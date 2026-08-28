@@ -3,46 +3,36 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { practiceSetup } from "@/lib/practice/setup";
-import {
-  SETUP_DOMAIN_SWATCH, DOMAIN_STATE_CHIP, MODULE_STATE_CHIP, READINESS_SWATCH,
-} from "@/lib/practice/practice-session-constants";
+import { publishReadiness } from "@/lib/practice/patient-access";
+import { bookingLinkSummary } from "@/lib/practice/identity-service";
+import { messagingStatus } from "@/lib/practice/messaging";
+import { MODULE_STATE_CHIP, READINESS_SWATCH } from "@/lib/practice/practice-session-constants";
 import type { Metadata } from "next";
 
 /** The tab name, so a practitioner with several open can tell which is which. */
 export const metadata: Metadata = { title: "Practice Setup" };
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// CPR-V5-008 PRACTICE SETUP WORKSPACE -- the three-domain landing page.
+// CPR-SETUP-HFE-001 -- SETUP HOME. The orientation and readiness surface, not another settings form.
 //
-// s6: "Display three domain cards, progress by domain, readiness indicators, contextual quick actions,
-// and validation warnings INSTEAD OF A FLAT GRID."
+// The old landing (CPR-V5-008's three engineering domains over seventeen areas) organised settings by
+// this product's internal architecture; a practitioner had to know which domain a task lived in before
+// finding it. This page asks the practitioner's questions instead -- what is this practice called,
+// where do I work, how do patients book me -- and each card answers with LIVE state and the one link
+// that manages it.
 //
-// ---- THE RING SAYS TWO NUMBERS, NOT A PERCENTAGE ---------------------------------------------------
+// ---- WHAT THIS PAGE DELIBERATELY DOES NOT DO -------------------------------------------------------
 //
-// The comp draws "72%" in the middle of the ring and "12 of 17 areas configured" beside it. The arc IS
-// the fraction, so it is drawn from done/of -- but the LABEL is the two numbers, because a percentage is
-// a figure with its denominator thrown away and the denominator is the entire content of this panel.
-// The same call the previous version of this page made, and CPR-SETUP-001's harness still asserts it.
-//
-// ---- COLOUR IS DOING WORK HERE, AND IT IS NOT DECORATION -------------------------------------------
-//
-// Each domain gets a tinted card, a tinted icon badge, AND ITS FIGURE IN ITS OWN HUE. palette.ts records
-// the same note four times because four screens shipped grey; the last one came back with "the colors
-// are flat". Three domain cards read at identical weight have to be READ top to bottom; three coloured
-// ones are FOUND. The hues are palette.ts's own, for the meanings palette.ts already gives them.
-//
-// ---- WHAT IS NOT A BUTTON --------------------------------------------------------------------------
-//
-// The comp's header carries "Preview booking page ↗". THERE IS STILL NO BOOKING PAGE -- CPR-V5-007 makes
-// it Phase 4 and only part of it exists -- so it is rendered as a statement of what is missing and which
-// phase owns it, not as a control. A button that does nothing is the one failure this codebase refuses
-// hardest, and it is worse in the header than anywhere else because that is where people look first.
-//
-// ⚠ WHAT DID BECOME A CONTROL, AND WHY IT IS A DIFFERENT ONE. Claiming a booking ADDRESS (PIS-000 s3)
-// is built: provisioning issues the identity row and the practitioner chooses the handle themselves at
-// /practice/setup/identity. So there is a real link beside the disabled chip, labelled for the address
-// rather than for the page -- because an address is not a page, and one control doing duty for both
-// would be the same overclaim in the other direction.
+//   - It does not restructure practiceSetup(). The service's domains, progress arithmetic and
+//     dependency evaluation are harness-pinned and still computed; this page regroups its modules at
+//     the presentation layer only.
+//   - It does not render a control for anything that does not exist. A capability with no surface is a
+//     sentence about what is true, never a dead button.
+//   - It does not label the practice "not ready" because an optional capability is missing. Readiness
+//     is purpose-specific: day-to-day use, public booking, and communications -- and communications is
+//     a warning, never a blocker.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = "force-dynamic";
@@ -55,32 +45,106 @@ const WARNING_TONE: Record<string, { box: string; text: string; icon: string }> 
   advisory: { box: "border-sky-200 bg-sky-50/60", text: "text-sky-900", icon: "◔" },
 };
 
-/** The arc is the fraction; the words are the counts. */
-function ProgressRing({ done, of, hue }: { done: number; of: number; hue: string }) {
-  const r = 34, c = 2 * Math.PI * r;
-  const fraction = of === 0 ? 0 : done / of;
+function StateMark({ state }: { state: string | null }) {
+  if (!state) return null;
+  const mc = MODULE_STATE_CHIP[state] ?? MODULE_STATE_CHIP.needs_attention;
   return (
-    <svg viewBox="0 0 84 84" className="h-[84px] w-[84px] shrink-0" role="img"
-      aria-label={`${done} of ${of} configurable areas are set up`}>
-      <circle cx="42" cy="42" r={r} fill="none" stroke="var(--cp-slate-100)" strokeWidth="8" />
-      <circle cx="42" cy="42" r={r} fill="none" stroke={hue} strokeWidth="8"
-        strokeLinecap="round" strokeDasharray={`${c * fraction} ${c}`} transform="rotate(-90 42 42)" />
-      <text x="42" y="40" textAnchor="middle" className="fill-gray-900 text-[20px] font-bold">{done}</text>
-      <text x="42" y="55" textAnchor="middle" className="fill-gray-400 text-[11px] font-semibold">of {of}</text>
-    </svg>
+    <span aria-hidden title={mc.label}
+      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${mc.chip}`}>
+      {mc.mark}
+    </span>
   );
 }
 
-export default async function PracticeSetupOverview() {
+/** One destination card: the question it answers, its live state, and the link that manages it. */
+function Destination({ title, answers, detail, href, hrefLabel, state, children }: {
+  title: string; answers: string; detail?: string | null;
+  href?: string | null; hrefLabel?: string; state?: string | null;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className={`${card} !p-3.5 flex flex-col`}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[12.5px] font-bold text-gray-900">{title}</p>
+        <StateMark state={state ?? null} />
+      </div>
+      <p className="mt-0.5 text-[10.5px] leading-relaxed text-gray-500">{answers}</p>
+      {detail && <p className="mt-1.5 text-[11px] font-semibold text-gray-700">{detail}</p>}
+      {children}
+      {href && (
+        <Link href={href}
+          className="mt-2 inline-block text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
+          {hrefLabel ?? "Manage"} →
+        </Link>
+      )}
+    </div>
+  );
+}
+
+export default async function PracticeSetupHome() {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
   const { ctx } = shell;
 
   const admin = createAdminClient();
-  const s = await practiceSetup(admin, ctx);
-  const byKey = new Map(s.modules.map(m => [m.key, m]));
-  const nextUp = s.checklist.find(i => !i.done && !i.unreadable);
-  const bookingAddress = s.availability.parts.find(p => p.key === "booking_address") ?? null;
+  const [s, booking, bookingLink] = await Promise.all([
+    practiceSetup(admin, ctx),
+    publishReadiness(admin, ctx),
+    bookingLinkSummary(admin, ctx.userId),
+  ]);
+  const channels = messagingStatus();
+  const byKey = new Map(s.modules.map((m: any) => [m.key, m]));
+  const m = (k: string) => byKey.get(k) as any | undefined;
+  const nextUp = s.checklist.find((i: any) => !i.done && !i.unreadable);
+
+  const availabilityParts = s.availability.parts.filter((p: any) =>
+    ["sessions", "appointment_types", "capacity"].includes(p.key));
+
+  // ── Patient booking, in the words the spec asks for: LIVE / READY / NEEDS SETUP / PAUSED. The live
+  //    test is the resolver's own (bookingLinkSummary), never a re-derivation of its conditions.
+  const bookingState = bookingLink.state === "live"
+    ? { chip: "LIVE", cls: "bg-emerald-100 text-emerald-800" }
+    : booking.verdict === "cannot_say"
+      ? { chip: "COULD NOT BE READ", cls: "bg-slate-100 text-slate-500" }
+      : booking.verdict === "not_ready"
+        ? { chip: `NEEDS SETUP — ${booking.blockersFailing.length} blocking`, cls: "bg-amber-100 text-amber-800" }
+        : { chip: "READY TO PUBLISH", cls: "bg-sky-100 text-sky-800" };
+
+  const anySender = channels.email.configured || channels.sms.configured || channels.whatsapp.configured;
+
+  // ── §16: purpose-specific readiness. The first two rows come from the pinned service; the booking
+  //    row is the publish engine's own verdict; communications never blocks anything.
+  const serviceRow = (key: string, label: string) => {
+    const r = (s.readiness as any[]).find(x => x.key === key);
+    return r ? { ...r, label } : null;
+  };
+  const readinessRows = [
+    serviceRow("foundation_complete", "Practice basics"),
+    serviceRow("operations_ready", "Ready for day-to-day use"),
+    {
+      key: "public_booking", label: "Public booking",
+      met: bookingLink.state === "live",
+      indeterminate: booking.verdict === "cannot_say" && bookingLink.state !== "live",
+      detail: bookingLink.state === "live"
+        ? "Your booking page is live — patients can open it."
+        : booking.verdict === "not_ready"
+          ? `${booking.blockersFailing.length} blocking step${booking.blockersFailing.length === 1 ? "" : "s"} before patients can book online.`
+          : booking.verdict === "cannot_say"
+            ? "Whether patients can book could not be read just now."
+            : "Everything checks out — publishing is the one step left.",
+      next: bookingLink.state === "live" ? null
+        : { label: booking.verdict === "not_ready" ? "See what is blocking" : "Finish publishing", href: "/practice/setup/identity" },
+      blockedReason: null,
+    },
+    {
+      key: "communications", label: "Communications",
+      met: anySender, indeterminate: false,
+      detail: anySender
+        ? `Booking codes and confirmations can be sent${channels.email.configured ? " by email" : ""}${channels.sms.configured ? " and by text" : ""}.`
+        : "No sending channel is connected, so nothing can be sent to patients. This warns — it does not block your practice.",
+      next: null, blockedReason: null,
+    },
+  ].filter(Boolean) as any[];
 
   return (
     <div className="-m-5 min-h-full bg-[var(--cp-canvas)] p-5">
@@ -92,59 +156,58 @@ export default async function PracticeSetupOverview() {
             ⚙
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Practice Setup</p>
             <h1 className="text-2xl font-bold text-gray-900">Practice Setup</h1>
             <p className="text-[13px] leading-relaxed text-gray-500">
-              Configure and manage all aspects of your practice. Follow the setup path or jump to any area.
+              What to finish, whether your practice is ready, and where everything is managed.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/practice/documentation"
               className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
-              Setup guide
+              Help &amp; guides
             </Link>
-            <Link href="/practice/privacy"
-              className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
-              Export setup
-            </Link>
-            {/* ⚠ A CONTROL NOW, BECAUSE THERE IS SOMETHING BEHIND IT -- AND IT STILL DOES NOT CLAIM A
-                BOOKING PAGE. Claiming an address is built; the page is not. The label says which of the
-                two this opens, and the chip beside it says whether the address exists. */}
-            <Link href="/practice/setup/identity"
-              className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:border-[var(--cp-primary)]/40 hover:bg-[var(--cp-primary)]/5 hover:text-[var(--cp-primary-deep)]">
-              {bookingAddress?.done === true
-                ? `Your booking address · ${bookingAddress.detail}`
-                : bookingAddress?.done === null
-                  ? "Your booking address · could not be read"
-                  : "Claim your booking address"}
-            </Link>
-            {/* NOT A BUTTON. There is still no booking page to preview -- an address is not a page. */}
-            <span className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3.5 py-2 text-[12px] font-semibold text-slate-500"
-              title="The public booking page, the code patients confirm with, and publishing your practice. Not available yet.">
-              No booking page to preview
-            </span>
+            {/* The one booking action that is true right now: view the live page, finish publishing,
+                or claim the address. Never a dead preview chip. */}
+            {bookingLink.state === "live" ? (
+              <a href={bookingLink.url} target="_blank" rel="noopener noreferrer"
+                className="rounded-lg bg-[var(--cp-primary)] px-3.5 py-2 text-[12px] font-semibold text-white hover:opacity-90">
+                View as patient ↗
+              </a>
+            ) : bookingLink.state === "claimed_not_open" ? (
+              <Link href="/practice/setup/identity"
+                className="rounded-lg bg-[var(--cp-primary)] px-3.5 py-2 text-[12px] font-semibold text-white hover:opacity-90">
+                Finish publishing →
+              </Link>
+            ) : bookingLink.state === "none" ? (
+              <Link href="/practice/setup/identity"
+                className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                Claim your booking address
+              </Link>
+            ) : null}
           </div>
         </div>
 
-        {/* ── s2's grouping banner ──────────────────────────────────────────────────────────────── */}
-        <section className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--cp-primary)]/20 bg-[var(--cp-primary)]/[0.05] p-4">
-          <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--cp-primary)]/12 text-[18px] text-[var(--cp-primary-deep)]">✧</span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-bold text-gray-900">Your practice setup, grouped by what it is for</p>
-            <p className="text-[11px] leading-relaxed text-gray-600">
-              Three domains instead of a flat list of seventeen. Nothing here has to be done in order —
-              the dependencies that do matter are named where they bite.
-            </p>
-          </div>
-          <span className="rounded-lg bg-white px-3 py-1.5 text-[11px] font-semibold text-[var(--cp-primary-deep)] ring-1 ring-[var(--cp-primary)]/20">
-            {s.progress.done} of {s.progress.of} areas configured
-          </span>
-        </section>
+        {/* ── The one recommended next action (§4) ──────────────────────────────────────────────── */}
+        {nextUp && (
+          <section className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--cp-primary)]/20 bg-[var(--cp-primary)]/[0.05] p-3.5">
+            <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--cp-primary)]/12 text-[16px] text-[var(--cp-primary-deep)]">→</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-bold text-gray-900">Recommended next: {nextUp.label}</p>
+              {nextUp.detail && <p className="text-[11px] leading-relaxed text-gray-600">{nextUp.detail}.</p>}
+            </div>
+            {nextUp.href && (
+              <Link href={nextUp.href}
+                className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
+                Continue →
+              </Link>
+            )}
+          </section>
+        )}
 
-        {/* ── Validation warnings (s6) ──────────────────────────────────────────────────────────── */}
+        {/* ── Warnings, each linking to its exact correction (§4) ───────────────────────────────── */}
         {s.warnings.length > 0 && (
           <ul className="grid gap-2 lg:grid-cols-2">
-            {s.warnings.map(w => {
+            {s.warnings.map((w: any) => {
               const tone = WARNING_TONE[w.severity] ?? WARNING_TONE.advisory;
               return (
                 <li key={w.key} className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 ${tone.box}`}>
@@ -159,176 +222,224 @@ export default async function PracticeSetupOverview() {
           </ul>
         )}
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_330px] items-start">
-          <div className="flex flex-col gap-4">
-
-            {/* ── THE THREE DOMAINS ─────────────────────────────────────────────────────────────── */}
-            {s.domains.map(d => {
-              const sw = SETUP_DOMAIN_SWATCH[d.key];
-              const chip = DOMAIN_STATE_CHIP[d.state] ?? DOMAIN_STATE_CHIP.not_started;
-              const cards = d.cardKeys.map(k => byKey.get(k)!).filter(Boolean);
+        {/* ── §16: purpose-specific readiness. Never one verdict for the whole practice. ─────────── */}
+        <section className={card}>
+          <h2 className="mb-2.5 text-[13px] font-bold text-gray-900">Is my practice ready?</h2>
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {readinessRows.map((r: any) => {
+              const sw = r.indeterminate ? READINESS_SWATCH.unreadable
+                : r.met ? READINESS_SWATCH.met : READINESS_SWATCH.unmet;
               return (
-                <section key={d.key} className={`overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]`}>
-                  <div className="grid gap-0 md:grid-cols-[230px_minmax(0,1fr)]">
-
-                    {/* The domain's own panel: tinted box, tinted badge, AND THE FIGURE IN ITS HUE. */}
-                    <div className={`relative border-b p-4 md:border-b-0 md:border-r ${sw.box}`}>
-                      <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${sw.accent}`} />
-                      <span aria-hidden className={`flex h-11 w-11 items-center justify-center rounded-xl text-[19px] ${sw.badge}`}>
-                        {sw.icon}
-                      </span>
-                      <p className="mt-2.5 text-[14px] font-bold text-gray-900">{d.n}. {d.title}</p>
-                      <p className={`mt-1 text-[11px] leading-relaxed ${sw.caption}`}>{d.purpose}</p>
-
-                      <p className="mt-3 flex items-baseline gap-1.5">
-                        <span className={`text-[26px] font-bold leading-none ${sw.figure}`}>{d.progress.done}</span>
-                        <span className="text-[12px] font-semibold text-gray-500">of {d.progress.of} configured</span>
-                      </p>
-                      {/* The bar is the fraction. The words above it are the counts. */}
-                      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/70">
-                        <div className={`h-full rounded-full ${sw.accent}`}
-                          style={{ width: `${d.progress.of === 0 ? 0 : (d.progress.done / d.progress.of) * 100}%` }} />
-                      </div>
-
-                      <span className={`mt-3 inline-block rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${chip.chip}`}>
-                        {chip.label}
-                      </span>
-                      {d.notBuilt > 0 && (
-                        <p className="mt-2 text-[10px] leading-relaxed text-gray-500">
-                          {d.notBuilt} area{d.notBuilt === 1 ? "" : "s"} here {d.notBuilt === 1 ? "has" : "have"} no
-                          implementation yet and {d.notBuilt === 1 ? "is" : "are"} not counted above.
-                        </p>
-                      )}
-                      <ul className="mt-2 flex flex-wrap gap-1">
-                        {d.outputs.map(o => (
-                          <li key={o} className="rounded bg-white/70 px-1.5 py-0.5 text-[9px] font-semibold text-gray-600">{o}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* The domain's modules. */}
-                    <div className="grid gap-2.5 p-4 sm:grid-cols-2 xl:grid-cols-4">
-                      {cards.map(m => {
-                        const mc = MODULE_STATE_CHIP[m.state] ?? MODULE_STATE_CHIP.needs_attention;
-                        const openable = !!m.href;
-                        const muted = m.state === "not_built" || m.state === "no_access" || m.state === "unreadable";
-                        const parts = m.key === "availability" ? s.availability : null;
-                        const Inner = (
-                          <>
-                            <div className="flex items-start justify-between gap-2">
-                              <span aria-hidden
-                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[16px]"
-                                style={{
-                                  background: muted ? "var(--cp-slate-100)" : `color-mix(in srgb, ${m.hue} 12%, white)`,
-                                  color: muted ? "var(--cp-slate-400)" : m.hue,
-                                }}>
-                                {m.icon}
-                              </span>
-                              <span aria-hidden className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${mc.chip}`}
-                                title={mc.label}>
-                                {mc.mark}
-                              </span>
-                            </div>
-                            <p className={`mt-2 text-[12px] font-bold leading-snug ${muted ? "text-gray-500" : "text-gray-900"}`}>
-                              {/* ⚠ THE TITLE CARRIES THE LINK WHEN THE PARTS DO. A card whose rows are
-                                  each their own destination cannot also be one big anchor -- nested
-                                  anchors are invalid HTML and React refuses to hydrate them -- so the
-                                  card stops being a link and the heading becomes one. Every other card
-                                  is unchanged and still opens from anywhere on it. */}
-                              {parts && openable
-                                ? <Link href={m.href!} className="hover:text-[var(--cp-primary-deep)] hover:underline">{m.title}</Link>
-                                : m.title}
-                            </p>
-                            <p className="mt-1 text-[10.5px] leading-relaxed text-gray-500">{m.description}</p>
-
-                            {/* The primary operations module carries its own parts, as the comp draws it. */}
-                            {parts && (
-                              <>
-                                <p className="mt-2 text-[10px] font-semibold" style={{ color: muted ? undefined : m.hue }}>
-                                  {parts.progress.done} of {parts.progress.of} parts configured
-                                </p>
-                                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-100">
-                                  <div className="h-full rounded-full"
-                                    style={{
-                                      background: m.hue,
-                                      width: `${parts.progress.of === 0 ? 0 : (parts.progress.done / parts.progress.of) * 100}%`,
-                                    }} />
-                                </div>
-                                {/* ── EACH ROW GOES WHERE IT IS ABOUT ────────────────────────────
-                                    The practice owner walked this list and reported that it says what
-                                    is unconfigured and does not take you there. Every part already
-                                    carried the href of the screen that owns it and nothing rendered it.
-
-                                    ⚠ THE NOT-BUILT ROW STAYS TEXT. Its href is null because there is
-                                    nothing behind it, and a link to nowhere is worse than a line of
-                                    prose -- it is the one thing this codebase refuses hardest. */}
-                                <ul className="mt-1.5 space-y-0.5">
-                                  {parts.parts.map(p => {
-                                    const mark = (
-                                      <span aria-hidden className={
-                                        p.notBuilt ? "text-slate-300"
-                                          : p.done === null ? "text-slate-400"
-                                            : p.done ? "text-emerald-600" : "text-amber-500"}>
-                                        {p.notBuilt ? "–" : p.done === null ? "?" : p.done ? "✓" : "○"}
-                                      </span>
-                                    );
-                                    const text = (
-                                      <span className={p.notBuilt ? "text-slate-400" : "text-gray-600"}>
-                                        {p.label}
-                                        <span className="text-gray-400"> · {p.detail}</span>
-                                      </span>
-                                    );
-                                    return (
-                                      <li key={p.key} className="text-[9.5px] leading-tight">
-                                        {p.href && !p.notBuilt ? (
-                                          <Link href={p.href}
-                                            className="-mx-1 flex items-start gap-1 rounded px-1 py-0.5 hover:bg-[var(--cp-primary)]/[0.06]">
-                                            {mark}
-                                            {text}
-                                            <span aria-hidden className="ml-auto shrink-0 text-gray-300">›</span>
-                                          </Link>
-                                        ) : (
-                                          <span className="flex items-start gap-1 px-1 py-0.5">{mark}{text}</span>
-                                        )}
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              </>
-                            )}
-
-                            {!parts && m.detail && (
-                              <p className="mt-2 text-[10px] font-semibold text-gray-600">{m.detail}</p>
-                            )}
-                            {m.unavailableReason && (
-                              <p className="mt-1.5 text-[9.5px] leading-relaxed text-gray-400">{m.unavailableReason}</p>
-                            )}
-                          </>
-                        );
-                        // ⚠ A CARD WITH LINKS INSIDE IT CANNOT ITSELF BE A LINK. See the title above.
-                        return openable && !parts ? (
-                          <Link key={m.key} href={m.href!}
-                            className={`${card} block !p-3 transition hover:border-[var(--cp-primary)]/40 hover:shadow-md`}>
-                            {Inner}
-                          </Link>
-                        ) : (
-                          <div key={m.key} className={`${card} !p-3 ${muted ? "bg-slate-50/70" : ""}`}>{Inner}</div>
-                        );
-                      })}
-                    </div>
+                <li key={r.key} className="flex items-start gap-2">
+                  <span aria-hidden className={`mt-px text-[13px] font-bold ${sw.ring}`}>{sw.mark}</span>
+                  <div className="min-w-0">
+                    <p className={`text-[12px] font-semibold ${sw.label}`}>{r.label}</p>
+                    <p className="text-[10.5px] leading-relaxed text-gray-500">{r.detail}</p>
+                    {r.next && (
+                      <Link href={r.next.href}
+                        className="mt-0.5 inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:underline">
+                        {r.next.label} <span aria-hidden>›</span>
+                      </Link>
+                    )}
                   </div>
-                </section>
+                </li>
               );
             })}
+          </ul>
+        </section>
 
-            {/* ── s8's dependency rules, evaluated ──────────────────────────────────────────────── */}
-            <section className={card}>
-              <div className="mb-2.5 flex items-center gap-2">
-                <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-100 text-[12px] text-violet-700">⚯</span>
-                <h2 className="text-[13px] font-bold text-gray-900">What depends on what</h2>
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_310px]">
+          <div className="flex flex-col gap-5">
+
+            {/* ══ PRACTICE ══════════════════════════════════════════════════════════════════════ */}
+            <section>
+              <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">Practice</h2>
+              <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <Destination title="Practice Profile"
+                  answers="What is this practice called and how is it presented?"
+                  detail={m("profile")?.detail ?? null} state={m("profile")?.state ?? null}
+                  href="/practice/settings?tab=practice#practice-profile">
+                  <p className="mt-1 text-[10.5px]">
+                    <Link href="/practice/settings?tab=practice#letterhead" className="font-semibold text-[var(--cp-primary)] hover:underline">Letterhead</Link>
+                    <span className="text-gray-300"> · </span>
+                    <Link href="/practice/settings/document-design" className="font-semibold text-[var(--cp-primary)] hover:underline">Document design</Link>
+                  </p>
+                </Destination>
+
+                <Destination title="Locations & Clinics"
+                  answers="Where do I work, and what clinics make up my regular week?"
+                  detail={m("locations")?.detail ?? null} state={m("locations")?.state ?? null}
+                  href="/practice/settings?tab=practice#locations">
+                  <p className="mt-1 text-[10.5px]">
+                    <Link href="/practice/settings?tab=practice#institutions" className="font-semibold text-[var(--cp-primary)] hover:underline">Hospital numbering</Link>
+                  </p>
+                </Destination>
+
+                <Destination title="Visit Types & Modes"
+                  answers="What kinds of visits do I offer and how are they delivered?"
+                  detail={m("appointment_types")?.detail ?? null} state={m("appointment_types")?.state ?? null}
+                  href={m("appointment_types")?.href ?? "/practice/settings?tab=practice#practice-profile"}>
+                  <p className="mt-1 text-[10.5px]">
+                    <Link href="/practice/setup/booking-taxonomy" className="font-semibold text-[var(--cp-primary)] hover:underline">Visit taxonomy</Link>
+                  </p>
+                </Destination>
+
+                <Destination title="Availability & Changes"
+                  answers="When am I normally available, and what one-off changes affect that pattern?"
+                  state={m("availability")?.state ?? null}
+                  href="/practice/setup/availability-booking" hrefLabel="Manage availability">
+                  <ul className="mt-1.5 space-y-0.5">
+                    {availabilityParts.map((p: any) => (
+                      <li key={p.key} className="text-[10px] leading-tight">
+                        {p.href ? (
+                          <Link href={p.href} className="-mx-1 flex items-start gap-1 rounded px-1 py-0.5 hover:bg-[var(--cp-primary)]/[0.06]">
+                            <span aria-hidden className={p.done === null ? "text-slate-400" : p.done ? "text-emerald-600" : "text-amber-500"}>
+                              {p.done === null ? "?" : p.done ? "✓" : "○"}
+                            </span>
+                            <span className="text-gray-600">{p.label}<span className="text-gray-400"> · {p.detail}</span></span>
+                          </Link>
+                        ) : (
+                          <span className="flex items-start gap-1 px-1 py-0.5 text-gray-500">{p.label}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </Destination>
+
+                <Destination title="Clinical catalogues"
+                  answers="The clinical vocabulary this practice works with.">
+                  <ul className="mt-1 space-y-0.5 text-[10.5px]">
+                    {[
+                      ["Clinical parameters", "/practice/setup/clinical-parameters"],
+                      ["Investigations", "/practice/setup/investigations"],
+                      ["Treatments", "/practice/setup/treatments"],
+                      ["Procedures", "/practice/setup/procedures"],
+                    ].map(([label, href]) => (
+                      <li key={href}>
+                        <Link href={href} className="font-semibold text-[var(--cp-primary)] hover:underline">{label} →</Link>
+                      </li>
+                    ))}
+                  </ul>
+                </Destination>
               </div>
+            </section>
+
+            {/* ══ PATIENT ACCESS ════════════════════════════════════════════════════════════════ */}
+            <section>
+              <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">Patient access</h2>
+              <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <div className={`${card} !p-3.5 flex flex-col`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-[12.5px] font-bold text-gray-900">Patient Booking</p>
+                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${bookingState.cls}`}>
+                      {bookingState.chip}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[10.5px] leading-relaxed text-gray-500">
+                    How can patients book me online?
+                  </p>
+                  {bookingLink.state === "live" && (
+                    <p className="mt-1.5 break-all font-mono text-[10.5px] font-semibold text-gray-800">{bookingLink.url}</p>
+                  )}
+                  <p className="mt-1 text-[10.5px]">
+                    <Link href="/practice/setup/identity" className="font-semibold text-[var(--cp-primary)] hover:underline">Address, QR &amp; share tools</Link>
+                    <span className="text-gray-300"> · </span>
+                    <Link href="/practice/setup/availability-booking?layer=3" className="font-semibold text-[var(--cp-primary)] hover:underline">Rules &amp; publish</Link>
+                  </p>
+                  <Link href={bookingLink.state === "live" ? "/practice/setup/availability-booking?layer=3" : "/practice/setup/identity"}
+                    className="mt-2 inline-block text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
+                    Manage booking →
+                  </Link>
+                </div>
+
+                <Destination title="Registration & Intake"
+                  answers="What information and consent do patients provide?"
+                  detail={m("registration")?.detail ?? null} state={m("registration")?.state ?? null}
+                  href="/practice/settings/registration-form" hrefLabel="Manage intake" />
+
+                {/* §11: channel readiness is a statement of what is true. There is no notifications
+                    console yet, so there is no Manage link -- a link to nowhere would be a control
+                    that does nothing. */}
+                <div className={`${card} !p-3.5`}>
+                  <p className="text-[12.5px] font-bold text-gray-900">Notifications</p>
+                  <p className="mt-0.5 text-[10.5px] leading-relaxed text-gray-500">
+                    How are booking communications sent?
+                  </p>
+                  <ul className="mt-1.5 space-y-1 text-[11px]">
+                    <li className="flex items-center gap-1.5">
+                      <span aria-hidden className={channels.email.configured ? "text-emerald-600" : "text-slate-300"}>
+                        {channels.email.configured ? "✓" : "–"}
+                      </span>
+                      <span className="text-gray-700">Email{channels.email.configured ? " — booking codes and confirmations send" : " — not connected"}</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span aria-hidden className={channels.sms.configured ? "text-emerald-600" : "text-slate-300"}>
+                        {channels.sms.configured ? "✓" : "–"}
+                      </span>
+                      <span className="text-gray-700">Text message{channels.sms.configured ? "" : " — not connected"}</span>
+                    </li>
+                  </ul>
+                  {!anySender && (
+                    <p className="mt-1.5 rounded bg-amber-50 px-2 py-1.5 text-[10.5px] leading-relaxed text-amber-900 ring-1 ring-amber-200">
+                      With no sending channel, patients cannot receive booking codes, so online booking
+                      cannot verify them.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* ══ PEOPLE · CONNECTIONS ══════════════════════════════════════════════════════════ */}
+            <section>
+              <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">People &amp; connections</h2>
+              <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <Destination title="Team & Permissions"
+                  answers="Who can work in this practice and what may they do?"
+                  detail={m("team")?.detail ?? null}
+                  href="/practice/people" hrefLabel="Manage team" />
+                {/* Nothing to connect exists yet; a concise statement, not a dead card. */}
+                <div className={`${card} !p-3.5`}>
+                  <p className="text-[12.5px] font-bold text-gray-900">Integrations &amp; Synchronisation</p>
+                  <p className="mt-0.5 text-[10.5px] leading-relaxed text-gray-500">
+                    What external calendars or services are connected?
+                  </p>
+                  <p className="mt-1.5 text-[11px] text-gray-600">
+                    Nothing can be connected yet. When a calendar or messaging connection exists, it
+                    will be managed from here.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* ══ PRACTICE CONTROL · PERSONAL ═══════════════════════════════════════════════════ */}
+            <section>
+              <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">Practice control &amp; personal</h2>
+              <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <Destination title="Security"
+                  answers="How is this practice protected?"
+                  href="/practice/privacy/security" hrefLabel="Review security" />
+                <Destination title="Activity Log"
+                  answers="What important actions have occurred?"
+                  href="/practice/privacy" hrefLabel="Open the log" />
+                <Destination title="Import, Export & Lifecycle"
+                  answers="Your data, in and out — and the practice's own lifecycle."
+                  state={m("import_export")?.state ?? null}
+                  href="/practice/privacy" hrefLabel="Import & export">
+                  <p className="mt-1 text-[10.5px]">
+                    <Link href="/practice/setup/lifecycle" className="font-semibold text-[var(--cp-primary)] hover:underline">Practice lifecycle</Link>
+                  </p>
+                </Destination>
+                <Destination title="Personal Settings"
+                  answers="How does this product behave for me personally?"
+                  href="/practice/settings" hrefLabel="Open personal settings" />
+              </div>
+            </section>
+
+            {/* ── What depends on what — evaluated, and said only where it bites ────────────────── */}
+            <section className={card}>
+              <h2 className="mb-2.5 text-[13px] font-bold text-gray-900">What depends on what</h2>
               <ul className="space-y-2">
-                {s.dependencies.map(dep => (
+                {s.dependencies.map((dep: any) => (
                   <li key={dep.key} className="flex items-start gap-2.5 rounded-lg border border-gray-200 px-3 py-2">
                     <span aria-hidden className={`mt-px text-[12px] font-bold ${
                       dep.indeterminate ? "text-slate-400"
@@ -340,94 +451,41 @@ export default async function PracticeSetupOverview() {
                       <p className="text-[11px] leading-relaxed text-gray-500">
                         {dep.indeterminate
                           ? "Part of this could not be read, so whether it is met is unknown."
-                          : dep.unmet.length === 0
-                            ? "Met."
-                            : `Still needs ${dep.unmet.join(", ")}.`}
+                          : dep.unmet.length === 0 ? "Met." : `Still needs ${dep.unmet.join(", ")}.`}
                       </p>
                     </div>
                   </li>
                 ))}
               </ul>
             </section>
-
-            {/* ── Recent setup activity ─────────────────────────────────────────────────────────── */}
-            <section className={card}>
-              <div className="mb-3 flex items-center gap-2">
-                <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-[12px] text-emerald-700">◷</span>
-                <h2 className="text-[13px] font-bold text-gray-900">Recent setup activity</h2>
-                <Link href="/practice/privacy" className="ml-auto text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
-                  View activity log →
-                </Link>
-              </div>
-              {s.recentActivity.length === 0 ? (
-                <p className="text-[12px] text-gray-400">Nothing has been changed yet.</p>
-              ) : (
-                <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {s.recentActivity.map((a, i) => (
-                    <li key={i} className="border-l-2 border-[var(--cp-primary)]/25 pl-2.5">
-                      <p className="text-[12px] font-semibold capitalize text-gray-800">{a.label}</p>
-                      <p className="text-[10px] text-gray-500">
-                        {new Date(a.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p className="mt-2 text-[10px] text-gray-400">
-                From the practice&apos;s own audit trail — every configuration change is recorded, and
-                changes here save as you make them.
-              </p>
-            </section>
           </div>
 
           {/* ── Right rail ──────────────────────────────────────────────────────────────────────── */}
           <div className="flex flex-col gap-4">
             <section className={card}>
-              <h2 className="mb-3 text-[13px] font-bold text-gray-900">Setup progress</h2>
-              <div className="flex items-center gap-3">
-                <ProgressRing done={s.progress.done} of={s.progress.of} hue="var(--cp-success)" />
-                <div className="min-w-0">
-                  <p className="text-[13px] font-bold text-gray-900">
-                    {s.progress.allDone
-                      ? "Everything you can configure is configured."
-                      : `${s.progress.of - s.progress.done} still to set up.`}
-                  </p>
-                  {/* THE COMP SAYS "72%". This says what the two numbers are. */}
-                  <p className="text-[11px] leading-relaxed text-gray-500">
-                    {s.progress.done} of {s.progress.of} areas configured, out of {s.progress.total} in all.
-                  </p>
-                </div>
+              <h2 className="mb-2 text-[13px] font-bold text-gray-900">Setup progress</h2>
+              <p className="text-[13px] font-bold text-gray-900">
+                {s.progress.done} of {s.progress.of} areas configured
+              </p>
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-[var(--cp-success)]"
+                  style={{ width: `${s.progress.of === 0 ? 0 : (s.progress.done / s.progress.of) * 100}%` }} />
               </div>
-
-              <ul className="mt-3 space-y-1.5 border-t border-gray-100 pt-3">
-                {s.legend.map(l => (
-                  <li key={l.key} className="flex items-center gap-2 text-[12px]">
-                    <span aria-hidden className={`h-2 w-2 rounded-full ${MODULE_STATE_CHIP[l.key]?.dot ?? "bg-slate-300"}`} />
-                    <span className="text-gray-700">{l.label}</span>
-                    <span className="ml-auto font-bold text-gray-900">{l.count}</span>
-                  </li>
-                ))}
-                <li className="flex items-center gap-2 border-t border-gray-100 pt-1.5 text-[12px]">
-                  <span className="text-gray-500">All areas</span>
-                  <span className="ml-auto font-bold text-gray-700">{s.progress.total}</span>
-                </li>
-              </ul>
-
-              <p className="mt-3 border-t border-gray-100 pt-2 text-[10px] leading-relaxed text-gray-500">
-                {s.notBuiltCount} of the {s.progress.total} have no implementation yet, so they are not
-                counted above and cannot be completed.
-                {s.unreadableCount > 0 && ` ${s.unreadableCount} could not be read just now and are counted as neither done nor undone.`}
+              <p className="mt-2 text-[10px] leading-relaxed text-gray-500">
+                {s.progress.allDone
+                  ? "Everything you can configure is configured."
+                  : `${s.progress.of - s.progress.done} still to set up. Nothing has to be done in order — the dependencies that matter are named where they bite.`}
+                {s.unreadableCount > 0 && ` ${s.unreadableCount} area${s.unreadableCount === 1 ? "" : "s"} could not be read just now and ${s.unreadableCount === 1 ? "is" : "are"} counted as neither done nor undone.`}
               </p>
             </section>
 
-            {/* ── s2's contextual quick actions ─────────────────────────────────────────────────── */}
             <section className={card}>
               <h2 className="mb-3 text-[13px] font-bold text-gray-900">Quick actions</h2>
               {s.quickActions.length === 0 ? (
                 <p className="text-[12px] text-gray-400">No setup action is available to you.</p>
               ) : (
                 <ul className="space-y-1.5">
-                  {s.quickActions.map(a => (
+                  {s.quickActions.map((a: any) => (
                     <li key={a.key}>
                       <Link href={a.href}
                         className="flex items-center gap-2 rounded-lg border border-gray-200 px-2.5 py-2 text-[12px] font-semibold text-gray-700 hover:border-[var(--cp-primary)]/40 hover:bg-[var(--cp-primary)]/5 hover:text-[var(--cp-primary-deep)]">
@@ -438,92 +496,36 @@ export default async function PracticeSetupOverview() {
                   ))}
                 </ul>
               )}
-              <p className="mt-2 text-[10px] leading-relaxed text-gray-400">
-                These change with your practice — each one is offered because of what is or is not there
-                right now.
-              </p>
             </section>
 
-            {/* ── s7's readiness indicators ─────────────────────────────────────────────────────── */}
             <section className={card}>
-              <h2 className="mb-3 text-[13px] font-bold text-gray-900">Readiness</h2>
-              <ul className="space-y-2">
-                {s.readiness.map(r => {
-                  const sw = r.indeterminate ? READINESS_SWATCH.unreadable
-                    : r.met ? READINESS_SWATCH.met : READINESS_SWATCH.unmet;
-                  return (
-                    <li key={r.key} className="flex items-start gap-2">
-                      <span aria-hidden className={`mt-px text-[13px] font-bold ${sw.ring}`}>{sw.mark}</span>
-                      <div className="min-w-0">
-                        <p className={`text-[12px] font-semibold ${sw.label}`}>{r.label}</p>
-                        <p className="text-[10.5px] leading-relaxed text-gray-500">{r.detail}</p>
-                        {/* NOT AN EMPTY CIRCLE WITH NO EXPLANATION. An indicator nobody can satisfy by
-                            configuring anything says so, and names the phase that owns it. */}
-                        {r.blockedReason && (
-                          <p className="mt-0.5 text-[10px] leading-relaxed text-slate-400">{r.blockedReason}</p>
-                        )}
-                        {/* ⚠ WHERE TO GO, WHEN THERE IS SOMEWHERE. Computed from the first module that
-                            is really unconfigured and really openable, so it moves as the practice is
-                            set up and vanishes when nothing is left. A row with no `next` renders no
-                            link rather than a dead one -- including every row that is already met, and
-                            every row whose remaining work could not be read. */}
-                        {r.next && (
-                          <Link href={r.next.href}
-                            className="mt-1 inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:underline">
-                            {r.next.label}
-                            <span aria-hidden>›</span>
-                          </Link>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-
-            {/* ── Where the specification and this codebase disagree ────────────────────────────── */}
-            {s.specDisagreements.length > 0 && (
-              <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
-                <h2 className="text-[13px] font-bold text-amber-900">Already built</h2>
-                <p className="mt-1 text-[11px] leading-relaxed text-amber-800">
-                  The setup framework lists {s.specDisagreements.length}{" "}
-                  {s.specDisagreements.length === 1 ? "area" : "areas"} as still to be built that already
-                  work here:
-                </p>
-                <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                  {s.specDisagreements.map(d => (
-                    <li key={d.n} className="rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
-                      {d.n}. {d.title}
+              <div className="mb-2.5 flex items-center gap-2">
+                <h2 className="text-[13px] font-bold text-gray-900">Recent changes</h2>
+                <Link href="/practice/privacy" className="ml-auto text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
+                  Activity log →
+                </Link>
+              </div>
+              {s.recentActivity.length === 0 ? (
+                <p className="text-[12px] text-gray-400">Nothing has been changed yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {s.recentActivity.slice(0, 5).map((a: any, i: number) => (
+                    <li key={i} className="border-l-2 border-[var(--cp-primary)]/25 pl-2.5">
+                      <p className="text-[12px] font-semibold capitalize text-gray-800">{a.label}</p>
+                      <p className="text-[10px] text-gray-500">
+                        {new Date(a.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </p>
                     </li>
                   ))}
                 </ul>
-                <p className="mt-2 text-[10px] leading-relaxed text-amber-700/80">
-                  Status on this page is read from the code and your data, never copied from the
-                  document — otherwise it would tell you these do not exist.
-                </p>
-              </section>
-            )}
-
-            {nextUp && (
-              <section className="rounded-xl border border-[var(--cp-primary)]/20 bg-[var(--cp-primary)]/[0.05] p-4">
-                <p className="text-[13px] font-bold text-gray-900">Next up</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-gray-600">
-                  <span className="font-semibold">{nextUp.label}</span>
-                  {nextUp.detail ? ` — ${nextUp.detail}.` : "."}
-                </p>
-                {nextUp.href && (
-                  <Link href={nextUp.href}
-                    className="mt-2.5 inline-block rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
-                    Continue setup →
-                  </Link>
-                )}
-              </section>
-            )}
+              )}
+            </section>
           </div>
         </div>
 
         <p className="text-[11px] text-gray-500">
-          Changes made here affect how your practice works across the whole product.
+          Changes made here affect how your practice works across the whole product, and every one is
+          recorded in your activity log.
         </p>
       </div>
     </div>
