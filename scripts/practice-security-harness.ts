@@ -608,6 +608,72 @@ async function main() {
   ok("the resume is written down too -- nothing about a lock-out happens quietly",
     resumeEvents.readable && resumeEvents.events.some(e => e.payload.sessionId === t1.sessionId));
 
+  // ── ⚠ THE RACING LIFT. One navigation resolves the shell more than once (the layout and the page
+  //    each do), so two touchSession calls race this lift on the first visit after a re-sign-in. The
+  //    guarded update lets exactly one land; the OTHER used to be refused for matching zero rows --
+  //    which put the owner through "sign out and sign in again" twice, with IDLE_SESSION_RESUMED and
+  //    a refusal in the trail in the same minute.
+  //
+  //    ⚠ THE LOSS IS MANUFACTURED, NOT HOPED FOR. A first draft ran two real calls in Promise.all and
+  //    stayed green with the bug PLANTED BACK -- the calls serialised and no loser existed, which is
+  //    an assertion passing for the wrong reason. This proxy IS the loser, deterministically: it lets
+  //    touchSession read the revoked row, then lands the competitor's lift before touchSession's own
+  //    guarded update runs, so that update always matches zero rows.
+  await admin.from("practice_session").update({
+    revoked_at: new Date().toISOString(), revoked_by: null, revoked_reason: IDLE_REVOKED_REASON,
+  }).eq("id", t1.sessionId!);
+  const raceSignIn = new Date(Date.now() + 2000).toISOString();
+  const losingAdmin = (() => {
+    let intercepted = false;
+    return new Proxy(admin, {
+      get(target, prop) {
+        if (prop !== "from") return Reflect.get(target, prop);
+        return (table: string) => {
+          const builder = target.from(table);
+          if (table !== "practice_session") return builder;
+          return new Proxy(builder, {
+            get(bt, bprop) {
+              if (bprop === "update" && !intercepted) {
+                return (vals: Record<string, unknown>) => {
+                  intercepted = true;
+                  const calls: [string, unknown[]][] = [];
+                  const chain: any = new Proxy({}, {
+                    get(_o, cp) {
+                      if (cp === "then") {
+                        return (onF: any, onR: any) => (async () => {
+                          // The competitor's lift lands first, through the REAL client.
+                          await admin.from("practice_session").update(vals)
+                            .eq("workspace_id", wsA).eq("id", t1.sessionId!)
+                            .eq("revoked_reason", IDLE_REVOKED_REASON).is("revoked_by", null);
+                          let b: any = admin.from("practice_session").update(vals);
+                          for (const [m, a] of calls) b = b[m](...a);
+                          return await b;
+                        })().then(onF, onR);
+                      }
+                      return (...a: unknown[]) => { calls.push([String(cp), a]); return chain; };
+                    },
+                  });
+                  return chain;
+                };
+              }
+              const v = Reflect.get(bt, bprop);
+              return typeof v === "function" ? v.bind(bt) : v;
+            },
+          });
+        };
+      },
+    });
+  })();
+  const loser = await touchSession(losingAdmin, {
+    workspaceId: wsA, userId: OWNER, deviceId: stableDevice, authSignInAt: raceSignIn,
+  });
+  ok("⚠ THE REQUEST THAT LOSES THE LIFT RACE IS STILL LET IN -- it re-reads the row instead of "
+    + "refusing entry to a session that is no longer revoked",
+    loser.allowed === true && loser.resumed === true, JSON.stringify(loser));
+  const { data: racedRow } = await admin.from("practice_session")
+    .select("revoked_at").eq("id", t1.sessionId!).maybeSingle();
+  ok("and the raced row ends live", racedRow?.revoked_at === null);
+
   // ⚠ THE CONTROL THAT MATTERS MOST IN THIS BLOCK.
   const byHand = await revokeSession(admin, {
     workspaceId: wsA, sessionId: t1.sessionId!, reason: "Laptop stolen from the car", ...base,

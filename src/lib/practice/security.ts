@@ -284,10 +284,26 @@ export async function touchSession(admin: any, args: {
           user_agent: args.userAgent ?? null,
         }).eq("workspace_id", args.workspaceId).eq("id", existing.id).eq("revoked_reason", IDLE_REVOKED_REASON).is("revoked_by", null).select("id");
 
-        // A resume whose write did not land leaves the row revoked, so the honest answer is still
-        // "refused" -- reporting entry on a write that failed is the exact error this arc is closing.
-        if (resumeError || ((resumed ?? []) as any[]).length !== 1)
+        // A resume whose write ERRORED leaves the row revoked, so the honest answer is "refused" --
+        // reporting entry on a write that failed is the exact error this arc closed.
+        //
+        // ⚠ BUT ZERO ROWS IS USUALLY THE OTHER REQUEST'S LIFT, NOT A FAILED WRITE. One navigation
+        // resolves the shell more than once (the layout and the page each do), so two touchSession
+        // calls race this lift on the first visit after a re-sign-in. The guarded update lets exactly
+        // one win; the loser matched nothing precisely BECAUSE the row is already clean. Refusing on
+        // that made the person sign in twice -- the owner hit it, and the trail showed IDLE_SESSION_
+        // RESUMED and a refusal in the same minute. So a zero-row lift re-reads the row: no longer
+        // revoked means no longer refusable, and nothing is weakened -- a row still revoked (or a
+        // read that failed) still refuses.
+        if (resumeError)
           return { allowed: false, reason: "idle", sessionId: existing.id, checked: true };
+        if (((resumed ?? []) as any[]).length !== 1) {
+          const { data: after, error: afterError } = await admin.from("practice_session")
+            .select("revoked_at").eq("workspace_id", args.workspaceId).eq("id", existing.id).maybeSingle();
+          if (afterError || !after || after.revoked_at !== null)
+            return { allowed: false, reason: "idle", sessionId: existing.id, checked: true };
+          return { allowed: true, sessionId: existing.id, checked: true, resumed: true };
+        }
 
         await recordAuthEvent(admin, {
           workspaceId: args.workspaceId, actorId: args.userId, eventType: AUTH_EVENT.IDLE_SESSION_RESUMED,
