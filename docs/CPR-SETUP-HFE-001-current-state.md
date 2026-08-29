@@ -133,4 +133,27 @@ per-location booking editor.
 Remaining from BOOK-HFE-002: §20 human acceptance ("make Wednesday morning at Nsambya bookable",
 run untrained) — the owner task.
 
+## CPR-BOOK-EMAIL-001 — email-verified self-booking ACTIVATED 2026-08-29
+
+The §17 inventory found the whole spec nearly built: issueOtp/verifyOtp carry the full §5 security
+contract (hashed single-use codes, 5-min expiry, per-destination AND per-source rate limits,
+refuse-if-undelivered), the intake/verify/confirm path is harness-proven, confirmation emails were
+already wired and channel-gated, and Resend is configured in production. The ONE gap: setChannel —
+permission-guarded, audited, sender-name-required — had ZERO callers. No practice could switch its
+email channel on, so every booking page refused with no-way-to-send-a-code.
+
+Built: /practice/setup/patient-communications (the §10 console; EMAIL only, SMS/WhatsApp one quiet
+"coming later" sentence, never a warning or control) + its thin route over setChannel. Setup Home
+Notifications card became the Patient Communications destination, truthful to the practice-level
+switch (usable, not merely provider-configured — the readiness row previously overclaimed on the
+provider alone). NO_WAY_TO_SEND_A_CODE practitioner action → "Set up email verification to accept
+online bookings" → the console. §4: the QR card removed from the patient page (practitioner tooling;
+the patient is already at the destination). Stale copy corrected: identity console otp_booking note
+no longer claims the deployment has no mail provider; deliveryReadiness practice-level reason speaks
+the §10 action. Enabling email flips deliveryReadiness → the entry blocker clears → the page becomes
+bookable automatically per §10, no hidden switch.
+
+§14 real-inbox E2E: owner-executed (enable email, book with own address, receive code + confirmation,
+see it in Planner) — the final evidence step only a human inbox can give.
+
 Remaining (owner-side): the §22 setup acceptance tasks + BOOK-HFE-002 §20's task, run untrained.

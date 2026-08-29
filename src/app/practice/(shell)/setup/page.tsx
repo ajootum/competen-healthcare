@@ -5,7 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { practiceSetup } from "@/lib/practice/setup";
 import { publishReadiness } from "@/lib/practice/patient-access";
 import { bookingLinkSummary } from "@/lib/practice/identity-service";
-import { messagingStatus } from "@/lib/practice/messaging";
+import { messagingStatus, channelSettings } from "@/lib/practice/messaging";
 import { MODULE_STATE_CHIP, READINESS_SWATCH, SETUP_HOME_SWATCH, SETUP_READINESS_BADGE } from "@/lib/practice/practice-session-constants";
 import type { Metadata } from "next";
 
@@ -92,12 +92,17 @@ export default async function PracticeSetupHome() {
   const { ctx } = shell;
 
   const admin = createAdminClient();
-  const [s, booking, bookingLink] = await Promise.all([
+  const [s, booking, bookingLink, practiceChannels] = await Promise.all([
     practiceSetup(admin, ctx),
     publishReadiness(admin, ctx),
     bookingLinkSummary(admin, ctx.userId),
+    channelSettings(admin, ctx.workspaceId),
   ]);
   const channels = messagingStatus();
+  // ⚠ USABLE, NOT MERELY CONFIGURED. A provider in the environment with the practice's switch off
+  // sends nothing -- reporting "can be sent" on the provider alone was exactly the stale claim the
+  // owner's booking page contradicted.
+  const emailUsable = practiceChannels.find(c => c.kind === "email")?.usable === true;
   const byKey = new Map(s.modules.map((m: any) => [m.key, m]));
   const m = (k: string) => byKey.get(k) as any | undefined;
   const nextUp = s.checklist.find((i: any) => !i.done && !i.unreadable);
@@ -115,7 +120,7 @@ export default async function PracticeSetupHome() {
         ? { chip: `NEEDS SETUP — ${booking.blockersFailing.length} blocking`, cls: "bg-amber-100 text-amber-800" }
         : { chip: "READY TO PUBLISH", cls: "bg-sky-100 text-sky-800" };
 
-  const anySender = channels.email.configured || channels.sms.configured || channels.whatsapp.configured;
+  const anySender = emailUsable;
 
   // ── §16: purpose-specific readiness. The first two rows come from the pinned service; the booking
   //    row is the publish engine's own verdict; communications never blocks anything.
@@ -145,9 +150,13 @@ export default async function PracticeSetupHome() {
       key: "communications", label: "Communications",
       met: anySender, indeterminate: false,
       detail: anySender
-        ? `Booking codes and confirmations can be sent${channels.email.configured ? " by email" : ""}${channels.sms.configured ? " and by text" : ""}.`
-        : "No sending channel is connected, so nothing can be sent to patients. This warns — it does not block your practice.",
-      next: null, blockedReason: null,
+        ? "Booking codes and confirmations send by email."
+        : channels.email.configured
+          ? "Email is not switched on for this practice, so patients cannot receive booking codes."
+          : "No email service is connected on this deployment, so nothing can be sent to patients.",
+      next: anySender || !channels.email.configured ? null
+        : { label: "Set up email verification", href: "/practice/setup/patient-communications" },
+      blockedReason: null,
     },
   ].filter(Boolean) as any[];
 
@@ -369,38 +378,18 @@ export default async function PracticeSetupHome() {
                   detail={m("registration")?.detail ?? null} state={m("registration")?.state ?? null}
                   href="/practice/settings/registration-form" hrefLabel="Manage intake" />
 
-                {/* §11: channel readiness is a statement of what is true. There is no notifications
-                    console yet, so there is no Manage link -- a link to nowhere would be a control
-                    that does nothing. */}
-                <div className={`rounded-xl border p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${SETUP_HOME_SWATCH.notifications.box}`}>
-                  <span aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-lg text-[15px] ${SETUP_HOME_SWATCH.notifications.badge}`}>
-                    {SETUP_HOME_SWATCH.notifications.icon}
-                  </span>
-                  <p className="mt-2 text-[12.5px] font-bold text-gray-900">Notifications</p>
-                  <p className="mt-0.5 text-[10.5px] leading-relaxed text-gray-500">
-                    How are booking communications sent?
-                  </p>
-                  <ul className="mt-1.5 space-y-1 text-[11px]">
-                    <li className="flex items-center gap-1.5">
-                      <span aria-hidden className={channels.email.configured ? "text-emerald-600" : "text-slate-300"}>
-                        {channels.email.configured ? "✓" : "–"}
-                      </span>
-                      <span className="text-gray-700">Email{channels.email.configured ? " — booking codes and confirmations send" : " — not connected"}</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <span aria-hidden className={channels.sms.configured ? "text-emerald-600" : "text-slate-300"}>
-                        {channels.sms.configured ? "✓" : "–"}
-                      </span>
-                      <span className="text-gray-700">Text message{channels.sms.configured ? "" : " — not connected"}</span>
-                    </li>
-                  </ul>
-                  {!anySender && (
+                <Destination hue="notifications" title="Patient Communications"
+                  answers="How do booking codes and confirmations reach patients?"
+                  detail={emailUsable ? "Email is on — codes and confirmations send."
+                    : channels.email.configured ? "Email is not switched on yet." : "No email service is connected."}
+                  href="/practice/setup/patient-communications" hrefLabel="Manage email">
+                  {!emailUsable && channels.email.configured && (
                     <p className="mt-1.5 rounded bg-amber-50 px-2 py-1.5 text-[10.5px] leading-relaxed text-amber-900 ring-1 ring-amber-200">
-                      With no sending channel, patients cannot receive booking codes, so online booking
-                      cannot verify them.
+                      Set up email verification to accept online bookings.
                     </p>
                   )}
-                </div>
+                  <p className="mt-1.5 text-[10px] text-gray-400">Text messages &amp; WhatsApp: coming later.</p>
+                </Destination>
               </div>
             </section>
 

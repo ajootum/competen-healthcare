@@ -128,7 +128,7 @@ export async function deliveryReadiness(
   if (!channels.some(c => c.providerConfigured))
     reasons.push("This deployment has no SMS gateway and no mail provider configured, so nothing can send a code.");
   else if (workspaceId && !channels.some(c => c.usable))
-    reasons.push("A provider is configured, but this practice has not switched any channel on.");
+    reasons.push("Email is not switched on for this practice. Set up email verification in Patient Communications to accept online bookings.");
 
   const deliverable = workspaceId
     ? channels.some(c => c.usable)

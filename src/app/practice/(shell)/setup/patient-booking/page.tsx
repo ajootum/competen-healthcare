@@ -6,7 +6,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { bookingRulesWorkspace, ruleReadingValue, type BookingRuleCard, type RuleConflict } from "@/lib/practice/booking-rules";
 import { publishReadiness } from "@/lib/practice/patient-access";
 import { bookingLinkSummary } from "@/lib/practice/identity-service";
-import { messagingStatus } from "@/lib/practice/messaging";
+import { messagingStatus, channelSettings } from "@/lib/practice/messaging";
 import { bookingPreview } from "@/lib/practice/availability-config";
 import { isPatientFacingMode } from "@/lib/practice/practice-session-constants";
 import { onSetupReadinessEvaluated } from "@/lib/practice/activation-hooks";
@@ -57,12 +57,14 @@ export default async function PatientBookingPage({ searchParams }: {
     redirect("/practice/setup");
 
   const admin = createAdminClient();
-  const [r, readiness, bookingLink] = await Promise.all([
+  const [r, readiness, bookingLink, practiceChannels] = await Promise.all([
     bookingRulesWorkspace(admin, ctx),
     publishReadiness(admin, ctx),
     bookingLinkSummary(admin, ctx.userId),
+    channelSettings(admin, ctx.workspaceId),
   ]);
   const channels = messagingStatus();
+  const emailUsable = practiceChannels.find(c => c.kind === "email")?.usable === true;
 
   // CPR-GROWTH-001 s2 "practice configured" -- the milestone rides with the readiness evaluation,
   // which now happens here. Idempotent; `cannot_say` never emits.
@@ -94,7 +96,7 @@ export default async function PatientBookingPage({ searchParams }: {
   const ruleConflicts = ruleReadingValue(r.conflicts, [] as RuleConflict[]);
   const rulesUnreadable = r.rules.state === "unreadable" ? r.rules.reason : null;
   const activeRules = ruleCards.filter(c => c.status === "active");
-  const anySender = channels.email.configured || channels.sms.configured || channels.whatsapp.configured;
+  const anySender = emailUsable;
 
   // s4's coverage figure, asked of the OFFERING engine (publicOfferingGate) over what the page shows.
   // The card chain governs booking-time evaluation; what a patient is OFFERED is the per-location
@@ -232,7 +234,7 @@ export default async function PatientBookingPage({ searchParams }: {
                     <li className="flex items-start gap-2">
                       <span aria-hidden className="font-bold text-amber-700">⚠</span>
                       <span className="text-gray-700">
-                        No sending channel — patients cannot receive booking codes.
+                        Email is not switched on — patients cannot receive booking codes.
                       </span>
                     </li>
                   )}
@@ -256,9 +258,17 @@ export default async function PatientBookingPage({ searchParams }: {
                 <h2 className="text-[13px] font-bold text-gray-900">How patients are reached</h2>
                 <p className="mt-1.5 text-[12px] leading-relaxed text-gray-600">
                   {anySender
-                    ? `Booking codes and confirmations send${channels.email.configured ? " by email" : ""}${channels.sms.configured ? " and by text" : ""}.`
-                    : "No sending channel is connected, so patients cannot receive the one-time booking code."}
+                    ? "Booking codes and confirmations send by email."
+                    : channels.email.configured
+                      ? "Email is not switched on for this practice, so patients cannot receive the one-time booking code."
+                      : "No email service is connected on this deployment, so patients cannot receive the one-time booking code."}
                 </p>
+                {!anySender && channels.email.configured && (
+                  <Link href="/practice/setup/patient-communications"
+                    className="mt-2 inline-block rounded-lg bg-[var(--cp-primary)] px-3.5 py-1.5 text-[12px] font-semibold text-white hover:opacity-90">
+                    Set up email verification →
+                  </Link>
+                )}
                 <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
                   Your address, QR code and share buttons live with your booking identity.
                 </p>

@@ -41,8 +41,8 @@ export const PUBLIC_FAILURE_ACTIONS: Record<string, PublicFailureAction> = {
     href: "/practice/setup/patient-booking?tab=page", why: null,
   },
   NO_WAY_TO_SEND_A_CODE: {
-    label: "Accept requests without a code, or wait for a sending channel",
-    href: "/practice/setup/patient-booking?tab=page",
+    label: "Set up email verification to accept online bookings",
+    href: "/practice/setup/patient-communications",
     why: null,
   },
   NO_PATIENT_SCREEN: {

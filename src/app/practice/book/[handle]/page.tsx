@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/server";
-import { resolveHandle, bookingQr } from "@/lib/practice/identity-service";
+import { resolveHandle } from "@/lib/practice/identity-service";
 import { publicBookingEntry } from "@/lib/practice/patient-booking";
 
 // /practice/book/@handle -- CPB-002's canonical practitioner URL.
@@ -100,7 +100,6 @@ export default async function PractitionerPage({ params }: {
   if (resolved.kind === "none") notFound();
 
   const p = resolved.profile;
-  const qr = p.handle ? await bookingQr(p.handle, "svg") : null;
   // ⚠ READ, NOT WRITTEN INTO THE PAGE. This section used to render a hard-coded paragraph saying booking
   // could not be built, and that paragraph had quietly stopped being true. publicBookingEntry derives the
   // answer from the practice's published page and from whether a code could actually be delivered, so the
@@ -205,19 +204,9 @@ export default async function PractitionerPage({ params }: {
         <p className="mt-3 break-all text-[11px] text-gray-500">{p.bookingUrl}</p>
       </section>
 
-      {qr && (
-        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-          <h2 className="text-[13px] font-bold text-gray-900">Scan to reach this page</h2>
-          <div className="mt-2 flex items-start gap-4 flex-wrap">
-            {/* Drawn in this process from the URL above. No external image service ever sees it, so a
-                printed card does not depend on somebody else's server still being up. */}
-            <div className="w-40 shrink-0" dangerouslySetInnerHTML={{ __html: qr }} />
-            <p className="min-w-0 flex-1 text-[11px] text-gray-500">
-              This code encodes the address on this page and nothing else.
-            </p>
-          </div>
-        </section>
-      )}
+      {/* CPR-BOOK-EMAIL-001 s4: no QR here. A patient reading this page is already at the
+          destination the code would encode; the QR and share tools are practitioner tooling and
+          live in Practice Setup. */}
 
       <p className="mt-8 text-[11px] text-gray-400">
         <Link href="/practice" className="hover:underline">Competen Practice</Link>

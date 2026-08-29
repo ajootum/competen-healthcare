@@ -69,7 +69,9 @@ export const NOT_BUILT = [
     // the challenge store and 254 built the patient session. Both exist, and so does the whole request /
     // verify / intake / confirmation path in patient-booking.ts. What is missing is a PROVIDER, which is
     // configuration rather than code -- so this entry now describes a deployment, and says which.
-    detail: "Sending a one-time code to a patient needs an SMS gateway or a mail provider, and this deployment has none -- issueOtp refuses outright rather than printing the code or pretending it sent one. The machinery around it is built and exercised: the challenge store, the short-lived patient session, and the request/verify/intake/confirmation path, all proven by practice-patient-intake-harness.ts. Everything else in s11 -- resolving a handle, a number, a QR code or a URL to a practitioner -- is built.",
+    // ⚠ REWRITTEN 2026-08-29 (CPR-BOOK-EMAIL-001): the old sentence said this deployment had no mail
+    // provider, which stopped being true. What decides today is the PRACTICE's own switch.
+    detail: "Sending a one-time code needs a sending channel the practice has switched on in Patient Communications. A practice with email on sends codes for real; one without has no channel, and the code is refused outright rather than printed to the screen or pretended sent. The machinery is built and exercised end to end: the challenge store, the short-lived patient session, and the request/verify/intake/confirmation path.",
   },
   {
     key: "licence_verification",
