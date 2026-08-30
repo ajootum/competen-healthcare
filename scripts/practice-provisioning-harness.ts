@@ -29,6 +29,8 @@
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, PROVISIONING_STEPS, type IndividualRequest } from "../src/lib/practice/provisioning";
+import { CP_BASELINE_VERSION, BASELINE_RULE_NAME } from "../src/lib/practice/baseline";
+import { messagingStatus } from "../src/lib/practice/messaging";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
@@ -164,6 +166,72 @@ async function main() {
     JSON.stringify({ ...c2, membershipRoles: undefined }));
   ok("re-running provisioning does not duplicate capabilities either",
     c2.capabilities === c1.capabilities, `${c1.capabilities} -> ${c2.capabilities}`);
+
+  // ── 2.5 CPR-PROV-DEFAULTS-001: the Competen Standard baseline, seeded once and only into emptiness ──
+  //
+  // ⚠ THESE RUN AFTER run2, DELIBERATELY. Every figure below is asserted on a workspace that has been
+  // provisioned TWICE, so "exactly one" is simultaneously DEF-01 (the starter state exists) and DEF-02
+  // (a retry converged rather than duplicated).
+
+  const { data: cfgRow } = await admin.from("practice_configuration")
+    .select("feature_flags").eq("workspace_id", wsId).eq("is_effective", true).maybeSingle();
+  ok("DEF-01. the baseline version is recorded on the configuration",
+    (cfgRow?.feature_flags as any)?.baseline_version === CP_BASELINE_VERSION,
+    JSON.stringify(cfgRow?.feature_flags ?? null));
+
+  const { data: seededRules } = await admin.from("practice_booking_rule")
+    .select("name, status, active, visibility, booking_horizon_days, lead_time_minutes, cancellation_notice_minutes, required_information")
+    .eq("workspace_id", wsId);
+  ok("DEF-01/02. exactly one starter booking rule, after two provisioning runs",
+    (seededRules ?? []).length === 1 && seededRules![0].name === BASELINE_RULE_NAME,
+    JSON.stringify((seededRules ?? []).map((r: any) => r.name)));
+  ok("DEF-01. the starter rule carries the V1 booking baseline: 120-day horizon, 30-minute cutoff, no cancellation penalty",
+    seededRules?.[0]?.booking_horizon_days === 120 && seededRules?.[0]?.lead_time_minutes === 30
+    && (seededRules?.[0]?.cancellation_notice_minutes ?? 0) === 0,
+    JSON.stringify(seededRules?.[0] ?? null));
+  ok("DEF-01. the starter rule is in force and serves BOTH engines: status active for the card chain, active flag for the offering engine",
+    seededRules?.[0]?.status === "active" && seededRules?.[0]?.active === true);
+  ok("DEF-01. the pilot's email requirement is on the rule -- email is required at booking",
+    (seededRules?.[0]?.required_information as any)?.fields?.contact_email?.level === "required",
+    JSON.stringify(seededRules?.[0]?.required_information ?? null));
+
+  const { data: seededTpls } = await admin.from("practice_registration_template")
+    .select("id, name, status, is_default").eq("workspace_id", wsId);
+  ok("DEF-01/02. exactly one starter registration template, published, after two runs",
+    (seededTpls ?? []).length === 1 && seededTpls![0].status === "published",
+    JSON.stringify((seededTpls ?? []).map((t: any) => `${t.name}:${t.status}`)));
+  const { count: fieldCount } = await admin.from("practice_registration_field")
+    .select("*", { count: "exact", head: true }).eq("workspace_id", wsId);
+  ok("DEF-01. the starter template carries the canonical core fields rather than being an empty shell",
+    (fieldCount ?? 0) >= 8, `${fieldCount} fields`);
+
+  // The email channel: seeded ONLY where the deployment can actually send (never fabricated).
+  const emailConfigured = messagingStatus().email.configured;
+  const { data: chanRows } = await admin.from("practice_message_channel")
+    .select("kind, enabled, sender_name").eq("workspace_id", wsId).eq("kind", "email");
+  if (emailConfigured) {
+    ok("DEF-01/13. the email channel is on, named after the practice, exactly once",
+      (chanRows ?? []).length === 1 && chanRows![0].enabled === true
+      && chanRows![0].sender_name === PAYLOAD.displayName,
+      JSON.stringify(chanRows ?? []));
+  } else {
+    ok("DEF-13. with no provider on this deployment, NO email channel row is fabricated",
+      (chanRows ?? []).length === 0, JSON.stringify(chanRows ?? []));
+  }
+
+  // DEF-12: the baseline fabricates no availability and no bookable inventory.
+  const { count: sessCount } = await admin.from("practice_availability_template")
+    .select("*", { count: "exact", head: true }).eq("workspace_id", wsId);
+  const { count: slotCount } = await admin.from("practice_availability_slot")
+    .select("*", { count: "exact", head: true }).eq("workspace_id", wsId);
+  ok("DEF-12. no clinic, session or slot exists merely because the baseline was provisioned",
+    (sessCount ?? -1) === 0 && (slotCount ?? -1) === 0, `sessions=${sessCount} slots=${slotCount}`);
+
+  // DEF-11: no booking page exists, let alone a published one -- publishing stays the deliberate act.
+  const { count: pageCount } = await admin.from("practice_booking_access")
+    .select("*", { count: "exact", head: true }).eq("workspace_id", wsId);
+  ok("DEF-11. no public booking page was created or published by the baseline",
+    (pageCount ?? -1) === 0, `pages=${pageCount}`);
 
   // ── 3. The idempotency key is unique at the database ───────────────────────
   const dup = await admin.from("provisioning_request").insert({

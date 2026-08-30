@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { audit } from "./audit";
 import { seedTaxonomy } from "./taxonomy";
+import { seedBaselineDefaults } from "./baseline";
 
 // Competen Practice provisioning orchestrator (CPR-PROV-001 sections 3-8, 11-13).
 //
@@ -386,7 +387,21 @@ export async function runProvisioning(admin: any, req: {
     if (error && !/duplicate|unique/i.test(error.message)) return fail("create_onboarding", "ONBOARDING_CREATE_FAILED");
     await audit(admin, { workspaceId, actorId: req.target_user_id, eventType: "practice.onboarding_started", payload: { currentStep: "professional_profile" }, correlationId: req.correlation_id });
   }
-  await markStep(admin, req.id, "create_onboarding", "succeeded");
+  // ── CPR-PROV-DEFAULTS-001: THE BASELINE, SEEDED HERE FOR THE SAME REASON THE TAXONOMY RIDES STEP 4.
+  // provisioning_step.step_code is a closed CHECK list (migration 191), so the baseline rides an
+  // existing step. It runs at step 6 because everything it needs now exists -- membership,
+  // capabilities, configuration, entitlement -- and it resolves the OWNER'S real context and writes
+  // through the canonical services, so every seeded record is capability-checked, versioned and
+  // audited exactly as a human's would be. Every part seeds only into emptiness, which is what makes
+  // a retry converge and an established practice untouchable.
+  //
+  // ⚠ AND IT DOES NOT FAIL PROVISIONING. A practice without its starter rule or form is recoverable
+  // from Practice Setup in minutes; a provisioning run halted here would leave a half-built practice
+  // behind for a fault the owner can fix. The failure is recorded on the step rather than swallowed.
+  const baseline = await seedBaselineDefaults(admin, workspaceId, req.target_user_id, req.correlation_id ?? req.id);
+  await markStep(admin, req.id, "create_onboarding", "succeeded",
+    baseline.ok ? undefined : "BASELINE_SEED_FAILED");
+  if (!baseline.ok) console.error(`[practice] baseline seed failed for ${workspaceId}: ${baseline.detail}`);
 
   // 7. publish_completed: workspace moves to ONBOARDING, request to COMPLETED.
   await markStep(admin, req.id, "publish_completed", "running");
