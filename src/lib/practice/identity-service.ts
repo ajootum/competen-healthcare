@@ -1343,6 +1343,18 @@ function publicView(row: any) {
     biography: row.biography,
     languages: row.languages,
     consultationTypes: row.consultation_types,
+    // ⚠ NO LICENCE FIELD REACHES THIS VIEW, AND CPR-BOOK-PROFILE-001 s4 DID NOT CHANGE THAT.
+    //
+    // That spec permits a "Verified practitioner" indicator "only if CP has a canonical verification
+    // state that justifies the claim", and this codebase had already answered the second half of that
+    // sentence: NOT_BUILT's licence_verification entry says the licence_verified state is "a provenance
+    // record rather than a verification. Nothing here contacts a council." A blue tick beside a real
+    // clinician's name tells a patient a regulator was checked. Nothing here has ever checked one.
+    //
+    // So the projection stays as it was, the badge is not rendered, and turning it on is an owner
+    // decision that needs a real verification behind it rather than a UI change.
+    // practice-booking-link-harness 5b-tick is the assertion that holds this line -- it went red the
+    // moment this field was added, which is how the conflict was found rather than shipped.
     discovery: row.discovery,
     bookingUrl: row.handle ? bookingUrl(row.handle) : null,
     // WHETHER BOOKING IS OPEN, and why not when it is not. s7's modes differ in exactly this.

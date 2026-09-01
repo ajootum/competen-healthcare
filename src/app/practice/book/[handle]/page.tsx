@@ -1,11 +1,14 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolveHandle } from "@/lib/practice/identity-service";
-import { publicBookingEntry } from "@/lib/practice/patient-booking";
+import { publicBookingProfile } from "@/lib/practice/public-profile";
+import ProfileView from "./ProfileView";
+import AvailabilityBlock, { AvailabilityPending } from "./AvailabilityBlock";
 
-// /practice/book/@handle -- CPB-002's canonical practitioner URL.
+// /practice/book/@handle -- CPB-002's canonical practitioner URL, CPR-BOOK-PROFILE-001's public profile.
 //
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // ⚠ THIS FILE USED TO LIVE AT src/app/[handle]/page.tsx, AT THE ROOT, AND THE MOVE IS THE POINT.
@@ -14,34 +17,24 @@ import { publicBookingEntry } from "@/lib/practice/patient-booking";
 // address is now https://competenhealthcare.com/practice/book/@handle: one domain, no subdomain, the
 // path carrying the meaning. identity-service.ts records all three candidates and which was chosen.
 //
-// ---- WHAT THE ROOT ROUTE WAS CATCHING, AND WHY LOSING IT IS AN IMPROVEMENT --------------------------
-//
-// A root-level dynamic segment matches EVERY unmatched single top-level path. Next.js gives a static
-// segment precedence, so it shadowed none of /students, /hospitals, /practice, /login and the rest, and
-// robots.ts, sitemap.ts and favicon.ico are metadata routes that also outrank it. What it did catch was
-// everything else: /foo, /pricing, /careers, a typo, a scanner probing for /wp-admin. Each of those was
-// answered by a `force-dynamic` server render that opened an admin Supabase client before deciding the
-// segment did not begin with '@' and calling notFound().
-//
-// So nothing was shadowed, and the status codes were the same -- but every 404 on a one-segment URL was
-// a dynamic render, and any top-level route added later would have had to win a precedence argument
-// nobody would have remembered to check. Under /practice/book/ the segment is reachable only beneath a
-// static prefix, and an unmatched /foo is a plain 404 again.
-//
-// ---- ⚠ AND THE OLD PATH IS DELETED RATHER THAN REDIRECTED ------------------------------------------
-//
-// A route that silently stops resolving is how a printed link dies, so this was checked against the
-// database rather than assumed: practice_practitioner_identity holds thirty rows and EVERY ONE has a
-// null handle, practice_handle_history is empty and practice_booking_access is empty. No /@handle URL
-// has ever resolved to anything, for anybody, so none can have been printed, shared or bookmarked.
-// There is nothing to redirect. If a single handle had been claimed this would have been a permanent
-// redirect instead, and it should be if that ever stops being true before launch.
+// A root-level dynamic segment matched EVERY unmatched single top-level path, so every 404 on a
+// one-segment URL was a dynamic render that opened an admin Supabase client before deciding the segment
+// did not begin with '@'. Under /practice/book/ the segment is reachable only beneath a static prefix.
 //
 // A HIDDEN PRACTITIONER IS A 404, NOT A REFUSAL. "This person exists but will not see you" is a
 // disclosure about a named individual; nothing here distinguishes it from a handle never issued.
 //
-// s7: only a practitioner who chose 'public' is indexable. Everybody else is noindex -- the position the
-// site already takes for /verify, where unguessable is not the same as unpublished.
+// ---- ⚠ THE PAGE NO LONGER COMPOSES ITSELF FROM WHATEVER THE READS RETURNED --------------------------
+//
+// It used to hold the identity row's public view AND the booking entry, and render fields from both.
+// That is how a patient page came to carry this practitioner's internal CP number, the raw booking URL
+// it was already at, and a free-text "consultation types" field whose live value on the owner's own
+// profile was the word "All types". None of those was a decision; each was simply in an object this
+// file already had.
+//
+// publicBookingProfile() is now the boundary (CPR-BOOK-PROFILE-001 s14): one allowlisted projection,
+// exported as data and asserted by a test, rendered by a component the practitioner's preview also
+// mounts. This file's whole job is routing, robots and the four resolution outcomes.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 
 export const dynamic = "force-dynamic";
@@ -61,6 +54,11 @@ export async function generateMetadata({ params }: {
   const resolved = await resolveHandle(createAdminClient(), handle);
   if (resolved.kind !== "found") return { robots: { index: false, follow: false } };
 
+  // s7: only a practitioner who chose 'public' is indexable. Everybody else is noindex -- the position
+  // the site already takes for /verify, where unguessable is not the same as unpublished.
+  //
+  // ⚠ AC-09: this is the ONLY place that policy is stated now. It used to be printed in the patient
+  // footer as well, where it answered a question no patient asked and undermined the page it sat on.
   const listed = resolved.profile.discovery === "public";
   return {
     title: `${resolved.profile.displayName} — Competen Practice`,
@@ -75,13 +73,13 @@ export default async function PractitionerPage({ params }: {
   const handle = handleFrom((await params).handle);
   if (!handle) notFound();
 
-  const resolved = await resolveHandle(createAdminClient(), handle);
+  const resolved = await publicBookingProfile(createAdminClient(), handle);
+
   // s8: legacy URLs redirect automatically after a handle change, so printed cards keep working.
   if (resolved.kind === "redirect") redirect(resolved.to);
-  // ⚠ A DATABASE THAT WOULD NOT ANSWER IS NOT A PRACTITIONER WHO DOES NOT EXIST. resolveHandle used to
-  // discard its read errors and return `none`, so a failed read was served as a 404 -- to a patient
-  // holding a printed card for a live, published clinician. This says what actually happened, and says
-  // exactly the same thing whether or not the handle exists, so it discloses nothing.
+
+  // ⚠ A DATABASE THAT WOULD NOT ANSWER IS NOT A PRACTITIONER WHO DOES NOT EXIST. This says what actually
+  // happened, and says exactly the same thing whether or not the handle exists, so it discloses nothing.
   if (resolved.kind === "unreadable") {
     return (
       <div className="mx-auto max-w-3xl px-5 py-12">
@@ -100,118 +98,24 @@ export default async function PractitionerPage({ params }: {
   if (resolved.kind === "none") notFound();
 
   const p = resolved.profile;
-  // ⚠ READ, NOT WRITTEN INTO THE PAGE. This section used to render a hard-coded paragraph saying booking
-  // could not be built, and that paragraph had quietly stopped being true. publicBookingEntry derives the
-  // answer from the practice's published page and from whether a code could actually be delivered, so the
-  // sentence below changes on its own rather than when somebody remembers to edit this file.
-  const entry = p.handle ? await publicBookingEntry(createAdminClient(), p.handle) : null;
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-12">
-      <header>
-        <p className="text-[12px] font-semibold text-[var(--cp-primary-deep)]">@{p.handle}</p>
-        <h1 className="mt-1 text-2xl font-bold text-gray-900">{p.displayName}</h1>
-        {p.qualifications && <p className="mt-0.5 text-[13px] text-gray-600">{p.qualifications}</p>}
-        {p.specialties && <p className="mt-0.5 text-[13px] text-gray-600">{p.specialties}</p>}
-        {/* Its own line rather than appended to the specialty: a paediatric urologist is a paediatrician
-            AND a urologist, and running the two together reads as one longer specialty name. */}
-        {p.subSpecialty && <p className="text-[13px] text-gray-600">{p.subSpecialty}</p>}
-        <p className="mt-1 text-[11px] text-gray-400">{p.practitionerNumber}</p>
-      </header>
-
-      {p.biography && (
-        <section className="mt-6">
-          <h2 className="text-[13px] font-bold text-gray-900">About</h2>
-          <p className="mt-1 whitespace-pre-wrap text-[13px] text-gray-700">{p.biography}</p>
-        </section>
-      )}
-
-      <div className="mt-6 grid sm:grid-cols-2 gap-4">
-        {p.languages && (
-          <section>
-            <h2 className="text-[12px] font-bold text-gray-900">Languages</h2>
-            <p className="mt-0.5 text-[13px] text-gray-700">{p.languages}</p>
-          </section>
-        )}
-        {p.consultationTypes && (
-          <section>
-            <h2 className="text-[12px] font-bold text-gray-900">Consultation types</h2>
-            <p className="mt-0.5 text-[13px] text-gray-700">{p.consultationTypes}</p>
-          </section>
-        )}
-      </div>
-
-      {/* ── Booking (s11; CPB-001 s5, s6) ───────────────────────────────────────────────────────── */}
-      <section className="mt-8 rounded-xl border border-gray-200 bg-white p-4">
-        <h2 className="text-[13px] font-bold text-gray-900">Booking</h2>
-        {p.bookingNote && <p className="mt-1 text-[12px] text-gray-600">{p.bookingNote}</p>}
-
-        {/* ⚠ WHAT THIS PRACTICE OFFERS, AND ONLY WHERE IT CHOSE TO EXPOSE IT. CPB-001 s6: "Only fields
-            explicitly approved for public display may be rendered." An empty list is drawn as nothing at
-            all rather than as an empty heading -- absence is not a section. */}
-        {entry?.state === "open" && entry.locations.length > 0 && (
-          <div className="mt-3">
-            <h3 className="text-[12px] font-bold text-gray-900">Where</h3>
-            <ul className="mt-0.5 text-[13px] text-gray-700">
-              {entry.locations.map(l => <li key={l.id}>{l.name}</li>)}
-            </ul>
-          </div>
-        )}
-        {entry?.state === "open" && entry.instructions && (
-          <p className="mt-3 whitespace-pre-wrap text-[12px] text-gray-700">{entry.instructions}</p>
-        )}
-
-        {/* ⚠ NO BUTTON UNLESS A PATIENT COULD ACTUALLY FINISH. `canBook` is false whenever the practice
-            has published nothing or a code could not reach anybody, and `canRequestWithoutCode` is true
-            only where the practice deliberately turned that on. Both are derived from stores, so this
-            offers what can actually be completed and nothing else.
-
-            ⚠ AND THEY ARE TWO DIFFERENT OFFERS WITH TWO DIFFERENT WORDS. A request is not a booking: it
-            makes no appointment and holds no time, and a button that said "Book" and produced a message
-            would be the worst sentence on this page. */}
-        {/* CPR-BOOK-HFE-002 s17: an open page whose clinics are all internal-only is empty by
-            CONFIGURATION, and a patient told so up front does not walk into a bare diary and wonder
-            whether it is full. The sentence comes from the entry itself, never composed here. */}
-        {entry?.canBook && entry.availability?.state === "no_public_clinic" && entry.availability.patientNote && (
-          <p className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-3 text-[12px] leading-relaxed text-gray-600">
-            {entry.availability.patientNote}
-          </p>
-        )}
-        {entry?.canBook && (
-          <Link href={`/practice/book/@${p.handle}/appointment`}
-            className="mt-3 inline-block rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12.5px] font-semibold text-white">
-            Book an appointment
-          </Link>
-        )}
-        {entry && !entry.canBook && entry.canRequestWithoutCode && (
-          <Link href={`/practice/book/@${p.handle}/appointment`}
-            className="mt-3 inline-block rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-[12.5px] font-semibold text-amber-900">
-            Request an appointment
-          </Link>
-        )}
-
-        {entry && !entry.canBook && entry.whyNot && (
-          <p className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-3 text-[12px] leading-relaxed text-gray-600">
-            {entry.whyNot}
-          </p>
-        )}
-        {entry?.state === "unreadable" && (
-          <p className="mt-2 text-[11px] text-gray-500">
-            Nothing about this practice&rsquo;s booking has been assumed &mdash; the check itself did not complete.
-          </p>
-        )}
-
-        <p className="mt-3 break-all text-[11px] text-gray-500">{p.bookingUrl}</p>
-      </section>
-
-      {/* CPR-BOOK-EMAIL-001 s4: no QR here. A patient reading this page is already at the
-          destination the code would encode; the QR and share tools are practitioner tooling and
-          live in Practice Setup. */}
-
-      <p className="mt-8 text-[11px] text-gray-400">
-        <Link href="/practice" className="hover:underline">Competen Practice</Link>
-        {p.discovery !== "public" && " · this page is not listed in search"}
-      </p>
+    <div className="min-h-screen bg-[var(--cp-canvas,#f8fafc)]">
+      <ProfileView
+        p={p}
+        // ⚠ SUSPENDED, SO THE NAME AND THE BUTTON NEVER WAIT FOR A DIARY SCAN (s16). The region is
+        // offered only where a patient could act on it -- a next-available time under a page that
+        // cannot be booked is a shortcut to a dead end.
+        availabilitySlot={p.booking.canBook && p.booking.bookingPath ? (
+          <Suspense fallback={<AvailabilityPending />}>
+            <AvailabilityBlock
+              handle={p.handle}
+              types={p.consultationTypes.map(t => t.code)}
+              bookingPath={p.booking.bookingPath}
+            />
+          </Suspense>
+        ) : null}
+      />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -14,6 +15,7 @@ import { publicBookingEntry, publicOfferingGate, type PublicBookingEntry } from 
 import { publicFailureAction } from "@/lib/practice/public-failure-constants";
 import RuleWorkspace from "../availability-booking/RuleWorkspace";
 import SetupWizard from "./SetupWizard";
+import ProfilePreview from "./ProfilePreview";
 import { computeSetupWizard } from "./wizard";
 import PublishWorkspace from "../availability-booking/PublishWorkspace";
 import BookingLinkCard from "../../home/BookingLinkCard";
@@ -40,6 +42,10 @@ const card = "rounded-xl border border-gray-200 bg-white p-4 shadow-[0_1px_2px_r
 
 const TABS = [
   { key: "overview", label: "Overview" },
+  // CPR-BOOK-PROFILE-001 s13: the public page becomes GOVERNED rather than accidentally assembled.
+  // It sits second because it answers the question every other tab is in service of -- what a patient
+  // actually finds -- and it renders the public component itself rather than a description of it.
+  { key: "profile", label: "Public profile" },
   { key: "page", label: "Booking page" },
   { key: "clinics", label: "Clinics & availability" },
   { key: "information", label: "Patient information" },
@@ -324,6 +330,20 @@ export default async function PatientBookingPage({ searchParams }: {
             </section>
           );
         })()}
+
+        {/* ══ PUBLIC PROFILE — CPR-BOOK-PROFILE-001 s13. ═══════════════════════════════════════
+            The readiness list and the page itself, both from the public projection. Suspended because
+            it runs a diary scan: the tabs and the wizard above must not wait for it. */}
+        {active === "profile" && (
+          <Suspense fallback={
+            <div aria-hidden className="h-64 animate-pulse rounded-xl border border-dashed border-gray-200 bg-white/60" />
+          }>
+            <ProfilePreview handle={
+              bookingLink.state === "live" || bookingLink.state === "claimed_not_open"
+                ? bookingLink.handle : null
+            } />
+          </Suspense>
+        )}
 
         {/* ══ BOOKING PAGE — the page's own settings, open (s5). ════════════════════════════════ */}
         {active === "page" && (

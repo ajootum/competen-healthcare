@@ -100,8 +100,15 @@ export type PublicBookingPage = {
   otpRequired: boolean;
   otpChannel: string;
   guestBookingAllowed: boolean;
-  /** Only what the practice chose to expose. Empty means nothing is visible, not everything. */
-  locations: { id: string; name: string }[];
+  /**
+   * Only what the practice chose to expose. Empty means nothing is visible, not everything.
+   *
+   * ⚠ `mode` IS A PATIENT WORD DERIVED FROM THE LOCATION'S KIND, NOT THE KIND ITSELF.
+   * CPR-BOOK-PROFILE-001 s8 forbids operational codes on the patient page, and 'outreach' or
+   * 'independent' answer a question no patient asked. What a patient needs to know is whether they
+   * travel somewhere or not, so the five kinds collapse to the two answers that change their day.
+   */
+  locations: { id: string; name: string; mode: "in_person" | "virtual" }[];
   appointmentTypes: string[];
 };
 
@@ -135,12 +142,20 @@ export async function resolveBookingPage(
   // list: the column is a uuid[] with no foreign key, so a stale or foreign id must not become a name
   // on a public page even though saveBookingAccess refuses to write one.
   const ids = ((data.visible_location_ids ?? []) as string[]).map(String);
-  let locations: { id: string; name: string }[] = [];
+  let locations: PublicBookingPage["locations"] = [];
   if (ids.length > 0) {
     const { data: locs, error: lErr } = await admin.from("practice_location")
-      .select("id, name, active").eq("workspace_id", data.workspace_id).in("id", ids);
+      .select("id, name, active, type").eq("workspace_id", data.workspace_id).in("id", ids);
     if (lErr) return { state: "unreadable", reason: `this practice's locations could not be read: ${lErr.message}` };
-    locations = ((locs ?? []) as any[]).filter(l => l.active).map(l => ({ id: l.id as string, name: l.name as string }));
+    locations = ((locs ?? []) as any[]).filter(l => l.active).map(l => ({
+      id: l.id as string,
+      name: l.name as string,
+      // ⚠ ONLY 'teleconsultation' MEANS THE PATIENT STAYS HOME. Every other kind -- hospital, clinic,
+      // outreach, independent -- is somewhere they have to be, and guessing otherwise sends somebody to
+      // the wrong place. An unrecognised kind therefore reads as in-person, which is the safe default:
+      // a patient who travels needlessly is inconvenienced, one who waits at home misses the appointment.
+      mode: l.type === "teleconsultation" ? "virtual" as const : "in_person" as const,
+    }));
   }
 
   return {
@@ -2007,7 +2022,8 @@ export type PublicBookingEntry = {
   fallbackEmail: string | null;
   fallbackPhone: string | null;
   privacyNotice: string | null;
-  locations: { id: string; name: string }[];
+  /** ⚠ `mode` IS THE PATIENT WORD, not the location's kind. See PublicBookingPage.locations. */
+  locations: { id: string; name: string; mode: "in_person" | "virtual" }[];
   appointmentTypes: string[];
   referenceNote: string;
 };
@@ -2032,7 +2048,7 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
     // put a practice.s address in front of somebody it never agreed to hear from.
     fallbackEmail: null as string | null, fallbackPhone: null as string | null,
     privacyNotice: null as string | null,
-    locations: [] as { id: string; name: string }[], appointmentTypes: [] as string[],
+    locations: [] as PublicBookingEntry["locations"], appointmentTypes: [] as string[],
     referenceNote: BOOKING_REFERENCE_NOTE,
     closedBecause: null as PublicBookingEntry["closedBecause"],
     availability: { state: "unknown", patientNote: null } as PublicBookingEntry["availability"],
