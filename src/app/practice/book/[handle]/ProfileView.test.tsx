@@ -30,6 +30,7 @@ const full: PublicBookingProfile = {
   handle: "elisham1",
   displayName: "Mullen Elisha",
   initials: "ME",
+  photoUrl: null,
   credentials: "BSN",
   specialty: "Pediatric Critical Care",
   subSpecialty: null,
@@ -162,6 +163,24 @@ describe("CPR-BOOK-PROFILE-001 public booking profile", () => {
     expect(html).toContain("Online consultation");
     // The operational vocabulary must not reach the patient.
     expect(html).not.toMatch(/teleconsultation|outreach|independent/i);
+  });
+
+  it("renders initials and NO image element when there is no photograph (s17)", () => {
+    const html = render(full);
+    // ⚠ "DO NOT SHOW BROKEN IMAGE" MEANS THERE IS NO <img> AT ALL, not an <img> with an empty src --
+    // a browser draws the second one as a broken-file icon under a clinician's name.
+    expect(html).not.toMatch(/<img/);
+    expect(html).toContain("ME");
+  });
+
+  it("renders the photograph when there is one, with the person as its alt text (s16)", () => {
+    const html = render({ ...full, photoUrl: "https://example.supabase.co/storage/v1/object/public/practitioner-photos/abc.jpg" });
+    expect(html).toMatch(/<img[^>]+src="https:\/\/example\.supabase\.co[^"]+abc\.jpg"/);
+    // The alt describes who is depicted, not the file. "Profile photo" tells a screen-reader user
+    // nothing the heading beside it did not already say.
+    expect(html).toMatch(/<img[^>]+alt="Mullen Elisha"/);
+    // And the initials fallback is not also drawn underneath it.
+    expect(html).not.toMatch(/>ME</);
   });
 
   it("carries the practice's own help contact only when it published one (s15)", () => {

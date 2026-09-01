@@ -5,6 +5,8 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { identitySetupView, resolveDisplayName } from "@/lib/practice/identity-service";
 import BookingAddressConsole from "./BookingAddressConsole";
+import PhotoConsole from "./PhotoConsole";
+import { photoUrl } from "@/lib/practice/practitioner-photo";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // PIS-000 s3, s8, s15 -- PRACTICE SETUP: YOUR BOOKING ADDRESS.
@@ -74,6 +76,18 @@ export default async function PracticeBookingAddressPage() {
         </div>
 
         <BookingAddressConsole identity={identity} />
+
+        {/* CPR-BOOK-PROFILE-001 s4: the photograph sits with the rest of the public identity, because
+            that is the question it answers -- what a patient sees when they open the address above.
+            It is only offered once an identity exists: there is nothing to attach a photograph to
+            before that, and an upload control over no identity is a button that cannot work. */}
+        {identity.state !== "none" && (
+          <PhotoConsole
+            photoUrl={photoUrl(identity.publicProfile.photoPath)}
+            displayName={identity.displayName ?? "You"}
+            mayManage={hasCapability(shell.ctx, "practice.settings.manage")}
+          />
+        )}
       </div>
     </div>
   );

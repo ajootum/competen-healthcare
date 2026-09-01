@@ -155,10 +155,44 @@ async function main() {
   ok("3b. no internal id of any kind is serialised (s14, s15)",
     !/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(flat), flat.slice(0, 200));
   ok("3c. the internal CP practitioner number is absent (AC-02)", !/CP-\d{6}-\d/.test(flat));
-  ok("3d. no absolute URL is serialised -- the page links, it does not print an address (AC-04)",
-    !/https?:\/\//.test(flat));
+  // ⚠ NARROWED FROM "no absolute URL at all", WHICH WAS TRUE ONLY UNTIL PHOTOGRAPHS EXISTED. A photo is
+  // served from storage and its address is legitimately absolute; what AC-04 forbids is printing the
+  // BOOKING address on a page the patient is already reading. The broad version would have failed the
+  // first time anybody uploaded a photograph, for a reason that has nothing to do with the rule.
+  ok("3d. the booking address is never serialised -- the page links, it does not print it (AC-04)",
+    !/https?:\/\/[^"]*\/practice\/book/.test(flat) && !/competenhealthcare\.com/.test(flat),
+    flat.match(/https?:\/\/[^"]+/)?.[0] ?? "");
   ok("3e. the identity's free-text consultation field never reaches the projection (AC-05)",
     !/All types/i.test(flat));
+
+  // ── 3f-3h. The photograph (s4, migration 362) ─────────────────────────────
+  //
+  // ⚠ THESE PASS BOTH BEFORE AND AFTER THE MIGRATION IS APPLIED, deliberately. Migrations here are run
+  // by hand, so a harness that only passes afterwards turns a pending owner action into a red build --
+  // and a harness that only passes BEFORE would never notice the feature arriving. What is asserted is
+  // the invariant that holds either way: no photograph means no photo URL and no <img> anywhere near
+  // this projection, and a stored path is composed into exactly one public address.
+  ok("3f. a practitioner with no photograph has a null photoUrl, never an empty string",
+    found.profile.photoUrl === null, JSON.stringify(found.profile.photoUrl));
+
+  const { error: photoErr } = await admin.from("practice_practitioner_identity")
+    .update({ photo_path: "harness-fake.jpg", photo_updated_at: new Date().toISOString() })
+    .eq("user_id", OWNER);
+  if (photoErr && /photo_path|column/i.test(photoErr.message)) {
+    console.log("  SKIP  3g/3h. migration 362 is not applied on this database yet -- the photo columns do not exist");
+  } else {
+    ok("3g. a stored path becomes exactly one public address, composed from the configured host",
+      !photoErr, photoErr?.message ?? "");
+    const withPhoto = await publicBookingProfile(admin, HANDLE);
+    const url = withPhoto.kind === "found" ? withPhoto.profile.photoUrl : null;
+    ok("3h. and the address points at the photographs bucket and the stored object, nothing else",
+      typeof url === "string"
+      && url.includes("/storage/v1/object/public/practitioner-photos/")
+      && url.endsWith("harness-fake.jpg"),
+      String(url));
+    await admin.from("practice_practitioner_identity")
+      .update({ photo_path: null, photo_updated_at: null }).eq("user_id", OWNER);
+  }
 
   // ── 4. Verification: the badge that is NOT built (s4) ─────────────────────
   //

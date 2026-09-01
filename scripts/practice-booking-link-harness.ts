@@ -114,8 +114,23 @@ function functionsIn(value: unknown, path = "$"): string[] {
  * shown to patients. The comp's blue tick is a claim to a patient that somebody checked. Assertion 5b
  * proves the trio never reaches the public payload, which is the property that actually matters; a
  * blanket pattern here would have failed on a column that is right to exist.
+ *
+ * ⚠ `photo` AND `avatar` WERE REMOVED FROM THIS PATTERN ON 2026-09-01, and the removal is a change of
+ * fact rather than a relaxation of the rule. They belonged here while no photograph could exist: a
+ * portrait beside a clinician's name, with no store behind it, is exactly the invented content this
+ * pattern refuses. CPR-BOOK-PROFILE-001 s4 asked for one, the owner asked for it explicitly, and
+ * migration 362 gives it a real column and a real bucket.
+ *
+ * The distinction from the blue tick is the whole reason one moved and the other did not. A verified
+ * badge is a CLAIM ABOUT A CHECK THIS PRODUCT NEVER PERFORMED -- no upload makes it true. A photograph
+ * is content the practitioner supplies about themselves, and it asserts nothing beyond what they chose
+ * to publish. The first is unbacked; the second is theirs.
+ *
+ * What still holds, and is asserted below: a photograph is OPTIONAL, its absence renders as initials
+ * rather than a broken image, and no figure about a clinician's popularity or experience exists anywhere
+ * near this payload.
  */
-const FABRICATED = /rating|review|photo|avatar|portrait|experience|years_|patients_total|response_time|satisfaction/i;
+const FABRICATED = /rating|review|portrait|experience|years_|patients_total|response_time|satisfaction/i;
 
 async function main() {
   console.log("\nCPB-002 -- public identity, booking link and sharing\n");

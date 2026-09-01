@@ -2,6 +2,7 @@ import { resolveHandle, bookingPath } from "@/lib/practice/identity-service";
 import { publicBookingEntry, nextAvailableDates } from "@/lib/practice/patient-booking";
 import { appointmentTypeLabel } from "@/lib/practice/practice-session-constants";
 import { practiceToday } from "@/lib/practice/practice-time";
+import { photoUrl } from "@/lib/practice/practitioner-photo";
 import { formatTime } from "@/lib/datetime";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -43,7 +44,7 @@ import { formatTime } from "@/lib/datetime";
  * that the object this module builds has these keys and no others.
  */
 export const PUBLIC_PROFILE_FIELDS = [
-  "handle", "displayName", "initials", "credentials", "specialty", "subSpecialty",
+  "handle", "displayName", "initials", "photoUrl", "credentials", "specialty", "subSpecialty",
   "bio", "languages", "practiceName", "locations", "consultationTypes",
   "booking", "availabilityNote", "help", "privacyNotice", "instructions",
 ] as const;
@@ -77,6 +78,11 @@ export type PublicBookingProfile = {
   displayName: string;
   /** s4's fallback when there is no photograph. Composed here so both renderers agree on it. */
   initials: string;
+  /**
+   * s4's optional photograph, as a public address. Null is the ordinary case and renders as initials --
+   * s17: "No photo -> use initials/avatar fallback; do not show broken image."
+   */
+  photoUrl: string | null;
   credentials: string | null;
   specialty: string | null;
   subSpecialty: string | null;
@@ -264,6 +270,10 @@ export async function publicBookingProfile(admin: any, rawHandle: string): Promi
       handle: p.handle,
       displayName: p.displayName,
       initials: initialsOf(p.displayName),
+      // ⚠ THE ADDRESS IS COMPOSED HERE AND NOWHERE ELSE, from the stored path. A screen that built it
+      // from the path itself would be a second construction of the same URL -- the mistake the booking
+      // link already taught this codebase.
+      photoUrl: photoUrl(p.photoPath),
       credentials: p.qualifications ?? null,
       specialty: p.specialties ?? null,
       subSpecialty: p.subSpecialty ?? null,

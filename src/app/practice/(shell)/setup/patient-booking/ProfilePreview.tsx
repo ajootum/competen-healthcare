@@ -174,12 +174,13 @@ export default async function ProfilePreview({ handle }: { handle: string | null
         + "patient that a regulator was checked. Nothing on your side is missing.",
     },
     {
-      // s4/s17: there is no photograph field in this product. Named as an absence rather than left to
-      // look like a setting the practitioner failed to find.
-      label: "Profile photograph",
-      state: "optional_absent",
-      detail: "Photographs are not part of this product yet, so every profile shows initials. Nothing "
-        + "on your side is missing.",
+      // s4/s17: optional, and marked optional. A profile with initials is finished, not deficient.
+      label: "Photograph (optional)",
+      state: p.photoUrl ? "present" : "optional_absent",
+      detail: p.photoUrl
+        ? "Your photograph appears on your booking page."
+        : "No photograph. Patients see your initials, which is a finished look rather than a gap.",
+      fix: p.photoUrl ? undefined : { label: "Add a photograph", href: "/practice/setup/identity" },
     },
   ];
 
@@ -208,42 +209,33 @@ export default async function ProfilePreview({ handle }: { handle: string | null
         </ul>
       </section>
 
-      {/* ── THE PHOTOGRAPH PLACEHOLDER ────────────────────────────────────────────────────────────
-          ⚠ IT LIVES HERE AND NOT ON THE PATIENT PAGE, and the distinction is the point. A patient
-          reading a dashed box labelled "photo not available" learns something about this product's
-          roadmap, which is not their business and reads as a page that failed to load. What the
-          patient gets is the initials avatar -- a deliberate, finished treatment.
-
-          The practitioner is a different audience with a different question ("where would my photo
-          go, and why can I not add one?"), so the reserved space is shown to THEM, beside the thing
-          patients actually see. */}
+      {/* ── THE PHOTOGRAPH ────────────────────────────────────────────────────────────────────────
+          Shown to the PRACTITIONER, beside what patients currently get, because "what will this look
+          like" is their question and not a patient's. The patient page itself never draws a labelled
+          empty frame: an avatar with initials is a finished treatment, and a dashed box marked
+          "no photo" reads as a page that failed to load. */}
       <section className={card}>
         <h2 className="text-[13px] font-bold text-gray-900">Photograph</h2>
-        <div className="mt-2 flex flex-wrap items-center gap-5">
-          <div className="flex flex-col items-center gap-1">
+        <div className="mt-2 flex flex-wrap items-center gap-4">
+          {p.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={p.photoUrl} alt={p.displayName} width={64} height={64}
+              className="h-16 w-16 shrink-0 rounded-full object-cover ring-1 ring-gray-200" />
+          ) : (
             <span aria-hidden
-              className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-gray-300 bg-gray-50 text-[20px] text-gray-400">
-              ☺
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              Where a photo would go
-            </span>
-          </div>
-          <span aria-hidden className="text-[16px] text-gray-300">→</span>
-          <div className="flex flex-col items-center gap-1">
-            <span aria-hidden
-              className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[22px] font-bold text-white">
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[22px] font-bold text-white">
               {p.initials}
             </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-              What patients see now
-            </span>
-          </div>
+          )}
           <p className="min-w-[200px] flex-1 text-[11.5px] leading-relaxed text-gray-600">
-            Profile photographs are not part of this product yet, so there is no setting to add one and
-            nothing on your side is missing. Every profile shows initials, which is a finished
-            treatment rather than a gap &mdash; patients see a considered avatar, not an empty frame.
+            {p.photoUrl
+              ? "This is what patients see. Location and camera details are removed from a photograph before it is published."
+              : "Patients see your initials. You can add a photograph if you would like one — it is optional, and a profile without one is complete."}
           </p>
+          <Link href="/practice/setup/identity"
+            className="text-[11.5px] font-semibold text-[var(--cp-primary)] hover:underline">
+            {p.photoUrl ? "Change or remove it" : "Add a photograph"} →
+          </Link>
         </div>
       </section>
 

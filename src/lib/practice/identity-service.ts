@@ -728,6 +728,8 @@ export type IdentitySetupView = {
   publicProfile: {
     qualifications: string; specialties: string; subSpecialty: string; biography: string;
     languages: string; consultationTypes: string;
+    /** s4: the stored object path, null until one is uploaded. The URL is composed by practitioner-photo. */
+    photoPath: string | null;
   };
   /** What a claim costs, in the words the harness also checks. */
   permanenceNotice: string;
@@ -900,6 +902,7 @@ export async function identitySetupView(admin: any, args: {
     emailConfirmed: await authEmailConfirmation(admin, args.userId),
     publicProfile: {
       qualifications: "", specialties: "", subSpecialty: "", biography: "", languages: "", consultationTypes: "",
+      photoPath: null,
     },
     permanenceNotice: HANDLE_PERMANENCE_NOTICE,
     publicationNotice: PUBLICATION_NOTICE,
@@ -910,7 +913,12 @@ export async function identitySetupView(admin: any, args: {
   const bookingPage = await bookingPageState(admin, args.workspaceId);
 
   const { data: row, error } = await admin.from("practice_practitioner_identity")
-    .select("practitioner_number, display_name, handle, discovery, status, qualifications, specialties, sub_specialty, biography, languages, consultation_types")
+    // ⚠ `*` RATHER THAN A COLUMN LIST, AND THE REASON IS SEQUENCING. Migrations here are applied by
+    // hand, so between a deploy and the owner running one the column named in a list DOES NOT EXIST --
+    // and PostgREST fails the WHOLE query, which this function reports as "your identity could not be
+    // read". A screen that breaks until somebody runs SQL is a worse outcome than a field that reads as
+    // null for an hour. Nothing extra is serialised: the typed view below is built field by field.
+    .select("*")
     .eq("user_id", args.userId).maybeSingle();
   // ⚠ A FAILED READ IS NOT "YOU HAVE NO IDENTITY". Reporting it as `none` would offer a practitioner a
   // button that issues a SECOND permanent number the moment the database answered again.
@@ -935,6 +943,7 @@ export async function identitySetupView(admin: any, args: {
     qualifications: row.qualifications ?? "", specialties: row.specialties ?? "", subSpecialty: row.sub_specialty ?? "",
     biography: row.biography ?? "", languages: row.languages ?? "",
     consultationTypes: row.consultation_types ?? "",
+    photoPath: (row.photo_path as string | null) ?? null,
   };
 
   if (row.handle) {
@@ -1343,6 +1352,10 @@ function publicView(row: any) {
     biography: row.biography,
     languages: row.languages,
     consultationTypes: row.consultation_types,
+    // s4's optional photograph. The PATH, not a URL: composing the address is practitioner-photo.ts's
+    // job and there must be exactly one place that does it. Null until migration 362 is applied and a
+    // practitioner uploads one, and the initials avatar is what renders in the meantime.
+    photoPath: row.photo_path ?? null,
     // ⚠ NO LICENCE FIELD REACHES THIS VIEW, AND CPR-BOOK-PROFILE-001 s4 DID NOT CHANGE THAT.
     //
     // That spec permits a "Verified practitioner" indicator "only if CP has a canonical verification

@@ -33,16 +33,34 @@ const MODE_LABEL: Record<string, string> = {
   virtual: "Online consultation",
 };
 
-function Avatar({ initials }: { initials: string }) {
-  // s4/s17: there is no photograph field in this product yet, so every profile renders the initials
-  // fallback the specification prescribes for the no-photo case. It is deliberately not an <img> with
-  // an empty src -- "do not show broken image" is the requirement, and an element that cannot break is
-  // the way to meet it.
+const AVATAR_BOX = "h-16 w-16 shrink-0 rounded-full md:h-20 md:w-20";
+
+function Avatar({ initials, photoUrl, name }: {
+  initials: string; photoUrl: string | null; name: string;
+}) {
+  // ⚠ NO <img> WITHOUT A SOURCE. s17: "do not show broken image" -- so the absent case is not an image
+  // element with an empty src that a browser draws as a broken icon, it is a different element that
+  // cannot break at all.
+  if (!photoUrl) {
+    return (
+      <span aria-hidden
+        className={`${AVATAR_BOX} flex items-center justify-center bg-[var(--cp-primary)] text-[22px] font-bold text-white md:text-[26px]`}>
+        {initials}
+      </span>
+    );
+  }
+
+  // ⚠ THE ALT TEXT IS THE PERSON, NOT THE FILE (s16: "profile photo requires appropriate alt handling").
+  // "Profile photo" tells a screen-reader user nothing they did not already know from the heading
+  // beside it; the clinician's name is what the image actually depicts.
+  //
+  // ⚠ AND IT IS A PLAIN <img>, NOT next/image. The source is a Supabase storage host, so next/image
+  // would need that host in remotePatterns and would proxy every patient's request through the
+  // optimiser for an image already stored at one small size.
+  // eslint-disable-next-line @next/next/no-img-element
   return (
-    <span aria-hidden
-      className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[22px] font-bold text-white md:h-20 md:w-20 md:text-[26px]">
-      {initials}
-    </span>
+    <img src={photoUrl} alt={name} width={80} height={80} loading="eager" decoding="async"
+      className={`${AVATAR_BOX} object-cover ring-1 ring-gray-200`} />
   );
 }
 
@@ -98,7 +116,7 @@ export default function ProfileView({ p, availabilitySlot }: {
           The name is the h1 and the strongest thing on the page. The handle is a small line UNDER it
           (AC-01) rather than the eyebrow it used to be, and the CP number is not here at all (AC-02). */}
       <header className={`${card} flex flex-col gap-3 sm:flex-row sm:items-center`}>
-        <Avatar initials={p.initials} />
+        <Avatar initials={p.initials} photoUrl={p.photoUrl} name={p.displayName} />
         <div className="min-w-0">
           {/* ⚠ NO VERIFIED BADGE, AND NOT BY OVERSIGHT. The comp shows one; this product's licence
               record is "a provenance record rather than a verification. Nothing here contacts a
