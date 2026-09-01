@@ -82,6 +82,11 @@ async function provision(user: string, name: string, suffix: string): Promise<st
   if (error || !req) throw new Error(`provisioning request refused: ${error?.message ?? "no row"}`);
   const run = await runProvisioning(admin, { id: req.id, target_user_id: user, correlation_id: CORR, workspace_id: null }, payload(name));
   if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}${run.detail ? " -- " + run.detail : ""}`);
+  // ⚠ CPR-PROV-DEFAULTS-001 seeds a practice-wide starter rule into every fresh practice. This
+  // harness authors its own rule ladder from a clean slate -- its practice-wide fixture at priority 0
+  // would (rightly) conflict with the seeded rule -- so the starter is removed here.
+  await admin.from("practice_booking_rule").delete()
+    .eq("workspace_id", run.workspaceId).eq("name", "Competen standard booking");
   return run.workspaceId;
 }
 

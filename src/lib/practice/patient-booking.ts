@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { issueOtp, verifyOtp, type Transport } from "@/lib/practice/messaging";
+import { issueOtp, verifyOtp, publicBookingNotice, type Transport } from "@/lib/practice/messaging";
 import { bookUnderRules, evaluateBooking } from "@/lib/practice/booking-rules";
 import { rescheduleAppointment, transitionAppointment, APPOINTMENT_TRANSITIONS } from "@/lib/practice/scheduling";
 import { resolveBookingRule } from "@/lib/practice/availability-config";
@@ -303,11 +303,12 @@ export type BookingConfirmation = {
   appliedRuleId: string | null;
   appliedRuleVersion: number | null;
   /**
-   * ⚠ ALWAYS FALSE IN THIS DEPLOYMENT, AND IT IS A FIELD RATHER THAN PAGE TEXT.
+   * ⚠ READ FROM WHAT THE PROVIDER ACCEPTED, AND IT IS A FIELD RATHER THAN PAGE TEXT.
    *
    * A screen that types "we could not text you" into a paragraph keeps saying it after it stops being
-   * true. This is read from whether anything could actually have sent, so the day a gateway is
-   * configured the sentence changes on its own.
+   * true -- which is exactly what happened: this was hard-coded false with "this practice has no way
+   * to send one yet" baked into the sentence, and the day a practice switched email on, the page kept
+   * saying it. True only when the confirmation was actually handed to a provider.
    */
   confirmationSent: boolean;
   /** What the patient should understand about that. Never "we have sent you a message". */
@@ -344,6 +345,12 @@ export async function submitBookingRequest(admin: any, args: {
   durationMinutes?: number | null;
   sourceKey?: string | null;
   correlationId: string;
+  /**
+   * ⚠ INJECTABLE SO A TEST NEVER EMAILS A REAL ADDRESS. The confirmation send below defaults to the
+   * real provider call, and every harness world carries an ENABLED channel -- a harness that forgets
+   * to inject would hand its fixture's address to the live provider.
+   */
+  transport?: Transport;
 }): Promise<EngineResult<BookingConfirmation>> {
   const page = await resolveBookingPage(admin, args.handle);
   if (page.state !== "ok") return { ok: false, status: 503, code: "READ_FAILED", message: page.reason };
@@ -579,6 +586,21 @@ export async function submitBookingRequest(admin: any, args: {
     };
   }
 
+  // ── THE CONFIRMATION, SENT TO THE ADDRESS THE CODE PROVED (CPR-SET-COMMS-001 s3.2) ──────────────
+  //
+  // ⚠ THE BOOKING IS ALREADY MADE AND NOTHING BELOW CAN UNMAKE IT. publicBookingNotice never throws
+  // and never fails; whatever happens here is reported on the response, not allowed to overturn it.
+  //
+  // ⚠ THE DESTINATION IS THE SESSION'S VERIFIED ONE -- the address the one-time code actually reached
+  // -- never an address typed into the intake form. A form field is a claim; the session is proof.
+  const verifiedDestination = proof.proof.destination;
+  const notice = await publicBookingNotice(admin, {
+    workspaceId: p.workspaceId, appointmentId: booked.data.appointmentId,
+    kind: verifiedDestination.includes("@") ? "email" : "sms", destination: verifiedDestination,
+    correlationId: args.correlationId, transport: args.transport,
+  });
+  const confirmationSent = notice.attempted?.status === "handed_over";
+
   return {
     ok: true,
     data: {
@@ -590,10 +612,12 @@ export async function submitBookingRequest(admin: any, args: {
       appointmentType: args.appointmentType,
       appliedRuleId: booked.data.appliedRuleId,
       appliedRuleVersion: booked.data.appliedRuleVersion,
-      // ⚠ FALSE, AND READ RATHER THAN ASSUMED. Nothing here sends anything.
-      confirmationSent: false,
-      confirmationNote:
-        "Your appointment is booked. Write down the reference above -- no message has been sent to you, because this practice has no way to send one yet, so nothing will arrive by text or email. Contact the practice directly if you need to change or cancel it.",
+      // ⚠ READ FROM WHAT THE PROVIDER ACCEPTED, NEVER ASSUMED. "handed over" is the strongest claim
+      // available -- no receipt exists -- so the sentence says "on its way", not "you have received".
+      confirmationSent,
+      confirmationNote: confirmationSent
+        ? `Your appointment is booked, and a confirmation ${notice.attempted!.kind === "email" ? "email" : "text message"} is on its way to the address you verified. Keep the reference above in case you need to change or cancel.`
+        : "Your appointment is booked. Write down the reference above -- no message has been sent to you, so nothing will arrive by text or email. Contact the practice directly if you need to change or cancel it.",
       // ⚠ SAID, NOT SILENTLY DONE. Somebody who typed a reason for their visit into a practice that does
       // not ask for one is entitled to know it was not kept, rather than to assume the practitioner has
       // read it.
@@ -1810,11 +1834,12 @@ export async function rescheduleManagedBooking(admin: any, args: {
     data: {
       reference: booking.reference, appointmentId: booking.appointmentId,
       from: moved.data.from.scheduledAt, to: moved.data.scheduledAt,
-      // ⚠ READ, NOT ASSUMED, and false in this deployment. Nothing here sends anything.
+      // ⚠ READ, NOT ASSUMED. Changes made from the manage page do not send notices yet -- that is a
+      // fact about THIS page, not about the practice's channels, and the sentence says which.
       confirmationSent: false,
       confirmationNote:
-        "Your appointment has been moved. Write down the new time -- no message has been sent to you, "
-        + "because this practice has no way to send one yet, so nothing will arrive by text or email.",
+        "Your appointment has been moved. Write down the new time -- no message has been sent to you "
+        + "for this change, so nothing will arrive by text or email.",
     },
   };
 }
@@ -1883,8 +1908,8 @@ export async function cancelManagedBooking(admin: any, args: {
       reasonStoredOnBooking: record.stored,
       confirmationSent: false,
       confirmationNote:
-        "This appointment has been cancelled. No message has been sent to you or to the practice, "
-        + "because this practice has no way to send one yet.",
+        "This appointment has been cancelled. No message has been sent to you or to the practice "
+        + "for this change.",
     },
   };
 }

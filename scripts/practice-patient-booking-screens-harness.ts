@@ -523,7 +523,7 @@ async function main() {
   // ⚠ THE CONTROL: A REAL VERIFIED BOOKING ON THE SAME TABLE READS 'verified'. Without it, 3a proves only
   // that this column always says unverified.
   const pairV = await freshPair();
-  const booked = await submitBookingRequest(admin, {
+  const booked = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: pairV.token, intake: intake({ contactPhone: pairV.phone }),
     scheduledAt: timeB, appointmentType: "new_consultation", locationId: locId,
     sourceKey: nextSource(), correlationId: CORR,
@@ -634,7 +634,7 @@ async function main() {
     offeredBeforeD.ok ? JSON.stringify(offeredBeforeD.data.slots.map(s => s.startsAt)) : (offeredBeforeD as any).message);
 
   const pairH = await freshPair();
-  const realBooking = await submitBookingRequest(admin, {
+  const realBooking = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: pairH.token, intake: intake({ contactPhone: pairH.phone }),
     scheduledAt: timeD, appointmentType: "new_consultation", locationId: locId,
     sourceKey: nextSource(), correlationId: CORR,

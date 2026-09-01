@@ -145,6 +145,58 @@ const TEMPLATES: Record<string, {
 
 export const MESSAGE_PURPOSES = Object.keys(TEMPLATES);
 
+// ── MESSAGE-TYPE PREFERENCES (CPR-SET-COMMS-001 s7) ──────────────────────────────────────────────────
+//
+// Per practice, per channel, keyed by message type, stored as jsonb on the channel row. AN ABSENT KEY
+// MEANS ON: the default posture is that a patient is told what happened to their appointment, and
+// switching a message off is a deliberate recorded act.
+//
+// BOOKING VERIFICATION CODES HAVE NO KEY HERE, ON PURPOSE. issueOtp never consults preferences, so
+// "verification off" is not a forbidden value but an unrepresentable one -- a required transactional
+// message cannot be disabled where doing so would break the workflow (s2).
+
+export const CONFIGURABLE_MESSAGE_TYPES = {
+  booking_confirmation: "booking confirmations",
+  cancellation_notice: "cancellation notices",
+  rescheduling_notice: "rescheduling notices",
+} as const;
+export type MessagePreferenceKey = keyof typeof CONFIGURABLE_MESSAGE_TYPES;
+
+/** The message types a practice cannot switch off, each with the sentence a screen refuses with. */
+export const REQUIRED_MESSAGE_TYPES = {
+  booking_verification: "Booking verification codes are required for online booking and cannot be switched off.",
+} as const;
+
+/** Pure, so a screen and a test can ask the same question the service refuses with. */
+export function validatePreferencePatch(patch: Record<string, unknown>):
+  | { ok: true; clean: Partial<Record<MessagePreferenceKey, boolean>> }
+  | { ok: false; message: string } {
+  const clean: Partial<Record<MessagePreferenceKey, boolean>> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (key in REQUIRED_MESSAGE_TYPES)
+      return { ok: false, message: REQUIRED_MESSAGE_TYPES[key as keyof typeof REQUIRED_MESSAGE_TYPES] };
+    if (!(key in CONFIGURABLE_MESSAGE_TYPES))
+      return { ok: false, message: `"${key}" is not a message type this practice can configure` };
+    if (typeof value !== "boolean")
+      return { ok: false, message: `${key} must be true or false` };
+    clean[key as MessagePreferenceKey] = value;
+  }
+  return { ok: true, clean };
+}
+
+/**
+ * The email channel's state as a practitioner sees it (CPR-SET-COMMS-001 s6). DERIVED, NEVER STORED:
+ * computed from configuration and service health at read time, so it cannot go stale and cannot be
+ * set by hand. A row with identity saved but the channel never activated is still SETUP_REQUIRED --
+ * saving valid settings is what activates it, and half-saved is not active.
+ */
+export function emailChannelState(c: {
+  enabled: boolean; senderName: string | null; providerConfigured: boolean;
+}): "SETUP_REQUIRED" | "ACTIVE" | "ACTION_NEEDED" {
+  if (!c.senderName?.trim() || !c.enabled) return "SETUP_REQUIRED";
+  return c.providerConfigured ? "ACTIVE" : "ACTION_NEEDED";
+}
+
 // ── CHANNEL SETTINGS ─────────────────────────────────────────────────────────────────────────────────
 
 export async function channelSettings(admin: any, workspaceId: string) {
@@ -160,6 +212,11 @@ export async function channelSettings(admin: any, workspaceId: string) {
       enabled: !!row?.enabled,
       senderName: row?.sender_name ?? null,
       senderAddress: row?.sender_address ?? null,
+      // FOR EMAIL, sender_address IS the reply-to (CPR-SET-COMMS-001 s3.1). The from-address is
+      // platform-managed, so the one address a practice owns on this channel is where replies land.
+      replyTo: row?.sender_address ?? null,
+      // Absent column (pre-migration-361) and absent keys both read as {} -- every message type on.
+      messagePreferences: (row?.message_preferences ?? {}) as Partial<Record<MessagePreferenceKey, boolean>>,
       requireConsent: row?.require_consent ?? true,
       enabledAt: row?.enabled_at ?? null,
       // WHETHER A PROVIDER EXISTS AT ALL, kept separate from whether the practice switched it on -- so
@@ -172,8 +229,13 @@ export async function channelSettings(admin: any, workspaceId: string) {
   });
 }
 
+/** Syntax only. Nothing here claims the mailbox exists -- "Saved" is the only state this can grant. */
+const EMAIL_SYNTAX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export async function setChannel(admin: any, ctx: WorkspaceContext, args: {
   kind: MessageKind; enabled: boolean; senderName?: string; senderAddress?: string;
+  /** Where a patient's reply lands (CPR-SET-COMMS-001 s3.1). Email only. Stored as sender_address. */
+  replyTo?: string;
   requireConsent?: boolean; correlationId: string;
 }): Promise<EngineResult<{ enabled: boolean }>> {
   if (!ctx.capabilities.includes("practice.settings.manage"))
@@ -190,13 +252,22 @@ export async function setChannel(admin: any, ctx: WorkspaceContext, args: {
       message: "give the sender a name -- a code from an unknown number is indistinguishable from a scam",
     };
 
+  // s8: a reply-to that is not an address sends every patient reply nowhere. Optional, so empty
+  // clears it -- only a non-empty value has a syntax to fail.
+  const replyTo = args.replyTo?.trim() ?? "";
+  if (args.replyTo !== undefined && replyTo && !EMAIL_SYNTAX.test(replyTo))
+    return {
+      ok: false, status: 422, code: "VALIDATION_ERROR",
+      message: "the reply-to address is not a valid email address",
+    };
+
   const { data: existing } = await admin.from("practice_message_channel")
-    .select("id").eq("workspace_id", ctx.workspaceId).eq("kind", args.kind).maybeSingle();
+    .select("id, enabled, sender_name, sender_address").eq("workspace_id", ctx.workspaceId).eq("kind", args.kind).maybeSingle();
 
   const patch = {
     workspace_id: ctx.workspaceId, kind: args.kind, enabled: args.enabled,
     sender_name: args.senderName?.trim() || null,
-    sender_address: args.senderAddress?.trim() || null,
+    sender_address: args.replyTo !== undefined ? (replyTo || null) : (args.senderAddress?.trim() || null),
     require_consent: args.requireConsent ?? true,
     enabled_at: args.enabled ? nowIso() : null,
     enabled_by: args.enabled ? ctx.userId : null,
@@ -207,12 +278,68 @@ export async function setChannel(admin: any, ctx: WorkspaceContext, args: {
     : await admin.from("practice_message_channel").insert(patch);
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
+  // s9: WHICH CATEGORY OF THING CHANGED, without the values. Sender identity and reply-to are audit
+  // categories in their own right, not just riders on an enable/disable event.
+  const changed: string[] = [];
+  if ((existing?.enabled ?? false) !== args.enabled) changed.push("channel_state");
+  if ((existing?.sender_name ?? null) !== patch.sender_name) changed.push("sender_name");
+  if ((existing?.sender_address ?? null) !== patch.sender_address) changed.push("reply_to");
+
   await audit(admin, {
     workspaceId: ctx.workspaceId, actorId: ctx.userId,
     eventType: args.enabled ? "practice.channel_enabled" : "practice.channel_disabled",
-    payload: { kind: args.kind }, correlationId: args.correlationId,
+    payload: { kind: args.kind, changed }, correlationId: args.correlationId,
   });
   return { ok: true, data: { enabled: args.enabled } };
+}
+
+/**
+ * Which of the configurable message types this practice sends (CPR-SET-COMMS-001 s3.2).
+ *
+ * A MERGE, NEVER A REPLACE: the caller names only the keys it is changing, so two screens saving
+ * different preferences cannot silently reset each other. Required message types are refused by
+ * validatePreferencePatch before anything is read -- there is no code path that stores a value for
+ * them, which is what makes "verification off" unrepresentable rather than merely forbidden.
+ */
+export async function setMessagePreferences(admin: any, ctx: WorkspaceContext, args: {
+  kind: MessageKind; preferences: Record<string, unknown>; correlationId: string;
+}): Promise<EngineResult<{ preferences: Partial<Record<MessagePreferenceKey, boolean>> }>> {
+  if (!ctx.capabilities.includes("practice.settings.manage"))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: "practice.settings.manage is required" };
+  if (args.kind !== "sms" && args.kind !== "email" && args.kind !== "whatsapp")
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "kind must be sms, email or whatsapp" };
+
+  const v = validatePreferencePatch(args.preferences);
+  if (!v.ok) return { ok: false, status: 422, code: "PREFERENCE_REFUSED", message: v.message };
+  if (Object.keys(v.clean).length === 0)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "no preference was named" };
+
+  const { data: existing, error: readErr } = await admin.from("practice_message_channel")
+    .select("id, message_preferences").eq("workspace_id", ctx.workspaceId).eq("kind", args.kind).maybeSingle();
+  if (readErr)
+    return {
+      ok: false, status: 503, code: "CHANNEL_UNREADABLE",
+      message: `nothing was changed because the channel could not be read: ${readErr.message}`,
+    };
+  // Preferences attach to a configured channel. Storing "cancellation notices off" for a channel that
+  // does not exist yet would be a setting with nothing to be a setting of.
+  if (!existing)
+    return {
+      ok: false, status: 409, code: "CHANNEL_NOT_CONFIGURED",
+      message: "save the channel settings first -- preferences attach to a configured channel",
+    };
+
+  const merged = { ...((existing.message_preferences ?? {}) as Record<string, boolean>), ...v.clean };
+  const { error } = await admin.from("practice_message_channel")
+    .update({ message_preferences: merged }).eq("id", existing.id);
+  if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId,
+    eventType: "practice.channel_preferences_changed",
+    payload: { kind: args.kind, changed: v.clean }, correlationId: args.correlationId,
+  });
+  return { ok: true, data: { preferences: merged } };
 }
 
 // ── SENDING ──────────────────────────────────────────────────────────────────────────────────────────
@@ -226,12 +353,17 @@ export async function setChannel(admin: any, ctx: WorkspaceContext, args: {
  */
 async function refusalFor(admin: any, workspaceId: string, args: {
   kind: MessageKind; destination: string; patientId?: string | null;
-}): Promise<string | null> {
+  preferenceKey?: MessagePreferenceKey;
+}, channel: Awaited<ReturnType<typeof channelSettings>>[number]): Promise<string | null> {
   if (!args.destination.trim()) return "no destination was recorded for this person";
 
-  const channels = await channelSettings(admin, workspaceId);
-  const channel = channels.find(c => c.kind === args.kind)!;
   if (!channel.enabled) return `this practice has not switched on ${args.kind}`;
+
+  // s3.2: A MESSAGE TYPE THE PRACTICE SWITCHED OFF IS A REFUSAL WITH THE PRACTICE'S OWN REASON ON IT,
+  // recorded as a row like every other. Only an EXPLICIT false refuses -- an absent key means on.
+  // Verification codes never pass a preferenceKey at all, so no preference can suppress one.
+  if (args.preferenceKey && channel.messagePreferences?.[args.preferenceKey] === false)
+    return `this practice switched off ${CONFIGURABLE_MESSAGE_TYPES[args.preferenceKey]}`;
 
   if (args.patientId) {
     // ⚠ WORKSPACE-SCOPED, and it was not until 2026-08-12. This read decides whether a person may be
@@ -279,11 +411,22 @@ export type Transport = (
   // positional parameter order is the thing most worth asserting, because swapping two of them puts a
   // date where a practitioner name belongs on a real patient's phone.
   wa?: { template: string; params: string[] },
+  // The practice's patient-facing identity (CPR-SET-COMMS-001 s3.1): the display name on the envelope
+  // and where a reply lands. The ADDRESS stays platform-managed -- only the name is the practice's.
+  identity?: { senderName?: string | null; replyTo?: string | null },
 ) => Promise<{ ok: boolean; providerMessageId?: string; response: string }>;
 
 export async function sendMessage(admin: any, args: {
   workspaceId: string; kind: MessageKind; purpose: string; destination: string;
   params: TemplateArgs; patientId?: string | null; actorId?: string | null; correlationId: string;
+  /**
+   * Which configurable message type this send is, where it is one (CPR-SET-COMMS-001 s3.2). A send
+   * with no key -- a verification code, an invitation -- consults no preference and cannot be
+   * switched off. The KEY is the caller's claim about what kind of message this is, which is why the
+   * reschedule path passes rescheduling_notice while sending the confirmation template: the template
+   * is what is true to say, the key is what the practice chose to say it about.
+   */
+  preferenceKey?: MessagePreferenceKey;
   // INJECTABLE SO A TEST NEVER TEXTS A REAL PHONE. Defaults to the real provider call; the harness
   // passes a recorder. Not a "test mode" flag on the engine -- there is no branch here that behaves
   // differently in production, only a function that was handed in.
@@ -296,7 +439,11 @@ export async function sendMessage(admin: any, args: {
     return { ok: false, status: 400, code: "WRONG_CHANNEL", message: `${args.purpose} cannot be sent by ${args.kind}` };
 
   const body = template.body(args.params);
-  const refused = await refusalFor(admin, args.workspaceId, args);
+  // ONE READ FOR BOTH QUESTIONS. The channel row answers "may this send" (refusalFor) and "under
+  // whose name" (identity below) -- reading it twice would let the two answers drift mid-request.
+  const channels = await channelSettings(admin, args.workspaceId);
+  const channel = channels.find(c => c.kind === args.kind)!;
+  const refused = await refusalFor(admin, args.workspaceId, args, channel);
 
   if (refused) {
     const { data } = await admin.from("practice_message").insert({
@@ -320,7 +467,10 @@ export async function sendMessage(admin: any, args: {
   const wa = args.kind === "whatsapp" && template.whatsapp
     ? { template: template.whatsapp.template, params: template.whatsapp.params(args.params) }
     : undefined;
-  const outcome = await (args.transport ?? handOver)(args.kind, args.destination, body, template.subject?.(args.params), wa);
+  const identity = args.kind === "email"
+    ? { senderName: channel.senderName, replyTo: channel.replyTo }
+    : undefined;
+  const outcome = await (args.transport ?? handOver)(args.kind, args.destination, body, template.subject?.(args.params), wa, identity);
 
   await admin.from("practice_message").update({
     status: outcome.ok ? "handed_over" : "failed",
@@ -452,6 +602,14 @@ async function appointmentDestination(admin: any, args: {
  */
 export async function notifyAppointment(admin: any, args: {
   workspaceId: string; appointmentId: string; actorId?: string | null; correlationId: string;
+  /**
+   * "rescheduled" when the moment being told about is a MOVE rather than the original booking
+   * (CPR-SET-COMMS-001 s3.2). The sentence sent is the same true one -- the confirmation with the
+   * new time -- but the practice's rescheduling-notice preference is what gets consulted, so
+   * switching off "tell patients when I move them" does not also switch off "tell patients they
+   * are booked".
+   */
+  trigger?: "rescheduled";
   transport?: Transport;
 }): Promise<EngineResult<AppointmentNotice>> {
   const nothing = (reason: string, purpose: AppointmentNotice["purpose"] = null): EngineResult<AppointmentNotice> =>
@@ -498,6 +656,9 @@ export async function notifyAppointment(admin: any, args: {
     // THE PRACTICE'S OWN CLOCK, not the server's and not the reader's. A patient told "14:30" must be
     // told the time the clinic means.
     params: { practitioner: counterparty, when: formatDateTime(appt.scheduled_at, workspace.timezone as string) },
+    preferenceKey: purpose === "appointment_cancelled"
+      ? "cancellation_notice"
+      : args.trigger === "rescheduled" ? "rescheduling_notice" : "booking_confirmation",
     actorId: args.actorId ?? null, correlationId: args.correlationId, transport: args.transport,
   });
   if (!sent.ok) return sent;
@@ -534,6 +695,7 @@ export async function notifyAppointment(admin: any, args: {
  */
 export async function appointmentNotice(admin: any, args: {
   workspaceId: string; appointmentId: string; actorId?: string | null; correlationId: string;
+  trigger?: "rescheduled";
   transport?: Transport;
 }): Promise<AppointmentNotice> {
   try {
@@ -544,6 +706,76 @@ export async function appointmentNotice(admin: any, args: {
       appointmentId: args.appointmentId, purpose: null, attempted: null,
       notAttempted: `the patient could not be told: ${e instanceof Error ? e.message : String(e)}`.slice(0, 300),
     };
+  }
+}
+
+/**
+ * Tell the person who just booked ONLINE that their appointment is confirmed (CPR-SET-COMMS-001 s3.2:
+ * booking confirmations default on for online bookings).
+ *
+ * ⚠ WHY THIS IS NOT notifyAppointment. That function resolves a destination from the patient RECORD,
+ * because a practice-side change must reach whoever the record says the patient is. An online booking
+ * usually has no patient record yet -- what it has is a destination the person PROVED minutes ago by
+ * entering the code sent to it. That verified address is the one right place to send, so it is passed
+ * in rather than resolved: nothing a record could say would be more true than the proof.
+ *
+ * ⚠ SAME CONTRACT AS appointmentNotice: never throws, never fails the booking, and only a CONFIRMED
+ * appointment earns the sentence -- a REQUESTED one has not been confirmed and nothing here will
+ * claim it has. The practice's booking-confirmation preference is consulted like any other send; a
+ * practice that switched confirmations off gets a refusal row, not silence.
+ */
+export async function publicBookingNotice(admin: any, args: {
+  workspaceId: string; appointmentId: string; kind: MessageKind; destination: string;
+  correlationId: string; transport?: Transport;
+}): Promise<AppointmentNotice> {
+  const nothing = (reason: string): AppointmentNotice =>
+    ({ appointmentId: args.appointmentId, purpose: null, attempted: null, notAttempted: reason });
+  try {
+    const { data: appt, error } = await admin.from("practice_appointment")
+      .select("id, scheduled_at, status")
+      .eq("id", args.appointmentId).eq("workspace_id", args.workspaceId).maybeSingle();
+    if (error) return nothing(`no confirmation was sent because the appointment could not be read: ${error.message}`);
+    if (!appt) return nothing("no confirmation was sent because the appointment could not be found");
+    if (appt.status !== "CONFIRMED")
+      return nothing(`an appointment that is ${appt.status} has not been confirmed, so there is no confirmation to send`);
+
+    const { data: workspace, error: wsError } = await admin.from("practice_workspace")
+      .select("id, name, type, timezone, owner_person_id").eq("id", args.workspaceId).maybeSingle();
+    if (wsError || !workspace)
+      return nothing(`no confirmation was sent because the practice could not be read: ${wsError?.message ?? "no practice row"}`);
+
+    const counterparty = await appointmentCounterparty(admin, workspace);
+    if (!counterparty)
+      return nothing("the practice has no name to send under, and a message naming nobody is one a patient cannot place");
+
+    const sent = await sendMessage(admin, {
+      workspaceId: args.workspaceId, kind: args.kind, purpose: "appointment_confirmation",
+      destination: args.destination, patientId: null,
+      params: { practitioner: counterparty, when: formatDateTime(appt.scheduled_at, workspace.timezone as string) },
+      preferenceKey: "booking_confirmation",
+      actorId: null, correlationId: args.correlationId, transport: args.transport,
+    });
+    if (!sent.ok) return nothing(sent.message);
+
+    await audit(admin, {
+      workspaceId: args.workspaceId, actorId: null,
+      eventType: "practice.appointment_notice",
+      payload: {
+        appointmentId: args.appointmentId, purpose: "appointment_confirmation", kind: args.kind,
+        status: sent.data.status, refusedReason: sent.data.refusedReason ?? null, channel: "patient_self",
+      },
+      correlationId: args.correlationId,
+    });
+
+    return {
+      appointmentId: args.appointmentId, purpose: "appointment_confirmation", notAttempted: null,
+      attempted: {
+        kind: args.kind, status: sent.data.status, messageId: sent.data.messageId,
+        ...(sent.data.refusedReason ? { refusedReason: sent.data.refusedReason } : {}),
+      },
+    };
+  } catch (e) {
+    return nothing(`no confirmation was sent: ${e instanceof Error ? e.message : String(e)}`.slice(0, 300));
   }
 }
 
@@ -576,6 +808,7 @@ async function handOver(
   // WhatsApp is handed a TEMPLATE NAME and ORDERED PARAMETERS, never `body` -- Meta rejects free
   // text outside a 24-hour window a patient opened. The other two channels ignore this.
   wa?: { template: string; params: string[] },
+  identity?: { senderName?: string | null; replyTo?: string | null },
 ): Promise<{
   ok: boolean; providerMessageId?: string; response: string;
 }> {
@@ -638,6 +871,14 @@ async function handOver(
       return { ok: res.ok, providerMessageId: safeJson(text)?.messages?.[0]?.id, response: text.slice(0, 2000) };
     }
     if (kind === "email" && status.provider === "resend") {
+      // THE PRACTICE'S NAME ON THE ENVELOPE (CPR-SET-COMMS-001 s3.1). sender_name was stored from the
+      // day the channel existed and reached no email -- the From line was the platform address
+      // verbatim, so the one thing the setting promised ("patients recognise messages from your
+      // practice") never happened. The ADDRESS stays platform-managed: only the display name is the
+      // practice's, stripped of the characters that would let a name smuggle in a second address.
+      const platformFrom = emailFrom()!;
+      const addr = platformFrom.match(/<([^>]+)>/)?.[1] ?? platformFrom;
+      const displayName = identity?.senderName?.replace(/[<>"\r\n]/g, "").trim();
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST", signal: controller.signal,
         headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
@@ -648,9 +889,12 @@ async function handOver(
         // ⚠ ONE BUILDER FOR BOTH STACKS. This payload used to be written here AND in dispatch.ts, which
         // is how the two came to disagree about sender variable names. resendEmailBody also carries
         // reply_to, so a patient answering a booking confirmation reaches somebody rather than an
-        // unattended from-address.
+        // unattended from-address -- the practice's own reply-to when it set one, the platform's
+        // otherwise (resendEmailBody's env fallback).
         body: JSON.stringify(resendEmailBody({
-          from: emailFrom()!, to: destination, subject: subject ?? "Message", text: body,
+          from: displayName ? `"${displayName}" <${addr}>` : platformFrom,
+          to: destination, subject: subject ?? "Message", text: body,
+          replyTo: identity?.replyTo ?? undefined,
         })),
       });
       const text = await res.text();

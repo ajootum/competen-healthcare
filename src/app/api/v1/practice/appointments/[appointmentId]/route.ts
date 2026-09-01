@@ -73,9 +73,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ appo
   // A MOVED APPOINTMENT IS THE ONE A PATIENT IS MOST LIKELY TO MISS. There is no `appointment_moved`
   // template and the purpose list is CHECK-constrained, so nothing new is invented: a CONFIRMED
   // appointment gets its confirmation again, carrying the new time, which is true. An appointment that
-  // was never confirmed still says nothing.
+  // was never confirmed still says nothing. The TRIGGER names what kind of moment this is, so the
+  // practice's rescheduling-notice preference -- not its booking-confirmation one -- decides it.
   const notice = await appointmentNotice(auth.caller.admin, {
-    workspaceId: auth.ctx.workspaceId, appointmentId,
+    workspaceId: auth.ctx.workspaceId, appointmentId, trigger: "rescheduled",
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   return NextResponse.json({ appointment: result.data, notice, correlationId: auth.caller.traceId });

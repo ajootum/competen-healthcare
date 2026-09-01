@@ -789,13 +789,21 @@ export async function resolveBookingRule(
   let extended = false;
   let readError: string | null = null;
 
+  // ⚠ ORDERED, SO TWO RULES ON THE SAME RUNG RESOLVE THE SAME WAY EVERY TIME. This select was
+  // unordered and `pick` below takes the FIRST match per rung -- harmless while a practice could
+  // only ever have one rule per rung, and a live coin-toss the day CPR-PROV-DEFAULTS-001 started
+  // seeding a practice-wide starter rule beside a practice's own. Priority wins (the card engine's
+  // own rule); the older rule wins a tie, so adding a rule without a higher priority never silently
+  // unseats an established one.
   const first = await admin.from("practice_booking_rule")
     .select(`${RESOLVE_COLUMNS_BASE}, ${RESOLVE_COLUMNS_268}`)
-    .eq("workspace_id", workspaceId).eq("active", true);
+    .eq("workspace_id", workspaceId).eq("active", true)
+    .order("priority", { ascending: false }).order("created_at", { ascending: true });
   if (!first.error && first.data != null) { rows = first.data as any[]; extended = true; }
   else if (first.error && MISSING_COLUMN_CODES.has(String(first.error.code))) {
     const second = await admin.from("practice_booking_rule")
-      .select(RESOLVE_COLUMNS_BASE).eq("workspace_id", workspaceId).eq("active", true);
+      .select(RESOLVE_COLUMNS_BASE).eq("workspace_id", workspaceId).eq("active", true)
+      .order("priority", { ascending: false }).order("created_at", { ascending: true });
     if (!second.error && second.data != null) rows = second.data as any[];
     else readError = second.error?.message ?? "neither rows nor an error";
   } else {

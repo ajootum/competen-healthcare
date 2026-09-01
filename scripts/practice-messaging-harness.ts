@@ -33,7 +33,7 @@ import { recordConsent, updatePatientAdmin } from "../src/lib/practice/relations
 import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/practice/access";
 import { purgeWorkspacesOwnedBy, cleanupOnKill } from "./_cleanup";
 import {
-  sendMessage, setChannel, channelSettings, messageLog, issueOtp, verifyOtp,
+  sendMessage, setChannel, setMessagePreferences, channelSettings, messageLog, issueOtp, verifyOtp,
   messagingStatus, MESSAGE_PURPOSES, type Transport,
 } from "../src/lib/practice/messaging";
 
@@ -387,9 +387,17 @@ async function main() {
   const crossLog = await messageLog(admin, b.ctx);
   ok("13c. ANOTHER PRACTICE SEES NONE OF THIS ONE'S MESSAGES",
     crossLog.messages.length === 0, String(crossLog.messages.length));
+  // ⚠ THIS PINNED A WORLD THAT STOPPED EXISTING. It asserted every channel of a fresh practice is
+  // off -- true until CPR-PROV-DEFAULTS-001, whose CP_STANDARD_V1 baseline deliberately seeds the
+  // EMAIL channel on at provisioning where a provider is configured. The isolation point was never
+  // "off": it is that B's channels are B's OWN -- so the seeded sender identity must be B's name,
+  // never A's, and the channels nothing seeded stay off.
   const crossChannels = await channelSettings(admin, wsB);
-  ok("13d. and its own channels are separately off",
-    crossChannels.every(c => !c.enabled), JSON.stringify(crossChannels.map(c => c.enabled)));
+  const crossEmail = crossChannels.find(c => c.kind === "email")!;
+  ok("13d. and its channels are its OWN -- baseline-seeded email carries B's name, the rest stay off",
+    crossChannels.filter(c => c.kind !== "email").every(c => !c.enabled)
+    && (!crossEmail.enabled || crossEmail.senderName === "HARNESS Messaging B (synthetic)"),
+    JSON.stringify(crossChannels.map(c => ({ kind: c.kind, enabled: c.enabled, sender: c.senderName }))));
   const crossSend = await sendMessage(admin, {
     workspaceId: wsB, kind: "sms", purpose: "appointment_reminder", destination: "+256700000001",
     params: { practitioner: "X", when: "Y" }, patientId: p1.data.id,
@@ -397,6 +405,119 @@ async function main() {
   });
   ok("13e. and it cannot send using this one's channel",
     crossSend.ok && crossSend.data.status === "refused", JSON.stringify(crossSend));
+
+  // ── 14. CPR-SET-COMMS-001: message-type preferences, reply-to, sender identity ──────────────────
+  //
+  // ⚠ GATED ON MIGRATION 361, HONESTLY. The column probe decides: absent -> one loud SKIP line (never
+  // a silent green), present -> the full contract runs. Rerun after the owner applies 361.
+  const { error: colProbe } = await admin.from("practice_message_channel")
+    .select("message_preferences").limit(1);
+  if (colProbe) {
+    console.log("  SKIP  14. message-type preferences (migration 361 not applied -- column absent). RERUN AFTER 361.");
+  } else {
+    const reqRefused = await setMessagePreferences(admin, a.ctx, {
+      kind: "sms", preferences: { booking_verification: false }, correlationId: "harness-msg",
+    });
+    ok("14a. THE REQUIRED TYPE CANNOT BE STORED -- refused in either direction, never ignored",
+      !reqRefused.ok && reqRefused.code === "PREFERENCE_REFUSED", JSON.stringify(reqRefused));
+
+    const unknownRefused = await setMessagePreferences(admin, a.ctx, {
+      kind: "sms", preferences: { marketing_blast: true }, correlationId: "harness-msg",
+    });
+    ok("14b. an unknown key is refused by name",
+      !unknownRefused.ok && !unknownRefused.ok && /marketing_blast/.test(unknownRefused.message),
+      JSON.stringify(unknownRefused));
+
+    const noRow = await setMessagePreferences(admin, a.ctx, {
+      kind: "whatsapp", preferences: { cancellation_notice: false }, correlationId: "harness-msg",
+    });
+    ok("14c. preferences attach to a CONFIGURED channel -- an absent row refuses",
+      !noRow.ok && noRow.code === "CHANNEL_NOT_CONFIGURED", JSON.stringify(noRow));
+
+    const offSet = await setMessagePreferences(admin, a.ctx, {
+      kind: "sms", preferences: { cancellation_notice: false }, correlationId: "harness-msg",
+    });
+    ok("14d. switching cancellation notices off is accepted", offSet.ok, offSet.ok ? "" : (offSet as any).message);
+
+    const outboxBefore = outbox.length;
+    const gated = await sendMessage(admin, {
+      workspaceId: wsA, kind: "sms", purpose: "appointment_cancelled", destination: "+256700000009",
+      params: { practitioner: "Dr Okello", when: "Tuesday 10am" }, patientId: null,
+      preferenceKey: "cancellation_notice", correlationId: "harness-msg", transport: recorder,
+    });
+    ok("14e. THE SWITCHED-OFF TYPE REFUSES, AS A ROW WITH THE PRACTICE'S OWN REASON ON IT",
+      gated.ok && gated.data.status === "refused"
+      && /switched off cancellation notices/i.test(gated.data.refusedReason ?? "")
+      && outbox.length === outboxBefore,
+      JSON.stringify(gated.ok ? gated.data : gated));
+
+    const stillOn = await sendMessage(admin, {
+      workspaceId: wsA, kind: "sms", purpose: "appointment_confirmation", destination: "+256700000009",
+      params: { practitioner: "Dr Okello", when: "Tuesday 10am" }, patientId: null,
+      preferenceKey: "booking_confirmation", correlationId: "harness-msg", transport: recorder,
+    });
+    ok("14f. AND THE OTHER TYPES ARE UNTOUCHED -- confirmations still hand over (AC-05 independence)",
+      stillOn.ok && stillOn.data.status === "handed_over", JSON.stringify(stillOn.ok ? stillOn.data : stillOn));
+
+    // A fresh destination every run: the per-destination rate limit is global, and a fixed number
+    // would trip TOO_MANY_CODES on the second same-hour run.
+    const codeStill = await issueOtp(admin, {
+      workspaceId: wsA, purpose: "booking", channel: "sms",
+      destination: `+25670${String(Date.now()).slice(-7)}`,
+      correlationId: "harness-msg", transport: recorder,
+    });
+    ok("14g. VERIFICATION CODES CONSULT NO PREFERENCE -- a code still issues with a type switched off",
+      codeStill.ok, codeStill.ok ? "" : (codeStill as any).message);
+
+    const secondSet = await setMessagePreferences(admin, a.ctx, {
+      kind: "sms", preferences: { rescheduling_notice: true }, correlationId: "harness-msg",
+    });
+    const smsNow = (await channelSettings(admin, wsA)).find(c => c.kind === "sms")!;
+    ok("14h. A PREFERENCE SAVE IS A MERGE -- the earlier false survives an unrelated save",
+      secondSet.ok && smsNow.messagePreferences.cancellation_notice === false
+      && smsNow.messagePreferences.rescheduling_notice === true,
+      JSON.stringify(smsNow.messagePreferences));
+
+    const { data: prefAudit } = await admin.from("practice_audit_event")
+      .select("payload").eq("workspace_id", wsA)
+      .eq("event_type", "practice.channel_preferences_changed")
+      .order("occurred_at", { ascending: false }).limit(1);
+    ok("14i. preference changes audit with the changed keys",
+      !!(prefAudit?.[0] as any)?.payload?.changed, JSON.stringify(prefAudit?.[0] ?? null));
+
+    const badReply = await setChannel(admin, a.ctx, {
+      kind: "email", enabled: true, senderName: "Kampala Clinic", replyTo: "not-an-address",
+      correlationId: "harness-msg",
+    });
+    ok("14j. A REPLY-TO THAT IS NOT AN ADDRESS IS REFUSED, so patient replies cannot be sent nowhere",
+      !badReply.ok && badReply.code === "VALIDATION_ERROR", JSON.stringify(badReply));
+
+    const goodReply = await setChannel(admin, a.ctx, {
+      kind: "email", enabled: true, senderName: "Kampala Clinic", replyTo: "reception@harness.example",
+      correlationId: "harness-msg",
+    });
+    const emailNow = (await channelSettings(admin, wsA)).find(c => c.kind === "email")!;
+    ok("14k. a valid reply-to saves and reads back",
+      goodReply.ok && emailNow.replyTo === "reception@harness.example", JSON.stringify(emailNow.replyTo));
+
+    // A holder, not a let: TypeScript cannot see the closure's assignment, so a bare variable stays
+    // narrowed to null at the assertion and the property reads type as never.
+    const seen: { identity: { senderName?: string | null; replyTo?: string | null } | null } = { identity: null };
+    const identityRecorder: Transport = async (kind, destination, body, subject, _wa, identity) => {
+      seen.identity = identity ?? null;
+      outbox.push({ kind, destination, body, subject });
+      return { ok: true, providerMessageId: "harness-identity", response: '{"harness":true}' };
+    };
+    const emailSend = await sendMessage(admin, {
+      workspaceId: wsA, kind: "email", purpose: "appointment_confirmation", destination: "patient@harness.example",
+      params: { practitioner: "Dr Okello", when: "Tuesday 10am" }, patientId: null,
+      preferenceKey: "booking_confirmation", correlationId: "harness-msg", transport: identityRecorder,
+    });
+    ok("14l. THE PRACTICE'S IDENTITY REACHES THE TRANSPORT -- the name patients recognise, on the send itself",
+      emailSend.ok && emailSend.data.status === "handed_over"
+      && seen.identity?.senderName === "Kampala Clinic" && seen.identity?.replyTo === "reception@harness.example",
+      JSON.stringify(seen.identity));
+  }
 
   ok("the provider status reports receipts as unavailable on every channel",
     messagingStatus().sms.receiptsAvailable === false && messagingStatus().email.receiptsAvailable === false);

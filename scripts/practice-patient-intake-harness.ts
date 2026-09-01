@@ -283,7 +283,7 @@ async function main() {
   soon.setUTCHours(8, 0, 0, 0);
   const slotA = soon.toISOString();
 
-  const noSession = await submitBookingRequest(admin, {
+  const noSession = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: "not-a-real-token", intake: intake(),
     scheduledAt: slotA, appointmentType: "new_consultation", locationId: locId, correlationId: CORR,
   });
@@ -301,7 +301,7 @@ async function main() {
 
   // ⚠ THE CONTROL: FIX ONLY THE SESSION, CHANGE NOTHING ELSE, AND THE SAME BOOKING SUCCEEDS.
   const { token, phone } = await freshPair();
-  const booked = await submitBookingRequest(admin, {
+  const booked = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token, intake: intake({ contactPhone: phone }),
     scheduledAt: slotA, appointmentType: "new_consultation", locationId: locId, correlationId: CORR,
   });
@@ -311,11 +311,18 @@ async function main() {
 
   ok("2c. the confirmation carries a reference somebody can read down a telephone",
     /^CP-[A-Z0-9]{6}$/.test(booked.data.reference), booked.data.reference);
-  ok("2d. ⚠ AND IT DOES NOT CLAIM A CONFIRMATION WAS SENT",
-    booked.data.confirmationSent === false
-    && /no message has been sent/i.test(booked.data.confirmationNote)
-    && !/we have (texted|emailed)|check your (phone|inbox)/i.test(booked.data.confirmationNote),
+  // ⚠ THIS PIN FLIPPED WITH CPR-SET-COMMS-001. It used to pin confirmationSent === false, because
+  // nothing sent -- now the online booking path sends the confirmation to the VERIFIED destination,
+  // and the claim is made only because the transport actually took the message.
+  ok("2d. ⚠ THE CONFIRMATION IS CLAIMED ONLY BECAUSE THE TRANSPORT TOOK IT",
+    booked.data.confirmationSent === true
+    && /confirmation text message is on its way/i.test(booked.data.confirmationNote)
+    && !/you have received|we have texted/i.test(booked.data.confirmationNote),
     booked.data.confirmationNote);
+  const confirmationMsg = outbox.filter(m => /is confirmed for/i.test(m.body)).at(-1);
+  ok("2d-2. and what it took IS the confirmation, addressed to the number the code proved -- not the form's",
+    !!confirmationMsg && confirmationMsg.destination === phone,
+    JSON.stringify(confirmationMsg ?? null));
 
   // AC-13, on both rows, together.
   const { data: reqRow } = await admin.from("practice_booking_request")
@@ -351,7 +358,7 @@ async function main() {
 
   const slotB = new Date(Date.parse(slotA) + 3600000).toISOString();
   const { token: tokenB, phone: phoneB } = await freshPair();
-  const ruleRefused = await submitBookingRequest(admin, {
+  const ruleRefused = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: tokenB, intake: intake({ contactPhone: phoneB }),
     scheduledAt: slotB, appointmentType: "new_consultation", locationId: locId, correlationId: CORR,
   });
@@ -371,7 +378,7 @@ async function main() {
   ok("3-control-2. the closing rule was actually removed -- a status update nobody checked is the silent-write class this codebase keeps finding",
     !removed1.error && (removed1.data ?? []).length === 1, JSON.stringify({ e: removed1.error?.message, n: (removed1.data ?? []).length }));
   const { token: tokenC, phone: phoneC } = await freshPair();
-  const afterRule = await submitBookingRequest(admin, {
+  const afterRule = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: tokenC, intake: intake({ contactPhone: phoneC }),
     scheduledAt: slotB, appointmentType: "new_consultation", locationId: locId, correlationId: CORR,
   });
@@ -419,7 +426,7 @@ async function main() {
   // started succeeding. +5.5h is inside the offered window and belongs to nothing else.
   const slotElig = new Date(Date.parse(slotA) + 19800000).toISOString();
   const pairG = await freshPair();
-  const eligResult = await submitBookingRequest(admin, {
+  const eligResult = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: pairG.token, intake: intake({ contactPhone: pairG.phone }),
     scheduledAt: slotElig, appointmentType: "new_consultation", locationId: locId, correlationId: CORR,
   });
@@ -433,7 +440,7 @@ async function main() {
   section("4. The occupied slot");
 
   const { token: tokenD, phone: phoneD } = await freshPair();
-  const clash = await submitBookingRequest(admin, {
+  const clash = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: tokenD, intake: intake({ contactPhone: phoneD }),
     // slotA is already taken by section 2's booking. Everything else is valid.
     scheduledAt: slotA, appointmentType: "new_consultation", locationId: locId, correlationId: CORR,
@@ -481,7 +488,7 @@ async function main() {
   // ⚠ THE CONTROL: THE SAME SLOT, ONCE IT IS FREE.
   await admin.from("practice_appointment").update({ status: "CANCELLED" }).eq("id", booked.data.appointmentId);
   const { token: tokenE, phone: phoneE } = await freshPair();
-  const nowFree = await submitBookingRequest(admin, {
+  const nowFree = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: tokenE, intake: intake({ contactPhone: phoneE }),
     scheduledAt: slotA, appointmentType: "new_consultation", locationId: locId, correlationId: CORR,
   });
@@ -594,7 +601,7 @@ async function main() {
 
   const { token: revokedToken, phone: revokedPhone } = await freshPair();
   await revokePatientSession(admin, { token: revokedToken });
-  const revoked = await submitBookingRequest(admin, {
+  const revoked = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: revokedToken, intake: intake({ contactPhone: revokedPhone }),
     scheduledAt: slotRevoked, appointmentType: "new_consultation", locationId: locId, correlationId: CORR,
   });
@@ -612,7 +619,7 @@ async function main() {
       created_at: new Date(Date.now() - 40 * 60000).toISOString(),
       expires_at: new Date(Date.now() - 35 * 60000).toISOString(),
     }).eq("id", expiredCheck.proof.sessionId);
-  const expired = await submitBookingRequest(admin, {
+  const expired = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: expiredToken, intake: intake({ contactPhone: expiredPhone }),
     scheduledAt: slotExpired, appointmentType: "new_consultation", locationId: locId, correlationId: CORR,
   });
@@ -622,7 +629,7 @@ async function main() {
 
   // ⚠ VERIFIED ONE NUMBER, BOOKED WITH ANOTHER. The verification would be real and attached to a stranger.
   const { token: otherToken } = await freshPair();
-  const wrongDest = await submitBookingRequest(admin, {
+  const wrongDest = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: otherToken, intake: intake({ contactPhone: "+256772555999" }),
     scheduledAt: slotWrongDest, appointmentType: "new_consultation", locationId: locId, correlationId: CORR,
   });
@@ -633,7 +640,7 @@ async function main() {
   // ⚠ THE CONTROL FOR ALL THREE: a session that is live, unrevoked and for the right number books the
   // same slot. Without it, 6a-6c prove only that this slot refuses everything.
   const { token: goodToken, phone: goodPhone } = await freshPair();
-  const goodBooking = await submitBookingRequest(admin, {
+  const goodBooking = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: goodToken, intake: intake({ contactPhone: goodPhone }),
     scheduledAt: slotD, appointmentType: "new_consultation", locationId: locId, correlationId: CORR,
   });
@@ -643,7 +650,9 @@ async function main() {
   // ══ 7. NOTHING EVER RETURNS OR PRINTS A CODE ══════════════════════════════════════════════════
   section("7. The code never leaks");
 
-  const lastCode = codeFrom(outbox[outbox.length - 1]?.body ?? "");
+  // ⚠ THE LAST MESSAGE IS NO LONGER THE OTP. Since CPR-SET-COMMS-001 the booking confirmation
+  // follows the code into the outbox, so the code is taken from the last message that CARRIES one.
+  const lastCode = [...outbox].reverse().map(m => codeFrom(m.body)).find(c => c) ?? "";
   ok("7a-control. a real six-digit code was captured from a real message, so 7b is asserting over something",
     /^\d{6}$/.test(lastCode), lastCode ? "captured" : "no code captured");
   ok("7b. ⚠ no confirmation payload anywhere contains the code that authorised it",

@@ -298,7 +298,7 @@ async function main() {
     const p = nextPhone();
     return { token: await freshSession(p), phone: p };
   })();
-  const booked = await submitBookingRequest(admin, {
+  const booked = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token, intake: intake({ contactPhone: phone }),
     scheduledAt: target.startsAt, appointmentType: "new_consultation",
     locationId: locId, durationMinutes: target.minutes, correlationId: CORR,
@@ -432,7 +432,7 @@ async function main() {
 
   const otherPhone = nextPhone();
   const otherToken = await freshSession(otherPhone);
-  const otherBooking = await submitBookingRequest(admin, {
+  const otherBooking = await submitBookingRequest(admin, { transport: recorder,
     handle: HANDLE, token: otherToken, intake: intake({ givenName: "Joel", familyName: "Ssempijja", contactPhone: otherPhone }),
     scheduledAt: contested.startsAt, appointmentType: "new_consultation",
     locationId: locId, durationMinutes: contested.minutes, correlationId: CORR,
@@ -557,12 +557,21 @@ async function main() {
     JSON.stringify({ canRequestWithoutCode: entry.canRequestWithoutCode, requestNote: entry.requestNote }));
 
   // ⚠ ONE THING CHANGES: the page is paused. Everything else about the fixture stands.
+  //
+  // ⚠ THIS PIN MOVED WITH CPR-BOOK-HFE-002 s16. It used to assert a paused page answers identically
+  // to a handle never issued; the ruling since is that PAUSING IS A POST-PUBLICATION STATE the
+  // practice chose, so the page may say "not accepting right now" (closedBecause: paused) -- while a
+  // handle never issued still discloses nothing. Both halves are asserted, separately.
   await admin.from("practice_booking_access").update({ publish_state: "paused" }).eq("workspace_id", ws);
   const paused = await publicBookingEntry(admin, HANDLE);
-  ok("5e. a paused page reports closed, and answers identically to a handle never issued",
-    paused.state === "closed" && paused.blockers[0] === "PAGE_NOT_PUBLISHED"
-    && (await publicBookingEntry(admin, "nobodyhasthishandle")).state === "closed",
+  const neverIssued = await publicBookingEntry(admin, "nobodyhasthishandle");
+  ok("5e. a paused page reports closed as the practice's own choice, and names no location, type or person",
+    paused.state === "closed" && paused.blockers[0] === "PAGE_PAUSED" && paused.closedBecause === "paused"
+    && paused.locations.length === 0 && paused.appointmentTypes.length === 0 && paused.displayName === null,
     JSON.stringify(paused));
+  ok("5e-2. while a handle never issued stays indistinguishable from nonexistent -- no paused sentence for it",
+    neverIssued.state === "closed" && neverIssued.closedBecause !== "paused",
+    JSON.stringify({ state: neverIssued.state, closedBecause: neverIssued.closedBecause }));
   await admin.from("practice_booking_access").update({ publish_state: "published_with_warnings" }).eq("workspace_id", ws);
   const relive = await publicBookingEntry(admin, HANDLE);
   ok("5e-control. and it opens again once republished -- so 5e is about the state, not a broken lookup",
