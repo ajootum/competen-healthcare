@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolveHandle } from "@/lib/practice/identity-service";
+import { publicBookingProfile, initialsOf } from "@/lib/practice/public-profile";
 import { publicBookingEntry } from "@/lib/practice/patient-booking";
 import BookingWizard from "./BookingWizard";
 
@@ -71,6 +72,27 @@ export default async function BookAppointmentPage({ params }: {
   if (!p.handle) notFound();
 
   const entry = await publicBookingEntry(admin, p.handle);
+  // s15: the SAME projection the profile page renders, so the practitioner a patient chose is the
+  // practitioner they see through every step rather than a second description of them.
+  const resolvedProfile = await publicBookingProfile(admin, p.handle);
+  // ⚠ A FAILED PROJECTION MUST NOT CLOSE THE DOOR. The strip is presentation; the booking is the point.
+  // resolveHandle has already returned this practitioner's name and qualifications, so a second read
+  // that did not answer degrades to those rather than taking the whole page down.
+  const identity = resolvedProfile.kind === "found"
+    ? {
+      displayName: resolvedProfile.profile.displayName,
+      credentials: resolvedProfile.profile.credentials,
+      specialty: resolvedProfile.profile.specialty,
+      initials: resolvedProfile.profile.initials,
+      photoUrl: resolvedProfile.profile.photoUrl,
+    }
+    : {
+      displayName: p.displayName,
+      credentials: p.qualifications ?? null,
+      specialty: p.specialties ?? null,
+      initials: initialsOf(p.displayName),
+      photoUrl: null,
+    };
 
   if (entry.state === "unreadable") {
     return (
@@ -107,8 +129,20 @@ export default async function BookAppointmentPage({ params }: {
       <BookingWizard
         handle={p.handle}
         practitioner={p.displayName}
+        // s3/AC-02: the practitioner strip comes from the SAME projection the public profile renders,
+        // so the person a patient chose on the previous screen is the person they see all the way
+        // through. It replaced a header showing "@elisham1" over the practice's internal name.
+        identity={identity}
         displayName={entry.displayName}
         instructions={entry.instructions}
+        // ⚠ NULL, AND DELIBERATELY SO. s8.5 asks for a concise "not for emergencies" statement whose
+        // "wording must be deployment-appropriate and configurable". This product has no field for one:
+        // the practice's `instructions` are general booking guidance and already render on step 1, so
+        // reusing them here would print the same paragraph twice AND relabel ordinary instructions as a
+        // safety warning. Inventing the sentence is worse still -- an emergency instruction naming the
+        // wrong service for the country is the kind of copy that gets somebody hurt. It stays absent
+        // until there is a field a practice can write it into.
+        safetyNote={null}
         privacyNotice={entry.privacyNotice}
         locations={entry.locations}
         appointmentTypes={entry.appointmentTypes}
@@ -127,11 +161,14 @@ function Shell({ handle, name, children }: {
   handle: string; name?: string | null; children: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto max-w-2xl px-5 py-10">
-      <header className="mb-6">
-        <p className="text-[12px] font-semibold text-[var(--cp-primary-deep)]">@{handle}</p>
-        {name && <h2 className="mt-0.5 text-[15px] font-bold text-gray-900">{name}</h2>}
-      </header>
+    // s3: a comfortable reading width rather than a narrow column in a wide viewport. The wizard widens
+    // itself once the persistent summary appears, so this bound is the form's, not the page's.
+    <div className="mx-auto max-w-[880px] px-4 py-8 md:px-6">
+      {/* ⚠ NO "@handle" EYEBROW AND NO PRACTICE BRAND NAME HERE (s3/AC-02, AC-03). This header showed
+          "@elisham1" in primary colour over "Trial" -- the practice's own internal name -- as the
+          strongest identity on a patient's booking screen. The practitioner strip inside the wizard is
+          the identity now, and it carries the person a patient actually chose. `name` remains a prop
+          because the pre-wizard states (outage, closed) still have nothing else to show. */}
       {children}
       <p className="mt-10 text-[11px] text-gray-400">
         <Link href={`/practice/book/@${handle}`} className="hover:underline">Back to this page</Link>

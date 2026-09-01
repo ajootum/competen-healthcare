@@ -562,8 +562,33 @@ const REPRESENTATIVE_RELATIONSHIPS = [
 
 export type BookingIntakeField = {
   field_key: string;
+  /**
+   * ⚠ THE PRACTITIONER'S LABEL. This catalogue is read by TWO screens with two audiences: the
+   * Registration Config workspace, where a practitioner decides which questions their practice asks,
+   * and the public booking form, where a patient answers them. `label` and `help` are written for the
+   * first; `patientLabel` and `patientHelp` are written for the second.
+   */
   label: string;
   help: string;
+  /**
+   * ⚠ WHY THE SPLIT EXISTS, AND WHAT IT COST NOT TO HAVE IT (CPR-BOOK-FLOW-002 s9).
+   *
+   * One string served both screens, so the reasoning a practitioner needs was rendered to patients
+   * mid-booking: "A rule written for children cannot apply to somebody whose date of birth you never
+   * asked for", "three spellings of 'mother' is how a report starts disagreeing with itself", "This is
+   * not what makes a rule apply to referred patients". None of that is a patient's business, and a
+   * booking form that explains its own rule engine is one people abandon.
+   *
+   * ⚠ AND TWO OF THEM HAD STOPPED BEING TRUE. "Nothing sends to it" and "Nothing in this product sends
+   * a patient a message" were written when no channel existed. Since email was activated this product
+   * sends verification codes and confirmations -- so a live patient page was telling people nothing
+   * would reach them while the booking they were making emailed them twice. A sentence about an absence
+   * is the kind that rots when the absence is filled.
+   *
+   * Null means "no help is needed": a plain label is better than a sentence restating it.
+   */
+  patientLabel?: string;
+  patientHelp?: string | null;
   field_type: string;
   /** The column on practice_booking_request this answer lands in. There is no field without one. */
   column: string;
@@ -576,32 +601,71 @@ export type BookingIntakeField = {
   /** Which of s7.2's four responsibilities this row belongs to, so the screen can group them. */
   group: "identity" | "contact" | "context" | "stated";
   options?: { value: string; label: string }[];
+  /**
+   * ⚠ A SUBSET OF `options`, NEVER A DIFFERENT VOCABULARY (s8.4, and s22's "preserve the contract and
+   * change presentation"). Migration 254's CHECK constraint is the canonical list of relationships this
+   * product may store; what a PATIENT is offered is a curated view of it. An interpreter, an employer
+   * and an insurance contact are real representative roles and none of them is a family relationship, so
+   * they stay in the store and out of the question "who is arranging this appointment".
+   *
+   * Every value here must exist in `options`, which the section harness asserts -- a patient-facing
+   * option the database would refuse is a form that fails on submit.
+   */
+  patientOptions?: { value: string; label: string }[];
   rules?: Record<string, unknown>;
 };
+
+/**
+ * The relationships a PATIENT is offered, in the order a person scans them.
+ *
+ * ⚠ EVERY VALUE IS ONE MIGRATION 254 ALREADY ACCEPTS. s8.4 also suggests a generic "Parent" and an
+ * "Other relative"; neither exists in the stored vocabulary, and inventing them here would produce a
+ * form whose answers the database refuses. Mother, father and guardian cover the same ground with
+ * values that survive the write, and "Other" carries the rest. Adding them properly is a migration and
+ * a decision about the canonical vocabulary, not a UI change -- recorded here rather than silently
+ * dropped.
+ */
+export const PATIENT_RELATIONSHIPS: { value: string; label: string }[] = [
+  { value: "mother", label: "Mother" },
+  { value: "father", label: "Father" },
+  { value: "guardian", label: "Guardian" },
+  { value: "spouse", label: "Spouse" },
+  { value: "partner", label: "Partner" },
+  { value: "child", label: "Son or daughter" },
+  { value: "sibling", label: "Brother or sister" },
+  { value: "grandparent", label: "Grandparent" },
+  { value: "carer", label: "Carer" },
+  { value: "other", label: "Someone else" },
+];
 
 export const BOOKING_INTAKE_FIELDS: BookingIntakeField[] = [
   {
     field_key: "given_name", label: "First name", field_type: "text", column: "given_name",
+    patientLabel: "First name", patientHelp: null,
     help: "Asked of everybody. A booking nobody can call by name is one nobody can call.",
     alwaysRequired: true, group: "identity", rules: { minLength: 1, maxLength: 80 },
   },
   {
     field_key: "family_name", label: "Family name", field_type: "text", column: "family_name",
+    patientLabel: "Family name", patientHelp: null,
     help: "Asked of everybody, for the same reason.",
     alwaysRequired: true, group: "identity", rules: { minLength: 1, maxLength: 80 },
   },
   {
     field_key: "birth_date", label: "Date of birth", field_type: "date", column: "birth_date",
+    patientLabel: "Date of birth", patientHelp: null,
     help: "What your age-scoped rules are decided on. A rule written for children cannot apply to somebody whose date of birth you never asked for.",
     alwaysRequired: false, group: "identity",
   },
   {
     field_key: "age_years", label: "Age in years", field_type: "number", column: "age_years",
+    patientLabel: "Age", patientHelp: "If you do not know the exact date of birth.",
     help: "For the patient who knows their age and not their date of birth. Both may be asked; neither is inferred from the other.",
     alwaysRequired: false, group: "identity", rules: { min: 0, max: 130 },
   },
   {
     field_key: "sex", label: "Sex", field_type: "select", column: "sex",
+    patientLabel: "Sex", patientHelp: null,
     help: "A fixed list of answers. 'Prefer not to say' is what is recorded when nobody answers.",
     alwaysRequired: false, group: "identity",
     options: [
@@ -612,67 +676,91 @@ export const BOOKING_INTAKE_FIELDS: BookingIntakeField[] = [
   },
   {
     field_key: "contact_phone", label: "Phone number", field_type: "phone", column: "contact_phone",
-    help: "Nothing rings it. This is the number the practice would use.",
+    patientLabel: "Mobile number", patientHelp: null,
+    // Phrased as what the number is FOR rather than as a claim about what this deployment can dial --
+    // the neighbouring email string had to be rewritten precisely because it made the second kind.
+    help: "The number the practice would use to reach this patient about the appointment.",
     alwaysRequired: false, group: "contact", rules: { minLength: 3, maxLength: 40 },
   },
   {
     field_key: "contact_email", label: "Email address", field_type: "email", column: "contact_email",
-    help: "Nothing sends to it. This is the address the practice would use.",
+    patientLabel: "Email address", patientHelp: "We'll use these details for your booking and appointment communications.",
+    // ⚠ THIS SAID "Nothing sends to it" UNTIL EMAIL WAS ACTIVATED, and then it was simply wrong -- on
+    // this screen AND on the patient's, which is where it did real harm. A sentence describing an
+    // absence has to be revisited the day the absence is filled, and nothing makes that happen except
+    // somebody noticing. It now describes what the address is FOR, which stays true either way.
+    help: "Where the booking code and the confirmation are sent, and how the practice reaches this patient about the appointment.",
     alwaysRequired: false, group: "contact", rules: { minLength: 3, maxLength: 160 },
   },
   {
     field_key: "representative_name", label: "Parent, guardian or representative",
     field_type: "text", column: "representative_name",
+    patientLabel: "Your name", patientHelp: "The person arranging this appointment.",
     help: "Set this to required with the condition below and a child's booking asks for a guardian while an adult's does not.",
     alwaysRequired: false, group: "contact", rules: { minLength: 2, maxLength: 160 },
   },
   {
     field_key: "representative_relationship", label: "Their relationship to the patient",
     field_type: "select", column: "representative_relationship",
+    patientLabel: "Your relationship to the patient", patientHelp: null,
     help: "One shared list of relationships, the same one used everywhere else -- three spellings of 'mother' is how a report starts disagreeing with itself.",
     alwaysRequired: false, group: "contact",
     options: REPRESENTATIVE_RELATIONSHIPS.map(v => ({ value: v, label: v.replace(/_/g, " ") })),
+    // s8.4/AC-11: the patient is asked a family question and offered family answers. An interpreter or
+    // an insurance contact is a real representative role and belongs in the workflow that uses it.
+    patientOptions: PATIENT_RELATIONSHIPS,
   },
   {
     field_key: "representative_phone", label: "Their phone number",
     field_type: "phone", column: "representative_phone",
-    help: "Nothing rings this either.", alwaysRequired: false, group: "contact",
+    patientLabel: "Your mobile number", patientHelp: null,
+    help: "The number to use for the representative rather than the patient.", alwaysRequired: false, group: "contact",
     rules: { minLength: 3, maxLength: 40 },
   },
   {
     field_key: "reason_for_visit", label: "Reason for the visit",
     field_type: "long_text", column: "reason_for_visit",
+    patientLabel: "Reason for visit", patientHelp: "Briefly tell the practitioner what you would like help with.",
     help: "What the patient says they are coming about. It reaches the diary entry.",
     alwaysRequired: false, group: "context", rules: { maxLength: 1000 },
   },
   {
     field_key: "referral_source", label: "Who referred them",
     field_type: "text", column: "referral_source",
+    patientLabel: "Who referred you?", patientHelp: "The clinician, clinic or facility that referred you.",
     help: "This is not what makes a rule apply to referred patients -- that is a property of the booking, not a sentence somebody typed.",
     alwaysRequired: false, group: "context", rules: { maxLength: 200 },
   },
   {
     field_key: "stated_diagnosis", label: "Diagnosis, as the patient states it",
     field_type: "long_text", column: "stated_diagnosis",
+    patientLabel: "Existing condition or diagnosis (optional)", patientHelp: "In your own words. This is what you tell us, not a diagnosis made here.",
     help: "⚠ NOT A DIAGNOSIS. A patient saying they have diabetes is a patient saying so. It is recorded as the patient's own statement and is never a clinician-confirmed diagnosis.",
     alwaysRequired: false, group: "stated", rules: { maxLength: 1000 },
   },
   {
     field_key: "stated_treatment", label: "Current treatment, as the patient states it",
     field_type: "long_text", column: "stated_treatment",
+    patientLabel: "Current treatment or medicines (optional)", patientHelp: "Anything you are taking or receiving at the moment.",
     help: "⚠ NOT A MEDICATION LIST, and it must never be read as one.",
     alwaysRequired: false, group: "stated", rules: { maxLength: 1000 },
   },
   {
     field_key: "stated_hospital_number", label: "Hospital or clinic number they quote",
     field_type: "text", column: "stated_hospital_number",
+    patientLabel: "Hospital or clinic number (optional)", patientHelp: "If you know your patient number at this facility.",
     help: "⚠ A claim, never an identifier of record. The authoritative number lives on the patient record.",
     alwaysRequired: false, group: "stated", rules: { maxLength: 60 },
   },
   {
     field_key: "consent_communication", label: "Agreement to be contacted",
     field_type: "boolean", column: "consent_communication",
-    help: "⚠ Recording an agreement is not a channel. Nothing in this product sends a patient a message, so a yes here changes what is stored and nothing else.",
+    patientLabel: "Send me appointment updates by email", patientHelp: "Reminders and changes about this appointment. Your verification code and booking confirmation are sent either way.",
+    // ⚠ ALSO STALE UNTIL THIS ARC. It said "Nothing in this product sends a patient a message", which
+    // was true when it was written and false from the day the email channel was switched on. What it
+    // was really guarding is still worth saying: this preference governs the OPTIONAL messages, and
+    // never the verification code or the confirmation, which are part of booking itself.
+    help: "Covers optional updates about the appointment. The verification code and the booking confirmation are part of booking and are sent regardless.",
     alwaysRequired: false, group: "context",
   },
 ];

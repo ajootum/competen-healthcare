@@ -9,6 +9,8 @@ import {
 import { validateAnswer, isBlankAnswer } from "@/lib/practice/form-field";
 import { appointmentTypeLabel } from "@/lib/practice/practice-session-constants";
 import { practiceDayOf, practiceToday } from "@/lib/practice/practice-time";
+import DetailsStep from "./DetailsStep";
+import { IdentityStrip, AppointmentSummary, type SummaryIdentity } from "./BookingSummary";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -58,10 +60,12 @@ type Question = { fieldKey: string; label: string; level: string; condition?: un
 export default function BookingWizard(props: {
   handle: string;
   practitioner: string;
+  /** s3: the practitioner strip that persists through every step, from the public projection. */
+  identity: SummaryIdentity;
   displayName: string | null;
   instructions: string | null;
   privacyNotice: string | null;
-  locations: { id: string; name: string }[];
+  locations: { id: string; name: string; mode: "in_person" | "virtual" }[];
   appointmentTypes: string[];
   canBook: boolean;
   canRequestWithoutCode: boolean;
@@ -70,6 +74,14 @@ export default function BookingWizard(props: {
   fallbackEmail: string | null;
   fallbackPhone: string | null;
   bookingWhyNot: string | null;
+  /**
+   * s8.5's emergency statement, from the practice's own instructions where it set one.
+   *
+   * ⚠ NOT A HARD-CODED NUMBER. "Call 911" under a booking form in Kampala is worse than saying nothing,
+   * and the spec says so in as many words: the wording must be deployment-appropriate and configurable.
+   * Null means the practice has not written one, and nothing is invented on its behalf.
+   */
+  safetyNote: string | null;
 }) {
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -170,9 +182,12 @@ export default function BookingWizard(props: {
     setClearedNote(clearedNotice((r.cleared as any[]).map(f => String(f.label ?? f.field_key))));
   }, [values, fields, onDate]);
 
+  // ⚠ THE PATIENT'S NAME FOR THE FIELD, NOT THE PRACTITIONER'S. "Still needed: Who referred them" names
+  // a question this form does not ask -- it asks "Who referred you?" -- so the one place a person looks
+  // when the button will not enable would have pointed at a label that is not on screen.
   const missing = useMemo(() => applicable
     .filter(f => f._level === "required" && isBlankAnswer(values[f.field_key]))
-    .map(f => f.label), [applicable, values]);
+    .map(f => (f as any).patientLabel ?? f.label), [applicable, values]);
 
   const badAnswers = useMemo(() => applicable
     .filter(f => !isBlankAnswer(values[f.field_key]))
@@ -180,6 +195,81 @@ export default function BookingWizard(props: {
     .filter(v => !v.ok).map(v => v.message), [applicable, values]);
 
   const contact = String(values.contact_phone ?? "").trim() || String(values.contact_email ?? "").trim();
+
+  // ⚠ THE ENGINE'S OWN DERIVED FACT, PASSED DOWN RATHER THAN RECOMPUTED. `_is_child` decides whether a
+  // guardian section is shown, and a second age calculation in the view layer is how a form comes to
+  // disagree with the rule that will judge it.
+  const isChild = useMemo(
+    () => intakeDerivedValues(values, onDate)._is_child === true,
+    [values, onDate]);
+
+  /**
+   * The timezone as a patient reads it (s6): "East Africa Time (EAT)", not "Africa/Kampala".
+   *
+   * ⚠ DERIVED FROM THE PRACTICE'S CANONICAL ZONE, never hard-coded for this deployment. Intl supplies
+   * the long and short names, so a practice in Lagos or Nairobi gets its own without a lookup table
+   * here; the identifier is the fallback when a runtime cannot name it.
+   */
+  const timezoneLabel = useMemo(() => {
+    const nameOf = (style: "long" | "short") => {
+      try {
+        const parts = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, timeZoneName: style })
+          .formatToParts(new Date());
+        return parts.find(p => p.type === "timeZoneName")?.value ?? null;
+      } catch { return null; }
+    };
+    const long = nameOf("long");
+    const short = nameOf("short");
+    // ⚠ THE ABBREVIATION ONLY WHERE IT IS ONE. Intl returns "GMT+3" as the short name for Africa/Kampala
+    // on most runtimes, and "East Africa Time (GMT+3)" tells a patient nothing the first three words did
+    // not -- while "East Africa Time (EAT)" does, where the runtime knows it.
+    if (long && short && long !== short && !/^GMT|^UTC/.test(short)) return `${long} (${short})`;
+    return long ?? short ?? timezone;
+  }, [timezone]);
+
+  /** Just the clock time, for slots already grouped under their date. */
+  const timeOf = useCallback((iso: string) => {
+    try {
+      return new Date(iso).toLocaleTimeString(undefined, {
+        hour: "numeric", minute: "2-digit", timeZone: timezone,
+      });
+    } catch { return iso; }
+  }, [timezone]);
+
+  /**
+   * s6: "Group time slots under their date." A flat run of forty buttons reading "Wed 9 Sep, 08:30" is
+   * the same information with the scanning done by the patient instead of the page.
+   */
+  const slotDays = useMemo(() => {
+    if (!slots) return [];
+    const days = new Map<string, { label: string; slots: Slot[] }>();
+    for (const s of slots) {
+      const key = practiceDayOf(timezone, s.startsAt) ?? s.startsAt.slice(0, 10);
+      if (!days.has(key)) {
+        let label = key;
+        try {
+          label = new Date(s.startsAt).toLocaleDateString(undefined, {
+            weekday: "long", day: "numeric", month: "long", timeZone: timezone,
+          });
+        } catch { /* the key is still a true date */ }
+        days.set(key, { label, slots: [] });
+      }
+      days.get(key)!.slots.push(s);
+    }
+    return [...days.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([key, v]) => ({ key, ...v }));
+  }, [slots, timezone]);
+
+  const locationOf = (id: string) => props.locations.find(l => l.id === id) ?? null;
+  const MODE_WORD: Record<string, string> = { in_person: "In-person", virtual: "Online consultation" };
+
+  /** What the persistent summary shows (s7). Every value is state, never a re-derivation. */
+  const summaryFacts = {
+    locationName: locationOf(locationId)?.name ?? null,
+    mode: locationOf(locationId) ? MODE_WORD[locationOf(locationId)!.mode] ?? null : null,
+    appointmentTypeLabel: appointmentType ? appointmentTypeLabel(appointmentType) : null,
+    when: chosen ? fmt(chosen.startsAt) : null,
+    minutes: chosen?.minutes ?? null,
+  };
 
   async function call(body: any) {
     setBusy(true); setProblem(null);
@@ -303,17 +393,38 @@ export default function BookingWizard(props: {
 
   if (doneKind && done) return <Confirmation kind={doneKind} data={done} fmt={fmt} handle={props.handle} />;
 
+  // s4/AC-01: the four patient-facing steps. "Where & what / When / About you / Verify" described the
+  // form's own construction; these describe what the patient is doing.
+  const STEP_LABELS = ["Appointment", "Date & time", "Your details", props.canBook ? "Confirm" : "Send"];
+
   return (
-    <div>
-      <ol className="mb-5 flex flex-wrap gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide">
-        {["Where & what", "When", "About you", props.canBook ? "Verify" : "Send"].map((s, i) => (
-          <li key={s} className={`rounded-lg px-2 py-1 ${step === i + 1
-            ? "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)]"
-            : step > i + 1 ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
-            {i + 1}. {s}
-          </li>
-        ))}
-      </ol>
+    <div className="flex flex-col gap-4">
+      <div className="rounded-xl border border-gray-200 bg-white p-3.5">
+        <IdentityStrip identity={props.identity} locationName={summaryFacts.locationName} />
+      </div>
+
+      {/* ⚠ THE STEPPER CARRIES A MARK AS WELL AS A COLOUR (s4). A completed step that differs only in
+          hue is a step nobody colour-blind can distinguish from the one they are on. On a narrow screen
+          the labels collapse to "Step 2 of 4 - Date & time", which stays legible where four chips do not. */}
+      <nav aria-label="Booking progress">
+        <p className="text-[11.5px] font-semibold text-[var(--cp-primary-deep)] sm:hidden">
+          Step {step} of 4 &middot; {STEP_LABELS[step - 1]}
+        </p>
+        <ol className="hidden flex-wrap gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide sm:flex">
+          {STEP_LABELS.map((s, i) => {
+            const done = step > i + 1;
+            const current = step === i + 1;
+            return (
+              <li key={s} aria-current={current ? "step" : undefined}
+                className={`rounded-lg px-2 py-1 ${current
+                  ? "bg-[var(--cp-primary)] text-white"
+                  : done ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                <span aria-hidden>{done ? "✓" : i + 1}</span> {s}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
       {props.instructions && step === 1 && (
         <p className="mb-4 whitespace-pre-wrap rounded-lg border border-gray-200 bg-white p-3 text-[12.5px] leading-relaxed text-gray-700">
@@ -330,27 +441,78 @@ export default function BookingWizard(props: {
         </p>
       )}
 
+      {/* ⚠ THE SUMMARY IS RENDERED ONCE, ABOVE THE STEPS, AND ONLY FROM STEP 2 (s7). On a phone it sits
+          where the patient's thumb already is; on a desktop the journey column and the summary sit side
+          by side, which is what the 65/35 split in s3 asks for without a second component. */}
+      {step > 1 && (
+        <div className="md:hidden">
+          <AppointmentSummary facts={summaryFacts} onChange={s => setStep(s)} compact />
+        </div>
+      )}
+
+      <div className={step > 1 ? "grid gap-4 md:grid-cols-[minmax(0,1fr)_300px]" : ""}>
+        {step > 1 && (
+          <aside className="hidden md:order-2 md:block">
+            <AppointmentSummary facts={summaryFacts} onChange={s => setStep(s)} />
+          </aside>
+        )}
+        <div className="flex flex-col gap-4 md:order-1">
+
       {step === 1 && (
         <section className="rounded-xl border border-gray-200 bg-white p-4">
-          <h1 className="text-[14px] font-bold text-gray-900">Where, and what kind of appointment</h1>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="flex flex-col text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">
-              Where
-              <select value={locationId} onChange={e => setLocationId(e.target.value)} className={`mt-0.5 ${CONTROL}`}>
-                {props.locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          <h1 className="text-[15px] font-bold text-gray-900">What would you like to book?</h1>
+
+          {/* ⚠ ONE LOCATION IS STATED, NOT ASKED (s5). A dropdown with a single option is a control that
+              looks like a decision and has none, and it costs a tap on a phone. */}
+          {props.locations.length === 1 ? (
+            <p className="mt-2 text-[12.5px] text-gray-700">
+              <span className="font-semibold">{props.locations[0].name}</span>
+              <span className="text-gray-500"> &middot; {MODE_WORD[props.locations[0].mode] ?? "In-person"}</span>
+            </p>
+          ) : props.locations.length > 1 && (
+            <label className="mt-3 block">
+              <span className="text-[12px] font-semibold text-gray-800">Location</span>
+              <select value={locationId} onChange={e => { setLocationId(e.target.value); setChosen(null); }}
+                className={`mt-1 ${CONTROL}`}>
+                {props.locations.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.name} — {MODE_WORD[l.mode] ?? "In-person"}
+                  </option>
+                ))}
               </select>
             </label>
-            <label className="flex flex-col text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">
-              What kind
-              <select value={appointmentType} onChange={e => setAppointmentType(e.target.value)} className={`mt-0.5 ${CONTROL}`}>
-                {props.appointmentTypes.map(t => <option key={t} value={t}>{appointmentTypeLabel(t)}</option>)}
-              </select>
-            </label>
-          </div>
+          )}
+
+          {/* s5: selectable cards rather than a dropdown while the eligible set is small -- a patient
+              choosing what kind of appointment they need is making the decision this page exists for. */}
+          <fieldset className="mt-4">
+            <legend className="text-[12px] font-semibold text-gray-800">Appointment type</legend>
+            <div className="mt-2 flex flex-col gap-2" role="radiogroup" aria-label="Appointment type">
+              {props.appointmentTypes.map(t => (
+                <button key={t} type="button" role="radio" aria-checked={appointmentType === t}
+                  onClick={() => { setAppointmentType(t); setChosen(null); }}
+                  className={`rounded-lg border px-3.5 py-3 text-left ${
+                    appointmentType === t
+                      ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/8 ring-1 ring-[var(--cp-primary)]/30"
+                      : "border-gray-200 bg-white hover:bg-gray-50"}`}>
+                  <span className="flex items-center gap-2">
+                    <span aria-hidden className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                      appointmentType === t ? "border-[var(--cp-primary)]" : "border-gray-300"}`}>
+                      {appointmentType === t && <span className="h-2 w-2 rounded-full bg-[var(--cp-primary)]" />}
+                    </span>
+                    <span className="text-[13px] font-semibold text-gray-900">{appointmentTypeLabel(t)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          {problem && <Problem text={problem} />}
+
           <div className="mt-4">
             <button type="button" className={PRIMARY} disabled={busy || !appointmentType}
               onClick={async () => { setStep(2); await loadSlots(0, { search: true }); }}>
-              Continue
+              Continue to date &amp; time →
             </button>
           </div>
         </section>
@@ -358,23 +520,28 @@ export default function BookingWizard(props: {
 
       {step === 2 && (
         <section className="rounded-xl border border-gray-200 bg-white p-4">
-          <h1 className="text-[14px] font-bold text-gray-900">Choose a time</h1>
-          <p className="mt-1 text-[11.5px] text-gray-500">
-            Times are shown in this practice&rsquo;s own timezone ({timezone}). Choosing one does not
-            reserve it &mdash; it is still free until a booking is actually made.
+          <h1 className="text-[15px] font-bold text-gray-900">Choose a date &amp; time</h1>
+          {/* s6: the zone in the words a patient uses, and the non-reservation stated as a fact about
+              when the appointment becomes theirs rather than as a note about how the engine works. */}
+          <p className="mt-1 text-[11.5px] leading-relaxed text-gray-500">
+            Times shown in {timezoneLabel}. Your appointment time is confirmed when booking is completed.
           </p>
 
-          <div className="mt-3 flex items-center gap-2">
+          {/* ⚠ "WEEK 2" WAS AN IMPLEMENTATION CONCEPT ON A PATIENT'S SCREEN (s6). The window is described
+              by the dates it covers, which is the thing the patient is actually looking at. */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <button type="button" className={SECONDARY} disabled={busy || weekFrom === 0}
               onClick={async () => { const w = Math.max(0, weekFrom - 1); setWeekFrom(w); await loadSlots(w); }}>
-              Earlier
+              ← Earlier
             </button>
             <span className="text-[11.5px] text-gray-600">
-              {weekFrom === 0 ? "The next seven days" : `Week ${weekFrom + 1}`}
+              {slotDays.length > 0
+                ? `${slotDays[0].label}${slotDays.length > 1 ? ` – ${slotDays[slotDays.length - 1].label}` : ""}`
+                : weekFrom === 0 ? "The next seven days" : "Later dates"}
             </span>
             <button type="button" className={SECONDARY} disabled={busy || weekFrom >= 16}
               onClick={async () => { const w = weekFrom + 1; setWeekFrom(w); await loadSlots(w); }}>
-              Later
+              Later →
             </button>
           </div>
 
@@ -417,106 +584,103 @@ export default function BookingWizard(props: {
               )}
             </div>
           )}
+          {/* s6: grouped under their date, so a patient scans days first and times second. */}
           {!busy && slots !== null && slots.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {slots.map(s => (
-                <button key={`${s.sourceSlotId}-${s.startsAt}`} type="button"
-                  onClick={() => setChosen(s)}
-                  className={`rounded-lg px-2.5 py-1.5 text-[12px] font-semibold ${
-                    chosen?.startsAt === s.startsAt
-                      ? "bg-[var(--cp-primary)]/12 text-[var(--cp-primary-deep)] ring-1 ring-[var(--cp-primary)]/30"
-                      : "bg-gray-100 text-gray-700"}`}>
-                  {fmt(s.startsAt)}
-                </button>
+            <div className="mt-3 flex flex-col gap-3">
+              {slotDays.map(day => (
+                <div key={day.key}>
+                  <h2 className="text-[11.5px] font-bold text-gray-700">{day.label}</h2>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {day.slots.map(s => {
+                      const selected = chosen?.startsAt === s.startsAt;
+                      return (
+                        <button key={`${s.sourceSlotId}-${s.startsAt}`} type="button"
+                          aria-pressed={selected}
+                          onClick={() => setChosen(s)}
+                          className={`rounded-lg px-3 py-2 text-[12.5px] font-semibold ${
+                            selected
+                              ? "bg-[var(--cp-primary)] text-white ring-1 ring-[var(--cp-primary)]"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>
+                          {/* Selection carries a mark as well as a fill, so it does not rest on colour. */}
+                          {selected && <span aria-hidden className="mr-1">✓</span>}
+                          {timeOf(s.startsAt)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
             </div>
+          )}
+
+          {chosen && (
+            <p className="mt-3 rounded-lg bg-[var(--cp-primary)]/8 px-3 py-2 text-[12px] font-semibold text-[var(--cp-primary-deep)]">
+              Selected: {fmt(chosen.startsAt)}
+            </p>
           )}
 
           {problem && <Problem text={problem} />}
 
           <div className="mt-4 flex gap-2">
-            <button type="button" className={SECONDARY} onClick={() => setStep(1)}>Back</button>
+            <button type="button" className={SECONDARY} onClick={() => setStep(1)}>← Back</button>
             <button type="button" className={PRIMARY} disabled={busy || !chosen}
               onClick={async () => { if (chosen && await loadQuestions(chosen)) setStep(3); }}>
-              Continue
+              Continue with this time →
             </button>
           </div>
         </section>
       )}
 
       {step === 3 && (
-        <section className="rounded-xl border border-gray-200 bg-white p-4">
-          <h1 className="text-[14px] font-bold text-gray-900">About you</h1>
-          {chosen && (
-            <p className="mt-1 text-[12px] text-gray-600">
-              {fmt(chosen.startsAt)} &middot; {appointmentTypeLabel(appointmentType)}
-              {chosen.locationName ? ` · ${chosen.locationName}` : ""}
+        <div className="flex flex-col gap-4">
+          <div>
+            <h1 className="text-[15px] font-bold text-gray-900">Your details</h1>
+            <p className="mt-0.5 text-[11.5px] text-gray-500">
+              {questions === null
+                ? "Preparing the form…"
+                : "Tell us about yourself so we can arrange your appointment."}
             </p>
-          )}
-          <p className="mt-1 text-[11.5px] text-gray-500">
-            {questions === null
-              ? "The questions this practice asks are being read."
-              : `This practice asks ${applicable.length} question${applicable.length === 1 ? "" : "s"}. Nothing else is collected.`}
-          </p>
-
-          <div className="mt-3 space-y-3">
-            {applicable.map(f => (
-              <label key={f.field_key} className="block">
-                <span className="text-[11px] font-semibold text-gray-700">
-                  {f.label}
-                  {f._level === "required" && <span className="ml-1 text-rose-600">*</span>}
-                </span>
-                {f.help && <span className="mt-0.5 block text-[10.5px] leading-relaxed text-gray-500">{f.help}</span>}
-                <span className="mt-1 block">
-                  {/* ⚠ THE ONE RENDERER. Eleven field types, one component, validated by the server's own
-                      function -- see FormFieldInput.tsx's header. */}
-                  <FormFieldInput field={f as any} value={values[f.field_key]}
-                    onChange={v => edit(f.field_key, v)} />
-                </span>
-              </label>
-            ))}
           </div>
 
+          {/* s8: the sections, the conditional reveals and the patient-facing copy. Which questions
+              exist, and which are required, is still the server's answer. */}
+          <DetailsStep
+            applicable={applicable as any}
+            values={values}
+            edit={edit}
+            isChild={isChild}
+            consent={consent}
+            setConsent={setConsent}
+            consentRequired={consentRequired}
+            consentText={consentText}
+            privacyNotice={props.privacyNotice}
+            safetyNote={props.safetyNote}
+          />
+
           {clearedNote && (
-            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
+            <p className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
               {clearedNote}
             </p>
           )}
 
-          {props.privacyNotice && (
-            <details className="mt-3">
-              <summary className="cursor-pointer text-[11.5px] font-semibold text-[var(--cp-primary)]">
-                What this practice does with your details
-              </summary>
-              <p className="mt-1 whitespace-pre-wrap text-[11.5px] leading-relaxed text-gray-600">{props.privacyNotice}</p>
-            </details>
-          )}
-
-          <label className="mt-3 flex items-start gap-2 text-[12px] leading-relaxed text-gray-700">
-            <input type="checkbox" className="mt-0.5" checked={consent} onChange={e => setConsent(e.target.checked)} />
-            <span>
-              {consentText ?? "I agree to this practice keeping the details I have entered so that it can arrange this appointment."}
-              {consentRequired && <span className="ml-1 text-rose-600">*</span>}
-            </span>
-          </label>
-
-          {/* ⚠ WHAT IS STILL MISSING IS NAMED BEFORE THE BUTTON IS PRESSED, not after the server refuses. */}
+          {/* ⚠ WHAT IS STILL MISSING IS NAMED BEFORE THE BUTTON IS PRESSED (s14), not after the server
+              refuses -- and in the patient's words for the field, not the practitioner's. */}
           {missing.length > 0 && (
-            <p className="mt-3 text-[11.5px] text-gray-600">Still needed: {missing.join(", ")}.</p>
+            <p className="text-[11.5px] text-gray-600">Still needed: {missing.join(", ")}.</p>
           )}
           {badAnswers.length > 0 && (
-            <p className="mt-1 text-[11.5px] text-rose-700">{badAnswers.join(" ")}</p>
+            <p className="text-[11.5px] text-rose-700">{badAnswers.join(" ")}</p>
           )}
           {!contact && (
-            <p className="mt-1 text-[11.5px] text-gray-600">
-              Give a phone number or an email address &mdash; the practice has no other way to reach you.
+            <p className="text-[11.5px] text-gray-600">
+              Add a mobile number or an email address &mdash; the practice has no other way to reach you.
             </p>
           )}
 
           {problem && <Problem text={problem} />}
 
-          <div className="mt-4 flex gap-2">
-            <button type="button" className={SECONDARY} onClick={() => setStep(2)}>Back</button>
+          <div className="flex gap-2">
+            <button type="button" className={SECONDARY} onClick={() => setStep(2)}>← Back</button>
             <button type="button" className={PRIMARY}
               disabled={busy || missing.length > 0 || badAnswers.length > 0 || !contact || (consentRequired && !consent)}
               onClick={() => {
@@ -524,61 +688,139 @@ export default function BookingWizard(props: {
                 setChannel(String(values.contact_phone ?? "").trim() ? "sms" : "email");
                 setStep(4);
               }}>
-              Continue
+              Continue to review →
             </button>
           </div>
-        </section>
+        </div>
       )}
 
       {step === 4 && (
         <section className="rounded-xl border border-gray-200 bg-white p-4">
           {props.canBook ? (
             <>
-              <h1 className="text-[14px] font-bold text-gray-900">Confirm it is you</h1>
-              <p className="mt-1 text-[12px] leading-relaxed text-gray-600">
-                This practice sends a code to your phone or inbox before it takes a booking. Enter the
-                code and the appointment is made.
-              </p>
-
               {!challengeId ? (
                 <>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <label className="flex flex-col text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">
-                      Send it by
-                      <select value={channel} onChange={e => setChannel(e.target.value as "sms" | "email")} className={`mt-0.5 ${CONTROL}`}>
-                        <option value="sms">Text message</option>
-                        <option value="email">Email</option>
-                      </select>
-                    </label>
-                    <label className="flex flex-col text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">
-                      To
-                      <input value={destination} onChange={e => setDestination(e.target.value)} className={`mt-0.5 ${CONTROL}`} />
-                    </label>
-                  </div>
-                  {/* ⚠ THE SAME ADDRESS OR THE BOOKING IS REFUSED, AND SAYING SO BEATS A 403 LATER. The
-                      session proves control of the address the code went to, and the booking must claim
-                      that same one. */}
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
-                    This must be the number or address you gave above &mdash; the code proves that one is
-                    yours, and a booking made with a different one is refused.
+                  {/* ══ THE REVIEW (s11/AC-15) ══════════════════════════════════════════════════════
+                      ⚠ STEP 4 IS THE PATIENT'S LAST DECISION POINT, NOT AN OTP SCREEN WITH A HEADING.
+                      Before this, the only place their answers appeared was the form they typed them
+                      into, so the first time anybody saw the booking as a whole was after it existed. */}
+                  <h1 className="text-[15px] font-bold text-gray-900">Review your appointment</h1>
+                  <p className="mt-1 text-[12px] leading-relaxed text-gray-600">
+                    Please check your details before we send a verification code to your email.
                   </p>
-                  <div className="mt-3">
+
+                  <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {[
+                      { k: "Practitioner", v: `${props.identity.displayName}${props.identity.credentials ? `, ${props.identity.credentials}` : ""}`, step: null },
+                      { k: "Appointment", v: appointmentTypeLabel(appointmentType), step: 1 as const },
+                      { k: "Where", v: [summaryFacts.locationName, summaryFacts.mode].filter(Boolean).join(" · "), step: 1 as const },
+                      { k: "When", v: chosen ? `${fmt(chosen.startsAt)} (${timezoneLabel})` : "", step: 2 as const },
+                      { k: "Patient", v: `${String(values.given_name ?? "")} ${String(values.family_name ?? "")}`.trim(), step: 3 as const },
+                      { k: "Contact", v: [maskEmail(String(values.contact_email ?? "")), maskPhone(String(values.contact_phone ?? ""))].filter(Boolean).join(" · "), step: 3 as const },
+                    ].filter(r => r.v).map(r => (
+                      <div key={r.k}>
+                        <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{r.k}</dt>
+                        <dd className="flex items-baseline justify-between gap-2">
+                          <span className="text-[12.5px] font-semibold text-gray-800">{r.v}</span>
+                          {r.step !== null && (
+                            <button type="button" onClick={() => setStep(r.step!)}
+                              className="shrink-0 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:underline">
+                              Change
+                            </button>
+                          )}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+
+                  {String(values.reason_for_visit ?? "").trim() && (
+                    <div className="mt-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Reason for visit</p>
+                      <p className="text-[12.5px] leading-relaxed text-gray-800">{String(values.reason_for_visit)}</p>
+                    </div>
+                  )}
+
+                  {/* ⚠ THE CODE GOES WHERE THE PATIENT SAID, AND THE BOOKING MUST CLAIM THE SAME ADDRESS.
+                      The session proves control of the destination the code reached, so a booking naming
+                      a different one is refused by the server -- said here rather than as a 403 later. */}
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-[11.5px] font-semibold text-[var(--cp-primary)]">
+                      Send the code somewhere else
+                    </summary>
+                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                      <label className="flex flex-col text-[11px] font-semibold text-gray-700">
+                        Send it by
+                        <select value={channel} onChange={e => setChannel(e.target.value as "sms" | "email")} className={`mt-0.5 ${CONTROL}`}>
+                          <option value="email">Email</option>
+                          <option value="sms">Text message</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col text-[11px] font-semibold text-gray-700">
+                        To
+                        <input value={destination} onChange={e => setDestination(e.target.value)} className={`mt-0.5 ${CONTROL}`} />
+                      </label>
+                    </div>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
+                      This must be one of the contact details you gave &mdash; the code proves that one is
+                      yours, and a booking made with a different one is refused.
+                    </p>
+                  </details>
+
+                  <div className="mt-4">
                     <button type="button" className={PRIMARY} disabled={busy || !destination.trim()}
                       onClick={async () => {
                         const r = await call({ action: "request_code", channel, destination });
                         if (r?.challengeId) setChallengeId(String(r.challengeId));
                       }}>
-                      {busy ? "Sending…" : "Send me a code"}
+                      {busy ? "Sending…" : channel === "email" ? "Confirm and verify email →" : "Confirm and send me a code →"}
                     </button>
                   </div>
                 </>
               ) : (
                 <>
-                  <label className="mt-3 flex flex-col text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">
-                    The six-digit code
-                    <input value={code} onChange={e => setCode(e.target.value)} inputMode="numeric"
-                      maxLength={6} className={`mt-0.5 ${CONTROL}`} />
+                  {/* ══ THE CODE (s12) ══════════════════════════════════════════════════════════════ */}
+                  <h1 className="text-[15px] font-bold text-gray-900">
+                    {channel === "email" ? "Check your email" : "Check your phone"}
+                  </h1>
+                  <p className="mt-1 text-[12px] leading-relaxed text-gray-600">
+                    We sent a 6-digit code to{" "}
+                    <span className="font-semibold text-gray-800">
+                      {channel === "email" ? maskEmail(destination) : maskPhone(destination)}
+                    </span>.
+                  </p>
+
+                  <label className="mt-3 flex flex-col text-[11px] font-semibold text-gray-700">
+                    Enter the code
+                    {/* inputMode + autocomplete let a phone offer the code from the message itself. */}
+                    <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                      aria-label="Six-digit verification code"
+                      className={`mt-0.5 max-w-[220px] tracking-[0.4em] ${CONTROL}`} />
                   </label>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-[11.5px]">
+                    <button type="button" disabled={busy}
+                      onClick={async () => {
+                        const r = await call({ action: "request_code", channel, destination });
+                        if (r?.challengeId) { setChallengeId(String(r.challengeId)); setCode(""); }
+                      }}
+                      className="font-semibold text-[var(--cp-primary)] hover:underline disabled:opacity-50">
+                      Resend code
+                    </button>
+                    {/* ⚠ CHANGING THE ADDRESS DISCARDS THE VERIFICATION (s12). The old challenge proved
+                        control of a different destination, and carrying it forward would let somebody
+                        verify one address and book against another. */}
+                    <button type="button" disabled={busy}
+                      onClick={() => { setChallengeId(null); setCode(""); setToken(null); }}
+                      className="font-semibold text-[var(--cp-primary)] hover:underline disabled:opacity-50">
+                      {channel === "email" ? "Change email" : "Change number"}
+                    </button>
+                  </div>
+
+                  <p className="mt-2 rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-2 text-[11px] leading-relaxed text-gray-600">
+                    Not arrived? Check your spam folder. The code expires a few minutes after it is sent.
+                  </p>
+
                   <div className="mt-3 flex gap-2">
                     <button type="button" className={PRIMARY} disabled={busy || code.trim().length !== 6}
                       onClick={async () => {
@@ -593,7 +835,7 @@ export default function BookingWizard(props: {
                         });
                         if (r) { setDone(r); setDoneKind("booked"); }
                       }}>
-                      {busy ? "Checking…" : "Confirm and book"}
+                      {busy ? "Checking…" : "Verify & book appointment"}
                     </button>
                   </div>
                 </>
@@ -625,12 +867,37 @@ export default function BookingWizard(props: {
           {problem && <Problem text={problem} />}
 
           <div className="mt-4">
-            <button type="button" className={SECONDARY} onClick={() => setStep(3)}>Back</button>
+            <button type="button" className={SECONDARY} onClick={() => setStep(3)}>← Back</button>
           </div>
         </section>
       )}
+        </div>
+      </div>
     </div>
   );
+}
+
+/**
+ * s11/s12: contact details are SUMMARISED, not reprinted.
+ *
+ * ⚠ ENOUGH TO RECOGNISE, NOT ENOUGH TO READ OVER A SHOULDER. A review screen and an OTP screen are both
+ * places a patient may be standing in a waiting room, and the address is already known to whoever typed
+ * it -- so the mask confirms which one was used without publishing it to the room.
+ */
+export function maskEmail(value: string): string {
+  const v = value.trim();
+  if (!v || !v.includes("@")) return "";
+  const [name, domain] = v.split("@");
+  const head = name.slice(0, 1);
+  return `${head}${"•".repeat(Math.max(3, Math.min(6, name.length - 1)))}@${domain}`;
+}
+
+export function maskPhone(value: string): string {
+  const v = value.trim();
+  if (!v) return "";
+  const digits = v.replace(/\D/g, "");
+  if (digits.length < 4) return v;
+  return `${"•".repeat(Math.max(3, digits.length - 3))}${digits.slice(-3)}`;
 }
 
 function Problem({ text }: { text: string }) {

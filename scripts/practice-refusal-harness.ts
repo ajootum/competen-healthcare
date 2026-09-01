@@ -263,7 +263,10 @@ ok("8d-control. the migration detector matches a real one",
   // Imported the way RuleWorkspace imports them, so this asserts what a practitioner can be shown.
   const rendered: string[] = [
     ...brc.BUILDER_SECTIONS.flatMap(s => [s.title, s.responsibility, s.note]),
-    ...brc.BOOKING_INTAKE_FIELDS.flatMap(f => [f.label, f.help]),
+    // ⚠ THE PATIENT-FACING PAIR IS SCANNED TOO, and it is the half that matters most: these strings are
+    // read by strangers mid-booking, not by a practitioner configuring their own practice.
+    ...brc.BOOKING_INTAKE_FIELDS.flatMap(f => [f.label, f.help, f.patientLabel ?? "", f.patientHelp ?? ""]),
+    ...brc.PATIENT_RELATIONSHIPS.map(r => r.label),
     ...brc.REQUIREMENT_LEVELS.flatMap(l => [l.label, l.blurb]),
     ...brc.RULE_STATUSES.flatMap(s => [s.label, s.blurb]),
     ...brc.CONFIRMATION_MODES.flatMap(c => [c.label, c.blurb]),
