@@ -208,6 +208,45 @@ export default async function ProfilePreview({ handle }: { handle: string | null
         </ul>
       </section>
 
+      {/* ── THE PHOTOGRAPH PLACEHOLDER ────────────────────────────────────────────────────────────
+          ⚠ IT LIVES HERE AND NOT ON THE PATIENT PAGE, and the distinction is the point. A patient
+          reading a dashed box labelled "photo not available" learns something about this product's
+          roadmap, which is not their business and reads as a page that failed to load. What the
+          patient gets is the initials avatar -- a deliberate, finished treatment.
+
+          The practitioner is a different audience with a different question ("where would my photo
+          go, and why can I not add one?"), so the reserved space is shown to THEM, beside the thing
+          patients actually see. */}
+      <section className={card}>
+        <h2 className="text-[13px] font-bold text-gray-900">Photograph</h2>
+        <div className="mt-2 flex flex-wrap items-center gap-5">
+          <div className="flex flex-col items-center gap-1">
+            <span aria-hidden
+              className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-gray-300 bg-gray-50 text-[20px] text-gray-400">
+              ☺
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+              Where a photo would go
+            </span>
+          </div>
+          <span aria-hidden className="text-[16px] text-gray-300">→</span>
+          <div className="flex flex-col items-center gap-1">
+            <span aria-hidden
+              className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[22px] font-bold text-white">
+              {p.initials}
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+              What patients see now
+            </span>
+          </div>
+          <p className="min-w-[200px] flex-1 text-[11.5px] leading-relaxed text-gray-600">
+            Profile photographs are not part of this product yet, so there is no setting to add one and
+            nothing on your side is missing. Every profile shows initials, which is a finished
+            treatment rather than a gap &mdash; patients see a considered avatar, not an empty frame.
+          </p>
+        </div>
+      </section>
+
       <section>
         <h2 className="text-[13px] font-bold text-gray-900">Preview</h2>
         <p className="mt-0.5 text-[11.5px] text-gray-600">
