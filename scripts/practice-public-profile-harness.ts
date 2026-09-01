@@ -22,6 +22,7 @@ import { saveBookingAccess, setPublishState } from "../src/lib/practice/patient-
 import {
   publicBookingProfile, profileAvailability, initialsOf, PUBLIC_PROFILE_FIELDS,
 } from "../src/lib/practice/public-profile";
+import { publicBookingEntry } from "../src/lib/practice/patient-booking";
 import { purgeWorkspacesOwnedBy, cleanupOnKill } from "./_cleanup";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -290,6 +291,31 @@ async function main() {
   ok("5e. the path is a ROUTE, never an absolute address (AC-04)",
     open.profile.booking.bookingPath === `/practice/book/@${HANDLE}/appointment`,
     String(open.profile.booking.bookingPath));
+
+  // ── 5f-5h. The emergency notice (CPR-BOOK-FLOW-002 s8.5, migration 363) ───
+  section("5b. the emergency notice");
+  {
+    const entryBefore = await publicBookingEntry(admin, HANDLE);
+    ok("5f. a practice that wrote none carries null -- nothing is composed on its behalf",
+      entryBefore.emergencyNotice === null, String(entryBefore.emergencyNotice));
+
+    const OWN = "This clinic does not handle emergencies. For urgent help go to the nearest emergency department.";
+    const saved = await saveBookingAccess(admin, ctx, {
+      emergencyNotice: OWN, actorId: OWNER, correlationId: CORR,
+    } as any);
+    ok("5g. a practice's own wording saves", (saved as any).ok, JSON.stringify(saved).slice(0, 120));
+
+    const entryAfter = await publicBookingEntry(admin, HANDLE);
+    ok("5h. and reaches the patient page verbatim, never summarised or rewritten",
+      entryAfter.emergencyNotice === OWN, String(entryAfter.emergencyNotice));
+
+    // ⚠ CLEARING IT MUST GENUINELY UNSET IT. A blank stored as "" would render an empty amber box on a
+    // patient's booking form -- a warning shaped like a warning with nothing in it.
+    await saveBookingAccess(admin, ctx, { emergencyNotice: "", actorId: OWNER, correlationId: CORR } as any);
+    const entryCleared = await publicBookingEntry(admin, HANDLE);
+    ok("5i. clearing it unsets it rather than storing an empty string",
+      entryCleared.emergencyNotice === null, JSON.stringify(entryCleared.emergencyNotice));
+  }
 
   // ── 6. Consultation types and mode (AC-05, AC-06) ─────────────────────────
   section("6. what a patient is offered");

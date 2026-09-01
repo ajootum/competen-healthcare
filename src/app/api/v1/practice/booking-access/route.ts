@@ -86,6 +86,9 @@ export async function POST(req: NextRequest) {
     visibleAppointmentTypes: stringList(body.visibleAppointmentTypes),
     brandDisplayName: nullableText(body.brandDisplayName),
     instructions: nullableText(body.instructions),
+    // Migration 363, CPR-BOOK-FLOW-002 s8.5. nullableText means clearing the box genuinely unsets it,
+    // so a practice that decides its wording was wrong can remove it rather than blank it to "".
+    emergencyNotice: nullableText(body.emergencyNotice),
     // Migration 291: either, both or neither. nullableText turns a cleared field into a genuine null.
     fallbackEmail: nullableText(body.fallbackEmail),
     fallbackPhone: nullableText(body.fallbackPhone),

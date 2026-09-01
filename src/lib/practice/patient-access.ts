@@ -434,6 +434,8 @@ export type BookingAccessProfile = {
   fallbackPhone: string | null;
   privacyNotice: string | null;
   consentText: string | null;
+  /** s8.5: the practice's own emergency wording. Null until it writes one -- never a default. */
+  emergencyNotice: string | null;
   consentRequired: boolean;
   publishedAt: string | null;
   pausedAt: string | null;
@@ -468,6 +470,7 @@ const profileFrom = (row: any): BookingAccessProfile => ({
   fallbackPhone: (row.fallback_phone as string | null) ?? null,
   privacyNotice: (row.privacy_notice as string | null) ?? null,
   consentText: (row.consent_text as string | null) ?? null,
+  emergencyNotice: (row.emergency_notice as string | null) ?? null,
   consentRequired: !!row.consent_required,
   publishedAt: (row.published_at as string | null) ?? null,
   pausedAt: (row.paused_at as string | null) ?? null,
@@ -488,6 +491,14 @@ const PROFILE_COLUMNS =
 const PROFILE_COLUMNS_272 =
   `${PROFILE_COLUMNS}, unverified_requests_allowed, unverified_requests_allowed_at`;
 
+/**
+ * Migration 363's one. Appended to the 272 list rather than folded into PROFILE_COLUMNS, so the
+ * fallback ladder below degrades one migration at a time: a practice missing 363 still gets 272's
+ * columns, and a practice missing both still gets its page.
+ */
+const PROFILE_COLUMNS_363 =
+  `${PROFILE_COLUMNS_272}, emergency_notice`;
+
 /** PostgREST's answer when a column is not there yet. Code and sentence, because both have been seen. */
 const isUndefinedColumn = (e: { code?: string | null; message?: string | null } | null | undefined) =>
   !!e && (String(e.code) === "42703" || /column .* does not exist/i.test(String(e.message ?? "")));
@@ -504,12 +515,21 @@ export async function bookingAccessProfile(
   admin: any, workspaceId: string,
 ): Promise<Reading<BookingAccessProfile | null>> {
   const { data, error } = await admin.from("practice_booking_access")
-    .select(PROFILE_COLUMNS_272).eq("workspace_id", workspaceId).maybeSingle();
-  // ⚠ A COLUMN THAT IS NOT THERE YET IS NOT AN UNREADABLE PAGE. Migration 272 adds two, and a practice
-  // that has not applied it must still be able to see and configure everything it had before -- so the
-  // read falls back to the older column list rather than reporting the whole profile unreadable.
-  // profileFrom() then reads the two as `null`, which is neither a yes nor a no.
+    .select(PROFILE_COLUMNS_363).eq("workspace_id", workspaceId).maybeSingle();
+  // ⚠ A COLUMN THAT IS NOT THERE YET IS NOT AN UNREADABLE PAGE. Migrations here are applied by hand, so
+  // between a deploy and the SQL running a column named in the list does not exist -- and PostgREST
+  // fails the WHOLE query, which would report a configured booking page as unreadable.
+  //
+  // ⚠ AND IT STEPS DOWN ONE MIGRATION AT A TIME. Falling straight from 363 to the base list would cost
+  // a practice that HAS applied 272 both of its columns, turning "this practice allows unverified
+  // requests" back into "nobody knows" for no reason. Each rung drops exactly what the rung above added.
   if (isUndefinedColumn(error)) {
+    const without363 = await admin.from("practice_booking_access")
+      .select(PROFILE_COLUMNS_272).eq("workspace_id", workspaceId).maybeSingle();
+    if (!isUndefinedColumn(without363.error)) {
+      if (without363.error) return { state: "unreadable", reason: `your booking page could not be read: ${without363.error.message}` };
+      return { state: "ok", value: without363.data ? profileFrom(without363.data) : null };
+    }
     const older = await admin.from("practice_booking_access")
       .select(PROFILE_COLUMNS).eq("workspace_id", workspaceId).maybeSingle();
     if (older.error) return { state: "unreadable", reason: `your booking page could not be read: ${older.error.message}` };
@@ -932,6 +952,7 @@ export type BookingAccessSave = {
   fallbackPhone?: string | null;
   privacyNotice?: string | null;
   consentText?: string | null;
+  emergencyNotice?: string | null;
   consentRequired?: boolean;
   /**
    * ⚠ MIGRATION 272. TURNING THIS ON CHANGES WHO MAY WRITE A ROW AT THIS PRACTICE.
@@ -1035,6 +1056,7 @@ export async function saveBookingAccess(admin: any, ctx: WorkspaceContext, args:
   if (args.fallbackPhone !== undefined) patch.fallback_phone = text(args.fallbackPhone);
   if (args.privacyNotice !== undefined) patch.privacy_notice = text(args.privacyNotice);
   if (args.consentText !== undefined) patch.consent_text = text(args.consentText);
+  if (args.emergencyNotice !== undefined) patch.emergency_notice = text(args.emergencyNotice);
   if (args.consentRequired !== undefined) patch.consent_required = args.consentRequired;
 
   // ⚠ MIGRATION 272. THE TIMESTAMP MOVES ONLY WHEN THE DOOR IS OPENED, so "when did this practice start

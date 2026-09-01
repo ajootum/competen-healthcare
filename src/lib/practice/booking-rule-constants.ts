@@ -625,6 +625,25 @@ export type BookingIntakeField = {
  * a decision about the canonical vocabulary, not a UI change -- recorded here rather than silently
  * dropped.
  */
+/**
+ * CPR-BOOK-FLOW-002 s8.5 -- the wording OFFERED to a practice that has not written its own.
+ *
+ * ⚠ IT NAMES NO NUMBER AND NO COUNTRY, and that is the whole design. The spec's instruction is explicit
+ * ('do not hard-code US emergency numbers'), and the reason is not tidiness: 'call 911' under a booking
+ * form in Kampala sends somebody to a line that will not answer while they are having the emergency.
+ * The sentence a patient reads has to name a service that exists where they are, and only the practice
+ * knows which one that is -- so this is a starting point with a gap the practice fills, never a default
+ * anything writes on their behalf.
+ *
+ * ⚠ NOTHING WRITES IT AUTOMATICALLY -- not migration 363 (which leaves the column null) and not the
+ * provisioning baseline. Seeding it would mean creating a booking-page row for a practice that has not
+ * made one, so that a sentence could sit in it unread. It is offered by a button in the booking-page
+ * editor, which is a practitioner choosing it, and that is the only way it is ever written.
+ */
+export const SUGGESTED_EMERGENCY_NOTICE =
+  "Online booking is not for emergencies. If you need urgent help, contact your nearest emergency "
+  + "service or go to your nearest emergency department.";
+
 export const PATIENT_RELATIONSHIPS: { value: string; label: string }[] = [
   { value: "mother", label: "Mother" },
   { value: "father", label: "Father" },

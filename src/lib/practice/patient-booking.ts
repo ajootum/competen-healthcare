@@ -95,6 +95,8 @@ export type PublicBookingPage = {
   fallbackEmail: string | null;
   fallbackPhone: string | null;
   privacyNotice: string | null;
+  /** s8.5: the practice's own emergency wording, or null where it wrote none. */
+  emergencyNotice: string | null;
   consentText: string | null;
   consentRequired: boolean;
   otpRequired: boolean;
@@ -127,7 +129,7 @@ export async function resolveBookingPage(
   if (!/^[a-z][a-z0-9]{2,29}$/.test(clean)) return { state: "ok", value: null };
 
   const { data, error } = await admin.from("practice_booking_access")
-    .select("workspace_id, handle, mode, publish_state, otp_required, otp_channel, guest_booking_allowed, visible_location_ids, visible_appointment_types, brand_display_name, instructions, privacy_notice, consent_text, consent_required, fallback_email, fallback_phone")
+    .select("workspace_id, handle, mode, publish_state, otp_required, otp_channel, guest_booking_allowed, visible_location_ids, visible_appointment_types, brand_display_name, instructions, privacy_notice, consent_text, consent_required, fallback_email, fallback_phone, emergency_notice")
     .eq("handle", clean).maybeSingle();
   // ⚠ AN UNREADABLE STORE IS NOT "NO SUCH PRACTICE". The caller renders an outage, not a 404 -- telling
   // a patient the practice does not exist because a query failed is the wrong answer to give twice.
@@ -169,6 +171,7 @@ export async function resolveBookingPage(
       fallbackEmail: (data.fallback_email as string | null) ?? null,
       fallbackPhone: (data.fallback_phone as string | null) ?? null,
       privacyNotice: (data.privacy_notice as string | null) ?? null,
+      emergencyNotice: (data.emergency_notice as string | null) ?? null,
       consentText: (data.consent_text as string | null) ?? null,
       consentRequired: !!data.consent_required,
       otpRequired: !!data.otp_required,
@@ -2022,6 +2025,8 @@ export type PublicBookingEntry = {
   fallbackEmail: string | null;
   fallbackPhone: string | null;
   privacyNotice: string | null;
+  /** s8.5, from the practice. Null renders nothing -- an invented safety instruction is worse. */
+  emergencyNotice: string | null;
   /** ⚠ `mode` IS THE PATIENT WORD, not the location's kind. See PublicBookingPage.locations. */
   locations: { id: string; name: string; mode: "in_person" | "virtual" }[];
   appointmentTypes: string[];
@@ -2047,7 +2052,7 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
     // A page that is not published, or could not be read, advertises no contact -- inventing one would
     // put a practice.s address in front of somebody it never agreed to hear from.
     fallbackEmail: null as string | null, fallbackPhone: null as string | null,
-    privacyNotice: null as string | null,
+    privacyNotice: null as string | null, emergencyNotice: null as string | null,
     locations: [] as PublicBookingEntry["locations"], appointmentTypes: [] as string[],
     referenceNote: BOOKING_REFERENCE_NOTE,
     closedBecause: null as PublicBookingEntry["closedBecause"],
@@ -2091,6 +2096,7 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
   const shared = {
     ...base, state: "open" as const,
     displayName: p.displayName, instructions: p.instructions, privacyNotice: p.privacyNotice,
+    emergencyNotice: p.emergencyNotice,
     fallbackEmail: p.fallbackEmail, fallbackPhone: p.fallbackPhone,
     locations: p.locations, appointmentTypes: p.appointmentTypes,
   };

@@ -89,16 +89,26 @@ the presentation.
 stored vocabulary, and offering them would produce answers the database refuses. Adding them is a
 migration and a decision about the canonical vocabulary, not a UI change.
 
-## 5. Substrate gap: the emergency statement (§8.5)
+## 5. The emergency statement (§8.5) — built, migration 363
 
-The spec asks for a concise "online booking is not for emergencies" statement whose "wording must be
-deployment-appropriate and configurable". **There is no field for one.** The practice's `instructions`
-are general booking guidance and already render on step 1, so reusing them would print the same
-paragraph twice and relabel ordinary instructions as a safety warning.
+Owner asked for the field the same day the gap was recorded. `practice_booking_access.emergency_notice`,
+nullable, bounded to 600 characters, **no database default**.
 
-`safetyNote` is therefore wired and passed `null`. Inventing the sentence would be worse than omitting
-it — an emergency instruction naming the wrong service for the country is the kind of copy that gets
-somebody hurt. It needs a configurable field, which is an owner decision.
+- **Nothing writes it automatically.** Not the migration, and not the provisioning baseline — seeding it
+  would mean creating a booking-page row for a practice that has not made one, so a sentence could sit
+  in it unread. It is written by a practitioner in the booking-page editor and nowhere else.
+- **The suggested wording names no number and no country**: *"Online booking is not for emergencies. If
+  you need urgent help, contact your nearest emergency service or go to your nearest emergency
+  department."* It is offered behind a button ("Use the suggested wording, then add your local service"),
+  because "call 911" under a booking form in Kampala sends somebody to a line that will not answer while
+  they are having the emergency — worse than the silence it replaced.
+- **Null renders nothing.** No empty amber box, and `instructions` are never relabelled as a warning.
+- The read ladder steps down **one migration at a time** (363 → 272 → base), so a practice missing 363
+  keeps 272's columns instead of silently losing them — the first version of this fell straight to the
+  base list and would have turned "this practice allows unverified requests" back into "nobody knows".
+
+Verified: harness round trip (null when unwritten → saves verbatim → clearing genuinely unsets rather
+than storing `""`), plus two render pins for the patient side.
 
 ## 6. Verification
 
@@ -124,4 +134,4 @@ somebody hurt. It needs a configurable field, which is an owner decision.
   migration 255's exclusion constraint at the moment of the write.
 - **§13 add-to-calendar and directions** on the success screen — no calendar artifact or map
   configuration exists yet.
-- The emergency statement and the "Parent"/"Other relative" vocabulary, per §4 and §5 above.
+- The "Parent"/"Other relative" relationship values, per §4 above (a migration to the canonical vocabulary).

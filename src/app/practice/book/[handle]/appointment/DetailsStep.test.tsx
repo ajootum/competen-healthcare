@@ -145,6 +145,31 @@ describe("optional medical information (s8.6/AC-13)", () => {
   });
 });
 
+describe("the emergency notice (s8.5, migration 363)", () => {
+  it("shows nothing at all when the practice has not written one", () => {
+    // ⚠ SILENCE IS THE CORRECT ABSENCE HERE. The alternative considered and rejected was reusing the
+    // practice's booking `instructions` as a safety line, which would relabel ordinary guidance as a
+    // warning; the alternative rejected harder was composing a sentence, because an emergency
+    // instruction naming the wrong service for the country is worse than none.
+    const html = render();
+    expect(html).not.toMatch(/emergenc/i);
+    expect(html).not.toMatch(/urgent/i);
+  });
+
+  it("renders the practice's own wording where it wrote one", () => {
+    const own = "This clinic does not handle emergencies. For urgent help call Nsambya on 0414 267 012.";
+    const html = renderToString(
+      React.createElement(DetailsStep, {
+        applicable: ALL.map(k => field(k, ["given_name", "family_name"].includes(k) ? "required" : "optional")),
+        values: {}, edit: () => {}, isChild: false,
+        consent: false, setConsent: () => {}, consentRequired: true, consentText: null,
+        privacyNotice: null, safetyNote: own,
+      }),
+    ).replace(/<!-- -->/g, "");
+    expect(html).toContain(own);
+  });
+});
+
 describe("relationship vocabulary (s8.4/AC-11)", () => {
   it("offers family and care relationships, and no administrative roles", () => {
     const html = render({ isChild: true });

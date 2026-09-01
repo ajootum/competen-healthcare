@@ -8,6 +8,7 @@ import {
   PUBLISH_STATES, PUBLISH_STATE_SWATCH, PUBLISH_STATES_LIVE, PUBLISHABLE_CONSTRAINT,
 } from "@/lib/practice/publish-constants";
 import { SESSION_APPOINTMENT_TYPES, appointmentTypeLabel } from "@/lib/practice/practice-session-constants";
+import { SUGGESTED_EMERGENCY_NOTICE } from "@/lib/practice/booking-rule-constants";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -103,6 +104,7 @@ export default function PublishWorkspace({ readiness, locations, mayPublish, vie
     unverifiedRequestsAllowed: p?.unverifiedRequestsAllowed === true,
     brandDisplayName: p?.brandDisplayName ?? "",
     instructions: p?.instructions ?? "",
+    emergencyNotice: p?.emergencyNotice ?? "",
     fallbackEmail: p?.fallbackEmail ?? "",
     fallbackPhone: p?.fallbackPhone ?? "",
     visibleLocationIds: (p?.visibleLocationIds ?? []) as string[],
@@ -416,6 +418,37 @@ export default function PublishWorkspace({ readiness, locations, mayPublish, vie
                 onChange={e => setDraft(d => ({ ...d, instructions: e.target.value }))}
                 className="mt-0.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-800" />
             </label>
+
+            {/* ── THE EMERGENCY NOTICE (CPR-BOOK-FLOW-002 s8.5, migration 363) ─────────────────────
+                ⚠ SUGGESTED, NEVER ASSUMED. This is safety copy that a stranger reads while deciding
+                whether to wait for an appointment, and the right words depend on the country, the
+                service and the practice. So the field starts EMPTY, the suggestion is one button, and
+                nothing writes it on a practice's behalf.
+
+                ⚠ AND THE SUGGESTION NAMES NO NUMBER. "Call 911" under a booking form in Kampala sends
+                somebody to a line that does not answer during the emergency -- which is worse than the
+                silence it replaced. The practice fills in its own local service. */}
+            <fieldset className="rounded-lg border border-gray-200 p-2.5">
+              <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                If someone needs urgent help
+              </legend>
+              <p className="text-[11px] leading-relaxed text-gray-500">
+                Shown while a patient is filling in their details. Leave it empty and nothing is shown
+                &mdash; this product will not invent a safety instruction for your patients.
+              </p>
+              <textarea rows={3} value={draft.emergencyNotice} disabled={!mayPublish}
+                maxLength={600}
+                placeholder={SUGGESTED_EMERGENCY_NOTICE}
+                onChange={e => setDraft(d => ({ ...d, emergencyNotice: e.target.value }))}
+                className="mt-1.5 w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-800" />
+              {!draft.emergencyNotice.trim() && mayPublish && (
+                <button type="button"
+                  onClick={() => setDraft(d => ({ ...d, emergencyNotice: SUGGESTED_EMERGENCY_NOTICE }))}
+                  className="mt-1.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
+                  Use the suggested wording, then add your local service →
+                </button>
+              )}
+            </fieldset>
 
             {/* ── HOW PATIENTS REACH YOU WHEN THE DIARY IS FULL (migration 291) ────────────────────
                 The booking page used to say "contact the practice directly" and give no way to do it.

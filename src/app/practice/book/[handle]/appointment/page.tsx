@@ -135,14 +135,10 @@ export default async function BookAppointmentPage({ params }: {
         identity={identity}
         displayName={entry.displayName}
         instructions={entry.instructions}
-        // ⚠ NULL, AND DELIBERATELY SO. s8.5 asks for a concise "not for emergencies" statement whose
-        // "wording must be deployment-appropriate and configurable". This product has no field for one:
-        // the practice's `instructions` are general booking guidance and already render on step 1, so
-        // reusing them here would print the same paragraph twice AND relabel ordinary instructions as a
-        // safety warning. Inventing the sentence is worse still -- an emergency instruction naming the
-        // wrong service for the country is the kind of copy that gets somebody hurt. It stays absent
-        // until there is a field a practice can write it into.
-        safetyNote={null}
+        // s8.5, from migration 363: the practice's OWN wording, or nothing. Never `instructions`
+        // relabelled as a safety warning, and never a sentence composed here -- an emergency instruction
+        // naming the wrong service for the country is the kind of copy that gets somebody hurt.
+        safetyNote={entry.emergencyNotice}
         privacyNotice={entry.privacyNotice}
         locations={entry.locations}
         appointmentTypes={entry.appointmentTypes}
