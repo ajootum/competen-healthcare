@@ -959,8 +959,13 @@ export default function BookingWizard(props: {
               ⚠ ONLY DAYS THAT HAVE SOMETHING FREE ARE OFFERED. A calendar greying out three weeks of
               unavailable dates makes a patient hunt for the ones that work. This lists exactly the days
               they can actually be seen, so every chip on the row is a real choice. */}
+          {/* ⚠ THE DATE AND THE TIMES SIT SIDE BY SIDE, which is the whole point of the width above.
+              Stacked, a patient chooses a date and then scrolls past the legend and the horizon note to
+              reach the times it produced -- the two halves of one decision, separated by the
+              explanation of the first half. Side by side, picking a date changes the panel next to it.
+              Below lg they stack, because at that width a month grid already fills the column. */}
           {!busy && slots !== null && slots.length > 0 && (
-            <div className="mt-3">
+            <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
               {/* ── §4: CALENDAR ─────────────────────────────────────────────────────────────────── */}
               {view === "calendar" && (
                 <>
@@ -1026,12 +1031,14 @@ export default function BookingWizard(props: {
                 </div>
               )}
 
+              {/* The times for the chosen date. A column beside the calendar on a wide screen, a block
+                  under it on a narrow one -- §15 wants the date heading close to its slots either way. */}
               {activeDay && (
-                <div className="mt-3">
+                <div className="lg:sticky lg:top-4 lg:self-start">
                   <h2 className="text-[11.5px] font-bold text-gray-700">
                     {slotDays.find(d => d.key === activeDay)?.label}
                   </h2>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <div className="mt-1.5 flex flex-wrap gap-1.5 lg:flex-col">
                     {activeDaySlots.map(s => {
                       const selected = chosen?.startsAt === s.startsAt;
                       return (
@@ -1084,8 +1091,10 @@ export default function BookingWizard(props: {
         </section>
       )}
 
+      {/* §3's reading width, kept for the FORM inside the widened frame. Input fields stretched to the
+          full journey column are as wrong as a calendar squeezed into half of one. */}
       {step === 3 && (
-        <div className="flex flex-col gap-4">
+        <div className="flex max-w-[680px] flex-col gap-4">
           <div>
             <h1 className="text-[15px] font-bold text-gray-900">Your details</h1>
             <p className="mt-0.5 text-[11.5px] text-gray-500">

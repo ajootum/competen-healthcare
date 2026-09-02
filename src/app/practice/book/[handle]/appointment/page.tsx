@@ -166,9 +166,18 @@ function Shell({ handle, name, children }: {
   handle: string; name?: string | null; children: React.ReactNode;
 }) {
   return (
-    // s3: a comfortable reading width rather than a narrow column in a wide viewport. The wizard widens
-    // itself once the persistent summary appears, so this bound is the form's, not the page's.
-    <div className="mx-auto max-w-[880px] px-4 py-8 md:px-6">
+    // ── §3: journey ~65%, persistent summary ~35% ────────────────────────────────────────────────
+    //
+    // ⚠ 880px WAS TOO NARROW ONCE THE SUMMARY EXISTED, and the date step was where it showed. Take the
+    // 300px summary off 880 and the journey has ~560px left -- enough for a month grid OR a column of
+    // times, not both, so the times fell underneath the calendar and a patient scrolled past the horizon
+    // note to reach them while two-fifths of a desktop screen sat empty beside it.
+    //
+    // ⚠ THE READING WIDTH IS STILL HONOURED, AND IT MOVES INWARD RATHER THAN DISAPPEARING. §3 asks for
+    // "a comfortable reading width rather than a tiny column centered in a large viewport" -- that is
+    // about the FORM, so step 3 keeps its own bound inside this wider frame. A 1,100px row of input
+    // fields is the opposite failure to the one being fixed here.
+    <div className="mx-auto max-w-[1180px] px-4 py-8 md:px-6">
       {/* ⚠ NO "@handle" EYEBROW AND NO PRACTICE BRAND NAME HERE (s3/AC-02, AC-03). This header showed
           "@elisham1" in primary colour over "Trial" -- the practice's own internal name -- as the
           strongest identity on a patient's booking screen. The practitioner strip inside the wizard is
