@@ -125,6 +125,31 @@ than storing `""`), plus two render pins for the patient side.
 - Walked in the browser at 1100px and 375px: no horizontal overflow, stepper collapses correctly, the
   full journey reaches the review screen with a masked contact.
 
+## 6b. Add to calendar and directions (§13) — built, migration 365
+
+- **Add to calendar builds the .ics in the browser**, from what the confirmation screen already holds.
+  A route that served the file would be a new public endpoint returning a named patient's appointment,
+  addressable by whatever it took as a parameter — an enumeration surface this product went to some
+  trouble not to have.
+- **The entry carries who, where and when, and never why.** It lands in a calendar this product cannot
+  reach afterwards: synced to a phone, a work account, a shared family calendar. An appointment with a
+  named clinician on a lock screen discloses an appointment; a specialty in the title discloses an
+  illness. The description is the booking reference and nothing else — and the reference is the UID, so
+  re-adding updates the entry rather than duplicating it.
+- **Directions need an address, so migration 365 adds one** (`practice_location.address`) plus an
+  optional exact `map_url`. **A pinned link always beats a search**: two clinics share a name and a
+  street repeats in the next town, and the wrong guess sends a sick person to the wrong building. With
+  only a name and no address there is **no directions button at all**.
+- `map_url` is constrained to https **by the database and again by the engine**, because it becomes an
+  anchor on a public booking confirmation. The link carries `rel="noopener noreferrer"`.
+- **No "View booking details" button**, deliberately: no manage screen is served at this deployment, and
+  §13 says not to promise functionality that is not live.
+
+Verified: 18 unit pins on the calendar file (escaping order, folding at 75 octets without splitting a
+multi-byte character, no clinical content, refusal of an unreadable instant) and 6 harness checks against
+the live database (no address → no directions; address → search link; non-https refused with a sentence;
+pin beats search; the file carries the address and no clinical words).
+
 ## 7. Not done
 
 - **§19 analytics** (step-to-step conversion, abandonment, OTP failure rate). No event surface exists on
@@ -132,6 +157,6 @@ than storing `""`), plus two render pins for the patient side.
 - **§6.1 slot holds** — deliberately not simulated. The spec is explicit that a hold must be a canonical
   booking-engine capability rather than UI state. Concurrency is still settled where it always was, by
   migration 255's exclusion constraint at the moment of the write.
-- **§13 add-to-calendar and directions** on the success screen — no calendar artifact or map
-  configuration exists yet.
-- The "Parent"/"Other relative" relationship values, per §4 above (a migration to the canonical vocabulary).
+- **A manage/reschedule screen.** The engines exist (`requestManageCode`, `managedBookings`) and no route
+  serves them, which is why the confirmation offers no "View booking details" and promises no
+  self-service reschedule.

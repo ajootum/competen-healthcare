@@ -11,6 +11,7 @@ import { appointmentTypeLabel } from "@/lib/practice/practice-session-constants"
 import { practiceDayOf, practiceToday } from "@/lib/practice/practice-time";
 import DetailsStep from "./DetailsStep";
 import { IdentityStrip, AppointmentSummary, type SummaryIdentity } from "./BookingSummary";
+import { buildIcs, directionsUrl } from "@/lib/practice/calendar-invite";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -65,7 +66,10 @@ export default function BookingWizard(props: {
   displayName: string | null;
   instructions: string | null;
   privacyNotice: string | null;
-  locations: { id: string; name: string; mode: "in_person" | "virtual" }[];
+  locations: {
+    id: string; name: string; mode: "in_person" | "virtual";
+    address: string | null; mapUrl: string | null;
+  }[];
   appointmentTypes: string[];
   canBook: boolean;
   canRequestWithoutCode: boolean;
@@ -391,7 +395,14 @@ export default function BookingWizard(props: {
 
   // ══ THE STEPS ══════════════════════════════════════════════════════════════════════════════════
 
-  if (doneKind && done) return <Confirmation kind={doneKind} data={done} fmt={fmt} handle={props.handle} />;
+  if (doneKind && done) {
+    const where = locationOf(locationId);
+    return (
+      <Confirmation kind={doneKind} data={done} fmt={fmt} handle={props.handle}
+        practitioner={props.identity.displayName}
+        location={where ? { name: where.name, address: where.address, mapUrl: where.mapUrl } : null} />
+    );
+  }
 
   // s4/AC-01: the four patient-facing steps. "Where & what / When / About you / Verify" described the
   // form's own construction; these describe what the patient is doing.
@@ -915,10 +926,42 @@ function Problem({ text }: { text: string }) {
  * somebody will be in touch. Drawing them the same way -- one green tick, one "thank you" -- is how a
  * patient turns up to a practice that never booked them.
  */
-function Confirmation({ kind, data, fmt, handle }: {
+function Confirmation({ kind, data, fmt, handle, practitioner, location }: {
   kind: "booked" | "requested"; data: any; fmt: (iso: string) => string; handle: string;
+  practitioner: string;
+  location: { name: string; address: string | null; mapUrl: string | null } | null;
 }) {
   const booked = kind === "booked";
+
+  // ⚠ THE CALENDAR FILE IS BUILT HERE, FROM WHAT THIS SCREEN ALREADY HOLDS (s13). A route that served
+  // it would be a new public endpoint returning a named patient's appointment, addressable by whatever
+  // it took as a parameter -- an enumeration surface this product went to some trouble not to have.
+  //
+  // ⚠ AND ONLY FOR A BOOKING. A request holds no time and makes no appointment, so there is nothing to
+  // put in a calendar; offering one would be the same lie as calling a request a booking.
+  const addToCalendar = () => {
+    const ics = buildIcs({
+      reference: String(data.reference),
+      practitioner,
+      startsAt: String(data.scheduledAt),
+      minutes: Number(data.durationMinutes ?? data.minutes ?? 30),
+      locationName: location?.name ?? data.locationName ?? null,
+      address: location?.address ?? null,
+    }, new Date().toISOString());
+    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `appointment-${String(data.reference)}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoked on the next tick: released immediately, some browsers cancel the download.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  };
+
+  const directions = location ? directionsUrl(location) : null;
+
   return (
     <section className={`rounded-xl border p-4 ${booked ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/60"}`}>
       <h1 className={`text-[15px] font-bold ${booked ? "text-emerald-900" : "text-amber-950"}`}>
@@ -947,6 +990,32 @@ function Confirmation({ kind, data, fmt, handle }: {
 
       {data.answersNotKept && (
         <p className="mt-2 text-[11.5px] leading-relaxed text-gray-600">{data.answersNotKept}</p>
+      )}
+
+      {/* ── s13: WHAT TO DO NEXT ────────────────────────────────────────────────────────────────
+          Each of these appears only where it can actually do something. There is no "View booking
+          details" button, and its absence is deliberate: no manage screen is served at this
+          deployment, and s13 says in as many words not to promise functionality that is not live. */}
+      {booked && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" onClick={addToCalendar}
+            className="rounded-lg border border-emerald-300 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-emerald-900 hover:bg-emerald-50">
+            Add to calendar
+          </button>
+          {directions && (
+            // ⚠ noreferrer AS WELL AS noopener. The destination is a link the practice configured, and a
+            // patient's booking confirmation is not a page whose URL should travel to it.
+            <a href={directions} target="_blank" rel="noopener noreferrer"
+              className="rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-gray-800 hover:bg-gray-50">
+              Get directions ↗
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* The address as text, so somebody without a maps app still knows where to go. */}
+      {booked && location?.address && (
+        <p className="mt-2 text-[11.5px] leading-relaxed text-gray-600">{location.address}</p>
       )}
 
       <p className="mt-4 text-[11px] text-gray-500">

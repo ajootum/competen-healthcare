@@ -15,7 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { issueIdentity, claimHandle, updateIdentity } from "../src/lib/practice/identity-service";
-import { createLocation } from "../src/lib/practice/configuration";
+import { createLocation, updateLocation } from "../src/lib/practice/configuration";
 import { saveSession } from "../src/lib/practice/practice-sessions";
 import { generateSlots } from "../src/lib/practice/availability-config";
 import { saveBookingAccess, setPublishState } from "../src/lib/practice/patient-access";
@@ -23,6 +23,7 @@ import {
   publicBookingProfile, profileAvailability, initialsOf, PUBLIC_PROFILE_FIELDS,
 } from "../src/lib/practice/public-profile";
 import { publicBookingEntry } from "../src/lib/practice/patient-booking";
+import { buildIcs, directionsUrl } from "../src/lib/practice/calendar-invite";
 import { purgeWorkspacesOwnedBy, cleanupOnKill } from "./_cleanup";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -366,6 +367,63 @@ async function main() {
     const invented = await attempt("second_cousin_twice_removed");
     ok("5j-control. and still refuses a value nobody added -- the constraint is still a constraint",
       invented !== null, invented ?? "IT ACCEPTED AN INVENTED RELATIONSHIP");
+  }
+
+  // ── 5k. Address and directions (CPR-BOOK-FLOW-002 s13, migration 365) ─────
+  section("5d. where a location is");
+  {
+    const before = await publicBookingEntry(admin, HANDLE);
+    const beforeLoc = before.locations.find(l => l.name === "Harness Clinic House");
+    ok("5k. a location with no address carries null, and offers no directions",
+      beforeLoc?.address === null && beforeLoc?.mapUrl === null
+      && directionsUrl({ name: beforeLoc?.name, address: beforeLoc?.address, mapUrl: beforeLoc?.mapUrl }) === null,
+      JSON.stringify(beforeLoc));
+
+    const ADDRESS = "Plot 9, Nsambya Hill, Kampala";
+    const saved = await updateLocation(admin, {
+      workspaceId: ws, locationId: loc.data.id, address: ADDRESS,
+      actorId: OWNER, correlationId: CORR,
+    });
+    ok("5l. an address saves", saved.ok, JSON.stringify(saved).slice(0, 120));
+
+    const after = await publicBookingEntry(admin, HANDLE);
+    const afterLoc = after.locations.find(l => l.name === "Harness Clinic House");
+    ok("5m. and reaches the patient page, where it becomes a directions link",
+      afterLoc?.address === ADDRESS
+      && (directionsUrl({ name: afterLoc?.name, address: afterLoc?.address, mapUrl: afterLoc?.mapUrl }) ?? "")
+        .startsWith("https://www.google.com/maps/search/"),
+      JSON.stringify(afterLoc));
+
+    // ⚠ THE URL IS REFUSED BEFORE IT CAN BECOME AN ANCHOR ON A PATIENT'S CONFIRMATION.
+    const bad = await updateLocation(admin, {
+      workspaceId: ws, locationId: loc.data.id, mapUrl: "javascript:alert(1)",
+      actorId: OWNER, correlationId: CORR,
+    });
+    ok("5n. a map link that is not https is refused by the engine, with a sentence",
+      !bad.ok && /https/i.test((bad as any).message ?? ""), JSON.stringify(bad).slice(0, 140));
+
+    const pinned = await updateLocation(admin, {
+      workspaceId: ws, locationId: loc.data.id, mapUrl: "https://maps.example/pinned-exact",
+      actorId: OWNER, correlationId: CORR,
+    });
+    const withPin = await publicBookingEntry(admin, HANDLE);
+    const pinnedLoc = withPin.locations.find(l => l.name === "Harness Clinic House");
+    ok("5o. an exact pin wins over the address search -- a search is a guess, a pin is not",
+      pinned.ok
+      && directionsUrl({ name: pinnedLoc?.name, address: pinnedLoc?.address, mapUrl: pinnedLoc?.mapUrl })
+        === "https://maps.example/pinned-exact",
+      String(directionsUrl({ name: pinnedLoc?.name, address: pinnedLoc?.address, mapUrl: pinnedLoc?.mapUrl })));
+
+    // The calendar file, built from what the confirmation screen would hold.
+    const ics = buildIcs({
+      reference: "CP-HARNESS", practitioner: "Amara Nsubuga",
+      startsAt: new Date(Date.now() + 86400000).toISOString(), minutes: 30,
+      locationName: pinnedLoc?.name ?? null, address: pinnedLoc?.address ?? null,
+    }, new Date().toISOString());
+    ok("5p. the calendar entry carries the address and no clinical content",
+      ics.includes("Nsambya Hill") && ics.includes("BEGIN:VEVENT")
+      && !/reason|diagnos|treatment/i.test(ics),
+      ics.slice(0, 80));
   }
 
   // ── 6. Consultation types and mode (AC-05, AC-06) ─────────────────────────

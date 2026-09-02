@@ -268,7 +268,7 @@ export async function configurationHistory(admin: any, workspaceId: string, limi
 
 export async function listLocations(admin: any, workspaceId: string) {
   const { data } = await admin.from("practice_location")
-    .select("id, name, type, country, active, created_at, facility_id, travel_buffer_minutes, color_slot")
+    .select("id, name, type, country, active, created_at, facility_id, travel_buffer_minutes, color_slot, address, map_url")
     .eq("workspace_id", workspaceId).order("created_at");
   return (data ?? []) as any[];
 }
@@ -308,10 +308,13 @@ export async function updateLocation(admin: any, args: {
   workspaceId: string; locationId: string; name?: string; type?: string; active?: boolean;
   /** A LOCATION_COLOR_SLOTS name, or null to return this clinic to the automatic palette. */
   colorSlot?: string | null;
+  /** Migration 365: where this place is, and an exact map link. Either may be cleared with null. */
+  address?: string | null;
+  mapUrl?: string | null;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ changed: string[] }>> {
   const { data: location } = await admin.from("practice_location")
-    .select("id, name, type, active, color_slot").eq("id", args.locationId).eq("workspace_id", args.workspaceId).maybeSingle();
+    .select("id, name, type, active, color_slot, address, map_url").eq("id", args.locationId).eq("workspace_id", args.workspaceId).maybeSingle();
   if (!location) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
   const patch: Record<string, unknown> = {};
@@ -336,6 +339,22 @@ export async function updateLocation(admin: any, args: {
   }
   if (args.active !== undefined && args.active !== location.active) {
     patch.active = args.active; changed.push(args.active ? "reopened" : "closed");
+  }
+  if (args.address !== undefined) {
+    const address = args.address === null ? null : args.address.trim() || null;
+    if (address && address.length > 400)
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "that address is too long -- 400 characters at most" };
+    if (address !== (location.address ?? null)) { patch.address = address; changed.push("address"); }
+  }
+  if (args.mapUrl !== undefined) {
+    const mapUrl = args.mapUrl === null ? null : args.mapUrl.trim() || null;
+    // ⚠ https OR NOTHING, CHECKED HERE AS WELL AS BY THE COLUMN. This value becomes an anchor on a
+    // public booking confirmation, and a refusal a practitioner can read beats a constraint violation.
+    if (mapUrl && !mapUrl.startsWith("https://"))
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a map link must start with https://" };
+    if (mapUrl && mapUrl.length > 600)
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "that map link is too long -- 600 characters at most" };
+    if (mapUrl !== (location.map_url ?? null)) { patch.map_url = mapUrl; changed.push("map link"); }
   }
   if (changed.length === 0)
     return { ok: false, status: 422, code: "NO_CHANGE", message: "nothing was different" };

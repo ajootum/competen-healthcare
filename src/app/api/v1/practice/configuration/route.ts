@@ -132,6 +132,9 @@ export async function PUT(req: NextRequest) {
     active: typeof body.active === "boolean" ? body.active : undefined,
     // The clinic's planner colour: a slot name, or null to return to the automatic palette.
     colorSlot: body.colorSlot !== undefined ? (body.colorSlot === null ? null : String(body.colorSlot)) : undefined,
+    // Migration 365. Null clears; undefined leaves alone -- the same shape every other optional here has.
+    address: body.address !== undefined ? (body.address === null ? null : String(body.address)) : undefined,
+    mapUrl: body.mapUrl !== undefined ? (body.mapUrl === null ? null : String(body.mapUrl)) : undefined,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });

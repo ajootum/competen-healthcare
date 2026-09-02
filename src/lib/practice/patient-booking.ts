@@ -110,7 +110,12 @@ export type PublicBookingPage = {
    * 'independent' answer a question no patient asked. What a patient needs to know is whether they
    * travel somewhere or not, so the five kinds collapse to the two answers that change their day.
    */
-  locations: { id: string; name: string; mode: "in_person" | "virtual" }[];
+  locations: {
+    id: string; name: string; mode: "in_person" | "virtual";
+    /** Migration 365. Null where the practice has not written one -- never a guess. */
+    address: string | null;
+    mapUrl: string | null;
+  }[];
   appointmentTypes: string[];
 };
 
@@ -147,7 +152,7 @@ export async function resolveBookingPage(
   let locations: PublicBookingPage["locations"] = [];
   if (ids.length > 0) {
     const { data: locs, error: lErr } = await admin.from("practice_location")
-      .select("id, name, active, type").eq("workspace_id", data.workspace_id).in("id", ids);
+      .select("id, name, active, type, address, map_url").eq("workspace_id", data.workspace_id).in("id", ids);
     if (lErr) return { state: "unreadable", reason: `this practice's locations could not be read: ${lErr.message}` };
     locations = ((locs ?? []) as any[]).filter(l => l.active).map(l => ({
       id: l.id as string,
@@ -157,6 +162,9 @@ export async function resolveBookingPage(
       // the wrong place. An unrecognised kind therefore reads as in-person, which is the safe default:
       // a patient who travels needlessly is inconvenienced, one who waits at home misses the appointment.
       mode: l.type === "teleconsultation" ? "virtual" as const : "in_person" as const,
+      // s13: shown as location detail and used for directions. Absent stays absent.
+      address: (l.address as string | null) ?? null,
+      mapUrl: (l.map_url as string | null) ?? null,
     }));
   }
 
@@ -2028,7 +2036,10 @@ export type PublicBookingEntry = {
   /** s8.5, from the practice. Null renders nothing -- an invented safety instruction is worse. */
   emergencyNotice: string | null;
   /** ⚠ `mode` IS THE PATIENT WORD, not the location's kind. See PublicBookingPage.locations. */
-  locations: { id: string; name: string; mode: "in_person" | "virtual" }[];
+  locations: {
+    id: string; name: string; mode: "in_person" | "virtual";
+    address: string | null; mapUrl: string | null;
+  }[];
   appointmentTypes: string[];
   referenceNote: string;
 };

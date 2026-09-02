@@ -217,6 +217,33 @@ export default function SettingsConsole({ workspace, config, today, locations, h
                       className="w-16 rounded border border-gray-200 px-1.5 py-1 text-[11px] text-gray-700" />
                     <span className="text-[11px] text-gray-400">min</span>
 
+                    {/* ── WHERE THIS PLACE ACTUALLY IS (migration 365) ───────────────────────────
+                        A patient's booking confirmation can only offer directions to somewhere it
+                        can name. Until this is written it says the location's name and nothing more,
+                        and no "Get directions" button appears -- a maps search for a clinic NAME is
+                        a guess, and the wrong guess sends a sick person to the wrong building. */}
+                    <div className="mt-2 flex w-full flex-wrap items-center gap-2">
+                      <label className="text-[11px] text-gray-500" htmlFor={`addr-${l.id}`}>Address</label>
+                      <input id={`addr-${l.id}`} type="text" disabled={busy} maxLength={400}
+                        defaultValue={l.address ?? ""}
+                        placeholder="shown to patients, and used for directions"
+                        onBlur={e => {
+                          const v = e.target.value.trim();
+                          if (v !== (l.address ?? "")) send("PUT", { locationId: l.id, address: v || null });
+                        }}
+                        className="min-w-[220px] flex-1 rounded border border-gray-200 px-1.5 py-1 text-[11px] text-gray-700" />
+
+                      <label className="text-[11px] text-gray-500" htmlFor={`map-${l.id}`}>Map link</label>
+                      <input id={`map-${l.id}`} type="url" disabled={busy} maxLength={600}
+                        defaultValue={l.map_url ?? ""}
+                        placeholder="https://... (optional, exact pin)"
+                        onBlur={e => {
+                          const v = e.target.value.trim();
+                          if (v !== (l.map_url ?? "")) send("PUT", { locationId: l.id, mapUrl: v || null });
+                        }}
+                        className="min-w-[220px] flex-1 rounded border border-gray-200 px-1.5 py-1 text-[11px] text-gray-700" />
+                    </div>
+
                     {l.type === "hospital" && !l.facility_id && (
                       <span className="text-[10px] text-amber-700">
                         a patient&apos;s number here cannot be shown until this is linked
