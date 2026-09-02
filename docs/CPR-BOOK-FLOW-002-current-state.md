@@ -190,6 +190,36 @@ refuses a metadata column and an unreviewed step.
   unavailability (an abandoned booking makes a real slot look taken to everyone, including the
   practitioner's own diary). §6c now measures the rate that would justify that cost. Concurrency remains
   settled where it always was: by the exclusion constraint at the moment of the write.
-- **A manage/reschedule screen.** The engines exist (`requestManageCode`, `managedBookings`) and no route
-  serves them, which is why the confirmation offers no "View booking details" and promises no
-  self-service reschedule.
+Nothing else from this specification — see §6d, which closed the last item.
+
+## 6d. Managing a booking (§13) — built, no migration
+
+The engines had been finished and harness-proven since the patient-manage arc, and **nothing served
+them**: no route mounted `requestManageCode`, `managedBookings`, `rescheduleManagedBooking` or
+`cancelManagedBooking`. That absence is why the confirmation screen offered no "View booking details"
+and promised no self-service reschedule — §13 forbids promising what is not live.
+
+`/practice/book/@handle/manage`: verify the email you booked with, then view, move or cancel.
+
+- **The screen decides no eligibility.** `canReschedule` / `canCancel` / `whyNot` come from the engine,
+  derived from the appointment's state and the practice's own rule. A screen that computed them would
+  eventually disagree with the engine that enforces them, and a patient meets that disagreement as a
+  button that does nothing.
+- **Asking for a code discloses nothing.** `requestManageCode` *is* `requestBookingCode`, and nothing on
+  that path reads the booking table before sending — so the answer is identical whether or not that
+  address has a booking here. There is no "no bookings for that email" state before verification,
+  because that sentence is an enumeration oracle in a helpful tone.
+- **It opens for any resolvable handle, including a practice that has since closed online booking.**
+  Somebody who booked last week must still be able to cancel today.
+- **Moves and cancellations now tell the patient.** `publicBookingNotice` was widened from
+  confirmations-only, and **the appointment's status picks the message** — the caller never names it, so
+  a cancelled booking cannot produce a message saying it is confirmed. That is break-tested: planting
+  the wrong purpose turns the guard red.
+- The engines' copy said *"no message has been sent to you for this change"*, which was true while
+  nothing served them and false the moment something did. Both sentences are now read from the send.
+- A capped list says so; a reason given on cancellation is stored on the booking and **never** reaches
+  the funnel counters (§16).
+
+Verified: manage harness 49/0 with the recorder transport injected into both paths, including a new
+assertion that the message a cancellation sends says *cancelled* — break-tested by planting a
+confirmation, restored byte-identical.

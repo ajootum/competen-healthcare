@@ -999,15 +999,19 @@ function Confirmation({ kind, data, fmt, handle, practitioner, location }: {
       )}
 
       {/* ── s13: WHAT TO DO NEXT ────────────────────────────────────────────────────────────────
-          Each of these appears only where it can actually do something. There is no "View booking
-          details" button, and its absence is deliberate: no manage screen is served at this
-          deployment, and s13 says in as many words not to promise functionality that is not live. */}
+          Each of these appears only where it can actually do something. "View or change" arrived with
+          the manage screen; before that it was deliberately absent, because s13 says in as many words
+          not to promise functionality that is not live. */}
       {booked && (
         <div className="mt-4 flex flex-wrap gap-2">
           <button type="button" onClick={addToCalendar}
             className="rounded-lg border border-emerald-300 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-emerald-900 hover:bg-emerald-50">
             Add to calendar
           </button>
+          <a href={`/practice/book/@${handle}/manage`}
+            className="rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-gray-800 hover:bg-gray-50">
+            View or change this booking
+          </a>
           {directions && (
             // ⚠ noreferrer AS WELL AS noopener. The destination is a link the practice configured, and a
             // patient's booking confirmation is not a page whose URL should travel to it.

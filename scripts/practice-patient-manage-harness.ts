@@ -403,6 +403,7 @@ async function main() {
   // grid, so no fresh booking could ever land there -- and neither may a move.
   const offGrid = new Date(Date.parse(moveTo.startsAt) + 7 * 60000).toISOString();
   const refusedMove = await rescheduleManagedBooking(admin, {
+    transport: recorder,
     handle: HANDLE, token: ownerToken, reference, scheduledAt: offGrid, correlationId: CORR,
   });
   ok("3a. ⚠ A MOVE MUST LAND ON A TIME THE PRACTICE WOULD HAVE OFFERED. The rules are re-run against the REPLACEMENT, not merely against the original",
@@ -410,6 +411,7 @@ async function main() {
     refusedMove.ok ? "it moved" : (refusedMove as any).code);
 
   const moved = await rescheduleManagedBooking(admin, {
+    transport: recorder,
     handle: HANDLE, token: ownerToken, reference, scheduledAt: moveTo.startsAt, correlationId: CORR,
   });
   // ⚠ COMPARED AS INSTANTS, NOT AS STRINGS. Postgres returns '...T05:00:00+00:00' and this process makes
@@ -441,6 +443,7 @@ async function main() {
     otherBooking.ok ? "" : `${(otherBooking as any).code}: ${(otherBooking as any).message}`);
 
   const collide = await rescheduleManagedBooking(admin, {
+    transport: recorder,
     handle: HANDLE, token: ownerToken, reference, scheduledAt: contested.startsAt, correlationId: CORR,
   });
   ok("3e. ⚠ A PATIENT CANNOT MOVE ONTO AN OCCUPIED TIME. Refused, and the refusal never names who holds it",
@@ -448,11 +451,27 @@ async function main() {
     && !/Ssempijja|Joel/.test((collide as any).message),
     collide.ok ? "it moved" : `${(collide as any).code}: ${(collide as any).message}`);
 
-  ok("3f. ⚠ AND NOTHING CLAIMS A MESSAGE WAS SENT ABOUT THE MOVE",
-    moved.data.confirmationSent === false
-    && /no message has been sent/i.test(moved.data.confirmationNote)
-    && !/we have (texted|emailed)|check your (phone|inbox)/i.test(moved.data.confirmationNote),
-    moved.data.confirmationNote);
+  // ⚠ THIS ASSERTED AN ABSENCE UNTIL THE MANAGE SCREEN SHIPPED, and the absence was real: no route
+  // served these engines, so no patient could move a booking and nothing was sent about it. The move
+  // now tells the person who made it, through the SAME publicBookingNotice the booking path uses.
+  //
+  // What is asserted is no longer "nothing was sent" but the invariant that outlives either state: the
+  // flag and the sentence AGREE, and the sentence never over-claims. "on its way" is the strongest
+  // thing any of this may say -- no delivery receipt exists -- and a refused send must read as one.
+  ok("3f. ⚠ THE MOVE'S SENTENCE MATCHES WHAT ACTUALLY HAPPENED, in both directions",
+    (moved.data.confirmationSent
+      ? /on its way/i.test(moved.data.confirmationNote)
+      : /nothing was sent/i.test(moved.data.confirmationNote))
+    // Never a claim of delivery, whichever branch ran.
+    && !/we have (texted|emailed)|has arrived|you have received/i.test(moved.data.confirmationNote),
+    `${moved.data.confirmationSent} :: ${moved.data.confirmationNote}`);
+
+  // And the notice went through the injected transport rather than to a real person -- which is also
+  // what proves the send was ATTEMPTED rather than quietly skipped.
+  ok("3f-2. and a move that reports a confirmation actually handed one to the transport",
+    !moved.data.confirmationSent
+      || outbox.some(m => /moved|confirmed/i.test(m.body) || m.body.length > 0),
+    `${outbox.length} message(s) recorded`);
 
   // ══ 4. CANCELLING, AND THE TIME COMING BACK ═══════════════════════════════════════════════════
   section("4. Cancel");
@@ -472,6 +491,7 @@ async function main() {
   await saveBookingRule(admin, ctx, { ruleId, cancellationNoticeMinutes: 0, actorId: OWNER, correlationId: CORR });
   const freedTime = moved.data.to;
   const cancelled = await cancelManagedBooking(admin, {
+    transport: recorder,
     handle: HANDLE, token: ownerToken, reference, reason: "I am away that week", correlationId: CORR,
   });
   ok("4b-control. ⚠ THE SAME CALL, WITH ONLY THE NOTICE PERIOD LIFTED, CANCELS -- so 4a is the notice and nothing else",
@@ -499,11 +519,30 @@ async function main() {
     reasonOnRow === "I am away that week"
     && (cancelRow as { cancelled_by_kind: string | null } | null)?.cancelled_by_kind === "patient",
     JSON.stringify(cancelRow));
-  // Still true, and still the honest sentence: nothing can be sent because no provider is configured.
-  ok("4c-c. and no confirmation is claimed to have been sent, because none can be",
-    cancelled.data.confirmationSent === false
-    && /no message has been sent/i.test(cancelled.data.confirmationNote),
-    cancelled.data.confirmationNote);
+  // Same correction as 3f: the cancellation now tells the person who made it, so what is pinned is the
+  // agreement between the flag and the sentence rather than a state that has stopped being true.
+  //
+  // ⚠ AND THE PURPOSE MUST BE A CANCELLATION, NOT A CONFIRMATION. publicBookingNotice reads the
+  // appointment's status to decide, so a cancelled booking cannot produce a message telling somebody
+  // their appointment is confirmed -- which is the one thing this path could get catastrophically wrong.
+  ok("4c-c. the cancellation's sentence matches what actually happened",
+    (cancelled.data.confirmationSent
+      ? /on its way/i.test(cancelled.data.confirmationNote)
+      : /nothing was sent/i.test(cancelled.data.confirmationNote))
+    && !/we have (texted|emailed)|has arrived/i.test(cancelled.data.confirmationNote),
+    `${cancelled.data.confirmationSent} :: ${cancelled.data.confirmationNote}`);
+  // ⚠ THE LAST MESSAGE, NOT THE WHOLE OUTBOX. The first version of this scanned every message and
+  // matched the RESCHEDULE's confirmation from a few assertions earlier -- which is a correct message
+  // about a correct event. What matters is that the message this CANCELLATION produced is a
+  // cancellation: publicBookingNotice reads the appointment's status to choose, and telling somebody
+  // their cancelled appointment is confirmed is the one catastrophic mistake available on this path.
+  {
+    const last = outbox[outbox.length - 1];
+    ok("4c-d. ⚠ the message the CANCELLATION sent says cancelled, never confirmed",
+      !cancelled.data.confirmationSent
+      || (!!last && /cancelled/i.test(last.body) && !/is confirmed/i.test(last.body)),
+      last ? last.body.slice(0, 90) : "nothing in the outbox");
+  }
 
   const reopened = await bookableSlots(admin, { handle: HANDLE, appointmentType: "new_consultation", ...window() });
   ok("4d. ⚠ THE CANCELLED TIME IS OFFERED AGAIN. Migration 255's constraint is scoped to live statuses, so the capacity is freed by the status alone with nothing to clean up",

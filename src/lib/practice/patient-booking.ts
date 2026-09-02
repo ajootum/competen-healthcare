@@ -641,8 +641,12 @@ export async function submitBookingRequest(admin: any, args: {
       // ⚠ READ FROM WHAT THE PROVIDER ACCEPTED, NEVER ASSUMED. "handed over" is the strongest claim
       // available -- no receipt exists -- so the sentence says "on its way", not "you have received".
       confirmationSent,
+      // ⚠ ONLY THE SENT BRANCH OFFERS SELF-SERVICE, and the condition is exactly right rather than
+      // approximately right: managing a booking needs a code to reach the same address, so a practice
+      // that could not send this confirmation cannot send that code either. Offering "change it online"
+      // in the other branch would send somebody to a screen that can never verify them.
       confirmationNote: confirmationSent
-        ? `Your appointment is booked, and a confirmation ${notice.attempted!.kind === "email" ? "email" : "text message"} is on its way to the address you verified. Keep the reference above in case you need to change or cancel.`
+        ? `Your appointment is booked, and a confirmation ${notice.attempted!.kind === "email" ? "email" : "text message"} is on its way to the address you verified. Keep the reference above -- you can view, move or cancel this appointment yourself using the same address.`
         : "Your appointment is booked. Write down the reference above -- no message has been sent to you, so nothing will arrive by text or email. Contact the practice directly if you need to change or cancel it.",
       // ⚠ SAID, NOT SILENTLY DONE. Somebody who typed a reason for their visit into a practice that does
       // not ask for one is entitled to know it was not kept, rather than to assume the practitioner has
@@ -1763,7 +1767,7 @@ function manageGate(args: {
 
 /** The one booking a manage action names, proved to belong to the verified contact. */
 async function mineOrRefuse(admin: any, args: { handle: string; token: string; reference: string }): Promise<
-  | { ok: true; booking: ManagedBooking; workspaceId: string; sessionId: string }
+  | { ok: true; booking: ManagedBooking; workspaceId: string; sessionId: string; destination: string }
   | { ok: false; status: number; code: string; message: string }
 > {
   const c = await manageContext(admin, args.handle, args.token);
@@ -1776,7 +1780,9 @@ async function mineOrRefuse(admin: any, args: { handle: string; token: string; r
   // reference into an oracle for whether a booking exists at this practice.
   if (!booking)
     return { ok: false, status: 404, code: "BOOKING_NOT_FOUND", message: "no booking of yours matches that reference" };
-  return { ok: true, booking, workspaceId: c.page.workspaceId, sessionId: c.sessionId };
+  // The address this session PROVED, carried out so a change can be told to the person who made it --
+  // never an address off a form, which is a claim rather than proof.
+  return { ok: true, booking, workspaceId: c.page.workspaceId, sessionId: c.sessionId, destination: c.destination };
 }
 
 /**
@@ -1801,6 +1807,8 @@ async function mineOrRefuse(admin: any, args: { handle: string; token: string; r
 export async function rescheduleManagedBooking(admin: any, args: {
   handle: string; token: string; reference: string;
   scheduledAt: string; correlationId: string;
+  /** Injected so a harness never emails a real person. Defaults to the real provider call. */
+  transport?: Transport;
 }): Promise<EngineResult<{
   reference: string; appointmentId: string; from: string; to: string; confirmationSent: boolean; confirmationNote: string;
 }>> {
@@ -1855,17 +1863,31 @@ export async function rescheduleManagedBooking(admin: any, args: {
     correlationId: args.correlationId,
   });
 
+  // ⚠ THE MOVE IS ALREADY MADE AND NOTHING BELOW CAN UNMAKE IT. Same contract the booking path uses:
+  // publicBookingNotice never throws and never fails, and whatever happens is reported on the response
+  // rather than allowed to overturn a change the diary has already accepted.
+  const movedNotice = await publicBookingNotice(admin, {
+    workspaceId, appointmentId: booking.appointmentId,
+    kind: found.destination.includes("@") ? "email" : "sms", destination: found.destination,
+    correlationId: args.correlationId, transport: args.transport,
+  });
+
   return {
     ok: true,
     data: {
       reference: booking.reference, appointmentId: booking.appointmentId,
       from: moved.data.from.scheduledAt, to: moved.data.scheduledAt,
-      // ⚠ READ, NOT ASSUMED. Changes made from the manage page do not send notices yet -- that is a
-      // fact about THIS page, not about the practice's channels, and the sentence says which.
-      confirmationSent: false,
-      confirmationNote:
-        "Your appointment has been moved. Write down the new time -- no message has been sent to you "
-        + "for this change, so nothing will arrive by text or email.",
+      // ⚠ READ FROM THE SEND, NOT ASSUMED -- and this used to say "no message has been sent to you for
+      // this change", which was true when the manage page could not send and became false the moment it
+      // could. A sentence about an absence has to be revisited the day the absence is filled.
+      //
+      // The destination is the SESSION's verified one, never an address off a form: the person proved
+      // that address minutes ago by entering the code sent to it.
+      confirmationSent: movedNotice.attempted?.status === "handed_over",
+      confirmationNote: movedNotice.attempted?.status === "handed_over"
+        ? "Your appointment has been moved, and a confirmation carrying the new time is on its way to you."
+        : "Your appointment has been moved. Write down the new time -- nothing was sent to you about "
+          + "this change, so do not wait for a message.",
     },
   };
 }
@@ -1884,6 +1906,8 @@ export async function rescheduleManagedBooking(admin: any, args: {
  */
 export async function cancelManagedBooking(admin: any, args: {
   handle: string; token: string; reference: string; reason?: string | null; correlationId: string;
+  /** Injected so a harness never emails a real person. Defaults to the real provider call. */
+  transport?: Transport;
 }): Promise<EngineResult<{
   reference: string; appointmentId: string; status: string;
   reasonStoredOnBooking: boolean; confirmationSent: boolean; confirmationNote: string;
@@ -1926,16 +1950,29 @@ export async function cancelManagedBooking(admin: any, args: {
     correlationId: args.correlationId,
   });
 
+  // ⚠ THE CANCELLATION IS ALREADY MADE. Same contract as the move: the notice is reported, never
+  // allowed to overturn what the diary has accepted. The purpose comes from the appointment's status,
+  // so this cannot send a "confirmation" for something that was just cancelled.
+  const cancelNotice = await publicBookingNotice(admin, {
+    workspaceId, appointmentId: booking.appointmentId,
+    kind: found.destination.includes("@") ? "email" : "sms", destination: found.destination,
+    correlationId: args.correlationId, transport: args.transport,
+  });
+
   return {
     ok: true,
     data: {
       reference: booking.reference, appointmentId: booking.appointmentId, status: cancelled.data.status,
       // ⚠ READ FROM THE WRITE, NOT ASSUMED. See above.
       reasonStoredOnBooking: record.stored,
-      confirmationSent: false,
-      confirmationNote:
-        "This appointment has been cancelled. No message has been sent to you or to the practice "
-        + "for this change.",
+      // ⚠ SAME CORRECTION AS THE MOVE ABOVE. publicBookingNotice reads the appointment's status and
+      // sends a CANCELLATION for a cancelled one -- the caller does not name the purpose, so this path
+      // cannot accidentally tell somebody their appointment is confirmed.
+      confirmationSent: cancelNotice.attempted?.status === "handed_over",
+      confirmationNote: cancelNotice.attempted?.status === "handed_over"
+        ? "This appointment has been cancelled, and a confirmation of the cancellation is on its way to you."
+        : "This appointment has been cancelled. Nothing was sent to you about it, so do not wait for a "
+          + "message -- the practice sees the cancellation on its own diary.",
     },
   };
 }

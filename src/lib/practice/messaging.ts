@@ -719,10 +719,15 @@ export async function appointmentNotice(admin: any, args: {
  * entering the code sent to it. That verified address is the one right place to send, so it is passed
  * in rather than resolved: nothing a record could say would be more true than the proof.
  *
- * ⚠ SAME CONTRACT AS appointmentNotice: never throws, never fails the booking, and only a CONFIRMED
- * appointment earns the sentence -- a REQUESTED one has not been confirmed and nothing here will
- * claim it has. The practice's booking-confirmation preference is consulted like any other send; a
- * practice that switched confirmations off gets a refusal row, not silence.
+ * ⚠ SAME CONTRACT AS appointmentNotice: never throws, never fails the caller, and THE STATUS DECIDES
+ * THE SENTENCE. A CONFIRMED appointment earns a confirmation -- which is also what a rescheduled one is,
+ * carrying its new time -- and a CANCELLED one earns a cancellation. A REQUESTED appointment has been
+ * confirmed by nobody and nothing here will claim otherwise. The caller never names the purpose: asking
+ * this function to send a "confirmation" for an appointment the state machine has cancelled is exactly
+ * the lie that rule forecloses.
+ *
+ * The practice's per-type preference is consulted like any other send; a practice that switched these
+ * off gets a refusal row, not silence.
  */
 export async function publicBookingNotice(admin: any, args: {
   workspaceId: string; appointmentId: string; kind: MessageKind; destination: string;
@@ -736,8 +741,13 @@ export async function publicBookingNotice(admin: any, args: {
       .eq("id", args.appointmentId).eq("workspace_id", args.workspaceId).maybeSingle();
     if (error) return nothing(`no confirmation was sent because the appointment could not be read: ${error.message}`);
     if (!appt) return nothing("no confirmation was sent because the appointment could not be found");
-    if (appt.status !== "CONFIRMED")
-      return nothing(`an appointment that is ${appt.status} has not been confirmed, so there is no confirmation to send`);
+    // ⚠ THE PURPOSE IS READ FROM THE STATE MACHINE, NEVER TAKEN FROM THE CALLER. STATUS_PURPOSE makes
+    // the same argument for the practice-side path a few hundred lines up.
+    const purpose = appt.status === "CONFIRMED" ? "appointment_confirmation"
+      : appt.status === "CANCELLED" ? "appointment_cancelled"
+        : null;
+    if (!purpose)
+      return nothing(`an appointment that is ${appt.status} has neither been confirmed nor cancelled, so there is nothing to tell the patient`);
 
     const { data: workspace, error: wsError } = await admin.from("practice_workspace")
       .select("id, name, type, timezone, owner_person_id").eq("id", args.workspaceId).maybeSingle();
@@ -749,10 +759,12 @@ export async function publicBookingNotice(admin: any, args: {
       return nothing("the practice has no name to send under, and a message naming nobody is one a patient cannot place");
 
     const sent = await sendMessage(admin, {
-      workspaceId: args.workspaceId, kind: args.kind, purpose: "appointment_confirmation",
+      workspaceId: args.workspaceId, kind: args.kind, purpose,
       destination: args.destination, patientId: null,
       params: { practitioner: counterparty, when: formatDateTime(appt.scheduled_at, workspace.timezone as string) },
-      preferenceKey: "booking_confirmation",
+      // The preference follows the purpose. CPR-SET-COMMS-001 made these separate settings, so a
+      // practice may switch cancellation notices off without switching confirmations off.
+      preferenceKey: purpose === "appointment_cancelled" ? "cancellation_notice" : "booking_confirmation",
       actorId: null, correlationId: args.correlationId, transport: args.transport,
     });
     if (!sent.ok) return nothing(sent.message);
@@ -761,14 +773,14 @@ export async function publicBookingNotice(admin: any, args: {
       workspaceId: args.workspaceId, actorId: null,
       eventType: "practice.appointment_notice",
       payload: {
-        appointmentId: args.appointmentId, purpose: "appointment_confirmation", kind: args.kind,
+        appointmentId: args.appointmentId, purpose, kind: args.kind,
         status: sent.data.status, refusedReason: sent.data.refusedReason ?? null, channel: "patient_self",
       },
       correlationId: args.correlationId,
     });
 
     return {
-      appointmentId: args.appointmentId, purpose: "appointment_confirmation", notAttempted: null,
+      appointmentId: args.appointmentId, purpose, notAttempted: null,
       attempted: {
         kind: args.kind, status: sent.data.status, messageId: sent.data.messageId,
         ...(sent.data.refusedReason ? { refusedReason: sent.data.refusedReason } : {}),
