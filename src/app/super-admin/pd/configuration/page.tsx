@@ -33,8 +33,12 @@ export default async function Page() {
   const ctx = await requireHqCapability("hq.practice.configuration.view");
   const admin = await createAdminClient();
   const cfg = await loadPdConfiguration(admin);
-  const canManage = ctx.capabilities.includes("hq.practice.configuration.manage");
-  const canApprove = ctx.capabilities.includes("hq.practice.change.approve");
+  // ⚠ `isOwner ||` FOR THE SAME REASON THE PRACTICE ACCESS CARD NEEDED IT: resolveHqContext
+  // short-circuits a platform owner with `capabilities: []`, so an includes() test alone hides every
+  // control from the one person who is allowed everything. Found while fixing that card, which had the
+  // identical defect and had locked the owner out of the surface built to restore their access.
+  const canManage = ctx.isOwner || ctx.capabilities.includes("hq.practice.configuration.manage");
+  const canApprove = ctx.isOwner || ctx.capabilities.includes("hq.practice.change.approve");
 
   return (
     <div className="flex flex-col gap-4">

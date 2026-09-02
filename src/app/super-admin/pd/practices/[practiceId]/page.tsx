@@ -370,7 +370,16 @@ export default async function Page({
             workspaceId={practiceId}
             practiceName={p.workspace.name}
             reading={entitlement}
-            mayManage={ctx.capabilities.includes("hq.practice.commercial.manage")}
+            // ⚠ `isOwner ||` IS LOAD-BEARING, AND LEAVING IT OUT LOCKED THE OWNER OUT OF THE CONTROL
+            // BUILT TO LET THEM BACK IN. resolveHqContext short-circuits a platform owner with
+            // `capabilities: []` -- allowed everything, holding nothing by enumeration -- so an
+            // includes() test alone is FALSE for exactly the person who can do anything. The card
+            // rendered read-only, saying "Changing it needs commercial administration", while the API
+            // behind it would have accepted their request perfectly well.
+            //
+            // Every other control in this workspace already had it (releases, flags, rollback, rollout,
+            // launch-readiness). This one, written last and in a hurry to unlock somebody, did not.
+            mayManage={ctx.isOwner || ctx.capabilities.includes("hq.practice.commercial.manage")}
           />
 
         <AbsentTab
