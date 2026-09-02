@@ -326,8 +326,16 @@ export default function BookingWizard(props: {
     setDayNote(null);
   };
   // §4/§13: navigation stops at the horizon, and never runs backwards into the past.
+  //
+  // ⚠ AN UNKNOWN HORIZON IS NOT AN UNLIMITED ONE. The engine answers `horizonDays: null` when no single
+  // rule governs the request -- a practice with several locations and no location chosen -- and reading
+  // that as "no boundary" let the patient page forward through empty months for ever, every one of them
+  // looking like a fully booked one. The fallback is the window that was actually SEARCHED, because
+  // nothing beyond it has been read and a month we have not looked at must not be drawn as empty.
+  const scannedUntil = new Date(Date.now() + 120 * 86400000).toISOString().slice(0, 7);
+  const lastMonth = horizon.until ? horizon.until.slice(0, 7) : scannedUntil;
   const canPrevMonth = monthKey > todayKey.slice(0, 7);
-  const canNextMonth = !horizon.until || monthKey < horizon.until.slice(0, 7);
+  const canNextMonth = monthKey < lastMonth;
 
   /** §5/§14: the next bookable date at or after a given one, for the "next available" sentence. */
   const nextAvailableFrom = (date: string) => slotDays.find(d => d.key > date) ?? null;

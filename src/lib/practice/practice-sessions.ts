@@ -777,7 +777,13 @@ export async function saveSession(admin: any, ctx: WorkspaceContext, args: {
   if (patientFacing && effectiveTypes.length === 0)
     return {
       ok: false, status: 422, code: "NO_APPOINTMENT_TYPE",
-      message: "a session patients may book must offer at least one appointment type; zero means not patient-bookable",
+      // ⚠ IT NAMES THE CONTROL, NOT ONLY THE RULE. The sentence this replaces was true and left the
+      // practitioner stuck: it stated s4.3 and said nothing about where to satisfy it, so opening a
+      // session to patients failed with a refusal that read like a limitation of the product. The fix is
+      // three inches up the same panel. An instruction with no route to it is the mistake this codebase
+      // has already been caught making on the two-factor screen and on the expired-practice screen.
+      message: "This session offers no appointment types, so patients would see it with nothing to book. "
+        + "Choose at least one under \"Appointment types offered\" in this panel, then set the booking mode again.",
     };
 
   // ⚠ THE PHASE GATE USED TO SIT HERE, AND IT IS GONE BECAUSE ITS REASON IS GONE.
