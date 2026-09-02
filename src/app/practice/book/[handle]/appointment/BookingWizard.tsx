@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import FormFieldInput from "@/components/practice/FormFieldInput";
 import { resolveApplicable, clearedNotice } from "@/lib/practice/registration-condition";
 import {
@@ -629,8 +630,31 @@ export default function BookingWizard(props: {
   // form's own construction; these describe what the patient is doing.
   const STEP_LABELS = ["Appointment", "Date & time", "Your details", props.canBook ? "Confirm" : "Send"];
 
+  /** The practice's real way of being reached. Either, both, or neither -- and neither draws nothing. */
+  const helpHref = props.fallbackPhone
+    ? `tel:${props.fallbackPhone.replace(/\s+/g, "")}`
+    : props.fallbackEmail ? `mailto:${props.fallbackEmail}` : null;
+
   return (
     <div className="flex flex-col gap-4">
+      {/* ⚠ THE WAY BACK IS A LINK, NOT THE BROWSER BUTTON. A patient who arrived from the profile and
+          wants another look at it should not have to guess that Back will not lose their choices. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href={`/practice/book/@${props.handle}`}
+          className="text-[12.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+          &larr; Back to profile
+        </Link>
+        {/* ⚠ "NEED HELP?" IS A REAL NUMBER OR IT IS ABSENT. The comp draws it unconditionally; a help
+            control that opens nothing is the thing this page has already been caught doing on the
+            "contact the practice" line, which named an action and gave no way to take it. */}
+        {helpHref && (
+          <a href={helpHref}
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+            Need help? {props.fallbackPhone ?? props.fallbackEmail}
+          </a>
+        )}
+      </div>
+
       <div className="rounded-xl border border-gray-200 bg-white p-3.5">
         <IdentityStrip identity={props.identity} locationName={summaryFacts.locationName} />
       </div>
@@ -642,16 +666,27 @@ export default function BookingWizard(props: {
         <p className="text-[11.5px] font-semibold text-[var(--cp-primary-deep)] sm:hidden">
           Step {step} of 4 &middot; {STEP_LABELS[step - 1]}
         </p>
-        <ol className="hidden flex-wrap gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide sm:flex">
+        {/* Numbered circles joined by a rule, as the comp draws them. The MARK still does the work --
+            a check for done, the numeral for everything else -- so the sequence survives greyscale. */}
+        <ol className="hidden items-center gap-2 sm:flex">
           {STEP_LABELS.map((s, i) => {
             const done = step > i + 1;
             const current = step === i + 1;
             return (
               <li key={s} aria-current={current ? "step" : undefined}
-                className={`rounded-lg px-2 py-1 ${current
-                  ? "bg-[var(--cp-primary)] text-white"
-                  : done ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
-                <span aria-hidden>{done ? "✓" : i + 1}</span> {s}
+                className="flex flex-1 items-center gap-2">
+                <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                  current ? "bg-[var(--cp-primary)] text-white"
+                    : done ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                  {done ? "✓" : i + 1}
+                </span>
+                <span className={`whitespace-nowrap text-[12px] font-semibold ${
+                  current ? "text-[var(--cp-primary-deep)]" : done ? "text-emerald-700" : "text-gray-500"}`}>
+                  {s}
+                </span>
+                {i < STEP_LABELS.length - 1 && (
+                  <span aria-hidden className={`h-px flex-1 ${done ? "bg-emerald-200" : "bg-gray-200"}`} />
+                )}
               </li>
             );
           })}
@@ -1336,6 +1371,57 @@ export default function BookingWizard(props: {
       )}
         </div>
       </div>
+
+      {/* ── "About this practice" ────────────────────────────────────────────────────────────────────
+          ⚠ THREE TILES WHERE THE COMP DRAWS FOUR, AND THE MISSING ONE IS THE POINT.
+
+          The comp offers "Confirm instantly — get immediate confirmation by email" and "Secure &
+          private — your data is safe with us". The first is a promise about a message this page cannot
+          see delivered, and it is FALSE for any practice whose booking rule asks it to review requests
+          rather than confirm them. The second is a reassurance with no referent -- it names no measure a
+          patient could check and nothing that would be different if it were untrue.
+
+          What survives is what the page can stand behind: it is open whenever the patient is, the
+          appointment is made when they finish, and here is the practice's real telephone number. A
+          strip of four claims where three are true is worth less than three that all are. */}
+      <section aria-label="About booking with this practice"
+        className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">About this practice</p>
+        <ul className="mt-2 grid gap-3 sm:grid-cols-3">
+          <li>
+            <p className="text-[12.5px] font-semibold text-gray-900">Book online, any time</p>
+            <p className="text-[11.5px] leading-relaxed text-gray-600">
+              This page is open whenever you are. You do not have to telephone to make an appointment.
+            </p>
+          </li>
+          <li>
+            <p className="text-[12.5px] font-semibold text-gray-900">
+              {props.canBook ? "Confirmed when you finish" : "The practice will be in touch"}
+            </p>
+            <p className="text-[11.5px] leading-relaxed text-gray-600">
+              {props.canBook
+                ? "Your appointment is made at the last step, not when you pick a time."
+                : "Your request reaches the practice and somebody there will contact you about a time."}
+            </p>
+          </li>
+          <li>
+            <p className="text-[12.5px] font-semibold text-gray-900">
+              {helpHref ? "If you need help" : "Your privacy"}
+            </p>
+            <p className="text-[11.5px] leading-relaxed text-gray-600">
+              {helpHref ? (
+                <>Contact the practice
+                  {props.fallbackPhone && <> on <a className="font-semibold text-[var(--cp-primary-deep)] underline" href={`tel:${props.fallbackPhone.replace(/\s+/g, "")}`}>{props.fallbackPhone}</a></>}
+                  {props.fallbackPhone && props.fallbackEmail && " or"}
+                  {props.fallbackEmail && <> at <a className="font-semibold text-[var(--cp-primary-deep)] underline" href={`mailto:${props.fallbackEmail}`}>{props.fallbackEmail}</a></>}.
+                </>
+              ) : (
+                "The details you give are used to arrange this appointment."
+              )}
+            </p>
+          </li>
+        </ul>
+      </section>
     </div>
   );
 }
