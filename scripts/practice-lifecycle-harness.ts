@@ -179,6 +179,7 @@ async function main() {
   /** A member who may LOOK and may not TOUCH. */
   const looker: LifecycleActor = {
     userId: STRANGER, workspaceId: ws, workspaceName: OWNER_CTX.workspaceName,
+    workspaceTimezone: OWNER_CTX.workspaceTimezone,
     capabilities: ["practice.lifecycle.view"], membershipId: null, actorKind: "member",
   };
   /** The same context shape, with a chosen capability set, so the state view can be read in any status. */

@@ -8,15 +8,22 @@
 // ⚠ WHAT BOUNDS THIS FILE IS NOT THE SCHEMA. IT IS `src/lib/access/plane-boundary.ts`.
 //
 // This module is imported by `src/app/super-admin/pd/practices/**`, so every `.from("practice_*")` in it
-// is judged by scripts/plane-boundary-harness.ts against PRACTICE_ALLOWLIST. That allowlist admits
-// exactly seven practice tables to this plane and, for four of them, exactly one column — `workspace_id`,
-// the tenancy key. `practice_entitlement`, `practice_activation_event`, `practice_configuration`,
-// `practice_location`, `practice_capability_activation`, `practice_message`, `practice_session` and
+// is judged by scripts/plane-boundary-harness.ts against PRACTICE_ALLOWLIST. Most of that allowlist
+// admits a practice table for exactly one column — `workspace_id`, the tenancy key.
+// `practice_activation_event`, `practice_configuration`, `practice_location`,
+// `practice_capability_activation`, `practice_message`, `practice_session` and
 // `practice_lifecycle_transition` are NOT on it, and `practice_audit_event` is refused BY NAME
 // (PLAT-OVERSIGHT-SURVEY-001 §4.4: its payloads carry drug names, procedure lateralities and clinician
 // free text).
 //
-// That is why five of PD-003 §6's eight tabs are stated as absent rather than built. The rows exist in
+// ⚠ `practice_entitlement` WAS IN THAT REFUSED LIST UNTIL 2026-09-01, AND THIS SENTENCE OUTLIVED THE
+// FACT BY ABOUT AN HOUR. CPR-PD-PROV-001 put a Director in charge of a practice's access period, which
+// cannot be done from a plane that may not read one, so the table was added to the allowlist with its
+// reason stated there — commercial columns only, and `sponsor_ref` deliberately excluded. Read the
+// allowlist, not this paragraph: a comment describing an absence is exactly what stops being true first,
+// and this file has now demonstrated it.
+//
+// That is why several of PD-003 §6's eight tabs are stated as absent rather than built. The rows exist in
 // the database; they are outside this plane. Widening the allowlist is a governance decision with a
 // named owner, not a loader edit — so this file reads what it may and says what it cannot, which is the
 // only honest option available to it.
@@ -34,6 +41,9 @@
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 import type { createAdminClient } from "@/lib/supabase/server";
+import {
+  periodOf, expiringSoonDays, expiringNearDays, STATUSES_GRANTING_ACCESS, type AccessState,
+} from "./entitlement";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -158,15 +168,43 @@ export type EstateRow = {
     observedAt: string;
     evidenceRef: string | null;
   } | null;
+
+  /**
+   * §8's plan and expiry, derived by the SAME function the s7 access card uses (`periodOf`) so the
+   * register and the practice record cannot classify one practice two ways.
+   *
+   * null = this practice has no entitlement row at all, which is §4's provisioning fault rather than an
+   * expiry, and renders as its own state instead of as "Expired".
+   */
+  entitlement: {
+    planCode: string;
+    status: string;
+    endsAt: string | null;
+    daysRemaining: number | null;
+    state: AccessState;
+    grantsAccessNow: boolean;
+  } | null;
 };
 
 export type EstateSort = "attention" | "created_desc" | "created_asc" | "name" | "lifecycle";
+
+/**
+ * CPR-PD-PROV-001 §8 / AC-14 -- the expiry groups a Director filters by.
+ *
+ * ⚠ THE CODES CARRY NO NUMBERS, BECAUSE THE NUMBERS ARE CONFIGURATION. §8: "Thresholds should be
+ * configurable rather than embedded in UI logic." A code of `d7` would have baked seven days into every
+ * URL, every link and every bookmark, and the day somebody changed the threshold the filter would have
+ * kept its name and changed its meaning.
+ */
+export const EXPIRY_FILTERS = ["expired", "near", "soon"] as const;
+export type ExpiryFilter = (typeof EXPIRY_FILTERS)[number];
 
 export type EstateQuery = {
   q?: string;
   market?: string;
   lifecycle?: string;
   attentionOnly?: boolean;
+  expiry?: string;
   sort?: EstateSort;
   page?: number;
 };
@@ -188,6 +226,8 @@ export type PracticeEstate = {
   failedProvisioning: { total: number; withWorkspace: number; orphaned: number } | null;
   /** Every read that could not be completed, named. Empty means every figure above is complete. */
   problems: string[];
+  /** §8's thresholds as they actually resolved, so the filter buttons can be labelled from them. */
+  expiryWindows: { near: number; soon: number };
   generatedAt: string;
 };
 
@@ -280,6 +320,29 @@ function lifecycleAttention(status: string): AttentionItem[] {
  * or an encounter is readable from this plane and "recent meaningful activity" has no producer here.
  * The tiebreak is `created_at desc`, and the surface says which half it is honouring.
  */
+/**
+ * Every workspace id an entitlement query matches, PAGED.
+ *
+ * ⚠ NOT ONE `.select()` AND A HOPE. PostgREST answers an unbounded select with at most 1,000 rows and
+ * says nothing about having stopped -- the trap countByWorkspace above already documents. Here the
+ * consequence would be worse than a wrong count: a truncated id list makes a FILTER quietly drop
+ * practices, so a Director scanning for expiring practices would see a short list that looks complete.
+ * A failed page returns null, and null means the filter refuses rather than narrowing.
+ */
+async function entitlementWorkspaceIds(
+  build: () => any, problems: string[], label: string,
+): Promise<Set<string> | null> {
+  const ids = new Set<string>();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build().range(from, from + PAGE - 1);
+    if (error) { problems.push(`${label}: ${error.message}`); return null; }
+    const rows = (data ?? []) as { workspace_id: string }[];
+    for (const r of rows) ids.add(r.workspace_id);
+    if (rows.length < PAGE) return ids;
+  }
+}
+
 export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}): Promise<PracticeEstate> {
   const problems: string[] = [];
   const page = Math.max(1, Math.floor(query.page ?? 1));
@@ -289,6 +352,55 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
   const lifecycle = LIFECYCLE_STATES.includes(query.lifecycle as (typeof LIFECYCLE_STATES)[number])
     ? (query.lifecycle as string) : "";
 
+  // ── §8 / AC-14: the expiry groups ────────────────────────────────────────────────────────────────
+  //
+  // ⚠ RESOLVED BEFORE PAGINATION, WHICH IS THE WHOLE DIFFERENCE BETWEEN A FILTER AND A DECORATION. The
+  // obvious build is to page the practices and then hide the rows that do not match -- and that produces
+  // a "3 practices expire this week" screen that is really "3 of the 25 practices on page 1". The id set
+  // is resolved across the estate first and constrains the page query itself.
+  const [nearDays, soonDays] = await Promise.all([expiringNearDays(admin), expiringSoonDays(admin)]);
+  const expiry = (EXPIRY_FILTERS as readonly string[]).includes(query.expiry ?? "")
+    ? (query.expiry as ExpiryFilter) : null;
+
+  const GRANTING = STATUSES_GRANTING_ACCESS as unknown as string[];
+  const horizon = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+
+  let expiryIds: Set<string> | null = null;
+  let expiryExcludes = false;   // `expired` is the COMPLEMENT of the granting set, not a set of its own
+  if (expiry) {
+    if (expiry === "expired") {
+      // ⚠ THE COMPLEMENT OF THE GATE, NOT A LIST OF EXPIRED ROWS. A practice whose plan lapsed AND a
+      // practice that was never given a plan at all are both shut, and the second has no row to find --
+      // so asking "which practices are currently let in" and inverting it catches both. §4's fault state
+      // is then visible on the row itself (`entitlement: null`) rather than being silently absent here.
+      expiryIds = await entitlementWorkspaceIds(
+        () => admin.from("practice_entitlement").select("workspace_id")
+          .in("status", GRANTING).lte("starts_at", "now").is("ends_at", null),
+        problems, "expiry filter (open-ended periods)");
+      const ending = expiryIds === null ? null : await entitlementWorkspaceIds(
+        () => admin.from("practice_entitlement").select("workspace_id")
+          .in("status", GRANTING).lte("starts_at", "now").gte("ends_at", "now"),
+        problems, "expiry filter (dated periods)");
+      if (expiryIds && ending) for (const id of ending) expiryIds.add(id);
+      else expiryIds = null;
+      expiryExcludes = true;
+    } else {
+      // Live now, and ending within the window. An open-ended period is deliberately absent: it has no
+      // end date, so it cannot be approaching one.
+      const days = expiry === "near" ? nearDays : soonDays;
+      expiryIds = await entitlementWorkspaceIds(
+        () => admin.from("practice_entitlement").select("workspace_id")
+          .in("status", GRANTING).lte("starts_at", "now")
+          .gte("ends_at", "now").lte("ends_at", horizon(days)),
+        problems, "expiry filter");
+    }
+  }
+  // ⚠ A FILTER THAT COULD NOT BE RESOLVED IS DROPPED AND SAID, never applied half-read. Applying it from
+  // a partial id set would answer the Director's question with a shorter list and no sign of it.
+  const expiryUnresolved = expiry !== null && expiryIds === null;
+  if (expiryUnresolved)
+    problems.push("the expiry filter could not be resolved, so this list is NOT filtered by expiry -- every matching practice is shown");
+
   type Q = ReturnType<Admin["from"]>;
   const filtered = (builder: ReturnType<Q["select"]>) => {
     let b = builder;
@@ -296,6 +408,14 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
     if (market) b = b.eq("country", market);
     if (lifecycle) b = b.eq("status", lifecycle);
     if (query.attentionOnly) b = b.in("status", ATTENTION_STATES as unknown as string[]);
+    if (expiryIds) {
+      const list = [...expiryIds];
+      // An EMPTY granting set means nobody is let in, so the complement is everybody -- and `.not in ()`
+      // is not valid PostgREST. Both directions of the empty case are handled explicitly rather than by
+      // an expression that happens to work for one of them.
+      if (expiryExcludes) { if (list.length) b = b.not("id", "in", inList(list)); }
+      else b = b.in("id", list.length ? list : ["00000000-0000-0000-0000-000000000000"]);
+    }
     return b;
   };
 
@@ -367,7 +487,7 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
 
   // ── Owner names (D1), membership bands (D2), failed sagas ────────────────────────────────────────
   const ownerIds = [...new Set(rows.map(r => r.owner_person_id).filter(Boolean))];
-  const [peopleRes, memberCounts, failedRes, marketRes, activityRes, healthRes] = await Promise.all([
+  const [peopleRes, memberCounts, failedRes, marketRes, activityRes, healthRes, entRes] = await Promise.all([
     ownerIds.length
       // ⚠ `email` IS NOT SELECTED, not selected-and-dropped. What is not fetched cannot be spread into
       // a payload by a later edit.
@@ -388,6 +508,12 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
     admin.from("pd_practice_health")
       .select("practice_id, health_state, health_reason, observed_at, evidence_ref")
       .in("practice_id", wsIds),
+    // §8's plan and expiry for the page's practices. Every period, not just the live one -- the current
+    // period is chosen the same way the s7 card chooses it, and a lapsed practice must show the period
+    // that ENDED rather than nothing at all.
+    admin.from("practice_entitlement")
+      .select("id, workspace_id, product_code, plan_code, status, starts_at, ends_at")
+      .in("workspace_id", wsIds).order("starts_at", { ascending: false }),
   ]);
 
   if (peopleRes.error) problems.push(`owner names: ${peopleRes.error.message}`);
@@ -432,6 +558,19 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
   const marketRows = (marketRes.data ?? []) as { country: string }[];
   const markets = [...new Set(marketRows.map(m => m.country).filter(Boolean))].sort();
 
+  // §8's plan and expiry per row. A FAILED READ LEAVES THE MAP NULL rather than empty, because an empty
+  // map renders every practice as "no plan recorded" -- inventing a provisioning fault across the estate.
+  if (entRes.error) problems.push(`entitlements: ${entRes.error.message}`);
+  const entByWs: Map<string, any[]> | null = entRes.error ? null : (() => {
+    const m = new Map<string, any[]>();
+    for (const row of (entRes.data ?? []) as any[]) {
+      const list = m.get(row.workspace_id) ?? [];
+      list.push(row);
+      m.set(row.workspace_id, list);
+    }
+    return m;
+  })();
+
   return {
     rows: rows.map(r => ({
       id: r.id, name: r.name, type: r.type, status: r.status, country: r.country,
@@ -464,6 +603,18 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
             }
           : null;
       })(),
+      entitlement: (() => {
+        // ⚠ `periodOf`, NOT ARITHMETIC WRITTEN HERE. One derivation, shared with the s7 access card.
+        const list = entByWs?.get(r.id);
+        if (!list || list.length === 0) return null;
+        const periods = list.map(row => periodOf(row, soonDays));
+        const current = periods.find(p => p.grantsAccessNow) ?? periods[0];
+        return {
+          planCode: current.planCode, status: current.status, endsAt: current.endsAt,
+          daysRemaining: current.daysRemaining, state: current.state,
+          grantsAccessNow: current.grantsAccessNow,
+        };
+      })(),
       attention: [
         ...lifecycleAttention(r.status),
         ...(failedByWs.has(r.id) ? [{
@@ -480,6 +631,7 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
     marketsTruncated: marketRows.length >= 1000,
     failedProvisioning,
     problems,
+    expiryWindows: { near: nearDays, soon: soonDays },
     generatedAt: new Date().toISOString(),
   };
 }

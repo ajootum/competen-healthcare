@@ -119,6 +119,25 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
       + "so the threshold is not UI magic.",
   },
   {
+    table: "practice_entitlement",
+    columns: ["id", "workspace_id", "product_code", "plan_code", "status", "starts_at", "ends_at"],
+    count: true,
+    why:
+      "CPR-PD commercial administration, added 2026-09-02 by the owner's decision after their own "
+      + "practice was locked out by a lapsed trial and NOTHING in this product could reactivate it. The "
+      + "screen a member lands on says 'reactivating the plan restores access'; provisioning was the "
+      + "only writer this table had ever had, and this plane refused even to read it -- so a practice "
+      + "whose trial ended was told a remedy existed and given no way to reach it, by anybody. "
+      + "hq.practice.commercial.manage (migration 367) is the right that fixes that, and it cannot act "
+      + "on a table it cannot see. "
+      + "WHAT IS EXPOSED IS THE PLAN WINDOW AND NOTHING ELSE: which product, which plan code, the "
+      + "status, and the two dates. No patient, no practitioner, no clinical content and no diary -- "
+      + "the row's only other column is sponsor_ref, a uuid pointing outside this table, and it is "
+      + "deliberately NOT listed because nothing on this plane needs to resolve it. "
+      + "workspace_id is here because the whole point is to act on ONE named practice, which the plane "
+      + "already identifies through practice_workspace.",
+  },
+  {
     table: "practice_workspace",
     columns: [
       "id", "name", "type", "status", "owner_person_id", "country", "timezone",
@@ -489,7 +508,18 @@ export const UNRESOLVED_EXCEPTIONS: readonly UnresolvedException[] = [
 // not an unjudged practice read like the other five: there is nothing here for the entry set to judge.
 // It is declared because A6 asserts this list is EXACTLY the operator-only set, which is what makes a
 // seventh route fail and get read by somebody.
+// ⚠ THE SEVENTH IS A THIRD CASE AGAIN, and the difference is worth stating rather than filing it with
+// the others. entitlement/route.ts reaches exactly one practice table -- practice_entitlement -- and
+// that table is IN the allowlist above, with its own reason. So unlike the five it is not an unjudged
+// read, and unlike launch-attestation it is not a route that touches no practice table at all: it is
+// the first operator route whose practice reads this allowlist actually governs.
+//
+// It is declared here for one reason only: A6 asserts this list is EXACTLY the operator-only set, so an
+// undeclared route fails whether or not its reads are safe. That assertion is what makes an EIGHTH one
+// get read by a person, and weakening it to "unless the table is allowlisted" would give up the property
+// that caught this route in the first place.
 export const OUT_OF_SCOPE_OPERATOR_ROUTES: readonly string[] = [
+  "src/app/api/v1/practice/entitlement/route.ts",
   "src/app/api/v1/practice/flags/route.ts",
   "src/app/api/v1/practice/launch-attestation/route.ts",
   "src/app/api/v1/practice/identifier-format/route.ts",

@@ -4,6 +4,8 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolveLifecycleActor, PERSON_SCOPED_EXPORT_PATH } from "@/lib/practice/lifecycle";
 import { CAP_RESTORE } from "@/lib/practice/lifecycle-constants";
+import { SETTINGS_CAPABILITY } from "@/lib/practice/capabilities";
+import { accessEndedReading, endedBecause, type AccessEndedReading } from "@/lib/practice/access-ended";
 import RestorePracticePanel from "./RestorePracticePanel";
 import IdleReSignIn from "./IdleReSignIn";
 
@@ -19,9 +21,13 @@ const REASONS: Record<string, { title: string; body: string; href?: string; href
     title: "This Practice is not currently available",
     body: "The workspace is suspended or being closed. Clinical data access is paused while that stands. If you believe this is wrong, contact support with your workspace name.",
   },
+  // ⚠ THE FALLBACK ONLY. CPR-PD-PROV-001 s10 replaces this with a dated, role-aware panel below, built
+  // from the practice's actual entitlement row. This wording stands for the one case that panel refuses
+  // to speak for: an entitlement record that could not be read. It says less than it used to on purpose
+  // -- it no longer promises "your data is retained", because when nothing was read, nothing is known.
   NOT_ENTITLED: {
-    title: "No active plan on this Practice",
-    body: "The trial or subscription covering this workspace has ended, so access is paused. Your data is retained under the retention policy; reactivating the plan restores access.",
+    title: "This Practice is not open",
+    body: "Access to this workspace is closed, and the record that would say why could not be read just now. Nothing has been changed and nothing has been deleted. Try again shortly; if it keeps happening, contact hello@competenhealthcare.com with your practice name.",
   },
   // CPR-370 (migration 213). Both say plainly what happened and what it does NOT mean -- a person who
   // has just been locked out needs to know whether they are still signed in to Competen.
@@ -122,11 +128,118 @@ export default async function Page() {
     }
   }
 
+  // ── CPR-PD-PROV-001 s10 / AC-13: the expired practice, told what happened and when ────────────────
+  //
+  // ⚠ THE AUDIENCE SPLIT IS BY CAPABILITY, NEVER BY A ROLE STRING. s13: "Never authorize these actions
+  // using a nullable role string where the CP capability model is authoritative", and CLAUDE.md says the
+  // same about `profiles.role`. Somebody who holds practice.settings.manage is the person who runs this
+  // practice; everybody else is staff, and staff are shown the state without the commercial detail.
+  //
+  // ⚠ AND THERE IS NO PRODUCT DIRECTOR BRANCH HERE, WHICH IS A DECISION AND NOT AN OVERSIGHT. s10's
+  // table asks for PD actions on this screen. Those actions are landlord commercial writes, and this is a
+  // tenant-plane page reached by a practice member; putting an Extend control on it would mean a Practice
+  // URL that mutates commercial state, which is the boundary plane-boundary.ts exists to hold. The PD
+  // already has the control, on the surface built for it, at /super-admin/pd/practices/[id] -- the s7
+  // card with the same presets and the same audit trail. A PD who lands HERE landed as a member of this
+  // practice, and is served by the branch their membership earns.
+  let ended: { reading: AccessEndedReading; isOwner: boolean; timezone: string } | null = null;
+  if (shell.state === "ACCESS_RESTRICTED" && shell.reason === "NOT_ENTITLED") {
+    const admin = createAdminClient();
+    const [reading, actor] = await Promise.all([
+      accessEndedReading(admin, shell.workspaceId),
+      resolveLifecycleActor(admin, shell.userId, shell.workspaceId),
+    ]);
+    ended = {
+      reading,
+      isOwner: !!actor?.capabilities.includes(SETTINGS_CAPABILITY),
+      timezone: actor?.workspaceTimezone ?? "UTC",
+    };
+  }
+
+  // ⚠ THE PRACTICE'S OWN TIMEZONE, NOT THE SERVER'S (s5, s15). An entitlement that lapses at 21:00 UTC
+  // ended on the FOLLOWING day in Kampala, and a screen that names the wrong day to somebody who was
+  // working when it happened is telling them their memory is wrong.
+  const onDate = (iso: string, timeZone: string) => {
+    try {
+      return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone });
+    } catch { return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); }
+  };
+
+  // s10's heading and copy, one branch per audience and one per state. `panel` is null whenever the
+  // entitlement could not be read, which is what hands the screen back to the cautious fallback above.
+  let panel: { title: string; body: string; retention: boolean } | null = null;
+  if (ended && ended.reading.state === "known") {
+    const r = ended.reading;
+    const tz = ended.timezone;
+    if (r.resumesAt && !r.startedAt) {
+      // s15: a future-start entitlement shows Scheduled, and must not let anybody in early.
+      panel = {
+        title: "This Practice has not opened yet",
+        body: `Access is scheduled to begin on ${onDate(r.resumesAt, tz)}, and cannot be opened before then. `
+          + (ended.isOwner
+            ? "If that date is wrong, email hello@competenhealthcare.com with your practice name."
+            : "Whoever runs this practice arranged the start date."),
+        retention: false,
+      };
+    } else if (r.resumesAt) {
+      panel = {
+        title: "Practice access resumes shortly",
+        body: `Access ended${r.endedAt ? ` on ${onDate(r.endedAt, tz)}` : ""}, and a new period is already `
+          + `recorded to begin on ${onDate(r.resumesAt, tz)}. Everything in the practice is waiting for it.`,
+        retention: true,
+      };
+    } else if (ended.isOwner) {
+      panel = {
+        title: "Practice access has ended",
+        body: (r.endedAt
+          ? `Your practice access ended on ${onDate(r.endedAt, tz)}, because ${endedBecause(r)}. `
+          : `Your practice access is closed, because ${endedBecause(r)}. `)
+          // ⚠ NOTHING ON THIS SCREEN REOPENS IT, AND SAYING SO IS THE POINT. This product has no
+          // self-serve route back in from behind the lock: the billing page lives inside the practice
+          // shell, and the shell sends a locked-out person here -- so an instruction to "renew your plan"
+          // would be a door that opens onto this same screen. An instruction with no control behind it is
+          // a mistake this page has already been caught making once, on the two-factor state above.
+          + "Reopening it is done by Competen rather than from this screen, so email "
+          + "hello@competenhealthcare.com with your practice name and the date above.",
+        retention: true,
+      };
+    } else {
+      // Non-owner staff: the state, and the person to ask. No plan, no dates beyond the end, no controls.
+      panel = {
+        title: "Practice access has ended",
+        body: (r.endedAt ? `This practice's access ended on ${onDate(r.endedAt, tz)}. ` : "This practice's access is closed. ")
+          + "Nothing is wrong with your own account, and nothing you did caused it. Whoever runs this "
+          + "practice can arrange for it to be reopened — there is nothing to do from here.",
+        retention: true,
+      };
+    }
+  } else if (ended && ended.reading.state === "none") {
+    // s4: "Provisioning must not leave a usable Practice without a valid entitlement." This is that fault
+    // seen from the inside, and it is worth distinguishing from an expiry -- the person did nothing.
+    panel = {
+      title: "This Practice has no access period",
+      body: "No plan or trial has ever been recorded against this practice, so it cannot be opened. That is "
+        + "a fault in how it was set up rather than something that ran out. Email hello@competenhealthcare.com "
+        + "with your practice name.",
+      retention: true,
+    };
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center">
-        <h1 className="text-lg font-bold text-gray-900">{reason.title}</h1>
-        <p className="mt-3 text-sm leading-relaxed text-gray-600">{reason.body}</p>
+        <h1 className="text-lg font-bold text-gray-900">{panel?.title ?? reason.title}</h1>
+        <p className="mt-3 text-sm leading-relaxed text-gray-600">{panel?.body ?? reason.body}</p>
+        {/* s10's retention reassurance, and it is deliberately a statement about what still EXISTS rather
+            than a promise about how long. This build has no retention clock and no deletion job, so a
+            period in days would be a number nothing enforces. */}
+        {panel?.retention && (
+          <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[12.5px] leading-relaxed text-gray-700">
+            <span className="font-semibold">Nothing has been deleted.</span> Patient records, appointments,
+            documents and settings are all retained under the applicable retention policy, and reopening
+            access brings the practice back as it was.
+          </p>
+        )}
         {/* The control behind the sentence, where one exists -- the MFA states route to the two-factor
             screen (2026-08-16), which is what turned their old "no screen exists" wording into a door. */}
         {reason.href && (

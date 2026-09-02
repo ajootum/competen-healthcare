@@ -2,8 +2,9 @@ import Link from "next/link";
 import { requireHqCapability } from "@/lib/hq/context";
 import {
   loadPracticeEstate, LIFECYCLE_STATES, LIFECYCLE_MEANING,
-  type EstateSort, type Band,
+  type EstateSort, type Band, type EstateRow,
 } from "@/lib/hq/pd-practices";
+import { ACCESS_STATE_LABEL } from "@/lib/hq/entitlement";
 
 // ⚠ THE GUARD IS ON THE PAGE, NOT ONLY ON THE LAYOUT. PD-001 s7: "A hidden navigation item does not
 // constitute authorization. Every destination must enforce server-side authorization", and "direct URL
@@ -40,10 +41,6 @@ const SORTS: { value: EstateSort; label: string }[] = [
  * and nothing went back to check. A dark cell is a claim about today, and it decays.
  */
 const DARK: Record<string, string> = {
-  plan:
-    "No producer. A Practice cannot be the subject of a subscription row at all — plat_subscriptions, "
-    + "plat_billing_accounts and plat_invoices key on tenants(id) and practice_workspace has no "
-    + "tenant_id, so a Practice plan is unrepresentable rather than unpopulated.",
   patients:
     "Refused by decision, not by absence. The count exists; oversight decision D2 of 2026-08-08 says an "
     + "exact per-practice patient count is business intelligence about a named clinician's book.",
@@ -64,6 +61,48 @@ function DarkCell({ reason }: { reason: keyof typeof DARK | string }) {
       title={DARK[reason] ?? "No producer."}
     >
       no producer
+    </span>
+  );
+}
+
+/**
+ * CPR-PD-PROV-001 §8: the access period, on the row.
+ *
+ * ⚠ THE STATE PRINTS ITS WORD AND DOES NOT RELY ON THE COLOUR (§18, and the same rule the avatar note
+ * below records). A Director scanning for practices about to shut must be able to do it in a screenshot,
+ * in greyscale, or with the colour vision a third of a percent of them have.
+ *
+ * ⚠ AND `null` IS ITS OWN SENTENCE, NOT "Expired". A practice with no entitlement row was never given
+ * one -- §4's provisioning fault -- and telling a Director it expired sends them to extend a period that
+ * does not exist rather than to ask why it was never created.
+ */
+function PlanCell({ e }: { e: EstateRow["entitlement"] }) {
+  if (!e) {
+    return (
+      <span className="cursor-help text-[10.5px] italic text-[var(--cmp-text-warning)] underline decoration-dotted underline-offset-2"
+        title={"No access period has ever been recorded for this practice, so nobody can open it. "
+          + "That is a provisioning fault rather than an expiry -- CPR-PD-PROV-001 s4: provisioning must "
+          + "not leave a usable Practice without a valid entitlement."}>
+        no access period
+      </span>
+    );
+  }
+  const tone = e.state === "active" ? "bg-emerald-100 text-emerald-800"
+    : e.state === "expiring_soon" ? "bg-amber-100 text-amber-900"
+      : e.state === "scheduled" ? "bg-sky-100 text-sky-800"
+        : e.state === "paused" ? "bg-slate-200 text-slate-700"
+          : "bg-rose-100 text-rose-800";
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className={`w-fit rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tone}`}>
+        {ACCESS_STATE_LABEL[e.state]}
+      </span>
+      <span className="font-mono text-[10.5px] text-gray-600">{e.planCode}</span>
+      {e.daysRemaining !== null && (
+        <span className="text-[10.5px] tabular-nums text-gray-600">
+          {e.daysRemaining} day{e.daysRemaining === 1 ? "" : "s"} left
+        </span>
+      )}
     </span>
   );
 }
@@ -125,15 +164,16 @@ export default async function Page(
   const market = str("market");
   const lifecycle = str("lifecycle");
   const attentionOnly = str("attention") === "1";
+  const expiry = str("expiry");
   const sort = (SORTS.some(s => s.value === str("sort")) ? str("sort") : "attention") as EstateSort;
   const page = Math.max(1, Number.parseInt(str("page") || "1", 10) || 1);
 
-  const estate = await loadPracticeEstate(ctx.admin, { q, market, lifecycle, attentionOnly, sort, page });
+  const estate = await loadPracticeEstate(ctx.admin, { q, market, lifecycle, attentionOnly, expiry, sort, page });
 
-  const activeFilters = [q, market, lifecycle, attentionOnly ? "1" : ""].filter(Boolean).length;
+  const activeFilters = [q, market, lifecycle, expiry, attentionOnly ? "1" : ""].filter(Boolean).length;
   const keep = (over: Record<string, string>) => {
     const params = new URLSearchParams();
-    const base: Record<string, string> = { q, market, lifecycle, attention: attentionOnly ? "1" : "", sort, page: String(page) };
+    const base: Record<string, string> = { q, market, lifecycle, expiry, attention: attentionOnly ? "1" : "", sort, page: String(page) };
     for (const [k, v] of Object.entries({ ...base, ...over })) if (v) params.set(k, v);
     const s = params.toString();
     return s ? `/super-admin/pd/practices?${s}` : "/super-admin/pd/practices";
@@ -151,6 +191,7 @@ export default async function Page(
     if (market) params.set("market", market);
     if (lifecycle) params.set("lifecycle", lifecycle);
     if (attentionOnly) params.set("attention", "1");
+    if (expiry) params.set("expiry", expiry);
     if (sort !== "attention") params.set("sort", sort);
     if (page > 1) params.set("page", String(page));
     return params.toString();
@@ -243,6 +284,10 @@ export default async function Page(
             <input type="checkbox" name="attention" value="1" defaultChecked={attentionOnly} className="h-3.5 w-3.5" />
             Exception state only
           </label>
+          {/* The expiry group is chosen by the links below rather than by this form. Without this hidden
+              field, pressing Apply would silently drop it -- a filter that survives navigation and dies
+              on submit is worse than one that never existed. */}
+          <input type="hidden" name="expiry" value={expiry} />
           <button type="submit" className="rounded bg-[var(--cmp-color-primary)] px-3 py-1.5 text-[13px] font-semibold text-white">
             Apply
           </button>
@@ -261,6 +306,32 @@ export default async function Page(
           {estate.marketsTruncated && " ⚠ The market list was built from the first 1,000 workspaces and may be incomplete."}
         </p>
       </form>
+
+      {/* ── CPR-PD-PROV-001 §8 / AC-14: the expiry groups ────────────────────────────────────────────
+          ⚠ THE LABELS ARE PRINTED FROM THE RESOLVED THRESHOLDS, NOT TYPED. §8: "Thresholds should be
+          configurable rather than embedded in UI logic." Change the pd_ops_config row and the button
+          changes with the filter; type "7 days" here and the day somebody widens the window this page
+          keeps its old promise and quietly means something else. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Access period</span>
+        {([
+          { code: "expired", label: "Expired" },
+          { code: "near", label: `Expires in ${estate.expiryWindows.near} days` },
+          { code: "soon", label: `Expires in ${estate.expiryWindows.soon} days` },
+        ] as const).map(f => (
+          <Link key={f.code} href={keep({ expiry: expiry === f.code ? "" : f.code, page: "1" })}
+            className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+              expiry === f.code
+                ? "bg-[var(--cmp-color-primary)] text-white"
+                : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}>
+            {f.label}
+          </Link>
+        ))}
+        <span className="text-[11px] text-gray-500">
+          {/* Said once, here, rather than left for a Director to work out from an empty Expired list. */}
+          Expired includes practices that were never given an access period at all.
+        </span>
+      </div>
 
       {/* ── The estate table (s3) ────────────────────────────────────────────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
@@ -299,7 +370,7 @@ export default async function Page(
                     <th scope="col" className="py-1 pr-3">Owner / handle</th>
                     <th scope="col" className="py-1 pr-3">Market</th>
                     <th scope="col" className="py-1 pr-3">Lifecycle</th>
-                    <th scope="col" className="py-1 pr-3">Plan</th>
+                    <th scope="col" className="py-1 pr-3">Access period</th>
                     <th scope="col" className="py-1 pr-3 text-right">Practitioners</th>
                     <th scope="col" className="py-1 pr-3 text-right">Activity (30d)</th>
                     <th scope="col" className="py-1 pr-3 text-right">Patients</th>
@@ -337,7 +408,14 @@ export default async function Page(
                       <td className="py-1.5 pr-3"><LifecycleBadge status={r.status} /></td>
 
                       {/* PLAN — no producer. A Practice cannot be the subject of a subscription row. */}
-                      <td className="py-1.5 pr-3"><DarkCell reason="plan" /></td>
+                      {/* ⚠ THIS CELL WAS DARK UNTIL 2026-09-01, AND IT WAS DARK FOR THE WRONG REASON.
+                          Its note said a Practice cannot be the subject of a subscription row, which is
+                          still true of plat_subscriptions and says nothing about whether the practice has
+                          an ACCESS PERIOD -- practice_entitlement has carried plan_code, status and dates
+                          since migration 191. The column was reading "no producer" over a populated table
+                          it merely was not allowed to see. CPR-PD-PROV-001 put that table on this plane's
+                          allowlist, and the absence went with it. */}
+                      <td className="py-1.5 pr-3"><PlanCell e={r.entitlement} /></td>
 
                       <td className="py-1.5 pr-3 text-right"><BandCell band={r.membershipBand} /></td>
 

@@ -447,6 +447,12 @@ export type LifecycleActor = {
   userId: string;
   workspaceId: string;
   workspaceName: string;
+  /**
+   * The practice's own timezone, so a date shown to a locked-out member is the date THEY experienced.
+   * Rides on a join that was already happening (the same reasoning access.ts records for WorkspaceContext),
+   * and WorkspaceContext already carries this field, so it still satisfies this type.
+   */
+  workspaceTimezone: string;
   capabilities: string[];
   /** null for a platform operator, who has no membership in the practice they are acting on. */
   membershipId: string | null;
@@ -783,7 +789,7 @@ export async function resolveLifecycleActor(
   admin: any, userId: string, workspaceId: string,
 ): Promise<LifecycleActor | null> {
   const { data: memberships, error } = await admin.from("practice_membership")
-    .select("id, role_code, workspace_id, practice_workspace!workspace_id(id, name, status)")
+    .select("id, role_code, workspace_id, practice_workspace!workspace_id(id, name, status, timezone)")
     .eq("user_id", userId).eq("workspace_id", workspaceId).eq("status", "active");
   if (error) return null;
   const mine = (memberships ?? []) as any[];
@@ -803,6 +809,8 @@ export async function resolveLifecycleActor(
     userId,
     workspaceId,
     workspaceName: (mine[0].practice_workspace?.name as string) ?? "",
+    // "UTC" only when the join itself failed -- the column is `not null` (migration 191).
+    workspaceTimezone: (mine[0].practice_workspace?.timezone as string) || "UTC",
     capabilities: [...new Set([...((open ?? []) as any[]), ...((ending ?? []) as any[])].map(c => c.capability_code as string))],
     membershipId: membershipIds[0],
     actorKind: "member",

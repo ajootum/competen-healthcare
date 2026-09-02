@@ -95,6 +95,10 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // and s19 continues that the Product Director "must not automatically self-approve every high-risk
   // acceptance". A single .manage code covering both would make that segregation unexpressible.
   { code: "hq.practice.provision.execute",    space: "practice"  },
+  // Migration 367. Setting a practice's plan window is deliberately NOT commercial.view: seeing which
+  // practices are on which plan is a reporting right, and deciding how long a clinician keeps access to
+  // their own diary is not the same act. The split is the same one this block exists for.
+  { code: "hq.practice.commercial.manage",    space: "practice"  },
   { code: "hq.practice.flags.manage",         space: "practice"  },
   { code: "hq.practice.release.activate",     space: "practice"  },
   { code: "hq.practice.release.rollback",     space: "practice"  },

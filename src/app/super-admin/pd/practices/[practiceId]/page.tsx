@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadPractice360, LIFECYCLE_MEANING, type Band, type AttentionItem } from "@/lib/hq/pd-practices";
+import { practiceEntitlements } from "@/lib/hq/entitlement";
+import PlanControl from "./PlanControl";
 
 // CPR-PD-003 §6–§14 — PRACTICE 360.
 //
@@ -116,6 +118,11 @@ export default async function Page({
   // protected data renders". The loader throws rather than returning null on a READ FAILURE, so this
   // branch means the workspace genuinely does not exist and never means "the database was slow".
   if (!p) notFound();
+
+  // The plan window, read only for the tab that shows it -- CPR-PD commercial administration.
+  const entitlement = tab === "commercial"
+    ? await practiceEntitlements(ctx.admin, practiceId)
+    : { state: "none" as const, periods: [] as [], current: null, hasAccess: false as const, expiringSoonDays: 0 };
 
   const tabHref = (key: TabKey) => {
     const qs = new URLSearchParams();
@@ -353,9 +360,22 @@ export default async function Page({
 
       {/* ── COMMERCIAL (§11) ─────────────────────────────────────────────────────────────────────── */}
       {tab === "commercial" && (
+        <div className="space-y-4">
+          {/* ⚠ THE ONE COMMERCIAL FACT THAT DOES EXIST, and it is now readable AND writable here. This
+              tab used to say the trial window was "on a table this plane may not read" -- true when
+              written, and false from the moment the owner decided the Product Director determines how
+              long a practice keeps access (migration 367, and the plane-boundary entry that goes with
+              it). The refusal below is narrowed to what is still genuinely absent: revenue. */}
+          <PlanControl
+            workspaceId={practiceId}
+            practiceName={p.workspace.name}
+            reading={entitlement}
+            mayManage={ctx.capabilities.includes("hq.practice.commercial.manage")}
+          />
+
         <AbsentTab
-          title="Commercial" spec="CPR-PD-003 §11"
-          wouldShow="plan and tier, trial dates, subscription status, renewal and conversion state, product-commercial events and payment attention."
+          title="Revenue and billing" spec="CPR-PD-003 §11"
+          wouldShow="subscription status, renewal and conversion state, product-commercial events and payment attention."
           reason={<>
             <p>
               <span className="font-bold">A Practice has no commercial plane. Not an empty one — none.</span>{" "}
@@ -369,10 +389,11 @@ export default async function Page({
               no producer to be unqueried from.
             </p>
             <p className="mt-2">
-              The one commercial fact that does exist — the 30-day trial window in{" "}
-              <code className="font-mono">practice_entitlement</code> — is on a table this plane may not read, so
-              even the trial dates are not shown here. §11 says to &quot;hide unavailable capabilities cleanly rather than
-              displaying false zeros&quot;; this whole tab is that instruction being followed.
+              The plan window above is the one commercial fact that does exist. It used to be unreadable
+              from here too, and this paragraph said so — until the owner decided the Product Director
+              determines how long a practice keeps access. §11 says to &quot;hide unavailable capabilities
+              cleanly rather than displaying false zeros&quot;, and what remains hidden is revenue, which
+              genuinely has no producer.
             </p>
             <p className="mt-2">
               ⚠ The invoice and payment bands on the Overview tab are <span className="font-bold">not</span> this. Those
@@ -381,6 +402,7 @@ export default async function Page({
             </p>
           </>}
         />
+        </div>
       )}
 
       {/* ── COMMUNICATIONS (§12) ─────────────────────────────────────────────────────────────────── */}
