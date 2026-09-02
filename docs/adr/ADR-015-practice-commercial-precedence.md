@@ -4,6 +4,8 @@
 **Satisfies:** CPR-PD-PROV-001 §12, §19, AC-10
 **Supersedes:** nothing. This is the first written answer to "which source controls access".
 **Enforced by:** `src/lib/practice/commercial-precedence.ts`, `src/lib/practice/commercial-precedence.test.ts`
+**Amended:** 2026-09-02 — migration 368 adds `practice_entitlement.source`, moving rung 3's judgement
+from the workspace to the period. See *Consequences and limits*.
 
 ---
 
@@ -108,10 +110,20 @@ was unreachable.
 
 - **Ending a period is still a status transition, never a date rewrite.** Rewriting `ends_at` to
   today would make the record claim the period had always been going to end today (§9).
-- **A period does not record which source wrote it.** Authority is judged per *workspace* — "does a
-  live paid subscription exist" — not per period. This is honest at today's granularity and needs no
-  migration. A `source` column would allow "this specific period was billing-written", and is the
-  natural next step if promotions gain their own representation.
+- ~~**A period does not record which source wrote it.** Authority is judged per *workspace*.~~
+  **Closed 2026-09-02 by migration 368**, the same day this ADR was written. `practice_entitlement.source`
+  is `NOT NULL` with no default and a closed list — `provisioning`, `payment`, `director`, `unknown` —
+  and rung 3 now judges the period being changed rather than the practice's history.
+
+  **The per-workspace rule was not merely coarse; it warned about untrue things.** A Director shortening
+  their own 14-day courtesy extension, granted *after* a subscription lapsed, was told they were
+  overriding a payment — one that had ended weeks earlier and had nothing to do with the period in
+  front of them. A false warning is worse than none: it is the one people learn to click through, and
+  then the true one arrives and reads exactly the same.
+
+  `unknown` covers rows written before the column existed and is treated as **not** billing-authoritative.
+  That is safe in fact as well as in principle: `practice_checkout` and `practice_subscription` were both
+  empty when 368 ran, so no existing period could be one somebody had paid for.
 - **Nothing in this product bills for a Practice plan.** Rung 3 is written against a payment path
   that cannot currently be reached. It is written now because the alternative is discovering the
   precedence question during the first chargeback.

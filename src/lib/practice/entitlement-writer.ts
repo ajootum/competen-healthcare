@@ -23,16 +23,25 @@ import { validateAccessPeriod } from "./entitlement-period";
 // One implementation, therefore, and every commercial source expresses itself through it.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Migration 368's closed list -- who wrote a period.
+ *
+ * ⚠ `payment` IS THE ONLY VALUE THAT CARRIES BILLING AUTHORITY, which is the whole reason the column
+ * exists. `unknown` means the period predates the column: an admission, not a guess.
+ */
+export const ENTITLEMENT_SOURCES = ["provisioning", "payment", "director", "unknown"] as const;
+export type EntitlementSource = (typeof ENTITLEMENT_SOURCES)[number];
+
 export type EntitlementRow = {
   id: string; workspace_id: string; product_code: string; plan_code: string;
-  status: string; starts_at: string; ends_at: string | null;
+  status: string; starts_at: string; ends_at: string | null; source: string;
 };
 
 export type OpenPeriodResult =
   | { ok: true; before: EntitlementRow | null; after: EntitlementRow }
   | { ok: false; status: number; code: string; message: string };
 
-const PERIOD_COLUMNS = "id, workspace_id, product_code, plan_code, status, starts_at, ends_at";
+const PERIOD_COLUMNS = "id, workspace_id, product_code, plan_code, status, starts_at, ends_at, source";
 const GRANTING = ["active", "trial"];
 
 /** Would this row be letting somebody in right now? The same three conditions resolveWorkspaceContext applies. */
@@ -58,6 +67,11 @@ export async function openAccessPeriod(admin: any, args: {
   startsAt: string;
   endsAt: string | null;
   productCode?: string;
+  /**
+   * Migration 368. REQUIRED, and the column has no default -- an insert that omits it fails at the
+   * database rather than recording a plausible value nobody chose.
+   */
+  source: EntitlementSource;
 }): Promise<OpenPeriodResult> {
   const refusal = validateAccessPeriod({ status: args.status, startsAt: args.startsAt, endsAt: args.endsAt });
   if (refusal) return { ok: false, status: refusal.status, code: refusal.code, message: refusal.message };
@@ -88,6 +102,7 @@ export async function openAccessPeriod(admin: any, args: {
     status: args.status,
     starts_at: args.startsAt,
     ends_at: args.endsAt,
+    source: args.source,
   }).select(PERIOD_COLUMNS).maybeSingle();
 
   if (insErr || !created)

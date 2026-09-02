@@ -81,6 +81,11 @@ export type EntitlementPeriod = {
   /** §7's derived display value. Null for an open-ended period and for one already over. */
   daysRemaining: number | null;
   state: AccessState;
+  /**
+   * Migration 368: who wrote this period. `payment` is the only value carrying billing authority --
+   * see ADR-015 rung 3. `unknown` means the period predates the column.
+   */
+  source: string;
 };
 
 export type EntitlementReading =
@@ -129,6 +134,9 @@ export function periodOf(row: any, expiringSoonDays: number): EntitlementPeriod 
   return {
     id: String(row.id), productCode: String(row.product_code), planCode: String(row.plan_code),
     status, startsAt, endsAt, grantsAccessNow, whyNot, daysRemaining, state,
+    // A row read without the column selected would have no source. `unknown` is the same admission
+    // migration 368's backfill makes, rather than a guess this function invents.
+    source: row.source ? String(row.source) : "unknown",
   };
 }
 
@@ -169,7 +177,7 @@ async function configuredDays(admin: any, key: string, fallback: number): Promis
 export async function practiceEntitlements(admin: any, workspaceId: string): Promise<EntitlementReading> {
   const soon = await expiringSoonDays(admin);
   const { data, error } = await admin.from("practice_entitlement")
-    .select("id, workspace_id, product_code, plan_code, status, starts_at, ends_at")
+    .select("id, workspace_id, product_code, plan_code, status, starts_at, ends_at, source")
     .eq("workspace_id", workspaceId)
     .order("starts_at", { ascending: false });
 
@@ -246,6 +254,8 @@ export async function grantAccessPeriod(admin: any, args: {
   const opened = await openAccessPeriod(admin, {
     workspaceId: args.workspaceId, planCode: args.planCode,
     status: args.status, startsAt: args.startsAt, endsAt: args.endsAt,
+    // A promotion is one of these too -- ADR-015: there is no separate promotional source.
+    source: "director",
   });
   if (!opened.ok) return { ok: false, status: opened.status, code: opened.code, message: opened.message };
 
@@ -302,7 +312,7 @@ export async function endAccess(admin: any, args: {
   if (!verdict.allowed) return { ok: false, status: 409, code: verdict.code, message: verdict.message };
 
   const { data: rows, error: readErr } = await admin.from("practice_entitlement")
-    .select("id, workspace_id, product_code, plan_code, status, starts_at, ends_at")
+    .select("id, workspace_id, product_code, plan_code, status, starts_at, ends_at, source")
     .eq("workspace_id", args.workspaceId).order("starts_at", { ascending: false });
   if (readErr)
     return { ok: false, status: 503, code: "UNREADABLE", message: `this practice's access could not be read: ${readErr.message}` };
@@ -315,7 +325,7 @@ export async function endAccess(admin: any, args: {
 
   const { data: updated, error } = await admin.from("practice_entitlement")
     .update({ status: args.status, updated_at: nowIso() }).eq("id", target.id)
-    .select("id, workspace_id, product_code, plan_code, status, starts_at, ends_at").maybeSingle();
+    .select("id, workspace_id, product_code, plan_code, status, starts_at, ends_at, source").maybeSingle();
   if (error || !updated)
     return { ok: false, status: 400, code: "NOT_SAVED", message: `access was not changed: ${error?.message ?? "the row came back empty"}` };
 

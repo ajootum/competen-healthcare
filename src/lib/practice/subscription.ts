@@ -175,6 +175,8 @@ export async function applyWebhook(admin: Admin, cfg: GatewayConfig, ev: {
   const opened = await openAccessPeriod(admin, {
     workspaceId: checkout.workspace_id, planCode: checkout.plan_code,
     status: "active", startsAt: now.toISOString(), endsAt: periodEnd,
+    // ADR-015: the ONLY source that carries billing authority.
+    source: "payment",
   });
   // ⚠ THE MONEY IS ALREADY TAKEN BY THIS POINT, so a failure here must not look like a failed payment.
   // The checkout and the subscription rows above are written and correct; what is missing is the access

@@ -120,10 +120,15 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
   },
   {
     table: "practice_entitlement",
-    columns: ["id", "workspace_id", "product_code", "plan_code", "status", "starts_at", "ends_at"],
+    columns: ["id", "workspace_id", "product_code", "plan_code", "status", "starts_at", "ends_at", "source"],
     count: true,
     why:
-      "CPR-PD commercial administration, added 2026-09-02 by the owner's decision after their own "
+      "⚠ `source` ADDED 2026-09-02 (migration 368, ADR-015 rung 3). It records WHICH source wrote a "
+      + "period -- provisioning, payment, director or unknown -- so the rule about not silently "
+      + "overriding a payment can ask about the period being changed rather than about whether the "
+      + "practice has ever paid. It is a four-value enum naming a system component. It identifies no "
+      + "person, carries no amount and no currency, and says nothing about a patient. "
+      + "CPR-PD commercial administration, added 2026-09-02 by the owner's decision after their own "
       + "practice was locked out by a lapsed trial and NOTHING in this product could reactivate it. The "
       + "screen a member lands on says 'reactivating the plan restores access'; provisioning was the "
       + "only writer this table had ever had, and this plane refused even to read it -- so a practice "

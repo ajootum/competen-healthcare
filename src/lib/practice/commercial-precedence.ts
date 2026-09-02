@@ -51,6 +51,14 @@ export type CommercialAuthority = {
   subscription: { planCode: string; status: string; periodEnd: string | null } | null;
   /** True when a subscription is `active` and its period has not run out on the reading clock. */
   billingLive: boolean;
+  /**
+   * ⚠ THE PERIOD CURRENTLY LETTING PEOPLE IN, and the thing rung 3 actually judges (migration 368).
+   * Null when nothing is granting access -- the reactivation case, where there is nothing to take away.
+   *
+   * It lives on the authority rather than being passed in by each caller so that two call sites cannot
+   * disagree about which period an act is about.
+   */
+  currentPeriod: { source: string; endsAt: string | null; grantsAccessNow: boolean } | null;
   /** Everything that could not be read, named. Empty means every field above is a real answer. */
   problems: string[];
 };
@@ -58,14 +66,17 @@ export type CommercialAuthority = {
 export async function commercialAuthority(admin: any, workspaceId: string): Promise<CommercialAuthority> {
   const problems: string[] = [];
 
-  const [wsRes, subRes] = await Promise.all([
+  const [wsRes, subRes, entRes] = await Promise.all([
     admin.from("practice_workspace").select("status").eq("id", workspaceId).maybeSingle(),
     admin.from("practice_subscription").select("plan_code, status, current_period_end")
       .eq("workspace_id", workspaceId).maybeSingle(),
+    admin.from("practice_entitlement").select("status, starts_at, ends_at, source")
+      .eq("workspace_id", workspaceId).order("starts_at", { ascending: false }),
   ]);
 
   if (wsRes.error) problems.push(`the practice's lifecycle status could not be read: ${wsRes.error.message}`);
   if (subRes.error) problems.push(`the practice's subscription could not be read: ${subRes.error.message}`);
+  if (entRes.error) problems.push(`the practice's access periods could not be read: ${entRes.error.message}`);
 
   const workspaceStatus = wsRes.error ? null : ((wsRes.data?.status as string | undefined) ?? null);
   const s = subRes.error ? null : (subRes.data as any ?? null);
@@ -77,14 +88,25 @@ export async function commercialAuthority(admin: any, workspaceId: string): Prom
     && subscription.status === "active"
     && (subscription.periodEnd === null || Date.parse(subscription.periodEnd) > Date.now());
 
-  // ⚠ A FAILED READ IS NOT "NOT SUSPENDED". Deciding precedence from half an answer is how a caller ends
-  // up told they may proceed because the thing that would have stopped them was unreachable.
+  // The period granting access right now, by the same three conditions the gate applies.
+  const nowIso = new Date().toISOString();
+  const granting = ((entRes.data ?? []) as any[]).find(r =>
+    ["active", "trial"].includes(String(r.status))
+    && String(r.starts_at) <= nowIso
+    && (r.ends_at === null || String(r.ends_at) >= nowIso));
+  const currentPeriod = granting
+    ? { source: granting.source ? String(granting.source) : "unknown", endsAt: granting.ends_at ?? null, grantsAccessNow: true }
+    : null;
+
+  // ⚠ A FAILED READ IS NOT "NOT SUSPENDED", AND IT IS NOT "NOTHING IS PAID FOR" EITHER. Deciding
+  // precedence from half an answer is how a caller ends up told they may proceed because the thing that
+  // would have stopped them was unreachable. Either failed read makes the authority unreadable.
   const governedBy: CommercialAuthority["governedBy"] =
-    wsRes.error ? "unreadable"
+    wsRes.error || entRes.error ? "unreadable"
       : workspaceStatus !== null && !OPERABLE_WORKSPACE_STATUSES.includes(workspaceStatus) ? "administrative"
         : "entitlement";
 
-  return { governedBy, workspaceStatus, subscription, billingLive, problems };
+  return { governedBy, workspaceStatus, subscription, billingLive, currentPeriod, problems };
 }
 
 export type OverrideVerdict =
@@ -133,21 +155,37 @@ export function judgeOverride(authority: CommercialAuthority, act: {
         + "An access period written now would grant nothing. Restore the practice first; its access period is a separate decision.",
     };
 
-  if (!authority.billingLive) return { allowed: true, acknowledgementRequired: false };
+  // ── Precedence rung 3: is the period being taken away one that a PAYMENT wrote? ──────────────────
+  //
+  // ⚠ THE PERIOD DECIDES, NOT THE WORKSPACE (migration 368). `practice_subscription` is corroboration
+  // for the message -- it names the plan and the date -- but the authority is carried by the period
+  // itself, because that is the thing the act is about to shorten or close.
+  const current = authority.currentPeriod;
 
-  const sub = authority.subscription!;
-  const paidUntil = sub.periodEnd;
+  // Nothing is granting access, so nothing paid-for is being taken away. This is the reactivation case.
+  if (!current || !current.grantsAccessNow) return { allowed: true, acknowledgementRequired: false };
+
+  // ⚠ A DIRECTOR'S OWN PERIOD IS NOT A PAYMENT, AND NEITHER IS A TRIAL OR AN `unknown`. Only `payment`
+  // carries billing authority; every other source is somebody in this product deciding, and a Director
+  // revising their own decision owes nobody a ceremony.
+  if (current.source !== "payment") return { allowed: true, acknowledgementRequired: false };
+
+  // The subscription row, where it agrees, supplies the plan name and the paid-until date. Where it does
+  // not exist, the period alone is still authority enough -- a payment wrote it.
+  const sub = authority.subscription;
+  const plan = sub?.planCode ?? "This period";
+  const paidUntil = current.endsAt ?? sub?.periodEnd ?? null;
 
   if (act.kind === "end")
     return acknowledgementRequired(
-      `${sub.planCode} is paid and active${paidUntil ? ` until ${paidUntil.slice(0, 10)}` : ""}. `
+      `${plan} was paid for${paidUntil ? ` and runs to ${paidUntil.slice(0, 10)}` : ""}. `
       + "Ending access now closes a practice that has paid for it.",
       act.acknowledged);
 
-  // A grant that ends BEFORE what was paid for is a shortening, which §13 calls a high-impact action.
+  // A grant that ends BEFORE the paid period is a shortening, which §13 calls a high-impact action.
   if (paidUntil && act.proposedEndsAt && Date.parse(act.proposedEndsAt) < Date.parse(paidUntil))
     return acknowledgementRequired(
-      `${sub.planCode} is paid until ${paidUntil.slice(0, 10)}, and this period would end before that.`,
+      `${plan} is paid until ${paidUntil.slice(0, 10)}, and this period would end before that.`,
       act.acknowledged);
 
   // Extending, or matching, or open-ended: no conflict with what was paid for.

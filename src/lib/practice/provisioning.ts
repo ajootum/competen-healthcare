@@ -3,6 +3,7 @@ import { audit } from "./audit";
 import { seedTaxonomy } from "./taxonomy";
 import { seedBaselineDefaults } from "./baseline";
 import { validateAccessPeriod, type AccessBasis } from "./entitlement-period";
+import { openAccessPeriod } from "./entitlement-writer";
 
 // Competen Practice provisioning orchestrator (CPR-PROV-001 sections 3-8, 11-13).
 //
@@ -426,11 +427,14 @@ export async function runProvisioning(admin: any, req: {
       : (plan.trial_days ? new Date(Date.now() + plan.trial_days * 86400000).toISOString() : null);
     const basis = chosen?.basis ?? "trial";
 
-    const { error } = await admin.from("practice_entitlement").insert({
-      workspace_id: workspaceId, product_code: "practice", plan_code: plan.plan_code,
-      status: basis, starts_at: startsAt, ends_at: endsAt,
+    // ⚠ THROUGH THE SHARED WRITER (migration 368 / ADR-015). This was a bare insert, which was correct
+    // and was also the third implementation of "open a period" -- and `source` has no default, so a bare
+    // insert would now fail at the database rather than silently recording nothing.
+    const opened = await openAccessPeriod(admin, {
+      workspaceId, planCode: plan.plan_code, status: basis,
+      startsAt, endsAt, source: "provisioning",
     });
-    if (error) return fail("create_entitlement", "ENTITLEMENT_CREATE_FAILED", error.message);
+    if (!opened.ok) return fail("create_entitlement", "ENTITLEMENT_CREATE_FAILED", opened.message);
     await audit(admin, {
       workspaceId, actorId: req.target_user_id, eventType: "practice.entitlement_created",
       // §14: the effective start and end are audit facts for "Practice provisioned", and `chosen` records
