@@ -5,6 +5,7 @@ import {
   validateIndividual, payloadHash, runProvisioning, platformFlag, type IndividualRequest,
 } from "@/lib/practice/provisioning";
 import { audit } from "@/lib/practice/audit";
+import { validateAccessPeriod } from "@/lib/practice/entitlement-period";
 
 // POST /api/v1/practice/provisioning/individual (CPR-PROV-001 s10/s11, CPR-IAM-001 s8).
 //
@@ -37,6 +38,16 @@ export async function POST(req: NextRequest) {
   if (invalid) return err(400, "VALIDATION_ERROR", invalid, correlationId);
   const payload = body as IndividualRequest;
 
+  // ── CPR-PD-PROV-001 §4 step 2 / AC-04 ────────────────────────────────────────────────────────────
+  //
+  // ⚠ THE CHOSEN ACCESS PERIOD IS STRIPPED FIRST AND ONLY GIVEN BACK ON THE GATED PATH BELOW. Left on
+  // the payload unconditionally, this field would let ANY authenticated user on the open self-serve
+  // route post themselves a ten-year `active` period -- the launch flags decide who may create a
+  // practice, and nothing else would have decided how long they get to keep it. It is reinstated after
+  // the capability gate, which is the only place a caller has been shown to be a Product Director.
+  const requestedAccess = payload.access ?? null;
+  delete payload.access;
+
   // Eligibility under the launch flags.
   const targetUserId = body.targetUserId && body.targetUserId !== c.userId ? body.targetUserId : c.userId;
   if (targetUserId !== c.userId) {
@@ -54,6 +65,25 @@ export async function POST(req: NextRequest) {
   if (isHqRefusal(gate)) return gate;
     if (!(await platformFlag(c.admin, "practice_pilot_provisioning")))
       return err(403, "ACCESS_DENIED", "pilot provisioning is disabled", correlationId);
+
+    // Past the capability gate: this caller may determine the period, which was the owner's decision.
+    if (requestedAccess) {
+      // ⚠ REFUSED BEFORE ANYTHING IS WRITTEN. §15: a failure must not "leave an apparently complete
+      // usable Practice". runProvisioning re-checks this as the server-authoritative backstop, but by
+      // then a workspace, two memberships and a configuration exist -- so an unusable interval is caught
+      // here, where the cost of being wrong is a 422 and nothing else.
+      const refusal = validateAccessPeriod({
+        status: String(requestedAccess.basis), startsAt: String(requestedAccess.startsAt),
+        endsAt: requestedAccess.endsAt === null ? null : String(requestedAccess.endsAt),
+      });
+      if (refusal) return err(refusal.status, refusal.code, refusal.message, correlationId);
+      payload.access = {
+        planCode: String(requestedAccess.planCode),
+        basis: requestedAccess.basis,
+        startsAt: String(requestedAccess.startsAt),
+        endsAt: requestedAccess.endsAt === null ? null : String(requestedAccess.endsAt),
+      };
+    }
   } else {
     const selfAllowed = (await platformFlag(c.admin, "practice_public_signup"))
       || (isSuper(c) && (await platformFlag(c.admin, "practice_pilot_provisioning")));

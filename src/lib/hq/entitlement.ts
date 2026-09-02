@@ -1,4 +1,5 @@
 import { audit } from "@/lib/practice/audit";
+import { validateAccessPeriod } from "@/lib/practice/entitlement-period";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -204,30 +205,20 @@ export async function grantAccessPeriod(admin: any, args: {
   reason: string;
   correlationId: string;
 }): Promise<AccessChange> {
-  if (args.status !== "active" && args.status !== "trial")
-    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a granted period must be active or trial" };
+  // ⚠ THE §5 INTERVAL RULES LIVE IN src/lib/practice/entitlement-period.ts AND ARE NOT REPEATED HERE.
+  // The provisioning wizard creates a practice's FIRST period and has to apply exactly these rules; two
+  // copies would drift into the wizard being quietly more permissive than this card. §19: "not as a
+  // parallel expiry system."
+  const refusal = validateAccessPeriod({ status: args.status, startsAt: args.startsAt, endsAt: args.endsAt });
+  if (refusal) return { ok: false, status: refusal.status, code: refusal.code, message: refusal.message };
 
+  // ⚠ THE REASON IS *NOT* IN THE SHARED RULES, AND THAT IS DELIBERATE. It is a governance requirement of
+  // a MANUAL OVERRIDE on a practice somebody is already using (§9, §14) -- not a property of a period.
+  // Provisioning a new practice carries its own authorisation and its own audit event; demanding a
+  // written justification for giving a brand-new practice its first trial would be a ritual, not a control.
   const reason = (args.reason ?? "").trim();
   if (reason.length < 8)
     return { ok: false, status: 400, code: "REASON_REQUIRED", message: "a reason is required (at least 8 characters). It is recorded with the before and after." };
-
-  const startMs = Date.parse(args.startsAt);
-  if (Number.isNaN(startMs))
-    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "the start must be an instant" };
-
-  if (args.endsAt !== null) {
-    const endMs = Date.parse(args.endsAt);
-    if (Number.isNaN(endMs))
-      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "the end must be an instant, or null for open-ended access" };
-    // §5: "Reject end <= start and other invalid intervals server-side."
-    if (endMs <= startMs)
-      return { ok: false, status: 422, code: "INVALID_INTERVAL", message: "the end must be after the start" };
-    // ⚠ AND A WINDOW THAT HAS ALREADY CLOSED IS REFUSED. Granting a period that ended in the past is
-    // indistinguishable from expiring one, and a Director who meant to extend would get a "saved" and a
-    // practice still locked out.
-    if (endMs <= Date.now())
-      return { ok: false, status: 422, code: "END_IN_THE_PAST", message: "that end has already passed, so it would not restore access. Choose a later one, or end access if that is what you mean." };
-  }
 
   const { data: rows, error: readErr } = await admin.from("practice_entitlement")
     .select("id, workspace_id, product_code, plan_code, status, starts_at, ends_at")

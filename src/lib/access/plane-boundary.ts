@@ -319,9 +319,17 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
   },
   {
     table: "practice_plans",
-    columns: [],
+    columns: ["plan_code", "name", "trial_days", "active"],
     count: true,
-    why: "row count only, for the seed gate. `practice_plans` carries no money (§3.3).",
+    why:
+      "⚠ WIDENED 2026-09-02 FROM row-count-only, for CPR-PD-PROV-001 §4 step 2. The provisioning " +
+      "wizard makes a Product Director choose the access basis a new practice is created on, and §3 " +
+      "requires that the codes and names come from canonical commercial configuration rather than " +
+      "being written into the component -- which is not possible from a plane that may only count the " +
+      "rows. THE REASON THIS IS A SMALL DECISION: `practice_plans` is a CATALOGUE, not tenant data. It " +
+      "has one row per plan the whole product offers, names no practice, no person and no workspace, " +
+      "and carries no money -- amount_minor and currency exist on it but are NOT taken here, so the " +
+      "'carries no money' claim the previous entry made stays true of what this plane can read.",
   },
   {
     table: "practice_onboarding_step_catalog",

@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { LEGAL_VERSIONS } from "@/lib/practice/catalogs";
 import {
-  Stepper, StepFindAccount, StepVerify, StepConfigure, StepReview, StepResult,
+  Stepper, StepFindAccount, StepVerify, StepConfigure, StepAccess, StepDefaults, StepReview, StepResult,
+  resolveAccessPeriod, type ProvAccess,
 } from "./_provisioning-steps";
 
 // The operator console. Four panels: the gate ledger, the launch ladder, pilot provisioning, and the
@@ -41,8 +42,18 @@ const STATE_MARK: Record<string, string> = { pass: "✓", fail: "✗", pending: 
 
 const newKey = () => `ops-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
 
-export default function PracticeOpsConsole({ callerId, callerName, initial, canRetry, canProvision, canManageFlags }: {
+export default function PracticeOpsConsole({ callerId, callerName, initial, plans, baseline, canRetry, canProvision, canManageFlags }: {
   callerId: string; callerName: string; initial: any;
+  /**
+   * CPR-PD-PROV-001 §3: the ACTIVE plans, read from `practice_plans` on the server.
+   *
+   * ⚠ NOT A CONSTANT IN THIS FILE. §3: "Do not hard-code commercial plans in the provisioning
+   * component." An empty array is a real answer -- the Access step refuses to invent a plan code and
+   * says the catalogue could not be read, rather than defaulting to one that may have been withdrawn.
+   */
+  plans: { planCode: string; name: string; trialDays: number | null }[];
+  /** CPR-PD-PROV-001 §4 step 3: the canonical template, read from CP_STANDARD_V1 on the server. */
+  baseline: { version: string; areas: { key: string; value: string; enforcement: string; where: string }[] };
   /**
    * Whether this caller holds hq.practice.provision.execute, resolved on the SERVER.
    *
@@ -77,6 +88,24 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
     professionCode: "medical_doctor", defaultPracticeType: "clinic", locale: "en-UG",
   });
 
+  // CPR-PD-PROV-001 §4 step 2. The plan defaults to the first ACTIVE plan the catalogue returned and the
+  // duration to that plan's own trial length -- a starting point the Director changes, not a decision
+  // this component makes on their behalf.
+  const [access, setAccess] = useState<ProvAccess>({
+    planCode: plans[0]?.planCode ?? "",
+    basis: "trial",
+    startMode: "now",
+    startDate: "",
+    endMode: "days",
+    days: plans[0]?.trialDays ?? 30,
+    endDate: "",
+  });
+
+  // ⚠ RESOLVED ONCE, HERE, and handed to both the step that shows it and the request that posts it. The
+  // alternative -- each of the three computing its own end date -- is how a screen promises one date and
+  // stores another.
+  const period = resolveAccessPeriod(access);
+
   const reload = () => window.location.reload();
 
   async function search() {
@@ -95,6 +124,12 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
       body: JSON.stringify({
         ...form, targetUserId: target.id,
         termsVersion: LEGAL_VERSIONS.terms, privacyNoticeVersion: LEGAL_VERSIONS.privacy, source: "pilot",
+        // §4 step 2 / AC-04. The route refuses this field unless the caller has passed the capability
+        // gate, and re-validates the interval before anything is written.
+        access: {
+          planCode: access.planCode, basis: access.basis,
+          startsAt: period.startsAt, endsAt: period.endsAt,
+        },
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -113,7 +148,7 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
       workspaceId: data.workspaceId, status: data.status,
       created: !!data.created, nextUrl: data.nextUrl,
     });
-    setStep(5);
+    setStep(7);
     setIdempotencyKey(newKey());
     setBusy(false);
   }
@@ -298,8 +333,9 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
       </div>
 
       {/* ── CPR-PD-014 §7.2 C — guided provisioning ──────────────────────────────────────────── */}
-      <section className="rounded-xl border border-gray-200 bg-white p-4">
-        <h2 className="text-[13px] font-bold text-gray-900">Provision a pilot workspace</h2>
+      {/* The anchor the PD register's "Provision a practice" button lands on -- AC-01's route in. */}
+      <section id="provisioning" className="scroll-mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        <h2 className="text-[13px] font-bold text-gray-900">Provision a practice</h2>
         <p className="mt-0.5 text-[11px] text-gray-500">
           PROV-001 §4 platform-assisted pilot. One individual Practice per person, enforced by the
           engine: a duplicate-safe request returns the first workspace rather than creating a second.
@@ -329,32 +365,44 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
         )}
         {step === 2 && target && <StepVerify target={target} />}
         {step === 3 && <StepConfigure form={form} setForm={setForm} />}
-        {step === 4 && target && <StepReview target={target} form={form} idempotencyKey={idempotencyKey} />}
-        {step === 5 && result && <StepResult result={result} />}
+        {/* CPR-PD-PROV-001 §4 step 2 — the access period, before the review that quotes it. */}
+        {step === 4 && <StepAccess access={access} setAccess={setAccess} plans={plans} timezone={form.timezone} />}
+        {step === 5 && <StepDefaults baseline={baseline} />}
+        {step === 6 && target && (
+          <StepReview target={target} form={form} access={access} plans={plans} idempotencyKey={idempotencyKey} />
+        )}
+        {step === 7 && result && <StepResult result={result} />}
 
         {/* Navigation. Each step names what it needs before it will advance, rather than disabling a
             button with no explanation. */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {step > 1 && step < 5 && (
+          {step > 1 && step < 7 && (
             <button type="button" onClick={() => setStep(s => s - 1)} disabled={busy}
               className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
               Back
             </button>
           )}
-          {step < 4 && (
-            <button type="button" disabled={busy || (step === 1 && !target) || (step === 3 && !form.displayName.trim())}
+          {step < 6 && (
+            <button type="button"
+              disabled={busy || (step === 1 && !target) || (step === 3 && !form.displayName.trim())
+                || (step === 4 && (period.problem !== null || plans.length === 0))}
               onClick={() => setStep(s => s + 1)}
               className="rounded-lg bg-teal-700 px-3 py-2 text-[12px] font-semibold text-white hover:bg-teal-800 disabled:opacity-50">
               Continue
             </button>
           )}
-          {step === 4 && (
-            <button type="button" disabled={busy || !target || !form.displayName.trim()} onClick={provision}
+          {step === 6 && (
+            // §6: "This is an explicit write action and must not occur merely by navigating away from
+            // the review screen." So the only control that writes lives on the review step, and every
+            // other button on this wizard moves between steps.
+            <button type="button"
+              disabled={busy || !target || !form.displayName.trim() || period.problem !== null}
+              onClick={provision}
               className="rounded-lg bg-teal-700 px-3 py-2 text-[12px] font-semibold text-white hover:bg-teal-800 disabled:opacity-50">
-              {busy ? "Provisioning…" : "Provision"}
+              {busy ? "Provisioning…" : "Provision practice"}
             </button>
           )}
-          {step === 5 && (
+          {step === 7 && (
             <>
               <button type="button" onClick={reload}
                 className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
@@ -369,6 +417,7 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
           )}
           {step === 1 && !target && <span className="text-[11px] text-gray-500">Choose who the workspace is for.</span>}
           {step === 3 && !form.displayName.trim() && <span className="text-[11px] text-gray-500">A practice name is required.</span>}
+          {step === 4 && period.problem && <span className="text-[11px] text-gray-500">{period.problem}</span>}
         </div>
         </>)}
       </section>

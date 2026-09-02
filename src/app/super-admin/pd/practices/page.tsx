@@ -209,6 +209,23 @@ export default async function Page(
           The authoritative landlord-side register of every Competen Practice workspace, and the way into
           Practice 360. It is not an EMR, not a patient search and not a door into anybody&apos;s tenant.
         </p>
+        {/* ── CPR-PD-PROV-001 AC-01: "provision a Practice from the PD workspace" ───────────────────
+            ⚠ A LINK, NOT A SECOND WIZARD. The guided provisioning flow already exists at Practice
+            Operations -- Find account, Verify eligibility, Configure, Access, Defaults, Review,
+            Provision -- gated on hq.practice.provision.execute, which is exactly the capability §13
+            requires and one a Product Director holds. §19 says to build this "as an extension of the
+            existing Product Director provisioning substrate, not as a parallel system", and a second
+            provisioning form on this page would have been that parallel system: two flows creating
+            workspaces, drifting the first time one gained a field. What was missing was not a wizard.
+            It was a way to reach the one that exists from the register a Director actually works in. */}
+        <Link href="/super-admin/platform-ops/practice#provisioning"
+          className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-[var(--cmp-color-primary)] px-3 py-2 text-[12.5px] font-semibold text-white hover:opacity-90">
+          Provision a practice
+          <span aria-hidden>&rarr;</span>
+        </Link>
+        <span className="ml-2 text-[11.5px] text-gray-500">
+          Opens the guided flow in Practice Operations, where the access period is chosen.
+        </span>
         <p className="mt-1.5 text-[12px] text-gray-600">
           {estate.estateTotal === null
             ? <span className="text-[var(--cmp-text-warning)]">The estate count could not be read, so no total is shown. This is not zero.</span>

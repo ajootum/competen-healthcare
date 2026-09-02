@@ -6,6 +6,7 @@ import PracticeOpsConsole from "./PracticeOpsConsole";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadServiceHealth } from "@/lib/hq/pd-service-health";
 import { loadFlagChangeHistory } from "@/lib/hq/pd-control-plane";
+import { provisionWizardOptions } from "@/lib/hq/pd-provisioning";
 
 // Practice Operations (CPR-IAM-001 s14 cutover, s14.1 launch ladder; CPR-PROV-001 s4 pilot pathway).
 //
@@ -61,6 +62,7 @@ export default async function PracticeOperations() {
   const canProvision = canRetry;
   const canManageFlags = hq.isOwner || hq.capabilities.includes("hq.practice.flags.manage");
 
+  const wizard = await provisionWizardOptions(admin);
   const ops = await loadPracticeOps(admin);
   const gate = await evaluateGate(admin, ops);
   const serviceHealth = await loadServiceHealth(admin);
@@ -218,8 +220,17 @@ export default async function PracticeOperations() {
         canRetry={canRetry}
         canProvision={canProvision}
         canManageFlags={canManageFlags}
+        // CPR-PD-PROV-001 §3/§4 step 2: the canonical plan catalogue, read here rather than listed in
+        // the client component.
+        plans={wizard.plans}
+        baseline={wizard.baseline}
         initial={JSON.parse(JSON.stringify({ ...ops, gate }))}
       />
+      {wizard.problems.length > 0 && (
+        <p className="text-[11.5px] text-[var(--cmp-text-warning)]">
+          {wizard.problems.join(" ")} The access step cannot offer what it could not read.
+        </p>
+      )}
     </div>
   );
 }

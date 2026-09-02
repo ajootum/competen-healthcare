@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { audit } from "./audit";
 import { seedTaxonomy } from "./taxonomy";
 import { seedBaselineDefaults } from "./baseline";
+import { validateAccessPeriod, type AccessBasis } from "./entitlement-period";
 
 // Competen Practice provisioning orchestrator (CPR-PROV-001 sections 3-8, 11-13).
 //
@@ -54,6 +55,21 @@ export const PROVISIONING_STEPS = [
 ] as const;
 export type StepCode = (typeof PROVISIONING_STEPS)[number];
 
+/**
+ * CPR-PD-PROV-001 §4 step 2 -- the access period a Product Director chose for this practice.
+ *
+ * ⚠ OPTIONAL, AND ITS ABSENCE IS THE SELF-SERVE PATH. Somebody signing themselves up does not choose
+ * their own trial length; they get the one `practice_plans` defines. Making this required would have
+ * meant the public signup route inventing a duration, which is the same as hard-coding one.
+ */
+export type AccessSelection = {
+  planCode: string;
+  basis: AccessBasis;
+  startsAt: string;
+  /** null = open-ended, and §5 permits that only as an explicit choice. */
+  endsAt: string | null;
+};
+
 export type IndividualRequest = {
   displayName: string;
   countryCode: string;
@@ -65,6 +81,7 @@ export type IndividualRequest = {
   termsVersion: string;
   privacyNoticeVersion: string;
   source: "public_signup" | "invitation" | "pilot" | "admin" | "migration";
+  access?: AccessSelection;
 };
 
 export type ProvisionResult = {
@@ -73,12 +90,22 @@ export type ProvisionResult = {
   body: Record<string, unknown>;
 };
 
-/** Stable hash so a replayed idempotency key can be checked for payload equality (PROV-001 s8). */
+/**
+ * Stable hash so a replayed idempotency key can be checked for payload equality (PROV-001 s8).
+ *
+ * ⚠ THE ACCESS PERIOD IS PART OF THE PAYLOAD, AND LEAVING IT OUT WOULD HAVE BEEN A SILENT ONE. Two
+ * requests differing only in the chosen end date would have hashed identically -- so a Director who
+ * corrected 30 days to 90 and resubmitted would be handed the ORIGINAL result as a replay, told it
+ * succeeded, and given the practice the duration they had just changed away from.
+ */
 export const payloadHash = (p: IndividualRequest) =>
   createHash("sha256").update(JSON.stringify({
     displayName: p.displayName, countryCode: p.countryCode, timezone: p.timezone,
     professionCode: p.professionCode, primarySpecialtyCode: p.primarySpecialtyCode ?? null,
     defaultPracticeType: p.defaultPracticeType, locale: p.locale, source: p.source,
+    access: p.access
+      ? { planCode: p.access.planCode, basis: p.access.basis, startsAt: p.access.startsAt, endsAt: p.access.endsAt }
+      : null,
   })).digest("hex");
 
 const REQUIRED: (keyof IndividualRequest)[] = [
@@ -368,14 +395,49 @@ export async function runProvisioning(admin: any, req: {
   await markStep(admin, req.id, "create_entitlement", "running");
   const { data: ent } = await admin.from("practice_entitlement").select("id").eq("workspace_id", workspaceId).in("status", ["active", "trial"]).maybeSingle();
   if (!ent) {
-    const { data: plan } = await admin.from("practice_plans").select("plan_code,trial_days").eq("plan_code", "practice_trial").eq("active", true).maybeSingle();
-    if (!plan) return fail("create_entitlement", "ENTITLEMENT_UNAVAILABLE");
-    const ends = plan.trial_days ? new Date(Date.now() + plan.trial_days * 86400000).toISOString() : null;
+    // ── CPR-PD-PROV-001 §4 step 2 / AC-04: the period the Director chose, where they chose one ───────
+    //
+    // ⚠ THE CHOSEN PERIOD IS RE-VALIDATED HERE EVEN THOUGH THE ROUTE ALREADY REFUSED A BAD ONE. §5 says
+    // the interval is rejected SERVER-SIDE, and this function is the server: it is also reachable from
+    // the resume endpoint replaying a stored payload, and a payload stored months ago can carry an end
+    // date that was in the future when it was written and is not now. The route's check is there to fail
+    // before anything is created; this one is there because it is the last place that can refuse.
+    //
+    // ⚠ AND IT USES THE SHARED RULES, not a second copy -- see entitlement-period.ts's header.
+    const chosen = payload.access ?? null;
+    if (chosen) {
+      const refusal = validateAccessPeriod({ status: chosen.basis, startsAt: chosen.startsAt, endsAt: chosen.endsAt });
+      if (refusal) return fail("create_entitlement", "ENTITLEMENT_PERIOD_INVALID", refusal.message);
+    }
+
+    // §3: "Plan codes and names must come from canonical commercial configuration. Do not hard-code
+    // commercial plans in the provisioning component." The chosen code is looked up rather than trusted,
+    // so a plan that has been deactivated since the wizard rendered cannot be assigned.
+    const wantedPlan = chosen?.planCode ?? "practice_trial";
+    const { data: plan } = await admin.from("practice_plans")
+      .select("plan_code,trial_days").eq("plan_code", wantedPlan).eq("active", true).maybeSingle();
+    if (!plan) return fail("create_entitlement", "ENTITLEMENT_UNAVAILABLE",
+      `${wantedPlan} is not an active plan`);
+
+    // Without a chosen period this is unchanged: the trial the plan itself defines, starting now.
+    const startsAt = chosen?.startsAt ?? new Date().toISOString();
+    const endsAt = chosen
+      ? chosen.endsAt
+      : (plan.trial_days ? new Date(Date.now() + plan.trial_days * 86400000).toISOString() : null);
+    const basis = chosen?.basis ?? "trial";
+
     const { error } = await admin.from("practice_entitlement").insert({
-      workspace_id: workspaceId, product_code: "practice", plan_code: plan.plan_code, status: "trial", ends_at: ends,
+      workspace_id: workspaceId, product_code: "practice", plan_code: plan.plan_code,
+      status: basis, starts_at: startsAt, ends_at: endsAt,
     });
-    if (error) return fail("create_entitlement", "ENTITLEMENT_CREATE_FAILED");
-    await audit(admin, { workspaceId, actorId: req.target_user_id, eventType: "practice.entitlement_created", payload: { planCode: plan.plan_code, status: "trial" }, correlationId: req.correlation_id });
+    if (error) return fail("create_entitlement", "ENTITLEMENT_CREATE_FAILED", error.message);
+    await audit(admin, {
+      workspaceId, actorId: req.target_user_id, eventType: "practice.entitlement_created",
+      // §14: the effective start and end are audit facts for "Practice provisioned", and `chosen` records
+      // whether a person picked this window or the plan's own default supplied it.
+      payload: { planCode: plan.plan_code, status: basis, startsAt, endsAt, chosen: !!chosen },
+      correlationId: req.correlation_id,
+    });
   }
   await markStep(admin, req.id, "create_entitlement", "succeeded");
 
