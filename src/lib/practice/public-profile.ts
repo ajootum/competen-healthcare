@@ -240,7 +240,13 @@ export async function profileAvailability(admin: any, args: {
  * handle behind it: a database that would not answer is not a practitioner who does not exist.
  */
 export async function publicBookingProfile(admin: any, rawHandle: string): Promise<
-  | { kind: "found"; profile: PublicBookingProfile }
+  /**
+   * ⚠  SITS BESIDE THE PROFILE, NEVER INSIDE IT. The public projection is allowlisted and
+   * a harness asserts its key set exactly; an internal id in there would be the leak this whole module
+   * exists to prevent. But a SERVER-side caller legitimately needs one -- s19 counts a page view against
+   * a practice -- so it travels one level up, where nothing serialises it to a browser.
+   */
+  | { kind: "found"; profile: PublicBookingProfile; workspaceId: string | null }
   | { kind: "redirect"; to: string }
   | { kind: "none" }
   | { kind: "unreadable"; reason: string }
@@ -266,6 +272,7 @@ export async function publicBookingProfile(admin: any, rawHandle: string): Promi
 
   return {
     kind: "found",
+    workspaceId: entry.workspaceId,
     profile: {
       handle: p.handle,
       displayName: p.displayName,

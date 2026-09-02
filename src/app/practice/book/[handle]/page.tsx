@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import { headers } from "next/headers";
+import { recordFunnelStep, deviceClass } from "@/lib/practice/booking-funnel";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -98,6 +100,15 @@ export default async function PractitionerPage({ params }: {
   if (resolved.kind === "none") notFound();
 
   const p = resolved.profile;
+
+  // s19: the top of the funnel. Recorded on the SERVER RENDER, so there is no beacon and no public
+  // write endpoint -- and counted as a page view rather than a person, which is what the read surface
+  // says it is. A refresh counts twice and a crawler counts once; see booking-funnel.ts.
+  await recordFunnelStep(createAdminClient(), {
+    workspaceId: resolved.workspaceId,
+    step: "profile_viewed",
+    device: deviceClass((await headers()).get("user-agent")),
+  });
 
   return (
     <div className="min-h-screen bg-[var(--cp-canvas,#f8fafc)]">

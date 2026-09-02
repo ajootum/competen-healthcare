@@ -88,6 +88,11 @@ export default function BookingWizard(props: {
   safetyNote: string | null;
 }) {
   const [step, setStep] = useState(1);
+  // s19 asks for time-to-complete. Without a journey id the SERVER cannot know when this patient
+  // started, so the client reports the elapsed seconds on the final step -- a duration, never an
+  // identifier. It is read once at mount and never sent for an abandoned journey, because there is no
+  // final step to attach it to.
+  const [startedAt] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -812,7 +817,7 @@ export default function BookingWizard(props: {
                   <div className="mt-2 flex flex-wrap items-center gap-3 text-[11.5px]">
                     <button type="button" disabled={busy}
                       onClick={async () => {
-                        const r = await call({ action: "request_code", channel, destination });
+                        const r = await call({ action: "request_code", channel, destination, resend: true });
                         if (r?.challengeId) { setChallengeId(String(r.challengeId)); setCode(""); }
                       }}
                       className="font-semibold text-[var(--cp-primary)] hover:underline disabled:opacity-50">
@@ -843,6 +848,7 @@ export default function BookingWizard(props: {
                           action: "book", token: t, ...intakePayload(),
                           scheduledAt: chosen?.startsAt, appointmentType, locationId: locationId || null,
                           durationMinutes: chosen?.minutes ?? null,
+                          elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
                         });
                         if (r) { setDone(r); setDoneKind("booked"); }
                       }}>

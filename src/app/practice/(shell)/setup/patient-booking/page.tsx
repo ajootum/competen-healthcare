@@ -16,6 +16,8 @@ import { publicFailureAction } from "@/lib/practice/public-failure-constants";
 import RuleWorkspace from "../availability-booking/RuleWorkspace";
 import SetupWizard from "./SetupWizard";
 import ProfilePreview from "./ProfilePreview";
+import FunnelCard from "./FunnelCard";
+import { bookingFunnel } from "@/lib/practice/booking-funnel";
 import { computeSetupWizard } from "./wizard";
 import PublishWorkspace from "../availability-booking/PublishWorkspace";
 import BookingLinkCard from "../../home/BookingLinkCard";
@@ -63,11 +65,13 @@ export default async function PatientBookingPage({ searchParams }: {
     redirect("/practice/setup");
 
   const admin = createAdminClient();
-  const [r, readiness, bookingLink, practiceChannels] = await Promise.all([
+  const [r, readiness, bookingLink, practiceChannels, funnel] = await Promise.all([
     bookingRulesWorkspace(admin, ctx),
     publishReadiness(admin, ctx),
     bookingLinkSummary(admin, ctx.userId),
     channelSettings(admin, ctx.workspaceId),
+    // s19: the funnel for the Overview tab. Read here with the rest, so the tab does not fan out.
+    bookingFunnel(admin, { workspaceId: ctx.workspaceId, days: 30 }),
   ]);
   const channels = messagingStatus();
   const emailUsable = practiceChannels.find(c => c.kind === "email")?.usable === true;
@@ -197,6 +201,7 @@ export default async function PatientBookingPage({ searchParams }: {
         {active === "overview" && (
           <>
             <BookingLinkCard summary={bookingLink} />
+            <FunnelCard funnel={funnel} />
             <div className="grid gap-4 md:grid-cols-2">
               <section className={card}>
                 <h2 className="text-[13px] font-bold text-gray-900">Where this stands</h2>

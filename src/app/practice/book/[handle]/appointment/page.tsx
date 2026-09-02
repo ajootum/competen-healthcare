@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { recordFunnelStep, deviceClass } from "@/lib/practice/booking-funnel";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -123,6 +125,13 @@ export default async function BookAppointmentPage({ params }: {
       </Shell>
     );
   }
+
+  // s19: the wizard rendering IS the booking start. Same server-render discipline as the profile.
+  await recordFunnelStep(admin, {
+    workspaceId: entry.workspaceId,
+    step: "booking_started",
+    device: deviceClass((await headers()).get("user-agent")),
+  });
 
   return (
     <Shell handle={p.handle} name={entry.displayName ?? p.displayName}>

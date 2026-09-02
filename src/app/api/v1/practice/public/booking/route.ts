@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  recordFunnelStepByHandle, deviceClass, type FunnelStep,
+} from "@/lib/practice/booking-funnel";
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import {
@@ -82,6 +85,23 @@ const intakeOf = (b: Record<string, any>): BookingIntake => ({
 });
 
 /**
+ * CPR-BOOK-FLOW-002 s19: record one rung of the funnel.
+ *
+ * ⚠ EVERY CALL SITE IS A REQUEST THE WIZARD ALREADY MAKES. Nothing here is a beacon, and no endpoint
+ * exists whose purpose is to accept analytics -- which would be an unauthenticated write surface on a
+ * public page, needing its own rate limiting and its own abuse story, for a metric.
+ *
+ * ⚠ AND IT CANNOT COST A BOOKING. recordFunnelStepByHandle swallows everything; this wrapper adds the
+ * device class and nothing else. If it ever needs a branch on failure, the branch is the bug.
+ */
+async function countStep(handle: string, step: FunnelStep, measure?: number | null): Promise<void> {
+  const ua = (await headers()).get("user-agent");
+  await recordFunnelStepByHandle(createAdminClient(), {
+    handle, step, device: deviceClass(ua), measure: measure ?? null,
+  });
+}
+
+/**
  * The times this practice can offer.
  *
  * ⚠ NO CACHING, AND `force-dynamic` IS NOT ENOUGH ON ITS OWN TO MAKE THAT OBVIOUS. A cached slot list is
@@ -112,6 +132,9 @@ export async function GET(req: NextRequest) {
       scheduledAt: q.get("scheduledAt") ?? new Date().toISOString(),
       locationId: q.get("locationId") || null,
     });
+    // s19: reaching the questions IS entering "Your details". Recorded from the call the wizard
+    // already makes, so no beacon and no new public endpoint exist to be abused.
+    if (r.ok) await countStep(handle, "details_started");
     return r.ok
       ? NextResponse.json(r.data, { headers: { "cache-control": "no-store" } })
       : err(r.status, r.code, r.message);
@@ -126,6 +149,7 @@ export async function GET(req: NextRequest) {
     locationId: q.get("locationId") || null,
     fromIso, toIso,
   });
+  if (r.ok) await countStep(handle, "availability_viewed");
   // ⚠ A FAILED READ IS A 503 WITH ITS OWN SENTENCE, NEVER AN EMPTY LIST. "No times are available" and
   // "the diary could not be read" are different things to tell somebody, and the first sends a patient
   // to another practice.
@@ -152,6 +176,9 @@ export async function POST(req: NextRequest) {
       handle, channel, destination: String(body.destination ?? ""),
       sourceKey, correlationId,
     });
+    // A resend is a different fact from a first request -- s19 asks for the resend rate by name -- and
+    // only the wizard knows which this is, because the engine issues both the same way.
+    if (r.ok) await countStep(handle, body.resend === true ? "verification_resent" : "verification_started");
     // ⚠ THE CODE IS NOT IN THIS RESPONSE AND THERE IS NO BRANCH THAT PUTS IT THERE. The engine returns a
     // challenge id, an expiry and whether the source limit ran, and nothing else exists to return.
     return r.ok ? NextResponse.json(r.data) : err(r.status, r.code, r.message);
@@ -161,6 +188,10 @@ export async function POST(req: NextRequest) {
     const r = await confirmBookingCode(admin, {
       challengeId: String(body.challengeId ?? ""), code: String(body.code ?? ""),
     });
+    // ⚠ THE FAILURE IS COUNTED AND THE CODE IS NOT TOUCHED. What is recorded is that a verification did
+    // not pass -- never the code, never the destination, never which of the refusals it was, because
+    // issueOtp deliberately gives one answer for every wrong-code case and a counter must not undo that.
+    if (!r.ok) await countStep(handle, "verification_failed");
     return r.ok ? NextResponse.json(r.data) : err(r.status, r.code, r.message);
   }
 
@@ -173,6 +204,17 @@ export async function POST(req: NextRequest) {
       durationMinutes: body.durationMinutes === undefined ? null : Number(body.durationMinutes),
       sourceKey, correlationId,
     });
+    if (r.ok) {
+      // The elapsed figure is the CLIENT's, because without a journey id the server cannot know when
+      // this patient started. It is a duration and nothing else -- see migration 366 on the measure
+      // column, which is bounded so a caller cannot store an epoch here and call it an elapsed time.
+      const seconds = Number(body.elapsedSeconds);
+      await countStep(handle, "booking_confirmed", Number.isFinite(seconds) ? seconds : null);
+    } else if (r.code === "SLOT_TAKEN") {
+      // s19 asks for this rate by name, and s6.1 is the decision it informs: whether a slot hold is
+      // ever worth building depends on how often somebody actually loses a time at the last moment.
+      await countStep(handle, "slot_taken_at_commit");
+    }
     return r.ok ? NextResponse.json(r.data) : err(r.status, r.code, r.message);
   }
 
@@ -189,6 +231,7 @@ export async function POST(req: NextRequest) {
       sourceKey: sourceKey ?? "",
       correlationId,
     });
+    if (r.ok) await countStep(handle, "request_submitted");
     return r.ok ? NextResponse.json(r.data) : err(r.status, r.code, r.message);
   }
 

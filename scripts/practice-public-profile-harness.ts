@@ -24,6 +24,7 @@ import {
 } from "../src/lib/practice/public-profile";
 import { publicBookingEntry } from "../src/lib/practice/patient-booking";
 import { buildIcs, directionsUrl } from "../src/lib/practice/calendar-invite";
+import { bookingFunnel, recordFunnelStep } from "../src/lib/practice/booking-funnel";
 import { purgeWorkspacesOwnedBy, cleanupOnKill } from "./_cleanup";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -424,6 +425,46 @@ async function main() {
       ics.includes("Nsambya Hill") && ics.includes("BEGIN:VEVENT")
       && !/reason|diagnos|treatment/i.test(ics),
       ics.slice(0, 80));
+  }
+
+  // ── 5q. The funnel, against the real column list (CPR-BOOK-FLOW-002 s19, migration 366) ──────
+  section("5e. the booking funnel");
+  {
+    const before = await bookingFunnel(admin, { workspaceId: ws });
+    ok("5q. a practice nothing has happened to reads `empty`, never a funnel of zeroes",
+      before.state === "empty" && before.rungs.length === 0, JSON.stringify(before.state));
+
+    await recordFunnelStep(admin, { workspaceId: ws, step: "profile_viewed", device: "mobile" });
+    await recordFunnelStep(admin, { workspaceId: ws, step: "profile_viewed", device: "desktop" });
+    await recordFunnelStep(admin, { workspaceId: ws, step: "booking_started", device: "mobile" });
+    await recordFunnelStep(admin, { workspaceId: ws, step: "booking_confirmed", device: "mobile", measure: 240 });
+
+    const after = await bookingFunnel(admin, { workspaceId: ws });
+    const rung = (step: string) => after.rungs.find(r => r.step === step);
+    ok("5r. the steps are counted, and the conversion is against the rung above",
+      after.state === "ok" && rung("profile_viewed")?.count === 2
+      && rung("booking_started")?.count === 1 && rung("booking_started")?.fromPrevious === 50,
+      JSON.stringify(after.rungs.map(r => [r.step, r.count, r.fromPrevious])));
+
+    ok("5s. the completion time and the device split come back",
+      after.medianSecondsToBook === 240
+      && after.byDevice.some(d => d.device === "mobile" && d.confirmed === 1),
+      JSON.stringify({ median: after.medianSecondsToBook, byDevice: after.byDevice }));
+
+    // ⚠ THE COLUMN THE TABLE DOES NOT HAVE. s16 forbids patient free text in analytics, and migration
+    // 366 enforces it by having nowhere to put any -- this proves the absence rather than trusting it.
+    const { error: leak } = await admin.from("practice_booking_funnel_event")
+      .insert({ workspace_id: ws, step: "profile_viewed", metadata: { reason: "chest pain" } } as any);
+    ok("5t. there is NO metadata column, so a patient's words cannot be written here at all",
+      !!leak, leak?.message?.slice(0, 90) ?? "IT ACCEPTED A METADATA COLUMN");
+
+    // And the step list is closed, so a funnel cannot acquire an unreviewed rung.
+    const { error: badStep } = await admin.from("practice_booking_funnel_event")
+      .insert({ workspace_id: ws, step: "read_the_patients_notes" });
+    ok("5u. and the step list is closed -- an unreviewed step is refused by the database",
+      !!badStep, badStep?.message?.slice(0, 90) ?? "IT ACCEPTED AN INVENTED STEP");
+
+    await admin.from("practice_booking_funnel_event").delete().eq("workspace_id", ws);
   }
 
   // ── 6. Consultation types and mode (AC-05, AC-06) ─────────────────────────

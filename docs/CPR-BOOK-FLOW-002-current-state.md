@@ -150,13 +150,46 @@ multi-byte character, no clinical content, refusal of an unreadable instant) and
 the live database (no address → no directions; address → search link; non-https refused with a sentence;
 pin beats search; the file carries the address and no clinical words).
 
+## 6c. The booking funnel (§19) — built, migration 366
+
+- **The existing telemetry could not serve it.** `practice_activation_event` carries a unique index on
+  `(workspace_id, event_key)`: it records *milestones*, one per practice, so an emitter may fire on every
+  booking and only the first lands. A funnel needs many rows per practice — same shape, opposite
+  requirement — so migration 366 adds its own table.
+- **No beacon and no analytics endpoint.** Every rung is recorded from a request the wizard already
+  makes, or from a server render. An endpoint whose purpose was to accept analytics would be an
+  unauthenticated write surface on a public page, needing its own rate limiting and its own abuse story,
+  for a metric.
+- **There is no metadata column and no journey id, and both absences are the design.** A jsonb bag is
+  exactly where somebody later puts a reason for a visit; a journey id at this scale — a practice taking
+  three bookings a day, plus a timestamp — is a patient. Conversion is computed from counts instead. A
+  patient's words *cannot* be written to this table rather than merely being forbidden, and the harness
+  proves it by trying.
+- **The cost is stated rather than hidden.** These are page counts, not people: a refresh counts twice
+  and a crawler counts once, and the card says so beside the numbers. Time-to-complete is measured only
+  on journeys that finished, and says that too. A step whose predecessor recorded nothing has a **null**
+  conversion, never 0% — "nobody got that far" and "nobody converted" are different facts.
+- **Recording can never cost a booking.** Every emitter swallows its own failures and returns nothing
+  anybody can branch on.
+- Read surface: a "Where patients stop" card on the Patient Booking Overview tab.
+
+This also answers §6.1: the slot-taken-at-commit rate is now measured, and that is the evidence that
+would justify building slot holds. At the time of writing the count is zero, because no patient has yet
+completed the public flow.
+
+Verified: 14 unit pins on the arithmetic (zero denominators, unreadable vs empty, a median rather than a
+mean, never-throws) and 5 harness checks against the live schema — two of which prove the database
+refuses a metadata column and an unreviewed step.
+
 ## 7. Not done
 
-- **§19 analytics** (step-to-step conversion, abandonment, OTP failure rate). No event surface exists on
-  the public booking path; adding one touches the activation-telemetry arc.
-- **§6.1 slot holds** — deliberately not simulated. The spec is explicit that a hold must be a canonical
-  booking-engine capability rather than UI state. Concurrency is still settled where it always was, by
-  migration 255's exclusion constraint at the moment of the write.
+- **§6.1 slot holds** — deliberately not simulated, and now deliberately not *built*. The spec is
+  explicit that a hold must be a canonical booking-engine capability rather than UI state, and a real one
+  means a `HELD` appointment status inside migration 255's exclusion constraint — a change to the frozen
+  appointment state machine — plus expiry-aware availability reads, and it introduces phantom
+  unavailability (an abandoned booking makes a real slot look taken to everyone, including the
+  practitioner's own diary). §6c now measures the rate that would justify that cost. Concurrency remains
+  settled where it always was: by the exclusion constraint at the moment of the write.
 - **A manage/reschedule screen.** The engines exist (`requestManageCode`, `managedBookings`) and no route
   serves them, which is why the confirmation offers no "View booking details" and promises no
   self-service reschedule.

@@ -1984,6 +1984,14 @@ export const PATIENT_BOOKING_SCREENS_NOTE =
   + "you normally would.";
 
 export type PublicBookingEntry = {
+  /**
+   * ⚠ SERVER-SIDE ONLY, AND IT MUST STAY THAT WAY. A server caller needs to attribute a page view to a
+   * practice (CPR-BOOK-FLOW-002 s19); a patient's browser has no business with a workspace id. This is
+   * safe today because NOTHING passes this whole object to a client component -- the pages pick fields
+   * off it one at a time. Handing  wholesale to a "use client" component would serialise this
+   * into the page source, which is the leak the public projection exists to prevent.
+   */
+  workspaceId: string | null;
   /** ⚠ THREE STATES. `closed` is "this practice takes no online booking"; `unreadable` is "nobody knows". */
   state: "open" | "closed" | "unreadable";
   /** Populated for `unreadable` only. A failed read says so instead of drawing as "not taking bookings". */
@@ -2063,6 +2071,7 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
     // A page that is not published, or could not be read, advertises no contact -- inventing one would
     // put a practice.s address in front of somebody it never agreed to hear from.
     fallbackEmail: null as string | null, fallbackPhone: null as string | null,
+    workspaceId: null as string | null,
     privacyNotice: null as string | null, emergencyNotice: null as string | null,
     locations: [] as PublicBookingEntry["locations"], appointmentTypes: [] as string[],
     referenceNote: BOOKING_REFERENCE_NOTE,
@@ -2106,6 +2115,7 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
 
   const shared = {
     ...base, state: "open" as const,
+    workspaceId: p.workspaceId,
     displayName: p.displayName, instructions: p.instructions, privacyNotice: p.privacyNotice,
     emergencyNotice: p.emergencyNotice,
     fallbackEmail: p.fallbackEmail, fallbackPhone: p.fallbackPhone,
