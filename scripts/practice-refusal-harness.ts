@@ -20,7 +20,7 @@
  *   npx tsx scripts/practice-refusal-harness.ts
  * ────────────────────────────────────────────────────────────────────────────────────────────────
  */
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import {
@@ -396,6 +396,44 @@ ok("7-control. the stripper removes comments WITHOUT emptying the file",
     return cut.length > raw.length * 0.4 && !/technicalDetail/.test(cut) && /technicalDetail/.test(raw);
   })(),
   "the comment naming technicalDetail must go; the code around it must stay");
+
+// ── 11. NO HARNESS FIXTURE BOOKS AT A DATE TYPED INTO THE FILE ──────────────────────────────────────
+//
+// ⚠ WHY THIS LIVES IN THE REFUSAL HARNESS. It is not about refusals; it is here because this is the
+// source-scanning harness that runs in CI, and a check that only runs when somebody remembers to run it
+// would not have caught the thing it exists to catch.
+//
+// ⚠ WHAT IT CAUGHT. Four harnesses booked appointments at instants like "2026-09-01T09:00:00.000Z" --
+// future when written, quietly past afterwards. CP_STANDARD_V1 seeds a starter rule with 30 minutes'
+// notice, so once the date passed the booking was refused with LEAD_TIME, the appointment row never
+// existed, and an assertion about DURATION PRECEDENCE failed reading `undefined`. The message named
+// neither the date nor the cause, and the harness rotted one assertion at a time as each instant aged
+// past -- which reads like a regression in the code under test rather than a fixture with a fuse.
+//
+// scripts/_harness-time.ts's daysAhead() is the replacement. Birth dates and effective-from dates stay
+// hardcoded: their VALUE is the point, and this pattern only matches scheduling instants.
+{
+  const HARNESS_INSTANT = /\b(scheduledAt|scheduled_at|requestedStart|requested_start)\s*:\s*["'`]\d{4}-\d{2}-\d{2}T/;
+  const scripts = readdirSync(join(process.cwd(), "scripts"))
+    .filter(f => f.endsWith(".ts"))
+    .map(f => join("scripts", f));
+  const offenders = scripts.filter(rel =>
+    HARNESS_INSTANT.test(stripComments(readFileSync(join(process.cwd(), rel), "utf8"))));
+  ok("11a. no harness books at an instant typed into the file -- they go stale and blame the code",
+    offenders.length === 0,
+    offenders.join(", "));
+  // ⚠ AND THE DETECTOR SEES A REAL ONE. A pattern that matched nothing would pass this list for ever,
+  // including on the day somebody pastes a fixed date back in.
+  // ⚠ THE CONTROL FIXTURE IS ASSEMBLED, NOT WRITTEN OUT. A literal here would make this harness its
+  // own offender -- 11a listed this file on its first run, which is the same shape as 7a matching the
+  // comment that explains 7a.
+  const offenderExample = ["scheduledAt: ", JSON.stringify("2026-09-01" + "T09:00:00.000Z"), ","].join("");
+  ok("11a-control. the detector matches a hardcoded scheduling instant",
+    HARNESS_INSTANT.test(offenderExample)
+    && !HARNESS_INSTANT.test("scheduledAt: daysAhead(3),")
+    // A birth date is not a scheduling instant and must not be caught.
+    && !HARNESS_INSTANT.test('birthDate: "1980-05-05",'));
+}
 
 console.log(`\n${fail === 0 ? "PASSED" : "FAILED"}  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

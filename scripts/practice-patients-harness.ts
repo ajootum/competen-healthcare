@@ -21,6 +21,7 @@
  *   npx --yes tsx scripts/practice-patients-harness.ts
  */
 import { loadEnvConfig } from "@next/env";
+import { daysAhead } from "./_harness-time";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
@@ -158,7 +159,7 @@ async function main() {
   // ── 4. Diary link + the Phase-1 FK promise ─────────────────────────────────
   const linked = await bookAppointment(admin, {
     workspaceId: wsA, patientId: p1.ok ? p1.data.id : undefined, patientName: "Wrong Spelling",
-    appointmentType: "scheduled_followup", scheduledAt: "2026-09-02T10:00:00.000Z", ...base,
+    appointmentType: "scheduled_followup", scheduledAt: daysAhead(4, 10), ...base,
   });
   if (linked.ok) {
     const { data: appt } = await admin.from("practice_appointment").select("patient_id, patient_name").eq("id", linked.data.id).single();
@@ -168,7 +169,7 @@ async function main() {
 
   const bogusFk = await admin.from("practice_appointment").insert({
     workspace_id: wsA, patient_id: "00000000-0000-4000-8000-00000000dead", patient_name: "Ghost",
-    appointment_type: "new_consultation", scheduled_at: "2026-09-02T11:00:00.000Z",
+    appointment_type: "new_consultation", scheduled_at: daysAhead(4, 11),
   });
   ok("a bogus patient_id is refused by the foreign key (the Phase-1 promise, proven)",
     !!bogusFk.error && /foreign key|violates/i.test(bogusFk.error.message), bogusFk.error?.message ?? "insert succeeded");

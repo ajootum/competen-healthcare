@@ -21,6 +21,7 @@
  *   npx --yes tsx scripts/practice-pilot-gate.ts
  */
 import { loadEnvConfig } from "@next/env";
+import { daysAhead } from "./_harness-time";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, platformFlag, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { registerPatient } from "../src/lib/practice/patients";
@@ -184,7 +185,7 @@ async function main() {
 
   const appt = await bookAppointment(admin, {
     workspaceId: ws, patientId: patient.data.id, patientName: "Gate Preflight Patient",
-    appointmentType: "new_consultation", scheduledAt: "2026-09-15T09:00:00.000Z", ...base,
+    appointmentType: "new_consultation", scheduledAt: daysAhead(13), ...base,
   });
   ok("an appointment books against the registry", appt.ok, appt.ok ? "" : appt.message);
   if (!appt.ok) { await cleanup(); return report(); }

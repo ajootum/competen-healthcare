@@ -27,6 +27,7 @@
  *   npx --yes tsx scripts/practice-configuration-harness.ts
  */
 import { readFileSync } from "node:fs";
+import { daysAhead } from "./_harness-time";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
@@ -186,7 +187,7 @@ async function main() {
 
   const at20 = await bookAppointment(admin, {
     workspaceId: wsA, patientId: pa.data.id, patientName: "Byaruhanga Eric",
-    appointmentType: "new_consultation", scheduledAt: "2026-09-01T09:00:00.000Z", allowOverlap: true, ...base,
+    appointmentType: "new_consultation", scheduledAt: daysAhead(3), allowOverlap: true, ...base,
   });
   const { data: booked20 } = at20.ok
     ? await admin.from("practice_appointment").select("duration_minutes").eq("id", at20.data.id).single()
@@ -221,7 +222,7 @@ async function main() {
 
   const at45 = await bookAppointment(admin, {
     workspaceId: wsA, patientId: pa.data.id, patientName: "Byaruhanga Eric",
-    appointmentType: "new_consultation", scheduledAt: "2026-09-02T09:00:00.000Z", allowOverlap: true, ...base,
+    appointmentType: "new_consultation", scheduledAt: daysAhead(4), allowOverlap: true, ...base,
   });
   const { data: booked45 } = at45.ok
     ? await admin.from("practice_appointment").select("duration_minutes").eq("id", at45.data.id).single()
@@ -245,7 +246,7 @@ async function main() {
   }
   const atDefault = await bookAppointment(admin, {
     workspaceId: wsA, patientId: pa.data.id, patientName: "Byaruhanga Eric",
-    appointmentType: "new_consultation", scheduledAt: "2026-09-04T09:00:00.000Z", allowOverlap: true, ...base,
+    appointmentType: "new_consultation", scheduledAt: daysAhead(6), allowOverlap: true, ...base,
   });
   const { data: bookedDefault } = atDefault.ok
     ? await admin.from("practice_appointment").select("duration_minutes").eq("id", atDefault.data.id).single()
@@ -275,7 +276,7 @@ async function main() {
     await (async () => {
       const explicit = await bookAppointment(admin, {
         workspaceId: wsA, patientId: pa.data.id, patientName: "Byaruhanga Eric", durationMinutes: 10,
-        appointmentType: "new_consultation", scheduledAt: "2026-09-03T09:00:00.000Z", allowOverlap: true, ...base,
+        appointmentType: "new_consultation", scheduledAt: daysAhead(5), allowOverlap: true, ...base,
       });
       if (!explicit.ok) return false;
       const { data } = await admin.from("practice_appointment").select("duration_minutes").eq("id", explicit.data.id).single();

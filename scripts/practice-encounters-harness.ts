@@ -25,6 +25,7 @@
  *   npx --yes tsx scripts/practice-encounters-harness.ts
  */
 import { loadEnvConfig } from "@next/env";
+import { daysAhead } from "./_harness-time";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
@@ -115,7 +116,7 @@ async function main() {
   // ── 1. FLOW-001 launch ────────────────────────────────────────────────────
   const appt = await bookAppointment(admin, {
     workspaceId: wsA, patientId: patientA, patientName: "Okello Peter",
-    appointmentType: "new_consultation", scheduledAt: "2026-09-10T09:00:00.000Z", ...base,
+    appointmentType: "new_consultation", scheduledAt: daysAhead(8), ...base,
   });
   ok("an appointment for the patient books", appt.ok, appt.ok ? "" : appt.message);
 
