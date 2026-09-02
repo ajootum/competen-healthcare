@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolveLifecycleActor, PERSON_SCOPED_EXPORT_PATH } from "@/lib/practice/lifecycle";
 import { CAP_RESTORE } from "@/lib/practice/lifecycle-constants";
 import { SETTINGS_CAPABILITY } from "@/lib/practice/capabilities";
+import { holdsHqCapability } from "@/lib/hq/context";
 import { accessEndedReading, endedBecause, type AccessEndedReading } from "@/lib/practice/access-ended";
 import RestorePracticePanel from "./RestorePracticePanel";
 import IdleReSignIn from "./IdleReSignIn";
@@ -142,17 +143,28 @@ export default async function Page() {
   // already has the control, on the surface built for it, at /super-admin/pd/practices/[id] -- the s7
   // card with the same presets and the same audit trail. A PD who lands HERE landed as a member of this
   // practice, and is served by the branch their membership earns.
-  let ended: { reading: AccessEndedReading; isOwner: boolean; timezone: string } | null = null;
+  let ended: {
+    reading: AccessEndedReading; isOwner: boolean; timezone: string;
+    workspaceId: string; isDirector: boolean;
+  } | null = null;
   if (shell.state === "ACCESS_RESTRICTED" && shell.reason === "NOT_ENTITLED") {
     const admin = createAdminClient();
-    const [reading, actor] = await Promise.all([
+    const [reading, actor, isDirector] = await Promise.all([
       accessEndedReading(admin, shell.workspaceId),
       resolveLifecycleActor(admin, shell.userId, shell.workspaceId),
+      // ⚠ THE ONLY PLACE THE PRACTICE PLANE ASKS THE LANDLORD PLANE ANYTHING, and it asks about the
+      // VIEWER rather than about any practice. holdsHqCapability resolves through the canonical HQ
+      // resolver -- no second implementation of authorization on this side -- and it PROBES, so an
+      // ordinary practitioner reading this screen does not file an HQ access-denied record for a door
+      // they never touched.
+      holdsHqCapability("hq.practice.commercial.manage"),
     ]);
     ended = {
       reading,
       isOwner: !!actor?.capabilities.includes(SETTINGS_CAPABILITY),
       timezone: actor?.workspaceTimezone ?? "UTC",
+      workspaceId: shell.workspaceId,
+      isDirector,
     };
   }
 
@@ -194,13 +206,21 @@ export default async function Page() {
         body: (r.endedAt
           ? `Your practice access ended on ${onDate(r.endedAt, tz)}, because ${endedBecause(r)}. `
           : `Your practice access is closed, because ${endedBecause(r)}. `)
-          // ⚠ NOTHING ON THIS SCREEN REOPENS IT, AND SAYING SO IS THE POINT. This product has no
-          // self-serve route back in from behind the lock: the billing page lives inside the practice
+          // ⚠ NOTHING ON THIS SCREEN REOPENS IT, AND SAYING SO IS THE POINT -- unless the person reading
+          // it is the one who reopens practices, which is what the branch below is for. This product has
+          // no self-serve route back in from behind the lock: the billing page lives inside the practice
           // shell, and the shell sends a locked-out person here -- so an instruction to "renew your plan"
           // would be a door that opens onto this same screen. An instruction with no control behind it is
           // a mistake this page has already been caught making once, on the two-factor state above.
-          + "Reopening it is done by Competen rather than from this screen, so email "
-          + "hello@competenhealthcare.com with your practice name and the date above.",
+          //
+          // ⚠ AND TELLING A PRODUCT DIRECTOR TO EMAIL SUPPORT IS THAT MISTAKE WEARING A POLITE FACE. The
+          // owner sat on this screen reading "email hello@competenhealthcare.com" while holding the
+          // capability to reopen their own practice in three clicks. The sentence was true for almost
+          // everybody and useless for the one person most likely to be looking at it.
+          + (ended.isDirector
+            ? "You hold commercial administration, so you can reopen it yourself rather than asking anybody."
+            : "Reopening it is done by Competen rather than from this screen, so email "
+              + "hello@competenhealthcare.com with your practice name and the date above."),
         retention: true,
       };
     } else {
@@ -233,6 +253,33 @@ export default async function Page() {
         {/* s10's retention reassurance, and it is deliberately a statement about what still EXISTS rather
             than a promise about how long. This build has no retention clock and no deletion job, so a
             period in days would be a number nothing enforces. */}
+        {/* ── CPR-PD-PROV-001 §10, the Product Director row ────────────────────────────────────────
+            ⚠ A SIGNPOST, NOT A CONTROL, AND THE DISTINCTION IS THE WHOLE DESIGN. §10 asks for the PD to
+            see "Extend access / Reactivate practice actions" here. Those are landlord commercial WRITES,
+            and this is a tenant-plane page reached by a practice member -- putting the write on it would
+            mean a /practice URL that mutates commercial state, which is the boundary plane-boundary.ts
+            exists to hold. What was actually missing was never the control. It was the route to it.
+
+            ⚠ SHOWN ONLY TO SOMEBODY WHO HOLDS THE CAPABILITY, resolved on the server through the HQ
+            resolver. If they somehow arrive without it, the destination re-gates and refuses -- this
+            decides what is drawn, never what is permitted. */}
+        {ended?.isDirector && (
+          <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/60 p-4 text-left">
+            <p className="text-[13px] font-semibold text-violet-900">You can reopen this practice</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-violet-900/80">
+              You hold commercial administration for Competen. The access period for this practice is on
+              its record in the Product Director workspace, where you can choose how long to reopen it
+              for. It is recorded against this practice with your reason.
+            </p>
+            <p className="mt-2">
+              <Link href={`/super-admin/pd/practices/${ended.workspaceId}?tab=commercial`}
+                className="inline-block rounded-lg bg-violet-700 px-3 py-2 text-[12px] font-semibold text-white hover:bg-violet-800">
+                Open the practice record &rarr;
+              </Link>
+            </p>
+          </div>
+        )}
+
         {panel?.retention && (
           <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[12.5px] leading-relaxed text-gray-700">
             <span className="font-semibold">Nothing has been deleted.</span> Patient records, appointments,

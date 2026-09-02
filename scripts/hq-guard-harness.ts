@@ -297,6 +297,24 @@ const contextSrc = stripComments(readFileSync("src/lib/hq/context.ts", "utf8"));
 ok("E7", /requireHqCapability[\s\S]{0,400}?resolveHqContext\([^)]*\{\s*enforce:\s*true\s*\}\s*\)/.test(contextSrc),
   "requireHqCapability really passes enforce:true -- the 205 pages are not calling a guard that quietly observes");
 
+// ── E8/E9: the PROBE, which asks whether somebody holds a capability without that being an attempt ──
+//
+// ⚠ WHY THIS IS ASSERTED IN SOURCE RATHER THAN BEHAVIOUR. resolveHqContext needs a real session, so a
+// harness cannot call it and count rows. What CAN be pinned is the two properties the probe rests on,
+// and both are one edit away from silently reversing:
+//
+//   E8  a probe does not write an observation record. The expired-practice screen asks this question on
+//       behalf of every locked-out practitioner; if it recorded, the enforce-rollout dataset would fill
+//       with HQ access denials for a door nobody touched.
+//   E9  a probe still ENFORCES. A probe that quietly observed would answer "yes, they hold it" to
+//       somebody who does not, and the signpost would be drawn for the wrong person. It decides what is
+//       DRAWN rather than what is permitted, so a wrong answer is not an escalation -- but it is a link
+//       to a page that will refuse them, which is the dead end this screen exists to remove.
+ok("E8", /decision\s*!==\s*"allow"\s*&&\s*!opts\.probe/.test(contextSrc),
+  "a probe does not file an observation record -- asking is not attempting");
+ok("E9", /holdsHqCapability[\s\S]{0,300}?resolveHqContext\([^)]*enforce:\s*true[^)]*probe:\s*true/.test(contextSrc),
+  "holdsHqCapability probes under ENFORCE -- it never answers yes on an observe-mode pass");
+
 // ── 2. The intent map, in BOTH directions ───────────────────────────────────
 console.log("\n2. THE INTENT MAP -- a new route must fail, not disappear");
 const unmapped = classified.filter(c => capabilityForRoute(c.route) === null).map(c => c.route);

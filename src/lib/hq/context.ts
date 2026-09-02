@@ -222,6 +222,19 @@ export async function resolveHqContext(
      * the observation ledger keeps filling and the rollout data is not lost.
      */
     enforce?: boolean;
+    /**
+     * A QUESTION, NOT AN ATTEMPT -- and the difference is what the observation ledger records.
+     *
+     * ⚠ record() above runs on every non-allow decision, which is right for a GATE: somebody tried a
+     * door and was refused, and the rollout data wants that. It is wrong for a caller that is merely
+     * ASKING whether this person holds a capability in order to decide whether to draw a link. The
+     * expired-practice screen does exactly that, and every ordinary practitioner who has ever been
+     * locked out would otherwise have filed an HQ access-denied record for a door they never touched --
+     * false negatives in the one dataset the enforce rollout is being judged on.
+     *
+     * A probe never records. It changes no verdict; it only declines to write one down.
+     */
+    probe?: boolean;
   } = {},
 ): Promise<HqResolution> {
   const supabase = await createClient();
@@ -288,7 +301,7 @@ export async function resolveHqContext(
   const capabilities = governance.active ? governance.active.capabilities : [];
   const verdict = decideHq({ isOwner: false, positions, capabilities, capability: declared, mode });
 
-  if (verdict.decision !== "allow") {
+  if (verdict.decision !== "allow" && !opts.probe) {
     await record(admin, { userId: user.id, route, capability: declared, decision: verdict.decision, mode, positions, reason: verdict.reason });
   }
   if (!verdict.allowed) {
@@ -339,4 +352,23 @@ export async function requireHqCapability(capability: string): Promise<HqContext
   const res = await resolveHqContext(capability, { enforce: true });
   if (!res.ok) redirect(res.redirectTo);
   return res.ctx;
+}
+
+/**
+ * Does the person viewing this page hold a landlord capability? A yes/no, with no consequence.
+ *
+ * ⚠ IT GRANTS NOTHING AND GUARDS NOTHING. It exists so a surface can decide whether to DRAW something --
+ * today, whether the expired-practice screen shows a Product Director the way to reopen the practice
+ * instead of telling them to email support they themselves answer. Every landlord control remains gated
+ * by requireHqCapability on its own page and by hqApiGate on its own route; this changes what is
+ * offered, never what is permitted.
+ *
+ * ⚠ AND IT IS THE CANONICAL RESOLVER, NOT A SECOND OPINION. The temptation on the tenant plane is to
+ * hand-roll "read the appointment, read its capabilities" rather than import from src/lib/hq -- which
+ * would put a second implementation of authorization resolution in the codebase, disagreeing with the
+ * first the day the one-active-context rule or a temporal grant changes. One resolver, asked politely.
+ */
+export async function holdsHqCapability(capability: string): Promise<boolean> {
+  const res = await resolveHqContext(capability, { enforce: true, probe: true });
+  return res.ok;
 }
