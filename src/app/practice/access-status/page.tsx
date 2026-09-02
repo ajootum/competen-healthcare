@@ -286,8 +286,15 @@ export default async function Page() {
             </Link>
           </p>
         </div>
+        {/* ⚠ THIS LINK POINTED AT /practice AND WAS A CLOSED LOOP FOR EVERY PERSON WHO COULD SEE IT.
+            /practice tie-breaks on MEMBERSHIP, not entitlement (IAM-001 s6: public landing for a
+            visitor, application entry for a member), so a member lands on /practice/home -- which is
+            inside the shell, whose layout sends ACCESS_RESTRICTED straight back here. Everybody who
+            reaches this screen is a member by definition, so the one escape offered returned them to
+            the screen they were trying to leave.
+            / carries no such redirect, which was checked rather than assumed. */}
         <p className="mt-4 text-[13px] text-gray-500">
-          <Link href="/practice" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Back to Competen Practice</Link>
+          <Link href="/" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Back to Competen</Link>
         </p>
       </div>
     </main>
