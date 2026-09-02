@@ -50,6 +50,11 @@ export default function PlanControl({ workspaceId, practiceName, reading, mayMan
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  // ADR-015 rung 3. Only ever shown after the server has refused for this reason -- there is no standing
+  // "I am overriding billing" checkbox, because a control offered before it is needed is one that gets
+  // ticked out of habit and stops being an acknowledgement of anything.
+  const [billingRefusal, setBillingRefusal] = useState<string | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
 
   // ⚠ EXTENSION RUNS FROM NOW WHEN ACCESS HAS LAPSED, AND FROM THE CURRENT END WHEN IT HAS NOT.
   // Adding 30 days to an end date that passed last week would produce a period that is already over --
@@ -69,13 +74,21 @@ export default function PlanControl({ workspaceId, practiceName, reading, mayMan
     setBusy(true); setResult(null);
     const res = await fetch("/api/v1/practice/entitlement", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspaceId, reason, ...body }),
+      body: JSON.stringify({ workspaceId, reason, overrideBilling: acknowledged, ...body }),
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
-    if (!res.ok) { setResult({ kind: "err", text: data.error ?? `Refused (${res.status}).` }); return; }
+    if (!res.ok) {
+      // ⚠ ONE REFUSAL GETS A CONTROL RATHER THAN A DEAD END. A rule the product enforces and gives the
+      // authorised person no way past is not a safeguard, it is a wall -- and the way round a wall is
+      // the SQL editor, where none of this is recorded.
+      if (data.code === "BILLING_OVERRIDE_UNACKNOWLEDGED") setBillingRefusal(data.error);
+      setResult({ kind: "err", text: data.error ?? `Refused (${res.status}).` });
+      return;
+    }
     setResult({ kind: "ok", text: describe(data) });
     setReason(""); setDays(null); setCustomEnd("");
+    setBillingRefusal(null); setAcknowledged(false);
     router.refresh();
   }
 
@@ -211,6 +224,22 @@ export default function PlanControl({ workspaceId, practiceName, reading, mayMan
               placeholder="recorded in this practice's audit trail with the before and after"
               className={`mt-1 ${INPUT}`} />
           </label>
+
+          {/* ADR-015 rung 3: the acknowledgement, offered only once the server has asked for it. */}
+          {billingRefusal && (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2">
+              <p className="text-[12px] font-semibold text-amber-900">This overrides a paid subscription</p>
+              <p className="mt-0.5 text-[11.5px] leading-relaxed text-amber-900">{billingRefusal}</p>
+              <label className="mt-2 flex items-start gap-2 text-[12px] text-amber-900">
+                <input type="checkbox" checked={acknowledged} className="mt-0.5"
+                  onChange={e => setAcknowledged(e.target.checked)} />
+                <span>
+                  I am deliberately overriding it. This is recorded on the practice&apos;s audit trail
+                  with my reason.
+                </span>
+              </label>
+            </div>
+          )}
 
           {result && (
             <p role="status" className={`mt-2 rounded-lg px-3 py-2 text-[12px] leading-relaxed ${

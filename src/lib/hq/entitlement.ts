@@ -1,5 +1,7 @@
 import { audit } from "@/lib/practice/audit";
 import { validateAccessPeriod } from "@/lib/practice/entitlement-period";
+import { openAccessPeriod } from "@/lib/practice/entitlement-writer";
+import { commercialAuthority, judgeOverride } from "@/lib/practice/commercial-precedence";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -204,6 +206,12 @@ export async function grantAccessPeriod(admin: any, args: {
   actorId: string;
   reason: string;
   correlationId: string;
+  /**
+   * §12: acknowledgement that this act knowingly overrides a live paid subscription. Absent, an act that
+   * would reduce paid-for access is REFUSED rather than performed quietly -- "must not be silently
+   * overwritten" is a rule about silence, not about the act.
+   */
+  overrideBilling?: boolean;
 }): Promise<AccessChange> {
   // ⚠ THE §5 INTERVAL RULES LIVE IN src/lib/practice/entitlement-period.ts AND ARE NOT REPEATED HERE.
   // The provisioning wizard creates a practice's FIRST period and has to apply exactly these rules; two
@@ -220,38 +228,29 @@ export async function grantAccessPeriod(admin: any, args: {
   if (reason.length < 8)
     return { ok: false, status: 400, code: "REASON_REQUIRED", message: "a reason is required (at least 8 characters). It is recorded with the before and after." };
 
-  const { data: rows, error: readErr } = await admin.from("practice_entitlement")
-    .select("id, workspace_id, product_code, plan_code, status, starts_at, ends_at")
-    .eq("workspace_id", args.workspaceId).order("starts_at", { ascending: false });
-  if (readErr)
-    return { ok: false, status: 503, code: "UNREADABLE", message: `this practice's access could not be read: ${readErr.message}` };
+  // ── §12 / AC-10: does this contradict a commercial fact somebody else established? ───────────────
+  //
+  // ⚠ CONSULTED BEFORE THE WRITE, AND ITS REFUSALS ARE REAL ONES. Administrative suspension outranks
+  // every commercial act, so writing a period into a SUSPENDED practice would produce a "saved" and a
+  // practice still shut. And a period that ends before what somebody paid for is permitted but may not
+  // be SILENT -- see judgeOverride for why refusing outright would be the worse design.
+  const authority = await commercialAuthority(admin, args.workspaceId);
+  const verdict = judgeOverride(authority, {
+    kind: "grant", proposedEndsAt: args.endsAt, acknowledged: !!args.overrideBilling,
+  });
+  if (!verdict.allowed) return { ok: false, status: 409, code: verdict.code, message: verdict.message };
 
+  // ⚠ THE APPEND ITSELF IS SHARED WITH PROVISIONING AND THE PAYMENT PATH (entitlement-writer.ts). Three
+  // implementations is how one of them ended up rewriting every historical row.
   const soon = await expiringSoonDays(admin);
-  const existing = ((rows ?? []) as any[]).map(r => periodOf(r, soon));
-  const before = existing.find(p => p.grantsAccessNow) ?? existing[0] ?? null;
+  const opened = await openAccessPeriod(admin, {
+    workspaceId: args.workspaceId, planCode: args.planCode,
+    status: args.status, startsAt: args.startsAt, endsAt: args.endsAt,
+  });
+  if (!opened.ok) return { ok: false, status: opened.status, code: opened.code, message: opened.message };
 
-  // ⚠ CLOSE ANY PERIOD STILL GRANTING ACCESS, so the gate has ONE answer. This is a STATUS transition:
-  // its dates are untouched, which is the difference between a lifecycle event and rewriting history.
-  for (const live of existing.filter(p => p.grantsAccessNow)) {
-    const { error } = await admin.from("practice_entitlement")
-      .update({ status: "expired", updated_at: nowIso() }).eq("id", live.id);
-    if (error)
-      return { ok: false, status: 400, code: "NOT_CLOSED", message: `the previous period could not be closed, so no new one was created: ${error.message}` };
-  }
-
-  const { data: created, error: insErr } = await admin.from("practice_entitlement").insert({
-    workspace_id: args.workspaceId,
-    product_code: "practice",
-    plan_code: args.planCode,
-    status: args.status,
-    starts_at: args.startsAt,
-    ends_at: args.endsAt,
-  }).select("id, workspace_id, product_code, plan_code, status, starts_at, ends_at").maybeSingle();
-
-  if (insErr || !created)
-    return { ok: false, status: 400, code: "NOT_CREATED", message: `the access period was not created: ${insErr?.message ?? "the row came back empty"}` };
-
-  const after = periodOf(created, soon);
+  const before = opened.before ? periodOf(opened.before, soon) : null;
+  const after = periodOf(opened.after, soon);
 
   await audit(admin, {
     // §14: the practice's OWN trail. The people who will ask about this are inside that practice.
@@ -285,6 +284,8 @@ export async function endAccess(admin: any, args: {
   actorId: string;
   reason: string;
   correlationId: string;
+  /** §12: acknowledgement that this knowingly closes a practice with a live paid subscription. */
+  overrideBilling?: boolean;
 }): Promise<AccessChange> {
   if (!["expired", "suspended", "cancelled"].includes(args.status))
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "ending access needs expired, suspended or cancelled" };
@@ -292,6 +293,13 @@ export async function endAccess(admin: any, args: {
   const reason = (args.reason ?? "").trim();
   if (reason.length < 8)
     return { ok: false, status: 400, code: "REASON_REQUIRED", message: "a reason is required (at least 8 characters). It is recorded with the before and after." };
+
+  // ⚠ §12 / AC-10. Ending access to a practice that has PAID is the sharpest form of the override this
+  // rule exists for, so it is asked about here as well as on the grant. An administratively closed
+  // practice is refused for a different reason: there is nothing left to end.
+  const authority = await commercialAuthority(admin, args.workspaceId);
+  const verdict = judgeOverride(authority, { kind: "end", acknowledged: !!args.overrideBilling });
+  if (!verdict.allowed) return { ok: false, status: 409, code: verdict.code, message: verdict.message };
 
   const { data: rows, error: readErr } = await admin.from("practice_entitlement")
     .select("id, workspace_id, product_code, plan_code, status, starts_at, ends_at")

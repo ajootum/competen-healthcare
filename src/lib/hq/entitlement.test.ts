@@ -26,7 +26,12 @@ const back = (d: number) => new Date(T0 - d * DAY).toISOString();
  * A Supabase-shaped stub over an in-memory table, so append-versus-overwrite is observable.
  * pd_ops_config answers empty, which exercises the documented fallback threshold.
  */
-function fakeDb(rows: any[] = []) {
+function fakeDb(rows: any[] = [], world: {
+  /** The practice's lifecycle status. §12's first precedence rung reads this. */
+  workspaceStatus?: string;
+  /** A paid subscription, when the test is about overriding one. */
+  subscription?: { plan_code: string; status: string; current_period_end: string | null } | null;
+} = {}) {
   const store = rows.map((r, i) => ({ id: r.id ?? `row-${i}`, product_code: "practice", ...r }));
   const audits: any[] = [];
   let seq = store.length;
@@ -34,6 +39,22 @@ function fakeDb(rows: any[] = []) {
   const table = (name: string) => {
     if (name === "pd_ops_config") {
       const q: any = { select: () => q, eq: () => q, maybeSingle: () => Promise.resolve({ data: null, error: null }) };
+      return q;
+    }
+    // ⚠ THE COMMERCIAL-PRECEDENCE WORLD (§12). Defaults are the ordinary case -- an operable practice
+    // with nothing paid -- so every test written before this rule existed still describes what it meant.
+    if (name === "practice_workspace") {
+      const q: any = {
+        select: () => q, eq: () => q,
+        maybeSingle: () => Promise.resolve({ data: { status: world.workspaceStatus ?? "ACTIVE" }, error: null }),
+      };
+      return q;
+    }
+    if (name === "practice_subscription") {
+      const q: any = {
+        select: () => q, eq: () => q,
+        maybeSingle: () => Promise.resolve({ data: world.subscription ?? null, error: null }),
+      };
       return q;
     }
     if (name === "practice_audit_event") {

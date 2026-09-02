@@ -379,6 +379,11 @@ const stripComments = (s: string) =>
 const OPERATOR_GATE = /\bisSuper\s*\(|\bhqApiGate\s*\(/;
 const operatorOnly: string[] = [];
 if (existsSync(practiceApi)) for (const f of walk(practiceApi)) {
+  // ⚠ A TEST FILE IS NOT A ROUTE, and this scan could not tell. A route test lives beside the route it
+  // exercises and MENTIONS its gate -- access-gate.test.ts asserts on hqApiGate by name -- so the needle
+  // matched the test and A6 reported a sixth operator route that does not exist. The same shape as the
+  // comment-stripping note above: a detector matching something written ABOUT the thing it looks for.
+  if (/\.(test|spec)\.tsx?$/.test(f)) continue;
   const src = stripComments(readFileSync(f, "utf8"));
   if (OPERATOR_GATE.test(src) && !/requirePracticeContext\s*\(/.test(src)) operatorOnly.push(rel(f));
 }

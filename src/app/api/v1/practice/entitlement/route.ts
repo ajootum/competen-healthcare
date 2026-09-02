@@ -33,6 +33,10 @@ export async function PATCH(req: NextRequest) {
   let body: {
     action?: string; workspaceId?: string; status?: string;
     startsAt?: string; endsAt?: string | null; planCode?: string; reason?: string;
+    // ⚠ ADR-015 rung 3: an explicit acknowledgement that this act overrides a live paid subscription.
+    // Absent, an act that would REDUCE paid-for access is refused rather than performed quietly. It is
+    // a separate field from `reason` on purpose -- a reason explains why, an acknowledgement admits what.
+    overrideBilling?: boolean;
   };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
 
@@ -62,6 +66,7 @@ export async function PATCH(req: NextRequest) {
       reason: String(body.reason ?? ""),
       actorId: c.userId,
       correlationId: c.traceId,
+      overrideBilling: body.overrideBilling === true,
     });
     if (!r.ok) return NextResponse.json({ error: r.message, code: r.code }, { status: r.status });
     return NextResponse.json({
@@ -79,6 +84,7 @@ export async function PATCH(req: NextRequest) {
       reason: String(body.reason ?? ""),
       actorId: c.userId,
       correlationId: c.traceId,
+      overrideBilling: body.overrideBilling === true,
     });
     if (!r.ok) return NextResponse.json({ error: r.message, code: r.code }, { status: r.status });
     return NextResponse.json({

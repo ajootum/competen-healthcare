@@ -48,6 +48,7 @@ wish, not a record.
 | [ADR-012](./ADR-012-security-architecture.md) | The actual security architecture - three layers, not RLS-enforced RBAC | Accepted |
 | [ADR-013](./ADR-013-auth-module-boundary.md) | src/lib/auth/ is a bounded internal module, not a package | Accepted |
 | [ADR-014](./ADR-014-hq-mounts-on-super-admin.md) | HQ mounts on `/super-admin`; `/hq/*` is an alias at most, never a second estate | Accepted |
+| [ADR-015](./ADR-015-practice-commercial-precedence.md) | Administrative suspension outranks every commercial fact; `practice_entitlement` is the only gate, and every commercial source writes a period into it | Accepted |
 
 Initial set published under COMP-ENG-001 §5, 2026-08-18. Each ADR below was written by reading the actual
 code, migrations, and harnesses cited in it — not reconstructed from memory of what the decision was

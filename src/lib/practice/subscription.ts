@@ -1,4 +1,5 @@
 import { audit } from "./audit";
+import { openAccessPeriod } from "./entitlement-writer";
 import {
   type GatewayConfig, createHostedCheckout, verifyTransaction, newTxRef, minorToMajor,
 } from "./subscription-gateway";
@@ -162,10 +163,30 @@ export async function applyWebhook(admin: Admin, cfg: GatewayConfig, ev: {
   }, { onConflict: "workspace_id" });
 
   // The entitlement is what the shell already reads, so paid access arrives through the existing gate
-  // rather than a second one nothing consults.
-  await admin.from("practice_entitlement")
-    .update({ plan_code: checkout.plan_code, status: "active", ends_at: periodEnd, updated_at: now.toISOString() })
-    .eq("workspace_id", checkout.workspace_id).in("status", ["trial", "active", "expired"]);
+  // rather than a second one nothing consults. CPR-PD-PROV-001 §12: the payment is billing-authoritative,
+  // and the way it exercises that authority is by writing a period -- not by becoming a second gate.
+  //
+  // ⚠ THIS APPENDS. It used to be an UPDATE filtered only by workspace and a status list, which rewrote
+  // plan_code, status and ends_at on EVERY period the practice had ever held -- a trial, an extension and
+  // a lapse all resurrected as `active` with one shared end date, each still claiming its original start.
+  // Harmless while a practice only ever had one row; a fabricated ledger the moment periods began to
+  // append (§9). Never reached in production -- no plan is both active and priced, so no checkout can be
+  // raised -- which is exactly why nothing caught it. See entitlement-writer.ts.
+  const opened = await openAccessPeriod(admin, {
+    workspaceId: checkout.workspace_id, planCode: checkout.plan_code,
+    status: "active", startsAt: now.toISOString(), endsAt: periodEnd,
+  });
+  // ⚠ THE MONEY IS ALREADY TAKEN BY THIS POINT, so a failure here must not look like a failed payment.
+  // The checkout and the subscription rows above are written and correct; what is missing is the access
+  // the payment bought, which a Director can grant from the practice's own record. Recorded loudly and
+  // named in the audit event rather than swallowed.
+  if (!opened.ok) {
+    console.error(`[practice] paid checkout ${checkout.id} could not open an access period: ${opened.message}`);
+    await audit(admin, {
+      workspaceId: checkout.workspace_id, eventType: "practice.subscription_paid_without_access",
+      payload: { txRef: ref, planCode: checkout.plan_code, code: opened.code, detail: opened.message },
+    });
+  }
 
   await audit(admin, {
     workspaceId: checkout.workspace_id, eventType: "practice.subscription_paid",

@@ -20,18 +20,28 @@ const CHECKOUT = {
 };
 
 /** Records every write so the tests can assert on what was GRANTED rather than what was returned. */
-function stubAdmin(opts: { claimFails?: boolean; checkout?: any | null } = {}) {
+function stubAdmin(opts: {
+  claimFails?: boolean; checkout?: any | null;
+  /** Access periods the practice already holds. ADR-015: a payment must APPEND beside these. */
+  periods?: any[];
+} = {}) {
   const writes: { table: string; op: string; row: any }[] = [];
+  const periods = opts.periods ?? [];
   const admin = {
     from(table: string) {
       const chain: any = {
         select: () => chain,
         eq: () => chain,
         in: () => chain,
+        // The entitlement ledger read that openAccessPeriod performs before appending.
+        order: async () => ({ data: table === "practice_entitlement" ? periods : [], error: null }),
         maybeSingle: async () =>
           table === "practice_checkout"
             ? { data: opts.checkout === undefined ? CHECKOUT : opts.checkout, error: null }
-            : { data: null, error: null },
+            // openAccessPeriod reads back the row it inserted; without this it reports NOT_CREATED.
+            : table === "practice_entitlement"
+              ? { data: lastEntitlementInsert(), error: null }
+              : { data: null, error: null },
         single: async () =>
           opts.claimFails
             ? { data: null, error: { message: "duplicate key value violates unique constraint" } }
@@ -44,9 +54,17 @@ function stubAdmin(opts: { claimFails?: boolean; checkout?: any | null } = {}) {
       return chain;
     },
   };
+  const lastEntitlementInsert = () => {
+    const ins = writes.filter(w => w.table === "practice_entitlement" && w.op === "insert");
+    return ins.length ? { id: "new-period", product_code: "practice", ...ins[ins.length - 1].row } : null;
+  };
+  // ⚠ THIS PREDICATE USED TO NAME THE BUG. It counted an entitlement `update` with status active as a
+  // grant -- which is exactly what the old code did, and what ADR-015 removed: that update carried no
+  // row filter beyond the workspace, so it rewrote every period the practice had ever held. A grant is
+  // now an INSERT, and a test still looking for the update would go green on a path that no longer runs.
   const granted = () => writes.filter(w =>
     (w.table === "practice_subscription" && w.op === "upsert") ||
-    (w.table === "practice_entitlement" && w.op === "update" && w.row.status === "active"));
+    (w.table === "practice_entitlement" && w.op === "insert" && w.row.status === "active"));
   return { admin, writes, granted };
 }
 
@@ -173,6 +191,30 @@ describe("applyWebhook — what actually grants access", () => {
     expect(sub.row).toMatchObject({ workspace_id: "ws-1", plan_code: "practice_solo_ugx", status: "active" });
     expect(writes.some(w => w.table === "practice_checkout" && w.row.status === "paid" && w.row.channel === "mobile_money")).toBe(true);
     // Without this control every "grants nothing" above could pass for the wrong reason.
+  });
+
+  it("APPENDS the paid period beside the practice's history rather than rewriting it", async () => {
+    // ADR-015 / CPR-PD-PROV-001 §9. The write this replaced was an UPDATE filtered only by workspace and
+    // a status list, so a practice holding a trial, an extension and a lapse had ALL THREE rewritten to
+    // `active` with one shared end date -- each still claiming the start date it originally had.
+    const past = [
+      { id: "old-trial", workspace_id: "ws-1", product_code: "practice", plan_code: "practice_trial", status: "expired", starts_at: "2026-06-01T00:00:00.000Z", ends_at: "2026-07-01T00:00:00.000Z" },
+      { id: "old-ext", workspace_id: "ws-1", product_code: "practice", plan_code: "practice_trial", status: "expired", starts_at: "2026-07-01T00:00:00.000Z", ends_at: "2026-08-01T00:00:00.000Z" },
+    ];
+    const { admin, writes } = stubAdmin({ periods: past });
+    flwVerify({ status: "success", data: { id: "tx1", status: "successful", amount: 74000, currency: "UGX", tx_ref: "cpr-1" } });
+
+    const r = await applyWebhook(admin, CFG, { providerEventId: "e1", providerTxId: "tx1", txRef: "cpr-1" });
+    expect(r.verdict).toBe("applied");
+
+    const entWrites = writes.filter(w => w.table === "practice_entitlement");
+    // Exactly one entitlement write, and it is an insert.
+    expect(entWrites).toHaveLength(1);
+    expect(entWrites[0].op).toBe("insert");
+    expect(entWrites[0].row).toMatchObject({ workspace_id: "ws-1", status: "active", plan_code: "practice_solo_ugx" });
+    // ⚠ AND NOT ONE UPDATE TOUCHED THE TWO EXPIRED PERIODS. Neither was granting access, so neither
+    // needed closing -- the old code would have rewritten both.
+    expect(entWrites.some(w => w.op === "update")).toBe(false);
   });
 
   it("does not pay a checkout twice even under a different event id", async () => {
