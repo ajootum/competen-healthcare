@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import FormFieldInput from "@/components/practice/FormFieldInput";
 import { resolveApplicable, clearedNotice } from "@/lib/practice/registration-condition";
 import {
   INTAKE_FIELDS_ALWAYS_REQUIRED, intakeDerivedValues, intakeField,
 } from "@/lib/practice/booking-rule-constants";
 import { validateAnswer, isBlankAnswer } from "@/lib/practice/form-field";
-import { appointmentTypeLabel } from "@/lib/practice/practice-session-constants";
+import {
+  appointmentTypeLabel, APPOINTMENT_TYPE_BLURB, WEEKDAY_LONG,
+} from "@/lib/practice/practice-session-constants";
 import { practiceDayOf, practiceToday } from "@/lib/practice/practice-time";
 import DetailsStep from "./DetailsStep";
 import AvailabilityCalendar, { monthCells } from "./AvailabilityCalendar";
@@ -124,6 +126,23 @@ export default function BookingWizard(props: {
   const [horizon, setHorizon] = useState<{ days: number | null; until: string | null }>({ days: null, until: null });
   /** §5: what to say when somebody taps a date with nothing on it. */
   const [dayNote, setDayNote] = useState<string | null>(null);
+
+  /**
+   * CPR-BOOK-FLOW-002 §5 / AC-04 -- what each location can actually offer, shown on step 1.
+   *
+   * ⚠ ONE REQUEST FOR ALL OF THEM. Asking per location would be three round trips before the patient
+   * has chosen anything. The engine answers an unfiltered window with every location's slots, each
+   * carrying its own locationId, so the pattern and the next free time are BUCKETED from one call --
+   * the same measurement that made the calendar cheap: range and breadth are free, round trips are not.
+   *
+   * ⚠ AND IT IS DERIVED, NEVER DECLARED. "Wednesdays and Thursdays" is computed from the times the
+   * engine returned for this appointment type, so it cannot claim a day the practice does not open --
+   * which a hand-written "Wednesdays & Thursdays" label on a location record eventually would.
+   */
+  const [overview, setOverview] = useState<
+    { byLocation: Record<string, { count: number; firstIso: string; weekdays: number[] }>; minutes: number | null } | null
+  >(null);
+  const [overviewBusy, setOverviewBusy] = useState(false);
 
   // Step 3
   const [questions, setQuestions] = useState<Question[] | null>(null);
@@ -480,6 +499,54 @@ export default function BookingWizard(props: {
     } finally { setBusy(false); }
   }
 
+  /** Step 1's per-location picture, for the currently chosen appointment type. */
+  const loadOverview = useCallback(async (type: string) => {
+    if (!type) { setOverview(null); return; }
+    setOverviewBusy(true);
+    try {
+      const q = new URLSearchParams({
+        handle: props.handle, appointmentType: type,
+        from: new Date().toISOString(),
+        // Four weeks is enough to establish the weekly pattern and find the next free time. The
+        // calendar asks for the full horizon later; this is the cheaper question.
+        to: new Date(Date.now() + 28 * 86400000).toISOString(),
+      });
+      const res = await fetch(`/api/v1/practice/public/booking?${q}`, { cache: "no-store" });
+      if (!res.ok) { setOverview(null); return; }   // step 1 stays usable; step 2 reports properly
+      const data = await res.json().catch(() => ({}));
+      const tz = String(data.timezone ?? "UTC");
+      // ⚠ THE PRACTICE'S ZONE IS ADOPTED HERE, NOT ONLY IN loadSlots -- AND LEAVING IT OUT PRINTED THE
+      // WRONG TIME ON EVERY CARD. `timezone` starts at "UTC" and used to be set only when step 2 loaded,
+      // so step 1 rendered "Next available Thu 3 Sept, 05:30" for the slot the calendar then correctly
+      // called 08:30. Three hours earlier, on the screen a patient reads first.
+      setTimezone(tz);
+      const byLocation: Record<string, { count: number; firstIso: string; weekdays: number[] }> = {};
+      for (const s of ((data.slots ?? []) as Slot[])) {
+        const key = s.locationId ?? "";
+        const day = practiceDayOf(tz, s.startsAt);
+        // ⚠ THE WEEKDAY IS TAKEN FROM THE PRACTICE'S OWN DATE, not from the instant. An 09:00 Kampala
+        // Monday is 06:00Z Monday, but a 00:30 session would be the previous day in UTC -- and the card
+        // would name a day the practice does not open.
+        const wd = day ? new Date(`${day}T12:00:00Z`).getUTCDay() : new Date(s.startsAt).getUTCDay();
+        const e = byLocation[key] ?? (byLocation[key] = { count: 0, firstIso: s.startsAt, weekdays: [] });
+        e.count++;
+        if (s.startsAt < e.firstIso) e.firstIso = s.startsAt;
+        if (!e.weekdays.includes(wd)) e.weekdays.push(wd);
+      }
+      setOverview({ byLocation, minutes: typeof data.minutes === "number" ? data.minutes : null });
+    } catch { setOverview(null); }
+    finally { setOverviewBusy(false); }
+  }, [props.handle]);
+
+  // ⚠ ONLY WHERE THERE IS A CHOICE TO INFORM. With one location the cards are not rendered, so the
+  // request would buy nothing and would still cost a patient on a slow connection three seconds.
+  useEffect(() => {
+    if (props.locations.length > 1 && appointmentType) void loadOverview(appointmentType);
+    // Mount only: a change of appointment type reloads from the control that made it, so this does not
+    // depend on `appointmentType` and cannot fire twice for the same choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function loadQuestions(slot: Slot) {
     setBusy(true); setProblem(null);
     try {
@@ -611,17 +678,74 @@ export default function BookingWizard(props: {
               <span className="text-gray-500"> &middot; {MODE_WORD[props.locations[0].mode] ?? "In-person"}</span>
             </p>
           ) : props.locations.length > 1 && (
-            <label className="mt-3 block">
-              <span className="text-[12px] font-semibold text-gray-800">Location</span>
-              <select value={locationId} onChange={e => { setLocationId(e.target.value); setChosen(null); }}
-                className={`mt-1 ${CONTROL}`}>
-                {props.locations.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.name} — {MODE_WORD[l.mode] ?? "In-person"}
-                  </option>
-                ))}
-              </select>
-            </label>
+            // ── §5 / AC-04: WHERE, AS CARDS THAT SAY WHAT EACH PLACE CAN ACTUALLY OFFER ─────────────
+            //
+            // ⚠ THE DROPDOWN THIS REPLACES HID THE ONLY THING WORTH KNOWING. Each option read
+            // "Nsambya Hospital — In-person", so a patient picked a location blind, waited for the
+            // calendar, and found out then whether it had anything -- and one of these three had
+            // nothing at all for a fortnight while looking identical to the other two.
+            //
+            // ⚠ EVERY LINE ON A CARD IS DERIVED FROM THE AVAILABILITY THE ENGINE RETURNED. The day
+            // pattern and the next free time are counted from real slots for the selected appointment
+            // type, so a card cannot advertise a day the practice does not open. Nothing here is a
+            // stored description of a location.
+            <fieldset className="mt-3">
+              <legend className="text-[12px] font-semibold text-gray-800">Where would you like to be seen?</legend>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Location">
+                {props.locations.map(l => {
+                  const o = overview?.byLocation[l.id];
+                  const on = locationId === l.id;
+                  // "Tuesdays, Fridays & Saturdays" -- not "Tuesdays & Fridays & Saturdays", which is
+                  // what joining on "&" produces and what a patient would read as carelessness.
+                  const dayNames = o
+                    ? o.weekdays.slice().sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
+                      .map(d => WEEKDAY_LONG[d === 0 ? 7 : d] + "s")
+                    : [];
+                  const days = dayNames.length === 0 ? null
+                    : dayNames.length === 1 ? dayNames[0]
+                      : `${dayNames.slice(0, -1).join(", ")} & ${dayNames[dayNames.length - 1]}`;
+                  return (
+                    <button key={l.id} type="button" role="radio" aria-checked={on}
+                      aria-label={`${l.name}, ${MODE_WORD[l.mode] ?? "In-person"}`
+                        + (o ? `, next available ${fmt(o.firstIso)}` : ", online booking not available")}
+                      onClick={() => { setLocationId(l.id); setChosen(null); setSelectedDay(null); }}
+                      className={`rounded-xl border px-3 py-2.5 text-left ${
+                        on ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/8 ring-1 ring-[var(--cp-primary)]/30"
+                          : "border-gray-200 bg-white hover:bg-gray-50"}`}>
+                      <span className="flex items-start gap-2">
+                        <span aria-hidden className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                          on ? "border-[var(--cp-primary)]" : "border-gray-300"}`}>
+                          {on && <span className="h-2 w-2 rounded-full bg-[var(--cp-primary)]" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-[13px] font-semibold text-gray-900">{l.name}</span>
+                          <span className="block text-[11.5px] text-gray-500">{MODE_WORD[l.mode] ?? "In-person"}</span>
+                          {days && <span className="block text-[11.5px] text-[var(--cp-primary-deep)]">{days}</span>}
+                        </span>
+                      </span>
+                      {/* ⚠ "NOT AVAILABLE" IS SAID, NOT LEFT BLANK. A location with nothing bookable used
+                          to be indistinguishable from one with a full diary until the patient had
+                          committed to it. It is still listed -- it is a real place this practitioner
+                          works -- and it says what it can do. */}
+                      <span className={`mt-2 block rounded-lg px-2 py-1.5 text-[11.5px] ${
+                        overviewBusy ? "bg-gray-50 text-gray-400"
+                          : o ? "bg-gray-50 text-gray-800" : "bg-gray-50 text-gray-500"}`}>
+                        {overviewBusy ? "Checking availability…"
+                          : o ? <><span className="text-gray-500">Next available </span>
+                              <span className="font-semibold">{fmt(o.firstIso)}</span></>
+                            : "No online booking here at the moment"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {/* §5's duration, shown ONCE and only where it is real -- see APPOINTMENT_TYPE_BLURB. */}
+              {overview?.minutes && (
+                <p className="mt-2 text-[11px] text-gray-500">
+                  Appointments with this practitioner are {overview.minutes} minutes.
+                </p>
+              )}
+            </fieldset>
           )}
 
           {/* s5: selectable cards rather than a dropdown while the eligible set is small -- a patient
@@ -631,17 +755,26 @@ export default function BookingWizard(props: {
             <div className="mt-2 flex flex-col gap-2" role="radiogroup" aria-label="Appointment type">
               {props.appointmentTypes.map(t => (
                 <button key={t} type="button" role="radio" aria-checked={appointmentType === t}
-                  onClick={() => { setAppointmentType(t); setChosen(null); }}
+                  onClick={() => { setAppointmentType(t); setChosen(null); setSelectedDay(null); void loadOverview(t); }}
                   className={`rounded-lg border px-3.5 py-3 text-left ${
                     appointmentType === t
                       ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/8 ring-1 ring-[var(--cp-primary)]/30"
                       : "border-gray-200 bg-white hover:bg-gray-50"}`}>
-                  <span className="flex items-center gap-2">
-                    <span aria-hidden className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                  <span className="flex items-start gap-2">
+                    <span aria-hidden className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
                       appointmentType === t ? "border-[var(--cp-primary)]" : "border-gray-300"}`}>
                       {appointmentType === t && <span className="h-2 w-2 rounded-full bg-[var(--cp-primary)]" />}
                     </span>
-                    <span className="text-[13px] font-semibold text-gray-900">{appointmentTypeLabel(t)}</span>
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-semibold text-gray-900">{appointmentTypeLabel(t)}</span>
+                      {/* §5's "short description". A definition of the label, never a claim about this
+                          practice -- and deliberately no per-type duration beside it, because this
+                          product has one appointment length and three different numbers would be two
+                          inventions. See APPOINTMENT_TYPE_BLURB. */}
+                      {APPOINTMENT_TYPE_BLURB[t] && (
+                        <span className="block text-[11.5px] text-gray-500">{APPOINTMENT_TYPE_BLURB[t]}</span>
+                      )}
+                    </span>
                   </span>
                 </button>
               ))}

@@ -163,6 +163,26 @@ export const SESSION_APPOINTMENT_TYPES = [
 export const appointmentTypeLabel = (code: string) =>
   SESSION_APPOINTMENT_TYPES.find(([c]) => c === code)?.[1] ?? code;
 
+/**
+ * CPR-BOOK-FLOW-002 §5: "Show patient-friendly name and short description."
+ *
+ * ⚠ THESE ARE DEFINITIONS OF THE LABEL, NOT FACTS ABOUT ANY PRACTICE. "First time seeing this
+ * practitioner" restates what `new_consultation` means; it claims nothing this practice has configured.
+ * That distinction is the reason the comp's per-type DURATIONS are not built beside them: appointment
+ * length is one workspace-level value in this product, not a per-type one, so "60 minutes" on New
+ * patient and "30 minutes" on Follow-up would be two invented numbers sitting next to a real name. The
+ * one real duration is shown once, from the availability response, where it is true.
+ */
+export const APPOINTMENT_TYPE_BLURB: Record<string, string> = {
+  new_consultation: "First time seeing this practitioner",
+  scheduled_followup: "A review after a previous visit",
+  hospital_consultation: "A consultation at the hospital",
+  teleconsultation: "Seen online rather than in person",
+  walk_in: "Seen without a fixed appointment time",
+  emergency: "Urgent, for something that cannot wait",
+  home_visit: "Seen at home",
+};
+
 export const WEEKDAY_SHORT = ["", "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 export const WEEKDAY_LONG = [
   "", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
