@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolveHandle } from "@/lib/practice/identity-service";
 import { publicBookingProfile, initialsOf } from "@/lib/practice/public-profile";
 import { publicBookingEntry } from "@/lib/practice/patient-booking";
+import { channelSettings } from "@/lib/practice/messaging";
 import BookingWizard from "./BookingWizard";
 
 // /practice/book/@handle/appointment -- CPB-001's "Location -> Service -> Time -> Details -> Verify".
@@ -126,6 +127,26 @@ export default async function BookAppointmentPage({ params }: {
     );
   }
 
+  /**
+   * Which channels can actually deliver a verification code for this practice.
+   *
+   * ⚠ `usable`, NOT `enabled`. A channel the practice switched on with no provider behind it accepts
+   * the request and delivers nothing, which is worse than not offering it. And the practice's own
+   * otpChannel setting narrows it further where it names one.
+   *
+   * ⚠ AN EMPTY LIST IS LEFT EMPTY. The wizard falls back to email and says what happened rather than
+   * this page inventing a channel to keep the form looking complete.
+   */
+  const channels = entry.workspaceId ? await channelSettings(admin, entry.workspaceId) : [];
+  // ⚠ `entry.otpChannel`, NOT `p.otpChannel`. `p` is the PROFILE from resolveHandle and has no such
+  // field, so the first version of this line compared `undefined` against "any" and filtered every
+  // channel away -- silently, because the wizard falls back to email when the list is empty and the
+  // screen therefore looked correct while the gate did nothing at all. Caught by reading the rendered
+  // payload rather than the page.
+  const codeChannels = (["email", "sms"] as const).filter(k =>
+    channels.find(c => c.kind === k)?.usable
+    && (entry.otpChannel === "any" || entry.otpChannel === k));
+
   // s19: the wizard rendering IS the booking start. Same server-render discipline as the profile.
   await recordFunnelStep(admin, {
     workspaceId: entry.workspaceId,
@@ -152,6 +173,11 @@ export default async function BookAppointmentPage({ params }: {
         locations={entry.locations}
         appointmentTypes={entry.appointmentTypes}
         canBook={entry.canBook}
+        // ⚠ WHICH CHANNELS CAN ACTUALLY CARRY A CODE (CPR-BOOK-FLOW-002 §12). `usable` is the
+        // practice's switch AND a configured provider, which is the pair that decides whether anything
+        // arrives. Offering a channel this practice cannot send on produced the only outcome it could:
+        // "this practice has not switched on sms", after the patient had filled in the whole form.
+        codeChannels={codeChannels}
         canRequestWithoutCode={entry.canRequestWithoutCode}
         requestNote={entry.requestNote}
         fallbackEmail={entry.fallbackEmail}

@@ -383,15 +383,40 @@ export async function submitBookingRequest(admin: any, args: {
   if (!page.value) return { ok: false, status: 404, code: "NOT_FOUND", message: "There is no booking page at that address." };
   const p = page.value;
 
-  const contact = args.intake.contactPhone?.trim() || args.intake.contactEmail?.trim() || null;
+  // ⚠ THE BOOKING MUST CLAIM THE CONTACT THAT WAS ACTUALLY VERIFIED, AND THIS LINE USED TO GUESS.
+  //
+  // It read `contactPhone || contactEmail`, which prefers the PHONE whenever one was given -- so a
+  // patient who gave both, and verified by EMAIL because that is the only channel this practice can
+  // send on, had their booking checked against a number no code was ever sent to. checkPatientSession
+  // did exactly what it should and refused: "that session verified a different phone or inbox", which
+  // the screen reported as "your booking session is not valid. Request a new code and start again."
+  // Requesting a new code sent another email and failed the same way, every time.
+  //
+  // ⚠ THE SECURITY PROPERTY IS UNCHANGED AND IS NOW STATED PROPERLY. The rule is not "the phone must
+  // match"; it is that the destination somebody PROVED they control must be one of the contacts on the
+  // booking. So the session is checked without a claim, and the destination it proves is then required
+  // to be among the details the patient gave. Verifying address A and booking with contact B is still
+  // refused -- that is the whole point of the check -- but a patient's own two contacts no longer
+  // disagree with each other.
+  const givenContacts = [args.intake.contactPhone?.trim(), args.intake.contactEmail?.trim()]
+    .filter((v): v is string => !!v);
 
   // ⚠ THE SESSION IS CHECKED HERE AS WELL AS INSIDE bookUnderRules, and that is not belt-and-braces
   // duplication: this call decides whether to WRITE AN INTAKE ROW AT ALL. Recording a stranger's name,
   // date of birth and reason for visit on the strength of an invalid session would be storing personal
   // data nobody proved they were entitled to submit.
   const proof = await checkPatientSession(admin, {
-    token: args.token, workspaceId: p.workspaceId, destination: contact,
+    token: args.token, workspaceId: p.workspaceId, destination: null,
   });
+  if (proof.ok && givenContacts.length > 0) {
+    const verified = normaliseDestination(proof.proof.destination);
+    if (!givenContacts.some(c => normaliseDestination(c) === verified))
+      return {
+        ok: false, status: 403, code: "PATIENT_SESSION_INVALID",
+        message: "the code was sent to a contact detail that is not on this booking. "
+          + "Use the phone or email you verified, or request a new code for the one you want to book with.",
+      };
+  }
   if (!proof.ok)
     return {
       ok: false,
@@ -566,7 +591,10 @@ export async function submitBookingRequest(admin: any, args: {
     // required-but-withdrawn question pass, because a value the rule deleted cannot be found missing.
     intake: answers,
     patientSessionToken: args.token,
-    patientContact: contact,
+    // ⚠ THE VERIFIED DESTINATION, not a guess between the two contacts. bookUnderRules runs the
+    // same session check again, so handing it the phone while the code went to the inbox failed there
+    // too -- the second half of the same defect.
+    patientContact: proof.proof.destination,
     actorId: proof.proof.sessionId,
     correlationId: args.correlationId,
   });
@@ -2084,6 +2112,11 @@ export type PublicBookingEntry = {
    * it books nothing, holds no time and becomes no appointment. See booking-request-unverified.ts.
    */
   canRequestWithoutCode: boolean;
+  /**
+   * s4.4 -- the channel this practice restricts codes to, or "any". The booking screen narrows what it
+   * offers by this AND by what can actually deliver; the engine enforces it regardless.
+   */
+  otpChannel: string;
   /** What such a request is and is not, in the patient's words. Null when none is offered. */
   requestNote: string | null;
   /** One sentence, true today, whenever either of the two above is false. */
@@ -2137,6 +2170,7 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
     reason: null as string | null, handle: clean,
     canBook: false, canManage: false,
     canRequestWithoutCode: false, requestNote: null as string | null,
+    otpChannel: "any",
     whyNot: null as string | null,
     blockers: [] as PublicBookingEntry["blockers"],
     displayName: null as string | null, instructions: null as string | null,
@@ -2191,6 +2225,7 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
     displayName: p.displayName, instructions: p.instructions, privacyNotice: p.privacyNotice,
     emergencyNotice: p.emergencyNotice,
     fallbackEmail: p.fallbackEmail, fallbackPhone: p.fallbackPhone,
+    otpChannel: p.otpChannel,
     locations: p.locations, appointmentTypes: p.appointmentTypes,
   };
 

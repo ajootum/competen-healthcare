@@ -76,6 +76,11 @@ export default function BookingWizard(props: {
   }[];
   appointmentTypes: string[];
   canBook: boolean;
+  /**
+   * CPR-BOOK-FLOW-002 §12: the channels that can ACTUALLY carry a code -- the practice switched
+   * them on AND a provider exists. Empty is a real answer and is not padded out here.
+   */
+  codeChannels: ("email" | "sms")[];
   canRequestWithoutCode: boolean;
   requestNote: string | null;
   /** The way through when the diary cannot help (migration 291). Either, both, or neither. */
@@ -163,7 +168,14 @@ export default function BookingWizard(props: {
   const [clearedNote, setClearedNote] = useState<string | null>(null);
 
   // Step 4
-  const [channel, setChannel] = useState<"sms" | "email">("sms");
+  // ⚠ DEFAULTS TO A CHANNEL THAT WORKS, not to SMS. It was hard-coded to "sms", and the prefill below
+  // then chose SMS for anybody who gave a phone -- on a practice that sends only email, which is every
+  // practice in this deployment. The patient met "this practice has not switched on sms" after filling
+  // in the entire form. Email leads where both work: it is the channel the booking confirmation itself
+  // uses, so the code arrives where the appointment will.
+  const [channel, setChannel] = useState<"sms" | "email">(
+    props.codeChannels.includes("email") ? "email" : props.codeChannels[0] ?? "email",
+  );
   const [destination, setDestination] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -1181,8 +1193,19 @@ export default function BookingWizard(props: {
             <button type="button" className={PRIMARY}
               disabled={busy || missing.length > 0 || badAnswers.length > 0 || !contact || (consentRequired && !consent)}
               onClick={() => {
-                setDestination(String(values.contact_phone ?? "").trim() || String(values.contact_email ?? "").trim());
-                setChannel(String(values.contact_phone ?? "").trim() ? "sms" : "email");
+                // ⚠ THE DESTINATION FOLLOWS THE CHANNEL, not the other way round. This used to pick the
+                // phone whenever one existed and set the channel to match -- which chose SMS on a
+                // practice that cannot send it. The channel is decided by what this practice can
+                // deliver (see the state above); the destination is then the contact detail that
+                // channel needs.
+                const phone = String(values.contact_phone ?? "").trim();
+                const email = String(values.contact_email ?? "").trim();
+                const ch: "email" | "sms" = props.codeChannels.includes("email") && email
+                  ? "email"
+                  : props.codeChannels.includes("sms") && phone ? "sms"
+                    : props.codeChannels[0] ?? "email";
+                setChannel(ch);
+                setDestination(ch === "sms" ? phone || email : email || phone);
                 setStep(4);
               }}>
               Continue to review →
@@ -1245,16 +1268,39 @@ export default function BookingWizard(props: {
                       Send the code somewhere else
                     </summary>
                     <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                      <label className="flex flex-col text-[11px] font-semibold text-gray-700">
-                        Send it by
-                        <select value={channel} onChange={e => setChannel(e.target.value as "sms" | "email")} className={`mt-0.5 ${CONTROL}`}>
-                          <option value="email">Email</option>
-                          <option value="sms">Text message</option>
-                        </select>
-                      </label>
+                      {/* ⚠ ONLY THE CHANNELS THIS PRACTICE CAN SEND ON. The list was hard-coded to both,
+                          so every patient here was offered a text message that could never arrive --
+                          and choosing it lost them the form. With one channel there is nothing to
+                          choose, so it is stated rather than asked. */}
+                      {props.codeChannels.length > 1 ? (
+                        <label className="flex flex-col text-[11px] font-semibold text-gray-700">
+                          Send it by
+                          <select value={channel}
+                            onChange={e => {
+                              const ch = e.target.value as "sms" | "email";
+                              setChannel(ch);
+                              // The destination must be the one that channel can reach.
+                              const phone = String(values.contact_phone ?? "").trim();
+                              const email = String(values.contact_email ?? "").trim();
+                              setDestination(ch === "sms" ? phone : email);
+                            }}
+                            className={`mt-0.5 ${CONTROL}`}>
+                            {props.codeChannels.map(k => (
+                              <option key={k} value={k}>{k === "email" ? "Email" : "Text message"}</option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <p className="text-[11px] text-gray-600">
+                          <span className="font-semibold text-gray-700">Send it by</span><br />
+                          {channel === "email" ? "Email" : "Text message"}
+                        </p>
+                      )}
                       <label className="flex flex-col text-[11px] font-semibold text-gray-700">
                         To
-                        <input value={destination} onChange={e => setDestination(e.target.value)} className={`mt-0.5 ${CONTROL}`} />
+                        <input value={destination} onChange={e => setDestination(e.target.value)}
+                          inputMode={channel === "email" ? "email" : "tel"}
+                          className={`mt-0.5 ${CONTROL}`} />
                       </label>
                     </div>
                     <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
