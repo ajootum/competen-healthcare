@@ -10,6 +10,7 @@ import { validateAnswer, isBlankAnswer } from "@/lib/practice/form-field";
 import { appointmentTypeLabel } from "@/lib/practice/practice-session-constants";
 import { practiceDayOf, practiceToday } from "@/lib/practice/practice-time";
 import DetailsStep from "./DetailsStep";
+import AvailabilityCalendar, { monthCells } from "./AvailabilityCalendar";
 import { IdentityStrip, AppointmentSummary, type SummaryIdentity } from "./BookingSummary";
 import { buildIcs, directionsUrl } from "@/lib/practice/calendar-invite";
 
@@ -115,6 +116,14 @@ export default function BookingWizard(props: {
    * Null until the slots arrive, then the first day that has any.
    */
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  /** CPR-BOOK-AVAIL-001 §3: Calendar | Soonest available. Two views of ONE computed result (§7). */
+  const [view, setView] = useState<"calendar" | "soonest">("calendar");
+  /** The month on screen, as YYYY-MM in the practice's own calendar. */
+  const [viewMonth, setViewMonth] = useState<string | null>(null);
+  /** §10's horizon metadata, straight from the engine. Null = not known, never "unlimited". */
+  const [horizon, setHorizon] = useState<{ days: number | null; until: string | null }>({ days: null, until: null });
+  /** §5: what to say when somebody taps a date with nothing on it. */
+  const [dayNote, setDayNote] = useState<string | null>(null);
 
   // Step 3
   const [questions, setQuestions] = useState<Question[] | null>(null);
@@ -285,6 +294,46 @@ export default function BookingWizard(props: {
     : (slotDays[0]?.key ?? null);
   const activeDaySlots = slotDays.find(d => d.key === activeDay)?.slots ?? [];
 
+  // ── CPR-BOOK-AVAIL-001 §4: the month grid, derived from the one availability result ───────────────
+  //
+  // ⚠ NOTHING HERE COMPUTES AVAILABILITY. It buckets what the server returned and counts it. AC-11 and
+  // §22 both forbid the client generating slots from a recurrence, and the way to keep that true is for
+  // the client to own no schedule at all.
+  const freeByDate = useMemo(
+    () => new Map(slotDays.map(d => [d.key, d.slots.length] as const)),
+    [slotDays],
+  );
+  /** Today in the PRACTICE's calendar, which is the calendar the grid and the buckets both use. */
+  const todayKey = practiceDayOf(timezone, new Date().toISOString()) ?? new Date().toISOString().slice(0, 10);
+  const monthKey = viewMonth ?? todayKey.slice(0, 7);
+  const [vYear, vMonth] = monthKey.split("-").map(Number);
+
+  const cells = useMemo(
+    () => monthCells(vYear, vMonth, { today: todayKey, freeByDate, bookableUntil: horizon.until }),
+    [vYear, vMonth, todayKey, freeByDate, horizon.until],
+  );
+
+  const monthLabel = (() => {
+    try {
+      return new Date(Date.UTC(vYear, vMonth - 1, 1))
+        .toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
+    } catch { return monthKey; }
+  })();
+
+  const shiftMonth = (delta: number) => {
+    const d = new Date(Date.UTC(vYear, vMonth - 1 + delta, 1));
+    setViewMonth(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+    setDayNote(null);
+  };
+  // §4/§13: navigation stops at the horizon, and never runs backwards into the past.
+  const canPrevMonth = monthKey > todayKey.slice(0, 7);
+  const canNextMonth = !horizon.until || monthKey < horizon.until.slice(0, 7);
+
+  /** §5/§14: the next bookable date at or after a given one, for the "next available" sentence. */
+  const nextAvailableFrom = (date: string) => slotDays.find(d => d.key > date) ?? null;
+  /** §8's shortcut: the very first bookable time in the whole horizon. */
+  const nextAvailable = slotDays[0] ?? null;
+
   /** A date chip's two lines: "Wed" over "9 Sep". Short, because there may be a month of them. */
   const chipLabel = (isoDay: string, sample: string) => {
     try {
@@ -369,11 +418,24 @@ export default function BookingWizard(props: {
    */
   const WINDOW_WEEKS = SEARCH_WEEKS;
 
+  /**
+   * ⚠ THE WHOLE HORIZON IN ONE CALL, WHICH IS WHAT MAKES THE TWO VIEWS HONEST.
+   *
+   * CPR-BOOK-AVAIL-001 §7: "Calendar and Soonest available are two presentations of the same computed
+   * availability result, not separate scheduling engines." They can only be that if there is ONE result
+   * to present. The engine caps a window at 120 days and the baseline horizon is 120 days, so a single
+   * request covers everything a patient may book -- and month navigation then costs nothing at all,
+   * because the month is a slice of data already held rather than another round trip.
+   *
+   * §17: "Fetch availability in useful date ranges rather than one request per calendar cell."
+   */
+  const HORIZON_SCAN_DAYS = 120;
+
   async function loadSlots(weekOffset: number, _opts: { search?: boolean } = {}) {
     setBusy(true); setProblem(null); setSlotsProblem(null); setSearchedWeeks(0);
     try {
       const from = new Date(Date.now() + weekOffset * 7 * 86400000);
-      const to = new Date(from.getTime() + WINDOW_WEEKS * 7 * 86400000);
+      const to = new Date(from.getTime() + HORIZON_SCAN_DAYS * 86400000);
       const q = new URLSearchParams({
         handle: props.handle, appointmentType,
         from: from.toISOString(), to: to.toISOString(),
@@ -391,8 +453,16 @@ export default function BookingWizard(props: {
       const found = (data.slots ?? []) as Slot[];
       setSlots(found);
       setWeekFrom(weekOffset);
+      // §10's horizon metadata. Null stays null -- an unknown boundary is not an unlimited one.
+      setHorizon({
+        days: typeof data.horizonDays === "number" ? data.horizonDays : null,
+        until: data.bookableUntilIso
+          ? (practiceDayOf(String(data.timezone ?? "UTC"), String(data.bookableUntilIso)) ?? null)
+          : null,
+      });
+      setDayNote(null);
       // The window really was searched, so the empty state can still say how far it looked.
-      setSearchedWeeks(WINDOW_WEEKS);
+      setSearchedWeeks(Math.round(HORIZON_SCAN_DAYS / 7));
       // ⚠ THE CHOSEN DAY IS CLEARED WITH THE WINDOW. Keeping it would leave a date selected that the new
       // window does not contain, and the times panel would render nothing with no explanation.
       setSelectedDay(null);
@@ -592,22 +662,43 @@ export default function BookingWizard(props: {
 
           {/* ⚠ "WEEK 2" WAS AN IMPLEMENTATION CONCEPT ON A PATIENT'S SCREEN (s6). The window is described
               by the dates it covers, which is the thing the patient is actually looking at. */}
-          {/* ⚠ THE ARROWS MOVE A WHOLE WINDOW, NOT A WEEK. They used to step seven days at a time, which
-              is why reaching a date a month out took four clicks and four waits. Each click now covers
-              eight weeks, for the same cost as the one week it used to fetch. */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button type="button" className={SECONDARY} disabled={busy || weekFrom === 0}
-              onClick={async () => { const w = Math.max(0, weekFrom - WINDOW_WEEKS); await loadSlots(w); }}>
-              ← Earlier
-            </button>
-            <span className="text-[11.5px] text-gray-600">
-              {weekFrom === 0 ? "The next eight weeks" : `Weeks ${weekFrom + 1}–${weekFrom + WINDOW_WEEKS} from now`}
-            </span>
-            <button type="button" className={SECONDARY} disabled={busy || weekFrom + WINDOW_WEEKS >= 24}
-              onClick={async () => { const w = weekFrom + WINDOW_WEEKS; await loadSlots(w); }}>
-              Later →
-            </button>
-          </div>
+          {/* ── §8: the next available appointment, offered in one press ─────────────────────────────
+              ⚠ IT IS THE SAME COMPUTED RESULT AS EVERY OTHER SLOT (§8, AC-07), taken from the head of
+              the same list the calendar and the soonest view both read. A shortcut resolved by separate
+              code is a second scheduling engine wearing a button. */}
+          {!busy && nextAvailable && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/6 px-3 py-2.5">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11px] font-semibold uppercase tracking-wide text-[var(--cp-primary-deep)]">
+                  Next available appointment
+                </span>
+                <span className="block text-[13px] font-bold text-gray-900">
+                  {fmt(nextAvailable.slots[0].startsAt)}
+                </span>
+              </span>
+              <button type="button" className={PRIMARY}
+                onClick={() => { setSelectedDay(nextAvailable.key); setChosen(nextAvailable.slots[0]); setViewMonth(nextAvailable.key.slice(0, 7)); }}>
+                Book this time
+              </button>
+            </div>
+          )}
+
+          {/* ── §3/§7: the view switch. Two presentations, one result. ──────────────────────────────── */}
+          {!busy && slots !== null && slots.length > 0 && (
+            <div role="tablist" aria-label="How to choose a date"
+              className="mt-3 flex gap-1 border-b border-gray-200">
+              {([["calendar", "Calendar"], ["soonest", "Soonest available"]] as const).map(([k, label]) => (
+                <button key={k} type="button" role="tab" aria-selected={view === k}
+                  onClick={() => setView(k)}
+                  className={`-mb-px border-b-2 px-3 py-2 text-[12.5px] font-semibold ${
+                    view === k
+                      ? "border-[var(--cp-primary)] text-[var(--cp-primary-deep)]"
+                      : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* ⚠ THREE DIFFERENT SENTENCES FOR THREE DIFFERENT STATES. */}
           {busy && <p className="mt-3 text-[12.5px] text-gray-500">Reading this practice&rsquo;s diary&hellip;</p>}
@@ -662,31 +753,70 @@ export default function BookingWizard(props: {
               they can actually be seen, so every chip on the row is a real choice. */}
           {!busy && slots !== null && slots.length > 0 && (
             <div className="mt-3">
-              <h2 className="text-[11.5px] font-bold text-gray-700">
-                {slotDays.length === 1 ? "One date is available" : `${slotDays.length} dates are available`}
-              </h2>
-              <div role="radiogroup" aria-label="Available dates"
-                className="mt-1.5 flex gap-1.5 overflow-x-auto pb-1">
-                {slotDays.map(day => {
-                  const on = day.key === activeDay;
-                  const { weekday, day: dayLabel } = chipLabel(day.key, day.slots[0].startsAt);
-                  return (
-                    <button key={day.key} type="button" role="radio" aria-checked={on}
-                      onClick={() => { setSelectedDay(day.key); setChosen(null); }}
-                      className={`shrink-0 rounded-lg border px-3 py-2 text-center ${
-                        on
-                          ? "border-[var(--cp-primary)] bg-[var(--cp-primary)] text-white"
-                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}>
-                      <span className="block text-[10.5px] uppercase tracking-wide opacity-80">{weekday}</span>
-                      <span className="block text-[12.5px] font-bold">{dayLabel}</span>
-                      {/* The count is why this beats a calendar: a patient can see where the choice is. */}
-                      <span className={`block text-[10px] ${on ? "opacity-80" : "text-gray-500"}`}>
-                        {day.slots.length} time{day.slots.length === 1 ? "" : "s"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              {/* ── §4: CALENDAR ─────────────────────────────────────────────────────────────────── */}
+              {view === "calendar" && (
+                <>
+                  <AvailabilityCalendar
+                    cells={cells} selected={activeDay} monthLabel={monthLabel} busy={busy}
+                    canPrev={canPrevMonth} canNext={canNextMonth}
+                    onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)}
+                    onPick={(date, freeCount) => {
+                      setDayNote(null);
+                      if (freeCount > 0) { setSelectedDay(date); setChosen(null); return; }
+                      // §5: an unavailable date explains itself and points at the next one, rather
+                      // than being a cell that does nothing when tapped.
+                      const next = nextAvailableFrom(date);
+                      let label = date;
+                      try {
+                        label = new Date(`${date}T12:00:00Z`).toLocaleDateString(undefined,
+                          { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+                      } catch { /* the key is still a true date */ }
+                      setDayNote(`No appointments are available on ${label}.`
+                        + (next ? ` Next available: ${next.label}.` : ""));
+                    }}
+                  />
+                  {dayNote && (
+                    <p role="status" className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] text-gray-700">
+                      {dayNote}
+                    </p>
+                  )}
+                  {/* §13: the horizon as a fact, not as the navigation control. */}
+                  {horizon.days !== null && (
+                    <p className="mt-1.5 text-[11px] text-gray-500">
+                      Appointments can currently be booked up to {horizon.days} days ahead.
+                    </p>
+                  )}
+                </>
+              )}
+
+              {/* ── §7: SOONEST AVAILABLE ────────────────────────────────────────────────────────── */}
+              {view === "soonest" && (
+                <div role="radiogroup" aria-label="Soonest available dates" className="flex flex-col gap-1.5">
+                  {slotDays.slice(0, 12).map(day => {
+                    const on = day.key === activeDay;
+                    return (
+                      <button key={day.key} type="button" role="radio" aria-checked={on}
+                        aria-label={`${day.label}, ${day.slots.length} appointment${day.slots.length === 1 ? "" : "s"} available`}
+                        onClick={() => { setSelectedDay(day.key); setChosen(null); setViewMonth(day.key.slice(0, 7)); }}
+                        className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left ${
+                          on ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/8"
+                            : "border-gray-200 bg-white hover:bg-gray-50"}`}>
+                        <span className="text-[12.5px] font-semibold text-gray-900">{day.label}</span>
+                        <span className="text-[11.5px] text-gray-600">
+                          {timeOf(day.slots[0].startsAt)}
+                          {day.slots.length > 1 && ` +${day.slots.length - 1} more`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {slotDays.length > 12 && (
+                    // §7: progressive, and honest about being a slice rather than the whole answer.
+                    <p className="text-[11px] text-gray-500">
+                      Showing the first 12 available dates. Use the calendar to look further ahead.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {activeDay && (
                 <div className="mt-3">

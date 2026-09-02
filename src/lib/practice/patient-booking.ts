@@ -847,6 +847,16 @@ export type BookableTimes = {
    * ⚠ ONLY OFFERABLE TIMES. Never a taken one, never a reason, never a total. See the header.
    */
   slots: BookableSlot[];
+  /**
+   * CPR-BOOK-AVAIL-001 §10's horizon metadata -- "permitted navigation boundaries where needed".
+   *
+   * How many days ahead this location's rule currently permits booking, and the instant that lands on.
+   * Null on the staff channel, which has always had an open-ended window, and null when the rule could
+   * not be read -- an absent boundary is not an unlimited one, and a caller must not read it as either
+   * "book forever" or "nothing after today".
+   */
+  horizonDays: number | null;
+  bookableUntilIso: string | null;
 };
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1197,9 +1207,34 @@ export async function bookableTimes(admin: any, args: {
   }
 
   out.sort((a, b) => (a.startsAt < b.startsAt ? -1 : a.startsAt > b.startsAt ? 1 : 0));
+
+  // ── CPR-BOOK-AVAIL-001 §10 / §13: HOW FAR AHEAD BOOKING IS CURRENTLY PERMITTED ───────────────────
+  //
+  // §13: "The booking horizon is a rule, not the primary navigation metaphor. Calendar navigation stops
+  // at the authoritative horizon boundary" and "do not imply that dates outside the horizon are fully
+  // booked; they are simply not yet bookable." A calendar cannot honour either sentence without knowing
+  // where the boundary is, and until now the answer left this function only as an ABSENCE of slots --
+  // which is precisely the conflation §13 forbids.
+  //
+  // ⚠ TAKEN FROM THE RULE, NOT INFERRED FROM THE SLOTS. Deriving it from the furthest slot returned
+  // would answer "the last Wednesday we found" rather than "the last day you may book", and would go
+  // silent exactly when it is most needed: a month with nothing in it would report no boundary at all.
+  // The rule is memoised above, so this costs nothing on a call that already resolved it.
+  //
+  // ⚠ AND IT IS THE RULE FOR THE REQUESTED LOCATION. Horizons are per location; answering with some
+  // blend of several would be a number no rule actually enforces.
+  const requestedRule = await ruleFor(args.locationId ?? null);
+  const horizonDays = requestedRule.readFailed ? null : requestedRule.bookingHorizonDays;
+  const bookableUntilIso = horizonDays === null || horizonDays === undefined
+    ? null                                            // staff keep the open-ended window
+    : new Date(now + horizonDays * 86400000).toISOString();
+
   return {
     ok: true,
-    data: { appointmentType: args.appointmentType, minutes, timezone, fromIso, toIso, channel, slots: out },
+    data: {
+      appointmentType: args.appointmentType, minutes, timezone, fromIso, toIso, channel, slots: out,
+      horizonDays: horizonDays ?? null, bookableUntilIso,
+    },
   };
 }
 
