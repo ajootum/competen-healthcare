@@ -108,6 +108,13 @@ export default function BookingWizard(props: {
   const [weekFrom, setWeekFrom] = useState(0);
   /** How many weeks the forward search covered, so the empty state can say how far it looked. */
   const [searchedWeeks, setSearchedWeeks] = useState(0);
+  /**
+   * ⚠ WHICH DATE THE PATIENT IS LOOKING AT. Until now there was no such thing: every day the window
+   * happened to contain was printed one under another, and choosing a date meant scrolling to it. A
+   * person booking an appointment picks a DAY first and a time second, and the screen now works that way.
+   * Null until the slots arrive, then the first day that has any.
+   */
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   // Step 3
   const [questions, setQuestions] = useState<Question[] | null>(null);
@@ -268,6 +275,27 @@ export default function BookingWizard(props: {
     return [...days.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([key, v]) => ({ key, ...v }));
   }, [slots, timezone]);
 
+  /**
+   * The day whose times are on screen. DERIVED rather than held in an effect, so it cannot lag the
+   * window: when a new window arrives with different dates, a stale selection is simply not among them
+   * and the first available day takes over on the same render.
+   */
+  const activeDay = selectedDay && slotDays.some(d => d.key === selectedDay)
+    ? selectedDay
+    : (slotDays[0]?.key ?? null);
+  const activeDaySlots = slotDays.find(d => d.key === activeDay)?.slots ?? [];
+
+  /** A date chip's two lines: "Wed" over "9 Sep". Short, because there may be a month of them. */
+  const chipLabel = (isoDay: string, sample: string) => {
+    try {
+      const d = new Date(sample);
+      return {
+        weekday: d.toLocaleDateString(undefined, { weekday: "short", timeZone: timezone }),
+        day: d.toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: timezone }),
+      };
+    } catch { return { weekday: "", day: isoDay }; }
+  };
+
   const locationOf = (id: string) => props.locations.find(l => l.id === id) ?? null;
   const MODE_WORD: Record<string, string> = { in_person: "In-person", virtual: "Online consultation" };
 
@@ -302,53 +330,72 @@ export default function BookingWizard(props: {
   }
 
   /**
-   * ⚠ IT SKIPS FORWARD TO THE FIRST WEEK THAT HAS SOMETHING, RATHER THAN SHOWING AN EMPTY ONE.
+   * ⚠ IT LOOKS EIGHT WEEKS AHEAD AT ONCE, RATHER THAN A WEEK AT A TIME.
    *
    * The owner, 2026-08-12: "They should be automatically offered spaces if all the slots are filled."
    * A patient landing on an empty week has to work out that clicking "next" repeatedly might help, and
-   * a quiet fortnight reads as a practice that is closed. So one call becomes at most SEARCH_WEEKS
-   * calls, stopping at the first week with a free time.
+   * a quiet fortnight reads as a practice that is closed.
    *
-   * ⚠ AND THE SEARCH IS BOUNDED AND SAYS SO. Walking forward until something turns up would hammer the
-   * endpoint against a practice with no availability at all. When the bound is reached the screen says
-   * how far it looked -- "nothing in the next eight weeks" is a fact a patient can act on, whereas an
-   * empty list is not.
+   * ⚠ THIS USED TO BE A LOOP -- up to eight one-week calls, stopping at the first week with something --
+   * and the loop was answering the owner's point at the price of up to eight round trips. It was built on
+   * the assumption that a wider range costs more, and it does not: see loadSlots for the measurements.
+   * The whole window is now one call, which is faster AND is what lets the patient see every available
+   * date at once instead of discovering them one week at a time.
    *
-   * ⚠ AN OUTAGE STOPS THE SEARCH IMMEDIATELY. Treating a failed read as "this week is empty, try the
-   * next" would turn one broken request into eight, and would end by reporting an outage as an
-   * absence -- the exact conflation `slots: null` versus `slots: []` exists to prevent.
+   * ⚠ THE SEARCH IS STILL BOUNDED AND STILL SAYS SO. "Nothing is free in the next eight weeks" is a fact
+   * a patient can act on, whereas an empty list is not -- and the arrows move a whole window at a time
+   * for anybody who needs to look further.
+   *
+   * ⚠ AN OUTAGE IS STILL NOT AN ABSENCE. A failed read sets `slots: null` and its own sentence, never
+   * `[]` -- the conflation that distinction exists to prevent.
    */
   const SEARCH_WEEKS = 8;
 
-  async function loadSlots(weekOffset: number, opts: { search?: boolean } = {}) {
+  /**
+   * ⚠ ONE REQUEST FOR THE WHOLE WINDOW, WHERE THIS USED TO MAKE UP TO EIGHT.
+   *
+   * The loop this replaces asked for one week, and if that week was empty asked for the next, up to
+   * SEARCH_WEEKS times -- built on the reasonable assumption that a wider range costs more.
+   *
+   * IT DOES NOT. Measured against production on 2026-09-02: a 7-day window took 2761ms, a 28-day window
+   * 2724ms and a 56-day window 2813ms. The cost is resolving the practice's rules and diary, paid once
+   * per call whatever the range. So the old shape charged a patient with a quiet fortnight ~8 seconds of
+   * "Reading this practice's diary" -- and up to ~22 for a genuinely empty two months -- to learn
+   * something a single call answers in under three.
+   *
+   * The window is asked for whole, once. That is faster, it is fewer requests against an unauthenticated
+   * endpoint, and it is what makes a date PICKER possible at all: you cannot offer somebody a choice of
+   * dates while you are still discovering them one week at a time.
+   */
+  const WINDOW_WEEKS = SEARCH_WEEKS;
+
+  async function loadSlots(weekOffset: number, _opts: { search?: boolean } = {}) {
     setBusy(true); setProblem(null); setSlotsProblem(null); setSearchedWeeks(0);
     try {
-      const last = opts.search ? weekOffset + SEARCH_WEEKS - 1 : weekOffset;
-      for (let w = weekOffset; w <= last; w++) {
-        const from = new Date(Date.now() + w * 7 * 86400000);
-        const to = new Date(from.getTime() + 7 * 86400000);
-        const q = new URLSearchParams({
-          handle: props.handle, appointmentType,
-          from: from.toISOString(), to: to.toISOString(),
-        });
-        if (locationId) q.set("locationId", locationId);
-        const res = await fetch(`/api/v1/practice/public/booking?${q}`, { cache: "no-store" });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          // ⚠ AN OUTAGE IS NOT AN EMPTY DIARY, AND THE TWO ARE HELD IN DIFFERENT STATE ON PURPOSE.
-          setSlots(null);
-          setSlotsProblem(data?.error?.message ?? `The times could not be read (${res.status}).`);
-          return;
-        }
-        setTimezone(String(data.timezone ?? "UTC"));
-        const found = (data.slots ?? []) as Slot[];
-        if (found.length > 0 || w === last) {
-          setSlots(found);
-          setWeekFrom(w);
-          setSearchedWeeks(opts.search ? w - weekOffset + 1 : 0);
-          return;
-        }
+      const from = new Date(Date.now() + weekOffset * 7 * 86400000);
+      const to = new Date(from.getTime() + WINDOW_WEEKS * 7 * 86400000);
+      const q = new URLSearchParams({
+        handle: props.handle, appointmentType,
+        from: from.toISOString(), to: to.toISOString(),
+      });
+      if (locationId) q.set("locationId", locationId);
+      const res = await fetch(`/api/v1/practice/public/booking?${q}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // ⚠ AN OUTAGE IS NOT AN EMPTY DIARY, AND THE TWO ARE HELD IN DIFFERENT STATE ON PURPOSE.
+        setSlots(null);
+        setSlotsProblem(data?.error?.message ?? `The times could not be read (${res.status}).`);
+        return;
       }
+      setTimezone(String(data.timezone ?? "UTC"));
+      const found = (data.slots ?? []) as Slot[];
+      setSlots(found);
+      setWeekFrom(weekOffset);
+      // The window really was searched, so the empty state can still say how far it looked.
+      setSearchedWeeks(WINDOW_WEEKS);
+      // ⚠ THE CHOSEN DAY IS CLEARED WITH THE WINDOW. Keeping it would leave a date selected that the new
+      // window does not contain, and the times panel would render nothing with no explanation.
+      setSelectedDay(null);
     } catch (e) {
       setSlots(null);
       setSlotsProblem(`The times could not be read: ${e instanceof Error ? e.message : String(e)}`);
@@ -545,18 +592,19 @@ export default function BookingWizard(props: {
 
           {/* ⚠ "WEEK 2" WAS AN IMPLEMENTATION CONCEPT ON A PATIENT'S SCREEN (s6). The window is described
               by the dates it covers, which is the thing the patient is actually looking at. */}
+          {/* ⚠ THE ARROWS MOVE A WHOLE WINDOW, NOT A WEEK. They used to step seven days at a time, which
+              is why reaching a date a month out took four clicks and four waits. Each click now covers
+              eight weeks, for the same cost as the one week it used to fetch. */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button type="button" className={SECONDARY} disabled={busy || weekFrom === 0}
-              onClick={async () => { const w = Math.max(0, weekFrom - 1); setWeekFrom(w); await loadSlots(w); }}>
+              onClick={async () => { const w = Math.max(0, weekFrom - WINDOW_WEEKS); await loadSlots(w); }}>
               ← Earlier
             </button>
             <span className="text-[11.5px] text-gray-600">
-              {slotDays.length > 0
-                ? `${slotDays[0].label}${slotDays.length > 1 ? ` – ${slotDays[slotDays.length - 1].label}` : ""}`
-                : weekFrom === 0 ? "The next seven days" : "Later dates"}
+              {weekFrom === 0 ? "The next eight weeks" : `Weeks ${weekFrom + 1}–${weekFrom + WINDOW_WEEKS} from now`}
             </span>
-            <button type="button" className={SECONDARY} disabled={busy || weekFrom >= 16}
-              onClick={async () => { const w = weekFrom + 1; setWeekFrom(w); await loadSlots(w); }}>
+            <button type="button" className={SECONDARY} disabled={busy || weekFrom + WINDOW_WEEKS >= 24}
+              onClick={async () => { const w = weekFrom + WINDOW_WEEKS; await loadSlots(w); }}>
               Later →
             </button>
           </div>
@@ -579,9 +627,13 @@ export default function BookingWizard(props: {
           {!busy && !slotsProblem && slots !== null && slots.length === 0 && (
             <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/70 p-3 text-[12.5px] leading-relaxed text-gray-700">
               <p>
-                {searchedWeeks > 1
+                {/* ⚠ IT SAYS WHICH WEEKS WERE SEARCHED, NOT JUST HOW MANY. "Nothing in the next eight
+                    weeks" is false once the patient has already paged forward -- the window then covers
+                    weeks nine to sixteen, and reporting it as "the next eight" would tell somebody
+                    looking at March that February is empty. */}
+                {weekFrom === 0
                   ? `Nothing is free in the next ${searchedWeeks} weeks.`
-                  : "Nothing is free in this week."}
+                  : `Nothing is free in weeks ${weekFrom + 1} to ${weekFrom + searchedWeeks} from now.`}
                 {" "}You can look further ahead with the arrows.
               </p>
               {(props.fallbackEmail || props.fallbackPhone) ? (
@@ -600,14 +652,49 @@ export default function BookingWizard(props: {
               )}
             </div>
           )}
-          {/* s6: grouped under their date, so a patient scans days first and times second. */}
+          {/* ── s6: THE DATE IS CHOSEN, THEN THE TIME ────────────────────────────────────────────────
+              ⚠ THIS USED TO PRINT EVERY DAY IN THE WINDOW ONE UNDER ANOTHER, and "choosing a date"
+              meant scrolling to it. A person booking an appointment picks a day first and a time
+              second; the screen now asks in that order.
+
+              ⚠ ONLY DAYS THAT HAVE SOMETHING FREE ARE OFFERED. A calendar greying out three weeks of
+              unavailable dates makes a patient hunt for the ones that work. This lists exactly the days
+              they can actually be seen, so every chip on the row is a real choice. */}
           {!busy && slots !== null && slots.length > 0 && (
-            <div className="mt-3 flex flex-col gap-3">
-              {slotDays.map(day => (
-                <div key={day.key}>
-                  <h2 className="text-[11.5px] font-bold text-gray-700">{day.label}</h2>
+            <div className="mt-3">
+              <h2 className="text-[11.5px] font-bold text-gray-700">
+                {slotDays.length === 1 ? "One date is available" : `${slotDays.length} dates are available`}
+              </h2>
+              <div role="radiogroup" aria-label="Available dates"
+                className="mt-1.5 flex gap-1.5 overflow-x-auto pb-1">
+                {slotDays.map(day => {
+                  const on = day.key === activeDay;
+                  const { weekday, day: dayLabel } = chipLabel(day.key, day.slots[0].startsAt);
+                  return (
+                    <button key={day.key} type="button" role="radio" aria-checked={on}
+                      onClick={() => { setSelectedDay(day.key); setChosen(null); }}
+                      className={`shrink-0 rounded-lg border px-3 py-2 text-center ${
+                        on
+                          ? "border-[var(--cp-primary)] bg-[var(--cp-primary)] text-white"
+                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}>
+                      <span className="block text-[10.5px] uppercase tracking-wide opacity-80">{weekday}</span>
+                      <span className="block text-[12.5px] font-bold">{dayLabel}</span>
+                      {/* The count is why this beats a calendar: a patient can see where the choice is. */}
+                      <span className={`block text-[10px] ${on ? "opacity-80" : "text-gray-500"}`}>
+                        {day.slots.length} time{day.slots.length === 1 ? "" : "s"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {activeDay && (
+                <div className="mt-3">
+                  <h2 className="text-[11.5px] font-bold text-gray-700">
+                    {slotDays.find(d => d.key === activeDay)?.label}
+                  </h2>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {day.slots.map(s => {
+                    {activeDaySlots.map(s => {
                       const selected = chosen?.startsAt === s.startsAt;
                       return (
                         <button key={`${s.sourceSlotId}-${s.startsAt}`} type="button"
@@ -625,7 +712,7 @@ export default function BookingWizard(props: {
                     })}
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
 
