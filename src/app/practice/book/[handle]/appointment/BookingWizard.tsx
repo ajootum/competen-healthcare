@@ -101,6 +101,15 @@ export default function BookingWizard(props: {
 
   // Step 1
   const [locationId, setLocationId] = useState<string>(props.locations[0]?.id ?? "");
+  /**
+   * CPR-BOOK-FLOW-002 §5 -- "show me the earliest appointment across all locations".
+   *
+   * ⚠ A BROWSING INTENT, NOT A LOCATION. It is held apart from `locationId` because a booking always
+   * lands somewhere: the patient browses without a filter, and the moment they choose a time the slot
+   * itself supplies the location. Storing "" as if it were a place would have sent `location: null` to
+   * the booking engine for an appointment that happens at a specific hospital.
+   */
+  const [anyLocation, setAnyLocation] = useState(false);
   const [appointmentType, setAppointmentType] = useState<string>(props.appointmentTypes[0] ?? "");
 
   // Step 2 -- ⚠ THREE STATES. null means nobody has looked or the look failed; [] means nothing is free.
@@ -375,10 +384,23 @@ export default function BookingWizard(props: {
   const locationOf = (id: string) => props.locations.find(l => l.id === id) ?? null;
   const MODE_WORD: Record<string, string> = { in_person: "In-person", virtual: "Online consultation" };
 
+  /**
+   * ⚠ WHERE THE APPOINTMENT ACTUALLY IS, which in "any location" mode only the chosen slot knows.
+   *
+   * Everything downstream -- the summary, the intake questions, the booking itself -- asks this rather
+   * than the browsing filter. §12 of CPR-BOOK-AVAIL-001 is the reason it exists: merged availability is
+   * permitted only when the UI identifies the location, and a booking submitted with a null location
+   * for a slot that happens at a named hospital would be the same failure one layer deeper.
+   */
+  const effectiveLocationId = chosen?.locationId ?? (locationId || null);
+  const effectiveLocation = effectiveLocationId ? locationOf(effectiveLocationId) : null;
+
   /** What the persistent summary shows (s7). Every value is state, never a re-derivation. */
   const summaryFacts = {
-    locationName: locationOf(locationId)?.name ?? null,
-    mode: locationOf(locationId) ? MODE_WORD[locationOf(locationId)!.mode] ?? null : null,
+    locationName: effectiveLocation?.name
+      // Browsing every location and nothing chosen yet: say that, rather than naming a place.
+      ?? (anyLocation ? "Any location" : null),
+    mode: effectiveLocation ? MODE_WORD[effectiveLocation.mode] ?? null : null,
     appointmentTypeLabel: appointmentType ? appointmentTypeLabel(appointmentType) : null,
     when: chosen ? fmt(chosen.startsAt) : null,
     minutes: chosen?.minutes ?? null,
@@ -553,7 +575,9 @@ export default function BookingWizard(props: {
       const q = new URLSearchParams({
         action: "intake", handle: props.handle, appointmentType, scheduledAt: slot.startsAt,
       });
-      if (locationId) q.set("locationId", locationId);
+      // The slot knows where it is; in "any location" mode the filter does not.
+      const forQuestions = slot.locationId ?? (locationId || null);
+      if (forQuestions) q.set("locationId", forQuestions);
       const res = await fetch(`/api/v1/practice/public/booking?${q}`, { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -694,7 +718,7 @@ export default function BookingWizard(props: {
               <div className="mt-2 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Location">
                 {props.locations.map(l => {
                   const o = overview?.byLocation[l.id];
-                  const on = locationId === l.id;
+                  const on = !anyLocation && locationId === l.id;
                   // "Tuesdays, Fridays & Saturdays" -- not "Tuesdays & Fridays & Saturdays", which is
                   // what joining on "&" produces and what a patient would read as carelessness.
                   const dayNames = o
@@ -708,7 +732,7 @@ export default function BookingWizard(props: {
                     <button key={l.id} type="button" role="radio" aria-checked={on}
                       aria-label={`${l.name}, ${MODE_WORD[l.mode] ?? "In-person"}`
                         + (o ? `, next available ${fmt(o.firstIso)}` : ", online booking not available")}
-                      onClick={() => { setLocationId(l.id); setChosen(null); setSelectedDay(null); }}
+                      onClick={() => { setAnyLocation(false); setLocationId(l.id); setChosen(null); setSelectedDay(null); }}
                       className={`rounded-xl border px-3 py-2.5 text-left ${
                         on ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/8 ring-1 ring-[var(--cp-primary)]/30"
                           : "border-gray-200 bg-white hover:bg-gray-50"}`}>
@@ -738,6 +762,49 @@ export default function BookingWizard(props: {
                     </button>
                   );
                 })}
+                {/* ── "Any location": the earliest across all of them ────────────────────────────────
+                    ⚠ IT IS OFFERED ONLY WHEN IT WOULD SAY SOMETHING DIFFERENT. With availability at a
+                    single location this card is the location card with a vaguer name, and a choice
+                    between two identical answers is a decision a patient is made to take for nothing.
+
+                    ⚠ AND IT NAMES WHERE THE EARLIEST ACTUALLY IS. "Show me anything" that then leaves
+                    somebody to discover the hospital at the confirmation step is how a person books
+                    into the wrong city. CPR-BOOK-AVAIL-001 §12 permits merged availability only where
+                    the UI identifies the location, which the time buttons on step 2 now also do. */}
+                {(() => {
+                  const withSlots = Object.entries(overview?.byLocation ?? {})
+                    .filter(([, v]) => v.count > 0);
+                  if (withSlots.length < 2) return null;
+                  const earliest = withSlots.reduce((a, b) => (a[1].firstIso <= b[1].firstIso ? a : b));
+                  const where = locationOf(earliest[0]);
+                  return (
+                    <button type="button" role="radio" aria-checked={anyLocation}
+                      aria-label={`Any location, earliest ${fmt(earliest[1].firstIso)}`
+                        + (where ? ` at ${where.name}` : "")}
+                      onClick={() => { setAnyLocation(true); setLocationId(""); setChosen(null); setSelectedDay(null); }}
+                      className={`rounded-xl border px-3 py-2.5 text-left ${
+                        anyLocation ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/8 ring-1 ring-[var(--cp-primary)]/30"
+                          : "border-dashed border-gray-300 bg-white hover:bg-gray-50"}`}>
+                      <span className="flex items-start gap-2">
+                        <span aria-hidden className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                          anyLocation ? "border-[var(--cp-primary)]" : "border-gray-300"}`}>
+                          {anyLocation && <span className="h-2 w-2 rounded-full bg-[var(--cp-primary)]" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-[13px] font-semibold text-gray-900">Any location</span>
+                          <span className="block text-[11.5px] text-gray-500">
+                            Show me the earliest appointment wherever it is
+                          </span>
+                        </span>
+                      </span>
+                      <span className="mt-2 block rounded-lg bg-gray-50 px-2 py-1.5 text-[11.5px] text-gray-800">
+                        <span className="text-gray-500">Earliest </span>
+                        <span className="font-semibold">{fmt(earliest[1].firstIso)}</span>
+                        {where && <span className="block text-[11px] text-gray-500">at {where.name}</span>}
+                      </span>
+                    </button>
+                  );
+                })()}
               </div>
               {/* §5's duration, shown ONCE and only where it is real -- see APPOINTMENT_TYPE_BLURB. */}
               {overview?.minutes && (
@@ -971,13 +1038,24 @@ export default function BookingWizard(props: {
                         <button key={`${s.sourceSlotId}-${s.startsAt}`} type="button"
                           aria-pressed={selected}
                           onClick={() => setChosen(s)}
-                          className={`rounded-lg px-3 py-2 text-[12.5px] font-semibold ${
+                          aria-label={`${timeOf(s.startsAt)}${anyLocation && s.locationName ? ` at ${s.locationName}` : ""}`}
+                          className={`rounded-lg px-3 py-2 text-left text-[12.5px] font-semibold ${
                             selected
                               ? "bg-[var(--cp-primary)] text-white ring-1 ring-[var(--cp-primary)]"
                               : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>
                           {/* Selection carries a mark as well as a fill, so it does not rest on colour. */}
                           {selected && <span aria-hidden className="mr-1">✓</span>}
                           {timeOf(s.startsAt)}
+                          {/* ⚠ CPR-BOOK-AVAIL-001 §12: merged availability is permitted ONLY where the UI
+                              identifies the location. Without this line a patient browsing every
+                              location would pick 09:00 from a list of times at three different
+                              hospitals and find out which one at the confirmation screen. */}
+                          {anyLocation && s.locationName && (
+                            <span className={`block text-[10px] font-normal ${
+                              selected ? "text-white/85" : "text-gray-500"}`}>
+                              {s.locationName}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -990,6 +1068,7 @@ export default function BookingWizard(props: {
           {chosen && (
             <p className="mt-3 rounded-lg bg-[var(--cp-primary)]/8 px-3 py-2 text-[12px] font-semibold text-[var(--cp-primary-deep)]">
               Selected: {fmt(chosen.startsAt)}
+              {anyLocation && chosen.locationName && <> &middot; {chosen.locationName}</>}
             </p>
           )}
 
@@ -1204,7 +1283,7 @@ export default function BookingWizard(props: {
                         setToken(t);
                         const r = await call({
                           action: "book", token: t, ...intakePayload(),
-                          scheduledAt: chosen?.startsAt, appointmentType, locationId: locationId || null,
+                          scheduledAt: chosen?.startsAt, appointmentType, locationId: effectiveLocationId,
                           durationMinutes: chosen?.minutes ?? null,
                           elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
                         });
@@ -1229,7 +1308,7 @@ export default function BookingWizard(props: {
                   onClick={async () => {
                     const r = await call({
                       action: "request_without_code", ...intakePayload(),
-                      scheduledAt: chosen?.startsAt, appointmentType, locationId: locationId || null,
+                      scheduledAt: chosen?.startsAt, appointmentType, locationId: effectiveLocationId,
                     });
                     if (r) { setDone(r); setDoneKind("requested"); }
                   }}>
