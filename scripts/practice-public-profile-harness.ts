@@ -317,6 +317,57 @@ async function main() {
       entryCleared.emergencyNotice === null, JSON.stringify(entryCleared.emergencyNotice));
   }
 
+  // ── 5j. The vocabulary the DATABASE accepts (migration 364) ───────────────
+  //
+  // ⚠ THE ONE ASSERTION THE UNIT TESTS CANNOT MAKE. relationships-constants.test.ts proves the lists in
+  // this codebase agree with each other; it cannot prove they agree with the CHECK constraint, and a
+  // value the UI offers and the database refuses fails at submit, on the patient, after they have typed
+  // everything. So this writes the two new values to the real column and lets the constraint judge them.
+  section("5c. the relationship vocabulary, against the real constraint");
+  {
+    const attempt = async (relationship: string) => {
+      const { data, error } = await admin.from("practice_booking_request").insert({
+        workspace_id: ws, appointment_type: "new_consultation", channel: "patient_self",
+        requested_start: new Date(Date.now() + 86400000).toISOString(), requested_minutes: 30,
+        // ⚠ A STATUS THE TABLE ACCEPTS. This said "draft", which is not one of them -- so every insert
+        // below failed on the STATUS constraint while this harness reported the RELATIONSHIP vocabulary
+        // as unmigrated. A fixture that cannot be written tests nothing, and blames the wrong thing.
+        status: "submitted", given_name: "Vocab", family_name: "Check",
+        // migration 254's unverified_is_contactable: a request nobody can reply to is refused by the
+        // database, which is right, and which a fixture has to satisfy before it can test anything else.
+        contact_email: "vocab.check@example.com",
+        representative_name: "A Person", representative_relationship: relationship,
+      }).select("id").maybeSingle();
+      if (data?.id) await admin.from("practice_booking_request").delete().eq("id", data.id);
+      return error?.message ?? null;
+    };
+
+    // ⚠ SKIPS RATHER THAN FAILS WHILE THE MIGRATION IS PENDING, and says which state it is in. Migrations
+    // here are applied by hand, so a harness that goes red between a deploy and the owner running SQL
+    // turns a normal step of this workflow into a broken build. What it must NOT do is fall silent: the
+    // skip names the migration, so "green" never means "checked" when nothing was checked.
+    const pendingRefusal = await attempt("parent");
+    const applied = pendingRefusal === null;
+    // ⚠ THE RELATIONSHIP CONSTRAINT BY NAME, NEVER "a check constraint". Matching any violation made
+    // an unrelated failure look like a pending migration -- the harness went quiet about the thing it
+    // exists to check, and said so in a sentence that was confidently wrong.
+    if (!applied && /representative_relationship/i.test(pendingRefusal ?? "")) {
+      console.log("  SKIP  5j. migration 364 is not applied on this database yet -- the relationship "
+        + "vocabulary still refuses 'parent' and 'other_relative', which is why the UI must not ship "
+        + "ahead of it");
+    } else {
+      ok("5j[parent]. the database accepts it, so the form can offer it", applied, pendingRefusal ?? "");
+      const other = await attempt("other_relative");
+      ok("5j[other_relative]. the database accepts it, so the form can offer it", other === null, other ?? "");
+    }
+
+    // ⚠ AND THE CONSTRAINT STILL REFUSES WHAT IS NOT IN THE LIST. A widened CHECK that accepts anything
+    // would pass the two assertions above while having stopped being a constraint at all.
+    const invented = await attempt("second_cousin_twice_removed");
+    ok("5j-control. and still refuses a value nobody added -- the constraint is still a constraint",
+      invented !== null, invented ?? "IT ACCEPTED AN INVENTED RELATIONSHIP");
+  }
+
   // ── 6. Consultation types and mode (AC-05, AC-06) ─────────────────────────
   section("6. what a patient is offered");
   const labels = open.profile.consultationTypes.map(t => t.label);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { RELATIONSHIP_TYPES, GUARDIAN_TYPES } from "@/lib/practice/relationships-constants";
 import Link from "next/link";
 import { SECTION_BADGE, BUTTON } from "@/lib/practice/palette";
 import { resolveApplicable, clearedNotice } from "@/lib/practice/registration-condition";
@@ -31,17 +32,27 @@ import SchedulingCard, { type SchedulingChoice } from "./SchedulingCard";
 const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-2 text-[14px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 const label = "block text-[12px] font-semibold text-gray-600";
 
-export const RELATIONSHIP_OPTIONS = [
-  ["guardian", "Guardian"], ["mother", "Mother"], ["father", "Father"], ["grandparent", "Grandparent"],
-  ["carer", "Carer"], ["social_worker", "Social worker"], ["spouse", "Spouse"], ["partner", "Partner"],
-  ["sibling", "Sibling"], ["child", "Child"], ["emergency_contact", "Emergency contact"],
-  ["interpreter", "Interpreter"], ["employer", "Employer"], ["insurance_contact", "Insurance contact"],
-  ["other", "Other"],
-];
+/**
+ * ⚠ DERIVED FROM THE CANONICAL LIST, NOT A COPY OF IT.
+ *
+ * This was a hand-written duplicate of relationships.ts's RELATIONSHIP_TYPES, and migration 364 is
+ * exactly the change that would have broken it: adding 'parent' and 'other_relative' to the vocabulary
+ * would have left this form offering the old fifteen while the booking form offered seventeen, with
+ * nothing failing and nobody told. The order differs from the canonical list on purpose -- guardians
+ * first, because this form is usually reached for a minor -- but the MEMBERSHIP is no longer a second
+ * opinion.
+ */
+export const RELATIONSHIP_OPTIONS: [string, string][] = (() => {
+  const canonical = new Map(RELATIONSHIP_TYPES.map(([k, l]) => [k as string, l as string]));
+  const first = ["guardian", "parent", "mother", "father", "grandparent", "carer", "social_worker"];
+  const ordered = [...first, ...[...canonical.keys()].filter(k => !first.includes(k))];
+  return ordered.map(k => [k, canonical.get(k)!] as [string, string]);
+})();
 
 // Only these can hold legal authority -- the server refuses the rest, and the form should not offer
-// what the server will reject.
-const GUARDIAN_TYPES = new Set(["guardian", "mother", "father", "grandparent", "carer", "social_worker"]);
+// what the server will reject. IMPORTED rather than restated, for the reason above: a second copy of
+// an authority set is a place where this form and the server can quietly disagree about who may consent
+// for a child.
 
 type Relation = {
   relationshipType: string; fullName: string; phone: string; secondaryPhone: string;

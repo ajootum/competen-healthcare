@@ -22,27 +22,11 @@ import { practiceToday } from "@/lib/practice/practice-time";
 
 const nowIso = () => new Date().toISOString();
 
-export const RELATIONSHIP_TYPES = [
-  ["guardian", "Guardian"],
-  ["mother", "Mother"],
-  ["father", "Father"],
-  ["spouse", "Spouse"],
-  ["partner", "Partner"],
-  ["sibling", "Sibling"],
-  ["child", "Child"],
-  ["grandparent", "Grandparent"],
-  ["emergency_contact", "Emergency contact"],
-  ["interpreter", "Interpreter"],
-  ["employer", "Employer"],
-  ["insurance_contact", "Insurance contact"],
-  ["carer", "Carer"],
-  ["social_worker", "Social worker"],
-  ["other", "Other"],
-] as const;
-
-/** The types that can carry legal authority for somebody who cannot decide for themselves.
- *  Exported for the patient import, which must judge a CSV guardian by THIS list and no copy of it. */
-export const GUARDIAN_TYPES = new Set(["guardian", "mother", "father", "grandparent", "carer", "social_worker"]);
+// ⚠ THE VOCABULARY AND THE AUTHORITY SET LIVE IN relationships-constants.ts and are re-exported here.
+// They are pure data, and a client component that needs them must not drag this service module -- and
+// its audit trail -- into the browser bundle. Every existing importer of this file keeps working.
+import { RELATIONSHIP_TYPES, GUARDIAN_TYPES } from "./relationships-constants";
+export { RELATIONSHIP_TYPES, GUARDIAN_TYPES };
 
 export const CONSENT_TYPES = [
   ["data_processing", "Holding and processing their information"],

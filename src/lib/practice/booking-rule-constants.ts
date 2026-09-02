@@ -14,6 +14,8 @@
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 import type { CardSwatch } from "@/lib/practice/palette";
+// Pure data, imports nothing -- safe across the client boundary this file's own header warns about.
+import { RELATIONSHIP_TYPES } from "@/lib/practice/relationships-constants";
 import { conditionMet, type RegistrationFieldLike } from "@/lib/practice/registration-condition";
 import type { FormFieldLike } from "@/lib/practice/form-field";
 
@@ -554,11 +556,20 @@ export const REQUIREMENT_LEVEL_CODES: string[] = REQUIREMENT_LEVELS.map(l => l.c
 /** ⚠ The level a field has when the rule says nothing about it. See REQUIREMENT_LEVELS' header. */
 export const REQUIREMENT_LEVEL_WHEN_UNSET: RequirementLevel = "optional";
 
-/** The relationship vocabulary is migration 221's, quoted from migration 254's own CHECK. */
-const REPRESENTATIVE_RELATIONSHIPS = [
-  "guardian", "mother", "father", "spouse", "partner", "sibling", "child", "grandparent",
-  "emergency_contact", "interpreter", "employer", "insurance_contact", "carer", "social_worker", "other",
-];
+/**
+ * The relationship vocabulary, DERIVED from the canonical list rather than quoted from the migration.
+ *
+ * ⚠ IT WAS A HAND-WRITTEN COPY, and migration 364 is what showed the cost: adding two values meant
+ * finding every transcription of the same seventeen strings -- this one, RegistrationForm's, and the two
+ * CHECK constraints -- with nothing failing if one was missed. Two lists that disagree about one value
+ * pass every count and fail a patient at submit.
+ *
+ * The database is still the authority; relationships-constants.ts is the single place this codebase
+ * writes that authority down, and adding a value there without a migration is what the agreement tests
+ * exist to catch.
+ */
+export const REPRESENTATIVE_RELATIONSHIPS: string[] =
+  RELATIONSHIP_TYPES.map(([code]) => code as string);
 
 export type BookingIntakeField = {
   field_key: string;
@@ -647,12 +658,16 @@ export const SUGGESTED_EMERGENCY_NOTICE =
 export const PATIENT_RELATIONSHIPS: { value: string; label: string }[] = [
   { value: "mother", label: "Mother" },
   { value: "father", label: "Father" },
+  // Migration 364. Offered after mother and father rather than instead of them: somebody who would
+  // pick "Mother" should not have to settle for the generic, and somebody who would not now has it.
+  { value: "parent", label: "Parent" },
   { value: "guardian", label: "Guardian" },
   { value: "spouse", label: "Spouse" },
   { value: "partner", label: "Partner" },
   { value: "child", label: "Son or daughter" },
   { value: "sibling", label: "Brother or sister" },
   { value: "grandparent", label: "Grandparent" },
+  { value: "other_relative", label: "Another relative" },
   { value: "carer", label: "Carer" },
   { value: "other", label: "Someone else" },
 ];

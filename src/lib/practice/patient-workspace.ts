@@ -1523,7 +1523,9 @@ export type FamilyView = {
   refuses: typeof REFUSES;
 };
 
-const PARENT_TYPES = new Set(["mother", "father"]);
+// ⚠ 'parent' COUNTS AS A PARENT HERE (migration 364). Somebody recorded as "Parent" who was not
+// counted in the family report would be a person the record holds and the report denies.
+const PARENT_TYPES = new Set(["parent", "mother", "father"]);
 const GUARDIAN_TYPES = new Set(["guardian", "grandparent", "carer", "social_worker"]);
 
 /**
