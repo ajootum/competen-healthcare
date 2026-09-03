@@ -1558,6 +1558,8 @@ export type ManagedBooking = {
   durationMinutes: number;
   appointmentType: string;
   locationName: string | null;
+  /** §10: the location this appointment is AT, so a reschedule can start there rather than everywhere. */
+  locationId: string | null;
   /** §8: mode, and the address/map ONLY where the practice actually set one. Never invented. */
   locationMode: string | null;
   locationAddress: string | null;
@@ -1717,6 +1719,7 @@ export async function managedBookings(admin: any, args: {
       status, scheduledAt,
       durationMinutes: (a.duration_minutes as number | null) ?? 20,
       appointmentType: type,
+      locationId,
       locationName: locationId ? locBy.get(locationId)?.name ?? null : null,
       locationMode: locationId ? locBy.get(locationId)?.mode ?? null : null,
       locationAddress: locationId ? locBy.get(locationId)?.address ?? null : null,

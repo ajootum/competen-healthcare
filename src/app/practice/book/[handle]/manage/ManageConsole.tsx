@@ -32,7 +32,8 @@ const CARD = "rounded-xl border border-gray-200 bg-white p-4";
 
 type Booking = {
   reference: string; status: string; scheduledAt: string; durationMinutes: number;
-  appointmentType: string; locationName: string | null; instructions: string | null;
+  appointmentType: string; locationName: string | null; locationId: string | null;
+  instructions: string | null;
   locationMode: string | null; locationAddress: string | null; locationMapUrl: string | null;
   canReschedule: boolean; canCancel: boolean; whyNot: string | null;
 };
@@ -57,6 +58,8 @@ export default function ManageConsole({ handle, identity, timezone }: {
   const [listIncomplete, setListIncomplete] = useState(false);
   const [moving, setMoving] = useState<Booking | null>(null);
   const [slots, setSlots] = useState<Slot[] | null>(null);
+  /** §10: which location the reschedule search is scoped to. "" means every location. */
+  const [rescheduleAt, setRescheduleAt] = useState<string>("");
   const [cancelling, setCancelling] = useState<Booking | null>(null);
   const [reason, setReason] = useState("");
 
@@ -315,8 +318,11 @@ export default function ManageConsole({ handle, identity, timezone }: {
               <button type="button" className={SECONDARY} disabled={busy}
                 onClick={async () => {
                   setMoving(b); setCancelling(null); setSlots(null); setNotice(null);
+                  // §10: the current location first. Opening this releases nothing (AC-13).
+                  setRescheduleAt(b.locationId ?? "");
                   const r = await call({
                     action: "times", appointmentType: b.appointmentType,
+                    locationId: b.locationId ?? null,
                     to: new Date(Date.now() + 28 * 86400000).toISOString(),
                   });
                   if (r) setSlots((r.slots ?? []) as Slot[]);
@@ -353,32 +359,89 @@ export default function ManageConsole({ handle, identity, timezone }: {
           {moving?.reference === b.reference && (
             <div className="mt-3 border-t border-gray-100 pt-3">
               <h3 className="text-[12.5px] font-bold text-gray-900">Choose a new time</h3>
-              {slots === null && <p className="mt-1 text-[12px] text-gray-500">Reading the diary…</p>}
+              <p className="mt-0.5 text-[11.5px] text-gray-600">
+                Your appointment stays as it is until you choose one.
+              </p>
+
+              {/* ── §10: START AT THE CURRENT LOCATION, AND PERMIT CHANGING IT ────────────────────────
+                  ⚠ THIS SEARCHED EVERY LOCATION FROM THE START AND SAID NOTHING ABOUT IT. §10 asks it
+                  to "start from the current location but permit Change location"; the times were drawn
+                  from the whole estate with no label, so a patient rescheduling from TMR could pick a
+                  Monday that only exists at Aga Khan and read it as another TMR slot. §11: "Every
+                  alternative must identify location; never make cross-location rescheduling
+                  ambiguous." The engine was already right -- it moves the appointment to the chosen
+                  slot's location -- which is what made the silent version dangerous rather than merely
+                  untidy: the booking really would have moved hospitals. */}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {([[b.locationId ?? "", b.locationName ?? "This location"], ["", "All locations"]] as const)
+                  .filter((v, i, a) => i === 0 || v[0] !== a[0][0])
+                  .map(([id, label]) => (
+                    <button key={label} type="button" disabled={busy}
+                      onClick={async () => {
+                        setRescheduleAt(id); setSlots(null);
+                        const r = await call({
+                          action: "times", appointmentType: b.appointmentType,
+                          locationId: id || null,
+                          to: new Date(Date.now() + 28 * 86400000).toISOString(),
+                        });
+                        if (r) setSlots((r.slots ?? []) as Slot[]);
+                      }}
+                      className={`rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold ${
+                        rescheduleAt === id
+                          ? "bg-[var(--cp-primary)] text-white"
+                          : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}>
+                      {label}
+                    </button>
+                  ))}
+              </div>
+
+              {slots === null && <p className="mt-2 text-[12px] text-gray-500">Reading the diary…</p>}
               {slots !== null && slots.length === 0 && (
-                <p className="mt-1 text-[12px] leading-relaxed text-gray-600">
-                  There are no other times available in the next four weeks. Your existing appointment is
-                  unchanged.
+                <p className="mt-2 text-[12px] leading-relaxed text-gray-600">
+                  {rescheduleAt
+                    ? "There are no other times at this location in the next four weeks. Try all locations, or keep your current time."
+                    : "There are no other times available in the next four weeks. Your existing appointment is unchanged."}
                 </p>
               )}
               {slots !== null && slots.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {slots.slice(0, 40).map(s => (
-                    <button key={s.startsAt} type="button" disabled={busy}
-                      className="rounded-lg bg-gray-100 px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-                      onClick={async () => {
-                        const r = await call({
-                          action: "reschedule", token, reference: b.reference, scheduledAt: s.startsAt,
-                        });
-                        if (!r) return;
-                        setMoving(null); setSlots(null);
-                        // The engine's own sentence about whether anything was sent -- never this
-                        // screen's guess about the practice's channels.
-                        setNotice(String(r.confirmationNote ?? "Your appointment has been moved."));
-                        await loadList(token);
-                      }}>
-                      {fmt(s.startsAt)}
-                    </button>
-                  ))}
+                <div className="mt-2 flex flex-col gap-1.5">
+                  {slots.slice(0, 40).map(s => {
+                    // §11's example is an EARLIER alternative at another facility -- worth naming,
+                    // because it is the reason to look beyond the current location at all.
+                    const elsewhere = !!s.locationId && s.locationId !== b.locationId;
+                    const earlier = Date.parse(s.startsAt) < Date.parse(b.scheduledAt);
+                    return (
+                      <button key={`${s.startsAt}-${s.locationId ?? ""}`} type="button" disabled={busy}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-100 px-3 py-2 text-left hover:bg-gray-200 disabled:opacity-50"
+                        onClick={async () => {
+                          const r = await call({
+                            action: "reschedule", token, reference: b.reference, scheduledAt: s.startsAt,
+                          });
+                          if (!r) return;
+                          setMoving(null); setSlots(null);
+                          // The engine's own sentence about whether anything was sent -- never this
+                          // screen's guess about the practice's channels.
+                          setNotice(String(r.confirmationNote ?? "Your appointment has been moved."));
+                          await loadList(token);
+                        }}>
+                        <span className="text-[12px] font-semibold text-gray-800">{fmt(s.startsAt)}</span>
+                        <span className="flex items-center gap-1.5">
+                          {earlier && elsewhere && (
+                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                              Earlier
+                            </span>
+                          )}
+                          {/* ⚠ THE LOCATION IS ON EVERY OPTION, not only the ones that differ. A label
+                              that appears only sometimes is one a patient learns to stop reading. */}
+                          {s.locationName && (
+                            <span className={`text-[11px] ${elsewhere ? "font-semibold text-[var(--cp-primary-deep)]" : "text-gray-600"}`}>
+                              {s.locationName}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               <button type="button" className={`mt-3 ${SECONDARY}`} onClick={() => { setMoving(null); setSlots(null); }}>
