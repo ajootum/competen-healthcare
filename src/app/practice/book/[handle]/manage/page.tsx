@@ -95,7 +95,10 @@ export default async function ManageBookingPage({ params }: {
 
 function Shell({ handle, children }: { handle: string; children: React.ReactNode }) {
   return (
-    <div className="mx-auto max-w-[720px] px-4 py-8 md:px-6">
+    // ⚠ §4: "approximately 900-1050 px centered content region rather than a narrow card floating in a
+    // wide page" -- §2's first listed defect was the unused desktop space around a 720px column. The
+    // support rail below needs somewhere to sit, and at 720 there was nowhere.
+    <div className="mx-auto max-w-[1000px] px-4 py-8 md:px-6">
       {children}
       <p className="mt-10 text-[11px] text-gray-400">
         <Link href={`/practice/book/@${handle}`} className="hover:underline">Back to this page</Link>

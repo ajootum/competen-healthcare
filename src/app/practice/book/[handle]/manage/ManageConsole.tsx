@@ -246,6 +246,13 @@ export default function ManageConsole({ handle, identity, timezone }: {
             </p>
           )}
 
+          {/* ═══ §4: JOURNEY LEFT, SUPPORT RIGHT ═══════════════════════════════════════════════
+              ~1fr and ~290px inside a 1000px page. §2 opens its defect list with "excessive unused
+              desktop space and an undersized central card", which a 720px column in a wide window is
+              exactly. On mobile it stacks in §19 order: the appointment first, its support after. */}
+          <div className="mt-3 grid gap-4 md:grid-cols-[minmax(0,1fr)_290px]">
+            <div className="md:order-1 min-w-0">
+
           {/* §6: the facts, in the order a patient reads them. */}
           <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
             <div>
@@ -259,21 +266,9 @@ export default function ManageConsole({ handle, identity, timezone }: {
               <dd className="text-[11.5px] text-gray-600">
                 {b.locationMode === "virtual" ? "Online consultation" : "In-person"}
               </dd>
-              {/* ⚠ §8 / AC-08 / §20: DIRECTIONS ONLY WHERE A DESTINATION EXISTS, and the address is
-                  shown as text either way. "Directions unavailable -- show location name without a dead
-                  map action" is the spec's own line, and a link that opens a search for a name is the
-                  guess §8 forbids. */}
-              {directionsFor(b) && (
-                <dd className="mt-0.5">
-                  <a href={directionsFor(b)!} target="_blank" rel="noopener noreferrer"
-                    className="text-[11.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-                    View location / directions ↗
-                  </a>
-                </dd>
-              )}
-              {b.locationAddress && (
-                <dd className="mt-0.5 text-[11px] leading-relaxed text-gray-500">{b.locationAddress}</dd>
-              )}
+              {/* The address and the directions link live in the support rail below, once -- §19 puts
+                  location third on mobile and the rail stacks straight after these details, so it is
+                  read in the same breath rather than printed twice. */}
             </div>
             <div>
               <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Appointment</dt>
@@ -357,6 +352,39 @@ export default function ManageConsole({ handle, identity, timezone }: {
               It led this card as a grey chip beside the date. §2 lists that as a defect: "Booking
               reference is visually prominent despite low patient importance." It matters to whoever
               answers the telephone, so it stays -- at the bottom, with a way to copy it. */}
+          {/* ═══ THE SUPPORT RAIL (§4) ══════════════════════════════════════════════════════════════
+              ~280-330px beside the journey on desktop, stacked underneath on mobile.
+
+              ⚠ THE PRACTITIONER IS NOT MOVED IN HERE, THOUGH §4 LISTS THEM. They are already one of
+              §6's required fields in the details above, and §19's MOBILE ORDER puts practitioner third
+              -- straight after date/time/location and before Add to calendar. Moving them to a rail
+              that stacks last would satisfy one sentence by breaking the other, and would print the
+              same name twice on a desktop. The rail carries what §4 asks for that is not already said:
+              where, how you were contacted, and the reference. */}
+            </div>
+
+            <aside className="md:order-2 flex flex-col gap-3">
+              {/* §8 in the rail: the place, its address and directions where one exists. */}
+              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
+                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Location</p>
+                <p className="mt-0.5 text-[12.5px] font-semibold text-gray-900">{b.locationName ?? "Not recorded"}</p>
+                <p className="text-[11.5px] text-gray-600">
+                  {b.locationMode === "virtual" ? "Online consultation" : "In-person"}
+                </p>
+                {b.locationAddress && (
+                  <p className="mt-1 text-[11px] leading-relaxed text-gray-500">{b.locationAddress}</p>
+                )}
+                {directionsFor(b) ? (
+                  <a href={directionsFor(b)!} target="_blank" rel="noopener noreferrer"
+                    className="mt-1 inline-block text-[11.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                    View location / directions ↗
+                  </a>
+                ) : (
+                  // §20: "Directions unavailable -- show location name without dead map action."
+                  <p className="mt-1 text-[11px] text-gray-400">No map link has been set for this location.</p>
+                )}
+              </div>
+
           {/* ── §13: COMMUNICATION STATE ─────────────────────────────────────────────────────────────
               ⚠ IT NAMES THE ADDRESS THAT WAS PROVED, and masks it. This is the inbox the patient just
               verified with a code to open this page, which is also the one the booking is attached to --
@@ -389,6 +417,8 @@ export default function ManageConsole({ handle, identity, timezone }: {
               {copied === b.reference ? "Copied" : "Copy"}
             </button>
           </p>
+            </aside>
+          </div>
 
           {/* ── MOVE ────────────────────────────────────────────────────────────────────────────── */}
           {moving?.reference === b.reference && (
