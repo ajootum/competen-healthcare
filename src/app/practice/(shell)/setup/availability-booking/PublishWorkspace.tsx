@@ -53,6 +53,17 @@ const VERDICT: Record<string, { label: string; blurb: string; box: string; text:
 };
 
 /**
+ * Words that are almost never what a practice calls itself to patients.
+ *
+ * ⚠ WHOLE-WORD AND DELIBERATELY SHORT. A practice legitimately called "Trial Bay Clinic" must not be
+ * nagged, so this matches a name only when it IS one of these -- never when it merely contains one.
+ * The product cannot know which words are internal; it names the ones that almost always are and leaves
+ * the judgement to the person who chose it.
+ */
+const INTERNAL_LOOKING =
+  /^(trial|test|testing|demo|sample|temp|temporary|dev|development|staging|sandbox|untitled|my practice|practice|workspace|new practice)$/i;
+
+/**
  * CPR-BOOK-HFE-002 s10: where a failing check sends the practitioner. The correction, not a
  * description of the problem -- every practitioner-fixable row links straight to its fix.
  */
@@ -314,6 +325,17 @@ export default function PublishWorkspace({ readiness, locations, mayPublish, vie
                   onChange={e => setDraft(d => ({ ...d, brandDisplayName: e.target.value }))}
                   placeholder="Left blank, the page has no name"
                   className="mt-0.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-800" />
+                {/* ⚠ THIS NAME IS PRINTED TO STRANGERS, beside the practitioner's own, on the public
+                    profile. A workspace gets an internal name when it is created -- "Trial", "Test",
+                    "Demo" -- and typing that here publishes it. CPR-BOOK-FLOW-002 §3: "Never show
+                    internal/test labels such as 'Trial'". The product cannot know which words are
+                    internal, so it names the ones that almost always are and leaves the judgement here. */}
+                {INTERNAL_LOOKING.test(draft.brandDisplayName.trim()) && (
+                  <span className="mt-1 normal-case tracking-normal text-[10.5px] font-normal leading-relaxed text-amber-700">
+                    &ldquo;{draft.brandDisplayName.trim()}&rdquo; reads like an internal name, and this is
+                    printed on your public page next to your own name. Patients will see it.
+                  </span>
+                )}
               </label>
             </div>
 
