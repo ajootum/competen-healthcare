@@ -235,6 +235,17 @@ export default function ManageConsole({ handle, identity, timezone }: {
             </span>
           </p>
 
+          {/* §12 / AC-18: after a cancellation, the useful next action is a new appointment -- offered
+              here rather than leaving somebody on a dead record with no way forward. */}
+          {b.status === "CANCELLED" && (
+            <p className="mt-2">
+              <a href={`/practice/book/@${handle}/appointment`}
+                className="inline-block rounded-lg bg-[var(--cp-primary)] px-3.5 py-2 text-[12.5px] font-semibold text-white">
+                Book another appointment →
+              </a>
+            </p>
+          )}
+
           {/* §6: the facts, in the order a patient reads them. */}
           <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
             <div>
@@ -346,7 +357,31 @@ export default function ManageConsole({ handle, identity, timezone }: {
               It led this card as a grey chip beside the date. §2 lists that as a defect: "Booking
               reference is visually prominent despite low patient importance." It matters to whoever
               answers the telephone, so it stays -- at the bottom, with a way to copy it. */}
-          <p className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2.5 text-[11px] text-gray-500">
+          {/* ── §13: COMMUNICATION STATE ─────────────────────────────────────────────────────────────
+              ⚠ IT NAMES THE ADDRESS THAT WAS PROVED, and masks it. This is the inbox the patient just
+              verified with a code to open this page, which is also the one the booking is attached to --
+              mineOrRefuse only returns bookings for the verified destination, so the two cannot differ.
+
+              ⚠ AND IT PROMISES NO REMINDER. The comp says "We'll send you a reminder before your
+              appointment"; §13 permits that only "if reminders are configured", and this product has no
+              reminder at all -- CONFIGURABLE_MESSAGE_TYPES is booking confirmations, cancellation
+              notices and rescheduling notices, and nothing schedules a message before a visit. A
+              reassurance that nobody is going to act on is worse than silence, because a patient who
+              relies on it stops setting their own.
+
+              ⚠ NOR DOES IT MENTION SMS. §13: "Do not claim SMS/WhatsApp delivery when those channels
+              are not active." This page verifies by email because email is the only channel this
+              deployment can send on, so email is the only one named. */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-gray-100 pt-2.5 text-[11.5px]">
+            <span aria-hidden>✉</span>
+            <span className="text-gray-600">Messages about this appointment go to</span>
+            <span className="font-semibold text-gray-800">{maskEmail(destination)}</span>
+            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+              Verified
+            </span>
+          </div>
+
+          <p className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2.5 text-[11px] text-gray-500">
             Booking reference
             <span className="font-mono font-semibold text-gray-700">{b.reference}</span>
             <button type="button" onClick={() => { void navigator.clipboard?.writeText(b.reference); setCopied(b.reference); }}
@@ -454,8 +489,28 @@ export default function ManageConsole({ handle, identity, timezone }: {
           {cancelling?.reference === b.reference && (
             <div className="mt-3 border-t border-gray-100 pt-3">
               <h3 className="text-[12.5px] font-bold text-gray-900">Cancel this appointment?</h3>
-              <p className="mt-1 text-[12px] leading-relaxed text-gray-600">
-                This frees the time for somebody else and cannot be undone from here.
+              {/* ⚠ §12: RESTATE WHAT IS BEING CANCELLED. "Restate date, time, practitioner and location
+                  before confirmation" -- this asked a patient to confirm a destructive act against a
+                  heading alone, on a page that may list more than one appointment. Somebody cancelling
+                  the wrong one of two has no way back from here. */}
+              <dl className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-[12px]">
+                <div className="flex flex-wrap gap-x-2">
+                  <dt className="text-gray-500">When</dt>
+                  <dd className="font-semibold text-gray-900">{fmt(b.scheduledAt)}</dd>
+                </div>
+                <div className="flex flex-wrap gap-x-2">
+                  <dt className="text-gray-500">Where</dt>
+                  <dd className="font-semibold text-gray-900">{b.locationName ?? "Not recorded"}</dd>
+                </div>
+                <div className="flex flex-wrap gap-x-2">
+                  <dt className="text-gray-500">With</dt>
+                  <dd className="font-semibold text-gray-900">{identity.displayName}</dd>
+                </div>
+              </dl>
+              <p className="mt-2 text-[12px] leading-relaxed text-gray-600">
+                {/* §12's own recommended sentence. It says what cancelling DOES rather than only that it
+                    is final -- somebody hesitating deserves to know the time goes back to the diary. */}
+                This will release the appointment time for another patient, and cannot be undone from here.
               </p>
               <label className="mt-2 block max-w-md">
                 <span className="text-[11.5px] font-semibold text-gray-700">
@@ -465,9 +520,15 @@ export default function ManageConsole({ handle, identity, timezone }: {
                   onChange={e => setReason(e.target.value)}
                   className={`mt-1 ${CONTROL}`} />
               </label>
-              <div className="mt-3 flex flex-wrap gap-2">
+              {/* ⚠ §12: THE SAFE ACTION IS THE PRIMARY ONE, AND IT COMES FIRST. Keeping the appointment
+                  is what most people who reach this screen actually want; the destructive act stays
+                  available, named in full, and does not wear the primary button. */}
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button type="button" className={PRIMARY} onClick={() => setCancelling(null)}>
+                  Keep appointment
+                </button>
                 <button type="button" disabled={busy}
-                  className="rounded-lg bg-rose-600 px-4 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-50"
+                  className="text-[12.5px] font-semibold text-rose-700 underline underline-offset-2 disabled:opacity-50"
                   onClick={async () => {
                     const r = await call({ action: "cancel", token, reference: b.reference, reason });
                     if (!r) return;
@@ -475,10 +536,7 @@ export default function ManageConsole({ handle, identity, timezone }: {
                     setNotice(String(r.confirmationNote ?? "This appointment has been cancelled."));
                     await loadList(token);
                   }}>
-                  {busy ? "Cancelling…" : "Yes, cancel it"}
-                </button>
-                <button type="button" className={SECONDARY} onClick={() => setCancelling(null)}>
-                  Keep this appointment
+                  {busy ? "Cancelling…" : "Yes, cancel appointment"}
                 </button>
               </div>
             </div>
