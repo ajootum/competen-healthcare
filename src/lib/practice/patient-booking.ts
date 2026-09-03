@@ -1546,7 +1546,7 @@ const MANAGE_SCAN_LIMIT = 1000;
  * already had to move once. The scan window is therefore backwards-looking and bounded, and "is this
  * still ahead of me" is decided on the appointment.
  */
-const MANAGE_LOOKBACK_DAYS = 180;
+export const MANAGE_LOOKBACK_DAYS = 180;
 
 export type ManagedBooking = {
   reference: string;
@@ -1574,7 +1574,28 @@ export type ManagedBooking = {
 };
 
 export type ManagedBookingList = {
+  /** Appointments still ahead of the caller. The only ones anything here will act on. */
   bookings: ManagedBooking[];
+  /**
+   * §7 / §18 -- APPOINTMENTS THAT HAVE ALREADY HAPPENED, READ-ONLY.
+   *
+   * ⚠ A SECOND ARRAY RATHER THAN AN `isPast` FLAG ON THE FIRST, and the choice is load-bearing. This
+   * codebase has the scar: `listFollowUps` grew a flag beside a still-working array and every caller
+   * carried on reading `.length` and carried on being wrong. A separate array cannot be missed -- a
+   * screen that does not know about retrospection renders exactly what it rendered before, and
+   * `mineOrRefuse` cannot accidentally hand a past appointment to a mutation because it never looks
+   * here. "Past appointments are not mutable" becomes a fact about the shape rather than a rule
+   * somebody has to keep remembering.
+   *
+   * Ordered most recent first: the appointment somebody is asking about is the one they just had.
+   */
+  past: ManagedBooking[];
+  /**
+   * How far back `past` reaches, in days -- so a screen can say so instead of typing a number that
+   * silently stops matching the scan. §18: past records stay viewable "according to retention policy",
+   * and this window IS that policy as currently implemented.
+   */
+  pastWindowDays: number;
   /**
    * ⚠ TRUE WHEN THE SCAN HIT ITS LIMIT, so a short list is never silently presented as a whole one.
    * A patient told "you have no bookings" because a read was capped is a patient who does not turn up.
@@ -1674,7 +1695,10 @@ export async function managedBookings(admin: any, args: {
   if (mine.length === 0)
     return {
       ok: true,
-      data: { bookings: [], listIncomplete: scanned.length >= MANAGE_SCAN_LIMIT, referenceNote: BOOKING_REFERENCE_NOTE },
+      data: {
+        bookings: [], past: [], pastWindowDays: MANAGE_LOOKBACK_DAYS,
+        listIncomplete: scanned.length >= MANAGE_SCAN_LIMIT, referenceNote: BOOKING_REFERENCE_NOTE,
+      },
     };
 
   const apptIds = mine.map(r => String(r.appointment_id)).filter(Boolean);
@@ -1691,6 +1715,7 @@ export async function managedBookings(admin: any, args: {
   const locBy = new Map(c.page.locations.map(l => [l.id, l]));
   const now = Date.now();
   const bookings: ManagedBooking[] = [];
+  const past: ManagedBooking[] = [];
 
   for (const r of mine) {
     const a = byId.get(String(r.appointment_id));
@@ -1698,7 +1723,12 @@ export async function managedBookings(admin: any, args: {
     const status = String(a.status);
     const scheduledAt = String(a.scheduled_at);
     // ⚠ DECIDED ON THE APPOINTMENT, NOT ON THE REQUEST. See MANAGE_LOOKBACK_DAYS.
-    if (Date.parse(scheduledAt) < now) continue;
+    //
+    // ⚠ AND IT USED TO `continue` HERE, WHICH IS WHY SOMEBODY WHO ATTENDED YESTERDAY OPENED THIS PAGE
+    // TO "There are no upcoming appointments". Indistinguishable, to the person reading it, from the
+    // practice having no record of them at all -- and they had just been seen. §7's state table gives
+    // Past/completed a "read-only retrospective view"; it is built below rather than dropped.
+    const isPast = Date.parse(scheduledAt) < now;
     const locationId = (a.location_id as string | null) ?? null;
     const type = String(a.appointment_type ?? r.appointment_type);
 
@@ -1712,7 +1742,7 @@ export async function managedBookings(admin: any, args: {
       ruleUnreadable: rule.readFailed,
     });
 
-    bookings.push({
+    const entry: ManagedBooking = {
       reference: referenceFrom(String(r.id)),
       requestId: String(r.id),
       appointmentId: String(a.id),
@@ -1726,13 +1756,26 @@ export async function managedBookings(admin: any, args: {
       locationMapUrl: locationId ? locBy.get(locationId)?.mapUrl ?? null : null,
       instructions: c.page.instructions,
       canReschedule: gate.canReschedule, canCancel: gate.canCancel, whyNot: gate.whyNot,
-    });
+    };
+
+    // ⚠ BOTH GATES SHUT BY ASSIGNMENT, NOT BY ARITHMETIC. manageGate already answers false for anything
+    // in the past -- every notice window has elapsed -- so this is not correcting it. It is refusing to
+    // depend on it. §7: "no prospective mutation controls" on a past appointment is the requirement, and
+    // a requirement that holds only while a notice calculation keeps agreeing with it is one negative
+    // notice period away from a patient being offered a button to cancel last Tuesday.
+    if (isPast) past.push({ ...entry, canReschedule: false, canCancel: false });
+    else bookings.push(entry);
   }
+
+  // Upcoming: soonest first, which is the one being asked about. Past: most recent first, for the same
+  // reason. The scan's own order is by requested_start, which a rescheduled booking no longer sits at.
+  bookings.sort((x, y) => Date.parse(x.scheduledAt) - Date.parse(y.scheduledAt));
+  past.sort((x, y) => Date.parse(y.scheduledAt) - Date.parse(x.scheduledAt));
 
   return {
     ok: true,
     data: {
-      bookings,
+      bookings, past, pastWindowDays: MANAGE_LOOKBACK_DAYS,
       listIncomplete: scanned.length >= MANAGE_SCAN_LIMIT,
       referenceNote: BOOKING_REFERENCE_NOTE,
     },
@@ -1851,7 +1894,22 @@ async function mineOrRefuse(admin: any, args: { handle: string; token: string; r
 
   const list = await managedBookings(admin, { handle: args.handle, token: args.token, reference: args.reference });
   if (!list.ok) return list;
+  // ⚠ `bookings` ONLY. The retrospective list is never searched for something to mutate -- see the note
+  // on ManagedBookingList.past. Every door into a write comes through here, so a past appointment is
+  // unreachable from all of them by construction rather than by each one remembering to check.
   const booking = list.data.bookings[0];
+
+  // ⚠ AND THIS ONE SENTENCE IS SAFE TO SAY, WHERE THE ONE BELOW IS NOT. The retrospective list has
+  // already been filtered to the destination this session PROVED, so a reference found in it is one the
+  // caller demonstrably owns -- saying "it has already happened" discloses nothing they did not just
+  // read on their own screen. Without this the page would show somebody an appointment and then tell
+  // them no booking of theirs matches its reference, which is simply false.
+  if (!booking && list.data.past.some(p => p.reference === args.reference.trim().toUpperCase()))
+    return {
+      ok: false, status: 422, code: "APPOINTMENT_PAST",
+      message: "that appointment has already taken place, so it can no longer be changed here",
+    };
+
   // ⚠ ONE ANSWER FOR "NO SUCH BOOKING", "NOT YOURS" AND "ALREADY GONE". Distinguishing them would turn a
   // reference into an oracle for whether a booking exists at this practice.
   if (!booking)

@@ -55,6 +55,10 @@ export default function ManageConsole({ handle, identity, timezone }: {
   const [token, setToken] = useState<string | null>(null);
 
   const [bookings, setBookings] = useState<Booking[] | null>(null);
+  /** §7 / §18: appointments that have already happened. Read-only, and never acted on from here. */
+  const [past, setPast] = useState<Booking[]>([]);
+  /** How far back the retrospective list reaches. The SERVER's number, never one typed in here. */
+  const [pastWindowDays, setPastWindowDays] = useState<number | null>(null);
   const [listIncomplete, setListIncomplete] = useState(false);
   const [moving, setMoving] = useState<Booking | null>(null);
   const [slots, setSlots] = useState<Slot[] | null>(null);
@@ -125,6 +129,8 @@ export default function ManageConsole({ handle, identity, timezone }: {
     const r = await call({ action: "list", token: t });
     if (!r) return;
     setBookings((r.bookings ?? []) as Booking[]);
+    setPast((r.past ?? []) as Booking[]);
+    setPastWindowDays(typeof r.pastWindowDays === "number" ? r.pastWindowDays : null);
     setListIncomplete(r.listIncomplete === true);
   }
 
@@ -208,13 +214,29 @@ export default function ManageConsole({ handle, identity, timezone }: {
       )}
       {problem && <Problem text={problem} />}
 
+      {/* ⚠ THE EMPTY STATE HAS TO KNOW ABOUT THE PAST LIST, or it contradicts the section underneath it.
+          "There are no appointments booked with this address" printed directly above three of them is
+          the same wrong answer this arc set out to fix, just relocated. So the heading and the sentence
+          both change when there is history to show: nothing UPCOMING is a different fact from no record
+          at all, and only one of them should send somebody off to try another email address. */}
       {bookings !== null && bookings.length === 0 && (
         <section className={CARD}>
-          <h1 className="text-[15px] font-bold text-gray-900">Nothing to show</h1>
+          <h1 className="text-[15px] font-bold text-gray-900">
+            {past.length > 0 ? "Nothing coming up" : "Nothing to show"}
+          </h1>
           <p className="mt-1 text-[12.5px] leading-relaxed text-gray-600">
-            There are no upcoming appointments booked with this address at this practice. If you booked
-            using a different email, verify that address instead.
+            {past.length > 0
+              ? "You have no upcoming appointments with this practice. Your past appointments are below."
+              : "There are no upcoming appointments booked with this address at this practice. If you booked using a different email, verify that address instead."}
           </p>
+          {past.length > 0 && (
+            <p className="mt-3">
+              <a href={`/practice/book/@${handle}/appointment`}
+                className="inline-block rounded-lg bg-[var(--cp-primary)] px-3.5 py-2 text-[12.5px] font-semibold text-white">
+                Book an appointment →
+              </a>
+            </p>
+          )}
         </section>
       )}
 
@@ -574,6 +596,61 @@ export default function ManageConsole({ handle, identity, timezone }: {
         </section>
       ))}
 
+      {/* ══ §7 / §18: PAST APPOINTMENTS, READ-ONLY ═══════════════════════════════════════════════════
+          §7's state table: "Past/completed -- read-only retrospective view; no prospective mutation
+          controls unless explicitly supported."
+
+          ⚠ WHY IT IS A LIST AND NOT MORE CARDS. Everything above answers "what is happening to me and
+          what can I do about it". This answers "did I come in on the 15th, and what was the reference" --
+          a lookup, not a task. Given the same card treatment it would outweigh the appointment somebody
+          actually opened the page for, and there can be a year of it.
+
+          ⚠ NOTHING HERE IS ACTIONABLE, AND NOT BECAUSE THE MARKUP OMITS IT. The server puts these in
+          their own array with both gates false, and mineOrRefuse never reads that array -- so there is
+          no request this section could make that the engine would honour. The absence of buttons is a
+          consequence, not the control.
+
+          ⚠ NO CALENDAR FILE AND NO DIRECTIONS. Both are preparations for a visit that has happened. */}
+      {past.length > 0 && (
+        <section className={CARD}>
+          <h2 className="text-[13px] font-bold text-gray-900">Past appointments</h2>
+          <p className="mt-0.5 text-[11.5px] text-gray-600">
+            {/* ⚠ THE SERVER'S WINDOW, PRINTED. A number typed in here would keep saying six months
+                after somebody changed the scan, and nothing would fail. */}
+            {pastWindowDays === null
+              ? "Your recent appointments with this practice."
+              : `Appointments from the last ${pastWindowDays} days. Older ones are not shown here -- the practice holds the full record.`}
+          </p>
+
+          <ul className="mt-3 flex flex-col divide-y divide-gray-100">
+            {past.map(b => (
+              <li key={b.reference} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2.5">
+                <span className="text-[12.5px] font-semibold text-gray-900">{fmt(b.scheduledAt)}</span>
+                <span className="text-[11.5px] text-gray-600">{appointmentTypeLabel(b.appointmentType)}</span>
+                {b.locationName && <span className="text-[11.5px] text-gray-600">{b.locationName}</span>}
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                  b.status === "CANCELLED" ? "bg-gray-100 text-gray-600" : "bg-gray-100 text-gray-700"}`}>
+                  {pastStateLabel(b.status)}
+                </span>
+                <span className="ml-auto font-mono text-[11px] text-gray-400">{b.reference}</span>
+              </li>
+            ))}
+          </ul>
+
+          {/* §12 / AC-18's pattern, applied once and only where it is the useful next step. Somebody
+              with an appointment coming up does not need this under their history. */}
+          {(bookings ?? []).length > 0 && (
+            <p className="mt-3 text-[11.5px] text-gray-500">
+              To arrange another appointment, use{" "}
+              <a href={`/practice/book/@${handle}/appointment`}
+                className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                the booking page
+              </a>.
+            </p>
+          )}
+        </section>
+      )}
+
       {/* ⚠ A CAPPED LIST SAYS SO. Telling somebody they have one appointment because a read stopped at
           its limit is how a person misses the second one. */}
       {listIncomplete && (
@@ -583,6 +660,28 @@ export default function ManageConsole({ handle, identity, timezone }: {
       )}
     </div>
   );
+}
+
+/**
+ * What a past appointment's status is called, to the person it happened to.
+ *
+ * ⚠ NO_SHOW IS ATTRIBUTED, NOT ASSERTED. "You did not attend" is the product telling somebody what they
+ * did; "Recorded as not attended" is the product telling them what the practice wrote down, which is the
+ * only one of the two this screen can actually stand behind -- and it is the difference between a record
+ * a patient can query and an accusation they have to argue with.
+ *
+ * ⚠ AND A PAST APPOINTMENT STILL MARKED CONFIRMED IS NOT CALLED "Attended". Nobody closed it off, so
+ * whether the person came is genuinely unrecorded. It reads as what it is: an appointment that was
+ * booked, at a time that has passed.
+ */
+function pastStateLabel(status: string): string {
+  switch (status) {
+    case "COMPLETED": return "Attended";
+    case "CANCELLED": return "Cancelled";
+    case "NO_SHOW": return "Recorded as not attended";
+    case "ARRIVED": return "Checked in";
+    default: return "Booked";
+  }
 }
 
 function Problem({ text }: { text: string }) {

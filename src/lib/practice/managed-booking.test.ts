@@ -394,26 +394,70 @@ describe("§23 -- an appointment that has already happened", () => {
     practice_booking_request: [{ ...bookingRequest, requested_start: "2026-08-15T08:00:00.000Z" }],
   });
 
-  it("⚠ IS NOT SHOWN AT ALL -- WHICH IS NOT WHAT §7 PRESCRIBES, and this test says so rather than blessing it", async () => {
-    // WHAT THE ENGINE DOES: managedBookings decides "still ahead of me" on the appointment and drops
-    // anything behind it, so a patient who attended yesterday sees an empty list.
-    //
-    // WHAT THE SPEC ASKS FOR: §7's state table gives Past/completed a "read-only retrospective view; no
-    // prospective mutation controls", and §18 allows past records to stay viewable under the retention
-    // policy. There is no such view, and building one is a product decision -- what it shows, whether it
-    // offers "book again", and how far back it reaches -- not something to infer from a test matrix.
-    //
-    // So this pins the behaviour that actually ships, and names the gap it leaves. The half that IS
-    // settled is asserted below: whatever the page eventually shows, it must never offer a mutation on
-    // an appointment that has already happened.
-    const { managedBookings } = await import("./patient-booking");
+  it("is returned in its OWN list, never among the appointments still ahead", async () => {
+    // ⚠ THIS IS WHY THE VIEW EXISTS. It used to `continue` past anything behind the clock, so somebody
+    // who attended yesterday opened the page to "There are no upcoming appointments booked with this
+    // address" -- which, to the person reading it, is the practice having no record of them at all.
+    const { managedBookings, MANAGE_LOOKBACK_DAYS } = await import("./patient-booking");
     const r: any = await managedBookings(fakeAdmin(past()).admin, { handle: HANDLE, token: TOKEN });
 
     expect(r.ok).toBe(true);
-    expect(r.data.bookings).toEqual([]);
+    expect(r.data.bookings).toEqual([]);          // nothing prospective, which was always true
+    expect(r.data.past).toHaveLength(1);          // and now the record is there to read
+    expect(r.data.past[0]).toMatchObject({
+      reference: REFERENCE,
+      scheduledAt: "2026-08-15T08:00:00.000Z",
+      appointmentType: "new_consultation",
+      locationName: "TMR International Hospital",
+    });
+    // §18: the window is the retention policy as implemented, and it is REPORTED so the screen can say
+    // how far back it reaches instead of typing a number that stops matching the scan.
+    expect(r.data.pastWindowDays).toBe(MANAGE_LOOKBACK_DAYS);
   });
 
-  it("offers no mutation on it, by either door", async () => {
+  it("⚠ CARRIES BOTH GATES SHUT, so no screen can offer an action on it (§7)", async () => {
+    // ⚠ THIS ASSERTS THE OUTCOME, NOT THE LINE THAT PRODUCES IT, and the difference was measured rather
+    // than assumed: removing the explicit `canReschedule: false, canCancel: false` on the past entry
+    // leaves this test GREEN, because manageGate's notice arithmetic already answers false for anything
+    // behind the clock. Two mechanisms, one result. The assignment is there for the day the arithmetic
+    // stops agreeing -- a negative notice period, a new status -- and this test is what would notice.
+    const { managedBookings } = await import("./patient-booking");
+    const r: any = await managedBookings(fakeAdmin(past()).admin, { handle: HANDLE, token: TOKEN });
+
+    expect(r.data.past[0].canReschedule).toBe(false);
+    expect(r.data.past[0].canCancel).toBe(false);
+  });
+
+  it("orders the retrospective list most recent first", async () => {
+    // The appointment somebody is asking about is the one they just had, not the one last spring. The
+    // scan's own order is by requested_start, which a rescheduled booking no longer sits at.
+    const older = "2026-04-02T08:00:00.000Z";
+    const world = buildWorld({
+      practice_appointment: [
+        { ...appointment, scheduled_at: "2026-08-15T08:00:00.000Z" },
+        { ...appointment, id: "appt-2", scheduled_at: older },
+      ],
+      practice_booking_request: [
+        { ...bookingRequest, requested_start: "2026-08-15T08:00:00.000Z" },
+        {
+          ...bookingRequest, id: "aaaaaaaa-0000-4000-8000-000000000000",
+          appointment_id: "appt-2", requested_start: older,
+        },
+      ],
+    });
+    const { managedBookings } = await import("./patient-booking");
+    const r: any = await managedBookings(fakeAdmin(world).admin, { handle: HANDLE, token: TOKEN });
+
+    expect(r.data.past.map((p: any) => p.scheduledAt)).toEqual(["2026-08-15T08:00:00.000Z", older]);
+  });
+
+  it("⚠ REACHES NO WRITE FROM EITHER DOOR", async () => {
+    // Showing it must not make it mutable. TWO independent things stop it: mineOrRefuse reads
+    // `bookings` and never `past`, and the gates on a past entry are shut anyway -- so this assertion
+    // survives either one being removed alone, which is what defence in depth is for and also why this
+    // test cannot tell you WHICH guard held. Measured: pointing mineOrRefuse at both arrays leaves this
+    // green and reds the APPOINTMENT_PAST test below instead. That one is the structural control; this
+    // one is the outcome nobody may break.
     const { cancelManagedBooking, rescheduleManagedBooking } = await import("./patient-booking");
     const cancelled: any = await cancelManagedBooking(fakeAdmin(past()).admin, {
       handle: HANDLE, token: TOKEN, reference: REFERENCE, correlationId: "c",
@@ -427,5 +471,37 @@ describe("§23 -- an appointment that has already happened", () => {
     expect(moved.ok).toBe(false);
     expect(transitionAppointment).not.toHaveBeenCalled();
     expect(rescheduleAppointment).not.toHaveBeenCalled();
+  });
+
+  it("and says so truthfully instead of denying the booking exists", async () => {
+    // ⚠ THIS IS ALSO THE STRUCTURAL CONTROL for the test above: APPOINTMENT_PAST is only reachable when
+    // mineOrRefuse did NOT resolve the past booking. Let it search `past` and this answer becomes
+    // CANCEL_NOT_ALLOWED -- still a refusal, still no write, but arrived at by the gates rather than by
+    // the shape, which is the distinction the array split exists to keep.
+    //
+    // ⚠ THE REFUSAL HAD TO CHANGE WITH THE VIEW. "No booking of yours matches that reference" was
+    // honest while the page showed nothing; printed about an appointment the patient can see three
+    // lines further up, it is simply false. The reference was already matched against the destination
+    // this session PROVED, so naming the real reason discloses nothing new.
+    const { cancelManagedBooking } = await import("./patient-booking");
+    const r: any = await cancelManagedBooking(fakeAdmin(past()).admin, {
+      handle: HANDLE, token: TOKEN, reference: REFERENCE, correlationId: "c",
+    });
+
+    expect(r.code).toBe("APPOINTMENT_PAST");
+    expect(r.message).toContain("already taken place");
+  });
+
+  it("keeps the enumeration oracle shut for a reference that is nobody's", async () => {
+    // ⚠ AND THIS IS THE HALF THE SENTENCE ABOVE MUST NOT BREAK. An unknown reference still gets the one
+    // undifferentiated answer -- otherwise the pair of messages tells a stranger which references are
+    // real at this practice, which is exactly what the single answer existed to prevent.
+    const { cancelManagedBooking } = await import("./patient-booking");
+    const r: any = await cancelManagedBooking(fakeAdmin(past()).admin, {
+      handle: HANDLE, token: TOKEN, reference: "CP-ZZZZZZ", correlationId: "c",
+    });
+
+    expect(r.code).toBe("BOOKING_NOT_FOUND");
+    expect(r.message).not.toContain("already taken place");
   });
 });
