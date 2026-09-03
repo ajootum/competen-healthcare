@@ -1558,6 +1558,10 @@ export type ManagedBooking = {
   durationMinutes: number;
   appointmentType: string;
   locationName: string | null;
+  /** §8: mode, and the address/map ONLY where the practice actually set one. Never invented. */
+  locationMode: string | null;
+  locationAddress: string | null;
+  locationMapUrl: string | null;
   /** What the practice chose to tell patients. Never an internal note. */
   instructions: string | null;
   /** ⚠ DERIVED FROM THE STATE MACHINE AND THE PRACTICE'S OWN RULE, never assumed. */
@@ -1679,7 +1683,10 @@ export async function managedBookings(admin: any, args: {
     return { ok: false, status: 503, code: "READ_FAILED", message: `your appointment could not be read: ${apptErr?.message ?? "neither rows nor an error"}` };
   const byId = new Map(((appts ?? []) as any[]).map(a => [String(a.id), a]));
 
-  const locName = new Map(c.page.locations.map(l => [l.id, l.name]));
+  // ⚠ THE WHOLE LOCATION, NOT ONLY ITS NAME. CPR-BOOK-MGMT-006 §8 asks for directions where a
+  // verified destination exists and forbids inventing one, so the mode and the address travel with the
+  // booking rather than being looked up again by a screen that would have to guess.
+  const locBy = new Map(c.page.locations.map(l => [l.id, l]));
   const now = Date.now();
   const bookings: ManagedBooking[] = [];
 
@@ -1710,7 +1717,10 @@ export async function managedBookings(admin: any, args: {
       status, scheduledAt,
       durationMinutes: (a.duration_minutes as number | null) ?? 20,
       appointmentType: type,
-      locationName: locationId ? locName.get(locationId) ?? null : null,
+      locationName: locationId ? locBy.get(locationId)?.name ?? null : null,
+      locationMode: locationId ? locBy.get(locationId)?.mode ?? null : null,
+      locationAddress: locationId ? locBy.get(locationId)?.address ?? null : null,
+      locationMapUrl: locationId ? locBy.get(locationId)?.mapUrl ?? null : null,
       instructions: c.page.instructions,
       canReschedule: gate.canReschedule, canCancel: gate.canCancel, whyNot: gate.whyNot,
     });

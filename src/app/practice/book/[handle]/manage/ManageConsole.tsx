@@ -3,6 +3,8 @@
 import { useCallback, useState } from "react";
 import { maskEmail, maskPhone } from "../appointment/BookingWizard";
 import { IdentityStrip, type SummaryIdentity } from "../appointment/BookingSummary";
+import { buildIcs, directionsUrl } from "@/lib/practice/calendar-invite";
+import { appointmentTypeLabel } from "@/lib/practice/practice-session-constants";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -31,6 +33,7 @@ const CARD = "rounded-xl border border-gray-200 bg-white p-4";
 type Booking = {
   reference: string; status: string; scheduledAt: string; durationMinutes: number;
   appointmentType: string; locationName: string | null; instructions: string | null;
+  locationMode: string | null; locationAddress: string | null; locationMapUrl: string | null;
   canReschedule: boolean; canCancel: boolean; whyNot: string | null;
 };
 
@@ -40,6 +43,8 @@ export default function ManageConsole({ handle, identity, timezone }: {
   handle: string; identity: SummaryIdentity; timezone: string;
 }) {
   const [busy, setBusy] = useState(false);
+  /** Which reference was just copied, so the button can say so rather than flashing nothing. */
+  const [copied, setCopied] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -54,6 +59,37 @@ export default function ManageConsole({ handle, identity, timezone }: {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [cancelling, setCancelling] = useState<Booking | null>(null);
   const [reason, setReason] = useState("");
+
+  /**
+   * §8 / AC-08 / §20: a directions link ONLY where the practice set a destination.
+   *
+   * ⚠ directionsUrl RETURNS NULL FOR A NAME ALONE, and that is the whole reason it is used here rather
+   * than a search URL built from the location name. §8: "Do not invent addresses from free text." Two
+   * clinics share a name; a street repeats in another town; and the wrong guess sends somebody who is
+   * unwell to the wrong building. §20 says the fallback is the name with no map action, which is what
+   * a null produces.
+   */
+  const directionsFor = useCallback((b: Booking) =>
+    directionsUrl({ name: b.locationName, address: b.locationAddress, mapUrl: b.locationMapUrl }),
+  []);
+
+  /**
+   * §7: the calendar event.
+   *
+   * ⚠ NO REASON FOR VISIT (§7, AC-07). "Do not place sensitive clinical free text such as reason for
+   * visit in a third-party calendar event by default" -- so the event carries who, what kind, when and
+   * where, and the sentence the patient typed about their child stays out of Google's servers.
+   */
+  const icsFor = useCallback((b: Booking) => buildIcs({
+    reference: b.reference,
+    practitioner: identity.displayName,
+    startsAt: b.scheduledAt,
+    minutes: b.durationMinutes,
+    locationName: b.locationName,
+    address: b.locationAddress,
+  // ⚠ THE STAMP IS PASSED IN, because buildIcs takes one rather than reading a clock -- the same
+  // decision that keeps it testable. A calendar entry generated now is stamped now.
+  }, new Date().toISOString()), [identity.displayName]);
 
   const fmt = useCallback((iso: string) => {
     try {
@@ -181,17 +217,89 @@ export default function ManageConsole({ handle, identity, timezone }: {
 
       {(bookings ?? []).map(b => (
         <section key={b.reference} className={CARD}>
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-[14px] font-bold text-gray-900">{fmt(b.scheduledAt)}</h2>
-            <span className="rounded bg-gray-100 px-2 py-0.5 text-[10.5px] font-semibold text-gray-600">
-              {b.reference}
+          {/* ── §3/§5: THE STATE, LED WITH, AND NOT CARRIED BY COLOUR ────────────────────────────────
+              §5: "Do not rely on green colour alone to communicate confirmation." The word and the mark
+              both say it, and the heading changes with the state rather than the tint doing the work. */}
+          <p className="flex items-center gap-2">
+            <span aria-hidden className={`flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-bold ${
+              b.status === "CANCELLED" ? "bg-gray-200 text-gray-600" : "bg-emerald-100 text-emerald-700"}`}>
+              {b.status === "CANCELLED" ? "×" : "✓"}
             </span>
-          </div>
-          <p className="mt-0.5 text-[12px] text-gray-600">
-            {b.durationMinutes} minutes{b.locationName ? ` · ${b.locationName}` : ""}
+            <span className="text-[14px] font-bold text-gray-900">
+              {b.status === "CANCELLED" ? "Appointment cancelled"
+                : b.status === "COMPLETED" ? "Appointment details"
+                  : "Your appointment is confirmed"}
+            </span>
           </p>
+
+          {/* §6: the facts, in the order a patient reads them. */}
+          <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+            <div>
+              <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Date &amp; time</dt>
+              <dd className="text-[13px] font-bold text-gray-900">{fmt(b.scheduledAt)}</dd>
+              <dd className="text-[11.5px] text-gray-600">{b.durationMinutes} minutes</dd>
+            </div>
+            <div>
+              <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Where</dt>
+              <dd className="text-[13px] font-semibold text-gray-900">{b.locationName ?? "Not recorded"}</dd>
+              <dd className="text-[11.5px] text-gray-600">
+                {b.locationMode === "virtual" ? "Online consultation" : "In-person"}
+              </dd>
+              {/* ⚠ §8 / AC-08 / §20: DIRECTIONS ONLY WHERE A DESTINATION EXISTS, and the address is
+                  shown as text either way. "Directions unavailable -- show location name without a dead
+                  map action" is the spec's own line, and a link that opens a search for a name is the
+                  guess §8 forbids. */}
+              {directionsFor(b) && (
+                <dd className="mt-0.5">
+                  <a href={directionsFor(b)!} target="_blank" rel="noopener noreferrer"
+                    className="text-[11.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                    View location / directions ↗
+                  </a>
+                </dd>
+              )}
+              {b.locationAddress && (
+                <dd className="mt-0.5 text-[11px] leading-relaxed text-gray-500">{b.locationAddress}</dd>
+              )}
+            </div>
+            <div>
+              <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Appointment</dt>
+              <dd className="text-[13px] font-semibold text-gray-900">{appointmentTypeLabel(b.appointmentType)}</dd>
+            </div>
+            <div>
+              <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Practitioner</dt>
+              <dd className="text-[13px] font-semibold text-gray-900">{identity.displayName}</dd>
+              {identity.specialty && <dd className="text-[11.5px] text-gray-600">{identity.specialty}</dd>}
+            </div>
+          </dl>
+
+          {/* ── §7: ADD TO CALENDAR ──────────────────────────────────────────────────────────────────
+              ⚠ ICS, AND NO REASON FOR VISIT IN IT (§7, AC-07). The event carries who, what kind, when
+              and where; the clinical free text a patient typed is not put into a third-party calendar.
+              One standards-based file rather than three provider buttons, because a Google link and an
+              Outlook link are two more constructions of the same event to disagree with this one. */}
+          {b.status !== "CANCELLED" && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+              <span className="text-[12px] font-semibold text-gray-800">Add to calendar</span>
+              <a download={`appointment-${b.reference}.ics`}
+                href={`data:text/calendar;charset=utf-8,${encodeURIComponent(icsFor(b))}`}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                Download (.ics)
+              </a>
+              <span className="text-[11px] text-gray-500">Opens in Google, Outlook, Apple Calendar and others.</span>
+            </div>
+          )}
+
+          {/* ── §14: BEFORE YOUR APPOINTMENT, CONFIGURATION-DRIVEN ──────────────────────────────────
+              ⚠ THE COMP'S THREE TILES ARE NOT BUILT. "Arrive 15 minutes early", "bring your ID",
+              "bring relevant documents" are sensible and are also advice this practice never wrote.
+              §14: "Do not display instructions not explicitly configured for the appointment context"
+              and "Provide a neutral empty state ... rather than inventing advice." So this renders what
+              the practice actually set, and nothing at all when it set nothing. */}
           {b.instructions && (
-            <p className="mt-2 whitespace-pre-wrap text-[11.5px] leading-relaxed text-gray-600">{b.instructions}</p>
+            <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2.5">
+              <p className="text-[12px] font-semibold text-gray-900">Before your appointment</p>
+              <p className="mt-1 whitespace-pre-wrap text-[11.5px] leading-relaxed text-gray-700">{b.instructions}</p>
+            </div>
           )}
 
           {/* ⚠ WHY NOT, WHERE NEITHER IS OFFERED. A disabled pair of buttons with no reason is a screen
@@ -213,16 +321,33 @@ export default function ManageConsole({ handle, identity, timezone }: {
                   });
                   if (r) setSlots((r.slots ?? []) as Slot[]);
                 }}>
-                Move this appointment
+                {/* §9 / AC-04: the patient's word for it. "Move" is what the system does. */}
+                Reschedule appointment
               </button>
             )}
             {b.canCancel && (
-              <button type="button" className={SECONDARY} disabled={busy}
-                onClick={() => { setCancelling(b); setMoving(null); setReason(""); setNotice(null); }}>
-                Cancel this appointment
+              // ⚠ §9 / AC-05: NEVER EQUAL WEIGHT TO CONTINUATION, and the destructive sense carried by
+              // the word, not by the colour -- "Cancel appointment" says it in greyscale.
+              <button type="button" disabled={busy}
+                onClick={() => { setCancelling(b); setMoving(null); setReason(""); setNotice(null); }}
+                className="rounded-lg px-3 py-2.5 text-[12.5px] font-semibold text-rose-700 underline underline-offset-2 hover:bg-rose-50 disabled:opacity-50">
+                Cancel appointment
               </button>
             )}
           </div>
+
+          {/* ── §6 / AC-03: THE REFERENCE, LOW IN THE HIERARCHY ──────────────────────────────────────
+              It led this card as a grey chip beside the date. §2 lists that as a defect: "Booking
+              reference is visually prominent despite low patient importance." It matters to whoever
+              answers the telephone, so it stays -- at the bottom, with a way to copy it. */}
+          <p className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2.5 text-[11px] text-gray-500">
+            Booking reference
+            <span className="font-mono font-semibold text-gray-700">{b.reference}</span>
+            <button type="button" onClick={() => { void navigator.clipboard?.writeText(b.reference); setCopied(b.reference); }}
+              className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              {copied === b.reference ? "Copied" : "Copy"}
+            </button>
+          </p>
 
           {/* ── MOVE ────────────────────────────────────────────────────────────────────────────── */}
           {moving?.reference === b.reference && (
