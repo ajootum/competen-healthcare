@@ -293,6 +293,15 @@ export default function BookingWizard(props: {
     return long ?? short ?? timezone;
   }, [timezone]);
 
+  /** Just the day, in the practice's zone, for the in-place retry heading. */
+  const fmtDayOnly = useCallback((iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString(undefined, {
+        weekday: "long", day: "numeric", month: "long", timeZone: timezone,
+      });
+    } catch { return iso.slice(0, 10); }
+  }, [timezone]);
+
   /** Just the clock time, for slots already grouped under their date. */
   const timeOf = useCallback((iso: string) => {
     try {
@@ -419,6 +428,39 @@ export default function BookingWizard(props: {
     minutes: chosen?.minutes ?? null,
   };
 
+  /**
+   * The refusals that mean "this TIME will not do" rather than "this booking will not do".
+   *
+   * ⚠ A CLOSED LIST, because the recovery below offers other times and that is only the right answer to
+   * some refusals. Showing a time picker under "we need your agreement to keep your details" would be
+   * an answer to a question nobody asked.
+   */
+  const TIME_PROBLEM_CODES = [
+    "TIME_NOT_OFFERED", "SLOT_TAKEN", "SLOT_UNAVAILABLE", "NO_CAPACITY", "CAPACITY_FULL",
+    "OVERLAP", "LEAD_TIME", "BEYOND_HORIZON", "OUTSIDE_SESSION", "PLACEMENT_REFUSED",
+  ];
+
+  /** Times still free on the day already chosen, for the in-place retry. */
+  const [retryTimes, setRetryTimes] = useState<Slot[] | null>(null);
+
+  const loadRetryTimes = useCallback(async () => {
+    if (!chosen) return;
+    const day = practiceDayOf(timezone, chosen.startsAt) ?? chosen.startsAt.slice(0, 10);
+    try {
+      const q = new URLSearchParams({
+        handle: props.handle, appointmentType,
+        from: `${day}T00:00:00.000Z`, to: `${day}T23:59:59.999Z`,
+      });
+      const where = chosen.locationId ?? (locationId || null);
+      if (where) q.set("locationId", where);
+      const res = await fetch(`/api/v1/practice/public/booking?${q}`, { cache: "no-store" });
+      if (!res.ok) { setRetryTimes([]); return; }
+      const data = await res.json().catch(() => ({}));
+      // The time just refused is not offered again, whatever the engine says about it.
+      setRetryTimes(((data.slots ?? []) as Slot[]).filter(s => s.startsAt !== chosen.startsAt));
+    } catch { setRetryTimes([]); }
+  }, [chosen, timezone, props.handle, appointmentType, locationId]);
+
   async function call(body: any) {
     setBusy(true); setProblem(null);
     try {
@@ -431,6 +473,12 @@ export default function BookingWizard(props: {
         // ⚠ THE SERVER'S SENTENCE, NOT A REWRITE OF IT. Replacing it with "something went wrong" throws
         // away the only part of the answer that tells somebody what to do next.
         setProblem(data?.error?.message ?? `That did not work (${res.status}).`);
+        // ⚠ AND IF THE PROBLEM IS THE TIME, THE ALTERNATIVES ARE FETCHED HERE (§14, §18). A refusal at
+        // the last step used to leave a patient with a red box and a Back button: three navigations and
+        // a re-entered form to change one field they had already chosen from a list. The times for the
+        // same day are loaded and offered under the error, so the recovery is one tap where the failure
+        // happened. Nothing they typed is touched.
+        if (TIME_PROBLEM_CODES.includes(String(data?.error?.code)) && chosen) void loadRetryTimes();
         return null;
       }
       return data;
@@ -1409,6 +1457,51 @@ export default function BookingWizard(props: {
           )}
 
           {problem && <Problem text={problem} />}
+
+          {/* ── §14/§18: RECOVER WHERE IT BROKE ──────────────────────────────────────────────────────
+              ⚠ "Do not silently move the patient" is not the same as "make them start again". The spec
+              asks for refreshed availability with their other valid data preserved, and the data IS
+              preserved -- it was the NAVIGATION that was not. Choosing a time here changes one field
+              and leaves every answer they typed exactly where it is. */}
+          {retryTimes !== null && (
+            <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-2.5">
+              {retryTimes.length > 0 ? (
+                <>
+                  <p className="text-[12px] font-semibold text-gray-900">
+                    Still free on {chosen ? fmtDayOnly(chosen.startsAt) : "that day"}
+                  </p>
+                  <p className="mt-0.5 text-[11.5px] text-gray-600">
+                    Pick another time and carry on &mdash; nothing you have entered is lost.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {retryTimes.map(s => (
+                      <button key={s.startsAt} type="button"
+                        onClick={() => { setChosen(s); setRetryTimes(null); setProblem(null); }}
+                        className="rounded-lg bg-white px-3 py-2 text-[12.5px] font-semibold text-gray-800 ring-1 ring-gray-200 hover:bg-gray-100">
+                        {timeOf(s.startsAt)}
+                        {anyLocation && s.locationName && (
+                          <span className="block text-[10px] font-normal text-gray-500">{s.locationName}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                // ⚠ AN EMPTY DAY IS SAID, NOT DRAWN AS AN EMPTY ROW. The only honest route left is back
+                // to the calendar, so it is offered as one press rather than described.
+                <>
+                  <p className="text-[12px] text-gray-700">
+                    Nothing else is free that day.
+                  </p>
+                  <button type="button"
+                    onClick={() => { setRetryTimes(null); setProblem(null); setChosen(null); setStep(2); }}
+                    className="mt-2 rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12px] font-semibold text-white">
+                    Choose another date &rarr;
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="mt-4">
             <button type="button" className={SECONDARY} onClick={() => setStep(3)}>← Back</button>

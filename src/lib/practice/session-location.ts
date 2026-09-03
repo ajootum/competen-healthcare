@@ -1,4 +1,5 @@
 import { zoneOffsetMinutes } from "@/lib/practice/practice-time";
+import { occursOn } from "./recurrence";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -24,9 +25,12 @@ import { zoneOffsetMinutes } from "@/lib/practice/practice-time";
 //   two sessions, two places      genuinely ambiguous. A guess here is a patient sent to the wrong
 //                                 hospital, which is the worst outcome this file can produce.
 //   the session names no place    the practice has not said where that session is.
-//   a fortnightly session         recurrence_weeks > 1 means "not every week", and deciding whether
-//                                 THIS week is one of them needs the anchor date. Left alone rather
-//                                 than assumed.
+//   a fortnightly OFF week        recurrence_weeks > 1 means "not every week", and occursOn() decides
+//                                 which weeks are the session's from its anchor date. An off week is
+//                                 outside the regular week; an ON week is inside it like any other.
+//                                 ⚠ THIS USED TO SAY the anchor was "left alone rather than assumed",
+//                                 and the code matched: every fortnightly session was excluded on all
+//                                 of its weeks. That made a real, offered Saturday time unbookable.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type DerivedLocation = {
@@ -66,7 +70,7 @@ export async function locationFromRegularWeek(
   const localDate = local.toISOString().slice(0, 10);
 
   const { data, error } = await admin.from("practice_availability_template")
-    .select("id, location_id, starts_minute, ends_minute, recurrence_weeks, effective_from, effective_to, session_name")
+    .select("id, location_id, starts_minute, ends_minute, recurrence_weeks, recurrence_anchor_date, effective_from, effective_to, session_name")
     .eq("workspace_id", workspaceId).eq("weekday", weekday)
     .eq("status", "active").eq("active", true);
 
@@ -75,9 +79,26 @@ export async function locationFromRegularWeek(
   if (error)
     return { locationId: null, reason: `the regular week could not be read: ${error.message}`, derived: false, outsideRegularWeek: false };
 
+  // ⚠ `occursOn`, NOT `recurrence_weeks === 1`. THIS MADE EVERY FORTNIGHTLY SESSION UNBOOKABLE.
+  //
+  // The test used to be "does this session repeat every week", which excluded a fortnightly clinic from
+  // the regular week ENTIRELY -- on its own weeks as well as its off ones. Because this function is the
+  // gate submitBookingRequest uses to refuse a hand-crafted out-of-hours instant, a patient who picked a
+  // real, offered Saturday time from the calendar was told "that time is not offered here" at the last
+  // step, every time, with no way through. The slot generator honours the recurrence correctly, so the
+  // page drew times the commit refused: two implementations of "when does this session run" disagreeing,
+  // which is the exact failure occursOn was written to prevent -- its own comment says it is the ONE
+  // function used on both sides. This module was never taught about it.
+  //
+  // ⚠ AND IT STILL REFUSES THE OFF WEEKS. Dropping the filter altogether would have fixed the symptom
+  // by opening every fortnightly session's blank weeks to the public, which is the wrong direction for
+  // the one check standing between this endpoint and an invented time.
   const covering = ((data ?? []) as any[]).filter(t =>
     t.starts_minute <= minuteOfDay && minuteOfDay < t.ends_minute
-    && (t.recurrence_weeks ?? 1) === 1
+    && occursOn(localDate, weekday, {
+      everyWeeks: Number(t.recurrence_weeks ?? 1) || 1,
+      anchorDate: (t.recurrence_anchor_date as string | null) ?? null,
+    })
     && (!t.effective_from || t.effective_from <= localDate)
     && (!t.effective_to || t.effective_to >= localDate));
 
