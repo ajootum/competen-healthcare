@@ -22,10 +22,10 @@ import { cleanQuestion, recordContext, systemPrompt, QUESTION_MAX } from "@/lib/
 // by action. A new action name would be an AI route the hourly limit cannot see. entity_type says which
 // assistant it was.
 //
-// ⚠ tenantId IS NULL. plat_ai_requests.tenant_id references tenants(id), and a person in Competen
-// Individual has no tenant. Passing some other id there (a hospital, a workspace) is the foreign-key
-// mismatch COMPETEN-IND-002 s2.7 found in two existing routes -- the insert fails and the usage row is
-// silently lost.
+// ⚠ ATTRIBUTION IS `person` (AI-LOG-001's AiAttribution, src/lib/ai/gateway.ts). A person in Competen
+// Individual has no tenant and no workspace, so the usage row records the actor alone. Passing some other
+// id as a tenant (a hospital, a workspace) is the foreign-key mismatch COMPETEN-IND-002 s2.7 found -- the
+// insert fails and the usage row is silently lost.
 
 export async function GET() {
   const s = aiStatus();
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     user: `My Competen record:\n${record}\n\nMy question: ${question}`,
     tier: "reasoning",
     maxTokens: 900,
-    context: { userId: ctx.userId, tenantId: null, operation: `individual_assistant_${experience}` },
+    context: { userId: ctx.userId, attribution: { scope: "person" }, operation: `individual_assistant_${experience}` },
   });
   if (!result.ok) {
     const status = result.error === "not_configured" ? 503 : 502;
