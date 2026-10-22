@@ -23,7 +23,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { ACCESS_DOORS } from "../src/lib/access-doors";
-import { EXPERIENCE_KEYS, FOUNDATION_NAV } from "../src/lib/individual/experiences";
+import { EXPERIENCE_KEYS, EXPERIENCES, FOUNDATION_NAV, navFor } from "../src/lib/individual/experiences";
 
 let pass = 0; const failures: string[] = [];
 const ok = (name: string, cond: boolean, detail = "") => {
@@ -94,13 +94,28 @@ function main() {
     "src/app/api/individual/terms/route.ts": ["individual_membership.update", "individual_entitlement.update"],
     "src/lib/individual/grants.ts": ["individual_membership.insert", "individual_entitlement.insert", "individual_entitlement.update"],
   };
+  // ⚠ AN EXPERIENCE WRITES ONLY ITS OWN TABLES (COMPETEN-IND-007). A file of an experience package may write
+  // tables named individual_<experience>_* and nothing else, plus the one named estate exception below.
+  // Which file writes which of those tables is pinned by that experience's own harness
+  // (scripts/individual-professional-harness.ts), so this rule cannot be satisfied by a stray writer.
+  const EXPERIENCE_WRITES: { dir: RegExp; table: RegExp }[] = [
+    { dir: /^src\/(lib\/individual|app\/api\/individual)\/professional\//, table: /^individual_professional_[a-z_]+\.(insert|update|delete)$/ },
+    // COMPETEN-IND-004. Pinned to src/lib/individual/scholar/store.ts by scripts/scholar-learning-harness.ts A4.
+    { dir: /^src\/(lib\/individual|app\/api\/individual)\/scholar\//, table: /^individual_scholar_[a-z_]+\.(insert|update|upsert|delete)$/ },
+  ];
+  // Sharing reuses passport_share_tokens (migration 122) -- the brief's instruction, not a new estate writer.
+  const ESTATE_EXCEPTIONS: Record<string, string[]> = {
+    "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "passport_share_tokens.update"],
+  };
+  const experienceAllows = (f: string, op: string) =>
+    EXPERIENCE_WRITES.some(r => r.dir.test(f) && r.table.test(op)) || (ESTATE_EXCEPTIONS[f] ?? []).includes(op);
   const writes: string[] = [];
   for (const [f, src] of SRC) {
     for (const m of src.matchAll(/from\("([a-z_]+)"\)\s*\.(insert|update|upsert|delete)\(/g)) writes.push(`${f}: ${m[1]}.${m[2]}`);
   }
   const badWrites = writes.filter(w => {
     const [f, op] = w.split(": ");
-    return op !== "audit_log.insert" && !(ALLOWED[f] ?? []).includes(op);
+    return op !== "audit_log.insert" && !(ALLOWED[f] ?? []).includes(op) && !experienceAllows(f, op);
   });
   ok("2a. every gate-3 write sits in its one allowed file; nothing else but audit_log is written", badWrites.length === 0, badWrites.join("; "));
   const expected = Object.entries(ALLOWED).flatMap(([f, ops]) => ops.map(op => `${f}: ${op}`));
@@ -148,10 +163,17 @@ function main() {
     !FILES.some(f => f.startsWith("src/app/api/individual/") && /from\("individual_(membership|entitlement)"\)\s*\.(insert|upsert)\(/.test(SRC.get(f) ?? "")));
 
   // ── 7. NAVIGATION LISTS ONLY WHAT EXISTS ────────────────────────────────────────────────────────
-  const missing = FOUNDATION_NAV.filter(n => !existsSync(n.segment
-    ? `src/app/individual/(app)/[experience]/${n.segment}/page.tsx`
-    : "src/app/individual/(app)/[experience]/page.tsx"));
-  ok("7a. every navigation entry has a real page behind it", missing.length === 0, missing.map(n => n.segment || "home").join(", "));
+  // Foundation modules live at [experience]/<segment>. An experience's own modules live in its route group,
+  // [experience]/(<experience>)/<segment> (COMPETEN-IND-007).
+  const foundationSegments = new Set(FOUNDATION_NAV.map(n => n.segment));
+  const pageOf = (k: string, segment: string) => !segment ? "src/app/individual/(app)/[experience]/page.tsx"
+    : foundationSegments.has(segment) ? `src/app/individual/(app)/[experience]/${segment}/page.tsx`
+      : `src/app/individual/(app)/[experience]/(${k})/${segment}/page.tsx`;
+  const missing = EXPERIENCE_KEYS.flatMap(k => navFor(k).filter(n => !existsSync(pageOf(k, n.segment))).map(n => `${k}/${n.segment || "home"}`));
+  ok("7a. every navigation entry, in every experience, has a real page behind it", missing.length === 0, missing.join(", "));
+  const own = EXPERIENCE_KEYS.flatMap(k => EXPERIENCES[k].modules.map(m => m.segment));
+  ok("7c. no experience module reuses a foundation segment or another experience's segment, so no page file is shared",
+    own.every(seg => !foundationSegments.has(seg)) && new Set(own).size === own.length, own.join(", "));
   ok("7b. the experience route accepts exactly the registry's experiences",
     /isExperienceKey\(experience\)/.test(SRC.get("src/app/individual/(app)/[experience]/layout.tsx") ?? "") && EXPERIENCE_KEYS.length === 2);
 

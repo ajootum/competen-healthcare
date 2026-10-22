@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FOUNDATION_NAV, EXPERIENCES, experienceHref, type ExperienceKey } from "@/lib/individual/experiences";
+import { EXPERIENCES, bottomNavFor, experienceHref, navFor, type ExperienceKey } from "@/lib/individual/experiences";
 import { createClient } from "@/lib/supabase/client";
 
-// The Individual navigation, generated from the registry (src/lib/individual/experiences.ts) and nothing
-// else: the sidebar from md up, the bottom bar below it. CPR-MOB-001's freeze applies -- ONE md edge,
+// The Individual navigation, generated from the registry (navFor and bottomNavFor in
+// src/lib/individual/experiences.ts) and nothing else: the sidebar from md up, the bottom bar below it. CPR-MOB-001's freeze applies -- ONE md edge,
 // and touch-target height gated on pointer-coarse, not on viewport width.
 //
 // The two presentations share one list, the way the Practice shell feeds its sidebar and bottom bar from
@@ -23,7 +23,7 @@ export function SidebarNav({ experience }: { experience: ExperienceKey }) {
   const x = EXPERIENCES[experience];
   return (
     <nav aria-label={`${x.name} navigation`} className="flex flex-col gap-0.5 p-3">
-      {FOUNDATION_NAV.map(item => {
+      {navFor(experience).map(item => {
         const href = experienceHref(experience, item.segment);
         const on = isActive(pathname, href, item.module === "home");
         return (
@@ -42,8 +42,9 @@ export function SidebarNav({ experience }: { experience: ExperienceKey }) {
 export function BottomNav({ experience }: { experience: ExperienceKey }) {
   const pathname = usePathname() ?? "";
   const x = EXPERIENCES[experience];
-  // Settings is configuration, not a destination -- it lives behind the account link in the header.
-  const items = FOUNDATION_NAV.filter(i => i.module !== "settings");
+  // Settings is configuration, not a destination -- it lives behind the account link in the header
+  // (bottomNavFor leaves it out).
+  const items = bottomNavFor(experience);
   return (
     <nav aria-label={`${x.name} navigation`}
       className="md:hidden fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]">
