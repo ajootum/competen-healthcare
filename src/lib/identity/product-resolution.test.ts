@@ -116,12 +116,13 @@ describe("resolveProductDestinations", () => {
 
   // ── INDIVIDUAL, GATE 3 (ADR-016, COMPETEN-IND-003) ────────────────────────────────────────────────
   const INDIVIDUAL = (status: string) => ({ data: { status }, error: null });
+  const GATE_ON = { data: { enabled: true }, error: null };
   const NOT_PROVISIONED = { data: null, error: { code: "PGRST205", message: "relation not in schema cache" } };
 
   it("offers Individual for an active individual_membership, and only that", async () => {
     admits(false);
     const r: any = await resolveProductDestinations(
-      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: INDIVIDUAL("active") }), "u1");
+      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: INDIVIDUAL("active"), practice_platform_flags: GATE_ON }), "u1");
     expect(r.state).toBe("one");
     expect(r.destination.code).toBe("individual");
     expect(r.destination.href).toBe("/individual/home");
@@ -132,7 +133,7 @@ describe("resolveProductDestinations", () => {
   it("lists Individual beside Practice for a person holding both, without offering the estate", async () => {
     admits(false);
     const r: any = await resolveProductDestinations(
-      stub({ profiles: PROFILE, practice_membership: PRACTICE, individual_membership: INDIVIDUAL("active") }), "u1");
+      stub({ profiles: PROFILE, practice_membership: PRACTICE, individual_membership: INDIVIDUAL("active"), practice_platform_flags: GATE_ON }), "u1");
     expect(r.state).toBe("many");
     expect(r.destinations.map((d: any) => d.code)).toEqual(["practice", "individual"]);
   });
@@ -140,7 +141,7 @@ describe("resolveProductDestinations", () => {
   it.each(["suspended", "revoked"])("does not offer Individual for a %s membership", async status => {
     admits(false);
     const r: any = await resolveProductDestinations(
-      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: INDIVIDUAL(status) }), "u1");
+      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: INDIVIDUAL(status), practice_platform_flags: GATE_ON }), "u1");
     expect(r.state).toBe("none");
   });
 
@@ -149,7 +150,7 @@ describe("resolveProductDestinations", () => {
   it("treats a not-yet-created individual_membership table as no Individual, not as unavailable", async () => {
     admits(true);
     const r: any = await resolveProductDestinations(
-      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: NOT_PROVISIONED }), "u1");
+      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: NOT_PROVISIONED, practice_platform_flags: GATE_ON }), "u1");
     expect(r.state).toBe("one");
     expect(r.destination.code).toBe("platform");
   });
@@ -157,7 +158,7 @@ describe("resolveProductDestinations", () => {
   it("fails closed to unavailable when the individual read errors for any other reason", async () => {
     admits(true);
     const r: any = await resolveProductDestinations(
-      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: READ_FAILED }), "u1");
+      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: READ_FAILED, practice_platform_flags: GATE_ON }), "u1");
     expect(r.state).toBe("unavailable");
   });
 

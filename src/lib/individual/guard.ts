@@ -5,6 +5,7 @@ import { readIndividualAccess, type IndividualMembership } from "./access";
 import type { ExperienceKey } from "./experiences";
 import type { Acceptance } from "./legal";
 import { termsGate } from "./terms";
+import { individualAppEnabled } from "./gate";
 
 // ── THE INDIVIDUAL GUARDS ── one for pages, one for API routes, one resolution under both ── ADR-016 ───
 //
@@ -28,6 +29,8 @@ export type IndividualContext = {
 };
 
 export type IndividualShell =
+  /** The release gate is off (src/lib/individual/gate.ts). Callers render 404 -- Individual does not exist. */
+  | { state: "DISABLED" }
   | { state: "AUTH_REQUIRED" }
   | { state: "NO_ACCESS" }
   | { state: "UNAVAILABLE" }
@@ -35,7 +38,8 @@ export type IndividualShell =
 
 async function readProfile(admin: any, userId: string, authEmail: string | null): Promise<IndividualProfile> {
   // The identity record every authenticated person has (on_auth_user_created). Display only -- nothing
-  // here reads profiles.role, which stays null for an Individual-only person (ADR-001).
+  // here reads or writes profiles.role (ADR-001). The new-user trigger (migration 335) sets it; Individual
+  // neither relies on that value nor changes it.
   const { data } = await admin.from("profiles").select("full_name, email, avatar_url, country").eq("id", userId).maybeSingle();
   return {
     fullName: data?.full_name ?? null,
@@ -47,10 +51,14 @@ async function readProfile(admin: any, userId: string, authEmail: string | null)
 
 /** For layouts and pages. Never renders protected content in a non-READY state -- the caller redirects. */
 export async function resolveIndividualShell(): Promise<IndividualShell> {
+  // ⚠ THE RELEASE GATE FIRST, BEFORE AUTHENTICATION. With the gate off, a signed-out visitor and a signed-
+  // in one get the same answer -- 404 -- so a disabled Individual cannot be told apart from an absent one,
+  // and nothing below (which reads the migration-370 tables) runs at all.
+  const admin = createAdminClient() as any;
+  if (!(await individualAppEnabled(admin))) return { state: "DISABLED" };
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { state: "AUTH_REQUIRED" };
-  const admin = createAdminClient() as any;
   const access = await readIndividualAccess(admin, user.id);
   if (access.state === "unavailable") return { state: "UNAVAILABLE" };
   if (access.state === "none") return { state: "NO_ACCESS" };
@@ -76,6 +84,7 @@ export async function requireIndividualContext(
   experience?: ExperienceKey, opts: { requireTerms?: boolean } = {},
 ): Promise<IndividualContext | NextResponse> {
   const shell = await resolveIndividualShell();
+  if (shell.state === "DISABLED") return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (shell.state === "AUTH_REQUIRED") return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   if (shell.state === "UNAVAILABLE")
     return NextResponse.json({ error: "Your Competen Individual access could not be checked. Try again shortly." }, { status: 503 });

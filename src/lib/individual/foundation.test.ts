@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { EXPERIENCES, EXPERIENCE_KEYS, FOUNDATION_NAV, experienceHref, isExperienceKey } from "./experiences";
+import { EXPERIENCES, EXPERIENCE_KEYS, FOUNDATION_NAV, SCHOLAR, BOTTOM_BAR_MAX, bottomNavFor, experienceHref, isExperienceKey, navFor } from "./experiences";
 import { latestDecisions, credentialEvidence, type IndividualPassport } from "./passport";
 import { buildHistory } from "./history";
 import { cleanQuestion, recordContext, systemPrompt, QUESTION_MAX } from "./assistant";
@@ -29,6 +29,27 @@ describe("experience registry", () => {
         expect(p.reason.length).toBeGreaterThan(30);
         expect(`${p.reason} ${p.summary}`.toLowerCase()).not.toContain("coming soon");
       }
+    }
+  });
+
+  it("composes navigation: Home, the experience's own modules, then the foundation; the bar caps at five without Settings", () => {
+    const saved = [...SCHOLAR.modules];
+    try {
+      SCHOLAR.modules.push(
+        { key: "study", segment: "study", label: "Study", short: "Study", icon: "S", bottom: true },
+        { key: "rev", segment: "revision", label: "Revision", short: "Rev", icon: "R", bottom: true },
+        { key: "cases", segment: "cases", label: "Cases", short: "Cases", icon: "C" },
+      );
+      expect(navFor("scholar").map(n => n.segment)).toEqual(["", "study", "revision", "cases", "assistant", "passport", "profile", "settings"]);
+      const bar = bottomNavFor("scholar").map(n => n.segment);
+      expect(bar).toEqual(["", "study", "revision", "assistant", "passport"]);
+      expect(bar.length).toBeLessThanOrEqual(BOTTOM_BAR_MAX);
+      expect(bar).not.toContain("settings");
+      // The other experience is untouched by Scholar's modules.
+      // (Professional has its own modules since IND-007, so assert the absence of Scholar's rather than a fixed list.)
+      expect(navFor("professional").map(n => n.segment).filter(s => ["study", "revision", "cases"].includes(s))).toEqual([]);
+    } finally {
+      SCHOLAR.modules.splice(0, SCHOLAR.modules.length, ...saved);
     }
   });
 

@@ -10,6 +10,7 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import BookingLinkCard from "./BookingLinkCard";
+import { bookingUrl } from "@/lib/practice/identity-service";
 
 const routerStub = {
   back() {}, forward() {}, refresh() {}, push() {}, replace() {}, prefetch() {}, hmrRefresh() {},
@@ -23,7 +24,8 @@ const render = (summary: Parameters<typeof BookingLinkCard>[0]["summary"]) =>
     ),
   ).replace(/<!-- -->/g, "");
 
-const URL = "https://competenhealthcare.com/practice/book/@dreokaisu";
+// The address as the one constructor builds it, so this file names no host of its own.
+const URL = bookingUrl("dreokaisu");
 
 describe("the Command Centre booking-link card", () => {
   it("live: the address with copy, open and the share-tools pointer", () => {

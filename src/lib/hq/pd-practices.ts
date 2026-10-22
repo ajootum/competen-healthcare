@@ -47,6 +47,9 @@ import {
 
 type Admin = ReturnType<typeof createAdminClient>;
 
+/** A practice_entitlement row as read here: grouped by workspace, then handed whole to periodOf. */
+type EntitlementRow = { workspace_id: string } & Record<string, unknown>;
+
 /** 0 / 1-9 / 10-99 / 100+ (D2). `null` means the count could NOT BE READ — which is not zero. */
 export type CountBand = "0" | "1-9" | "10-99" | "100+";
 export type Band = CountBand | null;
@@ -330,7 +333,8 @@ function lifecycleAttention(status: string): AttentionItem[] {
  * A failed page returns null, and null means the filter refuses rather than narrowing.
  */
 async function entitlementWorkspaceIds(
-  build: () => any, problems: string[], label: string,
+  build: () => { range(from: number, to: number): PromiseLike<{ data: unknown[] | null; error: { message: string } | null }> },
+  problems: string[], label: string,
 ): Promise<Set<string> | null> {
   const ids = new Set<string>();
   const PAGE = 1000;
@@ -561,9 +565,9 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
   // §8's plan and expiry per row. A FAILED READ LEAVES THE MAP NULL rather than empty, because an empty
   // map renders every practice as "no plan recorded" -- inventing a provisioning fault across the estate.
   if (entRes.error) problems.push(`entitlements: ${entRes.error.message}`);
-  const entByWs: Map<string, any[]> | null = entRes.error ? null : (() => {
-    const m = new Map<string, any[]>();
-    for (const row of (entRes.data ?? []) as any[]) {
+  const entByWs: Map<string, EntitlementRow[]> | null = entRes.error ? null : (() => {
+    const m = new Map<string, EntitlementRow[]>();
+    for (const row of (entRes.data ?? []) as EntitlementRow[]) {
       const list = m.get(row.workspace_id) ?? [];
       list.push(row);
       m.set(row.workspace_id, list);

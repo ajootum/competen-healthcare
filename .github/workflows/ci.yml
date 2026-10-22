@@ -124,7 +124,12 @@ jobs:
     # values: the three journeys pass and the app logs "could not read launch flag -- treating it as
     # OFF" instead of throwing. What this job proves is that the app BOOTS, SERVES its public routes
     # and DENIES a protected one -- not that any data renders. Data-dependent journeys are the four
-    # credential-gated ones, which skip here by design (see e2e/README.md).
+    # credential-gated ones, and they run in smoke-authenticated, not here.
+    #
+    # ⚠ THEY USED TO "SKIP HERE BY DESIGN", AND SINCE COMP-ENG-002G §6 THEY CANNOT. The helper now FAILS
+    # in CI when it cannot identify a staging project or has no credentials, rather than skipping -- so a
+    # bare `npx playwright test` here ran all seven and went red on the four that refuse, every push.
+    # This job therefore names its three files, as smoke-authenticated names its four.
     env:
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-no-database-reachable-in-ci
@@ -164,7 +169,9 @@ jobs:
           done
           pkill -f "next dev" || true
       - name: Smoke suite
-        run: npx playwright test
+        # Only the credential-free journeys; a new one is added here, a credential-gated one to the
+        # authenticated job below.
+        run: npx playwright test e2e/smoke/01-public-site.spec.ts e2e/smoke/02-practice-gateway.spec.ts e2e/smoke/03-protected-route-denial.spec.ts
       # The report is the diagnosis when a smoke journey fails; a failed run with no artifact means
       # re-running locally and hoping it reproduces.
       - name: Upload report on failure

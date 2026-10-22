@@ -11,6 +11,8 @@
  *
  * The world is manage-fixture.ts; §23's other rows are in managed-booking.test.ts.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   fakeAdmin, buildWorld, HANDLE, TOKEN, REFERENCE, APPT_ID,

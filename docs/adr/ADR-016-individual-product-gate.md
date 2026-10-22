@@ -60,6 +60,7 @@ The Scholar operating company's registered name is pending. `INDIVIDUAL_LEGAL_SC
 
 ## Consequences and limits
 
+- **Ships dark.** A release gate (`practice_platform_flags.individual_app`, default OFF; `src/lib/individual/gate.ts`) is checked first at every Individual entry point and in the neutral resolver. While it is off, Individual answers 404 everywhere and `/login` is unchanged. It does not depend on migration 370.
 - **No public signup.** People enter by HQ grant. The `/individual/sign-in` door stays `being_built`, and pilot users sign in at `/login`.
 - **No experience is usable until its terms are published.** The four `INDIVIDUAL_LEGAL_*_VERSION` variables per environment must be set before the pilot.
 - **The grant right has an API, not an HQ page.** An HQ console page would add route intent, navigation and plane-boundary entries. It is the next package's work.

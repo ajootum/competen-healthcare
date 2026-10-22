@@ -37,8 +37,7 @@ export type OperatingEntity = "competen_holdings" | "scholar_operator";
 export type FoundationModule = "home" | "assistant" | "passport" | "profile" | "settings";
 
 export type NavItem = {
-  /** A FoundationModule, or the key of one of the experience's own modules. */
-  module: FoundationModule | string;
+  module: FoundationModule;
   /** Path below /individual/<experience>. Empty for the experience home. */
   segment: string;
   label: string;
@@ -46,19 +45,6 @@ export type NavItem = {
   short: string;
   /** A glyph, aria-hidden wherever it renders -- the same convention as the Practice sidebar. */
   icon: string;
-};
-
-/**
- * A module that belongs to ONE experience (COMPETEN-IND-007): mounted at /individual/<experience>/<segment>
- * and present only in that experience's navigation. Its page lives in the experience's route group,
- * src/app/individual/(app)/[experience]/(<experience>)/<segment>/page.tsx, and refuses in any other
- * experience. A segment is never shared between experiences, so no page file is either.
- */
-export type ExperienceModule = NavItem & {
-  /** One line for the experience home's card. */
-  summary: string;
-  /** On the mobile bottom bar. Home is always first, and the bar holds five at most. */
-  bottom?: boolean;
 };
 
 /** A capability the experience will have and does not have yet. Never a nav entry (see header). */
@@ -84,9 +70,29 @@ export type ExperienceConfig = {
   operatingEntity: OperatingEntity;
   /** The experience home's opening sentence. */
   homeIntro: string;
-  /** The experience's own modules, in sidebar order. Empty until its first module ships. */
-  modules: ExperienceModule[];
   planned: PlannedCapability[];
+  /**
+   * Experience-OWNED modules: destinations only this experience has, mounted at
+   * /individual/<experience>/<segment> with their pages under (app)/[experience]/(<experience>)/<segment>.
+   * Empty until the module ships -- a planned capability is listed in `planned`, never here.
+   */
+  modules: ExperienceModule[];
+};
+
+/** A destination one experience owns (IND-004 Scholar, IND-007 Professional). */
+export type ExperienceModule = {
+  key: string;
+  /** Path below /individual/<experience>. Must not reuse a foundation segment. */
+  segment: string;
+  label: string;
+  short: string;
+  icon: string;
+  /** Wants a place on the mobile bottom bar. bottomNavFor() caps the bar at five. */
+  bottom?: boolean;
+  /** One line for the experience home card (IND-007). */
+  summary?: string;
+  /** false: a real module page reached from another page, not from the navigation (IND-007 share). */
+  nav?: false;
 };
 
 // ── THE FOUNDATION NAVIGATION ── the same five modules in both experiences ───────────────────────────
@@ -110,8 +116,8 @@ export const SCHOLAR: ExperienceConfig = {
   tagline: "Learn · Understand · Apply",
   micro: "Healthcare education, revision and clinical reasoning.",
   operatingEntity: "scholar_operator",
-  homeIntro: "Your study space. Your Passport, profile and personal AI are already here, and the learning tools below are being built.",
   modules: [],
+  homeIntro: "Your study space. Your Passport, profile and personal AI are already here, and the learning tools below are being built.",
   planned: [
     {
       key: "my-learning", label: "My Learning",
@@ -145,19 +151,23 @@ export const PROFESSIONAL: ExperienceConfig = {
   tagline: "Develop · Demonstrate · Advance",
   micro: "Your lifelong professional development, evidence and career.",
   operatingEntity: "competen_holdings",
-  homeIntro: "Your professional home: your registration, development plan, CPD and evidence. They are kept by you, and nobody else sees them unless you share them.",
+  // COMPETEN-IND-007. Pages under (app)/[experience]/(professional)/<segment>, each via experienceModulePage.
   modules: [
-    { module: "registration", segment: "registration", label: "Profession & registration", short: "Registration", icon: "◈",
+    { key: "registration", segment: "registration", label: "Profession & registration", short: "Registration", icon: "◈",
       summary: "Your profession, registration body and number, and country." },
-    { module: "development", segment: "development", label: "Needs & plan", short: "Plan", icon: "◎", bottom: true,
+    { key: "development", segment: "development", label: "Needs & plan", short: "Plan", icon: "◎", bottom: true,
       summary: "Your development needs and the learning goals you set against them." },
-    { module: "cpd", segment: "cpd", label: "CPD log", short: "CPD", icon: "✎", bottom: true,
+    { key: "cpd", segment: "cpd", label: "CPD log", short: "CPD", icon: "✎", bottom: true,
       summary: "Your continuing professional development, with reflections and certificates." },
-    { module: "evidence", segment: "evidence", label: "Credentials & evidence", short: "Evidence", icon: "❖",
+    { key: "evidence", segment: "evidence", label: "Credentials & evidence", short: "Evidence", icon: "❖",
       summary: "Credentials, renewal dates and the evidence you keep of your competence." },
-    { module: "progress", segment: "progress", label: "Progress", short: "Progress", icon: "↗",
+    { key: "progress", segment: "progress", label: "Progress", short: "Progress", icon: "↗",
       summary: "Plan progress, CPD hours by year, and how much of your plan has evidence behind it." },
+    // Reached from the Passport, not the navigation: experienceModulePage needs it listed, navFor shows it.
+    { key: "share", segment: "share", label: "Share your Passport", short: "Share", icon: "⇪",
+      summary: "A revocable, time-limited link to your Passport.", nav: false },
   ],
+  homeIntro: "Your professional home: your registration, development plan, CPD and evidence. They are kept by you, and nobody else sees them unless you share them.",
   planned: [
     {
       key: "career", label: "Career & Opportunities",
@@ -177,23 +187,31 @@ export const EXPERIENCES: Readonly<Record<ExperienceKey, ExperienceConfig>> = {
   professional: PROFESSIONAL,
 };
 
-/**
- * An experience's sidebar: Home, then its own modules, then the rest of the foundation. Pure, and the one
- * source the sidebar, the bottom bar and scripts/individual-foundation-harness.ts 7a read.
- */
-export function navFor(experience: ExperienceKey): NavItem[] {
-  const [home, ...rest] = FOUNDATION_NAV;
-  return [home, ...EXPERIENCES[experience].modules, ...rest];
+// ── THE GENERATED NAVIGATION ── one sidebar list and one bottom-bar list per experience ──────────────
+//
+// The ONLY place the shell's navigation is composed (ShellNav renders these, nothing else), so the two
+// experiences cannot drift and an experience module appears the day it is added to `modules`.
+
+export type ShellNavItem = { key: string; segment: string; label: string; short: string; icon: string };
+
+const asItem = (n: NavItem): ShellNavItem => ({ key: n.module, segment: n.segment, label: n.label, short: n.short, icon: n.icon });
+
+/** Sidebar order: Home, the experience's own modules, then the rest of the foundation. */
+export function navFor(experience: ExperienceKey): ShellNavItem[] {
+  const home = FOUNDATION_NAV.filter(n => n.module === "home").map(asItem);
+  const rest = FOUNDATION_NAV.filter(n => n.module !== "home").map(asItem);
+  const own = EXPERIENCES[experience].modules.filter(m => m.nav !== false).map(m => ({ key: m.key, segment: m.segment, label: m.label, short: m.short, icon: m.icon }));
+  return [...home, ...own, ...rest];
 }
 
-/**
- * The mobile bottom bar: Home, the experience modules marked `bottom`, then foundation destinations up to
- * five. Settings is configuration, not a destination (CPR-MOB-001), and stays behind the header account link.
- */
-export function bottomNavFor(experience: ExperienceKey): NavItem[] {
-  const [home, ...rest] = FOUNDATION_NAV.filter(i => i.module !== "settings");
-  const own = EXPERIENCES[experience].modules.filter(m => m.bottom);
-  return [home, ...own, ...rest].slice(0, 5);
+/** CPR-MOB-001: at most five bottom tabs -- Home, modules flagged `bottom`, then foundation to fill. Settings
+ *  never sits on the bar (it lives behind the account link). */
+export const BOTTOM_BAR_MAX = 5;
+export function bottomNavFor(experience: ExperienceKey): ShellNavItem[] {
+  const home = FOUNDATION_NAV.filter(n => n.module === "home").map(asItem);
+  const own = EXPERIENCES[experience].modules.filter(m => m.bottom && m.nav !== false).map(m => ({ key: m.key, segment: m.segment, label: m.label, short: m.short, icon: m.icon }));
+  const fill = FOUNDATION_NAV.filter(n => n.module !== "home" && n.module !== "settings").map(asItem);
+  return [...home, ...own, ...fill].slice(0, BOTTOM_BAR_MAX);
 }
 
 /** The href of a foundation module inside an experience. */

@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { EXPERIENCES, bottomNavFor, experienceHref, navFor, type ExperienceKey } from "@/lib/individual/experiences";
+import { EXPERIENCES, experienceHref, navFor, bottomNavFor, type ExperienceKey } from "@/lib/individual/experiences";
 import { createClient } from "@/lib/supabase/client";
 
-// The Individual navigation, generated from the registry (navFor and bottomNavFor in
-// src/lib/individual/experiences.ts) and nothing else: the sidebar from md up, the bottom bar below it. CPR-MOB-001's freeze applies -- ONE md edge,
+// The Individual navigation, generated from the registry (src/lib/individual/experiences.ts) and nothing
+// else: the sidebar from md up, the bottom bar below it. CPR-MOB-001's freeze applies -- ONE md edge,
 // and touch-target height gated on pointer-coarse, not on viewport width.
 //
 // The two presentations share one list, the way the Practice shell feeds its sidebar and bottom bar from
@@ -25,9 +25,9 @@ export function SidebarNav({ experience }: { experience: ExperienceKey }) {
     <nav aria-label={`${x.name} navigation`} className="flex flex-col gap-0.5 p-3">
       {navFor(experience).map(item => {
         const href = experienceHref(experience, item.segment);
-        const on = isActive(pathname, href, item.module === "home");
+        const on = isActive(pathname, href, item.segment === "");
         return (
-          <Link key={item.module} href={href} aria-current={on ? "page" : undefined}
+          <Link key={item.key} href={href} aria-current={on ? "page" : undefined}
             className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-medium pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on ? "font-semibold" : "text-gray-700 hover:bg-gray-50"}`}
             style={on ? { background: x.accentSoft, color: x.accent } : undefined}>
             <span aria-hidden className="w-5 text-center text-[15px]">{item.icon}</span>
@@ -42,8 +42,7 @@ export function SidebarNav({ experience }: { experience: ExperienceKey }) {
 export function BottomNav({ experience }: { experience: ExperienceKey }) {
   const pathname = usePathname() ?? "";
   const x = EXPERIENCES[experience];
-  // Settings is configuration, not a destination -- it lives behind the account link in the header
-  // (bottomNavFor leaves it out).
+  // Composed by the registry (bottomNavFor): at most five tabs, Settings never on the bar.
   const items = bottomNavFor(experience);
   return (
     <nav aria-label={`${x.name} navigation`}
@@ -51,9 +50,9 @@ export function BottomNav({ experience }: { experience: ExperienceKey }) {
       <ul className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map(item => {
           const href = experienceHref(experience, item.segment);
-          const on = isActive(pathname, href, item.module === "home");
+          const on = isActive(pathname, href, item.segment === "");
           return (
-            <li key={item.module}>
+            <li key={item.key}>
               <Link href={href} aria-current={on ? "page" : undefined}
                 className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${focusRing} ${on ? "" : "text-gray-500"}`}
                 style={on ? { color: x.accent } : undefined}>

@@ -27,18 +27,19 @@ import { cleanQuestion, recordContext, systemPrompt, QUESTION_MAX } from "@/lib/
 // id as a tenant (a hospital, a workspace) is the foreign-key mismatch COMPETEN-IND-002 s2.7 found -- the
 // insert fails and the usage row is silently lost.
 
-export async function GET() {
-  const s = aiStatus();
-  return NextResponse.json({ configured: s.configured });
-}
+// No GET: the assistant page reads aiStatus() on the server, and an unguarded GET would be an Individual
+// entry point that answered while the release gate is off.
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const experience = body?.experience;
-  if (!isExperienceKey(experience)) return NextResponse.json({ error: "Unknown experience" }, { status: 400 });
+  const known = isExperienceKey(experience);
 
-  const ctx = await requireIndividualContext(experience);
+  // The guard (release gate, then gate 3) runs BEFORE any input validation, so a disabled Individual
+  // answers 404 to every request rather than revealing which inputs it would have accepted.
+  const ctx = await requireIndividualContext(known ? experience : undefined);
   if (isGuardRefusal(ctx)) return ctx;
+  if (!known) return NextResponse.json({ error: "Unknown experience" }, { status: 400 });
 
   const question = cleanQuestion(body?.question);
   if (!question) return NextResponse.json({ error: `Ask a question of up to ${QUESTION_MAX} characters.` }, { status: 400 });

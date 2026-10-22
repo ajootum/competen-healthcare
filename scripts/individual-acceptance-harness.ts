@@ -26,6 +26,8 @@
  *      exist in the HQ catalogue, and a person with no appointment does not hold the right.
  *   L. Passport provenance and AI boundaries (D3): an organisation-verified credential and a self-declared
  *      one are labelled differently, and the AI context names the person's own record and nobody else's.
+ *   R. Release gate: with `individual_app` OFF in the real flag store, a real member is not offered
+ *      Individual at sign-in. The flag's prior state is restored at the end (Z2).
  *   M. Employer visibility (D1): nothing Individual did wrote to the estate learning tables that hospital
  *      analytics read.
  *
@@ -55,6 +57,7 @@ import { termsGate } from "../src/lib/individual/terms";
 import { entityLegal, type EntityLegal } from "../src/lib/individual/legal";
 import { recordContext } from "../src/lib/individual/assistant";
 import { resolveHqPositions } from "../src/lib/hq/context";
+import { individualAppEnabled, INDIVIDUAL_APP_FLAG } from "../src/lib/individual/gate";
 
 loadEnvConfig(process.cwd());
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -111,6 +114,13 @@ async function cleanup() {
   }
 }
 
+/** The release flag's row before this run, or null when there was none. Restored by restoreFlag(). */
+let priorFlag: { flag: string; enabled: boolean; note: string | null } | null = null;
+async function restoreFlag() {
+  if (priorFlag) await admin.from("practice_platform_flags").upsert(priorFlag);
+  else await admin.from("practice_platform_flags").delete().eq("flag", INDIVIDUAL_APP_FLAG);
+}
+
 async function makeUser(email: string) {
   const { data, error } = await admin.auth.admin.createUser({ email, password: FIX_PASSWORD, email_confirm: true });
   if (error || !data?.user) throw new Error(`createUser ${email}: ${error?.message}`);
@@ -147,6 +157,9 @@ async function main() {
   if (probe.error) { console.error(`store unreadable: ${probe.error.message}`); process.exit(1); }
 
   await cleanup();
+  const flagRead = await admin.from("practice_platform_flags").select("flag, enabled, note").eq("flag", INDIVIDUAL_APP_FLAG).maybeSingle();
+  if (flagRead.error) { console.error(`release flag unreadable: ${flagRead.error.message}`); process.exit(1); }
+  priorFlag = flagRead.data ?? null;
   const iso = (days: number) => new Date(Date.now() + days * 86400000).toISOString();
 
   const grantor = await makeUser(FIX.grantor);
@@ -182,6 +195,19 @@ async function main() {
   ok("I3. D8: a granted Scholar row records who confirmed eligibility and when", !!sRow.data?.adult_confirmed_at && sRow.data?.adult_confirmed_by === grantor && sRow.data?.granted_by === grantor);
   const again = await grant(scholar, grantor, ["scholar"]);
   ok("I4. the grant is idempotent: an already-live experience is reported, not duplicated", again.granted.length === 0 && again.alreadyLive.join() === "scholar");
+
+  // ── R. the release gate, against the real flag store (src/lib/individual/gate.ts) ──
+  // The run needs the gate ON, so it records the flag's state first, proves the OFF behaviour, switches it on
+  // and restores the original state at the end -- the same discipline practice-signup-harness keeps for its
+  // launch flag. A member who exists in the tables must still be invisible while the gate is off.
+  await admin.from("practice_platform_flags").upsert({ flag: INDIVIDUAL_APP_FLAG, enabled: false, note: "individual-acceptance-harness: OFF phase" });
+  const rOff: any = await resolveProductDestinations(admin, both);
+  const offCodes = rOff.state === "one" ? [rOff.destination.code] : rOff.state === "many" ? rOff.destinations.map((d: any) => d.code) : [];
+  ok("R1. gate OFF: the flag reads OFF from the real store", (await individualAppEnabled(admin)) === false);
+  ok("R2. ⚠ gate OFF: a real member with two live experiences is NOT offered Individual at sign-in, and nothing else is offered in its place",
+    !offCodes.includes("individual") && rOff.state !== "unavailable", JSON.stringify(rOff));
+  await admin.from("practice_platform_flags").upsert({ flag: INDIVIDUAL_APP_FLAG, enabled: true, note: "individual-acceptance-harness: ON phase (restored after run)" });
+  ok("R3. gate ON: the flag reads ON", (await individualAppEnabled(admin)) === true);
 
   // ── A. dual experience ──
   const a: any = await readIndividualAccess(admin, both);
@@ -316,9 +342,13 @@ async function main() {
   await cleanup();
   const left = await admin.from("individual_membership").select("id").in("user_id", ids);
   ok("Z1. fixtures removed -- every Individual row cascaded with its profile", (left.data ?? []).length === 0);
+  await restoreFlag();
+  const flagAfter = await admin.from("practice_platform_flags").select("enabled").eq("flag", INDIVIDUAL_APP_FLAG).maybeSingle();
+  ok("Z2. the release flag is restored to its state before the run",
+    priorFlag ? flagAfter.data?.enabled === priorFlag.enabled : flagAfter.data === null);
 
   console.log(`\n${fails.length ? "RED" : "ALL GREEN"} -- ${pass} passed, ${fails.length} failed`);
   process.exit(fails.length ? 1 : 0);
 }
 
-main().catch(async e => { console.error(e); try { await cleanup(); } catch { /* best effort */ } process.exit(1); });
+main().catch(async e => { console.error(e); try { await cleanup(); await restoreFlag(); } catch { /* best effort */ } process.exit(1); });

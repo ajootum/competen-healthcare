@@ -16,6 +16,10 @@
     {
       "route": "src/app/api/v1/practice/public/booking/route.ts",
       "reason": "The patient-facing booking surface. Unauthenticated BY DESIGN and deliberately outside the (shell) group: a patient is not a practitioner, and routing this through the practice gateway would mean the only session it understood was a practitioner's. It names no practice, so a stranger guessing the URL learns nothing about who is on the platform."
+    },
+    {
+      "route": "src/app/api/v1/practice/public/manage/route.ts",
+      "reason": "The patient's door to a booking they already hold. Unauthenticated BY DESIGN for the same reason as the booking route: a patient has no practitioner session. It is not unchecked: list, reschedule and cancel each require a session token minted by confirm_code (a one-time code sent to the patient's own email or phone), and every write goes through mineOrRefuse, which answers identically for a reference that does not exist, belongs to somebody else, or is already gone. request_code reads no booking before sending, so it is not an enumeration oracle; `times` is the same public slot reader the booking route serves."
     }
   ],
   "system": [
