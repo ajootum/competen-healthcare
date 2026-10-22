@@ -81,7 +81,10 @@ export default function LiveRefresh({ asOf, timezone }: { asOf?: string; timezon
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("connecting");
   const [lastAt, setLastAt] = useState<number | null>(null);
-  const [tick, setTick] = useState(0);
+  // The clock every render reads. It is advanced by the timers below and never read inside render
+  // (react-hooks/purity): a render React re-runs on its own would otherwise see a different instant
+  // from the one it committed.
+  const [now, setNow] = useState(() => Date.now());
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── THE FOURTH STATE ────────────────────────────────────────────────────────────────────────────
@@ -99,7 +102,7 @@ export default function LiveRefresh({ asOf, timezone }: { asOf?: string; timezon
     if (typeof navigator !== "undefined" && navigator.onLine === false) queueMicrotask(down);
     window.addEventListener("offline", down);
     window.addEventListener("online", up);
-    const age = setInterval(() => setTick(t => t + 1), AGE_TICK_MS);
+    const age = setInterval(() => setNow(Date.now()), AGE_TICK_MS);
     return () => { window.removeEventListener("offline", down); window.removeEventListener("online", up); clearInterval(age); };
   }, [router]);
 
@@ -109,7 +112,7 @@ export default function LiveRefresh({ asOf, timezone }: { asOf?: string; timezon
     const refresh = () => {
       if (pending.current) clearTimeout(pending.current);
       pending.current = setTimeout(() => {
-        if (!cancelled) { router.refresh(); setLastAt(Date.now()); }
+        if (!cancelled) { const at = Date.now(); router.refresh(); setLastAt(at); setNow(at); }
       }, COALESCE_MS);
     };
 
@@ -154,7 +157,9 @@ export default function LiveRefresh({ asOf, timezone }: { asOf?: string; timezon
     // Not "instead of" the stream: ALONGSIDE it. A stream that is connected but silently dropping events
     // -- a proxy buffering, a tab throttled in the background -- is invisible from in here, and a
     // 45-second re-read costs one render and closes that hole without needing to detect it.
-    const poll = setInterval(() => { if (!cancelled) { router.refresh(); setLastAt(Date.now()); } }, POLL_MS);
+    const poll = setInterval(() => {
+      if (!cancelled) { const at = Date.now(); router.refresh(); setLastAt(at); setNow(at); }
+    }, POLL_MS);
 
     return () => {
       cancelled = true;
@@ -164,11 +169,10 @@ export default function LiveRefresh({ asOf, timezone }: { asOf?: string; timezon
     };
   }, [router]);
 
-  // ⚠ `tick` is READ so that the offline badge recomputes its age on the timer above. Without it the
-  // escalation would be a promise the component never keeps: the badge would freeze at the age it had
-  // when the tab lost its connection, which is precisely the "8 minutes and 8 hours look identical"
-  // failure this state exists to prevent.
-  void tick;
+  // ⚠ `now` ADVANCES ON THE TIMER ABOVE, so the offline badge recomputes its age while the tab is left
+  // open. Without it the escalation would be a promise the component never keeps: the badge would freeze
+  // at the age it had when the tab lost its connection, which is precisely the "8 minutes and 8 hours
+  // look identical" failure this state exists to prevent.
 
   // ── A REFRESH THAT NEVER LANDS (CPR-CC-MOB-001 s6, "never label it Live") ──────────────────────
   //
@@ -185,16 +189,20 @@ export default function LiveRefresh({ asOf, timezone }: { asOf?: string; timezon
   //
   // Two intervals, not one, before it says so: a single missed poll is a slow request or a throttled
   // tab, and calling that stale would cry wolf at every red light.
-  const asOfSeenAt = useRef<number>(Date.now());
-  const lastAsOf = useRef<string | undefined>(asOf);
-  if (asOf !== lastAsOf.current) { lastAsOf.current = asOf; asOfSeenAt.current = Date.now(); }
-  const notReRead = Date.now() - asOfSeenAt.current > STALE_AFTER_MS;
+  //
+  // When `asOf` last changed is kept in state beside the value it was seen with, and updated during
+  // render when the prop moves on -- React's pattern for state derived from a previous prop. A ref
+  // written during render would be kept even by a render React then discards.
+  const [seen, setSeen] = useState(() => ({ asOf, at: now }));
+  if (asOf !== seen.asOf) setSeen({ asOf, at: now });
+  const asOfSeenAt = asOf !== seen.asOf ? now : seen.at;
+  const notReRead = now - asOfSeenAt > STALE_AFTER_MS;
 
   // Offline already had this reading and keeps it. The addition is that a page nobody could re-read is
   // now described the same way whether the cause was the network or the server -- because to the person
   // reading it, those are the same fact: what is on screen is older than it looks.
   const stale = (mode === "offline" || notReRead) && asOf
-    ? offlineFreshness(asOf, timezone ?? "UTC", new Date())
+    ? offlineFreshness(asOf, timezone ?? "UTC", new Date(now))
     : null;
 
   // ⚠ notReRead OUTRANKS live AND polling, and that ordering is the whole fix. Both of those words are
