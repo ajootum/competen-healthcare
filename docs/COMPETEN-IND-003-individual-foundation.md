@@ -120,6 +120,18 @@ Once staging answers, run in this order:
 
 None of the boundary failures involves Individual code. Each traces to the 361–369 gap or to missing staging seed data, and was confirmed by a direct schema read.
 
+## Merge-time step (required when this branch rebases or merges onto main)
+
+COMPETEN-AI-LOG-001 (PR #2, `9402bbe` on main) replaced `generate()`'s bare `tenantId` with a typed `attribution` (`AiAttribution` in `src/lib/ai/gateway.ts`). Owner GO: the branch that merges second makes the change. In `src/app/api/individual/assistant/route.ts`, change
+
+`context: { userId: ctx.userId, tenantId: null, operation: \`individual_assistant_${experience}\` }`
+
+to
+
+`context: { userId: ctx.userId, attribution: { scope: "person" }, operation: \`individual_assistant_${experience}\` }`
+
+The `person` scope records the actor alone, with no tenant and no workspace, which is what the route intends. Update its comment accordingly. Then re-run `tsc`, `vitest` (including `src/lib/ai/attribution.test.ts`) and the foundation harness. A trial `git merge-tree` of this branch with `9402bbe` (2026-10-22) is textually conflict-free, so this is the only change expected.
+
 ## 9. Next
 
 **COMPETEN-IND-004.** Scholar's first complete learning journey: upload, explain, practise, revise, progress, built on the `individual_*` storage boundary (D1). The Professional core can be built in parallel on separate files: credentials, private CPD and the D5 identity record. An HQ console page for the grant right can be built alongside. Staging commissioning (§7) must complete before IND-004 ships to staging.
