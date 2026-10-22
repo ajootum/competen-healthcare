@@ -67,7 +67,7 @@ Apply with the established tool once staging answers: `npx tsx scripts/apply-mig
 2. That person calls `POST /api/hq/individual/grants` with `{ targetUserId, experiences: ["scholar","professional"], adultConfirmed: true }`. `adultConfirmed` is required for Scholar.
 3. `POST /api/hq/individual/grants/end` with `{ targetUserId, experience }` ends one experience.
 
-The routes have no HQ console page yet (§8).
+The routes have no HQ console page yet (§9).
 
 **Before the pilot,** set the four legal version variables (and URLs) per environment. Until they are set, every experience stays closed.
 
