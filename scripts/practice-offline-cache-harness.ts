@@ -282,7 +282,7 @@ async function main() {
     live.includes("fire-and-forget") && !liveCode.includes("fire-and-forget"));
 
   ok("3f. a stalled asOf is detected at all",
-    liveCode.includes("asOfSeenAt") && liveCode.includes("Date.now() - asOfSeenAt.current > STALE_AFTER_MS"));
+    liveCode.includes("asOfSeenAt") && liveCode.includes("now - asOfSeenAt > STALE_AFTER_MS"));
 
   // Two intervals, not one: a single missed poll is a slow request or a throttled tab.
   ok("3g. and it waits more than one poll interval before saying so",

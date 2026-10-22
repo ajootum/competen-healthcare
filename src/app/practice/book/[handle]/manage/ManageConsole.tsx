@@ -273,7 +273,7 @@ export default function ManageConsole({ handle, identity, timezone }: {
               desktop space and an undersized central card", which a 720px column in a wide window is
               exactly. On mobile it stacks in §19 order: the appointment first, its support after. */}
           <div className="mt-3 grid gap-4 md:grid-cols-[minmax(0,1fr)_290px]">
-            <div className="md:order-1 min-w-0">
+            <div className="min-w-0">
 
           {/* §6: the facts, in the order a patient reads them. */}
           <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
@@ -385,7 +385,7 @@ export default function ManageConsole({ handle, identity, timezone }: {
               where, how you were contacted, and the reference. */}
             </div>
 
-            <aside className="md:order-2 flex flex-col gap-3">
+            <aside className="flex flex-col gap-3">
               {/* §8 in the rail: the place, its address and directions where one exists. */}
               <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
                 <p className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Location</p>

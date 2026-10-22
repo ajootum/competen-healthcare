@@ -12,6 +12,8 @@
  *      make it useless, and with no journey id there is no way to spot them.
  * ────────────────────────────────────────────────────────────────────────────────────────────────
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { describe, it, expect } from "vitest";
 import {
   bookingFunnel, deviceClass, recordFunnelStep, FUNNEL_STEPS, FUNNEL_LABELS,

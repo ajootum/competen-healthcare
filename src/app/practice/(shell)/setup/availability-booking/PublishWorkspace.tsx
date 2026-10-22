@@ -185,9 +185,9 @@ export default function PublishWorkspace({ readiness, locations, mayPublish, vie
         <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-[11.5px] leading-relaxed text-emerald-900">
           <span className="font-bold">Your booking page is live.</span> Your link is on the Command
           Centre, and the full kit is in one place:{" "}
-          <a href="/practice/setup/identity" className="font-semibold text-[var(--cp-primary)] hover:underline">
+          <Link href="/practice/setup/identity" className="font-semibold text-[var(--cp-primary)] hover:underline">
             booking link, QR code &amp; share tools →
-          </a>
+          </Link>
         </p>
       )}
 
