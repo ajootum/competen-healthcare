@@ -28,7 +28,7 @@ export default async function RegistrationPage({ params }: { params: Promise<{ e
       {!record.provisioned && <NotProvisioned />}
 
       <Section title="Your details" note="Self-declared. Competen has not checked these against any register.">
-        {p === null ? <Unreadable what="professional details" /> : (
+        {p === null ? <Unreadable what="professional details" /> : !record.provisioned ? null : (
           <>
             <div className="mb-4"><ClassLabel value="self_declared" /></div>
             <ApiForm action="/api/individual/professional/profile" method="PUT" submitLabel="Save my details" accent={x.accent} reset={false}>

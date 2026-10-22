@@ -76,7 +76,7 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
           </ul>
         )}
 
-        {needs !== null && (
+        {needs !== null && record.provisioned && (
           <details className="mt-4 rounded-xl border border-gray-200 p-4" open={needs.length === 0}>
             <summary className="cursor-pointer text-[14px] font-semibold" style={{ color: x.accent }}>Add a development need</summary>
             <div className="mt-4">
@@ -90,7 +90,7 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
         )}
       </Section>
 
-      {passport.competencies !== null && gaps.length > 0 && needs !== null && (
+      {passport.competencies !== null && gaps.length > 0 && needs !== null && record.provisioned && (
         <Section title="From your Passport" note="Assessed competencies an organisation recorded for you that are not current. Add any you want to work on.">
           <ul className="divide-y divide-gray-100">
             {gaps.map(g => (
@@ -140,7 +140,7 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
           </>
         )}
 
-        {goals !== null && (
+        {goals !== null && record.provisioned && (
           <details className="mt-4 rounded-xl border border-gray-200 p-4" open={goals.length === 0 && (needs?.length ?? 0) > 0}>
             <summary className="cursor-pointer text-[14px] font-semibold" style={{ color: x.accent }}>Add a goal</summary>
             <div className="mt-4">

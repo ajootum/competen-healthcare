@@ -52,7 +52,7 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
         )}
       </Section>
 
-      {cpd !== null && (
+      {cpd !== null && record.provisioned && (
         <Section title="Add an activity">
           <CpdForm accent={x.accent} today={today} goals={liveGoals.map(g => ({ id: g.id, title: g.title }))} />
         </Section>

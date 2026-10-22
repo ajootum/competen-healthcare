@@ -95,7 +95,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
         );
       })}
 
-      {evidence !== null && (
+      {evidence !== null && record.provisioned && (
         <Section title="Add a credential or evidence" note="Attach a document if you have one. It is stored privately and only you can open it.">
           <ApiForm action="/api/individual/professional/evidence" multipart submitLabel="Add to my record" accent={x.accent} savedText="Added.">
             <div className="grid gap-4 sm:grid-cols-2">
