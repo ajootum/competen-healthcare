@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { individualAppEnabled } from "@/lib/individual/gate";
 import type { Metadata } from "next";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient, createAdminClientOrNull } from "@/lib/supabase/server";
 import { readIndividualAccess } from "@/lib/individual/access";
 import { StatePanel, IndividualMark, primaryBtn, secondaryBtn } from "../_components/chrome";
 import { SignOutButton } from "../_components/ShellNav";
@@ -29,7 +29,9 @@ export const metadata: Metadata = { title: "Competen Individual access", robots:
 export default async function IndividualAccessPage() {
   // The release gate first: with Individual switched off, this page does not exist either.
   await connection(); // request time only -- see src/lib/individual/guard.ts
-  if (!(await individualAppEnabled(createAdminClient()))) notFound();
+  // OrNull: a missing service key is OFF (404), never a throwing constructor (500) -- see guard.ts.
+  const admin = createAdminClientOrNull();
+  if (!admin || !(await individualAppEnabled(admin))) notFound();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -44,7 +46,7 @@ export default async function IndividualAccessPage() {
     );
   }
 
-  const access = await readIndividualAccess(createAdminClient(), user.id);
+  const access = await readIndividualAccess(admin, user.id);
   if (access.state === "member") redirect("/individual/home");
 
   const about = <Link href="/individual" className={secondaryBtn}>About Competen Individual</Link>;
