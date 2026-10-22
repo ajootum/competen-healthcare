@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("full_name, hospital_id").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("full_name, hospital_id, tenant_id").eq("id", user.id).single();
 
   const quota = await checkAiQuota(admin, user.id);
   if (!quota.ok) return NextResponse.json({ error: `AI rate limit reached (${quota.limit}/hour).` }, { status: 429 });
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
     "Be concise, structured and calm. If the data doesn't support an answer, say so plainly.",
   ].join("\n");
 
-  const result = await generate({ system, user: `My live operational picture:\n${ctx.join("\n")}\n\nRequest: ${q}`, tier: "reasoning", maxTokens: 900, context: { userId: user.id, tenantId: profile?.hospital_id ?? null, operation: "hww_bedside_copilot" } });
+  const result = await generate({ system, user: `My live operational picture:\n${ctx.join("\n")}\n\nRequest: ${q}`, tier: "reasoning", maxTokens: 900, context: { userId: user.id, attribution: { scope: "tenant", tenantId: profile?.tenant_id ?? null }, operation: "hww_bedside_copilot" } });
   if (!result.ok) return NextResponse.json({ error: result.error === "not_configured" ? "AI is not configured." : result.error === "refusal" ? "The copilot declined that request." : `Error: ${result.detail ?? "failed"}` }, { status: result.error === "not_configured" ? 503 : 500 });
 
   await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: user.id, actor_name: profile?.full_name ?? null, action: "hww_ai_query", entity_type: "ai", entity_id: null, new_value: { question: q.slice(0, 300), model: result.model, tokens: result.usage } }).then((r: any) => r, () => {});

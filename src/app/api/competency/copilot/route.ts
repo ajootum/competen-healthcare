@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("role, roles, full_name, hospital_id").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("role, roles, full_name, hospital_id, tenant_id").eq("id", user.id).single();
   const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["super_admin", "hospital_admin", "educator"].includes(r))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
   ].join("\n");
   const userMsg = `Competency Office data (live):\n${context}\n\nRequest: ${q}`;
 
-  const result = await generate({ system, user: userMsg, tier: "reasoning", maxTokens: 1100, context: { userId: user.id, tenantId: profile?.hospital_id ?? null, operation: "competency_intelligence" } });
+  const result = await generate({ system, user: userMsg, tier: "reasoning", maxTokens: 1100, context: { userId: user.id, attribution: { scope: "tenant", tenantId: profile?.tenant_id ?? null }, operation: "competency_intelligence" } });
 
   if (!result.ok) {
     const msg = result.error === "not_configured" ? "AI is not configured." : result.error === "refusal" ? "The copilot declined to answer that request." : `Copilot error: ${result.detail ?? "failed"}`;

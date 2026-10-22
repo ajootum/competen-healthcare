@@ -28,12 +28,37 @@ export function estimateCost(model: string | null | undefined, input: number, ou
   return +((input / 1e6) * p.in + (output / 1e6) * p.out).toFixed(6);
 }
 
+// WHO A GENERATION IS ATTRIBUTED TO — one typed contract for every product (COMP-ARCH-PSA-001).
+// There is deliberately no bare `tenantId`: plat_ai_requests.tenant_id references tenants(id), and two
+// products passed ids that are not tenants into it -- Practice its workspace id, the Enterprise copilots
+// profiles.hospital_id -- so the database refused every one of those rows. The scope makes the caller
+// say which kind of id it holds, and the gateway decides the column.
+//   tenant     Enterprise / estate. tenants.id, which IS the organisation id (migration 041 reuses the
+//              organisation uuid as the tenant id). Read profiles.tenant_id -- never hospital_id.
+//              Null when the caller has no tenant (super_admin, an unattached profile).
+//   workspace  Practice. practice_workspace.id. A workspace is not a tenant (the two-gate split).
+//   person     Individual. The actor alone: no tenant, no workspace.
+export type AiAttribution =
+  | { scope: "tenant"; tenantId: string | null }
+  | { scope: "workspace"; workspaceId: string }
+  | { scope: "person" };
+
 export type AiUsageEntry = {
   operation?: string | null; tier?: string | null; provider?: string | null; model?: string | null;
   inputTokens?: number | null; outputTokens?: number | null; latencyMs?: number | null;
   status: "ok" | "refusal" | "error" | "not_configured"; error?: string | null;
-  actorId?: string | null; tenantId?: string | null;
+  actorId?: string | null; attribution?: AiAttribution | null;
 };
+
+// The identifier columns one attribution writes. workspace_id and attribution_scope arrive with
+// migration 371 -- see recordAiUsage for the row written before it is applied.
+export function attributionColumns(a: AiAttribution | null | undefined) {
+  return {
+    tenant_id: a?.scope === "tenant" ? a.tenantId : null,
+    workspace_id: a?.scope === "workspace" ? a.workspaceId : null,
+    attribution_scope: a?.scope ?? null,
+  };
+}
 
 // Best-effort insert of one usage row. Never throws — logging must not break the
 // AI call that produced it. But a dropped row IS reported: supabase-js returns a
@@ -44,13 +69,18 @@ export async function recordAiUsage(e: AiUsageEntry) {
   try {
     const admin = createAdminClient() as any;
     const input = e.inputTokens ?? 0, output = e.outputTokens ?? 0;
-    const { error } = await admin.from("plat_ai_requests").insert({
-      actor_id: e.actorId ?? null, tenant_id: e.tenantId ?? null,
+    const { tenant_id, workspace_id, attribution_scope } = attributionColumns(e.attribution);
+    const row = {
+      actor_id: e.actorId ?? null, tenant_id,
       operation: e.operation ?? null, tier: e.tier ?? null, provider: e.provider ?? null, model: e.model ?? null,
       input_tokens: input, output_tokens: output, total_tokens: input + output,
       latency_ms: e.latencyMs ?? null, status: e.status, error: e.error ? String(e.error).slice(0, 500) : null,
       cost_usd: estimateCost(e.model, input, output),
-    });
+    };
+    let { error } = await admin.from("plat_ai_requests").insert({ ...row, workspace_id, attribution_scope });
+    // ⚠ BEFORE MIGRATION 371 IS APPLIED the two columns do not exist and PostgREST refuses the whole row
+    // (PGRST204). Land it without them -- usage counted, workspace unattributed -- rather than lose it.
+    if (error?.code === "PGRST204") ({ error } = await admin.from("plat_ai_requests").insert(row));
     if (error) console.error(`${what}: ${error.message}`);
   } catch (err) {
     console.error(`${what}: ${String((err as Error)?.message ?? err)}`);
