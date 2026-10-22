@@ -58,6 +58,9 @@ const INCLUDED = [
   // ADR-016 gate-3 source invariants (COMPETEN-IND-003). Imports only access-doors.ts and the Individual
   // registry, neither of which reads the environment, and creates no client: 21/21 with no database.
   "individual-foundation-harness.ts",
+  // COMPETEN-IND-004 Scholar learning invariants (source and migration 372). Imports only the Scholar constants
+  // and the Individual registry, neither of which imports anything; no client, no network, no .env.local.
+  "scholar-learning-harness.ts",
   "mos-gap-matrix-harness.ts",
   "pd-health-harness.ts",
   "pd-nav-harness.ts",
