@@ -80,7 +80,10 @@ export async function recordAiUsage(e: AiUsageEntry) {
     let { error } = await admin.from("plat_ai_requests").insert({ ...row, workspace_id, attribution_scope });
     // ⚠ BEFORE MIGRATION 371 IS APPLIED the two columns do not exist and PostgREST refuses the whole row
     // (PGRST204). Land it without them -- usage counted, workspace unattributed -- rather than lose it.
-    if (error?.code === "PGRST204") ({ error } = await admin.from("plat_ai_requests").insert(row));
+    // Only for THOSE two columns: PGRST204 names whichever column is missing, and any other missing
+    // column is a real schema fault that must be reported below, not retried around.
+    if (error?.code === "PGRST204" && /'(workspace_id|attribution_scope)'/.test(error.message ?? ""))
+      ({ error } = await admin.from("plat_ai_requests").insert(row));
     if (error) console.error(`${what}: ${error.message}`);
   } catch (err) {
     console.error(`${what}: ${String((err as Error)?.message ?? err)}`);

@@ -65,12 +65,28 @@ describe("recordAiUsage attribution columns", () => {
   // every usage row until then -- the same silent loss this change exists to end.
   it("before migration 371, lands the row without the new columns instead of losing it", async () => {
     insert
-      .mockResolvedValueOnce({ error: { code: "PGRST204", message: "Could not find the 'workspace_id' column" } })
+      .mockResolvedValueOnce({ error: { code: "PGRST204", message: "Could not find the 'attribution_scope' column of 'plat_ai_requests' in the schema cache" } })
       .mockResolvedValueOnce({ error: null });
     await recordAiUsage({ status: "ok", attribution: { scope: "workspace", workspaceId: "ws-1" } });
     expect(insert).toHaveBeenCalledTimes(2);
     expect(insert.mock.calls[1][0]).not.toHaveProperty("workspace_id");
     expect(insert.mock.calls[1][0]).toMatchObject({ tenant_id: null });
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  // The message text is PostgREST's own, captured on staging. PGRST204 names ANY missing column, so the
+  // fallback must not swallow a schema fault that has nothing to do with 371.
+  it("does not retry around a different missing column, and reports it", async () => {
+    insert.mockResolvedValue({ error: { code: "PGRST204", message: "Could not find the 'cost_usd' column of 'plat_ai_requests' in the schema cache" } });
+    await recordAiUsage({ status: "ok", operation: "practice_ai_summary", attribution: { scope: "workspace", workspaceId: "ws-1" } });
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(String(errorSpy.mock.calls[0][0])).toMatch(/NOT recorded: Could not find the 'cost_usd' column/);
+  });
+
+  it("does not retry a foreign-key refusal either", async () => {
+    insert.mockResolvedValue({ error: { code: "23503", message: "violates foreign key constraint \"plat_ai_requests_workspace_id_fkey\"" } });
+    await recordAiUsage({ status: "ok", attribution: { scope: "workspace", workspaceId: "gone" } });
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
   });
 });
