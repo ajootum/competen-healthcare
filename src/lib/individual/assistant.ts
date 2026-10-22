@@ -37,6 +37,7 @@ const PERSONA: Record<ExperienceKey, string[]> = {
 const SHARED_RULES = [
   "Rules:",
   "- Speak directly to the person ('you'). Be clear, kind and brief.",
+  "- Write plain text: short paragraphs and simple lists starting with '- '. No markdown headings, no bold or italics, no tables, no emoji -- the answer is shown as plain text.",
   "- Use ONLY the record in the user message for anything about the person. Never invent competencies, credentials, dates, employers or achievements.",
   "- If the record does not contain what they ask about, say so plainly.",
   "- You do not make, change or verify any competency or credential. Only an authorised assessor or organisation can.",
