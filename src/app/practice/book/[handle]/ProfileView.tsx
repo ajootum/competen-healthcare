@@ -19,11 +19,9 @@ import type { PublicBookingProfile } from "@/lib/practice/public-profile";
 //   secondary       about, languages
 //   trust/footer    what happens with their details, and who runs this
 //
-// On a desktop the booking module is the right rail, and the DOM follows the desktop: decision support,
-// then booking. On a phone `max-md:order-first` lifts the booking module to the top, which is the only
-// place "above the fold" is a real constraint. CPR-MOB-001 allows a reorder only below md (pin 4e):
-// a desktop reorder would walk a keyboard and a screen reader through a different page from the one
-// drawn, at every width where nobody can blame the width.
+// On a phone that order is the DOM order. On a desktop the booking module moves to the right rail
+// (md:order-2) and keeps its place at the top of the reading order on the narrow screen, which is the
+// only place "above the fold" is a real constraint.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 const card = "rounded-xl border border-gray-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
@@ -143,67 +141,8 @@ export default function ProfileView({ p, availabilitySlot }: {
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_320px]">
 
-        {/* ── DECISION SUPPORT + SECONDARY (s7, s8, s9) ──────────────────────────────────────────── */}
-        <div className="flex flex-col gap-4">
-
-          {/* s7: the types a patient may actually choose, in patient words. Never "All types". */}
-          {p.consultationTypes.length > 0 && (
-            <section className={card} aria-labelledby="types-heading">
-              <h2 id="types-heading" className={h2}>Consultations offered</h2>
-              <ul className="mt-2 flex flex-wrap gap-1.5">
-                {p.consultationTypes.map(t => (
-                  <li key={t.code}
-                    className="rounded-lg bg-[var(--cp-primary-soft)] px-2.5 py-1 text-[12px] font-semibold text-[var(--cp-primary-deep)]">
-                    {t.label}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {/* s8: "Available at", with the mode said out loud. */}
-          {p.locations.length > 0 && (
-            <section className={card} aria-labelledby="where-heading">
-              <h2 id="where-heading" className={h2}>Available at</h2>
-              <ul className="mt-2 space-y-2">
-                {p.locations.map(l => (
-                  <li key={l.name} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span className="text-[12.5px] font-semibold text-gray-900">{l.name}</span>
-                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
-                      {MODE_LABEL[l.mode] ?? MODE_LABEL.in_person}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {/* Anything the practice wants a patient to read before booking. */}
-          {p.instructions && (
-            <section className={card} aria-labelledby="before-heading">
-              <h2 id="before-heading" className={h2}>Before you book</h2>
-              <p className="mt-1 whitespace-pre-wrap text-[12px] leading-relaxed text-gray-700">{p.instructions}</p>
-            </section>
-          )}
-
-          {/* s9/s17: About and Languages collapse entirely when unset -- absence is not a section. */}
-          {p.bio && (
-            <section className={card} aria-labelledby="about-heading">
-              <h2 id="about-heading" className={h2}>About</h2>
-              <p className="mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed text-gray-700">{p.bio}</p>
-            </section>
-          )}
-
-          {p.languages && (
-            <section className={card} aria-labelledby="languages-heading">
-              <h2 id="languages-heading" className={h2}>Languages</h2>
-              <p className="mt-1 text-[12.5px] text-gray-700">{p.languages}</p>
-            </section>
-          )}
-        </div>
-
         {/* ── BOOKING (s5, s6) — first on a phone, right rail on a desktop ───────────────────────── */}
-        <div className="flex flex-col gap-4 max-md:order-first">
+        <div className="flex flex-col gap-4 md:order-2">
           <section className={card} aria-labelledby="book-heading">
             {/* ⚠ THE HEADING FOLLOWS THE OFFER, and it did not until a render test caught it: a card
                 headed "Book an appointment" above a button that only sends a REQUEST tells a patient
@@ -292,6 +231,65 @@ export default function ProfileView({ p, availabilitySlot }: {
                   </li>
                 )}
               </ul>
+            </section>
+          )}
+        </div>
+
+        {/* ── DECISION SUPPORT + SECONDARY (s7, s8, s9) ──────────────────────────────────────────── */}
+        <div className="flex flex-col gap-4 md:order-1">
+
+          {/* s7: the types a patient may actually choose, in patient words. Never "All types". */}
+          {p.consultationTypes.length > 0 && (
+            <section className={card} aria-labelledby="types-heading">
+              <h2 id="types-heading" className={h2}>Consultations offered</h2>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {p.consultationTypes.map(t => (
+                  <li key={t.code}
+                    className="rounded-lg bg-[var(--cp-primary-soft)] px-2.5 py-1 text-[12px] font-semibold text-[var(--cp-primary-deep)]">
+                    {t.label}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* s8: "Available at", with the mode said out loud. */}
+          {p.locations.length > 0 && (
+            <section className={card} aria-labelledby="where-heading">
+              <h2 id="where-heading" className={h2}>Available at</h2>
+              <ul className="mt-2 space-y-2">
+                {p.locations.map(l => (
+                  <li key={l.name} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="text-[12.5px] font-semibold text-gray-900">{l.name}</span>
+                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
+                      {MODE_LABEL[l.mode] ?? MODE_LABEL.in_person}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* Anything the practice wants a patient to read before booking. */}
+          {p.instructions && (
+            <section className={card} aria-labelledby="before-heading">
+              <h2 id="before-heading" className={h2}>Before you book</h2>
+              <p className="mt-1 whitespace-pre-wrap text-[12px] leading-relaxed text-gray-700">{p.instructions}</p>
+            </section>
+          )}
+
+          {/* s9/s17: About and Languages collapse entirely when unset -- absence is not a section. */}
+          {p.bio && (
+            <section className={card} aria-labelledby="about-heading">
+              <h2 id="about-heading" className={h2}>About</h2>
+              <p className="mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed text-gray-700">{p.bio}</p>
+            </section>
+          )}
+
+          {p.languages && (
+            <section className={card} aria-labelledby="languages-heading">
+              <h2 id="languages-heading" className={h2}>Languages</h2>
+              <p className="mt-1 text-[12.5px] text-gray-700">{p.languages}</p>
             </section>
           )}
         </div>
