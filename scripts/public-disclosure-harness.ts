@@ -383,9 +383,16 @@ async function main() {
         "the gate must lead to the product's own screen");
     }
     // Students and Professionals gate into the SAME site -- Individual -- the owner's mapping.
-    for (const p of ["/students", "/professionals"]) {
+    // ⚠ EDITED BY DECISION, NOT DRIFT -- COMPETEN-WEB-IND-001 review GO: the two pathways' canonical pages
+    // are now /scholar and /professional, and the old indexed routes must REDIRECT there permanently,
+    // never 404 and never render a second copy. Same manual-redirect probe as 7j, for the same reason.
+    for (const [p, legacy] of [["/scholar", "/students"], ["/professional", "/professionals"]]) {
       const html = await (await fetch(BASE + p)).text();
       ok(`7l. ${p} gates into Competen Individual`, html.includes(`href="/individual/sign-in"`));
+      const hop = await fetch(BASE + legacy, { redirect: "manual" });
+      ok(`7l. ⚠ ${legacy} permanently redirects to ${p} -- a live indexed route never 404s`,
+        (hop.status === 308 || hop.status === 301) && new URL(hop.headers.get("location") ?? "", BASE).pathname === p,
+        `status=${hop.status} location=${hop.headers.get("location")}`);
     }
     // ⚠ THE COMING-SOON SCREENS CARRY NO CREDENTIAL FIELD. A password box on a product that does not
     // exist is a door painted on a wall -- the person types, submits, and lands somewhere the page did
