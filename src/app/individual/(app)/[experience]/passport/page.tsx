@@ -1,5 +1,6 @@
-import { EXPERIENCES } from "@/lib/individual/experiences";
+import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { EVIDENCE_LABEL, loadIndividualPassport } from "@/lib/individual/passport";
+import { OWN_KIND_LABEL } from "@/lib/individual/professional/passport-records";
 import { admitToEstate } from "@/lib/platform-membership";
 import { estateRolesOf, type AppRole } from "@/lib/roles";
 import { experiencePage } from "../../../_components/shell-context";
@@ -11,10 +12,15 @@ import { PageHeader, Unreadable, focusRing } from "../../../_components/chrome";
 // carries its evidence class in TEXT, never colour alone. The same page renders in both experiences
 // because the Passport belongs to the person, not to an experience.
 //
+// ⚠ TWO CLASSES, LABELLED TWO WAYS (COMPETEN-IND-007 s5, owner ruling D3). What organisations issued is
+// labelled by issuer. "Records you added" -- the person's own Competen Professional records -- is labelled
+// by provenance, and nothing in it ever says verified.
+//
 // ⚠ SHARING STAYS ON THE EXISTING SURFACE. /dashboard/passport/share mints the revocable /verify links,
 // and it sits behind gate 1. A person who also holds gate 1 is pointed there. A person who does not is
 // told plainly that sharing from Competen Individual is not available yet -- rather than offered a link
-// that bounces, or a second share mechanism that would duplicate the first.
+// that bounces, or a second share mechanism that would duplicate the first. A person who holds Competen
+// Professional shares from its share page, which mints the SAME passport_share_tokens link.
 
 const fmt = (d: string | null) => (d ? new Date(`${d.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : null);
 
@@ -95,8 +101,33 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
             )}
       </Section>
 
+      <Section title="Records you added" note="Recorded by you in Competen Professional. Each one says whether a document is attached. None of them is verified.">
+        {passport.own === null ? <Unreadable what="own records" />
+          : passport.own.length === 0 ? <Empty>{ctx.live.includes("professional") ? "Nothing yet. Your registration, credentials, competency evidence and CPD from Competen Professional appear here." : "Nothing yet. Records you add in Competen Professional appear here."}</Empty>
+            : (
+              <ul className="divide-y divide-gray-100">
+                {passport.own.map((o, i) => (
+                  <li key={`${o.kind}-${i}`} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
+                    <div className="min-w-0">
+                      <p className="text-[14.5px] font-semibold text-gray-900">{o.title}</p>
+                      <p className="text-[12.5px] text-gray-500">{[OWN_KIND_LABEL[o.kind], o.detail, o.date ? fmt(o.date) : null].filter(Boolean).join(" · ")}</p>
+                    </div>
+                    <p className="text-[12.5px] font-semibold text-amber-800">
+                      {EVIDENCE_LABEL[o.evidence]}{o.expires ? ` · ${o.expires < new Date().toISOString().slice(0, 10) ? "expired" : "expires"} ${fmt(o.expires)}` : ""}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+      </Section>
+
       <Section title="Sharing">
-        {holdsEstate ? (
+        {ctx.live.includes("professional") ? (
+          <p className="text-[14px] text-gray-700">
+            You can share a revocable, time-limited link to this Passport, including the records you added, from{" "}
+            <a href={experienceHref("professional", "share")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Share your Passport</a>.
+          </p>
+        ) : holdsEstate ? (
           <p className="text-[14px] text-gray-700">
             You can share a revocable, time-limited verification link from{" "}
             <a href="/dashboard/passport/share" className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>your Passport sharing page</a>.

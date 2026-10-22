@@ -37,7 +37,8 @@ export type OperatingEntity = "competen_holdings" | "scholar_operator";
 export type FoundationModule = "home" | "assistant" | "passport" | "profile" | "settings";
 
 export type NavItem = {
-  module: FoundationModule;
+  /** A FoundationModule, or the key of one of the experience's own modules. */
+  module: FoundationModule | string;
   /** Path below /individual/<experience>. Empty for the experience home. */
   segment: string;
   label: string;
@@ -45,6 +46,19 @@ export type NavItem = {
   short: string;
   /** A glyph, aria-hidden wherever it renders -- the same convention as the Practice sidebar. */
   icon: string;
+};
+
+/**
+ * A module that belongs to ONE experience (COMPETEN-IND-007): mounted at /individual/<experience>/<segment>
+ * and present only in that experience's navigation. Its page lives in the experience's route group,
+ * src/app/individual/(app)/[experience]/(<experience>)/<segment>/page.tsx, and refuses in any other
+ * experience. A segment is never shared between experiences, so no page file is either.
+ */
+export type ExperienceModule = NavItem & {
+  /** One line for the experience home's card. */
+  summary: string;
+  /** On the mobile bottom bar. Home is always first, and the bar holds five at most. */
+  bottom?: boolean;
 };
 
 /** A capability the experience will have and does not have yet. Never a nav entry (see header). */
@@ -70,6 +84,8 @@ export type ExperienceConfig = {
   operatingEntity: OperatingEntity;
   /** The experience home's opening sentence. */
   homeIntro: string;
+  /** The experience's own modules, in sidebar order. Empty until its first module ships. */
+  modules: ExperienceModule[];
   planned: PlannedCapability[];
 };
 
@@ -95,6 +111,7 @@ export const SCHOLAR: ExperienceConfig = {
   micro: "Healthcare education, revision and clinical reasoning.",
   operatingEntity: "scholar_operator",
   homeIntro: "Your study space. Your Passport, profile and personal AI are already here, and the learning tools below are being built.",
+  modules: [],
   planned: [
     {
       key: "my-learning", label: "My Learning",
@@ -128,27 +145,29 @@ export const PROFESSIONAL: ExperienceConfig = {
   tagline: "Develop · Demonstrate · Advance",
   micro: "Your lifelong professional development, evidence and career.",
   operatingEntity: "competen_holdings",
-  homeIntro: "Your professional home. Your Passport, profile and personal AI are already here, and the development tools below are being built.",
+  homeIntro: "Your professional home: your registration, development plan, CPD and evidence. They are kept by you, and nobody else sees them unless you share them.",
+  modules: [
+    { module: "registration", segment: "registration", label: "Profession & registration", short: "Registration", icon: "◈",
+      summary: "Your profession, registration body and number, and country." },
+    { module: "development", segment: "development", label: "Needs & plan", short: "Plan", icon: "◎", bottom: true,
+      summary: "Your development needs and the learning goals you set against them." },
+    { module: "cpd", segment: "cpd", label: "CPD log", short: "CPD", icon: "✎", bottom: true,
+      summary: "Your continuing professional development, with reflections and certificates." },
+    { module: "evidence", segment: "evidence", label: "Credentials & evidence", short: "Evidence", icon: "❖",
+      summary: "Credentials, renewal dates and the evidence you keep of your competence." },
+    { module: "progress", segment: "progress", label: "Progress", short: "Progress", icon: "↗",
+      summary: "Plan progress, CPD hours by year, and how much of your plan has evidence behind it." },
+  ],
   planned: [
-    {
-      key: "development-cpd", label: "Development & CPD",
-      summary: "Plan your learning and keep your continuing-education evidence in one place.",
-      reason: "A private Individual CPD record is not built yet. Your employer's CPD log is not used here, because it is visible to them.",
-    },
-    {
-      key: "competencies", label: "Competencies",
-      summary: "Document your development alongside verified assessment evidence.",
-      reason: "Recording your own competency evidence is not built yet. Assessed competencies an organisation issued to you already appear in your Passport.",
-    },
-    {
-      key: "credentials", label: "Credentials & registration",
-      summary: "Maintain your qualifications, registrations and renewal dates.",
-      reason: "Adding credentials from Competen Individual is not built yet. Credentials already on your Competen record appear in your Passport.",
-    },
     {
       key: "career", label: "Career & Opportunities",
       summary: "Plan your next role, speciality or leadership pathway.",
       reason: "Career planning has no store yet.",
+    },
+    {
+      key: "verification", label: "Independent verification",
+      summary: "Have a registration or credential confirmed by someone with the authority to confirm it.",
+      reason: "No regulator lookup or verification service is connected. Everything you add is shown as recorded by you.",
     },
   ],
 };
@@ -157,6 +176,25 @@ export const EXPERIENCES: Readonly<Record<ExperienceKey, ExperienceConfig>> = {
   scholar: SCHOLAR,
   professional: PROFESSIONAL,
 };
+
+/**
+ * An experience's sidebar: Home, then its own modules, then the rest of the foundation. Pure, and the one
+ * source the sidebar, the bottom bar and scripts/individual-foundation-harness.ts 7a read.
+ */
+export function navFor(experience: ExperienceKey): NavItem[] {
+  const [home, ...rest] = FOUNDATION_NAV;
+  return [home, ...EXPERIENCES[experience].modules, ...rest];
+}
+
+/**
+ * The mobile bottom bar: Home, the experience modules marked `bottom`, then foundation destinations up to
+ * five. Settings is configuration, not a destination (CPR-MOB-001), and stays behind the header account link.
+ */
+export function bottomNavFor(experience: ExperienceKey): NavItem[] {
+  const [home, ...rest] = FOUNDATION_NAV.filter(i => i.module !== "settings");
+  const own = EXPERIENCES[experience].modules.filter(m => m.bottom);
+  return [home, ...own, ...rest].slice(0, 5);
+}
 
 /** The href of a foundation module inside an experience. */
 export function experienceHref(experience: ExperienceKey, segment = ""): string {
