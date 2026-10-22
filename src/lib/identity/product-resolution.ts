@@ -2,6 +2,7 @@
 
 import { admitToEstate } from "../platform-membership";
 import { estateRolesOf, type AppRole } from "../roles";
+import { isNotProvisioned } from "../individual/access";
 
 // COMP-ID-ROUTE-001 -- NEUTRAL SIGN-IN PRODUCT RESOLUTION (2026-08-17).
 //
@@ -26,11 +27,14 @@ import { estateRolesOf, type AppRole } from "../roles";
 // list the day their gate exists, by adding a read -- the routing shape does not change (s8
 // "support future products without rewriting the routing algorithm"). Listing them earlier would
 // put marketing cards in an authorisation chooser, which s5 forbids by name.
+//
+// INDIVIDUAL JOINED ON 2026-10-22 (COMPETEN-IND-003, ADR-016), exactly that way: one read of its gate,
+// individual_membership, and one more code. Enterprise and Recruitment are still waiting for theirs.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type ProductDestination = {
   /** Stable internal identifier (s8): never shown raw to the person. */
-  code: "platform" | "practice";
+  code: "platform" | "practice" | "individual";
   /** Approved display name (s4). */
   name: string;
   /** One-line orientation, for chooser cards (s5). */
@@ -47,14 +51,22 @@ export type ProductResolution =
   | { state: "unavailable" };
 
 export async function resolveProductDestinations(admin: any, userId: string): Promise<ProductResolution> {
-  const [profileRead, practiceRead] = await Promise.all([
+  const [profileRead, practiceRead, individualRead] = await Promise.all([
     admin.from("profiles").select("id, role, roles").eq("id", userId).maybeSingle(),
     admin.from("practice_membership").select("id, workspace_id, status")
       .eq("user_id", userId).limit(5),
+    admin.from("individual_membership").select("status").eq("user_id", userId).maybeSingle(),
   ]);
 
   // A failed read is not "no access" -- inferring either way is the one forbidden move (s3, s11).
-  if (profileRead.error || practiceRead.error) return { state: "unavailable" };
+  //
+  // ⚠ ONE CARVE-OUT, AND IT IS NOT AN INFERENCE: individual_membership NOT EXISTING. Until migration 370
+  // is applied the table is absent, and nobody can hold a membership in a table that does not exist --
+  // so "no Individual destination" is a fact, not a guess. Without this carve-out, shipping the code
+  // before the migration would turn every sign-in on the estate into "unavailable". Any OTHER failure
+  // of that read fails closed exactly as the other two do.
+  const individualAbsent = !!individualRead.error && isNotProvisioned(individualRead.error);
+  if (profileRead.error || practiceRead.error || (individualRead.error && !individualAbsent)) return { state: "unavailable" };
 
   const destinations: ProductDestination[] = [];
 
@@ -101,6 +113,20 @@ export async function resolveProductDestinations(admin: any, userId: string): Pr
       // /practice is the auth-aware index: it resolves the workspace context itself (s6 -- the
       // neutral resolver chooses the product ONLY, never bypasses product context resolution).
       href: "/practice",
+    });
+  }
+
+  // ── INDIVIDUAL: GATE 3 (ADR-016) ────────────────────────────────────────────────────────────────
+  //
+  // The SAME question the Individual shell asks (src/lib/individual/access.ts): an active membership
+  // row. Which experiences are live is the shell's question, answered on arrival at /individual/home
+  // (s6 -- the neutral resolver chooses the product only). Individual's resolver fails CLOSED on an
+  // unreadable store, and so does this read, so the two sides of the door agree.
+  if (!individualAbsent && individualRead.data?.status === "active") {
+    destinations.push({
+      code: "individual", name: "Competen Individual",
+      blurb: "Competen Scholar and Competen Professional -- your learning, development and Passport.",
+      href: "/individual/home",
     });
   }
 

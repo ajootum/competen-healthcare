@@ -114,6 +114,53 @@ describe("resolveProductDestinations", () => {
     expect(r.state).toBe("none");
   });
 
+  // ── INDIVIDUAL, GATE 3 (ADR-016, COMPETEN-IND-003) ────────────────────────────────────────────────
+  const INDIVIDUAL = (status: string) => ({ data: { status }, error: null });
+  const NOT_PROVISIONED = { data: null, error: { code: "PGRST205", message: "relation not in schema cache" } };
+
+  it("offers Individual for an active individual_membership, and only that", async () => {
+    admits(false);
+    const r: any = await resolveProductDestinations(
+      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: INDIVIDUAL("active") }), "u1");
+    expect(r.state).toBe("one");
+    expect(r.destination.code).toBe("individual");
+    expect(r.destination.href).toBe("/individual/home");
+  });
+
+  // An Individual member holds NO platform membership. The chooser must not offer the estate to them,
+  // and Individual must sit beside the products they DO hold.
+  it("lists Individual beside Practice for a person holding both, without offering the estate", async () => {
+    admits(false);
+    const r: any = await resolveProductDestinations(
+      stub({ profiles: PROFILE, practice_membership: PRACTICE, individual_membership: INDIVIDUAL("active") }), "u1");
+    expect(r.state).toBe("many");
+    expect(r.destinations.map((d: any) => d.code)).toEqual(["practice", "individual"]);
+  });
+
+  it.each(["suspended", "revoked"])("does not offer Individual for a %s membership", async status => {
+    admits(false);
+    const r: any = await resolveProductDestinations(
+      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: INDIVIDUAL(status) }), "u1");
+    expect(r.state).toBe("none");
+  });
+
+  // ⚠ THE CARVE-OUT, AND ITS LIMIT. Before migration 370 the table does not exist: that must NOT turn every
+  // sign-in into "unavailable". But any other failure of the same read must still fail closed.
+  it("treats a not-yet-created individual_membership table as no Individual, not as unavailable", async () => {
+    admits(true);
+    const r: any = await resolveProductDestinations(
+      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: NOT_PROVISIONED }), "u1");
+    expect(r.state).toBe("one");
+    expect(r.destination.code).toBe("platform");
+  });
+
+  it("fails closed to unavailable when the individual read errors for any other reason", async () => {
+    admits(true);
+    const r: any = await resolveProductDestinations(
+      stub({ profiles: PROFILE, practice_membership: NO_PRACTICE, individual_membership: READ_FAILED }), "u1");
+    expect(r.state).toBe("unavailable");
+  });
+
   // ⚠ THE RESOLVER MUST INHERIT THE ESTATE'S FAIL-OPEN, NOT INVENT ITS OWN POSTURE. An unreadable
   // membership store ADMITS and falls back to the role gate, deliberately, so an outage does not blank
   // the estate for everyone. If this side failed closed while the destination failed open, the estate
