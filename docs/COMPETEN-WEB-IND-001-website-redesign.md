@@ -68,6 +68,27 @@ Re-verified: tsc and eslint clean; vitest 454/454; disclosure harness 213 / 1 (t
 4. **Homepage product-card title links** measure 21px tall as elements. The hit target is the whole card
    (a stretched `::after`), so this is a measurement artefact, not a defect.
 
+## 3a. Release verification (2026-10-22, production GO)
+
+| Check | Result |
+|---|---|
+| Nested navigation (desktop hover, mobile drawer) | 10/10 click-throughs land on the canonical routes. Solutions > Students lands on `/scholar`. Product bar sibling and sign-in links are correct. The drawer closes on Escape. |
+| Canonical routes, redirects, metadata | `/scholar` and `/professional` return 200 and are self-canonical with their own og:title. `/students`, `/professionals` and `/hospitals` return 308. The sitemap lists only the canonical routes (disclosure harness 1–5, 7l). |
+| Authentication boundaries, signed out | `/dashboard`, `/educator` and `/super-admin` → `/login`. `/practice/home` → `/practice/sign-in`. `/individual/sign-in` has no password field. `/signup` stays closed. |
+| Illustrative labels | 5 "Illustrative" labels plus the development note on each of `/scholar` and `/professional`. |
+| `e2e/smoke/01-public-site.spec.ts` | pass |
+| `ci-harnesses.ts` (CI's no-credential subset) | 38/43. All 5 failures are **baseline**, in files this change does not touch (below). |
+
+**Baseline CI failures (unrelated; identical on `main` @ `07d750ce`):**
+- Typecheck + lint: `no-explicit-any` and `no-html-link` in Practice files.
+- `ci-harnesses`: `auth-boundary` (`api/v1/practice/public/manage`), `cpr040-design-system`, `pd-screen-doctrine` 3b, `practice-responsive` 4e/5-perf, and `domain-registry` 8a.
+- Dependency + secret scan, both Playwright jobs: they fail on `main` too. The authenticated job refuses to run without staging secrets.
+
+**Rollback reference:** the production deployment before this release is `dpl_EGjeogZKFshAkvYqrkcjHFMa8zHe`
+(https://competen-healthcare-a3q4xo2xk-semacastonline-3597s-projects.vercel.app, built from `main` @ `07d750ce`
+on 2026-09-03). To restore it instantly: `vercel rollback dpl_EGjeogZKFshAkvYqrkcjHFMa8zHe`, or Instant Rollback in the
+Vercel dashboard. To restore the source: revert the merge commit on `main`.
+
 ## 4. Open owner items
 
 - **Scholar operator legal name** (COMPETEN-IND-001 D8). Set `SCHOLAR.operator` when it is confirmed.
