@@ -5,7 +5,7 @@
 | **Date** | 2026-10-22 |
 | **Status** | Built on branch `ind-003/individual-foundation` (from `50ae85f0`). Owner rulings D1–D10 applied. **Not merged, not pushed, not deployed.** |
 | **Authority** | Owner GO for COMPETEN-IND-003; owner rulings and staging commissioning GO (2026-10-22). ADR-016 is Accepted. |
-| **Staging** | Migration 370 applied and proven idempotent. Acceptance 35/35 green, with a planted defect proven red. See §4, §6 and §9. |
+| **Staging** | Migration 370 applied and proven idempotent. Acceptance 35/35 green, with a planted defect proven red. See §4, §6 and §8. |
 
 ## 1. What was built
 
@@ -90,7 +90,7 @@ The routes have no HQ console page yet (§8).
 
 ## 7. Blockers
 
-1. **RESOLVED 2026-10-22: the owner restored staging (see §9).** Original record: **the staging project was unreachable.** `STAGING_SUPABASE_URL`'s host (`ezhvpgtcqcdsgylrxgdb.supabase.co`) does not resolve, locally or through 8.8.8.8. The session pooler answers `tenant/user postgres.ezhvpgtcqcdsgylrxgdb not found`. That is consistent with the project being paused or deleted in Supabase. No other approved staging project is recorded in the repository. Restoring the project, or supplying a new one's `STAGING_*` values, is an owner action in the Supabase dashboard. Production was not substituted. Until then, these are pending:
+1. **RESOLVED 2026-10-22: the owner restored staging (see §8).** Original record: **the staging project was unreachable.** `STAGING_SUPABASE_URL`'s host (`ezhvpgtcqcdsgylrxgdb.supabase.co`) does not resolve, locally or through 8.8.8.8. The session pooler answers `tenant/user postgres.ezhvpgtcqcdsgylrxgdb not found`. That is consistent with the project being paused or deleted in Supabase. No other approved staging project is recorded in the repository. Restoring the project, or supplying a new one's `STAGING_*` values, is an owner action in the Supabase dashboard. Production was not substituted. Until then, these are pending:
    - applying 370 to staging and the run-twice proof;
    - the acceptance groups A–M (dual and single experience, expired, revoked and ended access, age, switching and refusals, identity, Passport provenance, history, AI boundaries, RLS isolation, employer visibility);
    - the HQ, Practice, Enterprise and Platform boundary re-runs on staging.
@@ -101,7 +101,7 @@ Once staging answers, run in this order:
 2. `privileged-harnesses.ts --staging --only individual-acceptance`;
 3. `--staging --only hq-guard`, `platform-membership`, `practice-signup` and `enterprise` (the boundary re-runs).
 
-## 9. Staging commissioning results (2026-10-22, after the owner restored staging)
+## 8. Staging commissioning results (2026-10-22, after the owner restored staging)
 
 **Pre-existing staging gap, not touched.** Staging is missing migrations **361–369**. Their markers are absent: 361, 362, 363, 365, 366 and 368 columns or tables, 367's capability, and 369's plan column. 364 has no probeable marker. 370 depends on none of them. Its dependencies were verified present before applying: `profiles`, `hq_position.product_line_code`, `hq_position_capability.effective_to`, `plat_product_line.individual` and `audit_log.trace_id`. Only 370 was applied, as the GO authorised. Applying 361–369 is an owner action.
 
@@ -120,6 +120,6 @@ Once staging answers, run in this order:
 
 None of the boundary failures involves Individual code. Each traces to the 361–369 gap or to missing staging seed data, and was confirmed by a direct schema read.
 
-## 8. Next
+## 9. Next
 
 **COMPETEN-IND-004.** Scholar's first complete learning journey: upload, explain, practise, revise, progress, built on the `individual_*` storage boundary (D1). The Professional core can be built in parallel on separate files: credentials, private CPD and the D5 identity record. An HQ console page for the grant right can be built alongside. Staging commissioning (§7) must complete before IND-004 ships to staging.
