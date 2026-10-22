@@ -36,19 +36,25 @@ export type AiUsageEntry = {
 };
 
 // Best-effort insert of one usage row. Never throws — logging must not break the
-// AI call that produced it.
+// AI call that produced it. But a dropped row IS reported: supabase-js returns a
+// failed insert as { error } rather than throwing, so the catch alone never saw
+// one, and a foreign-key violation lost every row it touched without a trace.
 export async function recordAiUsage(e: AiUsageEntry) {
+  const what = `[ai-gateway] usage row for "${e.operation ?? "unknown"}" was NOT recorded`;
   try {
     const admin = createAdminClient() as any;
     const input = e.inputTokens ?? 0, output = e.outputTokens ?? 0;
-    await admin.from("plat_ai_requests").insert({
+    const { error } = await admin.from("plat_ai_requests").insert({
       actor_id: e.actorId ?? null, tenant_id: e.tenantId ?? null,
       operation: e.operation ?? null, tier: e.tier ?? null, provider: e.provider ?? null, model: e.model ?? null,
       input_tokens: input, output_tokens: output, total_tokens: input + output,
       latency_ms: e.latencyMs ?? null, status: e.status, error: e.error ? String(e.error).slice(0, 500) : null,
       cost_usd: estimateCost(e.model, input, output),
     });
-  } catch { /* pre-migration / non-fatal */ }
+    if (error) console.error(`${what}: ${error.message}`);
+  } catch (err) {
+    console.error(`${what}: ${String((err as Error)?.message ?? err)}`);
+  }
 }
 
 const DAY = 86400000;
