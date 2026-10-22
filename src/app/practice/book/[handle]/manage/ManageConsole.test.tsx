@@ -55,7 +55,7 @@ let posted: Array<Record<string, unknown>>;
  * click.
  */
 function stubFetch() {
-  return vi.fn(async (_url: string, init: any) => {
+  return vi.fn(async (_url: string, init: RequestInit) => {
     const body = JSON.parse(String(init.body));
     posted.push(body);
     const reply = (data: unknown) => ({ ok: true, status: 200, json: async () => data });
@@ -87,7 +87,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 /** Verify an address and reach the appointment, which is where every test below starts. */
 async function openMyAppointment() {
-  render(<ManageConsole handle="elisham1" identity={IDENTITY as any} timezone="Africa/Kampala" />);
+  render(<ManageConsole handle="elisham1" identity={IDENTITY} timezone="Africa/Kampala" />);
 
   fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "patient@example.com" } });
   fireEvent.click(screen.getByRole("button", { name: /send me a code/i }));
@@ -173,7 +173,7 @@ describe("§23 -- cancel, then back out", () => {
     // name that one -- a screen keying the panel on anything but the reference would open both.
     const second = { ...booking, reference: "CP-AAAAAA", requestId: "req-2", appointmentId: "appt-2",
       scheduledAt: "2026-10-10T08:00:00.000Z" };
-    vi.stubGlobal("fetch", vi.fn(async (_u: string, init: any) => {
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init: RequestInit) => {
       const body = JSON.parse(String(init.body));
       posted.push(body);
       const reply = (data: unknown) => ({ ok: true, status: 200, json: async () => data });

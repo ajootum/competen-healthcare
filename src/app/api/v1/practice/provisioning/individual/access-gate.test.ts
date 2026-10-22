@@ -12,6 +12,8 @@
  * CLAUDE.md: "Authorization and tenancy boundaries are not optional to test."
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { NextRequest } from "next/server";
+import type { IndividualRequest } from "@/lib/practice/provisioning";
 
 // ── The stubs. Everything the route reaches for, and nothing it does not. ────────────────────────────
 const runProvisioning = vi.fn();
@@ -37,11 +39,14 @@ vi.mock("@/lib/practice/provisioning", async (importOriginal) => {
   return { ...real, runProvisioning: (...a: unknown[]) => runProvisioning(...a), platformFlag: (...a: unknown[]) => platformFlag(...a) };
 });
 
+/** A query-builder stub: each method returns the builder itself or a settled result. */
+type QueryStub = Record<string, (...a: unknown[]) => unknown>;
+
 /** A Supabase-shaped stub: enough for the idempotency insert and the duplicate-practice check. */
 function fakeAdmin() {
   const table = (name: string) => {
     if (name === "provisioning_request") {
-      const q: any = {
+      const q: QueryStub = {
         insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: { id: "req-1", status: "REQUESTED", workspace_id: null }, error: null }) }) }),
         update: () => ({ eq: () => Promise.resolve({ error: null }) }),
         select: () => q, eq: () => q, single: () => Promise.resolve({ data: null, error: null }),
@@ -49,7 +54,7 @@ function fakeAdmin() {
       return q;
     }
     // practice_workspace: nobody already owns one, so the run proceeds.
-    const q: any = { select: () => q, eq: () => q, not: () => q, maybeSingle: () => Promise.resolve({ data: null, error: null }) };
+    const q: QueryStub = { select: () => q, eq: () => q, not: () => q, maybeSingle: () => Promise.resolve({ data: null, error: null }) };
     return q;
   };
   return { from: table };
@@ -69,11 +74,11 @@ const post = async (body: unknown) => {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": "k-1" },
     body: JSON.stringify(body),
-  }) as any);
+  }) as NextRequest);
 };
 
 /** What runProvisioning was actually handed -- the only thing that decides what gets written. */
-const payloadSeen = () => runProvisioning.mock.calls[0]?.[2] as any;
+const payloadSeen = () => runProvisioning.mock.calls[0]?.[2] as IndividualRequest;
 
 beforeEach(() => {
   vi.clearAllMocks();
