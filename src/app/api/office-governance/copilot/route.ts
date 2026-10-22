@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("role, roles, full_name, hospital_id").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("role, roles, full_name, hospital_id, tenant_id").eq("id", user.id).single();
   const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["super_admin", "hospital_admin"].includes(r))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     "Be concise and structured; order recommendations by governance impact and reference the underlying numbers. If the data doesn't support an answer, say so.",
   ].join("\n");
 
-  const result = await generate({ system, user: `Office governance data (live):\n${ctx.join("\n")}\n\nRequest: ${q}`, tier: "reasoning", maxTokens: 1100, context: { userId: user.id, tenantId: hid, operation: "office_governance" } });
+  const result = await generate({ system, user: `Office governance data (live):\n${ctx.join("\n")}\n\nRequest: ${q}`, tier: "reasoning", maxTokens: 1100, context: { userId: user.id, attribution: { scope: "tenant", tenantId: profile?.tenant_id ?? null }, operation: "office_governance" } });
   if (!result.ok) return NextResponse.json({ error: result.error === "not_configured" ? "AI is not configured." : result.error === "refusal" ? "The copilot declined that request." : `Error: ${result.detail ?? "failed"}` }, { status: result.error === "not_configured" ? 503 : 500 });
 
   await admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: user.id, actor_name: profile?.full_name ?? null, action: "ogs_ai_query", entity_type: "ai", entity_id: null, new_value: { question: q.slice(0, 300), model: result.model, tokens: result.usage } }).then((r: any) => r, () => {});

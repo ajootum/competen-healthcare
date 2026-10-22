@@ -1,18 +1,8 @@
-import SolutionPage from "@/components/marketing/SolutionPage";
-import { templated } from "@/lib/marketing/solutions";
-import { pageMetadata } from "@/lib/marketing/site";
+import { permanentRedirect } from "next/navigation";
+import { PROFESSIONAL } from "@/lib/marketing/individual-family";
 
-// WEB-STRAT-001 public landing page. Content is data; the layout is the shared SolutionPage template.
-const s = templated("professionals");
-
-// pageMetadata, not a bare title/description: a page that sets only those keeps the ROOT layout's
-// og:title and og:description, so it reads correctly in a search result and unfurls in a chat app as the
-// generic site card. See src/lib/marketing/site.ts.
-export const metadata = pageMetadata({
-  title: `${s.template.headline.join(" ")} — Competen`,
-  description: s.body,
-  path: "/professionals",
-  imageAlt: s.template.imageAlt,
-});
-
-export default function Page() { return <SolutionPage s={s} />; }
+// ⚠ A PERMANENT REDIRECT, NOT A DELETED PAGE -- see src/app/students/page.tsx. /professional is the
+// canonical home of Competen Professional since COMPETEN-WEB-IND-001.
+export default function Page() {
+  permanentRedirect(PROFESSIONAL.href);
+}

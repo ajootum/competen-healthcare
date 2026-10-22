@@ -69,7 +69,7 @@ export default function SiteHeader({ dark = false }: { dark?: boolean }) {
             </button>
             {productsOpen && (
               <div className="absolute left-0 top-full pt-2">
-                <ul className="w-60 rounded-xl bg-white shadow-xl ring-1 ring-black/5 p-1.5">
+                <ul className="w-72 rounded-xl bg-white shadow-xl ring-1 ring-black/5 p-1.5">
                   {PRODUCTS.map(p => (
                     <li key={p.key}>
                       <Link href={p.href} onClick={() => setProductsOpen(false)}
@@ -77,6 +77,24 @@ export default function SiteHeader({ dark = false }: { dark?: boolean }) {
                         <span className="block text-[13.5px] font-semibold text-gray-900">{p.label}</span>
                         <span className="block text-[11.5px] text-gray-500">{p.micro}</span>
                       </Link>
+                      {/* COMPETEN-WEB-IND-001 s2: Individual's two branded experiences, nested under it --
+                          they are how Individual is presented, not a fifth and sixth product. */}
+                      {p.experiences && (
+                        <ul className="mb-1 ml-3 border-l border-gray-100 pl-2">
+                          {p.experiences.map(x => (
+                            <li key={x.key}>
+                              <Link href={x.href} onClick={() => setProductsOpen(false)}
+                                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-gray-50">
+                                <span aria-hidden className="w-1.5 h-1.5 shrink-0 rounded-full" style={{ background: x.accent }} />
+                                <span>
+                                  <span className="block text-[12.5px] font-semibold text-gray-800">{x.label}</span>
+                                  <span className="block text-[11px] text-gray-500">{x.micro}</span>
+                                </span>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -146,6 +164,16 @@ export default function SiteHeader({ dark = false }: { dark?: boolean }) {
                   <li key={p.key}>
                     <Link href={p.href} onClick={() => setOpen(false)}
                       className="block py-2.5 pl-3 text-[14px] text-white/70 hover:text-white">{p.label}</Link>
+                    {p.experiences && (
+                      <ul className="ml-3 border-l border-white/10">
+                        {p.experiences.map(x => (
+                          <li key={x.key}>
+                            <Link href={x.href} onClick={() => setOpen(false)}
+                              className="block py-2.5 pl-4 text-[13.5px] text-white/60 hover:text-white">{x.label}</Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </li>
                 ))}
               </ul>

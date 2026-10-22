@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("full_name, hospital_id").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("full_name, hospital_id, tenant_id").eq("id", user.id).single();
 
   const quota = await checkAiQuota(admin, user.id);
   if (!quota.ok) return NextResponse.json({ error: `AI rate limit reached (${quota.limit}/hour). Try again later.` }, { status: 429 });
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
   ].join("\n");
   const userMsg = `My competency data (live):\n${context}\n\nMy question: ${q}`;
 
-  const result = await generate({ system, user: userMsg, tier: "reasoning", maxTokens: 900, context: { userId: user.id, tenantId: profile?.hospital_id ?? null, operation: "worker_competency_copilot" } });
+  const result = await generate({ system, user: userMsg, tier: "reasoning", maxTokens: 900, context: { userId: user.id, attribution: { scope: "tenant", tenantId: profile?.tenant_id ?? null }, operation: "worker_competency_copilot" } });
   if (!result.ok) {
     const msg = result.error === "not_configured" ? "AI is not configured." : result.error === "refusal" ? "The coach declined to answer that request." : `Coach error: ${result.detail ?? "failed"}`;
     return NextResponse.json({ error: msg }, { status: result.error === "not_configured" ? 503 : 500 });

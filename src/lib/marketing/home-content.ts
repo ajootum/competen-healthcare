@@ -67,7 +67,8 @@ export const HERO = {
   body:
     'Competen helps students, professionals, practices and hospitals build capability, ' +
     'deliver better care and improve outcomes.',
-  primary: { label: 'Explore Competen', href: '#choose-your-path' },
+  // COMPETEN-WEB-IND-001 s1: lands on the four products, which now open the page below the hero.
+  primary: { label: 'Explore Competen', href: '#products' },
   secondary: { label: 'Book a Demo', href: DEMO_REQUEST },
   image: '/images/home/journey-nurse.webp',
   imageAlt: 'A nurse reviewing records on a tablet on the ward',
