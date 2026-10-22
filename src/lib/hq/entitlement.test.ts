@@ -8,6 +8,8 @@
  * reactivation, and AC-09 tests it. Periods are appended now, and the tests below fail if that regresses.
  * ────────────────────────────────────────────────────────────────────────────────────────────────
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { describe, it, expect } from "vitest";
 import {
   grantAccessPeriod, endAccess, practiceEntitlements,
