@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { aiStatus, providerKey, type AiProvider } from "@/lib/ai/config";
-import { recordAiUsage } from "@/lib/ai/gateway";
+import { recordAiUsage, type AiAttribution } from "@/lib/ai/gateway";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // PROVIDER-NEUTRAL GENERATION (Book IV — Clinical Intelligence Engine)
@@ -21,8 +21,9 @@ export type GenerateArgs = {
   tier?: "cheap" | "reasoning" | "heavy";
   maxTokens?: number;
   // Optional attribution for the AI Runtime Gateway usage log (PFS-000 §15).
-  // Usage (tokens/latency/cost/status) is always recorded; context adds who/what.
-  context?: { userId?: string | null; tenantId?: string | null; operation?: string };
+  // Usage (tokens/latency/cost/status) is always recorded; context adds who/what. The scope says which
+  // kind of id the caller holds -- see AiAttribution for why there is no bare tenantId here.
+  context?: { userId?: string | null; operation?: string; attribution?: AiAttribution };
 };
 
 export type GenerateFailure = "not_configured" | "refusal" | "failed";
@@ -195,7 +196,7 @@ export async function generate(
     provider,
     model,
     actorId: context?.userId ?? null,
-    tenantId: context?.tenantId ?? null,
+    attribution: context?.attribution ?? null,
   };
 
   const t0 = Date.now();

@@ -623,7 +623,7 @@ export async function runAssistant(admin: any, ctx: WorkspaceContext, args: {
     system: systemPrompt(task.key),
     user: `${question ? `QUESTION: ${question}\n\n` : ""}RECORD:\n${context.text}`,
     tier: "reasoning", maxTokens: 1200,
-    context: { userId: ctx.userId, tenantId: ctx.workspaceId, operation: `practice_ai_${task.key}` },
+    context: { userId: ctx.userId, attribution: { scope: "workspace", workspaceId: ctx.workspaceId }, operation: `practice_ai_${task.key}` },
   });
 
   if (!result.ok) {

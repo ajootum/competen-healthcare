@@ -229,7 +229,7 @@ export async function phraseFactSections(args: {
     user: phrasingPayload(args.sections),
     tier: "reasoning",
     maxTokens: 900,
-    context: { userId: args.userId, tenantId: args.workspaceId, operation: "practice.document_phrasing" },
+    context: { userId: args.userId, attribution: { scope: "workspace", workspaceId: args.workspaceId }, operation: "practice.document_phrasing" },
   });
   if (!result.ok) return { phrasing: "deterministic", reason: "generation_failed" };
 

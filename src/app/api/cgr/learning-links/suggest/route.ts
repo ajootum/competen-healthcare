@@ -23,7 +23,7 @@ export async function POST() {
   if (!aiStatus().configured) return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
 
   const { data: me } = await c.admin.from("profiles").select("full_name").eq("id", c.userId).single();
-  const r = await suggestLearningLinks(c.admin, { userId: c.userId, hospitalId: c.hospitalId, createdByName: me?.full_name ?? null });
+  const r = await suggestLearningLinks(c.admin, { userId: c.userId, hospitalId: c.hospitalId, tenantId: c.tenantId, createdByName: me?.full_name ?? null });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: /not configured/i.test(r.error ?? "") ? 503 : 500 });
 
   await c.admin.from("audit_log").insert({ trace_id: c.traceId,

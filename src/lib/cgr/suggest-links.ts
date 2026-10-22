@@ -49,7 +49,7 @@ const empty = (patch: Partial<SuggestOutcome>): SuggestOutcome =>
 
 export async function suggestLearningLinks(
   admin: any,
-  opts: { userId?: string | null; hospitalId?: string | null; createdByName?: string | null; dryRun?: boolean } = {},
+  opts: { userId?: string | null; hospitalId?: string | null; tenantId?: string | null; createdByName?: string | null; dryRun?: boolean } = {},
 ): Promise<SuggestOutcome> {
   const [incRes, linkRes, compRes] = await Promise.all([
     admin.from("op_incidents").select("id, hospital_id, incident_type, severity, description, created_at").order("created_at", { ascending: false }).limit(300),
@@ -91,7 +91,7 @@ export async function suggestLearningLinks(
 
   // 4000: the first live run produced 6090 chars and was cut off at 2000 tokens. The salvage path handles a cut
   // response, but headroom keeps truncation exceptional rather than routine.
-  const result = await generate({ system, user, tier: "reasoning", maxTokens: 4000, context: { userId: opts.userId ?? null, tenantId: opts.hospitalId ?? null, operation: "learning_link_suggest_cgr" } });
+  const result = await generate({ system, user, tier: "reasoning", maxTokens: 4000, context: { userId: opts.userId ?? null, attribution: { scope: "tenant", tenantId: opts.tenantId ?? null }, operation: "learning_link_suggest_cgr" } });
   if (!result.ok) {
     return empty({ ok: false, analysed: signals.length, error: result.error === "not_configured" ? "AI is not configured." : result.error === "refusal" ? "The model declined that request." : `Error: ${result.detail ?? "failed"}` });
   }
