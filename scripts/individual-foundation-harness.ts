@@ -220,7 +220,7 @@ function main() {
   // ── 10. THE RELEASE GATE: every entry point asks it first, on the server ──
   const guardSrc = SRC.get("src/lib/individual/guard.ts") ?? "";
   ok("10a. the shell guard checks the release gate BEFORE authentication and before any Individual table",
-    /individualAppEnabled\(admin\)\)\) return \{ state: "DISABLED" \}/.test(guardSrc)
+    /individualAppEnabled\(admin\)\)\) return \{ state: "DISABLED" \}/.test(guardSrc) // (admin may be null: see 11d)
     && guardSrc.indexOf("individualAppEnabled(admin)") < guardSrc.indexOf("auth.getUser()")
     && guardSrc.indexOf("individualAppEnabled(admin)") < guardSrc.indexOf("readIndividualAccess("));
   ok("10b. a DISABLED shell is 404 in the API guard, the group layout, the experience layout, every page helper, home and welcome",
@@ -229,7 +229,7 @@ function main() {
       "src/app/individual/(app)/home/page.tsx", "src/app/individual/(app)/welcome/page.tsx"]
       .every(f => /shell\.state === "DISABLED"\) notFound\(\)/.test(SRC.get(f) ?? "")));
   ok("10c. the access page and both HQ grant routes check the gate themselves",
-    /individualAppEnabled\(createAdminClient\(\)\)\)\) notFound\(\)/.test(SRC.get("src/app/individual/access/page.tsx") ?? "")
+    /if \(!admin \|\| !\(await individualAppEnabled\(admin\)\)\) notFound\(\)/.test(SRC.get("src/app/individual/access/page.tsx") ?? "")
     && hqRoutes.every(f => /individualAppEnabled\(ctx\.admin\)\)\) return NextResponse\.json/.test(SRC.get(f) ?? "")));
   ok("10d. the neutral resolver reads individual_membership ONLY when the gate is on",
     /individualAppEnabled\(admin\),/.test(pr) && /individualOn\s*\?\s*await admin\.from\("individual_membership"\)/.test(pr));
@@ -248,8 +248,14 @@ function main() {
   ok("11a. every Individual page, layout and route handler is force-dynamic (public /individual and /individual/sign-in excepted)",
     routeFiles.length >= 15 && notDynamic.length === 0, notDynamic.join(", "));
   ok("11b. the guard and the access page wait for a request (connection()) before creating any client",
-    guardSrc.indexOf("await connection()") > -1 && guardSrc.indexOf("await connection()") < guardSrc.indexOf("createAdminClient()")
-    && /await connection\(\);[^\n]*\n\s*if \(!\(await individualAppEnabled\(createAdminClient\(\)\)\)\) notFound\(\)/.test(SRC.get("src/app/individual/access/page.tsx") ?? ""));
+    guardSrc.indexOf("await connection()") > -1 && guardSrc.indexOf("await connection()") < guardSrc.indexOf("createAdminClientOrNull()")
+    && (() => { const a = SRC.get("src/app/individual/access/page.tsx") ?? ""; return a.indexOf("await connection()") > -1 && a.indexOf("await connection()") < a.indexOf("createAdminClientOrNull()"); })());
+  // Found on Vercel Preview 2026-10-22, after 11a: with no service key the routes answered 500, not 404 --
+  // createAdminClient()'s constructor throws on a missing key, before the gate's own try could say OFF.
+  const gatePaths = ["src/lib/individual/guard.ts", "src/app/individual/access/page.tsx"];
+  ok("11d. the gate paths build their client with createAdminClientOrNull (no client = OFF), never the throwing createAdminClient()",
+    gatePaths.every(f => /createAdminClientOrNull\(\)/.test(SRC.get(f) ?? "") && !/createAdminClient\(\)/.test(SRC.get(f) ?? ""))
+    && /if \(!admin \|\| !\(await individualAppEnabled\(admin\)\)\) return \{ state: "DISABLED" \}/.test(guardSrc));
   const moduleScopeClients = FILES.filter(f => /^(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:await\s+)?create(?:Admin)?Client(?:OrNull)?\(/m.test(SRC.get(f) ?? ""));
   ok("11c. no Supabase client is created at module scope anywhere in Individual", moduleScopeClients.length === 0, moduleScopeClients.join(", "));
 

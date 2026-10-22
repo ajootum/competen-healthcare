@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse, connection } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient, createAdminClientOrNull } from "@/lib/supabase/server";
 import { readIndividualAccess, type IndividualMembership } from "./access";
 import type { ExperienceKey } from "./experiences";
 import type { Acceptance } from "./legal";
@@ -57,8 +57,10 @@ export async function resolveIndividualShell(): Promise<IndividualShell> {
   // Request time only, before ANY client exists: a prerender stops here instead of building a service-role
   // client at build time (Vercel Preview has no key) or freezing the gate into static HTML.
   await connection();
-  const admin = createAdminClient() as any;
-  if (!(await individualAppEnabled(admin))) return { state: "DISABLED" };
+  // ⚠ OrNull, NOT createAdminClient(): that constructor THROWS when the service key is missing (Vercel
+  // Preview, a mis-set rotation), which turned this gate into a 500. No client is OFF, like a failed read.
+  const admin = createAdminClientOrNull() as any;
+  if (!admin || !(await individualAppEnabled(admin))) return { state: "DISABLED" };
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { state: "AUTH_REQUIRED" };
