@@ -26,7 +26,7 @@ Every step lives inside the existing Scholar shell at `/individual/scholar/study
 
 | Reused | How |
 |---|---|
-| Experience registry and shell | One `SCHOLAR.modules` entry. Pages go through `experiencePage` (gate 3, live, terms). The shared `modules`/`navFor`/`bottomNavFor` shape is COMPETEN-IND-007's proposal, adopted verbatim (commit `a4762f58`). |
+| Experience registry and shell | The foundation owner's one experience-module mechanism (`dde82336`, merged): one `SCHOLAR.modules` entry (`study`, on the bottom bar). Every page takes its context from `experienceModulePage(param, "study")`: the release gate, gate 3, live, D2 terms and the registry check, so `/individual/professional/study` is 404. Every page and route is `force-dynamic` (foundation 11a). Apart from the registry entry, Scholar changes one shared file: a one-line fix to `foundation.test.ts`, whose navigation test assumed Scholar ships no module. |
 | `requireIndividualContext("scholar")` | Every Scholar API handler. |
 | `generate()` | Every AI call, with `attribution: { scope: "person" }` (AI-LOG-001), so `plat_ai_requests` logs usage and cost. |
 | `checkAiQuota` | Scholar AI calls are audited as `ai_assistant_query`, the action the hourly limit counts. `entity_type` names the operation. |
@@ -75,11 +75,11 @@ It has no function or plpgsql, so no APPLY-WHOLE banner is needed. It references
 | Check | Result |
 |---|---|
 | `tsc --noEmit` and `eslint` on the 32 changed files | clean |
-| `vitest run` | **549 / 549**, including 37 new Scholar cases. A real two-page PDF is extracted page by page. The grounding refusals are proven. Progress shows not-measured as null. |
+| `vitest run` | **571 / 571** after merging the foundation at `68028b5b`, including 37 new Scholar cases. A real two-page PDF is extracted page by page. The grounding refusals are proven. Progress shows not-measured as null. |
 | `scholar-learning-harness` (new, in the CI list) | **49 / 49**, with 10 planted-failure controls (P1–P10) built in. A real on-disk plant also went red: removing one `user_id` filter in `store.ts` failed A1. Restored, it is green again. Without 372 in the checkout: 40/40, with schema checks printed as NOT RUN. |
-| `individual-foundation-harness` | **31 / 31** (adds 7c) |
+| `individual-foundation-harness` | **41 / 41** at `68028b5b`. That includes 7d and 7e (pages gated through `experienceModulePage`), 11a (`force-dynamic`), and the per-experience write rule, under which Scholar files write only `individual_scholar_*`. |
 | `access-doors` / `plane-boundary` | 39 / 39 · 35 / 35 |
-| `auth-boundary` | Every Scholar route is recognised. The one failure, `api/v1/practice/public/manage`, is the pre-existing one recorded in COMPETEN-IND-003 §6. |
+| `auth-boundary` | **ALL GREEN** after the merge, which brought in the CI baseline fix from `main` `6fa4cd52`. Every Scholar route is recognised. |
 | `audit-gate` | Fails on base and branch alike. `unpdf` adds no advisory (see §2). |
 
 ## 6. Staging
@@ -97,7 +97,7 @@ Pending owner authorisation to apply 372 to staging. Staging already has 370 and
 2. **Consent notice wording** (`CONSENT_NOTICE` in `config.ts`, version `scholar-ai-uploads-notice-v1`). This is a product notice, not legal text. It should be reviewed alongside the COMPETEN-LEGAL-001 documents before pilot use.
 3. **Clinical-review record** for shared content: who reviews, when and with what scope. This is a governance design. Until it exists, Apply serves only the person's own material.
 4. **OCR for scanned PDFs**: not built. A scanned PDF is refused with that reason.
-5. **The shared-foundation commit `a4762f58`** carries IND-007's harness rule verbatim, including its one `passport_share_tokens` estate exception (for a Professional file), so the two branches merge cleanly. That exception is IND-007's to justify.
+5. **Release gate.** Individual ships dark: `individual_app` is OFF by default, and while it is off every Scholar page and API answers 404. The staging acceptance switches it ON for the run and then restores its prior state, as `individual-acceptance-harness` R1-R3 and Z2 do. The flag is never touched on production.
 
 ## 8. Next
 
