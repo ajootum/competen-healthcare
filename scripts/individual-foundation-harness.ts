@@ -54,6 +54,7 @@ const FILES = [
   ...walk("src/lib/individual"),
   ...walk("src/app/individual"),
   ...walk("src/app/api/individual"),
+  ...walk("src/app/api/hq/individual"),
 ].map(posix).filter(f => f !== "src/app/individual/page.tsx" && !f.startsWith("src/app/individual/sign-in/"));
 const SRC = new Map(FILES.map(f => [f, strip(readFileSync(f, "utf8"))]));
 const offenders = (re: RegExp, among: string[] = FILES) => among.filter(f => re.test(SRC.get(f) ?? ""));
@@ -84,16 +85,27 @@ function main() {
     offenders(/from\("profiles"\)\s*\.(insert|update|upsert|delete)\(/).length === 0,
     offenders(/from\("profiles"\)\s*\.(insert|update|upsert|delete)\(/).join(", "));
 
-  // ── 2. WHAT INDIVIDUAL MAY WRITE ────────────────────────────────────────────────────────────────
-  // Every write site names its table on the same chain. Two tables are allowed: the caller's own
-  // membership row (preferences) and audit_log.
+  // ── 2. WHAT INDIVIDUAL MAY WRITE, AND WHERE ─────────────────────────────────────────────────────
+  // Every write site names its table on the same chain. audit_log may be written anywhere. Beyond it,
+  // each gate-3 write is allowed in exactly one file: the person's own preference and terms acceptance
+  // (owner ruling D2), and the HQ pilot grant (D9). A write anywhere else is a second writer.
+  const ALLOWED: Record<string, string[]> = {
+    "src/app/api/individual/preferences/route.ts": ["individual_membership.update"],
+    "src/app/api/individual/terms/route.ts": ["individual_membership.update", "individual_entitlement.update"],
+    "src/lib/individual/grants.ts": ["individual_membership.insert", "individual_entitlement.insert", "individual_entitlement.update"],
+  };
   const writes: string[] = [];
   for (const [f, src] of SRC) {
     for (const m of src.matchAll(/from\("([a-z_]+)"\)\s*\.(insert|update|upsert|delete)\(/g)) writes.push(`${f}: ${m[1]}.${m[2]}`);
   }
-  const badWrites = writes.filter(w => !/: (individual_membership\.update|audit_log\.insert)$/.test(w));
-  ok("2a. Individual writes only its own membership row and audit_log", badWrites.length === 0, badWrites.join("; "));
-  ok("2b. ⚠ control: the two expected writes are actually seen", writes.some(w => w.endsWith("individual_membership.update")) && writes.some(w => w.endsWith("audit_log.insert")));
+  const badWrites = writes.filter(w => {
+    const [f, op] = w.split(": ");
+    return op !== "audit_log.insert" && !(ALLOWED[f] ?? []).includes(op);
+  });
+  ok("2a. every gate-3 write sits in its one allowed file; nothing else but audit_log is written", badWrites.length === 0, badWrites.join("; "));
+  const expected = Object.entries(ALLOWED).flatMap(([f, ops]) => ops.map(op => `${f}: ${op}`));
+  ok("2b. ⚠ control: every allowed write is actually seen, so 2a is not vacuous",
+    expected.every(w => writes.includes(w)), expected.filter(w => !writes.includes(w)).join("; "));
 
   // ── 3. PROVISIONAL RULING D1 -- NO INDIVIDUAL DATA IN TABLES HOSPITAL ANALYTICS READ ──────────
   const ESTATE_LEARNING = /from\("(quiz_attempts|knowledge_attempts|cpd_logs|course_enrollments|learning_enrolments|cdp_reinforcement_cards|skill_log_entries)"\)/;
@@ -105,8 +117,8 @@ function main() {
   ok("4a. access reads liveness from individual_live_entitlement", /from\("individual_live_entitlement"\)/.test(access));
   ok("4b. access never reads the raw ledger or compares a period with the app clock",
     !/from\("individual_entitlement"\)/.test(access) && !/starts_at|ends_at/.test(access) && !/Date\.now\(\)|new Date\(/.test(access));
-  const ledgerReaders = offenders(/from\("individual_entitlement"\)/);
-  ok("4c. only the history view reads the raw ledger (all periods, for display)",
+  const ledgerReaders = offenders(/from\("individual_entitlement"\)\s*\.select\(/);
+  ok("4c. only the history view READS the raw ledger (all periods, for display) -- every access decision uses the view",
     ledgerReaders.length === 1 && ledgerReaders[0] === "src/lib/individual/history.ts", ledgerReaders.join(", "));
 
   // ── 5. EVERY INDIVIDUAL API ROUTE IS GUARDED BY GATE 3 ──────────────────────────────────────────
@@ -116,7 +128,15 @@ function main() {
     const handlers = [...s.matchAll(/export async function (POST|PUT|PATCH|DELETE)\b/g)].length;
     return handlers > 0 && [...s.matchAll(/requireIndividualContext\(/g)].length < handlers;
   });
-  ok("5a. every mutating Individual API handler calls requireIndividualContext", routes.length >= 2 && unguarded.length === 0, unguarded.join(", "));
+  ok("5a. every mutating Individual API handler calls requireIndividualContext", routes.length >= 3 && unguarded.length === 0, unguarded.join(", "));
+  const hqRoutes = FILES.filter(f => f.startsWith("src/app/api/hq/individual/") && f.endsWith("route.ts"));
+  const hqUngated = hqRoutes.filter(f => !/hqApiGate\(\["hq\.individual\.pilot\.grant"\]\)/.test(SRC.get(f) ?? "")
+    || !/targetUserId === ctx\.userId/.test(SRC.get(f) ?? ""));
+  ok("5b. D9: every HQ Individual route is gated on hq.individual.pilot.grant and refuses acting on yourself",
+    hqRoutes.length >= 2 && hqUngated.length === 0, hqUngated.join(", "));
+  const grantImporters = FILES.filter(f => /from "@\/lib\/individual\/grants"/.test(SRC.get(f) ?? ""));
+  ok("5c. the grant service is reachable only from the HQ grant routes",
+    grantImporters.length >= 2 && grantImporters.every(f => f.startsWith("src/app/api/hq/individual/")), grantImporters.join(", "));
 
   // ── 6. SIGNUP STAYS CLOSED ──────────────────────────────────────────────────────────────────────
   ok("6a. no Individual surface links to /signup or creates an auth user",
@@ -124,7 +144,7 @@ function main() {
     offenders(/["'`]\/signup|auth\.signUp\(|auth\.admin\.createUser\(/).join(", "));
   const door = ACCESS_DOORS.find(d => d.code === "INDIVIDUAL");
   ok("6b. the public Individual door is still being_built -- the pilot enters through /login", door?.status === "being_built");
-  ok("6c. no Individual API route exists that could provision membership or entitlement",
+  ok("6c. no person-facing Individual API route can create membership or entitlement",
     !FILES.some(f => f.startsWith("src/app/api/individual/") && /from\("individual_(membership|entitlement)"\)\s*\.(insert|upsert)\(/.test(SRC.get(f) ?? "")));
 
   // ── 7. NAVIGATION LISTS ONLY WHAT EXISTS ────────────────────────────────────────────────────────
@@ -141,6 +161,32 @@ function main() {
     /from\("individual_membership"\)/.test(pr) && /href: "\/individual\/home"/.test(pr));
   ok("8b. and a missing table is the ONLY Individual read failure it forgives",
     /isNotProvisioned\(individualRead\.error\)/.test(pr) && /individualRead\.error && !individualAbsent/.test(pr));
+
+  // ── 9. THE OWNER RULINGS THAT LIVE IN CODE AND SCHEMA ───────────────────────────────────────────
+  const MIG = "supabase/migrations/370-individual-membership-and-entitlement.sql";
+  const mig = existsSync(MIG) ? readFileSync(MIG, "utf8").replace(/--.*$/gm, "") : "";
+  const grantsSrc = SRC.get("src/lib/individual/grants.ts") ?? "";
+  const legalSrc = SRC.get("src/lib/individual/legal.ts") ?? "";
+  ok("9a. D8: the schema refuses a Scholar row without an adult-eligibility confirmation",
+    /check \(experience_code <> 'scholar' or adult_confirmed_at is not null\)/.test(mig));
+  ok("9b. D8: the grant refuses Scholar without adultConfirmed === true, and records who confirmed",
+    /includes\("scholar"\) && !adultConfirmed/.test(grantsSrc) && /adult_confirmed_by: grantedBy/.test(grantsSrc));
+  // RAW, not stripped: spaces.ts carries route globs ("/super-admin/*") that the block-comment strip would
+  // read as comment openers and swallow. The needle is a catalogue entry, which no comment could fake.
+  const spaces = readFileSync("src/lib/hq/spaces.ts", "utf8");
+  ok("9c. D9: the capability is in the migration AND the HQ catalogue, granted to the Individual Product Administrator",
+    /'hq\.individual\.pilot\.grant', 'platform'/.test(mig) && /"hq\.individual\.pilot\.grant",\s*space: "platform"/.test(spaces)
+    && /\('individual_product_administrator', 'platform'/.test(mig) && /set product_line_code = 'individual'/.test(mig));
+  ok("9d. D2: every page, the experience layout and every experience API pass the terms gate before use",
+    /contextTermsGate\(shell\.ctx, param\)\.usable/.test(SRC.get("src/app/individual/_components/shell-context.ts") ?? "")
+    && /contextTermsGate\(shell\.ctx, experience\)/.test(SRC.get("src/app/individual/(app)/[experience]/layout.tsx") ?? "")
+    && /opts\.requireTerms !== false && !contextTermsGate/.test(SRC.get("src/lib/individual/guard.ts") ?? ""));
+  ok("9e. D2: no legal version or registered name is hard-coded -- both come from configuration",
+    legalSrc.length > 0 && !/registeredName:\s*"/.test(legalSrc) && !/version:\s*"/.test(legalSrc));
+  ok("9f. D2: terms acceptance is all-or-nothing in the schema, on both tables",
+    /individual_entitlement_terms_whole/.test(mig) && /individual_membership_foundation_terms_whole/.test(mig));
+  ok("9g. D10: no Individual code persists AI conversation",
+    !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));
 
   console.log(`\n${failures.length === 0 ? "ALL GREEN" : "RED"} -- ${pass} passed, ${failures.length} failed`);
   if (failures.length) { failures.forEach(f => console.log(`  FAILED: ${f}`)); process.exit(1); }

@@ -1,38 +1,47 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * INDIVIDUAL ACCEPTANCE HARNESS -- COMPETEN-IND-003 s5, against a real database, STAGING ONLY.
+ * INDIVIDUAL ACCEPTANCE HARNESS -- COMPETEN-IND-003 s5 and the owner rulings D1-D10, against a real
+ * database, STAGING ONLY.
  *
  * ────────────────────────────────────────────────────────────────────────────────────────────────────
- * WHAT THIS EXISTS TO KEEP TRUE (the brief's acceptance list, one assertion group each).
+ * WHAT THIS EXISTS TO KEEP TRUE (one assertion group each).
  *
- *   A. One person holds BOTH experiences through authorised entitlements, and the neutral sign-in
- *      offers Competen Individual -- and NOT the estate, which they do not hold.
- *   B. A person entitled to ONE experience sees only that one. Direct Professional entry needs no
- *      Scholar row, ever.
- *   C. Liveness is the DATABASE clock: a period that has ended or not yet started is not live, even
- *      with status `active`. This is the control for A and B -- without it "live" could mean "any row".
- *   D. Graduation ACTIVATES: adding Professional to a Scholar leaves the same user id, the same
- *      membership row and the same Passport, and both experiences are then live.
- *   E. The primary experience is honoured only while live, and falls back when it is not.
- *   F. Nothing in any of this creates another product's membership or writes profiles.role.
- *   G. Own-row RLS (provisional ruling D6): a signed-in person reads their own membership, cannot read
- *      another's, and cannot grant themselves one.
- *   H. A suspended membership is refused.
+ *   A. Dual experience: one person holds Scholar AND Professional, and the neutral sign-in offers Competen
+ *      Individual -- and NOT the estate, which they do not hold.
+ *   B. Single experience: Scholar-only and Professional-only people see only theirs. Direct Professional
+ *      needs no Scholar row, ever.
+ *   C. Liveness is the DATABASE clock: ended and not-yet-started periods are not live. The control for A/B.
+ *   D. Graduation activates (D4): Professional is added on the same account, membership and Passport, and
+ *      Scholar stays live -- graduation does not revoke it.
+ *   E. Primary experience: honoured while live, falls back when not.
+ *   F. Product boundaries: no platform, practice or enterprise membership, and profiles.role unchanged from
+ *      what the new-user trigger wrote.
+ *   G. RLS (D6): own rows readable, another person's not, and no self-grant from a browser session.
+ *   H. Refusals: suspended and revoked memberships, and an ended experience, are refused.
+ *   I. Age (D8): the grant refuses Scholar without the 18+ confirmation, the SCHEMA refuses a raw Scholar
+ *      row without it, and a granted Scholar row records who confirmed and when.
+ *   J. Terms (D2): acceptance is all-or-nothing in the schema, and the gate opens only on the current
+ *      published versions.
+ *   K. HQ authority (D9): the capability, the Individual Product Administrator position and its grant
+ *      exist in the HQ catalogue, and a person with no appointment does not hold the right.
+ *   L. Passport provenance and AI boundaries (D3): an organisation-verified credential and a self-declared
+ *      one are labelled differently, and the AI context names the person's own record and nobody else's.
+ *   M. Employer visibility (D1): nothing Individual did wrote to the estate learning tables that hospital
+ *      analytics read.
  *
  * ⚠ IT IMPORTS THE RULES IT TESTS -- readIndividualAccess, decideLanding, effectivePrimary,
- * resolveProductDestinations, loadIndividualPassport, buildHistory. Nothing below restates them.
+ * resolveProductDestinations, grantIndividualAccess, validateGrant, endIndividualExperience, termsGate,
+ * loadIndividualPassport, buildHistory, recordContext, resolveHqPositions. Nothing below restates them.
  *
- * ⚠ MIGRATION 370 IS APPLIED BY HAND. Until it is, every assertion reports PEND, never PASS, and the run
- * exits 0 with the count of PENDs printed -- "not applied yet" is not a failure of the code, and it is
- * not a pass either.
+ * ⚠ MIGRATION 370 FIRST. Until it is applied every group reports PEND, never PASS, the run exits 0, and
+ * nothing is created.
  *
- * ⚠ STAGING ONLY. .env.local names PRODUCTION, so this refuses to start unless the Supabase variables
- * have been remapped to staging -- run it through the privileged runner, which does exactly that:
+ * ⚠ STAGING ONLY. .env.local names PRODUCTION. assertSafeTarget refuses production before any client is
+ * built, so run it with the three Supabase variables remapped to staging:
  *
  *   npx tsx scripts/privileged-harnesses.ts --staging --only individual-acceptance
  *
- * ⚠ RUN IT ALONE. Its fixture identities are its own (harness-ind003-*@competen.test) so it does not
- * collide with another harness's, but it creates and deletes auth users on the shared staging project.
+ * ⚠ RUN IT ALONE. Its fixture identities are its own (harness-ind003-*@competen.test) and it deletes them.
  */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
@@ -41,6 +50,11 @@ import { readIndividualAccess, decideLanding, effectivePrimary, isNotProvisioned
 import { resolveProductDestinations } from "../src/lib/identity/product-resolution";
 import { loadIndividualPassport } from "../src/lib/individual/passport";
 import { buildHistory, loadEntitlementHistory } from "../src/lib/individual/history";
+import { grantIndividualAccess, validateGrant, isGrantRefusal, endIndividualExperience, type GrantRequest } from "../src/lib/individual/grants";
+import { termsGate } from "../src/lib/individual/terms";
+import { entityLegal, type EntityLegal } from "../src/lib/individual/legal";
+import { recordContext } from "../src/lib/individual/assistant";
+import { resolveHqPositions } from "../src/lib/hq/context";
 
 loadEnvConfig(process.cwd());
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -50,20 +64,29 @@ if (!url || !key || !anonKey) { console.error("Supabase env not set"); process.e
 const ref = assertSafeTarget(url, "individual-acceptance-harness");
 const admin = createClient(url, key, { auth: { persistSession: false } }) as any;
 
-let pass = 0, pend = 0; const fails: string[] = [];
+let pass = 0; const fails: string[] = [];
 const ok = (name: string, cond: boolean, detail = "") => {
   if (cond) { pass++; console.log(`  PASS  ${name}`); }
   else { fails.push(name); console.log(`  FAIL  ${name}${detail ? ` -- ${detail}` : ""}`); }
 };
 
 const FIX = {
+  grantor: "harness-ind003-grantor@competen.test",
   both: "harness-ind003-both@competen.test",
   scholar: "harness-ind003-scholar@competen.test",
   pro: "harness-ind003-pro@competen.test",
   suspended: "harness-ind003-suspended@competen.test",
+  revoked: "harness-ind003-revoked@competen.test",
 };
-// A test value generated for this run, used only to sign the fixture in for the RLS check (G).
+// A test value generated for this run, used only to sign fixtures in for the RLS group (G).
 const FIX_PASSWORD = `ind003-${Math.random().toString(36).slice(2)}-Aa1!`;
+// Test legal configuration for J -- versions that exist only inside this run, never a deployment's.
+const TEST_LEGAL_ENV = {
+  INDIVIDUAL_LEGAL_COMPETEN_HOLDINGS_TERMS_VERSION: "harness-h-terms", INDIVIDUAL_LEGAL_COMPETEN_HOLDINGS_PRIVACY_VERSION: "harness-h-privacy",
+  INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_TERMS_VERSION: "harness-s-terms", INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_PRIVACY_VERSION: "harness-s-privacy",
+};
+const testLegal = (e: EntityLegal["entity"]) => entityLegal(e, TEST_LEGAL_ENV);
+const ESTATE_LEARNING = ["quiz_attempts", "knowledge_attempts", "cpd_logs", "course_enrollments", "learning_enrolments", "cdp_reinforcement_cards", "skill_log_entries"];
 
 async function findUser(email: string) {
   for (let page = 1; page <= 10; page++) {
@@ -81,6 +104,7 @@ async function cleanup() {
     if (!u) continue;
     await admin.from("individual_entitlement").delete().eq("user_id", u.id);
     await admin.from("individual_membership").delete().eq("user_id", u.id);
+    await admin.from("professional_credentials").delete().eq("nurse_id", u.id);
     await admin.from("audit_log").delete().eq("actor_id", u.id);
     await admin.from("profiles").delete().eq("id", u.id);
     await admin.auth.admin.deleteUser(u.id);
@@ -93,123 +117,205 @@ async function makeUser(email: string) {
   return data.user.id as string;
 }
 
-// The HQ pilot grant, exactly as COMPETEN-IND-003 s6's SQL template writes it.
-async function grant(userId: string, experiences: { code: "scholar" | "professional"; source?: string; starts?: string; ends?: string | null }[], status = "active") {
-  const m = await admin.from("individual_membership").insert({ user_id: userId, status, source: "hq_pilot_grant" });
-  if (m.error) throw new Error(`membership: ${m.error.message}`);
-  for (const e of experiences) {
-    const r = await admin.from("individual_entitlement").insert({
-      user_id: userId, experience_code: e.code, source: e.source ?? "pilot",
-      operating_entity: e.code === "scholar" ? "scholar_operator" : "competen_holdings",
-      ...(e.starts ? { starts_at: e.starts } : {}), ...(e.ends !== undefined ? { ends_at: e.ends } : {}),
-    });
-    if (r.error) throw new Error(`entitlement ${e.code}: ${r.error.message}`);
-  }
+async function grant(target: string, by: string, experiences: GrantRequest["experiences"]) {
+  const req = validateGrant({ targetUserId: target, experiences, adultConfirmed: true });
+  if (isGrantRefusal(req)) throw new Error(`grant refused: ${req.message}`);
+  const out = await grantIndividualAccess(admin, req, by);
+  if (!out.ok) throw new Error(`grant failed: ${out.message}`);
+  return out;
+}
+
+/** A raw ledger row, for periods the grant service never writes (ended, future). */
+async function rawEntitlement(userId: string, code: "scholar" | "professional", extra: Record<string, unknown>) {
+  const r = await admin.from("individual_entitlement").insert({
+    user_id: userId, experience_code: code, source: "pilot",
+    operating_entity: code === "scholar" ? "scholar_operator" : "competen_holdings",
+    ...(code === "scholar" ? { adult_confirmed_at: new Date().toISOString() } : {}), ...extra,
+  });
+  if (r.error) throw new Error(`raw entitlement: ${r.error.message}`);
 }
 
 async function main() {
-  console.log(`\nIndividual acceptance harness -- COMPETEN-IND-003 s5 -- target ${ref}\n`);
+  console.log(`\nIndividual acceptance harness -- COMPETEN-IND-003 -- target ${ref}\n`);
 
   const probe = await admin.from("individual_membership").select("id").limit(1);
   if (probe.error && isNotProvisioned(probe.error)) {
-    pend = 8;
-    console.log("  PEND  A-H: migration 370 is not applied on this project. Nothing was created.");
-    console.log(`\nPENDING -- 0 passed, ${pend} groups pending (apply 370, then re-run)`);
+    console.log("  PEND  A-M: migration 370 is not applied on this project. Nothing was created.");
+    console.log("\nPENDING -- 0 passed, 13 groups pending (apply 370, then re-run)");
     process.exit(0);
   }
   if (probe.error) { console.error(`store unreadable: ${probe.error.message}`); process.exit(1); }
 
   await cleanup();
-  const day = 86400000;
-  const iso = (offsetDays: number) => new Date(Date.now() + offsetDays * day).toISOString();
+  const iso = (days: number) => new Date(Date.now() + days * 86400000).toISOString();
 
+  const grantor = await makeUser(FIX.grantor);
   const both = await makeUser(FIX.both);
   const scholar = await makeUser(FIX.scholar);
   const pro = await makeUser(FIX.pro);
   const suspended = await makeUser(FIX.suspended);
+  const revoked = await makeUser(FIX.revoked);
+  // ⚠ THE BASELINE FOR F2. The new-user trigger (migration 335) writes profiles.role = 'nurse' for every new
+  // account, so "role is null" is not Individual's claim. Individual's claim is that it never CHANGES the
+  // role -- measured against this snapshot, taken before any Individual code runs.
+  const allIds = [grantor, both, scholar, pro, suspended, revoked];
+  const roleSnapshot = new Map(((await admin.from("profiles").select("id, role, roles").in("id", allIds)).data ?? [])
+    .map((p: any) => [p.id, JSON.stringify([p.role, p.roles])]));
 
-  // Ended and not-yet-started periods ride along on the "both" person as the C control.
-  await grant(both, [
-    { code: "scholar" }, { code: "professional" },
-    { code: "scholar", starts: iso(-60), ends: iso(-30) },
-    { code: "professional", starts: iso(30) },
-  ]);
-  await grant(scholar, [{ code: "scholar" }, { code: "professional", starts: iso(-40), ends: iso(-1) }]);
-  await grant(pro, [{ code: "professional" }]);
-  await grant(suspended, [{ code: "scholar" }], "suspended");
+  // ── I. age eligibility at grant time (before anything else is written for these people) ──
+  const noAdult = validateGrant({ targetUserId: scholar, experiences: ["scholar"] });
+  ok("I1. D8: the grant refuses Scholar without the 18+ confirmation", isGrantRefusal(noAdult) && noAdult.code === "AGE_ELIGIBILITY_REQUIRED");
+  const rawNoAdult = await admin.from("individual_entitlement").insert({ user_id: scholar, experience_code: "scholar", source: "pilot", operating_entity: "scholar_operator" });
+  ok("I2. ⚠ D8: the SCHEMA refuses a raw Scholar row with no adult confirmation", !!rawNoAdult.error, rawNoAdult.error?.message ?? "insert succeeded");
 
-  // ── A. both experiences, and the chooser ──
+  await grant(both, grantor, ["scholar", "professional"]);
+  await rawEntitlement(both, "scholar", { starts_at: iso(-60), ends_at: iso(-30) });
+  await rawEntitlement(both, "professional", { starts_at: iso(30) });
+  await grant(scholar, grantor, ["scholar"]);
+  await grant(pro, grantor, ["professional"]);
+  await grant(suspended, grantor, ["scholar"]);
+  await admin.from("individual_membership").update({ status: "suspended", suspended_at: iso(0) }).eq("user_id", suspended);
+  await grant(revoked, grantor, ["professional"]);
+  await admin.from("individual_membership").update({ status: "revoked", revoked_at: iso(0), revoked_by: grantor }).eq("user_id", revoked);
+
+  const sRow = await admin.from("individual_entitlement").select("adult_confirmed_at, adult_confirmed_by, granted_by, source").eq("user_id", scholar).eq("experience_code", "scholar").single();
+  ok("I3. D8: a granted Scholar row records who confirmed eligibility and when", !!sRow.data?.adult_confirmed_at && sRow.data?.adult_confirmed_by === grantor && sRow.data?.granted_by === grantor);
+  const again = await grant(scholar, grantor, ["scholar"]);
+  ok("I4. the grant is idempotent: an already-live experience is reported, not duplicated", again.granted.length === 0 && again.alreadyLive.join() === "scholar");
+
+  // ── A. dual experience ──
   const a: any = await readIndividualAccess(admin, both);
   ok("A1. one person holds Scholar AND Professional through live entitlements", a.state === "member" && a.live.join() === "scholar,professional", JSON.stringify(a));
   const r: any = await resolveProductDestinations(admin, both);
   const codes = r.state === "one" ? [r.destination.code] : r.state === "many" ? r.destinations.map((d: any) => d.code) : [];
   ok("A2. neutral sign-in offers Competen Individual and NOT the estate they do not hold", codes.includes("individual") && !codes.includes("platform"), JSON.stringify(r));
 
-  // ── B. one experience, direct Professional ──
+  // ── B. single experience ──
   const b1: any = await readIndividualAccess(admin, scholar);
-  ok("B1. a Scholar-only person sees only Scholar (their ended Professional period is not live)", b1.state === "member" && b1.live.join() === "scholar", JSON.stringify(b1));
+  ok("B1. a Scholar-only person sees only Scholar", b1.state === "member" && b1.live.join() === "scholar");
   const b2: any = await readIndividualAccess(admin, pro);
-  const proScholarRows = await admin.from("individual_entitlement").select("id").eq("user_id", pro).eq("experience_code", "scholar");
-  ok("B2. direct Professional: live Professional with no Scholar row ever written", b2.live?.join() === "professional" && (proScholarRows.data ?? []).length === 0);
+  const proScholar = await admin.from("individual_entitlement").select("id").eq("user_id", pro).eq("experience_code", "scholar");
+  ok("B2. direct Professional: live Professional with no Scholar row ever written", b2.live?.join() === "professional" && (proScholar.data ?? []).length === 0);
   ok("B3. a new member lands on the welcome first", decideLanding(b2.membership, b2.live).kind === "welcome");
 
-  // ── C. the control: DB-clock liveness ──
+  // ── C. DB-clock liveness ──
   const rows = await admin.from("individual_entitlement").select("id").eq("user_id", both);
   const liveRows = await admin.from("individual_live_entitlement").select("id").eq("user_id", both);
-  ok("C1. ⚠ the ledger holds 4 rows for that person but only 2 are live -- ended and future periods are excluded", (rows.data ?? []).length === 4 && (liveRows.data ?? []).length === 2, `${rows.data?.length}/${liveRows.data?.length}`);
+  ok("C1. ⚠ 4 ledger rows, 2 live -- ended and future periods are excluded by the database clock",
+    (rows.data ?? []).length === 4 && (liveRows.data ?? []).length === 2, `${rows.data?.length}/${liveRows.data?.length}`);
 
-  // ── D. graduation activates ──
+  // ── D. graduation activates and does not revoke ──
   const before = await admin.from("individual_membership").select("id").eq("user_id", scholar).single();
-  await admin.from("individual_entitlement").insert({ user_id: scholar, experience_code: "professional", source: "graduation", operating_entity: "competen_holdings" });
+  await admin.from("individual_entitlement").insert({ user_id: scholar, experience_code: "professional", source: "graduation", operating_entity: "competen_holdings", granted_by: grantor });
   const d: any = await readIndividualAccess(admin, scholar);
   const after = await admin.from("individual_membership").select("id").eq("user_id", scholar).single();
-  ok("D1. graduation adds Professional on the SAME account and membership row; both live", d.live?.join() === "scholar,professional" && before.data?.id === after.data?.id);
-  const passport = await loadIndividualPassport(admin, scholar, new Date().toISOString().slice(0, 10));
-  ok("D2. the Passport reads for the graduated person (sections read, not unreadable)", passport.competencies !== null && passport.credentials !== null && passport.employment !== null);
-  const hist = buildHistory({ joinedAt: d.membership.grantedAt, entitlements: await loadEntitlementHistory(admin, scholar), passport });
-  ok("D3. the one history keeps the Scholar period and shows Professional activated on graduation",
+  ok("D1. D4: graduation adds Professional on the same account and membership, and Scholar stays live",
+    d.live?.join() === "scholar,professional" && before.data?.id === after.data?.id);
+  const passportS = await loadIndividualPassport(admin, scholar, new Date().toISOString().slice(0, 10));
+  const hist = buildHistory({ joinedAt: d.membership.grantedAt, entitlements: await loadEntitlementHistory(admin, scholar), passport: passportS });
+  ok("D2. one continuous history keeps Scholar and shows Professional activated on graduation",
     hist.some(h => h.title === "Competen Scholar started") && hist.some(h => h.title === "Competen Professional started" && h.detail === "activated on graduation"));
 
   // ── E. primary experience ──
-  await admin.from("individual_membership").update({ primary_experience: "professional", onboarded_at: new Date().toISOString() }).eq("user_id", both);
+  await admin.from("individual_membership").update({ primary_experience: "professional", onboarded_at: iso(0) }).eq("user_id", both);
   const e1: any = await readIndividualAccess(admin, both);
-  ok("E1. a live primary experience is where they land", decideLanding(e1.membership, e1.live).kind === "experience" && (decideLanding(e1.membership, e1.live) as any).experience === "professional");
-  await admin.from("individual_membership").update({ primary_experience: "professional", onboarded_at: new Date().toISOString() }).eq("user_id", scholar);
-  await admin.from("individual_entitlement").update({ status: "cancelled" }).eq("user_id", scholar).eq("source", "graduation");
+  const land: any = decideLanding(e1.membership, e1.live);
+  ok("E1. a live primary experience is where they land", land.kind === "experience" && land.experience === "professional");
+  await admin.from("individual_membership").update({ primary_experience: "professional", onboarded_at: iso(0) }).eq("user_id", scholar);
+  const ended = await endIndividualExperience(admin, scholar, "professional");
   const e2: any = await readIndividualAccess(admin, scholar);
-  ok("E2. a primary experience that is no longer live falls back instead of stranding them", effectivePrimary(e2.membership.primaryExperience, e2.live) === "scholar");
+  ok("E2. ending the primary experience falls back to the live one instead of stranding them",
+    ended.ok && (ended as any).ended === 1 && effectivePrimary(e2.membership.primaryExperience, e2.live) === "scholar");
 
-  // ── F. no other product touched ──
-  const ids = [both, scholar, pro, suspended];
-  const [pm, pr, em, prof] = await Promise.all([
+  // ── H. refusals ──
+  ok("H1. a suspended membership is refused", JSON.stringify(await readIndividualAccess(admin, suspended)) === JSON.stringify({ state: "none", reason: "suspended" }));
+  ok("H2. a revoked membership is refused", JSON.stringify(await readIndividualAccess(admin, revoked)) === JSON.stringify({ state: "none", reason: "revoked" }));
+  const rr: any = await resolveProductDestinations(admin, revoked);
+  ok("H3. a revoked member is not offered Individual at sign-in", rr.state === "none" || !(rr.destinations ?? [rr.destination]).some((x: any) => x?.code === "individual"));
+  ok("H4. an ended experience is no longer live, and its rows remain for history", !e2.live.includes("professional")
+    && ((await admin.from("individual_entitlement").select("id").eq("user_id", scholar).eq("experience_code", "professional")).data ?? []).length === 1);
+
+  // ── J. terms (D2) ──
+  const half = await admin.from("individual_entitlement").update({ terms_version: "x" }).eq("user_id", pro);
+  ok("J1. ⚠ the schema refuses a terms version recorded without its acceptance time", !!half.error, half.error?.message ?? "update succeeded");
+  const g0 = termsGate({ experience: "professional", foundationAcceptance: null, experienceAcceptance: undefined, legalOf: testLegal });
+  ok("J2. with terms published but not accepted, the experience is not usable", !g0.usable && g0.foundation.state === "required");
+  const now = iso(0);
+  await admin.from("individual_membership").update({ foundation_terms_version: "harness-h-terms", foundation_privacy_version: "harness-h-privacy", foundation_accepted_at: now }).eq("user_id", both);
+  await admin.from("individual_entitlement").update({ terms_version: "harness-s-terms", privacy_version: "harness-s-privacy", terms_accepted_at: now }).eq("user_id", both).eq("experience_code", "scholar");
+  const j: any = await readIndividualAccess(admin, both);
+  const gs = termsGate({ experience: "scholar", foundationAcceptance: j.membership.foundationAcceptance, experienceAcceptance: j.experienceAcceptance.scholar, legalOf: testLegal });
+  const gp = termsGate({ experience: "professional", foundationAcceptance: j.membership.foundationAcceptance, experienceAcceptance: j.experienceAcceptance.professional, legalOf: testLegal });
+  ok("J3. recorded acceptances, read back from the database, open Scholar (both documents) and Professional (foundation covers it)", gs.usable && gp.usable);
+  const bumped = termsGate({ experience: "scholar", foundationAcceptance: j.membership.foundationAcceptance, experienceAcceptance: j.experienceAcceptance.scholar,
+    legalOf: e => entityLegal(e, { ...TEST_LEGAL_ENV, INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_TERMS_VERSION: "harness-s-terms-2" }) });
+  ok("J4. a newly published version closes the experience again until it is accepted", !bumped.usable && bumped.experience.state === "required");
+
+  // ── F. product boundaries ──
+  const ids = allIds;
+  const [pm, prm, em, prof] = await Promise.all([
     admin.from("platform_membership").select("user_id").in("user_id", ids),
     admin.from("practice_membership").select("user_id").in("user_id", ids),
     admin.from("enterprise_membership").select("user_id").in("user_id", ids),
-    admin.from("profiles").select("id, role").in("id", ids),
+    admin.from("profiles").select("id, role, roles").in("id", ids),
   ]);
-  ok("F1. no platform, practice or enterprise membership exists for any fixture", !pm.error && !pr.error && (pm.data ?? []).length === 0 && (pr.data ?? []).length === 0 && (em.error || (em.data ?? []).length === 0));
-  ok("F2. ⚠ control: the four profiles exist, and every profiles.role is still null", (prof.data ?? []).length === 4 && (prof.data ?? []).every((p: any) => p.role === null), JSON.stringify(prof.data));
+  ok("F1. no platform, practice or enterprise membership exists for any fixture",
+    !pm.error && !prm.error && (pm.data ?? []).length === 0 && (prm.data ?? []).length === 0 && (!!em.error || (em.data ?? []).length === 0));
+  ok("F2. ⚠ control: all six profiles exist, and no profiles.role or roles value changed after the trigger wrote it",
+    (prof.data ?? []).length === 6 && roleSnapshot.size === 6
+    && (prof.data ?? []).every((p: any) => roleSnapshot.get(p.id) === JSON.stringify([p.role, p.roles])), JSON.stringify(prof.data));
 
-  // ── G. own-row RLS ──
+  // ── K. HQ authority (D9) ──
+  const pos = await admin.from("hq_position").select("code, space, product_line_code, is_active").eq("code", "individual_product_administrator").maybeSingle();
+  const posCaps = await admin.from("hq_position_capability").select("capability_code").eq("position_code", "individual_product_administrator").is("effective_to", null);
+  ok("K1. D9: the Individual Product Administrator position exists in the platform space and the individual product line",
+    pos.data?.space === "platform" && pos.data?.product_line_code === "individual" && pos.data?.is_active === true, JSON.stringify(pos.data));
+  ok("K2. D9: it holds hq.individual.pilot.grant (and the HQ landing), and nothing else",
+    (posCaps.data ?? []).map((c: any) => c.capability_code).sort().join() === "hq.individual.pilot.grant,hq.platform.home.view");
+  const grantorCaps = await resolveHqPositions(admin, grantor);
+  ok("K3. ⚠ a person with no HQ appointment does not hold the grant right", !grantorCaps.capabilities.includes("hq.individual.pilot.grant"));
+
+  // ── L. Passport provenance and AI boundaries (D3) ──
+  await admin.from("professional_credentials").insert([
+    { nurse_id: both, title: "Harness verified licence", credential_type: "professional_license", issuing_body: "Harness Council", status: "active", verified: true, issue_date: "2025-01-01" },
+    { nurse_id: both, title: "Harness declared certificate", credential_type: "cpd_certificate", status: "active", verified: false, issue_date: "2025-02-01" },
+    { nurse_id: pro, title: "Harness OTHER person credential", credential_type: "cpd_certificate", status: "active", verified: false },
+  ]);
+  const pb = await loadIndividualPassport(admin, both, new Date().toISOString().slice(0, 10));
+  const byTitle = new Map((pb.credentials ?? []).map(c => [c.title, c.evidence]));
+  ok("L1. D3: an organisation-verified credential and a self-declared one carry different provenance",
+    byTitle.get("Harness verified licence") === "institution_verified" && byTitle.get("Harness declared certificate") === "self_declared");
+  const aiCtx = recordContext({ name: "Harness Both", experience: "professional", live: ["scholar", "professional"], passport: pb });
+  ok("L2. the AI context carries the person's own record and no other person's",
+    aiCtx.includes("Harness verified licence") && !aiCtx.includes("Harness OTHER person credential"));
+
+  // ── M. employer visibility (D1) ──
+  const estate = await Promise.all(ESTATE_LEARNING.map(t => admin.from(t).select("*", { count: "exact", head: true })
+    .in(t === "cpd_logs" || t === "course_enrollments" || t === "learning_enrolments" || t === "quiz_attempts" ? "user_id" : "nurse_id", ids)));
+  const written = ESTATE_LEARNING.filter((_, i) => !estate[i].error && (estate[i].count ?? 0) > 0);
+  ok("M1. D1: no estate learning table that hospital analytics read holds a row for any fixture", written.length === 0, written.join(", "));
+
+  // ── G. RLS (D6) ──
   const user = createClient(url!, anonKey!, { auth: { persistSession: false } }) as any;
   const signIn = await user.auth.signInWithPassword({ email: FIX.both, password: FIX_PASSWORD });
-  if (signIn.error) ok("G0. the fixture can sign in for the RLS check", false, signIn.error.message);
+  if (signIn.error) ok("G0. the fixture can sign in for the RLS group", false, signIn.error.message);
   else {
     const own = await user.from("individual_membership").select("user_id");
-    ok("G1. a signed-in person reads their own membership row, and only theirs", (own.data ?? []).length === 1 && own.data[0].user_id === both, JSON.stringify(own));
+    ok("G1. a signed-in person reads exactly one membership row: their own", (own.data ?? []).length === 1 && own.data[0].user_id === both, JSON.stringify(own));
+    const other = await user.from("individual_entitlement").select("id").eq("user_id", pro);
+    ok("G2. ⚠ cross-user isolation: another person's entitlements return nothing", (other.data ?? []).length === 0);
     const ownLive = await user.from("individual_live_entitlement").select("user_id");
-    ok("G2. the live view honours the same policy (security_invoker)", (ownLive.data ?? []).length === 2 && (ownLive.data ?? []).every((x: any) => x.user_id === both));
-    const selfGrant = await user.from("individual_entitlement").insert({ user_id: both, experience_code: "scholar", source: "pilot", operating_entity: "scholar_operator" });
-    ok("G3. ⚠ a person cannot grant themselves an experience from a browser session", !!selfGrant.error);
+    ok("G3. the live view honours the same policy (security_invoker)", (ownLive.data ?? []).length === 2 && (ownLive.data ?? []).every((x: any) => x.user_id === both));
+    const selfGrant = await user.from("individual_entitlement").insert({ user_id: both, experience_code: "professional", source: "pilot", operating_entity: "competen_holdings" });
+    const selfPrimary = await user.from("individual_membership").update({ status: "active", source: "signup" }).eq("user_id", both).select("id");
+    ok("G4. ⚠ a browser session can neither grant an experience nor rewrite its own membership",
+      !!selfGrant.error && (!!selfPrimary.error || (selfPrimary.data ?? []).length === 0));
     await user.auth.signOut();
   }
 
-  // ── H. suspended ──
-  ok("H1. a suspended membership is refused", JSON.stringify(await readIndividualAccess(admin, suspended)) === JSON.stringify({ state: "none", reason: "suspended" }));
-
   await cleanup();
   const left = await admin.from("individual_membership").select("id").in("user_id", ids);
-  ok("Z1. fixtures removed (cascade from profiles cleared every Individual row)", (left.data ?? []).length === 0);
+  ok("Z1. fixtures removed -- every Individual row cascaded with its profile", (left.data ?? []).length === 0);
 
   console.log(`\n${fails.length ? "RED" : "ALL GREEN"} -- ${pass} passed, ${fails.length} failed`);
   process.exit(fails.length ? 1 : 0);

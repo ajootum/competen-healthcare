@@ -300,6 +300,12 @@ const STAGING: Listed[] = [
   { file: "practice-patient-workspace-harness.ts", note: "the patient workspace. 133/133." },
   { file: "practice-patients-harness.ts", note: "patients. 31 assertions." },
   { file: "practice-pay-docs-harness.ts", note: "payment documents. 13/13." },
+  {
+    file: "practice-public-profile-harness.ts",
+    note: "CPR-BOOK-PROFILE-001 public booking profile against a real database. Screened 2026-10-22 (COMPETEN-IND-003): "
+      + "provisions its own practice, identity, handle and location, writes and purges them (_cleanup), and addresses no "
+      + "live practice -- so STAGING, never the read-only default run. Not yet run here: staging was unreachable.",
+  },
   { file: "practice-period-harness.ts", note: "periods. 86/86." },
   { file: "practice-personalisation-harness.ts", note: "personalisation. 48/48." },
   { file: "practice-pi-v2-harness.ts", note: "PI v2. 36/36." },
