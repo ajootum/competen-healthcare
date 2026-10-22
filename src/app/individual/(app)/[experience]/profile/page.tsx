@@ -4,6 +4,10 @@ import { buildHistory, loadEntitlementHistory } from "@/lib/individual/history";
 import { experiencePage } from "../../../_components/shell-context";
 import { PageHeader, Unreadable } from "../../../_components/chrome";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // PROFILE & HISTORY -- COMPETEN-IND-003 s2(4). The shared personal profile and development history.
 //
 // The profile is the one Competen identity record (profiles), shown read-only. Editing it here is not

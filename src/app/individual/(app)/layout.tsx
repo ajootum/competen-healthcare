@@ -3,6 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { individualShell } from "../_components/shell-context";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // ── THE COMPETEN INDIVIDUAL APPLICATION: GATE 3 ── COMPETEN-IND-003 s2, ADR-016 ───────────────────────
 //
 // Every signed-in Individual route sits in this group, and this layout answers gate 3 once for all of

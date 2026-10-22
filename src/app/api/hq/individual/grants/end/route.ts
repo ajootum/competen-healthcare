@@ -5,6 +5,10 @@ import { currentTraceId } from "@/lib/trace";
 import { isExperienceKey } from "@/lib/individual/experiences";
 import { endIndividualExperience } from "@/lib/individual/grants";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // POST /api/hq/individual/grants/end -- end one experience for a person during the pilot (D9).
 // Body: { targetUserId, experience }. Every live row for that experience is cancelled. The rows stay, so
 // the person's history keeps the period. The other experience is untouched (D4: entitlements are

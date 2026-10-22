@@ -232,6 +232,20 @@ function main() {
       return s.indexOf("requireIndividualContext(") < s.indexOf('"Unknown experience"') && !/export async function GET/.test(s);
     }));
 
+  // ── 11. REQUEST-TIME ONLY: nothing Individual is prerendered at build ──
+  // Found on Vercel Preview 2026-10-22: /individual/access was prerendered at build, built a service-role
+  // client there and died on "supabaseKey is required" (Preview has no key). Where a key DOES exist, the
+  // same prerender would freeze the release gate into static HTML -- a gate that is not server-enforced.
+  const routeFiles = FILES.filter(f => /\/(page|layout|route)\.tsx?$/.test(f));
+  const notDynamic = routeFiles.filter(f => !/export const dynamic = "force-dynamic";/.test(SRC.get(f) ?? ""));
+  ok("11a. every Individual page, layout and route handler is force-dynamic (public /individual and /individual/sign-in excepted)",
+    routeFiles.length >= 15 && notDynamic.length === 0, notDynamic.join(", "));
+  ok("11b. the guard and the access page wait for a request (connection()) before creating any client",
+    guardSrc.indexOf("await connection()") > -1 && guardSrc.indexOf("await connection()") < guardSrc.indexOf("createAdminClient()")
+    && /await connection\(\);[^\n]*\n\s*if \(!\(await individualAppEnabled\(createAdminClient\(\)\)\)\) notFound\(\)/.test(SRC.get("src/app/individual/access/page.tsx") ?? ""));
+  const moduleScopeClients = FILES.filter(f => /^(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:await\s+)?create(?:Admin)?Client(?:OrNull)?\(/m.test(SRC.get(f) ?? ""));
+  ok("11c. no Supabase client is created at module scope anywhere in Individual", moduleScopeClients.length === 0, moduleScopeClients.join(", "));
+
   ok("9g. D10: no Individual code persists AI conversation",
     !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));
 

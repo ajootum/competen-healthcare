@@ -5,6 +5,10 @@ import { individualShell } from "../../_components/shell-context";
 import { IndividualMark, ExperienceMark } from "../../_components/chrome";
 import PrimaryChoice from "../../_components/PrimaryChoice";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // /individual/welcome -- ONBOARDING (COMPETEN-IND-003 s2(7)). Shown once, before any experience, to a
 // member who has not finished it. It states what the account holds and asks the one question that has
 // an answer only the person can give: which experience opens first. Direct entry into Professional is

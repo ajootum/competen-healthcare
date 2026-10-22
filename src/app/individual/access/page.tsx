@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { connection } from "next/server";
 import { individualAppEnabled } from "@/lib/individual/gate";
 import type { Metadata } from "next";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { readIndividualAccess } from "@/lib/individual/access";
 import { StatePanel, IndividualMark, primaryBtn, secondaryBtn } from "../_components/chrome";
 import { SignOutButton } from "../_components/ShellNav";
+
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
 
 // /individual/access -- WHERE GATE 3 SENDS EVERY REFUSAL (COMPETEN-IND-003 s2(7)).
 //
@@ -23,6 +28,7 @@ export const metadata: Metadata = { title: "Competen Individual access", robots:
 
 export default async function IndividualAccessPage() {
   // The release gate first: with Individual switched off, this page does not exist either.
+  await connection(); // request time only -- see src/lib/individual/guard.ts
   if (!(await individualAppEnabled(createAdminClient()))) notFound();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

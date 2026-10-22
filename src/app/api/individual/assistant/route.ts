@@ -11,6 +11,10 @@ import { isExperienceKey } from "@/lib/individual/experiences";
 import { loadIndividualPassport } from "@/lib/individual/passport";
 import { cleanQuestion, recordContext, systemPrompt, QUESTION_MAX } from "@/lib/individual/assistant";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // POST /api/individual/assistant -- COMPETEN-IND-003 s2(6), the personal AI entry point.
 //
 // Gate 3 first (requireIndividualContext, never getCaller -- see src/lib/individual/guard.ts), and the

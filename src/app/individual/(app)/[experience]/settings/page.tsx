@@ -6,6 +6,10 @@ import { SignOutButton } from "../../../_components/ShellNav";
 import PrimaryChoice from "../../../_components/PrimaryChoice";
 import { DATA_ROLES, entityLegal, type EntityLegal } from "@/lib/individual/legal";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 const nameOf = (l: EntityLegal) => l.registeredName ?? l.label;
 
 // SETTINGS -- COMPETEN-IND-003 s2(3): the configurable primary experience, and what is active.

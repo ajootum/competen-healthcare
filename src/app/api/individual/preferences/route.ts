@@ -3,6 +3,10 @@ import { currentTraceId } from "@/lib/trace";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { validatePrimaryChoice } from "@/lib/individual/access";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // POST /api/individual/preferences -- COMPETEN-IND-003 s2(3) and s2(7). Sets the primary experience and,
 // from the welcome, records that onboarding is complete.
 //
