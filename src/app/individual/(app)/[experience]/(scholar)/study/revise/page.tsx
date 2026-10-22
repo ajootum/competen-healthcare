@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { SCHOLAR } from "@/lib/individual/experiences";
+import { experienceModulePage } from "../../../../../_components/shell-context";
 import { dueCards, countDue } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
 import { PageHeader, StatePanel, Unreadable } from "../../../../../_components/chrome";
-import { scholarPage } from "../_components/scholar-page";
 import StudyNav from "../_components/StudyNav";
 import { CardReview, sourceHref, type CardView } from "../_components/client";
 
@@ -13,9 +14,10 @@ import { CardReview, sourceHref, type CardView } from "../_components/client";
 export const metadata: Metadata = { title: "Revise" };
 
 export default async function Revise({ params }: { params: Promise<{ experience: string }> }) {
-  const page = await scholarPage((await params).experience);
+  const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
-  const { ctx, x } = page;
+  const { ctx } = page;
+  const x = SCHOLAR;
   const [cards, due] = await Promise.all([dueCards(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId)]);
 
   const views: CardView[] = cards.ok ? cards.data.map(c => {

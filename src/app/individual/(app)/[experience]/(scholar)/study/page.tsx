@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { SCHOLAR } from "@/lib/individual/experiences";
+import { experienceModulePage } from "../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
 import { countDue, listMaterials, readConsent } from "@/lib/individual/scholar/store";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
-import { scholarPage } from "./_components/scholar-page";
 import StudyNav from "./_components/StudyNav";
 import { ConsentPanel, EraseAll, ExplainPanel, UploadPanel } from "./_components/client";
 
@@ -26,9 +27,10 @@ const JOURNEY = [
 ];
 
 export default async function MyLearning({ params }: { params: Promise<{ experience: string }> }) {
-  const page = await scholarPage((await params).experience);
+  const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
-  const { ctx, x } = page;
+  const { ctx } = page;
+  const x = SCHOLAR;
   const [materials, consent, due] = await Promise.all([
     listMaterials(ctx.admin, ctx.userId), readConsent(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId),
   ]);

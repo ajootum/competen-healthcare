@@ -111,7 +111,7 @@ export default async function PractitionerPage({ params }: {
   });
 
   return (
-    <div className="min-h-screen bg-[var(--cp-canvas,#f8fafc)]">
+    <div className="min-h-screen bg-[var(--cp-canvas)]">
       <ProfileView
         p={p}
         // ⚠ SUSPENDED, SO THE NAME AND THE BUTTON NEVER WAIT FOR A DIARY SCAN (s16). The region is

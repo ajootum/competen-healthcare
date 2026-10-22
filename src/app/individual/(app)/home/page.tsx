@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { decideLanding } from "@/lib/individual/access";
 import { individualShell } from "../../_components/shell-context";
 import { StatePanel, IndividualMark, secondaryBtn } from "../../_components/chrome";
@@ -17,6 +17,7 @@ export const metadata = { title: "Home" };
 
 export default async function IndividualHome() {
   const shell = await individualShell();
+  if (shell.state === "DISABLED") notFound();
   if (shell.state !== "READY") redirect("/individual/access");
   const landing = decideLanding(shell.ctx.membership, shell.ctx.live);
   if (landing.kind === "welcome") redirect("/individual/welcome");

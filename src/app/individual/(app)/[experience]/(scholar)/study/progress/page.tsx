@@ -1,11 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { SCHOLAR } from "@/lib/individual/experiences";
+import { experienceModulePage } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
 import { progressRows } from "@/lib/individual/scholar/store";
 import { buildProgress } from "@/lib/individual/scholar/progress";
 import { SELF_DIRECTED_LABEL } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
-import { scholarPage } from "../_components/scholar-page";
 import StudyNav from "../_components/StudyNav";
 
 // IMPROVE -- COMPETEN-IND-004 s6. Per-material mastery, cards due and the weekly trend, built from the
@@ -21,9 +22,10 @@ export const metadata: Metadata = { title: "Progress" };
 const fmtWeek = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
 export default async function ProgressPage({ params }: { params: Promise<{ experience: string }> }) {
-  const page = await scholarPage((await params).experience);
+  const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
-  const { ctx, x } = page;
+  const { ctx } = page;
+  const x = SCHOLAR;
   const rows = await progressRows(ctx.admin, ctx.userId);
   const today = new Date().toISOString().slice(0, 10);
   const p = rows.ok ? buildProgress({ ...rows.data, today }) : null;

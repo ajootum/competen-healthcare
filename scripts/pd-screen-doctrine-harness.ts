@@ -41,7 +41,10 @@ function check(name: string, ok: boolean, detail?: string) {
 
 // ── what counts as an implementation identifier ─────────────────────────────
 // migration:line (278:123), file:line (runtime.ts:19), "migration 099", a src/ path.
-const ID = /\b\d{2,3}:\d{1,3}(?:-\d{1,3})?\b|\b[\w-]+\.tsx?:\d+|\bmigrations?\s+\d{2,3}\b|\bsrc\/(?:lib|app|components)\/[\w/.-]+/gi;
+// ⚠ A CLOCK TIME IS NOT A CITATION. `T23:59:59.000Z` holds "59:59", which the migration:line pattern
+// read as an identifier and counted as legacy debt. A citation never follows another colon; the
+// minutes:seconds of a time always do, so the lookbehind removes exactly that case (control C6).
+const ID = /(?<![\d:])\b\d{2,3}:\d{1,3}(?:-\d{1,3})?\b|\b[\w-]+\.tsx?:\d+|\bmigrations?\s+\d{2,3}\b|\bsrc\/(?:lib|app|components)\/[\w/.-]+/gi;
 
 // ⚠ LINE-PRESERVING COMMENT BLANKING, NOT STRIPPING. Deleting comment lines shifts every line number
 // after them, so a reported offender points at the wrong line — and a previous harness in this repo
@@ -299,6 +302,9 @@ check("C3. control — comment blanking preserves line numbers",
 check("C5. control — the legacy ratchet is measuring something",
   legacyOffenders.length > 0,
   "legacy scan found 0 — drop the ratchet and add these modules to DOCTRINE_MODULES");
+check("C6. control — a migration:line citation is still an identifier, a clock time is not",
+  "(076:20-21)".match(ID)?.length === 1 && "see 278:123".match(ID)?.length === 1
+  && "`${d}T23:59:59.000Z`".match(ID) === null);
 check("C4. control — the doctrine this enforces is on disk",
   existsSync("docs/CPR-PD-SCREEN-DOCTRINE.md")
   && /placement, not deletion/i.test(readFileSync("docs/CPR-PD-SCREEN-DOCTRINE.md", "utf8")));

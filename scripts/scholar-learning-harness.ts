@@ -65,7 +65,7 @@ const STORE = `${LIB}/store.ts`;
 const GEN = `${LIB}/generation.ts`;
 const HTTP = `${LIB}/http.ts`;
 const CLIENT = `${PAGES}/_components/client.tsx`;
-const SCHOLAR_PAGE = `${PAGES}/_components/scholar-page.ts`;
+const SCHOLAR_PAGE = `${PAGES}/_components/question-view.ts`;
 const ROUTES = FILES.filter(f => f.startsWith(API) && f.endsWith("route.ts"));
 const PAGE_FILES = FILES.filter(f => f.startsWith(PAGES) && f.endsWith("page.tsx"));
 
@@ -155,7 +155,8 @@ const provenanceStored = (src: Src) => {
 /** E: labels, and no answer key in the browser before answering. */
 const answerKeyLeaks = (src: Src) => {
   const s = src.get(SCHOLAR_PAGE) ?? "";
-  const body = s.slice(s.indexOf("export function questionView"), s.indexOf("export async function scholarPage"));
+  const at = s.indexOf("export function questionView");
+  const body = at < 0 ? "" : s.slice(at);
   return body.length < 50 || /correctIndex|rationale|sourceQuote/.test(body);
 };
 
@@ -203,9 +204,11 @@ function main() {
     /SCHOLAR_AI_AUDIT_ACTION = "ai_assistant_query"/.test(REAL.get(HTTP) ?? "") && /"ai_assistant_query"/.test(quota)
     && [`${API}/explain/route.ts`, `${API}/questions/route.ts`].every(f => /audit\(ctx, SCHOLAR_AI_AUDIT_ACTION/.test(REAL.get(f) ?? "")));
   ok("C6. every Scholar route handler is behind requireIndividualContext(\"scholar\")", unguardedHandlers(REAL).length === 0, unguardedHandlers(REAL).join(", "));
-  ok("C7. every My Learning page goes through scholarPage (gate 3, live, terms, and Scholar only)",
-    PAGE_FILES.every(f => /await scholarPage\(/.test(REAL.get(f) ?? "")) && /experiencePage\(param\)/.test(REAL.get(SCHOLAR_PAGE) ?? "")
-    && /modules\.some\(m => m\.segment === "study"\)\) notFound\(\)/.test(REAL.get(SCHOLAR_PAGE) ?? "")
+  // The release gate, gate 3, live, D2 terms and the registry check all live in the foundation's
+  // experienceModulePage. The foundation harness (7d, 7e) pins what that helper does.
+  ok("C7. every My Learning page takes its context from experienceModulePage(..., \"study\"), and only Scholar lists study",
+    PAGE_FILES.every(f => /await experienceModulePage\([^,]+, "study"\)/.test(REAL.get(f) ?? ""))
+    && !PAGE_FILES.some(f => /requireIndividualContext|resolveIndividualShell|createAdminClient/.test(REAL.get(f) ?? ""))
     && EXPERIENCES.scholar.modules.some(m => m.segment === "study") && !EXPERIENCES.professional.modules.some(m => m.segment === "study"));
 
   // ── D. GROUNDING AND PROVENANCE ─────────────────────────────────────────────────────────────────

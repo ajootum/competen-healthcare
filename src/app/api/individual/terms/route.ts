@@ -19,10 +19,12 @@ import { publishedVersions } from "@/lib/individual/legal";
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const experience = body?.experience;
-  if (!isExperienceKey(experience)) return NextResponse.json({ error: "Unknown experience" }, { status: 400 });
+  const known = isExperienceKey(experience);
 
-  const ctx = await requireIndividualContext(experience, { requireTerms: false });
+  // Guard first (release gate, then gate 3), validation after -- see /api/individual/assistant.
+  const ctx = await requireIndividualContext(known ? experience : undefined, { requireTerms: false });
   if (isGuardRefusal(ctx)) return ctx;
+  if (!known) return NextResponse.json({ error: "Unknown experience" }, { status: 400 });
 
   const gate = contextTermsGate(ctx, experience);
   const fCurrent = publishedVersions(gate.foundation.legal);

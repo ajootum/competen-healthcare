@@ -37,25 +37,6 @@ export default async function ExperienceHome({ params }: { params: Promise<{ exp
     <>
       <PageHeader accent={x.accent} eyebrow={x.tagline} title={firstName ? `Hello, ${firstName}` : x.name} intro={x.homeIntro} />
 
-      {x.modules.length > 0 && (
-        <section aria-labelledby="modules-h" className="mb-8">
-          <h2 id="modules-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">In {x.name}</h2>
-          <ol className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {x.modules.map((m, i) => (
-              <li key={m.module}>
-                <Link href={experienceHref(experience, m.segment)} className={`flex h-full gap-3 rounded-2xl border border-gray-200 bg-white p-4 hover:border-gray-300 hover:shadow-sm ${focusRing}`}>
-                  <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold" style={{ background: x.accentSoft, color: x.accent }}>{i + 1}</span>
-                  <span className="min-w-0">
-                    <span className="block text-[14.5px] font-bold text-gray-900">{m.label}</span>
-                    <span className="mt-0.5 block text-[13px] leading-relaxed text-gray-600">{m.summary}</span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-
       <section aria-labelledby="foundation-h">
         <h2 id="foundation-h" className="sr-only">Your foundation</h2>
         <ul className="grid gap-4 sm:grid-cols-3">

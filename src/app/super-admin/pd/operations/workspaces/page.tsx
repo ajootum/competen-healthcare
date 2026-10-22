@@ -53,6 +53,8 @@ export default async function Page() {
    */
   const onboardingByWorkspace = new Map(provHealth.onboarding.map(o => [o.practiceId, o]));
   const failedWorkspaces = new Set(ops.failures.map(f => f.workspaceId).filter(Boolean) as string[]);
+  // A server component runs once per request, so "now" is the request's own moment.
+  // eslint-disable-next-line react-hooks/purity -- request-scoped clock read in a server component
   const nowMs = Date.now();
   const healthOf = new Map(ops.workspaces.map(w => {
     const o = onboardingByWorkspace.get(w.id) ?? null;

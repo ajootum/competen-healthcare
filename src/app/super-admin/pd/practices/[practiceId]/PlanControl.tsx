@@ -59,18 +59,26 @@ export default function PlanControl({ workspaceId, practiceName, reading, mayMan
   // ⚠ EXTENSION RUNS FROM NOW WHEN ACCESS HAS LAPSED, AND FROM THE CURRENT END WHEN IT HAS NOT.
   // Adding 30 days to an end date that passed last week would produce a period that is already over --
   // the server refuses it, and a Director should not have to discover that from a refusal.
+  //
+  // "Now" is read when the Director picks the period, not during render (react-hooks/purity), so the
+  // figures below are the ones for the moment of choosing. The server re-checks against its own clock.
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const currentEndMs = current?.endsAt ? Date.parse(current.endsAt) : null;
-  const anchorMs = currentEndMs !== null && currentEndMs > Date.now() ? currentEndMs : Date.now();
+  const anchorMs = currentEndMs !== null && currentEndMs > nowMs ? currentEndMs : nowMs;
   const proposedEnd = days !== null
     ? new Date(anchorMs + days * 86_400_000).toISOString()
     : customEnd ? `${customEnd}T23:59:59.000Z` : null;
 
-  const proposedValid = proposedEnd !== null && Date.parse(proposedEnd) > Date.now();
+  const proposedValid = proposedEnd !== null && Date.parse(proposedEnd) > nowMs;
   const proposedDays = proposedEnd
-    ? Math.ceil((Date.parse(proposedEnd) - Date.now()) / 86_400_000)
+    ? Math.ceil((Date.parse(proposedEnd) - nowMs) / 86_400_000)
     : null;
 
-  async function send(body: Record<string, unknown>, describe: (data: any) => string) {
+  // The PATCH answer as far as the confirmation reads it: a grant always carries the end it was sent.
+  async function send(
+    body: Record<string, unknown>,
+    describe: (data: { grantsAccessNow?: boolean; after: { endsAt: string } }) => string,
+  ) {
     setBusy(true); setResult(null);
     const res = await fetch("/api/v1/practice/entitlement", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
@@ -176,14 +184,14 @@ export default function PlanControl({ workspaceId, practiceName, reading, mayMan
           <div className="mt-2 flex flex-wrap gap-1.5">
             {PRESETS.map(d => (
               <button key={d} type="button"
-                onClick={() => { setDays(days === d ? null : d); setCustomEnd(""); }}
+                onClick={() => { setNowMs(Date.now()); setDays(days === d ? null : d); setCustomEnd(""); }}
                 className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold ${
                   days === d ? "bg-violet-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>
                 +{d} days
               </button>
             ))}
             <input type="date" value={customEnd}
-              onChange={e => { setCustomEnd(e.target.value); setDays(null); }}
+              onChange={e => { setNowMs(Date.now()); setCustomEnd(e.target.value); setDays(null); }}
               className="rounded-lg border border-gray-300 px-2 py-1.5 text-[12px]" />
           </div>
 

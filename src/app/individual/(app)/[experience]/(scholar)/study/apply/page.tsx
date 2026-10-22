@@ -1,9 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { SCHOLAR } from "@/lib/individual/experiences";
+import { experienceModulePage } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
 import { countDue, listQuestions } from "@/lib/individual/scholar/store";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
-import { questionView, scholarPage } from "../_components/scholar-page";
+import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
 import { QuestionCard } from "../_components/client";
 
@@ -18,9 +20,10 @@ import { QuestionCard } from "../_components/client";
 export const metadata: Metadata = { title: "Apply" };
 
 export default async function Apply({ params }: { params: Promise<{ experience: string }> }) {
-  const page = await scholarPage((await params).experience);
+  const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
-  const { ctx, x } = page;
+  const { ctx } = page;
+  const x = SCHOLAR;
   const [questions, due] = await Promise.all([listQuestions(ctx.admin, ctx.userId, { kind: "case" }), countDue(ctx.admin, ctx.userId)]);
 
   return (

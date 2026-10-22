@@ -8,6 +8,8 @@
  * against "has this practice ever paid", which asked the wrong question -- see the courtesy-extension
  * case below, which passed under the old rule while warning about something untrue.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { describe, it, expect } from "vitest";
 import { judgeOverride, type CommercialAuthority } from "./commercial-precedence";
 

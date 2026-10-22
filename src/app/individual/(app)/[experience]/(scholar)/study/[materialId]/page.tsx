@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { SCHOLAR } from "@/lib/individual/experiences";
+import { experienceModulePage } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
 import { countDue, getMaterial, listChunks, listQuestions, readConsent } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
 import { PageHeader, StatePanel, Unreadable, focusRing, secondaryBtn } from "../../../../../_components/chrome";
-import { questionView, scholarPage } from "../_components/scholar-page";
+import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
 import { ChunkActions, DeleteMaterial, ExplainPanel, QuestionCard } from "../_components/client";
 
@@ -20,9 +22,10 @@ export const metadata: Metadata = { title: "Material" };
 
 export default async function MaterialPage({ params }: { params: Promise<{ experience: string; materialId: string }> }) {
   const { experience, materialId } = await params;
-  const page = await scholarPage(experience);
+  const page = await experienceModulePage(experience, "study");
   if (!page) return null;
-  const { ctx, x } = page;
+  const { ctx } = page;
+  const x = SCHOLAR;
 
   const material = await getMaterial(ctx.admin, ctx.userId, materialId);
   if (!material.ok) {

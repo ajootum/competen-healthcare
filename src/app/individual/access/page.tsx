@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { individualAppEnabled } from "@/lib/individual/gate";
 import type { Metadata } from "next";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { readIndividualAccess } from "@/lib/individual/access";
@@ -21,6 +22,8 @@ import { SignOutButton } from "../_components/ShellNav";
 export const metadata: Metadata = { title: "Competen Individual access", robots: { index: false, follow: false } };
 
 export default async function IndividualAccessPage() {
+  // The release gate first: with Individual switched off, this page does not exist either.
+  if (!(await individualAppEnabled(createAdminClient()))) notFound();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

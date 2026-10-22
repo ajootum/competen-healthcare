@@ -23,7 +23,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { ACCESS_DOORS } from "../src/lib/access-doors";
-import { EXPERIENCE_KEYS, EXPERIENCES, FOUNDATION_NAV, navFor } from "../src/lib/individual/experiences";
+import { EXPERIENCES, EXPERIENCE_KEYS, FOUNDATION_NAV, navFor } from "../src/lib/individual/experiences";
 
 let pass = 0; const failures: string[] = [];
 const ok = (name: string, cond: boolean, detail = "") => {
@@ -94,28 +94,23 @@ function main() {
     "src/app/api/individual/terms/route.ts": ["individual_membership.update", "individual_entitlement.update"],
     "src/lib/individual/grants.ts": ["individual_membership.insert", "individual_entitlement.insert", "individual_entitlement.update"],
   };
-  // ⚠ AN EXPERIENCE WRITES ONLY ITS OWN TABLES (COMPETEN-IND-007). A file of an experience package may write
-  // tables named individual_<experience>_* and nothing else, plus the one named estate exception below.
-  // Which file writes which of those tables is pinned by that experience's own harness
-  // (scripts/individual-professional-harness.ts), so this rule cannot be satisfied by a stray writer.
-  const EXPERIENCE_WRITES: { dir: RegExp; table: RegExp }[] = [
-    { dir: /^src\/(lib\/individual|app\/api\/individual)\/professional\//, table: /^individual_professional_[a-z_]+\.(insert|update|delete)$/ },
-    // COMPETEN-IND-004. Pinned to src/lib/individual/scholar/store.ts by scripts/scholar-learning-harness.ts A4.
-    { dir: /^src\/(lib\/individual|app\/api\/individual)\/scholar\//, table: /^individual_scholar_[a-z_]+\.(insert|update|upsert|delete)$/ },
-  ];
-  // Sharing reuses passport_share_tokens (migration 122) -- the brief's instruction, not a new estate writer.
-  const ESTATE_EXCEPTIONS: Record<string, string[]> = {
-    "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "passport_share_tokens.update"],
-  };
-  const experienceAllows = (f: string, op: string) =>
-    EXPERIENCE_WRITES.some(r => r.dir.test(f) && r.table.test(op)) || (ESTATE_EXCEPTIONS[f] ?? []).includes(op);
   const writes: string[] = [];
   for (const [f, src] of SRC) {
     for (const m of src.matchAll(/from\("([a-z_]+)"\)\s*\.(insert|update|upsert|delete)\(/g)) writes.push(`${f}: ${m[1]}.${m[2]}`);
   }
+  // EXPERIENCE RULE (IND-004 / IND-007): a file under src/lib/individual/<x>/ or src/app/api/individual/<x>/
+  // may write only that experience's own tables, individual_<x>_*. One named estate exception: Professional's
+  // share route reuses passport_share_tokens (COMPETEN-IND-002 s4.1), whose only other readers are the owner's
+  // own share page and /verify -- no hospital-scoped reader. Each experience's own harness pins its exact list.
+  const NAMED_EXCEPTIONS: Record<string, string[]> = {
+    "src/app/api/individual/professional/share/route.ts": ["passport_share_tokens.insert", "passport_share_tokens.update"],
+  };
+  const experienceOf = (f: string) => /^src\/(?:lib|app\/api)\/individual\/(scholar|professional)\//.exec(f)?.[1] ?? null;
   const badWrites = writes.filter(w => {
     const [f, op] = w.split(": ");
-    return op !== "audit_log.insert" && !(ALLOWED[f] ?? []).includes(op) && !experienceAllows(f, op);
+    if (op === "audit_log.insert" || (ALLOWED[f] ?? []).includes(op) || (NAMED_EXCEPTIONS[f] ?? []).includes(op)) return false;
+    const x = experienceOf(f);
+    return !(x && op.startsWith(`individual_${x}_`));
   });
   ok("2a. every gate-3 write sits in its one allowed file; nothing else but audit_log is written", badWrites.length === 0, badWrites.join("; "));
   const expected = Object.entries(ALLOWED).flatMap(([f, ops]) => ops.map(op => `${f}: ${op}`));
@@ -163,17 +158,25 @@ function main() {
     !FILES.some(f => f.startsWith("src/app/api/individual/") && /from\("individual_(membership|entitlement)"\)\s*\.(insert|upsert)\(/.test(SRC.get(f) ?? "")));
 
   // ── 7. NAVIGATION LISTS ONLY WHAT EXISTS ────────────────────────────────────────────────────────
-  // Foundation modules live at [experience]/<segment>. An experience's own modules live in its route group,
-  // [experience]/(<experience>)/<segment> (COMPETEN-IND-007).
+  const EXP_DIR = "src/app/individual/(app)/[experience]";
+  const missing = EXPERIENCE_KEYS.flatMap(k => navFor(k).filter(n => {
+    if (!n.segment) return !existsSync(`${EXP_DIR}/page.tsx`);
+    return !existsSync(`${EXP_DIR}/${n.segment}/page.tsx`) && !existsSync(`${EXP_DIR}/(${k})/${n.segment}/page.tsx`);
+  }).map(n => `${k}/${n.segment}`));
+  ok("7a. every navigation entry, for both experiences, has a real page behind it", missing.length === 0, missing.join(", "));
   const foundationSegments = new Set(FOUNDATION_NAV.map(n => n.segment));
-  const pageOf = (k: string, segment: string) => !segment ? "src/app/individual/(app)/[experience]/page.tsx"
-    : foundationSegments.has(segment) ? `src/app/individual/(app)/[experience]/${segment}/page.tsx`
-      : `src/app/individual/(app)/[experience]/(${k})/${segment}/page.tsx`;
-  const missing = EXPERIENCE_KEYS.flatMap(k => navFor(k).filter(n => !existsSync(pageOf(k, n.segment))).map(n => `${k}/${n.segment || "home"}`));
-  ok("7a. every navigation entry, in every experience, has a real page behind it", missing.length === 0, missing.join(", "));
-  const own = EXPERIENCE_KEYS.flatMap(k => EXPERIENCES[k].modules.map(m => m.segment));
-  ok("7c. no experience module reuses a foundation segment or another experience's segment, so no page file is shared",
-    own.every(seg => !foundationSegments.has(seg)) && new Set(own).size === own.length, own.join(", "));
+  const badModules = EXPERIENCE_KEYS.flatMap(k => {
+    const segs = EXPERIENCES[k].modules.map(m => m.segment);
+    return segs.filter((s, i) => !s || foundationSegments.has(s) || segs.indexOf(s) !== i).map(s => `${k}/${s || "(empty)"}`);
+  });
+  ok("7c. experience modules never reuse a foundation segment, an empty segment or each other", badModules.length === 0, badModules.join(", "));
+  const pages = FILES.filter(f => f.startsWith(`${EXP_DIR}/`) && f.endsWith("/page.tsx"));
+  const ungatedPages = pages.filter(f => !/experiencePage\(|experienceModulePage\(/.test(SRC.get(f) ?? ""));
+  ok("7d. every page under [experience] takes its context from experiencePage / experienceModulePage (gate, live, terms)",
+    pages.length >= 5 && ungatedPages.length === 0, ungatedPages.join(", "));
+  const modulePages = pages.filter(f => /\/\((scholar|professional)\)\//.test(f));
+  ok("7e. every experience-owned module page uses experienceModulePage, so another experience's URL is 404",
+    modulePages.every(f => /experienceModulePage\(/.test(SRC.get(f) ?? "")), modulePages.filter(f => !/experienceModulePage\(/.test(SRC.get(f) ?? "")).join(", "));
   ok("7b. the experience route accepts exactly the registry's experiences",
     /isExperienceKey\(experience\)/.test(SRC.get("src/app/individual/(app)/[experience]/layout.tsx") ?? "") && EXPERIENCE_KEYS.length === 2);
 
@@ -207,6 +210,28 @@ function main() {
     legalSrc.length > 0 && !/registeredName:\s*"/.test(legalSrc) && !/version:\s*"/.test(legalSrc));
   ok("9f. D2: terms acceptance is all-or-nothing in the schema, on both tables",
     /individual_entitlement_terms_whole/.test(mig) && /individual_membership_foundation_terms_whole/.test(mig));
+  // ── 10. THE RELEASE GATE: every entry point asks it first, on the server ──
+  const guardSrc = SRC.get("src/lib/individual/guard.ts") ?? "";
+  ok("10a. the shell guard checks the release gate BEFORE authentication and before any Individual table",
+    /individualAppEnabled\(admin\)\)\) return \{ state: "DISABLED" \}/.test(guardSrc)
+    && guardSrc.indexOf("individualAppEnabled(admin)") < guardSrc.indexOf("auth.getUser()")
+    && guardSrc.indexOf("individualAppEnabled(admin)") < guardSrc.indexOf("readIndividualAccess("));
+  ok("10b. a DISABLED shell is 404 in the API guard, the group layout, the experience layout, every page helper, home and welcome",
+    /shell\.state === "DISABLED"\) return NextResponse\.json\(\{ error: "Not found" \}, \{ status: 404 \}\)/.test(guardSrc)
+    && ["src/app/individual/(app)/layout.tsx", "src/app/individual/(app)/[experience]/layout.tsx", "src/app/individual/_components/shell-context.ts",
+      "src/app/individual/(app)/home/page.tsx", "src/app/individual/(app)/welcome/page.tsx"]
+      .every(f => /shell\.state === "DISABLED"\) notFound\(\)/.test(SRC.get(f) ?? "")));
+  ok("10c. the access page and both HQ grant routes check the gate themselves",
+    /individualAppEnabled\(createAdminClient\(\)\)\)\) notFound\(\)/.test(SRC.get("src/app/individual/access/page.tsx") ?? "")
+    && hqRoutes.every(f => /individualAppEnabled\(ctx\.admin\)\)\) return NextResponse\.json/.test(SRC.get(f) ?? "")));
+  ok("10d. the neutral resolver reads individual_membership ONLY when the gate is on",
+    /individualAppEnabled\(admin\),/.test(pr) && /individualOn\s*\?\s*await admin\.from\("individual_membership"\)/.test(pr));
+  ok("10e. both person-facing APIs run the guard before validating input, and no GET handler exists",
+    ["src/app/api/individual/assistant/route.ts", "src/app/api/individual/terms/route.ts"].every(f => {
+      const s = SRC.get(f) ?? "";
+      return s.indexOf("requireIndividualContext(") < s.indexOf('"Unknown experience"') && !/export async function GET/.test(s);
+    }));
+
   ok("9g. D10: no Individual code persists AI conversation",
     !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));
 
