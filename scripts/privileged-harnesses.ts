@@ -184,6 +184,13 @@ const STAGING: Listed[] = [
   { file: "hww-instruments-harness.ts", note: "HWW instruments. Reports `ALL PASS`." },
   { file: "hww-medications-harness.ts", note: "HWW medications. Reports `ALL PASS`." },
   { file: "hww-navigation-harness.ts", note: "HWW navigation. Reports `ALL PASS`." },
+  {
+    file: "individual-acceptance-harness.ts",
+    note: "COMPETEN-IND-003 s5 acceptance for Competen Individual (ADR-016): both experiences, one experience, "
+      + "direct Professional, DB-clock liveness, graduation, primary fallback, no cross-product state, own-row RLS. "
+      + "Creates and deletes its own harness-ind003-* identities. Refuses production via assertSafeTarget, and "
+      + "reports PEND (exit 0, nothing created) until migration 370 is applied.",
+  },
   { file: "mos-phase1-harness.ts", note: "CPR-CORE-MOS-001 phase 1. 20/20." },
   { file: "mos-phase2-harness.ts", note: "MOS phase 2. 25/25." },
   { file: "mos-phase3-harness.ts", note: "MOS phase 3. 73/73." },
