@@ -8,6 +8,10 @@ import { ALLOWED_MIME, MAX_UPLOAD_BYTES, type MaterialMime } from "@/lib/individ
 import { EXTRACTION_MESSAGE, PII_LABEL, chunkPages, extractMaterial, findPatientIdentifiers, sniffMime, titleFromFileName } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // POST /api/individual/scholar/materials -- COMPETEN-IND-004 s1, step two of an upload: process it.
 //
 // Body { uploadId, mime, fileName, piiAttested: true }. The object path is REBUILT here from the caller's

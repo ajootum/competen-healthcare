@@ -3,6 +3,10 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { getQuestion, recordAttempt } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // POST /api/individual/scholar/attempts -- COMPETEN-IND-004 s3 (feedback) and s4 (missed → review card).
 //
 // Body { questionId, chosenIndex }. Records the answer and returns the feedback: right or wrong, the

@@ -7,6 +7,10 @@ import { PageHeader, StatePanel, Unreadable } from "../../../../../_components/c
 import StudyNav from "../_components/StudyNav";
 import { CardReview, sourceHref, type CardView } from "../_components/client";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // REVISE -- COMPETEN-IND-004 s4. The person's due review cards: every question they missed becomes one,
 // scheduled by SM-2 (src/lib/delivery/reinforcement.ts). They read the question, reveal the answer with
 // its source in their notes, and grade their own recall. The grade reschedules the card.

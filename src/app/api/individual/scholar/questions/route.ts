@@ -7,6 +7,10 @@ import { getPassage, insertQuestions } from "@/lib/individual/scholar/store";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit } from "@/lib/individual/scholar/http";
 import { runQuestions, type QuestionKind } from "@/lib/individual/scholar/generation";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // POST /api/individual/scholar/questions -- COMPETEN-IND-004 s3 (Assess) and s5 (Apply).
 //
 // Body { chunkId, kind: "mcq" | "case" }. Generates questions from ONE passage of the person's own

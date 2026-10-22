@@ -3,6 +3,10 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { eraseAllMaterial } from "@/lib/individual/scholar/store";
 import { audit } from "@/lib/individual/scholar/http";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // POST /api/individual/scholar/erase -- COMPETEN-IND-002 s3.3: "Personal material is private to its owner
 // and erasable by them." Erases every Scholar material the caller owns, and everything derived from it.
 // Body { confirm: "ERASE" }, so an accidental request does nothing.

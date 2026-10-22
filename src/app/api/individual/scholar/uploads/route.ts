@@ -3,6 +3,10 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { countMaterials, createUploadSlot } from "@/lib/individual/scholar/store";
 import { ALLOWED_MIME, BUCKET, MAX_MATERIALS_PER_PERSON, MAX_UPLOAD_BYTES, type MaterialMime } from "@/lib/individual/scholar/config";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // POST /api/individual/scholar/uploads -- COMPETEN-IND-004 s1, step one of an upload.
 //
 // Issues a one-time signed upload URL for ONE object path the server chooses, under the person's own

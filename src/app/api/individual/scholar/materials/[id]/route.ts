@@ -3,6 +3,10 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { deleteMaterial, signedOriginalUrl } from "@/lib/individual/scholar/store";
 import { audit } from "@/lib/individual/scholar/http";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // /api/individual/scholar/materials/[id] -- COMPETEN-IND-004, the owner's own original and its erasure.
 //
 // GET redirects to a five-minute signed URL for the original file. DELETE erases the material: the

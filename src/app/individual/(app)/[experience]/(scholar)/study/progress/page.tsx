@@ -9,6 +9,10 @@ import { SELF_DIRECTED_LABEL } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // IMPROVE -- COMPETEN-IND-004 s6. Per-material mastery, cards due and the weekly trend, built from the
 // person's own rows (src/lib/individual/scholar/progress.ts).
 //

@@ -11,6 +11,10 @@ import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
 import { ChunkActions, DeleteMaterial, ExplainPanel, QuestionCard } from "../_components/client";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // ONE MATERIAL -- COMPETEN-IND-004 s2 (Understand) and s3 (Assess).
 //
 // The extracted text, section by section, each with its citation (page for a PDF, section number for a

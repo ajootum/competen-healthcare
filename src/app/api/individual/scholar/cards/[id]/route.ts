@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { reviewCard } from "@/lib/individual/scholar/store";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // POST /api/individual/scholar/cards/[id] -- COMPETEN-IND-004 s4 (Revise). Body { quality: 0..5 }, the
 // person's own grade of how well they recalled the answer. SM-2 (src/lib/delivery/reinforcement.ts)
 // reschedules the card. Keyed on the caller's own id: another person's card answers 404.
