@@ -22,11 +22,24 @@
 
 export type ExperienceKey = "scholar" | "professional";
 
-export type ExperienceSection = {
+/**
+ * One step of an experience's product demonstration (WEB-IND-001 refinement, items 5-6). The step labels
+ * ARE the hero flow ("Upload → Understand → ..."), so the two can never disagree.
+ */
+export type ExperienceStep = {
+  /** In-page anchor. */
   id: string;
+  /** The one-word flow label. */
+  label: string;
   title: string;
   body: string;
   points: string[];
+  /**
+   * ⚠ A DRAWN ILLUSTRATION, NOT A SCREENSHOT AND NOT DATA. The same rule as the homepage hero cards: a
+   * picture of what the step looks like, labelled as illustrative on the page. No figures that could read
+   * as measurements -- tags are words ("Revisit"), never invented percentages.
+   */
+  mock: { heading: string; lines: { text: string; tag?: string }[] };
 };
 
 export type Experience = {
@@ -48,14 +61,23 @@ export type Experience = {
   eyebrow: string;
   headline: string[];
   body: string;
-  signature: { title: string; flow: string[] };
+  /** The hero panel's one-line idea. Its flow is the step labels. */
+  signatureTitle: string;
   image: string;
   imageAlt: string;
-  sectionsTitle: string;
-  sectionsBody: string;
-  sections: ExperienceSection[];
-  /** What this experience adds to the lifelong record. Rendered in the Passport band. */
-  passportLine: string;
+  /**
+   * CSS object-position for the hero portrait. Both source images are portrait (about 1:2) with the face
+   * in the upper third, so the crop is aimed at the face rather than left to the centre default.
+   */
+  imagePosition: string;
+  stepsTitle: string;
+  stepsBody: string;
+  steps: ExperienceStep[];
+  /**
+   * The concise lifecycle reference for this page (refinement item 4). The full journey lives on
+   * /individual only; experience pages say one contextual thing and link to it.
+   */
+  journeyNote: { title: string; body: string };
   closing: { title: string; body: string };
   /**
    * ⚠ WHERE THIS EXPERIENCE'S CONVERSATIONS GO -- configurable per experience (owner decision at the
@@ -94,34 +116,63 @@ export const SCHOLAR: Experience = {
   body:
     "Turn your notes into explanations, questions, clinical cases and audio learning. " +
     "Designed for healthcare students and the journey ahead of them.",
-  signature: { title: "Your notes become active learning.", flow: ["Upload", "Understand", "Practise", "Apply"] },
+  signatureTitle: "Your notes become active learning.",
   image: "/images/home/path-students.webp",
-  imageAlt: "A student nurse with a tablet",
-  sectionsTitle: "Built around how you learn",
-  sectionsBody: "One connected academic learning experience, from first lecture to final examination.",
-  sections: [
+  imageAlt: "A smiling student nurse in scrubs with a stethoscope",
+  imagePosition: "72% 16%",
+  stepsTitle: "How Competen Scholar works",
+  stepsBody: "Five steps from the notes you already have to clinical confidence you can see.",
+  steps: [
     {
-      id: "my-learning", title: "My Learning",
-      body: "Upload your notes and explore explanations grounded in your own sources.",
-      points: ["Explanations tied to your material", "Ask follow-up questions as you read"],
+      id: "upload", label: "Upload", title: "Bring your own notes",
+      body: "Add lecture notes, slides and reading. Competen Scholar works from your material, organised by module.",
+      points: ["PDF and Word notes", "Organised by module and topic"],
+      mock: { heading: "My Learning · Cardiovascular", lines: [
+        { text: "Heart failure — lecture 4.pdf", tag: "Added" },
+        { text: "Cardiac drugs summary.docx", tag: "Added" },
+      ] },
     },
     {
-      id: "revision", title: "Revision & Exams",
-      body: "Questions, adaptive revision and examination preparation.",
-      points: ["Practice questions from your notes", "Revision that adapts to what you miss"],
+      id: "understand", label: "Understand", title: "Explanations grounded in your sources",
+      body: "Ask about anything you have uploaded and get an explanation that cites the page it came from. Listen to it as audio on the move.",
+      points: ["Answers cite your notes", "Audio explanations"],
+      mock: { heading: "Explain", lines: [
+        { text: "Why does left-sided heart failure cause breathlessness?" },
+        { text: "Pressure backs up into the lungs' circulation, so fluid collects there.", tag: "Your notes · p. 7" },
+      ] },
     },
     {
-      id: "clinical-reasoning", title: "Clinical Reasoning",
-      body: "Work through interactive patient scenarios and explain your thinking.",
+      id: "revise", label: "Revise", title: "Questions and revision from your material",
+      body: "Practise with questions generated from your notes. Anything you miss comes back for review until it sticks.",
+      points: ["Practice questions from your notes", "Spaced review of what you miss"],
+      mock: { heading: "Revision · cards due today", lines: [
+        { text: "A normal adult resting heart rate is…" },
+        { text: "60–100 beats per minute", tag: "Correct" },
+      ] },
+    },
+    {
+      id: "apply", label: "Apply", title: "Think through clinical cases",
+      body: "Work through patient scenarios and explain your reasoning, preparing for practice and practical examinations.",
       points: ["Case-based scenarios", "Reasoning, not just recall"],
+      mock: { heading: "Case", lines: [
+        { text: "A 68-year-old is breathless when lying flat." },
+        { text: "What would you assess first, and why?", tag: "Your answer" },
+      ] },
     },
     {
-      id: "audio-progress", title: "Audio & Progress",
-      body: "Listen on the move, reflect on what you learned and track your development.",
-      points: ["Audio learning from your notes", "Progress you can see over time"],
+      id: "progress", label: "Progress", title: "See your progress build",
+      body: "Track what you have mastered and what to revisit, topic by topic, across your whole course.",
+      points: ["Topic-by-topic progress", "A record that stays with you"],
+      mock: { heading: "Progress", lines: [
+        { text: "Cardiovascular", tag: "Strong" },
+        { text: "Respiratory", tag: "Revisit" },
+      ] },
     },
   ],
-  passportLine: "Your Scholar achievements become part of your lifelong Competen Passport.",
+  journeyNote: {
+    title: "Part of your Competen journey",
+    body: "What you learn in Scholar stays in your Competen Passport. Graduation is a natural moment to add Competen Professional to the same account, and you can keep Scholar for further study.",
+  },
   closing: {
     title: "Start your learning journey.",
     body: "Talk to us about Competen Scholar for you, your cohort or your school.",
@@ -146,34 +197,63 @@ export const PROFESSIONAL: Experience = {
   body:
     "Build your competencies, maintain your credentials, plan your development and discover " +
     "opportunities throughout your professional life.",
-  signature: { title: "A professional home that grows with you.", flow: ["Competence", "Evidence", "Growth", "Opportunity"] },
+  signatureTitle: "A professional home that grows with you.",
   image: "/images/home/path-professionals.webp",
-  imageAlt: "A doctor outside a hospital",
-  sectionsTitle: "Everything supporting your professional growth",
-  sectionsBody: "One connected professional development experience, for every stage of your career.",
-  sections: [
+  imageAlt: "A smiling doctor in a white coat with a stethoscope",
+  imagePosition: "50% 12%",
+  stepsTitle: "How Competen Professional works",
+  stepsBody: "One connected record, from the plan you set to the role you want next.",
+  steps: [
     {
-      id: "development", title: "Development & CPD",
-      body: "Plan your learning and keep your continuing education evidence in one place.",
-      points: ["A development plan you own", "CPD evidence ready when you need it"],
+      id: "development", label: "Development", title: "Plan your development",
+      body: "Set goals for your role, registration and speciality, and keep one development plan that you own.",
+      points: ["Goals you set", "Registration renewal reminders"],
+      mock: { heading: "Development plan", lines: [
+        { text: "Goal: critical care competence", tag: "In progress" },
+        { text: "Registration renewal", tag: "Reminder set" },
+      ] },
     },
     {
-      id: "competencies", title: "Competencies",
-      body: "Document your development alongside verified assessment evidence.",
-      points: ["Your competencies, recorded", "Assessment evidence that stays with you"],
+      id: "learning", label: "Learning", title: "Log learning and CPD",
+      body: "Record courses, conferences and reflective learning as CPD, ready whenever your regulator or employer asks.",
+      points: ["CPD with reflections", "Hours by year"],
+      mock: { heading: "CPD log", lines: [
+        { text: "Sepsis recognition update", tag: "Self-declared" },
+        { text: "Advanced life support course", tag: "Certificate attached" },
+      ] },
     },
     {
-      id: "credentials", title: "Credentials & Passport",
-      body: "Maintain your qualifications, registrations and professional achievements.",
-      points: ["Credentials in one record", "Your Competen Passport, always current"],
+      id: "evidence", label: "Competency Evidence", title: "Keep your competency evidence",
+      body: "Hold your competencies with the source of every piece of evidence shown: your own record, an attached certificate or an employer sign-off.",
+      points: ["Every item labelled by source", "Assessment evidence that stays with you"],
+      mock: { heading: "Competencies", lines: [
+        { text: "Central venous catheter care", tag: "Employer sign-off" },
+        { text: "Medication safety", tag: "Certificate attached" },
+      ] },
     },
     {
-      id: "career", title: "Career & Opportunities",
-      body: "Plan your next role, speciality or leadership pathway.",
-      points: ["Career planning", "Opportunities that fit your evidence"],
+      id: "passport", label: "Passport", title: "Share your Competen Passport",
+      body: "Bring your record together in one Passport and share it with a link you can revoke at any time.",
+      points: ["One shareable record", "You control who sees it"],
+      mock: { heading: "Competen Passport", lines: [
+        { text: "Share link for a job application", tag: "Active" },
+        { text: "Revoke access at any time" },
+      ] },
+    },
+    {
+      id: "career", label: "Career", title: "Plan your next step",
+      body: "Plan your next role, speciality or leadership pathway, and see the evidence you already hold for it.",
+      points: ["Career pathways", "Opportunities that fit your evidence"],
+      mock: { heading: "Career", lines: [
+        { text: "Next role: critical care nurse" },
+        { text: "Evidence for this role", tag: "Review gaps" },
+      ] },
     },
   ],
-  passportLine: "Your academic history and professional evidence stay connected in one Competen Passport.",
+  journeyNote: {
+    title: "Part of your Competen journey",
+    body: "Start Competen Professional at any stage of your career; you do not need Scholar first. If you studied with Scholar, your learning history is already here, and Scholar is there whenever you return to study.",
+  },
   closing: {
     title: "Invest in your professional future.",
     body: "Talk to us about Competen Professional for you or your team.",
@@ -201,8 +281,8 @@ export const INDIVIDUAL = {
   eyebrow: "One journey · A lifetime of growth",
   headline: ["Your learning.", "Your competence.", "Your career."],
   body:
-    "Begin with Scholar. Grow through Professional. Keep your achievements, your personal AI and your " +
-    "Competen Passport connected throughout your working life.",
+    "Start with Scholar or Professional, wherever you are today. Keep your achievements, your personal AI " +
+    "and your Competen Passport connected throughout your working life.",
   signature: { title: "Scholar + Professional. One continuous journey.", flow: ["Study", "Graduate", "Practise", "Specialise", "Lead"] },
   experiencesTitle: "Two distinct experiences",
   experiencesBody: "Choose where you are today. Move between them as your career evolves.",
@@ -214,9 +294,11 @@ export const INDIVIDUAL = {
 //
 // ⚠ GRADUATION IS ACTIVATION, NOT MIGRATION. The copy must never suggest a second account, a transfer or
 // an export: Professional is switched on for the same person, and Scholar may stay on alongside it.
+// ⚠ AND GRADUATION IS A SUGGESTED MILESTONE, NOT AN ELIGIBILITY RULE (refinement item 2). Professional
+// is open at any career stage without Scholar; no line here may read as "Professional comes after".
 export const LIFECYCLE = {
   title: "From student to professional, without starting again",
-  body: "Graduation opens Competen Professional for you with a guided activation. There is no new account to create and nothing to move across.",
+  body: "Graduation is a natural moment to activate Competen Professional, but not a requirement: practising professionals start with Professional directly, and Scholar is there whenever you return to study. There is never a new account to create or anything to move across.",
   stages: [
     { label: "Study", experience: "scholar" as ExperienceKey },
     { label: "Graduate", experience: "scholar" as ExperienceKey },
@@ -226,7 +308,7 @@ export const LIFECYCLE = {
   ],
   promises: [
     { title: "No account migration", body: "The account you studied with is the account you practise with." },
-    { title: "Guided activation", body: "Professional is switched on for you when you graduate, step by step." },
+    { title: "Activate when ready", body: "A guided activation adds Professional whenever you choose. Graduation is a good moment, not a condition." },
     { title: "Use both", body: "Keep Scholar for further study while Professional supports your practice." },
   ],
 };

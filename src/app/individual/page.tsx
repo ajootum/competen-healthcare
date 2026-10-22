@@ -3,7 +3,7 @@ import SiteHeader from "@/components/marketing/SiteHeader";
 import SiteFooter from "@/components/marketing/SiteFooter";
 import { PatternField } from "@/components/marketing/Pattern";
 import {
-  Breadcrumb, ExperienceMark, LifecycleJourney, PassportBand, SignaturePanel,
+  Breadcrumb, ExperienceMark, FlowChips, LifecycleJourney, PassportBand, SignaturePanel,
   container, primaryBtn, secondaryBtn,
 } from "@/components/marketing/IndividualFamily";
 import { EXPERIENCE_LIST, INDIVIDUAL, INDIVIDUAL_SIGN_IN, enquiryHref } from "@/lib/marketing/individual-family";
@@ -61,7 +61,7 @@ export default function IndividualGatewayPage() {
         <IndividualGatewayHero />
         <ExperienceChooser />
         <LifecycleJourney />
-        <PassportBand line="No new account when you graduate. Your learning record stays connected, wherever your career takes you." />
+        <PassportBand line="One account for every stage. Whenever you add Professional, your learning record stays connected." />
 
         {/* ── CLOSING ACTION ──────────────────────────────────────────────────────────────────── */}
         <section className={`${container} pb-16`}>
@@ -176,13 +176,8 @@ function ExperienceChooser() {
                 <p className="relative mt-2 text-[14px] leading-relaxed text-gray-600">{e.body}</p>
               </div>
               <div className="flex flex-1 flex-col px-6 pb-6 pt-5 sm:px-8 sm:pb-8">
-                <ul className="grid gap-2.5 sm:grid-cols-2">
-                  {e.sections.map(s => (
-                    <li key={s.id} className="flex gap-2 text-[13.5px] text-gray-700">
-                      <span aria-hidden style={{ color: e.accent }}>✓</span>{s.title}
-                    </li>
-                  ))}
-                </ul>
+                {/* The experience's five demonstration steps -- the same flow its own page opens with. */}
+                <FlowChips steps={e.steps.map(s => s.label)} accent={e.accent} />
                 <span className="mt-6 inline-flex items-center text-[14.5px] font-semibold" style={{ color: e.accent }}>
                   {`Explore ${e.name.replace("Competen ", "")}`}
                   <span aria-hidden className="ml-1.5 inline-block transition-transform group-hover:translate-x-0.5">→</span>

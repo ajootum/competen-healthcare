@@ -3,10 +3,12 @@ import SiteHeader from "@/components/marketing/SiteHeader";
 import SiteFooter from "@/components/marketing/SiteFooter";
 import { PatternField } from "@/components/marketing/Pattern";
 import {
-  Breadcrumb, ExperienceMark, ExperienceNav, LifecycleJourney, OperatorNotice, PassportBand, SignaturePanel,
+  Breadcrumb, ExperienceMark, ExperienceNav, JourneyNote, OperatorNotice, SignaturePanel,
   container, primaryBtn, secondaryBtn,
 } from "@/components/marketing/IndividualFamily";
-import { INDIVIDUAL, INDIVIDUAL_SIGN_IN, enquiryHref, siblingOf, type Experience } from "@/lib/marketing/individual-family";
+import {
+  INDIVIDUAL, INDIVIDUAL_SIGN_IN, enquiryHref, siblingOf, type Experience, type ExperienceStep,
+} from "@/lib/marketing/individual-family";
 
 // ONE TEMPLATE, TWO BRANDS -- COMPETEN-WEB-IND-001 s3. Competen Scholar (/scholar) and Competen
 // Professional (/professional) are distinct public experiences with their own name, accent, navigation
@@ -61,46 +63,51 @@ export default function ExperiencePage({ e }: { e: Experience }) {
               </div>
             </div>
 
-            <SignaturePanel title={e.signature.title} flow={e.signature.flow} accent={e.accent}
-              accentSoft={e.accentSoft} image={e.image} imageAlt={e.imageAlt} />
+            <SignaturePanel title={e.signatureTitle} flow={e.steps.map(s => s.label)} accent={e.accent}
+              accentSoft={e.accentSoft} image={e.image} imageAlt={e.imageAlt} imagePosition={e.imagePosition} />
           </div>
         </section>
 
-        {/* ── WHAT IT COVERS ───────────────────────────────────────────────────
-            Outcomes the person can reach, never an internal module name -- the disclosure rule. */}
+        {/* ── HOW IT WORKS: THE PRODUCT DEMONSTRATION (refinement items 5-6) ─────────────────────
+            One row per step of the hero flow: what the person does, and a DRAWN illustration of the
+            step. Illustrations are labelled as such and carry no figures -- the product is pre-launch,
+            and a mock that read as a screenshot of live data would be a claim nothing supports.
+            Outcomes, never internal module names -- the disclosure rule. */}
         <section id="features" aria-labelledby="features-title" className={`${container} scroll-mt-36 pt-14 lg:pt-16`}>
           <div className="max-w-2xl">
-            <h2 id="features-title" className="text-[1.6rem] font-bold tracking-tight text-gray-900">{e.sectionsTitle}</h2>
-            <p className="mt-2 text-[14.5px] leading-relaxed text-gray-600">{e.sectionsBody}</p>
+            <h2 id="features-title" className="text-[1.6rem] font-bold tracking-tight text-gray-900">{e.stepsTitle}</h2>
+            <p className="mt-2 text-[14.5px] leading-relaxed text-gray-600">{e.stepsBody}</p>
+            <p className="mt-2 text-[12px] font-medium text-gray-600">{`Illustrations show how each step will look. ${e.name} is in development.`}</p>
           </div>
-          <ul className="mt-8 grid gap-4 sm:grid-cols-2">
-            {e.sections.map((s, i) => (
-              <li key={s.id} id={s.id} className="rounded-2xl border border-gray-200 bg-white p-6 hover:shadow-md transition-shadow">
+          <ol className="mt-8 space-y-4">
+            {e.steps.map((s, i) => (
+              <li key={s.id} id={s.id}
+                className="grid gap-5 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center">
                 <div className="flex items-start gap-4">
                   <span aria-hidden className="flex w-11 h-11 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold"
                     style={{ background: e.accentSoft, color: e.accent }}>
                     {String(i + 1).padStart(2, "0")}
                   </span>
                   <div>
-                    <h3 className="text-[16.5px] font-bold text-gray-900">{s.title}</h3>
+                    <p className="text-[11.5px] font-bold uppercase tracking-[0.14em]" style={{ color: e.accent }}>{s.label}</p>
+                    <h3 className="mt-0.5 text-[17px] font-bold text-gray-900">{s.title}</h3>
                     <p className="mt-1 text-[13.5px] leading-relaxed text-gray-600">{s.body}</p>
-                    <ul className="mt-3 space-y-1.5">
+                    <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
                       {s.points.map(p => (
-                        <li key={p} className="flex gap-2 text-[13px] text-gray-700">
+                        <li key={p} className="flex gap-1.5 text-[13px] text-gray-700">
                           <span aria-hidden style={{ color: e.accent }}>✓</span>{p}
                         </li>
                       ))}
                     </ul>
                   </div>
                 </div>
+                <StepMock e={e} step={s} />
               </li>
             ))}
-          </ul>
+          </ol>
         </section>
 
-        <LifecycleJourney current={e.key} />
-
-        <PassportBand line={e.passportLine} action={{ label: "See the whole journey", href: `${INDIVIDUAL.href}#journey` }} />
+        <JourneyNote e={e} />
 
         {/* ── THE SIBLING ──────────────────────────────────────────────────────
             Both experiences may coexist (s4), so each page introduces the other rather than hiding it. */}
@@ -111,7 +118,7 @@ export default function ExperiencePage({ e }: { e: Experience }) {
             <ExperienceMark wordmark={sibling.wordmark} accent={sibling.accent} />
             <div className="flex-1 sm:pl-4">
               <h2 id="sibling-title" className="text-[1.15rem] font-bold text-gray-900">
-                {e.key === "scholar" ? "Graduating soon? Meet Competen Professional." : "Still studying? Meet Competen Scholar."}
+                {e.key === "scholar" ? "Practising, or about to? Meet Competen Professional." : "Studying again? Meet Competen Scholar."}
               </h2>
               <p className="mt-1 text-[13.5px] text-gray-600">{sibling.micro} {sibling.tagline}</p>
             </div>
@@ -142,5 +149,41 @@ export default function ExperiencePage({ e }: { e: Experience }) {
 
       <SiteFooter />
     </div>
+  );
+}
+
+/**
+ * The drawn illustration for one demonstration step: a small product-shaped card with the step's heading
+ * and two lines. aria-hidden as a whole would hide real example text, so it is a labelled figure instead.
+ */
+function StepMock({ e, step }: { e: Experience; step: ExperienceStep }) {
+  return (
+    <figure aria-label={`Illustration: ${step.label}`}
+      className="relative overflow-hidden rounded-xl p-4 sm:p-5"
+      style={{ background: `linear-gradient(140deg, ${e.accentSoft}, #fff 85%)` }}>
+      <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[12.5px] font-bold text-gray-900">{step.mock.heading}</span>
+          <span aria-hidden className="flex gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: e.accent }} />
+          </span>
+        </div>
+        <ul className="mt-3 space-y-2">
+          {step.mock.lines.map(l => (
+            <li key={l.text} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg bg-gray-50 px-3 py-2">
+              <span className="text-[13px] leading-snug text-gray-700">{l.text}</span>
+              {l.tag && (
+                <span className="rounded-full bg-white px-2 py-0.5 text-[11.5px] font-semibold ring-1 ring-black/5" style={{ color: e.accent }}>
+                  {l.tag}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <figcaption className="mt-2 text-[11.5px] text-gray-600">Illustrative</figcaption>
+    </figure>
   );
 }

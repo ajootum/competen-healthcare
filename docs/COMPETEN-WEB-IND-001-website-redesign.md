@@ -41,6 +41,22 @@ CTAs, and no `/signup` links.
 
 Evidence: `docs/evidence/COMPETEN-WEB-IND-001/` (full-page desktop and mobile captures plus both menus).
 
+## 2a. Refinement pass — conditional acceptance (2026-10-22)
+
+The owner accepted the screenshots as the design baseline and asked for one focused pass:
+
+| # | Item | Change |
+|---|---|---|
+| 1 | Hero cropping | The portrait images are a side column in the hero panel with a face-aimed `imagePosition`, not a 2:1 strip. |
+| 2 | Graduation wording | Graduation is a *suggested* activation moment everywhere: the lifecycle, the gateway, the homepage band (no "Graduate" step between the experiences) and the sibling cards. Professional opens at any stage. |
+| 3 | CTAs | Unchanged: the conversation plus `/individual/sign-in`. No registration action. |
+| 4 | Repetition | The full journey and Passport band are on `/individual` only. Scholar and Professional carry one `JourneyNote` that links to it. |
+| 5 | Scholar demo | Upload → Understand → Revise → Apply → Progress: five steps, each with a drawn, labelled illustration (`ExperienceStep.mock`). |
+| 6 | Professional demo | Development → Learning → Competency Evidence → Passport → Career, the same way, with evidence-source tags. |
+| 7 | Mobile journey | Below `sm`, stages are one-line rows (12px or larger, labelled by name). |
+
+Re-verified: tsc and eslint clean; vitest 454/454; disclosure harness 213 / 1 (the same baseline 6-control); access-doors 39/39; no horizontal overflow at 1440 and 390; axe shows the same 5 baseline footer findings and nothing new. The captures in `docs/evidence/` are refreshed.
+
 ## 3. Baseline findings — recorded, NOT fixed here (outside this scope)
 
 1. **`public-disclosure-harness` 6-control `/signup`.** The closed `/signup` copy was rewritten on 2026-08-28

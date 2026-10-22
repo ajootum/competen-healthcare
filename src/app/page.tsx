@@ -176,17 +176,17 @@ export default function Home() {
             <div className="flex-1">
               <h2 id="journey-band" className="text-[1.15rem] font-bold text-gray-900">From the classroom to professional practice.</h2>
               <p className="mt-1 text-[13.5px] leading-relaxed text-gray-600">
-                Begin with Competen Scholar. Grow through Competen Professional. One account and one Competen
-                Passport, the whole way.
+                Study with Competen Scholar. Practise with Competen Professional. Start with either, use
+                both, with one account and one Competen Passport the whole way.
               </p>
             </div>
-            <ol className="flex flex-wrap items-center gap-2 text-[13px] font-semibold" aria-label="The Individual journey">
+            {/* ⚠ NOT A SEQUENCE (refinement item 2): no "Graduate" step between the two -- Professional is
+                open at any career stage, and graduation is only a suggested moment to add it. */}
+            <ul className="flex flex-wrap items-center gap-2 text-[13px] font-semibold" aria-label="The two Individual experiences">
               <li><Link href={SCHOLAR.href} className="inline-flex min-h-[44px] items-center rounded-full bg-white px-4 ring-1 ring-black/5 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900" style={{ color: SCHOLAR.accent }}>Scholar</Link></li>
-              <li aria-hidden className="text-gray-400">→</li>
-              <li><span className="inline-flex min-h-[44px] items-center px-1 text-gray-500">Graduate</span></li>
-              <li aria-hidden className="text-gray-400">→</li>
+              <li aria-hidden className="text-gray-500">+</li>
               <li><Link href={PROFESSIONAL.href} className="inline-flex min-h-[44px] items-center rounded-full bg-white px-4 ring-1 ring-black/5 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900" style={{ color: PROFESSIONAL.accent }}>Professional</Link></li>
-            </ol>
+            </ul>
             <Link href="/individual#journey" className="shrink-0 inline-flex min-h-[44px] items-center text-[14px] font-semibold hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900" style={{ color: INDIVIDUAL.accent }}>
               See the journey <span aria-hidden className="ml-1">→</span>
             </Link>

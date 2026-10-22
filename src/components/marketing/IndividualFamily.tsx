@@ -57,27 +57,35 @@ export function FlowChips({ steps, accent }: { steps: string[]; accent: string }
 }
 
 /**
- * The family's hero panel: an image over a tinted card that carries the one-line idea and its flow.
+ * The family's hero panel: the one-line idea and its flow, with an optional portrait beside it.
  * Decorative framing around real content -- the image keeps its alt text, the flow is a real list.
+ *
+ * ⚠ THE PORTRAIT IS A COLUMN, NOT A BANNER. The experience images are portrait (about 1:2); forcing them
+ * into a wide 2:1 strip cropped them to a signboard and half a face (refinement item 1). As a side column
+ * they keep their shape at every width, and `imagePosition` aims the crop at the face.
  */
-export function SignaturePanel({ title, flow, accent, accentSoft, image, imageAlt }: {
-  title: string; flow: string[]; accent: string; accentSoft: string; image?: string; imageAlt?: string;
+export function SignaturePanel({ title, flow, accent, accentSoft, image, imageAlt, imagePosition }: {
+  title: string; flow: string[]; accent: string; accentSoft: string;
+  image?: string; imageAlt?: string; imagePosition?: string;
 }) {
   return (
     <div className="relative overflow-hidden rounded-3xl ring-1 ring-black/5"
       style={{ background: `linear-gradient(150deg, ${accentSoft}, #fff 75%)` }}>
-      {image && (
-        <div className="aspect-[16/8] overflow-hidden bg-[var(--cmp-neutral-100)]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt={imageAlt ?? ""} className="w-full h-full object-cover object-top" />
+      <PatternField className="absolute inset-0" tone={accent} opacity={0.07} />
+      <div className={`relative ${image ? "grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" : ""}`}>
+        {image && (
+          <div className="relative min-h-[190px] sm:min-h-[280px] overflow-hidden bg-[var(--cmp-neutral-100)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={image} alt={imageAlt ?? ""} className="absolute inset-0 w-full h-full object-cover"
+              style={{ objectPosition: imagePosition ?? "50% 15%" }} />
+          </div>
+        )}
+        <div className="flex flex-col justify-center p-5 sm:p-7">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: accent }}>The Competen advantage</p>
+          <p className="mt-2 text-[1.2rem] sm:text-[1.55rem] font-bold leading-snug tracking-tight text-gray-900 text-balance">{title}</p>
         </div>
-      )}
-      <div className="relative p-6 sm:p-7">
-        <PatternField className="absolute inset-0" tone={accent} opacity={0.07} />
-        <p className="relative text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: accent }}>The Competen advantage</p>
-        <p className="relative mt-2 text-[1.35rem] sm:text-[1.55rem] font-bold leading-snug tracking-tight text-gray-900 text-balance">{title}</p>
-        <div className="relative mt-4"><FlowChips steps={flow} accent={accent} /></div>
       </div>
+      <div className="relative border-t border-black/5 px-5 py-4 sm:px-7"><FlowChips steps={flow} accent={accent} /></div>
     </div>
   );
 }
@@ -98,22 +106,26 @@ export function LifecycleJourney({ current }: { current?: ExperienceKey }) {
         </h2>
         <p className="mt-3 max-w-2xl text-[14.5px] leading-relaxed text-gray-600">{LIFECYCLE.body}</p>
 
-        <ol className="mt-8 grid grid-cols-1 gap-2 sm:grid-cols-5" aria-label="Career stages">
+        {/* COMPACT ON A PHONE (refinement item 7): one short row per stage -- number, stage, experience on
+            a single line -- instead of five stacked cards. From sm up, the five-card row as before. Text
+            stays at 12px+ and the experience is named in words, never colour alone. */}
+        <ol className="mt-6 grid grid-cols-1 gap-1.5 sm:mt-8 sm:grid-cols-5 sm:gap-2" aria-label="Career stages">
           {LIFECYCLE.stages.map((stage, i) => {
             const e = EXPERIENCES[stage.experience];
             const here = current === stage.experience;
             return (
-              <li key={stage.label} className="relative rounded-2xl border px-4 py-3.5"
+              <li key={stage.label}
+                className="relative flex items-center gap-3 rounded-xl border px-3.5 py-2 sm:block sm:rounded-2xl sm:px-4 sm:py-3.5"
                 style={{
                   background: here ? e.accent : e.accentSoft,
                   borderColor: `color-mix(in srgb, ${e.accent} 28%, transparent)`,
                 }}>
-                {/* Full white / gray-600 at 11px: the softer shades measured under 4.5:1 on these fills. */}
-                <span className={`block text-[11px] font-semibold ${here ? "text-white" : "text-gray-600"}`}>
+                {/* Full white / gray-600 at small sizes: the softer shades measured under 4.5:1 on these fills. */}
+                <span className={`block text-[12px] sm:text-[11px] font-semibold tabular-nums ${here ? "text-white" : "text-gray-600"}`}>
                   {String(i + 1).padStart(2, "0")}
                 </span>
-                <span className={`block text-[15px] font-bold ${here ? "text-white" : "text-gray-900"}`}>{stage.label}</span>
-                <span className="block text-[11.5px] font-semibold" style={{ color: here ? "#fff" : e.accent }}>
+                <span className={`block flex-1 text-[14px] sm:text-[15px] font-bold ${here ? "text-white" : "text-gray-900"}`}>{stage.label}</span>
+                <span className="block text-[12px] sm:text-[11.5px] font-semibold" style={{ color: here ? "#fff" : e.accent }}>
                   {e.name.replace("Competen ", "")}
                 </span>
               </li>
@@ -121,7 +133,7 @@ export function LifecycleJourney({ current }: { current?: ExperienceKey }) {
           })}
         </ol>
 
-        <ul className="mt-8 grid gap-5 sm:grid-cols-3">
+        <ul className="mt-6 grid gap-3 sm:mt-8 sm:gap-5 sm:grid-cols-3">
           {LIFECYCLE.promises.map(p => (
             <li key={p.title} className="flex gap-3">
               <span aria-hidden className="mt-0.5 w-6 h-6 shrink-0 rounded-md flex items-center justify-center text-[11px]"
@@ -133,6 +145,29 @@ export function LifecycleJourney({ current }: { current?: ExperienceKey }) {
             </li>
           ))}
         </ul>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The CONCISE lifecycle reference on an experience page (refinement item 4). The full journey, stage row
+ * and Passport band live on /individual only; here, one contextual sentence and the way to the rest.
+ * Carries id="journey" so the product bar's "Your journey" anchor still lands somewhere.
+ */
+export function JourneyNote({ e }: { e: Experience }) {
+  return (
+    <section id="journey" aria-labelledby="journey-note-title" className={`${container} scroll-mt-36 py-14 lg:py-16`}>
+      <div className="flex flex-col gap-4 rounded-3xl border border-gray-200 bg-white px-6 py-6 sm:flex-row sm:items-center sm:px-8">
+        <div className="flex-1">
+          <h2 id="journey-note-title" className="text-[1.1rem] font-bold text-gray-900">{e.journeyNote.title}</h2>
+          <p className="mt-1 max-w-3xl text-[14px] leading-relaxed text-gray-600">{e.journeyNote.body}</p>
+        </div>
+        <Link href={`${INDIVIDUAL.href}#journey`}
+          className={`shrink-0 inline-flex min-h-[44px] items-center text-[14px] font-semibold hover:opacity-80 ${focusRing}`}
+          style={{ color: INDIVIDUAL.accent }}>
+          See the full journey <span aria-hidden className="ml-1">→</span>
+        </Link>
       </div>
     </section>
   );
@@ -179,7 +214,7 @@ export function ExperienceNav({ e }: { e: Experience }) {
   const sibling = siblingOf(e.key);
   const anchors = [
     { href: "#overview", label: "Overview" },
-    { href: "#features", label: e.key === "scholar" ? "How you learn" : "What it covers" },
+    { href: "#features", label: "How it works" },
     { href: "#journey", label: "Your journey" },
     { href: "#start", label: "Get started" },
   ];
