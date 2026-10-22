@@ -65,7 +65,7 @@ loadEnvConfig(process.cwd());
  */
 const FIXTURE_EMAIL = "smoke.practitioner@staging.competen.invalid";
 const FIXTURE_NAME = "Automation Practitioner (synthetic)";
-const IDEMPOTENCY_KEY = "comp-eng-002g-smoke-fixture";
+const IDEMPOTENCY_KEY = "comp-eng-002g-smoke-fixture"; // gitleaks:allow -- a deterministic idempotency label for the fixture run, not a credential
 const CORRELATION = "comp-eng-002g-provision";
 // CPR-BOOK-E2E-001 fixture names. Deterministic so a re-run reuses rather than multiplies.
 const FIXTURE_LOCATION = "Staging Clinic (synthetic)";
