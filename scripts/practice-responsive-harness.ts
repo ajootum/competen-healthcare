@@ -365,12 +365,37 @@ ok("4d no file invents its own breakpoint as an arbitrary Tailwind variant",
  * reorders a whole page for a mouse and a screen reader differently, permanently, with no width to
  * blame. So the pin is not "no order utilities" -- it is "every one of them is max-md:".
  */
+/**
+ * ⚠ ONE RECORDED DESKTOP EXCEPTION, BY FILE AND BY EXACT UTILITY, NEVER BY PATTERN (owner decision,
+ * 2026-10-22, CI-baseline PR #4; recorded in docs/CPR-MOB-001-RESPONSIVE-FREEZE.md s2).
+ *
+ * The public booking profile is the patient's page, not the practice shell, and its spec (CPR-BOOK-
+ * PROFILE-001 s12) puts the booking module FIRST in reading and interaction order at every width, so a
+ * phone meets it above the fold and a keyboard or screen reader meets the one action before the detail.
+ * On a desktop that module is drawn as the right rail. The owner chose booking-first DOM over
+ * DOM-follows-desktop, so a desktop reorder is unavoidable there: grid placement (md:col-start-2) would
+ * be the same reorder written where this pin cannot see it, so the honest form is the order utility,
+ * named here. Any OTHER order utility in that file, or either of these anywhere else, still fails 4e;
+ * an entry whose utility is no longer in its file fails 4e-x, so the exception cannot outlive its use.
+ */
+const DESKTOP_ORDER_EXCEPTIONS: Record<string, string[]> = {
+  "src/app/practice/book/[handle]/ProfileView.tsx": ["md:order-1", "md:order-2"],
+};
 const looseOrder: string[] = [];
+const exceptionUsed = new Set<string>();
 for (const f of PRACTICE_FILES)
-  for (const m of strip(readFileSync(f, "utf8")).matchAll(/(\S*)\border-(?:first|last|none|\d+)\b/g))
-    if (!m[1].endsWith("max-md:")) looseOrder.push(`${m[0]} in ${rel(f)}`);
-ok("4e every order utility in Practice is scoped to max-md, never desktop or unconditional",
+  for (const m of strip(readFileSync(f, "utf8")).matchAll(/(\S*)\border-(?:first|last|none|\d+)\b/g)) {
+    if (m[1].endsWith("max-md:")) continue;
+    const utility = m[0].replace(/^.*["'`]/, "");
+    if (DESKTOP_ORDER_EXCEPTIONS[rel(f)]?.includes(utility)) { exceptionUsed.add(`${rel(f)} ${utility}`); continue; }
+    looseOrder.push(`${m[0]} in ${rel(f)}`);
+  }
+ok("4e every order utility in Practice is scoped to max-md, never desktop or unconditional (one recorded exception)",
   looseOrder.length === 0, [...new Set(looseOrder)].slice(0, 5).join(", "));
+const staleOrderExceptions = Object.entries(DESKTOP_ORDER_EXCEPTIONS)
+  .flatMap(([f, us]) => us.map(u => `${f} ${u}`)).filter(k => !exceptionUsed.has(k));
+ok("4e-x every recorded desktop order exception is still in use, so none outlives its reason",
+  staleOrderExceptions.length === 0, staleOrderExceptions.join(", "));
 
 // The card fallback and sheet primitives are shared, not re-implemented per page (s19).
 const RESP = join(PRACTICE, "(shell)", "_responsive");
