@@ -12,6 +12,12 @@
       "package": "xlsx",
       "reason": "ReDoS in SheetJS. Same situation as above: no npm fix exists; export-only usage on operator-supplied data.",
       "dated": "2026-08-16"
+    },
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "reason": "Stack-exhaustion DoS from deeply nested glob patterns. No fixed version exists: 3.0.3 is the latest release and is affected. It is reached only through lint tooling (eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch); `npm ls braces --omit=dev` is empty, so nothing that ships or serves requests loads it, and the patterns it expands are the repository's own lint globs. Remove when braces publishes a fix or eslint-config-next drops fast-glob.",
+      "dated": "2026-10-22"
     }
   ]
 }
