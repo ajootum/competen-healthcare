@@ -78,7 +78,33 @@ refused by its own safety gate, so the owner applies the file.
 - **Staging:** applied 2026-10-22 under the staging GO, and verified. Both columns, the FK and the check
   are present, and a re-run is a no-op. The real gateway writes workspace, tenant and person rows to the
   right columns, a bad tenant is reported, and all probe rows were removed.
-- **Production:** PENDING owner application.
+- **Production:** applied 2026-10-22 by the owner, by hand, in the SQL editor of `rnnqhlrcgvsauigxwszl`.
+  The file was `e8ccbf80`, sha256 `6b9ae03d...`, run whole.
+  - The first run went to the staging project by mistake. It was a harmless no-op, because staging
+    already had 371.
+  - The agent's read-only check caught it: production still answered
+    `42703 column plat_ai_requests.workspace_id does not exist`.
+  - The owner re-ran it with production selected.
+
+**Production verification (read-only: REST API, plus the dashboard's Indexes page and Definition view):**
+- **Columns:** `tenant_id uuid null`, `workspace_id uuid null`, `attribution_scope text null`.
+- **Constraints:**
+  - `plat_ai_requests_tenant_id_fkey`: `references tenants (id) on delete set null`, unchanged.
+  - `plat_ai_requests_workspace_id_fkey`: `references practice_workspace (id) on delete set null`.
+  - `plat_ai_requests_attribution_scope_check`: `tenant` / `workspace` / `person`.
+  - `actor_id` FK, `status` check and pkey unchanged.
+- **Indexes:** `idx_plat_ai_requests_workspace (workspace_id, created_at desc)`, plus the unchanged pkey,
+  `_created` and `_model`.
+- **Existing rows intact:** 151 rows. The fingerprint over the pre-existing rows, `17f69b1b6006f67a`,
+  is identical to the pre-application reference. Every row has `attribution_scope` and `workspace_id` null,
+  and 140 have a `tenant_id`, as before.
+- **Attribution:** no production AI request was generated to test it. The real gateway was exercised
+  end to end on staging after 371 (workspace, tenant and person rows each landed in the right columns,
+  and a bad tenant was reported). Production now has the identical schema.
+- **Deployed code:** GitHub records Vercel's Production deployment of `9402bbef` (PR #2) as `success`
+  at 2026-10-22T19:01Z. With 371 live, new Practice rows carry `workspace_id`, Enterprise rows carry
+  `tenant_id` from `profiles.tenant_id`, and Individual rows carry `attribution_scope = person` once that
+  route adopts the scope (IND-003).
 
 **Verification query (read-only, run after applying):**
 
