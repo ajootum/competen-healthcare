@@ -4,6 +4,9 @@ import { experiencePage } from "../../../_components/shell-context";
 import { PageHeader } from "../../../_components/chrome";
 import { SignOutButton } from "../../../_components/ShellNav";
 import PrimaryChoice from "../../../_components/PrimaryChoice";
+import { DATA_ROLES, entityLegal, type EntityLegal } from "@/lib/individual/legal";
+
+const nameOf = (l: EntityLegal) => l.registeredName ?? l.label;
 
 // SETTINGS -- COMPETEN-IND-003 s2(3): the configurable primary experience, and what is active.
 //
@@ -50,6 +53,17 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
           <PrimaryChoice live={ctx.live} initial={primary} completeOnboarding={false} submitLabel="Save" />
         </section>
       )}
+
+      <section className="mb-5 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+        <h2 className="text-[16px] font-bold text-gray-900">Who runs your services</h2>
+        <ul className="mt-2 space-y-1.5 text-[14px] text-gray-700">
+          <li>{nameOf(entityLegal(DATA_ROLES.sharedFoundation.manager))} manages {DATA_ROLES.sharedFoundation.scope}.</li>
+          {EXPERIENCE_KEYS.filter(k => ctx.live.includes(k)).map(k => (
+            <li key={k}>{EXPERIENCES[k].name} is operated by {nameOf(entityLegal(DATA_ROLES.experienceService[k]))}.</li>
+          ))}
+        </ul>
+        {!DATA_ROLES.confirmed && <p className="mt-2 text-[12.5px] text-gray-500">These arrangements are pending formal legal confirmation.</p>}
+      </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
         <h2 className="text-[16px] font-bold text-gray-900">Account</h2>

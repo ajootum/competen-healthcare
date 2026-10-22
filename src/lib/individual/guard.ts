@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { readIndividualAccess, type IndividualMembership } from "./access";
 import type { ExperienceKey } from "./experiences";
+import type { Acceptance } from "./legal";
+import { termsGate } from "./terms";
 
 // ── THE INDIVIDUAL GUARDS ── one for pages, one for API routes, one resolution under both ── ADR-016 ───
 //
@@ -21,6 +23,7 @@ export type IndividualContext = {
   admin: any;
   membership: IndividualMembership;
   live: ExperienceKey[];
+  experienceAcceptance: Partial<Record<ExperienceKey, Acceptance[]>>;
   profile: IndividualProfile;
 };
 
@@ -52,14 +55,26 @@ export async function resolveIndividualShell(): Promise<IndividualShell> {
   if (access.state === "unavailable") return { state: "UNAVAILABLE" };
   if (access.state === "none") return { state: "NO_ACCESS" };
   const profile = await readProfile(admin, user.id, user.email ?? null);
-  return { state: "READY", ctx: { userId: user.id, admin, membership: access.membership, live: access.live, profile } };
+  return { state: "READY", ctx: { userId: user.id, admin, membership: access.membership, live: access.live, experienceAcceptance: access.experienceAcceptance, profile } };
+}
+
+/** Owner ruling D2: the terms gate for one live experience of this context. */
+export function contextTermsGate(ctx: IndividualContext, experience: ExperienceKey) {
+  return termsGate({
+    experience,
+    foundationAcceptance: ctx.membership.foundationAcceptance,
+    experienceAcceptance: ctx.experienceAcceptance[experience],
+  });
 }
 
 /**
  * For API routes. With `experience`, also requires that experience to be live -- an API reached for an
- * experience the person does not hold refuses, rather than trusting the page that called it.
+ * experience the person does not hold refuses, rather than trusting the page that called it -- and, unless
+ * the route IS the acceptance (requireTerms: false), that its terms are accepted (owner ruling D2).
  */
-export async function requireIndividualContext(experience?: ExperienceKey): Promise<IndividualContext | NextResponse> {
+export async function requireIndividualContext(
+  experience?: ExperienceKey, opts: { requireTerms?: boolean } = {},
+): Promise<IndividualContext | NextResponse> {
   const shell = await resolveIndividualShell();
   if (shell.state === "AUTH_REQUIRED") return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   if (shell.state === "UNAVAILABLE")
@@ -67,6 +82,8 @@ export async function requireIndividualContext(experience?: ExperienceKey): Prom
   if (shell.state === "NO_ACCESS") return NextResponse.json({ error: "Competen Individual is not active on this account" }, { status: 403 });
   if (experience && !shell.ctx.live.includes(experience))
     return NextResponse.json({ error: "That experience is not active on this account" }, { status: 403 });
+  if (experience && opts.requireTerms !== false && !contextTermsGate(shell.ctx, experience).usable)
+    return NextResponse.json({ error: "Accept the terms for this experience before using it" }, { status: 403 });
   return shell.ctx;
 }
 

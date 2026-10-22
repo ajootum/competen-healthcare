@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { EXPERIENCE_KEYS, isExperienceKey, type ExperienceKey } from "./experiences";
+import type { Acceptance } from "./legal";
 
 // ── GATE 3: WHO MAY ENTER COMPETEN INDIVIDUAL, AND WHICH EXPERIENCES ARE LIVE ── ADR-016 ──────────────
 //
@@ -36,10 +37,16 @@ export type IndividualMembership = {
   primaryExperience: ExperienceKey | null;
   onboardedAt: string | null;
   grantedAt: string | null;
+  /** D2: the shared-foundation terms the person accepted, or null if none yet. */
+  foundationAcceptance: Acceptance | null;
 };
 
 export type IndividualAccess =
-  | { state: "member"; membership: IndividualMembership; live: ExperienceKey[] }
+  | {
+    state: "member"; membership: IndividualMembership; live: ExperienceKey[];
+    /** D2: per live experience, the acceptance recorded on each of its live rows (any one may carry it). */
+    experienceAcceptance: Partial<Record<ExperienceKey, Acceptance[]>>;
+  }
   | { state: "none"; reason: "no_membership" | "suspended" | "revoked" | "not_provisioned" }
   | { state: "unavailable" };
 
@@ -60,17 +67,27 @@ export function foldAccess(
   // "nothing is active on your account", a false statement. Fail closed instead.
   if (!liveRead || liveRead.error) return { state: "unavailable" };
 
-  const codes = new Set(((liveRead.data ?? []) as any[]).map(r => r.experience_code).filter(isExperienceKey));
+  const liveRows = ((liveRead.data ?? []) as any[]).filter(r => isExperienceKey(r.experience_code));
+  const codes = new Set(liveRows.map(r => r.experience_code as ExperienceKey));
+  const experienceAcceptance: Partial<Record<ExperienceKey, Acceptance[]>> = {};
+  for (const r of liveRows) {
+    if (!r.terms_version && !r.privacy_version) continue;
+    (experienceAcceptance[r.experience_code as ExperienceKey] ??= []).push({ termsVersion: r.terms_version ?? null, privacyVersion: r.privacy_version ?? null });
+  }
   // Registry order, so both experiences always list Scholar then Professional whatever order rows came in.
   const live = EXPERIENCE_KEYS.filter(k => codes.has(k));
   return {
     state: "member",
     live,
+    experienceAcceptance,
     membership: {
       id: row.id,
       status: "active",
       primaryExperience: isExperienceKey(row.primary_experience) ? row.primary_experience : null,
       onboardedAt: row.onboarded_at ?? null,
+      foundationAcceptance: row.foundation_accepted_at
+        ? { termsVersion: row.foundation_terms_version ?? null, privacyVersion: row.foundation_privacy_version ?? null }
+        : null,
       grantedAt: row.granted_at ?? null,
     },
   };
@@ -80,7 +97,7 @@ export async function readIndividualAccess(admin: any, userId: string): Promise<
   let membershipRead: { data: any; error: any };
   try {
     membershipRead = await admin.from("individual_membership")
-      .select("id, status, primary_experience, onboarded_at, granted_at")
+      .select("id, status, primary_experience, onboarded_at, granted_at, foundation_terms_version, foundation_privacy_version, foundation_accepted_at")
       .eq("user_id", userId).maybeSingle();
   } catch {
     return { state: "unavailable" };
@@ -91,7 +108,7 @@ export async function readIndividualAccess(admin: any, userId: string): Promise<
   let liveRead: { data: any; error: any };
   try {
     liveRead = await admin.from("individual_live_entitlement")
-      .select("experience_code").eq("user_id", userId).limit(20);
+      .select("experience_code, terms_version, privacy_version").eq("user_id", userId).limit(20);
   } catch {
     return { state: "unavailable" };
   }

@@ -5,6 +5,9 @@ import { EXPERIENCES, experienceHref, isExperienceKey } from "@/lib/individual/e
 import { individualShell } from "../../_components/shell-context";
 import { ExperienceMark, ExperienceSwitcher, StatePanel, focusRing, secondaryBtn } from "../../_components/chrome";
 import { SidebarNav, BottomNav, SignOutButton } from "../../_components/ShellNav";
+import TermsAcceptance, { type ShownDoc } from "../../_components/TermsAcceptance";
+import { contextTermsGate } from "@/lib/individual/guard";
+import { publishedVersions } from "@/lib/individual/legal";
 
 // ── AN EXPERIENCE SHELL: /individual/scholar/** or /individual/professional/** ── COMPETEN-IND-003 s3 ──
 //
@@ -47,6 +50,51 @@ export default async function ExperienceLayout({ children, params }: {
             <p>{x.micro} It is part of Competen Individual, and it is added to the account you already have. There is no separate sign-up.</p>
             <p>Competen Individual is in pilot, so access is arranged by Competen.</p>
           </StatePanel>
+        </div>
+      </main>
+    );
+  }
+
+  // ── OWNER RULING D2: TERMS BEFORE USE ───────────────────────────────────────────────────────────
+  // Live is not yet usable. The person accepts the shared foundation's and this experience operator's
+  // currently published terms first; until those are published, the experience stays closed and says so.
+  const gate = contextTermsGate(shell.ctx, experience);
+  if (!gate.usable) {
+    const fCur = publishedVersions(gate.foundation.legal);
+    const xCur = publishedVersions(gate.experience.legal);
+    const nameOf = (l: typeof gate.foundation.legal) => l.registeredName ?? l.label;
+    const docs: ShownDoc[] = [];
+    if (fCur && gate.foundation.state !== "accepted" && gate.foundation.legal.terms && gate.foundation.legal.privacy) {
+      docs.push({ title: `${nameOf(gate.foundation.legal)} Terms of Use`, version: fCur.terms, url: gate.foundation.legal.terms.url });
+      docs.push({ title: `${nameOf(gate.foundation.legal)} Privacy Notice`, version: fCur.privacy, url: gate.foundation.legal.privacy.url });
+    }
+    const sameAsFoundation = gate.experience.legal.entity === gate.foundation.legal.entity
+      && fCur && xCur && fCur.terms === xCur.terms && fCur.privacy === xCur.privacy;
+    if (xCur && gate.experience.state !== "accepted" && !sameAsFoundation && gate.experience.legal.terms && gate.experience.legal.privacy) {
+      docs.push({ title: `${x.name} Terms of Use (${nameOf(gate.experience.legal)})`, version: xCur.terms, url: gate.experience.legal.terms.url });
+      docs.push({ title: `${x.name} Privacy Notice (${nameOf(gate.experience.legal)})`, version: xCur.privacy, url: gate.experience.legal.privacy.url });
+    }
+    const unpublished = !fCur || !xCur;
+    return (
+      <main className="min-h-screen bg-gray-50 px-4 py-10 sm:py-16">
+        <div className="mx-auto max-w-xl">
+          <div className="mb-6"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></div>
+          {unpublished ? (
+            <StatePanel title={`${x.name} is not open yet`} actions={<SignOutButton />}>
+              <p>Its terms of use and privacy notice have not been published for this service yet. You will be asked to read and accept them before you use {x.name}.</p>
+              <p>Your access is in place, and nothing on your account has changed.</p>
+            </StatePanel>
+          ) : (
+            <section className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8">
+              <h1 className="text-xl font-bold tracking-tight text-gray-900">Before you use {x.name}</h1>
+              <p className="mt-2 text-[14.5px] leading-relaxed text-gray-700">
+                {nameOf(gate.foundation.legal)} manages your Competen identity, Passport, history and personal AI.
+                {gate.experience.legal.entity !== gate.foundation.legal.entity ? ` ${x.name} is operated by ${nameOf(gate.experience.legal)}.` : ""}
+                {" "}Please read and accept the following.
+              </p>
+              <TermsAcceptance experience={experience} accent={x.accent} docs={docs} foundation={fCur!} experienceDocs={xCur!} />
+            </section>
+          )}
         </div>
       </main>
     );

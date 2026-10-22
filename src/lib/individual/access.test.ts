@@ -102,7 +102,7 @@ describe("readIndividualAccess", () => {
 
 describe("landing and primary experience", () => {
   const m = (over: Partial<IndividualMembership> = {}): IndividualMembership =>
-    ({ id: "m1", status: "active", primaryExperience: null, onboardedAt: "2026-10-01", grantedAt: null, ...over });
+    ({ id: "m1", status: "active", primaryExperience: null, onboardedAt: "2026-10-01", grantedAt: null, foundationAcceptance: null, ...over });
 
   it("sends a member who has not finished onboarding to the welcome", () => {
     expect(decideLanding(m({ onboardedAt: null }), ["professional"])).toEqual({ kind: "welcome" });
