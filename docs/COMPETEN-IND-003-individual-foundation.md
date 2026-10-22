@@ -3,114 +3,104 @@
 | | |
 |---|---|
 | **Date** | 2026-10-22 |
-| **Status** | Built on branch `ind-003/individual-foundation` (from `50ae85f0`). **Not merged, not pushed, not deployed.** |
-| **Authority** | Owner GO for COMPETEN-IND-003. Architecture: COMPETEN-IND-001 (Option B), COMPETEN-IND-002 §5, ADR-016 (Proposed). |
-| **Blocked on** | (1) the owner applying migration 370; (2) a reachable staging project. See §7. |
+| **Status** | Built on branch `ind-003/individual-foundation` (from `50ae85f0`). Owner rulings D1–D10 applied. **Not merged, not pushed, not deployed.** |
+| **Authority** | Owner GO for COMPETEN-IND-003; owner rulings and staging commissioning GO (2026-10-22). ADR-016 is Accepted. |
+| **Blocked on** | The staging Supabase project being reachable. See §7. |
 
 ## 1. What was built
 
-| # | Brief item | Where | State |
-|---|---|---|---|
-| 1 | Authenticated workspace and landing | `src/app/individual/(app)/layout.tsx` (gate 3), `(app)/home` (landing) | Built; needs 370 to admit anyone |
-| 2 | Experience-specific navigation | `src/lib/individual/experiences.ts` (registry), `src/app/individual/_components/ShellNav.tsx`, `(app)/[experience]/layout.tsx` | Built |
-| 3 | Configurable primary experience and switching | `ExperienceSwitcher` (live experiences only), `(app)/[experience]/settings`, `POST /api/individual/preferences` | Built |
-| 4 | Shared profile and development history | `(app)/[experience]/profile`, `src/lib/individual/history.ts` | Built (read-only profile) |
-| 5 | Competen Passport integration | `(app)/[experience]/passport`, `src/lib/individual/passport.ts` | Built: a view of the existing Passport; no new record |
-| 6 | Personal AI entry point | `(app)/[experience]/assistant`, `POST /api/individual/assistant` → existing `generate()` | Built; no memory |
-| 7 | Empty states, onboarding, entitlement handling | `(app)/welcome`, `/individual/access`, the not-active state in the experience layout, planned-capability lists | Built |
-| 8 | Responsive layouts consistent with the public site | Sidebar from `md`, bottom bar below it, `pointer-coarse` touch floors (CPR-MOB-001), public-site marks and accents | Built; signed-in screens are verified by compile only (§7) |
+| # | Brief item | Where |
+|---|---|---|
+| 1 | Authenticated workspace and landing | `src/app/individual/(app)/layout.tsx` (gate 3), `(app)/home` |
+| 2 | Experience-specific navigation | `src/lib/individual/experiences.ts`, `_components/ShellNav.tsx`, `(app)/[experience]/layout.tsx` |
+| 3 | Primary experience and switching | `ExperienceSwitcher` (live experiences only), `[experience]/settings`, `POST /api/individual/preferences` |
+| 4 | Shared profile and history | `[experience]/profile`, `src/lib/individual/history.ts` |
+| 5 | Passport integration | `[experience]/passport`, `src/lib/individual/passport.ts`. A view of the existing Passport; no new record. |
+| 6 | Personal AI entry point | `[experience]/assistant`, `POST /api/individual/assistant` → existing `generate()`. No memory (D10). |
+| 7 | Onboarding, empty states, entitlement handling | `(app)/welcome`, `/individual/access`, the not-active and terms states in the experience layout, the planned-capability lists |
+| 8 | Responsive design consistent with the public site | Sidebar from `md`, bottom bar below it, `pointer-coarse` touch floors, public-site marks and accents |
+| Rulings | D2 terms, D8 age, D9 grant right | `legal.ts`, `terms.ts`, `TermsAcceptance.tsx`, `POST /api/individual/terms`, `grants.ts`, `POST /api/hq/individual/grants` and `/grants/end` |
 
-**Routes.** All signed-in routes are `noindex`.
-
-| Route | Purpose |
-|---|---|
-| `/individual/home` | Landing. Sends a member to the welcome, then to their primary experience, or explains why no experience is active. |
-| `/individual/welcome` | One-time onboarding. Shows what the account holds and asks which experience opens first. |
-| `/individual/scholar` | Scholar experience home. Each experience also mounts `/passport`, `/profile`, `/assistant` and `/settings`. |
-| `/individual/professional` | Professional experience home, with the same four modules. |
-| `/individual/access` | Every refusal lands here. The page works out its own state and names it: not signed in, not provisioned, no membership, suspended, revoked, or could not check. |
-
-**Entry.** A pilot member signs in at `/login`. The neutral resolver (`src/lib/identity/product-resolution.ts`) now offers *Competen Individual* from `individual_membership`. The public door `/individual/sign-in` stays `being_built`, and no signup surface exists.
+**Entry.** An HQ grant creates access. The person signs in at `/login`, where the neutral resolver offers *Competen Individual*. The first time they open an experience, they accept its terms. There is no signup surface.
 
 ## 2. Reused, not rebuilt
 
-| Need | Reused |
+Identity (`profiles`, GoTrue), the neutral product resolver, the gate pattern of `platform_membership` and ADR-015, the existing Passport rows (with `/verify`'s current-competence rule), `generate()` with its quota and usage log, `audit_log`, HQ capabilities, positions, appointments and `hqApiGate`, and the public-site design language. No identity, Passport record, competency engine, AI service or grant engine was duplicated.
+
+## 3. Owner rulings applied
+
+See ADR-016 §Owner rulings for where each one is enforced. Implementation changes made for them:
+
+- **D2**
+  - Legal configuration comes from the environment per operating entity:
+    - `INDIVIDUAL_LEGAL_{COMPETEN_HOLDINGS|SCHOLAR_OPERATOR}_{TERMS|PRIVACY}_{VERSION|URL}`
+    - `INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_REGISTERED_NAME`
+  - `DATA_ROLES` is configurable and marked unconfirmed.
+  - The terms gate covers the shared foundation (Holdings) and the experience operator. Acceptance is recorded all-or-nothing in the schema.
+  - An experience is closed while its terms are unpublished, and the screen says so.
+- **D8:** the grant refuses Scholar without the 18+ confirmation, and a schema CHECK refuses any Scholar row without `adult_confirmed_at`. The confirmer is recorded.
+- **D9:**
+  - `hq.individual.pilot.grant`, the position `individual_product_administrator` (platform space, product line `individual`) and the grant are seeded in 370 and the `spaces.ts` catalogue.
+  - The grant and end routes sit behind `hqApiGate` and refuse self-grant.
+  - Holding the right needs an ordinary HQ appointment to that position.
+- **D1, D3, D4, D5, D6, D7, D10:** already implemented as working assumptions. They are now ruled, and pinned by the foundation harness and the acceptance harness.
+
+## 4. Migration 370
+
+| | |
 |---|---|
-| Identity | `profiles` and the GoTrue session, read only. `profiles.role` is never read or written. |
-| Product routing | `resolveProductDestinations` gains one read and one code. The login chooser is unchanged. |
-| Gate pattern | `platform_membership` / ADR-015 three-state shape. Fails **closed** here, and §3 of ADR-016 records why. |
-| Passport | The existing rows: `competency_decisions` (current-competence rule taken from `/verify`), `professional_credentials`, `employment_records`. Sharing stays on `/dashboard/passport/share`. |
-| AI | `generate()` with `plat_ai_requests` logging, `checkAiQuota`, `aiStatus`, and the `/api/me/copilot` grounding pattern. |
-| Audit | `audit_log`. AI queries are written as `ai_assistant_query`, so the hourly quota counts them. |
-| UI | Public-site marks, accents, controls and touch sizes, with `--cmp-touch-min`. |
+| File | `supabase/migrations/370-individual-membership-and-entitlement.sql` |
+| Commit | `cb63e582` |
+| SHA-256 (committed blob, LF) | `4b327cb8ad6c716214c43756eca50addb851fd0ef11a2fab163ae3e46d63f656` (15,399 bytes; git blob `c3e49afa`) |
+| House rules | ALL CLEAR: 271 lines, 48 statements, 12 constraints. No `$$`, no plpgsql, no partial unique index, `notify pgrst` last. |
+| Reproducibility | Every statement is idempotent (`if not exists`, drop-then-add constraints, `on conflict do nothing`, `where not exists`, `create or replace view`). No backfill. It touches no existing table, policy or constraint. A second run is designed to be a no-op. The run-twice proof is part of the staging apply, which is still pending (§7). |
+| `hq-guard` catalogue parity (DB neutralised) | S0, S4, D1–D8 pass: 52 capabilities in DDL and code, 8 positions, 81 grants. |
+| **Staging** | **Not applied.** The project is unreachable (§7). |
+| **Production** | Not applied, and needs a separate owner GO. |
 
-**Nothing is duplicated.** No identity, no Passport record, no competency engine and no AI service is created. The only new storage is the gate (migration 370).
+Apply with the established tool once staging answers: `npx tsx scripts/apply-migrations.ts --only 370`. It refuses production, sends the file whole and stops on the first error. Run it twice to prove idempotency, then run `migration-verify --staging`.
 
-## 3. Provisional rulings in force
+## 5. Granting pilot access
 
-These are COMPETEN-IND-002 §7 recommendations. They are applied as working assumptions only; the owner has not ruled.
+**Normal path (D9).**
+1. An HQ governance lead appoints a person to *Individual Product Administrator*.
+2. That person calls `POST /api/hq/individual/grants` with `{ targetUserId, experiences: ["scholar","professional"], adultConfirmed: true }`. `adultConfirmed` is required for Scholar.
+3. `POST /api/hq/individual/grants/end` with `{ targetUserId, experience }` ends one experience.
 
-- **D1:** separate `individual_*` storage. The harness fails any Individual use of estate learning tables.
-- **D3:** institution-issued records shown to their subject, read-only and labelled by issuer.
-- **D6:** own-row RLS on `individual_*`.
-- **D7:** app routes `/individual/scholar/**` and `/individual/professional/**`.
-- **D8:** 18+ for the pilot. Recorded only, because grants are made by HQ.
-- **D2:** only `operating_entity` is recorded.
+The routes have no HQ console page yet (§8).
 
-## 4. Migration 370 — for the owner to apply (staging first)
-
-**File:** `supabase/migrations/370-individual-membership-and-entitlement.sql`.
-
-- It is **uncommitted**, per CLAUDE.md. Commit it after you confirm application.
-- `scripts/migration-house-rules.ts` reports **ALL CLEAR** (195 lines, 37 statements, 9 constraints).
-- It creates `individual_membership`, `individual_entitlement` and the view `individual_live_entitlement`.
-- It touches no existing object and backfills nothing. RLS is on, with own-row `select` policies only.
-
-Before 370 is applied, the code treats the missing tables as **not provisioned**: nobody is admitted, `/login` behaves exactly as before, and `/individual/access` says the product is not set up here.
-
-## 5. Pilot grant (HQ, by SQL) until an HQ grant capability exists
-
-Run this in the SQL editor for one invited person. Replace the email address, and keep only the experiences being granted.
-
-```sql
-insert into individual_membership (user_id, status, source, note)
-select id, 'active', 'hq_pilot_grant', 'COMPETEN-IND-003 pilot' from profiles where email = 'pilot@example.com'
-on conflict (user_id) do nothing;
-
-insert into individual_entitlement (user_id, experience_code, source, operating_entity, note)
-select id, 'scholar', 'pilot', 'scholar_operator', 'COMPETEN-IND-003 pilot' from profiles where email = 'pilot@example.com';
-
-insert into individual_entitlement (user_id, experience_code, source, operating_entity, note)
-select id, 'professional', 'pilot', 'competen_holdings', 'COMPETEN-IND-003 pilot' from profiles where email = 'pilot@example.com';
-```
-
-- **Direct Professional:** omit the Scholar insert.
-- **Graduation:** a later Professional insert with `source = 'graduation'`.
-- **End an experience:** `update individual_entitlement set status = 'cancelled' where …`.
-
-The history is kept in every case.
+**Before the pilot,** set the four legal version variables (and URLs) per environment. Until they are set, every experience stays closed.
 
 ## 6. Verification (2026-10-22)
 
 | Check | Result |
 |---|---|
-| `tsc --noEmit` | clean |
-| `eslint` on every changed file | clean |
-| `vitest run` (whole suite) | **491 / 491**. 47 cases are new or updated for Individual and product resolution. |
-| Controls proven | Removing the missing-table carve-out turned the resolver test red. Making the entitlement read fail open turned the access test red. Both were restored to green. |
-| `individual-foundation-harness` (new, in CI list) | **21 / 21**. Four planted violations (estate-table read, `getCaller`, `profiles` write, unlisted write) turned it red, and it went green on restore. |
-| `access-doors-harness` | 39 / 39 |
-| `plane-boundary-harness` | 35 / 35 (Individual adds no HQ-plane reads) |
-| `auth-boundary-harness` | Individual routes recognised after registering `requireIndividualContext`. One failure remains (`practice/public/manage`), and it fails identically at `50ae85f0`. |
-| `pd-screen-doctrine`, `domain-registry` 8a, `cpr040`, `practice-responsive`, `pui-tokens` | Fail **identically at `50ae85f0`**, measured on a clean export. They are not touched here. |
-| Dev server on 3020 against **staging** (production refused by the launcher) | Every Individual route compiles. Signed-out deep links redirect to `/login?next=<same path>`. `/individual/access` renders at 375px with no horizontal overflow and 44px targets. Both APIs answer 401 when signed out and 400 for an unknown experience. |
-| `individual-acceptance-harness` (new, staging) | **Not run.** The staging host does not resolve from this machine (`ENOTFOUND`), and 370 is not applied. The harness reports PEND and creates nothing when 370 is absent. |
+| `tsc --noEmit`, `eslint` on changed files | clean |
+| `vitest run` | **504 / 504**. 60 cases cover Individual, product resolution and the safeguards. |
+| `individual-foundation-harness` (CI list) | **30 / 30**. Planted violations went red, and it went green on restore: estate-table read, `getCaller`, `profiles` write, an unlisted write, the D8 check removed, and a person-facing provisioning insert. |
+| `access-doors` / `plane-boundary` / `access-scanner` | 39/39 · 35/35 · 22/22 |
+| `auth-boundary` | Individual and HQ Individual routes recognised. One failure (`practice/public/manage`) is identical at `50ae85f0`. |
+| `hq-guard` static sections, Supabase neutralised to an unresolvable host | Catalogue parity passes. P2 cannot run without a database. |
+| Privileged runner | UNTRIAGED 0 (`practice-public-profile-harness` screened into STAGING). |
+| Acceptance harness, production target | Refused by `assertSafeTarget` before any client is created. |
+| **Acceptance harness on staging (groups A–M)** | **Not run: staging unreachable.** |
+| Baseline failures, measured identical at `50ae85f0` and not touched | `pd-screen-doctrine` (5), `domain-registry` 8a, `cpr040` 3, `practice-responsive` 4e/5-perf, `pui-tokens` token regeneration, `auth-boundary` `practice/public/manage` |
 
-Evidence: `docs/evidence/COMPETEN-IND-003/` (signed-out access page, desktop and mobile).
+**Process incident, disclosed.** While checking the HQ catalogue harnesses, I ran `scripts/hq-guard-harness.ts` once with the default `.env.local`, which names **production**. Its G-section wrote one temporary `ogs_office_appointments` row for an existing non-owner profile, cycled its status (active, suspended, nominated, …) and deleted it. The run reported G6 "the fixture appointment is GONE" and 70/70 green. The repository lists this harness as previously run against production by the owner. Nothing else ran against production. I did not query production afterwards to inspect any side effects; that check is the owner's call. Since the incident, every database harness runs only with Supabase neutralised or with an explicit staging target.
 
-## 7. Blockers to the end-to-end acceptance demo
+## 7. Blockers
 
-1. **Migration 370 is not applied.** No membership can exist until it is, so no signed-in Individual screen can render with real data. Entitlements are not simulated.
-2. **Staging is unreachable.** `STAGING_SUPABASE_URL`'s host returns `ENOTFOUND` (`supabase.co` itself resolves). The privileged runner reports the same `fetch failed`. Nothing was run against production.
+1. **The staging project is unreachable.** `STAGING_SUPABASE_URL`'s host (`ezhvpgtcqcdsgylrxgdb.supabase.co`) does not resolve, locally or through 8.8.8.8. The session pooler answers `tenant/user postgres.ezhvpgtcqcdsgylrxgdb not found`. That is consistent with the project being paused or deleted in Supabase. No other approved staging project is recorded in the repository. Restoring the project, or supplying a new one's `STAGING_*` values, is an owner action in the Supabase dashboard. Production was not substituted. Until then, these are pending:
+   - applying 370 to staging and the run-twice proof;
+   - the acceptance groups A–M (dual and single experience, expired, revoked and ended access, age, switching and refusals, identity, Passport provenance, history, AI boundaries, RLS isolation, employer visibility);
+   - the HQ, Practice, Enterprise and Platform boundary re-runs on staging.
+2. **Legal documents.** No Individual terms or privacy documents are published. D2 makes this blocking for real pilot use, though not for staging commissioning, where the harness uses its own test versions. The Scholar operator's registered name is also pending.
 
-Once both are fixed, run `npx tsx scripts/privileged-harnesses.ts --staging --only individual-acceptance`. Its gate currently also refuses because `practice-public-profile-harness.ts` is untriaged, which is pre-existing. That run covers §5 of the brief end to end: groups A–H in the harness header.
+Once staging answers, run in this order:
+1. `apply-migrations.ts --only 370`, twice;
+2. `privileged-harnesses.ts --staging --only individual-acceptance`;
+3. `--staging --only hq-guard`, `platform-membership`, `practice-signup` and `enterprise` (the boundary re-runs).
+
+## 8. Next
+
+**COMPETEN-IND-004.** Scholar's first complete learning journey: upload, explain, practise, revise, progress, built on the `individual_*` storage boundary (D1). The Professional core can be built in parallel on separate files: credentials, private CPD and the D5 identity record. An HQ console page for the grant right can be built alongside. Staging commissioning (§7) must complete before IND-004 ships to staging.

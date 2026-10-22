@@ -1,14 +1,14 @@
 # ADR-016 — Competen Individual is a third product gate; Scholar and Professional are entitlements inside it
 
-**Status:** Proposed · 2026-10-22. It becomes Accepted when the owner applies migration 370 and confirms
-the provisional rulings below.
-**Satisfies:** COMPETEN-IND-001 D1–D6, COMPETEN-IND-002 §5, COMPETEN-IND-003 §2
+**Status:** Accepted · 2026-10-22. The owner ruled on D1–D10 in the COMPETEN-IND-003 owner rulings and staging commissioning GO.
+**Satisfies:** COMPETEN-IND-001 D1–D6, COMPETEN-IND-002 §5, COMPETEN-IND-003 §2 and the owner rulings
 **Supersedes:** nothing.
 **Enforced by:**
-- `supabase/migrations/370-individual-membership-and-entitlement.sql` (draft, owner-applied)
-- `src/lib/individual/access.ts` and `src/lib/individual/access.test.ts`
-- `src/lib/identity/product-resolution.ts` and its test
-- `scripts/individual-foundation-harness.ts`
+- `supabase/migrations/370-individual-membership-and-entitlement.sql`
+- `src/lib/individual/{access,guard,terms,legal,grants}.ts` and their tests
+- `src/lib/identity/product-resolution.ts`
+- `scripts/individual-foundation-harness.ts` (source invariants, in CI)
+- `scripts/individual-acceptance-harness.ts` (database, staging)
 
 ---
 
@@ -19,63 +19,49 @@ Each must be independently entitled and simultaneously usable. Both sit on one i
 one learning history and one Competen Passport (COMPETEN-IND-001 D2–D5). The audit (COMPETEN-IND-002 §1)
 found three facts that shape the answer:
 
-- No per-person entitlement store exists. Every commercial store is keyed on a workspace or a tenant.
+- No per-person entitlement store exists.
 - The personal workspace at `/dashboard` is gate 1 (`platform_membership`).
 - COMP-ARCH-PSA-001 §40 forbids granting gate 1 as a side effect of joining another product.
 
 ## Decision
 
 1. **Individual is gate 3, built the way gates 1 and 2 were.**
-   - `individual_membership` holds one row per person, with `status`, `source` and grant/revoke audit
-     columns. It is the only fact that admits a person to the Individual shell.
+   - `individual_membership` holds one row per person. It is the only fact that admits a person to the Individual shell.
    - Absence of the row means no access.
-   - An unreadable store is reported as unavailable and admits nobody: ADR-015's "unreadable is not
-     permission", and the fail-closed half of `product-resolution.ts`.
-   - Creating the row never creates `platform_membership`, never writes `profiles.role`, and never touches
-     `practice_membership` or `enterprise_membership`.
-2. **Scholar and Professional are rows in an entitlement ledger, not products and not roles.**
-   - `individual_entitlement` is keyed `(user_id, experience_code)`, with a period
-     (`starts_at`/`ends_at`), a `status`, a `source` (NOT NULL, no default, after migration 368's reasoning)
-     and an `operating_entity`.
-   - Any number of rows may be live together, so both experiences can run at once.
-   - Liveness is decided by the database clock, in the view `individual_live_entitlement`. Application
-     code never compares its own clock to a stored period.
-3. **Graduation activates; it never migrates.** Activating Professional for a Scholar inserts a ledger row
-   (`source = 'graduation'`). Returning to Scholar for postgraduate study inserts a Scholar row. The
-   identity, history and Passport do not move, because they were never inside an experience.
-4. **The primary experience is a preference, not an entitlement.**
-   - It is stored as `individual_membership.primary_experience`.
-   - It is honoured only while that experience is live.
-   - Otherwise the landing falls back to the single live experience, and then to a chooser.
-5. **The shell is Individual's own.** `/individual/(app)/**` is guarded by gate 3 and never by
-   `admitToEstate`. Individual API routes use `requireIndividualContext`, not `getCaller()`, whose default
-   is gate 1 by design (`src/lib/api-auth.ts`).
-6. **Shared modules are rendered inside each experience, not owned by either.** The Passport, profile and
-   history, personal AI and settings are one module each. They are mounted at `/individual/<experience>/…`
-   so the navigation context lives in the URL, and they read the same person-scoped data.
+   - An unreadable store is reported as unavailable and admits nobody (ADR-015's "unreadable is not permission").
+   - Creating the row never creates another product's membership and never writes `profiles.role`.
+2. **Scholar and Professional are rows in an entitlement ledger,** `individual_entitlement`, keyed `(user_id, experience_code)`.
+   - Each row has a period, a status, a `source` (NOT NULL, no default) and an `operating_entity`.
+   - Any number of rows may be live together.
+   - Liveness is the database clock, read through the view `individual_live_entitlement`.
+3. **Graduation activates; it never migrates.** It inserts a Professional row (`source = 'graduation'`). Returning to study inserts a Scholar row. Identity, history and Passport never move.
+4. **The primary experience is a preference,** honoured only while that experience is live.
+5. **The shell is Individual's own.**
+   - `/individual/(app)/**` is guarded by gate 3, never by `admitToEstate`.
+   - Person-facing APIs use `requireIndividualContext`. That guard is registered as the Individual plane in `scripts/auth-boundary-harness.ts`.
+6. **Shared modules are rendered inside each experience, not owned by either.** The Passport, profile and history, personal AI and settings are mounted at `/individual/<experience>/…`.
 
-## Provisional rulings
+## Owner rulings (2026-10-22)
 
-These are working assumptions from COMPETEN-IND-002 §7. The owner has not ruled on them.
-
-| # | Assumption | Where it is implemented |
+| # | Ruling | Where it is enforced |
 |---|---|---|
-| D1 | Individual-originated records live in `individual_*` tables. Nothing Individual writes goes into estate tables that hospital analytics read. | Migration 370 creates only `individual_*` tables. The harness fails any Individual write to `quiz_attempts`, `cpd_logs`, `course_enrollments`, `knowledge_attempts` or `learning_enrolments`. |
-| D3 | Records an institution issued about a person are shown to that person, read-only and labelled by issuer. | `src/lib/individual/passport.ts` reads them with the subject's id only. |
-| D6 | RLS is enabled on `individual_*` with own-row `select` policies. Writes go through the service role behind app guards. | Migration 370. |
-| D7 | The app routes are `/individual/scholar/**` and `/individual/professional/**`. | `src/app/individual/(app)/[experience]` plus the registry. |
-| D8 | The pilot is 18+. | Recorded only. Pilot grants are made by HQ, so there is no age gate in code. |
+| D1 | Separate `individual_*` tables. Personal data must not become employer-visible through shared Enterprise datasets. | 370 creates only `individual_*` objects. The foundation harness (3a) fails any Individual use of the estate learning tables. The acceptance harness (M1) proves that no fixture row reaches them. |
+| D2 | Holdings manages the shared foundation, and the Scholar subsidiary operates its service. Controller/processor relationships stay configurable pending formal legal confirmation. Terms acceptance is captured before pilot use. | `legal.ts` holds `DATA_ROLES` (`confirmed: false`); terms and privacy versions come from the environment, with no legal text or name invented. `terms.ts` gate: shared-foundation acceptance on the membership row, operator acceptance on the entitlement row, both all-or-nothing in the schema. Checked in the experience layout, every page and every experience API. Acceptance via `POST /api/individual/terms`, of the versions displayed. |
+| D3 | Employer-issued Passport evidence is read-only to the individual, with provenance and verification status. External sharing is governed by the individual's consent. Organisations' lawful rights over their original records are preserved. | `passport.ts` reads by the subject's id only, writes nothing and copies nothing. Every item is labelled *Issued by an organisation*, *Verified by an organisation* or *Self-declared*. Sharing stays on the existing consented share surface. |
+| D4 | Graduation does not revoke Scholar. Entitlements remain independent, and learning history persists. | The ledger allows concurrent rows. The grant end route cancels one experience only. History reads every period. Acceptance check D1. |
+| D5 | Individual maintains its own professional identity record. Future Practice linkage requires governed consent. | No Individual code reads or writes `practice_practitioner_identity`. The record itself arrives with the Professional MVP. |
+| D6 | RLS and server-side authorisation on Individual personal data, including cross-user isolation. | 370: RLS on, own-row `select` policies, no write policies, `security_invoker` view. App guards on every route. Acceptance checks G1–G4. |
+| D7 | Authenticated routes `/individual/scholar/**` and `/individual/professional/**`. Public marketing routes stay distinct. | `src/app/individual/(app)/[experience]`. |
+| D8 | The Scholar pilot is 18+, enforced during access granting. | The grant refuses Scholar without `adultConfirmed: true`. The schema CHECK `individual_entitlement_scholar_adult` refuses any Scholar row without `adult_confirmed_at`. The grant records `adult_confirmed_by`. |
+| D9 | `hq.individual.pilot.grant` goes through existing HQ governance, assigned to an Individual Product Administrator appointment. No new landlord authority and no parallel grant engine. | 370 seeds the capability, the position `individual_product_administrator` (platform space, product line `individual`) and its grant. `spaces.ts` catalogue. `POST /api/hq/individual/grants` and `/grants/end` behind `hqApiGate(["hq.individual.pilot.grant"])`, refusing self-grant. |
+| D10 | Personal AI persistent memory stays OFF until opt-in, visibility, correction and deletion controls exist. | The assistant stores no conversation (foundation harness 9g), and the page says so. |
 
-D2 (operating entity and data controller) is only partly assumed. `operating_entity` is recorded per
-entitlement, but the controller arrangement and terms capture are not built.
+The Scholar operating company's registered name is pending. `INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_REGISTERED_NAME` stays unset, and surfaces show a descriptive label.
 
 ## Consequences and limits
 
-- **No public signup.** The only way in is a pilot grant. The `/individual/sign-in` door stays
-  `being_built`, and pilot users sign in at `/login`, where the neutral resolver offers Individual.
-- **The pilot-grant right has no HQ capability yet.** Who in HQ may grant it is an owner decision. Until
-  then, grants are made by the owner in SQL from the template in COMPETEN-IND-003 §6.
-- **Passport sharing from Individual is not built.** The existing share route is behind gate 1. A person
-  who also holds gate 1 is pointed to it; a person who does not is told that sharing is not available yet.
-- The personal AI keeps **no memory**. Each question is grounded on the person's own record and
-  forgotten. Memory waits for a consent design.
+- **No public signup.** People enter by HQ grant. The `/individual/sign-in` door stays `being_built`, and pilot users sign in at `/login`.
+- **No experience is usable until its terms are published.** The four `INDIVIDUAL_LEGAL_*_VERSION` variables per environment must be set before the pilot.
+- **The grant right has an API, not an HQ page.** An HQ console page would add route intent, navigation and plane-boundary entries. It is the next package's work.
+- **Passport sharing from Individual is not built.** A person who also holds gate 1 is pointed to the existing share surface.
+- **No migration of `profiles.role`.** New accounts still receive `role = 'nurse'` from the new-user trigger (migration 335). Individual neither relies on that value nor changes it. Whether an Individual-only account should keep it is outside this ADR.
