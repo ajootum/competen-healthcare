@@ -1,6 +1,6 @@
 import { EXPERIENCES } from "@/lib/individual/experiences";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
-import { professionalPage } from "../../../../_components/professional/page-context";
+import { experienceModulePage } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable } from "../../../../_components/chrome";
 import { ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import { ClassLabel, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
@@ -14,7 +14,7 @@ import { ClassLabel, NotProvisioned, Section, fmtDate } from "../../../../_compo
 export const metadata = { title: "Profession & registration" };
 
 export default async function RegistrationPage({ params }: { params: Promise<{ experience: string }> }) {
-  const page = await professionalPage((await params).experience);
+  const page = await experienceModulePage((await params).experience, "registration");
   if (!page) return null;
   const { ctx } = page;
   const x = EXPERIENCES.professional;

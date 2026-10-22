@@ -32,6 +32,7 @@ import { EVIDENCE_LABEL } from "../src/lib/individual/passport";
 import { OWN_EVIDENCE_CLASSES, PROFESSIONAL_TABLES, DOCUMENT_BUCKET } from "../src/lib/individual/professional/vocabulary";
 import { ownRecordsFrom } from "../src/lib/individual/professional/passport-records";
 import { ClassLabel } from "../src/app/individual/_components/professional/bits";
+import { EXPERIENCES } from "../src/lib/individual/experiences";
 
 let pass = 0; const failures: string[] = [];
 const ok = (name: string, cond: boolean, detail = "") => {
@@ -182,12 +183,12 @@ const checkRenderedLabel = (render: (v: string) => string) => {
 const checkVerifyPage = (src: Sources) => {
   const s = src.get("src/app/verify/[token]/page.tsx") ?? "";
   return {
-    ok: /shareCarriesOwnRecords\(admin, share\.id, share\.nurse_id\)/.test(s)
+    ok: /\(await individualAppEnabled\(admin\)\) && await shareCarriesOwnRecords\(admin, share\.id, share\.nurse_id\)/.test(s)
       && /carriesOwn \? await loadOwnRecords\(admin, share\.nurse_id\) : null/.test(s)
       && /EVIDENCE_LABEL\[o\.evidence\]/.test(s)
       && /carriesOwn \? "Competen · Passport" : "Competen · Verified Passport"/.test(s)
       && /not verified by Competen or by any organisation/.test(s),
-    detail: "the own-records section must be gated on the companion row, labelled by class, and unhook the 'Verified' header",
+    detail: "the own-records section must be gated on the release gate AND the companion row, labelled by class, and unhook the Verified header",
   };
 };
 const checkNoVerifiedClassInProfessional = (src: Sources) => {
@@ -204,10 +205,16 @@ const checkDirectEntry = (src: Sources) => {
     const guards = [...s.matchAll(/requireIndividualContext\((?:"professional")?\)/g)].length;
     if (handlers === 0 || guards < handlers || /requireIndividualContext\("scholar"\)|\bscholar\b/.test(s)) bad.push(f);
   }
-  const pageCtx = src.get("src/app/individual/_components/professional/page-context.ts") ?? "";
+
   const pages = [...src].filter(([f]) => f.startsWith("src/app/individual/(app)/[experience]/(professional)/") && f.endsWith("page.tsx"));
-  for (const [f, s] of pages) if (!/await professionalPage\(/.test(s) || /\bscholar\b/i.test(s)) bad.push(f);
-  if (!/page\.experience !== "professional"\) notFound\(\)/.test(pageCtx) || /scholar/.test(pageCtx)) bad.push("page-context.ts");
+  // Each module page names its OWN segment to the foundation's experienceModulePage, which 404s unless the
+  // experience lists it -- and only Professional lists these segments, so the Scholar URL is not a page.
+  const scholarSegs = new Set(EXPERIENCES.scholar.modules.map(m => m.segment));
+  for (const [f, s] of pages) {
+    const seg = /\(professional\)\/([a-z-]+)\/page\.tsx$/.exec(f)?.[1] ?? "";
+    const listed = EXPERIENCES.professional.modules.some(m => m.segment === seg);
+    if (!s.includes(`await experienceModulePage((await params).experience, "${seg}")`) || !listed || scholarSegs.has(seg) || /\bscholar\b/i.test(s)) bad.push(f);
+  }
   return { ok: routes.length >= 9 && pages.length >= 6 && bad.length === 0, detail: `${routes.length} routes, ${pages.length} pages; ${bad.join(", ")}` };
 };
 
@@ -255,7 +262,7 @@ function main() {
   run("E3. the Passport items carry the right class per row, drop a class Professional cannot create, and leak no private text", checkPassportItems(ownRecordsFrom));
   run("E4. the rendered class label says not verified, and renders nothing for any other class",
     checkRenderedLabel(v => renderToStaticMarkup(createElement(ClassLabel, { value: v }))));
-  run("E5. /verify shows own records only with the companion row, labelled by class, without the 'Verified' header", checkVerifyPage(ALL));
+  run("E5. /verify shows own records only with the release gate on and the companion row, labelled by class, without the 'Verified' header", checkVerifyPage(ALL));
   run("E6. no Professional file names a verified class or sets a verified flag", checkNoVerifiedClassInProfessional(ALL));
 
   run("D1. direct entry: every Professional API handler and page asks for Professional, never Scholar", checkDirectEntry(ALL));
@@ -287,10 +294,11 @@ function main() {
   red("E3 when a foreign class passes through", checkPassportItems(r => (ownRecordsFrom(r) ?? []).concat([{ kind: "credential", title: "Forged", detail: null, date: null, expires: null, evidence: "independently_verified" as never }])));
   red("E3 when private text leaks", checkPassportItems(r => (ownRecordsFrom(r) ?? []).map(i => i.kind === "credential" ? { ...i, detail: "private detail" } : i)));
   red("E4 when a foreign class renders", checkRenderedLabel(v => v === "institution_verified" ? "<span>Verified</span>" : renderToStaticMarkup(createElement(ClassLabel, { value: v }))));
-  red("E5 without the companion-row gate", checkVerifyPage(new Map([...ALL].map(([f, s]) => [f, f === "src/app/verify/[token]/page.tsx" ? s.replace("shareCarriesOwnRecords(admin, share.id, share.nurse_id)", "true") : s]))));
+  red("E5 without the release gate", checkVerifyPage(new Map([...ALL].map(([f, s]) => [f, f === "src/app/verify/[token]/page.tsx" ? s.replace("(await individualAppEnabled(admin)) && await shareCarriesOwnRecords(admin, share.id, share.nurse_id)", "await shareCarriesOwnRecords(admin, share.id, share.nurse_id)") : s]))));
   red("E6 on a verified flag", checkNoVerifiedClassInProfessional(plant("src/app/api/individual/professional/evidence/route.ts", `const row = { verified: true };`)));
+  red("D1 when Scholar lists a Professional segment", (() => { const sch = EXPERIENCES.scholar.modules as unknown as { segment: string }[]; sch.push({ segment: "cpd" }); try { return checkDirectEntry(ALL); } finally { sch.pop(); } })());
   red("D1 on a Scholar guard", checkDirectEntry(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/cpd/route.ts") ? s.replace('requireIndividualContext("professional")', 'requireIndividualContext("scholar")') : s]))));
-  red("D1 on a page without the Professional check", checkDirectEntry(new Map([...ALL].map(([f, s]) => [f, f.endsWith("(professional)/progress/page.tsx") ? s.replace("await professionalPage(", "await experiencePage(") : s]))));
+  red("D1 on a page without the Professional check", checkDirectEntry(new Map([...ALL].map(([f, s]) => [f, f.endsWith("(professional)/progress/page.tsx") ? s.replace("await experienceModulePage((await params).experience, \"progress\")", "await experiencePage((await params).experience)") : s]))));
   redSchema("S1 on a write policy", checkRls(MIG + "\ncreate policy p on individual_professional_cpd for insert with check (true)"));
   redSchema("S1 on a defaulted origin", checkRls(MIG.replace("experience_code text not null,", "experience_code text not null default 'professional',")));
   redSchema("S2 on a single-column need link", checkCrossPersonLinks(MIG.replace("foreign key (need_id, user_id) references individual_professional_need(id, user_id) on delete set null (need_id)", "foreign key (need_id) references individual_professional_need(id)")));

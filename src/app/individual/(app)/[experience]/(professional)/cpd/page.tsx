@@ -2,7 +2,7 @@ import { EXPERIENCES } from "@/lib/individual/experiences";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { cpdHoursByYear } from "@/lib/individual/professional/progress";
 import { CPD_ACTIVITY_LABEL } from "@/lib/individual/professional/vocabulary";
-import { professionalPage } from "../../../../_components/professional/page-context";
+import { experienceModulePage } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { ApiButton } from "../../../../_components/professional/forms";
 import CpdForm from "../../../../_components/professional/CpdForm";
@@ -21,7 +21,7 @@ import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../..
 export const metadata = { title: "CPD log" };
 
 export default async function CpdPage({ params }: { params: Promise<{ experience: string }> }) {
-  const page = await professionalPage((await params).experience);
+  const page = await experienceModulePage((await params).experience, "cpd");
   if (!page) return null;
   const { ctx } = page;
   const x = EXPERIENCES.professional;

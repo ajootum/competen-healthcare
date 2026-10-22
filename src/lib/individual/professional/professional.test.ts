@@ -136,15 +136,16 @@ describe("the Passport and the AI see the same own record", () => {
 describe("the registry composes each experience's navigation", () => {
   it("puts Professional's modules after Home and before the foundation, and leaves Scholar's unchanged", () => {
     expect(navFor("professional").map(n => n.segment)).toEqual(["", "registration", "development", "cpd", "evidence", "progress", "assistant", "passport", "profile", "settings"]);
-    expect(navFor("scholar")).toEqual([...FOUNDATION_NAV]);
+    expect(navFor("scholar").map(n => n.key)).toEqual(FOUNDATION_NAV.map(n => n.module));
+    expect(navFor("professional").some(n => n.segment === "share")).toBe(false);
   });
 
   it("keeps the bottom bar to five destinations, without Settings", () => {
     for (const k of ["scholar", "professional"] as const) {
       const b = bottomNavFor(k);
       expect(b.length).toBeLessThanOrEqual(5);
-      expect(b[0].module).toBe("home");
-      expect(b.some(i => i.module === "settings")).toBe(false);
+      expect(b[0].key).toBe("home");
+      expect(b.some(i => i.key === "settings")).toBe(false);
     }
     expect(bottomNavFor("professional").map(i => i.segment)).toEqual(["", "development", "cpd", "assistant", "passport"]);
     expect(EXPERIENCES.professional.planned.some(p => p.key === "credentials" || p.key === "development-cpd")).toBe(false);

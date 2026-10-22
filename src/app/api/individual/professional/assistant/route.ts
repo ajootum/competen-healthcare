@@ -26,12 +26,13 @@ import { todayUtc } from "@/lib/individual/professional/api";
 // The audit row records the task and sizes, never the notes or the answer.
 
 export async function POST(req: Request) {
+  // The guard first, before any input is read: with the release gate off this route does not exist (404).
+  const ctx = await requireIndividualContext("professional");
+  if (isGuardRefusal(ctx)) return ctx;
+
   const body = await req.json().catch(() => ({}));
   const task = body?.task;
   if (!isAssistTask(task)) return NextResponse.json({ error: "Unknown task" }, { status: 400 });
-
-  const ctx = await requireIndividualContext("professional");
-  if (isGuardRefusal(ctx)) return ctx;
 
   const activity = task === "reflection" ? cleanActivity(body ?? {}) : null;
   if (task === "reflection" && !activity) return NextResponse.json({ error: "Name the activity (3 to 200 characters) and keep your notes under 2,000 characters." }, { status: 400 });

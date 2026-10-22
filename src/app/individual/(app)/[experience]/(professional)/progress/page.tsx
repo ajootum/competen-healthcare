@@ -4,7 +4,7 @@ import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { cpdHoursByYear, evidenceCoverage, planProgress } from "@/lib/individual/professional/progress";
 import { NEED_STATUS_LABEL } from "@/lib/individual/professional/vocabulary";
-import { professionalPage } from "../../../../_components/professional/page-context";
+import { experienceModulePage } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { NotProvisioned, Section } from "../../../../_components/professional/bits";
 
@@ -39,7 +39,7 @@ function NotMeasured({ why, href, cta, accent }: { why: string; href: string; ct
 }
 
 export default async function ProgressPage({ params }: { params: Promise<{ experience: string }> }) {
-  const page = await professionalPage((await params).experience);
+  const page = await experienceModulePage((await params).experience, "progress");
   if (!page) return null;
   const { ctx } = page;
   const x = EXPERIENCES.professional;

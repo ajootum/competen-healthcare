@@ -16,6 +16,8 @@
  *      person does not; revoke works on the person's own link only.
  *   G. Shared frameworks only: the framework list has no hospital framework, and a hospital framework is
  *      refused as a reference.
+ *   R. Release gate: the reminder job is silent while `individual_app` is OFF. The run switches it ON and
+ *      restores the row it found (Z2), as individual-acceptance-harness does. Never production.
  *   M. Employer visibility (D1): no fixture row in cpd_logs, professional_credentials, evidence,
  *      cdp_reminders or notifications.
  *
@@ -43,6 +45,7 @@ import { mintShare, listShares, revokeShare, shareCarriesOwnRecords } from "../s
 import { scanProfessionalReminders } from "../src/lib/individual/professional/reminders";
 import { loadSharedFrameworks, checkSharedReference } from "../src/lib/individual/professional/frameworks";
 import { DOCUMENT_BUCKET } from "../src/lib/individual/professional/vocabulary";
+import { individualAppEnabled, INDIVIDUAL_APP_FLAG } from "../src/lib/individual/gate";
 
 loadEnvConfig(process.cwd());
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -93,6 +96,16 @@ async function removeUser(email: string) {
 }
 const cleanup = async () => { for (const e of Object.values(FIX)) await removeUser(e); };
 
+/** The release flag's row before this run, or null when there was none. Restored by restoreFlag(). Staging
+ *  only -- assertSafeTarget above has already refused production. */
+let priorFlag: { flag: string; enabled: boolean; note: string | null } | null = null;
+let flagTouched = false;
+async function restoreFlag() {
+  if (!flagTouched) return;
+  if (priorFlag) await admin.from("practice_platform_flags").upsert(priorFlag);
+  else await admin.from("practice_platform_flags").delete().eq("flag", INDIVIDUAL_APP_FLAG);
+}
+
 async function makeUser(email: string, name: string, password = FIX_PASSWORD) {
   const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: name } });
   if (error || !data?.user) throw new Error(`createUser ${email}: ${error?.message}`);
@@ -120,6 +133,17 @@ async function main() {
   if (probe.error) { console.error(`store unreadable: ${probe.error.message}`); process.exit(1); }
 
   await cleanup();
+  // ── R. the release gate (src/lib/individual/gate.ts): saved, OFF phase, ON for the run, restored in Z2 ──
+  const flagRead = await admin.from("practice_platform_flags").select("flag, enabled, note").eq("flag", INDIVIDUAL_APP_FLAG).maybeSingle();
+  if (flagRead.error) { console.error(`release flag unreadable: ${flagRead.error.message}`); process.exit(1); }
+  priorFlag = flagRead.data ?? null;
+  flagTouched = true;
+  await admin.from("practice_platform_flags").upsert({ flag: INDIVIDUAL_APP_FLAG, enabled: false, note: "individual-professional-acceptance-harness: OFF phase" });
+  const off = await scanProfessionalReminders(admin);
+  ok("R1. gate OFF: the reminder job sends nothing -- Individual does not exist", off.disabled === true && off.sent === 0);
+  await admin.from("practice_platform_flags").upsert({ flag: INDIVIDUAL_APP_FLAG, enabled: true, note: "individual-professional-acceptance-harness: ON phase (restored after run)" });
+  ok("R2. gate ON for the run", (await individualAppEnabled(admin)) === true);
+
   const today = new Date().toISOString().slice(0, 10);
   const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
   const grantor = await makeUser(FIX.grantor, "IND-007 Grantor");
@@ -238,6 +262,10 @@ async function main() {
   await cleanup();
   const left = await Promise.all(PRO_TABLES.map(t => admin.from(t).select("*", { count: "exact", head: true }).in("user_id", ids)));
   ok("Z1. fixtures removed -- no Professional row left for any fixture", left.every(r => !r.error && (r.count ?? 0) === 0));
+  await restoreFlag();
+  const flagAfter = await admin.from("practice_platform_flags").select("enabled").eq("flag", INDIVIDUAL_APP_FLAG).maybeSingle();
+  ok("Z2. the release flag is restored to its state before the run",
+    priorFlag ? flagAfter.data?.enabled === priorFlag.enabled : flagAfter.data === null);
 
   if (pilotFile) await makePilot(pilotFile);
   console.log(`\n${fails.length ? "RED" : "ALL GREEN"} -- ${pass} passed, ${fails.length} failed`);
@@ -256,4 +284,4 @@ async function makePilot(file: string) {
   console.log(`  pilot: ${FIX.pilot} created, Professional only. Password written to the IND007_PILOT_CREDENTIALS file.`);
 }
 
-main().catch(async e => { console.error(e); try { await cleanup(); } catch { /* best effort */ } process.exit(1); });
+main().catch(async e => { console.error(e); try { await cleanup(); await restoreFlag(); } catch { /* best effort */ } process.exit(1); });

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { dispatch } from "@/lib/notifications/dispatch";
 import { REMINDER_HORIZON_DAYS } from "./vocabulary";
+import { individualAppEnabled } from "../gate";
 
 // ── EXPIRY REMINDERS FOR THE PERSON'S OWN CREDENTIALS AND REGISTRATION ── COMPETEN-IND-007 s4 ────────────
 //
@@ -41,7 +42,10 @@ export function reminderMessage(c: ReminderCandidate, today: string) {
   };
 }
 
-export async function scanProfessionalReminders(admin: any, now = new Date()): Promise<{ sent: number; skipped: number }> {
+export async function scanProfessionalReminders(admin: any, now = new Date()): Promise<{ sent: number; skipped: number; disabled?: true }> {
+  // The release gate (src/lib/individual/gate.ts): while Competen Individual is off it does not exist, and
+  // nobody is emailed about it.
+  if (!(await individualAppEnabled(admin))) return { sent: 0, skipped: 0, disabled: true };
   const today = now.toISOString().slice(0, 10);
   const horizon = new Date(now.getTime() + REMINDER_HORIZON_DAYS * 864e5).toISOString().slice(0, 10);
 

@@ -4,7 +4,7 @@ import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { loadSharedFrameworks, referenceNames } from "@/lib/individual/professional/frameworks";
 import { EVIDENCE_KIND, REMINDER_HORIZON_DAYS } from "@/lib/individual/professional/vocabulary";
 import { isExpired, isExpiringSoon } from "@/lib/engines/competency";
-import { professionalPage } from "../../../../_components/professional/page-context";
+import { experienceModulePage } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import FrameworkPicker from "../../../../_components/professional/FrameworkPicker";
@@ -24,7 +24,7 @@ import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../..
 export const metadata = { title: "Credentials & evidence" };
 
 export default async function EvidencePage({ params }: { params: Promise<{ experience: string }> }) {
-  const page = await professionalPage((await params).experience);
+  const page = await experienceModulePage((await params).experience, "evidence");
   if (!page) return null;
   const { ctx } = page;
   const x = EXPERIENCES.professional;

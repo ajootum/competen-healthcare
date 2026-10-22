@@ -4,7 +4,7 @@ import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { loadSharedFrameworks, referenceNames } from "@/lib/individual/professional/frameworks";
 import { GOAL_STATUS, GOAL_STATUS_LABEL, NEED_ORIGIN_LABEL, NEED_STATUS_LABEL } from "@/lib/individual/professional/vocabulary";
 import { planProgress } from "@/lib/individual/professional/progress";
-import { professionalPage } from "../../../../_components/professional/page-context";
+import { experienceModulePage } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable } from "../../../../_components/chrome";
 import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import FrameworkPicker from "../../../../_components/professional/FrameworkPicker";
@@ -21,7 +21,7 @@ import { Empty, NotProvisioned, Section, fmtDate } from "../../../../_components
 export const metadata = { title: "Needs & plan" };
 
 export default async function DevelopmentPage({ params }: { params: Promise<{ experience: string }> }) {
-  const page = await professionalPage((await params).experience);
+  const page = await experienceModulePage((await params).experience, "development");
   if (!page) return null;
   const { ctx } = page;
   const x = EXPERIENCES.professional;
