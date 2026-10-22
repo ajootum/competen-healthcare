@@ -20,6 +20,8 @@
 // the page to change. The optional `template` makes that difference structural. `templated()` is the only
 // way to reach SolutionPage, so a page cannot render a template that is not there.
 
+import { PROFESSIONAL, SCHOLAR } from "@/lib/marketing/individual-family";
+
 export type Solution = {
   slug: string;
   nav: string;                 // label in the Solutions menu
@@ -53,52 +55,24 @@ const ACTION = "mailto:gabriel@semacast.com?subject=" + encodeURIComponent("Comp
 
 export const SOLUTIONS: Solution[] = [
   {
-    slug: "students", nav: "Students", eyebrow: "Students",
-    body: "Competen helps you learn, practise and prove your readiness for the real world.",
-    // teal-700, not teal-600. The 600 shade measures 3.74:1 as the 13px "Explore" link on the homepage
-    // cards -- the same failure already fixed on the Practice pages, missed here because this catalogue
-    // was not re-measured when they were.
-    accent: "#0F766E", inPrimaryNav: true,
-    template: {
-      headline: ["Build your future", "in healthcare."],
-      points: ["Track your learning & progress", "Build your professional portfolio", "Prepare for assessments", "Stand out to employers"],
-      primary: { label: "Talk to us about getting started", href: ACTION },
-      // The owner, 2026-08-11: Student and Professional both GATE into Competen Individual -- one site
-      // for both audiences. The login page says the site is still being built BEFORE the password field.
-      secondary: { label: "Sign in", href: "/individual/sign-in" },
-      image: "/images/home/path-students.webp",
-      imageAlt: "A student nurse with a tablet",
-      featuresTitle: "Everything you need to succeed",
-      features: [
-        { title: "Learn", body: "Access courses and resources" },
-        { title: "Practice", body: "Apply knowledge with confidence" },
-        { title: "Assess", body: "Prepare and track assessments" },
-        { title: "Grow", body: "Build skills for your career" },
-      ],
-      closing: { title: "Start your journey today.", body: "Join thousands of students preparing for a brighter future in healthcare.", action: "Get Started" },
-    },
+    // ⚠ NO TEMPLATE SINCE COMPETEN-WEB-IND-001: /scholar is the public home of Competen Scholar, built by
+    // ExperiencePage from src/lib/marketing/individual-family.ts. The entry stays because Students is
+    // still an AUDIENCE pathway (nav, footer, "Who are you?"); the slug owns its page, as /practice does.
+    // ⚠ THE SLUG IS THE BRAND ROUTE, THE LABEL IS THE AUDIENCE -- the /practice + "Practitioners"
+    // precedent. Owner decision at the review GO: /scholar canonical, /students a permanent redirect.
+    // The owner's 2026-08-11 mapping still holds: the door is /individual/sign-in (harness 7l).
+    slug: "scholar", nav: "Students", eyebrow: "Students",
+    body: "Learn, revise and reason clinically with Competen Scholar.",
+    // Scholar's accent, so the homepage card's "Explore" link matches the page it opens. cyan-700 is
+    // 5.4:1 against white at the 13px link size -- above the 4.5:1 the teal-600 once failed.
+    accent: SCHOLAR.accent, inPrimaryNav: true,
   },
   {
-    slug: "professionals", nav: "Professionals", eyebrow: "Professionals",
-    body: "Keep your skills up to date. Showcase your competence. Unlock new opportunities.",
-    accent: "#4F46E5", inPrimaryNav: true,
-    template: {
-      headline: ["Grow throughout", "your career."],
-      points: ["Maintain your competency records", "Continuing professional development", "Career opportunities", "Professional portfolio & passport"],
-      primary: { label: "Talk to us about getting started", href: ACTION },
-      // Same gate as Students -- one Individual site serves both audience pathways.
-      secondary: { label: "Sign in", href: "/individual/sign-in" },
-      image: "/images/home/path-professionals.webp",
-      imageAlt: "A doctor outside a hospital",
-      featuresTitle: "Your professional workspace",
-      features: [
-        { title: "Develop", body: "Learn new skills and stay current" },
-        { title: "Document", body: "Store evidence and achievements" },
-        { title: "Demonstrate", body: "Showcase your competence" },
-        { title: "Advance", body: "Find roles and grow your career" },
-      ],
-      closing: { title: "Invest in your future.", body: "Join a community of professionals committed to excellence in healthcare.", action: "Get Started" },
-    },
+    // ⚠ NO TEMPLATE -- the public home of Competen Professional. Same rules as Students above:
+    // /professional canonical, /professionals a permanent redirect.
+    slug: "professional", nav: "Professionals", eyebrow: "Professionals",
+    body: "Grow your career with Competen Professional.",
+    accent: PROFESSIONAL.accent, inPrimaryNav: true,
   },
   {
     // No `template`: /practice is a six-page section built from practice-content.ts. See the note above.

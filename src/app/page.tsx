@@ -9,6 +9,7 @@ import {
 import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
 import { PRODUCTS } from "@/lib/marketing/products";
 import { pageMetadata } from "@/lib/marketing/site";
+import { INDIVIDUAL, PROFESSIONAL, SCHOLAR } from "@/lib/marketing/individual-family";
 
 // Public homepage. Governed by WEB-HOME-001 since 2026-08-11 (WEB-DEC, superseding WEB-STRAT-001):
 // products-first IA -- Products say WHAT Competen offers, Solutions say WHO it helps.
@@ -35,8 +36,11 @@ const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 // product-named cards, and Recruiter joined. Keyed by catalogue slug, so a pathway with no blurb here
 // simply does not render a card -- which is why the count is asserted by the disclosure harness.
 const PATH_BLURB: Record<string, { title: string; body: string; img: string }> = {
-  students:      { title: "Student",      body: "Build your foundation. Start your journey with confidence.", img: "/images/home/path-students.webp" },
-  professionals: { title: "Professional", body: "Grow your career. Keep learning. Stay ready.",               img: "/images/home/path-professionals.webp" },
+  // COMPETEN-WEB-IND-001: the two Individual audiences now land on their branded experiences (keyed by the
+  // canonical slugs scholar / professional since the review GO), and the
+  // card says which -- the audience stays the title (s9), the product is the way in.
+  scholar:       { title: "Student",      body: "Study smarter and think clinically with Competen Scholar.",   img: "/images/home/path-students.webp" },
+  professional:  { title: "Professional", body: "Grow your career and keep your evidence with Competen Professional.", img: "/images/home/path-professionals.webp" },
   practice:      { title: "Practitioner", body: "Run your practice. Delight your patients.",                  img: "/images/home/path-practice.webp" },
   organisations: { title: "Organisation", body: "Empower your teams. Improve care. Transform outcomes.",      img: "/images/home/path-hospitals.webp" },
   recruitment:   { title: "Recruiter",    body: "Find the right people. Verify what matters.",                img: "/images/home/team-hospital.webp" },
@@ -119,6 +123,76 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ── ONE PLATFORM. FOUR PRODUCTS. (WEB-HOME-001 s10, COMPETEN-WEB-IND-001 s1) ───────────
+            MOVED ABOVE the audience question: product discovery is the redesign's first job, and the
+            four products are what the hero's "Explore Competen" should land the eye on.
+            ⚠ Still four products and only four, each with an outcome sentence, never a module list --
+            s2 forbids feature lists here and s10 forbids naming any Enterprise sub-product. Individual's
+            Scholar and Professional are its two branded EXPERIENCES, shown inside its card, not as
+            products of their own. The disclosure harness holds all of it (7g, 7h, 2b). */}
+        <section id="products" className={`${container} pt-12 lg:pt-16`}>
+          <div className="text-center">
+            <h2 className="text-[1.35rem] font-bold tracking-tight text-gray-900">One platform. Four products.</h2>
+            <p className="mt-1.5 text-[14px] text-gray-600">Find your place in Competen — for individuals and for organisations.</p>
+          </div>
+          <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {PRODUCTS.map(p => (
+              <li key={p.key} className="group relative flex flex-col rounded-2xl border border-gray-200 bg-white p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all focus-within:shadow-lg">
+                <span aria-hidden className="flex w-10 h-10 items-center justify-center rounded-xl text-[15px] font-bold text-white"
+                  style={{ background: p.accent }}>{p.label[0]}</span>
+                <h3 className="mt-3 text-[16px] font-bold text-gray-900">
+                  {/* The whole card is the product link (stretched ::after); the experience links below
+                      sit above it with their own targets, so each still gets a 44px hit area. */}
+                  <Link href={p.href} className="after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none">
+                    {p.label}
+                  </Link>
+                </h3>
+                <p className="mt-0.5 text-[12px] font-semibold uppercase tracking-wide" style={{ color: p.accent }}>{p.micro}</p>
+                <p className="mt-2 text-[13px] leading-snug text-gray-600">{p.summary}</p>
+                {p.experiences && (
+                  <ul className="relative z-10 mt-3 flex flex-wrap gap-1.5" aria-label={`${p.label} experiences`}>
+                    {p.experiences.map(x => (
+                      <li key={x.key}>
+                        <Link href={x.href}
+                          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-semibold hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
+                          style={{ color: x.accent, borderColor: `color-mix(in srgb, ${x.accent} 30%, transparent)` }}>
+                          {x.label.replace("Competen ", "")}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <span aria-hidden className="mt-auto pt-3 inline-block text-[13px] font-semibold" style={{ color: p.accent }}>Explore →</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* ── FROM STUDENT TO PROFESSIONAL (COMPETEN-WEB-IND-001 s4) ───────────
+            The lifelong journey in one band; the full story lives on /individual#journey. */}
+        <section aria-labelledby="journey-band" className={`${container} pt-10`}>
+          <div className="flex flex-col gap-5 rounded-3xl border border-gray-200 px-6 py-6 sm:px-8 lg:flex-row lg:items-center"
+            style={{ background: `linear-gradient(110deg, ${SCHOLAR.accentSoft}, #fff 50%, ${PROFESSIONAL.accentSoft})` }}>
+            <div className="flex-1">
+              <h2 id="journey-band" className="text-[1.15rem] font-bold text-gray-900">From the classroom to professional practice.</h2>
+              <p className="mt-1 text-[13.5px] leading-relaxed text-gray-600">
+                Study with Competen Scholar. Practise with Competen Professional. Start with either, use
+                both, with one account and one Competen Passport the whole way.
+              </p>
+            </div>
+            {/* ⚠ NOT A SEQUENCE (refinement item 2): no "Graduate" step between the two -- Professional is
+                open at any career stage, and graduation is only a suggested moment to add it. */}
+            <ul className="flex flex-wrap items-center gap-2 text-[13px] font-semibold" aria-label="The two Individual experiences">
+              <li><Link href={SCHOLAR.href} className="inline-flex min-h-[44px] items-center rounded-full bg-white px-4 ring-1 ring-black/5 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900" style={{ color: SCHOLAR.accent }}>Scholar</Link></li>
+              <li aria-hidden className="text-gray-500">+</li>
+              <li><Link href={PROFESSIONAL.href} className="inline-flex min-h-[44px] items-center rounded-full bg-white px-4 ring-1 ring-black/5 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900" style={{ color: PROFESSIONAL.accent }}>Professional</Link></li>
+            </ul>
+            <Link href="/individual#journey" className="shrink-0 inline-flex min-h-[44px] items-center text-[14px] font-semibold hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900" style={{ color: INDIVIDUAL.accent }}>
+              See the journey <span aria-hidden className="ml-1">→</span>
+            </Link>
+          </div>
+        </section>
+
         {/* ── CHOOSE YOUR PATH ─────────────────────────────────────────────── */}
         <section id="choose-your-path" className={`${container} py-12 lg:py-16`}>
           {/* WEB-HOME-001 s9's heading. The section id stays `choose-your-path` -- the hero CTA and any
@@ -142,25 +216,6 @@ export default function Home() {
                 </Link>
               );
             })}
-          </div>
-        </section>
-
-        {/* ── ONE PLATFORM. FOUR PRODUCTS. (WEB-HOME-001 s10) ─────────────────
-            ⚠ Micro-descriptions only, from the catalogue -- s2 forbids feature lists here, and s10
-            forbids naming any Enterprise sub-product on this page. The disclosure harness holds both. */}
-        <section className={`${container} pb-14`}>
-          <h2 className="text-center text-[1.35rem] font-bold tracking-tight text-gray-900">One platform. Four products.</h2>
-          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {PRODUCTS.map(p => (
-              <Link key={p.key} href={p.href}
-                className="group rounded-2xl border border-gray-200 bg-white p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all">
-                <span aria-hidden className="flex w-10 h-10 items-center justify-center rounded-xl text-[15px] font-bold text-white"
-                  style={{ background: p.accent }}>{p.label[0]}</span>
-                <h3 className="mt-3 text-[16px] font-bold text-gray-900">{p.label}</h3>
-                <p className="mt-1 text-[13px] text-gray-600">{p.micro}</p>
-                <span className="mt-3 inline-block text-[13px] font-semibold" style={{ color: p.accent }}>Explore →</span>
-              </Link>
-            ))}
           </div>
         </section>
 

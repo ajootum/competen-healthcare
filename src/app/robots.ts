@@ -12,7 +12,8 @@ import { abs } from "@/lib/marketing/site";
 //
 // PUBLIC SURFACE, deliberately enumerated as an allow-list of what is crawlable rather than a guess:
 //   /                          homepage
-//   /students /professionals /practice /hospitals   the four Phase 1 landing pages
+//   /scholar /professional /practice /organisations   the audience landing pages (COMPETEN-WEB-IND-001:
+//                              /students, /professionals and /hospitals are permanent redirects to them)
 //   /quality                   secondary landing page (indexed; simply not in the primary menu)
 //   /login /signup /forgot-password /reset-password  access pages
 //   /verify/<token>            public passport verification -- see below

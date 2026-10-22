@@ -37,6 +37,16 @@ export default function SiteFooter() {
               {PRODUCTS.map(p => (
                 <li key={p.key}>
                   <Link href={p.href} className="text-[12.5px] text-white/55 hover:text-white transition-colors">{p.label}</Link>
+                  {/* COMPETEN-WEB-IND-001 s2: Scholar and Professional, nested under Individual. */}
+                  {p.experiences && (
+                    <ul className="mt-2 space-y-2 border-l border-white/10 pl-3">
+                      {p.experiences.map(x => (
+                        <li key={x.key}>
+                          <Link href={x.href} className="text-[12px] text-white/60 hover:text-white transition-colors">{x.label.replace("Competen ", "")}</Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ul>
