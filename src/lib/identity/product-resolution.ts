@@ -3,6 +3,7 @@
 import { admitToEstate } from "../platform-membership";
 import { estateRolesOf, type AppRole } from "../roles";
 import { isNotProvisioned } from "../individual/access";
+import { individualAppEnabled } from "../individual/gate";
 
 // COMP-ID-ROUTE-001 -- NEUTRAL SIGN-IN PRODUCT RESOLUTION (2026-08-17).
 //
@@ -51,12 +52,20 @@ export type ProductResolution =
   | { state: "unavailable" };
 
 export async function resolveProductDestinations(admin: any, userId: string): Promise<ProductResolution> {
-  const [profileRead, practiceRead, individualRead] = await Promise.all([
+  const [profileRead, practiceRead, individualOn] = await Promise.all([
     admin.from("profiles").select("id, role, roles").eq("id", userId).maybeSingle(),
     admin.from("practice_membership").select("id, workspace_id, status")
       .eq("user_id", userId).limit(5),
-    admin.from("individual_membership").select("status").eq("user_id", userId).maybeSingle(),
+    individualAppEnabled(admin),
   ]);
+
+  // ⚠ INDIVIDUAL'S RELEASE GATE (src/lib/individual/gate.ts). With it OFF -- the default, and the state an
+  // absent row or a failed flag read produce -- the Individual table is NEVER QUERIED, so this function
+  // issues the same membership reads and returns the same answers it did before Individual existed, with
+  // or without migration 370. The gate never throws and never makes this resolver "unavailable".
+  const individualRead: { data: any; error: any } = individualOn
+    ? await admin.from("individual_membership").select("status").eq("user_id", userId).maybeSingle()
+    : { data: null, error: null };
 
   // A failed read is not "no access" -- inferring either way is the one forbidden move (s3, s11).
   //

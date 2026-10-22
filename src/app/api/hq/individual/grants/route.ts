@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { individualAppEnabled } from "@/lib/individual/gate";
 import { currentTraceId } from "@/lib/trace";
 import { grantIndividualAccess, isGrantRefusal, validateGrant } from "@/lib/individual/grants";
 
@@ -22,6 +23,8 @@ import { grantIndividualAccess, isGrantRefusal, validateGrant } from "@/lib/indi
 export async function POST(req: Request) {
   const ctx = await hqApiGate(["hq.individual.pilot.grant"]);
   if (isHqRefusal(ctx)) return ctx;
+  // The release gate (src/lib/individual/gate.ts): with Individual off, the grant right opens nothing.
+  if (!(await individualAppEnabled(ctx.admin))) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
 
   const parsed = validateGrant(await req.json().catch(() => ({})));
   if (isGrantRefusal(parsed)) return NextResponse.json({ error: { code: parsed.code, message: parsed.message } }, { status: parsed.status });

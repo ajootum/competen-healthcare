@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { resolveIndividualShell, contextTermsGate, type IndividualContext } from "@/lib/individual/guard";
 import { isExperienceKey, type ExperienceKey } from "@/lib/individual/experiences";
 
@@ -17,6 +17,7 @@ export const individualShell = cache(resolveIndividualShell);
  */
 export async function experiencePage(param: string): Promise<{ ctx: IndividualContext; experience: ExperienceKey } | null> {
   const shell = await individualShell();
+  if (shell.state === "DISABLED") notFound();
   if (shell.state === "AUTH_REQUIRED") redirect("/login?next=/individual/home");
   if (shell.state !== "READY") redirect("/individual/access");
   if (!isExperienceKey(param) || !shell.ctx.live.includes(param)) return null;

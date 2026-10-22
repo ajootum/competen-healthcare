@@ -1,12 +1,13 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { individualShell } from "../_components/shell-context";
 
 // ── THE COMPETEN INDIVIDUAL APPLICATION: GATE 3 ── COMPETEN-IND-003 s2, ADR-016 ───────────────────────
 //
 // Every signed-in Individual route sits in this group, and this layout answers gate 3 once for all of
-// them, in the Practice shell's order: authentication, then membership. A non-READY state redirects to
+// them: the release gate first (OFF renders 404 -- src/lib/individual/gate.ts), then, in the Practice
+// shell's order, authentication and membership. A non-READY state redirects to
 // its own surface and protected content never renders in it.
 //
 // ⚠ GATE 3 ONLY. This layout never calls admitToEstate and never requires platform_membership -- an
@@ -23,6 +24,7 @@ export const metadata: Metadata = {
 
 export default async function IndividualAppLayout({ children }: { children: React.ReactNode }) {
   const shell = await individualShell();
+  if (shell.state === "DISABLED") notFound();
   if (shell.state === "AUTH_REQUIRED") {
     // Return to where they were going, validated -- only a plain /individual path, never an open redirect.
     const asked = (await headers()).get("x-pathname") ?? "";

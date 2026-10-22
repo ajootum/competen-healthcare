@@ -32,6 +32,7 @@ export default async function ExperienceLayout({ children, params }: {
   const { experience } = await params;
   if (!isExperienceKey(experience)) notFound();
   const shell = await individualShell();
+  if (shell.state === "DISABLED") notFound();
   if (shell.state !== "READY") redirect("/individual/access");
   const { live, profile } = shell.ctx;
   const x = EXPERIENCES[experience];

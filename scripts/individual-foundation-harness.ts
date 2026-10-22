@@ -185,6 +185,28 @@ function main() {
     legalSrc.length > 0 && !/registeredName:\s*"/.test(legalSrc) && !/version:\s*"/.test(legalSrc));
   ok("9f. D2: terms acceptance is all-or-nothing in the schema, on both tables",
     /individual_entitlement_terms_whole/.test(mig) && /individual_membership_foundation_terms_whole/.test(mig));
+  // ── 10. THE RELEASE GATE: every entry point asks it first, on the server ──
+  const guardSrc = SRC.get("src/lib/individual/guard.ts") ?? "";
+  ok("10a. the shell guard checks the release gate BEFORE authentication and before any Individual table",
+    /individualAppEnabled\(admin\)\)\) return \{ state: "DISABLED" \}/.test(guardSrc)
+    && guardSrc.indexOf("individualAppEnabled(admin)") < guardSrc.indexOf("auth.getUser()")
+    && guardSrc.indexOf("individualAppEnabled(admin)") < guardSrc.indexOf("readIndividualAccess("));
+  ok("10b. a DISABLED shell is 404 in the API guard, the group layout, the experience layout, every page helper, home and welcome",
+    /shell\.state === "DISABLED"\) return NextResponse\.json\(\{ error: "Not found" \}, \{ status: 404 \}\)/.test(guardSrc)
+    && ["src/app/individual/(app)/layout.tsx", "src/app/individual/(app)/[experience]/layout.tsx", "src/app/individual/_components/shell-context.ts",
+      "src/app/individual/(app)/home/page.tsx", "src/app/individual/(app)/welcome/page.tsx"]
+      .every(f => /shell\.state === "DISABLED"\) notFound\(\)/.test(SRC.get(f) ?? "")));
+  ok("10c. the access page and both HQ grant routes check the gate themselves",
+    /individualAppEnabled\(createAdminClient\(\)\)\)\) notFound\(\)/.test(SRC.get("src/app/individual/access/page.tsx") ?? "")
+    && hqRoutes.every(f => /individualAppEnabled\(ctx\.admin\)\)\) return NextResponse\.json/.test(SRC.get(f) ?? "")));
+  ok("10d. the neutral resolver reads individual_membership ONLY when the gate is on",
+    /individualAppEnabled\(admin\),/.test(pr) && /individualOn\s*\?\s*await admin\.from\("individual_membership"\)/.test(pr));
+  ok("10e. both person-facing APIs run the guard before validating input, and no GET handler exists",
+    ["src/app/api/individual/assistant/route.ts", "src/app/api/individual/terms/route.ts"].every(f => {
+      const s = SRC.get(f) ?? "";
+      return s.indexOf("requireIndividualContext(") < s.indexOf('"Unknown experience"') && !/export async function GET/.test(s);
+    }));
+
   ok("9g. D10: no Individual code persists AI conversation",
     !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));
 

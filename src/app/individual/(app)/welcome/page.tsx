@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { EXPERIENCES } from "@/lib/individual/experiences";
 import { effectivePrimary } from "@/lib/individual/access";
 import { individualShell } from "../../_components/shell-context";
@@ -17,6 +17,7 @@ export const metadata = { title: "Welcome" };
 
 export default async function Welcome() {
   const shell = await individualShell();
+  if (shell.state === "DISABLED") notFound();
   if (shell.state !== "READY") redirect("/individual/access");
   const { membership, live, profile } = shell.ctx;
   if (live.length === 0) redirect("/individual/home");
