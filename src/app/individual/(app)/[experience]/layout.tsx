@@ -9,6 +9,10 @@ import TermsAcceptance, { type ShownDoc } from "../../_components/TermsAcceptanc
 import { contextTermsGate } from "@/lib/individual/guard";
 import { publishedVersions } from "@/lib/individual/legal";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // ── AN EXPERIENCE SHELL: /individual/scholar/** or /individual/professional/** ── COMPETEN-IND-003 s3 ──
 //
 // One layout for both experiences, configured by the registry: the mark, accent and navigation come from

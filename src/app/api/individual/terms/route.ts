@@ -4,6 +4,10 @@ import { requireIndividualContext, isGuardRefusal, contextTermsGate } from "@/li
 import { isExperienceKey } from "@/lib/individual/experiences";
 import { publishedVersions } from "@/lib/individual/legal";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // POST /api/individual/terms -- owner ruling D2: "Capture applicable terms acceptance before pilot use."
 // Body: { experience, foundation: { terms, privacy }, experienceDocs: { terms, privacy } } -- the versions
 // the person was SHOWN.
