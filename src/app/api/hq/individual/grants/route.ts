@@ -4,6 +4,10 @@ import { individualAppEnabled } from "@/lib/individual/gate";
 import { currentTraceId } from "@/lib/trace";
 import { grantIndividualAccess, isGrantRefusal, validateGrant } from "@/lib/individual/grants";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // POST /api/hq/individual/grants -- COMPETEN-IND-003 owner rulings D8 and D9.
 //
 // Grants Competen Individual pilot access: the gate-3 membership if the person has none, and one live

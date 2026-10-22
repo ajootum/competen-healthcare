@@ -4,6 +4,10 @@ import { loadIndividualPassport } from "@/lib/individual/passport";
 import { experiencePage } from "../../_components/shell-context";
 import { PageHeader, focusRing } from "../../_components/chrome";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // THE EXPERIENCE HOME -- COMPETEN-IND-003 s2(1) and s3.
 //
 // What it shows is what exists: the foundation modules (Passport, personal AI, profile and history) with

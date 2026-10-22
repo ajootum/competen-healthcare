@@ -5,6 +5,10 @@ import { individualShell } from "../../_components/shell-context";
 import { StatePanel, IndividualMark, secondaryBtn } from "../../_components/chrome";
 import { SignOutButton } from "../../_components/ShellNav";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // /individual/home -- THE LANDING. The neutral sign-in chooser sends Individual members here, and this
 // page sends them on: to the welcome if they have not finished it, otherwise to their primary experience
 // if it is still live, otherwise to the one that is (src/lib/individual/access.ts decideLanding).

@@ -6,6 +6,10 @@ import { estateRolesOf, type AppRole } from "@/lib/roles";
 import { experiencePage } from "../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../_components/chrome";
 
+// Request-time only: it reads the release gate and the session, and must never be prerendered at build
+// (a build-time render would fail without the service key, or freeze the gate into static HTML).
+export const dynamic = "force-dynamic";
+
 // THE COMPETEN PASSPORT IN COMPETEN INDIVIDUAL -- COMPETEN-IND-003 s2(5).
 //
 // The person's one existing Passport, read by their own id (src/lib/individual/passport.ts). Every item

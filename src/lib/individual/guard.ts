@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextResponse } from "next/server";
+import { NextResponse, connection } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { readIndividualAccess, type IndividualMembership } from "./access";
 import type { ExperienceKey } from "./experiences";
@@ -54,6 +54,9 @@ export async function resolveIndividualShell(): Promise<IndividualShell> {
   // ⚠ THE RELEASE GATE FIRST, BEFORE AUTHENTICATION. With the gate off, a signed-out visitor and a signed-
   // in one get the same answer -- 404 -- so a disabled Individual cannot be told apart from an absent one,
   // and nothing below (which reads the migration-370 tables) runs at all.
+  // Request time only, before ANY client exists: a prerender stops here instead of building a service-role
+  // client at build time (Vercel Preview has no key) or freezing the gate into static HTML.
+  await connection();
   const admin = createAdminClient() as any;
   if (!(await individualAppEnabled(admin))) return { state: "DISABLED" };
   const supabase = await createClient();
