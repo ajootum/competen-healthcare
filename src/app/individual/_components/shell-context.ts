@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import { resolveIndividualShell, contextTermsGate, type IndividualContext } from "@/lib/individual/guard";
-import { isExperienceKey, type ExperienceKey } from "@/lib/individual/experiences";
+import { EXPERIENCES, isExperienceKey, type ExperienceKey } from "@/lib/individual/experiences";
 
 // One gate-3 resolution per request, shared by the group layout, the experience layout and the page.
 // React's cache() scopes it to the render, so three callers cost one read -- and, more importantly, they
@@ -24,4 +24,17 @@ export async function experiencePage(param: string): Promise<{ ctx: IndividualCo
   // Owner ruling D2: live is not usable until the terms are accepted. The layout renders the acceptance.
   if (!contextTermsGate(shell.ctx, param).usable) return null;
   return { ctx: shell.ctx, experience: param };
+}
+
+/**
+ * For an EXPERIENCE-OWNED module page (EXPERIENCES[x].modules -- IND-004 Scholar, IND-007 Professional):
+ * everything experiencePage() checks (release gate, gate 3, live experience, D2 terms), and then that this
+ * experience actually lists the module. /individual/scholar/<a professional segment> is 404, not a page
+ * that happens to render because both experiences share the [experience] route.
+ */
+export async function experienceModulePage(param: string, segment: string): Promise<{ ctx: IndividualContext; experience: ExperienceKey } | null> {
+  const page = await experiencePage(param);
+  if (!page) return null;
+  if (!EXPERIENCES[page.experience].modules.some(m => m.segment === segment)) notFound();
+  return page;
 }

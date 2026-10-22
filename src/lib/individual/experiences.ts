@@ -71,6 +71,24 @@ export type ExperienceConfig = {
   /** The experience home's opening sentence. */
   homeIntro: string;
   planned: PlannedCapability[];
+  /**
+   * Experience-OWNED modules: destinations only this experience has, mounted at
+   * /individual/<experience>/<segment> with their pages under (app)/[experience]/(<experience>)/<segment>.
+   * Empty until the module ships -- a planned capability is listed in `planned`, never here.
+   */
+  modules: ExperienceModule[];
+};
+
+/** A destination one experience owns (IND-004 Scholar, IND-007 Professional). */
+export type ExperienceModule = {
+  key: string;
+  /** Path below /individual/<experience>. Must not reuse a foundation segment. */
+  segment: string;
+  label: string;
+  short: string;
+  icon: string;
+  /** Wants a place on the mobile bottom bar. bottomNavFor() caps the bar at five. */
+  bottom?: boolean;
 };
 
 // ── THE FOUNDATION NAVIGATION ── the same five modules in both experiences ───────────────────────────
@@ -94,6 +112,7 @@ export const SCHOLAR: ExperienceConfig = {
   tagline: "Learn · Understand · Apply",
   micro: "Healthcare education, revision and clinical reasoning.",
   operatingEntity: "scholar_operator",
+  modules: [],
   homeIntro: "Your study space. Your Passport, profile and personal AI are already here, and the learning tools below are being built.",
   planned: [
     {
@@ -128,6 +147,7 @@ export const PROFESSIONAL: ExperienceConfig = {
   tagline: "Develop · Demonstrate · Advance",
   micro: "Your lifelong professional development, evidence and career.",
   operatingEntity: "competen_holdings",
+  modules: [],
   homeIntro: "Your professional home. Your Passport, profile and personal AI are already here, and the development tools below are being built.",
   planned: [
     {
@@ -157,6 +177,33 @@ export const EXPERIENCES: Readonly<Record<ExperienceKey, ExperienceConfig>> = {
   scholar: SCHOLAR,
   professional: PROFESSIONAL,
 };
+
+// ── THE GENERATED NAVIGATION ── one sidebar list and one bottom-bar list per experience ──────────────
+//
+// The ONLY place the shell's navigation is composed (ShellNav renders these, nothing else), so the two
+// experiences cannot drift and an experience module appears the day it is added to `modules`.
+
+export type ShellNavItem = { key: string; segment: string; label: string; short: string; icon: string };
+
+const asItem = (n: NavItem): ShellNavItem => ({ key: n.module, segment: n.segment, label: n.label, short: n.short, icon: n.icon });
+
+/** Sidebar order: Home, the experience's own modules, then the rest of the foundation. */
+export function navFor(experience: ExperienceKey): ShellNavItem[] {
+  const home = FOUNDATION_NAV.filter(n => n.module === "home").map(asItem);
+  const rest = FOUNDATION_NAV.filter(n => n.module !== "home").map(asItem);
+  const own = EXPERIENCES[experience].modules.map(m => ({ key: m.key, segment: m.segment, label: m.label, short: m.short, icon: m.icon }));
+  return [...home, ...own, ...rest];
+}
+
+/** CPR-MOB-001: at most five bottom tabs -- Home, modules flagged `bottom`, then foundation to fill. Settings
+ *  never sits on the bar (it lives behind the account link). */
+export const BOTTOM_BAR_MAX = 5;
+export function bottomNavFor(experience: ExperienceKey): ShellNavItem[] {
+  const home = FOUNDATION_NAV.filter(n => n.module === "home").map(asItem);
+  const own = EXPERIENCES[experience].modules.filter(m => m.bottom).map(m => ({ key: m.key, segment: m.segment, label: m.label, short: m.short, icon: m.icon }));
+  const fill = FOUNDATION_NAV.filter(n => n.module !== "home" && n.module !== "settings").map(asItem);
+  return [...home, ...own, ...fill].slice(0, BOTTOM_BAR_MAX);
+}
 
 /** The href of a foundation module inside an experience. */
 export function experienceHref(experience: ExperienceKey, segment = ""): string {

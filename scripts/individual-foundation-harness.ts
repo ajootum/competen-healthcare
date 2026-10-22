@@ -23,7 +23,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { ACCESS_DOORS } from "../src/lib/access-doors";
-import { EXPERIENCE_KEYS, FOUNDATION_NAV } from "../src/lib/individual/experiences";
+import { EXPERIENCES, EXPERIENCE_KEYS, FOUNDATION_NAV, navFor } from "../src/lib/individual/experiences";
 
 let pass = 0; const failures: string[] = [];
 const ok = (name: string, cond: boolean, detail = "") => {
@@ -98,9 +98,19 @@ function main() {
   for (const [f, src] of SRC) {
     for (const m of src.matchAll(/from\("([a-z_]+)"\)\s*\.(insert|update|upsert|delete)\(/g)) writes.push(`${f}: ${m[1]}.${m[2]}`);
   }
+  // EXPERIENCE RULE (IND-004 / IND-007): a file under src/lib/individual/<x>/ or src/app/api/individual/<x>/
+  // may write only that experience's own tables, individual_<x>_*. One named estate exception: Professional's
+  // share route reuses passport_share_tokens (COMPETEN-IND-002 s4.1), whose only other readers are the owner's
+  // own share page and /verify -- no hospital-scoped reader. Each experience's own harness pins its exact list.
+  const NAMED_EXCEPTIONS: Record<string, string[]> = {
+    "src/app/api/individual/professional/share/route.ts": ["passport_share_tokens.insert", "passport_share_tokens.update"],
+  };
+  const experienceOf = (f: string) => /^src\/(?:lib|app\/api)\/individual\/(scholar|professional)\//.exec(f)?.[1] ?? null;
   const badWrites = writes.filter(w => {
     const [f, op] = w.split(": ");
-    return op !== "audit_log.insert" && !(ALLOWED[f] ?? []).includes(op);
+    if (op === "audit_log.insert" || (ALLOWED[f] ?? []).includes(op) || (NAMED_EXCEPTIONS[f] ?? []).includes(op)) return false;
+    const x = experienceOf(f);
+    return !(x && op.startsWith(`individual_${x}_`));
   });
   ok("2a. every gate-3 write sits in its one allowed file; nothing else but audit_log is written", badWrites.length === 0, badWrites.join("; "));
   const expected = Object.entries(ALLOWED).flatMap(([f, ops]) => ops.map(op => `${f}: ${op}`));
@@ -148,10 +158,25 @@ function main() {
     !FILES.some(f => f.startsWith("src/app/api/individual/") && /from\("individual_(membership|entitlement)"\)\s*\.(insert|upsert)\(/.test(SRC.get(f) ?? "")));
 
   // ── 7. NAVIGATION LISTS ONLY WHAT EXISTS ────────────────────────────────────────────────────────
-  const missing = FOUNDATION_NAV.filter(n => !existsSync(n.segment
-    ? `src/app/individual/(app)/[experience]/${n.segment}/page.tsx`
-    : "src/app/individual/(app)/[experience]/page.tsx"));
-  ok("7a. every navigation entry has a real page behind it", missing.length === 0, missing.map(n => n.segment || "home").join(", "));
+  const EXP_DIR = "src/app/individual/(app)/[experience]";
+  const missing = EXPERIENCE_KEYS.flatMap(k => navFor(k).filter(n => {
+    if (!n.segment) return !existsSync(`${EXP_DIR}/page.tsx`);
+    return !existsSync(`${EXP_DIR}/${n.segment}/page.tsx`) && !existsSync(`${EXP_DIR}/(${k})/${n.segment}/page.tsx`);
+  }).map(n => `${k}/${n.segment}`));
+  ok("7a. every navigation entry, for both experiences, has a real page behind it", missing.length === 0, missing.join(", "));
+  const foundationSegments = new Set(FOUNDATION_NAV.map(n => n.segment));
+  const badModules = EXPERIENCE_KEYS.flatMap(k => {
+    const segs = EXPERIENCES[k].modules.map(m => m.segment);
+    return segs.filter((s, i) => !s || foundationSegments.has(s) || segs.indexOf(s) !== i).map(s => `${k}/${s || "(empty)"}`);
+  });
+  ok("7c. experience modules never reuse a foundation segment, an empty segment or each other", badModules.length === 0, badModules.join(", "));
+  const pages = FILES.filter(f => f.startsWith(`${EXP_DIR}/`) && f.endsWith("/page.tsx"));
+  const ungatedPages = pages.filter(f => !/experiencePage\(|experienceModulePage\(/.test(SRC.get(f) ?? ""));
+  ok("7d. every page under [experience] takes its context from experiencePage / experienceModulePage (gate, live, terms)",
+    pages.length >= 5 && ungatedPages.length === 0, ungatedPages.join(", "));
+  const modulePages = pages.filter(f => /\/\((scholar|professional)\)\//.test(f));
+  ok("7e. every experience-owned module page uses experienceModulePage, so another experience's URL is 404",
+    modulePages.every(f => /experienceModulePage\(/.test(SRC.get(f) ?? "")), modulePages.filter(f => !/experienceModulePage\(/.test(SRC.get(f) ?? "")).join(", "));
   ok("7b. the experience route accepts exactly the registry's experiences",
     /isExperienceKey\(experience\)/.test(SRC.get("src/app/individual/(app)/[experience]/layout.tsx") ?? "") && EXPERIENCE_KEYS.length === 2);
 
