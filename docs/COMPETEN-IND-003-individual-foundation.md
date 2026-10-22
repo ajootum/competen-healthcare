@@ -120,7 +120,7 @@ Once staging answers, run in this order:
 
 None of the boundary failures involves Individual code. Each traces to the 361–369 gap or to missing staging seed data, and was confirmed by a direct schema read.
 
-## Merge-time step (required when this branch rebases or merges onto main)
+## Merge-time step -- DONE 2026-10-22 (merge 65d20804, change 07f90770; staging acceptance 35/35 re-run after merge)
 
 COMPETEN-AI-LOG-001 (PR #2, `9402bbe` on main) replaced `generate()`'s bare `tenantId` with a typed `attribution` (`AiAttribution` in `src/lib/ai/gateway.ts`). Owner GO: the branch that merges second makes the change. In `src/app/api/individual/assistant/route.ts`, change
 
