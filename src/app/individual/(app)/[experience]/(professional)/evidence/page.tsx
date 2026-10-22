@@ -10,6 +10,9 @@ import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/pro
 import FrameworkPicker from "../../../../_components/professional/FrameworkPicker";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // CREDENTIALS AND COMPETENCY EVIDENCE -- COMPETEN-IND-007 s4.
 //
 // What the person keeps themselves: credentials with renewal dates, and evidence of their own competence,

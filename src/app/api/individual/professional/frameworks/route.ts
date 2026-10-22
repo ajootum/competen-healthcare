@@ -3,6 +3,9 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { isUuid } from "@/lib/individual/professional/validate";
 import { loadSharedCompetencies } from "@/lib/individual/professional/frameworks";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // GET /api/individual/professional/frameworks?framework=<uuid> -- the competencies of ONE shared framework
 // (hospital_id null), for the need and evidence forms. A hospital's own framework answers 404, the same
 // as one that does not exist: whether it exists is that organisation's business.

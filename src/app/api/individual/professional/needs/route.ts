@@ -5,6 +5,9 @@ import { checkSharedReference } from "@/lib/individual/professional/frameworks";
 import { ORIGIN } from "@/lib/individual/professional/vocabulary";
 import { audit, readBody, refuse, writeFailed } from "@/lib/individual/professional/api";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // /api/individual/professional/needs -- COMPETEN-IND-007 s2, development needs.
 //
 // POST records a need, optionally against a SHARED framework competency (frameworks.hospital_id null,

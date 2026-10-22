@@ -11,6 +11,9 @@ import FrameworkPicker from "../../../../_components/professional/FrameworkPicke
 import AssistPanel from "../../../../_components/professional/AssistPanel";
 import { Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // DEVELOPMENT NEEDS AND THE LEARNING PLAN -- COMPETEN-IND-007 s2 and s3.
 //
 // Needs are the person's own, optionally against a SHARED framework competency. The page also offers the

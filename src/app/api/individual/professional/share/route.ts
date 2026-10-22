@@ -4,6 +4,9 @@ import { isUuid } from "@/lib/individual/professional/validate";
 import { mintShare, parseShare, revokeShare } from "@/lib/individual/professional/share";
 import { audit, readBody, refuse } from "@/lib/individual/professional/api";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // /api/individual/professional/share -- COMPETEN-IND-007 s5. A revocable, time-limited Passport link.
 //
 // Reuses passport_share_tokens and the public /verify page (migration 122). The link also carries the

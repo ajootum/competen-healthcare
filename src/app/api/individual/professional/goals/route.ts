@@ -4,6 +4,9 @@ import { isUuid, parseGoal, parseGoalStatus } from "@/lib/individual/professiona
 import { ORIGIN } from "@/lib/individual/professional/vocabulary";
 import { audit, readBody, refuse, writeFailed } from "@/lib/individual/professional/api";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // /api/individual/professional/goals -- COMPETEN-IND-007 s3, the learning plan.
 //
 // A goal has a target date and may serve one development need. Migration 373's composite foreign key

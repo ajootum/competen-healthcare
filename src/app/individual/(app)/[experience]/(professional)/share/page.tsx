@@ -6,6 +6,9 @@ import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrom
 import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import { Empty, Section, fmtDate } from "../../../../_components/professional/bits";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // SHARE YOUR PASSPORT -- COMPETEN-IND-007 s5.
 //
 // A revocable, time-limited link to the public /verify page (passport_share_tokens, migration 122), which

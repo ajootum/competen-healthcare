@@ -6,6 +6,9 @@ import { removeDocument, storeDocument } from "@/lib/individual/professional/doc
 import { ORIGIN } from "@/lib/individual/professional/vocabulary";
 import { audit, readBody, refuse, todayUtc, writeFailed } from "@/lib/individual/professional/api";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // /api/individual/professional/evidence -- COMPETEN-IND-007 s4, credentials and competency evidence.
 //
 // ⚠ NOT professional_credentials, NOT evidence (owner ruling D1). Both are read by hospital staff in

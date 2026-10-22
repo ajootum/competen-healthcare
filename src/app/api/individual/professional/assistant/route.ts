@@ -14,6 +14,9 @@ import { cleanActivity, isAssistTask, professionalContext, taskInstruction } fro
 import { CPD_ACTIVITY_LABEL } from "@/lib/individual/professional/vocabulary";
 import { todayUtc } from "@/lib/individual/professional/api";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // POST /api/individual/professional/assistant -- COMPETEN-IND-007 s7. CPD planning and reflection drafting.
 //
 // The foundation assistant's controls, in its order (src/app/api/individual/assistant/route.ts): gate 3

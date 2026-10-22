@@ -5,6 +5,9 @@ import { PageHeader, Unreadable } from "../../../../_components/chrome";
 import { ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import { ClassLabel, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // PROFESSION AND REGISTRATION -- COMPETEN-IND-007 s1, owner ruling D5.
 //
 // The person's own professional identity record, every field self-declared (migration 270's vocabulary

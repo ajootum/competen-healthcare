@@ -3,6 +3,9 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { isUuid } from "@/lib/individual/professional/validate";
 import { signDocument } from "@/lib/individual/professional/documents";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // GET /api/individual/professional/documents?type=cpd|evidence&id=<uuid> -- the ONLY download path for a
 // document attached to a Professional record (migration 373 s7).
 //

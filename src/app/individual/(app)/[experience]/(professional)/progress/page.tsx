@@ -8,6 +8,9 @@ import { experienceModulePage } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { NotProvisioned, Section } from "../../../../_components/professional/bits";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // PROGRESS -- COMPETEN-IND-007 s6. Plan progress, CPD hours by year and evidence coverage.
 //
 // ⚠ EVERY FIGURE IS A COUNT OF THE PERSON'S OWN ROWS (src/lib/individual/professional/progress.ts). There

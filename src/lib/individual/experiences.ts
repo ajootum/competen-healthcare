@@ -163,7 +163,8 @@ export const PROFESSIONAL: ExperienceConfig = {
       summary: "Credentials, renewal dates and the evidence you keep of your competence." },
     { key: "progress", segment: "progress", label: "Progress", short: "Progress", icon: "↗",
       summary: "Plan progress, CPD hours by year, and how much of your plan has evidence behind it." },
-    // Reached from the Passport, not the navigation: experienceModulePage needs it listed, navFor shows it.
+    // Reached from the Passport, not the navigation: experienceModulePage needs it listed, and
+    // nav: false keeps navFor and bottomNavFor from showing it.
     { key: "share", segment: "share", label: "Share your Passport", short: "Share", icon: "⇪",
       summary: "A revocable, time-limited link to your Passport.", nav: false },
   ],

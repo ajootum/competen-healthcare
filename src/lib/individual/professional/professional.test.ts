@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from "vitest";
 import { parseCpd, parseEvidence, parseGoal, parseNeed, parseProfile, isoDate, documentPath } from "./validate";
 import { cpdHoursByYear, evidenceCoverage, planProgress } from "./progress";
-import { ownRecordsFrom, summariseOwn } from "./passport-records";
+import { ownRecordsFrom, summariseOwn, loadOwnRecords } from "./passport-records";
+import { loadProfessionalRecord } from "./record";
 import { reminderMessage } from "./reminders";
 import { parseShare } from "./share";
 import { documentProblem } from "./documents";
@@ -110,6 +112,22 @@ describe("the Passport and the AI see the same own record", () => {
     expect(items.map(i => i.evidence)).toEqual(["self_declared", "source_linked"]);
     expect(JSON.stringify(items)).not.toContain("Secret reflection");
     expect(summariseOwn(items).byKind).toEqual({ registration: 1, credential: 0, competency_evidence: 0, cpd: 1 });
+  });
+
+  // IND-003 follow-up 4: before migration 373 the tables do not exist, so nobody can hold a record -- [] (the
+  // access.ts isNotProvisioned rule), never null, which would show every Passport an Unreadable warning.
+  const errClient = (error: { code: string; message: string }) => ({
+    from: () => { const b: any = new Proxy({}, { get: (_t, k) => k === "then" ? (r: any) => r({ data: null, error }) : () => b }); return b; },
+  });
+  it("reads an environment without migration 373 as no records, not as unreadable", async () => {
+    for (const code of ["PGRST205", "42P01"]) {
+      const rec = await loadProfessionalRecord(errClient({ code, message: "relation does not exist" }), "u");
+      expect(rec.provisioned).toBe(false);
+      expect(await loadOwnRecords(errClient({ code, message: "x" }), "u")).toEqual([]);
+    }
+  });
+  it("keeps any other read failure as unreadable (null)", async () => {
+    expect(await loadOwnRecords(errClient({ code: "57014", message: "statement timeout" }), "u")).toBeNull();
   });
 
   it("returns null, not [], when a section could not be read", () => {

@@ -5,6 +5,9 @@ import { removeDocument, storeDocument } from "@/lib/individual/professional/doc
 import { ORIGIN } from "@/lib/individual/professional/vocabulary";
 import { audit, readBody, refuse, todayUtc, writeFailed } from "@/lib/individual/professional/api";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // /api/individual/professional/cpd -- COMPETEN-IND-007 s4, the private CPD log.
 //
 // ⚠ NOT cpd_logs (owner ruling D1). The estate CPD table is read by hospital analytics

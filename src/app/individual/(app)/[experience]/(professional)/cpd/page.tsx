@@ -8,6 +8,9 @@ import { ApiButton } from "../../../../_components/professional/forms";
 import CpdForm from "../../../../_components/professional/CpdForm";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // THE PRIVATE CPD LOG -- COMPETEN-IND-007 s4, owner ruling D1.
 //
 // ⚠ NOT YOUR EMPLOYER'S CPD LOG. This reads and writes migration 373's individual_professional_cpd, never

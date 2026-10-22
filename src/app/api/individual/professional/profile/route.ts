@@ -4,6 +4,9 @@ import { parseProfile } from "@/lib/individual/professional/validate";
 import { ORIGIN } from "@/lib/individual/professional/vocabulary";
 import { audit, readBody, refuse, writeFailed } from "@/lib/individual/professional/api";
 
+// Request-time only: never prerendered, no client at build time (foundation harness 11a).
+export const dynamic = "force-dynamic";
+
 // PUT /api/individual/professional/profile -- COMPETEN-IND-007 s1, owner ruling D5.
 //
 // The person's own professional identity record (migration 373 individual_professional_profile). Every
