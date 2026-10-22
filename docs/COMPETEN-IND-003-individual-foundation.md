@@ -148,8 +148,36 @@ None of these is satisfied by this branch alone. Each needs an owner act or a se
 | 7 | **Data roles confirmed** by legal (`DATA_ROLES.confirmed`). | **Pending** (D2). |
 | 8 | **An Individual Product Administrator appointed** through the HQ appointments surface. That person holds `hq.individual.pilot.grant`. | **Not yet.** The position exists once 370 is applied. |
 | 9 | PR #5 reviewed and merged by the owner, and CI shows no failure beyond `main`'s baseline. | In review. |
-| 10 | **Post-deploy checks (production):** `/individual/access` renders signed out; `/login` still resolves Platform, Practice and Enterprise accounts exactly as before; one pilot grant to a test identity shows welcome → terms → shell; that identity holds no platform, practice or enterprise membership and its `profiles.role` is unchanged; `plat_ai_requests` logs `attribution_scope = person`; the grant is ended and the experience closes. | Run after 1–9. |
+| 10 | **Post-deploy checks (production):** before the flag, every Individual route answers 404; after setting `individual_app` ON (condition 12), `/individual/access` renders signed out; `/login` still resolves Platform, Practice and Enterprise accounts exactly as before; one pilot grant to a test identity shows welcome → terms → shell; that identity holds no platform, practice or enterprise membership and its `profiles.role` is unchanged; `plat_ai_requests` logs `attribution_scope = person`; the grant is ended and the experience closes. | Run after 1–9. |
 | 11 | Staging is brought to parity (361–369 applied) so the boundary harnesses run clean there. | Owner action. Not an Individual blocker, but it removes the noise in §8. |
+| 12 | **Release gate ON, last:** insert `practice_platform_flags ('individual_app', true)` in production only after 1–8 hold and 370 is verified. This is a data change, not a schema change. Setting it back to false (or deleting the row) turns Individual off instantly. | Not set. Individual is dark. |
+
+## Release gate and the merge-behind-gate assessment (2026-10-22, owner GO item 5)
+
+**Gate.** `src/lib/individual/gate.ts` reads `practice_platform_flags.flag = 'individual_app'`. That is the estate's existing launch-flag table (migration 191), which exists in every environment. An absent row, `enabled = false`, a failed read, a throwing client or no client at all all mean **OFF**. It never throws, and it doesn't depend on 370. It is not registered in the Practice flags console, which belongs to Practice's director. It is checked first at:
+- the shell guard (`DISABLED`, before authentication and before any Individual table);
+- the group and experience layouts, every page helper, home and welcome (404);
+- the access page (404);
+- `/api/individual/*` (404, guard before input validation; the assistant's unguarded GET removed);
+- `/api/hq/individual/grants` and `/end` (404 after the HQ capability gate);
+- the neutral resolver (it reads `individual_membership` only when the gate is on).
+
+**Evidence**
+
+| Claim | Proof |
+|---|---|
+| `/login` behaves exactly as before while the gate is off, with or without 370 | Differential run of this branch's resolver against `origin/main`'s pre-IND-003 resolver, using the real `admitToEstate` over 4 profile × 4 practice × 5 platform-membership states × 6 Individual variants (gate absent, off, failed, thrown; gate on with 42P01; gate on with PGRST205). **480/480 identical**: answer, membership reads, and `individual_membership` never read while off. Permanent unit tests: `src/lib/identity/product-resolution.gate.test.ts`, 21 cases. A planted bypass turned 12 red. |
+| Missing 370 is quiet and closed even with the gate on | The same test file: 42P01 and PGRST205 give the gate-off answer, no Individual card, never `unavailable`. |
+| Every entry point is closed while off, against a real database | Staging-backed dev server with no flag row (the production condition): `/individual/home`, `/welcome`, `/scholar`, `/professional/passport` and `/access` → **404**. `POST /api/individual/{assistant,terms,preferences}` → **404**, including invalid input. `/api/hq/individual/grants(/end)` → refused at the capability gate. `/individual`, `/individual/sign-in` (coming soon, no password field), `/login` and `/practice/sign-in` → 200. |
+| A real member stays invisible while off | Staging acceptance **39/39**: R1–R3 drive the real flag store OFF then ON; Z2 restores it. |
+| Static pins | `individual-foundation-harness` 10a–10e (35/35). A removed gate turned 10a red. `access-doors` 39/39 (`/individual/sign-in` stays `being_built`). |
+| Inert before 370 | `hq.individual.pilot.grant` is listed in `spaces.ts`, but grants resolve from `hq_position_capability`, which has no such row until 370. No runtime code compares the DB catalogue with the code catalogue. |
+
+**Assessment: safe to merge behind the gate without production migration 370, subject to one policy ruling (below).** While the gate is off, production behaves as it does today: one extra primary-key read of `practice_platform_flags` per sign-in, nothing else. Residual and accepted: an authenticated caller probing `/api/hq/individual/*` gets the HQ capability refusal (401/403) before the gate's 404. That exposes no data and reflects existing HQ behaviour.
+
+**Policy conflict: needs an owner ruling.** CLAUDE.md says a migration is not committed until the owner confirms it is applied. 370 is applied and verified on **staging only**. Merging PR #5 puts it into `main` unapplied in production. **Recommended ruling:** *a migration may enter `main` once it is applied and verified on staging (idempotent re-run, recorded checksum), provided its build record marks production application PENDING and every code path that reads its objects is behind a default-OFF gate or tolerates their absence; production application still requires its own owner GO.* 370 meets each clause: staging applied twice with an identical snapshot, sha256 `4b327cb8…` recorded, PENDING in §4, the gate is OFF by default, and the resolver tolerates the missing table. Without this ruling, PR #5 should wait for production 370, which is itself blocked by the recovery freeze.
+
+**Merge record.** `main` `6fa4cd52` was merged as `a0cac3ea`: CI baseline green, Next.js 16.4.2, lint fixes, OPS-001 and AI-LOG-002 docs. Dependencies were reinstalled to 16.4.2. `tsc` is clean, `eslint src` has 0 errors, vitest passes 538/538, and the audit gate passes. The CI harness set is 42/44 locally. Its two failures (`pd-screen-doctrine`, `pui-tokens`) fail identically on a clean `main` export on this Windows machine, and this branch touches none of their files.
 
 ## 9. Next
 
