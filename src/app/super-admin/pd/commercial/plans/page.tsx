@@ -30,7 +30,7 @@ export default async function Page() {
       // What is genuinely absent is narrower and is what this now says: the effective-dated PRICE BOOK
       // (one price per plan, no history, no second currency), and any way to edit a plan from this
       // plane. Activating a plan is migration 369, a row update, because there is no writer here.
-      absence="The plan catalogue is real: practice_plans carries plan_code, name, trial_days, active and, since migration 349, amount_minor, currency and interval_unit -- practice_solo_ugx is priced in UGX today. What does not exist is the PRICE BOOK this page is specified to show: there is one price per plan with no effective dating, no history of a change, and no second currency; and nothing on this plane can write to the table, so activating or repricing a plan is a migration. Plan-level commercial precedence is settled and enforced -- see ADR-015 -- it is the pricing MODEL that is unbuilt, not the plans."
+      absence="The plan catalogue is real: practice_plans carries plan_code, name, trial_days, active, amount_minor, currency and interval_unit -- practice_solo_ugx is priced in UGX today. What does not exist is the PRICE BOOK this page is specified to show: there is one price per plan with no effective dating, no history of a change, and no second currency; and nothing on this plane can write to the table, so activating or repricing a plan is a migration. Plan-level commercial precedence is settled and enforced -- see ADR-015 -- it is the pricing MODEL that is unbuilt, not the plans."
     />
   );
 }

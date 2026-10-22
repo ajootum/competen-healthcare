@@ -57,6 +57,12 @@ place a `matchMedia` scan cannot see.
   `max-md:`-scoped, each with a recorded reason. That bound is the rule: an `order-*` that applies at
   desktop or unconditionally reorders a whole page differently for a mouse and a screen reader,
   permanently, with no width to blame. Pin 4e enforces the bound rather than the absence.
+  **One recorded desktop exception** (owner decision, 2026-10-22, CI-baseline PR #4): the public booking
+  profile, `src/app/practice/book/[handle]/ProfileView.tsx`, keeps its booking module first in the DOM at
+  every width (CPR-BOOK-PROFILE-001 s12: booking first in reading and interaction order) and draws it as
+  the desktop right rail with `md:order-1` / `md:order-2`. It is listed in the harness by file and exact
+  utility, so any other desktop `order-*` still fails 4e, and pin 4e-x fails if the exception outlives its
+  use. Any further exception needs the same owner decision and the same entry.
 - **Touch targets are sized by what is pointing, not by how wide the window is.** Below `md` that is
   `max-md:`; from 768 up it is `pointer-coarse:`. Sizing the tablet band by width would grow targets
   in a 1000px-wide *desktop window*, where a mouse is pointing and compact is correct, and would

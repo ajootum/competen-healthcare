@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
+import type { Caller } from "@/lib/api-auth";
 import {
   addClinic, addSession, removeSession, addException, setBookingRule, generateSlots,
   editSession, duplicateSession,
@@ -32,7 +33,7 @@ const REGENERATE_DAYS = 90;
  * plusDays also added milliseconds to an instant rather than days to a calendar date; across a DST
  * change those are different answers.
  */
-const regenerationWindow = async (admin: any, workspaceId: string) => {
+const regenerationWindow = async (admin: Caller["admin"], workspaceId: string) => {
   const { today } = await workspaceClock(admin, workspaceId);
   return { fromDate: today, toDate: dueDateFrom(today, REGENERATE_DAYS) };
 };

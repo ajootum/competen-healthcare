@@ -20,10 +20,12 @@ import DetailsStep from "./DetailsStep";
 import { BOOKING_INTAKE_FIELDS } from "@/lib/practice/booking-rule-constants";
 
 /** The field as the wizard hands it over: the catalogue row plus the server's requirement level. */
-const field = (key: string, level: "required" | "optional" = "optional") => {
+const field = (
+  key: string, level: "required" | "optional" = "optional",
+): React.ComponentProps<typeof DetailsStep>["applicable"][number] => {
   const f = BOOKING_INTAKE_FIELDS.find(x => x.field_key === key);
   if (!f) throw new Error(`no such intake field: ${key}`);
-  return { ...f, _level: level } as any;
+  return { ...f, _level: level };
 };
 
 const ALL = [
