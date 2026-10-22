@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Date** | 2026-10-22 |
-| **Status** | Built on branch `ind-007/professional-mvp`, cut from `ind-003/individual-foundation` @ `d6252ad6`. Pushed. **Not merged, not deployed.** |
+| **Status** | Built on branch `ind-007/professional-mvp`, cut from `ind-003/individual-foundation` @ `d6252ad6` and merged with it again @ `dde82336` (release gate, experience-module mechanism, `main` @ `6fa4cd52`). Pushed. **Not merged, not deployed.** Ships dark: every Professional page and API is behind the release gate `individual_app` (default OFF). |
 | **Authority** | Owner GO for COMPETEN-IND-007. ADR-016 and its owner rulings D1–D10. COMPETEN-IND-002 §4. |
 | **Migration** | `373-individual-professional-record.sql`. Drafted, house rules ALL CLEAR. **Not committed and not applied anywhere** (CLAUDE.md: committed only after the owner confirms it is applied). Staging apply is waiting on owner authorisation. |
 
@@ -45,19 +45,16 @@ The `dashboard/career` engine's readiness formula and ladder are hospital-promot
 3. **`/verify` wording.** For a link minted from Professional, the header reads "Competen · Passport" rather than "Verified Passport", and the footer says the self-recorded section is the professional's own account. Estate-minted links render byte-for-byte as before.
 4. **A Full link includes the self-declared registration number.** Reflections, needs, plans, notes and documents are never shared. The share page says this before the link is created.
 
-## 4. Foundation changes (IND-003 owns these files; the proposal is in the shared notes `IND-007-foundation-proposal.md`)
+## 4. Foundation changes
 
-| File | Change |
-|---|---|
-| `experiences.ts` | `modules`, `navFor`, `bottomNavFor`. The Professional modules are filled in, and the shipped `planned` entries are removed. |
-| `ShellNav.tsx` | Reads `navFor` and `bottomNavFor`. |
-| `passport.ts` | `source_linked` class, `own` section (loader is Professional's). |
-| `assistant.ts` | `recordContext` counts own records. |
-| `[experience]/page.tsx` | Module cards from the registry. |
-| `[experience]/passport/page.tsx` | "Records you added" section, and the share pointer for Professional. |
-| `scripts/individual-foundation-harness.ts` | 2a experience-prefix write rule (plus one named estate exception, `passport_share_tokens` in `share.ts`), 7a over `navFor`, 7c no shared segment. |
+IND-003 built the shared mechanism itself (`dde82336`). It agreed proposals A–D, with conditions. IND-007 then made three changes:
+- filled `PROFESSIONAL.modules` and trimmed `planned`;
+- added two **optional** `ExperienceModule` fields (flagged to IND-003 for review): `summary` for the home cards, and `nav: false` for the share page, which is a listed module reached from the Passport rather than from the nav;
+- pointed the `passport_share_tokens` exception at `src/lib/individual/professional/share.ts`, the one module that writes it. Both the share route and the staging harness call it.
 
-Outside the foundation: `src/app/verify/[token]/page.tsx` (estate), `src/lib/platform/jobs.ts` (one job), `scripts/privileged-harnesses.ts` (one STAGING entry).
+The Passport (`passport.ts`, the Passport page) and `assistant.ts` changes are as proposed in C.
+
+/verify (D) shows own records only when the release gate is on **and** the link has a companion row. A Vitest renders the live page and a frozen copy at `d6252ad6` (`src/test-fixtures/verify-page-d6252ad6.tsx`) against the same data, and requires identical markup for every estate-minted link. It covers both scopes, with the gate on and off. A planted one-word change turned 5 of the 6 cases red.
 
 ## 5. Verification (2026-10-22)
 
@@ -65,11 +62,11 @@ Outside the foundation: `src/app/verify/[token]/page.tsx` (estate), `src/lib/pla
 |---|---|
 | `tsc --noEmit` | clean |
 | `eslint` on every changed file | clean |
-| `vitest run` | **534 / 534** (17 new Professional cases) |
-| `individual-foundation-harness` | **31 / 31**. 2a went red on the Professional writes before the experience rule existed. |
-| `individual-professional-harness` (new, no database) | **46 / 46**. 20 invariants plus **26 planted violations, each proven red in memory on every run**: estate writes (`cpd_logs`, `professional_credentials`, the estate bucket, `passport_share_tokens` outside `share.ts`), employer read paths (an educator page reading, a dashboard importing), a verified column, a writable class, a "Verified" label, a foreign class rendered, `/verify` without the companion-row gate, a Scholar guard, a write policy, a defaulted origin, a single-column link. |
+| `vitest run` (after the `dde82336` merge) | **562 / 562**, including 17 Professional cases and 6 /verify identity cases |
+| `individual-foundation-harness` | **38 / 38**, including 7d/7e (`experienceModulePage`) and 10a–10e (release gate). Before the experience rule, 2a went red on the Professional writes. |
+| `individual-professional-harness` (new, no database) | **47 / 47**. 20 invariants plus **27 planted violations, each proven red in memory on every run**: estate writes (`cpd_logs`, `professional_credentials`, the estate bucket, `passport_share_tokens` outside `share.ts`), employer read paths (an educator page reading, a dashboard importing), a verified column, a writable class, a "Verified" label, a foreign class rendered, `/verify` without the companion-row gate, a Scholar guard, a write policy, a defaulted origin, a single-column link. |
 | `access-doors` / `plane-boundary` | 39/39 · 35/35 |
-| `auth-boundary` | Individual routes classified. The single failure (`practice/public/manage`) is the known baseline. |
+| `auth-boundary` | ALL GREEN after the merge. |
 | `migration-house-rules` on 373 | ALL CLEAR: 396 lines, 91 statements, 26 constraints, 0 warnings |
 | `individual-professional-acceptance-harness` on staging | **PEND**: 373 is not applied on staging. Nothing was created. |
 | Pre-373 browser walk-through on staging (`localhost:3040`, Professional-only pilot) | Welcome offers only Professional → Holdings test terms → Professional shell with the five modules → module pages say the store is not set up and offer no form → `/individual/scholar/cpd` shows the governed not-active state → the Passport shows "Records you added" and points to sharing. Console shows only the pre-existing CSP report-only notice. |
