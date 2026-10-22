@@ -3,6 +3,7 @@ import { loadFrameworkCurrency, assessCurrency, summariseCurrency } from "@/lib/
 import { loadOwnRecords, summariseOwn, OWN_KIND_LABEL } from "@/lib/individual/professional/passport-records";
 import { shareCarriesOwnRecords } from "@/lib/individual/professional/share";
 import { EVIDENCE_LABEL } from "@/lib/individual/passport";
+import { individualAppEnabled } from "@/lib/individual/gate";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,9 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
   const full = share.scope === "full";
   const competencyNames = current.map(nameOf).filter(Boolean) as string[];
 
-  const carriesOwn = await shareCarriesOwnRecords(admin, share.id, share.nurse_id);
+  // While the Individual release gate is off (src/lib/individual/gate.ts) Individual does not exist, so no
+  // link shows its records -- every link renders as the estate one.
+  const carriesOwn = (await individualAppEnabled(admin)) && await shareCarriesOwnRecords(admin, share.id, share.nurse_id);
   const own = carriesOwn ? await loadOwnRecords(admin, share.nurse_id) : null;
   const ownSummary = own ? summariseOwn(own) : null;
 
