@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Date** | 2026-10-22 |
-| **Status** | Built on branch `ind-003/individual-foundation` (from `50ae85f0`). Owner rulings D1–D10 applied. **Not merged, not pushed, not deployed.** |
+| **Status** | Built on branch `ind-003/individual-foundation` (from `50ae85f0`). Owner rulings D1–D10 applied. In review as PR #5 (pushed by the owner). **Not merged, not deployed.** |
 | **Authority** | Owner GO for COMPETEN-IND-003; owner rulings and staging commissioning GO (2026-10-22). ADR-016 is Accepted. |
 | **Staging** | Migration 370 applied and proven idempotent. Acceptance 35/35 green, with a planted defect proven red. See §4, §6 and §8. |
 
@@ -56,7 +56,8 @@ See ADR-016 §Owner rulings for where each one is enforced. Implementation chang
 | Reproducibility | Every statement is idempotent (`if not exists`, drop-then-add constraints, `on conflict do nothing`, `where not exists`, `create or replace view`). No backfill. It touches no existing table, policy or constraint. A second run is designed to be a no-op. The run-twice proof is part of the staging apply, which is still pending (§7). |
 | `hq-guard` catalogue parity (DB neutralised) | S0, S4, D1–D8 pass: 52 capabilities in DDL and code, 8 positions, 81 grants. |
 | **Staging** | **Applied 2026-10-22** with `apply-migrations.ts --only 370` (node-postgres, whole file, production guard passed). The working file was confirmed byte-identical to the `cb63e582` blob first. **Run twice:** the schema snapshot hash was identical after the second run (`83b7db43…6678`). It covers 3 relations (RLS on both tables, `security_invoker=true` on the view), 20 constraints, 4 indexes, 2 `SELECT` policies, column counts 17/17/10, 0 rows, the capability, the position (platform space, product line `individual`) and exactly 2 grant rows. |
-| **Production** | Not applied, and needs a separate owner GO. |
+| **Production** | **ON HOLD.** It needs a separate owner GO, and is also blocked by the owner's schema freeze: no production schema change until a verified recovery mechanism exists, because production has no backups or PITR. |
+| **Ordering with 371** | `371-plat-ai-requests-attribution.sql` (AI-LOG-001, merged to `main` `fb5ce41b`) is already applied to production. It alters only `plat_ai_requests` (two columns, one index), and 370 never touches that table. 370 depends only on objects from migration 281 and earlier. So the production history will read 371 then 370 in application order, which is safe. 370 keeps its number. |
 
 Apply with the established tool once staging answers: `npx tsx scripts/apply-migrations.ts --only 370`. It refuses production, sends the file whole and stops on the first error. Run it twice to prove idempotency, then run `migration-verify --staging`.
 
@@ -131,6 +132,24 @@ to
 `context: { userId: ctx.userId, attribution: { scope: "person" }, operation: \`individual_assistant_${experience}\` }`
 
 The `person` scope records the actor alone, with no tenant and no workspace, which is what the route intends. Update its comment accordingly. Then re-run `tsc`, `vitest` (including `src/lib/ai/attribution.test.ts`) and the foundation harness. A trial `git merge-tree` of this branch with `9402bbe` (2026-10-22) is textually conflict-free, so this is the only change expected.
+
+## Release readiness: what must be true before the production GO for 370
+
+None of these is satisfied by this branch alone. Each needs an owner act or a separate GO.
+
+| # | Condition | State on 2026-10-22 |
+|---|---|---|
+| 1 | **A verified recovery mechanism for production**, such as backups/PITR enabled and a restore rehearsed (owner brief item 5, ADR-009). | **Not met.** Production has no backups or PITR. The recovery requirements are being documented separately. |
+| 2 | **Owner GO for production migration 370.** | **On hold.** |
+| 3 | 370 is applied to production with the established controls: run once, re-run as a no-op, then the schema snapshot compared against staging's (`83b7db43…6678`). | Waits on 1 and 2. |
+| 4 | **Legal documents published** (COMPETEN-LEGAL-001): the four documents legally signed off, owner-approved and live at permanent URLs, with register entries. | **Not met.** No documents exist. |
+| 5 | The **`INDIVIDUAL_LEGAL_*` variables set in production** to the published versions and URLs, after staging verification. | **Not met.** Until set, every experience stays closed (by design). |
+| 6 | The **Scholar operator's registered name confirmed** and set, or a decision recorded to launch Professional only. | **Pending** (COMPETEN-IND-001 D8). |
+| 7 | **Data roles confirmed** by legal (`DATA_ROLES.confirmed`). | **Pending** (D2). |
+| 8 | **An Individual Product Administrator appointed** through the HQ appointments surface. That person holds `hq.individual.pilot.grant`. | **Not yet.** The position exists once 370 is applied. |
+| 9 | PR #5 reviewed and merged by the owner, and CI shows no failure beyond `main`'s baseline. | In review. |
+| 10 | **Post-deploy checks (production):** `/individual/access` renders signed out; `/login` still resolves Platform, Practice and Enterprise accounts exactly as before; one pilot grant to a test identity shows welcome → terms → shell; that identity holds no platform, practice or enterprise membership and its `profiles.role` is unchanged; `plat_ai_requests` logs `attribution_scope = person`; the grant is ended and the experience closes. | Run after 1–9. |
+| 11 | Staging is brought to parity (361–369 applied) so the boundary harnesses run clean there. | Owner action. Not an Individual blocker, but it removes the noise in §8. |
 
 ## 9. Next
 
