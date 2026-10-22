@@ -777,13 +777,10 @@ export default function BookingWizard(props: {
         </div>
       )}
 
+      {/* The desktop rail comes AFTER the journey column in the DOM, so a keyboard and a screen reader
+          meet the two in the order they are drawn (CPR-MOB-001: DOM order is visual order). */}
       <div className={step > 1 ? "grid gap-4 md:grid-cols-[minmax(0,1fr)_300px]" : ""}>
-        {step > 1 && (
-          <aside className="hidden md:order-2 md:block">
-            <AppointmentSummary facts={summaryFacts} onChange={s => setStep(s)} />
-          </aside>
-        )}
-        <div className="flex flex-col gap-4 md:order-1">
+        <div className="flex flex-col gap-4">
 
       {step === 1 && (
         <section className="rounded-xl border border-gray-200 bg-white p-4">
@@ -1509,6 +1506,11 @@ export default function BookingWizard(props: {
         </section>
       )}
         </div>
+        {step > 1 && (
+          <aside className="hidden md:block">
+            <AppointmentSummary facts={summaryFacts} onChange={s => setStep(s)} />
+          </aside>
+        )}
       </div>
 
       {/* ── "About this practice" ────────────────────────────────────────────────────────────────────

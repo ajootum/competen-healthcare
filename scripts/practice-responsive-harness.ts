@@ -395,8 +395,12 @@ console.log("\n5. s18 performance and state preservation -- what Practice ships,
  * moment it becomes necessary rather than discovered later on a clinic's mobile connection.
  */
 const FRAMEWORK = /^(?:next|react)(?:\/|$)/;
+// ⚠ TEST FILES ARE NOT RUNTIME. A colocated *.test.ts(x) imports vitest and a DOM library, and none of
+// it reaches a clinic's phone: Next bundles what a route imports, and nothing imports a test. Counting
+// them made this pin red on files that ship zero bytes. Everything a page can import is still scanned.
+const TEST_FILE = /\.test\.tsx?$/;
 const heavyImports: string[] = [];
-for (const f of PRACTICE_FILES) {
+for (const f of PRACTICE_FILES.filter(p => !TEST_FILE.test(p))) {
   const s = strip(readFileSync(f, "utf8"));
   const specs = [
     ...[...s.matchAll(/^\s*import\s[\s\S]*?\sfrom\s+["']([^"']+)["']/gm)].map(m => m[1]),
