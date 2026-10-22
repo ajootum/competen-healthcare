@@ -68,6 +68,7 @@ describe("development history", () => {
       { title: "Undated cert", type: "cpd_certificate", issuingBody: null, issueDate: null, expiryDate: null, status: "active", evidence: "self_declared" },
     ],
     employment: [],
+    own: [],
   };
 
   // Graduation adds, never replaces: both experience periods stay on the one timeline.
@@ -87,7 +88,7 @@ describe("development history", () => {
   });
 
   it("survives unreadable sections without inventing entries", () => {
-    expect(buildHistory({ joinedAt: null, entitlements: null, passport: { competencies: null, credentials: null, employment: null } })).toEqual([]);
+    expect(buildHistory({ joinedAt: null, entitlements: null, passport: { competencies: null, credentials: null, employment: null, own: null } })).toEqual([]);
   });
 });
 
@@ -99,9 +100,10 @@ describe("personal AI prompt", () => {
   });
 
   it("says when a section could not be read instead of presenting it as empty", () => {
-    const ctx = recordContext({ name: "Amina", experience: "scholar", live: ["scholar"], passport: { competencies: null, credentials: [], employment: null } });
+    const ctx = recordContext({ name: "Amina", experience: "scholar", live: ["scholar"], passport: { competencies: null, credentials: [], employment: null, own: null } });
     expect(ctx).toContain("Assessed competencies: could not be read");
     expect(ctx).toContain("Credentials on record: none.");
+    expect(ctx).toContain("Records they added themselves in Competen Professional: could not be read");
   });
 
   it("rejects empty and oversized questions", () => {
