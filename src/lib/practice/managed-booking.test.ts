@@ -20,6 +20,8 @@
  * sent when nothing was.
  * ════════════════════════════════════════════════════════════════════════════════════════════════════
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   fakeAdmin, buildWorld, HANDLE, TOKEN, REFERENCE, APPT_ID, PATIENT_EMAIL,

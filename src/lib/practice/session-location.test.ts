@@ -13,6 +13,8 @@
  * answer the same question the same way. These tests fail if the filter ever goes back to asking whether
  * a session repeats weekly instead of whether it runs on THIS date.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { describe, it, expect } from "vitest";
 import { locationFromRegularWeek } from "./session-location";
 
