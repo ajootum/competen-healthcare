@@ -1,0 +1,78 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { FOUNDATION_NAV, EXPERIENCES, experienceHref, type ExperienceKey } from "@/lib/individual/experiences";
+import { createClient } from "@/lib/supabase/client";
+
+// The Individual navigation, generated from the registry (src/lib/individual/experiences.ts) and nothing
+// else: the sidebar from md up, the bottom bar below it. CPR-MOB-001's freeze applies -- ONE md edge,
+// and touch-target height gated on pointer-coarse, not on viewport width.
+//
+// The two presentations share one list, the way the Practice shell feeds its sidebar and bottom bar from
+// the same filtered set: same destinations, different medium.
+
+const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
+
+function isActive(pathname: string, href: string, isHome: boolean) {
+  return isHome ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function SidebarNav({ experience }: { experience: ExperienceKey }) {
+  const pathname = usePathname() ?? "";
+  const x = EXPERIENCES[experience];
+  return (
+    <nav aria-label={`${x.name} navigation`} className="flex flex-col gap-0.5 p-3">
+      {FOUNDATION_NAV.map(item => {
+        const href = experienceHref(experience, item.segment);
+        const on = isActive(pathname, href, item.module === "home");
+        return (
+          <Link key={item.module} href={href} aria-current={on ? "page" : undefined}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-medium pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on ? "font-semibold" : "text-gray-700 hover:bg-gray-50"}`}
+            style={on ? { background: x.accentSoft, color: x.accent } : undefined}>
+            <span aria-hidden className="w-5 text-center text-[15px]">{item.icon}</span>
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function BottomNav({ experience }: { experience: ExperienceKey }) {
+  const pathname = usePathname() ?? "";
+  const x = EXPERIENCES[experience];
+  // Settings is configuration, not a destination -- it lives behind the account link in the header.
+  const items = FOUNDATION_NAV.filter(i => i.module !== "settings");
+  return (
+    <nav aria-label={`${x.name} navigation`}
+      className="md:hidden fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]">
+      <ul className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+        {items.map(item => {
+          const href = experienceHref(experience, item.segment);
+          const on = isActive(pathname, href, item.module === "home");
+          return (
+            <li key={item.module}>
+              <Link href={href} aria-current={on ? "page" : undefined}
+                className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${focusRing} ${on ? "" : "text-gray-500"}`}
+                style={on ? { color: x.accent } : undefined}>
+                <span aria-hidden className="text-[18px] leading-none">{item.icon}</span>
+                {item.short}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+export function SignOutButton() {
+  return (
+    <button type="button"
+      onClick={async () => { await createClient().auth.signOut(); window.location.assign("/individual"); }}
+      className={`rounded-lg border border-gray-200 px-3 py-1.5 text-[12.5px] font-medium text-gray-600 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+      Sign out
+    </button>
+  );
+}
