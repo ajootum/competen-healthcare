@@ -191,6 +191,13 @@ const STAGING: Listed[] = [
       + "Creates and deletes its own harness-ind003-* identities. Refuses production via assertSafeTarget, and "
       + "reports PEND (exit 0, nothing created) until migration 370 is applied.",
   },
+  {
+    file: "individual-professional-acceptance-harness.ts",
+    note: "COMPETEN-IND-007 acceptance for Competen Professional: direct entry with no Scholar row, the whole journey, "
+      + "schema-generated evidence classes, cross-person links refused, own-row RLS, once-only reminders, share carries own "
+      + "records only for a Professional link, shared frameworks only, no estate rows. Creates and deletes its own "
+      + "harness-ind007-* identities. Refuses production via assertSafeTarget, and reports PEND until migration 373 is applied.",
+  },
   { file: "mos-phase1-harness.ts", note: "CPR-CORE-MOS-001 phase 1. 20/20." },
   { file: "mos-phase2-harness.ts", note: "MOS phase 2. 25/25." },
   { file: "mos-phase3-harness.ts", note: "MOS phase 3. 73/73." },
