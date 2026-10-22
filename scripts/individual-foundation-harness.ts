@@ -171,6 +171,12 @@ function main() {
     return segs.filter((s, i) => !s || foundationSegments.has(s) || segs.indexOf(s) !== i).map(s => `${k}/${s || "(empty)"}`);
   });
   ok("7c. experience modules never reuse a foundation segment, an empty segment or each other", badModules.length === 0, badModules.join(", "));
+  // 7a walks navFor, which skips modules that are not in the navigation (nav: false -- reached from another
+  // page). experienceModulePage still admits them, so every listed module needs its page.
+  const modulesWithoutPage = EXPERIENCE_KEYS.flatMap(k => EXPERIENCES[k].modules
+    .filter(m => !existsSync(`${EXP_DIR}/(${k})/${m.segment}/page.tsx`)).map(m => `${k}/${m.segment}`));
+  ok("7f. every experience module, in the navigation or not, has its page under (app)/[experience]/(<experience>)/",
+    modulesWithoutPage.length === 0, modulesWithoutPage.join(", "));
   const pages = FILES.filter(f => f.startsWith(`${EXP_DIR}/`) && f.endsWith("/page.tsx"));
   const ungatedPages = pages.filter(f => !/experiencePage\(|experienceModulePage\(/.test(SRC.get(f) ?? ""));
   ok("7d. every page under [experience] takes its context from experiencePage / experienceModulePage (gate, live, terms)",
