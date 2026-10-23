@@ -192,6 +192,12 @@ const STAGING: Listed[] = [
       + "reports PEND (exit 0, nothing created) until migration 370 is applied.",
   },
   {
+    file: "scholar-intelligence-harness.ts",
+    note: "COMPETEN-SCHOLAR-01 S5 over HTTP: the four Learning Intelligence measures (not measured, too little practice, measured "
+      + "separately), coverage Not measured until S1/S2, the review log (391) and revision in the Passport as a count. Needs a "
+      + "staging-pointed dev server at BASE_URL with individual_app ON; never writes the flag. Own harness-s5-* fixtures.",
+  },
+  {
     file: "individual-access-harness.ts",
     note: "COMPETEN-IND-ACCESS-001 s6 over HTTP: the public doors, the one login with the destination preserved, "
       + "first-entry welcome, primary and switching, expired/revoked/ended, uninvited guidance, deep links, and the HQ "

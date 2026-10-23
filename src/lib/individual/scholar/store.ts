@@ -373,7 +373,7 @@ export async function countDue(admin: Admin, userId: string): Promise<number | n
 /** The learner self-grades recall 0..5. SM-2 (imported) reschedules. Owner-keyed. */
 export async function reviewCard(admin: Admin, userId: string, cardId: string, quality: number) {
   if (!isUuid(cardId)) return { ok: false as const, error: "not_found" };
-  const { data: card } = await admin.from("individual_scholar_card").select("id, ease_factor, interval_days, repetitions, reviews")
+  const { data: card } = await admin.from("individual_scholar_card").select("id, material_id, ease_factor, interval_days, repetitions, reviews")
     .eq("user_id", userId).eq("id", cardId).maybeSingle();
   if (!card) return { ok: false as const, error: "not_found" };
   const next = sm2({ ease: Number(card.ease_factor ?? 2.5), interval: card.interval_days ?? 0, reps: card.repetitions ?? 0 }, quality);
@@ -386,7 +386,21 @@ export async function reviewCard(admin: Admin, userId: string, cardId: string, q
     last_reviewed_at: now, last_quality: next.quality, reviews: (card.reviews ?? 0) + 1, status, updated_at: now,
   }).eq("user_id", userId).eq("id", cardId);
   if (error) return { ok: false as const, error: "write" };
+  // The review history (migration 391, COMPETEN-SCHOLAR-01 S5): one row per review, for engagement and
+  // recall over time. It never blocks the review itself -- the card is already rescheduled -- and before
+  // 391 is installed the table is absent and nothing is written; the page says when the record starts.
+  await admin.from("individual_scholar_review").insert({
+    user_id: userId, card_id: cardId, material_id: card.material_id, quality: next.quality, interval_days: next.interval, reviewed_at: now,
+  }).then((r: unknown) => r, () => {});
   return { ok: true as const, nextReviewAt: nextDate, intervalDays: next.interval, status };
+}
+
+/** The review history (migration 391), or null while the table is not installed. Owner-keyed. */
+export async function reviewRows(admin: Admin, userId: string): Promise<Read<{ materialId: string; quality: number; reviewedAt: string }[] | null>> {
+  const { data, error } = await admin.from("individual_scholar_review").select("material_id, quality, reviewed_at")
+    .eq("user_id", userId).order("reviewed_at", { ascending: false }).limit(10000);
+  if (error) return isNotProvisioned(error) ? { ok: true, data: null } : fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(r => ({ materialId: r.material_id, quality: r.quality, reviewedAt: r.reviewed_at })) };
 }
 
 // ── IMPROVE: THE ROWS PROGRESS IS BUILT FROM ───────────────────────────────────────────────────────
@@ -395,7 +409,7 @@ export async function progressRows(admin: Admin, userId: string): Promise<Read<{
   materials: ProgressMaterial[]; questions: ProgressQuestion[]; attempts: ProgressAttempt[]; cards: ProgressCard[];
 }>> {
   const [m, q, a, c] = await Promise.all([
-    admin.from("individual_scholar_material").select("id, title").eq("user_id", userId).order("created_at", { ascending: false }),
+    admin.from("individual_scholar_material").select("id, title, created_at").eq("user_id", userId).order("created_at", { ascending: false }),
     admin.from("individual_scholar_question").select("id, material_id, kind").eq("user_id", userId).limit(5000),
     admin.from("individual_scholar_attempt").select("question_id, correct, answered_at").eq("user_id", userId).order("answered_at", { ascending: false }).limit(10000),
     admin.from("individual_scholar_card").select("material_id, status, next_review_at").eq("user_id", userId).limit(5000),
@@ -405,7 +419,7 @@ export async function progressRows(admin: Admin, userId: string): Promise<Read<{
   return {
     ok: true,
     data: {
-      materials: (m.data ?? []).map((r: any) => ({ id: r.id, title: r.title })),
+      materials: (m.data ?? []).map((r: any) => ({ id: r.id, title: r.title, createdAt: r.created_at })),
       questions: (q.data ?? []).map((r: any) => ({ id: r.id, materialId: r.material_id, kind: r.kind })),
       attempts: (a.data ?? []).map((r: any) => ({ questionId: r.question_id, correct: r.correct, answeredAt: r.answered_at })),
       cards: (c.data ?? []).map((r: any) => ({ materialId: r.material_id, status: r.status, nextReviewAt: r.next_review_at })),
@@ -431,10 +445,16 @@ export async function listPassportChoices(admin: Admin, userId: string): Promise
   };
 }
 
-/** How many distinct questions of this kind the person answered from this material of their own. */
+/** How many distinct questions of this kind the person answered from this material of their own -- or, for revision, how many reviews they made on it. */
 async function answeredFrom(admin: Admin, userId: string, materialId: string, achievement: StudyAchievementKind): Promise<number | null> {
+  const questionKind = STUDY_ACHIEVEMENT[achievement].questionKind;
+  if (questionKind === null) {
+    const { count, error } = await admin.from("individual_scholar_review").select("id", { count: "exact" })
+      .eq("user_id", userId).eq("material_id", materialId).limit(1);
+    return error ? null : (count ?? 0);
+  }
   const { data: qs, error } = await admin.from("individual_scholar_question").select("id")
-    .eq("user_id", userId).eq("material_id", materialId).eq("kind", STUDY_ACHIEVEMENT[achievement].questionKind).limit(5000);
+    .eq("user_id", userId).eq("material_id", materialId).eq("kind", questionKind).limit(5000);
   if (error) return null;
   const ids = ((qs ?? []) as any[]).map(q => q.id);
   if (!ids.length) return 0;
@@ -491,7 +511,17 @@ export async function loadStudyAchievements(admin: Admin, userId: string): Promi
     if (aErr) return fail(aErr);
     attempts = ((at ?? []) as any[]).map(a => ({ questionId: a.question_id, answeredAt: a.answered_at }));
   }
-  return { ok: true, data: studyAchievementsFrom({ choices: choices.data, questions, attempts }) };
+  // Revision achievements (migration 391) read only which material was reviewed and when -- never the grade.
+  // Only asked when one is chosen, so a Passport without one never depends on the review table existing.
+  let reviews: { materialId: string; reviewedAt: string }[] = [];
+  const revisionMaterials = [...new Set(choices.data.filter(c => c.achievement === "revision_reviews").map(c => c.materialId))];
+  if (revisionMaterials.length) {
+    const { data: rv, error: rErr } = await admin.from("individual_scholar_review").select("material_id, reviewed_at")
+      .eq("user_id", userId).in("material_id", revisionMaterials).limit(10000);
+    if (rErr) return fail(rErr);
+    reviews = ((rv ?? []) as any[]).map(r => ({ materialId: r.material_id, reviewedAt: r.reviewed_at }));
+  }
+  return { ok: true, data: studyAchievementsFrom({ choices: choices.data, questions, attempts, reviews }) };
 }
 
 export function isUuid(v: unknown): v is string {

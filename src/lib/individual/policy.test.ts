@@ -4,7 +4,7 @@ import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, lo
 import { publishScope, rollbackVersion, setOverride } from "@/lib/config/workspace-config-write";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX, parseShare } from "./professional/share";
-import { MAX_MATERIALS_PER_PERSON, QUESTIONS_PER_REQUEST } from "./scholar/config";
+import { MAX_MATERIALS_PER_PERSON, QUESTIONS_PER_REQUEST, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS } from "./scholar/config";
 import { STUDY_ACHIEVEMENT_KINDS } from "./scholar/passport-items";
 import { INDIVIDUAL_APP_FLAG } from "./gate";
 
@@ -50,6 +50,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
     expect(DEFAULT_POLICY).toEqual({
       reminderHorizonDays: REMINDER_HORIZON_DAYS, shareLinkMaxDays: SHARE_DAYS_MAX, aiHourlyLimit: 30,
       scholarQuestionsPerRequest: QUESTIONS_PER_REQUEST, scholarMaterialsPerPerson: MAX_MATERIALS_PER_PERSON,
+      scholarInsightMinAnswers: INSIGHT_MIN_ANSWERS, scholarInsightWindowDays: INSIGHT_WINDOW_DAYS,
       passportAchievementKinds: [...STUDY_ACHIEVEMENT_KINDS],
       // S1: no catalogue reaches a person until HQ chooses one.
       scholarCatalogues: [], professionalCatalogues: [],
