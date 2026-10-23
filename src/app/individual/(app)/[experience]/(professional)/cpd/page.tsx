@@ -2,7 +2,8 @@ import { EXPERIENCES } from "@/lib/individual/experiences";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { cpdHoursByYear } from "@/lib/individual/professional/progress";
 import { CPD_ACTIVITY_LABEL } from "@/lib/individual/professional/vocabulary";
-import { experienceModulePage } from "../../../../_components/shell-context";
+import type { Metadata } from "next";
+import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { ApiButton } from "../../../../_components/professional/forms";
 import CpdForm from "../../../../_components/professional/CpdForm";
@@ -21,7 +22,7 @@ export const dynamic = "force-dynamic";
 // annual target, because no store holds one for an Individual person and their regulator's requirement
 // is not something Competen knows.
 
-export const metadata = { title: "CPD log" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "CPD log" }); }
 
 export default async function CpdPage({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "cpd");

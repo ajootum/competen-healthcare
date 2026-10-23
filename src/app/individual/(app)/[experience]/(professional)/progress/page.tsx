@@ -4,7 +4,8 @@ import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { cpdHoursByYear, evidenceCoverage, planProgress } from "@/lib/individual/professional/progress";
 import { NEED_STATUS_LABEL } from "@/lib/individual/professional/vocabulary";
-import { experienceModulePage } from "../../../../_components/shell-context";
+import type { Metadata } from "next";
+import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { NotProvisioned, Section } from "../../../../_components/professional/bits";
 
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 // is no target, no score, no readiness percentage and no comparison with anyone. A ratio with nothing to
 // count is "Not measured", with the reason, never 0%.
 
-export const metadata = { title: "Progress" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Progress" }); }
 
 const pct = (r: number) => `${Math.round(r * 100)}%`;
 

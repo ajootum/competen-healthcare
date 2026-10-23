@@ -4,7 +4,8 @@ import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { loadSharedFrameworks, referenceNames } from "@/lib/individual/professional/frameworks";
 import { GOAL_STATUS, GOAL_STATUS_LABEL, NEED_ORIGIN_LABEL, NEED_STATUS_LABEL } from "@/lib/individual/professional/vocabulary";
 import { planProgress } from "@/lib/individual/professional/progress";
-import { experienceModulePage } from "../../../../_components/shell-context";
+import type { Metadata } from "next";
+import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable } from "../../../../_components/chrome";
 import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import FrameworkPicker from "../../../../_components/professional/FrameworkPicker";
@@ -21,7 +22,7 @@ export const dynamic = "force-dynamic";
 // they may choose to record -- the person decides; nothing is added for them. Goals have target dates and
 // may serve a need. The personal AI can suggest a plan; it saves nothing.
 
-export const metadata = { title: "Needs & plan" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Needs & plan" }); }
 
 export default async function DevelopmentPage({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "development");

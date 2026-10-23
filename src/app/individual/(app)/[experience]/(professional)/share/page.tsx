@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { listShares } from "@/lib/individual/professional/share";
-import { experienceModulePage } from "../../../../_components/shell-context";
+import type { Metadata } from "next";
+import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import { Empty, Section, fmtDate } from "../../../../_components/professional/bits";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 // also carries the person's own records, each with its evidence class. Not in the navigation: it is
 // reached from the Passport, where the person sees exactly what they would be sharing.
 
-export const metadata = { title: "Share your Passport" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Share your Passport" }); }
 
 export default async function SharePage({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "share");

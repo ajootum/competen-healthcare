@@ -1,6 +1,7 @@
 import { EXPERIENCES } from "@/lib/individual/experiences";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
-import { experienceModulePage } from "../../../../_components/shell-context";
+import type { Metadata } from "next";
+import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable } from "../../../../_components/chrome";
 import { ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import { ClassLabel, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 // carried into migration 373). The page says plainly that nothing here was checked against a register,
 // because no regulator lookup is connected: that is a governed empty state, not a missing button.
 
-export const metadata = { title: "Profession & registration" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Profession & registration" }); }
 
 export default async function RegistrationPage({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "registration");

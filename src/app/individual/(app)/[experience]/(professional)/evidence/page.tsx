@@ -4,7 +4,8 @@ import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { loadSharedFrameworks, referenceNames } from "@/lib/individual/professional/frameworks";
 import { EVIDENCE_KIND, REMINDER_HORIZON_DAYS } from "@/lib/individual/professional/vocabulary";
 import { isExpired, isExpiringSoon } from "@/lib/engines/competency";
-import { experienceModulePage } from "../../../../_components/shell-context";
+import type { Metadata } from "next";
+import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import FrameworkPicker from "../../../../_components/professional/FrameworkPicker";
@@ -24,7 +25,7 @@ export const dynamic = "force-dynamic";
 // Expiry uses the shared competency engine's date rules (src/lib/engines/competency.ts) over the
 // reminder horizon, so this page and the emailed reminder agree on what "expires soon" means.
 
-export const metadata = { title: "Credentials & evidence" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Credentials & evidence" }); }
 
 export default async function EvidencePage({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "evidence");
