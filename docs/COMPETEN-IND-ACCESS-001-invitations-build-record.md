@@ -87,16 +87,13 @@ An earlier draft had a defect: its D8 CHECK also required `adult_confirmed_by`, 
 - **Independent of:** 372–377.
 - **Application order:** any time after 370.
 
-**Rollback SQL** (staging, or production if ever applied). Run whole; the trigger must go before its function.
-```sql
-drop trigger if exists trg_individual_invitation_guard on individual_invitation;
-drop function if exists individual_invitation_guard();
-drop view if exists individual_live_invitation;
-drop table if exists individual_invitation;
-notify pgrst, 'reload schema';
-```
-- **What rollback keeps:** identities created by invitations stay (auth user and profile, with `role` null), along with any Individual membership or entitlement they accepted. The audit rows stay.
-- **What rollback removes:** only the invitation records.
+**Rollback SQL:** `docs/evidence/COMPETEN-IND-ACCESS-001/ROLLBACK-378.sql`, following the ROLLBACK-380/381 conventions. It is for staging, or for production if 378 is ever applied there.
+- **Checksums:** LF `d07e5fb91ebda2a0191dbf829798cd6149933144af8de05b9b443721b4f1154f`, CRLF working copy `add8d051b3fb6152fb3ea136488f0c436927a132e0def7617edbb6a48a1758b8`.
+- **House rules:** ALL CLEAR.
+- **It drops, in dependency order, each `IF EXISTS`:** the guard trigger, its function, the view, then the table. Re-running it is a no-op, and it touches nothing 378 did not create.
+- **Not rehearsed:** not required for the Low tier.
+- **What rollback removes:** **every invitation row** (pending, accepted and revoked), as the file's header states.
+- **What rollback keeps:** identities created by invitations (auth user and profile, `role` null), any Individual membership or entitlement they accepted, and the audit rows.
 
 ## 4. Verification
 - **Foundation harness: 58/58.**
