@@ -181,7 +181,9 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },
   // COMPETEN-IND-ACCESS-001 s4: the Competen Individual pilot access screen. The capability already existed
   // (migration 370, D9) with no page; this declares the page it opens, so the intent map stays the whole truth.
-  { prefix: "/super-admin/individual",            capability: "hq.individual.pilot.grant" },
+  // EXACT: the screen has no sub-routes, and a sibling Individual HQ page (IND-007 configuration) must not
+  // inherit the pilot-grant right by sitting under this prefix -- it declares its own entry.
+  { prefix: "/super-admin/individual",            capability: "hq.individual.pilot.grant", exact: true },
 
   // ── The Product Director workspace ────────────────────────────────────────────────────────────────
   //
