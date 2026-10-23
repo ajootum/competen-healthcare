@@ -49,7 +49,7 @@ describe("explanation modes and what lies beyond the notes", () => {
     expect(explainSystem("explain")).toBe(EXPLAIN_SYSTEM);
     expect(explainPromptVersion("explain")).toBe("scholar-explain-v2");
     expect(explainSystem("summary").startsWith(EXPLAIN_SYSTEM)).toBe(true);
-    expect(explainPromptVersion("tutor")).toBe("scholar-explain-modes-v3:tutor");
+    expect(explainPromptVersion("tutor")).toBe("scholar-explain-modes-v4:tutor");
   });
 
   it("splits the background off the answer at the marker line", () => {

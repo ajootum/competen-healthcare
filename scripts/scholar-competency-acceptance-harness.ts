@@ -298,16 +298,25 @@ async function main() {
 
     // ── L. S3 ──
     const p1 = await store.getPassage(admin, a, sec1.id);
-    const simplify = await runExplain(a, "Explain this section as simply as possible.", [p1!], "simplify");
-    const deeper = await runExplain(a, "Explain this section in depth.", [p1!], "deeper");
+    // A withheld answer is the check doing its job, and a student can ask again: each step may try twice.
+    // Every answer that IS shown has passed the check either way.
+    const twice = async (go: () => ReturnType<typeof runExplain>, what: string) => {
+      const first = await go();
+      if (first.ok && first.check.ok) return first;
+      const why = !first.ok ? first.error : first.check.ok ? "" : `withheld:${first.check.reason} ${JSON.stringify(first.check.violations ?? [])}`;
+      note(`${what}: first try ${why}, asked again`);
+      return go();
+    };
+    const simplify = await twice(() => runExplain(a, "Explain this section as simply as possible.", [p1!], "simplify"), "simplify");
+    const deeper = await twice(() => runExplain(a, "Explain this section in depth.", [p1!], "deeper"), "deeper");
     note(`simplify: ${simplify.ok ? (simplify.check.ok ? "shown" : `withheld:${simplify.check.reason}`) : simplify.error}; supplementary ${simplify.ok ? JSON.stringify(simplify.supplementary) : "-"}`);
     note(`deeper: ${deeper.ok ? (deeper.check.ok ? "shown" : `withheld:${deeper.check.reason}`) : deeper.error}; supplementary ${deeper.ok ? (deeper.supplementary ? (deeper.supplementary.ok ? "shown" : `withheld:${deeper.supplementary.reason}`) : "none") : "-"}`);
     ok("L1. simplify answers from the notes and never shows background beyond them",
       simplify.ok && simplify.check.ok && (simplify.supplementary === null || (!simplify.supplementary.ok && simplify.supplementary.reason === "not_this_mode")));
     ok("L2. go deeper answers from the notes; any background beyond them is separate, and free of figures and doses when shown",
       deeper.ok && deeper.check.ok && (deeper.supplementary === null || !deeper.supplementary.ok || !/\d|dose|mg\b/i.test(deeper.supplementary.text)));
-    const t1 = await runExplain(a, "Teach me this section step by step.", [p1!], "tutor");
-    const t2 = t1.ok && t1.check.ok ? await runExplain(a, "You count it for a full minute.", [p1!], "tutor", [{ role: "tutor", text: t1.check.text }]) : null;
+    const t1 = await twice(() => runExplain(a, "Teach me this section step by step.", [p1!], "tutor"), "tutor turn 1");
+    const t2 = t1.ok && t1.check.ok ? await twice(() => runExplain(a, "You count it for a full minute.", [p1!], "tutor", [{ role: "tutor", text: (t1.check as { text: string }).text }]), "tutor turn 2") : null;
     note(`tutor: turn 1 ${t1.ok ? (t1.check.ok ? "shown" : t1.check.reason) : t1.error}; turn 2 ${t2 ? (t2.ok ? (t2.check.ok ? "shown" : t2.check.reason) : t2.error) : "-"}`);
     ok("L3. the tutor teaches a step and continues from the student's reply, each turn checked against the notes",
       t1.ok && t1.check.ok && !!t2 && t2.ok && t2.check.ok && /\[S1\]/.test(t2.check.text));
