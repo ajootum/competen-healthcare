@@ -43,7 +43,12 @@ export function AiBadge() {
 
 // ── CONSENT ────────────────────────────────────────────────────────────────────────────────────────
 
-export function ConsentPanel({ granted, grantedAt, revokedAt }: { granted: boolean; grantedAt: string | null; revokedAt: string | null }) {
+/** A legal document the notice points to, from the Individual legal configuration (never an invented URL). */
+export type LegalLink = { title: string; version: string; url: string | null };
+
+export function ConsentPanel({ granted, grantedAt, revokedAt, legal }: {
+  granted: boolean; grantedAt: string | null; revokedAt: string | null; legal: LegalLink[];
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -54,14 +59,28 @@ export function ConsentPanel({ granted, grantedAt, revokedAt }: { granted: boole
     if (!r.ok) { setError(r.json.error ?? "Your choice could not be saved."); return; }
     router.refresh();
   }
-  // Owner review P1.7: simpler, not weaker. The full notice is still on screen at the moment of agreeing,
-  // the agreement is still its own click, and turning it off is always one click away.
+  // The owner-approved notice (CONSENT_NOTICE, version stored with the grant). Still off by default, still
+  // its own click with the notice in view, and withdrawal is one click.
   const [reviewing, setReviewing] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const date = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   const notice = (
-    <ul className="mt-3 list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed text-gray-700">
-      {CONSENT_NOTICE.map(l => <li key={l}>{l}</li>)}
-    </ul>
+    <div className="mt-2 space-y-2 text-[13.5px] leading-relaxed text-gray-700">
+      <h3 className="text-[14px] font-bold text-gray-900">{CONSENT_NOTICE.heading}</h3>
+      {CONSENT_NOTICE.paragraphs.map(p => <p key={p}>{p}</p>)}
+      <p>{CONSENT_NOTICE.review}</p>
+      <ul className="space-y-1 text-[13px]">
+        {legal.length === 0 && <li className="text-gray-600">The Privacy Notice and Terms of Service are not published for this service yet.</li>}
+        {legal.map(d => (
+          <li key={`${d.title}-${d.version}`}>
+            {d.url
+              ? <a href={d.url} target="_blank" rel="noopener noreferrer" className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: accent }}>{d.title}</a>
+              : <span className="font-semibold text-gray-800">{d.title}</span>}
+            <span className="text-gray-500"> · version {d.version}{d.url ? "" : " (no published link yet)"}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
   return (
     <section aria-labelledby="consent-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
@@ -74,11 +93,12 @@ export function ConsentPanel({ granted, grantedAt, revokedAt }: { granted: boole
       {granted ? (
         <>
           <p className="mt-2 text-[13.5px] text-gray-700">
-            Explanations and practice questions are on{grantedAt ? ` (since ${date(grantedAt)})` : ""}. Only the passages you ask about are sent to Competen&apos;s AI provider, and only when you ask.
+            Explanations and practice questions are on{grantedAt ? ` (since ${date(grantedAt)})` : ""}. Your private uploads are not shared with other learners.
           </p>
           <details className="mt-2 text-[13px] text-gray-600">
-            <summary className={`cursor-pointer font-semibold text-gray-700 ${focusRing}`}>What is sent, and what is kept?</summary>
+            <summary className={`cursor-pointer font-semibold text-gray-700 ${focusRing}`}>What you agreed to</summary>
             {notice}
+            <p className="mt-2 text-[13px] italic text-gray-700">“{CONSENT_NOTICE.statement}”</p>
           </details>
           <button type="button" className={`${ghost} mt-3`} disabled={busy} onClick={() => set(false)}>{busy ? "Saving…" : "Turn off"}</button>
         </>
@@ -91,11 +111,14 @@ export function ConsentPanel({ granted, grantedAt, revokedAt }: { granted: boole
             <button type="button" className={`${btn} mt-3`} style={{ background: accent }} onClick={() => setReviewing(true)}>Review and turn on</button>
           ) : (
             <div className="mt-2 rounded-xl bg-gray-50 p-3">
-              <p className="text-[13px] font-semibold text-gray-800">Before you turn it on:</p>
               {notice}
+              <label className="mt-3 flex items-start gap-3 text-[13.5px] font-semibold text-gray-900">
+                <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0" />
+                <span>{CONSENT_NOTICE.statement}</span>
+              </label>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" className={btn} style={{ background: accent }} disabled={busy} onClick={() => set(true)}>{busy ? "Saving…" : "I agree, turn on AI help"}</button>
-                <button type="button" className={ghost} disabled={busy} onClick={() => setReviewing(false)}>Not now</button>
+                <button type="button" className={btn} style={{ background: accent }} disabled={busy || !agreed} onClick={() => set(true)}>{busy ? "Saving…" : "Turn on AI help"}</button>
+                <button type="button" className={ghost} disabled={busy} onClick={() => { setReviewing(false); setAgreed(false); }}>Not now</button>
               </div>
             </div>
           )}

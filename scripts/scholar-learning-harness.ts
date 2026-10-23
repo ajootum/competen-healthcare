@@ -28,7 +28,7 @@
  */
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { ALLOWED_MIME, MAX_UPLOAD_BYTES, BUCKET, AI_LABEL, SELF_DIRECTED_LABEL } from "../src/lib/individual/scholar/config";
+import { ALLOWED_MIME, MAX_UPLOAD_BYTES, BUCKET, AI_LABEL, SELF_DIRECTED_LABEL, CONSENT_FEATURE, CONSENT_NOTICE, CONSENT_NOTICE_VERSION } from "../src/lib/individual/scholar/config";
 import { EXPERIENCES } from "../src/lib/individual/experiences";
 
 let pass = 0; const failures: string[] = [];
@@ -167,6 +167,16 @@ const sourceNoticeCount = (src: Src) => [...(src.get(CLIENT) ?? "").matchAll(/<S
 const masteryWords = (src: Src) => [...src].filter(([f]) => f.startsWith(PAGES) || f === CLIENT)
   .filter(([, s]) => /master(y|ed)/i.test(s.replace(/["']mastered["']/g, ""))).map(([f]) => f);
 
+/**
+ * Owner consent GO (2026-10-23): contribution and AI-training permissions are SEPARATE and neither exists.
+ * No Scholar code may share, submit, contribute or publish a person's material, or ask for or imply a training
+ * permission. The notice text itself (config.ts) is the one place these words may appear.
+ */
+// Sharing constructs, not form submits (type="submit") or the word "published" in the legal-links UI.
+const SHARING = /contribut|shared[_ -]?library|learning[_ -]?library|submit\w*(library|review|share)|publish\w*(material|library)|share\w*material|\btrain(ing)?\b|fine[_ -]?tun/i;
+const sharingPaths = (src: Src) => [...src].filter(([f]) => f !== `${LIB}/config.ts`)
+  .filter(([, s]) => SHARING.test(s)).map(([f]) => f);
+
 /** E: labels, and no answer key in the browser before answering. */
 const answerKeyLeaks = (src: Src) => {
   const s = src.get(SCHOLAR_PAGE) ?? "";
@@ -265,6 +275,20 @@ function main() {
   ok("R3. P0.3: no Scholar screen calls practice accuracy 'mastery'", masteryWords(REAL).length === 0, masteryWords(REAL).join(", "));
   ok("R4. P0.4: the AI prompts carry only passages and the question -- no name, email or other profile data",
     !/profile|fullName|email|full_name/.test(REAL.get(GEN) ?? "x") && !/profile|fullName|email|full_name/.test(REAL.get(`${LIB}/question-quality.ts`) ?? "x"));
+  // ── S. OWNER CONSENT GO (2026-10-23) ───────────────────────────────────────────────────────────
+  ok("S1. no Scholar code shares, submits, contributes or publishes a person's material, or mentions training (outside the notice text)",
+    sharingPaths(REAL).length === 0, sharingPaths(REAL).join(", "));
+  ok("S2. the only consent Scholar asks for is AI processing: one feature value in code and in the schema, so no training permission exists",
+    CONSENT_FEATURE === "ai_processing_uploads" && (!MIG_REAL || /check \(feature in \('ai_processing_uploads'\)\)/.test(MIG_REAL)));
+  ok("S3. the consent notice is the owner-approved v2, with the separation sentences, the consent statement, and its version recorded with each grant",
+    CONSENT_NOTICE_VERSION === "scholar-ai-uploads-notice-v2"
+    && CONSENT_NOTICE.paragraphs.some(p => p.includes("Permission to contribute materials is separate from any permission to use data for training AI models."))
+    && CONSENT_NOTICE.paragraphs.some(p => p.includes("Your private uploads are not automatically shared with other learners"))
+    && CONSENT_NOTICE.statement.startsWith("I understand how AI-assisted learning works")
+    && /notice_version: CONSENT_NOTICE_VERSION/.test(REAL.get(STORE) ?? ""));
+  ok("S4. the agreement is its own click on the stated consent, and withdrawal is one click",
+    /disabled=\{busy \|\| !agreed\} onClick=\{\(\) => set\(true\)\}/.test(REAL.get(CLIENT) ?? "") && /\{CONSENT_NOTICE\.statement\}/.test(REAL.get(CLIENT) ?? "")
+    && /onClick=\{\(\) => set\(false\)\}>\{busy \? "Saving…" : "Turn off"\}/.test(REAL.get(CLIENT) ?? ""));
   ok("R5. P0.5: a personal practice case is labelled as such on its card",
     /q\.kind === "case" && \(/.test(REAL.get(CLIENT) ?? "") && /\{PERSONAL_CASE_LABEL\}/.test(REAL.get(CLIENT) ?? ""));
 
@@ -335,6 +359,8 @@ function main() {
     !qualityWired(plant(GEN, "const problems = qualityProblems(draft, passage.content);", "const problems: { reason: string; detail?: string }[] = [];")));
   ok("P12. ⚠ R1 goes red when the blind verification is skipped",
     !qualityWired(plant(GEN, "const outcome = applyVerification(check.kept, v.text);", "const outcome = { kept: check.kept, rejected: [] };")));
+  ok("P14. ⚠ S1 goes red when a route starts submitting material to a shared library",
+    sharingPaths(plant(STORE, "export function isUuid", "export async function submitToSharedLibrary() { return null; }\nexport function isUuid")).length > 0);
   ok("P13. ⚠ R3 goes red when a screen says mastery again",
     masteryWords(plant(`${PAGES}/progress/page.tsx`, "% practice accuracy`", "% mastery`")).length > 0);
 

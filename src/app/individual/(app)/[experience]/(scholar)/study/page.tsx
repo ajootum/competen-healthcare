@@ -6,7 +6,27 @@ import { experienceHref } from "@/lib/individual/experiences";
 import { countDue, listMaterials, readConsent } from "@/lib/individual/scholar/store";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
 import StudyNav from "./_components/StudyNav";
-import { ConsentPanel, EraseAll, ExplainPanel, UploadPanel } from "./_components/client";
+import { ConsentPanel, EraseAll, ExplainPanel, UploadPanel, type LegalLink } from "./_components/client";
+import { FOUNDATION_ENTITY, entityLegal, type EntityLegal } from "@/lib/individual/legal";
+
+/**
+ * The Privacy Notice and Terms the consent notice points to: the shared foundation's and the Scholar
+ * operator's, exactly as the Individual legal configuration publishes them (version, and a URL only if one
+ * is configured). Nothing is invented, and an unpublished document is simply absent.
+ */
+function consentLegalLinks(): LegalLink[] {
+  const docs = (l: EntityLegal): LegalLink[] => {
+    const raw = l.registeredName ?? l.label;
+    const name = raw.charAt(0).toUpperCase() + raw.slice(1);
+    return [
+      ...(l.privacy ? [{ title: `${name} Privacy Notice`, version: l.privacy.version, url: l.privacy.url }] : []),
+      ...(l.terms ? [{ title: `${name} Terms of Use`, version: l.terms.version, url: l.terms.url }] : []),
+    ];
+  };
+  const foundation = entityLegal(FOUNDATION_ENTITY);
+  const operator = entityLegal(SCHOLAR.operatingEntity);
+  return operator.entity === foundation.entity ? docs(foundation) : [...docs(operator), ...docs(foundation)];
+}
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -72,7 +92,7 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
       <div className="grid gap-5 lg:grid-cols-2">
         <UploadPanel />
         {consent.ok
-          ? <ConsentPanel granted={consent.data.granted} grantedAt={consent.data.grantedAt} revokedAt={consent.data.revokedAt} />
+          ? <ConsentPanel granted={consent.data.granted} grantedAt={consent.data.grantedAt} revokedAt={consent.data.revokedAt} legal={consentLegalLinks()} />
           : <Unreadable what="AI consent setting" />}
       </div>
 

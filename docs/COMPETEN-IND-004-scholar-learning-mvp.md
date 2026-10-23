@@ -6,6 +6,7 @@
 | **Status** | Built on branch `ind-004/scholar-mvp`, cut from `ind-003/individual-foundation` at `d6252ad6`. **Not merged, not deployed.** |
 | **Authority** | Owner GO for COMPETEN-IND-004. Builds on ADR-016 (owner rulings D1–D10), COMPETEN-IND-002 §3.2–3.3 and COMPETEN-IND-003. |
 | **Migration** | `372-individual-scholar-learning.sql`. House rules ALL CLEAR. **Applied and verified on STAGING only (2026-10-23)**, under the owner's continuation GO. Committed to this branch (`08ea2a31`), as the CLAUDE.md migration-governance amendment now allows for a staging-verified migration (`main` `5a9a07cc`). Nothing merges to `main` without a GO. **Production: not applied, and a separate GO is required.** |
+| **Owner acceptance** | **APPROVED** as the MVP design baseline (2026-10-23). Final verification, consent v2, residual risks and release action are in §10. |
 | **Owner review** | Conditional acceptance (2026-10-23); P0.1–P0.5 done, P1.6–P1.8 done, P1.9–P1.10 recommended. See §9. |
 | **Staging** | 372 applied twice, idempotent. `scholar-acceptance-harness` 40/40. End-to-end walk-through at 1440 and 390 px. Three defects found and fixed. See §6. |
 
@@ -231,6 +232,61 @@ The owner accepted the Scholar journey as the MVP foundation, subject to one foc
 4. Turn `individual_app` on, and pilot-grant the cohort through the HQ grant right (D8/D9).
 
 Until then, Scholar stays dark in production behind the default-OFF gate.
+
+## 10. Owner visual acceptance (APPROVED, 2026-10-23): final verification and release preparation
+
+The owner approved the revised interface and journey as the MVP design baseline. This section records the final verification, the AI-consent change the owner approved the same day, the residual risks and the release action. No schema change; 372 is unchanged (sha256 `17a43464…`).
+
+### Final verification
+
+| # | Owner item | Evidence | Result |
+|---|---|---|---|
+| 1 | Question validation covers stems, correct answers, distractors, ambiguity, clinical terminology and source support | `question-quality.ts`:<br>• stem: a question, no unmarked negative;<br>• key: in the quoted source sentence;<br>• distractors and terminology: every option from the notes' terms, no catch-all or overlap.<br>The blind check covers ambiguity, exactly-one-supported, and no outside facts. Unit tests, harness R1 + P11/P12. **Live on staging (A1–A3):** green, with 3 acceptance runs today. The v3 pipeline re-measured at 11 kept across 6 sets, at least 1 each. | **Pass** |
+| 2 | AI consent, withdrawal and material-deletion boundaries | Acceptance C1–C6: off by default; grant records the notice version (now **v2**, confirmed in the database); revoke records when; the preflight refuses with **403** after revoke. E1–E3: one material and everything, objects included, an unprocessed upload too; the consent record kept. I1–I8: isolation. Walk-through: the statement must be ticked before "Turn on AI help" enables, and "Turn off" is one click. | **Pass** |
+| 3 | Source-grounded explanations, clear separation from clinically reviewed content | A1 live: shown only after the grounding check, cited `[S1]` to a page, with the AI label and the source notice (screenshot r13). The Apply page separates "Your practice scenarios" from "Clinically reviewed cases" (not served). Nothing reads `clinical_cases` (harness B2, R5). | **Pass**, with residual risk 4 |
+| 4 | Practice accuracy, spaced revision, progress calculations | **Known fixtures (unit tests, all green):**<br>• Accuracy: the latest answer per question counts (wrong then right = right). Material with 2 answered, 1 right on the latest = **50%**.<br>• Not measured: no answers gives `null`, shown as "Not measured yet", never 0%. A week with no answers has no bar.<br>• Weekly trend: 3 answers in the week of 19 Oct, 1 right, gives **33%**. Weeks start on Monday, and the window is 8 weeks ending with the current one.<br>• SM-2 (the estate's `sm2()`, imported): Good every time gives **1 → 6 → 15 → 38 → 95 days**, reaching long intervals on review 5 (reps ≥ 5 and interval ≥ 60). Easy/Okay set the ease (2.6 / 2.36) for later intervals. A miss restarts at 1 day.<br>• Cards due: a card due today counts; a future card does not.<br>Staging Q2–Q7 confirm the same against the real database. | **Pass** |
+| 5 | Desktop and mobile usability and navigation | 15 owner-review screenshots, all live (1440 and 390). No horizontal overflow at 390 (measured). Study tabs pinned on mobile, five-tab bottom bar, two-column material page with a sticky Ask panel on desktop. Revise keeps its session summary after the due-count refresh (defect found and fixed). | **Pass** |
+| 6 | Personal educational activity kept distinct from verified competency | "Practice accuracy … not a measure of competence or of clinical knowledge". The self-directed label on Progress. Nothing is written to the Passport or any estate table (harness B1, acceptance M1). "Mastery" is refused on screen (R3). Answers are "marked against your notes, not against clinical guidelines". | **Pass** |
+
+Local checks: `tsc` clean; `vitest` **587/587**; `scholar-learning-harness` **63/63** (S1–S4 consent and separation, planted P14 goes red); `individual-foundation` 44/44; `auth-boundary`, `plane-boundary`, `access-doors` green. Staging: `scholar-acceptance-harness` **43/43**. The flag was restored to no row each time and confirmed, with IND-007 told before and after.
+
+### AI consent v2 (owner GO, 2026-10-23)
+
+- **Wording:** the owner-approved wording, verbatim, as `CONSENT_NOTICE` v2 (`scholar-ai-uploads-notice-v2`, stored with each grant).
+- **Agreement:** the agreement control is a checkbox labelled with the Consent sentence, followed by its own "Turn on AI help" click. It stays off by default, the notice is in view, and withdrawal is one click.
+- **Legal links:** the Privacy Notice and Terms links come from the Individual legal configuration: version shown, URL only if configured, and nothing invented.
+- **Separation:** contribution and training permissions are kept separate by not existing. No code path shares, submits or publishes a person's material, and no training permission is requested or implied: the only consent feature, in code and schema, is `ai_processing_uploads`. Harness S1–S4 pin this, and planted P14 goes red.
+
+**Consistency check: where the approved wording and the implementation differ (report only, no code changed):**
+1. *"With your separate, optional permission, eligible materials may be submitted for review…"* No such permission or mechanism exists; contribution is out of scope. The sentence describes a capability the person cannot use today. Legal and product should decide whether to keep it before the pilot, or say it is not yet available.
+2. *"…or material you do not have permission to use."* The upload attestation covers patient information only, not copyright or permission to use. A one-line attestation change would align it; that needs a decision on whether the attestation timestamp should then cover both.
+3. *"You can review the applicable Privacy Notice and Terms of Service…"* and *"…as described in the Privacy Notice."* Both depend on LEGAL-001. No Individual Privacy Notice or Terms is published; on staging the links show test versions with "no published link yet". The consent would refer to a document that does not exist until legal publishes it.
+4. *"Terms of Service"* vs the configured and displayed name *"Terms of Use"* (legal.ts, the terms gate). The names should be aligned in one place.
+5. *"processed by Competen and its authorised technology providers"* The provider is Anthropic, via `generate()`. Naming the processor and its terms, including that API inputs are not used for training, belongs in the Privacy Notice, which is a legal dependency.
+6. *"receive personalised explanations and feedback"* Explanations are AI-generated. Answer **feedback** is the stored question's own rationale and source, with no AI call at marking time. The sentence is accurate for explanations and loosely so for feedback.
+7. The v2 wording drops the v1 operational details: only the passages you ask about are sent; explanations are not saved; questions are saved with their source; turning AI off deletes nothing. They are still true. Legal should decide whether the Privacy Notice carries them.
+
+### Residual risks (accepted for the MVP, recorded)
+
+1. **Question quality limits.**
+   - Distractors limited to the notes' terms are safe but sometimes obviously wrong, which lowers discrimination.
+   - A harmless synonym is refused (conservative).
+   - In explanations, explanatory paraphrase is not term-checked (live example: "problems with blood supply to the kidneys").
+2. **The blind check is the same model family, not clinical review.** It catches keying errors and ambiguity. It does not validate clinical truth, and the notes themselves may be wrong. The AI label and source notice say so on every output.
+3. **The consent-notice wording is pending legal review** (items 1–7 above), and the Privacy Notice and Terms it relies on are unpublished (LEGAL-001).
+4. **Storage files are outside the planned database backups.** Uploaded originals live in the `individual-scholar-materials` Storage bucket. A database backup or PITR (COMPETEN-OPS-001) does not cover Storage objects, so a restore could bring back material rows whose original file is gone. The extracted text is in the database, so study still works. Download-original would 404, and erasure must stay object-first, as it is.
+5. Unchanged from §9: production needs 370 + 372 under a separate GO and the freeze's recovery mechanism; `individual_app` stays OFF in production.
+
+### Recommended release action
+
+**Merge PR #9 to `main` when the owner gives the GO.** The code is dark behind the default-OFF `individual_app` gate, and 372 is staging-verified and eligible under the CLAUDE.md amendment. Merging records it in release history and activates nothing.
+
+Then, as **separate owner GOs**, in order:
+1. Legal: resolve consistency items 1–5 and publish the Individual Privacy Notice and Terms (LEGAL-001).
+2. Production: apply 370 + 372 once the freeze's recovery mechanism exists. Decide whether Storage needs its own backup first (risk 4).
+3. Pilot: turn `individual_app` on in production and pilot-grant the closed cohort through the HQ right (D8/D9).
+
+No production migration, merge, deployment or pilot activation has been done.
 
 ## 8. Next
 

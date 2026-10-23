@@ -113,6 +113,27 @@ describe("question checks", () => {
   });
 });
 
+describe("spaced revision schedule, against a known fixture (owner acceptance item 4)", () => {
+  it("a card graded Good every time comes back after 1, 6, 15, 38, 95 days, and reaches long intervals on the fifth review", () => {
+    let st = { ease: 2.5, interval: 0, reps: 0 };
+    const intervals: number[] = [];
+    for (let i = 0; i < 5; i++) { const n = sm2(st, 4); intervals.push(n.interval); st = { ease: n.ease, interval: n.interval, reps: n.reps }; }
+    expect(intervals).toEqual([1, 6, 15, 38, 95]);
+    // store.reviewCard's long-interval rule (the engine's own): reps >= 5 and interval >= 60.
+    expect(st.reps >= 5 && st.interval >= 60).toBe(true);
+  });
+
+  it("the grade sets the ease for later intervals (Easy raises it, Okay lowers it), and a miss starts the schedule again", () => {
+    // SM-2 applies the CURRENT ease to this interval, so both give 15 days now; the next ones diverge.
+    const easy = sm2({ ease: 2.5, interval: 6, reps: 2 }, 5), okay = sm2({ ease: 2.5, interval: 6, reps: 2 }, 3);
+    expect([easy.interval, okay.interval]).toEqual([15, 15]);
+    expect(easy.ease).toBe(2.6);
+    expect(okay.ease).toBe(2.36);
+    expect(sm2({ ease: easy.ease, interval: 15, reps: 3 }, 4).interval).toBeGreaterThan(sm2({ ease: okay.ease, interval: 15, reps: 3 }, 4).interval);
+    expect(sm2({ ease: 2.5, interval: 38, reps: 4 }, 2)).toMatchObject({ reps: 0, interval: 1 });
+  });
+});
+
 describe("revision uses the estate's SM-2, unchanged", () => {
   it("a miss (quality 1) restarts the schedule, a good recall extends it", () => {
     expect(sm2({ ease: 2.5, interval: 6, reps: 2 }, 1)).toMatchObject({ reps: 0, interval: 1 });
