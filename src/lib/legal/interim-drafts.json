@@ -1,0 +1,1892 @@
+[
+ {
+  "key": "holdings-terms",
+  "kind": "terms",
+  "title": "Competen Holdings — Platform Terms of Use",
+  "preamble": [
+   "COMPETEN HOLDINGS",
+   "PLATFORM TERMS OF USE",
+   "Document reference: COMPETEN-LEGAL-HOLDINGS-TERMS-001\nVersion: Draft 0.1\nEffective date: To be confirmed\nStatus: Draft — subject to legal approval",
+   "Platform: www.competenhealthcare.com",
+   "Operating entity: [Insert full registered legal name of Competen Holdings]\nRegistration number: [Insert]\nRegistered address: [Insert]\nLegal contact: [Insert verified email address]"
+  ],
+  "sections": [
+   {
+    "heading": "1. Introduction",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Welcome to Competen."
+     },
+     {
+      "type": "p",
+      "text": "Competen is a digital healthcare education, professional development and organisational competency platform designed to support learning, professional growth, quality improvement and the development of healthcare services."
+     },
+     {
+      "type": "p",
+      "text": "These Terms of Use govern access to and use of the shared Competen platform, including its account services, identity infrastructure, common technologies and platform-wide functionality."
+     },
+     {
+      "type": "p",
+      "text": "Competen's principal product families include:"
+     },
+     {
+      "type": "ul",
+      "items": [
+       "Competen Enterprise: Organisational workforce development, learning, competency management and related institutional services.",
+       "Competen Individual: Personal learning and professional development, including Scholar and Professional.",
+       "Competen Practice: Healthcare practice and related operational services.",
+       "Competen Recruitment: Professional career and recruitment services, as and when made available."
+      ]
+     },
+     {
+      "type": "p",
+      "text": "Individual products may have additional terms governing their specific activities."
+     },
+     {
+      "type": "p",
+      "text": "By creating an account, accepting these Terms or using the relevant services, you agree to comply with the applicable provisions."
+     },
+     {
+      "type": "p",
+      "text": "Where you access Competen through an employer, educational institution or other organisation, additional organisational agreements and policies may apply."
+     }
+    ]
+   },
+   {
+    "heading": "2. The Competen Platform",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen provides a shared technological foundation through which different healthcare-related services can operate."
+     },
+     {
+      "type": "p",
+      "text": "This foundation may include identity management, authentication, access control, user profiles, artificial intelligence services, learning infrastructure, competency records, digital evidence and the Competen Passport."
+     },
+     {
+      "type": "p",
+      "text": "The availability of any service depends on its development status, your permissions, applicable subscriptions and organisational or individual entitlements."
+     },
+     {
+      "type": "p",
+      "text": "Access to one Competen product does not automatically grant access to another."
+     },
+     {
+      "type": "p",
+      "text": "Competen may introduce, modify, suspend or discontinue features in accordance with applicable agreements and law."
+     }
+    ]
+   },
+   {
+    "heading": "3. Accounts and Identity",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Each individual should ordinarily maintain one Competen identity across the platform."
+     },
+     {
+      "type": "p",
+      "text": "Users must provide accurate information and keep their contact details reasonably current."
+     },
+     {
+      "type": "p",
+      "text": "Users are responsible for safeguarding their authentication credentials and reporting suspected unauthorised account access."
+     },
+     {
+      "type": "p",
+      "text": "Accounts must not be shared or transferred to another person."
+     },
+     {
+      "type": "p",
+      "text": "Competen may use email verification, invitation controls, authentication checks and other security measures to protect accounts."
+     },
+     {
+      "type": "p",
+      "text": "A person may hold multiple product memberships, organisational appointments or service entitlements under one identity. These permissions remain separately governed."
+     },
+     {
+      "type": "p",
+      "text": "Competen may suspend or restrict access where reasonably necessary to protect users, investigate misuse, comply with law or enforce these Terms."
+     }
+    ]
+   },
+   {
+    "heading": "4. Organisational and Individual Access",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Access to Competen may be granted through an organisation, an authorised administrator, a personal subscription or another approved entitlement mechanism."
+     },
+     {
+      "type": "p",
+      "text": "Organisations remain responsible for their authorised appointments, staff access decisions and the accuracy of records they create, subject to applicable law and their agreements with Competen."
+     },
+     {
+      "type": "p",
+      "text": "An organisation's authority over its own records does not automatically give it access to an individual's private learning materials, personal AI interactions or independently maintained professional records."
+     },
+     {
+      "type": "p",
+      "text": "Similarly, a user's personal account does not automatically confer authority to modify organisational records."
+     }
+    ]
+   },
+   {
+    "heading": "5. Acceptable Use",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Users must use Competen lawfully, responsibly and consistently with its intended purposes."
+     },
+     {
+      "type": "p",
+      "text": "Users must not:"
+     },
+     {
+      "type": "ul",
+      "items": [
+       "Access another person's account or records without authorisation.",
+       "Misrepresent qualifications, credentials, professional registration or competency.",
+       "Upload information they are not entitled to disclose.",
+       "Introduce malicious code or attempt to compromise platform security.",
+       "Circumvent access controls, usage limits or payment requirements.",
+       "Use the platform to harass, defraud, discriminate unlawfully or otherwise harm others.",
+       "Present AI-generated material as independently verified professional evidence.",
+       "Use educational content as a substitute for required clinical supervision or professional judgement."
+      ]
+     },
+     {
+      "type": "p",
+      "text": "Competen may investigate suspected misuse and take proportionate protective action."
+     }
+    ]
+   },
+   {
+    "heading": "6. Artificial Intelligence",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Certain Competen services use artificial intelligence to assist with learning, explanations, analysis, documentation and professional development."
+     },
+     {
+      "type": "p",
+      "text": "AI-generated content may be incomplete, inaccurate, outdated or inappropriate for a particular situation."
+     },
+     {
+      "type": "p",
+      "text": "Users must exercise independent judgement and verify important information against reliable sources, applicable professional standards and relevant institutional policies."
+     },
+     {
+      "type": "p",
+      "text": "AI-generated responses do not constitute clinical authorisation, professional certification, independent competency assessment or medical advice."
+     },
+     {
+      "type": "p",
+      "text": "Competen may impose reasonable usage limits and fair-use controls to maintain service reliability and responsible resource consumption."
+     },
+     {
+      "type": "p",
+      "text": "Additional AI-specific notices and consent requirements may apply."
+     }
+    ]
+   },
+   {
+    "heading": "7. Clinical and Professional Responsibility",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen supports healthcare education and professional development but does not replace professional licensing authorities, employers, clinical supervisors or regulatory bodies."
+     },
+     {
+      "type": "p",
+      "text": "Unless a particular service is expressly authorised and governed for such use, Competen must not be relied upon as the sole basis for diagnosis, treatment, emergency response or other clinical decisions."
+     },
+     {
+      "type": "p",
+      "text": "Healthcare professionals remain responsible for acting within their lawful scope of practice and applicable professional obligations."
+     }
+    ]
+   },
+   {
+    "heading": "8. Competen Passport and Evidence",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "The Competen Passport provides a means of presenting selected professional, educational and competency-related information."
+     },
+     {
+      "type": "p",
+      "text": "Passport information may include self-declared records, self-directed learning achievements, institution-issued evidence and independently verified credentials."
+     },
+     {
+      "type": "p",
+      "text": "These categories must remain distinguishable."
+     },
+     {
+      "type": "p",
+      "text": "The presence of information in a Passport does not, by itself, mean that Competen has verified its accuracy."
+     },
+     {
+      "type": "p",
+      "text": "Where sharing functionality is available, users may be able to select information for disclosure through controlled links."
+     },
+     {
+      "type": "p",
+      "text": "A valid sharing link confirms the status of the link, not necessarily the validity of the credentials it displays."
+     },
+     {
+      "type": "p",
+      "text": "Organisations retain lawful authority over their original institutional records, while individuals retain applicable rights concerning information about themselves."
+     }
+    ]
+   },
+   {
+    "heading": "9. Intellectual Property",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen's software, branding, designs, proprietary technology and original platform content are protected by applicable intellectual-property laws."
+     },
+     {
+      "type": "p",
+      "text": "Except where expressly permitted, users may not reproduce, commercially redistribute, reverse engineer or exploit protected Competen materials."
+     },
+     {
+      "type": "p",
+      "text": "Users retain ownership or other lawful rights in materials they submit, subject to any applicable third-party rights."
+     },
+     {
+      "type": "p",
+      "text": "By uploading material, a user grants Competen a limited permission to host, process, display and technically transform that material as reasonably necessary to deliver the authorised service."
+     },
+     {
+      "type": "p",
+      "text": "This permission does not automatically authorise public distribution, model training or contribution to a shared educational library."
+     },
+     {
+      "type": "p",
+      "text": "Users must have the necessary rights to upload and use their materials."
+     }
+    ]
+   },
+   {
+    "heading": "10. Privacy and Data Protection",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen processes personal information in accordance with its applicable Privacy Notices and data-protection obligations."
+     },
+     {
+      "type": "p",
+      "text": "The shared platform may process identity, contact, authentication, access, security and service-usage information."
+     },
+     {
+      "type": "p",
+      "text": "Product-specific processing is explained in the relevant product notices."
+     },
+     {
+      "type": "p",
+      "text": "Competen will maintain appropriate safeguards against unauthorised access, disclosure, alteration and loss of information."
+     },
+     {
+      "type": "p",
+      "text": "Where different Competen entities or organisational customers participate in processing, their responsibilities will be determined by the applicable legal arrangements."
+     }
+    ]
+   },
+   {
+    "heading": "11. Fees and Subscriptions",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Some Competen services may be free, invitation-based, institution-sponsored or subscription-based."
+     },
+     {
+      "type": "p",
+      "text": "Where fees apply, the relevant price, billing period, included services, renewal arrangements and cancellation terms must be disclosed before payment."
+     },
+     {
+      "type": "p",
+      "text": "Additional product terms may govern specific subscriptions."
+     },
+     {
+      "type": "p",
+      "text": "No feature described as planned creates an obligation to provide that feature before it is commercially released."
+     }
+    ]
+   },
+   {
+    "heading": "12. Availability and Service Changes",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen will make reasonable efforts to maintain service availability, security and reliability."
+     },
+     {
+      "type": "p",
+      "text": "However, uninterrupted access cannot be guaranteed."
+     },
+     {
+      "type": "p",
+      "text": "Maintenance, technical failures, external provider outages or security incidents may affect availability."
+     },
+     {
+      "type": "p",
+      "text": "Competen may make necessary changes to protect platform integrity or comply with legal requirements."
+     },
+     {
+      "type": "p",
+      "text": "Where practicable, material service changes will be communicated in advance."
+     }
+    ]
+   },
+   {
+    "heading": "13. Suspension and Termination",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "A user may request account closure or discontinue use in accordance with applicable product arrangements."
+     },
+     {
+      "type": "p",
+      "text": "Competen may suspend or terminate access for serious misuse, security risks, legal obligations or material breach of these Terms."
+     },
+     {
+      "type": "p",
+      "text": "Termination of access does not necessarily require immediate deletion of records that must lawfully be retained, including audit evidence, institutional records and legally required transaction information."
+     },
+     {
+      "type": "p",
+      "text": "Applicable data-protection rights remain available."
+     }
+    ]
+   },
+   {
+    "heading": "14. Disclaimers and Liability",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen provides educational, professional and technological services subject to applicable law."
+     },
+     {
+      "type": "p",
+      "text": "Competen does not guarantee examination success, employment, professional registration, clinical competence or particular professional outcomes."
+     },
+     {
+      "type": "p",
+      "text": "To the extent permitted by law, Competen is not responsible for losses arising solely from a user's unauthorised use, inaccurate self-declarations or reliance on unverified AI-generated information."
+     },
+     {
+      "type": "p",
+      "text": "Nothing in these Terms excludes liability that cannot lawfully be excluded, including liability arising from fraud, wilful misconduct or other non-excludable legal obligations."
+     },
+     {
+      "type": "p",
+      "text": "Any additional limitation of liability must be reviewed by counsel for enforceability and fairness."
+     }
+    ]
+   },
+   {
+    "heading": "15. Changes to These Terms",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen may revise these Terms to reflect changes in services, law, governance or operational requirements."
+     },
+     {
+      "type": "p",
+      "text": "Each published version will have a version identifier and effective date."
+     },
+     {
+      "type": "p",
+      "text": "Where required, users will be asked to accept revised Terms before continuing to use affected services."
+     },
+     {
+      "type": "p",
+      "text": "Earlier acceptance records will be retained as necessary for lawful accountability."
+     }
+    ]
+   },
+   {
+    "heading": "16. Governing Law and Disputes",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "These Terms are intended to be governed by the laws of the Republic of Uganda, subject to confirmation of the operating entity's jurisdiction and any mandatory rights applicable elsewhere."
+     },
+     {
+      "type": "p",
+      "text": "Users should first contact Competen to seek resolution of service-related disputes."
+     },
+     {
+      "type": "p",
+      "text": "Nothing in these Terms restricts rights to approach a competent regulator, court or other lawful dispute-resolution body."
+     }
+    ]
+   },
+   {
+    "heading": "17. Contact",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Legal entity: [Registered Holdings name]\nRegistered address: [Insert]\nGeneral contact: [Insert]\nPrivacy contact: [Insert]\nWebsite: www.competenhealthcare.com"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "holdings-privacy",
+  "kind": "privacy",
+  "title": "Competen Holdings — Platform Privacy Notice",
+  "preamble": [
+   "COMPETEN HOLDINGS",
+   "PLATFORM PRIVACY NOTICE",
+   "Document reference: COMPETEN-LEGAL-HOLDINGS-PRIVACY-001\nVersion: Draft 0.1\nEffective date: To be confirmed\nStatus: Draft — subject to legal approval",
+   "Data controller: [Insert confirmed legal entity and applicable role]\nRegistration number: [Insert]\nPrivacy contact: [Insert verified contact]\nRegistered address: [Insert]"
+  ],
+  "sections": [
+   {
+    "heading": "1. Introduction",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen respects the privacy and data-protection rights of people who use its services."
+     },
+     {
+      "type": "p",
+      "text": "This Privacy Notice explains how personal information is collected, used, stored, disclosed and protected when individuals interact with the shared Competen platform."
+     },
+     {
+      "type": "p",
+      "text": "It applies principally to shared platform activities, including identity, authentication, personal accounts, access permissions, security, common technology services and related administration."
+     },
+     {
+      "type": "p",
+      "text": "Specific products may provide additional Privacy Notices."
+     }
+    ]
+   },
+   {
+    "heading": "2. Our Responsibilities",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Holdings is intended to operate the shared platform infrastructure."
+     },
+     {
+      "type": "p",
+      "text": "Its legal role as a data controller, processor or joint controller for particular processing activities will depend on the purpose of processing and the relevant contractual arrangements."
+     },
+     {
+      "type": "p",
+      "text": "For example, an organisation may determine the purposes of processing its workforce information, while Competen provides technology to process that information on its behalf."
+     },
+     {
+      "type": "p",
+      "text": "The final allocation of responsibilities will be identified in the applicable legal and contractual documentation."
+     }
+    ]
+   },
+   {
+    "heading": "3. Information We Collect",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Depending on the services used, we may collect:"
+     },
+     {
+      "type": "p",
+      "text": "Identity and contact information: Name, email address, telephone number, country, account identifier and voluntarily supplied profile details."
+     },
+     {
+      "type": "p",
+      "text": "Authentication and security information: Account status, authentication events, sign-in history, security logs and information necessary to protect accounts."
+     },
+     {
+      "type": "p",
+      "text": "Access and organisational information: Product memberships, authorised roles, HQ appointments, institutional relationships and service entitlements."
+     },
+     {
+      "type": "p",
+      "text": "Platform activity: Service interactions, technical diagnostics, access events, audit records and information needed to operate the platform."
+     },
+     {
+      "type": "p",
+      "text": "AI service metadata: Where AI is used, operational information such as model, token usage, cost, status and applicable user or service attribution."
+     },
+     {
+      "type": "p",
+      "text": "Communications: Requests for assistance, account-related correspondence and service notifications."
+     },
+     {
+      "type": "p",
+      "text": "Billing information: Subscription and transaction records where paid services are introduced. Payment-card information, if applicable, will be handled according to the actual payment-provider arrangement."
+     },
+     {
+      "type": "p",
+      "text": "Product-specific learning, professional and clinical information is addressed in additional notices."
+     }
+    ]
+   },
+   {
+    "heading": "4. How We Use Information",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "We process personal information for purposes including:"
+     },
+     {
+      "type": "ul",
+      "items": [
+       "Creating and administering Competen accounts.",
+       "Verifying identity and securing authentication.",
+       "Managing authorised access to products.",
+       "Delivering requested services.",
+       "Maintaining audit and accountability records.",
+       "Providing support and service communications.",
+       "Monitoring reliability and preventing misuse.",
+       "Enforcing appropriate AI usage controls.",
+       "Complying with applicable legal obligations.",
+       "Managing subscriptions and transactions where applicable."
+      ]
+     },
+     {
+      "type": "p",
+      "text": "We will not use personal information for unrelated purposes without an appropriate lawful basis and required notice or permission."
+     }
+    ]
+   },
+   {
+    "heading": "5. Legal Bases for Processing",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "The lawful basis depends on the processing activity and applicable law."
+     },
+     {
+      "type": "p",
+      "text": "Potential bases include performance of an agreement, compliance with legal obligations, consent where required, and other grounds permitted by law."
+     },
+     {
+      "type": "p",
+      "text": "The final processing-purpose and lawful-basis mapping must be approved before publication."
+     },
+     {
+      "type": "p",
+      "text": "Where consent is relied upon, it must be informed, specific and appropriately recorded."
+     },
+     {
+      "type": "p",
+      "text": "Accepting contractual Terms does not automatically constitute consent to every optional processing activity."
+     }
+    ]
+   },
+   {
+    "heading": "6. Sharing Information",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "We may disclose limited information to:"
+     },
+     {
+      "type": "ul",
+      "items": [
+       "Authorised Competen personnel who need it for their duties.",
+       "Competen operating entities under appropriate arrangements.",
+       "Organisations with which a user has an authorised relationship.",
+       "Technology providers acting under applicable contractual safeguards.",
+       "Payment or communication providers where necessary.",
+       "Regulators or public authorities where disclosure is legally required."
+      ]
+     },
+     {
+      "type": "p",
+      "text": "A user's personal learning information is not automatically available to their employer merely because the employer also uses Competen."
+     },
+     {
+      "type": "p",
+      "text": "Disclosure must follow applicable product permissions, lawful purposes and contractual responsibilities."
+     },
+     {
+      "type": "p",
+      "text": "We do not sell personal information to advertisers."
+     }
+    ]
+   },
+   {
+    "heading": "7. Technology and AI Providers",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen uses third-party technology infrastructure to provide authentication, hosting, storage, deployment and AI-supported services."
+     },
+     {
+      "type": "p",
+      "text": "Providers currently identified in the development architecture include Supabase, Vercel and Anthropic's AI API."
+     },
+     {
+      "type": "p",
+      "text": "The final published notice must confirm which providers are active in production, the information each receives, relevant processing locations and applicable contractual safeguards."
+     },
+     {
+      "type": "p",
+      "text": "When AI services are used, selected inputs may be transmitted to the AI provider to generate a response."
+     },
+     {
+      "type": "p",
+      "text": "The provider's own processing and retention terms may apply."
+     },
+     {
+      "type": "p",
+      "text": "Competen does not authorise private uploads to be used for AI model training through the current Individual learning service. Any materially different future use would require a separate legal and product-governance decision."
+     }
+    ]
+   },
+   {
+    "heading": "8. International Data Transfers",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen's technology providers may process information outside Uganda."
+     },
+     {
+      "type": "p",
+      "text": "Where personal information is transferred internationally, Competen will identify the relevant destinations, legal grounds and safeguards required by applicable data-protection law."
+     },
+     {
+      "type": "p",
+      "text": "The final transfer arrangements must be confirmed before publication."
+     }
+    ]
+   },
+   {
+    "heading": "9. Data Retention",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen retains information only for as long as reasonably necessary for the relevant purpose, subject to applicable legal and contractual requirements."
+     },
+     {
+      "type": "p",
+      "text": "Different periods may apply to:"
+     },
+     {
+      "type": "ul",
+      "items": [
+       "Account and profile information.",
+       "Authentication and security records.",
+       "Access and entitlement history.",
+       "Audit and legal acceptance records.",
+       "Financial transactions.",
+       "Support communications.",
+       "AI usage metadata.",
+       "Backup copies."
+      ]
+     },
+     {
+      "type": "p",
+      "text": "Retention schedule: [Insert approved category-specific periods and deletion criteria.]"
+     },
+     {
+      "type": "p",
+      "text": "Account closure does not necessarily result in immediate deletion of information that must lawfully be preserved."
+     }
+    ]
+   },
+   {
+    "heading": "10. Security",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen uses technical and organisational safeguards appropriate to the nature of the information processed."
+     },
+     {
+      "type": "p",
+      "text": "These may include authentication, access controls, database permissions, audit trails, encryption, controlled administrative authority and backup arrangements."
+     },
+     {
+      "type": "p",
+      "text": "Access to information is limited according to authorised responsibilities."
+     },
+     {
+      "type": "p",
+      "text": "No digital system can guarantee absolute security. Suspected incidents will be assessed and managed according to applicable security and legal requirements."
+     }
+    ]
+   },
+   {
+    "heading": "11. Your Privacy Rights",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Subject to applicable law, individuals may request:"
+     },
+     {
+      "type": "ul",
+      "items": [
+       "Access to personal information.",
+       "Correction of inaccurate information.",
+       "Deletion where legally applicable.",
+       "Information about relevant processing activities.",
+       "Withdrawal of consent where consent is the lawful basis.",
+       "Restriction or objection where legally available.",
+       "Copies or export of relevant personal information where applicable."
+      ]
+     },
+     {
+      "type": "p",
+      "text": "Requests may require identity verification to protect against unauthorised disclosure."
+     },
+     {
+      "type": "p",
+      "text": "Some records may be retained where required by law or legitimate institutional obligations."
+     },
+     {
+      "type": "p",
+      "text": "Privacy requests: [Insert verified privacy contact.]"
+     },
+     {
+      "type": "p",
+      "text": "Individuals may also raise complaints with the appropriate data-protection authority."
+     }
+    ]
+   },
+   {
+    "heading": "12. Cookies and Similar Technologies",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen may use cookies or similar technologies necessary for authentication, session security and platform functionality."
+     },
+     {
+      "type": "p",
+      "text": "Any additional analytics, preference or marketing technologies must be identified and governed according to their actual use and applicable consent requirements."
+     },
+     {
+      "type": "p",
+      "text": "Cookie inventory and retention: [Insert verified production configuration.]"
+     }
+    ]
+   },
+   {
+    "heading": "13. Children's Information",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "The current Competen Scholar pilot is intended for adults aged 18 and over."
+     },
+     {
+      "type": "p",
+      "text": "Other Competen services may have different eligibility rules, subject to their specific legal and product requirements."
+     },
+     {
+      "type": "p",
+      "text": "Competen does not currently offer a general guardian-consent mechanism for Scholar."
+     }
+    ]
+   },
+   {
+    "heading": "14. Changes to This Notice",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "We may update this Notice when our services, processing practices or legal requirements change."
+     },
+     {
+      "type": "p",
+      "text": "Published versions will identify the applicable version and effective date."
+     },
+     {
+      "type": "p",
+      "text": "Where required, we will provide additional notice or request renewed consent."
+     }
+    ]
+   },
+   {
+    "heading": "15. Contact and Complaints",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Entity: [Registered Holdings name]\nPrivacy contact: [Insert]\nRegistered address: [Insert]\nData-protection registration details: [Insert once confirmed]"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "individual-terms",
+  "kind": "terms",
+  "title": "Competen Individual — Terms of Use (Scholar and Professional)",
+  "preamble": [
+   "COMPETEN INDIVIDUAL",
+   "TERMS OF USE",
+   "Applicable to Competen Scholar and Competen Professional",
+   "Document reference: COMPETEN-IND-LEGAL-TERMS-001\nVersion: Draft 0.1\nEffective date: To be confirmed\nStatus: Draft for legal review",
+   "Shared platform operator: [Full registered legal name of Competen Holdings]\nScholar operator: [Full registered legal name of Scholar operating entity — pending confirmation]\nWebsite: https://www.competenhealthcare.com\nContact: [Insert verified contact details]"
+  ],
+  "sections": [
+   {
+    "heading": "1. Introduction",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Welcome to Competen Individual."
+     },
+     {
+      "type": "p",
+      "text": "Competen Individual is a lifelong healthcare education, learning, competency development and professional growth platform."
+     },
+     {
+      "type": "p",
+      "text": "It comprises two interconnected experiences:"
+     },
+     {
+      "type": "p",
+      "text": "Competen Scholar supports students and other learners through academic study, revision, knowledge assessment, clinical reasoning exercises and preparation for professional practice."
+     },
+     {
+      "type": "p",
+      "text": "Competen Professional supports healthcare professionals through continuing professional development (CPD), personal development planning, competency evidence, professional credentials, reflective practice and career progression."
+     },
+     {
+      "type": "p",
+      "text": "Both experiences operate through a shared Competen identity and may use common services, including personal profiles, learning history, artificial intelligence infrastructure and the Competen Passport."
+     },
+     {
+      "type": "p",
+      "text": "These Terms govern your use of Competen Individual and supplement the applicable Competen Holdings Platform Terms of Use."
+     },
+     {
+      "type": "p",
+      "text": "Where the two sets of Terms address different matters, the Holdings Terms govern shared platform services and these Terms govern Individual-specific services. Any material inconsistency will be resolved according to applicable law and the final legally approved contractual arrangements."
+     }
+    ]
+   },
+   {
+    "heading": "2. Operating Entities",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Individual uses a shared platform operated by Competen Holdings."
+     },
+     {
+      "type": "p",
+      "text": "Competen Professional is intended to be operated by Competen Holdings."
+     },
+     {
+      "type": "p",
+      "text": "Competen Scholar is intended to be operated by a separately incorporated subsidiary of Competen Holdings."
+     },
+     {
+      "type": "p",
+      "text": "The legal responsibilities of the respective operating entities will be identified in the published legal documents."
+     },
+     {
+      "type": "p",
+      "text": "A person using Professional must accept the applicable Holdings documentation."
+     },
+     {
+      "type": "p",
+      "text": "A person using Scholar must accept the applicable Holdings documentation and any additional Terms issued by the Scholar operating entity."
+     },
+     {
+      "type": "p",
+      "text": "Where both experiences are active, all applicable Terms must be accepted."
+     }
+    ]
+   },
+   {
+    "heading": "3. Eligibility",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Individual is intended for healthcare students, healthcare professionals and other eligible individuals engaged in relevant education or professional development."
+     },
+     {
+      "type": "p",
+      "text": "During the initial pilot, access is by invitation only."
+     },
+     {
+      "type": "p",
+      "text": "Users must have an authorised Competen account and an active entitlement to the relevant experience."
+     },
+     {
+      "type": "p",
+      "text": "The initial Scholar pilot is restricted to individuals aged 18 or older."
+     },
+     {
+      "type": "p",
+      "text": "Users must provide accurate eligibility information. Where an authorised administrator confirms eligibility, that confirmation does not relieve the user of responsibility for providing truthful information."
+     },
+     {
+      "type": "p",
+      "text": "Competen may request additional verification where reasonably necessary."
+     },
+     {
+      "type": "p",
+      "text": "Professional access does not require previous participation in Scholar."
+     }
+    ]
+   },
+   {
+    "heading": "4. Registration, Invitations and Access",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Individual uses the shared Competen authentication system."
+     },
+     {
+      "type": "p",
+      "text": "Each person should ordinarily maintain one identity across Competen products."
+     },
+     {
+      "type": "p",
+      "text": "During the invitation-only pilot, authorised Competen administrators may invite new users or grant access to existing Competen accounts."
+     },
+     {
+      "type": "p",
+      "text": "An invitation does not guarantee continuing access. Access depends on successful authentication, invitation acceptance, applicable legal acceptance, entitlement validity and other relevant security controls."
+     },
+     {
+      "type": "p",
+      "text": "Users must not transfer invitations, share accounts or use another person's identity."
+     },
+     {
+      "type": "p",
+      "text": "Competen may refuse, suspend or terminate access where necessary to protect security, enforce eligibility requirements or comply with applicable law."
+     }
+    ]
+   },
+   {
+    "heading": "5. Continuous Identity and Career Lifecycle",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Individual is designed to support continuity from education into professional practice and throughout a person's career."
+     },
+     {
+      "type": "p",
+      "text": "A Scholar user may subsequently activate Professional without creating a separate Competen identity."
+     },
+     {
+      "type": "p",
+      "text": "A Professional user may also activate Scholar for further education."
+     },
+     {
+      "type": "p",
+      "text": "Where both experiences are active, the user may switch between them through the Individual application."
+     },
+     {
+      "type": "p",
+      "text": "Graduation or activation of Professional does not automatically terminate an existing Scholar entitlement."
+     },
+     {
+      "type": "p",
+      "text": "Personal learning history and other retained records are governed independently of whether a particular experience remains active."
+     },
+     {
+      "type": "p",
+      "text": "Continuity does not mean that all information is automatically shared between experiences, organisations or third parties."
+     }
+    ]
+   },
+   {
+    "heading": "6. Competen Scholar",
+    "blocks": []
+   },
+   {
+    "heading": "6.1 Educational purpose",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Scholar provides tools for personal education, revision, knowledge development and preparation for healthcare practice."
+     },
+     {
+      "type": "p",
+      "text": "Available capabilities may include:"
+     },
+     {
+      "type": "ul",
+      "items": [
+       "Uploading permitted educational materials.",
+       "Receiving AI-assisted explanations.",
+       "Generating revision questions and feedback.",
+       "Practising recall and spaced revision.",
+       "Working through educational clinical scenarios.",
+       "Reviewing personal learning progress.",
+       "Recording selected self-directed learning achievements."
+      ]
+     },
+     {
+      "type": "p",
+      "text": "Availability may vary according to the user's entitlement and the current product release."
+     }
+    ]
+   },
+   {
+    "heading": "6.2 Educational materials",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Users may upload lecture notes, study materials and other content they are lawfully entitled to use."
+     },
+     {
+      "type": "p",
+      "text": "By uploading material, users confirm that they have the necessary rights or permission to upload and process it."
+     },
+     {
+      "type": "p",
+      "text": "Users must not upload identifiable patient information or confidential clinical records into Scholar's personal learning service."
+     },
+     {
+      "type": "p",
+      "text": "Where educational examples originate from clinical practice, they must be appropriately de-identified and otherwise lawful to use."
+     },
+     {
+      "type": "p",
+      "text": "Users must not upload content that violates copyright, confidentiality, privacy or other legal obligations."
+     },
+     {
+      "type": "p",
+      "text": "Competen may refuse material that appears to breach applicable upload rules."
+     },
+     {
+      "type": "p",
+      "text": "Automated screening is a safeguard but cannot guarantee detection of every prohibited identifier or disclosure."
+     }
+    ]
+   },
+   {
+    "heading": "6.3 AI-generated educational content",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Scholar may use AI to generate explanations, revision questions, feedback and educational clinical scenarios."
+     },
+     {
+      "type": "p",
+      "text": "Such content is intended to assist learning and may contain errors, omissions, outdated guidance or misleading interpretations."
+     },
+     {
+      "type": "p",
+      "text": "Users should compare important information against authoritative educational references, current clinical guidance and instructions from qualified educators."
+     },
+     {
+      "type": "p",
+      "text": "AI-generated content must not be treated as independently verified clinical guidance unless it has completed an applicable review and approval process."
+     }
+    ]
+   },
+   {
+    "heading": "6.4 Clinical reasoning and scenarios",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Clinical cases in Scholar are educational exercises."
+     },
+     {
+      "type": "p",
+      "text": "A scenario generated from personal notes is not necessarily clinically reviewed."
+     },
+     {
+      "type": "p",
+      "text": "Where reviewed content is available, its review or verification status will be identified."
+     },
+     {
+      "type": "p",
+      "text": "Completing a scenario does not establish that the learner is competent to perform a clinical procedure or make an independent clinical decision."
+     }
+    ]
+   },
+   {
+    "heading": "6.5 Assessments and learning progress",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Scholar may record answers, practice activity, revision history and learning progress."
+     },
+     {
+      "type": "p",
+      "text": "Practice accuracy reflects performance on particular educational activities. It does not automatically demonstrate mastery, professional competence or readiness for unsupervised clinical practice."
+     },
+     {
+      "type": "p",
+      "text": "Competen does not guarantee examination success, academic progression, admission, graduation or professional registration."
+     }
+    ]
+   },
+   {
+    "heading": "7. Competen Professional",
+    "blocks": []
+   },
+   {
+    "heading": "7.1 Purpose",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Professional supports the organisation and development of an individual's professional learning and career information."
+     },
+     {
+      "type": "p",
+      "text": "It may provide:"
+     },
+     {
+      "type": "ul",
+      "items": [
+       "Personal professional profiles.",
+       "Professional registration information.",
+       "Development needs and learning goals.",
+       "Personal development plans.",
+       "CPD activity records.",
+       "Reflective practice.",
+       "Competency-related evidence.",
+       "Qualifications and credentials.",
+       "Renewal reminders.",
+       "Professional portfolios and the Competen Passport."
+      ]
+     }
+    ]
+   },
+   {
+    "heading": "7.2 Accuracy of professional information",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Users are responsible for ensuring that their professional declarations are accurate and current."
+     },
+     {
+      "type": "p",
+      "text": "Recording a qualification, professional registration or competency does not mean that Competen has independently verified it."
+     },
+     {
+      "type": "p",
+      "text": "Information must be clearly identified as self-declared, self-directed, institution-issued or independently verified, as applicable."
+     },
+     {
+      "type": "p",
+      "text": "Users must not misrepresent their qualifications, registration status, scope of practice or clinical competence."
+     }
+    ]
+   },
+   {
+    "heading": "7.3 CPD and professional development",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Professional may assist users in recording CPD activities and planning their professional development."
+     },
+     {
+      "type": "p",
+      "text": "Unless expressly confirmed by an authorised regulator or accredited provider, recording CPD within Competen does not establish that an activity qualifies for statutory or professional renewal credit."
+     },
+     {
+      "type": "p",
+      "text": "Users remain responsible for understanding and complying with the requirements of their professional regulators, employers and educational bodies."
+     }
+    ]
+   },
+   {
+    "heading": "7.4 AI-assisted professional development",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen may suggest learning goals, CPD activities, development plans and reflective-writing structures."
+     },
+     {
+      "type": "p",
+      "text": "AI-generated suggestions are recommendations, not binding professional instructions."
+     },
+     {
+      "type": "p",
+      "text": "Users must review and explicitly adopt any suggested information before it becomes part of their personal professional record."
+     },
+     {
+      "type": "p",
+      "text": "AI must not invent clinical experience, attendance, learning achievements or personal reflections."
+     }
+    ]
+   },
+   {
+    "heading": "7.5 Renewal reminders",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Where available, users may configure in-app and email reminders for dates they have recorded."
+     },
+     {
+      "type": "p",
+      "text": "Reminders are supplementary aids, not an official regulatory notification service."
+     },
+     {
+      "type": "p",
+      "text": "Users remain responsible for tracking registration, licence and certification requirements."
+     },
+     {
+      "type": "p",
+      "text": "Competen does not guarantee that a reminder will be received or that a recorded date is accurate."
+     }
+    ]
+   },
+   {
+    "heading": "8. Competen Passport",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "The Competen Passport provides a continuous record and presentation of selected educational, professional and competency-related evidence."
+     },
+     {
+      "type": "p",
+      "text": "It may include:"
+     },
+     {
+      "type": "ul",
+      "items": [
+       "Self-directed study achievements.",
+       "Self-declared professional information.",
+       "Uploaded supporting documents.",
+       "Institution-issued records.",
+       "Independently verified credentials.",
+       "Relevant professional development evidence."
+      ]
+     },
+     {
+      "type": "p",
+      "text": "Each category must retain appropriate provenance and verification status."
+     }
+    ]
+   },
+   {
+    "heading": "8.1 Personal control",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Users may select certain personal records for inclusion in their Passport."
+     },
+     {
+      "type": "p",
+      "text": "Where supported, users may remove selected records from Passport presentation without deleting the underlying learning or professional history."
+     },
+     {
+      "type": "p",
+      "text": "Private learning materials, question answers, personal AI conversations and confidential reflections are not automatically included in shared Passport views."
+     }
+    ]
+   },
+   {
+    "heading": "8.2 Sharing",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Users may create controlled sharing links where the functionality is available."
+     },
+     {
+      "type": "p",
+      "text": "Users are responsible for choosing appropriate recipients and understanding the information disclosed."
+     },
+     {
+      "type": "p",
+      "text": "A link may have an expiry date and may be revoked."
+     },
+     {
+      "type": "p",
+      "text": "Revocation prevents subsequent access through the application but cannot guarantee deletion of information already lawfully downloaded or copied by a recipient."
+     }
+    ]
+   },
+   {
+    "heading": "8.3 Verification",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "A valid Passport link does not establish that all displayed qualifications, registrations or competencies are verified."
+     },
+     {
+      "type": "p",
+      "text": "Competen will distinguish the validity of a sharing link from the verification status of the records it contains."
+     },
+     {
+      "type": "p",
+      "text": "Institution-issued records remain attributable to the issuing institution."
+     },
+     {
+      "type": "p",
+      "text": "An individual cannot alter an institution's authoritative record merely because the information appears in their Passport."
+     }
+    ]
+   },
+   {
+    "heading": "9. Personal AI",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Individual may provide AI-assisted learning and professional development support."
+     },
+     {
+      "type": "p",
+      "text": "The initial Personal AI service does not provide persistent conversational memory between questions."
+     },
+     {
+      "type": "p",
+      "text": "Future memory functionality, if introduced, will be subject to appropriate notice, user controls and applicable consent requirements."
+     },
+     {
+      "type": "p",
+      "text": "AI responses may be generated using selected personal records or educational materials according to the user's authorised activity."
+     },
+     {
+      "type": "p",
+      "text": "Competen does not guarantee that AI-generated information is complete, accurate or suitable for a particular clinical or professional situation."
+     },
+     {
+      "type": "p",
+      "text": "Users must not rely solely on Personal AI for patient care decisions, professional registration, competency certification or regulatory compliance."
+     }
+    ]
+   },
+   {
+    "heading": "10. Intellectual Property and Uploaded Content",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Users retain ownership or other lawful rights in the educational and professional materials they provide."
+     },
+     {
+      "type": "p",
+      "text": "Users grant the relevant Competen operating entity a limited, non-exclusive permission to store, process and use those materials to deliver the requested service, subject to applicable law and the Privacy Notice."
+     },
+     {
+      "type": "p",
+      "text": "This permission does not automatically authorise:"
+     },
+     {
+      "type": "ul",
+      "items": [
+       "Public sharing of private materials.",
+       "Disclosure to other learners.",
+       "Contribution to a shared educational library.",
+       "Use of private uploads to train AI models.",
+       "Commercial redistribution of third-party content."
+      ]
+     },
+     {
+      "type": "p",
+      "text": "Any future optional contribution mechanism will require separate governance and appropriate permissions."
+     },
+     {
+      "type": "p",
+      "text": "Competen retains its rights in its software, designs, trademarks and original platform content."
+     }
+    ]
+   },
+   {
+    "heading": "11. Privacy and Confidentiality",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Personal learning and professional development information is handled according to the applicable Privacy Notices."
+     },
+     {
+      "type": "p",
+      "text": "An employer does not automatically receive access to private Scholar materials, personal revision results or personal AI interactions merely because the individual also has an organisational Competen membership."
+     },
+     {
+      "type": "p",
+      "text": "Organisations may retain lawful access to records they originally issued or maintain."
+     },
+     {
+      "type": "p",
+      "text": "Disclosure between Individual, Enterprise, Practice and Recruitment must follow applicable authorisation, legal and product-specific controls."
+     },
+     {
+      "type": "p",
+      "text": "Users must respect patient confidentiality and other professional obligations when using Competen."
+     }
+    ]
+   },
+   {
+    "heading": "12. Subscriptions, Fees and Fair Use",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "During the initial pilot, access may be invitation-based and subject to pilot-specific conditions."
+     },
+     {
+      "type": "p",
+      "text": "Where commercial subscriptions become available, Competen will disclose the applicable price, billing period, included services, renewal arrangements, cancellation conditions and any taxes before payment."
+     },
+     {
+      "type": "p",
+      "text": "AI-supported services may be subject to reasonable fair-use and usage limits."
+     },
+     {
+      "type": "p",
+      "text": "Unless expressly offered under a particular plan, subscriptions do not provide unlimited AI processing."
+     },
+     {
+      "type": "p",
+      "text": "Competen may apply proportionate controls to prevent abuse, excessive automated use or activity that threatens service reliability."
+     },
+     {
+      "type": "p",
+      "text": "The current pilot invitation does not itself create an obligation to purchase a subscription."
+     }
+    ]
+   },
+   {
+    "heading": "13. Service Availability and Changes",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen may update educational content, interfaces, AI services and product capabilities as the platform develops."
+     },
+     {
+      "type": "p",
+      "text": "Some features may be labelled as planned, experimental or unavailable."
+     },
+     {
+      "type": "p",
+      "text": "Competen will make reasonable efforts to preserve the integrity of retained learning and professional records during product changes."
+     },
+     {
+      "type": "p",
+      "text": "Service interruptions may occur because of maintenance, security events or third-party infrastructure failures."
+     },
+     {
+      "type": "p",
+      "text": "Material changes affecting users' legal rights will be handled according to applicable notice and acceptance requirements."
+     }
+    ]
+   },
+   {
+    "heading": "14. Suspension, Expiry and Account Closure",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Individual access may end when an invitation, entitlement or subscription expires or is revoked."
+     },
+     {
+      "type": "p",
+      "text": "The expiry of Scholar or Professional access does not automatically require deletion of the person's shared Competen identity."
+     },
+     {
+      "type": "p",
+      "text": "Users may request account closure or exercise applicable privacy rights."
+     },
+     {
+      "type": "p",
+      "text": "Certain information may need to be retained for legal compliance, institutional record integrity, audit or dispute resolution."
+     },
+     {
+      "type": "p",
+      "text": "Competen will not represent a record as deleted merely because it is no longer visible in an active experience."
+     }
+    ]
+   },
+   {
+    "heading": "15. Professional and Clinical Disclaimer",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Individual is an educational and professional development service."
+     },
+     {
+      "type": "p",
+      "text": "It is not a substitute for:"
+     },
+     {
+      "type": "ul",
+      "items": [
+       "Formal healthcare education or supervised clinical training.",
+       "Professional licensing or regulatory assessment.",
+       "Employer-authorised competency assessment.",
+       "Independent clinical judgement.",
+       "Emergency clinical decision-making.",
+       "Applicable institutional policies and clinical guidelines."
+      ]
+     },
+     {
+      "type": "p",
+      "text": "Competen does not guarantee professional competence, employment, promotion, regulatory renewal or examination success."
+     },
+     {
+      "type": "p",
+      "text": "Nothing in these Terms excludes legal rights or liabilities that cannot lawfully be excluded."
+     }
+    ]
+   },
+   {
+    "heading": "16. Changes to These Terms",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen may update these Terms when services, legal requirements or operating arrangements change."
+     },
+     {
+      "type": "p",
+      "text": "Each published version will carry a version identifier and effective date."
+     },
+     {
+      "type": "p",
+      "text": "Where required, users must accept the applicable revised Terms before continuing to use the relevant experience."
+     },
+     {
+      "type": "p",
+      "text": "Acceptance records may be retained to establish which Terms applied at a particular time."
+     }
+    ]
+   },
+   {
+    "heading": "17. Governing Law",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "These Terms are intended to be governed by the laws of Uganda, subject to legal confirmation and any mandatory consumer, data-protection or other rights applicable in the user's jurisdiction."
+     },
+     {
+      "type": "p",
+      "text": "Disputes should initially be directed to the relevant operating entity for resolution."
+     },
+     {
+      "type": "p",
+      "text": "Users retain any rights to approach competent courts, regulators or other lawful authorities."
+     }
+    ]
+   },
+   {
+    "heading": "18. Contact",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Holdings: [Registered name and address]\nScholar operating entity: [Registered name and address]\nIndividual support: [Verified email]\nPrivacy enquiries: [Verified email]\nWebsite: https://www.competenhealthcare.com"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "individual-privacy",
+  "kind": "privacy",
+  "title": "Competen Individual — Privacy Notice (Scholar and Professional)",
+  "preamble": [
+   "PRIVACY NOTICE",
+   "Scholar | Professional",
+   "Reference: COMPETEN-IND-LEGAL-PRIVACY-001",
+   "Version: Draft 0.3 | Date: 23 October 2026",
+   "Status: DRAFT — NOT LEGALLY APPROVED",
+   "Holdings operator: [Registered legal name to confirm]",
+   "Scholar operator: [Registered legal name or approved interim arrangement]",
+   "Privacy contact: [Verified address to insert]",
+   "Website: https://www.competenhealthcare.com",
+   "This working draft consolidates the prior sections. Legal counsel must confirm the bracketed facts, lawful bases, provider terms, data roles, retention periods and regulatory obligations before publication."
+  ],
+  "sections": [
+   {
+    "heading": "1. Introduction",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Individual supports lifelong healthcare education and professional development. Scholar offers AI-assisted explanations, revision, practice questions and educational clinical reasoning. Professional supports CPD, development plans, reflections, credentials and competency evidence. Both share one identity and selected infrastructure, but personal information is not automatically shared between products or with employers. This Notice explains collection, use, disclosure, retention, security and rights. Read it alongside the Holdings Platform Privacy Notice and applicable Terms of Use."
+     }
+    ]
+   },
+   {
+    "heading": "2. Responsible legal entities",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Holdings is intended to operate shared identity, authentication, profiles, entitlements, AI infrastructure, Passport and Professional. Scholar is intended to operate through a separately incorporated, majority-owned subsidiary. Controller and processor roles depend on actual processing decisions, not ownership alone. [CONFIRM registered names, numbers, addresses, controller allocation and intra-group agreement before publication.]"
+     }
+    ]
+   },
+   {
+    "heading": "3. Scope and eligibility",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "This Notice covers invited users of Scholar and Professional, shared Individual services and relevant Passport sharing. The initial pilot is invitation-only. Scholar pilot users must be at least 18. Professional does not require prior Scholar participation. Each experience requires its own entitlement and applicable legal acceptance. Younger-user services and public registration require separate review."
+     }
+    ]
+   },
+   {
+    "heading": "4. Information collected",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Account information includes name, optional given and family names, email, phone, country, identity identifiers, authentication status, invitations, entitlements and acceptance versions. Scholar may process uploaded notes, source passages, questions, responses, feedback, scenarios, revision schedules, recall ratings, progress and selected achievements. Professional may process profession, speciality, registration details, credentials, CPD hours, development needs, plans, reflections, evidence, renewal dates and reminder preferences. Passport data includes selected records, provenance, verification status and link-sharing controls. Operational data includes audit, security, diagnostic and AI usage metadata. Some information may be sensitive and require additional safeguards."
+     }
+    ]
+   },
+   {
+    "heading": "5. Sources of information",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Information is obtained from users and their uploads, activity in the application, authorised administrators managing invitations, organisations issuing or verifying evidence, and technical service providers. Shared identity does not make records from one Competen product universally accessible to others."
+     }
+    ]
+   },
+   {
+    "heading": "6. Processing purposes",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "We use information to provide secure access; deliver learning, AI explanations and revision; maintain CPD and professional records; enable selected Passport sharing; send essential notices and optional reminders; prevent misuse; preserve audit evidence; operate and support the platform; and comply with law. Private study material is not automatically contributed to shared libraries or distributed commercially."
+     }
+    ]
+   },
+   {
+    "heading": "7. Lawful bases and sensitive data",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Processing must have a lawful basis under applicable law, potentially including performance of a service agreement, legal obligation, consent where required or another lawful ground. Sensitive information may require additional conditions. Terms acceptance is not blanket consent to optional AI or other activities. [LEGAL ACTION: approve purpose-by-purpose lawful bases and sensitive-data conditions.]"
+     }
+    ]
+   },
+   {
+    "heading": "8. Artificial intelligence",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Scholar may send a user question and the passages selected as most relevant from their notes to an AI provider to generate explanations, questions or feedback. Professional may process information relevant to a user-requested plan, learning suggestion or reflection draft. The current architecture uses Anthropic's API; confirm provider entity, contractual terms, retention and transfers. Competen does not use private uploads to train its own AI models, and the current Scholar service does not authorise third-party model training of private uploads. Explanations are not saved as permanent learning records by the current explain step; generated questions and source passages may be saved. Shared AI usage logs retain model, tokens, cost, operation and status rather than question/answer text. Transient processing and provider retention may still occur. Persistent Personal AI conversational memory is currently off. AI output is not clinical advice, professional verification or a substitute for supervision."
+     }
+    ]
+   },
+   {
+    "heading": "9. Educational uploads and confidentiality",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Upload only material you have permission to use. Do not upload identifiable patient information or confidential clinical records to Scholar. Users may attest that files contain no patient identifiers and that they have upload rights. Automated screening cannot identify every prohibited disclosure. Users remain responsible for confidentiality, copyright and professional obligations."
+     }
+    ]
+   },
+   {
+    "heading": "10. Private learning",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Private Scholar notes, question answers, practice accuracy, schedules and personal AI interactions are not automatically accessible to employers or institutions. Individual study records are not automatically placed in Enterprise learning analytics. Disclosure requires user authorisation, another lawful basis or legal obligation."
+     }
+    ]
+   },
+   {
+    "heading": "11. Professional evidence",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Professional records may be self-declared, self-directed, document-attached, organisation-issued or independently verified. The status and source must remain clear. Institutions may retain authority over records they issue; an individual's personal copy does not authorise altering institutional history, and an institution does not automatically gain access to unrelated private Individual records."
+     }
+    ]
+   },
+   {
+    "heading": "12. Passport and sharing",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Eligible Scholar achievements are excluded by default and can be selected individually. Removing a Passport selection does not delete the underlying study history. Time-limited, revocable sharing links may disclose selected records to anyone holding a valid link. Revocation blocks later access through the link, not copies already obtained. Private notes, answers, accuracy, AI conversations and confidential reflections are excluded by default. An active link does not establish credential verification."
+     }
+    ]
+   },
+   {
+    "heading": "13. Cross-product flows",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Enterprise, Practice, Recruitment and Individual share identity infrastructure but have separate permissions. Institution-issued evidence may appear in a person's Passport, and users may choose to disclose eligible records. Future integrations require lawful grounds and governed technical controls; no unrestricted sharing is implied."
+     }
+    ]
+   },
+   {
+    "heading": "14. Recipients and processors",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Information may be shared with authorised personnel, applicable Competen operating entities, relevant issuing or verifying organisations, contracted hosting, storage, authentication, AI, email and payment providers, and authorities where required by law. Current architecture includes Supabase, Vercel and Anthropic API services; the actual production entities and subprocessor terms must be confirmed. We do not sell personal information to advertisers."
+     }
+    ]
+   },
+   {
+    "heading": "15. International transfers",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Providers may process information outside Uganda. Competen must assess destinations, legal transfer conditions, contracts and safeguards before publication. [LEGAL ACTION: complete international transfer mapping and provider assessment.]"
+     }
+    ]
+   },
+   {
+    "heading": "16. Retention",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Retention depends on purpose and legal requirements. Accounts, invitations, uploads, revision history, CPD, credentials, Passport shares, AI metadata, consent records, audit logs and backups may have different periods. Entitlement expiry does not automatically erase historical records. [REQUIRED: insert approved retention schedule or meaningful category-specific criteria, including backups.]"
+     }
+    ]
+   },
+   {
+    "heading": "17. Deletion and withdrawal",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Users may request deletion of eligible information, subject to lawful restrictions. Turning off AI help does not automatically delete saved materials, questions or learning history. Removing a Passport achievement does not erase study activity. Revoking a link cannot retract information recipients already copied. Closing an account or ending access does not automatically erase legally retained evidence. Where information cannot be deleted, Competen will assess the request and explain the applicable reason where lawful."
+     }
+    ]
+   },
+   {
+    "heading": "18. Accuracy and correction",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Users may edit permitted personal details. Email changes use verified authentication procedures. Institution-issued credentials and competency decisions may require issuer correction. Original records and authorised corrections may be retained for audit integrity rather than silently overwritten."
+     }
+    ]
+   },
+   {
+    "heading": "19. Automated recommendations",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Scholar practice indicators and Professional AI suggestions do not independently determine professional registration, employment, academic qualifications, competence or fitness to practise. Any future consequential automated decisions require assessment of applicable safeguards, human review and challenge rights."
+     }
+    ]
+   },
+   {
+    "heading": "20. Research, analytics and improvement",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Appropriately authorised operational data may be analysed to improve reliability. Private uploads are not automatically shared with other learners, used for model training or added to a verified knowledge library. Any future optional contribution requires a distinct lawful basis and applicable permission. Anonymisation must be meaningful; pseudonymised information remains personal data where re-identification is possible. Identifiable research may require ethical approval."
+     }
+    ]
+   },
+   {
+    "heading": "21. Security",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Safeguards may include secure authentication, product entitlements, server-side checks, Individual row-level security, restricted administration, audit trails, private storage, controlled Passport links and backup/recovery. No system guarantees absolute security. Users should safeguard credentials and report suspected unauthorised access."
+     }
+    ]
+   },
+   {
+    "heading": "22. Personal-data incidents",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen will investigate, contain and document suspected breaches, assess confidentiality and integrity risks, take corrective measures and notify regulators or affected people where law requires. Responsibilities across entities and processors follow the applicable arrangements."
+     }
+    ]
+   },
+   {
+    "heading": "23. Data-protection rights",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Subject to applicable law, users may request information about processing, access to their data, correction, erasure where available, withdrawal of consent where consent applies, objection or restriction where available, and copies or export where legally applicable. Rights relating to qualifying automated decisions will be respected. Competen may verify identity and may lawfully retain or withhold information to protect others or meet legal obligations. Requests: [verified privacy contact]. We will respond within applicable statutory periods and explain lawful refusals. Users may complain to the competent authority."
+     }
+    ]
+   },
+   {
+    "heading": "24. Applicable law and oversight",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "This Notice is intended to operate under applicable Ugandan law, including the Data Protection and Privacy Act, 2019 and relevant regulations, and any mandatory rules in other relevant jurisdictions. Applicable registration, reporting and oversight requirements involving Uganda's Personal Data Protection Office must be confirmed for each responsible entity. [LEGAL ACTION: verify registration status and obligations.]"
+     }
+    ]
+   },
+   {
+    "heading": "25. Incident communications and accountability",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Where an incident affects personal information, Competen will preserve appropriate evidence, assess affected records, coordinate responsible entities and communicate as required by law. Restoring technical access alone does not prove all privacy and integrity risks have been resolved."
+     }
+    ]
+   },
+   {
+    "heading": "26. Record disputes",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Disputed professional registration, competency and institutional records will be handled according to provenance. Competen may refer correction to the issuer or record a dispute without falsely presenting the record as verified. Private reflections and development needs remain separate from institutional assessment records."
+     }
+    ]
+   },
+   {
+    "heading": "27. Notifications and reminders",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Essential account, invitation, legal and security communications may be sent as needed. Professional in-app renewal reminders are on by default where available; email reminders are optional and off by default. They use dates supplied by the user and do not independently verify regulatory deadlines. Individual reminder preferences are separate from Enterprise and Practice notification preferences. Delivery is not guaranteed."
+     }
+    ]
+   },
+   {
+    "heading": "28. Cookies and tracking",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen may use necessary authentication and security cookies. Optional analytics or marketing technologies, if any, require an accurate inventory, disclosure and applicable consent. [TECHNICAL ACTION: verify current cookie names, purposes and retention.]"
+     }
+    ]
+   },
+   {
+    "heading": "29. Children and age",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "The initial Scholar pilot is restricted to adults aged 18 or older. The current release does not provide a general guardian-consent workflow. Expansion to younger learners requires separate legal and technical safeguards."
+     }
+    ]
+   },
+   {
+    "heading": "30. Corporate restructuring",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Changes in corporate ownership, investment or operating entities may affect responsibilities. Any transfer or disclosure of personal data requires a lawful basis and safeguards, with notices or approvals where required. Shared identity does not remove distinct legal responsibilities."
+     }
+    ]
+   },
+   {
+    "heading": "31. Contacts and complaints",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Competen Holdings: [registered name, number, address, privacy contact and responsible officer]. Scholar operator: [registered name, number, address, privacy contact and responsible officer]. Website: https://www.competenhealthcare.com. Users may complain to Competen or to Uganda's Personal Data Protection Office, where applicable, and retain available court or regulatory remedies. [LEGAL ACTION: verify current official complaint channels.]"
+     }
+    ]
+   },
+   {
+    "heading": "32. Updates and document governance",
+    "blocks": [
+     {
+      "type": "p",
+      "text": "Each approved Notice version must carry a version identifier, effective date and permanent publication URL. Historical versions and relevant acknowledgement or consent records should be preserved. Material changes will be notified, with renewed consent where legally required. Merely configuring a version or URL does not establish legal approval. Document owner: [confirm]; approver: [confirm]; approval date: [pending]; effective date: [pending]; next review: [pending]; publication URL: [pending]."
+     }
+    ]
+   },
+   {
+    "heading": "Legal review and publication checklist",
+    "blocks": [
+     {
+      "type": "ul",
+      "items": [
+       "Confirm Holdings and Scholar registered legal entities and interim operating arrangement.",
+       "Confirm data controller/processor allocation and intra-group agreements.",
+       "Approve lawful bases, sensitive-data conditions and AI/provider transfer disclosures.",
+       "Approve category-specific retention and deletion arrangements.",
+       "Verify PDPO obligations, privacy contact details and complaint channels.",
+       "Confirm real production cookies, storage and processor arrangements.",
+       "Approve final version, effective date and permanent publication URL before enabling the legal gate."
+      ]
+     }
+    ]
+   }
+  ]
+ }
+]
