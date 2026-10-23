@@ -40,6 +40,7 @@ const BOUNDARIES: Record<string, string> = {
   getCaller: "estate plane — loads the caller's roles + tenant (src/lib/api-auth.ts)",
   getLandlordCaller: "landlord/platform plane — paired with landlordCan",
   hqApiGate: "HQ plane — capability-gated API entry (src/lib/hq/api-gate.ts)",
+  hqOwnerApiGate: "HQ plane — hqApiGate then isOwner, for owner-only writes (src/lib/hq/api-gate.ts, HQ-USERS-A)",
   requireHqCapability: "HQ plane — named capability",
   requireHqContext: "HQ plane — governance context",
   requirePracticeContext: "Practice plane — membership, entitlement, capabilities",
@@ -167,7 +168,7 @@ if (unknownGuards.length) {
 }
 
 // ── Ratchet ──────────────────────────────────────────────────────────────────────────────────────
-const BACKLOG_CEILING = 91;
+const BACKLOG_CEILING = 88;
 const ok = counts.inline <= BACKLOG_CEILING;
 if (!ok) failed++;
 console.log(`  ${ok ? "PASS" : "FAIL"}  inline-auth backlog: ${counts.inline} (ceiling ${BACKLOG_CEILING}, target 0)`);
