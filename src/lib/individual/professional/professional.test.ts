@@ -54,6 +54,9 @@ describe("validation mirrors migration 373", () => {
     expect(documentPath("u1", "my cert?.pdf", "r").path).toBe("u1/r-my cert_.pdf");
     expect(documentProblem({ type: "text/html", size: 10 })).not.toBeNull();
     expect(documentProblem({ type: "application/pdf", size: 11 * 1024 * 1024 })).not.toBeNull();
+    // Vercel caps a route handler body at ~4.5 MB, so the app refuses above 4 MB (the bucket allows 10).
+    expect(documentProblem({ type: "application/pdf", size: 5 * 1024 * 1024 })).not.toBeNull();
+    expect(documentProblem({ type: "application/pdf", size: 4 * 1024 * 1024 })).toBeNull();
   });
 
   it("clamps a share request the way the estate route does", () => {

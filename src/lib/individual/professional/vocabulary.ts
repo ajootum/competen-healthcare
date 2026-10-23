@@ -62,7 +62,11 @@ export const EVIDENCE_KIND_LABEL: Record<string, string> = Object.fromEntries(EV
 
 /** Migration 373's bucket. Private, server-mediated, no storage policies (migration 336's posture). */
 export const DOCUMENT_BUCKET = "individual-professional-evidence";
-export const DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
+// 4 MB, not the bucket's 10 MB: the document travels through a route handler, and Vercel caps a function's
+// request body at about 4.5 MB (the finding IND-004 recorded for /api/evidence). A larger file would be cut off
+// on the deployed site while working locally. The bucket limit stays as the outer ceiling.
+export const DOCUMENT_MAX_BYTES = 4 * 1024 * 1024;
+export const DOCUMENT_MAX_LABEL = "4 MB";
 export const DOCUMENT_MIME = ["application/pdf", "image/png", "image/jpeg", "image/webp"] as const;
 
 /** Days before a credential or registration expiry when the reminder is sent. */

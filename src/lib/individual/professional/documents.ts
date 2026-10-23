@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID } from "node:crypto";
-import { DOCUMENT_BUCKET, DOCUMENT_MAX_BYTES, DOCUMENT_MIME } from "./vocabulary";
+import { DOCUMENT_BUCKET, DOCUMENT_MAX_BYTES, DOCUMENT_MAX_LABEL, DOCUMENT_MIME } from "./vocabulary";
 import { documentPath } from "./validate";
 
 // ── DOCUMENTS ATTACHED TO THE PERSON'S OWN RECORDS ── migration 373 s7 ───────────────────────────────────
@@ -19,7 +19,7 @@ export type StoredDocument = { document_path: string; document_name: string; doc
 /** Pure: why a file cannot be attached, or null when it can. */
 export function documentProblem(file: { type: string; size: number }): string | null {
   if (!(DOCUMENT_MIME as readonly string[]).includes(file.type)) return "Attach a PDF, PNG, JPEG or WebP file.";
-  if (file.size <= 0 || file.size > DOCUMENT_MAX_BYTES) return "The document must be between 1 byte and 10 MB.";
+  if (file.size <= 0 || file.size > DOCUMENT_MAX_BYTES) return `The document must be between 1 byte and ${DOCUMENT_MAX_LABEL}.`;
   return null;
 }
 

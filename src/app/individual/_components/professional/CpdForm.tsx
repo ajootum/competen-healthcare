@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CPD_ACTIVITY } from "@/lib/individual/professional/vocabulary";
+import { CPD_ACTIVITY, DOCUMENT_MAX_LABEL } from "@/lib/individual/professional/vocabulary";
 import { focusRing, primaryBtn } from "../chrome";
 import { Field, inputCls } from "./forms";
 
@@ -69,7 +69,7 @@ export default function CpdForm({ accent, today, goals }: { accent: string; toda
             {goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
           </select>
         </Field>
-        <Field label="Certificate (optional)" htmlFor="cpd-doc" hint="PDF or image, up to 10 MB. Attaching it does not verify the entry.">
+        <Field label="Certificate (optional)" htmlFor="cpd-doc" hint={`PDF or image, up to ${DOCUMENT_MAX_LABEL}. Attaching it does not verify the entry.`}>
           <input id="cpd-doc" name="document" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className={`${inputCls} py-2.5`} />
         </Field>
       </div>

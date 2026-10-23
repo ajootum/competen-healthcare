@@ -2,7 +2,7 @@ import Link from "next/link";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { loadSharedFrameworks, referenceNames } from "@/lib/individual/professional/frameworks";
-import { EVIDENCE_KIND, REMINDER_HORIZON_DAYS } from "@/lib/individual/professional/vocabulary";
+import { DOCUMENT_MAX_LABEL, EVIDENCE_KIND, REMINDER_HORIZON_DAYS } from "@/lib/individual/professional/vocabulary";
 import { isExpired, isExpiringSoon } from "@/lib/engines/competency";
 import type { Metadata } from "next";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
@@ -121,7 +121,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
             </div>
             <Field label="Description (optional)" htmlFor="ev-detail" hint="Never include patient-identifiable details."><textarea id="ev-detail" name="detail" rows={4} maxLength={5000} className={inputCls} /></Field>
             <FrameworkPicker idPrefix="ev" frameworks={frameworks?.map(f => ({ id: f.id, name: f.name })) ?? null} />
-            <Field label="Document (optional)" htmlFor="ev-doc" hint="PDF or image, up to 10 MB. Attaching it does not verify the item.">
+            <Field label="Document (optional)" htmlFor="ev-doc" hint={`PDF or image, up to ${DOCUMENT_MAX_LABEL}. Attaching it does not verify the item.`}>
               <input id="ev-doc" name="document" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className={`${inputCls} py-2.5`} />
             </Field>
           </ApiForm>
