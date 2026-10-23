@@ -3,7 +3,10 @@ import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { loadSharedFrameworks, referenceNames } from "@/lib/individual/professional/frameworks";
 import { DOCUMENT_MAX_LABEL, EVIDENCE_KIND, REMINDER_HORIZON_DAYS } from "@/lib/individual/professional/vocabulary";
-import { isExpired, isExpiringSoon } from "@/lib/engines/competency";
+import { dueRenewals } from "@/lib/individual/professional/renewals";
+import { loadReminderPrefs } from "@/lib/individual/professional/preferences";
+import ReminderSettings from "../../../../_components/professional/ReminderSettings";
+import { RenewalsDue } from "../../../../_components/professional/RenewalsDue";
 import type { Metadata } from "next";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
@@ -33,16 +36,18 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, frameworks] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadSharedFrameworks(ctx.admin)]);
+  const [record, frameworks, prefs] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadSharedFrameworks(ctx.admin), loadReminderPrefs(ctx.admin, ctx.userId)]);
   const evidence = record.evidence;
   const names = evidence ? await referenceNames(ctx.admin,
     [...new Set(evidence.map(e => e.framework_id).filter((v): v is string => !!v))],
     [...new Set(evidence.map(e => e.framework_competency_id).filter((v): v is string => !!v))]) : new Map<string, string>();
   const needTitle = new Map((record.needs ?? []).map(n => [n.id, n.title]));
   const openNeeds = (record.needs ?? []).filter(n => n.status === "open");
-  const due = (evidence ?? []).filter(e => e.kind === "credential" && e.expires_on && (isExpired(e.expires_on) || isExpiringSoon(e.expires_on, REMINDER_HORIZON_DAYS)));
-  const reg = record.profile?.self_declared_registration_expires_on ?? null;
-  const regDue = reg && (isExpired(reg) || isExpiringSoon(reg, REMINDER_HORIZON_DAYS)) ? reg : null;
+  // The in-app reminder: shown only while the person's in-app switch is on (migration 374).
+  const due = prefs.inApp ? dueRenewals({
+    registration: record.profile ? { body: record.profile.self_declared_registration_body, expiresOn: record.profile.self_declared_registration_expires_on } : null,
+    credentials: evidence ?? [],
+  }, today) : [];
 
   return (
     <>
@@ -50,16 +55,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
         intro="Your qualifications, licences and certificates, and the evidence you keep of your own competence. Items you add are recorded by you and are not verified." />
       {!record.provisioned && <NotProvisioned />}
 
-      {(due.length > 0 || regDue) && (
-        <section aria-label="Renewals due" className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 p-5">
-          <h2 className="text-[15px] font-bold text-amber-900">Renewals due</h2>
-          <ul className="mt-2 space-y-1 text-[14px] text-amber-900">
-            {regDue && <li>Your registration {regDue < today ? "expired" : "renews"} on {fmtDate(regDue)}. <Link href={experienceHref("professional", "registration")} className={`font-semibold underline ${focusRing}`}>Update it</Link></li>}
-            {due.map(e => <li key={e.id}>{e.title} {e.expires_on! < today ? "expired" : "expires"} on {fmtDate(e.expires_on)}.</li>)}
-          </ul>
-          <p className="mt-2 text-[12.5px] text-amber-900/80">From the dates you recorded. Competen has not checked them with the issuer.</p>
-        </section>
-      )}
+      <RenewalsDue items={due} today={today} />
 
       {EVIDENCE_KIND.map(([kind, label]) => {
         const items = evidence?.filter(e => e.kind === kind) ?? [];
@@ -111,7 +107,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
               <Field label="Title" htmlFor="ev-title"><input id="ev-title" name="title" required minLength={3} maxLength={200} className={inputCls} placeholder="e.g. Basic Life Support certificate" /></Field>
               <Field label="Issuing body (credentials)" htmlFor="ev-body"><input id="ev-body" name="issuingBody" maxLength={160} className={inputCls} /></Field>
               <Field label="Date issued or done (optional)" htmlFor="ev-issued"><input id="ev-issued" name="issuedOn" type="date" max={today} className={inputCls} /></Field>
-              <Field label="Expiry date (credentials, optional)" htmlFor="ev-exp" hint={`We email you ${REMINDER_HORIZON_DAYS} days before, if email is set up.`}><input id="ev-exp" name="expiresOn" type="date" className={inputCls} /></Field>
+              <Field label="Expiry date (credentials, optional)" htmlFor="ev-exp" hint={`You are reminded ${REMINDER_HORIZON_DAYS} days before: in Competen, and by email if you turn that on under Reminders.`}><input id="ev-exp" name="expiresOn" type="date" className={inputCls} /></Field>
               <Field label="Development need (optional)" htmlFor="ev-need">
                 <select id="ev-need" name="needId" className={inputCls} defaultValue="">
                   <option value="">Not linked to a need</option>
@@ -127,6 +123,12 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
           </ApiForm>
         </Section>
       )}
+
+      <Section title="Reminders" note="Your choice, for your own records only. Separate from any employer's notifications.">
+        {prefs.configurable
+          ? <ReminderSettings accent={x.accent} inApp={prefs.inApp} email={prefs.email} />
+          : <Empty>Reminder settings are not available on this environment yet. Renewals due are shown here, and no reminder is emailed.</Empty>}
+      </Section>
 
       <Section title="Verified by an organisation">
         <p className="text-[14px] text-gray-700">

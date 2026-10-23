@@ -59,6 +59,8 @@ type Sources = Map<string, string>;
 const ALL: Sources = new Map(walk("src").map(posix).map(f => [f, strip(readFileSync(f, "utf8"))]));
 const MIG_FILE = "supabase/migrations/373-individual-professional-record.sql";
 const MIG = existsSync(MIG_FILE) ? readFileSync(MIG_FILE, "utf8").replace(/--.*$/gm, "").toLowerCase() : "";
+const MIG374_FILE = "supabase/migrations/374-individual-professional-reminder-preferences.sql";
+const MIG374 = existsSync(MIG374_FILE) ? readFileSync(MIG374_FILE, "utf8").replace(/--.*$/gm, "").toLowerCase() : "";
 
 const isProfessional = (f: string) => /^src\/(lib\/individual\/professional|app\/api\/individual\/professional|app\/individual\/_components\/professional|app\/individual\/\(app\)\/\[experience\]\/\(professional\))\//.test(f);
 
@@ -74,6 +76,7 @@ const WRITES: Record<string, string[]> = {
   "src/lib/individual/professional/api.ts": ["audit_log.insert"],
   "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "individual_professional_share.insert", "passport_share_tokens.update"],
   "src/lib/individual/professional/reminders.ts": ["individual_professional_evidence.update", "individual_professional_profile.update"],
+  "src/app/api/individual/professional/reminders/route.ts": ["individual_professional_profile.update", "individual_professional_profile.insert"],
 };
 const ESTATE_NAMED = /^(cpd_logs|professional_credentials|evidence|cdp_reminders|notifications|competency_decisions|employment_records|profiles)\./;
 
@@ -234,6 +237,37 @@ const checkCrossPersonLinks = (mig: string) => {
   return { ok: fks.length === 3 && paths === 2, detail: `${fks.length} composite FKs, ${paths} path checks` };
 };
 
+// ── N. REMINDERS (migration 374, owner continuation GO Option A) ────────────────────────────────────
+// Individual notifications stay separate from Enterprise and Practice: no Professional file names the
+// estate notification stores, anywhere.
+const checkNoEstateNotifications = (src: Sources) => {
+  const bad = [...src].filter(([f, s]) => isProfessional(f) && /["'`](notifications|notification_preferences|notif_deliveries|cdp_reminders)["'`]/.test(s)).map(([f]) => f);
+  return { ok: bad.length === 0, detail: bad.join(", ") };
+};
+// Email is opt-in: the scan narrows to reminder_email = true before anything is sent, and sends email only.
+const checkEmailOptIn = (src: Sources) => {
+  const s = src.get("src/lib/individual/professional/reminders.ts") ?? "";
+  const optIn = s.indexOf(`.eq("reminder_email", true)`);
+  const send = s.indexOf("await dispatch(");
+  return {
+    ok: optIn > -1 && send > optIn && s.includes(`dispatch(admin, [c.userId], reminderMessage(c, today), ["email"])`),
+    detail: `opt-in filter at ${optIn}, dispatch at ${send}`,
+  };
+};
+// The in-app reminder honours the switch on both surfaces.
+const checkInAppSwitch = (src: Sources) => {
+  const home = src.get("src/app/individual/_components/professional/HomeReminders.tsx") ?? "";
+  const ev = src.get("src/app/individual/(app)/[experience]/(professional)/evidence/page.tsx") ?? "";
+  return { ok: home.includes("if (!prefs.inApp) return null") && ev.includes("const due = prefs.inApp ? dueRenewals("), detail: "HomeReminders and the evidence page must gate on prefs.inApp" };
+};
+// 374: in-app NOT NULL DEFAULT TRUE, email NOT NULL DEFAULT FALSE, on the own profile row, no estate table.
+const checkPrefsSchema = (mig: string) => ({
+  ok: /alter table individual_professional_profile\s+add column if not exists reminder_in_app boolean not null default true/.test(mig)
+    && /alter table individual_professional_profile\s+add column if not exists reminder_email boolean not null default false/.test(mig)
+    && !/notification_preferences|insert into notifications/.test(mig.replace(/comment on column[\s\S]*?;/g, "")),
+  detail: "374 must add reminder_in_app default true and reminder_email default false to the own profile, and touch no estate table",
+});
+
 function main() {
   console.log("INDIVIDUAL PROFESSIONAL HARNESS (COMPETEN-IND-007)\n");
   const run = (name: string, r: { ok: boolean; detail: string }) => ok(name, r.ok, r.detail);
@@ -265,6 +299,12 @@ function main() {
   run("E5. /verify shows own records only with the release gate on and the companion row, labelled by class, without the 'Verified' header", checkVerifyPage(ALL));
   run("E6. no Professional file names a verified class or sets a verified flag", checkNoVerifiedClassInProfessional(ALL));
 
+  run("N1. no Professional file names notifications, notification_preferences, notif_deliveries or cdp_reminders", checkNoEstateNotifications(ALL));
+  run("N2. email reminders go only to people who opted in (reminder_email = true), by email only", checkEmailOptIn(ALL));
+  run("N3. the in-app reminder honours the in-app switch on the home and evidence pages", checkInAppSwitch(ALL));
+  if (MIG374) run("N4. 374: in-app defaults ON, email defaults OFF, both NOT NULL, on the own profile row, no estate table", checkPrefsSchema(MIG374));
+  else { pend.push("N4"); console.log(`  PEND  N4. ${MIG374_FILE} is not in this checkout`); }
+
   run("D1. direct entry: every Professional API handler and page asks for Professional, never Scholar", checkDirectEntry(ALL));
 
   schema("S1. D6: RLS on, own-row SELECT only, no write policy, experience_code with no default -- on every 373 table", checkRls(MIG));
@@ -295,6 +335,12 @@ function main() {
   red("E3 when private text leaks", checkPassportItems(r => (ownRecordsFrom(r) ?? []).map(i => i.kind === "credential" ? { ...i, detail: "private detail" } : i)));
   red("E4 when a foreign class renders", checkRenderedLabel(v => v === "institution_verified" ? "<span>Verified</span>" : renderToStaticMarkup(createElement(ClassLabel, { value: v }))));
   red("E5 without the release gate", checkVerifyPage(new Map([...ALL].map(([f, s]) => [f, f === "src/app/verify/[token]/page.tsx" ? s.replace("(await individualAppEnabled(admin)) && await shareCarriesOwnRecords(admin, share.id, share.nurse_id)", "await shareCarriesOwnRecords(admin, share.id, share.nurse_id)") : s]))));
+  red("N1 on a write to notifications", checkNoEstateNotifications(plant("src/lib/individual/professional/reminders.ts", `admin.from("notifications").insert({})`)));
+  red("N1 on reading notification_preferences", checkNoEstateNotifications(plant("src/lib/individual/professional/preferences.ts", `admin.from("notification_preferences").select("email")`)));
+  red("N2 without the opt-in filter", checkEmailOptIn(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/reminders.ts") ? s.replace(`.eq("reminder_email", true)`, "") : s]))));
+  red("N2 on an in-app channel", checkEmailOptIn(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/reminders.ts") ? s.replace(`["email"])`, `["in_app", "email"])`) : s]))));
+  red("N3 when home ignores the switch", checkInAppSwitch(new Map([...ALL].map(([f, s]) => [f, f.endsWith("HomeReminders.tsx") ? s.replace("if (!prefs.inApp) return null", "") : s]))));
+  if (MIG374) red("N4 on email defaulting ON", checkPrefsSchema(MIG374.replace("reminder_email boolean not null default false", "reminder_email boolean not null default true")));
   red("E6 on a verified flag", checkNoVerifiedClassInProfessional(plant("src/app/api/individual/professional/evidence/route.ts", `const row = { verified: true };`)));
   red("D1 when Scholar lists a Professional segment", (() => { const sch = EXPERIENCES.scholar.modules as unknown as { segment: string }[]; sch.push({ segment: "cpd" }); try { return checkDirectEntry(ALL); } finally { sch.pop(); } })());
   red("D1 on a Scholar guard", checkDirectEntry(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/cpd/route.ts") ? s.replace('requireIndividualContext("professional")', 'requireIndividualContext("scholar")') : s]))));

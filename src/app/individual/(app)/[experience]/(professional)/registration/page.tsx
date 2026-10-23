@@ -49,7 +49,7 @@ export default async function RegistrationPage({ params }: { params: Promise<{ e
                 <Field label="Registration number" htmlFor="pr-num">
                   <input id="pr-num" name="registrationNumber" maxLength={60} defaultValue={p?.self_declared_registration_number ?? ""} className={inputCls} autoComplete="off" />
                 </Field>
-                <Field label="Registration renewal date (optional)" htmlFor="pr-exp" hint="We email you 60 days before, if email is set up.">
+                <Field label="Registration renewal date (optional)" htmlFor="pr-exp" hint="You are reminded 60 days before: in Competen, and by email if you turn that on under Credentials & evidence → Reminders.">
                   <input id="pr-exp" name="registrationExpiresOn" type="date" defaultValue={p?.self_declared_registration_expires_on ?? ""} className={inputCls} />
                 </Field>
               </div>

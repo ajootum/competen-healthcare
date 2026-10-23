@@ -18,7 +18,12 @@ import { individualAppEnabled } from "../gate";
 // ⚠ EMAIL, NOT AN IN-APP NOTIFICATION ROW. `notifications` rows are counted by type across every user on
 // estate consoles (educator communication, assessor automation), and an Individual-only person has no
 // notification inbox to read them in. The in-app surface for these reminders is Competen Professional's
-// own evidence and home pages, which compute "expires soon" from the same rows on every visit.
+// own evidence and home pages, which compute "expires soon" from the same rows on every visit
+// (renewals.ts), shown while the person's in-app switch is on.
+//
+// ⚠ EMAIL IS OPT-IN (migration 374, owner continuation GO). Only people whose reminder_email is TRUE are
+// emailed. It defaults to false. If the column is absent (374 not applied), nobody is emailed. The switch
+// is the person's own, on their own row, and never the estate notification_preferences (owner ruling D1).
 //
 // ⚠ ONLY PEOPLE WHO HOLD PROFESSIONAL NOW. Liveness comes from individual_live_entitlement (the database
 // clock, migration 370). A person whose Professional period ended keeps their record and gets no mail.
@@ -42,19 +47,28 @@ export function reminderMessage(c: ReminderCandidate, today: string) {
   };
 }
 
-export async function scanProfessionalReminders(admin: any, now = new Date()): Promise<{ sent: number; skipped: number; disabled?: true }> {
+export type ScanResult = { sent: number; skipped: number; recipients: string[]; disabled?: true };
+
+export async function scanProfessionalReminders(admin: any, now = new Date()): Promise<ScanResult> {
   // The release gate (src/lib/individual/gate.ts): while Competen Individual is off it does not exist, and
   // nobody is emailed about it.
-  if (!(await individualAppEnabled(admin))) return { sent: 0, skipped: 0, disabled: true };
+  if (!(await individualAppEnabled(admin))) return { sent: 0, skipped: 0, recipients: [], disabled: true };
   const today = now.toISOString().slice(0, 10);
   const horizon = new Date(now.getTime() + REMINDER_HORIZON_DAYS * 864e5).toISOString().slice(0, 10);
 
   const { data: live, error: liveErr } = await admin.from("individual_live_entitlement").select("user_id").eq("experience_code", "professional").limit(20000);
   if (liveErr) throw new Error(`individual_live_entitlement: ${liveErr.message}`);
   const users = [...new Set(((live ?? []) as any[]).map(r => r.user_id).filter(Boolean))] as string[];
-  if (!users.length) return { sent: 0, skipped: 0 };
+  if (!users.length) return { sent: 0, skipped: 0, recipients: [] };
   const { data: members } = await admin.from("individual_membership").select("user_id").in("user_id", users).eq("status", "active");
-  const active = new Set(((members ?? []) as any[]).map(m => m.user_id));
+  const entitled = ((members ?? []) as any[]).map(m => m.user_id as string);
+  if (!entitled.length) return { sent: 0, skipped: 0, recipients: [] };
+  // Opted in to email: reminder_email = true on their own row. An error (374 absent, or unreadable) means
+  // nobody is emailed -- the opt-in cannot be confirmed, and email is never the default.
+  const { data: optedIn, error: optErr } = await admin.from("individual_professional_profile")
+    .select("user_id").in("user_id", entitled).eq("reminder_email", true).limit(20000);
+  const active = new Set(optErr ? [] : ((optedIn ?? []) as any[]).map(r => r.user_id as string));
+  if (!active.size) return { sent: 0, skipped: 0, recipients: [] };
 
   const candidates: ReminderCandidate[] = [];
   const { data: creds, error: credErr } = await admin.from("individual_professional_evidence")
@@ -78,6 +92,7 @@ export async function scanProfessionalReminders(admin: any, now = new Date()): P
   }
 
   let sent = 0, skipped = 0;
+  const recipients = new Set<string>();
   for (const c of candidates.slice(0, 1000)) {
     // Mark first, conditionally on the date still being the one we are reminding about: the update is the
     // once-only gate, so two overlapping runs cannot both send.
@@ -88,7 +103,8 @@ export async function scanProfessionalReminders(admin: any, now = new Date()): P
         .eq("id", c.id).eq("self_declared_registration_expires_on", c.expiresOn).or(`registration_reminded_for.is.null,registration_reminded_for.neq.${c.expiresOn}`).select("id");
     if (mark.error || !(mark.data ?? []).length) { skipped++; continue; }
     await dispatch(admin, [c.userId], reminderMessage(c, today), ["email"]);
+    recipients.add(c.userId);
     sent++;
   }
-  return { sent, skipped };
+  return { sent, skipped, recipients: [...recipients] };
 }
