@@ -102,6 +102,19 @@ The `plat_ai_requests` and `notif_deliveries` rows stay as the platform's usage 
 
 **Schema note.** 373 uses `on delete set null (need_id)`, which needs PostgreSQL 15 or later. Staging runs 17.6. Production has not been checked from this session.
 
+## 5b. Migration state, dependencies and application order (CLAUDE.md, `main` @ `5a9a07cc`)
+
+| | |
+|---|---|
+| **State** | Applied and verified on **staging** (state 2). Eligible for PR review into `main`. Merging records release history only; it does **not** authorise production (state 4 needs a separate owner GO and the COMPETEN-OPS-001 safeguards). |
+| **Production** | **Not applied.** If merged, `main` holds 373 while production does not. |
+| **Checksum** | sha256 `4b53519aee7faaef7f2d6aace2f8f24574262677474867f509b21a49e0c75657`. Identical for the file applied on staging, the committed file (`cd878e8f`) and the copy handed to the owner. The file is never edited; any fix goes forward in a new migration. |
+| **Schema dependencies** | `profiles`, `frameworks` and `framework_competencies` (003), `passport_share_tokens` (122), `storage.buckets`. None on 370, 371 or 372. |
+| **Functional dependency** | 370 (gate 3). The code that uses 373 is reachable only through the Individual guards, and those answer 404 while the release gate `individual_app` is OFF (default, absent row, or unreadable). Production has no `individual_app` row. If 373 is absent while the gate is on, every reader treats the missing tables as *no records* (`isNotProvisioned`) and the pages offer no forms. |
+| **Order applied on staging** | 370 (2026-10-22) → 371 (already present) → 372 (IND-004, 2026-10-23) → 373 (owner, 2026-10-23, twice). |
+| **Recommended production order** | 370 → 373. 371 is already in production. 372 and 373 are independent and may go in either order. |
+| **Rollback** | 373 creates only new objects: six tables, their constraints, indexes and policies, and one bucket row. Rollback is dropping those six tables (`cascade`) and deleting the bucket row once it is empty. The SQL is to be written with the production GO, as COMPETEN-OPS-001 requires. |
+
 ## 5a. Migration 373 on staging (2026-10-23)
 
 **Who applied it.** The owner ran `npx tsx scripts/apply-migrations.ts --only 373` twice from this worktree. Each run printed `production is rnnqhlrcgvsauigxwszl – guard passed`, `373-individual-professional-record.sql ... ok` and `All 1 migration(s) applied.`. This session's own attempt was refused by its permission check and was not retried. The second run completing without error is the idempotency proof: every statement is `if not exists`, drop-then-add or `on conflict do nothing`.
