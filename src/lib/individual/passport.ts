@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadOwnRecords, type OwnRecord } from "./professional/passport-records";
+import { loadStudyAchievements, type Read } from "./scholar/store";
+import type { StudyAchievement } from "./scholar/passport-items";
 
 // ── THE COMPETEN PASSPORT, AS COMPETEN INDIVIDUAL SHOWS IT ── COMPETEN-IND-003 s2(5), ADR-016 ──────────
 //
@@ -19,11 +21,15 @@ import { loadOwnRecords, type OwnRecord } from "./professional/passport-records"
 //                       added in Competen Professional with no document attached
 //   source_linked       a record the person added in Competen Professional with a document attached.
 //                       Still not verified -- attaching a document checks nothing (COMPETEN-IND-002 s4.2)
+//   self_directed       a Competen Scholar study achievement the person CHOSE to show (migration 375):
+//                       practice they did on their own notes. Not an assessment, and never verified.
 //
 // ⚠ TWO CLASSES OF RECORD, LABELLED TWO WAYS (COMPETEN-IND-007 s5, owner ruling D3). The sections read
 // here are what organisations issued, labelled by ISSUER. `own` is what the person recorded themselves
 // (migration 373, src/lib/individual/professional/passport-records.ts), labelled by PROVENANCE. It
 // belongs to the person, not to an experience, so it is read whichever experience shows the Passport.
+// `study` is the same idea for Competen Scholar: only the achievements the person chose, one at a time
+// (src/lib/individual/scholar/passport-items.ts), never their notes, answers or AI interactions.
 //
 // ⚠ PROVISIONAL RULING D3 (COMPETEN-IND-002 s7). Showing institution-issued records to their subject,
 // read-only, is the working assumption, not an owner ruling. Disclosure OUTWARD is never automatic --
@@ -37,13 +43,14 @@ import { loadOwnRecords, type OwnRecord } from "./professional/passport-records"
 // its outcome is `competent` and it has not passed its expiry date -- the rule src/app/verify/[token]
 // applies, so the Passport cannot show a person something the verification page would not.
 
-export type EvidenceClass = "institution_issued" | "institution_verified" | "self_declared" | "source_linked";
+export type EvidenceClass = "institution_issued" | "institution_verified" | "self_declared" | "source_linked" | "self_directed";
 
 export const EVIDENCE_LABEL: Record<EvidenceClass, string> = {
   institution_issued: "Issued by an organisation",
   institution_verified: "Verified by an organisation",
   self_declared: "Self-declared, not verified",
   source_linked: "Self-declared with a document attached, not verified",
+  self_directed: "Self-directed study, not a verified competency",
 };
 
 export type PassportCompetency = {
@@ -80,6 +87,8 @@ export type IndividualPassport = {
   employment: PassportEmployment[] | null;
   /** The person's own Competen Professional records, labelled by provenance. */
   own: OwnRecord[] | null;
+  /** The Competen Scholar study achievements the person chose to show, labelled self-directed. */
+  study: Read<StudyAchievement[]>;
 };
 
 const nameOf = (row: any): string => {
@@ -111,7 +120,7 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
   const settle = async (p: PromiseLike<any>) => {
     try { const r = await p; return r?.error ? null : (r?.data ?? []); } catch { return null; }
   };
-  const [decRows, credRows, empRows, own] = await Promise.all([
+  const [decRows, credRows, empRows, own, study] = await Promise.all([
     settle(admin.from("competency_decisions")
       .select("competency_id, outcome, expiry_date, created_at, hospital_id, organisation_id, framework_competencies(name)")
       .eq("nurse_id", userId).order("created_at", { ascending: false }).limit(3000)),
@@ -122,6 +131,7 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
       .select("role_title, status, start_date, end_date, hospital_id, organisation_id")
       .eq("nurse_id", userId).order("start_date", { ascending: false }).limit(50)),
     loadOwnRecords(admin, userId).catch(() => null),
+    loadStudyAchievements(admin, userId).catch((): Read<StudyAchievement[]> => ({ ok: false, notProvisioned: false })),
   ]);
 
   // Issuer names: the organisations and facilities stamped on this person's own rows, and no others.
@@ -158,5 +168,6 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
       endDate: e.end_date ?? null,
     })),
     own,
+    study,
   };
 }

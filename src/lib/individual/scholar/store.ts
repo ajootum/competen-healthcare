@@ -7,6 +7,7 @@ import type { Chunk } from "./extract";
 import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
 import type { ProgressAttempt, ProgressCard, ProgressMaterial, ProgressQuestion } from "./progress";
+import { STUDY_ACHIEVEMENT, isStudyAchievementKind, studyAchievementsFrom, type ChoiceRow, type StudyAchievement, type StudyAchievementKind } from "./passport-items";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -410,6 +411,87 @@ export async function progressRows(admin: Admin, userId: string): Promise<Read<{
       cards: (c.data ?? []).map((r: any) => ({ materialId: r.material_id, status: r.status, nextReviewAt: r.next_review_at })),
     },
   };
+}
+
+// ── PASSPORT: THE ACHIEVEMENTS THE PERSON CHOSE TO SHOW (migration 375) ──────────────────────────────
+//
+// The row is the choice (passport-items.ts). Including writes one row, removing deletes that one row, and
+// neither touches a material, question, answer or card. What the Passport shows is derived from the
+// answers at render time, reading only which question was answered and when -- never the material text,
+// a question, the option chosen or whether it was right.
+
+export async function listPassportChoices(admin: Admin, userId: string): Promise<Read<ChoiceRow[]>> {
+  const { data, error } = await admin.from("individual_scholar_passport_item").select("material_id, achievement, label, included_at")
+    .eq("user_id", userId).order("included_at", { ascending: false }).limit(200);
+  if (error) return fail(error);
+  return {
+    ok: true,
+    data: ((data ?? []) as any[]).filter(r => isStudyAchievementKind(r.achievement))
+      .map(r => ({ materialId: r.material_id, achievement: r.achievement, label: r.label, includedAt: r.included_at })),
+  };
+}
+
+/** How many distinct questions of this kind the person answered from this material of their own. */
+async function answeredFrom(admin: Admin, userId: string, materialId: string, achievement: StudyAchievementKind): Promise<number | null> {
+  const { data: qs, error } = await admin.from("individual_scholar_question").select("id")
+    .eq("user_id", userId).eq("material_id", materialId).eq("kind", STUDY_ACHIEVEMENT[achievement].questionKind).limit(5000);
+  if (error) return null;
+  const ids = ((qs ?? []) as any[]).map(q => q.id);
+  if (!ids.length) return 0;
+  const { data: at, error: aErr } = await admin.from("individual_scholar_attempt").select("question_id")
+    .eq("user_id", userId).in("question_id", ids).limit(10000);
+  if (aErr) return null;
+  return new Set(((at ?? []) as any[]).map(a => a.question_id)).size;
+}
+
+/**
+ * Show one achievement in the Passport. Refused unless the person has earned it: the material is theirs
+ * (the 375 composite key would refuse it anyway) and they have answered at least one question of that kind
+ * from it. Choosing again updates the label.
+ */
+export async function includeInPassport(admin: Admin, userId: string, input: { materialId: string; achievement: StudyAchievementKind; label: string }): Promise<"included" | "not_eligible" | "failed"> {
+  if (!isUuid(input.materialId)) return "not_eligible";
+  const answered = await answeredFrom(admin, userId, input.materialId, input.achievement);
+  if (answered === null) return "failed";
+  if (answered < 1) return "not_eligible";
+  const { error } = await admin.from("individual_scholar_passport_item").upsert({
+    user_id: userId, material_id: input.materialId, achievement: input.achievement, label: input.label, included_at: new Date().toISOString(),
+  }, { onConflict: "user_id,material_id,achievement" });
+  return error ? "failed" : "included";
+}
+
+/** Take one achievement off the Passport. Deletes that choice only. The study history is untouched. */
+export async function removeFromPassport(admin: Admin, userId: string, materialId: string, achievement: StudyAchievementKind): Promise<{ ok: boolean; found: boolean }> {
+  if (!isUuid(materialId)) return { ok: true, found: false };
+  const { data, error } = await admin.from("individual_scholar_passport_item").delete()
+    .eq("user_id", userId).eq("material_id", materialId).eq("achievement", achievement).select("id");
+  if (error) return { ok: false, found: false };
+  return { ok: true, found: ((data ?? []) as any[]).length > 0 };
+}
+
+/**
+ * The chosen achievements with their figures, for the Passport and for /verify. Read fresh on every
+ * render, so a removal reaches every live share link at once. Reads which question was answered and
+ * when, and nothing else.
+ */
+export async function loadStudyAchievements(admin: Admin, userId: string): Promise<Read<StudyAchievement[]>> {
+  const choices = await listPassportChoices(admin, userId);
+  if (!choices.ok) return choices;
+  if (!choices.data.length) return { ok: true, data: [] };
+  const materialIds = [...new Set(choices.data.map(c => c.materialId))];
+  const { data: qs, error } = await admin.from("individual_scholar_question").select("id, material_id, kind")
+    .eq("user_id", userId).in("material_id", materialIds).limit(5000);
+  if (error) return fail(error);
+  const questions = ((qs ?? []) as any[]).map(q => ({ id: q.id, materialId: q.material_id, kind: q.kind }));
+  const ids = questions.map(q => q.id);
+  let attempts: { questionId: string; answeredAt: string }[] = [];
+  if (ids.length) {
+    const { data: at, error: aErr } = await admin.from("individual_scholar_attempt").select("question_id, answered_at")
+      .eq("user_id", userId).in("question_id", ids).limit(10000);
+    if (aErr) return fail(aErr);
+    attempts = ((at ?? []) as any[]).map(a => ({ questionId: a.question_id, answeredAt: a.answered_at }));
+  }
+  return { ok: true, data: studyAchievementsFrom({ choices: choices.data, questions, attempts }) };
 }
 
 export function isUuid(v: unknown): v is string {

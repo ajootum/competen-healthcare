@@ -337,3 +337,88 @@ The superseded v2 consent screenshots (owner-review r01–r03, r14) are kept as 
 
 - Staging acceptance is done (§6). Next is owner review of this branch and of 372 for production, which needs a separate GO and is blocked by the production freeze. Then an HQ console page for pilot grants, so Scholar pilots can be provisioned without the API.
 - Post-MVP: OCR, audio (TTS), persisted OSCE prep on `osce_stations`, adaptive question selection over `individual_scholar_attempt`, and a clinical-review record for shared cases.
+
+## 11. Scholar Passport achievements (owner continuation GO, 2026-10-23, item 3): migration 375
+
+> "Permit selected learning achievements to appear as clearly labelled personal educational records. Do not automatically publish private study materials, quiz answers, AI conversations or unverified clinical competencies."
+> Continuation GO item 3: "Implement migration 375 using a person-owned selection table. Opt-in per eligible achievement. Allow inclusion and removal independently. Preserve original learning history. Keep private notes, quiz answers and AI interactions excluded by default. Clearly label self-directed, self-declared and independently verified achievements. Ensure removal also excludes the achievement from newly rendered Passport shares and existing live share links. Apply migration 375 to staging only." Item 5: "Migrations 374 and 375 are NOT authorised for production."
+
+### Design
+
+- **Migration 375** creates `individual_scholar_passport_item`, the person's selection table. **The row is the choice:** no row means not shown, so nothing is in the Passport by default, and removing an achievement deletes only that row.
+  - RLS is on, with an own-row select policy and no write policy. Writes use the service role, behind `requireIndividualContext("scholar")`.
+  - A composite key `(material_id, user_id)` points to the owner's own material, with cascade.
+  - The table holds the two achievement kinds, a checked label (trimmed, 1 to 120 characters) and a full unique index `(user_id, material_id, achievement)`.
+  - It depends only on 372, and not on 373 or 374 (IND-007's reminders, numbered independently).
+- **Two kinds of achievement per material**: practice questions answered and practice scenarios answered.
+  - Both only grow while the material exists, so a chosen achievement cannot quietly become untrue.
+  - An achievement is eligible only once earned (at least one answer of that kind). The store counts before it stores (harness V3).
+- **Derived, never copied.** The figures are computed when the page is rendered from which question was answered and when. The Passport shows:
+  - the title the person chose (suggested from the material title, which the person edits before including);
+  - the kind;
+  - the count answered;
+  - the last-studied date.
+  - It never shows note text, a question, an option, the answer chosen, whether it was right, accuracy, or anything an AI wrote (harness V1, acceptance X1/X2).
+  - The personal AI's context does not read these items.
+- **Labels.** A new evidence class `self_directed` is shown as **"Self-directed study, not a verified competency"**. It is distinct from:
+  - self-declared (Professional own records);
+  - document-attached;
+  - verified by an organisation;
+  - issued by an organisation.
+  - It is shown in its own "Self-directed study" section on the Passport and on `/verify` (harness V4, acceptance L1).
+- **Live share links.** `/verify` reads the choices on every view of a link that carries the person's own records (a Competen Professional link with its 373 companion row), with no caching. Removing an achievement therefore reaches every existing live link at once, as well as links minted later (harness V2, acceptance S3/S4).
+  - A summary link shows the count only.
+  - An organisation-minted link, or another person's link, shows none of it (S5).
+- **History.** Removing an achievement leaves material, chunks, questions, answers and cards exactly as they were (H1). Deleting the material takes its achievements off the Passport and off live links through the cascade (C1).
+- **Where the person chooses:** Progress, in a "Your Passport" section, one item at a time ("Show in my Passport" / "Remove from my Passport"). The route is `/api/individual/scholar/passport` (POST include, DELETE remove), audited with ids only, never the title.
+- **Fails closed** while 375 is absent: Progress and the Passport say *"not available on this environment yet"* (checked live before the apply), and `/verify` shows nothing.
+- **Configuration candidate (owner review, 2026-10-23).** Achievement categories (currently questions answered and scenarios answered, in code) are a configuration candidate under COMPETEN-CONFIG-001. Recorded only. This MVP is not expanded and the code is unchanged.
+
+### Migration 375 on staging
+
+| | |
+|---|---|
+| File | `supabase/migrations/375-individual-scholar-passport-selection.sql` |
+| sha256 (the committed LF file, as applied) | `782295e152a714a742a4b082205f3246a21d20214840f8aef2af2f15ffd9c5ab` |
+| House rules | ALL CLEAR: 105 lines, 13 statements, ASCII, no function, `notify pgrst` last |
+| Applied | **Staging only** (`ezhvpgtcqcdsgylrxgdb`), **by the owner, twice**, with `scripts/apply-migrations.ts --only 375`. Both runs ended "ok", "All 1 migration(s) applied". |
+| Pre-application state | 6 Scholar tables; scholar schema hash `b7ba71139a01e7d7`; rest of public `91ce3da58766fd0b`; other buckets `ee38116f6911fd74` |
+| After both runs | 7 Scholar tables; scholar schema `9608676c791f8b80`; **rest of public `91ce3da58766fd0b` (unchanged)**; other buckets unchanged. A repeat snapshot is identical. RLS is on for `individual_scholar_passport_item`, with one policy, `read_own: SELECT`. |
+| Dependencies and order | 372 must be applied first. Independent of 370, 373 and 374. |
+| Production | **NOT authorised** (owner GO item 5). Not applied. `main` may hold this file before production does. The code that reads it fails closed while it is absent, and is behind `individual_app` (default OFF). |
+
+**Note for the record.** In a development worktree whose `.env.local` points the local app at staging, `NEXT_PUBLIC_SUPABASE_URL` is the staging URL. `apply-migrations.ts` takes its production reference from that variable, so there the guard refuses the staging target, reading staging as production. That fails safe, but the guard has no real production reference in such a worktree. The owner set the real production URL in the shell for the two runs. A guard that read the production ref from `scripts/production-guard.ts` (as `assertSafeTarget` does) instead of from the environment would remove the dependency. Recorded as a follow-up, not changed here. The owner is recording it as a separate operational correction in COMPETEN-OPS-001.
+
+### Verification
+
+- `tsc` clean and `eslint` 0 errors on changed files.
+- `vitest` **622/622**: 10 new tests in `passport-items.test.ts`, and the foundation fixtures gain the new `study` field.
+- `scholar-learning-harness` **72/72**:
+  - V1, the Passport read selects no content;
+  - V2, `/verify` reads live and uncached;
+  - V3, opt-in only to an earned achievement;
+  - V4, labels;
+  - V5, the 375 schema;
+  - planted P17–P20 all go red.
+- `individual-foundation` **44/44**, `individual-professional` **47/47**, `plane-boundary` **35/35**, `auth-boundary` green.
+- **Staging acceptance** `scholar-passport-acceptance-harness` **32/32**, with `/verify` checked over HTTP against this branch on localhost:3033. Fixtures removed and the flag restored to its prior state (ON, for the owner's viewing session). IND-007 and IND-002 were told before the run.
+
+| Group | Proves | Result |
+|---|---|---|
+| D1–D2 | Nothing in the Passport by default, though the study history exists; only earned achievements are eligible | Pass |
+| O1–O6 | Opt-in per item; an unearned item is refused; two items included and removed independently | Pass |
+| H1 | The study history is unchanged after removal | Pass |
+| X1–X2 | No note text, question, option, answer or AI provenance in the Passport data or on the share page | Pass |
+| L1 | Self-directed, self-declared, document-attached, verified and issued each carry their own label | Pass |
+| I1–I5 | RLS own-row (B sees none of A's); no browser writes; the composite key refuses B→A's material; the store called as B refuses and A is untouched; the schema refuses a bad label or kind | Pass |
+| S1–S5 (+h, over HTTP) | Live link shows both; summary gives the count only; **the SAME live link loses the removed item**; a new link never shows it; B's link and an organisation-minted link show none | Pass |
+| C1 | Deleting the material removes its achievements from the Passport and from the live link | Pass |
+
+The first acceptance run was 31/32. S2h failed because React separates adjacent text with `<!-- -->` in server HTML, and the check matched raw markup. The harness now compares text. The red run shows the HTTP checks do discriminate.
+
+**Screenshots** (`docs/evidence/COMPETEN-IND-004/passport-375/`, live on staging with the viewing test account; the choice was removed and the walk-through link revoked afterwards):
+- p1: eligible but not shown, by default;
+- p2: included under a chosen title;
+- p3: the Passport's Self-directed study section;
+- p4: a live `/verify` link showing it;
+- p5: the same link after removal.

@@ -64,6 +64,12 @@ const read = (f: string) => readFileSync(f, "utf8").replace(/\r\n/g, "\n");
 const REAL: Src = new Map(FILES.map(f => [f, strip(read(f))]));
 const MIG_FILE = "supabase/migrations/372-individual-scholar-learning.sql";
 const MIG_REAL = existsSync(MIG_FILE) ? read(MIG_FILE).replace(/--.*$/gm, "").toLowerCase() : "";
+// Migration 375 and the surfaces outside the Scholar tree that show what it holds (s11).
+const MIG375_FILE = "supabase/migrations/375-individual-scholar-passport-selection.sql";
+const MIG375 = existsSync(MIG375_FILE) ? read(MIG375_FILE).replace(/--.*$/gm, "").toLowerCase() : "";
+const VERIFY = "src/app/verify/[token]/page.tsx";
+const PASSPORT_PAGE = "src/app/individual/(app)/[experience]/passport/page.tsx";
+const OUTSIDE: Src = new Map([VERIFY, PASSPORT_PAGE, "src/lib/individual/passport.ts"].map(f => [f, strip(read(f))]));
 
 const STORE = `${LIB}/store.ts`;
 const GEN = `${LIB}/generation.ts`;
@@ -196,6 +202,33 @@ const masteryWords = (src: Src) => [...src].filter(([f]) => f.startsWith(PAGES) 
 const SHARING = /contribut|shared[_ -]?library|learning[_ -]?library|submit\w*(library|review|share)|publish\w*(material|library)|share\w*material|\btrain(ing)?\b|fine[_ -]?tun/i;
 const sharingPaths = (src: Src) => [...src].filter(([f]) => f !== `${LIB}/config.ts`)
   .filter(([, s]) => SHARING.test(s)).map(([f]) => f);
+
+/**
+ * s11, owner continuation GO 2026-10-23 item 3: Scholar study achievements in the Passport (migration 375).
+ *   studyReadsContent: the read that feeds the Passport and /verify selects only ids, kinds and dates --
+ *                      never note text, a question, an option, the answer chosen, whether it was right, or
+ *                      anything the AI wrote.
+ *   verifyReadsLive:   /verify reads the person's choices on every view of a link that carries their own
+ *                      records, so a removal reaches live links. Nothing caches it.
+ *   includeChecksEarned: a choice is stored only after the store has counted an answer of that kind.
+ */
+const studyReadsContent = (src: Src) => {
+  const s = src.get(STORE) ?? "";
+  const body = s.slice(s.indexOf("export async function listPassportChoices"), s.indexOf("export function isUuid"));
+  const selects = [...body.matchAll(/\.select\("([^"]*)"\)/g)].map(m => m[1]);
+  return body.length < 100 || selects.length < 4 || selects.some(c => /content|stem|options|chosen|correct|rationale|source_quote|model|prompt|title/.test(c));
+};
+const verifyReadsLive = (out: Src) => {
+  const v = out.get(VERIFY) ?? "";
+  return /const study = carriesOwn \? await loadStudyAchievements\(admin, share\.nurse_id\) : null;/.test(v)
+    && !/unstable_cache|"use cache"|revalidate\s*=/.test(v);
+};
+const includeChecksEarned = (src: Src) => {
+  const s = src.get(STORE) ?? "";
+  const body = s.slice(s.indexOf("export async function includeInPassport"), s.indexOf("export async function removeFromPassport"));
+  const count = body.indexOf("await answeredFrom("), refuse = body.indexOf('if (answered < 1) return "not_eligible";'), write = body.indexOf(".upsert(");
+  return count >= 0 && refuse > count && write > refuse;
+};
 
 /** E: labels, and no answer key in the browser before answering. */
 const answerKeyLeaks = (src: Src) => {
@@ -361,6 +394,25 @@ function main() {
     !/individual_membership|individual_entitlement|individual_live_entitlement/.test(MIG_REAL));
   }
 
+  // ── V. PASSPORT STUDY ACHIEVEMENTS (s11, migration 375) ─────────────────────────────────────────
+  ok("V1. the Passport and /verify read only which question was answered and when -- no notes, questions, answers or AI output",
+    !studyReadsContent(REAL));
+  ok("V2. /verify reads the person's choices on every view of a link carrying their own records, uncached, so a removal reaches live links",
+    verifyReadsLive(OUTSIDE));
+  ok("V3. a choice is stored only after the store counted an answer of that kind (opt-in to an earned achievement)", includeChecksEarned(REAL));
+  ok("V4. self-directed study is labelled as such on the Passport page and on /verify, from one label",
+    /self_directed: "Self-directed study, not a verified competency"/.test(OUTSIDE.get("src/lib/individual/passport.ts") ?? "")
+    && /EVIDENCE_LABEL\.self_directed/.test(OUTSIDE.get(PASSPORT_PAGE) ?? "") && /EVIDENCE_LABEL\.self_directed/.test(OUTSIDE.get(VERIFY) ?? ""));
+  if (!MIG375) console.log(`  NOTE  ${MIG375_FILE} is not in this checkout -- schema check V5 and P19 NOT RUN`);
+  if (MIG375) ok("V5. 375: RLS with own-row select only, no write policy, the composite key to the owner's material with cascade, two achievement kinds, a checked label, no function",
+    /alter table individual_scholar_passport_item enable row level security/.test(MIG375)
+    && /create policy individual_scholar_passport_item_read_own on individual_scholar_passport_item\s+for select using \(auth\.uid\(\) = user_id\)/.test(MIG375)
+    && !/for (insert|update|delete|all)\b/.test(MIG375)
+    && /foreign key \(material_id, user_id\)\s+references individual_scholar_material\(id, user_id\) on delete cascade/.test(MIG375)
+    && /check \(achievement in \('practice_questions', 'practice_scenarios'\)\)/.test(MIG375)
+    && /check \(label = btrim\(label\) and char_length\(label\) between 1 and 120\)/.test(MIG375)
+    && !/create (or replace )?function|plpgsql|\$\$/.test(MIG375));
+
   // ── G. ERASURE ──────────────────────────────────────────────────────────────────────────────────
   const store = REAL.get(STORE) ?? "";
   ok("G1. deleting a material removes its stored object before its row (which cascades)",
@@ -397,6 +449,14 @@ function main() {
     !onlyCheckedQuestionsStored(plant(`${API}/questions/route.ts`, "drafts: r.check.kept", "drafts: r.raw")));
   ok("P9. ⚠ E3 goes red when the answer key is sent with the question",
     answerKeyLeaks(plant(SCHOLAR_PAGE, "model: q.model,", "model: q.model, correctIndex: q.correctIndex,")));
+  ok("P17. ⚠ V1 goes red when the Passport read starts selecting a question's text",
+    studyReadsContent(plant(STORE, '.select("id, material_id, kind")\n    .eq("user_id", userId).in("material_id", materialIds)', '.select("id, material_id, kind, stem")\n    .eq("user_id", userId).in("material_id", materialIds)')));
+  ok("P18. ⚠ V2 goes red when /verify stops reading the choices at render time",
+    (() => { const copy = new Map(OUTSIDE); copy.set(VERIFY, (copy.get(VERIFY) ?? "").replace("carriesOwn ? await loadStudyAchievements(admin, share.nurse_id) : null", "null")); return !verifyReadsLive(copy); })());
+  ok("P20. ⚠ V3 goes red when a choice is stored before the answers are counted",
+    !includeChecksEarned(plant(STORE, 'if (answered < 1) return "not_eligible";', "")));
+  if (MIG375) ok("P19. ⚠ V5 goes red on an added write policy",
+    /for (insert|update|delete|all)\b/.test(`${MIG375}\ncreate policy x on individual_scholar_passport_item for insert with check (true)`));
   if (MIG_REAL) ok("P10. ⚠ F1/F2 go red on a missing policy or an added write policy",
     tablesWithoutRls(MIG_REAL.replace("alter table individual_scholar_card enable row level security", "")).length === 1
     && writePolicies(`${MIG_REAL}\ncreate policy x on individual_scholar_card for insert with check (true)`));
