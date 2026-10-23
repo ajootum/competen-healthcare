@@ -179,8 +179,9 @@ async function main() {
   ok("A4. the Passport shows the own records, each by provenance", classes === "cpd:self_declared,cpd:source_linked,credential:self_declared,registration:self_declared", classes);
   ok("A5. the Passport never carries the private reflection", !JSON.stringify(passport.own).includes("Harness private reflection"));
   const plan = planProgress(record.goals!, today), years = cpdHoursByYear(record.cpd!), cov = evidenceCoverage(record.needs!, record.goals!, record.cpd!, record.evidence!);
-  ok("A6. progress: plan measured, hours by year, coverage through the goal and the evidence link",
-    plan.completion === 0 && years[0]?.hours === 9.5 && cov.ratio === 1 && cov.needs[0].cpd === 2 && cov.needs[0].evidence === 1, JSON.stringify({ plan, years, cov: cov.needs }));
+  // Only the plain CPD entry is linked to the goal; the workshop is not, so it adds hours but no coverage.
+  ok("A6. progress: plan measured, hours by year (both entries), coverage through the goal (one linked entry) and the evidence link",
+    plan.completion === 0 && years[0]?.hours === 9.5 && cov.ratio === 1 && cov.needs[0].cpd === 1 && cov.needs[0].evidence === 1, JSON.stringify({ plan, years, cov: cov.needs }));
 
   // ── B. evidence classes are the database's ──
   ok("B1. no document gives self_declared, a document gives source_linked -- computed by the schema", cpdPlain.data?.evidence_class === "self_declared" && cpdDoc.data?.evidence_class === "source_linked");
