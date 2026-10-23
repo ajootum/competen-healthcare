@@ -6,6 +6,7 @@ import type { AppRole } from "@/lib/roles";
 import { cardClass } from "@/components/ui/primitives";
 import { estateRolesOf } from "@/lib/roles";
 import JoinOrganisationPanel from "./JoinOrganisationPanel";
+import OwnProfileCard from "@/components/account/OwnProfileCard";
 
 // PW-011 Profile & Professional Identity — the user's own professional profile over real profiles /
 // professional_credentials / competency_decisions. Summary cards, profile card, About Me, Professional Summary,
@@ -57,6 +58,11 @@ export default async function ProfilePage() {
           panel renders nothing for a homed member with no request history. */}
       <JoinOrganisationPanel homed={!!pr?.organisation_id} />
 
+      {/* My profile (owner GO 2026-10-23, PR D): the shared personal-profile card, editable, behind this
+          page's sign-in check and the /dashboard layout's estate gate. HQ reaches it through the same user
+          menu "Profile" entry (PUI-002). */}
+      <OwnProfileCard credentialsNote={<>Your credentials and their verification status are listed further down this page, under <span className="font-semibold">Credentials</span>.</>} />
+
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi icon="✅" label="Profile Completeness" value={`${d.kpis.completeness}%`} sub={d.kpis.completeness >= 80 ? "Excellent" : "Add more detail"} tint="bg-[var(--cmp-surface-success)]" />
@@ -94,7 +100,6 @@ export default async function ProfilePage() {
             <div className="space-y-5">
               <div className={cardClass}>
                 <div className="flex items-center justify-between mb-2"><h2 className="text-sm font-semibold text-gray-900">About Me</h2><Link href="/dashboard/billing" className="text-[11px] font-medium text-[var(--cmp-text-information)] hover:underline">Edit</Link></div>
-                <Field label="Preferred Name" value={p.fullName.split(" ")[0]} />
                 <Field label="Role" value={p.role} />
                 <Field label="Specialization" value={p.specialization} />
                 <Field label="Country" value={p.country} />
