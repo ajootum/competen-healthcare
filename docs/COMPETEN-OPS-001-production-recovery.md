@@ -100,9 +100,11 @@ Scripts are in `ops/backup/` and installed at `C:\Users\elish\CompetenBackup\bin
 
 | Tier | Definition | Gate before applying to production |
 |---|---|---|
-| **Low** | Additive and non-destructive: new tables, views, indexes or private buckets; RLS and constraints on **new** objects only; foreign keys from new tables to existing ones that act only on the new rows. No change to existing tables, policies, grants, functions or data. | A verified backup **less than 24 hours old** (the daily run), a recovery reference and rollback SQL in the build record, and the migration's own verification queries after applying. |
+| **Low** | Additive and non-destructive:<br>• new tables, views, indexes or private buckets;<br>• RLS and constraints on **new** objects only;<br>• foreign keys from new tables to existing ones that act only on the new rows;<br>• **additive columns with compatible defaults** (a constant default, or nullable) on **product-owned** tables, where existing rows, reads and access behaviour stay as they were;<br>• **HQ catalogue additions** (capabilities, positions, position grants) that confer **no effective authority** until separately authorised, for example by an appointment.<br>Otherwise no change to existing tables, policies, grants, functions or data. **Classify on actual security, data and operational impact, from the committed file on `main` by checksum.** A change that touches RLS, existing authority, shared access boundaries or bulk data is not Low, whatever its shape. | A verified backup **less than 24 hours old** (the daily run), a recovery reference and rollback SQL in the build record, and the migration's own verification queries after applying. |
 | **Medium** | Changes constraints, relationships, RLS, grants, triggers or functions on **existing** objects, or shared behaviour that existing code relies on. | The Low gate, plus a compatibility check (affected code paths and harnesses green on staging with the change) and a recovery rehearsal (rollback SQL run on staging). |
 | **High** | Destructive (drop, rename, type change), bulk data rewrites, or changes to a critical security boundary (auth, patient-data RLS, `SECURITY DEFINER` widening, grants to `anon`). | A **fresh** backup taken immediately before, verified by an isolated restore, and **explicit owner approval** for that migration. |
+
+**Low-tier amendment (owner, 2026-10-23):** the last two Low bullets were added so 374 (two defaulted columns on `individual_professional_profile`) and 376 (an HQ capability seed) are classified by their real impact, not their shape. Each batch sheet still states why its migration is Low.
 
 **Batches:** related migrations may be applied as one controlled batch under one GO, in dependency order. The batch takes the gate of its highest tier, is verified after each migration and again at the end, and stops at the first failed verification.
 
@@ -144,6 +146,19 @@ Scripts are in `ops/backup/` and installed at `C:\Users\elish\CompetenBackup\bin
 **Dark deploy, same day.** Production deployment `dpl_36p4BL34ipAgrZFuCRVgSqppXFuQ` (`main` `88df2929`), deployed by CLI. Git auto-deploys stay paused (Ignored Build Step = pre-production only). Rollback reference: `dpl_BQufB4JpTK4RHxYBSHCgPCRZ97oc`.
 - **Individual dark:** all 38 Individual page URLs return 404 with the root title; all 31 Individual API method checks return 404; the HQ grant APIs return 403.
 - **No regression:** the public site, Practice, Enterprise, Recruitment, Staff, Platform and `/login` all respond 200. The public disclosure harness gives 213 assertions and 1 failure, the same as the pre-deploy baseline.
+
+### 11b. Release batch 374 → 375 (production, 2026-10-23, owner GO)
+
+| Step | Detail |
+|---|---|
+| Tier | **Low**, under the amended §8. 374: two constant-default columns on the product-owned `individual_professional_profile` (0 rows). 375: one new table with its own RLS. |
+| Recovery reference | `competen-production-20261023-1246.dump.gpg`, sha256 `e73c1b6e…`, taken immediately before (R11). Isolated restore **PASS**: 729/729 tables, 0 errors. |
+| Pre-check | Dependencies `individual_professional_profile` and `individual_scholar_material` present. 374 columns absent; 375 table absent; 0 profile rows; `individual_app` has no row. Baseline 686 tables, 332 policies. |
+| Files | From `main`; checksums match staging (374 `8ccd5a48…`, 375 `782295e1…`). Applied by the owner in the SQL editor, one at a time. |
+| 374 | Verified: `reminder_in_app` boolean NOT NULL default true; `reminder_email` boolean NOT NULL default false. The profile's own-row policy is unchanged; 0 rows; totals unchanged. |
+| 375 | Verified: `individual_scholar_passport_item` with RLS on, one `read_own` SELECT policy, the composite key `(material_id, user_id)` to the owner's own material with cascade, and 0 rows. **687 tables, 333 policies**; functions unchanged (379). Buckets unchanged; no `storage.objects` policies. |
+| Gate | `individual_app` has no row, before and after. |
+| Rollback | `docs/evidence/COMPETEN-OPS-001/ROLLBACK-374-375.sql`. Not used. |
 
 ## 12. Outstanding recovery requirements
 
