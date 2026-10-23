@@ -18,6 +18,10 @@
  *   F  schema        372: RLS on every table with own-row select only, composite ownership keys, the
  *                    attestation NOT NULL, a private bucket whose limits match the code
  *   G  erasure       the owner can delete one material or all of it, objects included
+ *   K  competencies  COMPETEN-SCHOLAR-01 (387, 388): the catalogue only through its interface, shared and
+ *                    published; proposals the model cannot point outside; an append-only correction trail;
+ *                    background beyond the notes kept apart; case steps held to the question rules; the
+ *                    MVP unchanged where 388 is absent; no profession in code
  *
  * ⚠ EVERY KEY CHECK CARRIES A PLANTED-FAILURE CONTROL (section P). The check is run again against a copy
  * of the source with the violation planted, and must FAIL there. A check that cannot fail is worth
@@ -81,20 +85,30 @@ const PAGE_FILES = FILES.filter(f => f.startsWith(PAGES) && f.endsWith("page.tsx
 
 // ── THE CHECKS, AS FUNCTIONS OF THE SOURCE, SO SECTION P CAN RUN THEM ON A PLANTED COPY ─────────────
 
-/** A1: every individual_scholar_* statement in the store names the caller's own user_id. */
-function unkeyedStatements(src: Src): string[] {
+/**
+ * A1: every individual_scholar_* statement in the store names the caller's own user_id.
+ * COMPETEN-SCHOLAR-01 (migration 387): the two programme CONFIGURATION tables have no user_id -- they say which
+ * frameworks a programme uses, for everyone -- so they are exempt here, and configOnlyRead holds them to reads.
+ */
+const CONFIG_TABLES = new Set(["individual_scholar_programme", "individual_scholar_programme_framework"]);
+function storeStatements(src: Src): { table: string; at: number; stmt: string }[] {
   const s = src.get(STORE) ?? "";
-  const bad: string[] = [];
+  const out: { table: string; at: number; stmt: string }[] = [];
   const re = /admin\.from\("(individual_scholar_[a-z_]+)"\)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(s)) !== null) {
     const rest = s.slice(m.index + m[0].length);
     const next = rest.search(/admin\.from\(|;\s*$/m);
-    const stmt = rest.slice(0, next < 0 ? undefined : next);
-    if (!/\.eq\("user_id", userId\)/.test(stmt) && !/user_id: userId/.test(stmt)) bad.push(`${m[1]}@${m.index}`);
+    out.push({ table: m[1], at: m.index, stmt: rest.slice(0, next < 0 ? undefined : next) });
   }
-  return bad;
+  return out;
 }
+function unkeyedStatements(src: Src): string[] {
+  return storeStatements(src).filter(x => !CONFIG_TABLES.has(x.table))
+    .filter(x => !/\.eq\("user_id", userId\)/.test(x.stmt) && !/user_id: userId/.test(x.stmt)).map(x => `${x.table}@${x.at}`);
+}
+/** K1: the configuration tables are only ever read by Scholar code, and only active programmes are offered. */
+const configWrites = (src: Src) => storeStatements(src).filter(x => CONFIG_TABLES.has(x.table) && /\.(insert|upsert|update|delete)\(/.test(x.stmt)).map(x => `${x.table}@${x.at}`);
 const storeStatementCount = (src: Src) => [...(src.get(STORE) ?? "").matchAll(/admin\.from\("individual_scholar_/g)].length;
 
 /** A2: the upload is processed at a path the server builds from the caller's id, never one from the body. */
@@ -120,7 +134,8 @@ const generateOutsideGen = (src: Src) => [...src].filter(([f, s]) => f !== GEN &
 /** C2: each AI route runs aiPreflight (consent, quota, configuration) BEFORE the AI call. */
 function preflightOrder(src: Src): string[] {
   const bad: string[] = [];
-  for (const [file, call] of [[`${API}/explain/route.ts`, "runExplain("], [`${API}/questions/route.ts`, "runQuestions("]] as const) {
+  for (const [file, call] of [[`${API}/explain/route.ts`, "runExplain("], [`${API}/questions/route.ts`, "runQuestions("],
+    [`${API}/materials/[id]/analyse/route.ts`, "runAnalysis("], [`${API}/cases/route.ts`, "runCase("]] as const) {
     const s = src.get(file) ?? "";
     const p = s.indexOf("await aiPreflight(ctx)"), c = s.indexOf(call);
     if (p < 0 || c < 0 || p > c) bad.push(file);
@@ -165,7 +180,9 @@ function unguardedHandlers(src: Src): string[] {
 const onlyCheckedQuestionsStored = (src: Src) => /drafts: r\.check\.kept/.test(src.get(`${API}/questions/route.ts`) ?? "");
 const explanationChecked = (src: Src) => {
   const g = src.get(GEN) ?? "", r = src.get(`${API}/explain/route.ts`) ?? "";
-  return /check: checkExplanation\(r\.text/.test(g) && /groundingViolations\(prose/.test(g)
+  // COMPETEN-SCHOLAR-01 S3: the model text is split first (what lies beyond the notes comes off), and the
+  // notes-based part is what checkExplanation sees and the route shows.
+  return /const split = splitSupplementary\(r\.text\);/.test(g) && /check: checkExplanation\(split\.main, /.test(g) && /groundingViolations\(prose/.test(g)
     && /if \(!r\.check\.ok\)/.test(r) && /answer: r\.check\.text/.test(r) && !/answer: r\.text/.test(r);
 };
 const explanationNotStored = (src: Src) => {
@@ -244,6 +261,91 @@ const tablesWithoutRls = (mig: string) => SCHOLAR_TABLES.filter(t =>
   !mig.includes(`alter table ${t} enable row level security`) || !new RegExp(`create policy ${t}_read_own on ${t}\\s+for select using \\(auth\\.uid\\(\\) = user_id\\)`).test(mig));
 const writePolicies = (mig: string) => /for (insert|update|delete|all)\b/.test(mig);
 
+// ── K. COMPETEN-SCHOLAR-01: COMPETENCY-DRIVEN LEARNING (migrations 387, 388) ─────────────────────────
+const CAT = `${LIB}/catalogue.ts`;
+const MAP = `${LIB}/mapping.ts`;
+const migText = (f: string) => existsSync(f) ? read(f).replace(/--.*$/gm, "").toLowerCase() : "";
+const MIG387_FILE = "supabase/migrations/387-individual-scholar-programme.sql";
+const MIG388_FILE = "supabase/migrations/388-individual-scholar-competency-mapping.sql";
+const MIG387 = migText(MIG387_FILE);
+const MIG388 = migText(MIG388_FILE);
+
+/**
+ * K2: the catalogue Scholar offers is shared (hospital_id null), active and published on every frameworks read,
+ * its domains are read only for frameworks that passed that filter, and no other Scholar file reads the
+ * catalogue tables itself -- it goes through the CompetencyCatalogue interface (or referenceNames for names).
+ */
+const catalogueLeaks = (src: Src): string[] => {
+  const c = src.get(CAT) ?? "";
+  const reads = [...c.matchAll(/\.from\("frameworks"\)([\s\S]*?);/g)].map(m => m[1]);
+  const bad: string[] = reads.length ? [] : ["no frameworks read found"];
+  for (const r of reads) if (!/\.is\("hospital_id", null\)/.test(r) || !/\.eq\("is_active", true\)/.test(r) || !/\.eq\("pub_status", PUBLISHED\)/.test(r)) bad.push("unfiltered frameworks read");
+  if (!/\.from\("framework_domains"\)[\s\S]*?\.in\("framework_id", \[\.\.\.offered\.keys\(\)\]\)/.test(c)) bad.push("domains not limited to offered frameworks");
+  bad.push(...[...src].filter(([f, s]) => f !== CAT && /from\("(frameworks|framework_domains|framework_competencies)"\)/.test(s)).map(([f]) => f));
+  return bad;
+};
+/** K3: the model is shown tags, never an id, and a proposal's id comes only from the catalogue entry its tag names. */
+const idsReachModel = (src: Src) => {
+  const m = src.get(MAP) ?? "";
+  const body = m.slice(m.indexOf("export function mapUserPrompt"), m.indexOf("const contentWords"));
+  return body.length < 50 || /\.id\b|chunkId|frameworkId/.test(body) || !/const comp = competencies\[ci\];/.test(m) || !/competencyId: comp\.id/.test(m);
+};
+/** K4: no Scholar code edits or deletes a mapping or a decision, and every upsert onto them leaves existing rows alone. */
+const trailEdits = (src: Src) => storeStatements(src)
+  .filter(x => /^individual_scholar_(competency_decision|competency_map|chunk_analysis)$/.test(x.table))
+  .filter(x => /\.(update|delete)\(/.test(x.stmt) || (/\.upsert\(/.test(x.stmt) && !/ignoreDuplicates: true/.test(x.stmt)))
+  .map(x => `${x.table}@${x.at}`);
+/** K5: what lies beyond the notes is split off before the check, checked on its own, and shown apart under its label. */
+const supplementaryApart = (src: Src) => {
+  const g = src.get(GEN) ?? "", r = src.get(`${API}/explain/route.ts`) ?? "", c = src.get(CLIENT) ?? "";
+  return /supplementary: split\.extra === null \? null : checkSupplementary\(split\.extra, mode\)/.test(g)
+    && /label: SUPPLEMENTARY_LABEL/.test(r) && /SUPPLEMENTARY_WITHHELD\[/.test(r) && !/answer: [^,\n]*supplementary/.test(r)
+    && /<SourceNotice \/><\/div>\s*<BeyondNotes s=\{item\.supplementary\} \/>/.test(c) && /Beyond your notes/.test(c);
+};
+/** K6: every step of a case is held to the single-question rules, the blind verification included. */
+const caseStepsChecked = (src: Src) => {
+  const g = src.get(GEN) ?? "";
+  const body = g.slice(g.indexOf("export async function runCase"), g.indexOf("export async function runQuestions"));
+  return /const check = checkQuestions\(JSON\.stringify\(parsed\.steps\), passage, CASE_MAX_STEPS, CASE_MAX_STEPS\);/.test(body)
+    && /const verified = applyVerification\(check\.kept, v\.text\);/.test(body) && /steps = verified\.kept;/.test(body)
+    && /verified\.kept\.length >= CASE_MIN_STEPS/.test(body) && /drafts: r\.steps/.test(src.get(`${API}/cases/route.ts`) ?? "");
+};
+/** K7: the MVP keeps working without 388 -- its columns are never selected with the 372 ones, and written only when set. */
+const failsClosed = (src: Src) => {
+  const s = src.get(STORE) ?? "";
+  const cols = /const QUESTION_COLS = "([^"]*)"/.exec(s)?.[1] ?? "competency_id";
+  return !/competency_id|case_/.test(cols)
+    && /\.\.\.\(input\.competencyId \? \{ competency_id: input\.competencyId \} : \{\}\)/.test(s)
+    && /\.\.\.\(input\.caseId \? \{ case_id: input\.caseId, case_step: i \+ 1/.test(s)
+    && /async function questionExtras[\s\S]*?if \(error\) return new Map\(\);/.test(s);
+};
+/** K8: a link the person adds names a competency the catalogue offers their programme, checked before it is written. */
+const addChecksCatalogue = (src: Src) => {
+  const r = src.get(`${API}/mappings/route.ts`) ?? "";
+  const find = r.indexOf("cat.data.find(c => c.id === body.competencyId)"), write = r.indexOf("await addMapping(");
+  return find >= 0 && write > find && /competencyId: competency\.id, layer: competency\.layer/.test(r);
+};
+/** K10: the schema of 387 and 388. */
+const mig387Shape = (m: string) =>
+  ["individual_scholar_programme", "individual_scholar_programme_framework", "individual_scholar_learner"].every(t => m.includes(`alter table ${t} enable row level security`))
+  && !/create policy \w+ on individual_scholar_programme(_framework)?\b/.test(m)
+  && /create policy individual_scholar_learner_read_own on individual_scholar_learner\s+for select using \(auth\.uid\(\) = user_id\)/.test(m)
+  && /framework_id\s+uuid not null references frameworks\(id\)/.test(m) && /check \(layer in \('foundational', 'profession', 'specialty'\)\)/.test(m)
+  && !/for (insert|update|delete|all)\b/.test(m) && !/create (or replace )?function|plpgsql|\$\$/.test(m);
+const mig388Shape = (m: string) =>
+  ["chunk_analysis", "competency_map", "competency_decision"].every(t =>
+    m.includes(`alter table individual_scholar_${t} enable row level security`)
+    && new RegExp(`create policy individual_scholar_${t}_read_own on individual_scholar_${t}\\s+for select using \\(auth\\.uid\\(\\) = user_id\\)`).test(m))
+  && !/for (insert|update|delete|all)\b/.test(m)
+  && /if tg_op = 'delete' and pg_trigger_depth\(\) > 1 then/.test(m) && /before update or delete on individual_scholar_competency_decision/.test(m)
+  && /competency_id\s+uuid not null references framework_competencies\(id\)/.test(m)
+  && /foreign key \(map_id, user_id\)\s+references individual_scholar_competency_map\(id, user_id\) on delete cascade/.test(m)
+  && /check \(\(source = 'ai'\) = \(model is not null and prompt_version is not null and confidence is not null\)/.test(m)
+  && /\(case_id is null\) = \(case_step is null\)/.test(m) && /\(case_id is null or kind = 'case'\)/.test(m);
+/** K9: no Scholar code names a profession. A new profession is configuration rows (387), never code. */
+const professionNamed = (src: Src) => [...src].filter(([f]) => f !== `${LIB}/test-documents.ts`)
+  .filter(([, s]) => /\b(nurs(e|es|ing)|midwi(fe|fery|ves)|pharmac(y|ist)|physiotherap)/i.test(s)).map(([f]) => f);
+
 /** Every applicable document published (version and URL), with overrides. Test values only, never a real URL. */
 const legalEnv = (over: Record<string, string>) => ({
   ...Object.fromEntries(["COMPETEN_HOLDINGS", "SCHOLAR_OPERATOR"].flatMap(e => ["TERMS", "PRIVACY"].flatMap(d => [
@@ -288,7 +390,8 @@ function main() {
   const quota = strip(readFileSync("src/lib/ai/quota.ts", "utf8"));
   ok("C5. Scholar AI calls are audited under an action the hourly quota counts",
     /SCHOLAR_AI_AUDIT_ACTION = "ai_assistant_query"/.test(REAL.get(HTTP) ?? "") && /"ai_assistant_query"/.test(quota)
-    && [`${API}/explain/route.ts`, `${API}/questions/route.ts`].every(f => /audit\(ctx, SCHOLAR_AI_AUDIT_ACTION/.test(REAL.get(f) ?? "")));
+    && [`${API}/explain/route.ts`, `${API}/questions/route.ts`, `${API}/materials/[id]/analyse/route.ts`, `${API}/cases/route.ts`]
+      .every(f => /audit\(ctx, SCHOLAR_AI_AUDIT_ACTION/.test(REAL.get(f) ?? "")));
   ok("C6. every Scholar route handler is behind requireIndividualContext(\"scholar\")", unguardedHandlers(REAL).length === 0, unguardedHandlers(REAL).join(", "));
   // The release gate, gate 3, live, D2 terms and the registry check all live in the foundation's
   // experienceModulePage. The foundation harness (7d, 7e) pins what that helper does.
@@ -422,6 +525,27 @@ function main() {
     /storage\.from\(BUCKET\)\.list\(userId/.test(store) && /export async function eraseAllMaterial/.test(store));
   if (MIG_REAL) ok("G3. every child table cascades from its material", (MIG_REAL.match(/references individual_scholar_material\(id, user_id\) on delete cascade/g) ?? []).length === 3);
 
+  // ── K. COMPETEN-SCHOLAR-01: COMPETENCY-DRIVEN LEARNING ─────────────────────────────────────────────
+  ok("K1. programme configuration is only ever read by Scholar code (no user_id, and no write path)", configWrites(REAL).length === 0, configWrites(REAL).join(", "));
+  ok("K2. competencies come only through the catalogue interface: shared, active and published frameworks, nothing read around it",
+    catalogueLeaks(REAL).length === 0, catalogueLeaks(REAL).join(", "));
+  ok("K3. the model sees competency tags, never ids, and a stored proposal names only a competency the catalogue offered", !idsReachModel(REAL));
+  ok("K4. proposals, concepts and decisions are never edited or deleted by code -- a correction is a new decision row", trailEdits(REAL).length === 0, trailEdits(REAL).join(", "));
+  ok("K5. background beyond the notes is split off before the check, checked on its own, and shown apart under its own label", supplementaryApart(REAL));
+  ok("K6. every step of a practice case passes the question checks and the blind verification, or the case is not stored", caseStepsChecked(REAL));
+  ok("K7. fails closed without 388: the MVP question read and insert are unchanged unless there is a competency or a case", failsClosed(REAL));
+  ok("K8. a competency the person links is checked against their programme's catalogue before it is written", addChecksCatalogue(REAL));
+  ok("K9. no Scholar code names a profession -- a new one is configuration rows", professionNamed(REAL).length === 0, professionNamed(REAL).join(", "));
+  ok("K11. labels: a case says it is a practice scenario and AI-written, suggested links say they are suggestions, progress by competency says it is not an assessment",
+    /\{PERSONAL_CASE_LABEL\}/.test(REAL.get(`${PAGES}/_components/competency-client.tsx`) ?? "") && /\{AI_LABEL\}/.test(REAL.get(`${PAGES}/_components/competency-client.tsx`) ?? "")
+    && /\{MAPPING_LABEL\}/.test(REAL.get(`${PAGES}/_components/competency-client.tsx`) ?? "")
+    && /not an assessment of competence/.test(REAL.get(`${PAGES}/progress/page.tsx`) ?? ""));
+  ok("K12. every new AI call is audited, attributed and behind the preflight (C1, C3, C5 cover analyse and cases)",
+    [`${API}/materials/[id]/analyse/route.ts`, `${API}/cases/route.ts`].every(f => REAL.has(f)) && /operation: "individual_scholar_map"/.test(REAL.get(GEN) ?? ""));
+  if (!MIG387 || !MIG388) console.log(`  NOTE  ${!MIG387 ? MIG387_FILE : MIG388_FILE} is not in this checkout -- schema check K10 and P30 NOT RUN`);
+  if (MIG387 && MIG388) ok("K10. 387/388: configuration service-role only, own-row read on personal rows, no write policy, typed catalogue keys, an append-only trail that cascade can still remove, AI provenance, and case steps only on case questions",
+    mig387Shape(MIG387) && mig388Shape(MIG388));
+
   // ── P. PLANTED-FAILURE CONTROLS ── each key check, run on a copy with the violation planted ──────
   const plant = (file: string, from: RegExp | string, to: string): Src => {
     const copy = new Map(REAL);
@@ -472,6 +596,31 @@ function main() {
     rawGrantReads(plant(`${PAGES}/[materialId]/page.tsx`, 'const consentOn = status === "on";', "const consentOn = consent.ok && consent.data.granted;")).length > 0);
   ok("P13. ⚠ R3 goes red when a screen says mastery again",
     masteryWords(plant(`${PAGES}/progress/page.tsx`, "% practice accuracy`", "% mastery`")).length > 0);
+
+  // COMPETEN-SCHOLAR-01
+  ok("P21. ⚠ K1 goes red when Scholar code writes programme configuration",
+    configWrites(plant(STORE, "export function isUuid", 'export async function x(admin: Admin) { await admin.from("individual_scholar_programme").insert({ code: "x" }); }\nexport function isUuid')).length > 0);
+  ok("P22. ⚠ K2 goes red when the published filter is dropped, or a page reads competencies around the catalogue",
+    catalogueLeaks(plant(CAT, '.eq("pub_status", PUBLISHED)', "")).length > 0
+    && catalogueLeaks(plant(`${PAGES}/progress/page.tsx`, "const learner = rows.ok", 'const leak = ctx.admin.from("framework_competencies").select("*");\n  const learner = rows.ok')).length > 0);
+  ok("P23. ⚠ K3 goes red when the prompt shows the model competency ids",
+    idsReachModel(plant(MAP, "[${competencyTag(i)}]", "[${c.id}]")));
+  ok("P24. ⚠ K4 goes red when a decision is updated instead of appended",
+    trailEdits(plant(STORE, ".insert({ user_id: userId, map_id: mapId, decision,", ".update({ user_id: userId, map_id: mapId, decision,")).length > 0);
+  ok("P25. ⚠ K5 goes red when the notes check is given the unsplit text, or the background is shown without its box",
+    !explanationChecked(plant(GEN, "check: checkExplanation(split.main, asked, passages)", "check: checkExplanation(r.text, asked, passages)"))
+    && !supplementaryApart(plant(CLIENT, "<BeyondNotes s={item.supplementary} />", "")));
+  ok("P26. ⚠ K6 goes red when case steps skip the blind verification",
+    !caseStepsChecked(plant(GEN, "const verified = applyVerification(check.kept, v.text);", "const verified = { kept: check.kept, rejected: [] };")));
+  ok("P27. ⚠ K7 goes red when the MVP question read starts selecting a 388 column",
+    !failsClosed(plant(STORE, 'const QUESTION_COLS = "id, material_id,', 'const QUESTION_COLS = "id, competency_id, material_id,')));
+  ok("P28. ⚠ K8 goes red when the link route trusts the competency id from the body",
+    !addChecksCatalogue(plant(`${API}/mappings/route.ts`, "competencyId: competency.id, layer: competency.layer", "competencyId: body.competencyId, layer: competency.layer")));
+  ok("P29. ⚠ K9 goes red when code names a profession",
+    professionNamed(plant(CAT, "export const LAYERS", 'export const DEFAULT_PROFESSION = "Nursing";\nexport const LAYERS')).length > 0);
+  if (MIG387 && MIG388) ok("P30. ⚠ K10 goes red when the trail loses its cascade allowance, or configuration gains a policy",
+    !mig388Shape(MIG388.replace("pg_trigger_depth() > 1", "false"))
+    && !mig387Shape(`${MIG387}\ncreate policy x on individual_scholar_programme for select using (true)`));
 
   console.log(`\n${failures.length === 0 ? "ALL GREEN" : "RED"} -- ${pass} passed, ${failures.length} failed`);
   if (failures.length) { failures.forEach(f => console.log(`  FAILED: ${f}`)); process.exit(1); }

@@ -1,7 +1,9 @@
 import { generate } from "@/lib/ai/client";
 import { verifyGrounded, type PhrasingViolation } from "@/lib/practice/document-phrasing";
-import { PROMPT_VERSIONS, QUESTIONS_PER_REQUEST } from "./config";
-import { citeChunk } from "./extract";
+import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST } from "./config";
+import { citeChunk, findPatientIdentifiers } from "./extract";
+import { MAP_SYSTEM, checkAnalysis, mapUserPrompt, type AnalysisSection } from "./mapping";
+import type { CatalogueCompetency } from "./catalogue";
 import { VERIFY_SYSTEM, applyVerification, passageVocabulary, qualityProblems, verificationPrompt, type QualityReason } from "./question-quality";
 
 // ── SOURCE-GROUNDED AI FOR SCHOLAR ── COMPETEN-IND-004 s2, s3 and s5 ───────────────────────────────────
@@ -108,6 +110,80 @@ export const EXPLAIN_REFUSAL: Record<Exclude<ExplainCheck, { ok: true }>["reason
   ungrounded: "The explanation included details that are not in your notes, so it was not shown.",
 };
 
+// ── S3: WAYS OF LEARNING FROM THE SAME PASSAGES ── COMPETEN-SCHOLAR-01 ────────────────────────────────
+//
+// Every mode keeps EXPLAIN_SYSTEM's rules and its check: the notes-based answer must cite its passages and
+// pass checkExplanation, or it is withheld. "explain" is the unchanged v2 prompt. The other modes append
+// one instruction, and carry their own prompt version.
+//
+// ⚠ BEYOND THE NOTES IS SEPARATE. "Go deeper" and "Tutor me" may add general background after a marker
+// line. That part is never mixed into the answer: it is split off, checked by its own rules below, and
+// shown under SUPPLEMENTARY_LABEL. It may not carry a figure, a unit, dosing language, a citation tag or an
+// identifier -- a background paragraph is not where a student should learn a dose. Failing that, it is
+// withheld and the answer from the notes is still shown. Summary and Simplify are notes only.
+
+export const EXPLAIN_MODES = ["explain", "summary", "simplify", "deeper", "tutor"] as const;
+export type ExplainMode = (typeof EXPLAIN_MODES)[number];
+export const isExplainMode = (v: unknown): v is ExplainMode => typeof v === "string" && (EXPLAIN_MODES as readonly string[]).includes(v);
+export const SUPPLEMENTARY_MODES: readonly ExplainMode[] = ["deeper", "tutor"];
+export const SUPPLEMENTARY_MARKER = "BEYOND THE NOTES:";
+
+const MODE_INSTRUCTION: Record<Exclude<ExplainMode, "explain">, string> = {
+  summary: "MODE: SUMMARY. Instead of an explanation, summarise the passages as a short list of their key points, each line starting '- ' and ending with its citation. Under 150 words. Notes only: add nothing beyond the passages.",
+  simplify: "MODE: SIMPLIFY. Explain as simply as you can, for someone meeting the topic for the first time: short sentences and everyday words. When the passages use a technical term, keep the term exactly and say what it means using the passages. Under 200 words. Notes only: add nothing beyond the passages.",
+  deeper: `MODE: GO DEEPER. Explain in depth: how the ideas in the passages connect, the reasoning behind them, and what a student should understand rather than memorise, citing as before. Then, only if it genuinely helps, add general background that is NOT in the passages, after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 120 words, general principles only, with no numbers, units, doses, drug names, values or thresholds, no citation tags, and no advice about any patient.`,
+  tutor: `MODE: TUTOR. Teach one small step at a time. If the student has replied, first say briefly whether their reply matches the passages, and correct it from the passages if it does not. Then explain the next idea, citing as before, and end with ONE short question for the student on its own line starting 'Your turn:'. Under 180 words. Optional background beyond the passages goes after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 80 words, with no numbers, units, doses, drug names or thresholds and no citation tags.`,
+};
+
+export function explainSystem(mode: ExplainMode): string {
+  return mode === "explain" ? EXPLAIN_SYSTEM : `${EXPLAIN_SYSTEM}\n\n${MODE_INSTRUCTION[mode]}`;
+}
+export const explainPromptVersion = (mode: ExplainMode) =>
+  mode === "explain" ? PROMPT_VERSIONS.explain : `${PROMPT_VERSIONS.explainModes}:${mode}`;
+
+export type TutorTurn = { role: "tutor" | "student"; text: string };
+
+export function modeUserPrompt(question: string, passages: Passage[], history: TutorTurn[]): string {
+  if (!history.length) return explainUserPrompt(question, passages);
+  const blocks = passages.map((p, i) => `[${passageTag(i)}] (${passageCitation(p)})\n${p.content}`);
+  const convo = history.map(t => `${t.role === "tutor" ? "TUTOR" : "STUDENT"}: ${t.text}`).join("\n\n");
+  return `PASSAGES FROM MY NOTES:\n\n${blocks.join("\n\n")}\n\nOUR CONVERSATION SO FAR:\n\n${convo}\n\nMY REPLY: ${question}`;
+}
+
+/** Pure. The notes-based answer, and the part after the marker line (null when there is none). */
+export function splitSupplementary(raw: string): { main: string; extra: string | null } {
+  const m = /^[\s*_#>-]*BEYOND THE NOTES:?[\s*_]*/im.exec(raw);
+  if (!m) return { main: raw, extra: null };
+  const extra = raw.slice(m.index + m[0].length).trim();
+  return { main: raw.slice(0, m.index).trim(), extra: extra || null };
+}
+
+export type SupplementaryReason = "not_this_mode" | "figures" | "dosing" | "citation" | "identifier" | "too_long";
+export type SupplementaryCheck = { ok: true; text: string } | { ok: false; reason: SupplementaryReason };
+
+const FIGURE = /\d|\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|thousand|quarter|twice|triple)\b/i;
+const UNIT_OR_DOSE = /%|\b(mg|mcg|micrograms?|milligrams?|kg|ml|millilitres?|milliliters?|mmol|mmhg|percent|per cent|dose[sd]?|dosage|dosing|prescrib\w*|titrat\w*|bolus)\b/i;
+
+/** Pure. Background beyond the notes, or why it is withheld. */
+export function checkSupplementary(text: string, mode: ExplainMode): SupplementaryCheck {
+  if (!SUPPLEMENTARY_MODES.includes(mode)) return { ok: false, reason: "not_this_mode" };
+  const t = text.trim();
+  if (t.length > 900) return { ok: false, reason: "too_long" };
+  if (/\[S\d+\]/.test(t)) return { ok: false, reason: "citation" };
+  if (findPatientIdentifiers(t).length) return { ok: false, reason: "identifier" };
+  if (UNIT_OR_DOSE.test(t)) return { ok: false, reason: "dosing" };
+  if (FIGURE.test(t)) return { ok: false, reason: "figures" };
+  return { ok: true, text: t };
+}
+
+export const SUPPLEMENTARY_WITHHELD: Record<Exclude<SupplementaryReason, "not_this_mode">, string> = {
+  figures: "The AI's extra background mentioned figures, so it was not shown. Your notes and course materials are the place for numbers.",
+  dosing: "The AI's extra background mentioned doses or units, so it was not shown.",
+  citation: "The AI's extra background claimed to come from your notes, so it was not shown.",
+  identifier: "The AI's extra background contained something that looked like a personal identifier, so it was not shown.",
+  too_long: "The AI's extra background was too long, so it was not shown.",
+};
+
 // ── ASSESS AND APPLY: QUESTIONS FROM ONE PASSAGE ────────────────────────────────────────────────────
 
 export type QuestionKind = "mcq" | "case";
@@ -187,12 +263,12 @@ export type QuestionCheck = {
  * Individual policy value (COMPETEN-CONFIG-002), never above QUESTIONS_PER_REQUEST: it narrows how many are
  * KEPT and leaves the versioned prompt (PROMPT_VERSIONS) untouched.
  */
-export function checkQuestions(raw: string, passage: Passage, limit: number = QUESTIONS_PER_REQUEST): QuestionCheck {
+export function checkQuestions(raw: string, passage: Passage, limit: number = QUESTIONS_PER_REQUEST, cap: number = QUESTIONS_PER_REQUEST): QuestionCheck {
   const out: QuestionCheck = { kept: [], dropped: [] };
   const arr = parseJsonArray(raw);
   if (!arr) { out.dropped.push({ reason: "malformed" }); return out; }
   const source = squash(passage.content);
-  for (const item of arr.slice(0, Math.min(QUESTIONS_PER_REQUEST, Math.max(1, Math.floor(limit))))) {
+  for (const item of arr.slice(0, Math.min(cap, Math.max(1, Math.floor(limit))))) {
     const q = item as Record<string, unknown>;
     const options = Array.isArray(q?.options) ? (q.options as unknown[]).map(o => (typeof o === "string" ? o.trim() : "")) : [];
     const ci = typeof q?.correctIndex === "number" ? q.correctIndex : -1;
@@ -220,16 +296,135 @@ export function checkQuestions(raw: string, passage: Passage, limit: number = QU
 
 export type AiFailure = { ok: false; error: "not_configured" | "refusal" | "failed" };
 
-export async function runExplain(userId: string, question: string, passages: Passage[]) {
+/**
+ * S3: one answer in the chosen mode. The notes-based part is checked by checkExplanation, with the
+ * question and the earlier tutor turns as grounding (the person typed or was already shown them). The part
+ * beyond the notes, if any, is split off first and checked by its own rules -- it never reaches
+ * checkExplanation, and never grounds anything.
+ */
+export async function runExplain(userId: string, question: string, passages: Passage[], mode: ExplainMode = "explain", history: TutorTurn[] = []) {
   const r = await generate({
-    system: EXPLAIN_SYSTEM,
-    user: explainUserPrompt(question, passages),
+    system: explainSystem(mode),
+    user: modeUserPrompt(question, passages, history),
     tier: "reasoning",
-    maxTokens: 700,
+    maxTokens: mode === "explain" ? 700 : 900,
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_explain" },
   });
   if (!r.ok) return { ok: false, error: r.error } as AiFailure;
-  return { ok: true as const, check: checkExplanation(r.text, question, passages), model: r.model, provider: r.provider, promptVersion: PROMPT_VERSIONS.explain };
+  const split = splitSupplementary(r.text);
+  const asked = [question, ...history.map(t => t.text)].join("\n");
+  return {
+    ok: true as const,
+    check: checkExplanation(split.main, asked, passages),
+    supplementary: split.extra === null ? null : checkSupplementary(split.extra, mode),
+    model: r.model, provider: r.provider, promptVersion: explainPromptVersion(mode),
+  };
+}
+
+/**
+ * S2: concepts and proposed competency mappings for a few sections at once. The model sees tags, never
+ * ids. `competencies` is the programme's catalogue, already shortlisted by the caller (mapping.ts).
+ */
+export async function runAnalysis(userId: string, sections: AnalysisSection[], competencies: CatalogueCompetency[]) {
+  const r = await generate({
+    system: MAP_SYSTEM,
+    user: mapUserPrompt(sections, competencies),
+    tier: "reasoning",
+    maxTokens: 2000,
+    context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_map" },
+  });
+  if (!r.ok) return { ok: false, error: r.error } as AiFailure;
+  return { ok: true as const, check: checkAnalysis(r.text, sections, competencies), model: r.model, provider: r.provider, promptVersion: PROMPT_VERSIONS.map };
+}
+
+// ── S4: A MULTI-STEP PRACTICE CASE FROM ONE PASSAGE ── COMPETEN-SCHOLAR-01 ──────────────────────────────
+//
+// Several linked questions that follow one scenario. Each step is held to EVERY rule a single question is
+// (checkQuestions, the quality layer, the blind verification), so a step that fails is dropped exactly as
+// a question would be. A case with fewer than CASE_MIN_STEPS surviving steps is not stored at all. The
+// title is checked against the passage too. Educational and unreviewed, and labelled so where it is shown
+// (PERSONAL_CASE_LABEL, AI_LABEL).
+
+export const CASE_SYSTEM = [
+  "You write ONE short multi-step practice case for a healthcare student, from ONE passage of their own study notes.",
+  "The case follows 'a patient' (no name, no age, no dates, no numbers unless the passage gives them) through the steps the passage supports, for example recognising the problem, assessing, prioritising, acting and evaluating.",
+  `Write a short title (under 80 characters, no names) and between ${CASE_MIN_STEPS} and ${CASE_MAX_STEPS} steps, in order. Each step is one multiple-choice question that moves the scenario on and asks the student to APPLY the passage.`,
+  `A step may only describe what the passage itself mentions. If the passage cannot support ${CASE_MIN_STEPS} steps, reply {"title": "", "steps": []}.`,
+  "",
+  ...QUESTION_RULES.slice(0, -2),
+  "",
+  'Reply with JSON ONLY, no prose and no code fence: {"title": "...", "steps": [{"stem": "...", "options": ["...", "...", "...", "..."], "correctIndex": 0, "rationale": "...", "sourceQuote": "..."}]}',
+].join("\n");
+
+export const CASE_FALLBACK_TITLE = "Practice case";
+
+/** Pure. The model's case object → its title and the raw steps, or null when it is not one. */
+export function parseCase(raw: string): { title: string; steps: unknown[] } | null {
+  const s = raw.replace(/```(?:json)?/gi, "").trim();
+  const start = s.indexOf("{"), end = s.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const v = JSON.parse(s.slice(start, end + 1));
+    if (!v || typeof v !== "object" || !Array.isArray(v.steps)) return null;
+    return { title: typeof v.title === "string" ? v.title : "", steps: v.steps };
+  } catch {
+    return null;
+  }
+}
+
+/** Pure. A title that adds nothing the passage lacks and identifies nobody, or the neutral fallback. */
+export function checkCaseTitle(title: string, passage: Passage): string {
+  const t = title.replace(/\s+/g, " ").trim();
+  if (!t || t.length > 120 || findPatientIdentifiers(t).length || groundingViolations(t, [passage.content]).length) return CASE_FALLBACK_TITLE;
+  return t;
+}
+
+export async function runCase(userId: string, passage: Passage) {
+  const dropped: QuestionCheck["dropped"] = [];
+  let steps: DraftQuestion[] = [];
+  let title = CASE_FALLBACK_TITLE;
+  let model = "", provider = "";
+  let attempts = 0;
+  let feedback = "";
+  while (attempts < 2 && steps.length < CASE_MIN_STEPS) {
+    attempts++;
+    const r = await generate({
+      system: CASE_SYSTEM,
+      user: questionUserPrompt(passage) + (feedback ? `\n\nA previous attempt was rejected for: ${feedback}. Write a new case that avoids these problems.` : ""),
+      tier: "reasoning",
+      maxTokens: 2200,
+      context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_case_steps" },
+    });
+    if (!r.ok) return { ok: false, error: r.error } as AiFailure;
+    model = r.model; provider = r.provider;
+    const parsed = parseCase(r.text);
+    if (!parsed) { dropped.push({ reason: "malformed" }); feedback = "malformed"; continue; }
+    const check = checkQuestions(JSON.stringify(parsed.steps), passage, CASE_MAX_STEPS, CASE_MAX_STEPS);
+    dropped.push(...check.dropped);
+    if (check.kept.length >= CASE_MIN_STEPS) {
+      const v = await generate({
+        system: VERIFY_SYSTEM,
+        user: verificationPrompt(passage.content, check.kept),
+        tier: "reasoning",
+        maxTokens: 700,
+        context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_case_steps_verify" },
+      });
+      if (!v.ok) {
+        dropped.push(...check.kept.map(() => ({ reason: "verification_unavailable" as const })));
+      } else {
+        const verified = applyVerification(check.kept, v.text);
+        dropped.push(...verified.rejected.map(x => ({ reason: "failed_verification" as const, detail: x.detail })));
+        if (verified.kept.length >= CASE_MIN_STEPS) { steps = verified.kept; title = checkCaseTitle(parsed.title, passage); }
+      }
+    } else if (check.kept.length) {
+      dropped.push({ reason: "malformed", detail: `only ${check.kept.length} step survived` });
+    }
+    feedback = [...new Set(dropped.map(d => d.detail ? `${d.reason} (${d.detail})` : d.reason))].slice(0, 6).join("; ");
+  }
+  return {
+    ok: true as const, title, steps, dropped, model, provider, attempts,
+    promptVersion: `${PROMPT_VERSIONS.caseSteps}+${PROMPT_VERSIONS.verify}`,
+  };
 }
 
 /**

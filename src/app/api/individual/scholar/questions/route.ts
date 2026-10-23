@@ -3,7 +3,8 @@ export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { getPassage, insertQuestions } from "@/lib/individual/scholar/store";
+import { chunkMappings, getPassage, insertQuestions } from "@/lib/individual/scholar/store";
+import { primaryCompetency } from "@/lib/individual/scholar/mapping";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit } from "@/lib/individual/scholar/http";
 import { runQuestions, type QuestionKind } from "@/lib/individual/scholar/generation";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -39,12 +40,15 @@ export async function POST(req: Request) {
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, `individual_scholar_${kind}`, null, { chunk_id: passage.chunkId, outcome: `error:${r.error}` });
     return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
   }
+  // COMPETEN-SCHOLAR-01 S4: the competency the questions practise is the section's leading link (accepted
+  // first, never a rejected one). None, or 388 absent: the questions are stored exactly as before.
+  const competencyId = primaryCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
   const saved = await insertQuestions(ctx.admin, ctx.userId, {
-    passage, kind, drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion,
+    passage, kind, drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId,
   });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, `individual_scholar_${kind}`, null, {
     chunk_id: passage.chunkId, kept: saved.ids.length, dropped: r.check.dropped.map(d => d.reason),
-    model: r.model, prompt_version: r.promptVersion, saved: saved.ok, attempts: r.attempts,
+    model: r.model, prompt_version: r.promptVersion, saved: saved.ok, attempts: r.attempts, competency_id: competencyId,
   });
   if (!saved.ok) return NextResponse.json({ error: "The questions could not be saved. Try again shortly." }, { status: 500 });
   if (!saved.ids.length)

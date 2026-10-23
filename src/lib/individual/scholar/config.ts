@@ -36,7 +36,26 @@ export const PROMPT_VERSIONS = {
   mcq: "scholar-mcq-v3",
   case: "scholar-case-v3",
   verify: "scholar-verify-v1",
+  // COMPETEN-SCHOLAR-01. explain (above) is unchanged. The other modes add an instruction to the same
+  // system prompt, so they carry their own version. A case is several linked steps from one passage.
+  explainModes: "scholar-explain-modes-v1",
+  map: "scholar-map-v1",
+  caseSteps: "scholar-case-steps-v1",
 } as const;
+
+/** S4: a multi-step practice case has this many steps at most (migration 388 allows 1 to 5). */
+export const CASE_MAX_STEPS = 4;
+export const CASE_MIN_STEPS = 2;
+/** S3: tutor turns the browser may send back. Nothing is stored (owner ruling D10). */
+export const TUTOR_MAX_TURNS = 6;
+
+/**
+ * S3: background the AI adds beyond the notes is shown APART from the notes-based answer, under this
+ * label, and never counts as coming from them. The notes-only modes (summary, simplify) never show it.
+ */
+export const SUPPLEMENTARY_LABEL = "Beyond your notes: general background from the AI. It is not from your notes and has not been verified. Check it against your course materials.";
+/** S2: a proposed competency link is a suggestion until the person accepts it. */
+export const MAPPING_LABEL = "Suggested by AI from your notes. Accept the ones that fit and reject the rest. Every choice is kept as a record.";
 
 // ── LABELS THAT MUST NOT DRIFT ── the harness pins each of these to the surface that must show it ─────
 export const AI_LABEL = "AI-generated from your notes, not clinically reviewed";

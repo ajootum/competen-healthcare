@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { countDue, listMaterials, readConsent } from "@/lib/individual/scholar/store";
+import { countDue, learnerProgramme, listMaterials, listProgrammes, readConsent } from "@/lib/individual/scholar/store";
+import { ProgrammeChooser } from "./_components/competency-client";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
 import StudyNav from "./_components/StudyNav";
 import { ConsentPanel, EraseAll, ExplainPanel, UploadPanel } from "./_components/client";
@@ -40,9 +41,12 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
-  const [materials, consent, due] = await Promise.all([
+  const [materials, consent, due, programmes, mine] = await Promise.all([
     listMaterials(ctx.admin, ctx.userId), readConsent(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId),
+    listProgrammes(ctx.admin), learnerProgramme(ctx.admin, ctx.userId),
   ]);
+  // COMPETEN-SCHOLAR-01 S2: the programme choice exists only where 387 does (fail closed).
+  const programmeOn = programmes.ok && mine.ok;
 
   if (!materials.ok && materials.notProvisioned) {
     return (
@@ -78,6 +82,13 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
           ? <ConsentPanel status={status!} recorded={consent.data.granted} grantedAt={consent.data.grantedAt} revokedAt={consent.data.revokedAt} legal={documents.links} />
           : <Unreadable what="AI consent setting" />}
       </div>
+
+      {programmeOn && (
+        <div className="mt-5"><ProgrammeChooser programmes={programmes.data} current={mine.data?.code ?? null} /></div>
+      )}
+      {!programmeOn && ((!programmes.ok && !programmes.notProvisioned) || (!mine.ok && !mine.notProvisioned)) && (
+        <div className="mt-5"><Unreadable what="your programme" /></div>
+      )}
 
       <section aria-labelledby="materials-h" className="mt-8">
         <h2 id="materials-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your materials</h2>
