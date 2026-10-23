@@ -95,6 +95,9 @@ describe("/verify for an estate-minted link is unchanged by COMPETEN-IND-007", (
     expect(html).toContain("Self-declared with a document attached, not verified");
     expect(html).toContain("Self-declared, not verified");
     expect(html).not.toContain("PRIVATE REFLECTION");
+    // The subtitle is the profession the person declared, marked as such -- never the default profiles.role.
+    expect(html).toContain("Registered midwife (self-declared)");
+    expect(html).not.toContain(">nurse<");
     // The institution sections keep their own wording, and the framework-currency caveat path is untouched.
     expect(html).toContain("Verified credentials");
   });

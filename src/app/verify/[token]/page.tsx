@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { loadFrameworkCurrency, assessCurrency, summariseCurrency } from "@/lib/competency/framework-currency";
-import { loadOwnRecords, summariseOwn, OWN_KIND_LABEL } from "@/lib/individual/professional/passport-records";
+import { loadOwnRecords, summariseOwn, OWN_KIND_LABEL, PROFESSION_NOT_RECORDED } from "@/lib/individual/professional/passport-records";
 import { shareCarriesOwnRecords } from "@/lib/individual/professional/share";
 import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { individualAppEnabled } from "@/lib/individual/gate";
@@ -68,6 +68,12 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
   const carriesOwn = (await individualAppEnabled(admin)) && await shareCarriesOwnRecords(admin, share.id, share.nurse_id);
   const own = carriesOwn ? await loadOwnRecords(admin, share.nurse_id) : null;
   const ownSummary = own ? summariseOwn(own) : null;
+  // A Professional-minted link names the person's profession as THEY declared it, and says so. It never
+  // shows profiles.role, which the new-user trigger fills with a default (migration 335) and which
+  // Competen Individual neither sets nor relies on (ADR-016).
+  const registration = own?.find(o => o.kind === "registration");
+  const declaredProfession = registration && registration.title !== PROFESSION_NOT_RECORDED ? registration.title : null;
+  const ownSubtitle = declaredProfession ? `${declaredProfession} (self-declared)` : null;
 
   return (
     <Shell>
@@ -81,7 +87,7 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
             <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-2xl font-bold shrink-0">{profile?.full_name?.[0] ?? "?"}</div>
             <div className="min-w-0">
               <h1 className="text-xl font-bold truncate">{profile?.full_name ?? "Professional"}</h1>
-              <p className="text-teal-50 text-sm capitalize">{roleLabel}{profile?.specialization ? ` · ${profile.specialization}` : ""}</p>
+              <p className="text-teal-50 text-sm capitalize">{carriesOwn ? ownSubtitle : <>{roleLabel}{profile?.specialization ? ` · ${profile.specialization}` : ""}</>}</p>
             </div>
           </div>
         </div>

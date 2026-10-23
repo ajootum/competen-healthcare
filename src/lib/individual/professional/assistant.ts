@@ -36,6 +36,7 @@ const TASK: Record<AssistTask, string[]> = {
     "- Where a part is missing from their notes, leave a short bracketed prompt such as [add an example from your practice] instead of making it up.",
     "- Never include patient-identifiable details, even if the notes contain them.",
     "- Keep it under 250 words.",
+    "- Return ONLY the reflection. No introduction, no closing remarks, no separator lines and no note about editing: the person edits it in place and may save it as written.",
   ],
 };
 

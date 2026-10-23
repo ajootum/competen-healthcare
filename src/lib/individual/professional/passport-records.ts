@@ -16,6 +16,9 @@ import { hasProfile, loadProfessionalRecord, type ProfessionalRecord } from "./r
 // items for a link minted from Competen Professional, so the person can never be shown one description
 // of their record and a third party another.
 
+/** The registration item's title when the person recorded a body or number but no profession. */
+export const PROFESSION_NOT_RECORDED = "Profession not recorded";
+
 export type OwnRecordKind = "registration" | "credential" | "competency_evidence" | "cpd";
 
 export type OwnRecord = {
@@ -43,7 +46,7 @@ export function ownRecordsFrom(record: ProfessionalRecord): OwnRecord[] | null {
   if (hasProfile(p)) {
     out.push({
       kind: "registration",
-      title: p.self_declared_profession ?? "Profession not recorded",
+      title: p.self_declared_profession ?? PROFESSION_NOT_RECORDED,
       detail: [p.self_declared_registration_body, p.self_declared_registration_number ? `No. ${p.self_declared_registration_number}` : null,
         p.self_declared_registration_country].filter(Boolean).join(" · ") || null,
       date: null,
