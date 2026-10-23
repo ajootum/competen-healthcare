@@ -50,6 +50,11 @@ export const GENERAL_NAV: NavSection[] = [
     { label: "Competen Practice", href: "/super-admin/platform-ops/practice", icon: "🩺" },
     { label: "Platform Workspace", href: "/platform-admin", icon: "🛰️" },
   ]},
+  // COMPETEN-CONFIG-002 (migration 376): the Competen Individual policy page, for the Individual Product
+  // Administrator appointment (hq.individual.config.manage) as well as the owners.
+  { group: "COMPETEN INDIVIDUAL", items: [
+    { label: "Individual Policy", href: "/super-admin/individual/configuration", icon: "🎓" },
+  ]},
   { group: "STRATEGY & PRIORITIES", items: [
     { label: "Strategy Manager", href: "/super-admin/priorities", icon: "🎯" },
     { label: "Priority Distribution", href: "/super-admin/priorities/distribution", icon: "🌊" },
