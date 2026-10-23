@@ -1,17 +1,22 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { profileUpdateForOrgRoles } from "@/lib/roles";
+import { hqOwnerApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { estateRolesOf, profileUpdateForOrgRoles } from "@/lib/roles";
 import { grantPlatformMembership } from "@/lib/platform-membership";
 
 import { currentTraceId } from "@/lib/trace";
-export async function PATCH(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: me } = await createAdminClient()
-    .from("profiles").select("role").eq("id", user.id).single();
-  if (me?.role !== "super_admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+// HQ-USERS-A: every handler here is OWNER-ONLY, as before, but the owner is now decided by the HQ gate
+// (super_admin in roles[], or platform_owner) instead of the single legacy profiles.role column. Role and
+// tenancy changes, account creation and deletion stay with the platform's owners.
+async function requireOwner() {
+  const ctx = await hqOwnerApiGate(["hq.platform.users.view"]);
+  if (isHqRefusal(ctx)) return ctx;
+  return { admin: ctx.admin, actorId: ctx.userId, actorName: ctx.fullName };
+}
+
+export async function PATCH(req: Request) {
+  const ctx = await requireOwner();
+  if (ctx instanceof NextResponse) return ctx;
 
   const { userId, isSuperAdmin, org_roles, extra_portal_roles, hospital_id, organisation_id, platform_role, department_id } = await req.json();
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
@@ -34,19 +39,9 @@ export async function PATCH(req: Request) {
   if (organisation_id !== undefined) update.organisation_id = organisation_id ?? null;
   if (department_id !== undefined) update.department_id = department_id ?? null;
 
-  const { error } = await createAdminClient().from("profiles").update(update).eq("id", userId);
+  const { error } = await ctx.admin.from("profiles").update(update).eq("id", userId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
-}
-
-async function requireSuperAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const admin = createAdminClient();
-  const { data: me } = await admin.from("profiles").select("role, full_name").eq("id", user.id).single();
-  if (me?.role !== "super_admin") return null;
-  return { admin, actorId: user.id, actorName: me.full_name as string | null };
 }
 
 const PORTALS = new Set(["super_admin", "hospital_admin", "educator", "assessor", "nurse"]);
@@ -54,8 +49,8 @@ const PORTALS = new Set(["super_admin", "hospital_admin", "educator", "assessor"
 // Create a user account: either invite-by-email (user sets their own password)
 // or with a server-generated temporary password returned once in the response.
 export async function POST(req: Request) {
-  const ctx = await requireSuperAdmin();
-  if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const ctx = await requireOwner();
+  if (ctx instanceof NextResponse) return ctx;
   const { admin, actorId, actorName } = ctx;
 
   const { email, full_name, role, mode, organisation_id, hospital_id } = await req.json();
@@ -129,19 +124,21 @@ export async function POST(req: Request) {
 // Permanently delete an account (auth login + profile; competency records
 // cascade via their FKs). Guards: not yourself, and never the last super admin.
 export async function DELETE(req: Request) {
-  const ctx = await requireSuperAdmin();
-  if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const ctx = await requireOwner();
+  if (ctx instanceof NextResponse) return ctx;
   const { admin, actorId, actorName } = ctx;
 
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   if (id === actorId) return NextResponse.json({ error: "You cannot delete your own account" }, { status: 400 });
 
-  const { data: target } = await admin.from("profiles").select("full_name, role").eq("id", id).single();
+  const { data: target } = await admin.from("profiles").select("full_name, role, roles").eq("id", id).single();
   if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  if (target.role === "super_admin") {
-    const { count } = await admin.from("profiles").select("id", { count: "exact", head: true }).eq("role", "super_admin");
+  // A super admin is one whose role OR roles[] says so (estateRolesOf), and the count includes both, so a
+  // multi-role owner is neither missed as a target nor left out of "the last one".
+  if (estateRolesOf(target).includes("super_admin")) {
+    const { count } = await admin.from("profiles").select("id", { count: "exact", head: true }).or("role.eq.super_admin,roles.cs.{super_admin}");
     if ((count ?? 0) <= 1) return NextResponse.json({ error: "Cannot delete the last super admin" }, { status: 400 });
   }
 

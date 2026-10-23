@@ -66,6 +66,9 @@ const INCLUDED = [
   // reads src/** and the migration and renders one component with react-dom/server; no client, no network,
   // no .env.local. Screened 2026-10-23: 47/47 twice in a scrubbed environment, identical results.
   "individual-professional-harness.ts",
+  // HQ-USERS-A: the /api/super-admin/users handlers are gated by the HQ gate (view) and the owner gate (writes),
+  // never by profiles.role, with 8 planted-failure controls. Reads files only: no client, no network, no .env.local.
+  "hq-users-authority-harness.ts",
   "mos-gap-matrix-harness.ts",
   "pd-health-harness.ts",
   "pd-nav-harness.ts",
