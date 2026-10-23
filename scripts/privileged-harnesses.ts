@@ -223,6 +223,12 @@ const STAGING: Listed[] = [
       + "nothing created) until 376 is applied.",
   },
   {
+    file: "email-sync-acceptance-harness.ts",
+    note: "Migration 381 (owner GO 2026-10-23, item 4): a CONFIRMED Auth email change is copied into profiles.email with one "
+      + "audit_log row (actor auth), an UNCONFIRMED one is not, and an update that leaves the email alone copies nothing. "
+      + "Creates and deletes its own harness-esync-* identities. PEND (exit 0) until 381 is applied. Writes no flag.",
+  },
+  {
     file: "scholar-acceptance-harness.ts",
     note: "COMPETEN-IND-004 Scholar learning journey against migration 372: consent, real PDF and DOCX upload with the "
       + "anon key, FTS retrieval, questions, SM-2 cards, progress, cross-user isolation (store, RLS, storage, "
