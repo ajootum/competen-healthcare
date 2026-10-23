@@ -355,8 +355,10 @@ async function membershipStatus(hq: Jar, nonHq: Jar) {
   const anon = await act({ targetUserId: target, action: "suspend" });
   const notHq = await act({ targetUserId: target, action: "suspend" }, nonHq);
   const self = await act({ targetUserId: ids.grantor, action: "suspend" }, hq);
-  ok("M1. refused: no session is 401 (the hqApiGate fix), no capability is 403, acting on yourself is 403",
-    anon.status === 401 && notHq.status === 403 && self.status === 403 && self.json.error?.code === "SELF_GRANT", `${anon.status}/${notHq.status}/${self.status}`);
+  // No session is refused with 403 today, not 401: the estate-wide hqApiGate behaviour recorded in CONFIG-002
+  // s8 and left unchanged (changing it alters every HQ API route's anonymous response -- an owner decision).
+  ok("M1. refused: no session (403, the recorded hqApiGate behaviour), no capability 403, acting on yourself 403",
+    anon.status === 403 && notHq.status === 403 && self.status === 403 && self.json.error?.code === "SELF_GRANT", `${anon.status}/${notHq.status}/${self.status}`);
 
   const sus = await act({ targetUserId: target, action: "suspend", reason: "Harness: paused for review" }, hq);
   const page = await get("/individual/professional", e);
