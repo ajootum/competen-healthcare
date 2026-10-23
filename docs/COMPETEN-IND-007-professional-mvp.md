@@ -202,6 +202,46 @@ Check ids:
 **Defects found in this review:**
 - **Fixed (4 MB upload limit):** Professional documents uploaded through a route handler with a 10 MB ceiling, which Vercel would cut off above about 4.5 MB. The app now refuses anything over 4 MB, with a test. The bucket keeps its 10 MB outer limit.
 
+## 8. Professional reminders and migration 374 (owner continuation GO, Option A, 2026-10-23)
+
+**Behaviour**
+- **In-app reminders.** Default ON. They show as "Renewals due" on the Professional home and the Credentials & evidence page while the in-app switch is on.
+- **Email reminders.** Default OFF, opt-in. They go through the existing `dispatch()` email sender, once per expiry date, 60 days ahead.
+- **Switches.** The two switches are independent and set by the person (`PUT /api/individual/professional/reminders`, Reminders section of Credentials & evidence).
+- **Who is emailed.** Only a person who opted in AND holds Professional now (`individual_live_entitlement`, active membership), and only while the release gate is on.
+- **Separation (D1).** Individual notifications stay separate from Enterprise and Practice. Nothing reads or writes `notifications`, `notification_preferences`, `notif_deliveries` or `cdp_reminders` (PH-N1).
+- **No invented renewal rules.** Reminders come only from the dates the person recorded. The surfaces say Competen does not know their regulator's renewal rules.
+- **Without 374.** Preferences are read with their own query (`preferences.ts`). Where 374 is absent, in-app stays on, the switches are not offered, and nobody is emailed. Production has 373 but not 374, and stays safe.
+
+**Migration 374** (`374-individual-professional-reminder-preferences.sql`)
+
+| | |
+|---|---|
+| sha256 | `8ccd5a48500d53df30d0fe44845df6fb3e6e384ca4e857477dc9cea4a99b25a7` (file applied = file committed = copy handed to the owner) |
+| Content | `alter table individual_professional_profile add column if not exists reminder_in_app boolean not null default true` / `… reminder_email boolean not null default false`, two comments, `notify pgrst`. APPLY THIS FILE WHOLE banner. House rules ALL CLEAR, 0 warnings. |
+| Dependencies | `individual_professional_profile` (373) only. Independent of 375. |
+| Staging pre-state (read-only, `ind007-staging-schema-check.ts`) | Fingerprint `bb0de985…` (unchanged since 373). 76 columns, 43 constraints, 15 indexes, 6 policies. Rows: `profiles` 18, `frameworks` 14, `framework_competencies` 277, `passport_share_tokens` 0, all six Professional tables 0, `storage.buckets` 5. |
+| Application | The owner applied it twice from this worktree on 2026-10-23, with `apply-migrations.ts --only 374`. Both runs printed "guard passed", "… ok" and "All 1 migration(s) applied". This session's own attempt was refused by its permission check and was not retried. |
+| Staging post-state | Fingerprint `bc71a0f3cb80a60d28f160a968a417694f76eecbd11cc80d5a84c390edcbe668`, stable across reads. Columns 76 → 78; constraints, indexes, policies and RLS unchanged. `reminder_in_app boolean NOT NULL DEFAULT true`, `reminder_email boolean NOT NULL DEFAULT false`. All row counts identical to the pre-state. No verified or scope column. |
+| Production | **Not applied. Not authorised** (owner GO item 5). |
+| Rollback | `alter table individual_professional_profile drop column if exists reminder_email;` then `alter table individual_professional_profile drop column if exists reminder_in_app;` then `notify pgrst, 'reload schema';`. No code change is needed: the application falls back to the defaults. |
+
+**Staging acceptance** (`individual-professional-acceptance-harness`, after 374): **ALL GREEN, 35 / 35.**
+- **New checks:**
+  - N1: defaults are in-app ON and email OFF;
+  - N2: the switches are independent;
+  - N3: email goes only to the person who opted in;
+  - N4: an opted-in person whose Professional ended is not emailed;
+  - N5: no row in the estate `notification_preferences`. M1 now also covers it.
+- **E1–E3** now run with the opt-in.
+- **R1 PEND by design:** `individual_app` was held ON for the owner's viewing session, so the run did not switch it, and Z2 confirms it is left as found.
+- **G2 PEND:** staging has no hospital-owned framework to test against.
+
+**Local checks**
+- `individual-professional-harness` 57 / 57: N1–N4, with 6 planted reds.
+- Reminder unit tests 6 / 6.
+- vitest 618 / 618, foundation 44 / 44, tsc and eslint clean.
+
 ## 6. Next
 
 After the staging run: an IND-003 review of the foundation diff, then the owner's production decisions (370 first; 373 is blocked by the same schema freeze). Follow-ups noted, not built:
