@@ -206,6 +206,13 @@ const STAGING: Listed[] = [
       + "harness-ind007-* identities. Refuses production via assertSafeTarget, and reports PEND until migration 373 is applied.",
   },
   {
+    file: "account-profile-acceptance-harness.ts",
+    note: "My profile (owner GO 2026-10-23, PR D): a real anon-key user session updates its own personal fields and "
+      + "is refused every authority column and the email (column grants plus RLS WITH CHECK profile_authority_unchanged), "
+      + "cannot update another row, sets 380's given/family names (PEND until 380 is applied), and an email change is "
+      + "pending with profiles.email untouched. Creates and deletes its own harness-acct-* identities. Writes no flag.",
+  },
+  {
     file: "scholar-acceptance-harness.ts",
     note: "COMPETEN-IND-004 Scholar learning journey against migration 372: consent, real PDF and DOCX upload with the "
       + "anon key, FTS retrieval, questions, SM-2 cards, progress, cross-user isolation (store, RLS, storage, "
