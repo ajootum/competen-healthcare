@@ -269,6 +269,17 @@ export function buildIntelligence(input: {
         reason: `${open} of its ${qs.length} practice question${qs.length === 1 ? " is" : "s are"} not answered yet.`, href: STUDY_HREF.material(m.id) });
     }
   }
+  // Short of the threshold: say how many more answers make the measure meaningful.
+  if (knowledge.state === "insufficient") {
+    const more = knowledge.need - knowledge.have;
+    recs.push({ id: "more-questions", priority: 72, title: `Answer ${more} more practice question${more === 1 ? "" : "s"}`,
+      reason: "Then Scholar can show how your practice questions are going.", href: STUDY_HREF.home });
+  }
+  if (reasoning.state === "insufficient") {
+    const more = reasoning.need - reasoning.have;
+    recs.push({ id: "more-scenarios-to-measure", priority: 71, title: `Work through ${more} more practice scenario${more === 1 ? "" : "s"}`,
+      reason: "Then Scholar can show how your clinical reasoning is going.", href: STUDY_HREF.apply });
+  }
   if (materials.length > 0 && reasoning.state === "not_measured")
     recs.push({ id: "try-scenarios", priority: 70, title: "Try a practice scenario",
       reason: "Scenarios practise clinical reasoning, which question practice alone does not show.", href: STUDY_HREF.apply });

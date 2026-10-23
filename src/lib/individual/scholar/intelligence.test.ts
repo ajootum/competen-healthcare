@@ -141,3 +141,12 @@ describe("the insight thresholds are Individual policy, clamped", () => {
     expect(p.scholarInsightWindowDays).toBe(def("scholar_insight_window_days").max);
   });
 });
+
+describe("below a threshold, the recommendation says how many more answers are needed", () => {
+  it("knowledge measured, scenarios short: work through N more scenarios", () => {
+    const questions = [...["a", "b", "c", "d", "e"].map(id => q(id, "m1")), ...["x", "y"].map(id => q(id, "m1", "case"))];
+    const attempts = [...["a", "b", "c", "d", "e"].map(id => at(id, true)), at("x", true), at("y", false)];
+    const li = buildIntelligence({ ...base, materials: [mats[0]], questions, attempts });
+    expect(li.recommendations.find(r => r.id === "more-scenarios-to-measure")).toMatchObject({ title: "Work through 3 more practice scenarios", href: "/individual/scholar/study/apply" });
+  });
+});
