@@ -54,6 +54,7 @@ import { buildProgress } from "../src/lib/individual/scholar/progress";
 import { BUCKET, CONSENT_NOTICE_VERSION, DOCX_MIME, PDF_MIME, PROMPT_VERSIONS } from "../src/lib/individual/scholar/config";
 import { tinyPdf } from "../src/lib/individual/scholar/test-documents";
 import { aiStatus } from "../src/lib/ai/config";
+import { aiPreflight } from "../src/lib/individual/scholar/http";
 
 loadEnvConfig(process.cwd());
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -141,7 +142,9 @@ async function upload(userId: string, mime: typeof PDF_MIME | typeof DOCX_MIME, 
   const put = await browser.storage.from(BUCKET).uploadToSignedUrl(slot.path, slot.token, bytes, { contentType: mime });
   if (put.error) return { slot, error: `put: ${put.error.message}`, materialId: null, chunks: 0, pii: [] };
   const read = await store.readUpload(admin, store.uploadPath(userId, slot.uploadId, mime));
-  if (!read || sniffMime(read) !== mime) return { slot, error: "read back", materialId: null, chunks: 0, pii: [] };
+  if (!read) return { slot, error: "read back", materialId: null, chunks: 0, pii: [] };
+  // The route's rule: the bytes decide the type, and a mismatch is refused and its object deleted.
+  if (sniffMime(read) !== mime) { await store.discardUpload(admin, slot.path); return { slot, error: "type_mismatch", materialId: null, chunks: 0, pii: [] }; }
   const ex = await extractMaterial(mime, read);
   if (!ex.ok) { await store.discardUpload(admin, slot.path); return { slot, error: `extract: ${ex.reason}`, materialId: null, chunks: 0, pii: [] }; }
   const pii = findPatientIdentifiers(ex.pages.map(p => p.text).join("\n"));
@@ -191,6 +194,14 @@ async function main() {
     ok("C4. granting again clears the revocation", c3.ok && c3.data.granted && c3.data.revokedAt === null);
     const bad = await admin.from("individual_scholar_consent").update({ status: "revoked", revoked_at: null }).eq("user_id", a);
     ok("C5. the schema refuses a revoked consent with no revocation time", !!bad.error, bad.error?.message ?? "accepted");
+    // Owner review P0.4: the AI boundary itself -- the preflight every Scholar AI route runs first.
+    const asRoute = { admin, userId: a, profile: { fullName: null } } as any;
+    await store.setConsent(admin, a, false);
+    const refused = await aiPreflight(asRoute);
+    await store.setConsent(admin, a, true);
+    const allowed = await aiPreflight(asRoute);
+    ok("C6. P0.4: with consent revoked the AI preflight refuses (403) before any AI call. Granted, consent no longer stops it",
+      refused?.status === 403 && (allowed === null || allowed.status !== 403), `revoked:${refused?.status} granted:${allowed?.status ?? "pass"}`);
 
     // ── U. UPLOAD ──
     const pdf = await upload(a, PDF_MIME, tinyPdf([PAGE1, PAGE2]), "Renal notes.pdf");
@@ -209,6 +220,15 @@ async function main() {
     const afterPii = await admin.storage.from(BUCKET).list(a, { limit: 100 });
     ok("U6. a file holding an NHS number is refused, and its uploaded object is deleted",
       piiUp.error === "pii" && piiUp.pii.includes("nhs_number") && !(afterPii.data ?? []).some((o: any) => piiUp.slot && piiUp.slot.path.endsWith(o.name)));
+    // Owner review P0.4: the other identifier shapes, and a file that is not what it claims to be.
+    const dob = await upload(a, PDF_MIME, tinyPdf([["Clerking", "DOB: 12/03/1961"]]), "clerking.pdf");
+    const mrn = await upload(a, PDF_MIME, tinyPdf([["Handover", "MRN 00482913 bed 4"]]), "handover.pdf");
+    ok("U7. P0.4: a labelled date of birth and a hospital number are each refused",
+      dob.error === "pii" && dob.pii.includes("date_of_birth") && mrn.error === "pii" && mrn.pii.includes("hospital_number"));
+    const liar = await upload(a, PDF_MIME, await docx(["Not really a PDF."]), "liar.pdf");
+    const afterLiar = await admin.storage.from(BUCKET).list(a, { limit: 100 });
+    ok("U8. P0.4: a file whose bytes are not the declared type is refused, and its object deleted",
+      liar.error === "type_mismatch" && !(afterLiar.data ?? []).some((o: any) => liar.slot && liar.slot.path.endsWith(o.name)));
 
     // ── R. RETRIEVAL ──
     const tsq = toTsQuery("How is acute kidney injury staged?")!;
@@ -250,9 +270,9 @@ async function main() {
     const rows = await store.progressRows(admin, a);
     const prog = rows.ok ? buildProgress({ ...rows.data, today: new Date().toISOString().slice(0, 10) }) : null;
     const pm = prog?.materials.find(m => m.id === pdf.materialId);
-    ok("Q7. progress: mastery from the LATEST answer (100%), 3 answers this week, and not-measured stays null for the DOCX",
-      pm?.mastery === 100 && pm.answered === 1 && prog!.trend.at(-1)!.attempts === 3
-      && prog!.materials.find(m => m.id === dx.materialId)?.mastery === null);
+    ok("Q7. progress: practice accuracy from the LATEST answer (100%), 3 answers this week, and not-measured stays null for the DOCX",
+      pm?.latestAccuracy === 100 && pm.answered === 1 && prog!.trend.at(-1)!.attempts === 3
+      && prog!.materials.find(m => m.id === dx.materialId)?.latestAccuracy === null);
 
     // ── I. ISOLATION ──
     const aMat = pdf.materialId!, aChunk = passage?.chunkId ?? "", aCard = cardId ?? "";

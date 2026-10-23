@@ -152,6 +152,21 @@ const provenanceStored = (src: Src) => {
     && /source_quote: d\.sourceQuote/.test(s);
 };
 
+/** Owner review P0.1: the quality layer and the blind check both stand between generation and storage. */
+const qualityWired = (src: Src) => {
+  const g = src.get(GEN) ?? "";
+  const q = src.get(`${LIB}/question-quality.ts`) ?? "";
+  return /const problems = qualityProblems\(draft, passage\.content\);/.test(g) && /if \(problems\.length\)/.test(g)
+    && /const outcome = applyVerification\(check\.kept, v\.text\);/.test(g) && /kept = outcome\.kept;/.test(g)
+    && /unsupportedTerms\(o, passage\)/.test(q) && /supported\.length === 1 && supported\[0\] === d\.correctIndex/.test(q)
+    && onlyCheckedQuestionsStored(src);
+};
+/** Owner review P0.2: the source-derived notice, where answers are read. */
+const sourceNoticeCount = (src: Src) => [...(src.get(CLIENT) ?? "").matchAll(/<SourceNotice\b/g)].length;
+/** Owner review P0.3: "mastery" on any Scholar screen. The SM-2 engine's stored state value "mastered" is allowed. */
+const masteryWords = (src: Src) => [...src].filter(([f]) => f.startsWith(PAGES) || f === CLIENT)
+  .filter(([, s]) => /master(y|ed)/i.test(s.replace(/["']mastered["']/g, ""))).map(([f]) => f);
+
 /** E: labels, and no answer key in the browser before answering. */
 const answerKeyLeaks = (src: Src) => {
   const s = src.get(SCHOLAR_PAGE) ?? "";
@@ -188,8 +203,9 @@ function main() {
   // ── B. SEPARATION ───────────────────────────────────────────────────────────────────────────────
   ok("B1. D1: no Scholar file touches an estate learning table", estateOffenders(REAL).length === 0, estateOffenders(REAL).join(", "));
   ok("B2. no Scholar file reads shared clinical content (no clinical-review record exists)", clinicalOffenders(REAL).length === 0, clinicalOffenders(REAL).join(", "));
-  ok("B3. Apply shows the governed state for reviewed clinical cases",
-    /Reviewed clinical cases/.test(REAL.get(`${PAGES}/apply/page.tsx`) ?? "") && /Not available yet/.test(REAL.get(`${PAGES}/apply/page.tsx`) ?? ""));
+  ok("B3. Apply shows the governed state for reviewed clinical cases, in a section apart from the person's own scenarios",
+    /Clinically reviewed cases/.test(REAL.get(`${PAGES}/apply/page.tsx`) ?? "") && /Not available yet/.test(REAL.get(`${PAGES}/apply/page.tsx`) ?? "")
+    && /Your practice scenarios/.test(REAL.get(`${PAGES}/apply/page.tsx`) ?? ""));
   ok("B4. SM-2 is imported from the estate engine, not copied",
     /import \{ sm2 \} from "@\/lib\/delivery\/reinforcement"/.test(REAL.get(STORE) ?? "") && !FILES.some(f => /function sm2\b/.test(REAL.get(f) ?? "")));
 
@@ -240,6 +256,17 @@ function main() {
     .flatMap(m => m[1].split(",").map(s => s.trim()).filter(n => n && !/^type\s/.test(n) && !/^[A-Z]/.test(n)).map(n => `${f}: ${n}`)));
   ok("E6. server pages import only components and types from the \"use client\" module, never a function to call",
     clientCalls(REAL).length === 0, clientCalls(REAL).join(", "));
+
+  // ── R. OWNER REVIEW P0 (2026-10-23) ────────────────────────────────────────────────────────────
+  ok("R1. P0.1: every generated question passes the deterministic quality layer AND a blind verification before it can be stored",
+    qualityWired(REAL));
+  ok("R2. P0.2: the source-derived notice is shown with explanations, answer feedback and revision answers, and marking says 'against your notes'",
+    sourceNoticeCount(REAL) >= 3 && /\{MARKED_AGAINST_NOTES\}/.test(REAL.get(CLIENT) ?? ""));
+  ok("R3. P0.3: no Scholar screen calls practice accuracy 'mastery'", masteryWords(REAL).length === 0, masteryWords(REAL).join(", "));
+  ok("R4. P0.4: the AI prompts carry only passages and the question -- no name, email or other profile data",
+    !/profile|fullName|email|full_name/.test(REAL.get(GEN) ?? "x") && !/profile|fullName|email|full_name/.test(REAL.get(`${LIB}/question-quality.ts`) ?? "x"));
+  ok("R5. P0.5: a personal practice case is labelled as such on its card",
+    /q\.kind === "case" && \(/.test(REAL.get(CLIENT) ?? "") && /\{PERSONAL_CASE_LABEL\}/.test(REAL.get(CLIENT) ?? ""));
 
   // ── F. MIGRATION 372 ────────────────────────────────────────────────────────────────────────────
   // ⚠ 372 IS COMMITTED ONLY ONCE THE OWNER HAS APPLIED IT (CLAUDE.md, Database), so a checkout may not
@@ -304,6 +331,12 @@ function main() {
   if (MIG_REAL) ok("P10. ⚠ F1/F2 go red on a missing policy or an added write policy",
     tablesWithoutRls(MIG_REAL.replace("alter table individual_scholar_card enable row level security", "")).length === 1
     && writePolicies(`${MIG_REAL}\ncreate policy x on individual_scholar_card for insert with check (true)`));
+  ok("P11. ⚠ R1 goes red when checkQuestions stops applying the quality layer",
+    !qualityWired(plant(GEN, "const problems = qualityProblems(draft, passage.content);", "const problems: { reason: string; detail?: string }[] = [];")));
+  ok("P12. ⚠ R1 goes red when the blind verification is skipped",
+    !qualityWired(plant(GEN, "const outcome = applyVerification(check.kept, v.text);", "const outcome = { kept: check.kept, rejected: [] };")));
+  ok("P13. ⚠ R3 goes red when a screen says mastery again",
+    masteryWords(plant(`${PAGES}/progress/page.tsx`, "% practice accuracy`", "% mastery`")).length > 0);
 
   console.log(`\n${failures.length === 0 ? "ALL GREEN" : "RED"} -- ${pass} passed, ${failures.length} failed`);
   if (failures.length) { failures.forEach(f => console.log(`  FAILED: ${f}`)); process.exit(1); }
