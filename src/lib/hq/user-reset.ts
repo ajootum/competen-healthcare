@@ -26,7 +26,7 @@ import { currentTraceId } from "@/lib/trace";
 // /reset-password?initiated=admin. A spoofed Host header cannot steer where the link lands, and
 // `initiated=admin` is how the reset page tells the person an administrator sent it.
 //
-// ⚠ THE RATE LIMIT IS ATOMIC AND ON THE DATABASE CLOCK. hq_reserve_password_reset (migration NNN) takes one
+// ⚠ THE RATE LIMIT IS ATOMIC AND ON THE DATABASE CLOCK. hq_reserve_password_reset (migration 383) takes one
 // advisory lock, counts this hour's reservations by now(), and inserts this request's reservation row, all
 // in one transaction, so two simultaneous requests cannot both take the last slot. Its limits (3 and 20)
 // are fixed inside the function: the application cannot widen them. Unavailable means refused, never
