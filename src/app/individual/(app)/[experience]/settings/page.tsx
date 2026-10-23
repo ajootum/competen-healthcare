@@ -6,6 +6,7 @@ import { PageHeader } from "../../../_components/chrome";
 import { SignOutButton } from "../../../_components/ShellNav";
 import PrimaryChoice from "../../../_components/PrimaryChoice";
 import { DATA_ROLES, entityLegal, type EntityLegal } from "@/lib/individual/legal";
+import OwnProfileCard from "@/components/account/OwnProfileCard";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -69,6 +70,15 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
         </ul>
         {!DATA_ROLES.confirmed && <p className="mt-2 text-[12.5px] text-gray-500">These arrangements are pending formal legal confirmation.</p>}
       </section>
+
+      {/* My profile (owner GO 2026-10-23, PR D): the shared personal-profile card, behind this page's
+          experiencePage guard. Professional's self-declared registration and credentials are a different
+          store (migration 373) and stay on their own pages. */}
+      <div className="mb-5">
+        <OwnProfileCard credentialsNote={ctx.live.includes("professional")
+          ? <>In Competen Professional, your registration and credentials are recorded separately, each labelled self-declared, never verified by this profile.</>
+          : undefined} />
+      </div>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
         <h2 className="text-[16px] font-bold text-gray-900">Account</h2>

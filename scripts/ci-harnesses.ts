@@ -61,6 +61,10 @@ const INCLUDED = [
   // COMPETEN-IND-004 Scholar learning invariants (source and migration 372). Imports only the Scholar constants
   // and the Individual registry, neither of which imports anything; no client, no network, no .env.local.
   "scholar-learning-harness.ts",
+  // My profile (owner GO 2026-10-23, PR D): a self-update cannot change access, email is never written to
+  // profiles, names are never inferred, each shell mounts the card behind its own guard, migration 380 is
+  // additive. Source and migration only, with 9 planted-failure controls; no client, no network.
+  "account-profile-harness.ts",
   // COMPETEN-IND-007 Professional invariants (source and migration 373): no estate write, no employer read
   // path, evidence classes, direct entry, RLS posture, with 27 planted-failure controls run in memory. It
   // reads src/** and the migration and renders one component with react-dom/server; no client, no network,
