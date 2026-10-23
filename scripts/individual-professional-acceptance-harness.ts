@@ -248,7 +248,12 @@ async function main() {
   const fws = await loadSharedFrameworks(admin);
   const fwIds = (fws ?? []).map(f => f.id);
   const leak = fwIds.length ? await admin.from("frameworks").select("id").in("id", fwIds).not("hospital_id", "is", null) : { data: [] };
-  ok("G1. the framework list holds shared frameworks only", fws !== null && (leak.data ?? []).length === 0, `${fwIds.length} shared`);
+  const unpublished = fwIds.length ? await admin.from("frameworks").select("id").in("id", fwIds).neq("pub_status", "published") : { data: [] };
+  ok("G1. the framework list holds shared, PUBLISHED frameworks only (COMPETEN-CONFIG-002 P0)",
+    fws !== null && (leak.data ?? []).length === 0 && (unpublished.data ?? []).length === 0, `${fwIds.length} shared and published`);
+  const draftFw = await admin.from("frameworks").select("id").is("hospital_id", null).neq("pub_status", "published").limit(1).maybeSingle();
+  if (draftFw.data) ok("G3. ⚠ a shared framework that is not published is refused as a reference", (await checkSharedReference(admin, draftFw.data.id, null)) !== null);
+  else console.log("  PEND  G3. staging has no unpublished shared framework to refuse");
   const hospFw = await admin.from("frameworks").select("id").not("hospital_id", "is", null).limit(1).maybeSingle();
   if (hospFw.data) ok("G2. ⚠ a hospital framework is refused as a reference", (await checkSharedReference(admin, hospFw.data.id, null)) !== null);
   else console.log("  PEND  G2. staging has no hospital-owned framework to refuse");

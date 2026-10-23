@@ -234,6 +234,16 @@ const checkCrossPersonLinks = (mig: string) => {
   return { ok: fks.length === 3 && paths === 2, detail: `${fks.length} composite FKs, ${paths} path checks` };
 };
 
+// ── F. PUBLISHED FRAMEWORKS ONLY (COMPETEN-CONFIG-002 P0) ────────────────────────────────────────────
+// The list a person chooses from, and the check before any write, both require a shared, active,
+// published framework. A draft or archived framework is neither offered nor accepted.
+const checkPublishedFrameworks = (src: Sources) => {
+  const s = src.get("src/lib/individual/professional/frameworks.ts") ?? "";
+  const list = /\.is\("hospital_id", null\)\.eq\("is_active", true\)\.eq\("pub_status", PUBLISHED\)\.order\(/.test(s);
+  const write = /\.eq\("id", frameworkId\)\.is\("hospital_id", null\)\.eq\("is_active", true\)\.eq\("pub_status", PUBLISHED\)\.maybeSingle\(\)/.test(s);
+  return { ok: list && write && /export const PUBLISHED = "published"/.test(s), detail: `list filter ${list}, write check ${write}` };
+};
+
 function main() {
   console.log("INDIVIDUAL PROFESSIONAL HARNESS (COMPETEN-IND-007)\n");
   const run = (name: string, r: { ok: boolean; detail: string }) => ok(name, r.ok, r.detail);
@@ -264,6 +274,7 @@ function main() {
     checkRenderedLabel(v => renderToStaticMarkup(createElement(ClassLabel, { value: v }))));
   run("E5. /verify shows own records only with the release gate on and the companion row, labelled by class, without the 'Verified' header", checkVerifyPage(ALL));
   run("E6. no Professional file names a verified class or sets a verified flag", checkNoVerifiedClassInProfessional(ALL));
+  run("F1. only shared, active, PUBLISHED frameworks are offered, and only they are accepted on write", checkPublishedFrameworks(ALL));
 
   run("D1. direct entry: every Professional API handler and page asks for Professional, never Scholar", checkDirectEntry(ALL));
 
@@ -296,6 +307,9 @@ function main() {
   red("E4 when a foreign class renders", checkRenderedLabel(v => v === "institution_verified" ? "<span>Verified</span>" : renderToStaticMarkup(createElement(ClassLabel, { value: v }))));
   red("E5 without the release gate", checkVerifyPage(new Map([...ALL].map(([f, s]) => [f, f === "src/app/verify/[token]/page.tsx" ? s.replace("(await individualAppEnabled(admin)) && await shareCarriesOwnRecords(admin, share.id, share.nurse_id)", "await shareCarriesOwnRecords(admin, share.id, share.nurse_id)") : s]))));
   red("E6 on a verified flag", checkNoVerifiedClassInProfessional(plant("src/app/api/individual/professional/evidence/route.ts", `const row = { verified: true };`)));
+  const fwFile = "src/lib/individual/professional/frameworks.ts";
+  red("F1 when the list offers drafts", checkPublishedFrameworks(new Map([...ALL].map(([f, s]) => [f, f === fwFile ? s.replace(`.eq("is_active", true).eq("pub_status", PUBLISHED).order(`, `.eq("is_active", true).order(`) : s]))));
+  red("F1 when a write accepts a draft", checkPublishedFrameworks(new Map([...ALL].map(([f, s]) => [f, f === fwFile ? s.replace(`.eq("pub_status", PUBLISHED).maybeSingle()`, ".maybeSingle()") : s]))));
   red("D1 when Scholar lists a Professional segment", (() => { const sch = EXPERIENCES.scholar.modules as unknown as { segment: string }[]; sch.push({ segment: "cpd" }); try { return checkDirectEntry(ALL); } finally { sch.pop(); } })());
   red("D1 on a Scholar guard", checkDirectEntry(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/cpd/route.ts") ? s.replace('requireIndividualContext("professional")', 'requireIndividualContext("scholar")') : s]))));
   red("D1 on a page without the Professional check", checkDirectEntry(new Map([...ALL].map(([f, s]) => [f, f.endsWith("(professional)/progress/page.tsx") ? s.replace("await experienceModulePage((await params).experience, \"progress\")", "await experiencePage((await params).experience)") : s]))));

@@ -99,6 +99,11 @@ async function main() {
     out.objectCounts = { columns: fp.columns.length, constraints: fp.constraints.length, indexes: fp.indexes.length, policies: fp.policies.length,
       rlsOn: fp.rls.filter(r => r.relrowsecurity).length };
 
+    if (process.argv.includes("--frameworks")) {
+      // COMPETEN-CONFIG-002 P0: what a person may choose = shared (no hospital), active, published.
+      out.sharedFrameworksByStatus = await q(`select coalesce(pub_status, '(null)') as pub_status, count(*)::int as n
+        from frameworks where hospital_id is null and is_active = true group by 1 order by 1`);
+    }
     if (process.argv.includes("--detail")) {
       out.policies = fp.policies;
       out.generated = fp.columns.filter(r => r.is_generated === "ALWAYS");
