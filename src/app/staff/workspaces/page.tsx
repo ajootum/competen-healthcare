@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { resolveStaffGateway } from "@/lib/staff/gateway";
+import { holdsHqCapability } from "@/lib/hq/context";
+import { HQ_HOME_CAPABILITY } from "@/lib/hq/spaces";
+import StaffFrame from "../_components/StaffFrame";
 
 // /staff/workspaces -- the staff workspace selector and its no-access states
 // (COMP-STAFF-ACCESS-001 s7 steps 3-7, s11, s15).
@@ -30,34 +33,6 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-function Frame({ name, children }: { name: string | null; children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-[#0f1923] flex flex-col">
-      <header className="px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-white text-sm font-bold">C</span>
-          <span className="leading-tight">
-            <span className="block text-[15px] font-bold text-white">competen</span>
-            <span className="block text-[9px] font-bold uppercase tracking-[0.18em] text-teal-400">Staff Access</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          {/* The active identity, made obvious (spec s24) -- it is the viewer's own session. */}
-          <span className="text-[12px] text-gray-400">
-            Signed in as <span className="font-semibold text-gray-200">{name ?? "this account"}</span>
-          </span>
-          <form action="/api/auth/logout" method="POST">
-            <button type="submit" className="text-[12px] text-gray-400 hover:text-white hover:underline">Sign out</button>
-          </form>
-        </div>
-      </header>
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-lg">{children}</div>
-      </main>
-    </div>
-  );
-}
-
 /** The support path every refusal carries -- a person, not a void (spec s15). */
 function SupportLine() {
   return (
@@ -74,10 +49,13 @@ export default async function StaffWorkspacesPage() {
   const res = await resolveStaffGateway();
   if (res.state === "AUTH_REQUIRED") redirect("/staff");
   const { decision, fullName } = res;
+  // My profile for anybody holding HQ access -- including an HQ appointee with no estate membership,
+  // who lands on this page (PRACTICE_ONLY) and can enter no estate shell (owner review GO, PR D item 3).
+  const profileHref = (await holdsHqCapability(HQ_HOME_CAPABILITY)) ? "/staff/profile" : null;
 
   if (decision.state === "PRACTICE_ONLY") {
     return (
-      <Frame name={fullName}>
+      <StaffFrame name={fullName} profileHref={profileHref}>
         <div className="rounded-2xl bg-white/5 border border-white/10 p-7">
           <h1 className="text-lg font-bold text-white">This account belongs to Competen Practice</h1>
           <p className="mt-3 text-[13.5px] leading-relaxed text-gray-400">
@@ -91,13 +69,13 @@ export default async function StaffWorkspacesPage() {
           </Link>
           <SupportLine />
         </div>
-      </Frame>
+      </StaffFrame>
     );
   }
 
   if (decision.state === "ACCESS_WITHDRAWN") {
     return (
-      <Frame name={fullName}>
+      <StaffFrame name={fullName} profileHref={profileHref}>
         <div className="rounded-2xl bg-white/5 border border-white/10 p-7">
           <h1 className="text-lg font-bold text-white">Your appointment is no longer active</h1>
           <p className="mt-3 text-[13.5px] leading-relaxed text-gray-400">
@@ -107,13 +85,13 @@ export default async function StaffWorkspacesPage() {
           </p>
           <SupportLine />
         </div>
-      </Frame>
+      </StaffFrame>
     );
   }
 
   if (decision.state === "INSUFFICIENT") {
     return (
-      <Frame name={fullName}>
+      <StaffFrame name={fullName} profileHref={profileHref}>
         <div className="rounded-2xl bg-white/5 border border-white/10 p-7">
           <h1 className="text-lg font-bold text-white">Your appointment does not open a workspace here</h1>
           <p className="mt-3 text-[13.5px] leading-relaxed text-gray-400">
@@ -124,13 +102,13 @@ export default async function StaffWorkspacesPage() {
           </p>
           <SupportLine />
         </div>
-      </Frame>
+      </StaffFrame>
     );
   }
 
   if (decision.state === "NO_APPOINTMENT") {
     return (
-      <Frame name={fullName}>
+      <StaffFrame name={fullName} profileHref={profileHref}>
         <div className="rounded-2xl bg-white/5 border border-white/10 p-7">
           <h1 className="text-lg font-bold text-white">No authorised workspace</h1>
           <p className="mt-3 text-[13.5px] leading-relaxed text-gray-400">
@@ -144,7 +122,7 @@ export default async function StaffWorkspacesPage() {
           </p>
           <SupportLine />
         </div>
-      </Frame>
+      </StaffFrame>
     );
   }
 
@@ -164,7 +142,7 @@ export default async function StaffWorkspacesPage() {
   // SELECT -- more than one genuinely held destination.
   const { workspaces, governanceContexts } = decision;
   return (
-    <Frame name={fullName}>
+    <StaffFrame name={fullName} profileHref={profileHref}>
       <h1 className="text-xl font-bold text-white">Your workspaces</h1>
       <p className="mt-1 text-[13px] text-gray-400">
         {workspaces.length === 1
@@ -201,6 +179,6 @@ export default async function StaffWorkspacesPage() {
         create authority. Everything else on your account lives in{" "}
         <Link href="/dashboard" className="font-semibold text-teal-400 hover:underline">your Competen dashboard</Link>.
       </p>
-    </Frame>
+    </StaffFrame>
   );
 }

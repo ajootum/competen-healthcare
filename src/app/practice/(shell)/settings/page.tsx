@@ -11,6 +11,7 @@ import SettingsConsole from "./SettingsConsole";
 import PersonalisationConsole from "./PersonalisationConsole";
 import SettingsCards, { type SettingsCard } from "./SettingsCards";
 import BillingCard from "./BillingCard";
+import OwnProfileCard from "@/components/account/OwnProfileCard";
 import { subscriptionState, formatMoney } from "@/lib/practice/subscription-state";
 import { gatewayConfig, currencyExponent } from "@/lib/practice/subscription-gateway";
 
@@ -263,6 +264,13 @@ export default async function SettingsPage({ searchParams }: {
                 <SettingsCards cards={cards} />
               </div>
             </section>
+
+            {/* My profile (owner GO 2026-10-23, PR D): the shared personal-profile card, behind this
+                page's resolvePracticeShell READY gate. The practitioner details Practice prints on
+                documents are Practice's own record, kept in Practice Setup. */}
+            <div id="my-profile">
+              <OwnProfileCard credentialsNote={<>The practitioner details and registration numbers Competen Practice uses on your documents are kept separately, in Practice Setup.</>} />
+            </div>
 
             {/* The full controls, below the grid. `section=personal` is where every Appearance,
                 Dashboard, Notifications and Shortcuts card lands. */}

@@ -61,11 +61,21 @@ const INCLUDED = [
   // COMPETEN-IND-004 Scholar learning invariants (source and migration 372). Imports only the Scholar constants
   // and the Individual registry, neither of which imports anything; no client, no network, no .env.local.
   "scholar-learning-harness.ts",
+  // My profile (owner GO 2026-10-23, PR D): a self-update cannot change access, email is never written to
+  // profiles, names are never inferred, each shell mounts the card behind its own guard, migration 380 is
+  // additive, the HQ-only staff entry, one API and one card. Source and migration only, 13 planted controls; no client, no network.
+  "account-profile-harness.ts",
+  // Migration 381 email sync (owner GO 2026-10-23, item 4): trigger scope, confirmed-only copy, audit,
+  // SECURITY DEFINER + search_path, no backfill, exact rollback. Migration text only, 7 planted controls.
+  "email-sync-harness.ts",
   // COMPETEN-IND-007 Professional invariants (source and migration 373): no estate write, no employer read
   // path, evidence classes, direct entry, RLS posture, with 27 planted-failure controls run in memory. It
   // reads src/** and the migration and renders one component with react-dom/server; no client, no network,
   // no .env.local. Screened 2026-10-23: 47/47 twice in a scrubbed environment, identical results.
   "individual-professional-harness.ts",
+  // HQ-USERS-A: the /api/super-admin/users handlers are gated by the HQ gate (view) and the owner gate (writes),
+  // never by profiles.role, with 8 planted-failure controls. Reads files only: no client, no network, no .env.local.
+  "hq-users-authority-harness.ts",
   // COMPETEN-CONFIG-002 Individual policy invariants (source and migration 376): the capability door, one WCE
   // writer, the two partitions, every consumer on the policy, the clamping reader, no individual_app, no third
   // HQ door, with 22 planted-failure controls run in memory. Reads files only: no client, no network, no .env.local.
