@@ -317,6 +317,19 @@ function main() {
   ok("12i. the login's Individual presentation is copy only: next is still validated by the one existing rule",
     /signInProductName\(/.test(loginSrc) && /next && next\.startsWith\("\/"\) && !next\.startsWith\("\/\/"\) && !BUILDING\[next\]/.test(loginSrc));
 
+  // ⚠ SWITCHING INDIVIDUAL ON IS THE OWNER'S ACT, NEVER AN APPLICATION'S (COMPETEN-IND-ACCESS-001 s5,
+  // CONFIG-002). The release flag is a row the owner writes by hand. No route, page or library in the
+  // application may write it: the only flag writer (/api/v1/practice/flags) allowlists the three Practice
+  // launch flags and refuses every other name, and no other file writes practice_platform_flags at all.
+  const flagWriters = walk("src").map(posix).filter(f => /from\("practice_platform_flags"\)\s*\.(insert|update|upsert|delete)\(/.test(strip(readFileSync(f, "utf8"))));
+  const flagsRoute = strip(readFileSync("src/app/api/v1/practice/flags/route.ts", "utf8"));
+  const allow = /const FLAGS: Record<string, string> = \{([\s\S]*?)\};/.exec(flagsRoute)?.[1] ?? "";
+  ok("12j. no application code can switch individual_app: one flag writer, allowlisted to Practice flags, refusing anything else",
+    flagWriters.length === 1 && flagWriters[0] === "src/app/api/v1/practice/flags/route.ts"
+    && /practice_sign_in/.test(allow) && !/individual_/.test(allow) && /if \(!FLAGS\[flag\]\) return NextResponse\.json/.test(flagsRoute)
+    && !walk("src").map(posix).some(f => /["'`]individual_app["'`]/.test(strip(readFileSync(f, "utf8"))) && f !== "src/lib/individual/gate.ts"),
+    `writers: ${flagWriters.join(", ")}`);
+
   ok("9g. D10: no Individual code persists AI conversation",
     !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));
 
