@@ -12,7 +12,10 @@
  *      supabase.auth.updateUser({ email }), Supabase's verified flow
  *   N  given and family names are never derived from full_name, anywhere in the account surfaces or the
  *      PW-011 profile page
- *   M  each product shell mounts the shared card inside a page that runs that shell's own guard first
+ *   M  each product shell mounts the shared card inside a page that runs that shell's own guard first, and
+ *      HQ staff WITHOUT estate membership reach it on the Staff Access surface, gated on HQ access only
+ *   O  one API and one component: no other component calls the profile API, no second own-profile route
+ *      exists, and every shell renders the same card
  *   S  migration 380 (when present): additive columns, no policy, no function, no table-level grant, and a
  *      column-level grant on the two name columns only
  *   C  the card states that a profile is not a credential, and the account surfaces read no credential store
@@ -20,7 +23,7 @@
  * ⚠ EVERY CHECK HAS A PLANTED-FAILURE CONTROL (section P), run on a copy of the source with the violation
  * planted, which must FAIL. A check that cannot fail is worth nothing (CLAUDE.md, Testing).
  */
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { PROFILE_FIELDS, NAME_FIELDS, parseProfilePatch } from "../src/lib/account/own-profile";
 
 let pass = 0; const failures: string[] = [];
@@ -42,9 +45,22 @@ const SHELLS = {
   individual: "src/app/individual/(app)/[experience]/settings/page.tsx",
 } as const;
 const ESTATE_LAYOUT = "src/app/dashboard/layout.tsx";
+const STAFF_PROFILE = "src/app/staff/profile/page.tsx";
+const STAFF_WORKSPACES = "src/app/staff/workspaces/page.tsx";
 const MIG = "supabase/migrations/380-profiles-given-family-name.sql";
 type Src = Map<string, string>;
-const REAL: Src = new Map([ROUTE, LIB, CARD, ESTATE_LAYOUT, ...Object.values(SHELLS)].map(f => [f, strip(read(f))]));
+const REAL: Src = new Map([ROUTE, LIB, CARD, ESTATE_LAYOUT, STAFF_PROFILE, STAFF_WORKSPACES, ...Object.values(SHELLS)].map(f => [f, strip(read(f))]));
+/** Every source file, for the one-API / one-component checks. */
+function walk(dir: string): string[] {
+  const out: string[] = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = `${dir}/${e.name}`;
+    if (e.isDirectory()) out.push(...walk(p));
+    else if (/\.(ts|tsx)$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) out.push(p);
+  }
+  return out;
+}
+const ALL_SRC: Src = new Map(walk("src").map(f => [f, strip(read(f))]));
 const MIG_REAL = existsSync(MIG) ? read(MIG).replace(/--.*$/gm, "").toLowerCase() : "";
 
 // ── A. the write ────────────────────────────────────────────────────────────────────────────────────
@@ -88,6 +104,23 @@ function unguardedMounts(src: Src): string[] {
   return bad;
 }
 
+/** M2: the HQ-only entry. HQ access is checked before the card renders, and estate membership is NOT required. */
+const staffEntryGuarded = (src: Src) => {
+  const s = src.get(STAFF_PROFILE) ?? "";
+  const g = s.indexOf("await requireHqCapability(HQ_HOME_CAPABILITY)"), m = s.indexOf("<OwnProfileCard");
+  return g >= 0 && m > g && !/admitToEstate|platform_membership/.test(s);
+};
+/** M3: the staff frame offers the link only to a viewer holding HQ access. */
+const staffLinkGated = (src: Src) =>
+  /const profileHref = \(await holdsHqCapability\(HQ_HOME_CAPABILITY\)\) \? "\/staff\/profile" : null;/.test(src.get(STAFF_WORKSPACES) ?? "");
+
+// ── O. one API, one component ──────────────────────────────────────────────────────────────────────
+/** Components other than the shared card (and the legacy billing form's PATCH) that call the profile API. */
+const LEGACY_CALLER = "src/app/dashboard/billing/AccountSettings.tsx";
+const otherCallers = (all: Src) => [...all].filter(([f, s]) => f !== CARD && f !== LEGACY_CALLER && f !== ROUTE && /\/api\/account\/profile/.test(s)).map(([f]) => f);
+const secondRoutes = (all: Src) => [...all.keys()].filter(f => /^src\/app\/api\/.*(own-?profile|my-?profile|account\/profile\/.+)\/route\.ts$/.test(f));
+const mountsOf = (all: Src) => [...all].filter(([, s]) => /<OwnProfileCard\b/.test(s)).map(([f]) => f).sort();
+
 // ── S. migration 380 ───────────────────────────────────────────────────────────────────────────────
 const migSafe = (m: string) =>
   /alter table profiles add column if not exists given_name text;/.test(m)
@@ -114,6 +147,13 @@ function main() {
   ok("N1. no account surface or the profile page derives a name from full_name", inferredNames(REAL).length === 0, inferredNames(REAL).join(", "));
   ok("M1. each shell mounts the card after its own guard (estate also behind the /dashboard estate gate)",
     unguardedMounts(REAL).length === 0, unguardedMounts(REAL).join(", "));
+  ok("M2. HQ staff without estate membership reach My profile on the Staff Access surface, gated on HQ access, no estate check",
+    staffEntryGuarded(REAL));
+  ok("M3. the staff frame offers 'My profile' only to a viewer holding HQ access", staffLinkGated(REAL));
+  ok("O1. one API: no component but the shared card (and the legacy billing form) calls /api/account/profile, and no second own-profile route exists",
+    otherCallers(ALL_SRC).length === 0 && secondRoutes(ALL_SRC).length === 0, [...otherCallers(ALL_SRC), ...secondRoutes(ALL_SRC)].join(", "));
+  ok("O2. one component: the card renders in exactly the four entry points (estate, practice, individual, staff) and nowhere else",
+    JSON.stringify(mountsOf(ALL_SRC)) === JSON.stringify([...Object.values(SHELLS), STAFF_PROFILE].sort()), mountsOf(ALL_SRC).join(", "));
   if (!MIG_REAL) console.log(`  NOTE  ${MIG} is not in this checkout -- S1 and P8 NOT RUN`);
   if (MIG_REAL) ok("S1. 380: two additive nullable columns, no default or backfill, no policy, no function, only a column grant on the two names", migSafe(MIG_REAL));
   ok("C1. the account surfaces read no credential or registration store", credentialReads(REAL).length === 0, credentialReads(REAL).join(", "));
@@ -142,6 +182,15 @@ function main() {
     !migSafe(`${MIG_REAL}\ncreate policy x on profiles for update using (true);`)
     && !migSafe(MIG_REAL.replace("add column if not exists given_name text;", "add column if not exists given_name text default '';"))
     && !migSafe(`${MIG_REAL}\ngrant update on table profiles to authenticated;`));
+  ok("P10. ⚠ M2 goes red when the staff entry stops checking HQ access, or starts requiring estate membership",
+    !staffEntryGuarded(plant(STAFF_PROFILE, "await requireHqCapability(HQ_HOME_CAPABILITY)", "null"))
+    && !staffEntryGuarded(plant(STAFF_PROFILE, "export default async function", "import { admitToEstate } from \"@/lib/platform-membership\";\nexport default async function")));
+  ok("P11. ⚠ M3 goes red when the link is offered to everybody",
+    !staffLinkGated(plant(STAFF_WORKSPACES, '(await holdsHqCapability(HQ_HOME_CAPABILITY)) ? "/staff/profile" : null', '"/staff/profile"')));
+  ok("P12. ⚠ O1 goes red when another component calls the profile API",
+    otherCallers(new Map([...ALL_SRC, ["src/components/Fork.tsx", 'fetch("/api/account/profile")']])).length > 0);
+  ok("P13. ⚠ O2 goes red when a shell forks its own copy of the card",
+    JSON.stringify(mountsOf(new Map([...ALL_SRC, ["src/app/enterprise/x/page.tsx", "<OwnProfileCard />"]]))) !== JSON.stringify([...Object.values(SHELLS), STAFF_PROFILE].sort()));
   ok("P9. ⚠ C1 goes red when the card reads a credential store",
     credentialReads(plant(LIB, 'export const PROFILE_FIELDS', 'const _c = (a: any) => a.from("professional_credentials");\nexport const PROFILE_FIELDS')).length > 0);
 
