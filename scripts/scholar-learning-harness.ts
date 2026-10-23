@@ -186,20 +186,6 @@ const SHARING = /contribut|shared[_ -]?library|learning[_ -]?library|submit\w*(l
 const sharingPaths = (src: Src) => [...src].filter(([f]) => f !== `${LIB}/config.ts`)
   .filter(([, s]) => SHARING.test(s)).map(([f]) => f);
 
-/** E: labels, and no answer key in the browser before answering. */
-const answerKeyLeaks = (src: Src) => {
-  const s = src.get(SCHOLAR_PAGE) ?? "";
-  const at = s.indexOf("export function questionView");
-  const body = at < 0 ? "" : s.slice(at);
-  return body.length < 50 || /correctIndex|rationale|sourceQuote/.test(body);
-};
-
-/** F: the schema. */
-const SCHOLAR_TABLES = ["consent", "material", "chunk", "question", "attempt", "card"].map(t => `individual_scholar_${t}`);
-const tablesWithoutRls = (mig: string) => SCHOLAR_TABLES.filter(t =>
-  !mig.includes(`alter table ${t} enable row level security`) || !new RegExp(`create policy ${t}_read_own on ${t}\\s+for select using \\(auth\\.uid\\(\\) = user_id\\)`).test(mig));
-const writePolicies = (mig: string) => /for (insert|update|delete|all)\b/.test(mig);
-
 /**
  * s11, owner continuation GO 2026-10-23 item 3: Scholar study achievements in the Passport (migration 375).
  *   studyReadsContent: the read that feeds the Passport and /verify selects only ids, kinds and dates --
@@ -226,6 +212,20 @@ const includeChecksEarned = (src: Src) => {
   const count = body.indexOf("await answeredFrom("), refuse = body.indexOf('if (answered < 1) return "not_eligible";'), write = body.indexOf(".upsert(");
   return count >= 0 && refuse > count && write > refuse;
 };
+
+/** E: labels, and no answer key in the browser before answering. */
+const answerKeyLeaks = (src: Src) => {
+  const s = src.get(SCHOLAR_PAGE) ?? "";
+  const at = s.indexOf("export function questionView");
+  const body = at < 0 ? "" : s.slice(at);
+  return body.length < 50 || /correctIndex|rationale|sourceQuote/.test(body);
+};
+
+/** F: the schema. */
+const SCHOLAR_TABLES = ["consent", "material", "chunk", "question", "attempt", "card"].map(t => `individual_scholar_${t}`);
+const tablesWithoutRls = (mig: string) => SCHOLAR_TABLES.filter(t =>
+  !mig.includes(`alter table ${t} enable row level security`) || !new RegExp(`create policy ${t}_read_own on ${t}\\s+for select using \\(auth\\.uid\\(\\) = user_id\\)`).test(mig));
+const writePolicies = (mig: string) => /for (insert|update|delete|all)\b/.test(mig);
 
 function main() {
   console.log("SCHOLAR LEARNING HARNESS (COMPETEN-IND-004)\n");
