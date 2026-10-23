@@ -54,15 +54,16 @@ export function IntDraft({ policyKey, label, unit, min, max, draft, hasOverride 
   );
 }
 
-export function SetDraft({ policyKey, options, draft, hasOverride }: {
-  policyKey: string; options: { value: string; label: string }[]; draft: string[]; hasOverride: boolean;
+export function SetDraft({ policyKey, options, draft, hasOverride, legend = "Draft: offered kinds" }: {
+  policyKey: string; options: { value: string; label: string }[]; draft: string[]; hasOverride: boolean; legend?: string;
 }) {
   const [on, setOn] = useState<Set<string>>(new Set(draft));
   const { busy, msg, send } = useSend();
   const toggle = (v: string) => setOn(s => { const n = new Set(s); if (n.has(v)) n.delete(v); else n.add(v); return n; });
   return (
     <fieldset className="space-y-1.5">
-      <legend className="text-[12.5px] font-semibold text-gray-700">Draft: offered kinds</legend>
+      <legend className="text-[12.5px] font-semibold text-gray-700">{legend}</legend>
+      {options.length === 0 && <p className="text-[13px] text-gray-600">Nothing can be chosen yet: no shared catalogue is published.</p>}
       {options.map(o => (
         <label key={o.value} className="flex items-center gap-2 text-[14px] text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]">
           <input type="checkbox" checked={on.has(o.value)} onChange={() => toggle(o.value)} className="h-4 w-4 rounded border-gray-400" />

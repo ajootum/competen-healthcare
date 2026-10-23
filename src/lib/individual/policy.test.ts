@@ -51,7 +51,21 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       reminderHorizonDays: REMINDER_HORIZON_DAYS, shareLinkMaxDays: SHARE_DAYS_MAX, aiHourlyLimit: 30,
       scholarQuestionsPerRequest: QUESTIONS_PER_REQUEST, scholarMaterialsPerPerson: MAX_MATERIALS_PER_PERSON,
       passportAchievementKinds: [...STUDY_ACHIEVEMENT_KINDS],
+      // S1: no catalogue reaches a person until HQ chooses one.
+      scholarCatalogues: [], professionalCatalogues: [],
     });
+  });
+
+  it("S1: a catalogue allowlist is ids only, deduplicated, capped, and empty when absent or malformed", () => {
+    const a = "11111111-1111-4111-8111-111111111111", b = "22222222-2222-4222-8222-222222222222";
+    const p = resolvePolicy([{ config_path: policyPath("professional_catalogues"), published: { ids: [a, a.toUpperCase(), "not-an-id", b] } }]);
+    expect(p.professionalCatalogues).toEqual([a, b]);
+    expect(p.scholarCatalogues).toEqual([]);
+    expect(resolvePolicy([{ config_path: policyPath("scholar_catalogues"), published: { ids: "everything" } }]).scholarCatalogues).toEqual([]);
+    expect(validateDraft("scholar_catalogues", [a, b])).toMatchObject({ ok: true, settings: { ids: [a, b] } });
+    expect(validateDraft("scholar_catalogues", ["all"])).toMatchObject({ ok: false });
+    expect(validateDraft("scholar_catalogues", Array.from({ length: 51 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`))).toMatchObject({ ok: false });
+    expect(validateDraft("scholar_catalogues", [])).toMatchObject({ ok: true, settings: { ids: [] } });
   });
 
   it("every default sits inside its own hard limit, and the Scholar and AI limits can only tighten", () => {
