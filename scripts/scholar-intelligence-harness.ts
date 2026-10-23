@@ -168,13 +168,21 @@ async function main() {
     .eq("scope_type", "platform").eq("scope_ref", "individual").eq("config_path", PATH).maybeSingle();
   const beforeCov = panel(p3.text, "li-cov");
   let afterCov = "";
+  // ⚠ SHARED STAGING CONFIG. Another session may already have allowlisted catalogues (S2 testing). If CF-FOUND is
+  // already in the published allowlist, nothing is written -- the check only reads. Otherwise the change lasts one
+  // page load and the prior row (or its absence) is put back.
+  const alreadyAllowed = Array.isArray(prior?.published?.ids) && prior.published.ids.includes(CF_FOUND);
   try {
-    if (prior) await admin.from("workspace_config_overrides").update({ published: { ids: [CF_FOUND] } }).eq("id", prior.id);
-    else await admin.from("workspace_config_overrides").insert({ scope_type: "platform", scope_ref: "individual", config_path: PATH, draft: { ids: [CF_FOUND] }, published: { ids: [CF_FOUND] } });
+    if (!alreadyAllowed) {
+      if (prior) await admin.from("workspace_config_overrides").update({ published: { ids: [CF_FOUND] } }).eq("id", prior.id);
+      else await admin.from("workspace_config_overrides").insert({ scope_type: "platform", scope_ref: "individual", config_path: PATH, draft: { ids: [CF_FOUND] }, published: { ids: [CF_FOUND] } });
+    }
     afterCov = panel((await page(PROGRESS, s)).text, "li-cov");
   } finally {
-    if (prior) await admin.from("workspace_config_overrides").update({ draft: prior.draft, published: prior.published }).eq("id", prior.id);
-    else await admin.from("workspace_config_overrides").delete().eq("scope_type", "platform").eq("scope_ref", "individual").eq("config_path", PATH);
+    if (!alreadyAllowed) {
+      if (prior) await admin.from("workspace_config_overrides").update({ draft: prior.draft, published: prior.published }).eq("id", prior.id);
+      else await admin.from("workspace_config_overrides").delete().eq("scope_type", "platform").eq("scope_ref", "individual").eq("config_path", PATH);
+    }
   }
   ok("L8. S1 is live: an allowlisted catalogue turns 'no framework connected' into 'questions not yet linked' (S2 pending); allowlist restored",
     (prior ? true : beforeCov.includes("No competency framework is connected")) && afterCov.includes("not yet linked to competencies"),
