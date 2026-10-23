@@ -7,7 +7,7 @@ import {
   container, primaryBtn, secondaryBtn,
 } from "@/components/marketing/IndividualFamily";
 import {
-  INDIVIDUAL, INDIVIDUAL_SIGN_IN, enquiryHref, siblingOf, type Experience, type ExperienceStep,
+  INDIVIDUAL, enquiryHref, experienceSignIn, siblingOf, type Experience, type ExperienceStep,
 } from "@/lib/marketing/individual-family";
 
 // ONE TEMPLATE, TWO BRANDS -- COMPETEN-WEB-IND-001 s3. Competen Scholar (/scholar) and Competen
@@ -16,9 +16,10 @@ import {
 // near-identical pages written out twice stop looking like one family within a week. The differences that
 // matter are data in individual-family.ts; the structure is not a difference.
 //
-// ⚠ CONVERSION IS HONEST. Neither experience can be signed into yet, so the primary action is the
-// conversation and "Sign in" is the product's own coming-soon door (/individual/sign-in). There is no
-// /signup link anywhere on the page -- the disclosure harness (7c, 7l) holds both properties.
+// ⚠ CONVERSION IS HONEST. The primary action is the conversation, and "Sign in" is the product's own door
+// naming this experience (/individual/sign-in?experience=<key>, COMPETEN-IND-ACCESS-001): coming soon while
+// the release gate is off, the one Competen sign-in with the destination preserved when it is on. There
+// is no /signup link anywhere on the page -- the disclosure harness (7c, 7l) holds both properties.
 
 export default function ExperiencePage({ e }: { e: Experience }) {
   const sibling = siblingOf(e.key);
@@ -57,7 +58,7 @@ export default function ExperiencePage({ e }: { e: Experience }) {
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <a href={enquiryHref(e.contact)} className={primaryBtn} style={{ background: e.accent }}>{talk}</a>
-                <Link href={INDIVIDUAL_SIGN_IN} className={secondaryBtn} style={{ color: e.accent }}>
+                <Link href={experienceSignIn(e.key)} className={secondaryBtn} style={{ color: e.accent }}>
                   Sign in <span aria-hidden>→</span>
                 </Link>
               </div>
@@ -139,7 +140,7 @@ export default function ExperiencePage({ e }: { e: Experience }) {
             </div>
             <div className="relative flex flex-wrap gap-3">
               <a href={enquiryHref(e.contact)} className={primaryBtn} style={{ background: e.accent }}>Talk to us</a>
-              <Link href={INDIVIDUAL_SIGN_IN} className={`${secondaryBtn} bg-white`} style={{ color: e.accent }}>Sign in</Link>
+              <Link href={experienceSignIn(e.key)} className={`${secondaryBtn} bg-white`} style={{ color: e.accent }}>Sign in</Link>
             </div>
           </div>
         </section>

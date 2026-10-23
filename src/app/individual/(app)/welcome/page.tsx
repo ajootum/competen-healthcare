@@ -5,6 +5,7 @@ import { individualShell, gatedMetadata } from "../../_components/shell-context"
 import type { Metadata } from "next";
 import { IndividualMark, ExperienceMark } from "../../_components/chrome";
 import PrimaryChoice from "../../_components/PrimaryChoice";
+import { requestedExperience } from "@/lib/individual/entry";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -15,19 +16,28 @@ export const dynamic = "force-dynamic";
 // an answer only the person can give: which experience opens first. Direct entry into Professional is
 // this page with Professional alone -- there is no Scholar step to skip, because nothing requires one.
 //
+// ⚠ ?for= IS THE EXPERIENCE THE PERSON ASKED FOR (COMPETEN-IND-ACCESS-001 s3) -- a Scholar website sign-in,
+// a bookmark. When it is live for them it is preselected and the welcome continues THERE, whatever they
+// choose to open first next time: an explicit request outranks the primary. When it is not live it is
+// ignored, and the experience layout shows the governed not-active state if they go back to it.
+//
 // ⚠ IT CREATES NOTHING BUT A PREFERENCE. No identity, no Passport, no entitlement. The account the
 // person signed in with IS their Competen Individual account (COMPETEN-IND-001 D4).
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Welcome" }); }
 
-export default async function Welcome() {
+export default async function Welcome({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const shell = await individualShell();
   if (shell.state === "DISABLED") notFound();
   if (shell.state !== "READY") redirect("/individual/access");
   const { membership, live, profile } = shell.ctx;
   if (live.length === 0) redirect("/individual/home");
-  if (membership.onboardedAt) redirect("/individual/home");
-  const initial = effectivePrimary(membership.primaryExperience, live) ?? live[0];
+  const asked = requestedExperience((await searchParams).for);
+  const requested = asked && live.includes(asked) ? asked : null;
+  if (membership.onboardedAt) redirect(requested ? `/individual/${requested}` : "/individual/home");
+  const initial = requested ?? effectivePrimary(membership.primaryExperience, live) ?? live[0];
   const firstName = profile.fullName?.split(" ")[0] ?? null;
 
   return (
@@ -62,8 +72,8 @@ export default async function Welcome() {
         </section>
 
         <section className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-          <PrimaryChoice live={live} initial={initial} completeOnboarding
-            submitLabel={live.length > 1 ? "Continue" : `Continue to ${EXPERIENCES[live[0]].name}`} />
+          <PrimaryChoice live={live} initial={initial} completeOnboarding continueTo={requested}
+            submitLabel={requested ? `Continue to ${EXPERIENCES[requested].name}` : live.length > 1 ? "Continue" : `Continue to ${EXPERIENCES[live[0]].name}`} />
         </section>
       </div>
     </main>

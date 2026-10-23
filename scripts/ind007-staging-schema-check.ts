@@ -104,6 +104,11 @@ async function main() {
       out.taxonomy = await q(`select t.kind, count(tt.id)::int as terms, coalesce(string_agg(tt.value, ', ' order by tt.sort_order, tt.value), '') as sample
         from taxonomies t left join taxonomy_terms tt on tt.taxonomy_id = t.id group by t.kind order by t.kind`);
     }
+    if (process.argv.includes("--frameworks")) {
+      // COMPETEN-CONFIG-002 P0: what a person may choose = shared (no hospital), active, published.
+      out.sharedFrameworksByStatus = await q(`select coalesce(pub_status, '(null)') as pub_status, count(*)::int as n
+        from frameworks where hospital_id is null and is_active = true group by 1 order by 1`);
+    }
     if (process.argv.includes("--detail")) {
       out.policies = fp.policies;
       out.generated = fp.columns.filter(r => r.is_generated === "ALWAYS");
