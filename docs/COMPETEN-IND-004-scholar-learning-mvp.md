@@ -5,8 +5,8 @@
 | **Date** | 2026-10-22 |
 | **Status** | Built on branch `ind-004/scholar-mvp`, cut from `ind-003/individual-foundation` at `d6252ad6`. **Not merged, not deployed.** |
 | **Authority** | Owner GO for COMPETEN-IND-004. Builds on ADR-016 (owner rulings D1–D10), COMPETEN-IND-002 §3.2–3.3 and COMPETEN-IND-003. |
-| **Migration** | `372-individual-scholar-learning.sql`. House rules ALL CLEAR. **Not committed and not applied anywhere** until the owner applies it (CLAUDE.md, Database). Never production without a separate GO. |
-| **Staging** | See §6. |
+| **Migration** | `372-individual-scholar-learning.sql`. House rules ALL CLEAR. **Applied and verified on STAGING only (2026-10-23)**, under the owner's continuation GO. Committed to this branch only (`08ea2a31`), not to `main`. **Production: not applied, and a separate GO is required.** |
+| **Staging** | 372 applied twice, idempotent. `scholar-acceptance-harness` 40/40. End-to-end walk-through at 1440 and 390 px. Three defects found and fixed. See §6. |
 
 ## 1. The journey, end to end
 
@@ -74,26 +74,80 @@ It has no function or plpgsql, so no APPLY-WHOLE banner is needed. It references
 
 | Check | Result |
 |---|---|
-| `tsc --noEmit` and `eslint` on the 32 changed files | clean |
-| `vitest run` | **571 / 571** after merging the foundation at `68028b5b`, including 37 new Scholar cases. A real two-page PDF is extracted page by page. The grounding refusals are proven. Progress shows not-measured as null. |
-| `scholar-learning-harness` (new, in the CI list) | **49 / 49**, with 10 planted-failure controls (P1–P10) built in. A real on-disk plant also went red: removing one `user_id` filter in `store.ts` failed A1. Restored, it is green again. Without 372 in the checkout: 40/40, with schema checks printed as NOT RUN. |
-| `individual-foundation-harness` | **41 / 41** at `68028b5b`. That includes 7d and 7e (pages gated through `experienceModulePage`), 11a (`force-dynamic`), and the per-experience write rule, under which Scholar files write only `individual_scholar_*`. |
+| `tsc --noEmit` and `eslint` on changed files | clean (0 errors) |
+| `vitest run` | **575 / 575** at foundation `79690f12`, including 33 Scholar cases. A real PDF is extracted page by page, and the caller's bytes stay intact (§6, defect 1). The grounding refusals are proven. Progress shows not-measured as null. |
+| `scholar-learning-harness` (new, in the CI list) | **50 / 50** (E6 added after staging defect 3), with 10 planted-failure controls (P1–P10) built in. A real on-disk plant also went red: removing one `user_id` filter in `store.ts` failed A1. Restored, it is green again. Without 372 in the checkout: 40/40, with schema checks printed as NOT RUN. |
+| `individual-foundation-harness` | **43 / 43** at `79690f12`. That includes 7d, 7e and 7f (pages gated through `experienceModulePage`, each module with its page), 11a (`force-dynamic`), 11c and 11d (no client before the guard), and the per-experience write rule, under which Scholar files write only `individual_scholar_*`. |
 | `access-doors` / `plane-boundary` | 39 / 39 · 35 / 35 |
 | `auth-boundary` | **ALL GREEN** after the merge, which brought in the CI baseline fix from `main` `6fa4cd52`. Every Scholar route is recognised. |
 | `audit-gate` | Fails on base and branch alike. `unpdf` adds no advisory (see §2). |
+| `build:verify` with `SUPABASE_SERVICE_ROLE_KEY` empty | Exit 0, 526/526 pages. All 14 Scholar routes and pages are ƒ (dynamic). Only the public `/individual` and `/individual/sign-in` are ○. |
 
-## 6. Staging
+## 6. Staging (2026-10-23, owner continuation GO)
 
-Pending owner authorisation to apply 372 to staging. Staging already has 370 and is missing 361–369, none of which 372 needs. Once authorised:
+**Migration 372 on `ezhvpgtcqcdsgylrxgdb`.**
+- **Before.** 372 depends only on `profiles` and `storage.buckets`. 370 and 371 were present (371's `attribution_scope` column included). 373 was not yet applied, and there is no collision: the prefixes differ (`individual_professional_*`), the buckets differ, both bucket inserts are `ON CONFLICT DO NOTHING`, and neither file references the other. Timing was agreed with IND-007, who applied 373 afterwards.
+- **Snapshot.** A read-only schema and row snapshot (staging-guarded) was taken before, after run 1 and after run 2. It excludes `individual_professional_*`.
 
-1. `apply-migrations.ts --only 372`, twice, with an identical schema snapshot after the second run.
-2. Create a pilot-granted test identity (membership, Scholar entitlement with adult confirmation, staging-only test legal versions), then walk the journey on `localhost:3030` against staging. Steps: upload PDF and DOCX; refusals (patient data, scanned PDF, wrong type); consent on, then off, then on; explain; generate and answer MCQs; miss one, then review the card; case question; progress; erase one; erase all. Capture desktop and mobile screenshots.
-3. Cross-user check: a second identity cannot read, answer, review, download or delete the first one's rows or objects (expect 404).
-4. Remove the test identities and their objects.
+| | Result |
+|---|---|
+| Run 1 | Six tables and the private bucket (10 MB, PDF and DOCX). RLS is on every table, with an own-row SELECT policy only. |
+| Run 2 | The Scholar schema hash is identical to run 1 (`b7ba7113…`), so 372 is **idempotent**. |
+| Everything else | The hash of the rest of `public` is identical before and after (`91ce3da5…`), and the other buckets are unchanged. Existing row counts are preserved. 372 inserts no rows. |
+
+**`scholar-acceptance-harness`, 40/40, against the real database.** It is staging-only (`assertSafeTarget`), registered in `privileged-harnesses` STAGING, and UNTRIAGED is 0. It covers:
+- **C, consent:** grant, revoke and re-grant, plus the schema refusal.
+- **U, upload:** a real PDF and DOCX through the anon-key signed upload, page-referenced chunks, and an NHS-number file refused with its object deleted.
+- **R, retrieval:** FTS, with nothing visible across users and hostile input sanitised.
+- **Q, Assess and Revise:** provenance; one card per miss, reset on a second miss; SM-2 rescheduling; progress from the latest answer.
+- **I, isolation:**
+  - store calls by another person answer not-found;
+  - RLS through real sessions, including no writes from the browser;
+  - no direct storage reads;
+  - a working signed URL for the owner;
+  - composite keys, and the attestation, folder, size and DOCX-page checks.
+- **A, AI:** real `generate()` calls, with `plat_ai_requests` rows carrying `attribution_scope='person'` and no tenant.
+- **M, D1:** no estate rows.
+- **E, erasure:** one material, then everything, including an unprocessed upload; the consent record is kept.
+- **Z:** fixtures removed, flag restored.
+
+A planted defect (`getMaterial` without its `user_id` filter) turned I1 red (39/1).
+
+**Release gate.** `individual_app` had no row on staging. Each run recorded that, switched it ON, and restored it to no row. With the gate off, a signed-in, granted person who had accepted the terms got **404** on the page and on the API.
+
+**End-to-end walk-through** on `localhost:3030` against staging, with staging-only test identities and test legal versions. Evidence is in `docs/evidence/COMPETEN-IND-004/`: 11 desktop screenshots at 1440 px and 3 mobile at 390 px.
+- Before 372, the governed "not set up" state.
+- Terms gate, then My Learning with consent off.
+- An NHS-number PDF refused with the reason, and nothing kept.
+- A 3-page PDF giving 3 page-cited sections.
+- Consent on, with the date recorded.
+- "What should be given in the Sepsis Six?" answered from the notes only, cited `[S1]` to *page 2*, with the AI label and the model and prompt shown.
+- Practice questions: 2 kept, 1 dropped by the grounding check.
+- A deliberate wrong answer: the correct option, rationale, verbatim source quote and *page 1*, and "Added to your review cards".
+- Revise: the card revealed with its source and graded, then no longer due.
+- Apply: 3 case questions answered with cited feedback, and the governed "Reviewed clinical cases: not available yet".
+- Progress: 3 of 5 answered, 67% mastery on the latest try, and weeks without answers shown as "No answers".
+- Mobile: no horizontal scroll, and a bottom bar of Home, Study, AI, Passport, Profile.
+- Cross-user: as a second person, the first person's material page, download and delete were **404**, and their search found nothing (no AI call).
+- Before accepting the terms, that second person's API call was 403.
+- Erasure through the UI: rows and object gone, consent kept.
+- `plat_ai_requests` held the three browser calls with `attribution_scope='person'` and no tenant. No audit row held question text.
+
+**Defects found on staging and fixed within scope**
+
+| # | Defect | Fix | Proof |
+|---|---|---|---|
+| 1 | **Every PDF upload was refused.** pdf.js transfers (detaches) the `ArrayBuffer` it is given, so the route then stored `byte_size` 0, and the size CHECK refused it. | `extract.ts` gives pdf.js a copy. `createMaterial` returns the database reason, and the route logs and audits it. | A unit test fails without the fix and passes with it. Acceptance U2–U4 and the walk-through pass. |
+| 2 | **The grounding yield was near zero with the real model.** Explanations counted in words ("in two ways"), and distractors invented thresholds ("two times", "1.5 times", "normal range"). The check was right each time. | Prompts v2 say it explicitly: no number in digits or words that the passage lacks, and distractors built only from the passage's terms. The check is unchanged. | Against the real model: explanations 4/4 shown (was 0/2), questions 9 of 12 kept, and every remaining drop is a genuinely invented number. |
+| 3 | **Revise returned a 500 when a card was due.** The server page called a function exported from the `"use client"` module. | `sourceHref` and `studyHref` moved to `question-view.ts`. | New harness check E6; the planted original turns it red. |
+
+**Known limitation, recorded rather than fixed.** The grounding check pins numbers, months and clinical finding-words. A *distractor* that names a term the notes do not contain (for example "Arrange an urgent CT scan" as a wrong option) is not caught, because it is not asserted as true. Questions carry the not-clinically-reviewed label.
+
+**Cleanup.** Test identities, their objects and rows were removed, and the flag was restored. Every Scholar table on staging is empty, and `profiles` is back at its pre-fixture count.
 
 ## 7. Owner decisions and blockers
 
-1. **Apply 372 to staging** (§6). After that, production is a separate GO, and it is also blocked by the production schema freeze (COMPETEN-OPS-001).
+1. **Production for 372** is a separate GO. It is also blocked by the production schema freeze (COMPETEN-OPS-001). 372 is committed on this branch only, pending the CLAUDE.md amendment for staging-verified migrations.
 2. **Consent notice wording** (`CONSENT_NOTICE` in `config.ts`, version `scholar-ai-uploads-notice-v1`). This is a product notice, not legal text. It should be reviewed alongside the COMPETEN-LEGAL-001 documents before pilot use.
 3. **Clinical-review record** for shared content: who reviews, when and with what scope. This is a governance design. Until it exists, Apply serves only the person's own material.
 4. **OCR for scanned PDFs**: not built. A scanned PDF is refused with that reason.
@@ -101,5 +155,5 @@ Pending owner authorisation to apply 372 to staging. Staging already has 370 and
 
 ## 8. Next
 
-- Staging acceptance (§6). Then an HQ console page for pilot grants, so Scholar pilots can be provisioned without the API.
+- Staging acceptance is done (§6). Next is owner review of this branch and of 372 for production, which needs a separate GO and is blocked by the production freeze. Then an HQ console page for pilot grants, so Scholar pilots can be provisioned without the API.
 - Post-MVP: OCR, audio (TTS), persisted OSCE prep on `osce_stations`, adaptive question selection over `individual_scholar_attempt`, and a clinical-review record for shared cases.
