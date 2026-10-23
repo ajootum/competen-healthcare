@@ -12,7 +12,7 @@
 // "not measured yet". A week with no answers has accuracy null, and the trend shows a gap, not a 0% bar.
 // A zero would read as a measurement, and nothing was measured.
 
-export type ProgressMaterial = { id: string; title: string };
+export type ProgressMaterial = { id: string; title: string; createdAt?: string };
 export type ProgressQuestion = { id: string; materialId: string; kind: "mcq" | "case" };
 export type ProgressAttempt = { questionId: string; correct: boolean; answeredAt: string };
 export type ProgressCard = { materialId: string; status: "active" | "mastered"; nextReviewAt: string };

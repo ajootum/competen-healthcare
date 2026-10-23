@@ -20,12 +20,19 @@ import type { QuestionKind } from "./generation";
 //
 // Pure: the store (store.ts) does the reads and writes, keyed on the caller's own user_id.
 
-export type StudyAchievementKind = "practice_questions" | "practice_scenarios";
-export const STUDY_ACHIEVEMENT_KINDS: readonly StudyAchievementKind[] = ["practice_questions", "practice_scenarios"];
+export type StudyAchievementKind = "practice_questions" | "practice_scenarios" | "revision_reviews";
+export const STUDY_ACHIEVEMENT_KINDS: readonly StudyAchievementKind[] = ["practice_questions", "practice_scenarios", "revision_reviews"];
 
-export const STUDY_ACHIEVEMENT: Record<StudyAchievementKind, { questionKind: QuestionKind; name: string; one: string; many: string }> = {
-  practice_questions: { questionKind: "mcq", name: "Practice questions", one: "practice question", many: "practice questions" },
-  practice_scenarios: { questionKind: "case", name: "Practice scenarios", one: "practice scenario", many: "practice scenarios" },
+/**
+ * Where each kind's one figure comes from. Two count distinct practice questions answered, by question kind.
+ * revision_reviews (COMPETEN-SCHOLAR-01 S5, migration 391) counts spaced-revision reviews made on the
+ * material, from individual_scholar_review -- a count, never the recall grade. All three only grow while
+ * the material exists.
+ */
+export const STUDY_ACHIEVEMENT: Record<StudyAchievementKind, { questionKind: QuestionKind | null; name: string; one: string; many: string; verb: string }> = {
+  practice_questions: { questionKind: "mcq", name: "Practice questions", one: "practice question", many: "practice questions", verb: "answered from own notes" },
+  practice_scenarios: { questionKind: "case", name: "Practice scenarios", one: "practice scenario", many: "practice scenarios", verb: "answered from own notes" },
+  revision_reviews: { questionKind: null, name: "Revision", one: "revision review", many: "revision reviews", verb: "of own notes" },
 };
 
 export const isStudyAchievementKind = (v: unknown): v is StudyAchievementKind =>
@@ -64,9 +71,14 @@ export type EligibleAchievement = {
 export type ChoiceRow = { materialId: string; achievement: StudyAchievementKind; label: string; includedAt: string };
 type QuestionRef = { id: string; materialId: string; kind: QuestionKind };
 type AttemptRef = { questionId: string; answeredAt: string };
+/** One revision review (migration 391): which material, and when. Never the grade. */
+export type ReviewRef = { materialId: string; reviewedAt: string };
 
-/** Pure: distinct questions answered and the latest answer, per material and achievement kind. */
-function answeredBy(questions: readonly QuestionRef[], attempts: readonly AttemptRef[]) {
+/**
+ * Pure: per material and achievement kind, the one figure and the latest activity -- distinct questions
+ * answered for the two practice kinds, reviews made for revision.
+ */
+function answeredBy(questions: readonly QuestionRef[], attempts: readonly AttemptRef[], reviews: readonly ReviewRef[] = []) {
   const byId = new Map(questions.map(q => [q.id, q]));
   const seen = new Map<string, { ids: Set<string>; last: string | null }>();
   for (const a of attempts) {
@@ -80,7 +92,18 @@ function answeredBy(questions: readonly QuestionRef[], attempts: readonly Attemp
     if (!s.last || a.answeredAt > s.last) s.last = a.answeredAt;
     seen.set(key, s);
   }
+  const revision = new Map<string, { n: number; last: string | null }>();
+  for (const r of reviews) {
+    const s = revision.get(r.materialId) ?? { n: 0, last: null };
+    s.n++;
+    if (!s.last || r.reviewedAt > s.last) s.last = r.reviewedAt;
+    revision.set(r.materialId, s);
+  }
   return (materialId: string, kind: StudyAchievementKind) => {
+    if (kind === "revision_reviews") {
+      const r = revision.get(materialId);
+      return { answered: r?.n ?? 0, lastStudied: r?.last ?? null };
+    }
     const s = seen.get(`${materialId}|${kind}`);
     return { answered: s?.ids.size ?? 0, lastStudied: s?.last ?? null };
   };
@@ -91,8 +114,8 @@ function answeredBy(questions: readonly QuestionRef[], attempts: readonly Attemp
  * shown as an achievement of zero -- it cannot happen while the material exists, and showing less is the
  * safe failure on a page a third party reads.
  */
-export function studyAchievementsFrom(input: { choices: readonly ChoiceRow[]; questions: readonly QuestionRef[]; attempts: readonly AttemptRef[] }): StudyAchievement[] {
-  const stat = answeredBy(input.questions, input.attempts);
+export function studyAchievementsFrom(input: { choices: readonly ChoiceRow[]; questions: readonly QuestionRef[]; attempts: readonly AttemptRef[]; reviews?: readonly ReviewRef[] }): StudyAchievement[] {
+  const stat = answeredBy(input.questions, input.attempts, input.reviews);
   return input.choices
     .map(c => ({ ...c, ...stat(c.materialId, c.achievement) }))
     .filter(a => a.answered > 0);
@@ -101,8 +124,9 @@ export function studyAchievementsFrom(input: { choices: readonly ChoiceRow[]; qu
 /** Pure: every achievement the person has earned, one per material and kind with at least one answer. */
 export function eligibleAchievements(input: {
   materials: readonly { id: string; title: string }[]; questions: readonly QuestionRef[]; attempts: readonly AttemptRef[]; choices: readonly ChoiceRow[];
+  reviews?: readonly ReviewRef[];
 }): EligibleAchievement[] {
-  const stat = answeredBy(input.questions, input.attempts);
+  const stat = answeredBy(input.questions, input.attempts, input.reviews);
   const chosen = new Map(input.choices.map(c => [`${c.materialId}|${c.achievement}`, c.label]));
   const out: EligibleAchievement[] = [];
   for (const m of input.materials) {
@@ -114,8 +138,8 @@ export function eligibleAchievements(input: {
   return out;
 }
 
-/** "12 practice questions answered from own notes" -- the one figure shown. Never accuracy. */
+/** "12 practice questions answered from own notes", "8 revision reviews of own notes" -- the one figure shown. Never accuracy or a grade. */
 export function studyDetail(a: { achievement: StudyAchievementKind; answered: number }): string {
   const k = STUDY_ACHIEVEMENT[a.achievement];
-  return `${a.answered} ${a.answered === 1 ? k.one : k.many} answered from own notes`;
+  return `${a.answered} ${a.answered === 1 ? k.one : k.many} ${k.verb}`;
 }

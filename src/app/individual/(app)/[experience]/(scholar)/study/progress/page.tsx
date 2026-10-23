@@ -3,7 +3,9 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { listPassportChoices, progressRows } from "@/lib/individual/scholar/store";
+import { listPassportChoices, progressRows, reviewRows } from "@/lib/individual/scholar/store";
+import { loadLearningIntelligence } from "@/lib/individual/scholar/intelligence-data";
+import LearningIntelligence from "../_components/LearningIntelligence";
 import { eligibleAchievements } from "@/lib/individual/scholar/passport-items";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { EVIDENCE_LABEL } from "@/lib/individual/passport";
@@ -111,14 +113,18 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
-  const rows = await progressRows(ctx.admin, ctx.userId);
+  const [rows, reviews] = await Promise.all([progressRows(ctx.admin, ctx.userId), reviewRows(ctx.admin, ctx.userId)]);
   const today = new Date().toISOString().slice(0, 10);
+  const policy = await loadIndividualPolicy(ctx.admin);
+  // COMPETEN-SCHOLAR-01 S5: the four measures, from the rows already read (nothing is read twice).
+  const li = rows.ok ? await loadLearningIntelligence(ctx.admin, ctx.userId, policy, today, { pre: { rows, reviews } }) : null;
+  const reviewRefs = reviews.ok && reviews.data ? reviews.data : [];
   const p = rows.ok ? buildProgress({ ...rows.data, today }) : null;
   const choices = rows.ok ? await listPassportChoices(ctx.admin, ctx.userId) : null;
-  const allEligible = rows.ok && choices?.ok ? eligibleAchievements({ ...rows.data, choices: choices.data }) : [];
+  const allEligible = rows.ok && choices?.ok ? eligibleAchievements({ ...rows.data, choices: choices.data, reviews: reviewRefs }) : [];
   // Which kinds may be newly chosen is Individual policy (COMPETEN-CONFIG-002). One already chosen stays listed,
   // so the person can still see it and take it off: switching a kind off never rewrites their Passport.
-  const offered = new Set<string>((await loadIndividualPolicy(ctx.admin)).passportAchievementKinds);
+  const offered = new Set<string>(policy.passportAchievementKinds);
   const eligible = allEligible.filter(a => a.chosenLabel !== null || offered.has(a.achievement));
 
   // COMPETEN-SCHOLAR-01 S4: progress by competency, through the catalogue interface. Absent where 387/388
@@ -167,6 +173,8 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
             </dl>
 
             <CompetencySection learner={learner} progress={cp} unreadable={cUnreadable} accent={x.accent} />
+
+            {li?.ok ? <LearningIntelligence li={li.data} accent={x.accent} /> : <div className="mt-8"><Unreadable what="learning intelligence" /></div>}
 
             <section aria-labelledby="accuracy-h" className="mt-8">
               <h2 id="accuracy-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">By material</h2>

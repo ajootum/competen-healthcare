@@ -26,6 +26,10 @@ export const CHUNK_MAX = 1800;
 export const RETRIEVAL_LIMIT = 5;
 export const QUESTION_MAX = 600;
 export const QUESTIONS_PER_REQUEST = 3;
+// Learning Intelligence (COMPETEN-SCHOLAR-01 S5) defaults. Governed by Individual policy (policy.ts), which
+// clamps them: answers needed before a figure is shown, and the engagement window in days.
+export const INSIGHT_MIN_ANSWERS = 5;
+export const INSIGHT_WINDOW_DAYS = 28;
 
 // ── PROVENANCE ── COMPETEN-IND-002 s3.3: "Every AI artefact stores its source chunk ids, model and prompt
 // version. Prompts are inline strings today, so a prompt version constant is needed." Change a prompt in

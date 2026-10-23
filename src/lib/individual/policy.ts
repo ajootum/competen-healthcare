@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
-import { MAX_MATERIALS_PER_PERSON, QUESTIONS_PER_REQUEST } from "./scholar/config";
+import { INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, MAX_MATERIALS_PER_PERSON, QUESTIONS_PER_REQUEST } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
 
 // ── COMPETEN INDIVIDUAL POLICY ── COMPETEN-CONFIG-002 items 4-7 ─────────────────────────────────────────
@@ -35,7 +35,8 @@ export const POLICY_PATH_PREFIX = "individual.policy.";
 /** The estate default (src/lib/ai/quota.ts HOURLY_LIMIT without AI_HOURLY_LIMIT set). */
 export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
-export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person";
+export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
+  | "scholar_insight_min_answers" | "scholar_insight_window_days";
 export type SetPolicyKey = "passport_achievement_kinds";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues";
@@ -84,6 +85,22 @@ export const POLICIES: readonly PolicyDef[] = [
     help: "How many study materials one person may keep uploaded at once.",
     fallback: MAX_MATERIALS_PER_PERSON, min: 1, max: MAX_MATERIALS_PER_PERSON,
     limitReason: "Fifty is the reviewed storage allowance. Each file stays capped at 10 MB by the database.",
+  },
+  // COMPETEN-SCHOLAR-01 S5 (Learning Intelligence). The two thresholds its measures honour, so how much data a
+  // figure needs, and over what window engagement is counted, are governed here rather than hard-coded.
+  {
+    key: "scholar_insight_min_answers", kind: "int", product: "Scholar", unit: "answers",
+    label: "Answers needed before a progress figure is shown",
+    help: "How many practice questions, scenarios or revision reviews a person must have answered before Scholar shows an accuracy or recall figure for them. Below it, the page says there is too little practice to say.",
+    fallback: INSIGHT_MIN_ANSWERS, min: 3, max: 50,
+    limitReason: "Under three, one answer swings a percentage by a third or more. Over fifty hides progress from most students.",
+  },
+  {
+    key: "scholar_insight_window_days", kind: "int", product: "Scholar", unit: "days",
+    label: "Engagement window",
+    help: "Over how many recent days Scholar counts study days, answers and revision reviews for the engagement measure.",
+    fallback: INSIGHT_WINDOW_DAYS, min: 7, max: 90,
+    limitReason: "Under a week is noise. Over three months stops reflecting current study habits.",
   },
   {
     key: "passport_achievement_kinds", kind: "set", product: "Scholar",
@@ -167,6 +184,8 @@ export type IndividualPolicy = {
   aiHourlyLimit: number;
   scholarQuestionsPerRequest: number;
   scholarMaterialsPerPerson: number;
+  scholarInsightMinAnswers: number;
+  scholarInsightWindowDays: number;
   passportAchievementKinds: StudyAchievementKind[];
   /** S1: framework ids each experience may offer. Empty by default. */
   scholarCatalogues: string[];
@@ -185,6 +204,8 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     aiHourlyLimit: int("ai_hourly_limit"),
     scholarQuestionsPerRequest: int("scholar_questions_per_request"),
     scholarMaterialsPerPerson: int("scholar_materials_per_person"),
+    scholarInsightMinAnswers: int("scholar_insight_min_answers"),
+    scholarInsightWindowDays: int("scholar_insight_window_days"),
     passportAchievementKinds: clampSet(policyDef("passport_achievement_kinds") as SetPolicy, published.get(policyPath("passport_achievement_kinds"))) as StudyAchievementKind[],
     scholarCatalogues: clampCatalogues(policyDef("scholar_catalogues") as CataloguePolicy, published.get(policyPath("scholar_catalogues"))),
     professionalCatalogues: clampCatalogues(policyDef("professional_catalogues") as CataloguePolicy, published.get(policyPath("professional_catalogues"))),
