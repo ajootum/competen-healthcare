@@ -35,7 +35,8 @@ describe("experience registry", () => {
   it("composes navigation: Home, the experience's own modules, then the foundation; the bar caps at five without Settings", () => {
     const saved = [...SCHOLAR.modules];
     try {
-      SCHOLAR.modules.push(
+      // Replace, not append: the test fixes its own module list, whatever Scholar actually ships.
+      SCHOLAR.modules.splice(0, SCHOLAR.modules.length,
         { key: "study", segment: "study", label: "Study", short: "Study", icon: "S", bottom: true },
         { key: "rev", segment: "revision", label: "Revision", short: "Rev", icon: "R", bottom: true },
         { key: "cases", segment: "cases", label: "Cases", short: "Cases", icon: "C" },

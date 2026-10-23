@@ -157,7 +157,12 @@ describe("the Passport and the AI see the same own record", () => {
 describe("the registry composes each experience's navigation", () => {
   it("puts Professional's modules after Home and before the foundation, and leaves Scholar's unchanged", () => {
     expect(navFor("professional").map(n => n.segment)).toEqual(["", "registration", "development", "cpd", "evidence", "progress", "assistant", "passport", "profile", "settings"]);
-    expect(navFor("scholar").map(n => n.key)).toEqual(FOUNDATION_NAV.map(n => n.module));
+    // Each experience shows its own modules and never the other's (Scholar has `study` since IND-004).
+    const pro = EXPERIENCES.professional.modules.map(m => m.segment);
+    const sch = EXPERIENCES.scholar.modules.map(m => m.segment);
+    expect(navFor("scholar").map(n => n.segment).filter(s => pro.includes(s))).toEqual([]);
+    expect(navFor("professional").map(n => n.segment).filter(s => sch.includes(s))).toEqual([]);
+    expect(navFor("scholar").map(n => n.key).filter(k => FOUNDATION_NAV.some(f => f.module === k))).toEqual(FOUNDATION_NAV.map(n => n.module));
     expect(navFor("professional").some(n => n.segment === "share")).toBe(false);
   });
 

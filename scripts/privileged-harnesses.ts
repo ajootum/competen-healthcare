@@ -198,6 +198,13 @@ const STAGING: Listed[] = [
       + "records only for a Professional link, shared frameworks only, no estate rows. Creates and deletes its own "
       + "harness-ind007-* identities. Refuses production via assertSafeTarget, and reports PEND until migration 373 is applied.",
   },
+  {
+    file: "scholar-acceptance-harness.ts",
+    note: "COMPETEN-IND-004 Scholar learning journey against migration 372: consent, real PDF and DOCX upload with the "
+      + "anon key, FTS retrieval, questions, SM-2 cards, progress, cross-user isolation (store, RLS, storage, "
+      + "composite keys), AI through the gateway when configured, D1, erasure. Creates and deletes its own "
+      + "harness-ind004-* identities, turns individual_app ON and restores it. PEND (exit 0) until 372 is applied.",
+  },
   { file: "mos-phase1-harness.ts", note: "CPR-CORE-MOS-001 phase 1. 20/20." },
   { file: "mos-phase2-harness.ts", note: "MOS phase 2. 25/25." },
   { file: "mos-phase3-harness.ts", note: "MOS phase 3. 73/73." },
