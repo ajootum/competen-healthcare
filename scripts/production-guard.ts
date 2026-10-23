@@ -79,6 +79,37 @@ export function judgeDbTarget(conn: string | null | undefined): TargetVerdict {
   return { ok: true, ref };
 }
 
+/** The environment variable that carries the owner GO authorising a read-only production run. */
+export const PRODUCTION_READ_GO_ENV = "COMPETEN_PRODUCTION_READ_GO";
+
+export type ProductionReadDecision =
+  | { allowed: true; production: false }
+  | { allowed: true; production: true; go: string }
+  | { allowed: false; reason: "NOT_AUTHORISED" | "UNIDENTIFIABLE" };
+
+/**
+ * May this read-only harness run against `url`? A non-production target may. PRODUCTION needs BOTH an
+ * explicit `--production` argument AND a named owner GO in COMPETEN_PRODUCTION_READ_GO. An unidentifiable
+ * target is refused.
+ *
+ * ⚠ COMPETEN-OPS-001 R13 (2026-10-23). .env.local in every worktree names production, so a harness run
+ * with no flag read production twice that day without a GO. Both reads were read-only, but production
+ * access is an owner decision, not a default. The flag says "I mean production"; the variable says which
+ * GO allowed it. Neither alone is enough, so a stray flag or a stale shell variable cannot open it.
+ */
+export function productionReadDecision(
+  url: string | null | undefined,
+  argv: readonly string[] = process.argv,
+  env: Record<string, string | undefined> = process.env,
+): ProductionReadDecision {
+  const ref = refOf(url);
+  if (ref === null) return { allowed: false, reason: "UNIDENTIFIABLE" };
+  if (ref !== PRODUCTION_REF) return { allowed: true, production: false };
+  const go = (env[PRODUCTION_READ_GO_ENV] ?? "").trim();
+  if (argv.includes("--production") && go.length >= 6) return { allowed: true, production: true, go };
+  return { allowed: false, reason: "NOT_AUTHORISED" };
+}
+
 /** True when this URL names the production project. Used by request-level blocks. */
 export function isProductionUrl(url: string): boolean {
   const host = (() => { try { return new URL(url).host; } catch { return ""; } })();
