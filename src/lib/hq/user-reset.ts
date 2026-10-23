@@ -43,6 +43,10 @@ export const NEUTRAL_MESSAGE = "If that account can receive a password reset, an
 export const SELF_MESSAGE = "You cannot send yourself an administrator reset. Use Forgot password on the sign-in page.";
 export const ACTOR_LIMIT_MESSAGE = `You have sent ${ACTOR_LIMIT} password resets in the last hour. Try again later.`;
 
+/** A user id as Supabase Auth issues it. Local on purpose: HQ code does not import a product's validators. */
+export const isUserId = (v: unknown): v is string =>
+  typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
 export const resetReturnUrl = () => `${SITE_URL}/reset-password?initiated=admin`;
 
 export type RefusalReason = "unknown_target" | "owner_target" | "suspended" | "unverified_email" | "target_rate_limited" | "send_failed";
