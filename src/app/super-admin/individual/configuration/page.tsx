@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
-import { POLICIES, POLICY_SCOPE, POLICY_PATH_PREFIX, clampInt, clampSet, policyPath, type PolicyDef } from "@/lib/individual/policy";
+import { POLICIES, POLICY_SCOPE, POLICY_PATH_PREFIX, clampInt, clampSet, clampCatalogues, policyPath, type PolicyDef } from "@/lib/individual/policy";
 import { IntDraft, PublishBar, RollbackButton, SetDraft } from "./_components/PolicyControls";
 
 // /super-admin/individual/configuration -- COMPETEN-CONFIG-002 item 6.
@@ -20,8 +20,12 @@ export const metadata: Metadata = { title: "Competen Individual policy" };
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" }) + " UTC";
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
-function describe(def: PolicyDef, settings: any): string {
+function describe(def: PolicyDef, settings: any, names: Map<string, string> = new Map()): string {
   if (def.kind === "int") return `${clampInt(def, settings)} ${def.unit}`;
+  if (def.kind === "catalogues") {
+    const ids = clampCatalogues(def, settings);
+    return ids.length ? ids.map(id => names.get(id) ?? "A catalogue no longer shared and published (offers nothing)").join(", ") : "None offered (nothing reaches a person until a catalogue is chosen)";
+  }
   const on = clampSet(def, settings);
   return on.length ? def.options.filter(o => on.includes(o.value)).map(o => o.label).join(", ") : "None offered";
 }
@@ -31,11 +35,15 @@ export default async function IndividualPolicyPage() {
   const admin = ctx.admin;
   const scope = (q: any) => q.eq("scope_type", POLICY_SCOPE.scopeType).eq("scope_ref", POLICY_SCOPE.scopeRef);
 
-  const [ovr, ver, aud] = await Promise.all([
+  const [ovr, ver, aud, cats] = await Promise.all([
     scope(admin.from("workspace_config_overrides").select("config_path, draft, published, updated_by_name, updated_at")).like("config_path", `${POLICY_PATH_PREFIX}%`),
     scope(admin.from("workspace_config_versions").select("id, note, status, published_by_name, created_at, snapshot")).order("created_at", { ascending: false }).limit(25),
     scope(admin.from("workspace_config_audit").select("action, config_path, actor_name, created_at, new_value")).order("created_at", { ascending: false }).limit(40),
+    // S1: the catalogues an allowlist may name -- shared, active, published -- and their layer.
+    admin.from("frameworks").select("id, name, competency_layer").is("hospital_id", null).eq("is_active", true).eq("pub_status", "published").order("name"),
   ]);
+  const catalogueOptions = ((cats.data ?? []) as any[]).map(f => ({ value: String(f.id).toLowerCase(), label: f.competency_layer ? `${f.name} (${f.competency_layer})` : `${f.name} (layer not set)` }));
+  const catalogueNames = new Map(catalogueOptions.map(o => [o.value, o.label]));
   const unreadable = !!(ovr.error || ver.error || aud.error);
   const rows = new Map<string, any>((ovr.data ?? []).map((r: any) => [r.config_path, r]));
   const versions: any[] = ver.data ?? [];
@@ -81,7 +89,7 @@ export default async function IndividualPolicyPage() {
           const path = policyPath(def.key);
           const r = rows.get(path);
           const published = r?.published ?? null;
-          const effective = describe(def, published);
+          const effective = describe(def, published, catalogueNames);
           const raw = def.kind === "int" ? Number(published?.value) : null;
           const clamped = def.kind === "int" && published != null && Number.isFinite(raw) && clampInt(def, published) !== raw;
           const source = published == null
@@ -100,17 +108,19 @@ export default async function IndividualPolicyPage() {
                 <div><dt className="text-[12px] font-semibold text-gray-500">Effective now</dt><dd className="font-semibold text-gray-900">{effective}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Source</dt><dd className="text-gray-800">{source}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Effective since</dt><dd className="text-gray-800">{published == null ? "Not applicable: the default has always applied" : at ? fmt(at) : "Not recorded in the recent versions"}</dd></div>
-                <div><dt className="text-[12px] font-semibold text-gray-500">Fixed limit</dt><dd className="text-gray-800">{def.kind === "int" ? `${def.min} to ${def.max} ${def.unit}. Default ${def.fallback}.` : `Only: ${def.options.map(o => o.label).join(", ")}. Default: all.`} <span className="text-gray-500">{def.limitReason}</span></dd></div>
+                <div><dt className="text-[12px] font-semibold text-gray-500">Fixed limit</dt><dd className="text-gray-800">{def.kind === "int" ? `${def.min} to ${def.max} ${def.unit}. Default ${def.fallback}.` : def.kind === "catalogues" ? `Shared, active, published catalogues only, at most ${def.max}. Default: none.` : `Only: ${def.options.map(o => o.label).join(", ")}. Default: all.`} <span className="text-gray-500">{def.limitReason}</span></dd></div>
               </dl>
               {draftDiffers && (
                 <p className="mt-3 rounded-lg bg-[var(--cmp-surface-information)] px-3 py-1.5 text-[13px] text-blue-900">
-                  Unpublished draft: {describe(def, r.draft)}{r.updated_by_name ? `, saved by ${r.updated_by_name}` : ""}.
+                  Unpublished draft: {describe(def, r.draft, catalogueNames)}{r.updated_by_name ? `, saved by ${r.updated_by_name}` : ""}.
                 </p>
               )}
               <div className="mt-3 border-t border-gray-100 pt-3">
                 {def.kind === "int"
                   ? <IntDraft policyKey={def.key} label={def.label} unit={def.unit} min={def.min} max={def.max} draft={clampInt(def, r?.draft ?? published)} hasOverride={!!r} />
-                  : <SetDraft policyKey={def.key} options={[...def.options]} draft={clampSet(def, r?.draft ?? published)} hasOverride={!!r} />}
+                  : def.kind === "catalogues"
+                    ? <SetDraft policyKey={def.key} legend="Draft: catalogues offered" options={catalogueOptions} draft={clampCatalogues(def, r?.draft ?? published)} hasOverride={!!r} />
+                    : <SetDraft policyKey={def.key} options={[...def.options]} draft={clampSet(def, r?.draft ?? published)} hasOverride={!!r} />}
               </div>
             </article>
           );
@@ -141,7 +151,7 @@ export default async function IndividualPolicyPage() {
                 <ul className="mt-2 grid gap-1 text-[13px] text-gray-700 md:grid-cols-2">
                   {POLICIES.map(def => {
                     const e = (v.snapshot ?? []).find((s: any) => s.config_path === policyPath(def.key));
-                    return <li key={def.key}><span className="text-gray-500">{def.label}:</span> {e ? describe(def, e.settings) : `default (${describe(def, null)})`}</li>;
+                    return <li key={def.key}><span className="text-gray-500">{def.label}:</span> {e ? describe(def, e.settings, catalogueNames) : `default (${describe(def, null, catalogueNames)})`}</li>;
                   })}
                 </ul>
               </li>
@@ -158,7 +168,7 @@ export default async function IndividualPolicyPage() {
           <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
             {(aud.data ?? []).map((a: any, i: number) => {
               const def = POLICIES.find(p => policyPath(p.key) === a.config_path);
-              const what = a.action === "set" ? `saved a draft of ${def?.label ?? a.config_path}: ${def ? describe(def, a.new_value) : "value"}`
+              const what = a.action === "set" ? `saved a draft of ${def?.label ?? a.config_path}: ${def ? describe(def, a.new_value, catalogueNames) : "value"}`
                 : a.action === "reset" ? `set ${def?.label ?? a.config_path} back to its default`
                 : a.action === "publish" ? "published a version"
                 : "restored an earlier version";

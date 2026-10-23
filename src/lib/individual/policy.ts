@@ -37,12 +37,17 @@ export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
 export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person";
 export type SetPolicyKey = "passport_achievement_kinds";
-export type PolicyKey = IntPolicyKey | SetPolicyKey;
+/** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
+export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues";
+export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
 export type IntPolicy = Common & { key: IntPolicyKey; kind: "int"; unit: string; fallback: number; min: number; max: number };
 export type SetPolicy = Common & { key: SetPolicyKey; kind: "set"; options: readonly { value: string; label: string }[]; fallback: readonly string[] };
-export type PolicyDef = IntPolicy | SetPolicy;
+/** A list of framework ids. Options are not fixed in code: the route checks each against the library. */
+export type CataloguePolicy = Common & { key: CataloguePolicyKey; kind: "catalogues"; max: number };
+export type PolicyDef = IntPolicy | SetPolicy | CataloguePolicy;
+export const CATALOGUES_MAX = 50;
 
 export const POLICIES: readonly PolicyDef[] = [
   {
@@ -88,7 +93,22 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: STUDY_ACHIEVEMENT_KINDS,
     limitReason: "Only the kinds migration 375 records can be offered.",
   },
+  // ⚠ COMPETEN-SCHOLAR-01 S1: EMPTY UNTIL HQ CHOOSES. No catalogue reaches a person by existing -- not the
+  // shared frameworks already in the library, not a newly published one. Unreadable is empty too.
+  {
+    key: "scholar_catalogues", kind: "catalogues", product: "Scholar", max: CATALOGUES_MAX,
+    label: "Competency catalogues Scholar may map study to",
+    help: "The shared competency catalogues Scholar may link a person's study materials to. Nothing is offered until a catalogue is chosen here.",
+    limitReason: "Only shared, active, published catalogues can be chosen, at most 50. Empty by default: nothing is offered automatically.",
+  },
+  {
+    key: "professional_catalogues", kind: "catalogues", product: "Professional", max: CATALOGUES_MAX,
+    label: "Competency catalogues Professional may offer",
+    help: "The shared competency catalogues a person may link a development need or evidence to in Competen Professional. Links already made keep their names.",
+    limitReason: "Only shared, active, published catalogues can be chosen, at most 50. Empty by default: nothing is offered automatically.",
+  },
 ];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const policyPath = (key: PolicyKey) => `${POLICY_PATH_PREFIX}${key}`;
 export const policyDef = (key: string): PolicyDef | undefined => POLICIES.find(p => p.key === key);
@@ -108,6 +128,12 @@ export function clampSet(p: SetPolicy, settings: any): string[] {
   return p.options.map(o => o.value).filter(v => chosen.has(v));
 }
 
+/** Pure: a catalogue allowlist from a stored settings object. Well-formed ids only, deduplicated, capped. */
+export function clampCatalogues(p: CataloguePolicy, settings: any): string[] {
+  if (settings == null || !Array.isArray(settings.ids)) return [];
+  return [...new Set(settings.ids.filter((v: unknown): v is string => typeof v === "string" && UUID.test(v)).map((v: string) => v.toLowerCase()))].slice(0, p.max) as string[];
+}
+
 /**
  * Pure: a draft as the administrator sent it, or why it is refused. Out of range is REFUSED here (not
  * silently clamped) so the administrator sees the limit rather than a different number than they typed.
@@ -120,6 +146,13 @@ export function validateDraft(key: unknown, raw: unknown): { ok: true; def: Poli
     if (!Number.isInteger(n)) return { ok: false, error: `${def.label} must be a whole number.` };
     if (n < def.min || n > def.max) return { ok: false, error: `${def.label} must be between ${def.min} and ${def.max} ${def.unit}. That limit is fixed.` };
     return { ok: true, def, settings: { value: n } };
+  }
+  if (def.kind === "catalogues") {
+    if (!Array.isArray(raw) || raw.some(v => typeof v !== "string" || !UUID.test(v))) return { ok: false, error: `${def.label}: send the list of catalogue ids to allow.` };
+    const ids = [...new Set(raw.map(v => v.toLowerCase()))];
+    if (ids.length > def.max) return { ok: false, error: `${def.label}: at most ${def.max} catalogues. That limit is fixed.` };
+    // Whether each id is a shared, active, published framework is checked by the route, against the library.
+    return { ok: true, def, settings: { ids } };
   }
   if (!Array.isArray(raw) || raw.some(v => typeof v !== "string")) return { ok: false, error: `${def.label}: send the list of kinds to allow.` };
   const known = new Set(def.options.map(o => o.value));
@@ -135,6 +168,9 @@ export type IndividualPolicy = {
   scholarQuestionsPerRequest: number;
   scholarMaterialsPerPerson: number;
   passportAchievementKinds: StudyAchievementKind[];
+  /** S1: framework ids each experience may offer. Empty by default. */
+  scholarCatalogues: string[];
+  professionalCatalogues: string[];
 };
 
 type Row = { config_path: string; published: any };
@@ -150,6 +186,8 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarQuestionsPerRequest: int("scholar_questions_per_request"),
     scholarMaterialsPerPerson: int("scholar_materials_per_person"),
     passportAchievementKinds: clampSet(policyDef("passport_achievement_kinds") as SetPolicy, published.get(policyPath("passport_achievement_kinds"))) as StudyAchievementKind[],
+    scholarCatalogues: clampCatalogues(policyDef("scholar_catalogues") as CataloguePolicy, published.get(policyPath("scholar_catalogues"))),
+    professionalCatalogues: clampCatalogues(policyDef("professional_catalogues") as CataloguePolicy, published.get(policyPath("professional_catalogues"))),
   };
 }
 
