@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { individualShell } from "../_components/shell-context";
+import { individualShell, gatedMetadata } from "../_components/shell-context";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -21,10 +21,12 @@ export const dynamic = "force-dynamic";
 // ⚠ NOT INDEXED. /individual (the public gateway) is a marketing page. Everything behind this layout is a
 // person's own record. Set here as metadata rather than in robots.ts, which the website branch also edits.
 
-export const metadata: Metadata = {
-  title: { default: "Competen Individual", template: "%s · Competen Individual" },
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return gatedMetadata({
+    title: { default: "Competen Individual", template: "%s · Competen Individual" },
+    robots: { index: false, follow: false },
+  });
+}
 
 export default async function IndividualAppLayout({ children }: { children: React.ReactNode }) {
   const shell = await individualShell();

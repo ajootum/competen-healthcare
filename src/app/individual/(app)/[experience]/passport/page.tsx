@@ -3,7 +3,8 @@ import { EVIDENCE_LABEL, loadIndividualPassport } from "@/lib/individual/passpor
 import { OWN_KIND_LABEL } from "@/lib/individual/professional/passport-records";
 import { admitToEstate } from "@/lib/platform-membership";
 import { estateRolesOf, type AppRole } from "@/lib/roles";
-import { experiencePage } from "../../../_components/shell-context";
+import { experiencePage, gatedMetadata } from "../../../_components/shell-context";
+import type { Metadata } from "next";
 import { PageHeader, Unreadable, focusRing } from "../../../_components/chrome";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -28,7 +29,7 @@ export const dynamic = "force-dynamic";
 
 const fmt = (d: string | null) => (d ? new Date(`${d.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : null);
 
-export const metadata = { title: "Competen Passport" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Competen Passport" }); }
 
 export default async function PassportPage({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experiencePage((await params).experience);
