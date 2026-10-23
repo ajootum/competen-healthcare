@@ -46,6 +46,39 @@ export function judgeTarget(url: string | null | undefined): TargetVerdict {
   return { ok: true, ref };
 }
 
+/**
+ * The project ref inside a Supabase Postgres connection string, or null when it does not name one.
+ * Two shapes exist: the pooler, whose user is `postgres.<ref>`, and the direct host `db.<ref>.supabase.co`.
+ *
+ * ⚠ A STRING THAT NAMES TWO DIFFERENT PROJECTS IS UNIDENTIFIABLE, NOT THE FIRST ONE. A pooler user for
+ * one project and a direct host for another is a hand-edited string, and picking either half would let
+ * the other half decide where the writes go.
+ */
+export function dbRefOf(conn: string | null | undefined): string | null {
+  if (!conn) return null;
+  const pooler = conn.match(/^postgres(?:ql)?:\/\/postgres\.([a-z0-9]{20})[:@]/)?.[1] ?? null;
+  const direct = conn.match(/@db\.([a-z0-9]{20})\.supabase\.co(?:[:/]|$)/)?.[1] ?? null;
+  if (pooler && direct && pooler !== direct) return null;
+  return pooler ?? direct;
+}
+
+/**
+ * Is this DATABASE connection string a safe target for migrations and fixtures? The same verdict as
+ * judgeTarget, judged on the string that will actually be connected to -- never on another variable.
+ *
+ * ⚠ COMPETEN-OPS-001 R12. scripts/apply-migrations.ts once took "which project is production" from
+ * NEXT_PUBLIC_SUPABASE_URL. In a worktree that points the local app at staging, production then read as
+ * staging and the guard compared against the wrong project. The production identity is this file's
+ * constant; the environment only supplies the target being judged.
+ */
+export function judgeDbTarget(conn: string | null | undefined): TargetVerdict {
+  const ref = dbRefOf(conn);
+  if (conn && conn.includes(PRODUCTION_REF)) return { ok: false, reason: "PRODUCTION", ref: PRODUCTION_REF };
+  if (ref === null) return { ok: false, reason: "UNIDENTIFIABLE", ref: null };
+  if (ref === PRODUCTION_REF) return { ok: false, reason: "PRODUCTION", ref };
+  return { ok: true, ref };
+}
+
 /** True when this URL names the production project. Used by request-level blocks. */
 export function isProductionUrl(url: string): boolean {
   const host = (() => { try { return new URL(url).host; } catch { return ""; } })();

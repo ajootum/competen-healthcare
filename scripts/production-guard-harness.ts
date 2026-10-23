@@ -17,7 +17,9 @@
  * re-implementation works.
  */
 import { blockProductionTraffic } from "../e2e/helpers/synthetic-practitioner";
-import { PRODUCTION_REF, isProductionUrl, judgeTarget, refOf } from "./production-guard";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { PRODUCTION_REF, dbRefOf, isProductionUrl, judgeDbTarget, judgeTarget, refOf } from "./production-guard";
 
 const STAGING = "https://ezhvpgtcqcdsgylrxgdb.supabase.co";
 const SYNTHETIC = "https://abcdefghijklmnopqrst.supabase.co";
@@ -82,6 +84,43 @@ const underPressure = judgeTarget(PRODUCTION);
 check("production is still refused with bypass-looking env vars set",
   !underPressure.ok && underPressure.reason === "PRODUCTION");
 process.env = savedEnv;
+
+// ── Database connection strings (COMPETEN-OPS-001 R12): the migration runner's guard ─────────────
+// No password here is real; every string is data only and nothing connects.
+console.log("\nDATABASE TARGETS (judgeDbTarget, used by apply-migrations.ts)");
+const pooler = (ref: string) => `postgresql://postgres.${ref}:pw@aws-1-eu-west-1.pooler.supabase.com:5432/postgres`;
+const direct = (ref: string) => `postgresql://postgres:pw@db.${ref}.supabase.co:5432/postgres`;
+check("a staging pooler string is permitted and names staging",
+  judgeDbTarget(pooler("ezhvpgtcqcdsgylrxgdb")).ok && dbRefOf(pooler("ezhvpgtcqcdsgylrxgdb")) === "ezhvpgtcqcdsgylrxgdb");
+check("a staging direct string is permitted", judgeDbTarget(direct("ezhvpgtcqcdsgylrxgdb")).ok);
+for (const [label, conn] of [
+  ["a production pooler string", pooler(PRODUCTION_REF)],
+  ["a production direct string", direct(PRODUCTION_REF)],
+  ["a staging pooler user with the production ref elsewhere", `${pooler("ezhvpgtcqcdsgylrxgdb")}?note=${PRODUCTION_REF}`],
+] as Array<[string, string]>) {
+  const v = judgeDbTarget(conn);
+  check(`${label} is refused as PRODUCTION`, !v.ok && v.reason === "PRODUCTION", JSON.stringify(v));
+}
+for (const [label, conn] of [
+  ["an unset target", undefined],
+  ["a non-Supabase Postgres host", "postgresql://postgres:pw@localhost:5432/postgres"],
+  ["a pooler user and direct host naming two projects", `postgresql://postgres.ezhvpgtcqcdsgylrxgdb:pw@db.abcdefghijklmnopqrst.supabase.co:5432/postgres`],
+] as Array<[string, string | undefined]>) {
+  const v = judgeDbTarget(conn);
+  check(`${label} is refused as UNIDENTIFIABLE`, !v.ok && v.reason === "UNIDENTIFIABLE", JSON.stringify(v));
+}
+// R12 itself: a staging-pointed app environment must not change what counts as production.
+const savedPublic = process.env.NEXT_PUBLIC_SUPABASE_URL;
+process.env.NEXT_PUBLIC_SUPABASE_URL = STAGING;
+check("with the app pointed at staging, a staging target still passes and production is still refused",
+  judgeDbTarget(pooler("ezhvpgtcqcdsgylrxgdb")).ok && !judgeDbTarget(pooler(PRODUCTION_REF)).ok);
+process.env.NEXT_PUBLIC_SUPABASE_URL = savedPublic;
+// And the runner really uses this predicate, not its own copy (planted-control style: reverting the
+// runner to an environment-derived production ref turns these red).
+const runner = readFileSync(join(import.meta.dirname, "apply-migrations.ts"), "utf8").replace(/\r\n/g, "\n");
+const runnerCode = runner.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+check("apply-migrations.ts calls judgeDbTarget on STAGING_DB_URL", /judgeDbTarget\(dbUrl\)/.test(runnerCode));
+check("apply-migrations.ts does not read NEXT_PUBLIC_SUPABASE_URL", !/NEXT_PUBLIC_SUPABASE_URL/.test(runnerCode));
 
 // ── The request-level block: the half that was twice inert ───────────────────────────────────────
 console.log("\nREQUEST-LEVEL BLOCK (the real handler, driven by a fake route)");

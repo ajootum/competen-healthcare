@@ -205,6 +205,14 @@ const STAGING: Listed[] = [
       + "composite keys), AI through the gateway when configured, D1, erasure. Creates and deletes its own "
       + "harness-ind004-* identities, turns individual_app ON and restores it. PEND (exit 0) until 372 is applied.",
   },
+  {
+    file: "scholar-passport-acceptance-harness.ts",
+    note: "COMPETEN-IND-004 s11 Scholar Passport achievements against migration 375: nothing shown by default, opt-in per "
+      + "earned item, independent removal, study history unchanged, no notes/answers/AI, distinct labels, cross-user "
+      + "isolation (store, RLS, composite key), and removal reaching the SAME live /verify link (over HTTP when "
+      + "VERIFY_BASE_URL names a running server). Creates and deletes its own harness-ind004p-* identities, turns "
+      + "individual_app ON and restores the prior row. PEND (exit 0, nothing created) until 375 is applied. 32/32 on staging.",
+  },
   { file: "mos-phase1-harness.ts", note: "CPR-CORE-MOS-001 phase 1. 20/20." },
   { file: "mos-phase2-harness.ts", note: "MOS phase 2. 25/25." },
   { file: "mos-phase3-harness.ts", note: "MOS phase 3. 73/73." },
