@@ -2,6 +2,7 @@ import { generate } from "@/lib/ai/client";
 import { verifyGrounded, type PhrasingViolation } from "@/lib/practice/document-phrasing";
 import { PROMPT_VERSIONS, QUESTIONS_PER_REQUEST } from "./config";
 import { citeChunk } from "./extract";
+import { VERIFY_SYSTEM, applyVerification, passageVocabulary, qualityProblems, verificationPrompt, type QualityReason } from "./question-quality";
 
 // ── SOURCE-GROUNDED AI FOR SCHOLAR ── COMPETEN-IND-004 s2, s3 and s5 ───────────────────────────────────
 //
@@ -128,6 +129,9 @@ const QUESTION_RULES = [
   "   Do not use clinical descriptors (such as normal, raised, reduced, positive, stable) unless the passage uses them.",
   "3. sourceQuote is ONE sentence copied EXACTLY, character for character, from the passage, that shows the correct answer.",
   "4. Exactly four options, one correct. correctIndex is 0, 1, 2 or 3.",
+  "   The stem is a question ending with '?'. Avoid negative stems; if you must use one, write NOT or EXCEPT in capitals.",
+  "   Never use 'all of the above', 'none of the above' or 'both'. No option may contain another option's wording.",
+  "   Exactly ONE option may be supported by the passage. Every wrong option must be clearly contradicted or unsupported by it.",
   "5. rationale explains in one or two sentences why the correct option is right, in the passage's own terms.",
   "6. Never include a name, NHS number, date of birth or any detail that could identify a real person.",
   "",
@@ -151,7 +155,9 @@ export const QUESTION_SYSTEM: Record<QuestionKind, string> = {
 };
 
 export function questionUserPrompt(passage: Passage): string {
-  return `PASSAGE (${passageCitation(passage)}):\n${passage.content}`;
+  return `PASSAGE (${passageCitation(passage)}):\n${passage.content}\n\n`
+    + "OPTION VOCABULARY. Every option, right or wrong, may use only these content words (plus small words like 'the', 'by', 'of'), "
+    + `in any order or form: ${passageVocabulary(passage.content).join(", ")}`;
 }
 
 const squash = (s: string) => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
@@ -169,9 +175,11 @@ export function parseJsonArray(raw: string): unknown[] | null {
   }
 }
 
+export type DropReason = "malformed" | "quote_not_in_passage" | "ungrounded" | QualityReason | "failed_verification" | "verification_unavailable";
+
 export type QuestionCheck = {
   kept: DraftQuestion[];
-  dropped: { reason: "malformed" | "quote_not_in_passage" | "ungrounded"; violations?: PhrasingViolation[] }[];
+  dropped: { reason: DropReason; violations?: PhrasingViolation[]; detail?: string }[];
 };
 
 /** Pure. Model reply → the questions that may be stored, and why each other one was not. */
@@ -196,7 +204,10 @@ export function checkQuestions(raw: string, passage: Passage): QuestionCheck {
     if (quoteKey.length < 12 || !source.includes(quoteKey)) { out.dropped.push({ reason: "quote_not_in_passage" }); continue; }
     const violations = groundingViolations([stem, ...options, rationale].join("\n"), [passage.content]);
     if (violations.length) { out.dropped.push({ reason: "ungrounded", violations }); continue; }
-    out.kept.push({ stem, options: options as DraftQuestion["options"], correctIndex: ci, rationale, sourceQuote: quote });
+    const draft: DraftQuestion = { stem, options: options as DraftQuestion["options"], correctIndex: ci, rationale, sourceQuote: quote };
+    const problems = qualityProblems(draft, passage.content);
+    if (problems.length) { out.dropped.push({ reason: problems[0].reason, detail: problems.map(p => p.detail ? `${p.reason} (${p.detail})` : p.reason).join("; ") }); continue; }
+    out.kept.push(draft);
   }
   return out;
 }
@@ -217,14 +228,53 @@ export async function runExplain(userId: string, question: string, passages: Pas
   return { ok: true as const, check: checkExplanation(r.text, question, passages), model: r.model, provider: r.provider, promptVersion: PROMPT_VERSIONS.explain };
 }
 
+/**
+ * Owner review P0.1: generate, check every part of every question, then have a second, blind reader confirm
+ * that the passage supports exactly the keyed option. If nothing survives, regenerate ONCE on the same
+ * provider, telling it what was rejected. A grounding failure is never sent to another vendor (client.ts).
+ */
 export async function runQuestions(userId: string, kind: QuestionKind, passage: Passage) {
-  const r = await generate({
-    system: QUESTION_SYSTEM[kind],
-    user: questionUserPrompt(passage),
-    tier: "reasoning",
-    maxTokens: 1400,
-    context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_${kind}` },
-  });
-  if (!r.ok) return { ok: false, error: r.error } as AiFailure;
-  return { ok: true as const, check: checkQuestions(r.text, passage), model: r.model, provider: r.provider, promptVersion: PROMPT_VERSIONS[kind] };
+  const dropped: QuestionCheck["dropped"] = [];
+  let kept: DraftQuestion[] = [];
+  let model = "", provider = "";
+  let attempts = 0;
+  let feedback = "";
+  while (attempts < 2 && kept.length === 0) {
+    attempts++;
+    const r = await generate({
+      system: QUESTION_SYSTEM[kind],
+      user: questionUserPrompt(passage) + (feedback ? `
+
+A previous attempt was rejected for: ${feedback}. Write new questions that avoid these problems.` : ""),
+      tier: "reasoning",
+      maxTokens: 1400,
+      context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_${kind}` },
+    });
+    if (!r.ok) return { ok: false, error: r.error } as AiFailure;
+    model = r.model; provider = r.provider;
+    const check = checkQuestions(r.text, passage);
+    dropped.push(...check.dropped);
+    if (check.kept.length) {
+      const v = await generate({
+        system: VERIFY_SYSTEM,
+        user: verificationPrompt(passage.content, check.kept),
+        tier: "reasoning",
+        maxTokens: 600,
+        context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_${kind}_verify` },
+      });
+      if (!v.ok) {
+        // Unverifiable is not verified: nothing from this attempt is stored.
+        dropped.push(...check.kept.map(() => ({ reason: "verification_unavailable" as const })));
+      } else {
+        const outcome = applyVerification(check.kept, v.text);
+        kept = outcome.kept;
+        dropped.push(...outcome.rejected.map(x => ({ reason: "failed_verification" as const, detail: x.detail })));
+      }
+    }
+    feedback = [...new Set(dropped.map(d => d.detail ? `${d.reason} (${d.detail})` : d.reason))].slice(0, 6).join("; ");
+  }
+  return {
+    ok: true as const, check: { kept, dropped }, model, provider, attempts,
+    promptVersion: `${PROMPT_VERSIONS[kind]}+${PROMPT_VERSIONS.verify}`,
+  };
 }

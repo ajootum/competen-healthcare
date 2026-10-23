@@ -73,7 +73,7 @@ describe("explanation grounding", () => {
 describe("question checks", () => {
   const good = {
     stem: "How is acute kidney injury staged?",
-    options: ["By the rise in serum creatinine and by urine output", "By blood pressure", "By heart rate", "By temperature"],
+    options: ["By the rise in serum creatinine and by urine output", "By the baseline creatinine alone", "By prerenal causes", "By renal and postrenal causes"],
     correctIndex: 0,
     rationale: "Your notes say it is staged by the rise in serum creatinine and by urine output.",
     sourceQuote: "Acute kidney injury is staged by the rise in serum creatinine and by urine output.",
@@ -124,7 +124,7 @@ describe("progress", () => {
   const today = "2026-10-22";
   it("⚠ reports not-measured as null, never as zero", () => {
     const p = buildProgress({ materials: [{ id: "m1", title: "Renal" }], questions: [{ id: "q1", materialId: "m1", kind: "mcq" }], attempts: [], cards: [], today });
-    expect(p.materials[0]).toMatchObject({ mastery: null, latestCorrect: null, answered: 0, questions: 1 });
+    expect(p.materials[0]).toMatchObject({ latestAccuracy: null, latestCorrect: null, answered: 0, questions: 1 });
     expect(p.trend.every(w => w.accuracy === null && w.attempts === 0)).toBe(true);
     expect(p.trend).toHaveLength(8);
   });
@@ -141,7 +141,7 @@ describe("progress", () => {
       cards: [{ materialId: "m1", status: "active", nextReviewAt: "2026-10-22" }, { materialId: "m1", status: "active", nextReviewAt: "2026-10-30" }],
       today,
     });
-    expect(p.materials[0]).toMatchObject({ answered: 2, latestCorrect: 1, mastery: 50, cardsDue: 1, cardsActive: 2 });
+    expect(p.materials[0]).toMatchObject({ answered: 2, latestCorrect: 1, latestAccuracy: 50, cardsDue: 1, cardsActive: 2 });
     expect(p.trend.at(-1)).toMatchObject({ weekStart: "2026-10-19", attempts: 3, correct: 1, accuracy: 33 });
   });
 

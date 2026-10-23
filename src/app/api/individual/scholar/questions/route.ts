@@ -16,7 +16,10 @@ export const dynamic = "force-dynamic";
 // Body { chunkId, kind: "mcq" | "case" }. Generates questions from ONE passage of the person's own
 // material. Each question is stored with its chunk, the quoted source sentence, the model the provider
 // reported and the prompt version -- and only if it passed the checks in generation.ts (well-formed,
-// the quote really is in the passage, nothing ungrounded). The rest are dropped and counted, never stored.
+// the quote really is in the passage, nothing ungrounded), the quality layer in question-quality.ts
+// (options built from the passage's terms, keyed answer in the quote, no catch-alls or overlaps) and a
+// blind verification that the passage supports exactly the keyed option. If nothing survives, it
+// regenerates once. The rest are dropped and counted, never stored.
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");
@@ -40,7 +43,7 @@ export async function POST(req: Request) {
   });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, `individual_scholar_${kind}`, null, {
     chunk_id: passage.chunkId, kept: saved.ids.length, dropped: r.check.dropped.map(d => d.reason),
-    model: r.model, prompt_version: r.promptVersion, saved: saved.ok,
+    model: r.model, prompt_version: r.promptVersion, saved: saved.ok, attempts: r.attempts,
   });
   if (!saved.ok) return NextResponse.json({ error: "The questions could not be saved. Try again shortly." }, { status: 500 });
   if (!saved.ids.length)

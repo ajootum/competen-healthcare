@@ -33,12 +33,24 @@ export const QUESTIONS_PER_REQUEST = 3;
 // produced it.
 export const PROMPT_VERSIONS = {
   explain: "scholar-explain-v2",
-  mcq: "scholar-mcq-v2",
-  case: "scholar-case-v2",
+  mcq: "scholar-mcq-v3",
+  case: "scholar-case-v3",
+  verify: "scholar-verify-v1",
 } as const;
 
 // ── LABELS THAT MUST NOT DRIFT ── the harness pins each of these to the surface that must show it ─────
 export const AI_LABEL = "AI-generated from your notes, not clinically reviewed";
+/**
+ * Owner review P0.2. A source-derived answer says what the person's notes say. It is not independently
+ * verified clinical guidance, and the notes themselves may be out of date or wrong. Shown under every
+ * explanation, every piece of answer feedback and every revision answer.
+ */
+export const SOURCE_NOTICE =
+  "This comes from your own notes, not from verified clinical guidance. Your notes may be incomplete or out of date. Check against current guidelines and your course materials, and never use it to make decisions about a real patient.";
+/** How a marked answer is described: right or wrong against the notes, not against clinical truth. */
+export const MARKED_AGAINST_NOTES = "Marked against your notes, not against clinical guidelines.";
+/** Owner review P0.5: a personal practice case is never mistaken for a clinically reviewed one. */
+export const PERSONAL_CASE_LABEL = "Practice scenario from your notes · not a clinically reviewed case";
 export const SELF_DIRECTED_LABEL = "Self-directed study. Nothing here is verified or assessed by an organisation.";
 
 // ── CONSENT ── the migration-215 per-feature switch, per person ──────────────────────────────────────
