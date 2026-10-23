@@ -7,6 +7,10 @@ import { ROLE_CONFIG, ORG_ROLE_CONFIG, PLATFORM_ROLE_CONFIG, type AppRole, type 
 import UserRoleEditor from "./UserRoleEditor";
 import { Modal, Drawer } from "@/components/ui/interactive";
 import { formatDateTime } from "@/lib/datetime";
+import type { Access, Readable } from "@/lib/hq/user-directory";
+
+const PRODUCT_LABEL: Record<string, string> = { platform: "Platform", enterprise: "Enterprise", practice: "Practice", individual: "Individual" };
+const EXPERIENCE_LABEL: Record<string, string> = { scholar: "Scholar", professional: "Professional" };
 
 export type UserRow = {
   id: string; name: string; email: string; phone: string | null;
@@ -22,6 +26,10 @@ export type UserRow = {
   competencyPct: number | null; passportPct: number | null;
   decisionsTotal: number; decisionsOk: number; decisionsCurrent: number;
   activeAuthorizations: number;
+  /** HQ-USERS-C: what the person can reach, from the rows the gates read (src/lib/hq/user-directory.ts). */
+  access: Access;
+  products: string[];
+  hqActive: boolean;
 };
 export type AuditEntry = { id: string; action: string; entityType: string | null; entityName: string | null; at: string };
 
@@ -71,7 +79,7 @@ function Ring({ pct }: { pct: number | null }) {
 const PAGE_SIZE = 25;
 
 export default function UsersWorkspace({
-  users, auditByActor, hospitals, organisations, departments, currentUserId, canManage, canReset,
+  users, auditByActor, hospitals, organisations, departments, currentUserId, canManage, canReset, readable, authComplete,
 }: {
   users: UserRow[];
   auditByActor: Record<string, AuditEntry[]>;
@@ -84,6 +92,10 @@ export default function UsersWorkspace({
   canManage: boolean;
   /** HQ-USERS-B: the caller may send password-reset emails (an owner, or hq.platform.users.reset). */
   canReset: boolean;
+  /** HQ-USERS-C: which access sources answered. A false one is shown as "not readable", never as "none". */
+  readable: Readable;
+  /** HQ-USERS-C: every Auth page was read. False means last sign-in and status may be missing for some. */
+  authComplete: boolean;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -92,6 +104,8 @@ export default function UsersWorkspace({
   const [fFacility, setFFacility] = useState("all");
   const [fStatus, setFStatus] = useState("all");
   const [fLogin, setFLogin] = useState("all");
+  const [fProduct, setFProduct] = useState("all");
+  const [fHq, setFHq] = useState("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -114,7 +128,7 @@ export default function UsersWorkspace({
   const [addForm, setAddForm] = useState({ full_name: "", email: "", role: "nurse", mode: "invite", organisation_id: "", hospital_id: "" });
   const [createdCreds, setCreatedCreds] = useState<{ email: string; password: string } | null>(null);
 
-  const anyFilter = search || fRole !== "all" || fOrg !== "all" || fFacility !== "all" || fStatus !== "all" || fLogin !== "all";
+  const anyFilter = search || fRole !== "all" || fOrg !== "all" || fFacility !== "all" || fStatus !== "all" || fLogin !== "all" || fProduct !== "all" || fHq !== "all";
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -131,9 +145,13 @@ export default function UsersWorkspace({
         if (fLogin === "30d" && age > 30) return false;
         if (fLogin === "never" && u.lastSignIn) return false;
       }
+      if (fProduct === "none" && u.products.length > 0) return false;
+      if (fProduct !== "all" && fProduct !== "none" && !u.products.includes(fProduct)) return false;
+      if (fHq === "yes" && !u.hqActive) return false;
+      if (fHq === "no" && u.hqActive) return false;
       return true;
     });
-  }, [users, search, fRole, fOrg, fFacility, fStatus, fLogin, now]);
+  }, [users, search, fRole, fOrg, fFacility, fStatus, fLogin, fProduct, fHq, now]);
 
   const pages = Math.ceil(filtered.length / PAGE_SIZE);
   const shown = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -310,8 +328,21 @@ export default function UsersWorkspace({
           <option value="30d">Last 30 days</option>
           <option value="never">Never</option>
         </select>
+        <select value={fProduct} onChange={e => { setFProduct(e.target.value); setPage(0); }} className={input} aria-label="Filter by product access">
+          <option value="all">Product: Any</option>
+          <option value="platform">Platform</option>
+          <option value="enterprise">Enterprise</option>
+          <option value="practice">Practice</option>
+          <option value="individual">Individual</option>
+          <option value="none">No active product</option>
+        </select>
+        <select value={fHq} onChange={e => { setFHq(e.target.value); setPage(0); }} className={input} aria-label="Filter by HQ position">
+          <option value="all">HQ position: Any</option>
+          <option value="yes">Holds an HQ position</option>
+          <option value="no">No HQ position</option>
+        </select>
         {anyFilter && (
-          <button onClick={() => { setSearch(""); setFRole("all"); setFOrg("all"); setFFacility("all"); setFStatus("all"); setFLogin("all"); setPage(0); }}
+          <button onClick={() => { setSearch(""); setFRole("all"); setFOrg("all"); setFFacility("all"); setFStatus("all"); setFLogin("all"); setFProduct("all"); setFHq("all"); setPage(0); }}
             className="text-xs font-semibold text-teal-600 hover:text-teal-800 px-2">Clear</button>
         )}
       </div>
@@ -360,6 +391,14 @@ export default function UsersWorkspace({
             className="text-xs font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg">Export</button>
         </div>
       </div>
+
+      {(!authComplete || Object.values(readable).some(v => !v)) && (
+        <p role="status" className="text-xs rounded-lg px-3 py-2 mb-2 border text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]">
+          Part of this directory could not be read just now:{" "}
+          {[!authComplete && "sign-in records", ...Object.entries(readable).filter(([, v]) => !v).map(([k]) => `${k} access`)].filter(Boolean).join(", ")}.
+          Those columns say &ldquo;Not readable&rdquo; rather than showing nothing.
+        </p>
+      )}
 
       {notice && (
         <p className={`text-xs rounded-lg px-3 py-2 mb-2 border ${notice.kind === "ok" ? "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]" : "text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border-[var(--cmp-color-critical)]"}`}>
@@ -418,6 +457,12 @@ export default function UsersWorkspace({
                         </span>
                       ))}
                     </div>
+                    {(u.products.length > 0 || u.hqActive) && (
+                      <div className="mt-1 flex flex-wrap gap-1 max-w-[180px]" aria-label="Product access">
+                        {u.products.map(p => <span key={p} className="text-[9px] font-semibold px-1.5 py-0.5 rounded border border-gray-200 text-gray-600">{PRODUCT_LABEL[p] ?? p}</span>)}
+                        {u.hqActive && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border border-violet-200 text-violet-700">HQ</span>}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-3 text-xs text-gray-500">
                     <p>{u.organisation ?? <span className="text-gray-500">—</span>}</p>
@@ -630,6 +675,25 @@ export default function UsersWorkspace({
                   <p className="text-gray-700 mt-0.5" suppressHydrationWarning>{v}</p>
                 </div>
               ))}
+            </div>
+
+            {/* HQ-USERS-C: what this person can reach, from the rows the gates read. "Not readable" is a
+                source that did not answer -- never shown as "none". No patient or record content. */}
+            <div className="p-5 border-b border-gray-50">
+              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-2">Product access</p>
+              <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1.5 text-xs">
+                <dt className="text-gray-500">Platform</dt>
+                <dd className="text-gray-800">{!readable.platform ? "Not readable" : drawer.access.platform ?? "No membership"}</dd>
+                <dt className="text-gray-500">Enterprise</dt>
+                <dd className="text-gray-800">{!readable.enterprise ? "Not readable" : drawer.access.enterprise.length ? drawer.access.enterprise.map(e => `${e.tenant ?? "Unnamed tenant"} (${e.status})`).join(", ") : "No membership"}</dd>
+                <dt className="text-gray-500">Practice</dt>
+                <dd className="text-gray-800">{!readable.practice ? "Not readable" : drawer.access.practice.length ? drawer.access.practice.map(p => `${p.workspace ?? "Unnamed practice"}${p.role ? ` · ${p.role.replace(/_/g, " ")}` : ""} (${p.status})`).join(", ") : "No membership"}</dd>
+                <dt className="text-gray-500">Individual</dt>
+                <dd className="text-gray-800">{!readable.individual ? "Not readable" : !drawer.access.individual.membership ? "No membership"
+                  : `${drawer.access.individual.membership}${drawer.access.individual.live.length ? ` · live: ${drawer.access.individual.live.map(x => EXPERIENCE_LABEL[x] ?? x).join(", ")}` : " · no live experience"}`}</dd>
+                <dt className="text-gray-500">HQ positions</dt>
+                <dd className="text-gray-800">{!readable.hq ? "Not readable" : drawer.access.hq.length ? drawer.access.hq.map(h => `${h.name ?? h.position} (${h.status})`).join(", ") : "None"}</dd>
+              </dl>
             </div>
 
             <div className="p-5 border-b border-gray-50">

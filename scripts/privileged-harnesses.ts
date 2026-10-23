@@ -199,6 +199,14 @@ const STAGING: Listed[] = [
       + "BASE_URL with individual_app ON; NEVER writes the flag (PEND when off). Own harness-access001-* fixtures.",
   },
   {
+    file: "hq-users-directory-acceptance-harness.ts",
+    note: "HQ-USERS-C: the directory loader against real staging rows (platform membership, Individual membership and a "
+      + "live Professional entitlement, an HQ appointment), every source readable, a stranger with nothing; and over HTTP "
+      + "a platform_director viewer finds the subject with the product and HQ filters, no record content in the payload, "
+      + "and a stranger gets no directory. ⚠ NEEDS BASE_URL naming a STAGING-pointed dev server for the H group. Creates "
+      + "and deletes harness-usersc-* identities and their rows.",
+  },
+  {
     file: "hq-users-reset-acceptance-harness.ts",
     note: "HQ-USERS-B against migration 379, over HTTP: a stranger is refused, the old owner-only reset is no second door, "
       + "self-reset is refused by name, verified/unverified/suspended/unknown targets all get the same neutral answer with "

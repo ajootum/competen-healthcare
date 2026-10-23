@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { estateRolesOf } from "@/lib/roles";
 import UsersWorkspace, { type UserRow, type AuditEntry } from "./UsersWorkspace";
+import { EMPTY_ACCESS, activeProducts, holdsHqPosition, listAllAuthUsers, loadDirectoryAccess } from "@/lib/hq/user-directory";
 
 // Landlord Portal — User Management (Design System spec §6).
 // Every column is computed from live sources: auth admin metadata gives last
@@ -37,6 +38,7 @@ export default async function AllUsersPage() {
     { data: authz },
     { data: audit },
     authList,
+    directory,
   ] = await Promise.all([
     admin.from("profiles")
       .select("id, full_name, email, phone, role, roles, org_role, org_roles, hospital_id, organisation_id, platform_role, department_id, specialization, created_at")
@@ -52,11 +54,13 @@ export default async function AllUsersPage() {
     admin.from("audit_log")
       .select("id, actor_id, actor_name, action, entity_type, entity_name, created_at")
       .order("created_at", { ascending: false }).limit(200),
-    admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    // HQ-USERS-C: every Auth page, not only the first 1000, and the access each person holds.
+    listAllAuthUsers(admin),
+    loadDirectoryAccess(admin),
   ]);
 
   const authById = new Map(
-    (authList.data?.users ?? []).map(u => [u.id, {
+    authList.users.map((u: { id: string; last_sign_in_at?: string | null; email_confirmed_at?: string | null; invited_at?: string | null }) => [u.id, {
       lastSignIn: u.last_sign_in_at ?? null,
       emailConfirmed: !!u.email_confirmed_at,
       invitedAt: u.invited_at ?? null,
@@ -130,6 +134,9 @@ export default async function AllUsersPage() {
       decisionsOk: m?.ok ?? 0,
       decisionsCurrent: m?.current ?? 0,
       activeAuthorizations: authzByUser.get(p.id) ?? 0,
+      access: directory.byUser.get(p.id) ?? EMPTY_ACCESS(),
+      products: activeProducts(directory.byUser.get(p.id) ?? EMPTY_ACCESS()),
+      hqActive: holdsHqPosition(directory.byUser.get(p.id) ?? EMPTY_ACCESS()),
     };
   });
 
@@ -154,6 +161,8 @@ export default async function AllUsersPage() {
       currentUserId={user.id}
       canManage={isOwner}
       canReset={isOwner || capabilities.includes("hq.platform.users.reset")}
+      readable={directory.readable}
+      authComplete={authList.complete}
     />
   );
 }
