@@ -272,6 +272,18 @@ const checkInAppSwitch = (src: Sources) => {
   return { ok: home.includes("if (!prefs.inApp) return null") && ev.includes("const due = prefs.inApp ? dueRenewals("), detail: "HomeReminders and the evidence page must gate on prefs.inApp" };
 };
 // 374: in-app NOT NULL DEFAULT TRUE, email NOT NULL DEFAULT FALSE, on the own profile row, no estate table.
+// ── T. TAXONOMY SUGGESTIONS (COMPETEN-CONFIG-002 item 8) ────────────────────────────────────────────
+// Profession and registration body are offered the migration 013 vocabularies as a datalist and stay free
+// text: an <input> with no pattern, never a <select>. The suggestion reader never writes the vocabularies.
+const checkFreeTextSuggestions = (src: Sources) => {
+  const page = src.get("src/app/individual/(app)/[experience]/(professional)/registration/page.tsx") ?? "";
+  const lib = src.get("src/lib/individual/professional/suggestions.ts") ?? "";
+  const field = (id: string) => (page.match(new RegExp(`<input id="${id}"[^>]*>`)) ?? [""])[0];
+  const prof = field("pr-prof"), body = field("pr-body");
+  const free = [prof, body].every(f => f && !/\bpattern=|\brequired\b/.test(f) && /list=\{/.test(f)) && !/<select[^>]*name="(profession|registrationBody)"/.test(page);
+  const readOnly = /\.from\("taxonomies"\)\.select\(/.test(lib) && /\.from\("taxonomy_terms"\)\.select\(/.test(lib) && !/\.(insert|upsert|update|delete)\(/.test(lib);
+  return { ok: free && readOnly && page.includes("loadSuggestions(ctx.admin)"), detail: `free text ${free}, read-only ${readOnly}` };
+};
 const checkPrefsSchema = (mig: string) => ({
   ok: /alter table individual_professional_profile\s+add column if not exists reminder_in_app boolean not null default true/.test(mig)
     && /alter table individual_professional_profile\s+add column if not exists reminder_email boolean not null default false/.test(mig)
@@ -317,6 +329,7 @@ function main() {
   if (MIG374) run("N4. 374: in-app defaults ON, email defaults OFF, both NOT NULL, on the own profile row, no estate table", checkPrefsSchema(MIG374));
   else { pend.push("N4"); console.log(`  PEND  N4. ${MIG374_FILE} is not in this checkout`); }
 
+  run("T1. profession and registration body offer the migration 013 vocabularies and stay free text, read-only", checkFreeTextSuggestions(ALL));
   run("D1. direct entry: every Professional API handler and page asks for Professional, never Scholar", checkDirectEntry(ALL));
 
   schema("S1. D6: RLS on, own-row SELECT only, no write policy, experience_code with no default -- on every 373 table", checkRls(MIG));
@@ -356,7 +369,10 @@ function main() {
   red("N5 when a skipped email counts as delivered", checkClaimReleasedOnFailure(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/reminders.ts") ? s.replace(`email?.status === "sent" ?`, `email?.status !== "failed" ?`) : s]))));
   red("N3 when home ignores the switch", checkInAppSwitch(new Map([...ALL].map(([f, s]) => [f, f.endsWith("HomeReminders.tsx") ? s.replace("if (!prefs.inApp) return null", "") : s]))));
   if (MIG374) red("N4 on email defaulting ON", checkPrefsSchema(MIG374.replace("reminder_email boolean not null default false", "reminder_email boolean not null default true")));
-  red("E6 on a verified flag", checkNoVerifiedClassInProfessional(plant("src/app/api/individual/professional/evidence/route.ts", `const row = { verified: true };`)));
+  const regFile = "src/app/individual/(app)/[experience]/(professional)/registration/page.tsx";
+  red("T1 on a profession restricted to the list", checkFreeTextSuggestions(new Map([...ALL].map(([f, s]) => [f, f === regFile ? s.replace(`<input id="pr-prof" name="profession"`, `<input id="pr-prof" pattern="(Nursing|Medicine)" name="profession"`) : s]))));
+  red("T1 on a suggestion reader that writes", checkFreeTextSuggestions(plant("src/lib/individual/professional/suggestions.ts", `admin.from("taxonomy_terms").insert({})`)));
+  red("E6 on a verified flag",checkNoVerifiedClassInProfessional(plant("src/app/api/individual/professional/evidence/route.ts", `const row = { verified: true };`)));
   red("D1 when Scholar lists a Professional segment", (() => { const sch = EXPERIENCES.scholar.modules as unknown as { segment: string }[]; sch.push({ segment: "cpd" }); try { return checkDirectEntry(ALL); } finally { sch.pop(); } })());
   red("D1 on a Scholar guard", checkDirectEntry(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/cpd/route.ts") ? s.replace('requireIndividualContext("professional")', 'requireIndividualContext("scholar")') : s]))));
   red("D1 on a page without the Professional check", checkDirectEntry(new Map([...ALL].map(([f, s]) => [f, f.endsWith("(professional)/progress/page.tsx") ? s.replace("await experienceModulePage((await params).experience, \"progress\")", "await experiencePage((await params).experience)") : s]))));

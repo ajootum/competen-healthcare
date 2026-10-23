@@ -6,6 +6,7 @@ import { PageHeader, Unreadable } from "../../../../_components/chrome";
 import { ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import { ClassLabel, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 import { REMINDER_HORIZON_DAYS } from "@/lib/individual/professional/vocabulary";
+import { loadSuggestions } from "@/lib/individual/professional/suggestions";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -23,7 +24,8 @@ export default async function RegistrationPage({ params }: { params: Promise<{ e
   if (!page) return null;
   const { ctx } = page;
   const x = EXPERIENCES.professional;
-  const record = await loadProfessionalRecord(ctx.admin, ctx.userId);
+  // Suggestions only: both fields stay free text (COMPETEN-CONFIG-002 item 8, migration 013 vocabularies).
+  const [record, suggestions] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadSuggestions(ctx.admin)]);
   const p = record.profile;
 
   return (
@@ -39,13 +41,15 @@ export default async function RegistrationPage({ params }: { params: Promise<{ e
             <ApiForm action="/api/individual/professional/profile" method="PUT" submitLabel="Save my details" accent={x.accent} reset={false}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Profession" htmlFor="pr-prof" hint="For example: Registered nurse, Midwife, Clinical officer.">
-                  <input id="pr-prof" name="profession" maxLength={120} defaultValue={p?.self_declared_profession ?? ""} className={inputCls} />
+                  <input id="pr-prof" name="profession" maxLength={120} defaultValue={p?.self_declared_profession ?? ""} className={inputCls} list={suggestions.profession.length ? "pr-prof-options" : undefined} autoComplete="off" />
+                  {suggestions.profession.length > 0 && <datalist id="pr-prof-options">{suggestions.profession.map(v => <option key={v} value={v} />)}</datalist>}
                 </Field>
                 <Field label="Country of registration" htmlFor="pr-country">
                   <input id="pr-country" name="country" maxLength={80} defaultValue={p?.self_declared_registration_country ?? ctx.profile.country ?? ""} className={inputCls} autoComplete="country-name" />
                 </Field>
                 <Field label="Registration body" htmlFor="pr-body" hint="The council or board you are registered with.">
-                  <input id="pr-body" name="registrationBody" maxLength={160} defaultValue={p?.self_declared_registration_body ?? ""} className={inputCls} />
+                  <input id="pr-body" name="registrationBody" maxLength={160} defaultValue={p?.self_declared_registration_body ?? ""} className={inputCls} list={suggestions.registrationBody.length ? "pr-body-options" : undefined} autoComplete="off" />
+                  {suggestions.registrationBody.length > 0 && <datalist id="pr-body-options">{suggestions.registrationBody.map(v => <option key={v} value={v} />)}</datalist>}
                 </Field>
                 <Field label="Registration number" htmlFor="pr-num">
                   <input id="pr-num" name="registrationNumber" maxLength={60} defaultValue={p?.self_declared_registration_number ?? ""} className={inputCls} autoComplete="off" />
