@@ -42,3 +42,33 @@ Owner GO 2026-10-23, item 4, "Email synchronisation": *"Develop a separate focus
   - no backfill;
   - exact rollback.
 - **`email-sync-acceptance-harness`** (staging, registered STAGING in `privileged-harnesses`): 6/6 after apply, and PEND before apply.
+
+## Merge review (owner GO "APPROVED FOR MERGE", 2026-10-23)
+
+**Items 2–4: authority and safety, pinned by `email-sync-harness`:**
+- **Auth stays the source of the verified email.** The function copies Auth to `profiles` only, never the other way. A person cannot write `profiles.email` themselves: `authenticated` has no UPDATE on it (column grants, PR D), pinned by `account-profile-harness` E1 and staging acceptance U5.
+- **Confirmed-only and own-profile only:** G1, with planted P2 and P3.
+- **EXECUTE revoked and `search_path` fixed:** S1, with planted P5. Staging G1/G3 confirms it: EXECUTE is held only by postgres and service_role.
+- **Audit row written:** A1, with planted P4. Staging acceptance C2: exactly one row.
+
+**Item 5: who can read the old and new address in the audit row.** Read-only on STAGING:
+- `audit_log` has RLS **enabled with no policies**, so `anon` and `authenticated` read zero rows through the API, whatever their table grants. Only the service role and postgres can read it.
+- In the app, the service-role readers that select `old_value` / `new_value` are:
+  - `/super-admin/audit`, behind HQ capability. **This is the one surface that shows the addresses.**
+  - Assessor and educator pages filtered to a fixed action and to the viewer as actor (`ai_report`, `ai_*`, `send_message`). A `sync_profile_email` row has actor null, so it never matches.
+- Every other reader selects only `actor_name`, `action`, `entity_name`, `entity_type` and `created_at`, and 381 writes `entity_name` null and `actor_name` `auth`. So those readers show at most "sync profile email" with no address.
+
+So the addresses are readable only by the service role and by HQ audit viewers. That is consistent with the GO ("old to new"), and no change to 381 is needed. Any future reader that selects `new_value` broadly must not be exposed below HQ.
+
+**Item 6: reconciliation (read-only):** `scripts/email-sync-reconcile.ts`.
+- **Output:** for confirmed Auth accounts, how many have `profiles.email` different from Auth (ids only, never an address), and how many have no profile row.
+- **How to run:**
+  - Staging: `npx tsx scripts/email-sync-reconcile.ts`.
+  - Production: only with `--production` AND `COMPETEN_PRODUCTION_READ_GO=<named owner GO>` (`productionReadDecision`, R13).
+- **Staging, 2026-10-23:** 21 confirmed accounts, **0 mismatched**. One confirmed Auth user has no profile row (77c9bdb5…), which is unrelated to 381 (a profile never created or later removed). Recorded, not changed.
+- **Production:** run it under its read GO before deciding any one-time backfill. 381 performs none.
+
+**Item 7: compatibility with 380.**
+- **Disjoint objects:** 380 adds `profiles.given_name` / `family_name`, their CHECKs and a column grant. 381 adds a function and a trigger on `auth.users`, and writes only `profiles.email` and `audit_log`.
+- **No shared object, no ordering dependency:** either merge or apply order works.
+- **The one textual overlap** is the additive registry lists (`scripts/ci-harnesses.ts`, `scripts/privileged-harnesses.ts`). Whichever PR lands second keeps both entries.
