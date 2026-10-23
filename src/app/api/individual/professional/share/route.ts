@@ -3,6 +3,7 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { isUuid } from "@/lib/individual/professional/validate";
 import { mintShare, parseShare, revokeShare } from "@/lib/individual/professional/share";
 import { audit, readBody, refuse } from "@/lib/individual/professional/api";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
   const ctx = await requireIndividualContext("professional");
   if (isGuardRefusal(ctx)) return ctx;
   const { fields } = await readBody(req);
-  const input = parseShare(fields);
+  const input = parseShare(fields, (await loadIndividualPolicy(ctx.admin)).shareLinkMaxDays);
   const link = await mintShare(ctx.admin, ctx.userId, input);
   if (!link) return NextResponse.json({ error: "The link could not be created just now. Try again shortly." }, { status: 500 });
   await audit(ctx, "create_passport_share", "passport_share_token", link.id, { scope: input.scope, days: input.days, includes_own_records: true });

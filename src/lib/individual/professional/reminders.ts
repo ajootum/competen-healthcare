@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { dispatch } from "@/lib/notifications/dispatch";
-import { REMINDER_HORIZON_DAYS } from "./vocabulary";
+import { loadIndividualPolicy } from "../policy";
 import { individualAppEnabled } from "../gate";
 
 // ── EXPIRY REMINDERS FOR THE PERSON'S OWN CREDENTIALS AND REGISTRATION ── COMPETEN-IND-007 s4 ────────────
@@ -72,7 +72,9 @@ export async function scanProfessionalReminders(admin: any, now = new Date(), se
   // nobody is emailed about it.
   if (!(await individualAppEnabled(admin))) return { ...EMPTY(), disabled: true };
   const today = now.toISOString().slice(0, 10);
-  const horizon = new Date(now.getTime() + REMINDER_HORIZON_DAYS * 864e5).toISOString().slice(0, 10);
+  // The lead time is Individual policy (COMPETEN-CONFIG-002), clamped to its fixed range, 60 days by default.
+  const horizonDays = (await loadIndividualPolicy(admin)).reminderHorizonDays;
+  const horizon = new Date(now.getTime() + horizonDays * 864e5).toISOString().slice(0, 10);
 
   const { data: live, error: liveErr } = await admin.from("individual_live_entitlement").select("user_id").eq("experience_code", "professional").limit(20000);
   if (liveErr) throw new Error(`individual_live_entitlement: ${liveErr.message}`);

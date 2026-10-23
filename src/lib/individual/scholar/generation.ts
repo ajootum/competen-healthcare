@@ -182,13 +182,17 @@ export type QuestionCheck = {
   dropped: { reason: DropReason; violations?: PhrasingViolation[]; detail?: string }[];
 };
 
-/** Pure. Model reply → the questions that may be stored, and why each other one was not. */
-export function checkQuestions(raw: string, passage: Passage): QuestionCheck {
+/**
+ * Pure. Model reply → the questions that may be stored, and why each other one was not. `limit` is the
+ * Individual policy value (COMPETEN-CONFIG-002), never above QUESTIONS_PER_REQUEST: it narrows how many are
+ * KEPT and leaves the versioned prompt (PROMPT_VERSIONS) untouched.
+ */
+export function checkQuestions(raw: string, passage: Passage, limit: number = QUESTIONS_PER_REQUEST): QuestionCheck {
   const out: QuestionCheck = { kept: [], dropped: [] };
   const arr = parseJsonArray(raw);
   if (!arr) { out.dropped.push({ reason: "malformed" }); return out; }
   const source = squash(passage.content);
-  for (const item of arr.slice(0, QUESTIONS_PER_REQUEST)) {
+  for (const item of arr.slice(0, Math.min(QUESTIONS_PER_REQUEST, Math.max(1, Math.floor(limit))))) {
     const q = item as Record<string, unknown>;
     const options = Array.isArray(q?.options) ? (q.options as unknown[]).map(o => (typeof o === "string" ? o.trim() : "")) : [];
     const ci = typeof q?.correctIndex === "number" ? q.correctIndex : -1;
@@ -233,7 +237,7 @@ export async function runExplain(userId: string, question: string, passages: Pas
  * that the passage supports exactly the keyed option. If nothing survives, regenerate ONCE on the same
  * provider, telling it what was rejected. A grounding failure is never sent to another vendor (client.ts).
  */
-export async function runQuestions(userId: string, kind: QuestionKind, passage: Passage) {
+export async function runQuestions(userId: string, kind: QuestionKind, passage: Passage, limit: number = QUESTIONS_PER_REQUEST) {
   const dropped: QuestionCheck["dropped"] = [];
   let kept: DraftQuestion[] = [];
   let model = "", provider = "";
@@ -252,7 +256,7 @@ A previous attempt was rejected for: ${feedback}. Write new questions that avoid
     });
     if (!r.ok) return { ok: false, error: r.error } as AiFailure;
     model = r.model; provider = r.provider;
-    const check = checkQuestions(r.text, passage);
+    const check = checkQuestions(r.text, passage, limit);
     dropped.push(...check.dropped);
     if (check.kept.length) {
       const v = await generate({
