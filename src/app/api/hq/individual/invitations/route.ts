@@ -3,6 +3,7 @@ import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { individualAppEnabled } from "@/lib/individual/gate";
 import { currentTraceId } from "@/lib/trace";
 import { createIndividualInvitation, inviteDeliveryMode, isRefusal, validateInvitation } from "@/lib/individual/invitations";
+import { SITE_URL } from "@/lib/marketing/site";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -33,7 +34,9 @@ export async function POST(req: Request) {
   if (isRefusal(parsed)) return NextResponse.json({ error: { code: parsed.code, message: parsed.message } }, { status: parsed.status });
 
   const delivery = inviteDeliveryMode();
-  const outcome = await createIndividualInvitation(ctx.admin, parsed, { id: ctx.userId }, { origin: new URL(req.url).origin, delivery });
+  // ⚠ THE TRUSTED ORIGIN, NEVER THE REQUEST'S. The invite link's return URL is SITE_URL (the HQ-USERS-B rule,
+  // scripts/hq-users-reset-harness.ts R3): a Host or Origin header must not decide where a sign-in link lands.
+  const outcome = await createIndividualInvitation(ctx.admin, parsed, { id: ctx.userId }, { origin: SITE_URL, delivery });
   if (!outcome.ok)
     return NextResponse.json({ error: { code: outcome.code, message: outcome.message, ...(outcome.personId ? { personId: outcome.personId } : {}) } }, { status: outcome.status });
 

@@ -71,7 +71,7 @@ function Ring({ pct }: { pct: number | null }) {
 const PAGE_SIZE = 25;
 
 export default function UsersWorkspace({
-  users, auditByActor, hospitals, organisations, departments, currentUserId, canManage,
+  users, auditByActor, hospitals, organisations, departments, currentUserId, canManage, canReset,
 }: {
   users: UserRow[];
   auditByActor: Record<string, AuditEntry[]>;
@@ -82,6 +82,8 @@ export default function UsersWorkspace({
   /** HQ-USERS-A: the caller is a platform owner. Account writes are owner-only on the server; a viewer
    *  holding hq.platform.users.view sees the directory without controls that would only be refused. */
   canManage: boolean;
+  /** HQ-USERS-B: the caller may send password-reset emails (an owner, or hq.platform.users.reset). */
+  canReset: boolean;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -151,14 +153,19 @@ export default function UsersWorkspace({
     { label: "Healthcare Workers", icon: "🧑‍⚕️", tintBg: "bg-teal-50", ...cardFor("nurse") },
   ];
 
+  // HQ-USERS-B: a reset goes to its own governed route; the other account actions stay owner-only.
+  const request = (userId: string, action: "suspend" | "unsuspend" | "send_reset" | "resend_invite") =>
+    action === "send_reset"
+      ? fetch("/api/super-admin/users/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId }) })
+      : fetch("/api/super-admin/users/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, action }) });
+
   async function act(userId: string, action: "suspend" | "unsuspend" | "send_reset" | "resend_invite", label: string) {
     setBusy(true); setNotice(null);
-    const res = await fetch("/api/super-admin/users/actions", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, action }),
-    });
+    const res = await request(userId, action);
     setBusy(false);
-    if (res.ok) { setNotice({ kind: "ok", text: `${label} — done.` }); router.refresh(); }
+    // A reset answers with the same sentence whatever the account's state (no enumeration), so say exactly that.
+    if (res.ok && action === "send_reset") { const j = (await res.json().catch(() => ({}))) as { message?: string }; setNotice({ kind: "ok", text: j.message ?? "Reset requested." }); }
+    else if (res.ok) { setNotice({ kind: "ok", text: `${label} — done.` }); router.refresh(); }
     else {
       const j = (await res.json().catch(() => ({}))) as { error?: string };
       setNotice({ kind: "err", text: j.error ?? `${label} failed.` });
@@ -184,10 +191,7 @@ export default function UsersWorkspace({
     setBusy(true); setNotice(null);
     let ok = 0;
     for (const t of targets) {
-      const res = await fetch("/api/super-admin/users/actions", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: t.id, action }),
-      });
+      const res = await request(t.id, action);
       if (res.ok) ok++;
     }
     setBusy(false);
@@ -331,9 +335,11 @@ export default function UsersWorkspace({
               <div className="absolute left-0 top-8 z-30 w-52 bg-white border border-gray-100 rounded-lg shadow-lg py-1">
                 <button onClick={() => { setBulkOpen(false); exportCsv(users.filter(u => selected.has(u.id))); }}
                   className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">📥 Export selected as CSV</button>
-                {canManage && <>
-                <button onClick={() => { setBulkOpen(false); bulkAct("send_reset", "Password reset sent"); }} disabled={busy}
+                {canReset && (
+                <button onClick={() => { setBulkOpen(false); bulkAct("send_reset", "Password reset requested (each account that can receive one is emailed)"); }} disabled={busy}
                   className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">🔑 Send password reset</button>
+                )}
+                {canManage && <>
                 <button onClick={() => {
                   setBulkOpen(false);
                   if (window.confirm(`Suspend ${selected.size} selected user(s)? They will be unable to sign in until reactivated.`)) bulkAct("suspend", "Suspended");
@@ -437,9 +443,11 @@ export default function UsersWorkspace({
                               className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">👤 View details</button>
                             <button onClick={() => { setMenuFor(null); navigator.clipboard.writeText(u.email); setNotice({ kind: "ok", text: `Copied ${u.email}` }); }}
                               className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">⧉ Copy email</button>
-                            {canManage && <>
+                            {canReset && u.id !== currentUserId && (
                             <button onClick={() => { setMenuFor(null); act(u.id, "send_reset", `Password reset for ${u.name}`); }}
                               className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">🔑 Send password reset</button>
+                            )}
+                            {canManage && <>
                             {u.status === "pending" && (
                               <button onClick={() => { setMenuFor(null); act(u.id, "resend_invite", `Invitation re-sent to ${u.name}`); }}
                                 className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">✉️ Resend invitation</button>

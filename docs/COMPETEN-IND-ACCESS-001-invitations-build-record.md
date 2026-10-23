@@ -129,8 +129,8 @@ An earlier draft had a defect: its D8 CHECK also required `adult_confirmed_by`, 
 Nothing here could be verified against production from a development worktree: the production key is in the owner's vault and needs a named GO. These are requirements for the owner to confirm.
 
 1. **Redirect allowlist** (Supabase, production project, Authentication → URL Configuration).
-   - **What must be allowed:** the invite `redirectTo` is `<origin>/reset-password?next=%2Findividual%2Fhome`, where `<origin>` is the host the administrator used for HQ (taken from the request).
-   - **How to allow it:** list every production host HQ is reached on, as `https://<host>/reset-password**` (the `**` wildcard covers the query string).
+   - **What must be allowed:** the invite `redirectTo` is `${SITE_URL}/reset-password?next=%2Findividual%2Fhome`. `SITE_URL` is `NEXT_PUBLIC_SITE_URL`, defaulting to `https://www.competenhealthcare.com`. It is the trusted origin, never the request's: the HQ-USERS-B rule, `hq-users-reset-harness` R3, which now covers the invitation route too.
+   - **How to allow it:** one entry, `${SITE_URL}/reset-password**` (the `**` wildcard covers the query string). This is the same entry the governed administrator reset (`?initiated=admin`) needs.
    - **If it isn't allowed:** Supabase falls back to the Site URL. The person then lands somewhere that is not the password page, and can still recover through "Forgot password", but the flow breaks.
    - **On staging:** I8 proves the allowlist keeps the path and the `next` query.
 2. **Email delivery.**
@@ -180,16 +180,16 @@ The link is attached to the API response only on the `"link"` branch. In `"email
 
 The goal is to exercise the same Auth mailer and the same redirect allowlist that invitations use, without touching Individual:
 ```bash
-curl -sS -X POST "https://<production-ref>.supabase.co/auth/v1/recover?redirect_to=https%3A%2F%2F<hq-host>%2Freset-password%3Fnext%3D%252Findividual%252Fhome" \
+curl -sS -X POST "https://<production-ref>.supabase.co/auth/v1/recover?redirect_to=https%3A%2F%2Fwww.competenhealthcare.com%2Freset-password%3Fnext%3D%252Findividual%252Fhome" \
   -H "apikey: <production anon key>" -H "Content-Type: application/json" \
   -d '{"email":"<an existing owner-controlled Competen account>"}'
 ```
 
 **Pass criteria:**
 1. **SMTP:** the email arrives promptly, from the configured sender. That proves production SMTP, as ADR-010 requires.
-2. **Redirect allowlist:** opening the link, or reading its `redirect_to`, lands on `https://<hq-host>/reset-password?next=%2Findividual%2Fhome`, not the Site URL. That proves the allowlist entry. Repeat for each host HQ is reached on.
+2. **Redirect allowlist:** opening the link, or reading its `redirect_to`, lands on `${SITE_URL}/reset-password?next=%2Findividual%2Fhome`, not the Site URL fallback. That proves the allowlist entry.
 3. **Nothing else changes:** completing the reset only changes that owner account's password, and it can be skipped. No invitation row, membership or entitlement is created anywhere.
 
 **Failure modes and fixes:**
 - **The email doesn't arrive:** configure production SMTP (ADR-010 steps 1–3).
-- **The link goes to the Site URL:** add `https://<hq-host>/reset-password**` under Authentication → URL Configuration.
+- **The link goes to the Site URL:** add `${SITE_URL}/reset-password**` under Authentication → URL Configuration.
