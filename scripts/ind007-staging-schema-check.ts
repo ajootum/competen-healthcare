@@ -99,6 +99,11 @@ async function main() {
     out.objectCounts = { columns: fp.columns.length, constraints: fp.constraints.length, indexes: fp.indexes.length, policies: fp.policies.length,
       rlsOn: fp.rls.filter(r => r.relrowsecurity).length };
 
+    if (process.argv.includes("--taxonomy")) {
+      // COMPETEN-CONFIG-002 item 8: the migration 013 vocabularies the Professional fields are offered.
+      out.taxonomy = await q(`select t.kind, count(tt.id)::int as terms, coalesce(string_agg(tt.value, ', ' order by tt.sort_order, tt.value), '') as sample
+        from taxonomies t left join taxonomy_terms tt on tt.taxonomy_id = t.id group by t.kind order by t.kind`);
+    }
     if (process.argv.includes("--frameworks")) {
       // COMPETEN-CONFIG-002 P0: what a person may choose = shared (no hospital), active, published.
       out.sharedFrameworksByStatus = await q(`select coalesce(pub_status, '(null)') as pub_status, count(*)::int as n
