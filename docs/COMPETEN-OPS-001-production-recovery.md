@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Requirements of record. **Production schema freeze in force** until §5 is met (owner ruling, 2026-10-22). |
+| **Status** | Requirements of record, revised 2026-10-23 (Revision 1, §6–§10). **Production schema freeze in force** until the owner signs off §10. Backup and isolated restore are verified on production. |
 | **Scope** | The production Supabase project `rnnqhlrcgvsauigxwszl` (Competen Platform, Practice, Enterprise, Individual). |
 | **Not covered** | Application rollback, which is a Vercel concern and already has a verified path. See `COMPETEN-WEB-IND-001-website-redesign.md` §3a. |
 
@@ -60,7 +60,7 @@
 
 This revision supersedes R1, R2 and R5 above, along with the §3 recommendations to buy a paid plan and PITR. R3, R4, R6, R7 and R8 stand.
 
-## 6. Backup automation (built; production run pending the owner's credential)
+## 6. Backup automation (built; production verified 2026-10-23)
 
 Scripts are in `ops/backup/` and installed at `C:\Users\elish\CompetenBackup\bin`.
 
@@ -93,7 +93,8 @@ Scripts are in `ops/backup/` and installed at `C:\Users\elish\CompetenBackup\bin
 | Retention | 40 simulated days keep exactly 7 daily + the weekly set (9 files). |
 | Isolated restore, staging | **PASS** (`docs/evidence/COMPETEN-OPS-001/staging-restore-test-2026-10-23.json`). 723/723 tables match the archive row for row; 0 restore errors; 28 s restore, 65 s end to end. Live cross-check: tables, RLS tables, policies, functions, auth users and the schema fingerprint all match. Nothing is left behind. |
 | Run as the scheduled task (outside the app) | Backup and restore **PASS**. A failed production run (no credential yet) raised the notification and logged the cause. |
-| **Production backup + restore** | **PENDING.** It needs the owner to run `set-production-credential.ps1` once. |
+| **Production backup (2026-10-23 09:48)** | **OK.** 10.3 MB encrypted archive in 425 s. 7,706 TOC entries; data for all 672 public tables; 318 policies; Postgres 17.6. |
+| **Production isolated restore** | **PASS** (`docs/evidence/COMPETEN-OPS-001/production-restore-test-2026-10-23.json`). 715/715 tables match the archive row for row (105,803 rows); 0 restore errors; 34 s restore, 84 s end to end. Live cross-check (read-only counts): 672 tables, 672 with RLS, 318 policies, 379 functions, 47 auth users and the schema fingerprint `67c8b840…` all match. Nothing is left behind. |
 
 ## 8. Migration governance by risk
 
@@ -122,7 +123,7 @@ Scripts are in `ops/backup/` and installed at `C:\Users\elish\CompetenBackup\bin
 ## 10. Freeze lift (revised conditions; owner sign-off required)
 
 - [x] Automated, encrypted, integrity-checked backup with 7 daily + 4 weekly retention and failure/missed reporting, proven on staging (§6, §7).
-- [ ] First production backup verified (needs the owner's credential).
-- [ ] Production isolated restore test **PASS**.
+- [x] First production backup verified (2026-10-23, §7).
+- [x] Production isolated restore test **PASS** (2026-10-23, §7).
 - [x] Risk-tier gate adopted (§8); 370, 372 and 373 classified (§9).
 - [ ] The owner records the sign-off date here and gives a separate production GO for the 370 → 372 → 373 batch.
