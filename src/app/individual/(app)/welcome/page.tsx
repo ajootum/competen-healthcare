@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { EXPERIENCES } from "@/lib/individual/experiences";
 import { effectivePrimary } from "@/lib/individual/access";
-import { individualShell } from "../../_components/shell-context";
+import { individualShell, gatedMetadata } from "../../_components/shell-context";
+import type { Metadata } from "next";
 import { IndividualMark, ExperienceMark } from "../../_components/chrome";
 import PrimaryChoice from "../../_components/PrimaryChoice";
 
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 // ⚠ IT CREATES NOTHING BUT A PREFERENCE. No identity, no Passport, no entitlement. The account the
 // person signed in with IS their Competen Individual account (COMPETEN-IND-001 D4).
 
-export const metadata = { title: "Welcome" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Welcome" }); }
 
 export default async function Welcome() {
   const shell = await individualShell();

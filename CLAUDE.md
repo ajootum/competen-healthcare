@@ -88,9 +88,27 @@ route around when a query would be easier without them.
 
 ## Database
 
-- **Migrations are the only way schema changes happen**, and they are applied **by hand, by the repo
-  owner**, in the Supabase SQL editor — never auto-applied by an agent. A migration is not "done" until
-  the owner confirms application; do not commit one before that confirmation.
+- **Migrations are the only way schema changes happen.** Nothing in the build, CI or deploy pipeline ever
+  applies one. Each migration passes through four distinct states, and a later state never follows from
+  an earlier one on its own (owner ruling, COMPETEN-IND continuation GO, 2026-10-23):
+  1. **Authored** — drafted in local development. Not committed.
+  2. **Applied and verified on staging** — applied to the staging project only (by the owner, or by an
+     agent the owner has authorised for that migration), run twice to prove it is idempotent, with its
+     pre-application state, its checksum (sha256) and its verification results recorded in the build
+     record. Only from this state is it **eligible for version control and PR review**.
+  3. **Merged into `main`** — recorded in release history. This does **not** authorise production.
+     `main` can therefore hold a migration that production does not have yet. Its build record must say
+     so, and any code that depends on it must stay behind a server-enforced gate that defaults OFF and
+     fails closed while the migration is absent.
+  4. **Applied to production** — only with a **separate owner GO** for that migration and the established
+     production safeguards: a verified recovery mechanism (`docs/COMPETEN-OPS-001-production-recovery.md`),
+     a recorded pre-application recovery reference, rollback SQL, and post-application verification. It
+     is applied by the owner, by hand, in the Supabase SQL editor — never by an agent against production.
+- **Preserve ordering, reproducibility and audit evidence.** Numbers are never reused or renumbered, and
+  a committed migration file is never edited. Fix forward with a new migration. Because files can reach
+  production out of numeric order, every build record states the application order and each migration's
+  dependencies, and the checksum recorded at staging must match the file that is merged and the file the
+  owner applies.
 - Every migration must pass `scripts/migration-house-rules.ts` before being sent. House rules include:
   ASCII-only content, no semicolons inside comments (the owner's runner splits on `;`), no partial unique
   indexes, `notify pgrst, 'reload schema';` last, and an `APPLY THIS FILE WHOLE` banner in the first 15

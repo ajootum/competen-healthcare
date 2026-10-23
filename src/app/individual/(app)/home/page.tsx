@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { decideLanding } from "@/lib/individual/access";
-import { individualShell } from "../../_components/shell-context";
+import { individualShell, gatedMetadata } from "../../_components/shell-context";
+import type { Metadata } from "next";
 import { StatePanel, IndividualMark, secondaryBtn } from "../../_components/chrome";
 import { SignOutButton } from "../../_components/ShellNav";
 
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 // is a real state (a period ended, an experience was suspended), and it is stated, not hidden behind a
 // redirect loop.
 
-export const metadata = { title: "Home" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Home" }); }
 
 export default async function IndividualHome() {
   const shell = await individualShell();

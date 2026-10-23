@@ -1,6 +1,7 @@
 import { EXPERIENCES, EXPERIENCE_KEYS } from "@/lib/individual/experiences";
 import { effectivePrimary } from "@/lib/individual/access";
-import { experiencePage } from "../../../_components/shell-context";
+import { experiencePage, gatedMetadata } from "../../../_components/shell-context";
+import type { Metadata } from "next";
 import { PageHeader } from "../../../_components/chrome";
 import { SignOutButton } from "../../../_components/ShellNav";
 import PrimaryChoice from "../../../_components/PrimaryChoice";
@@ -17,7 +18,7 @@ const nameOf = (l: EntityLegal) => l.registeredName ?? l.label;
 // It lists both experiences and says which are active, without offering to activate one. Activation is
 // a grant (pilot) or, later, graduation or a subscription -- never a toggle on this page.
 
-export const metadata = { title: "Settings" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Settings" }); }
 
 export default async function SettingsPage({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experiencePage((await params).experience);

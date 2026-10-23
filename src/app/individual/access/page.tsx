@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { individualAppEnabled } from "@/lib/individual/gate";
+import { gatedMetadata } from "../_components/shell-context";
 import type { Metadata } from "next";
 import { createClient, createAdminClientOrNull } from "@/lib/supabase/server";
 import { readIndividualAccess } from "@/lib/individual/access";
@@ -24,7 +25,9 @@ export const dynamic = "force-dynamic";
 // ⚠ NO SIGN-UP. Individual signup is closed by owner decision. Nothing here links to /signup or offers to
 // create anything -- the pilot is by invitation.
 
-export const metadata: Metadata = { title: "Competen Individual access", robots: { index: false, follow: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  return gatedMetadata({ title: "Competen Individual access", robots: { index: false, follow: false } });
+}
 
 export default async function IndividualAccessPage() {
   // The release gate first: with Individual switched off, this page does not exist either.

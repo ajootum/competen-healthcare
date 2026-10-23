@@ -249,6 +249,16 @@ function main() {
   ok("11b. the guard and the access page wait for a request (connection()) before creating any client",
     guardSrc.indexOf("await connection()") > -1 && guardSrc.indexOf("await connection()") < guardSrc.indexOf("createAdminClientOrNull()")
     && (() => { const a = SRC.get("src/app/individual/access/page.tsx") ?? ""; return a.indexOf("await connection()") > -1 && a.indexOf("await connection()") < a.indexOf("createAdminClientOrNull()"); })());
+  // Found 2026-10-23 (merge-condition check on staging): static `export const metadata` put "Competen Scholar ·
+  // Competen Individual" into the gate-off 404, telling a visitor the route exists. Gated metadata is empty
+  // while the gate is off, so the 404 carries the root title an absent route carries.
+  const gatedViews = routeFiles.filter(f => /\/(page|layout)\.tsx$/.test(f));
+  const leakyMeta = gatedViews.filter(f => {
+    const s = SRC.get(f) ?? "";
+    return /export const metadata\b/.test(s) || (/export async function generateMetadata/.test(s) && !/gatedMetadata\(/.test(s));
+  });
+  ok("11e. no gated Individual page or layout exports static metadata; every generateMetadata goes through gatedMetadata",
+    gatedViews.length >= 10 && leakyMeta.length === 0, leakyMeta.join(", "));
   // Found on Vercel Preview 2026-10-22, after 11a: with no service key the routes answered 500, not 404 --
   // createAdminClient()'s constructor throws on a missing key, before the gate's own try could say OFF.
   const gatePaths = ["src/lib/individual/guard.ts", "src/app/individual/access/page.tsx"];
