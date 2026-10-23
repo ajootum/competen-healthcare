@@ -10,12 +10,12 @@ import { currentTraceId } from "@/lib/trace";
 // The decision is pure (decideReset) and its order is the rule:
 //
 //   1. yourself          refused, by name: your own password goes through Forgot password, which stays.
-//   2. actor rate limit  20 sends per administrator per hour -> 429.
-//   3. no such account   } all four answer the SAME neutral sentence, so the administrator cannot use
-//   4. owner account     }  this route to learn whether an address exists, is an owner, is suspended or
-//   5. suspended         }  is unverified. The audit row keeps the true reason.
-//   6. unverified email  }  An owner or super-admin account is resettable only by an owner.
-//   7. target rate limit 3 sends per person per hour, also neutral.
+//   2. actor rate limit  20 REQUESTS per administrator per hour -> 429.
+//   3. target rate limit 3 REQUESTS per person per hour     } every one of these answers the SAME neutral
+//   4. no such account                                       }  sentence, so the administrator cannot use
+//   5. owner account (owners only)                           }  this route to learn whether an address
+//   6. suspended                                             }  exists, is an owner, is suspended or is
+//   7. unverified email                                      }  unverified. The audit row keeps the reason.
 //   8. send.
 //
 // ⚠ THE LINK NEVER PASSES THROUGH COMPETEN. The email is Supabase Auth recovery (resetPasswordForEmail)
@@ -26,22 +26,25 @@ import { currentTraceId } from "@/lib/trace";
 // /reset-password?initiated=admin. A spoofed Host header cannot steer where the link lands, and
 // `initiated=admin` is how the reset page tells the person an administrator sent it.
 //
-// ⚠ THE RATE LIMIT IS COUNTED ON THE DATABASE CLOCK. The attempt row is written first, and its
-// created_at (database time) anchors the hour. Every row counted is also database time, so no
-// application clock is compared with a database one, and no schema object was needed for it.
+// ⚠ THE RATE LIMIT IS ATOMIC AND ON THE DATABASE CLOCK. hq_reserve_password_reset (migration 383) takes one
+// advisory lock, counts this hour's reservations by now(), and inserts this request's reservation row, all
+// in one transaction, so two simultaneous requests cannot both take the last slot. Its limits (3 and 20)
+// are fixed inside the function: the application cannot widen them. Unavailable means refused, never
+// unmetered.
 
 export const RESET_CAPABILITY = "hq.platform.users.reset";
 export const TARGET_LIMIT = 3;
 export const ACTOR_LIMIT = 20;
-export const WINDOW_MS = 3_600_000;
 /** The audit actions. RESET_SENT is the name the owner-only route always used, so its history counts too. */
-export const RESET_ATTEMPT = "admin_password_reset_requested";
+/** Written by hq_reserve_password_reset for every request it lets through: the row the limits count. */
+export const RESET_RESERVED = "admin_password_reset_reserved";
+export const RESERVE_FUNCTION = "hq_reserve_password_reset";
 export const RESET_SENT = "send_password_reset";
 export const RESET_REFUSED = "admin_password_reset_refused";
 
 export const NEUTRAL_MESSAGE = "If that account can receive a password reset, an email is on its way to its verified address.";
 export const SELF_MESSAGE = "You cannot send yourself an administrator reset. Use Forgot password on the sign-in page.";
-export const ACTOR_LIMIT_MESSAGE = `You have sent ${ACTOR_LIMIT} password resets in the last hour. Try again later.`;
+export const ACTOR_LIMIT_MESSAGE = `You have made ${ACTOR_LIMIT} password-reset requests in the last hour. Try again later.`;
 
 /** A user id as Supabase Auth issues it. Local on purpose: HQ code does not import a product's validators. */
 export const isUserId = (v: unknown): v is string =>
@@ -52,18 +55,20 @@ export const resetReturnUrl = () => `${SITE_URL}/reset-password?initiated=admin`
 export type RefusalReason = "unknown_target" | "owner_target" | "suspended" | "unverified_email" | "target_rate_limited" | "send_failed";
 export type TargetFacts = { email: string | null; emailVerified: boolean; isOwnerAccount: boolean; suspended: boolean };
 export type Decision = { kind: "self" } | { kind: "actor_limited" } | { kind: "refuse"; reason: RefusalReason } | { kind: "send" };
+/** What the reservation function answered. */
+export type Reservation = "reserved" | "actor_limited" | "target_limited";
 
 /** Pure: the decision, in the order the rule states. */
 export function decideReset(i: {
-  actorId: string; actorIsOwner: boolean; targetId: string; target: TargetFacts | null; sentForTarget: number; sentByActor: number;
+  actorId: string; actorIsOwner: boolean; targetId: string; target: TargetFacts | null; reservation: Reservation;
 }): Decision {
   if (i.targetId === i.actorId) return { kind: "self" };
-  if (i.sentByActor >= ACTOR_LIMIT) return { kind: "actor_limited" };
+  if (i.reservation === "actor_limited") return { kind: "actor_limited" };
+  if (i.reservation === "target_limited") return { kind: "refuse", reason: "target_rate_limited" };
   if (!i.target) return { kind: "refuse", reason: "unknown_target" };
   if (i.target.isOwnerAccount && !i.actorIsOwner) return { kind: "refuse", reason: "owner_target" };
   if (i.target.suspended) return { kind: "refuse", reason: "suspended" };
   if (!i.target.email || !i.target.emailVerified) return { kind: "refuse", reason: "unverified_email" };
-  if (i.sentForTarget >= TARGET_LIMIT) return { kind: "refuse", reason: "target_rate_limited" };
   return { kind: "send" };
 }
 
@@ -90,26 +95,22 @@ const audit = async (admin: any, actor: Actor, action: string, targetId: string,
     action, entity_type: "user", entity_id: targetId, new_value: value,
   }).select("created_at").single();
 
-const countSince = async (admin: any, column: "entity_id" | "actor_id", id: string, since: string): Promise<number | null> => {
-  const { count, error } = await admin.from("audit_log").select("id", { count: "exact", head: false })
-    .eq("action", RESET_SENT).eq(column, id).gte("created_at", since).limit(1);
-  return error ? null : (count ?? 0);
-};
+const isReservation = (v: unknown): v is Reservation => v === "reserved" || v === "actor_limited" || v === "target_limited";
 
-/** The whole request: attempt row, counts, facts, decision, send, outcome row, in-app notice. */
+/** The whole request: atomic reservation, facts, decision, send, outcome row, in-app notice. */
 export async function requestAdminReset(admin: any, actor: Actor, targetId: string): Promise<{ status: number; body: Record<string, unknown> }> {
   if (targetId === actor.userId) {
     await audit(admin, actor, RESET_REFUSED, targetId, { reason: "self" });
     return responseFor({ kind: "self" });
   }
-  const attempt = await audit(admin, actor, RESET_ATTEMPT, targetId, {});
-  if (attempt.error || !attempt.data?.created_at) return { status: 503, body: { error: "The reset could not be recorded, so it was not sent. Try again shortly." } };
-  const at: string = attempt.data.created_at;
-  const since = new Date(Date.parse(at) - WINDOW_MS).toISOString();
-
-  const [sentForTarget, sentByActor] = await Promise.all([countSince(admin, "entity_id", targetId, since), countSince(admin, "actor_id", actor.userId, since)]);
-  // A limit that cannot be counted is not a limit that was met: refuse rather than send unmetered.
-  if (sentForTarget === null || sentByActor === null) return { status: 503, body: { error: "The reset could not be checked, so it was not sent. Try again shortly." } };
+  const { data: res, error: resErr } = await admin.rpc(RESERVE_FUNCTION, {
+    p_actor: actor.userId, p_target: targetId, p_actor_name: actor.fullName, p_trace: await currentTraceId(),
+  });
+  const row = Array.isArray(res) ? res[0] : res;
+  // A limit that cannot be applied is not a limit that was met: refuse rather than send unmetered.
+  if (resErr || !isReservation(row?.outcome) || !row?.reserved_at) return { status: 503, body: { error: "The reset could not be checked, so it was not sent. Try again shortly." } };
+  const reservation: Reservation = row.outcome;
+  const at: string = row.reserved_at;
 
   let target: TargetFacts | null = null;
   const { data: au } = await admin.auth.admin.getUserById(targetId).catch(() => ({ data: null }));
@@ -123,7 +124,7 @@ export async function requestAdminReset(admin: any, actor: Actor, targetId: stri
     };
   }
 
-  const d = decideReset({ actorId: actor.userId, actorIsOwner: actor.isOwner, targetId, target, sentForTarget, sentByActor });
+  const d = decideReset({ actorId: actor.userId, actorIsOwner: actor.isOwner, targetId, target, reservation });
   if (d.kind === "actor_limited") {
     await audit(admin, actor, RESET_REFUSED, targetId, { reason: "actor_rate_limited" });
     return responseFor(d);

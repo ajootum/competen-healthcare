@@ -44,7 +44,7 @@ import { loadProfessionalRecord } from "../src/lib/individual/professional/recor
 import { evidenceCoverage, planProgress, cpdHoursByYear } from "../src/lib/individual/professional/progress";
 import { mintShare, listShares, revokeShare, shareCarriesOwnRecords } from "../src/lib/individual/professional/share";
 import { scanProfessionalReminders, type ReminderSender } from "../src/lib/individual/professional/reminders";
-import { loadSharedFrameworks, checkSharedReference } from "../src/lib/individual/professional/frameworks";
+import { loadSharedFrameworks, loadSharedCompetencies, checkSharedReference } from "../src/lib/individual/professional/frameworks";
 import { DOCUMENT_BUCKET } from "../src/lib/individual/professional/vocabulary";
 import { individualAppEnabled, INDIVIDUAL_APP_FLAG } from "../src/lib/individual/gate";
 
@@ -306,6 +306,18 @@ async function main() {
   const draftFw = await admin.from("frameworks").select("id").is("hospital_id", null).neq("pub_status", "published").limit(1).maybeSingle();
   if (draftFw.data) ok("G3. ⚠ a shared framework that is not published is refused as a reference", (await checkSharedReference(admin, draftFw.data.id, null)) !== null);
   else console.log("  PEND  G3. staging has no unpublished shared framework to refuse");
+  // ⚠ THE POSITIVE PATH. G1 alone passes on an empty list, which proves exclusion and nothing about offering.
+  // With a published shared framework present, it must be offered, and it and one of its competencies must
+  // be accepted as a reference -- exactly what the Professional picker and the write check use.
+  const pubFw = await admin.from("frameworks").select("id, name").is("hospital_id", null).eq("is_active", true).eq("pub_status", "published").limit(1).maybeSingle();
+  if (pubFw.data) {
+    const comps = await loadSharedCompetencies(admin, pubFw.data.id);
+    ok("G4. a shared, PUBLISHED framework is offered, and it and its competency are accepted as references",
+      fwIds.includes(pubFw.data.id) && !!comps?.length
+        && (await checkSharedReference(admin, pubFw.data.id, null)) === null
+        && (await checkSharedReference(admin, pubFw.data.id, comps![0].id)) === null,
+      `${pubFw.data.name}: offered ${fwIds.includes(pubFw.data.id)}, ${comps?.length ?? 0} competencies`);
+  } else console.log("  PEND  G4. staging has no published shared framework to offer");
   const hospFw = await admin.from("frameworks").select("id").not("hospital_id", "is", null).limit(1).maybeSingle();
   if (hospFw.data) ok("G2. ⚠ a hospital framework is refused as a reference", (await checkSharedReference(admin, hospFw.data.id, null)) !== null);
   else console.log("  PEND  G2. staging has no hospital-owned framework to refuse");

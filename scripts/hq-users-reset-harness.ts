@@ -68,13 +68,17 @@ const checkTrustedOrigin = (src: Src): R => {
 const checkDecision = (src: Src): R => {
   const s = code(src, "lib");
   const fn = s.slice(s.indexOf("export function decideReset"), s.indexOf("export function responseFor"));
-  const order = ["i.targetId === i.actorId", "i.sentByActor >= ACTOR_LIMIT", "if (!i.target)", "i.target.isOwnerAccount && !i.actorIsOwner", "i.target.suspended", "!i.target.emailVerified", "i.sentForTarget >= TARGET_LIMIT"].map(n => fn.indexOf(n));
+  const order = ["i.targetId === i.actorId", 'i.reservation === "actor_limited"', 'i.reservation === "target_limited"', "if (!i.target)", "i.target.isOwnerAccount && !i.actorIsOwner", "i.target.suspended", "!i.target.emailVerified"].map(n => fn.indexOf(n));
   const ordered = order.every((v, i) => v > -1 && (i === 0 || v > order[i - 1]));
   const authEmail = /email: au\.user\.email \?\? null,/.test(s) && /emailVerified: !!au\.user\.email_confirmed_at,/.test(s) && !/profiles"\)\.select\([^)]*email/.test(s);
-  const limits = /export const TARGET_LIMIT = 3;/.test(s) && /export const ACTOR_LIMIT = 20;/.test(s) && /export const WINDOW_MS = 3_600_000;/.test(s);
+  const limits = /export const TARGET_LIMIT = 3;/.test(s) && /export const ACTOR_LIMIT = 20;/.test(s);
+  // The limits are applied by the database function in ONE call, before any fact is read, and an answer
+  // that is not one of its three outcomes refuses (503) rather than sending unmetered.
+  const atomic = /await admin\.rpc\(RESERVE_FUNCTION, \{/.test(s) && /if \(resErr \|\| !isReservation\(row\?\.outcome\) \|\| !row\?\.reserved_at\) return \{ status: 503/.test(s)
+    && s.indexOf("await admin.rpc(RESERVE_FUNCTION") < s.indexOf("admin.auth.admin.getUserById(targetId)") && !/\.from\("audit_log"\)\.select\(/.test(s);
   const fixed = /return \{ status: 202, body: \{ ok: true, message: NEUTRAL_MESSAGE \} \};/.test(s) && !/body: \{[^}]*(target|email|link|url)/i.test(s.slice(s.indexOf("export function responseFor"), s.indexOf("export function isSuspended")));
-  const dbClock = /const at: string = attempt\.data\.created_at;/.test(s) && /isSuspended\(au\.user\.banned_until, p\?\.account_status, at\)/.test(s) && !/Date\.now\(\)/.test(s);
-  return { ok: ordered && authEmail && limits && fixed && dbClock, detail: `order ${ordered}, auth email ${authEmail}, 3/20/hour ${limits}, fixed answers ${fixed}, DB clock ${dbClock}` };
+  const dbClock = /const at: string = row\.reserved_at;/.test(s) && /isSuspended\(au\.user\.banned_until, p\?\.account_status, at\)/.test(s) && !/Date\.now\(\)/.test(s);
+  return { ok: ordered && authEmail && limits && atomic && fixed && dbClock, detail: `order ${ordered}, auth email ${authEmail}, 3/20 ${limits}, atomic ${atomic}, fixed answers ${fixed}, DB clock ${dbClock}` };
 };
 const checkAuditClean = (src: Src): R => {
   const s = code(src, "lib");
@@ -98,6 +102,28 @@ const checkMigration = (src: Src): R => {
   const grants = /from \(values \('chief_executive'\), \('platform_director'\)\) as p\(code\)\s+cross join \(values \('hq\.platform\.users\.reset'\)\) as c\(code\)/.test(m);
   const ddl = /\b(create|alter|drop|truncate|update|delete|grant|revoke)\b/i.test(m);
   return { ok: cap && grants && !ddl && /notify pgrst, 'reload schema';\s*$/.test(m), detail: `cap ${cap}, grants ${grants}, ddl ${ddl}` };
+};
+// R10/R11: the two follow-up migrations, found by name so the number can be whatever was allocated.
+const migByName = (suffix: string) => { const f = readdirSync("supabase/migrations").find(n => n.endsWith(suffix)); return f ? read(join("supabase/migrations", f)) : ""; };
+const RES_SQL = migByName("-hq-password-reset-reservation.sql"), CEO_SQL = migByName("-hq-chief-executive-users-view.sql");
+const sqlBody = (m: string) => m.split("\n").filter(l => !l.trim().startsWith("--")).join("\n");
+const checkReservationSql = (m: string, lib: string): R => {
+  const b = sqlBody(m);
+  const lock = /perform pg_advisory_xact_lock\(hashtextextended\('hq_reserve_password_reset', 0\)\);/.test(b);
+  const clock = /v_now timestamptz := now\(\);/.test(b) && (b.match(/created_at > v_now - interval '1 hour'/g) ?? []).length === 2;
+  const limits = /if v_actor >= 20 then/.test(b) && /if v_target >= 3 then/.test(b) && /export const ACTOR_LIMIT = 20;/.test(lib) && /export const TARGET_LIMIT = 3;/.test(lib);
+  const insertOnlyWhenReserved = b.indexOf("insert into audit_log") > b.indexOf("if v_target >= 3 then") && (b.match(/insert into /g) ?? []).length === 1;
+  const grants = ["public", "anon", "authenticated"].every(r => new RegExp(`revoke all on function hq_reserve_password_reset\\(uuid, uuid, text, text\\) from ${r};`).test(b))
+    && /grant execute on function hq_reserve_password_reset\(uuid, uuid, text, text\) to service_role;/.test(b) && !/security definer/i.test(b);
+  const banner = /APPLY THIS FILE WHOLE/.test(m.split("\n").slice(0, 15).join("\n"));
+  return { ok: !!m && lock && clock && limits && insertOnlyWhenReserved && grants && banner, detail: `file ${!!m}, lock ${lock}, DB clock ${clock}, 3/20 in SQL and lib ${limits}, insert only when reserved ${insertOnlyWhenReserved}, service-role only ${grants}, banner ${banner}` };
+};
+const checkCeoSql = (m: string): R => {
+  const b = sqlBody(m);
+  const grant = /from \(values \('chief_executive'\)\) as p\(code\)\s+cross join \(values \('hq\.platform\.users\.view'\)\) as c\(code\)/.test(b);
+  const only = (b.match(/'hq\.[a-z._]+'/g) ?? []).every(c => c === "'hq.platform.users.view'");
+  const ddl = /\b(create|alter|drop|truncate|update|delete|grant|revoke)\b/i.test(b);
+  return { ok: !!m && grant && only && !ddl && /notify pgrst, 'reload schema';\s*$/.test(b), detail: `file ${!!m}, grant ${grant}, users.view only ${only}, ddl ${ddl}` };
 };
 const checkCatalogue = (src: Src): R => ({ ok: /\{ code: "hq\.platform\.users\.reset",\s+space: "platform"\s+\}/.test(code(src, "spaces")), detail: "spaces.ts must declare hq.platform.users.reset" });
 const checkResetPage = (src: Src): R => ({
@@ -125,6 +151,8 @@ run("R6. reset is offered to owners and users.reset holders, through the governe
 run("R7. 379 seeds the capability and its two grants together, data only", checkMigration(RAW));
 run("R8. the HQ code catalogue declares hq.platform.users.reset", checkCatalogue(RAW));
 run("R9. the reset page says when an administrator sent the link", checkResetPage(RAW));
+run("R10. the reservation function: one lock, DB clock, 3 and 20 fixed in SQL, insert only when reserved, service role only", checkReservationSql(RES_SQL, code(RAW, "lib")));
+run("R11. the Chief Executive grant is users.view only, data only", checkCeoSql(CEO_SQL));
 console.log("");
 red("R1 on a route gated by the view right", checkGate(plant("route", "await hqApiGate([RESET_CAPABILITY])", `await hqApiGate(["hq.platform.users.view"])`)));
 red("R2 on send_reset back in actions", checkOnePath(ALL, plant("actions", `type Action = "suspend" | "unsuspend" | "resend_invite";`, `type Action = "suspend" | "unsuspend" | "resend_invite" | "send_reset";`)));
@@ -132,7 +160,9 @@ red("R2 on a second sender elsewhere", checkOnePath(new Map([...ALL, ["src/app/a
 red("R3 on a request-derived origin", checkTrustedOrigin(plant("users", "const origin = SITE_URL;", "const origin = new URL(req.url).origin;")));
 red("R4 on the owner rule moved after the send checks", checkDecision(plant("lib", `  if (i.target.isOwnerAccount && !i.actorIsOwner) return { kind: "refuse", reason: "owner_target" };\n`, "")));
 red("R4 on the profiles address", checkDecision(plant("lib", "email: au.user.email ?? null,", "email: p?.email ?? null,")));
-red("R4 on an app-clock window", checkDecision(plant("lib", "const at: string = attempt.data.created_at;", "const at: string = new Date(Date.now()).toISOString();")));
+red("R4 on an app-clock window", checkDecision(plant("lib", "const at: string = row.reserved_at;", "const at: string = new Date(Date.now()).toISOString();")));
+red("R4 on a limit counted in the application", checkDecision(plant("lib", "const isReservation = ", `const c = (admin: any) => admin.from("audit_log").select("id");\nconst isReservation = `)));
+red("R4 on a failed reservation that still sends", checkDecision(plant("lib", "if (resErr || !isReservation(row?.outcome) || !row?.reserved_at) return { status: 503", "if (false) return { status: 503")));
 red("R4 on an answer that names the target", checkDecision(plant("lib", "return { status: 202, body: { ok: true, message: NEUTRAL_MESSAGE } };", "return { status: 202, body: { ok: true, message: NEUTRAL_MESSAGE, target: 1 } };")));
 red("R5 on an address in the audit", checkAuditClean(plant("lib", `{ initiated_by: "administrator", channel: "supabase_recovery" }`, `{ initiated_by: "administrator", email: target.email }`)));
 red("R5 on an unredacted provider message in the log", checkAuditClean(plant("lib", "${redactAddresses(error.message)}", "${error.message}")));
@@ -141,6 +171,10 @@ red("R6 on reset offered to every viewer", checkUi(plant("page", `canReset={isOw
 red("R7 on a grant to a third position", checkMigration(plant("mig", "(values ('chief_executive'), ('platform_director')) as p(code)", "(values ('chief_executive'), ('platform_director'), ('individual_product_administrator')) as p(code)")));
 red("R7 on DDL in the data-only file", checkMigration(plant("mig", "notify pgrst, 'reload schema';", "create view v as select 1;\nnotify pgrst, 'reload schema';")));
 red("R8 on a missing catalogue entry", checkCatalogue(plant("spaces", `{ code: "hq.platform.users.reset",`, `{ code: "hq.platform.users.reset_x",`)));
+red("R10 on a limit passed in by the caller", checkReservationSql(RES_SQL.replace("if v_target >= 3 then", "if v_target >= p_limit then"), code(RAW, "lib")));
+red("R10 on a function anyone signed in may call", checkReservationSql(RES_SQL.replace(/revoke all on function hq_reserve_password_reset\(uuid, uuid, text, text\) from authenticated;\n/, ""), code(RAW, "lib")));
+red("R10 on a count without the lock", checkReservationSql(RES_SQL.replace("perform pg_advisory_xact_lock(hashtextextended('hq_reserve_password_reset', 0));", ""), code(RAW, "lib")));
+red("R11 on a grant that adds an account-write right", checkCeoSql(CEO_SQL.replace("cross join (values ('hq.platform.users.view')) as c(code)", "cross join (values ('hq.platform.users.view'), ('hq.platform.users.manage')) as c(code)")));
 red("R9 on a page that ignores the marker", checkResetPage(plant("resetPage", "setFromAdmin(isAdminInitiated(window.location.search));", "")));
 
 console.log(fails.length ? `\nRED -- ${pass} passed, ${fails.length} failed` : `\nALL GREEN -- ${pass} passed, 0 failed`);
