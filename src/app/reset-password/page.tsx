@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { isAdminInitiated, recoveryCredentialFromUrl } from "@/lib/auth/recovery-link";
+import { isIndividualNext } from "@/lib/individual/entry";
 
 // Landing page for the password-reset email link. The link carries a one-time
 // code which is exchanged for a session; the user then sets a new password.
@@ -18,6 +19,11 @@ export default function ResetPasswordPage() {
   const [linkProblem, setLinkProblem] = useState<string | null>(null);
   /** HQ-USERS-B: the link came from an administrator-initiated reset (?initiated=admin). */
   const [fromAdmin, setFromAdmin] = useState(false);
+  // COMPETEN-IND-ACCESS-001 (invitations): a Competen Individual invitation lands here with
+  // ?next=/individual/home, and the "Sign in" after the password is set carries it to the one login. Only a
+  // plain /individual path is honoured (isIndividualNext) -- anything else is the plain /login it always was.
+  // Set in the submit handler, after hydration, so the server render and the first client render agree.
+  const [signInAt, setSignInAt] = useState("/login");
 
   useEffect(() => {
     const supabase = createClient();
@@ -75,6 +81,8 @@ export default function ResetPasswordPage() {
     setLoading(false);
     if (error) { setError(error.message); return; }
     await supabase.auth.signOut();
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (isIndividualNext(next)) setSignInAt(`/login?next=${encodeURIComponent(next!)}`);
     setDone(true);
   }
 
@@ -116,7 +124,7 @@ export default function ResetPasswordPage() {
             <p className="text-4xl mb-3">✅</p>
             <h2 className="text-lg font-bold text-gray-900">Password updated</h2>
             <p className="text-sm text-gray-500 mt-2">You can now sign in with your new password.</p>
-            <Link href="/login"
+            <Link href={signInAt}
               className="mt-5 inline-block bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
               Sign in
             </Link>

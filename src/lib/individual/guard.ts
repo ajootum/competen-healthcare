@@ -102,3 +102,27 @@ export async function requireIndividualContext(
 }
 
 export const isGuardRefusal = (x: IndividualContext | NextResponse): x is NextResponse => x instanceof NextResponse;
+
+export type IndividualSession = { userId: string; email: string | null; emailConfirmedAt: string | null; admin: any };
+
+/**
+ * The Individual PRE-MEMBERSHIP boundary -- for the one act a person performs before they hold Competen
+ * Individual: accepting an invitation (COMPETEN-IND-ACCESS-001, migration 378). requireIndividualContext
+ * would refuse them, correctly, because they have no membership yet.
+ *
+ * ⚠ THE SAME ORDER AS THE SHELL GUARD, MINUS THE MEMBERSHIP. The release gate first (404 while Individual is
+ * off, before any session or table is read), then the signed-in session (401). It grants nothing and reads
+ * no Individual table: the caller decides what this identity may do -- the accept route only lets it accept
+ * an invitation made for exactly this user id.
+ */
+export async function requireIndividualSession(): Promise<IndividualSession | NextResponse> {
+  await connection();
+  const admin = createAdminClientOrNull() as any;
+  if (!admin || !(await individualAppEnabled(admin))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  return { userId: user.id, email: user.email ?? null, emailConfirmedAt: user.email_confirmed_at ?? null, admin };
+}
+
+export const isSessionRefusal = (x: IndividualSession | NextResponse): x is NextResponse => x instanceof NextResponse;

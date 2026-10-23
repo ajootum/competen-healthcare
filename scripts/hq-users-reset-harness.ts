@@ -34,7 +34,7 @@ type K = keyof typeof F;
 type Src = Map<string, string>;
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
 const read = (f: string) => existsSync(f) ? readFileSync(f, "utf8").replace(/\r\n/g, "\n") : "";
-const RAW: Src = new Map(Object.values(F).map(f => [f, read(f)]));
+const RAW: Src = new Map([...Object.values(F), "src/app/api/hq/individual/invitations/route.ts"].map(f => [f, read(f)]));
 const code = (src: Src, k: K) => k === "mig" || k === "spaces" ? (src.get(F[k]) ?? "") : strip(src.get(F[k]) ?? "");
 const walk = (d: string): string[] => readdirSync(d).flatMap(e => { const p = join(d, e); return statSync(p).isDirectory() ? walk(p) : /\.(ts|tsx)$/.test(e) && !/\.test\./.test(e) ? [p.replace(/\\/g, "/")] : []; });
 const ALL: Src = new Map(walk("src").map(f => [f, strip(read(f))]));
@@ -50,7 +50,13 @@ const checkGate = (src: Src): R => {
   const cap = /export const RESET_CAPABILITY = "hq\.platform\.users\.reset";/.test(code(src, "lib"));
   return { ok: cap && gate > -1 && gate === first && !/export async function (GET|PUT|PATCH|DELETE)/.test(s), detail: `capability ${cap}, gate at ${gate}, first await at ${first}` };
 };
-const ALLOWED_SENDERS = new Set([F.lib, F.actions, F.forgot]);
+// The Competen Individual invitation (COMPETEN-IND-ACCESS-001, migration 378) re-sends to an identity a previous
+// invitation created ONLY while it has never been signed into and holds no standing at all
+// (src/lib/identity/standing.ts), behind hq.individual.pilot.grant and the release gate, with a SITE_URL return.
+// It is the same kind of sender as the owner-only invitation fallback in actions, and is listed for that reason.
+const INVITATIONS = "src/lib/individual/invitations.ts";
+const INVITE_ROUTE = "src/app/api/hq/individual/invitations/route.ts";
+const ALLOWED_SENDERS = new Set<string>([F.lib, F.actions, F.forgot, INVITATIONS]);
 const checkOnePath = (all: Src, src: Src): R => {
   const senders = [...all].filter(([, s]) => /resetPasswordForEmail\(/.test(s)).map(([f]) => f);
   const extra = senders.filter(f => !ALLOWED_SENDERS.has(f as never));
@@ -61,9 +67,11 @@ const checkOnePath = (all: Src, src: Src): R => {
 };
 const REQUEST_ORIGIN = /new URL\(req\.url\)\.origin|req\.nextUrl\.origin|headers\(\)[\s\S]{0,40}\.get\(["'](host|origin|x-forwarded-host)["']\)|req\.headers\.get\(["'](host|origin|x-forwarded-host)["']\)/;
 const checkTrustedOrigin = (src: Src): R => {
-  const bad = (["route", "lib", "actions", "users"] as K[]).filter(k => REQUEST_ORIGIN.test(code(src, k)));
+  const bad: string[] = (["route", "lib", "actions", "users"] as K[]).filter(k => REQUEST_ORIGIN.test(code(src, k))).map(k => F[k]);
+  // The invitation sender's route is held to the same rule: its return URL is SITE_URL, never the request's.
+  if (REQUEST_ORIGIN.test(src.get(INVITE_ROUTE) ?? "") || !/\{ origin: SITE_URL, delivery \}/.test(src.get(INVITE_ROUTE) ?? "")) bad.push(INVITE_ROUTE);
   const lib = /export const resetReturnUrl = \(\) => `\$\{SITE_URL\}\/reset-password\?initiated=admin`;/.test(code(src, "lib"));
-  return { ok: bad.length === 0 && lib, detail: `request-derived origin in: ${bad.map(k => F[k]).join(", ")}; lib uses SITE_URL ${lib}` };
+  return { ok: bad.length === 0 && lib, detail: `request-derived origin in: ${bad.join(", ")}; lib uses SITE_URL ${lib}` };
 };
 const checkDecision = (src: Src): R => {
   const s = code(src, "lib");

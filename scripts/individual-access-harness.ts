@@ -11,6 +11,11 @@
  *   S3  Both experiences active          S8  Primary-experience preference and switching
  *   S4  Existing account, new grant      S9  Signed-out, unauthorised (the gate-OFF half: see the note)
  *   S5  Expired / revoked / ended        H   HQ grant refusals: self, 18+, past end date, no capability
+ *   I   Invitations for people without an account (migration 378): one identity, no other membership or
+ *       estate role, duplicates refused, the real invite link followed, accept, revoke, expiry, schema.
+ *       Needs the dev server started with INDIVIDUAL_INVITE_TEST_DELIVERY=link (src/lib/individual/
+ *       invitations.ts inviteDeliveryMode: only under next dev, only against non-production). PEND while
+ *       378 is not applied.
  *
  * ⚠ IT NEEDS A DEV SERVER POINTED AT STAGING with `individual_app` ON, and the staging-test legal versions
  * set (the IND-003 staging launcher sets both the remap and the versions). BASE_URL names it.
@@ -77,8 +82,18 @@ async function findUser(email: string) {
   return null;
 }
 
+// Invitation fixtures (group I, migration 378). NOT pre-created: the invitation creates them, except the
+// expired one, whose past dates only a fixture can write.
+const INVITEES = {
+  both: "harness-access001-invitee@competen.test",
+  revoked: "harness-access001-invitee-revoked@competen.test",
+  expired: "harness-access001-invitee-expired@competen.test",
+  reuse: "harness-access001-invitee-reuse@competen.test",
+};
+
 async function cleanup() {
-  for (const email of Object.values(FIX)) {
+  // An invitation row cannot be deleted directly (378's trigger): deleting its identity's profile cascades it.
+  for (const email of [...Object.values(FIX), ...Object.values(INVITEES)]) {
     const u = await findUser(email);
     if (!u) continue;
     await admin.from("ogs_office_appointments").delete().eq("person_id", u.id);
@@ -326,6 +341,150 @@ async function main() {
   const access = await get("/individual/access?for=professional");
   ok("S9d. signed out, the access guidance names the product and signs in back to it",
     access.status === 200 && access.text.includes("Sign in to Competen Professional") && access.text.includes("/login?next=%2Findividual%2Fprofessional"));
+
+  await invitations(hq, s);
+}
+
+// ── I. INVITATIONS FOR PEOPLE WITHOUT AN ACCOUNT (migration 378) ──────────────────────────────────────
+// Needs the dev server started with INDIVIDUAL_INVITE_TEST_DELIVERY=link, so the invite link comes back to
+// this harness instead of a mailbox (inviteDeliveryMode: never on a deployed build, never production).
+async function invitations(hq: Jar, nonHq: Jar) {
+  const probe = await admin.from("individual_invitation").select("id").limit(0);
+  if (probe.error) { console.log(`  PEND  group I: individual_invitation is not readable here (${probe.error.code}) -- migration 378 not applied.`); return; }
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const invite = (body: Record<string, unknown>, jar = hq) => send("POST", "/api/hq/individual/invitations", body, jar);
+
+  /** Follow the invite link the way a mailbox click does, then set a password on the session it carries. */
+  async function openLinkAndSetPassword(link: string) {
+    const hop = await fetch(link, { redirect: "manual" });
+    const loc = hop.headers.get("location") ?? "";
+    const frag = new URLSearchParams(loc.split("#")[1] ?? "");
+    const at = frag.get("access_token"), rt = frag.get("refresh_token");
+    let set = false;
+    if (at && rt) {
+      const c = createClient(url!, anonKey, { auth: { persistSession: false, autoRefreshToken: false } }) as any;
+      const { error } = await c.auth.setSession({ access_token: at, refresh_token: rt });
+      if (!error) set = !(await c.auth.updateUser({ password: PW })).error;
+    }
+    return { loc, set };
+  }
+
+  // I1-I2. Invite an address with no account, to both experiences.
+  const i1 = await invite({ email: INVITEES.both.toUpperCase(), name: "Harness Invitee", experiences: ["scholar", "professional"], adultConfirmed: true, endsOn: "2099-12-31", expiresInDays: 7, note: "harness-access001" });
+  ok("I1. an address with no account is invited (201) -- the link comes back ONLY because this is the test delivery mode",
+    i1.status === 201 && i1.json.delivery === "link" && typeof i1.json.testLink === "string" && i1.json.reusedIdentity === false, `${i1.status} ${JSON.stringify(i1.json).slice(0, 160)}`);
+  const newId = i1.json.authUserId as string;
+  const [prof, pm, prm, im, ie] = await Promise.all([
+    admin.from("profiles").select("id, role, email").eq("id", newId).maybeSingle(),
+    admin.from("platform_membership").select("id").eq("user_id", newId),
+    admin.from("practice_membership").select("id").eq("user_id", newId),
+    admin.from("individual_membership").select("id").eq("user_id", newId),
+    admin.from("individual_entitlement").select("id").eq("user_id", newId),
+  ]);
+  ok("I2. the invitation created ONE identity with no estate role, and no platform, practice or Individual membership yet",
+    prof.data?.id === newId && prof.data?.role === null && prof.data?.email === INVITEES.both
+    && (pm.data ?? []).length === 0 && !prm.error && (prm.data ?? []).length === 0 && (im.data ?? []).length === 0 && (ie.data ?? []).length === 0,
+    `role=${prof.data?.role} pm=${(pm.data ?? []).length} prm=${prm.error?.code ?? (prm.data ?? []).length} im=${(im.data ?? []).length}`);
+
+  // I3-I6. Duplicates and refusals, decided before anything is created.
+  const dup = await invite({ email: INVITEES.both, experiences: ["professional"] });
+  ok("I3. a second invitation to the same address is refused while one is waiting", dup.status === 409 && dup.json.error?.code === "INVITATION_PENDING");
+  const existing = await invite({ email: FIX.uninvited, experiences: ["professional"] });
+  ok("I4. an address that already has an account is sent to the existing grant path, with the person's id",
+    existing.status === 409 && existing.json.error?.code === "ACCOUNT_EXISTS" && existing.json.error?.personId === ids.uninvited);
+  const noAdult = await invite({ email: "harness-access001-never@competen.test", experiences: ["scholar"], adultConfirmed: false });
+  const never = await findUser("harness-access001-never@competen.test");
+  ok("I5. D8: inviting to Scholar without the 18+ confirmation is refused, and creates no identity", noAdult.status === 422 && !never);
+  const notHq = await invite({ email: "harness-access001-never@competen.test", experiences: ["professional"] }, nonHq);
+  ok("I6. a person without the HQ right cannot invite", notHq.status === 403);
+  const look = await send("GET", `/api/hq/individual/grants?email=${encodeURIComponent(INVITEES.both)}`, undefined, hq);
+  ok("I7. the HQ lookup shows the waiting invitation (live by the database clock)",
+    look.status === 200 && look.json.invitationsProvisioned === true && look.json.invitations?.[0]?.status === "PENDING" && look.json.invitations?.[0]?.live === true);
+
+  // I8-I14. The person: open the link, set a password, sign in once, accept.
+  const opened = await openLinkAndSetPassword(i1.json.testLink);
+  ok("I8. the invite link lands on the shared password page carrying the Individual destination, and the password is set",
+    opened.set && opened.loc.includes("/reset-password") && opened.loc.includes("next=%2Findividual%2Fhome"), opened.loc.split("#")[0]);
+  const inv = await signIn(INVITEES.both);
+  const home = await get("/individual/home", inv);
+  const accessPage = await get(redirectTarget(home) ?? "/individual/access", inv);
+  ok("I9. signed in, the invited person holds nothing yet and is shown the invitation on the access page",
+    redirectTarget(home)?.startsWith("/individual/access") === true && accessPage.text.includes("You have been invited to Competen Scholar and Competen Professional"));
+  const acc = await send("POST", "/api/individual/invitation/accept", {}, inv);
+  ok("I10. accepting grants, and continues to the welcome", acc.status === 200 && acc.json.next === "/individual/welcome?for=scholar", `${acc.status} ${JSON.stringify(acc.json)}`);
+  const [m2, e2, invRow, prof2] = await Promise.all([
+    admin.from("individual_membership").select("status, source, granted_by").eq("user_id", newId).maybeSingle(),
+    admin.from("individual_entitlement").select("experience_code, source, operating_entity, ends_at, adult_confirmed_by, adult_confirmed_at, granted_by").eq("user_id", newId),
+    admin.from("individual_invitation").select("status, accepted_at, adult_confirmed_at").eq("id", i1.json.invitationId).single(),
+    admin.from("profiles").select("role").eq("id", newId).single(),
+  ]);
+  const sc = (e2.data ?? []).find((r: any) => r.experience_code === "scholar");
+  const pr = (e2.data ?? []).find((r: any) => r.experience_code === "professional");
+  ok("I11. the grant carries the inviter as grantor, the inviter's 18+ confirmation, operating entities and the validity date",
+    m2.data?.status === "active" && m2.data?.granted_by === ids.grantor && sc?.adult_confirmed_by === ids.grantor
+    && sc?.adult_confirmed_at === invRow.data?.adult_confirmed_at && sc?.operating_entity === "scholar_operator" && pr?.operating_entity === "competen_holdings"
+    && String(sc?.ends_at).startsWith("2099-12-31T23:59:59") && String(pr?.ends_at).startsWith("2099-12-31T23:59:59"),
+    JSON.stringify({ m: m2.data, sc, pr }).slice(0, 300));
+  ok("I12. the invitation is closed as ACCEPTED, and the identity still holds no estate role", invRow.data?.status === "ACCEPTED" && !!invRow.data?.accepted_at && prof2.data?.role === null);
+  const again = await send("POST", "/api/individual/invitation/accept", {}, inv);
+  const first = await get("/individual/scholar", inv);
+  const dest = await destinations(inv);
+  ok("I13. accepting twice is refused; Scholar opens through the welcome (then terms, D2); sign-in offers Individual only",
+    again.status === 404 && redirectTarget(first) === "/individual/welcome?for=scholar" && dest.json.state === "one" && dest.json.destination?.href === "/individual/home");
+  const { data: auditRows } = await admin.from("audit_log").select("action").in("entity_id", [i1.json.invitationId]).limit(10);
+  ok("I14. creation and acceptance are both audited", ["individual_invitation_created", "individual_invitation_accepted"].every(a => (auditRows ?? []).some((r: any) => r.action === a)));
+
+  // I15-I17. Revocation.
+  const i2 = await invite({ email: INVITEES.revoked, experiences: ["professional"] });
+  const short = await send("POST", "/api/hq/individual/invitations/revoke", { invitationId: i2.json.invitationId, reason: "no" }, hq);
+  const rev = await send("POST", "/api/hq/individual/invitations/revoke", { invitationId: i2.json.invitationId, reason: "Harness: invited in error" }, hq);
+  const revRow = await admin.from("individual_invitation").select("status, revoked_by, revoked_reason").eq("id", i2.json.invitationId).single();
+  ok("I15. revoking needs a reason, keeps the record, and leaves the identity in place",
+    i2.status === 201 && short.status === 400 && rev.status === 200 && revRow.data?.status === "REVOKED" && revRow.data?.revoked_by === ids.grantor
+    && !!(await findUser(INVITEES.revoked)));
+  const opened2 = await openLinkAndSetPassword(i2.json.testLink);
+  const r2 = await signIn(INVITEES.revoked);
+  const acc2 = await send("POST", "/api/individual/invitation/accept", {}, r2);
+  const acc2Page = await get("/individual/access", r2);
+  ok("I16. a revoked invitation cannot be accepted; the person is told Individual is not on the account",
+    opened2.set && acc2.status === 404 && acc2Page.text.includes("Competen Individual is not on this account") && !acc2Page.text.includes("You have been invited"));
+  const reinvite = await invite({ email: INVITEES.revoked, experiences: ["professional"] });
+  ok("I17. once that identity has signed in, it is an existing account: re-inviting goes to the grant path", reinvite.status === 409 && reinvite.json.error?.code === "ACCOUNT_EXISTS");
+
+  // I18-I19. Expiry, by the database clock (a fixture: only it can write past dates).
+  const xId = await makeUser(INVITEES.expired);
+  const past = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+  const xIns = await admin.from("individual_invitation").insert({
+    invited_email: INVITEES.expired, invite_professional: true, expires_at: past(1), created_at: past(10), auth_user_id: xId, created_by: ids.grantor,
+  }).select("id").single();
+  const x = await signIn(INVITEES.expired);
+  const xAcc = await send("POST", "/api/individual/invitation/accept", {}, x);
+  const xLook = await send("GET", `/api/hq/individual/grants?email=${encodeURIComponent(INVITEES.expired)}`, undefined, hq);
+  ok("I18. an expired invitation cannot be accepted, and HQ sees it as waiting-but-not-live",
+    !xIns.error && xAcc.status === 404 && xLook.json.invitations?.[0]?.status === "PENDING" && xLook.json.invitations?.[0]?.live === false, xIns.error?.message ?? "");
+  const xNew = await invite({ email: INVITEES.expired, experiences: ["professional"] });
+  ok("I19. a new invitation waits until the expired one is revoked (one live invitation per email)", xNew.status === 409 && xNew.json.error?.code === "INVITATION_EXPIRED_PENDING");
+
+  // I20. The schema itself: the history cannot be rewritten or deleted.
+  const tamper = await admin.from("individual_invitation").update({ invite_scholar: true }).eq("id", i1.json.invitationId);
+  const del = await admin.from("individual_invitation").delete().eq("id", i2.json.invitationId);
+  const dupRow = await admin.from("individual_invitation").insert({ invited_email: INVITEES.expired, invite_professional: true, expires_at: new Date(Date.now() + 86_400_000).toISOString(), auth_user_id: xId, created_by: ids.grantor });
+  ok("I20. the schema refuses rewriting an invitation, deleting one, and a second pending invitation for one email",
+    !!tamper.error && !!del.error && String(dupRow.error?.code) === "23505", `${tamper.error?.message} | ${del.error?.message} | ${dupRow.error?.code}`);
+
+  // I21-I22. Re-invitation cannot inherit unrelated authority (owner review item 5). An identity an earlier
+  // invitation created, never signed into, is reused only while it holds NOTHING.
+  const ri1 = await invite({ email: INVITEES.reuse, experiences: ["professional"] });
+  await send("POST", "/api/hq/individual/invitations/revoke", { invitationId: ri1.json.invitationId, reason: "Harness: re-invitation test" }, hq);
+  const ri2 = await invite({ email: INVITEES.reuse, experiences: ["professional"] });
+  ok("I21. a clean, never-signed-in identity from a revoked invitation is reused, not duplicated",
+    ri1.status === 201 && ri2.status === 201 && ri2.json.reusedIdentity === true && ri2.json.authUserId === ri1.json.authUserId, `${ri1.status}/${ri2.status} ${JSON.stringify(ri2.json).slice(0, 120)}`);
+  await send("POST", "/api/hq/individual/invitations/revoke", { invitationId: ri2.json.invitationId, reason: "Harness: re-invitation test" }, hq);
+  // Somebody has since given that identity standing (a platform membership, as a fixture).
+  await admin.from("platform_membership").insert({ user_id: ri1.json.authUserId, status: "active", source: "explicit_grant", note: "harness-access001 standing fixture" });
+  const ri3 = await invite({ email: INVITEES.reuse, experiences: ["professional"] });
+  ok("I22. once that identity holds any standing, re-inviting is refused as an existing account -- no fresh sign-in link to an inbox with authority",
+    ri3.status === 409 && ri3.json.error?.code === "ACCOUNT_EXISTS", `${ri3.status} ${JSON.stringify(ri3.json).slice(0, 120)}`);
 }
 
 main()

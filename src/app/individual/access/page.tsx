@@ -10,6 +10,8 @@ import { StatePanel, IndividualMark, primaryBtn, secondaryBtn } from "../_compon
 import { SignOutButton } from "../_components/ShellNav";
 import { EXPERIENCES } from "@/lib/individual/experiences";
 import { requestedExperience, signInHref } from "@/lib/individual/entry";
+import { liveInvitationFor } from "@/lib/individual/invitations";
+import AcceptInvitation from "../_components/AcceptInvitation";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -62,6 +64,36 @@ export default async function IndividualAccessPage({ searchParams }: {
   if (access.state === "member") redirect("/individual/home");
 
   const about = <Link href="/individual" className={secondaryBtn}>About Competen Individual</Link>;
+
+  // ── AN INVITATION WAITING FOR THIS ACCOUNT (COMPETEN-IND-ACCESS-001, migration 378) ──────────────────
+  // A person invited without an account arrives here after setting a password and signing in: they hold no
+  // membership yet, by design. The invitation is found by THIS session's user id through the database-clock
+  // view -- nothing in the URL selects it -- and accepting it is the act that grants (invitations.ts).
+  // A failed read says so rather than falling through to "not on this account".
+  if (access.state === "none" && access.reason === "no_membership") {
+    const inv = await liveInvitationFor(admin, user.id);
+    if (!inv.ok) {
+      return (
+        <Frame>
+          <StatePanel tone="warning" title="We could not check for your invitation"
+            actions={<><Link href="/individual/access" className={`${primaryBtn} bg-gray-900`}>Try again</Link><SignOutButton /></>}>
+            <p>Something went wrong while reading it. This does not mean you have been refused, and nothing on your account has changed.</p>
+          </StatePanel>
+        </Frame>
+      );
+    }
+    if (inv.value) {
+      const names = inv.value.experiences.map(x => EXPERIENCES[x].name);
+      return (
+        <Frame>
+          <StatePanel title={`You have been invited to ${names.join(" and ")}`} actions={<><AcceptInvitation /><SignOutButton /></>}>
+            <p>Competen has invited this account to {names.join(" and ")}, part of Competen Individual. It is added to the account you just signed in with. There is nothing else to create.</p>
+            <p>After you accept, you will choose which experience opens first, and read and accept the terms of use and privacy notice before you start.</p>
+          </StatePanel>
+        </Frame>
+      );
+    }
+  }
 
   if (access.state === "unavailable") {
     return (

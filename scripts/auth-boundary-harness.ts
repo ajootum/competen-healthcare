@@ -46,6 +46,7 @@ const BOUNDARIES: Record<string, string> = {
   requirePracticeContext: "Practice plane — membership, entitlement, capabilities",
   requireEnterpriseContext: "Enterprise plane",
   requireIndividualContext: "Individual plane (gate 3, ADR-016) — individual_membership, plus the named experience's live entitlement (src/lib/individual/guard.ts)",
+  requireIndividualSession: "Individual pre-membership (COMPETEN-IND-ACCESS-001) — release gate, then a signed-in session; grants nothing. Used only to accept an invitation made for exactly that user id (src/lib/individual/guard.ts)",
   requireAnalyticsAccess: "analytics surface",
   requireEducatorAccess: "educator surface",
   resolveWorkspaceContext: "Practice — workspace resolution used directly",
