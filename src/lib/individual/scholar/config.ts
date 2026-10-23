@@ -32,9 +32,9 @@ export const QUESTIONS_PER_REQUEST = 3;
 // generation.ts and its version here changes with it, so a stored question always says which prompt
 // produced it.
 export const PROMPT_VERSIONS = {
-  explain: "scholar-explain-v1",
-  mcq: "scholar-mcq-v1",
-  case: "scholar-case-v1",
+  explain: "scholar-explain-v2",
+  mcq: "scholar-mcq-v2",
+  case: "scholar-case-v2",
 } as const;
 
 // ── LABELS THAT MUST NOT DRIFT ── the harness pins each of these to the surface that must show it ─────
