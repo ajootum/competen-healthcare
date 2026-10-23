@@ -4,6 +4,8 @@ import { loadOwnRecords, summariseOwn, OWN_KIND_LABEL, PROFESSION_NOT_RECORDED }
 import { shareCarriesOwnRecords } from "@/lib/individual/professional/share";
 import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { individualAppEnabled } from "@/lib/individual/gate";
+import { loadStudyAchievements } from "@/lib/individual/scholar/store";
+import { STUDY_ACHIEVEMENT, studyDetail } from "@/lib/individual/scholar/passport-items";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +70,10 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
   const carriesOwn = (await individualAppEnabled(admin)) && await shareCarriesOwnRecords(admin, share.id, share.nurse_id);
   const own = carriesOwn ? await loadOwnRecords(admin, share.nurse_id) : null;
   const ownSummary = own ? summariseOwn(own) : null;
+  // The Competen Scholar achievements the person chose to show (migration 375), read NOW, on every view:
+  // taking one off the Passport takes it off this link too, however long ago the link was shared. Only on
+  // a link that carries the person's own records -- an organisation-minted link shows none of them.
+  const study = carriesOwn ? await loadStudyAchievements(admin, share.nurse_id) : null;
   // A Professional-minted link names the person's profession as THEY declared it, and says so. It never
   // shows profiles.role, which the new-user trigger fills with a default (migration 335) and which
   // Competen Individual neither sets nor relies on (ADR-016).
@@ -163,6 +169,27 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
                       ))}
                     </div>
                   )}
+            </div>
+          )}
+
+          {study && (!study.ok ? !study.notProvisioned : study.data.length > 0) && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50/60 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900">Self-directed study the professional chose to show</h2>
+              <p className="text-[11.5px] text-sky-900 mt-0.5 leading-relaxed">{EVIDENCE_LABEL.self_directed}. Practice the professional did on their own study notes in Competen Scholar. It was not assessed by Competen or by any organisation, and their notes, answers and results are not shared here.</p>
+              {!study.ok ? <p className="text-[12px] text-gray-600 mt-2">These could not be read just now.</p>
+                : !full ? (
+                  <p className="text-[12.5px] text-gray-700 mt-2">{study.data.length} self-directed study {study.data.length === 1 ? "achievement" : "achievements"}.</p>
+                ) : (
+                  <div className="space-y-1.5 mt-2">
+                    {study.data.map(a => (
+                      <div key={`${a.materialId}-${a.achievement}`} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] border-b border-sky-100 pb-1.5">
+                        <span className="font-medium text-gray-800 min-w-0">{a.label}</span>
+                        <span className="text-[10.5px] text-gray-500">{STUDY_ACHIEVEMENT[a.achievement].name} · {studyDetail(a)}{a.lastStudied ? ` · last studied ${fmt(a.lastStudied)}` : ""}</span>
+                        <span className="ml-auto text-[10.5px] font-semibold text-sky-900">{EVIDENCE_LABEL.self_directed}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
             </div>
           )}
 
