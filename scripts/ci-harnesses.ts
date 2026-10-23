@@ -61,6 +61,10 @@ const INCLUDED = [
   // COMPETEN-IND-004 Scholar learning invariants (source and migration 372). Imports only the Scholar constants
   // and the Individual registry, neither of which imports anything; no client, no network, no .env.local.
   "scholar-learning-harness.ts",
+  // My profile (owner GO 2026-10-23, PR D): a self-update cannot change access, email is never written to
+  // profiles, names are never inferred, each shell mounts the card behind its own guard, migration 380 is
+  // additive, the HQ-only staff entry, one API and one card. Source and migration only, 13 planted controls; no client, no network.
+  "account-profile-harness.ts",
   // Migration 381 email sync (owner GO 2026-10-23, item 4): trigger scope, confirmed-only copy, audit,
   // SECURITY DEFINER + search_path, no backfill, exact rollback. Migration text only, 7 planted controls.
   "email-sync-harness.ts",
