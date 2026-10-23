@@ -144,8 +144,11 @@ const strip = (p: string) => readFileSync(join(import.meta.dirname, p), "utf8").
 check("privileged-harnesses.ts gates its default run on productionReadDecision(target)",
   /productionReadDecision\(target\)/.test(strip("privileged-harnesses.ts")) && /process\.exit\(1\)/.test(strip("privileged-harnesses.ts")));
 const hqg = strip("hq-guard-harness.ts");
-check("hq-guard-harness.ts checks productionReadDecision before creating its live client",
+check("hq-guard-harness.ts checks productionReadDecision before creating its live client (its section G WRITES)",
   hqg.indexOf("productionReadDecision(") > -1 && hqg.indexOf("productionReadDecision(") < hqg.indexOf("createClient(process.env"));
+const hqn = strip("hq-nav-filter-harness.ts");
+check("hq-nav-filter-harness.ts checks productionReadDecision before creating its live client",
+  hqn.indexOf("productionReadDecision(") > -1 && hqn.indexOf("productionReadDecision(") < hqn.indexOf("createClient(url, key"));
 
 // ── The request-level block: the half that was twice inert ───────────────────────────────────────
 console.log("\nREQUEST-LEVEL BLOCK (the real handler, driven by a fake route)");
