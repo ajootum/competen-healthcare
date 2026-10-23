@@ -28,7 +28,8 @@
  */
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { ALLOWED_MIME, MAX_UPLOAD_BYTES, BUCKET, AI_LABEL, SELF_DIRECTED_LABEL, CONSENT_FEATURE, CONSENT_NOTICE, CONSENT_NOTICE_VERSION } from "../src/lib/individual/scholar/config";
+import { ALLOWED_MIME, MAX_UPLOAD_BYTES, BUCKET, AI_LABEL, SELF_DIRECTED_LABEL, CONSENT_FEATURE, CONSENT_NOTICE, CONSENT_NOTICE_VERSION, UPLOAD_ATTESTATION } from "../src/lib/individual/scholar/config";
+import { consentDocuments, consentStatus } from "../src/lib/individual/scholar/consent-gate";
 import { EXPERIENCES } from "../src/lib/individual/experiences";
 
 let pass = 0; const failures: string[] = [];
@@ -57,9 +58,18 @@ const PAGES = "src/app/individual/(app)/[experience]/(scholar)/study";
 const API = "src/app/api/individual/scholar";
 const FILES = [...walk(LIB), ...walk(PAGES), ...walk(API)];
 type Src = Map<string, string>;
-const REAL: Src = new Map(FILES.map(f => [f, strip(readFileSync(f, "utf8"))]));
+// Line endings normalised: a Windows checkout (core.autocrlf) has CRLF, and the planted-failure controls match
+// multi-line text. Without this the plants silently stop applying on Windows and the run aborts.
+const read = (f: string) => readFileSync(f, "utf8").replace(/\r\n/g, "\n");
+const REAL: Src = new Map(FILES.map(f => [f, strip(read(f))]));
 const MIG_FILE = "supabase/migrations/372-individual-scholar-learning.sql";
-const MIG_REAL = existsSync(MIG_FILE) ? readFileSync(MIG_FILE, "utf8").replace(/--.*$/gm, "").toLowerCase() : "";
+const MIG_REAL = existsSync(MIG_FILE) ? read(MIG_FILE).replace(/--.*$/gm, "").toLowerCase() : "";
+// Migration 375 and the surfaces outside the Scholar tree that show what it holds (s11).
+const MIG375_FILE = "supabase/migrations/375-individual-scholar-passport-selection.sql";
+const MIG375 = existsSync(MIG375_FILE) ? read(MIG375_FILE).replace(/--.*$/gm, "").toLowerCase() : "";
+const VERIFY = "src/app/verify/[token]/page.tsx";
+const PASSPORT_PAGE = "src/app/individual/(app)/[experience]/passport/page.tsx";
+const OUTSIDE: Src = new Map([VERIFY, PASSPORT_PAGE, "src/lib/individual/passport.ts"].map(f => [f, strip(read(f))]));
 
 const STORE = `${LIB}/store.ts`;
 const GEN = `${LIB}/generation.ts`;
@@ -120,8 +130,24 @@ function preflightOrder(src: Src): string[] {
 const preflightChecksConsentFirst = (src: Src) => {
   const s = src.get(HTTP) ?? "";
   const consent = s.indexOf("readConsent("), quota = s.indexOf("checkAiQuota(");
-  return consent >= 0 && quota > consent && /if \(!consent\.data\.granted\)/.test(s) && /if \(!consent\.ok\)/.test(s);
+  return consent >= 0 && quota > consent && /if \(status !== "on"\)/.test(s) && /if \(!consent\.ok\)/.test(s);
 };
+
+/**
+ * Owner GO (2026-10-23), consent v3. AI help counts as on only through consentStatus, which needs the
+ * CURRENT notice version and the Privacy Notice and Terms of Use published (consent-gate.ts).
+ *   legalGateHeld: the preflight asks consentStatus with the published flag, and the consent route refuses a
+ *                  grant while the documents are unpublished, before anything is saved.
+ *   rawGrantReads: a page or route treating the stored `granted` flag as "on" by itself, which would let a
+ *                  v2 grant, or a grant made before the documents were published, keep working.
+ */
+const legalGateHeld = (src: Src) => {
+  const pre = src.get(HTTP) ?? "", route = src.get(`${API}/consent/route.ts`) ?? "";
+  const refuse = route.indexOf("if (body.grant && !consentDocuments().published)"), save = route.indexOf("await setConsent(");
+  return /consentStatus\(consent\.data, consentDocuments\(\)\.published\)/.test(pre) && refuse >= 0 && save > refuse;
+};
+const rawGrantReads = (src: Src) => [...src].filter(([f]) => f.startsWith(PAGES) || f.startsWith(API) || f === HTTP)
+  .filter(([, s]) => /consent\.data\.granted\b/.test(s.replace(/recorded=\{consent\.data\.granted\}/g, ""))).map(([f]) => f);
 
 /** C3: every route handler is behind gate 3 for the SCHOLAR experience. */
 function unguardedHandlers(src: Src): string[] {
@@ -177,6 +203,33 @@ const SHARING = /contribut|shared[_ -]?library|learning[_ -]?library|submit\w*(l
 const sharingPaths = (src: Src) => [...src].filter(([f]) => f !== `${LIB}/config.ts`)
   .filter(([, s]) => SHARING.test(s)).map(([f]) => f);
 
+/**
+ * s11, owner continuation GO 2026-10-23 item 3: Scholar study achievements in the Passport (migration 375).
+ *   studyReadsContent: the read that feeds the Passport and /verify selects only ids, kinds and dates --
+ *                      never note text, a question, an option, the answer chosen, whether it was right, or
+ *                      anything the AI wrote.
+ *   verifyReadsLive:   /verify reads the person's choices on every view of a link that carries their own
+ *                      records, so a removal reaches live links. Nothing caches it.
+ *   includeChecksEarned: a choice is stored only after the store has counted an answer of that kind.
+ */
+const studyReadsContent = (src: Src) => {
+  const s = src.get(STORE) ?? "";
+  const body = s.slice(s.indexOf("export async function listPassportChoices"), s.indexOf("export function isUuid"));
+  const selects = [...body.matchAll(/\.select\("([^"]*)"\)/g)].map(m => m[1]);
+  return body.length < 100 || selects.length < 4 || selects.some(c => /content|stem|options|chosen|correct|rationale|source_quote|model|prompt|title/.test(c));
+};
+const verifyReadsLive = (out: Src) => {
+  const v = out.get(VERIFY) ?? "";
+  return /const study = carriesOwn \? await loadStudyAchievements\(admin, share\.nurse_id\) : null;/.test(v)
+    && !/unstable_cache|"use cache"|revalidate\s*=/.test(v);
+};
+const includeChecksEarned = (src: Src) => {
+  const s = src.get(STORE) ?? "";
+  const body = s.slice(s.indexOf("export async function includeInPassport"), s.indexOf("export async function removeFromPassport"));
+  const count = body.indexOf("await answeredFrom("), refuse = body.indexOf('if (answered < 1) return "not_eligible";'), write = body.indexOf(".upsert(");
+  return count >= 0 && refuse > count && write > refuse;
+};
+
 /** E: labels, and no answer key in the browser before answering. */
 const answerKeyLeaks = (src: Src) => {
   const s = src.get(SCHOLAR_PAGE) ?? "";
@@ -190,6 +243,13 @@ const SCHOLAR_TABLES = ["consent", "material", "chunk", "question", "attempt", "
 const tablesWithoutRls = (mig: string) => SCHOLAR_TABLES.filter(t =>
   !mig.includes(`alter table ${t} enable row level security`) || !new RegExp(`create policy ${t}_read_own on ${t}\\s+for select using \\(auth\\.uid\\(\\) = user_id\\)`).test(mig));
 const writePolicies = (mig: string) => /for (insert|update|delete|all)\b/.test(mig);
+
+/** Every applicable document published (version and URL), with overrides. Test values only, never a real URL. */
+const legalEnv = (over: Record<string, string>) => ({
+  ...Object.fromEntries(["COMPETEN_HOLDINGS", "SCHOLAR_OPERATOR"].flatMap(e => ["TERMS", "PRIVACY"].flatMap(d => [
+    [`INDIVIDUAL_LEGAL_${e}_${d}_VERSION`, "test-1"], [`INDIVIDUAL_LEGAL_${e}_${d}_URL`, "https://example.test/doc"]]))),
+  ...over,
+});
 
 function main() {
   console.log("SCHOLAR LEARNING HARNESS (COMPETEN-IND-004)\n");
@@ -280,15 +340,33 @@ function main() {
     sharingPaths(REAL).length === 0, sharingPaths(REAL).join(", "));
   ok("S2. the only consent Scholar asks for is AI processing: one feature value in code and in the schema, so no training permission exists",
     CONSENT_FEATURE === "ai_processing_uploads" && (!MIG_REAL || /check \(feature in \('ai_processing_uploads'\)\)/.test(MIG_REAL)));
-  ok("S3. the consent notice is the owner-approved v2, with the separation sentences, the consent statement, and its version recorded with each grant",
-    CONSENT_NOTICE_VERSION === "scholar-ai-uploads-notice-v2"
-    && CONSENT_NOTICE.paragraphs.some(p => p.includes("Permission to contribute materials is separate from any permission to use data for training AI models."))
-    && CONSENT_NOTICE.paragraphs.some(p => p.includes("Your private uploads are not automatically shared with other learners"))
+  ok("S3. the consent notice is v3: no contribution sentence, the plain no-sharing/no-training statement, Terms of Use, feedback scoped to practice questions, the How-it-works list, and its version recorded with each grant",
+    CONSENT_NOTICE_VERSION === "scholar-ai-uploads-notice-v3"
+    && !CONSENT_NOTICE.paragraphs.some(p => /contribut|library|submi/i.test(p))
+    && CONSENT_NOTICE.paragraphs.some(p => p.includes("Your private uploads are not shared with other learners, and Competen does not use them to train AI models."))
+    && CONSENT_NOTICE.paragraphs[0].includes("feedback on practice questions drawn from your notes")
+    && CONSENT_NOTICE.review.includes("Terms of Use") && ![...REAL.values()].some(s => /Terms of Service/.test(s))
+    && CONSENT_NOTICE.howItWorks.length === 4 && /CONSENT_NOTICE\.howItWorks\.map/.test(REAL.get(CLIENT) ?? "")
     && CONSENT_NOTICE.statement.startsWith("I understand how AI-assisted learning works")
     && /notice_version: CONSENT_NOTICE_VERSION/.test(REAL.get(STORE) ?? ""));
   ok("S4. the agreement is its own click on the stated consent, and withdrawal is one click",
     /disabled=\{busy \|\| !agreed\} onClick=\{\(\) => set\(true\)\}/.test(REAL.get(CLIENT) ?? "") && /\{CONSENT_NOTICE\.statement\}/.test(REAL.get(CLIENT) ?? "")
     && /onClick=\{\(\) => set\(false\)\}>\{busy \? "Saving…" : "Turn off"\}/.test(REAL.get(CLIENT) ?? ""));
+  ok("S5. AI help cannot be turned on, or used, until every applicable Privacy Notice and Terms of Use has a version and a URL",
+    legalGateHeld(REAL)
+    && consentStatus({ granted: true, noticeVersion: CONSENT_NOTICE_VERSION }, false) === "awaiting_legal"
+    && !consentDocuments({}).published
+    && !consentDocuments(legalEnv({ INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_PRIVACY_URL: "" })).published
+    && consentDocuments(legalEnv({})).published);
+  ok("S6. a grant to an earlier notice is kept but does not count: the person is asked again, and no page or route reads the raw grant as 'on'",
+    consentStatus({ granted: true, noticeVersion: "scholar-ai-uploads-notice-v2" }, true) === "outdated"
+    && consentStatus({ granted: true, noticeVersion: CONSENT_NOTICE_VERSION }, true) === "on"
+    && consentStatus({ granted: false, noticeVersion: CONSENT_NOTICE_VERSION }, true) === "off"
+    && rawGrantReads(REAL).length === 0, rawGrantReads(REAL).join(", "));
+  ok("S7. the upload attestation covers patient information AND permission to use the material, on screen and in both refusals",
+    /no identifiable patient information/.test(UPLOAD_ATTESTATION) && /permission to upload and use it/.test(UPLOAD_ATTESTATION)
+    && /\{UPLOAD_ATTESTATION\}/.test(REAL.get(CLIENT) ?? "")
+    && [`${API}/uploads/route.ts`, `${API}/materials/route.ts`].every(f => /\{ error: UPLOAD_ATTESTATION_REQUIRED \}/.test(REAL.get(f) ?? "")));
   ok("R5. P0.5: a personal practice case is labelled as such on its card",
     /q\.kind === "case" && \(/.test(REAL.get(CLIENT) ?? "") && /\{PERSONAL_CASE_LABEL\}/.test(REAL.get(CLIENT) ?? ""));
 
@@ -315,6 +393,25 @@ function main() {
   ok("F7. 372 is independent of 370 and 373 (no individual_membership or individual_entitlement reference)",
     !/individual_membership|individual_entitlement|individual_live_entitlement/.test(MIG_REAL));
   }
+
+  // ── V. PASSPORT STUDY ACHIEVEMENTS (s11, migration 375) ─────────────────────────────────────────
+  ok("V1. the Passport and /verify read only which question was answered and when -- no notes, questions, answers or AI output",
+    !studyReadsContent(REAL));
+  ok("V2. /verify reads the person's choices on every view of a link carrying their own records, uncached, so a removal reaches live links",
+    verifyReadsLive(OUTSIDE));
+  ok("V3. a choice is stored only after the store counted an answer of that kind (opt-in to an earned achievement)", includeChecksEarned(REAL));
+  ok("V4. self-directed study is labelled as such on the Passport page and on /verify, from one label",
+    /self_directed: "Self-directed study, not a verified competency"/.test(OUTSIDE.get("src/lib/individual/passport.ts") ?? "")
+    && /EVIDENCE_LABEL\.self_directed/.test(OUTSIDE.get(PASSPORT_PAGE) ?? "") && /EVIDENCE_LABEL\.self_directed/.test(OUTSIDE.get(VERIFY) ?? ""));
+  if (!MIG375) console.log(`  NOTE  ${MIG375_FILE} is not in this checkout -- schema check V5 and P19 NOT RUN`);
+  if (MIG375) ok("V5. 375: RLS with own-row select only, no write policy, the composite key to the owner's material with cascade, two achievement kinds, a checked label, no function",
+    /alter table individual_scholar_passport_item enable row level security/.test(MIG375)
+    && /create policy individual_scholar_passport_item_read_own on individual_scholar_passport_item\s+for select using \(auth\.uid\(\) = user_id\)/.test(MIG375)
+    && !/for (insert|update|delete|all)\b/.test(MIG375)
+    && /foreign key \(material_id, user_id\)\s+references individual_scholar_material\(id, user_id\) on delete cascade/.test(MIG375)
+    && /check \(achievement in \('practice_questions', 'practice_scenarios'\)\)/.test(MIG375)
+    && /check \(label = btrim\(label\) and char_length\(label\) between 1 and 120\)/.test(MIG375)
+    && !/create (or replace )?function|plpgsql|\$\$/.test(MIG375));
 
   // ── G. ERASURE ──────────────────────────────────────────────────────────────────────────────────
   const store = REAL.get(STORE) ?? "";
@@ -352,6 +449,14 @@ function main() {
     !onlyCheckedQuestionsStored(plant(`${API}/questions/route.ts`, "drafts: r.check.kept", "drafts: r.raw")));
   ok("P9. ⚠ E3 goes red when the answer key is sent with the question",
     answerKeyLeaks(plant(SCHOLAR_PAGE, "model: q.model,", "model: q.model, correctIndex: q.correctIndex,")));
+  ok("P17. ⚠ V1 goes red when the Passport read starts selecting a question's text",
+    studyReadsContent(plant(STORE, '.select("id, material_id, kind")\n    .eq("user_id", userId).in("material_id", materialIds)', '.select("id, material_id, kind, stem")\n    .eq("user_id", userId).in("material_id", materialIds)')));
+  ok("P18. ⚠ V2 goes red when /verify stops reading the choices at render time",
+    (() => { const copy = new Map(OUTSIDE); copy.set(VERIFY, (copy.get(VERIFY) ?? "").replace("carriesOwn ? await loadStudyAchievements(admin, share.nurse_id) : null", "null")); return !verifyReadsLive(copy); })());
+  ok("P20. ⚠ V3 goes red when a choice is stored before the answers are counted",
+    !includeChecksEarned(plant(STORE, 'if (answered < 1) return "not_eligible";', "")));
+  if (MIG375) ok("P19. ⚠ V5 goes red on an added write policy",
+    /for (insert|update|delete|all)\b/.test(`${MIG375}\ncreate policy x on individual_scholar_passport_item for insert with check (true)`));
   if (MIG_REAL) ok("P10. ⚠ F1/F2 go red on a missing policy or an added write policy",
     tablesWithoutRls(MIG_REAL.replace("alter table individual_scholar_card enable row level security", "")).length === 1
     && writePolicies(`${MIG_REAL}\ncreate policy x on individual_scholar_card for insert with check (true)`));
@@ -361,6 +466,10 @@ function main() {
     !qualityWired(plant(GEN, "const outcome = applyVerification(check.kept, v.text);", "const outcome = { kept: check.kept, rejected: [] };")));
   ok("P14. ⚠ S1 goes red when a route starts submitting material to a shared library",
     sharingPaths(plant(STORE, "export function isUuid", "export async function submitToSharedLibrary() { return null; }\nexport function isUuid")).length > 0);
+  ok("P15. ⚠ S5 goes red when the consent route saves a grant without checking the documents are published",
+    !legalGateHeld(plant(`${API}/consent/route.ts`, "if (body.grant && !consentDocuments().published)", "if (false)")));
+  ok("P16. ⚠ S6 goes red when a page treats the stored grant as 'on' again",
+    rawGrantReads(plant(`${PAGES}/[materialId]/page.tsx`, 'const consentOn = status === "on";', "const consentOn = consent.ok && consent.data.granted;")).length > 0);
   ok("P13. ⚠ R3 goes red when a screen says mastery again",
     masteryWords(plant(`${PAGES}/progress/page.tsx`, "% practice accuracy`", "% mastery`")).length > 0);
 

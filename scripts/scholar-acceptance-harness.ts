@@ -51,7 +51,7 @@ import { chunkPages, extractMaterial, findPatientIdentifiers, sniffMime } from "
 import { rankChunks, toTsQuery } from "../src/lib/individual/scholar/retrieval";
 import { runExplain, runQuestions } from "../src/lib/individual/scholar/generation";
 import { buildProgress } from "../src/lib/individual/scholar/progress";
-import { BUCKET, CONSENT_NOTICE_VERSION, DOCX_MIME, PDF_MIME, PROMPT_VERSIONS } from "../src/lib/individual/scholar/config";
+import { BUCKET, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE_VERSION, CONSENT_UPDATED, DOCX_MIME, PDF_MIME, PROMPT_VERSIONS } from "../src/lib/individual/scholar/config";
 import { tinyPdf } from "../src/lib/individual/scholar/test-documents";
 import { aiStatus } from "../src/lib/ai/config";
 import { aiPreflight } from "../src/lib/individual/scholar/http";
@@ -195,13 +195,39 @@ async function main() {
     const bad = await admin.from("individual_scholar_consent").update({ status: "revoked", revoked_at: null }).eq("user_id", a);
     ok("C5. the schema refuses a revoked consent with no revocation time", !!bad.error, bad.error?.message ?? "accepted");
     // Owner review P0.4: the AI boundary itself -- the preflight every Scholar AI route runs first.
+    // Consent v3 (owner GO 2026-10-23): the preflight also waits for the published Privacy Notice and
+    // Terms of Use (consent-gate.ts). This process sets them as TEST configuration -- a version and an
+    // example.test URL for each -- exactly as an environment would publish them, and puts the environment
+    // back afterwards. No code path is bypassed: the gate reads process.env at call time.
     const asRoute = { admin, userId: a, profile: { fullName: null } } as any;
-    await store.setConsent(admin, a, false);
-    const refused = await aiPreflight(asRoute);
-    await store.setConsent(admin, a, true);
-    const allowed = await aiPreflight(asRoute);
-    ok("C6. P0.4: with consent revoked the AI preflight refuses (403) before any AI call. Granted, consent no longer stops it",
-      refused?.status === 403 && (allowed === null || allowed.status !== 403), `revoked:${refused?.status} granted:${allowed?.status ?? "pass"}`);
+    const LEGAL_KEYS = ["COMPETEN_HOLDINGS", "SCHOLAR_OPERATOR"].flatMap(e => ["TERMS", "PRIVACY"].flatMap(d => [`INDIVIDUAL_LEGAL_${e}_${d}_VERSION`, `INDIVIDUAL_LEGAL_${e}_${d}_URL`]));
+    const savedLegal = Object.fromEntries(LEGAL_KEYS.map(k => [k, process.env[k]]));
+    const setLegal = (published: boolean) => { for (const k of LEGAL_KEYS) {
+      if (published) process.env[k] = k.endsWith("_URL") ? "https://example.test/legal" : (savedLegal[k] ?? "acceptance-test-1");
+      else delete process.env[k];
+    } };
+    try {
+      setLegal(true);
+      await store.setConsent(admin, a, false);
+      const refused = await aiPreflight(asRoute);
+      await store.setConsent(admin, a, true);
+      const allowed = await aiPreflight(asRoute);
+      ok("C6. P0.4: with consent revoked the AI preflight refuses (403) before any AI call. Granted to the current notice, with the documents published, consent no longer stops it",
+        refused?.status === 403 && (allowed === null || allowed.status !== 403), `revoked:${refused?.status} granted:${allowed?.status ?? "pass"}`);
+      await admin.from("individual_scholar_consent").update({ notice_version: "scholar-ai-uploads-notice-v2" }).eq("user_id", a);
+      const outdated = await aiPreflight(asRoute);
+      const kept = await store.readConsent(admin, a);
+      ok("C7. a grant to the earlier v2 notice is kept as a record, but the preflight refuses (403) and asks for agreement again",
+        outdated?.status === 403 && (await outdated.json()).error === CONSENT_UPDATED && kept.ok && kept.data.granted && kept.data.noticeVersion === "scholar-ai-uploads-notice-v2",
+        `status:${outdated?.status}`);
+      await store.setConsent(admin, a, true);
+      setLegal(false);
+      const waiting = await aiPreflight(asRoute);
+      ok("C8. with the Privacy Notice and Terms of Use unpublished, even a current grant is refused (403) before any AI call, saying why",
+        waiting?.status === 403 && (await waiting.json()).error === CONSENT_AWAITING_LEGAL, `status:${waiting?.status}`);
+    } finally {
+      for (const k of LEGAL_KEYS) { if (savedLegal[k] === undefined) delete process.env[k]; else process.env[k] = savedLegal[k]; }
+    }
 
     // ── U. UPLOAD ──
     const pdf = await upload(a, PDF_MIME, tinyPdf([PAGE1, PAGE2]), "Renal notes.pdf");

@@ -1,6 +1,7 @@
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { EVIDENCE_LABEL, loadIndividualPassport } from "@/lib/individual/passport";
 import { OWN_KIND_LABEL } from "@/lib/individual/professional/passport-records";
+import { STUDY_ACHIEVEMENT, studyDetail } from "@/lib/individual/scholar/passport-items";
 import { admitToEstate } from "@/lib/platform-membership";
 import { estateRolesOf, type AppRole } from "@/lib/roles";
 import { experiencePage, gatedMetadata } from "../../../_components/shell-context";
@@ -19,7 +20,9 @@ export const dynamic = "force-dynamic";
 //
 // ⚠ TWO CLASSES, LABELLED TWO WAYS (COMPETEN-IND-007 s5, owner ruling D3). What organisations issued is
 // labelled by issuer. "Records you added" -- the person's own Competen Professional records -- is labelled
-// by provenance, and nothing in it ever says verified.
+// by provenance, and nothing in it ever says verified. "Self-directed study" -- Competen Scholar
+// achievements -- shows only what the person chose to show, one at a time, labelled self-directed: never
+// their notes, answers or AI interactions (migration 375, src/lib/individual/scholar/passport-items.ts).
 //
 // ⚠ SHARING STAYS ON THE EXISTING SURFACE. /dashboard/passport/share mints the revocable /verify links,
 // and it sits behind gate 1. A person who also holds gate 1 is pointed there. A person who does not is
@@ -126,10 +129,35 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
             )}
       </Section>
 
+      <Section title="Self-directed study" note={`${EVIDENCE_LABEL.self_directed}. Only the Competen Scholar achievements you chose to show. Your notes, answers and anything the AI wrote are never shown.`}>
+        {!passport.study.ok ? (passport.study.notProvisioned
+          ? <Empty>Showing study achievements is not available on this environment yet.</Empty>
+          : <Unreadable what="study achievements" />)
+          : passport.study.data.length === 0 ? (
+            <Empty>
+              {ctx.live.includes("scholar")
+                ? <>Nothing shown. You can choose achievements to show, one at a time, from <a href={experienceHref("scholar", "study/progress")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.scholar.accent }}>Progress in My Learning</a>.</>
+                : "Nothing shown. Nothing from Competen Scholar appears here unless you choose it."}
+            </Empty>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {passport.study.data.map(a => (
+                <li key={`${a.materialId}-${a.achievement}`} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
+                  <div className="min-w-0">
+                    <p className="text-[14.5px] font-semibold text-gray-900">{a.label}</p>
+                    <p className="text-[12.5px] text-gray-500">{[STUDY_ACHIEVEMENT[a.achievement].name, studyDetail(a), a.lastStudied ? `last studied ${fmt(a.lastStudied)}` : null].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  <p className="text-[12.5px] font-semibold text-sky-800">{EVIDENCE_LABEL.self_directed}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+      </Section>
+
       <Section title="Sharing">
         {ctx.live.includes("professional") ? (
           <p className="text-[14px] text-gray-700">
-            You can share a revocable, time-limited link to this Passport, including the records you added, from{" "}
+            You can share a revocable, time-limited link to this Passport, including the records you added and the study you chose to show, from{" "}
             <a href={experienceHref("professional", "share")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Share your Passport</a>.
           </p>
         ) : holdsEstate ? (

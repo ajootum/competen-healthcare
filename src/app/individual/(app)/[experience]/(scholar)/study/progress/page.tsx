@@ -3,7 +3,10 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { progressRows } from "@/lib/individual/scholar/store";
+import { listPassportChoices, progressRows } from "@/lib/individual/scholar/store";
+import { eligibleAchievements } from "@/lib/individual/scholar/passport-items";
+import { EVIDENCE_LABEL } from "@/lib/individual/passport";
+import { PassportChoices } from "../_components/passport-choice";
 import { buildProgress } from "@/lib/individual/scholar/progress";
 import { SELF_DIRECTED_LABEL } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
@@ -16,8 +19,9 @@ export const dynamic = "force-dynamic";
 // IMPROVE -- COMPETEN-IND-004 s6. Per-material mastery, cards due and the weekly trend, built from the
 // person's own rows (src/lib/individual/scholar/progress.ts).
 //
-// ⚠ SELF-DIRECTED STUDY, AND LABELLED SO. Nothing here is verified, assessed or visible to an employer,
-// and nothing is written to the Passport.
+// ⚠ SELF-DIRECTED STUDY, AND LABELLED SO. Nothing here is verified, assessed or visible to an employer.
+// Nothing reaches the Passport unless the person chooses it, one achievement at a time, in "Your Passport"
+// below (migration 375). What can be chosen is a count of practice answered, never accuracy.
 // ⚠ NOT MEASURED IS SHOWN AS NOT MEASURED. A material with no answers has no mastery figure, and a week
 // with no answers has no accuracy bar -- never a 0.
 
@@ -36,13 +40,15 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
   const rows = await progressRows(ctx.admin, ctx.userId);
   const today = new Date().toISOString().slice(0, 10);
   const p = rows.ok ? buildProgress({ ...rows.data, today }) : null;
+  const choices = rows.ok ? await listPassportChoices(ctx.admin, ctx.userId) : null;
+  const eligible = rows.ok && choices?.ok ? eligibleAchievements({ ...rows.data, choices: choices.data }) : [];
 
   return (
     <>
       <PageHeader accent={x.accent} eyebrow="My Learning" title="Progress" intro="How your own study is going, material by material." />
       <StudyNav dueCount={p?.totals.cardsDue ?? null} />
       <p className="mb-6 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">
-        <span className="font-semibold">{SELF_DIRECTED_LABEL}</span> It is not added to your Passport and is not shared with anyone.
+        <span className="font-semibold">{SELF_DIRECTED_LABEL}</span> None of it is added to your Passport or shared with anyone unless you choose an achievement below.
       </p>
 
       {!rows.ok ? (rows.notProvisioned
@@ -93,6 +99,21 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
                   </li>
                 ))}
               </ul>
+            </section>
+
+            <section aria-labelledby="passport-h" className="mt-8">
+              <h2 id="passport-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your Passport</h2>
+              <p className="mt-1 text-[13px] text-gray-600">
+                You can choose to show what you have practised in your Competen Passport, one achievement at a time. It is labelled
+                &ldquo;{EVIDENCE_LABEL.self_directed}&rdquo;. Only the title you give it, the number you answered and when you last studied are shown. Your notes, your answers, whether they were right and anything the AI wrote are never shown.
+                It also appears on Passport links you share from Competen Professional, including links already shared. Removing it takes it off them straight away, and your study history stays as it is.
+              </p>
+              {!choices?.ok ? (choices?.notProvisioned
+                ? <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Showing study achievements in your Passport is not available on this environment yet.</p>
+                : <div className="mt-3"><Unreadable what="Passport choices" /></div>)
+                : eligible.length === 0 ? (
+                  <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Nothing to show yet. Answer practice questions or scenarios from a material and it can be shown here.</p>
+                ) : <PassportChoices items={eligible} />}
             </section>
 
             <section aria-labelledby="trend-h" className="mt-8">
