@@ -44,6 +44,7 @@ const BOUNDARIES: Record<string, string> = {
   requireHqContext: "HQ plane — governance context",
   requirePracticeContext: "Practice plane — membership, entitlement, capabilities",
   requireEnterpriseContext: "Enterprise plane",
+  requireIndividualContext: "Individual plane (gate 3, ADR-016) — individual_membership, plus the named experience's live entitlement (src/lib/individual/guard.ts)",
   requireAnalyticsAccess: "analytics surface",
   requireEducatorAccess: "educator surface",
   resolveWorkspaceContext: "Practice — workspace resolution used directly",

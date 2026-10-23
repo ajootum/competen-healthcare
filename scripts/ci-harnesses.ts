@@ -55,6 +55,9 @@ const INCLUDED = [
   "clock-format-harness.ts",
   "cpr040-design-system-harness.ts",
   "hww-cnci-harness.ts",
+  // ADR-016 gate-3 source invariants (COMPETEN-IND-003). Imports only access-doors.ts and the Individual
+  // registry, neither of which reads the environment, and creates no client: 21/21 with no database.
+  "individual-foundation-harness.ts",
   "mos-gap-matrix-harness.ts",
   "pd-health-harness.ts",
   "pd-nav-harness.ts",

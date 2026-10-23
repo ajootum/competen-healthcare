@@ -184,6 +184,13 @@ const STAGING: Listed[] = [
   { file: "hww-instruments-harness.ts", note: "HWW instruments. Reports `ALL PASS`." },
   { file: "hww-medications-harness.ts", note: "HWW medications. Reports `ALL PASS`." },
   { file: "hww-navigation-harness.ts", note: "HWW navigation. Reports `ALL PASS`." },
+  {
+    file: "individual-acceptance-harness.ts",
+    note: "COMPETEN-IND-003 s5 acceptance for Competen Individual (ADR-016): both experiences, one experience, "
+      + "direct Professional, DB-clock liveness, graduation, primary fallback, no cross-product state, own-row RLS. "
+      + "Creates and deletes its own harness-ind003-* identities. Refuses production via assertSafeTarget, and "
+      + "reports PEND (exit 0, nothing created) until migration 370 is applied.",
+  },
   { file: "mos-phase1-harness.ts", note: "CPR-CORE-MOS-001 phase 1. 20/20." },
   { file: "mos-phase2-harness.ts", note: "MOS phase 2. 25/25." },
   { file: "mos-phase3-harness.ts", note: "MOS phase 3. 73/73." },
@@ -293,6 +300,12 @@ const STAGING: Listed[] = [
   { file: "practice-patient-workspace-harness.ts", note: "the patient workspace. 133/133." },
   { file: "practice-patients-harness.ts", note: "patients. 31 assertions." },
   { file: "practice-pay-docs-harness.ts", note: "payment documents. 13/13." },
+  {
+    file: "practice-public-profile-harness.ts",
+    note: "CPR-BOOK-PROFILE-001 public booking profile against a real database. Screened 2026-10-22 (COMPETEN-IND-003): "
+      + "provisions its own practice, identity, handle and location, writes and purges them (_cleanup), and addresses no "
+      + "live practice -- so STAGING, never the read-only default run. Not yet run here: staging was unreachable.",
+  },
   { file: "practice-period-harness.ts", note: "periods. 86/86." },
   { file: "practice-personalisation-harness.ts", note: "personalisation. 48/48." },
   { file: "practice-pi-v2-harness.ts", note: "PI v2. 36/36." },

@@ -55,6 +55,9 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.platform.workflows.view",       space: "platform"  },
   { code: "hq.platform.metadata.view",        space: "platform"  },
   { code: "hq.platform.audit.view",           space: "platform"  },
+  // COMPETEN-IND-003 D9 (migration 370): the Competen Individual pilot-grant right. Platform space, held by
+  // the Individual Product Administrator position (product line `individual`). A write right with no page.
+  { code: "hq.individual.pilot.grant",        space: "platform"  },
   { code: "hq.practice.operations.view",      space: "practice"  },
   // ⚠ ADDED BY MIGRATION 273, and this list had to follow it. The DB gained the capability and this
   // catalogue did not, so B1 went red -- which is the drift control working.
