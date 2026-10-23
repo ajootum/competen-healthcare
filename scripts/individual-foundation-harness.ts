@@ -410,6 +410,18 @@ function main() {
     && /action === "revoke" && \(reason \?\? ""\)\.length < 8/.test(grantsLib)
     && !/from\("individual_entitlement"\)/.test(grantsLib.slice(grantsLib.indexOf("export async function setIndividualMembershipStatus"), grantsLib.indexOf("export async function endIndividualExperience"))));
 
+  // ── 12p. COMPETEN-SCHOLAR-01 S5: the review log feeds the Passport as a count, never a grade ──
+  const scholarStore = SRC.get("src/lib/individual/scholar/store.ts") ?? "";
+  const achievementsFn = scholarStore.slice(scholarStore.indexOf("export async function loadStudyAchievements"));
+  const reviewWriters = FILES.filter(f => /from\("individual_scholar_review"\)\s*\.(insert|update|upsert|delete)\(/.test(SRC.get(f) ?? ""));
+  ok("12p. revision reaches the Passport as which material and when (never the recall grade), and only reviewCard writes the review log",
+    /from\("individual_scholar_review"\)\.select\("material_id, reviewed_at"\)/.test(achievementsFn) && !/quality/.test(achievementsFn.slice(0, achievementsFn.indexOf("export function isUuid")))
+    && reviewWriters.join() === "src/lib/individual/scholar/store.ts"
+    && (scholarStore.match(/from\("individual_scholar_review"\)\.insert\(/g) ?? []).length === 1
+    && scholarStore.indexOf('from("individual_scholar_review").insert(') > scholarStore.indexOf("export async function reviewCard")
+    && scholarStore.indexOf('from("individual_scholar_review").insert(') < scholarStore.indexOf("export async function reviewRows"),
+    `writers: ${reviewWriters.join(", ")}`);
+
   // ── 12q. INDIVIDUAL AI FAILS CLOSED ON AN UNREADABLE QUOTA ──
   // checkAiQuota stays fail-open for the estate. Every Individual AI entry point goes through individualAiQuota
   // AND answers with individualQuotaRefusal, so an unreadable count is a 503 refusal, never a free pass.
