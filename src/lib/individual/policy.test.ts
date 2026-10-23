@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
-import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, loadIndividualPolicy, policyDef, policyPath, resolvePolicy, validateDraft, type IntPolicy } from "./policy";
+import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, individualQuotaRefusal, loadIndividualPolicy, policyDef, policyPath, resolvePolicy, validateDraft, type IntPolicy } from "./policy";
 import { publishScope, rollbackVersion, setOverride } from "@/lib/config/workspace-config-write";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX, parseShare } from "./professional/share";
@@ -102,9 +102,18 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
 
   it("the Individual AI limit tightens the estate quota and never loosens it", () => {
     const tight = { ...DEFAULT_POLICY, aiHourlyLimit: 5 };
-    expect(individualAiQuota({ ok: true, used: 5, limit: 30 }, tight)).toEqual({ ok: false, used: 5, limit: 5 });
-    expect(individualAiQuota({ ok: true, used: 4, limit: 30 }, tight)).toEqual({ ok: true, used: 4, limit: 5 });
-    expect(individualAiQuota({ ok: false, used: 10, limit: 10 }, DEFAULT_POLICY)).toEqual({ ok: false, used: 10, limit: 10 });
+    expect(individualAiQuota({ ok: true, used: 5, limit: 30 }, tight)).toEqual({ ok: false, used: 5, limit: 5, unreadable: false });
+    expect(individualAiQuota({ ok: true, used: 4, limit: 30 }, tight)).toEqual({ ok: true, used: 4, limit: 5, unreadable: false });
+    expect(individualAiQuota({ ok: false, used: 10, limit: 10 }, DEFAULT_POLICY)).toEqual({ ok: false, used: 10, limit: 10, unreadable: false });
+  });
+
+  it("⚠ FAILS CLOSED: an unreadable count refuses Individual AI, where the estate quota would still say ok", () => {
+    // The estate answer when the audit_log count fails: ok true, used 0 (fail open). Individual must refuse.
+    const q = individualAiQuota({ ok: true, used: 0, limit: 30, unreadable: true }, DEFAULT_POLICY);
+    expect(q).toEqual({ ok: false, used: 0, limit: 30, unreadable: true });
+    expect(individualQuotaRefusal(q)).toEqual({ status: 503, error: "Your AI allowance could not be checked just now, so nothing was sent. Try again shortly." });
+    expect(individualQuotaRefusal({ ok: false, limit: 5, unreadable: false }, "questions")).toEqual({ status: 429, error: "You have reached the limit of 5 questions an hour. Try again later." });
+    expect(individualQuotaRefusal({ ok: true, limit: 30, unreadable: false })).toBeNull();
   });
 
   it("the share-link maximum caps what a person asks for and keeps the 30-day suggestion within it", () => {

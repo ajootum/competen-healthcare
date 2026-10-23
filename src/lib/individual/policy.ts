@@ -205,8 +205,20 @@ export async function loadIndividualPolicy(admin: any): Promise<IndividualPolicy
 /**
  * The Individual AI hourly check: the estate quota (src/lib/ai/quota.ts, unchanged) AND the Individual
  * limit, whichever is tighter. Same `used` count, because it is the same person's AI use.
+ *
+ * ⚠ FAILS CLOSED. When the count could not be read (`unreadable`), the estate quota still answers ok (it
+ * treats the limit as protection); Individual does not. An unreadable count is a refusal here, with
+ * `unreadable` set so the route can say "could not be checked" rather than "limit reached".
  */
-export function individualAiQuota(estate: { ok: boolean; used: number; limit: number }, policy: IndividualPolicy) {
+export function individualAiQuota(estate: { ok: boolean; used: number; limit: number; unreadable?: boolean }, policy: IndividualPolicy) {
   const limit = Math.min(estate.limit, policy.aiHourlyLimit);
-  return { ok: estate.ok && estate.used < limit, used: estate.used, limit };
+  const unreadable = estate.unreadable === true;
+  return { ok: !unreadable && estate.ok && estate.used < limit, used: estate.used, limit, unreadable };
+}
+
+/** What an Individual AI route answers when its quota refuses: 503 when unreadable, 429 at the limit. */
+export function individualQuotaRefusal(quota: { ok: boolean; limit: number; unreadable: boolean }, noun = "AI requests"): { status: number; error: string } | null {
+  if (quota.unreadable) return { status: 503, error: "Your AI allowance could not be checked just now, so nothing was sent. Try again shortly." };
+  if (!quota.ok) return { status: 429, error: `You have reached the limit of ${quota.limit} ${noun} an hour. Try again later.` };
+  return null;
 }
