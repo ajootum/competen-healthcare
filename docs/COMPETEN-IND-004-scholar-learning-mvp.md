@@ -6,6 +6,7 @@
 | **Status** | Built on branch `ind-004/scholar-mvp`, cut from `ind-003/individual-foundation` at `d6252ad6`. **Not merged, not deployed.** |
 | **Authority** | Owner GO for COMPETEN-IND-004. Builds on ADR-016 (owner rulings D1–D10), COMPETEN-IND-002 §3.2–3.3 and COMPETEN-IND-003. |
 | **Migration** | `372-individual-scholar-learning.sql`. House rules ALL CLEAR. **Applied and verified on STAGING only (2026-10-23)**, under the owner's continuation GO. Committed to this branch (`08ea2a31`), as the CLAUDE.md migration-governance amendment now allows for a staging-verified migration (`main` `5a9a07cc`). Nothing merges to `main` without a GO. **Production: not applied, and a separate GO is required.** |
+| **Owner review** | Conditional acceptance (2026-10-23); P0.1–P0.5 done, P1.6–P1.8 done, P1.9–P1.10 recommended. See §9. |
 | **Staging** | 372 applied twice, idempotent. `scholar-acceptance-harness` 40/40. End-to-end walk-through at 1440 and 390 px. Three defects found and fixed. See §6. |
 
 ## 1. The journey, end to end
@@ -152,6 +153,83 @@ A planted defect (`getMaterial` without its `user_id` filter) turned I1 red (39/
 3. **Clinical-review record** for shared content: who reviews, when and with what scope. This is a governance design. Until it exists, Apply serves only the person's own material.
 4. **OCR for scanned PDFs**: not built. A scanned PDF is refused with that reason.
 5. **Release gate.** Individual ships dark: `individual_app` is OFF by default, and while it is off every Scholar page and API answers 404. The staging acceptance switches it ON for the run and then restores its prior state, as `individual-acceptance-harness` R1-R3 and Z2 do. The flag is never touched on production.
+
+## 9. Owner review (2026-10-23): conditional acceptance, quality and usability pass
+
+The owner accepted the Scholar journey as the MVP foundation, subject to one focused quality pass. No schema change was needed, and none was made: 372 is unchanged (sha256 `17a43464…`).
+
+### P0 corrections
+
+| # | Required | Done | Where |
+|---|---|---|---|
+| P0.1 | Validate stems, correct answers, distractors, terminology, ambiguity and source support. Reject or regenerate defective questions. | **Deterministic layer:** every option, right or wrong, is built from the passage's own terms. The keyed answer is in the quoted source sentence. No all/none-of-the-above. No option contains another. A real question, with no lower-case NOT/EXCEPT. Bounded lengths. **Blind check:** a second `generate()` sees the passage and the questions *without the key*. A question survives only if the passage supports exactly the keyed option, it is answerable from the passage alone, the stem adds no outside facts, and it is not ambiguous. An unreadable verdict rejects (fail closed). **Regenerate once** on the same provider, with the reasons, if nothing survives. The prompt states the same rules and lists the passage vocabulary that options may use. Prompts are now `mcq/case-v3` with `verify-v1`. | `question-quality.ts` (+ tests), `generation.ts`, questions route |
+| P0.2 | Distinguish source-derived answers from verified guidance, with provenance and safety warnings. | A **source notice** sits under every explanation, every piece of answer feedback and every revision answer: "from your own notes, not verified clinical guidance … never use it for a real patient". Marking reads "That matches your notes" / "Your notes support B", plus "Marked against your notes, not against clinical guidelines." The model, prompt version, citation and AI label are kept. | `config.ts` (`SOURCE_NOTICE`, `MARKED_AGAINST_NOTES`), `client.tsx` |
+| P0.3 | Replace "mastery". Imply no verified competence. | The figure is now **practice accuracy** (latest try), with "It is not a measure of competence or of clinical knowledge." SM-2's stored `mastered` state is shown as *cards on long intervals*. The internal fields are renamed `latestAccuracy` / `cardsLongInterval`, and the harness refuses "mastery" on any screen. | `progress.ts`, Progress page |
+| P0.4 | Verify the consent, upload screening, deletion and AI processing boundaries. | Staging acceptance adds three checks. **C6:** the AI preflight refuses with 403 when consent is revoked, and passes when it is granted. **U7:** a labelled DOB and an MRN are refused. **U8:** a file whose bytes are not the declared type is refused and its object deleted. These sit alongside the existing deletion, erasure, isolation and no-passage-no-AI checks. The harness also checks (R4) that the prompts carry no profile data. | `scholar-acceptance-harness`, `scholar-learning-harness` |
+| P0.5 | Keep personal AI cases apart from clinically reviewed ones. | Every personal case card is labelled "Practice scenario from your notes · not a clinically reviewed case". Apply separates "Your practice scenarios" from "Clinically reviewed cases", which stays the governed not-available state. Nothing reads `clinical_cases`. | `client.tsx`, Apply page |
+
+**The recorded limitation is closed.** A distractor naming something the notes never mention ("Arrange an urgent CT scan") is now refused (`unsupported_term`, unit-tested).
+
+**What remains, stated precisely:**
+1. Distractors limited to the notes' own terms are safe but sometimes *obviously* wrong ("Take oxygen", "Fatigue, to relieve fluid overload"). That lowers discrimination, but nothing they say is false.
+2. The blind check is a second reading by the same model family. It catches ambiguity and keying errors; it is not a clinical review.
+3. A synonym of a passage term ("administer" for "give") is refused even when harmless. That is the conservative direction.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `tsc`, `eslint` on changed files | clean |
+| `vitest` | **585 / 585**, including 10 new quality and verification cases. The fail-closed verdict and the CT-scan distractor are among them. |
+| `scholar-learning-harness` | **58 / 58**. R1–R5 pin each P0. Planted controls P11 (quality layer off), P12 (blind check skipped) and P13 ("mastery" back on a screen) each go red. |
+| `individual-foundation` / `auth-boundary` / `plane-boundary` / `access-doors` | 44/44 · green · 35/35 · 39/39 |
+| Real model, v3 pipeline, measured before the provider stopped | 11 blind-verified questions across 6 sets (3 passages × MCQ and case), at least 1 per set, 8–17 s per request. Every drop had a stated reason. |
+| Staging acceptance, re-run (flag ON for the run, restored to no row, IND-007 told) | **40 / 43.** All non-AI groups are green, including the new C6, U7 and U8. **A1–A3 failed only because the AI provider rejected every call:** "credit balance is too low" (see Blockers). |
+| Walk-through, updated presentation | 9 desktop (1440) and 3 mobile (390) screenshots in `docs/evidence/COMPETEN-IND-004/owner-review/`: AI help off, the notice before agreeing, AI help on, the two-column material page, feedback against the notes with the source notice, labelled personal scenarios, a revision answer with the notice, the revision summary, practice accuracy, sticky study tabs on mobile, case feedback and progress on mobile. **Because the provider was down, the fixture's questions were seeded.** Their stems and options are real v3-pipeline output from the measured run, the rationales and quotes are verbatim from the notes, and the rows are marked `model: screenshot-seed`. No explanation screenshot was possible. |
+
+### P1, done within scope
+
+- **P1.6:** on desktop, material sections sit left with a sticky "Ask about this material" panel right, and answer options sit in two columns. On mobile, the study tab bar stays pinned under the header.
+- **P1.7:** the consent card shows one line with "Review and turn on", which opens the full notice. The agreement is still its own click with the notice in view, and "Turn off" is one click. Nothing about the consent record changed.
+- **P1.8:**
+  - Questions show the last result ("did not match your notes") and offer "Answer again".
+  - Revise shows a progress bar and a recall prompt, explains what a grade does, says when each graded card comes back, and ends with a session summary.
+
+### P1.9: reusable organisation (recommendation only)
+
+| Existing | Scope | Reusable for Scholar? |
+|---|---|---|
+| `curricula` + `curriculum_modules` + `curriculum_competencies` (016) | hospital, or global when `hospital_id` is null | **Yes, read-only, as the programme/module catalogue.** Global curricula (null hospital) can describe e.g. a pre-registration nursing programme and its modules, linked to `framework_competencies`. |
+| `taxonomies` + `taxonomy_terms` (013) | global | **Yes, read-only, as the topic vocabulary** (a `scholar_subject` taxonomy kind). |
+| `tags` + `object_tags` (013) | hospital, enterprise | **No.** They are organisation data, and an Individual tag row would be visible to tenants (D1). |
+| `learning_pathways` / `pathway_items` (014) | per person, estate | **No.** It sits among the estate learning tables (D1). |
+
+**Minimum extension:** one owner-only link table, `individual_scholar_material_topic (material_id, user_id, curriculum_module_id or taxonomy_term_id)`, with the same composite-key and RLS shape as 372. The person tags their material against the shared catalogue, and Progress groups by module or topic. That is a new migration (374) and needs a staging GO, so it is **not done here**. Nothing configuration-only would deliver it.
+
+### P1.10: progressive clinical reasoning (recommendation only)
+
+- **Existing:**
+  - `simulation-briefs.ts` (7 static briefs) and `cdp_sim_sessions` (147) are estate, hospital-scoped, so D1 rules them out as Scholar storage.
+  - `osce_stations` (033) is an institutional exam model.
+  - `clinical_cases` (026) has no review record.
+- **Minimum extension: a staged case.** One source passage gives an ordered series of 3–4 steps. Each step reveals one more fact *from the passage* and asks one decision. Each step runs through the existing generation, quality layer and blind verification, so the safety model is unchanged.
+- **Storage:** two nullable columns on `individual_scholar_question` (`case_group uuid`, `step int`, a CHECK that both are set or neither). The UI shows the next step only after the previous one is answered. This is a migration (374 or 375) and needs a staging GO.
+- **Later:** a free-text "explain your reasoning" step marked against the source, reusing the existing `/api/ai/coach` advisory pattern, and shared reviewed cases once `clinical_cases` gains a review record.
+
+### Blockers
+
+1. **The AI provider account is out of credit.** Every `generate()` returns `400 invalid_request_error: Your credit balance is too low` (request `req_011CgJciKh2J36AbCTKb1Mbc`). That blocks the live re-verification of P0.1 on staging (A1–A3). It is owner billing, not code. If production shares the key, production AI features are affected too.
+2. Unchanged: production for 372 needs a separate GO (production freeze); the LEGAL-001 documents and the consent-notice wording need review; and `individual_app` is OFF in production.
+
+### Recommended Scholar pilot-readiness decision
+
+**Conditional GO for a closed pilot, on four owner-side conditions. No further code is required.**
+1. Restore AI provider credit, then re-run `scholar-acceptance-harness` on staging until A1–A3 are green.
+2. Publish the Holdings and Scholar-operator terms and privacy versions (LEGAL-001) and approve the consent-notice wording.
+3. Give the production GO for 370 and 372, after the recovery mechanism the production freeze requires.
+4. Turn `individual_app` on, and pilot-grant the cohort through the HQ grant right (D8/D9).
+
+Until then, Scholar stays dark in production behind the default-OFF gate.
 
 ## 8. Next
 
