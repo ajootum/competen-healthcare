@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
-import { experienceModulePage } from "../../../../../_components/shell-context";
+import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
 import { progressRows } from "@/lib/individual/scholar/store";
 import { buildProgress } from "@/lib/individual/scholar/progress";
@@ -21,7 +21,10 @@ export const dynamic = "force-dynamic";
 // ⚠ NOT MEASURED IS SHOWN AS NOT MEASURED. A material with no answers has no mastery figure, and a week
 // with no answers has no accuracy bar -- never a 0.
 
-export const metadata: Metadata = { title: "Progress" };
+// The title only when Individual is live: with the release gate off, a 404 must not name the route.
+export async function generateMetadata(): Promise<Metadata> {
+  return gatedMetadata({ title: "Progress" });
+}
 
 const fmtWeek = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 

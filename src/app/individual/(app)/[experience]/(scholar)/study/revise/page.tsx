@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
-import { experienceModulePage } from "../../../../../_components/shell-context";
+import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { dueCards, countDue } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
 import { PageHeader, StatePanel, Unreadable } from "../../../../../_components/chrome";
@@ -16,7 +16,10 @@ export const dynamic = "force-dynamic";
 // scheduled by SM-2 (src/lib/delivery/reinforcement.ts). They read the question, reveal the answer with
 // its source in their notes, and grade their own recall. The grade reschedules the card.
 
-export const metadata: Metadata = { title: "Revise" };
+// The title only when Individual is live: with the release gate off, a 404 must not name the route.
+export async function generateMetadata(): Promise<Metadata> {
+  return gatedMetadata({ title: "Revise" });
+}
 
 export default async function Revise({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
-import { experienceModulePage } from "../../../../../_components/shell-context";
+import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
 import { countDue, listQuestions } from "@/lib/individual/scholar/store";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
@@ -21,7 +21,10 @@ export const dynamic = "force-dynamic";
 // (COMPETEN-IND-002 s3.3). Scholar serves shared content only once that record exists. So this page
 // reads nothing from clinical_cases, and shows the governed state below in its place.
 
-export const metadata: Metadata = { title: "Apply" };
+// The title only when Individual is live: with the release gate off, a 404 must not name the route.
+export async function generateMetadata(): Promise<Metadata> {
+  return gatedMetadata({ title: "Apply" });
+}
 
 export default async function Apply({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");

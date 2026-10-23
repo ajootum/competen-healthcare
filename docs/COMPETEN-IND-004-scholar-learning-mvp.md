@@ -5,7 +5,7 @@
 | **Date** | 2026-10-22 |
 | **Status** | Built on branch `ind-004/scholar-mvp`, cut from `ind-003/individual-foundation` at `d6252ad6`. **Not merged, not deployed.** |
 | **Authority** | Owner GO for COMPETEN-IND-004. Builds on ADR-016 (owner rulings D1–D10), COMPETEN-IND-002 §3.2–3.3 and COMPETEN-IND-003. |
-| **Migration** | `372-individual-scholar-learning.sql`. House rules ALL CLEAR. **Applied and verified on STAGING only (2026-10-23)**, under the owner's continuation GO. Committed to this branch only (`08ea2a31`), not to `main`. **Production: not applied, and a separate GO is required.** |
+| **Migration** | `372-individual-scholar-learning.sql`. House rules ALL CLEAR. **Applied and verified on STAGING only (2026-10-23)**, under the owner's continuation GO. Committed to this branch (`08ea2a31`), as the CLAUDE.md migration-governance amendment now allows for a staging-verified migration (`main` `5a9a07cc`). Nothing merges to `main` without a GO. **Production: not applied, and a separate GO is required.** |
 | **Staging** | 372 applied twice, idempotent. `scholar-acceptance-harness` 40/40. End-to-end walk-through at 1440 and 390 px. Three defects found and fixed. See §6. |
 
 ## 1. The journey, end to end

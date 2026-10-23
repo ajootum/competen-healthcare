@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
-import { experienceModulePage } from "../../../../_components/shell-context";
+import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
 import { countDue, listMaterials, readConsent } from "@/lib/individual/scholar/store";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
@@ -19,7 +19,10 @@ export const dynamic = "force-dynamic";
 // list. Material unreadable → said so, not "none yet". Consent off → upload and reading still work, and
 // every AI action says it needs consent instead of failing when pressed.
 
-export const metadata: Metadata = { title: "My Learning" };
+// The title only when Individual is live: with the release gate off, a 404 must not name the route.
+export async function generateMetadata(): Promise<Metadata> {
+  return gatedMetadata({ title: "My Learning" });
+}
 
 const JOURNEY = [
   { step: "Upload", text: "Add your notes, slides or guidance as PDF or Word." },
