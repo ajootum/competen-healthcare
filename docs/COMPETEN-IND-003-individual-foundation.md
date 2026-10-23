@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Date** | 2026-10-22 |
-| **Status** | Built on branch `ind-003/individual-foundation` (from `50ae85f0`). Owner rulings D1–D10 applied. In review as PR #5 (pushed by the owner). **Not merged, not deployed.** |
+| **Status** | Built on branch `ind-003/individual-foundation` (from `50ae85f0`). Owner rulings D1–D10 applied. **Merged to `main` as `293e50f1` (PR #5) on 2026-10-23, deployed dark** (release gate absent). Migration 370 is applied on staging only, and is ON HOLD for production. |
 | **Authority** | Owner GO for COMPETEN-IND-003; owner rulings and staging commissioning GO (2026-10-22). ADR-016 is Accepted. |
 | **Staging** | Migration 370 applied and proven idempotent. Acceptance 35/35 green, with a planted defect proven red. See §4, §6 and §8. |
 
@@ -56,7 +56,7 @@ See ADR-016 §Owner rulings for where each one is enforced. Implementation chang
 | Reproducibility | Every statement is idempotent (`if not exists`, drop-then-add constraints, `on conflict do nothing`, `where not exists`, `create or replace view`). No backfill. It touches no existing table, policy or constraint. A second run is designed to be a no-op. The run-twice proof is part of the staging apply, which is still pending (§7). |
 | `hq-guard` catalogue parity (DB neutralised) | S0, S4, D1–D8 pass: 52 capabilities in DDL and code, 8 positions, 81 grants. |
 | **Staging** | **Applied 2026-10-22** with `apply-migrations.ts --only 370` (node-postgres, whole file, production guard passed). The working file was confirmed byte-identical to the `cb63e582` blob first. **Run twice:** the schema snapshot hash was identical after the second run (`83b7db43…6678`). It covers 3 relations (RLS on both tables, `security_invoker=true` on the view), 20 constraints, 4 indexes, 2 `SELECT` policies, column counts 17/17/10, 0 rows, the capability, the position (platform space, product line `individual`) and exactly 2 grant rows. |
-| **Production** | **ON HOLD.** It needs a separate owner GO, and is also blocked by the owner's schema freeze: no production schema change until a verified recovery mechanism exists, because production has no backups or PITR. |
+| **Production** | Code merged to `main` (`293e50f1`) and deployed dark: no `individual_app` row, so Individual is 404 everywhere and 370 is not needed. **Migration 370 is ON HOLD.** It needs a separate owner GO, and is also blocked by the owner's schema freeze: no production schema change until a verified recovery mechanism exists, because production has no backups or PITR. |
 | **Ordering with 371** | `371-plat-ai-requests-attribution.sql` (AI-LOG-001, merged to `main` `fb5ce41b`) is already applied to production. It alters only `plat_ai_requests` (two columns, one index), and 370 never touches that table. 370 depends only on objects from migration 281 and earlier. So the production history will read 371 then 370 in application order, which is safe. 370 keeps its number. |
 
 Apply with the established tool once staging answers: `npx tsx scripts/apply-migrations.ts --only 370`. It refuses production, sends the file whole and stops on the first error. Run it twice to prove idempotency, then run `migration-verify --staging`.
@@ -147,10 +147,27 @@ None of these is satisfied by this branch alone. Each needs an owner act or a se
 | 6 | The **Scholar operator's registered name confirmed** and set, or a decision recorded to launch Professional only. | **Pending** (COMPETEN-IND-001 D8). |
 | 7 | **Data roles confirmed** by legal (`DATA_ROLES.confirmed`). | **Pending** (D2). |
 | 8 | **An Individual Product Administrator appointed** through the HQ appointments surface. That person holds `hq.individual.pilot.grant`. | **Not yet.** The position exists once 370 is applied. |
-| 9 | PR #5 reviewed and merged by the owner, and CI shows no failure beyond `main`'s baseline. | In review. |
+| 9 | PR #5 reviewed and merged by the owner, and CI shows no failure beyond `main`'s baseline. | **Done 2026-10-23.** Merged under the owner's conditional GO as `main` `293e50f1` (head `036f47aa`). CI: everything passed except the authenticated staging smoke, which fails closed because its secrets are missing (recorded on the PR). Production deployment `dpl_HAFWvNxtJsQpfmHZgBz5sWjpEb6P`; rollback reference `dpl_DeBNcrYaydMp7CJYwT7iYQXscv2F` (`main` `5a9a07cc`). |
 | 10 | **Post-deploy checks (production):** before the flag, every Individual route answers 404; after setting `individual_app` ON (condition 12), `/individual/access` renders signed out; `/login` still resolves Platform, Practice and Enterprise accounts exactly as before; one pilot grant to a test identity shows welcome → terms → shell; that identity holds no platform, practice or enterprise membership and its `profiles.role` is unchanged; `plat_ai_requests` logs `attribution_scope = person`; the grant is ended and the experience closes. | Run after 1–9. |
 | 11 | Staging is brought to parity (361–369 applied) so the boundary harnesses run clean there. | Owner action. Not an Individual blocker, but it removes the noise in §8. |
 | 12 | **Release gate ON, last:** insert `practice_platform_flags ('individual_app', true)` in production only after 1–8 hold and 370 is verified. This is a data change, not a schema change. Setting it back to false (or deleting the row) turns Individual off instantly. | Not set. Individual is dark. |
+
+## Production verification after merge (2026-10-23, gate absent, 370 not applied)
+
+Run by the main session against production deployment `dpl_HAFWvNxtJsQpfmHZgBz5sWjpEb6P`.
+
+| Check | Result |
+|---|---|
+| 7 gated Individual pages | 404, root title, 0 Individual strings |
+| `POST /api/individual/{assistant,terms,preferences}` | 404 |
+| `/api/hq/individual/grants` | 403 (HQ capability gate) |
+| `/`, `/individual`, `/individual/sign-in`, `/scholar`, `/professional`, `/enterprise`, `/practice`, `/recruitment`, `/login`, `/practice/sign-in`, `/signup` | 200 |
+| `/students` | 308 |
+| Protected routes | Redirect to sign-in |
+| Password fields | Only on `/login` and `/practice/sign-in` |
+| `public-disclosure-harness` on production | 213 pass, 1 baseline failure |
+
+Merge-condition evidence (no-entitlement refusal with the key present, gate OFF and ON, and the machine-derived 17-route inventory) is recorded in the main session's notes (`IND-003-merge-conditions-evidence.md`).
 
 ## Release gate and the merge-behind-gate assessment (2026-10-22, owner GO item 5)
 
