@@ -1,6 +1,7 @@
 import { EXPERIENCES } from "@/lib/individual/experiences";
 import { aiStatus } from "@/lib/ai/config";
-import { experiencePage } from "../../../_components/shell-context";
+import { experiencePage, gatedMetadata } from "../../../_components/shell-context";
+import type { Metadata } from "next";
 import { PageHeader } from "../../../_components/chrome";
 import AssistantPanel from "./AssistantPanel";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 // PERSONAL AI -- COMPETEN-IND-003 s2(6). One AI in both experiences, through the existing gateway
 // (/api/individual/assistant -> generate()). The page says what it can see and that nothing is saved.
 
-export const metadata = { title: "Personal AI" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Personal AI" }); }
 
 export default async function AssistantPage({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experiencePage((await params).experience);

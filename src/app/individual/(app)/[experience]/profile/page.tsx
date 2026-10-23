@@ -1,7 +1,8 @@
 import { EXPERIENCES } from "@/lib/individual/experiences";
 import { loadIndividualPassport } from "@/lib/individual/passport";
 import { buildHistory, loadEntitlementHistory } from "@/lib/individual/history";
-import { experiencePage } from "../../../_components/shell-context";
+import { experiencePage, gatedMetadata } from "../../../_components/shell-context";
+import type { Metadata } from "next";
 import { PageHeader, Unreadable } from "../../../_components/chrome";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 const fmt = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
-export const metadata = { title: "Profile & history" };
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Profile & history" }); }
 
 export default async function ProfilePage({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experiencePage((await params).experience);

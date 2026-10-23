@@ -1,4 +1,5 @@
 import { cache } from "react";
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { resolveIndividualShell, contextTermsGate, type IndividualContext } from "@/lib/individual/guard";
 import { EXPERIENCES, isExperienceKey, type ExperienceKey } from "@/lib/individual/experiences";
@@ -7,6 +8,16 @@ import { EXPERIENCES, isExperienceKey, type ExperienceKey } from "@/lib/individu
 // React's cache() scopes it to the render, so three callers cost one read -- and, more importantly, they
 // cannot get three different answers.
 export const individualShell = cache(resolveIndividualShell);
+
+/**
+ * Metadata for a gated Individual route: the route's own title while the release gate is on, and NOTHING
+ * while it is off -- so a disabled Individual 404 carries the root default title, byte-for-byte what an
+ * absent route's 404 carries. Static `export const metadata` would put "Competen Scholar · Competen
+ * Individual" into the 404 and tell a visitor the route exists (found 2026-10-23, merge-condition check).
+ */
+export async function gatedMetadata(meta: Metadata): Promise<Metadata> {
+  return (await individualShell()).state === "DISABLED" ? {} : meta;
+}
 
 /**
  * ⚠ EVERY PAGE CALLS THIS ITSELF, NOT ONLY THE LAYOUT. Layouts and pages render in parallel, so a page

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { EXPERIENCES, experienceHref, isExperienceKey } from "@/lib/individual/experiences";
-import { individualShell } from "../../_components/shell-context";
+import { individualShell, gatedMetadata } from "../../_components/shell-context";
 import { ExperienceMark, ExperienceSwitcher, StatePanel, focusRing, secondaryBtn } from "../../_components/chrome";
 import { SidebarNav, BottomNav, SignOutButton } from "../../_components/ShellNav";
 import TermsAcceptance, { type ShownDoc } from "../../_components/TermsAcceptance";
@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: { params: Promise<{ experienc
   const { experience } = await params;
   if (!isExperienceKey(experience)) return {};
   const name = EXPERIENCES[experience].name;
-  return { title: { default: name, template: `%s · ${name}` } };
+  return gatedMetadata({ title: { default: name, template: `%s · ${name}` } });
 }
 
 export default async function ExperienceLayout({ children, params }: {
