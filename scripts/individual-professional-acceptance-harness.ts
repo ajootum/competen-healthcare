@@ -33,7 +33,7 @@
  * A later run removes it first. Without the variable nothing is left behind.
  */
 import { loadEnvConfig } from "@next/env";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { readIndividualAccess, isNotProvisioned } from "../src/lib/individual/access";
@@ -122,6 +122,7 @@ async function grantProfessional(target: string, by: string) {
 
 async function main() {
   console.log(`\nIndividual Professional acceptance harness -- COMPETEN-IND-007 -- target ${ref}\n`);
+  if (process.env.IND007_RESTORE_GATE_FROM) return restoreHeldGate(process.env.IND007_RESTORE_GATE_FROM);
   const probe = await admin.from("individual_professional_cpd").select("id").limit(1);
   const pilotFile = process.env.IND007_PILOT_CREDENTIALS ?? null;
   if (probe.error && isNotProvisioned(probe.error)) {
@@ -268,8 +269,34 @@ async function main() {
     priorFlag ? flagAfter.data?.enabled === priorFlag.enabled : flagAfter.data === null);
 
   if (pilotFile) await makePilot(pilotFile);
+  await holdGateForWalkthrough();
   console.log(`\n${fails.length ? "RED" : "ALL GREEN"} -- ${pass} passed, ${fails.length} failed`);
   process.exit(fails.length ? 1 : 0);
+}
+
+/**
+ * ⚠ THE BROWSER WALK-THROUGH NEEDS THE GATE ON, AND THE RESTORE MUST STILL BE EXPLICIT. With
+ * IND007_HOLD_GATE_FILE=<file>, after Z2 has proved the restore works, the run writes the flag row it
+ * found to that file and switches the gate ON again. A second invocation with
+ * IND007_RESTORE_GATE_FROM=<file> puts that row back (or removes the flag when there was none) and exits.
+ * Tell any other session using the flag before holding it.
+ */
+async function holdGateForWalkthrough() {
+  const file = process.env.IND007_HOLD_GATE_FILE;
+  if (!file) return;
+  writeFileSync(file, JSON.stringify({ prior: priorFlag }));
+  await admin.from("practice_platform_flags").upsert({ flag: INDIVIDUAL_APP_FLAG, enabled: true, note: "IND-007 walk-through hold (restore with IND007_RESTORE_GATE_FROM)" });
+  console.log(`  HOLD  individual_app is ON for the walk-through. The prior state is in IND007_HOLD_GATE_FILE. Restore it afterwards.`);
+}
+
+async function restoreHeldGate(file: string) {
+  const { prior } = JSON.parse(readFileSync(file, "utf8")) as { prior: typeof priorFlag };
+  if (prior) await admin.from("practice_platform_flags").upsert(prior);
+  else await admin.from("practice_platform_flags").delete().eq("flag", INDIVIDUAL_APP_FLAG);
+  const after = await admin.from("practice_platform_flags").select("enabled").eq("flag", INDIVIDUAL_APP_FLAG).maybeSingle();
+  const restored = prior ? after.data?.enabled === prior.enabled : after.data === null;
+  console.log(`  ${restored ? "PASS" : "FAIL"}  the release flag is back to its state before the walk-through (${prior ? `enabled=${prior.enabled}` : "no row"})`);
+  process.exit(restored ? 0 : 1);
 }
 
 /** The walk-through identity: Professional only, through the grant service. Password to a file only. */
