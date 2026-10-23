@@ -192,6 +192,13 @@ const STAGING: Listed[] = [
       + "reports PEND (exit 0, nothing created) until migration 370 is applied.",
   },
   {
+    file: "individual-professional-acceptance-harness.ts",
+    note: "COMPETEN-IND-007 acceptance for Competen Professional: direct entry with no Scholar row, the whole journey, "
+      + "schema-generated evidence classes, cross-person links refused, own-row RLS, once-only reminders, share carries own "
+      + "records only for a Professional link, shared frameworks only, no estate rows. Creates and deletes its own "
+      + "harness-ind007-* identities. Refuses production via assertSafeTarget, and reports PEND until migration 373 is applied.",
+  },
+  {
     file: "scholar-acceptance-harness.ts",
     note: "COMPETEN-IND-004 Scholar learning journey against migration 372: consent, real PDF and DOCX upload with the "
       + "anon key, FTS retrieval, questions, SM-2 cards, progress, cross-user isolation (store, RLS, storage, "

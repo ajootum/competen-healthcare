@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { loadOwnRecords, type OwnRecord } from "./professional/passport-records";
 
 // ── THE COMPETEN PASSPORT, AS COMPETEN INDIVIDUAL SHOWS IT ── COMPETEN-IND-003 s2(5), ADR-016 ──────────
 //
@@ -14,9 +15,15 @@
 //
 //   institution_issued  a governed decision or record an organisation made about the person
 //   institution_verified a credential the person declared that an organisation's staff then verified
-//   self_declared       a credential on the record that nobody has verified
+//   self_declared       a credential on the record that nobody has verified, or a record the person
+//                       added in Competen Professional with no document attached
+//   source_linked       a record the person added in Competen Professional with a document attached.
+//                       Still not verified -- attaching a document checks nothing (COMPETEN-IND-002 s4.2)
 //
-// Individual itself creates none of these today -- its own records arrive with the Professional tools.
+// ⚠ TWO CLASSES OF RECORD, LABELLED TWO WAYS (COMPETEN-IND-007 s5, owner ruling D3). The sections read
+// here are what organisations issued, labelled by ISSUER. `own` is what the person recorded themselves
+// (migration 373, src/lib/individual/professional/passport-records.ts), labelled by PROVENANCE. It
+// belongs to the person, not to an experience, so it is read whichever experience shows the Passport.
 //
 // ⚠ PROVISIONAL RULING D3 (COMPETEN-IND-002 s7). Showing institution-issued records to their subject,
 // read-only, is the working assumption, not an owner ruling. Disclosure OUTWARD is never automatic --
@@ -30,12 +37,13 @@
 // its outcome is `competent` and it has not passed its expiry date -- the rule src/app/verify/[token]
 // applies, so the Passport cannot show a person something the verification page would not.
 
-export type EvidenceClass = "institution_issued" | "institution_verified" | "self_declared";
+export type EvidenceClass = "institution_issued" | "institution_verified" | "self_declared" | "source_linked";
 
 export const EVIDENCE_LABEL: Record<EvidenceClass, string> = {
   institution_issued: "Issued by an organisation",
   institution_verified: "Verified by an organisation",
   self_declared: "Self-declared, not verified",
+  source_linked: "Self-declared with a document attached, not verified",
 };
 
 export type PassportCompetency = {
@@ -70,6 +78,8 @@ export type IndividualPassport = {
   competencies: PassportCompetency[] | null;
   credentials: PassportCredential[] | null;
   employment: PassportEmployment[] | null;
+  /** The person's own Competen Professional records, labelled by provenance. */
+  own: OwnRecord[] | null;
 };
 
 const nameOf = (row: any): string => {
@@ -101,7 +111,7 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
   const settle = async (p: PromiseLike<any>) => {
     try { const r = await p; return r?.error ? null : (r?.data ?? []); } catch { return null; }
   };
-  const [decRows, credRows, empRows] = await Promise.all([
+  const [decRows, credRows, empRows, own] = await Promise.all([
     settle(admin.from("competency_decisions")
       .select("competency_id, outcome, expiry_date, created_at, hospital_id, organisation_id, framework_competencies(name)")
       .eq("nurse_id", userId).order("created_at", { ascending: false }).limit(3000)),
@@ -111,6 +121,7 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
     settle(admin.from("employment_records")
       .select("role_title, status, start_date, end_date, hospital_id, organisation_id")
       .eq("nurse_id", userId).order("start_date", { ascending: false }).limit(50)),
+    loadOwnRecords(admin, userId).catch(() => null),
   ]);
 
   // Issuer names: the organisations and facilities stamped on this person's own rows, and no others.
@@ -146,5 +157,6 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
       startDate: e.start_date ?? null,
       endDate: e.end_date ?? null,
     })),
+    own,
   };
 }

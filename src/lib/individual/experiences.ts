@@ -89,6 +89,10 @@ export type ExperienceModule = {
   icon: string;
   /** Wants a place on the mobile bottom bar. bottomNavFor() caps the bar at five. */
   bottom?: boolean;
+  /** One line for the experience home card (IND-007). */
+  summary?: string;
+  /** false: a real module page reached from another page, not from the navigation (IND-007 share). */
+  nav?: false;
 };
 
 // ── THE FOUNDATION NAVIGATION ── the same five modules in both experiences ───────────────────────────
@@ -146,28 +150,34 @@ export const PROFESSIONAL: ExperienceConfig = {
   tagline: "Develop · Demonstrate · Advance",
   micro: "Your lifelong professional development, evidence and career.",
   operatingEntity: "competen_holdings",
-  modules: [],
-  homeIntro: "Your professional home. Your Passport, profile and personal AI are already here, and the development tools below are being built.",
+  // COMPETEN-IND-007. Pages under (app)/[experience]/(professional)/<segment>, each via experienceModulePage.
+  modules: [
+    { key: "registration", segment: "registration", label: "Profession & registration", short: "Registration", icon: "◈",
+      summary: "Your profession, registration body and number, and country." },
+    { key: "development", segment: "development", label: "Needs & plan", short: "Plan", icon: "◎", bottom: true,
+      summary: "Your development needs and the learning goals you set against them." },
+    { key: "cpd", segment: "cpd", label: "CPD log", short: "CPD", icon: "✎", bottom: true,
+      summary: "Your continuing professional development, with reflections and certificates." },
+    { key: "evidence", segment: "evidence", label: "Credentials & evidence", short: "Evidence", icon: "❖",
+      summary: "Credentials, renewal dates and the evidence you keep of your competence." },
+    { key: "progress", segment: "progress", label: "Progress", short: "Progress", icon: "↗",
+      summary: "Plan progress, CPD hours by year, and how much of your plan has evidence behind it." },
+    // Reached from the Passport, not the navigation: experienceModulePage needs it listed, and
+    // nav: false keeps navFor and bottomNavFor from showing it.
+    { key: "share", segment: "share", label: "Share your Passport", short: "Share", icon: "⇪",
+      summary: "A revocable, time-limited link to your Passport.", nav: false },
+  ],
+  homeIntro: "Your professional home: your registration, development plan, CPD and evidence. They are kept by you, and nobody else sees them unless you share them.",
   planned: [
-    {
-      key: "development-cpd", label: "Development & CPD",
-      summary: "Plan your learning and keep your continuing-education evidence in one place.",
-      reason: "A private Individual CPD record is not built yet. Your employer's CPD log is not used here, because it is visible to them.",
-    },
-    {
-      key: "competencies", label: "Competencies",
-      summary: "Document your development alongside verified assessment evidence.",
-      reason: "Recording your own competency evidence is not built yet. Assessed competencies an organisation issued to you already appear in your Passport.",
-    },
-    {
-      key: "credentials", label: "Credentials & registration",
-      summary: "Maintain your qualifications, registrations and renewal dates.",
-      reason: "Adding credentials from Competen Individual is not built yet. Credentials already on your Competen record appear in your Passport.",
-    },
     {
       key: "career", label: "Career & Opportunities",
       summary: "Plan your next role, speciality or leadership pathway.",
       reason: "Career planning has no store yet.",
+    },
+    {
+      key: "verification", label: "Independent verification",
+      summary: "Have a registration or credential confirmed by someone with the authority to confirm it.",
+      reason: "No regulator lookup or verification service is connected. Everything you add is shown as recorded by you.",
     },
   ],
 };
@@ -190,7 +200,7 @@ const asItem = (n: NavItem): ShellNavItem => ({ key: n.module, segment: n.segmen
 export function navFor(experience: ExperienceKey): ShellNavItem[] {
   const home = FOUNDATION_NAV.filter(n => n.module === "home").map(asItem);
   const rest = FOUNDATION_NAV.filter(n => n.module !== "home").map(asItem);
-  const own = EXPERIENCES[experience].modules.map(m => ({ key: m.key, segment: m.segment, label: m.label, short: m.short, icon: m.icon }));
+  const own = EXPERIENCES[experience].modules.filter(m => m.nav !== false).map(m => ({ key: m.key, segment: m.segment, label: m.label, short: m.short, icon: m.icon }));
   return [...home, ...own, ...rest];
 }
 
@@ -199,7 +209,7 @@ export function navFor(experience: ExperienceKey): ShellNavItem[] {
 export const BOTTOM_BAR_MAX = 5;
 export function bottomNavFor(experience: ExperienceKey): ShellNavItem[] {
   const home = FOUNDATION_NAV.filter(n => n.module === "home").map(asItem);
-  const own = EXPERIENCES[experience].modules.filter(m => m.bottom).map(m => ({ key: m.key, segment: m.segment, label: m.label, short: m.short, icon: m.icon }));
+  const own = EXPERIENCES[experience].modules.filter(m => m.bottom && m.nav !== false).map(m => ({ key: m.key, segment: m.segment, label: m.label, short: m.short, icon: m.icon }));
   const fill = FOUNDATION_NAV.filter(n => n.module !== "home" && n.module !== "settings").map(asItem);
   return [...home, ...own, ...fill].slice(0, BOTTOM_BAR_MAX);
 }
