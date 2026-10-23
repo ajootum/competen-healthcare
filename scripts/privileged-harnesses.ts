@@ -199,6 +199,13 @@ const STAGING: Listed[] = [
       + "BASE_URL with individual_app ON; NEVER writes the flag (PEND when off). Own harness-access001-* fixtures.",
   },
   {
+    file: "hq-users-authority-acceptance-harness.ts",
+    note: "HQ-USERS-A: over HTTP, a platform_director appointee (hq.platform.users.view) reads the users directory and its "
+      + "page with no write controls, every owner-only write (reset, suspend, role change, create, delete) is 403 and changes "
+      + "nothing, and an unappointed person is refused the directory. The owner path is PEND (needs a synthetic super admin). "
+      + "⚠ NEEDS BASE_URL naming a STAGING-pointed dev server, else PEND. Creates and deletes harness-usersa-* identities.",
+  },
+  {
     file: "individual-professional-acceptance-harness.ts",
     note: "COMPETEN-IND-007 acceptance for Competen Professional: direct entry with no Scholar row, the whole journey, "
       + "schema-generated evidence classes, cross-person links refused, own-row RLS, once-only reminders, share carries own "

@@ -66,6 +66,9 @@ const INCLUDED = [
   // reads src/** and the migration and renders one component with react-dom/server; no client, no network,
   // no .env.local. Screened 2026-10-23: 47/47 twice in a scrubbed environment, identical results.
   "individual-professional-harness.ts",
+  // HQ-USERS-A: the /api/super-admin/users handlers are gated by the HQ gate (view) and the owner gate (writes),
+  // never by profiles.role, with 8 planted-failure controls. Reads files only: no client, no network, no .env.local.
+  "hq-users-authority-harness.ts",
   // COMPETEN-CONFIG-002 Individual policy invariants (source and migration 376): the capability door, one WCE
   // writer, the two partitions, every consumer on the policy, the clamping reader, no individual_app, no third
   // HQ door, with 22 planted-failure controls run in memory. Reads files only: no client, no network, no .env.local.

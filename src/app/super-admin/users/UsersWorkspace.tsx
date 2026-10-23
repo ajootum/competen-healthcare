@@ -71,7 +71,7 @@ function Ring({ pct }: { pct: number | null }) {
 const PAGE_SIZE = 25;
 
 export default function UsersWorkspace({
-  users, auditByActor, hospitals, organisations, departments, currentUserId,
+  users, auditByActor, hospitals, organisations, departments, currentUserId, canManage,
 }: {
   users: UserRow[];
   auditByActor: Record<string, AuditEntry[]>;
@@ -79,6 +79,9 @@ export default function UsersWorkspace({
   organisations: { id: string; name: string }[];
   departments: { id: string; name: string; hospital_id: string }[];
   currentUserId: string;
+  /** HQ-USERS-A: the caller is a platform owner. Account writes are owner-only on the server; a viewer
+   *  holding hq.platform.users.view sees the directory without controls that would only be refused. */
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -250,10 +253,12 @@ export default function UsersWorkspace({
           <h1 className="text-xl font-bold text-gray-900">User Management</h1>
           <p className="text-gray-500 text-sm mt-0.5">Manage your platform users and workforce</p>
         </div>
-        <button onClick={() => { setAddOpen(true); setCreatedCreds(null); }}
-          className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg">
-          + Add User
-        </button>
+        {canManage && (
+          <button onClick={() => { setAddOpen(true); setCreatedCreds(null); }}
+            className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg">
+            + Add User
+          </button>
+        )}
       </div>
 
       {/* Stat cards */}
@@ -326,6 +331,7 @@ export default function UsersWorkspace({
               <div className="absolute left-0 top-8 z-30 w-52 bg-white border border-gray-100 rounded-lg shadow-lg py-1">
                 <button onClick={() => { setBulkOpen(false); exportCsv(users.filter(u => selected.has(u.id))); }}
                   className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">📥 Export selected as CSV</button>
+                {canManage && <>
                 <button onClick={() => { setBulkOpen(false); bulkAct("send_reset", "Password reset sent"); }} disabled={busy}
                   className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">🔑 Send password reset</button>
                 <button onClick={() => {
@@ -335,6 +341,7 @@ export default function UsersWorkspace({
                   className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-critical)] hover:bg-gray-50">⛔ Suspend selected</button>
                 <button onClick={() => { setBulkOpen(false); bulkAct("unsuspend", "Reactivated"); }} disabled={busy}
                   className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-success)] hover:bg-gray-50">✓ Reactivate selected</button>
+                </>}
               </div>
             </>
           )}
@@ -430,6 +437,7 @@ export default function UsersWorkspace({
                               className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">👤 View details</button>
                             <button onClick={() => { setMenuFor(null); navigator.clipboard.writeText(u.email); setNotice({ kind: "ok", text: `Copied ${u.email}` }); }}
                               className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">⧉ Copy email</button>
+                            {canManage && <>
                             <button onClick={() => { setMenuFor(null); act(u.id, "send_reset", `Password reset for ${u.name}`); }}
                               className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">🔑 Send password reset</button>
                             {u.status === "pending" && (
@@ -450,6 +458,7 @@ export default function UsersWorkspace({
                               <button onClick={() => { setMenuFor(null); removeUser(u); }}
                                 className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-critical)] hover:bg-gray-50 border-t border-gray-50">🗑 Delete account…</button>
                             )}
+                            </>}
                           </div>
                         </>
                       )}
@@ -618,11 +627,11 @@ export default function UsersWorkspace({
             <div className="p-5 border-b border-gray-50">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Roles & access</p>
-                <UserRoleEditor
+                {canManage && <UserRoleEditor
                   user={editorUser}
                   hospitals={hospitals} organisations={organisations} departments={departments}
                   onSaved={() => { setDrawer(null); router.refresh(); }}
-                />
+                />}
               </div>
               <div className="flex flex-wrap gap-1">
                 {drawer.platformRole && PLATFORM_ROLE_CONFIG[drawer.platformRole as PlatformRole] && (

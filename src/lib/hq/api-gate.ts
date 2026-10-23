@@ -42,5 +42,20 @@ export async function hqApiGate(capabilities: string[]): Promise<HqContext | Nex
     : NextResponse.json({ error: "You do not hold a position that opens this part of Competen HQ" }, { status: 403 });
 }
 
+/**
+ * An OWNER-ONLY operation reached through the same HQ gate (HQ-USERS-A).
+ *
+ * ⚠ IT REPLACES `profiles.role === "super_admin"`, NOT THE RULE. Those checks read the single legacy column,
+ * so a super admin whose role lives only in `roles[]` was refused and a platform_owner never passed at all.
+ * The rule they expressed -- only the platform's owners do this -- is kept exactly: hqApiGate resolves the
+ * caller (session, roles[], platform_roles, appointments, the refusal ledger) and this then requires
+ * `isOwner`. Holding the view capability opens the page, never an owner-only write.
+ */
+export async function hqOwnerApiGate(capabilities: string[]): Promise<HqContext | NextResponse> {
+  const ctx = await hqApiGate(capabilities);
+  if (isHqRefusal(ctx)) return ctx;
+  return ctx.isOwner ? ctx : NextResponse.json({ error: "Only a platform owner can do this" }, { status: 403 });
+}
+
 /** `if (isHqRefusal(gate)) return gate;` — mirrors api-auth's isResponse. */
 export const isHqRefusal = (x: HqContext | NextResponse): x is NextResponse => x instanceof NextResponse;
