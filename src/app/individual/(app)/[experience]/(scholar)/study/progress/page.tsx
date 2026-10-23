@@ -35,7 +35,7 @@ function CompetencySection({ learner, progress, unreadable, accent }: { learner:
         By competency{learner.programme ? ` · ${learner.programme.label}` : ""}
       </h2>
       <p className="mt-1 text-[13px] text-gray-600">
-        Which competencies of your programme your notes cover, and how you did on practice questions written for each. Rejected links are not counted. This is practice on your own notes, not an assessment of competence.
+        Which competencies of your programme your notes cover, and how you did on practice questions written for each. Practice counts once you have accepted the link from a section to a competency, so suggestions you have not decided on, and rejected links, are not counted. This is practice on your own notes, not an assessment of competence.
       </p>
       <div className="mt-3">
         {!learner.programme ? (

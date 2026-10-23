@@ -666,12 +666,12 @@ export async function questionCompetencies(admin: Admin, userId: string, questio
 
 /** The rows competency progress is built from. Ids, competencies and right-or-wrong only. */
 export async function competencyProgressRows(admin: Admin, userId: string): Promise<Read<{
-  mappings: MappingRow[]; questions: { id: string; competencyId: string | null }[]; attempts: ProgressAttempt[];
+  mappings: MappingRow[]; questions: { id: string; chunkId: string; competencyId: string | null }[]; attempts: ProgressAttempt[];
 }>> {
   const maps = await listMappings(admin, userId);
   if (!maps.ok) return maps;
   const [q, a] = await Promise.all([
-    admin.from("individual_scholar_question").select("id, competency_id").eq("user_id", userId).limit(5000),
+    admin.from("individual_scholar_question").select("id, chunk_id, competency_id").eq("user_id", userId).limit(5000),
     admin.from("individual_scholar_attempt").select("question_id, correct, answered_at").eq("user_id", userId).order("answered_at", { ascending: false }).limit(10000),
   ]);
   const err = q.error ?? a.error;
@@ -680,7 +680,7 @@ export async function competencyProgressRows(admin: Admin, userId: string): Prom
     ok: true,
     data: {
       mappings: maps.data.mappings,
-      questions: ((q.data ?? []) as any[]).map(r => ({ id: r.id, competencyId: r.competency_id ?? null })),
+      questions: ((q.data ?? []) as any[]).map(r => ({ id: r.id, chunkId: r.chunk_id, competencyId: r.competency_id ?? null })),
       attempts: ((a.data ?? []) as any[]).map(r => ({ questionId: r.question_id, correct: r.correct, answeredAt: r.answered_at })),
     },
   };

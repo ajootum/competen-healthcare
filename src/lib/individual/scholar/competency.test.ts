@@ -4,6 +4,8 @@ import {
   checkCaseTitle, checkSupplementary, explainPromptVersion, explainSystem, parseCase, splitSupplementary, CASE_FALLBACK_TITLE, EXPLAIN_SYSTEM, type Passage,
 } from "./generation";
 import { buildCompetencyProgress } from "./competency-progress";
+import { PROMPT_VERSIONS } from "./config";
+import { MAPPING_PROMPT_VERSION } from "@/lib/competency/mapping";
 
 // COMPETEN-SCHOLAR-01 S2-S4: competency proposals, explanation modes, multi-step cases, progress by competency.
 
@@ -36,12 +38,18 @@ describe("the S1 catalogue, narrowed by a programme", () => {
   });
 });
 
+describe("provenance", () => {
+  it("the map prompt version Scholar records is the Holdings engine's own", () => {
+    expect(PROMPT_VERSIONS.map).toBe(MAPPING_PROMPT_VERSION);
+  });
+});
+
 describe("explanation modes and what lies beyond the notes", () => {
   it("explain keeps the v2 prompt and version; every other mode adds to it and has its own version", () => {
     expect(explainSystem("explain")).toBe(EXPLAIN_SYSTEM);
     expect(explainPromptVersion("explain")).toBe("scholar-explain-v2");
     expect(explainSystem("summary").startsWith(EXPLAIN_SYSTEM)).toBe(true);
-    expect(explainPromptVersion("tutor")).toBe("scholar-explain-modes-v2:tutor");
+    expect(explainPromptVersion("tutor")).toBe("scholar-explain-modes-v3:tutor");
   });
 
   it("splits the background off the answer at the marker line", () => {
@@ -82,11 +90,19 @@ describe("progress by competency", () => {
         { competencyId: "u-assess", chunkId: "k1", state: "accepted" },
         { competencyId: "u-anat", chunkId: "k1", state: "proposed" },
         { competencyId: "u-ipc", chunkId: "k2", state: "rejected" },
+        { competencyId: "gone", chunkId: "k1", state: "accepted" },
       ],
-      questions: [{ id: "q1", competencyId: "u-assess" }, { id: "q2", competencyId: "u-assess" }, { id: "q3", competencyId: "gone" }, { id: "q4", competencyId: null }],
+      questions: [
+        { id: "q1", chunkId: "k1", competencyId: "u-assess" }, { id: "q2", chunkId: "k1", competencyId: "u-assess" },
+        { id: "q3", chunkId: "k1", competencyId: "gone" }, { id: "q4", chunkId: "k1", competencyId: null },
+        // Practised through a link the person has not accepted (proposed) or has rejected: counts for nothing.
+        { id: "q5", chunkId: "k1", competencyId: "u-anat" }, { id: "q6", chunkId: "k2", competencyId: "u-ipc" },
+      ],
       attempts: [
         { questionId: "q1", correct: false, answeredAt: "2026-10-01T10:00:00Z" },
         { questionId: "q1", correct: true, answeredAt: "2026-10-02T10:00:00Z" },
+        { questionId: "q5", correct: true, answeredAt: "2026-10-02T10:00:00Z" },
+        { questionId: "q6", correct: true, answeredAt: "2026-10-02T10:00:00Z" },
       ],
     });
     const rows = p.layers.flatMap(l => l.rows);
