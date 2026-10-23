@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { PatternField } from "@/components/marketing/Pattern";
 import { enabledOAuthProviders } from "@/lib/oauth-providers";
@@ -30,6 +30,9 @@ const PROVIDERS = [
   ) },
   { id: "apple", label: "Apple", mark: <span className="text-[15px] leading-none"></span> },
 ];
+
+/** The login URL does not change while this page is mounted -- see individualProduct below. */
+const noSubscription = () => () => {};
 
 const field =
   "w-full rounded-xl border border-gray-200 bg-white pl-12 pr-11 py-3 text-sm text-gray-900 placeholder:text-gray-400 " +
@@ -108,10 +111,16 @@ export default function LoginPage() {
   // ?next=/individual/scholar) names that product above the form, the way the building notice does. It is
   // PRESENTATION ONLY: the same form, the same /api/auth/login, the same validated next below, and the
   // destination decides access on arrival. There is no second login and no second account.
-  const [individualProduct] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return signInProductName(new URLSearchParams(window.location.search).get("next"));
-  });
+  //
+  // ⚠ useSyncExternalStore, NOT the lazy-initialiser idiom used above: that one renders null on the server
+  // and the notice on the client, a hydration mismatch React answers by discarding the server HTML and
+  // re-rendering the page. The server snapshot (null) is what hydration compares against; the URL value
+  // follows in the next render. The URL never changes under this page, so there is nothing to subscribe to.
+  const individualProduct = useSyncExternalStore(
+    noSubscription,
+    () => signInProductName(new URLSearchParams(window.location.search).get("next")),
+    () => null,
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
