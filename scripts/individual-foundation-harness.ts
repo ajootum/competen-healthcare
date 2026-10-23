@@ -329,6 +329,21 @@ function main() {
     && /practice_sign_in/.test(allow) && !/individual_/.test(allow) && /if \(!FLAGS\[flag\]\) return NextResponse\.json/.test(flagsRoute)
     && !walk("src").map(posix).some(f => /["'`]individual_app["'`]/.test(strip(readFileSync(f, "utf8"))) && f !== "src/lib/individual/gate.ts"),
     `writers: ${flagWriters.join(", ")}`);
+  // CONFIG-002 item 3, the capability half: whatever Individual HQ rights exist -- hq.individual.pilot.grant
+  // (370), hq.individual.config.manage (IND-007, 376) or a later one -- none may reach the flag writer. Its
+  // gate is hq.practice.flags.manage, and no migration statement may grant that right to an Individual
+  // position. And the gate reads ONE store, so no other configuration (a WCE override, an env var) can
+  // switch Individual on behind it.
+  const flagsGate = /hqApiGate\(\["hq\.practice\.flags\.manage"\]\)/.test(flagsRoute) && (flagsRoute.match(/hqApiGate\(/g) ?? []).length === 1;
+  const grantsToIndividual = readdirSync("supabase/migrations").filter(f => f.endsWith(".sql")).flatMap(f =>
+    readFileSync(join("supabase/migrations", f), "utf8").replace(/--.*$/gm, "").split(";")
+      .filter(st => /hq_position_capability/i.test(st) && /hq\.practice\.flags\.manage/.test(st) && /'individual_[a-z_]+'/.test(st))
+      .map(() => f));
+  const gateSrc = SRC.get("src/lib/individual/gate.ts") ?? "";
+  ok("12k. no Individual HQ right reaches the flag writer, and the gate reads only practice_platform_flags",
+    flagsGate && grantsToIndividual.length === 0
+    && (gateSrc.match(/\.from\(/g) ?? []).length === 1 && /\.from\("practice_platform_flags"\)/.test(gateSrc) && !/process\.env/.test(gateSrc),
+    `flagsGate=${flagsGate} grantsToIndividual=${grantsToIndividual.join(", ")}`);
 
   ok("9g. D10: no Individual code persists AI conversation",
     !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));
