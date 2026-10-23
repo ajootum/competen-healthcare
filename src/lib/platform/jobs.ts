@@ -86,7 +86,9 @@ const HANDLERS: Record<string, (admin: any) => Promise<string>> = {
   individual_professional_reminders: async (admin) => {
     const r = await scanProfessionalReminders(admin);
     if (r.sent) await emitPlatformEvent(admin, { event_type: "individual.professional_reminders_sent", severity: "info", payload: { sent: r.sent } });
-    return `${r.sent} reminder(s) sent${r.skipped ? ` · ${r.skipped} already sent` : ""}`;
+    // A failed send is released for the next run, and counted here so it stays visible (counts only).
+    if (r.failed) await emitPlatformEvent(admin, { event_type: "individual.professional_reminders_failed", severity: "warning", payload: { failed: r.failed } });
+    return `${r.sent} reminder(s) sent${r.skipped ? ` · ${r.skipped} already sent` : ""}${r.failed ? ` · ${r.failed} not delivered, retried next run` : ""}`;
   },
   delivery_event_consumer: async (admin) => {
     const r = await processEvents(admin);

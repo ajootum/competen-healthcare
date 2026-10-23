@@ -3,6 +3,7 @@ import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { loadIndividualPassport } from "@/lib/individual/passport";
 import { experiencePage } from "../../_components/shell-context";
 import { PageHeader, focusRing } from "../../_components/chrome";
+import HomeReminders from "../../_components/professional/HomeReminders";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -40,6 +41,8 @@ export default async function ExperienceHome({ params }: { params: Promise<{ exp
   return (
     <>
       <PageHeader accent={x.accent} eyebrow={x.tagline} title={firstName ? `Hello, ${firstName}` : x.name} intro={x.homeIntro} />
+      {/* Competen Professional: renewals due, while the person's in-app reminder switch is on (migration 374). */}
+      {experience === "professional" && <HomeReminders admin={ctx.admin} userId={ctx.userId} />}
 
       {x.modules.some(m => m.nav !== false) && (
         <section aria-labelledby="modules-h" className="mb-8">
