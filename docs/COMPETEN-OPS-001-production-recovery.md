@@ -147,6 +147,19 @@ Scripts are in `ops/backup/` and installed at `C:\Users\elish\CompetenBackup\bin
 - **Individual dark:** all 38 Individual page URLs return 404 with the root title; all 31 Individual API method checks return 404; the HQ grant APIs return 403.
 - **No regression:** the public site, Practice, Enterprise, Recruitment, Staff, Platform and `/login` all respond 200. The public disclosure harness gives 213 assertions and 1 failure, the same as the pre-deploy baseline.
 
+### 11b. Release batch 374 → 375 (production, 2026-10-23, owner GO)
+
+| Step | Detail |
+|---|---|
+| Tier | **Low**, under the amended §8. 374: two constant-default columns on the product-owned `individual_professional_profile` (0 rows). 375: one new table with its own RLS. |
+| Recovery reference | `competen-production-20261023-1246.dump.gpg`, sha256 `e73c1b6e…`, taken immediately before (R11). Isolated restore **PASS**: 729/729 tables, 0 errors. |
+| Pre-check | Dependencies `individual_professional_profile` and `individual_scholar_material` present. 374 columns absent; 375 table absent; 0 profile rows; `individual_app` has no row. Baseline 686 tables, 332 policies. |
+| Files | From `main`; checksums match staging (374 `8ccd5a48…`, 375 `782295e1…`). Applied by the owner in the SQL editor, one at a time. |
+| 374 | Verified: `reminder_in_app` boolean NOT NULL default true; `reminder_email` boolean NOT NULL default false. The profile's own-row policy is unchanged; 0 rows; totals unchanged. |
+| 375 | Verified: `individual_scholar_passport_item` with RLS on, one `read_own` SELECT policy, the composite key `(material_id, user_id)` to the owner's own material with cascade, and 0 rows. **687 tables, 333 policies**; functions unchanged (379). Buckets unchanged; no `storage.objects` policies. |
+| Gate | `individual_app` has no row, before and after. |
+| Rollback | `docs/evidence/COMPETEN-OPS-001/ROLLBACK-374-375.sql`. Not used. |
+
 ## 12. Outstanding recovery requirements
 
 | # | Requirement | Status |
