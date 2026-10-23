@@ -19,6 +19,8 @@ export type CompetencyRef = {
   name: string;
   frameworkId: string;
   frameworkName: string;
+  /** The level the framework expects (S1 CatalogueCompetency.expectedLevel), or null when it sets none. Orders the gaps. */
+  expectedLevel?: { score: number; label: string } | null;
 };
 
 export type QuestionCompetency = { questionId: string; competencyId: string };
@@ -31,7 +33,11 @@ export interface CompetencyCatalogueSource {
   competenciesFor(admin: any, userId: string): Promise<SourceRead<CompetencyRef[]>>;
 }
 
-/** S2: which competency each of these questions exercises, or null while questions are not mapped. */
+/**
+ * S2: which competency each of these questions exercises, or null while questions are not mapped.
+ * ⚠ ACCEPTED MAPS ONLY. An adapter returns only mappings a decision has accepted (IND-004 388), never a
+ * proposal alone: coverage must not count a competency on the strength of a map nobody has accepted.
+ */
 export interface CompetencyMappingSource {
   readonly name: string;
   mappingsFor(admin: any, userId: string, questionIds: readonly string[]): Promise<SourceRead<QuestionCompetency[]>>;

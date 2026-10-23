@@ -25,7 +25,10 @@ import type { CompetencyRef, QuestionCompetency } from "./competency-sources";
 
 export type Kind = "mcq" | "case";
 export type IMaterial = { id: string; title: string; createdAt?: string };
-export type IQuestion = { id: string; materialId: string; kind: Kind };
+/** caseId (IND-004 388): a question that belongs to a clinical case counts as reasoning, whatever its kind. */
+export type IQuestion = { id: string; materialId: string; kind: Kind; caseId?: string | null };
+/** Reasoning is scenarios and case questions. Knowledge is everything else. Kept apart, never blended. */
+export const isReasoning = (q: IQuestion) => q.kind === "case" || !!q.caseId;
 export type IAttempt = { questionId: string; correct: boolean; answeredAt: string };
 export type ICard = { materialId: string; status: "active" | "mastered"; nextReviewAt: string };
 export type IReview = { materialId: string; quality: number; reviewedAt: string };
@@ -42,7 +45,9 @@ export type NotMeasured = { state: "not_measured"; reason: string };
 
 export type Coverage =
   | { state: "measured"; framework: string; total: number; practised: number; practisedCorrect: number;
-      gaps: { id: string; name: string }[]; rows: { id: string; name: string; answered: number; latestCorrect: number }[] }
+      /** Not yet practised, highest expected level first (S1 expectedLevel), then by name. */
+      gaps: { id: string; name: string; expected: string | null }[];
+      rows: { id: string; name: string; answered: number; latestCorrect: number; expected: string | null }[] }
   | NotMeasured;
 
 export type Engagement =
@@ -109,13 +114,14 @@ export function buildCoverage(
     const qs = byComp.get(c.id) ?? [];
     const answered = qs.filter(q => idx.latest.has(q)).length;
     const latestCorrect = qs.filter(q => idx.latest.get(q)?.correct).length;
-    return { id: c.id, name: c.name, answered, latestCorrect };
+    return { id: c.id, name: c.name, answered, latestCorrect, expected: c.expectedLevel?.label ?? null, score: c.expectedLevel?.score ?? -1 };
   });
   const frameworks = [...new Set(catalogue.map(c => c.frameworkName))];
   return {
     state: "measured", framework: frameworks.join(", "), total: rows.length,
     practised: rows.filter(r => r.answered > 0).length, practisedCorrect: rows.filter(r => r.latestCorrect > 0).length,
-    gaps: rows.filter(r => r.answered === 0).map(r => ({ id: r.id, name: r.name })), rows,
+    gaps: rows.filter(r => r.answered === 0).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).map(r => ({ id: r.id, name: r.name, expected: r.expected })),
+    rows: rows.map(({ score: _s, ...r }) => r),
   };
 }
 
@@ -160,7 +166,7 @@ export function buildKnowledge(input: {
   cards: readonly ICard[]; reviews: readonly IReview[] | null; today: string; t: Thresholds;
 }): Knowledge {
   const { materials, questions, idx, cards, reviews, today, t } = input;
-  const mcq = questions.filter(q => q.kind === "mcq");
+  const mcq = questions.filter(q => !isReasoning(q));
   if (mcq.length === 0) return { state: "not_measured", reason: "No practice questions have been written from your notes yet." };
   const p = performanceOf(mcq, idx);
   if (p.answered === 0) return { state: "not_measured", reason: "You have not answered any practice questions yet." };
@@ -188,7 +194,7 @@ export function buildKnowledge(input: {
 }
 
 export function buildReasoning(questions: readonly IQuestion[], idx: ReturnType<typeof attemptIndex>, t: Thresholds): Reasoning {
-  const cases = questions.filter(q => q.kind === "case");
+  const cases = questions.filter(isReasoning);
   if (cases.length === 0) return { state: "not_measured", reason: "No practice scenarios have been written from your notes yet." };
   const p = performanceOf(cases, idx);
   if (p.answered === 0) return { state: "not_measured", reason: "You have not worked through any practice scenarios yet." };

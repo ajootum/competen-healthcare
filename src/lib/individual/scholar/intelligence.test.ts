@@ -150,3 +150,23 @@ describe("below a threshold, the recommendation says how many more answers are n
     expect(li.recommendations.find(r => r.id === "more-scenarios-to-measure")).toMatchObject({ title: "Work through 3 more practice scenarios", href: "/individual/scholar/study/apply" });
   });
 });
+
+describe("S1/S2 readiness: expected levels order the gaps, and case questions are reasoning", () => {
+  it("gaps come highest expected level first, with the level named", () => {
+    const catalogue = [
+      { id: "c1", code: null, name: "Asepsis", frameworkId: "f", frameworkName: "CF-FOUND", expectedLevel: { score: 2, label: "Competent" } },
+      { id: "c2", code: null, name: "Handover", frameworkId: "f", frameworkName: "CF-FOUND", expectedLevel: { score: 4, label: "Proficient" } },
+      { id: "c3", code: null, name: "Consent", frameworkId: "f", frameworkName: "CF-FOUND", expectedLevel: null },
+    ];
+    const li = buildIntelligence({ ...base, questions: [q("a", "m1")], attempts: [], catalogue, mappings: [] });
+    expect(li.coverage.state === "measured" && li.coverage.gaps).toEqual([
+      { id: "c2", name: "Handover", expected: "Proficient" }, { id: "c1", name: "Asepsis", expected: "Competent" }, { id: "c3", name: "Consent", expected: null },
+    ]);
+  });
+  it("a question with a case_id counts as reasoning, never as knowledge", () => {
+    const questions = ["a", "b", "c", "d", "e"].map(id => ({ id, materialId: "m1", kind: "mcq" as const, caseId: "case-1" }));
+    const li = buildIntelligence({ ...base, questions, attempts: questions.map(x => at(x.id, true)) });
+    expect(li.reasoning).toMatchObject({ state: "measured", answered: 5 });
+    expect(li.knowledge.state).toBe("not_measured");
+  });
+});
