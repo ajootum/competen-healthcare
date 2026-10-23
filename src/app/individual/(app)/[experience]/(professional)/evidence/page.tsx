@@ -2,7 +2,8 @@ import Link from "next/link";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { loadSharedFrameworks, referenceNames } from "@/lib/individual/professional/frameworks";
-import { DOCUMENT_MAX_LABEL, EVIDENCE_KIND, REMINDER_HORIZON_DAYS } from "@/lib/individual/professional/vocabulary";
+import { DOCUMENT_MAX_LABEL, EVIDENCE_KIND } from "@/lib/individual/professional/vocabulary";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { dueRenewals } from "@/lib/individual/professional/renewals";
 import { loadReminderPrefs } from "@/lib/individual/professional/preferences";
 import ReminderSettings from "../../../../_components/professional/ReminderSettings";
@@ -36,7 +37,8 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, frameworks, prefs] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadSharedFrameworks(ctx.admin), loadReminderPrefs(ctx.admin, ctx.userId)]);
+  const [record, frameworks, prefs, policy] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadSharedFrameworks(ctx.admin), loadReminderPrefs(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
+  const horizonDays = policy.reminderHorizonDays;
   const evidence = record.evidence;
   const names = evidence ? await referenceNames(ctx.admin,
     [...new Set(evidence.map(e => e.framework_id).filter((v): v is string => !!v))],
@@ -47,7 +49,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
   const due = prefs.inApp ? dueRenewals({
     registration: record.profile ? { body: record.profile.self_declared_registration_body, expiresOn: record.profile.self_declared_registration_expires_on } : null,
     credentials: evidence ?? [],
-  }, today) : [];
+  }, today, horizonDays) : [];
 
   return (
     <>
@@ -107,7 +109,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
               <Field label="Title" htmlFor="ev-title"><input id="ev-title" name="title" required minLength={3} maxLength={200} className={inputCls} placeholder="e.g. Basic Life Support certificate" /></Field>
               <Field label="Issuing body (credentials)" htmlFor="ev-body"><input id="ev-body" name="issuingBody" maxLength={160} className={inputCls} /></Field>
               <Field label="Date issued or done (optional)" htmlFor="ev-issued"><input id="ev-issued" name="issuedOn" type="date" max={today} className={inputCls} /></Field>
-              <Field label="Expiry date (credentials, optional)" htmlFor="ev-exp" hint={`You are reminded ${REMINDER_HORIZON_DAYS} days before: in Competen, and by email if you turn that on under Reminders.`}><input id="ev-exp" name="expiresOn" type="date" className={inputCls} /></Field>
+              <Field label="Expiry date (credentials, optional)" htmlFor="ev-exp" hint={`You are reminded ${horizonDays} days before: in Competen, and by email if you turn that on under Reminders.`}><input id="ev-exp" name="expiresOn" type="date" className={inputCls} /></Field>
               <Field label="Development need (optional)" htmlFor="ev-need">
                 <select id="ev-need" name="needId" className={inputCls} defaultValue="">
                   <option value="">Not linked to a need</option>
@@ -126,7 +128,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
 
       <Section title="Reminders" note="Your choice, for your own records only. Separate from any employer's notifications.">
         {prefs.configurable
-          ? <ReminderSettings accent={x.accent} inApp={prefs.inApp} email={prefs.email} />
+          ? <ReminderSettings accent={x.accent} inApp={prefs.inApp} email={prefs.email} horizonDays={horizonDays} />
           : <Empty>Reminder settings are not available on this environment yet. Renewals due are shown here, and no reminder is emailed.</Empty>}
       </Section>
 

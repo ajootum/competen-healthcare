@@ -140,7 +140,10 @@ function main() {
     return handlers > 0 && [...s.matchAll(/requireIndividualContext\(/g)].length < handlers;
   });
   ok("5a. every mutating Individual API handler calls requireIndividualContext", routes.length >= 3 && unguarded.length === 0, unguarded.join(", "));
-  const hqRoutes = FILES.filter(f => f.startsWith("src/app/api/hq/individual/") && f.endsWith("route.ts"));
+  // The pilot-GRANT routes. COMPETEN-CONFIG-002 added /api/hq/individual/config, which is gated on its own
+  // capability (hq.individual.config.manage) and pinned by scripts/individual-config-harness.ts G1, so it is
+  // not one of these. Every route under grants/ still is.
+  const hqRoutes = FILES.filter(f => f.startsWith("src/app/api/hq/individual/grants/") && f.endsWith("route.ts"));
   const hqUngated = hqRoutes.filter(f => !/hqApiGate\(\["hq\.individual\.pilot\.grant"\]\)/.test(SRC.get(f) ?? "")
     || !/targetUserId === ctx\.userId/.test(SRC.get(f) ?? ""));
   ok("5b. D9: every HQ Individual route is gated on hq.individual.pilot.grant and refuses acting on yourself",

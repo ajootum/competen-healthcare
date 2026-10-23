@@ -58,6 +58,9 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // COMPETEN-IND-003 D9 (migration 370): the Competen Individual pilot-grant right. Platform space, held by
   // the Individual Product Administrator position (product line `individual`). A write right with no page.
   { code: "hq.individual.pilot.grant",        space: "platform"  },
+  // COMPETEN-CONFIG-002 (migration 376): set the Competen Individual policy within its fixed hard limits, on
+  // /super-admin/individual/configuration. Same position. Not super-admin, not the individual_app gate.
+  { code: "hq.individual.config.manage",      space: "platform"  },
   { code: "hq.practice.operations.view",      space: "practice"  },
   // ⚠ ADDED BY MIGRATION 273, and this list had to follow it. The DB gained the capability and this
   // catalogue did not, so B1 went red -- which is the drift control working.
@@ -178,6 +181,7 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/governance",            capability: "hq.quality.governance.view" },
   { prefix: "/super-admin/cgr",                   capability: "hq.quality.regulation.view" },
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },
+  { prefix: "/super-admin/individual",            capability: "hq.individual.config.manage" },
 
   // ── The Product Director workspace ────────────────────────────────────────────────────────────────
   //
