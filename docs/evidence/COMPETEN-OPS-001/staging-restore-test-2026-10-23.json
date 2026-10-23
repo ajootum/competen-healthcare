@@ -1,0 +1,47 @@
+﻿{
+    "test":  "cb-restore-20261023-090635",
+    "profile":  "staging",
+    "archive":  {
+                    "tables_with_data":  "723",
+                    "rows":  "8749",
+                    "file":  "competen-staging-20261023-0901.dump.gpg"
+                },
+    "started":  "2026-10-23T09:06:35.8875700+03:00",
+    "isolation":  "docker --network none, scratch volume, removed after",
+    "archive_sha256":  "b7428dd2d4c0d175bd066d649ad544f47f51ebcaf1cc0719e7d73e13b21bc55a",
+    "restore":  {
+                    "restore_rc":  "0",
+                    "restore_errors":  "0",
+                    "restore_seconds":  "28"
+                },
+    "restored":  {
+                     "checked":  "723",
+                     "mismatches":  "0",
+                     "public_tables":  "685",
+                     "public_rls_tables":  "685",
+                     "public_policies":  "332",
+                     "public_functions":  "379",
+                     "auth_users":  "16",
+                     "schema_fingerprint":  "5c9e0e09ffd22c47c540b1b03bb801fe"
+                 },
+    "live":  {
+                 "public_tables":  "685",
+                 "public_rls_tables":  "685",
+                 "public_policies":  "332",
+                 "public_functions":  "379",
+                 "auth_users":  "16",
+                 "schema_fingerprint":  "5c9e0e09ffd22c47c540b1b03bb801fe"
+             },
+    "live_matches":  {
+                         "public_tables":  true,
+                         "public_rls_tables":  true,
+                         "public_policies":  true,
+                         "public_functions":  true,
+                         "auth_users":  true,
+                         "schema_fingerprint":  true
+                     },
+    "cleanup_containers_left":  0,
+    "cleanup_volumes_left":  0,
+    "result":  "PASS",
+    "elapsed_seconds":  65
+}

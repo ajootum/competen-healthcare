@@ -1,0 +1,47 @@
+﻿{
+    "test":  "cb-restore-20261023-095600",
+    "profile":  "production",
+    "archive":  {
+                    "tables_with_data":  "715",
+                    "rows":  "105803",
+                    "file":  "competen-production-20261023-0948.dump.gpg"
+                },
+    "started":  "2026-10-23T09:56:00.6613369+03:00",
+    "isolation":  "docker --network none, scratch volume, removed after",
+    "archive_sha256":  "e6d7ac4db3dd5d145f306b15d0a45050b9cb31d6190668d491c577ebe9141122",
+    "restore":  {
+                    "restore_rc":  "0",
+                    "restore_errors":  "0",
+                    "restore_seconds":  "34"
+                },
+    "restored":  {
+                     "checked":  "715",
+                     "mismatches":  "0",
+                     "public_tables":  "672",
+                     "public_rls_tables":  "672",
+                     "public_policies":  "318",
+                     "public_functions":  "379",
+                     "auth_users":  "47",
+                     "schema_fingerprint":  "67c8b8408d224392a05265974041becb"
+                 },
+    "live":  {
+                 "public_tables":  "672",
+                 "public_rls_tables":  "672",
+                 "public_policies":  "318",
+                 "public_functions":  "379",
+                 "auth_users":  "47",
+                 "schema_fingerprint":  "67c8b8408d224392a05265974041becb"
+             },
+    "live_matches":  {
+                         "public_tables":  true,
+                         "public_rls_tables":  true,
+                         "public_policies":  true,
+                         "public_functions":  true,
+                         "auth_users":  true,
+                         "schema_fingerprint":  true
+                     },
+    "cleanup_containers_left":  0,
+    "cleanup_volumes_left":  0,
+    "result":  "PASS",
+    "elapsed_seconds":  84
+}
