@@ -6,7 +6,8 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
-import { AI_LABEL, ALLOWED_MIME, CONSENT_NOTICE, DOCX_MIME, MARKED_AGAINST_NOTES, MAX_UPLOAD_BYTES, PDF_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE } from "@/lib/individual/scholar/config";
+import { AI_LABEL, ALLOWED_MIME, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, MAX_UPLOAD_BYTES, PDF_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
+import type { ConsentStatus, LegalLink } from "@/lib/individual/scholar/consent-gate";
 
 // The interactive pieces of My Learning. Each one calls a gate-3 API route and shows what the route says,
 // including its refusals, in words. Nothing here decides access or ownership: the routes do, by the
@@ -43,11 +44,19 @@ export function AiBadge() {
 
 // ── CONSENT ────────────────────────────────────────────────────────────────────────────────────────
 
-/** A legal document the notice points to, from the Individual legal configuration (never an invented URL). */
-export type LegalLink = { title: string; version: string; url: string | null };
+const CONSENT_BADGE: Record<ConsentStatus, { text: string; cls: string }> = {
+  on: { text: "On", cls: "bg-emerald-50 text-emerald-800" },
+  off: { text: "Off", cls: "bg-gray-100 text-gray-700" },
+  outdated: { text: "Agree again", cls: "bg-amber-50 text-amber-900" },
+  awaiting_legal: { text: "Not available yet", cls: "bg-gray-100 text-gray-700" },
+};
 
-export function ConsentPanel({ granted, grantedAt, revokedAt, legal }: {
-  granted: boolean; grantedAt: string | null; revokedAt: string | null; legal: LegalLink[];
+/**
+ * The person's AI-help switch (consent-gate.ts). `recorded`: a grant is on file, whatever its version, so
+ * it can be withdrawn even while it no longer counts (an earlier notice, or the documents unpublished).
+ */
+export function ConsentPanel({ status, recorded, grantedAt, revokedAt, legal }: {
+  status: ConsentStatus; recorded: boolean; grantedAt: string | null; revokedAt: string | null; legal: LegalLink[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -68,9 +77,13 @@ export function ConsentPanel({ granted, grantedAt, revokedAt, legal }: {
     <div className="mt-2 space-y-2 text-[13.5px] leading-relaxed text-gray-700">
       <h3 className="text-[14px] font-bold text-gray-900">{CONSENT_NOTICE.heading}</h3>
       {CONSENT_NOTICE.paragraphs.map(p => <p key={p}>{p}</p>)}
+      <h4 className="text-[13.5px] font-bold text-gray-900">How it works</h4>
+      <ul className="list-disc space-y-1 pl-5">
+        {CONSENT_NOTICE.howItWorks.map(p => <li key={p}>{p}</li>)}
+      </ul>
       <p>{CONSENT_NOTICE.review}</p>
       <ul className="space-y-1 text-[13px]">
-        {legal.length === 0 && <li className="text-gray-600">The Privacy Notice and Terms of Service are not published for this service yet.</li>}
+        {legal.length === 0 && <li className="text-gray-600">The Privacy Notice and Terms of Use are not published for this service yet.</li>}
         {legal.map(d => (
           <li key={`${d.title}-${d.version}`}>
             {d.url
@@ -86,11 +99,22 @@ export function ConsentPanel({ granted, grantedAt, revokedAt, legal }: {
     <section aria-labelledby="consent-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="consent-h" className="text-[16px] font-bold text-gray-900">AI help with your notes</h2>
-        <span className={`rounded-full px-2.5 py-1 text-[12px] font-bold ${granted ? "bg-emerald-50 text-emerald-800" : "bg-gray-100 text-gray-700"}`}>
-          {granted ? "On" : "Off"}
+        <span className={`rounded-full px-2.5 py-1 text-[12px] font-bold ${CONSENT_BADGE[status].cls}`}>
+          {CONSENT_BADGE[status].text}
         </span>
       </div>
-      {granted ? (
+      {status === "awaiting_legal" ? (
+        <>
+          <p className="mt-2 text-[13.5px] text-gray-700">{CONSENT_AWAITING_LEGAL} You can upload and read your material in the meantime.</p>
+          <details className="mt-2 text-[13px] text-gray-600">
+            <summary className={`cursor-pointer font-semibold text-gray-700 ${focusRing}`}>What AI help will involve</summary>
+            {notice}
+          </details>
+          {recorded && (
+            <button type="button" className={`${ghost} mt-3`} disabled={busy} onClick={() => set(false)}>{busy ? "Saving…" : "Withdraw my earlier agreement"}</button>
+          )}
+        </>
+      ) : status === "on" ? (
         <>
           <p className="mt-2 text-[13.5px] text-gray-700">
             Explanations and practice questions are on{grantedAt ? ` (since ${date(grantedAt)})` : ""}. Your private uploads are not shared with other learners.
@@ -105,10 +129,17 @@ export function ConsentPanel({ granted, grantedAt, revokedAt, legal }: {
       ) : (
         <>
           <p className="mt-2 text-[13.5px] text-gray-700">
-            {revokedAt ? `Off since ${date(revokedAt)}. ` : ""}Turn it on to get explanations and practice questions from your notes. You can upload and read your material without it.
+            {status === "outdated"
+              ? CONSENT_UPDATED
+              : <>{revokedAt ? `Off since ${date(revokedAt)}. ` : ""}Turn it on to get explanations and practice questions from your notes. You can upload and read your material without it.</>}
           </p>
           {!reviewing ? (
-            <button type="button" className={`${btn} mt-3`} style={{ background: accent }} onClick={() => setReviewing(true)}>Review and turn on</button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" className={btn} style={{ background: accent }} onClick={() => setReviewing(true)}>{status === "outdated" ? "Review the updated notice" : "Review and turn on"}</button>
+              {status === "outdated" && recorded && (
+                <button type="button" className={ghost} disabled={busy} onClick={() => set(false)}>{busy ? "Saving…" : "Turn off"}</button>
+              )}
+            </div>
           ) : (
             <div className="mt-2 rounded-xl bg-gray-50 p-3">
               {notice}
@@ -181,7 +212,7 @@ export function UploadPanel() {
         className={`mt-1.5 block w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-[14px] text-gray-800 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:font-semibold ${focusRing}`} />
       <label className="mt-4 flex items-start gap-3 text-[14px] text-gray-800">
         <input type="checkbox" checked={attested} onChange={e => setAttested(e.target.checked)} className="mt-1 h-5 w-5 shrink-0" />
-        <span>I confirm this file contains no information that could identify a patient.</span>
+        <span>{UPLOAD_ATTESTATION}</span>
       </label>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button type="submit" className={btn} style={{ background: accent }} disabled={!file || !attested || !!stage}>
@@ -201,7 +232,7 @@ type Source = { tag: string; chunkId: string; materialId: string; citation: stri
 type Explained = { q: string; answer?: string; message?: string; sources: Source[]; provenance?: { model: string; promptVersion: string } };
 
 
-export function ExplainPanel({ materialId, consent, title = "Ask your notes", hint }: { materialId?: string; consent: boolean; title?: string; hint?: string }) {
+export function ExplainPanel({ materialId, consent, offMessage, title = "Ask your notes", hint }: { materialId?: string; consent: boolean; offMessage?: string; title?: string; hint?: string }) {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -222,7 +253,7 @@ export function ExplainPanel({ materialId, consent, title = "Ask your notes", hi
       <h2 id="explain-h" className="text-[16px] font-bold text-gray-900">{title}</h2>
       <p className="mt-1 text-[13.5px] text-gray-600">{hint ?? "Explanations use only your uploaded material and cite the page or section each point came from. They are not saved."}</p>
       {!consent ? (
-        <p className="mt-3 rounded-xl bg-gray-50 px-3.5 py-3 text-[13.5px] text-gray-700">Turn on AI help (in My Learning) to ask for explanations.</p>
+        <p className="mt-3 rounded-xl bg-gray-50 px-3.5 py-3 text-[13.5px] text-gray-700">{offMessage ?? "Turn on AI help (in My Learning) to ask for explanations."}</p>
       ) : (
         <form onSubmit={ask} className="mt-3">
           <label htmlFor={`explain-q-${materialId ?? "all"}`} className="sr-only">Your question</label>
