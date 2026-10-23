@@ -316,7 +316,7 @@ async function main() {
     ok("L2. go deeper answers from the notes; any background beyond them is separate, and free of figures and doses when shown",
       deeper.ok && deeper.check.ok && (deeper.supplementary === null || !deeper.supplementary.ok || !/\d|dose|mg\b/i.test(deeper.supplementary.text)));
     const t1 = await twice(() => runExplain(a, "Teach me this section step by step.", [p1!], "tutor"), "tutor turn 1");
-    const t2 = t1.ok && t1.check.ok ? await twice(() => runExplain(a, "You count it for a full minute.", [p1!], "tutor", [{ role: "tutor", text: (t1.check as { text: string }).text }]), "tutor turn 2") : null;
+    const t2 = t1.ok && t1.check.ok ? await twice(() => runExplain(a, "You count it for a full minute.", [p1!], "tutor", [{ speaker: "tutor", text: (t1.check as { text: string }).text }]), "tutor turn 2") : null;
     note(`tutor: turn 1 ${t1.ok ? (t1.check.ok ? "shown" : t1.check.reason) : t1.error}; turn 2 ${t2 ? (t2.ok ? (t2.check.ok ? "shown" : t2.check.reason) : t2.error) : "-"}`);
     ok("L3. the tutor teaches a step and continues from the student's reply, each turn checked against the notes",
       t1.ok && t1.check.ok && !!t2 && t2.ok && t2.check.ok && /\[S1\]/.test(t2.check.text));

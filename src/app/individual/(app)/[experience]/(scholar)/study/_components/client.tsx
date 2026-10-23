@@ -410,7 +410,7 @@ export function ChunkActions({ chunkId, consent }: { chunkId: string; consent: b
 // ── S3: TUTOR ── one small step at a time, from one section. The conversation lives in this component
 // only: nothing is stored (D10), and each turn is checked against the notes like any explanation.
 
-type TutorTurn = { role: "tutor" | "student"; text: string; supplementary?: Supplementary };
+type TutorTurn = { speaker: "tutor" | "student"; text: string; supplementary?: Supplementary };
 
 function TutorPanel({ chunkId }: { chunkId: string }) {
   const [turns, setTurns] = useState<TutorTurn[]>([]);
@@ -421,7 +421,7 @@ function TutorPanel({ chunkId }: { chunkId: string }) {
   const [held, setHeld] = useState("");
   async function send(text: string, first: boolean) {
     setBusy(true); setError(""); setHeld("");
-    const history = first ? [] : turns.map(t => ({ role: t.role, text: t.text }));
+    const history = first ? [] : turns.map(t => ({ speaker: t.speaker, text: t.text }));
     const r = await post("/api/individual/scholar/explain", first
       ? { question: text, chunkId, mode: "tutor" }
       : { question: text, chunkIds: ids, mode: "tutor", history });
@@ -429,7 +429,7 @@ function TutorPanel({ chunkId }: { chunkId: string }) {
     if (!r.ok) { setError(r.json.error ?? "The tutor could not answer just now."); return; }
     if (!r.json.answer) { setHeld(r.json.message ?? "That answer was not shown."); return; }
     if (first) setIds(r.json.passageIds ?? [chunkId]);
-    setTurns(list => [...list, ...(first ? [] : [{ role: "student" as const, text }]), { role: "tutor" as const, text: r.json.answer, supplementary: r.json.supplementary }]);
+    setTurns(list => [...list, ...(first ? [] : [{ speaker: "student" as const, text }]), { speaker: "tutor" as const, text: r.json.answer, supplementary: r.json.supplementary }]);
     setReply("");
   }
   return (
@@ -442,10 +442,10 @@ function TutorPanel({ chunkId }: { chunkId: string }) {
       )}
       <ol aria-live="polite" className="mt-3 space-y-3">
         {turns.map((t, i) => (
-          <li key={i} className={t.role === "tutor" ? "rounded-lg bg-white p-3 text-[14.5px] leading-relaxed text-gray-800" : "ml-6 rounded-lg bg-gray-900 p-3 text-[14px] text-white"}>
-            <p className="sr-only">{t.role === "tutor" ? "Tutor" : "You"}</p>
+          <li key={i} className={t.speaker === "tutor" ? "rounded-lg bg-white p-3 text-[14.5px] leading-relaxed text-gray-800" : "ml-6 rounded-lg bg-gray-900 p-3 text-[14px] text-white"}>
+            <p className="sr-only">{t.speaker === "tutor" ? "Tutor" : "You"}</p>
             <p className="whitespace-pre-wrap">{t.text}</p>
-            {t.role === "tutor" && <BeyondNotes s={t.supplementary} />}
+            {t.speaker === "tutor" && <BeyondNotes s={t.supplementary} />}
           </li>
         ))}
       </ol>

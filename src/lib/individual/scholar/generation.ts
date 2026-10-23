@@ -138,12 +138,12 @@ export function explainSystem(mode: ExplainMode): string {
 export const explainPromptVersion = (mode: ExplainMode) =>
   mode === "explain" ? PROMPT_VERSIONS.explain : `${PROMPT_VERSIONS.explainModes}:${mode}`;
 
-export type TutorTurn = { role: "tutor" | "student"; text: string };
+export type TutorTurn = { speaker: "tutor" | "student"; text: string };
 
 export function modeUserPrompt(question: string, passages: Passage[], history: TutorTurn[]): string {
   if (!history.length) return explainUserPrompt(question, passages);
   const blocks = passages.map((p, i) => `[${passageTag(i)}] (${passageCitation(p)})\n${p.content}`);
-  const convo = history.map(t => `${t.role === "tutor" ? "TUTOR" : "STUDENT"}: ${t.text}`).join("\n\n");
+  const convo = history.map(t => `${t.speaker === "tutor" ? "TUTOR" : "STUDENT"}: ${t.text}`).join("\n\n");
   return `PASSAGES FROM MY NOTES:\n\n${blocks.join("\n\n")}\n\nOUR CONVERSATION SO FAR:\n\n${convo}\n\nMY REPLY: ${question}`;
 }
 

@@ -40,9 +40,9 @@ export async function POST(req: Request) {
   if (!mode) return NextResponse.json({ error: "Unknown way of explaining." }, { status: 400 });
   const rawHistory: unknown[] = mode === "tutor" && Array.isArray(body?.history) ? body.history : [];
   const history: TutorTurn[] = rawHistory.slice(-TUTOR_MAX_TURNS).flatMap(raw => {
-    const t = raw as { role?: unknown; text?: unknown } | null;
-    return (t?.role === "tutor" || t?.role === "student") && typeof t.text === "string" && t.text.trim()
-      ? [{ role: t.role, text: t.text.trim().slice(0, 1500) }] : [];
+    const t = raw as { speaker?: unknown; text?: unknown } | null;
+    return (t?.speaker === "tutor" || t?.speaker === "student") && typeof t.text === "string" && t.text.trim()
+      ? [{ speaker: t.speaker, text: t.text.trim().slice(0, 1500) }] : [];
   });
 
   let passages;
