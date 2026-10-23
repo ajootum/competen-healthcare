@@ -192,6 +192,13 @@ const STAGING: Listed[] = [
       + "reports PEND (exit 0, nothing created) until migration 370 is applied.",
   },
   {
+    file: "individual-access-harness.ts",
+    note: "COMPETEN-IND-ACCESS-001 s6 over HTTP: the public doors, the one login with the destination preserved, "
+      + "first-entry welcome, primary and switching, expired/revoked/ended, uninvited guidance, deep links, and the HQ "
+      + "pilot grant through its API (self, 18+, past end date, no capability). Needs a staging-pointed dev server at "
+      + "BASE_URL with individual_app ON; NEVER writes the flag (PEND when off). Own harness-access001-* fixtures.",
+  },
+  {
     file: "individual-professional-acceptance-harness.ts",
     note: "COMPETEN-IND-007 acceptance for Competen Professional: direct entry with no Scholar row, the whole journey, "
       + "schema-generated evidence classes, cross-person links refused, own-row RLS, once-only reminders, share carries own "

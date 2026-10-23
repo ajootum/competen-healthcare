@@ -12,9 +12,11 @@
 // LABELS stay "Students" and "Professionals" in solutions.ts -- only the route is the brand's. The
 // audience-to-product mapping is still the owner's 2026-08-11 one: both gate into Individual.
 //
-// ⚠ NEITHER EXPERIENCE CAN BE SIGNED INTO YET. Both doors lead to /individual/sign-in, the product-branded
-// coming-soon screen (access-doors.ts: "being_built"), and the primary action is a conversation. That is
-// the same honesty rule the rest of the public site keeps -- see products.ts `live: false`.
+// ⚠ BOTH DOORS LEAD TO /individual/sign-in, CARRYING THE EXPERIENCE (COMPETEN-IND-ACCESS-001 s3). While the
+// Individual release gate is off that door is the product-branded coming-soon screen (access-doors.ts:
+// "being_built") and the primary action here stays a conversation -- the honesty rule the rest of the
+// public site keeps (products.ts `live: false`). With the gate on, the same door funnels into the one
+// Competen sign-in with the experience preserved, so a Scholar visitor signs in once and lands in Scholar.
 //
 // ⚠ DISCLOSURE. scripts/public-disclosure-harness.ts sweeps these pages' rendered text against its
 // FORBIDDEN list. "AI-powered" is fine; the phrases "AI platform" and "Learning platform" are not, and
@@ -96,6 +98,8 @@ export type Experience = {
 
 const SIGN_IN = "/individual/sign-in";
 export const INDIVIDUAL_SIGN_IN = SIGN_IN;
+/** An experience page's "Sign in": the Individual door, naming the experience the visitor came from. */
+export const experienceSignIn = (k: ExperienceKey) => `${SIGN_IN}?experience=${k}`;
 
 /** The shared Competen enquiries mailbox -- the address every public conversation CTA uses today. */
 const COMPETEN_ENQUIRIES = "gabriel@semacast.com";

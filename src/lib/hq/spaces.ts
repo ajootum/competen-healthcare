@@ -56,7 +56,8 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.platform.metadata.view",        space: "platform"  },
   { code: "hq.platform.audit.view",           space: "platform"  },
   // COMPETEN-IND-003 D9 (migration 370): the Competen Individual pilot-grant right. Platform space, held by
-  // the Individual Product Administrator position (product line `individual`). A write right with no page.
+  // the Individual Product Administrator position (product line `individual`). Its one page is the pilot
+  // access screen, /super-admin/individual (COMPETEN-IND-ACCESS-001 s4).
   { code: "hq.individual.pilot.grant",        space: "platform"  },
   // COMPETEN-CONFIG-002 (migration 376): set the Competen Individual policy within its fixed hard limits, on
   // /super-admin/individual/configuration. Same position. Not super-admin, not the release gate.
@@ -183,6 +184,11 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },
   // The policy page only. /super-admin/individual itself is the pilot-grant page (IND-ACCESS-001, exact).
   { prefix: "/super-admin/individual/configuration", capability: "hq.individual.config.manage" },
+  // COMPETEN-IND-ACCESS-001 s4: the Competen Individual pilot access screen. The capability already existed
+  // (migration 370, D9) with no page; this declares the page it opens, so the intent map stays the whole truth.
+  // EXACT: the screen has no sub-routes, and a sibling Individual HQ page (IND-007 configuration) must not
+  // inherit the pilot-grant right by sitting under this prefix -- it declares its own entry.
+  { prefix: "/super-admin/individual",            capability: "hq.individual.pilot.grant", exact: true },
 
   // ── The Product Director workspace ────────────────────────────────────────────────────────────────
   //

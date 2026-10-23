@@ -5,6 +5,7 @@ import Link from "next/link";
 import { METHOD_LABELS, OUTCOME_CONFIG, type AssessmentMethod, type DecisionOutcome } from "@/lib/ckcm";
 import { outcomeFor } from "@/lib/engines/outcomes";
 import { SignaturePad, VoiceNoteButton, ScanButton } from "./CaptureTools";
+import { uploadEvidence as uploadEvidenceFile } from "@/lib/evidence/client-upload";
 
 // Conduct Assessment cockpit (client). Everything shown is backed by live data
 // or the assessor's own in-session input; assistant signals are rule-derived
@@ -226,17 +227,13 @@ export default function ConductCockpit({
 
   async function uploadEvidence(comp: CockpitComp, file: File) {
     setUploadBusy(comp.id); setError(null);
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("competency_id", comp.id);
-    fd.append("note", `Conduct Assessment session — ${comp.name}`);
-    const res = await fetch("/api/evidence", { method: "POST", body: fd });
-    const d = await res.json().catch(() => ({}));
-    if (res.ok && d.evidence) {
-      setUploads(prev => [...prev, { id: d.evidence.id, name: d.evidence.file_name, compName: comp.name }]);
+    // Straight to storage on a signed URL, so recordings up to 50 MB work on Vercel too.
+    const res = await uploadEvidenceFile(file, { competency_id: comp.id, note: `Conduct Assessment session — ${comp.name}` });
+    if (res.ok) {
+      setUploads(prev => [...prev, { id: res.evidence.id, name: res.evidence.file_name, compName: comp.name }]);
       logEvent(`Evidence attached — ${comp.name}`);
     } else {
-      setError(d.error ?? "Upload failed");
+      setError(res.error);
     }
     setUploadBusy(null);
   }

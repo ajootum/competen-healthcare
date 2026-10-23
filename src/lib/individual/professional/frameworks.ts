@@ -8,6 +8,13 @@
 // read. Migration 373 cannot express "the referenced framework has a null hospital_id" without a trigger,
 // so the rule is HERE, on every read and every write, and scripts/individual-professional-harness.ts pins
 // that every framework read in Professional code carries the null-hospital filter.
+//
+// ⚠ AND PUBLISHED ONLY (COMPETEN-CONFIG-002 P0). A framework a person may choose, or link a new record to,
+// must be `pub_status = 'published'` (migration 127's lifecycle: draft, in_review, approved, published,
+// archived). A draft or archived framework is not offered and is refused on write. referenceNames() still
+// names a framework an EXISTING record already points at, whatever its status now -- hiding the name of a
+// link the person made would rewrite their record.
+export const PUBLISHED = "published";
 
 export type SharedFramework = { id: string; name: string; library: string };
 export type SharedCompetency = { id: string; name: string; domain: string };
@@ -15,16 +22,16 @@ export type SharedCompetency = { id: string; name: string; domain: string };
 export async function loadSharedFrameworks(admin: any): Promise<SharedFramework[] | null> {
   try {
     const { data, error } = await admin.from("frameworks").select("id, name, library")
-      .is("hospital_id", null).eq("is_active", true).order("sort_order").order("name").limit(200);
+      .is("hospital_id", null).eq("is_active", true).eq("pub_status", PUBLISHED).order("sort_order").order("name").limit(200);
     return error ? null : (data ?? []);
   } catch { return null; }
 }
 
-/** The competencies of one SHARED framework, or null when it is not shared or could not be read. */
+/** The competencies of one SHARED, ACTIVE, PUBLISHED framework, or null when it is not one or could not be read. */
 export async function loadSharedCompetencies(admin: any, frameworkId: string): Promise<SharedCompetency[] | null> {
   try {
     const { data: fw, error: fwErr } = await admin.from("frameworks").select("id")
-      .eq("id", frameworkId).is("hospital_id", null).maybeSingle();
+      .eq("id", frameworkId).is("hospital_id", null).eq("is_active", true).eq("pub_status", PUBLISHED).maybeSingle();
     if (fwErr || !fw) return null;
     const { data, error } = await admin.from("framework_domains")
       .select("name, sort_order, framework_competencies(id, name, sort_order)")

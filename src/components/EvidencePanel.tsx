@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { uploadEvidence } from "@/lib/evidence/client-upload";
 
 // Reusable evidence attach/view strip (§E). Files upload through /api/evidence
 // into the private bucket; viewing opens a short-lived signed URL. Used on
@@ -23,14 +24,13 @@ export default function EvidencePanel({ entryId, credentialId, initial, canAttac
 
   async function upload(file: File) {
     setBusy(true); setError(null);
-    const form = new FormData();
-    form.append("file", file);
-    if (entryId) form.append("skill_log_entry_id", entryId);
-    if (credentialId) form.append("credential_id", credentialId);
-    const res = await fetch("/api/evidence", { method: "POST", body: form });
-    const body = await res.json().catch(() => ({}));
-    if (res.ok && body.evidence) setItems(prev => [...prev, body.evidence]);
-    else setError(body.error ?? "Upload failed");
+    // Straight to storage on a signed URL, so 10 MB documents and 50 MB recordings work on Vercel too.
+    const res = await uploadEvidence(file, {
+      ...(entryId ? { skill_log_entry_id: entryId } : {}),
+      ...(credentialId ? { credential_id: credentialId } : {}),
+    });
+    if (res.ok) setItems(prev => [...prev, res.evidence]);
+    else setError(res.error);
     setBusy(false);
     if (fileRef.current) fileRef.current.value = "";
   }
