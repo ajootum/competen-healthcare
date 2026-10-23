@@ -105,6 +105,8 @@ async function main() {
       out.compositeForeignKeys = fp.constraints.filter(r => /foreign key \(\w+, user_id\)/i.test(r.def));
       out.verifiedColumns = fp.columns.filter(r => /verif/i.test(r.column_name));
       out.scopeColumns = fp.columns.filter(r => /^(hospital_id|organisation_id|tenant_id|workspace_id)$/.test(r.column_name));
+      // Migration 374: the reminder preference columns on the own profile row.
+      out.reminderColumns = fp.columns.filter(r => /^reminder_(in_app|email)$/.test(r.column_name));
     }
     console.log(JSON.stringify(out, null, 2));
   } finally {

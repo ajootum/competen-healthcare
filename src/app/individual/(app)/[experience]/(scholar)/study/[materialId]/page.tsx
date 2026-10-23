@@ -10,6 +10,7 @@ import { PageHeader, StatePanel, Unreadable, focusRing, secondaryBtn } from "../
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
 import { ChunkActions, DeleteMaterial, ExplainPanel, QuestionCard } from "../_components/client";
+import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -52,7 +53,9 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
     readConsent(ctx.admin, ctx.userId),
     countDue(ctx.admin, ctx.userId),
   ]);
-  const consentOn = consent.ok && consent.data.granted;
+  const status = consent.ok ? consentStatus(consent.data, consentDocuments().published) : null;
+  const consentOn = status === "on";
+  const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
   const byChunk = new Map<string, ReturnType<typeof questionView>[]>();
   let caseCount = 0;
   if (questions.ok) {
@@ -78,8 +81,8 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
 
       {!consentOn && (
         <p className="mb-6 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">
-          AI help is off, so explanations and practice questions are not available. You can turn it on in{" "}
-          <Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`}>My Learning</Link>.
+          {offMessage}{" "}
+          <Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`}>Go to My Learning</Link>.
         </p>
       )}
 
@@ -87,7 +90,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
           view on the right. One column below lg, in the same order. */}
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-6">
       <div className="lg:order-2 lg:sticky lg:top-20">
-        <ExplainPanel materialId={m.id} consent={consentOn} title="Ask about this material" />
+        <ExplainPanel materialId={m.id} consent={consentOn} offMessage={offMessage ?? undefined} title="Ask about this material" />
       </div>
       <div className="lg:order-1">
 

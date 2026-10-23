@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { countMaterials, createUploadSlot } from "@/lib/individual/scholar/store";
-import { ALLOWED_MIME, BUCKET, MAX_MATERIALS_PER_PERSON, MAX_UPLOAD_BYTES, type MaterialMime } from "@/lib/individual/scholar/config";
+import { ALLOWED_MIME, BUCKET, MAX_MATERIALS_PER_PERSON, MAX_UPLOAD_BYTES, type MaterialMime, UPLOAD_ATTESTATION_REQUIRED } from "@/lib/individual/scholar/config";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   if (!Number.isFinite(size) || size <= 0 || size > MAX_UPLOAD_BYTES)
     return NextResponse.json({ error: `Files must be between 1 byte and ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.` }, { status: 400 });
   if (body?.piiAttested !== true)
-    return NextResponse.json({ error: "Confirm the file contains no patient-identifiable information." }, { status: 400 });
+    return NextResponse.json({ error: UPLOAD_ATTESTATION_REQUIRED }, { status: 400 });
 
   const count = await countMaterials(ctx.admin, ctx.userId);
   if (count === null) return NextResponse.json({ error: "Your study space could not be read just now. Try again shortly." }, { status: 503 });

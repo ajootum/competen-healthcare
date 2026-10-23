@@ -37,12 +37,13 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { readIndividualAccess, isNotProvisioned } from "../src/lib/individual/access";
-import { grantIndividualAccess, validateGrant, isGrantRefusal } from "../src/lib/individual/grants";
+import { grantIndividualAccess, validateGrant, isGrantRefusal, endIndividualExperience } from "../src/lib/individual/grants";
+import { loadReminderPrefs } from "../src/lib/individual/professional/preferences";
 import { loadIndividualPassport } from "../src/lib/individual/passport";
 import { loadProfessionalRecord } from "../src/lib/individual/professional/record";
 import { evidenceCoverage, planProgress, cpdHoursByYear } from "../src/lib/individual/professional/progress";
 import { mintShare, listShares, revokeShare, shareCarriesOwnRecords } from "../src/lib/individual/professional/share";
-import { scanProfessionalReminders } from "../src/lib/individual/professional/reminders";
+import { scanProfessionalReminders, type ReminderSender } from "../src/lib/individual/professional/reminders";
 import { loadSharedFrameworks, checkSharedReference } from "../src/lib/individual/professional/frameworks";
 import { DOCUMENT_BUCKET } from "../src/lib/individual/professional/vocabulary";
 import { individualAppEnabled, INDIVIDUAL_APP_FLAG } from "../src/lib/individual/gate";
@@ -138,11 +139,18 @@ async function main() {
   const flagRead = await admin.from("practice_platform_flags").select("flag, enabled, note").eq("flag", INDIVIDUAL_APP_FLAG).maybeSingle();
   if (flagRead.error) { console.error(`release flag unreadable: ${flagRead.error.message}`); process.exit(1); }
   priorFlag = flagRead.data ?? null;
-  flagTouched = true;
-  await admin.from("practice_platform_flags").upsert({ flag: INDIVIDUAL_APP_FLAG, enabled: false, note: "individual-professional-acceptance-harness: OFF phase" });
-  const off = await scanProfessionalReminders(admin);
-  ok("R1. gate OFF: the reminder job sends nothing -- Individual does not exist", off.disabled === true && off.sent === 0);
-  await admin.from("practice_platform_flags").upsert({ flag: INDIVIDUAL_APP_FLAG, enabled: true, note: "individual-professional-acceptance-harness: ON phase (restored after run)" });
+  // ⚠ ANOTHER SESSION MAY BE HOLDING THE GATE ON (an owner viewing session, another experience's run). The
+  // flag is shared staging state, so a run that finds it ON never switches it OFF under them: the OFF phase
+  // is skipped (R1 PEND) and the flag is left exactly as found.
+  if (priorFlag?.enabled === true) {
+    console.log("  PEND  R1. individual_app is already ON (held by another session) -- the OFF phase is not run, and the flag is not touched");
+  } else {
+    flagTouched = true;
+    await admin.from("practice_platform_flags").upsert({ flag: INDIVIDUAL_APP_FLAG, enabled: false, note: "individual-professional-acceptance-harness: OFF phase" });
+    const off = await scanProfessionalReminders(admin);
+    ok("R1. gate OFF: the reminder job sends nothing -- Individual does not exist", off.disabled === true && off.sent === 0);
+    await admin.from("practice_platform_flags").upsert({ flag: INDIVIDUAL_APP_FLAG, enabled: true, note: "individual-professional-acceptance-harness: ON phase (restored after run)" });
+  }
   ok("R2. gate ON for the run", (await individualAppEnabled(admin)) === true);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -220,18 +228,62 @@ async function main() {
     await user.auth.signOut();
   }
 
-  // ── E. reminders ──
-  // No real mail from a harness: with the provider unset, dispatch records the email as skipped. What is under
-  // test is who is chosen and the once-only mark, not Resend.
-  delete process.env.RESEND_API_KEY;
-  const r1 = await scanProfessionalReminders(admin);
-  const marked = await admin.from("individual_professional_evidence").select("expiry_reminded_for, expires_on").eq("id", cred.data?.id).single();
-  const r2 = await scanProfessionalReminders(admin);
-  ok("E1. an expiring credential is reminded once, recorded on the person's own row", r1.sent >= 1 && marked.data?.expiry_reminded_for === marked.data?.expires_on, JSON.stringify({ r1, marked: marked.data }));
-  const again = await admin.from("individual_professional_evidence").select("expiry_reminded_for").eq("id", cred.data?.id).single();
-  ok("E2. a second run does not remind the same date again", again.data?.expiry_reminded_for === marked.data?.expires_on && r2.sent === 0, JSON.stringify(r2));
-  const badMark = await admin.from("individual_professional_evidence").update({ expiry_reminded_for: inDays(400) }).eq("id", cred.data?.id);
-  ok("E3. ⚠ a reminder mark can only name the expiry date it was for", !!badMark.error);
+  // ── N. reminder preferences (migration 374, owner continuation GO Option A) ──
+  const prefsPro = await loadReminderPrefs(admin, pro);
+  if (!prefsPro.configurable) {
+    console.log("  PEND  N1-N5, E1-E3: migration 374 is not applied on this project (reminder preferences absent)");
+  } else {
+    ok("N1. defaults: in-app reminders ON, email reminders OFF, for a person who never set them", prefsPro.inApp === true && prefsPro.email === false, JSON.stringify(prefsPro));
+    await admin.from("individual_professional_profile").update({ reminder_in_app: false }).eq("user_id", pro);
+    const p1 = await loadReminderPrefs(admin, pro);
+    await admin.from("individual_professional_profile").update({ reminder_email: true }).eq("user_id", pro);
+    const p2 = await loadReminderPrefs(admin, pro);
+    ok("N2. the two switches are independent: turning in-app off leaves email off, turning email on leaves in-app off",
+      p1.inApp === false && p1.email === false && p2.inApp === false && p2.email === true, JSON.stringify({ p1, p2 }));
+    await admin.from("individual_professional_profile").update({ reminder_in_app: true }).eq("user_id", pro);
+
+    // `other` holds Professional, has an expiring credential, and never opted in to email.
+    await admin.from("individual_professional_evidence").insert({ user_id: other, experience_code: "professional", kind: "credential", title: "Harness OTHER licence", expires_on: inDays(10) });
+
+    // ── E. reminders ──
+    // No real mail from a harness: with the provider unset, dispatch records the email as skipped. What is under
+    // test is who is chosen and the once-only mark, not Resend.
+    delete process.env.RESEND_API_KEY;
+    // A provider that DELIVERS, injected: no real mail leaves a harness, and the real sender would report
+    // "skipped" here, which -- correctly -- no longer consumes the reminder (owner review, E4 below).
+    const delivered: ReminderSender = async () => ({ sent: true });
+    const undelivered: ReminderSender = async () => ({ sent: false, error: "harness: provider refused" });
+    const r1 = await scanProfessionalReminders(admin, new Date(), delivered);
+    const marked = await admin.from("individual_professional_evidence").select("expiry_reminded_for, expires_on").eq("id", cred.data?.id).single();
+    const r2 = await scanProfessionalReminders(admin, new Date(), delivered);
+    ok("E1. an expiring credential of a person who opted in is emailed once, recorded on the person's own row",
+      r1.recipients.includes(pro) && marked.data?.expiry_reminded_for === marked.data?.expires_on, JSON.stringify({ r1, marked: marked.data }));
+    ok("N3. email only when opted in: the person who never opted in is not emailed", !r1.recipients.includes(other), JSON.stringify(r1.recipients));
+    const again = await admin.from("individual_professional_evidence").select("expiry_reminded_for").eq("id", cred.data?.id).single();
+    ok("E2. a second run does not remind the same date again", again.data?.expiry_reminded_for === marked.data?.expires_on && !r2.recipients.includes(pro), JSON.stringify(r2));
+    const badMark = await admin.from("individual_professional_evidence").update({ expiry_reminded_for: inDays(400) }).eq("id", cred.data?.id);
+    ok("E3. ⚠ a reminder mark can only name the expiry date it was for", !!badMark.error);
+
+    // Owner review: a failed delivery must stay observable and must NOT consume the once-only reminder.
+    const fresh = await admin.from("individual_professional_evidence").insert({ user_id: pro, experience_code: "professional", kind: "credential", title: "Harness second licence", expires_on: inDays(20) }).select("id").single();
+    const failedRun = await scanProfessionalReminders(admin, new Date(), undelivered);
+    const afterFail = await admin.from("individual_professional_evidence").select("expiry_reminded_for").eq("id", fresh.data?.id).single();
+    const retry = await scanProfessionalReminders(admin, new Date(), delivered);
+    const afterRetry = await admin.from("individual_professional_evidence").select("expiry_reminded_for, expires_on").eq("id", fresh.data?.id).single();
+    ok("E4. ⚠ a failed send is reported, releases the reminder (marker unchanged), and the next run delivers and marks it once",
+      failedRun.failed >= 1 && failedRun.failures.some(f => f.userId === pro && /provider refused/.test(f.error))
+      && afterFail.data?.expiry_reminded_for === null
+      && retry.recipients.includes(pro) && afterRetry.data?.expiry_reminded_for === afterRetry.data?.expires_on,
+      JSON.stringify({ failedRun, afterFail: afterFail.data, retry: retry.recipients, afterRetry: afterRetry.data }));
+
+    // Entitlement: `other` opts in, then their Professional period ends. Opting in is not enough.
+    await admin.from("individual_professional_profile").insert({ user_id: other, experience_code: "professional", reminder_email: true });
+    const ended = await endIndividualExperience(admin, other, "professional");
+    const r3 = await scanProfessionalReminders(admin, new Date(), delivered);
+    ok("N4. entitlement respected: an opted-in person whose Professional has ended is not emailed", ended.ok && !r3.recipients.includes(other), JSON.stringify({ ended, r3 }));
+    const estatePrefs = await admin.from("notification_preferences").select("user_id", { count: "exact", head: true }).in("user_id", ids);
+    ok("N5. ⚠ nothing was written to the estate notification_preferences for any fixture", !estatePrefs.error && (estatePrefs.count ?? 0) === 0, estatePrefs.error?.message ?? String(estatePrefs.count));
+  }
 
   // ── F. share ──
   const link = await mintShare(admin, pro, { scope: "full", label: "Harness link", days: 7 });
@@ -254,11 +306,11 @@ async function main() {
   else console.log("  PEND  G2. staging has no hospital-owned framework to refuse");
 
   // ── M. employer visibility ──
-  const estateTables: [string, string][] = [["cpd_logs", "user_id"], ["professional_credentials", "nurse_id"], ["evidence", "owner_id"], ["cdp_reminders", "recipient_id"], ["notifications", "user_id"]];
+  const estateTables: [string, string][] = [["cpd_logs", "user_id"], ["professional_credentials", "nurse_id"], ["evidence", "owner_id"], ["cdp_reminders", "recipient_id"], ["notifications", "user_id"], ["notification_preferences", "user_id"]];
   const counts = await Promise.all(estateTables.map(([t, c]) => admin.from(t).select("*", { count: "exact", head: true }).in(c, ids)));
   const written = estateTables.filter((_, i) => !counts[i].error && (counts[i].count ?? 0) > 0).map(([t]) => t);
   const unread = estateTables.filter((_, i) => !!counts[i].error).map(([t]) => t);
-  ok("M1. D1: no fixture row in cpd_logs, professional_credentials, evidence, cdp_reminders or notifications", written.length === 0 && unread.length === 0, `written: ${written.join(",")} unreadable: ${unread.join(",")}`);
+  ok("M1. D1: no fixture row in cpd_logs, professional_credentials, evidence, cdp_reminders, notifications or notification_preferences", written.length === 0 && unread.length === 0, `written: ${written.join(",")} unreadable: ${unread.join(",")}`);
 
   await admin.from("passport_share_tokens").delete().eq("id", estate.data?.id);
   await cleanup();

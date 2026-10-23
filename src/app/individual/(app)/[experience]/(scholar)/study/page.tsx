@@ -6,27 +6,8 @@ import { experienceHref } from "@/lib/individual/experiences";
 import { countDue, listMaterials, readConsent } from "@/lib/individual/scholar/store";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
 import StudyNav from "./_components/StudyNav";
-import { ConsentPanel, EraseAll, ExplainPanel, UploadPanel, type LegalLink } from "./_components/client";
-import { FOUNDATION_ENTITY, entityLegal, type EntityLegal } from "@/lib/individual/legal";
-
-/**
- * The Privacy Notice and Terms the consent notice points to: the shared foundation's and the Scholar
- * operator's, exactly as the Individual legal configuration publishes them (version, and a URL only if one
- * is configured). Nothing is invented, and an unpublished document is simply absent.
- */
-function consentLegalLinks(): LegalLink[] {
-  const docs = (l: EntityLegal): LegalLink[] => {
-    const raw = l.registeredName ?? l.label;
-    const name = raw.charAt(0).toUpperCase() + raw.slice(1);
-    return [
-      ...(l.privacy ? [{ title: `${name} Privacy Notice`, version: l.privacy.version, url: l.privacy.url }] : []),
-      ...(l.terms ? [{ title: `${name} Terms of Use`, version: l.terms.version, url: l.terms.url }] : []),
-    ];
-  };
-  const foundation = entityLegal(FOUNDATION_ENTITY);
-  const operator = entityLegal(SCHOLAR.operatingEntity);
-  return operator.entity === foundation.entity ? docs(foundation) : [...docs(operator), ...docs(foundation)];
-}
+import { ConsentPanel, EraseAll, ExplainPanel, UploadPanel } from "./_components/client";
+import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -37,7 +18,8 @@ export const dynamic = "force-dynamic";
 //
 // What it shows is what exists. Migration 372 not applied → a governed "not set up" state, not an empty
 // list. Material unreadable → said so, not "none yet". Consent off → upload and reading still work, and
-// every AI action says it needs consent instead of failing when pressed.
+// every AI action says it needs consent instead of failing when pressed. The Privacy Notice and Terms of
+// Use unpublished → AI help says it is not available yet, and cannot be turned on (consent-gate.ts).
 
 // The title only when Individual is live: with the release gate off, a 404 must not name the route.
 export async function generateMetadata(): Promise<Metadata> {
@@ -72,7 +54,8 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
       </>
     );
   }
-  const consentOn = consent.ok && consent.data.granted;
+  const documents = consentDocuments();
+  const status = consent.ok ? consentStatus(consent.data, documents.published) : null;
 
   return (
     <>
@@ -92,7 +75,7 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
       <div className="grid gap-5 lg:grid-cols-2">
         <UploadPanel />
         {consent.ok
-          ? <ConsentPanel granted={consent.data.granted} grantedAt={consent.data.grantedAt} revokedAt={consent.data.revokedAt} legal={consentLegalLinks()} />
+          ? <ConsentPanel status={status!} recorded={consent.data.granted} grantedAt={consent.data.grantedAt} revokedAt={consent.data.revokedAt} legal={documents.links} />
           : <Unreadable what="AI consent setting" />}
       </div>
 
@@ -124,7 +107,7 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
 
       {materials.ok && materials.data.length > 0 && (
         <div className="mt-8">
-          <ExplainPanel consent={consentOn} title="Ask across all your notes"
+          <ExplainPanel consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? undefined : undefined} title="Ask across all your notes"
             hint="Searches every material you have uploaded and answers only from what it finds, citing the page or section. Explanations are not saved." />
         </div>
       )}
