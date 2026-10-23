@@ -4,7 +4,7 @@ export const maxDuration = 60;
 import { NextResponse } from "next/server";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
-import { individualAiQuota, loadIndividualPolicy } from "@/lib/individual/policy";
+import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "@/lib/individual/policy";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadCatalogueFor } from "@/lib/individual/catalogue";
 import { SUBJECTS_PER_CALL } from "@/lib/competency/mapping";
@@ -76,7 +76,9 @@ export async function POST(req: Request) {
 
     // The estate limit and the Individual policy limit, whichever is tighter (CONFIG-002).
     const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin));
-    if (!quota.ok) return refuse(`You have reached the limit of ${quota.limit} questions an hour. Try again later.`, 429);
+    // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
+    const refusal = individualQuotaRefusal(quota, "questions");
+    if (refusal) return refuse(refusal.error, refusal.status);
     if (!aiStatus().configured) return refuse("The personal AI is not configured on this environment.", 503);
 
     // Only the person's own entries: the record is read by user id, and an id not in it is skipped.
