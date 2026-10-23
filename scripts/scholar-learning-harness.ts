@@ -234,6 +234,13 @@ function main() {
   ok("E5. the server runs the patient-identifier check before anything is stored",
     (() => { const s = REAL.get(`${API}/materials/route.ts`) ?? ""; const c = s.indexOf("findPatientIdentifiers("); return c >= 0 && c < s.indexOf("createMaterial("); })());
 
+  // A server page can render a client component, but it cannot CALL a plain function exported from a
+  // "use client" module -- Next throws at request time (found on staging: Revise called sourceHref).
+  const clientCalls = (src: Src) => PAGE_FILES.flatMap(f => [...(src.get(f) ?? "").matchAll(/import \{([^}]*)\} from "[./]*_components\/client"/g)]
+    .flatMap(m => m[1].split(",").map(s => s.trim()).filter(n => n && !/^type\s/.test(n) && !/^[A-Z]/.test(n)).map(n => `${f}: ${n}`)));
+  ok("E6. server pages import only components and types from the \"use client\" module, never a function to call",
+    clientCalls(REAL).length === 0, clientCalls(REAL).join(", "));
+
   // ── F. MIGRATION 372 ────────────────────────────────────────────────────────────────────────────
   // ⚠ 372 IS COMMITTED ONLY ONCE THE OWNER HAS APPLIED IT (CLAUDE.md, Database), so a checkout may not
   // have it yet. Then F1-F7, G3 and P10 are NOT RUN and the harness says so on every run -- it does not

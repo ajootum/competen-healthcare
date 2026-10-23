@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
+import { SCHOLAR } from "@/lib/individual/experiences";
+import { sourceHref, studyHref } from "./question-view";
 import { AI_LABEL, ALLOWED_MIME, CONSENT_NOTICE, DOCX_MIME, MAX_UPLOAD_BYTES, PDF_MIME, PII_WARNING, QUESTION_MAX } from "@/lib/individual/scholar/config";
 
 // The interactive pieces of My Learning. Each one calls a gate-3 API route and shows what the route says,
@@ -15,7 +16,7 @@ const accent = SCHOLAR.accent;
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 ${focusRing}`;
 const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${focusRing}`;
-const studyHref = (seg = "") => experienceHref("scholar", seg ? `study/${seg}` : "study");
+
 
 async function post(url: string, body: unknown, method = "POST"): Promise<{ ok: boolean; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
   try {
@@ -140,9 +141,6 @@ export function UploadPanel() {
 type Source = { tag: string; chunkId: string; materialId: string; citation: string; excerpt: string };
 type Explained = { q: string; answer?: string; message?: string; sources: Source[]; provenance?: { model: string; promptVersion: string } };
 
-export function sourceHref(materialId: string, chunkId: string) {
-  return `${studyHref(materialId)}#c-${chunkId}`;
-}
 
 export function ExplainPanel({ materialId, consent, title = "Ask your notes", hint }: { materialId?: string; consent: boolean; title?: string; hint?: string }) {
   const [q, setQ] = useState("");

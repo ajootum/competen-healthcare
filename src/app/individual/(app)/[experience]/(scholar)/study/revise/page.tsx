@@ -5,7 +5,8 @@ import { dueCards, countDue } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
 import { PageHeader, StatePanel, Unreadable } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
-import { CardReview, sourceHref, type CardView } from "../_components/client";
+import { CardReview, type CardView } from "../_components/client";
+import { sourceHref } from "../_components/question-view";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
