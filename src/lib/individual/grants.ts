@@ -24,6 +24,13 @@ export type GrantRequest = {
   /** D8: the HQ administrator confirms the person is 18 or over. Required when Scholar is granted. */
   adultConfirmed: boolean;
   note?: string | null;
+  /**
+   * COMPETEN-IND-ACCESS-001 s4 "validity": the last day of access, or null for open-ended. Stored as the end
+   * of that day in UTC on individual_entitlement.ends_at. The SCHEMA decides whether it is in the future
+   * (ends_at > starts_at, starts_at = the database's now()) -- this file never compares it with an
+   * application clock.
+   */
+  endsAt?: string | null;
 };
 
 export type GrantOutcome =
@@ -42,7 +49,17 @@ export function validateGrant(body: any): GrantRequest | { ok: false; status: nu
   if (experiences.includes("scholar") && !adultConfirmed)
     return { ok: false, status: 422, code: "AGE_ELIGIBILITY_REQUIRED", message: "The Competen Scholar pilot is for people aged 18 or over. Confirm eligibility to grant Scholar." };
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 500) || null : null;
-  return { targetUserId, experiences, adultConfirmed, note };
+  const endsAt = parseEndDate(body?.endsOn);
+  if (endsAt === false) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "The access end date must be a date (YYYY-MM-DD)." };
+  return { targetUserId, experiences, adultConfirmed, note, endsAt };
+}
+
+/** "YYYY-MM-DD" -> the end of that day in UTC; absent or empty -> null (open-ended); anything else -> false. */
+export function parseEndDate(v: unknown): string | null | false {
+  if (v === undefined || v === null || v === "") return null;
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T23:59:59.999Z`);
+  return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v ? false : d.toISOString();
 }
 
 export const isGrantRefusal = (x: GrantRequest | { ok: false }): x is { ok: false; status: number; code: string; message: string } =>
@@ -82,8 +99,18 @@ export async function grantIndividualAccess(admin: any, req: GrantRequest, grant
       user_id: req.targetUserId, experience_code: x, status: "active", source: "pilot",
       operating_entity: EXPERIENCES[x].operatingEntity, granted_by: grantedBy, note: req.note,
       ...(x === "scholar" ? { adult_confirmed_at: now, adult_confirmed_by: grantedBy } : {}),
+      ...(req.endsAt ? { ends_at: req.endsAt } : {}),
     });
-    if (ins.error) return { ok: false, status: 503, code: "WRITE_FAILED", message: `The ${EXPERIENCES[x].name} entitlement could not be written.` };
+    if (ins.error) {
+      // ⚠ NO STRANDED MEMBERSHIP. A membership this call created, with no entitlement written beside it,
+      // would be a member with nothing live -- so it is removed again before the refusal is returned.
+      if (membership === "created" && granted.length === 0)
+        await admin.from("individual_membership").delete().eq("user_id", req.targetUserId).eq("source", "hq_pilot_grant").is("onboarded_at", null);
+      // 23514: a CHECK refused the row -- with an end date, that is ends_at > starts_at (the DB's now()).
+      if (req.endsAt && String(ins.error.code) === "23514")
+        return { ok: false, status: 422, code: "END_DATE_NOT_FUTURE", message: "The access end date must be in the future." };
+      return { ok: false, status: 503, code: "WRITE_FAILED", message: `The ${EXPERIENCES[x].name} entitlement could not be written.` };
+    }
     granted.push(x);
   }
   return { ok: true, membership, granted, alreadyLive };
@@ -100,4 +127,67 @@ export async function endIndividualExperience(admin: any, targetUserId: string, 
     .update({ status: "cancelled", updated_at: new Date().toISOString() }).in("id", ids).eq("user_id", targetUserId);
   if (upd.error) return { ok: false, status: 503, message: "The entitlement could not be ended." };
   return { ok: true, ended: ids.length };
+}
+
+// ── THE LOOKUP BEHIND THE HQ GRANT SCREEN ── COMPETEN-IND-ACCESS-001 s4 ────────────────────────────────
+//
+// An administrator finds an EXISTING Competen account by its email address and sees what Competen
+// Individual it holds: the membership, and every entitlement period with whether the database says it is
+// live now. It reads the identity record (name, email) and the gate-3 rows, nothing else -- no other
+// product's membership, no Passport content, no learning records.
+
+export type PersonLookup =
+  | { found: false }
+  | {
+    found: true;
+    person: { id: string; name: string | null; email: string | null };
+    membership: { status: string; primaryExperience: string | null; onboarded: boolean; source: string } | null;
+    entitlements: {
+      id: string; experience: ExperienceKey; status: string; live: boolean; startsAt: string; endsAt: string | null;
+      source: string; operatingEntity: string; adultConfirmed: boolean; createdAt: string;
+    }[];
+  };
+
+/** Pure: a lookup email, trimmed and lower-cased, or null when it is not an email address. */
+export function normaliseLookupEmail(v: unknown): string | null {
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) && s.length <= 254 ? s : null;
+}
+
+export async function lookupIndividualPerson(admin: any, email: string): Promise<{ ok: true; value: PersonLookup } | { ok: false; message: string }> {
+  // ilike with the LIKE wildcards escaped: a case-insensitive EXACT match, never a pattern search.
+  const pattern = email.replace(/[\\%_]/g, c => "\\" + c);
+  const { data: people, error } = await admin.from("profiles").select("id, full_name, email").ilike("email", pattern).limit(2);
+  if (error) return { ok: false, message: "The account could not be looked up." };
+  const rows = (people ?? []) as any[];
+  if (rows.length === 0) return { ok: true, value: { found: false } };
+  if (rows.length > 1) return { ok: false, message: "More than one account carries that email address. Resolve that in Users first." };
+  const p = rows[0];
+
+  const [m, e, l] = await Promise.all([
+    admin.from("individual_membership").select("status, primary_experience, onboarded_at, source").eq("user_id", p.id).maybeSingle(),
+    admin.from("individual_entitlement")
+      .select("id, experience_code, status, starts_at, ends_at, source, operating_entity, adult_confirmed_at, created_at")
+      .eq("user_id", p.id).order("created_at", { ascending: false }).limit(50),
+    admin.from("individual_live_entitlement").select("id").eq("user_id", p.id).limit(20),
+  ]);
+  // A failed read is not "no access": refuse to draw the person rather than draw them wrong.
+  if (m.error || e.error || l.error) return { ok: false, message: "Competen Individual access could not be read for this account." };
+  const liveIds = new Set(((l.data ?? []) as any[]).map(r => r.id));
+  return {
+    ok: true,
+    value: {
+      found: true,
+      person: { id: p.id, name: p.full_name ?? null, email: p.email ?? null },
+      membership: m.data ? {
+        status: m.data.status, primaryExperience: m.data.primary_experience ?? null,
+        onboarded: !!m.data.onboarded_at, source: m.data.source,
+      } : null,
+      entitlements: ((e.data ?? []) as any[]).filter(r => isExperienceKey(r.experience_code)).map(r => ({
+        id: r.id, experience: r.experience_code, status: r.status, live: liveIds.has(r.id),
+        startsAt: r.starts_at, endsAt: r.ends_at ?? null, source: r.source, operatingEntity: r.operating_entity,
+        adultConfirmed: !!r.adult_confirmed_at, createdAt: r.created_at,
+      })),
+    },
+  };
 }

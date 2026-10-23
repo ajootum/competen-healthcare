@@ -9,8 +9,10 @@ import { EXPERIENCES, type ExperienceKey } from "@/lib/individual/experiences";
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 
-export default function PrimaryChoice({ live, initial, completeOnboarding, submitLabel }: {
+export default function PrimaryChoice({ live, initial, completeOnboarding, submitLabel, continueTo = null }: {
   live: ExperienceKey[]; initial: ExperienceKey; completeOnboarding: boolean; submitLabel: string;
+  /** The experience the person explicitly asked for (welcome ?for=). Onboarding continues there. */
+  continueTo?: ExperienceKey | null;
 }) {
   const [choice, setChoice] = useState<ExperienceKey>(initial);
   const [busy, setBusy] = useState(false);
@@ -28,7 +30,7 @@ export default function PrimaryChoice({ live, initial, completeOnboarding, submi
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { setError(json.error ?? "That could not be saved."); return; }
-      if (completeOnboarding) { window.location.assign(json.next ?? `/individual/${choice}`); return; }
+      if (completeOnboarding) { window.location.assign(continueTo ? `/individual/${continueTo}` : json.next ?? `/individual/${choice}`); return; }
       setSaved(true);
     } catch {
       setError("That could not be saved. Check your connection and try again.");

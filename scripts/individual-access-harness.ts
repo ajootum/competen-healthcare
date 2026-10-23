@@ -1,0 +1,337 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * INDIVIDUAL ACCESS HARNESS -- COMPETEN-IND-ACCESS-001 s6, over HTTP, STAGING ONLY.
+ *
+ * Login, routing and the HQ pilot grant, exercised the way a person and an administrator meet them: real
+ * sign-ins through /api/auth/login, real session cookies, real redirects (read with redirect: "manual"),
+ * and the HQ grant made through /api/hq/individual/grants by an appointed administrator -- never by SQL.
+ *
+ *   S1  Scholar-only invitation          S6  Uninvited user
+ *   S2  Professional-only invitation     S7  Deep-link authentication and destination preservation
+ *   S3  Both experiences active          S8  Primary-experience preference and switching
+ *   S4  Existing account, new grant      S9  Signed-out, unauthorised (the gate-OFF half: see the note)
+ *   S5  Expired / revoked / ended        H   HQ grant refusals: self, 18+, past end date, no capability
+ *
+ * ⚠ IT NEEDS A DEV SERVER POINTED AT STAGING with `individual_app` ON, and the staging-test legal versions
+ * set (the IND-003 staging launcher sets both the remap and the versions). BASE_URL names it.
+ *
+ * ⚠ IT NEVER WRITES THE RELEASE FLAG. Other sessions share staging and own that row. With the flag OFF it
+ * reports PEND and creates nothing. The gate-OFF behaviour is proved separately, on a server with no
+ * service key (the guard's `no client = OFF` path), and by the foundation harness from source.
+ *
+ * ⚠ STAGING ONLY. .env.local names PRODUCTION. Run with the three Supabase variables remapped:
+ *
+ *   npx tsx scripts/privileged-harnesses.ts --staging --only individual-access
+ *
+ * Fixtures are its own (harness-access001-*@competen.test, one temporary HQ appointment and one platform
+ * membership for its administrator) and are deleted at the start and the end.
+ */
+import { loadEnvConfig } from "@next/env";
+import { createClient } from "@supabase/supabase-js";
+import { assertSafeTarget } from "./production-guard";
+import { INDIVIDUAL_APP_FLAG } from "../src/lib/individual/gate";
+import { EXPERIENCES } from "../src/lib/individual/experiences";
+import { HQ_OFFICE_TYPE_PREFIX } from "../src/lib/hq/spaces";
+
+loadEnvConfig(process.cwd());
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!url || !key) { console.error("Supabase env not set"); process.exit(1); }
+assertSafeTarget(url, "individual-access-harness");
+const admin = createClient(url, key, { auth: { persistSession: false } }) as any;
+const BASE = process.env.BASE_URL ?? "http://localhost:3020";
+
+let pass = 0; const fails: string[] = [];
+const ok = (name: string, cond: boolean, detail = "") => {
+  if (cond) { pass++; console.log(`  PASS  ${name}`); }
+  else { fails.push(name); console.log(`  FAIL  ${name}${detail ? ` -- ${detail}` : ""}`); }
+};
+
+const FIX = {
+  grantor: "harness-access001-grantor@competen.test",
+  scholar: "harness-access001-scholar@competen.test",
+  pro: "harness-access001-pro@competen.test",
+  both: "harness-access001-both@competen.test",
+  existing: "harness-access001-existing@competen.test",
+  expired: "harness-access001-expired@competen.test",
+  revoked: "harness-access001-revoked@competen.test",
+  uninvited: "harness-access001-uninvited@competen.test",
+};
+// A test value generated for this run only.
+const PW = `acc001-${Math.random().toString(36).slice(2)}-Aa1!`;
+const ids: Record<string, string> = {};
+
+// Must match the staging launcher's test legal versions (staging-only identifiers, never production).
+const LEGAL = {
+  holdings: { terms: "staging-test-h-terms-1", privacy: "staging-test-h-privacy-1" },
+  scholar_operator: { terms: "staging-test-s-terms-1", privacy: "staging-test-s-privacy-1" },
+};
+
+async function findUser(email: string) {
+  for (let page = 1; page <= 10; page++) {
+    const { data } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    const hit = (data?.users ?? []).find((u: any) => u.email === email);
+    if (hit) return hit;
+    if ((data?.users ?? []).length < 200) return null;
+  }
+  return null;
+}
+
+async function cleanup() {
+  for (const email of Object.values(FIX)) {
+    const u = await findUser(email);
+    if (!u) continue;
+    await admin.from("ogs_office_appointments").delete().eq("person_id", u.id);
+    await admin.from("platform_membership").delete().eq("user_id", u.id);
+    await admin.from("individual_entitlement").delete().eq("user_id", u.id);
+    await admin.from("individual_membership").delete().eq("user_id", u.id);
+    await admin.from("audit_log").delete().eq("actor_id", u.id);
+    await admin.from("profiles").delete().eq("id", u.id);
+    await admin.auth.admin.deleteUser(u.id);
+  }
+}
+
+async function makeUser(email: string) {
+  const { data, error } = await admin.auth.admin.createUser({ email, password: PW, email_confirm: true, user_metadata: { full_name: `Harness ${email.split("-")[2].split("@")[0]}` } });
+  if (error || !data?.user) throw new Error(`createUser ${email}: ${error?.message}`);
+  return data.user.id as string;
+}
+
+// ── HTTP with a cookie jar ──────────────────────────────────────────────────────────────────────────
+type Jar = Map<string, string>;
+const cookieHeader = (jar: Jar) => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+function absorb(jar: Jar, res: Response) {
+  for (const c of (res.headers as any).getSetCookie?.() ?? []) {
+    const [pair] = c.split(";");
+    const i = pair.indexOf("=");
+    const name = pair.slice(0, i), value = pair.slice(i + 1);
+    if (!value || /max-age=0/i.test(c)) jar.delete(name); else jar.set(name, value);
+  }
+}
+async function get(path: string, jar?: Jar) {
+  const res = await fetch(BASE + path, { redirect: "manual", headers: jar ? { Cookie: cookieHeader(jar) } : {} });
+  if (jar) absorb(jar, res);
+  const location = res.headers.get("location");
+  return { status: res.status, location: location ? new URL(location, BASE).pathname + new URL(location, BASE).search : null, // Server HTML splits adjacent JSX text and expressions with an empty comment; read it as one phrase.
+    text: res.status === 200 ? (await res.text()).replace(/<!-- -->/g, "") : "" };
+}
+async function send(method: string, path: string, body: unknown, jar?: Jar) {
+  const res = await fetch(BASE + path, { method, redirect: "manual", headers: { "Content-Type": "application/json", ...(jar ? { Cookie: cookieHeader(jar) } : {}) }, body: method === "GET" ? undefined : JSON.stringify(body) });
+  if (jar) absorb(jar, res);
+  return { status: res.status, json: await res.json().catch(() => ({})) as any };
+}
+async function signIn(email: string): Promise<Jar> {
+  const jar: Jar = new Map();
+  const r = await send("POST", "/api/auth/login", { email, password: PW }, jar);
+  if (r.status !== 200 || jar.size === 0) throw new Error(`sign-in ${email}: ${r.status} ${JSON.stringify(r.json)}`);
+  return jar;
+}
+const isRedirect = (s: number) => s === 307 || s === 308 || s === 302 || s === 303;
+/** Next renders a server redirect() inside a streamed page as a meta refresh / NEXT_REDIRECT when headers are sent. */
+function redirectTarget(r: { status: number; location: string | null; text: string }): string | null {
+  if (isRedirect(r.status)) return r.location;
+  const m = /NEXT_REDIRECT;(?:replace|push);([^;"]+);/.exec(r.text) ?? /<meta id="__next-page-redirect" http-equiv="refresh" content="\d+;url=([^"]+)"/.exec(r.text);
+  return m ? decodeURIComponent(m[1].replace(/&amp;/g, "&")) : null;
+}
+
+async function acceptTerms(jar: Jar, experience: "scholar" | "professional") {
+  const x = experience === "scholar" ? LEGAL.scholar_operator : LEGAL.holdings;
+  return send("POST", "/api/individual/terms", { experience, foundation: LEGAL.holdings, experienceDocs: x }, jar);
+}
+const destinations = async (jar: Jar) => (await send("GET", "/api/auth/destinations", undefined, jar));
+
+async function main() {
+  console.log(`INDIVIDUAL ACCESS HARNESS (COMPETEN-IND-ACCESS-001) against ${BASE}\n`);
+
+  const { data: flag, error: flagErr } = await admin.from("practice_platform_flags").select("enabled").eq("flag", INDIVIDUAL_APP_FLAG).maybeSingle();
+  if (flagErr || flag?.enabled !== true) {
+    console.log(`  PEND  individual_app is not ON in this project (${flagErr?.message ?? "row absent or false"}). Nothing created. This harness never writes the flag.`);
+    return;
+  }
+  try { await fetch(BASE); } catch { console.log(`  PEND  nothing is serving ${BASE}.`); return; }
+
+  await cleanup();
+  for (const [k, email] of Object.entries(FIX)) ids[k] = await makeUser(email);
+
+  // The administrator: an HQ appointment to the Individual Product Administrator position, and the
+  // platform membership every HQ staff member holds (gate 1 for the HQ shell).
+  const { data: offices } = await admin.from("ogs_offices").select("id, office_type").limit(500);
+  const office = ((offices ?? []) as any[]).find(o => o.office_type === `${HQ_OFFICE_TYPE_PREFIX}platform`)
+    ?? ((offices ?? []) as any[]).find(o => String(o.office_type ?? "").startsWith(HQ_OFFICE_TYPE_PREFIX));
+  const appt = await admin.from("ogs_office_appointments")
+    .insert({ office_id: office?.id, person_id: ids.grantor, role: "individual_product_administrator", status: "active" }).select("id").single();
+  const pm = await admin.from("platform_membership").insert({ user_id: ids.grantor, status: "active", source: "explicit_grant", note: "harness-access001 HQ administrator fixture" });
+  ok("0a. fixture: the administrator holds an Individual Product Administrator appointment", !appt.error && !!office, appt.error?.message ?? "");
+  ok("0b. fixture: the administrator holds a platform membership (HQ gate 1)", !pm.error, pm.error?.message ?? "");
+  await admin.from("platform_membership").insert({ user_id: ids.existing, status: "active", source: "explicit_grant", note: "harness-access001 existing-account fixture" });
+
+  const hq = await signIn(FIX.grantor);
+
+  // ── H. THE HQ GRANT, BY THE SCREEN'S OWN API ─────────────────────────────────────────────────────
+  const page = await get("/super-admin/individual", hq);
+  ok("H1. the administrator opens the HQ Individual pilot access screen", page.status === 200 && page.text.includes("Individual pilot access"), `status=${page.status} -> ${page.location}`);
+  const look = await send("GET", `/api/hq/individual/grants?email=${encodeURIComponent(FIX.scholar.toUpperCase())}`, undefined, hq);
+  ok("H2. lookup by email (case-insensitive) finds the existing account and reports no Individual access yet",
+    look.status === 200 && look.json.found === true && look.json.person?.id === ids.scholar && look.json.membership === null && look.json.entitlements?.length === 0, JSON.stringify(look.json).slice(0, 200));
+  const none = await send("GET", "/api/hq/individual/grants?email=nobody-access001%40competen.test", undefined, hq);
+  ok("H3. an email with no account is 'not found', never an account created", none.status === 200 && none.json.found === false);
+  const grant = (target: string, experiences: string[], extra: Record<string, unknown> = {}) =>
+    send("POST", "/api/hq/individual/grants", { targetUserId: target, experiences, adultConfirmed: true, ...extra }, hq);
+  const self = await grant(ids.grantor, ["professional"]);
+  ok("H4. the administrator cannot grant themselves", self.status === 403 && self.json.error?.code === "SELF_GRANT");
+  const noAdult = await send("POST", "/api/hq/individual/grants", { targetUserId: ids.scholar, experiences: ["scholar"], adultConfirmed: false }, hq);
+  ok("H5. D8: Scholar without the 18+ confirmation is refused", noAdult.status === 422 && noAdult.json.error?.code === "AGE_ELIGIBILITY_REQUIRED");
+  const past = await grant(ids.uninvited, ["professional"], { endsOn: "2020-01-01" });
+  const stranded = await admin.from("individual_membership").select("id").eq("user_id", ids.uninvited);
+  ok("H6. an end date in the past is refused by the SCHEMA, and leaves no stranded membership",
+    past.status === 422 && past.json.error?.code === "END_DATE_NOT_FUTURE" && (stranded.data ?? []).length === 0, `${past.status} ${JSON.stringify(past.json)} rows=${(stranded.data ?? []).length}`);
+
+  const gS = await grant(ids.scholar, ["scholar"], { note: "harness-access001" });
+  const gP = await grant(ids.pro, ["professional"]);
+  const gB = await grant(ids.both, ["scholar", "professional"], { endsOn: "2099-12-31" });
+  ok("H7. Scholar-only, Professional-only and both are granted through the HQ API",
+    gS.status === 201 && gP.status === 201 && gB.status === 201 && gB.json.granted?.length === 2, `${gS.status}/${gP.status}/${gB.status}`);
+  const rowsB = await admin.from("individual_entitlement").select("experience_code, operating_entity, ends_at, adult_confirmed_by, source").eq("user_id", ids.both);
+  const sRow = (rowsB.data ?? []).find((r: any) => r.experience_code === "scholar");
+  const pRow = (rowsB.data ?? []).find((r: any) => r.experience_code === "professional");
+  ok("H8. each row carries its operating entity, the validity date and (Scholar) who confirmed 18+",
+    sRow?.operating_entity === "scholar_operator" && pRow?.operating_entity === "competen_holdings"
+    && String(sRow?.ends_at).startsWith("2099-12-31T23:59:59") && sRow?.adult_confirmed_by === ids.grantor && sRow?.source === "pilot");
+  const { data: audit } = await admin.from("audit_log").select("action, new_value").eq("actor_id", ids.grantor).eq("action", "individual_pilot_grant").limit(20);
+  ok("H9. every grant is audited under the administrator, with the validity recorded",
+    (audit ?? []).length >= 3 && (audit ?? []).some((a: any) => a.new_value?.target_user_id === ids.both && String(a.new_value?.ends_at).startsWith("2099-12-31")));
+  const again = await grant(ids.scholar, ["scholar"]);
+  ok("H10. granting a live experience again is idempotent (reported, not duplicated)", again.status === 200 && again.json.alreadyLive?.includes("scholar"));
+
+  // ── S1. SCHOLAR-ONLY INVITATION ──────────────────────────────────────────────────────────────────
+  const anon = await get("/individual/sign-in?experience=scholar");
+  ok("S1a. the Scholar website's Sign in, signed out, goes to the ONE Competen login with the Scholar destination",
+    anon.status === 307 && anon.location === "/login?next=%2Findividual%2Fscholar", `${anon.status} -> ${anon.location}`);
+  const s = await signIn(FIX.scholar);
+  const door = await get("/individual/sign-in?experience=scholar", s);
+  ok("S1b. signed in, the same door skips the form and goes straight to Scholar", door.status === 307 && door.location === "/individual/scholar", `${door.status} -> ${door.location}`);
+  const first = await get("/individual/scholar", s);
+  ok("S1c. first entry goes through the welcome once, carrying the requested experience",
+    redirectTarget(first) === "/individual/welcome?for=scholar", `${first.status} -> ${redirectTarget(first)}`);
+  const welcome = await get("/individual/welcome?for=scholar", s);
+  ok("S1d. the welcome renders for the requested experience", welcome.status === 200 && welcome.text.includes("Continue to Competen Scholar"));
+  const done = await send("POST", "/api/individual/preferences", { primaryExperience: "scholar", completeOnboarding: true }, s);
+  ok("S1e. completing the welcome records onboarding", done.status === 200);
+  const terms = await get("/individual/scholar", s);
+  ok("S1f. Scholar then asks for its terms before use (D2), not the welcome again",
+    terms.status === 200 && terms.text.includes("Before you use Competen Scholar"), `${terms.status} -> ${redirectTarget(terms)}`);
+  const acc = await acceptTerms(s, "scholar");
+  const shell = await get("/individual/scholar", s);
+  ok("S1g. after acceptance the Scholar shell opens", acc.status === 200 && shell.status === 200 && shell.text.includes("Scholar navigation"), `${acc.status} ${JSON.stringify(acc.json)}`);
+  const sOther = await get("/individual/professional", s);
+  ok("S1h. Professional, not held, renders the governed not-active state -- never the shell",
+    sOther.status === 200 && sOther.text.includes("Competen Professional is not active on your account") && !sOther.text.includes("Professional navigation"));
+  const sDest = await destinations(s);
+  ok("S1i. the neutral sign-in offers Competen Individual only (no platform membership)",
+    sDest.status === 200 && sDest.json.state === "one" && sDest.json.destination?.href === "/individual/home", JSON.stringify(sDest.json).slice(0, 160));
+
+  // ── S2. PROFESSIONAL-ONLY INVITATION ─────────────────────────────────────────────────────────────
+  const p = await signIn(FIX.pro);
+  const pDoor = await get("/individual/sign-in?experience=professional", p);
+  ok("S2a. the Professional website's Sign in lands on Professional", pDoor.location === "/individual/professional");
+  await send("POST", "/api/individual/preferences", { primaryExperience: "professional", completeOnboarding: true }, p);
+  await acceptTerms(p, "professional");
+  const pShell = await get("/individual/professional", p);
+  ok("S2b. direct Professional, with no Scholar row ever, opens its shell", pShell.status === 200 && pShell.text.includes("Professional navigation"));
+  const pWrong = await get("/individual/sign-in?experience=scholar", p);
+  const pWrongPage = await get(pWrong.location ?? "/", p);
+  ok("S2c. arriving from the Scholar website, a Professional-only person is told Scholar is not active, with a way to Professional",
+    pWrong.location === "/individual/scholar" && pWrongPage.text.includes("Competen Scholar is not active on your account") && pWrongPage.text.includes('href="/individual/professional"'));
+
+  // ── S3 / S8. BOTH EXPERIENCES, PRIMARY AND SWITCHING ─────────────────────────────────────────────
+  const b = await signIn(FIX.both);
+  await send("POST", "/api/individual/preferences", { primaryExperience: "professional", completeOnboarding: true }, b);
+  await acceptTerms(b, "scholar"); await acceptTerms(b, "professional");
+  const bHome = await get("/individual/home", b);
+  ok("S3a. with both, /individual/home opens the configured primary (Professional)", redirectTarget(bHome) === "/individual/professional", `${redirectTarget(bHome)}`);
+  const bMain = await get("/individual/sign-in", b);
+  ok("S3b. the Individual door with no experience named resolves through /individual/home", bMain.location === "/individual/home");
+  const bExplicit = await get("/individual/sign-in?experience=scholar", b);
+  const bScholar = await get("/individual/scholar", b);
+  ok("S3c. an explicit Scholar request outranks the Professional primary", bExplicit.location === "/individual/scholar" && bScholar.status === 200 && bScholar.text.includes("Scholar navigation"));
+  ok("S3d. the experience switcher offers the other live experience", bScholar.text.includes('href="/individual/professional"'));
+  const toScholar = await send("POST", "/api/individual/preferences", { primaryExperience: "scholar" }, b);
+  const bHome2 = await get("/individual/home", b);
+  ok("S8a. changing the primary to Scholar changes where /individual/home opens", toScholar.status === 200 && redirectTarget(bHome2) === "/individual/scholar");
+  const bad = await send("POST", "/api/individual/preferences", { primaryExperience: "scholar" }, p);
+  ok("S8b. a primary the person does not hold is refused", bad.status === 400);
+
+  // ── S4. EXISTING ACCOUNT RECEIVING A NEW ENTITLEMENT ─────────────────────────────────────────────
+  const e = await signIn(FIX.existing);
+  const before = await destinations(e);
+  const beforeCodes = (before.json.destinations ?? (before.json.destination ? [before.json.destination] : [])).map((d: any) => d.code ?? d.href);
+  const gE = await grant(ids.existing, ["professional"]);
+  const after = await destinations(e);
+  const afterCodes = (after.json.destinations ?? (after.json.destination ? [after.json.destination] : [])).map((d: any) => d.code ?? d.href);
+  ok("S4a. before the grant, the existing account is not offered Individual", !beforeCodes.includes("individual") && !beforeCodes.includes("/individual/home"), JSON.stringify(before.json).slice(0, 160));
+  ok("S4b. after the HQ grant, the SAME account (same session, no new identity) is offered Individual beside its estate",
+    gE.status === 201 && after.json.state === "many" && afterCodes.includes("individual") && afterCodes.includes("platform"), JSON.stringify(after.json).slice(0, 200));
+  const { data: pmE } = await admin.from("platform_membership").select("id").eq("user_id", ids.existing);
+  const { data: pmS } = await admin.from("platform_membership").select("id").eq("user_id", ids.scholar);
+  ok("S4c. the grant created no platform membership, and kept the existing one", (pmE ?? []).length === 1 && (pmS ?? []).length === 0);
+
+  // ── S5. EXPIRED, REVOKED, ENDED ──────────────────────────────────────────────────────────────────
+  await admin.from("individual_membership").insert({ user_id: ids.expired, status: "active", source: "hq_pilot_grant", onboarded_at: new Date().toISOString() });
+  await admin.from("individual_entitlement").insert({ user_id: ids.expired, experience_code: "professional", status: "active", source: "pilot",
+    operating_entity: "competen_holdings", starts_at: "2024-01-01T00:00:00Z", ends_at: "2024-06-30T23:59:59Z" });
+  const x = await signIn(FIX.expired);
+  const xP = await get("/individual/professional", x);
+  const xHome = await get("/individual/home", x);
+  ok("S5a. an expired entitlement (DB clock) opens nothing: the experience shows not-active, home says nothing is active",
+    xP.text.includes("Competen Professional is not active on your account") && xHome.status === 200 && xHome.text.includes("No experience is active on your account right now"));
+  await admin.from("individual_membership").insert({ user_id: ids.revoked, status: "revoked", revoked_at: new Date().toISOString(), source: "hq_pilot_grant" });
+  const r = await signIn(FIX.revoked);
+  const rS = await get("/individual/scholar", r);
+  const rAcc = await get(redirectTarget(rS) ?? "/individual/access", r);
+  ok("S5b. a revoked membership is refused to the access guidance, which says access has ended",
+    redirectTarget(rS) === "/individual/access?for=scholar" && rAcc.text.includes("Your Competen Individual access has ended"), `${redirectTarget(rS)}`);
+  const end = await send("POST", "/api/hq/individual/grants/end", { targetUserId: ids.pro, experience: "professional" }, hq);
+  const pAfter = await get("/individual/professional", p);
+  ok("S5c. an experience ended from HQ closes on the next request", end.status === 200 && pAfter.text.includes("Competen Professional is not active on your account"));
+
+  // ── S6. UNINVITED ────────────────────────────────────────────────────────────────────────────────
+  const u = await signIn(FIX.uninvited);
+  const uS = await get("/individual/scholar", u);
+  const uAcc = await get(redirectTarget(uS) ?? "/individual/access", u);
+  ok("S6a. an uninvited account asking for Scholar is sent to guidance that names Scholar -- nothing is granted",
+    redirectTarget(uS) === "/individual/access?for=scholar" && uAcc.text.includes("Competen Scholar is not on this account") && !uAcc.text.includes('href="/signup"'), `${redirectTarget(uS)}`);
+  const { data: uRows } = await admin.from("individual_membership").select("id").eq("user_id", ids.uninvited);
+  ok("S6b. no access was created implicitly for the uninvited account", (uRows ?? []).length === 0);
+  const uDest = await destinations(u);
+  ok("S6c. the neutral sign-in offers the uninvited account no Individual destination", uDest.json.state === "none", JSON.stringify(uDest.json).slice(0, 120));
+
+  // ── S7. DEEP LINK, SIGNED OUT ────────────────────────────────────────────────────────────────────
+  const seg = EXPERIENCES.scholar.modules[0]?.segment;
+  const deep = await get(`/individual/scholar/${seg}`);
+  ok("S7a. a signed-out deep link goes to the one login with the FULL path preserved",
+    deep.status === 307 && deep.location === `/login?next=${encodeURIComponent(`/individual/scholar/${seg}`)}`, `${deep.status} -> ${deep.location}`);
+  const deepIn = await get(`/individual/scholar/${seg}`, s);
+  ok("S7b. after signing in, the same deep link opens for the entitled person", deepIn.status === 200, `${deepIn.status} -> ${redirectTarget(deepIn)}`);
+  const evil = await get("/individual/sign-in?experience=%2F%2Fevil.example");
+  ok("S7c. a crafted ?experience= cannot become a redirect target", evil.location === "/login?next=%2Findividual%2Fhome", `${evil.location}`);
+
+  // ── S9. SIGNED OUT AND UNAUTHORISED ──────────────────────────────────────────────────────────────
+  const so = await send("POST", "/api/individual/preferences", { primaryExperience: "scholar" });
+  ok("S9a. a signed-out API call is 401", so.status === 401);
+  const sHq = await send("GET", `/api/hq/individual/grants?email=${encodeURIComponent(FIX.pro)}`, undefined, s);
+  const sGrant = await send("POST", "/api/hq/individual/grants", { targetUserId: ids.uninvited, experiences: ["professional"], adultConfirmed: true }, s);
+  ok("S9b. an Individual member without the HQ capability cannot look up or grant", sHq.status === 403 && sGrant.status === 403);
+  const sPage = await get("/super-admin/individual", s);
+  ok("S9c. and cannot open the HQ screen", sPage.status !== 200 || !sPage.text.includes("Find a Competen account"), `${sPage.status}`);
+  const access = await get("/individual/access?for=professional");
+  ok("S9d. signed out, the access guidance names the product and signs in back to it",
+    access.status === 200 && access.text.includes("Sign in to Competen Professional") && access.text.includes("/login?next=%2Findividual%2Fprofessional"));
+}
+
+main()
+  .catch(err => { fails.push(`crashed: ${err?.message ?? err}`); console.log(`  FAIL  crashed: ${err?.stack ?? err}`); })
+  .finally(async () => {
+    await cleanup().catch(() => {});
+    console.log(`\n${fails.length === 0 ? "ALL GREEN" : "RED"} -- ${pass} passed, ${fails.length} failed`);
+    if (fails.length) { fails.forEach(f => console.log(`  FAILED: ${f}`)); process.exitCode = 1; }
+  });

@@ -8,6 +8,8 @@ import { SidebarNav, BottomNav, SignOutButton } from "../../_components/ShellNav
 import TermsAcceptance, { type ShownDoc } from "../../_components/TermsAcceptance";
 import { contextTermsGate } from "@/lib/individual/guard";
 import { publishedVersions } from "@/lib/individual/legal";
+import { experienceOfPath, forQuery, isIndividualNext, signInHref } from "@/lib/individual/entry";
+import { headers } from "next/headers";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -37,7 +39,14 @@ export default async function ExperienceLayout({ children, params }: {
   if (!isExperienceKey(experience)) notFound();
   const shell = await individualShell();
   if (shell.state === "DISABLED") notFound();
-  if (shell.state !== "READY") redirect("/individual/access");
+  // Layouts and pages render in parallel, so this layout answers a signed-out visitor itself rather than
+  // relying on the group layout's redirect landing first: same destination, the experience preserved.
+  if (shell.state === "AUTH_REQUIRED") {
+    const asked = (await headers()).get("x-pathname") ?? "";
+    redirect(isIndividualNext(asked) && experienceOfPath(asked) === experience
+      ? `/login?next=${encodeURIComponent(asked)}` : signInHref(experience));
+  }
+  if (shell.state !== "READY") redirect(`/individual/access${forQuery(experience)}`);
   const { live, profile } = shell.ctx;
   const x = EXPERIENCES[experience];
 
@@ -59,6 +68,13 @@ export default async function ExperienceLayout({ children, params }: {
       </main>
     );
   }
+
+  // ── THE WELCOME COMES FIRST, ONCE (COMPETEN-IND-003 s2(7), COMPETEN-IND-ACCESS-001 s3) ─────────────
+  // A direct entry -- a Scholar website sign-in, a bookmark -- used to step past the onboarding, which is
+  // shown "before any experience". It now goes through the welcome with the experience it asked for
+  // preselected, and the welcome continues to that experience. Presentation order only: the experience
+  // is already live for this person, and nothing here grants or withholds it.
+  if (!shell.ctx.membership.onboardedAt) redirect(`/individual/welcome${forQuery(experience)}`);
 
   // ── OWNER RULING D2: TERMS BEFORE USE ───────────────────────────────────────────────────────────
   // Live is not yet usable. The person accepts the shared foundation's and this experience operator's

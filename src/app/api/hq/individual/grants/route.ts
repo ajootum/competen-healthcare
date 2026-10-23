@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { individualAppEnabled } from "@/lib/individual/gate";
 import { currentTraceId } from "@/lib/trace";
-import { grantIndividualAccess, isGrantRefusal, validateGrant } from "@/lib/individual/grants";
+import { grantIndividualAccess, isGrantRefusal, validateGrant, lookupIndividualPerson, normaliseLookupEmail } from "@/lib/individual/grants";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -23,6 +23,20 @@ export const dynamic = "force-dynamic";
 //
 // ⚠ NOT YOURSELF. An administrator does not grant their own access -- the same rule /api/hq/appointments
 // applies to appointing yourself. Another holder of the right, or the owner, grants it.
+
+// GET /api/hq/individual/grants?email= -- COMPETEN-IND-ACCESS-001 s4. The lookup behind the HQ grant screen
+// (/super-admin/individual): an existing Competen account by email, and the Individual access it holds.
+// Same capability, same release gate, as the grant itself.
+export async function GET(req: Request) {
+  const ctx = await hqApiGate(["hq.individual.pilot.grant"]);
+  if (isHqRefusal(ctx)) return ctx;
+  if (!(await individualAppEnabled(ctx.admin))) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
+  const email = normaliseLookupEmail(new URL(req.url).searchParams.get("email"));
+  if (!email) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Enter the person's email address." } }, { status: 400 });
+  const res = await lookupIndividualPerson(ctx.admin, email);
+  if (!res.ok) return NextResponse.json({ error: { code: "UNAVAILABLE", message: res.message } }, { status: 503 });
+  return NextResponse.json({ ...res.value, isSelf: res.value.found && res.value.person.id === ctx.userId });
+}
 
 export async function POST(req: Request) {
   const ctx = await hqApiGate(["hq.individual.pilot.grant"]);
@@ -45,6 +59,7 @@ export async function POST(req: Request) {
       target_user_id: parsed.targetUserId, requested: parsed.experiences, granted: outcome.granted,
       already_live: outcome.alreadyLive, membership: outcome.membership,
       adult_confirmed: parsed.experiences.includes("scholar") ? parsed.adultConfirmed : null,
+      ends_at: parsed.endsAt ?? null, note: parsed.note ?? null,
     },
   }).then((r: unknown) => r, () => {});
 

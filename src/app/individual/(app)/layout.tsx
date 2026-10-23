@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { individualShell, gatedMetadata } from "../_components/shell-context";
+import { experienceOfPath, forQuery, isIndividualNext } from "@/lib/individual/entry";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -31,12 +32,15 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function IndividualAppLayout({ children }: { children: React.ReactNode }) {
   const shell = await individualShell();
   if (shell.state === "DISABLED") notFound();
+  // The proxy's x-pathname: safe for a redirect decision during this server render, never rendered.
+  const asked = shell.state === "READY" ? "" : (await headers()).get("x-pathname") ?? "";
   if (shell.state === "AUTH_REQUIRED") {
     // Return to where they were going, validated -- only a plain /individual path, never an open redirect.
-    const asked = (await headers()).get("x-pathname") ?? "";
-    const next = /^\/individual\/[A-Za-z0-9\-/]*$/.test(asked) ? asked : "/individual/home";
+    const next = isIndividualNext(asked) ? asked : "/individual/home";
     redirect(`/login?next=${encodeURIComponent(next)}`);
   }
-  if (shell.state !== "READY") redirect("/individual/access");
+  // COMPETEN-IND-ACCESS-001 s3: the guidance names the experience they asked for. It is copy only -- the
+  // access page works out the person's state itself and never trusts the URL for it.
+  if (shell.state !== "READY") redirect(`/individual/access${forQuery(experienceOfPath(asked))}`);
   return <>{children}</>;
 }

@@ -23,6 +23,9 @@ export const GENERAL_NAV: NavSection[] = [
     // It shipped with no link at all and was reachable only by typing the URL -- the fourth screen this
     // week to be built and left doorless, which is why scripts/practice-door-sweep.ts exists.
     { label: "HQ Positions", href: "/super-admin/users/appointments", icon: "🏛️" },
+    // COMPETEN-IND-ACCESS-001 s4: granting Competen Individual pilot access. Shown only to holders of
+    // hq.individual.pilot.grant (and owners) by the same capability filter as every other link.
+    { label: "Individual Pilot Access", href: "/super-admin/individual", icon: "🎓" },
   ]},
   { group: "ENTERPRISE ADMINISTRATION", items: [
     { label: "Overview", href: "/super-admin/enterprise", icon: "🏢" },
