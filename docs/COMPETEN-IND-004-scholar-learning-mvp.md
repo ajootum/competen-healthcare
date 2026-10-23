@@ -372,6 +372,7 @@ The superseded v2 consent screenshots (owner-review r01–r03, r14) are kept as 
 - **History.** Removing an achievement leaves material, chunks, questions, answers and cards exactly as they were (H1). Deleting the material takes its achievements off the Passport and off live links through the cascade (C1).
 - **Where the person chooses:** Progress, in a "Your Passport" section, one item at a time ("Show in my Passport" / "Remove from my Passport"). The route is `/api/individual/scholar/passport` (POST include, DELETE remove), audited with ids only, never the title.
 - **Fails closed** while 375 is absent: Progress and the Passport say *"not available on this environment yet"* (checked live before the apply), and `/verify` shows nothing.
+- **Configuration candidate (owner review, 2026-10-23).** Achievement categories (currently questions answered and scenarios answered, in code) are a configuration candidate under COMPETEN-CONFIG-001. Recorded only. This MVP is not expanded and the code is unchanged.
 
 ### Migration 375 on staging
 
@@ -386,7 +387,7 @@ The superseded v2 consent screenshots (owner-review r01–r03, r14) are kept as 
 | Dependencies and order | 372 must be applied first. Independent of 370, 373 and 374. |
 | Production | **NOT authorised** (owner GO item 5). Not applied. `main` may hold this file before production does. The code that reads it fails closed while it is absent, and is behind `individual_app` (default OFF). |
 
-**Note for the record.** In a development worktree whose `.env.local` points the local app at staging, `NEXT_PUBLIC_SUPABASE_URL` is the staging URL. `apply-migrations.ts` takes its production reference from that variable, so there the guard refuses the staging target, reading staging as production. That fails safe, but the guard has no real production reference in such a worktree. The owner set the real production URL in the shell for the two runs. A guard that read the production ref from `scripts/production-guard.ts` (as `assertSafeTarget` does) instead of from the environment would remove the dependency. Recorded as a follow-up, not changed here.
+**Note for the record.** In a development worktree whose `.env.local` points the local app at staging, `NEXT_PUBLIC_SUPABASE_URL` is the staging URL. `apply-migrations.ts` takes its production reference from that variable, so there the guard refuses the staging target, reading staging as production. That fails safe, but the guard has no real production reference in such a worktree. The owner set the real production URL in the shell for the two runs. A guard that read the production ref from `scripts/production-guard.ts` (as `assertSafeTarget` does) instead of from the environment would remove the dependency. Recorded as a follow-up, not changed here. The owner is recording it as a separate operational correction in COMPETEN-OPS-001.
 
 ### Verification
 
