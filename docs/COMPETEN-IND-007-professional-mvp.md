@@ -68,10 +68,37 @@ The Passport (`passport.ts`, the Passport page) and `assistant.ts` changes are a
 | `access-doors` / `plane-boundary` | 39/39 · 35/35 |
 | `auth-boundary` | ALL GREEN after the merge. |
 | `migration-house-rules` on 373 | ALL CLEAR: 396 lines, 91 statements, 26 constraints, 0 warnings |
-| `individual-professional-acceptance-harness` on staging | **PEND**: 373 is not applied on staging. Nothing was created. |
+| `individual-professional-acceptance-harness` on staging, after 373 (2026-10-23) | **ALL GREEN, 31 / 31.** G2 is PEND because staging has no hospital-owned framework to refuse. The groups: R (reminder job silent while the gate is OFF), A (direct entry with no Scholar row, the whole journey), B (schema-generated class, no verified column, no default origin), C (cross-person links refused), D (own-row RLS, no browser writes), E (once-only reminders), F (share carries own records only for a Professional link; another person cannot revoke it), G1 (shared frameworks only), M (no row in `cpd_logs`, `professional_credentials`, `evidence`, `cdp_reminders` or `notifications`), Z (fixtures removed, flag restored). The first run was 30/1: A6 expected two CPD entries behind the need, but only one was linked to the goal. That was a harness expectation, not a product defect. It was corrected and re-run green. |
 | Pre-373 browser walk-through on staging (`localhost:3040`, Professional-only pilot) | Welcome offers only Professional → Holdings test terms → Professional shell with the five modules → module pages say the store is not set up and offer no form → `/individual/scholar/cpd` shows the governed not-active state → the Passport shows "Records you added" and points to sharing. Console shows only the pre-existing CSP report-only notice. |
 
-**Still to run once 373 is on staging** (per the IND-003 build record §5 template): `apply-migrations.ts --only 373` twice; `privileged-harnesses.ts --staging --only individual-professional-acceptance` (groups A–M); the full journey in the browser with the pilot identity, at desktop and at 375px, with screenshots to `docs/evidence/COMPETEN-IND-007/`; `/verify` for a Full and a Summary link.
+**End-to-end journey on staging, after 373 (2026-10-23)**
+- **Setup:** `localhost:3040` pointed at staging, with staging-only test legal versions. The pilot was a Professional-only identity (`harness-ind007-pilot@competen.test`, granted through the foundation grant service, no Scholar row). `individual_app` was held ON for the walk-through, then restored to no row, verified.
+- **Path:** welcome (only Professional offered) → Holdings test terms → Professional home with the five journey modules →
+  1. registration saved, self-declared;
+  2. a need against the shared *Emergency Nursing / Participates in Advanced Resuscitation*;
+  3. a goal with a target date linked to that need, marked in progress;
+  4. personal AI CPD-plan suggestion: grounded in the need and goal, labelled advisory and not saved, no invented hour target;
+  5. CPD entry with an AI-drafted reflection linked to the goal;
+  6. CPD entry with a PDF certificate, labelled *Self-declared with a document attached, not verified*, which opens only through a 5-minute signed URL on the private bucket;
+  7. a credential expiring within 60 days and the registration renewal, both shown under *Renewals due*;
+  8. competency evidence linked to the need;
+  9. Progress: 0% done of 1 goal, 1 in progress; 2026: 7.5 hours over 2 entries, 1 with a document; coverage 100% (1 of 1);
+  10. the Passport's *Records you added* lists all five items by class;
+  11. a Full share link created;
+  12. `/verify` shows *Competen · Passport* (not *Verified*), each own item with its class and the not-verified notice. The subtitle is the self-declared profession.
+- **Layout:** 390 px: no horizontal overflow on any page; five bottom tabs: Home, Plan, CPD, AI, Passport.
+- **Evidence:** `docs/evidence/COMPETEN-IND-007/staging-desktop-1440-*.jpg` (11) and `staging-mobile-390-*.jpg` (5). Desktop 06 shows the reflection saved *before* defect 1 below was fixed.
+
+**Genuine defects found in the walk-through, both fixed and re-verified**
+1. **The AI reflection draft carried chat framing** ("Here is a draft…", "Feel free to adjust…"), which would be saved into the CPD record as written. The reflection task now returns only the reflection. Re-checked live: no preamble and no sign-off.
+2. **`/verify` showed the estate default `profiles.role` ("Nurse") as the subtitle** of a Professional-minted link. Individual must not rely on that value (ADR-016). Such a link now shows the person's self-declared profession, marked *(self-declared)*, or nothing. Estate-minted links still render byte-identically (the identity test passes), and a new assertion pins the subtitle.
+
+**Other staging rows from this turn** (all test data, all removed by the harness cleanup unless noted):
+- the walk-through's records, its share token and the pilot itself, removed by the second acceptance run;
+- AI usage rows in `plat_ai_requests` for 4 test calls (2 plan, 2 reflection);
+- email delivery rows marked *skipped* in `notif_deliveries` from the reminder groups.
+
+The `plat_ai_requests` and `notif_deliveries` rows stay as the platform's usage and delivery log. No pre-existing row was altered or deleted.
 
 **Schema note.** 373 uses `on delete set null (need_id)`, which needs PostgreSQL 15 or later. Staging runs 17.6. Production has not been checked from this session.
 
