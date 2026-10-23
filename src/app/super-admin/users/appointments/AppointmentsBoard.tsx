@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type {
-  HqAppointmentBoard, HqHolderView, HqPositionView, HqSpaceView, Read,
+  HqAppointmentBoard, HqHolderView, HqPersonDetails, HqPositionView, HqSpaceView, Read,
 } from "@/lib/hq/appointments";
-import { HQ_END_STATUSES, STATUS_LABEL, STATUS_MEANING } from "@/lib/hq/appointments";
+import { GIVEN_NAME_NOT_STORED, HQ_END_STATUSES, STATUS_LABEL, STATUS_MEANING } from "@/lib/hq/appointments";
 
 /**
  * The HQ appointment board.
@@ -51,6 +51,35 @@ const StatusBadge = ({ status, grantsAccess }: { status: string; grantsAccess: b
   </span>
 );
 
+/**
+ * Who the holder is: given name, full name, email and phone, so the board says who is appointed where.
+ * ⚠ A missing value reads "Not recorded", never blank. A profiles read that FAILED reads as unreadable,
+ * never as "Not recorded" -- that would claim the person has no email when nobody could look.
+ */
+const NotRecorded = () => <span className="text-gray-500 italic">Not recorded</span>;
+function PersonDetails({ d }: { d: HqPersonDetails }) {
+  if (d.state === "unreadable")
+    return <p className="w-full text-[11px] text-amber-900">Contact details could not be read, so none are shown. This is not &ldquo;not recorded&rdquo;. ({d.error})</p>;
+  if (d.state === "no_profile")
+    return <p className="w-full text-[11px] text-gray-500">No profile is linked to this appointment, so there are no contact details to show.</p>;
+  const rows: [string, ReactNode][] = [
+    ["Given name", <span key="g" className="text-gray-500 italic" title={GIVEN_NAME_NOT_STORED}>Not stored separately</span>],
+    ["Full name", d.fullName ?? <NotRecorded />],
+    ["Email", d.email ? <a href={`mailto:${d.email}`} className="text-teal-700 hover:underline break-all">{d.email}</a> : <NotRecorded />],
+    ["Phone", d.phone ? <a href={`tel:${d.phone.replace(/\s+/g, "")}`} className="text-teal-700 hover:underline">{d.phone}</a> : <NotRecorded />],
+  ];
+  return (
+    <dl className="w-full grid grid-cols-[auto_1fr] sm:grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-0.5 text-[12px]">
+      {rows.map(([k, v]) => (
+        <div key={k} className="contents">
+          <dt className="text-gray-500">{k}</dt>
+          <dd className="text-gray-800 min-w-0">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function HolderRow({ h, canAppoint, onEnd, busy }: {
   h: HqHolderView; canAppoint: boolean; busy: string | null;
   onEnd: (h: HqHolderView, status: string) => void;
@@ -65,6 +94,7 @@ function HolderRow({ h, canAppoint, onEnd, busy }: {
         {h.termEnd ? ` to ${h.termEnd}` : ""}
         {h.appointedBy ? ` · appointed by ${h.appointedBy}` : ""}
       </span>
+      <PersonDetails d={h.person} />
       {canAppoint && h.status !== "removed" && (
         <span className="ml-auto flex items-center gap-1.5">
           <select
@@ -163,7 +193,8 @@ function PositionCard({ p, canAppoint, people, busy, onAppoint, onEnd, spaceStaf
                 <option value="">Choose a person…</option>
                 {people.value.map(pe => (
                   <option key={pe.id} value={pe.id}>
-                    {pe.name ?? pe.email ?? pe.id}{pe.role ? ` — ${pe.role}` : ""}
+                    {/* Name AND email, so two people with the same name can be told apart. */}
+                    {pe.name ?? "Name not recorded"} · {pe.email ?? "email not recorded"}{pe.role ? ` — ${pe.role}` : ""}
                   </option>
                 ))}
               </select>
@@ -367,6 +398,7 @@ export default function AppointmentsBoard({ board, people, canAppoint, viewerId,
                       <span className="text-gray-500">{o.spaceLabel}</span>
                       <StatusBadge status={o.status} grantsAccess={o.grantsAccess} />
                       <span className="text-amber-800">grants no HQ capability</span>
+                      <PersonDetails d={o.person} />
                     </li>
                   ))}
                 </ul>}

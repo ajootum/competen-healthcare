@@ -296,8 +296,9 @@ async function main() {
   const posCaps = await admin.from("hq_position_capability").select("capability_code").eq("position_code", "individual_product_administrator").is("effective_to", null);
   ok("K1. D9: the Individual Product Administrator position exists in the platform space and the individual product line",
     pos.data?.space === "platform" && pos.data?.product_line_code === "individual" && pos.data?.is_active === true, JSON.stringify(pos.data));
-  ok("K2. D9: it holds hq.individual.pilot.grant (and the HQ landing), and nothing else",
-    (posCaps.data ?? []).map((c: any) => c.capability_code).sort().join() === "hq.individual.pilot.grant,hq.platform.home.view");
+  // COMPETEN-CONFIG-002: migration 376 adds hq.individual.config.manage to the same position. Still exact.
+  ok("K2. D9: it holds hq.individual.pilot.grant, hq.individual.config.manage (376) and the HQ landing, and nothing else",
+    (posCaps.data ?? []).map((c: any) => c.capability_code).sort().join() === "hq.individual.config.manage,hq.individual.pilot.grant,hq.platform.home.view");
   const grantorCaps = await resolveHqPositions(admin, grantor);
   ok("K3. ⚠ a person with no HQ appointment does not hold the grant right", !grantorCaps.capabilities.includes("hq.individual.pilot.grant"));
 

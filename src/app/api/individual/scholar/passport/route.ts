@@ -3,6 +3,7 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { includeInPassport, removeFromPassport } from "@/lib/individual/scholar/store";
 import { audit } from "@/lib/individual/scholar/http";
 import { isStudyAchievementKind, parseLabel, PASSPORT_LABEL_MAX } from "@/lib/individual/scholar/passport-items";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -19,6 +20,10 @@ export async function POST(req: Request) {
   if (isGuardRefusal(ctx)) return ctx;
   const body = await req.json().catch(() => ({}));
   if (!isStudyAchievementKind(body?.achievement)) return NextResponse.json({ error: "Choose an achievement." }, { status: 400 });
+  // A kind the Individual policy has switched off is not newly added (COMPETEN-CONFIG-002). Taking one off
+  // (DELETE) is always allowed.
+  if (!(await loadIndividualPolicy(ctx.admin)).passportAchievementKinds.includes(body.achievement))
+    return NextResponse.json({ error: "Adding that kind of achievement to your Passport is not offered at the moment." }, { status: 409 });
   const label = parseLabel(body?.label);
   if (!label) return NextResponse.json({ error: `Give it a title of 1 to ${PASSPORT_LABEL_MAX} characters.` }, { status: 400 });
   const r = await includeInPassport(ctx.admin, ctx.userId, { materialId: String(body?.materialId ?? ""), achievement: body.achievement, label });

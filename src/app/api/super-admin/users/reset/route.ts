@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
-import { isUuid } from "@/lib/individual/professional/validate";
-import { RESET_CAPABILITY, requestAdminReset } from "@/lib/hq/user-reset";
+import { RESET_CAPABILITY, isUserId, requestAdminReset } from "@/lib/hq/user-reset";
 
 // Request-time only: it reads the session and must never be prerendered.
 export const dynamic = "force-dynamic";
@@ -19,7 +18,7 @@ export async function POST(req: Request) {
   const ctx = await hqApiGate([RESET_CAPABILITY]);
   if (isHqRefusal(ctx)) return ctx;
   const body = await req.json().catch(() => ({}));
-  if (!isUuid(body?.userId)) return NextResponse.json({ error: "Choose a person." }, { status: 400 });
+  if (!isUserId(body?.userId)) return NextResponse.json({ error: "Choose a person." }, { status: 400 });
   const r = await requestAdminReset(ctx.admin, { userId: ctx.userId, fullName: ctx.fullName, isOwner: ctx.isOwner }, body.userId);
   return NextResponse.json(r.body, { status: r.status });
 }

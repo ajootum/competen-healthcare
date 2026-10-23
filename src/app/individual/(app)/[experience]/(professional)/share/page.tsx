@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
-import { listShares } from "@/lib/individual/professional/share";
+import { listShares, suggestedShareDays } from "@/lib/individual/professional/share";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 import type { Metadata } from "next";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
@@ -23,7 +24,8 @@ export default async function SharePage({ params }: { params: Promise<{ experien
   if (!page) return null;
   const { ctx } = page;
   const x = EXPERIENCES.professional;
-  const links = await listShares(ctx.admin, ctx.userId);
+  const [links, policy] = await Promise.all([listShares(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
+  const maxDays = policy.shareLinkMaxDays;
   const now = new Date().toISOString();
 
   return (
@@ -51,7 +53,7 @@ export default async function SharePage({ params }: { params: Promise<{ experien
                 <option value="full">Full</option>
               </select>
             </Field>
-            <Field label="Valid for (days)" htmlFor="sh-days"><input id="sh-days" name="days" type="number" min={1} max={365} defaultValue={30} className={inputCls} /></Field>
+            <Field label="Valid for (days)" htmlFor="sh-days" hint={`Up to ${maxDays} days.`}><input id="sh-days" name="days" type="number" min={1} max={maxDays} defaultValue={suggestedShareDays(maxDays)} className={inputCls} /></Field>
             <Field label="Purpose (optional)" htmlFor="sh-label" hint="Shown on the link, e.g. a job application."><input id="sh-label" name="label" maxLength={120} className={inputCls} /></Field>
           </div>
         </ApiForm>
