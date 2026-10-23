@@ -19,7 +19,8 @@
  *      refusing a malformed case; progress by competency from real answers
  *   A  every AI call is in plat_ai_requests with person attribution and the Scholar operation
  *   E  erasing the material removes its concepts, mappings and decisions THROUGH the append-only trigger
- *   Z  fixtures, programmes and the Scholar allowlist restored exactly
+ *   Z  fixtures and programmes removed; a Scholar allowlist that was set is NEVER touched (shared staging
+ *      configuration); one the run had to add is removed only while it is still unchanged
  *
  * ⚠ IT IMPORTS THE CODE IT TESTS (the store, catalogue adapter, mapping, generation, progress). Nothing
  * below restates their rules.
@@ -140,7 +141,7 @@ async function main() {
   await cleanupUsers();
   await cleanupProgrammes();
   const before = (await admin.from("workspace_config_overrides").select("*").match(ALLOW).maybeSingle()).data;
-  let a = "", b = "", materialId: string | null = null;
+  let a = "", b = "", materialId: string | null = null, runAllowId: string | null = null;
   try {
     // ── G (setup). Programmes are rows ──
     const ins = await admin.from("individual_scholar_programme").insert([
@@ -160,13 +161,25 @@ async function main() {
     const cat = scholarCatalogue(admin);
 
     // ── N. nothing while the allowlist is empty ──
-    await admin.from("workspace_config_overrides").delete().match(ALLOW);
-    const none = await cat.forProgramme(nursing);
-    ok("N1. ⚠ with the Scholar allowlist empty, the nursing programme is offered nothing -- naming a catalogue is not allowing it",
-      none.ok && none.data.length === 0, JSON.stringify(none.ok ? none.data.length : none));
+    // ⚠ THE ALLOWLIST IS SHARED STAGING CONFIGURATION (the owner's viewing setup lives in it). The run never
+    // removes or changes one that is set: N1 runs only when there is none, and the run's own allowlist is
+    // written only where none exists, and removed at the end only if it is still exactly what the run wrote.
+    if (!before) {
+      const none = await cat.forProgramme(nursing);
+      ok("N1. ⚠ with the Scholar allowlist empty, the nursing programme is offered nothing -- naming a catalogue is not allowing it",
+        none.ok && none.data.length === 0, JSON.stringify(none.ok ? none.data.length : none));
+    } else pend("N1. the empty default", "a Scholar allowlist is set here and is never removed by this run; the default is pinned statically (competency-foundation-harness)");
 
-    // ── G. the run's allowlist, then configuration decides ──
-    await admin.from("workspace_config_overrides").insert({ ...ALLOW, draft: { ids: [cf.id, nr.id] }, published: { ids: [cf.id, nr.id] } });
+    // ── G. the run's allowlist (only where none is set), then configuration decides ──
+    const seedIds = [cf.id, nr.id];
+    const has = (row: any) => seedIds.every(id => (row?.published?.ids ?? []).includes(id));
+    if (!before) {
+      const ins = await admin.from("workspace_config_overrides").insert({ ...ALLOW, draft: { ids: seedIds }, published: { ids: seedIds } }).select("id").single();
+      runAllowId = ins.data?.id ?? null;
+    } else if (!has(before)) {
+      pend("G. the slice", "a Scholar allowlist is set here without both seed catalogues; this run does not change it");
+      return;
+    }
     const nCat = await cat.forProgramme(nursing), oCat = await cat.forProgramme(other), xCat = await cat.forProgramme(notAllowed);
     const comps: CatalogueCompetency[] = nCat.ok ? nCat.data : [];
     ok("G1. the nursing programme is offered 8 foundational then 5 nursing respiratory competencies, foundational first, with S1 layers and outcomes",
@@ -357,10 +370,11 @@ async function main() {
   } finally {
     await cleanupUsers();
     await cleanupProgrammes();
-    await admin.from("workspace_config_overrides").delete().match(ALLOW);
-    if (before) await admin.from("workspace_config_overrides").insert(before);
+    // Compare-and-remove: only the row this run inserted, only while it is unchanged. Anything else is left alone.
+    if (runAllowId) await admin.from("workspace_config_overrides").delete().eq("id", runAllowId).is("updated_by_name", null).is("updated_by", null);
     const now = (await admin.from("workspace_config_overrides").select("*").match(ALLOW).maybeSingle()).data;
-    ok("Z1. the Scholar allowlist is restored exactly", JSON.stringify(now) === JSON.stringify(before));
+    ok("Z1. the Scholar allowlist is as the run found it (the run removes only its own unchanged row)",
+      runAllowId ? !now || now.id !== runAllowId : JSON.stringify(now) === JSON.stringify(before));
     const progLeft = (await admin.from("individual_scholar_programme").select("code").in("code", Object.values(PROG))).data ?? [];
     ok("Z2. the harness programmes and fixture identities are gone", progLeft.length === 0 && !(await findUser(FIX.a)) && !(await findUser(FIX.b)));
   }
