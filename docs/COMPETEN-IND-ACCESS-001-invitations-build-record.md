@@ -48,9 +48,33 @@ An HQ administrator holding `hq.individual.pilot.grant` can invite an email addr
 | State | Status | Evidence |
 |---|---|---|
 | 1. Authored | Done, 2026-10-23 | House rules: ALL CLEAR (3 expected warnings: `$$`, plpgsql, function; the `APPLY THIS FILE WHOLE` banner is present) |
-| 2. Applied and verified on staging | **Done.** Applied by the owner with `npx.cmd tsx scripts/apply-migrations.ts --only 378` | **Pre-application** (11:04Z, read-only REST, with controls): `individual_invitation` and `individual_live_invitation` absent (PGRST205); absent-table control PGRST205; absent-column control 42703. **Post-application catalog** (read-only transaction on `STAGING_DB_URL`, guarded by `judgeDbTarget`): all 8 CHECKs, including `scholar_adult` on `adult_confirmed_at` only, the corrected form; the full unique index on generated `pending_email`; trigger `trg_individual_invitation_guard` enabled; RLS on, with policy `individual_invitation_read_own` (SELECT); view `security_invoker=true`; 0 rows. The second, idempotent run: **owner's run output to be attached** by the main session. |
+| 2. Applied and verified on staging | **Done.** The owner applied it **twice** from `competen-ind-002` with `npx.cmd tsx scripts/apply-migrations.ts --only 378` and reported "Done" (relayed by the main session, which also checked that the file on disk was the corrected version: CRLF `c26dd5ab…`, LF `f2d535b7…`). | See the evidence below this table. |
 | 3. Merged into `main` | Not yet (PR) | The code that reads it fails closed while the table is absent: HQ shows "Invitations are not set up in this environment yet", and the access page shows no invitation. The whole flow also sits behind `individual_app` (default OFF). |
 | 4. Applied to production | **Not authorised.** Needs a separate owner GO plus the OPS-001 safeguards. | — |
+
+**Staging evidence for state 2:**
+- **Pre-application** (11:04Z, read-only REST, with controls):
+  - `individual_invitation` and `individual_live_invitation` absent (PGRST205);
+  - absent-table control: PGRST205;
+  - absent-column control: 42703;
+  - `individual_membership` present.
+- **Post-application catalog, first check** (read-only transaction on `STAGING_DB_URL`, guarded by `judgeDbTarget`):
+  - all 8 CHECKs, including `scholar_adult` on `adult_confirmed_at` only, which is the corrected form;
+  - the full unique index on the generated `pending_email`;
+  - trigger `trg_individual_invitation_guard` enabled;
+  - RLS on, with policy `individual_invitation_read_own` (SELECT);
+  - view `security_invoker=true`;
+  - 0 rows.
+- **Post-application catalog, second check** (11:35Z, after both runs):
+  - the D8 CHECK is still `NOT invite_scholar OR adult_confirmed_at IS NOT NULL`, the corrected form;
+  - the public objects named like `invitation` are only this migration's (table, view, three indexes, pkey) plus the pre-existing `practice_invitation` and its two indexes;
+  - the only new function is `individual_invitation_guard`, and the only trigger on the table is `trg_individual_invitation_guard`;
+  - the 370 tables still carry 9 and 11 constraints and their own-row SELECT policies;
+  - 0 rows.
+- **What the pre-state covers:** it was an existence probe of the objects 378 creates, not a full catalog snapshot. "The rest of public unchanged" therefore rests on three facts:
+  - the file contains no statement against any other object;
+  - the post-check enumerates what exists by name, and finds only 378's objects;
+  - the 370 constraints and policies are intact.
 
 **Checksums:** these must match the file the owner applies.
 - LF, as git stores it: `f2d535b7015f824c842db160220c76968359c3d51c482ee647ef064576e18d58`. Verified on the committed blob.
@@ -78,7 +102,8 @@ notify pgrst, 'reload schema';
 - **Foundation harness: 58/58.**
   - Updated by decision: 1d (the one role-clearing profiles write), 2a (`individual_invitation` writes), 5a (named exception for the accept route), 5b (invitation routes) and 5c (grant-engine callers, including the relative import).
   - New: 12l, 12m and 12n, each proven red by a planted violation.
-- **Vitest:** 197/197, including `invitations.test.ts`.
+- **Auth-boundary harness:** green. The accept route enters `requireIndividualSession`, a new pre-membership boundary in `guard.ts`: the release gate, then the session, and it grants nothing. It is registered in `scripts/auth-boundary-harness.ts` with its plane stated. Before it existed, the route entered no boundary and the harness went red, which is how this was caught.
+- **Vitest:** 551/551 across `src/lib` after merging main `bf549efc`, including `invitations.test.ts`.
 - **Typecheck and lint:** clean.
 - **Staging HTTP:** `individual-access-harness` 66/66. Groups H, S1–S9 and I1–I20, with the dev server started with the test delivery mode.
   - The real invite link is followed to `/reset-password`, and the Individual destination is preserved.

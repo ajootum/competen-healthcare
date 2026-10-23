@@ -370,11 +370,14 @@ function main() {
 
   // ── 12l-12n. INVITATIONS FOR PEOPLE WITHOUT AN ACCOUNT (migration 378) ──
   const acceptSrc = SRC.get(ACCEPT_ROUTE) ?? "";
-  ok("12l. the accept route checks the release gate FIRST, then the session, and takes nothing from the body",
-    acceptSrc.indexOf("await connection()") > -1
-    && acceptSrc.indexOf("individualAppEnabled(admin)") > -1 && acceptSrc.indexOf("individualAppEnabled(admin)") < acceptSrc.indexOf("auth.getUser()")
-    && acceptSrc.indexOf("auth.getUser()") < acceptSrc.indexOf("acceptIndividualInvitation(")
-    && !/req\.json\(|request\.json\(|searchParams/.test(acceptSrc) && /acceptIndividualInvitation\(admin, \{ id: user\.id,/.test(acceptSrc));
+  // The pre-membership boundary (guard.ts requireIndividualSession): release gate first, then the session.
+  const sessionGuard = guardSrc.slice(guardSrc.indexOf("export async function requireIndividualSession"));
+  ok("12l. the accept route enters requireIndividualSession (gate FIRST, then session), and takes nothing from the body",
+    sessionGuard.length > 0 && sessionGuard.indexOf("await connection()") > -1
+    && sessionGuard.indexOf("individualAppEnabled(admin)") > -1 && sessionGuard.indexOf("individualAppEnabled(admin)") < sessionGuard.indexOf("auth.getUser()")
+    && !/from\("individual_/.test(sessionGuard.slice(0, sessionGuard.indexOf("export const isSessionRefusal")))
+    && acceptSrc.indexOf("requireIndividualSession()") > -1 && acceptSrc.indexOf("requireIndividualSession()") < acceptSrc.indexOf("acceptIndividualInvitation(")
+    && !/req\.json\(|request\.json\(|searchParams/.test(acceptSrc) && /acceptIndividualInvitation\(s\.admin, \{ id: s\.userId,/.test(acceptSrc));
   const invSrc = SRC.get("src/lib/individual/invitations.ts") ?? "";
   const modes = [
     inviteDeliveryMode({ INDIVIDUAL_INVITE_TEST_DELIVERY: "link", NODE_ENV: "development", NEXT_PUBLIC_SUPABASE_URL: "https://ezhvpgtcqcdsgylrxgdb.supabase.co" }),
