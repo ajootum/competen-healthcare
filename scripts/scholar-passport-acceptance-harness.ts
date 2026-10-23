@@ -159,7 +159,8 @@ async function verifyStudy(token: { id: string; nurse_id: string }) {
 async function verifyHtml(token: string): Promise<string | null> {
   if (!BASE) return null;
   const res = await fetch(`${BASE}/verify/${token}`, { cache: "no-store" });
-  return res.ok ? await res.text() : `HTTP ${res.status}`;
+  // React separates adjacent text with <!-- --> in server HTML, so compare text, not markup.
+  return res.ok ? (await res.text()).replace(/<!-- -->/g, "") : `HTTP ${res.status}`;
 }
 
 async function main() {
