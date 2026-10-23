@@ -40,7 +40,7 @@ const pend = (n: string, why: string) => console.log(`  PEND  ${n} -- ${why}`);
 const FIX = {
   resetter: "harness-usersb-resetter@competen.test", stranger: "harness-usersb-stranger@competen.test",
   target: "harness-usersb-target@competen.test", unverified: "harness-usersb-unverified@competen.test", suspended: "harness-usersb-suspended@competen.test",
-  burst: "harness-usersb-burst@competen.test", target2: "harness-usersb-target2@competen.test", ceo: "harness-usersb-ceo@competen.test",
+  burst: "harness-usersb-burst@competen.test", target2: "harness-usersb-target2@competen.test", ceo: "harness-usersb-ceo@competen.test", burstactor: "harness-usersb-burstactor@competen.test",
 };
 const PASSWORD = `usersB-${Math.random().toString(36).slice(2)}-Aa1!`;
 const UNKNOWN = "00000000-0000-4000-8000-0000000000b0";
@@ -112,11 +112,6 @@ async function main() {
   console.log(`HQ USERS RESET ACCEPTANCE (HQ-USERS-B) -- target ${ref}${BASE ? `, server ${BASE}` : ", no server"}\n`);
   const cap = await admin.from("hq_capability").select("code").eq("code", "hq.platform.users.reset").maybeSingle();
   if (!cap.data) { console.log("  PEND  migration 379 is not applied here. Nothing created."); return; }
-  // The reservation function must exist, or every reset is refused (503) by design. Probe it with a
-  // throwaway pair and remove the row it writes.
-  const probe = await admin.rpc(RESERVE_FUNCTION, { p_actor: UNKNOWN, p_target: UNKNOWN, p_actor_name: "harness probe", p_trace: null });
-  await admin.from("audit_log").delete().eq("actor_id", UNKNOWN);
-  if (probe.error) { console.log(`  PEND  the reservation function is not applied here (${probe.error.message}). Nothing created.`); return; }
   if (!BASE) { console.log("  PEND  every check -- BASE_URL is not set: this run is NOT acceptance. Nothing created."); return; }
 
   await cleanup();
@@ -129,13 +124,20 @@ async function main() {
       await admin.from("platform_membership").insert({ user_id: data.user.id, status: "active", source: "admin_grant", note: "HQ-USERS-B acceptance fixture. Staging only." });
     }
     await admin.auth.admin.updateUserById(id.suspended, { ban_duration: "876000h" });
+    // 383 must be applied, or every reset is refused (503) by design. One real reservation by a fixture
+    // proves it answers; its row is removed at once (and by cleanup in any case).
+    const probe = await admin.rpc(RESERVE_FUNCTION, { p_actor: id.stranger, p_target: id.stranger, p_actor_name: "harness probe", p_trace: null });
+    await admin.from("audit_log").delete().eq("actor_id", id.stranger).eq("action", RESET_RESERVED);
+    ok("0d. the reservation function (383) answers on this project", !probe.error && (Array.isArray(probe.data) ? probe.data[0] : probe.data)?.outcome === "reserved", probe.error?.message ?? JSON.stringify(probe.data));
+    if (probe.error) return;
     const office = await admin.from("ogs_offices").select("id").eq("office_type", "hq_platform").limit(1).maybeSingle();
     const appt = office.data ? await admin.from("ogs_office_appointments").insert({ office_id: office.data.id, person_id: id.resetter, person_name: "Harness usersB resetter", role: "platform_director", status: "active", term_start: new Date(Date.now() - 60_000).toISOString() }) : { error: { message: "no hq_platform office" } };
+    if (office.data) await admin.from("ogs_office_appointments").insert({ office_id: office.data.id, person_id: id.burstactor, person_name: "Harness usersB second administrator", role: "platform_director", status: "active", term_start: new Date(Date.now() - 60_000).toISOString() });
     ok("0. the resetter is appointed platform_director", !appt.error, appt.error?.message);
     const caps = (await resolveHqPositions(admin, id.resetter)).capabilities;
     ok("G0. 379: the Platform Director appointment holds hq.platform.users.reset", caps.includes("hq.platform.users.reset"), caps.join(","));
 
-    const resetter = await cookieFor(FIX.resetter), stranger = await cookieFor(FIX.stranger);
+    const resetter = await cookieFor(FIX.resetter), stranger = await cookieFor(FIX.stranger), burstActor = await cookieFor(FIX.burstactor);
     if (!resetter || !stranger) { ok("0c. fixtures sign in", false); return; }
 
     const s1 = await post("/api/super-admin/users/reset", stranger, { userId: id.target });
@@ -175,6 +177,15 @@ async function main() {
     const burst = await Promise.all(Array.from({ length: 8 }, () => post("/api/super-admin/users/reset", resetter, { userId: id.burst })));
     const burstReserved = await reservedFor("entity_id", id.burst);
     ok("L3. ⚠ 8 simultaneous requests for one person: exactly 3 reserved, all 8 answered neutrally", burstReserved === TARGET_LIMIT && burst.every(b => b.status === 202 && b.text.includes(NEUTRAL_MESSAGE)), `${burstReserved} reserved, statuses ${burst.map(b => b.status).join(",")}`);
+    // L4: a fresh administrator fires 25 simultaneous requests at 25 different people. Exactly 20 may be
+    // reserved, and the other 5 must be refused with 429, however they interleave.
+    if (burstActor) {
+      const targets = Array.from({ length: 25 }, (_, i) => `00000000-0000-4000-8000-0000000b${String(i).padStart(4, "0")}`);
+      const flood = await Promise.all(targets.map(t => post("/api/super-admin/users/reset", burstActor, { userId: t })));
+      const floodReserved = await reservedFor("actor_id", id.burstactor);
+      const limited = flood.filter(f => f.status === 429).length, neutral = flood.filter(f => f.status === 202).length;
+      ok("L4. ⚠ 25 simultaneous requests by one administrator: exactly 20 reserved, exactly 5 refused (429)", floodReserved === ACTOR_LIMIT && limited === 25 - ACTOR_LIMIT && neutral === ACTOR_LIMIT, `${floodReserved} reserved, ${neutral}x202, ${limited}x429, others ${flood.filter(f => f.status !== 202 && f.status !== 429).map(f => f.status).join(",")}`);
+    } else ok("L4. the second administrator fixture signs in", false);
     // L1: seeded reservations by someone else bring the person to the limit.
     await admin.from("audit_log").insert(Array.from({ length: TARGET_LIMIT }, () => ({ actor_id: id.stranger, action: RESET_RESERVED, entity_type: "user", entity_id: id.target, new_value: { seeded: "harness" } })));
     const t = await post("/api/super-admin/users/reset", resetter, { userId: id.target });
