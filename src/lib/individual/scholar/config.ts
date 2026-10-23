@@ -60,24 +60,41 @@ export const SELF_DIRECTED_LABEL = "Self-directed study. Nothing here is verifie
 // notice, not legal text: the Terms and Privacy Notice the person accepted on entry (owner ruling D2)
 // remain the legal documents, and this notice must be reviewed alongside them (COMPETEN-LEGAL-001).
 export const CONSENT_FEATURE = "ai_processing_uploads";
-export const CONSENT_NOTICE_VERSION = "scholar-ai-uploads-notice-v2";
+export const CONSENT_NOTICE_VERSION = "scholar-ai-uploads-notice-v3";
 /**
- * The owner-approved wording (owner GO, 2026-10-23), VERBATIM, subject to legal review (COMPETEN-LEGAL-001).
- * Do not edit a word without a new approval and a new version: the version is stored with every grant.
+ * v3 (owner GO, 2026-10-23): the owner-approved v2 wording with the seven consistency corrections from
+ * build record s10. Subject to legal review (COMPETEN-LEGAL-001). Do not edit a word without a new
+ * approval and a new version: the version is stored with every grant, and a grant counts only for the
+ * CURRENT version (consentIsCurrent), so a v2 grant is kept as a record but asked again.
  * scripts/scholar-learning-harness.ts pins the separation sentences.
  */
 export const CONSENT_NOTICE = {
   heading: "AI-assisted learning and your information",
   paragraphs: [
-    "Competen Scholar uses artificial intelligence to help you study, understand learning materials, generate practice questions and clinical cases, and receive personalised explanations and feedback.",
+    "Competen Scholar uses artificial intelligence to help you study, understand learning materials, generate practice questions and clinical cases, and receive personalised explanations, and feedback on practice questions drawn from your notes.",
     "AI-generated information may be incomplete or incorrect. It is intended to support learning and does not replace approved clinical guidance, professional supervision or independently verified competency assessment.",
-    "When you use AI features, relevant information you provide may be processed by Competen and its authorised technology providers to deliver those features. Your private uploads are not automatically shared with other learners or added to Competen's verified learning library.",
-    "With your separate, optional permission, eligible materials may be submitted for review and possible inclusion in a shared learning library. Submission does not guarantee publication. Permission to contribute materials is separate from any permission to use data for training AI models.",
+    "When you use AI features, relevant information you provide may be processed by Competen and its authorised technology providers to deliver those features. Your private uploads are not shared with other learners, and Competen does not use them to train AI models.",
     "Please do not upload identifiable patient information or material you do not have permission to use.",
   ],
-  review: "You can review the applicable Privacy Notice and Terms of Service before continuing.",
+  /** Consistency item 7: the operational facts, all true of the code today. */
+  howItWorks: [
+    "Only the passages of your notes that you ask about are sent to the AI.",
+    "Explanations are shown to you and not saved.",
+    "Practice questions are saved with the passage they came from, so you can check them.",
+    "Turning AI help off stops new AI requests. It deletes nothing: your notes, questions and progress stay until you delete them.",
+  ],
+  review: "You can review the applicable Privacy Notice and Terms of Use before continuing.",
   statement: "I understand how AI-assisted learning works and agree to the processing necessary to provide the AI features, as described in the Privacy Notice.",
 } as const;
 
+/** Shown instead of the agreement while the documents the notice relies on are not yet published. */
+export const CONSENT_AWAITING_LEGAL = "AI help will be available once our Privacy Notice and Terms of Use are published.";
+/** Shown to a person whose recorded agreement is to an earlier version of the notice. */
+export const CONSENT_UPDATED = "We have updated how we describe AI help. Please review the notice and agree again to keep using it.";
+
+/** Consistency item 2: one attestation, one timestamp (pii_attested_at), covering both. */
+export const UPLOAD_ATTESTATION = "I confirm this file contains no identifiable patient information, and I have permission to upload and use it.";
+export const UPLOAD_ATTESTATION_REQUIRED = "Confirm the file contains no identifiable patient information and that you have permission to upload and use it.";
+
 export const PII_WARNING =
-  "Do not upload anything that identifies a patient: no names with clinical details, NHS or hospital numbers, dates of birth or addresses. Use your own notes, lecture slides and published guidance.";
+  "Do not upload anything that identifies a patient: no names with clinical details, NHS or hospital numbers, dates of birth or addresses. Only upload material you have permission to use, such as your own notes, lecture slides and published guidance.";

@@ -288,6 +288,51 @@ Then, as **separate owner GOs**, in order:
 
 No production migration, merge, deployment or pilot activation has been done.
 
+### Addendum: AI consent v3 (owner GO, 2026-10-23)
+
+The owner's GO on the consistency check above: correct the seven items, remove references to contribution functionality that does not exist, use the Terms of Use name, and keep AI help off until the applicable Privacy Notice and Terms are published and legally approved. Operator names stay configurable. No schema change; 372 is unchanged.
+
+| # | Item | What changed |
+|---|---|---|
+| 1 | Optional-contribution sentence | **Removed entirely.** In its place is a plain statement that is true of the code today: *"Your private uploads are not shared with other learners, and Competen does not use them to train AI models."* |
+| 2 | Attestation covers patient data only | The upload checkbox is now *"I confirm this file contains no identifiable patient information, and I have permission to upload and use it."* The refusal in both upload routes says the same. **One attestation and one timestamp** (`pii_attested_at`) cover both; no schema change. The warning above it also says to upload only material you have permission to use. |
+| 3 | Privacy Notice and Terms unpublished | **Gate implemented** (`src/lib/individual/scholar/consent-gate.ts`). AI help cannot be turned on, or used, until every applicable document (the Scholar operator's and the shared foundation's Privacy Notice and Terms of Use) has a **version and a URL** in the Individual legal configuration. A version with no URL does not count, because nobody can open it. Until then the card says *"AI help will be available once our Privacy Notice and Terms of Use are published."* and shows the notice read-only. The consent route refuses a grant (409), and `aiPreflight` refuses every AI call (403) with that message. Turning AI help off is always allowed. The gate opens through configuration, not code. |
+| 4 | Terms of Service vs Terms of Use | "Terms of Use" throughout Scholar. Harness S3 fails if "Terms of Service" appears in any Scholar file. (The marketing site's planned footer link `src/lib/marketing/home-content.ts` still says "Terms of Service". It is outside Individual and was left alone.) |
+| 5 | Naming the AI provider and its training terms | **A legal dependency; recorded only, no code.** It belongs in the Privacy Notice (LEGAL-001). |
+| 6 | "feedback" loosely accurate | Now *"…and receive personalised explanations, and feedback on practice questions drawn from your notes."* |
+| 7 | Operational details dropped in v2 | A **"How it works"** list in the notice: only the passages you ask about are sent; explanations are not saved; questions are saved with their source passage; turning AI help off deletes nothing. |
+
+**Version and re-agreement.** The notice is `scholar-ai-uploads-notice-v3`. A grant counts only for the current version: `consentStatus` returns `on` only for a v3 grant with the documents published. A v2 grant stays in `individual_scholar_consent` as the record of what was agreed then. The person sees *"We have updated how we describe AI help. Please review the notice and agree again to keep using it."*, and can review and agree, or turn it off. Every AI surface (the Ask panels and the per-section actions) reads the same status, and none treats the stored grant as "on" by itself (harness S6).
+
+**Harness pins** (`scholar-learning-harness`, now 68 checks):
+- **S3:** the v3 wording. No contribution, library or submission language, the no-sharing/no-training sentence, Terms of Use, the feedback scope, and the four How-it-works items rendered.
+- **S5:** the legal gate, in the preflight and in the consent route before anything is saved. The pure function is checked with no documents, with one URL missing, and with all four published.
+- **S6:** re-agreement. v2 → `outdated`, v3 → `on`, and no page or route reads the raw grant.
+- **S7:** the attestation, on screen and in both refusals.
+- Planted **P15** (the route stops checking the documents) and **P16** (a page reads the raw grant again) both go red.
+
+The staging acceptance harness adds **C7** (a v2 grant is kept but refused, 403, asking again) and **C8** (documents unpublished: even a current grant is refused, 403, saying why). **C6** now runs with the documents set as published. The harness sets test legal versions and `example.test` URLs in its own process and restores the environment afterwards.
+
+**Staging walk-through.** Staging publishes test versions with no URLs, so the gate is closed there, which is the honest state. To walk through the agreement, the consent worktree's local `.env.local` (not committed) sets the four `INDIVIDUAL_LEGAL_*_URL` values to `example.test` addresses.
+
+**Screenshots** (`docs/evidence/COMPETEN-IND-004/consent-v3/`, live on staging):
+- v1: AI help awaiting the published documents, beside the new upload attestation;
+- v2: a v2 grant asked to agree again;
+- v3a/v3b: the v3 notice, How it works, the legal links and the statement;
+- v4: AI help on;
+- v5: the material page while the documents are unpublished;
+- m1: the notice on mobile at 390, with no horizontal overflow.
+
+The superseded v2 consent screenshots (owner-review r01–r03, r14) are kept as the record of what v2 showed.
+
+**Verification:**
+- `tsc` clean and `eslint` 0 errors on changed files.
+- `vitest` **595/595**, including 8 new consent-gate tests.
+- `scholar-learning-harness` **68/68**: S3, S5, S6 and S7, with planted P15 and P16 red.
+- `individual-foundation` **44/44**.
+- **Staging** `scholar-acceptance-harness` **45/45**: C6, C7 and C8 green, fixtures removed, flag restored to its prior state.
+- CI no-credential subset on an LF clone: **46/46 harnesses green** (`scripts/ci-harnesses.ts`, 5 excluded by record), on a `core.autocrlf=false` clone of this branch after `npm ci`.
+
 ## 8. Next
 
 - Staging acceptance is done (§6). Next is owner review of this branch and of 372 for production, which needs a separate GO and is blocked by the production freeze. Then an HQ console page for pilot grants, so Scholar pilots can be provisioned without the API.

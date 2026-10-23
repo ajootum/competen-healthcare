@@ -4,12 +4,15 @@ import { checkAiQuota } from "@/lib/ai/quota";
 import { currentTraceId } from "@/lib/trace";
 import type { IndividualContext } from "../guard";
 import { readConsent } from "./store";
+import { consentDocuments, consentStatus } from "./consent-gate";
+import { CONSENT_AWAITING_LEGAL, CONSENT_UPDATED } from "./config";
 
 // ── WHAT EVERY SCHOLAR AI ROUTE CHECKS, IN ORDER ── after requireIndividualContext("scholar") ────────────
 //
 //   1. CONSENT. The person's own, revocable consent to AI processing of their uploads
-//      (individual_scholar_consent). None, revoked, or unreadable: no AI call. Unreadable is not
-//      permission (ADR-015).
+//      (individual_scholar_consent), to the CURRENT notice version, while the Privacy Notice and Terms
+//      of Use it relies on are published (consent-gate.ts). None, revoked, to an earlier notice,
+//      documents unpublished, or unreadable: no AI call. Unreadable is not permission (ADR-015).
 //   2. QUOTA. The estate's hourly AI limit (src/lib/ai/quota.ts), which counts audit_log rows by action.
 //   3. CONFIGURATION. An environment with no AI provider says so rather than failing later.
 //
@@ -19,7 +22,10 @@ import { readConsent } from "./store";
 export async function aiPreflight(ctx: IndividualContext): Promise<NextResponse | null> {
   const consent = await readConsent(ctx.admin, ctx.userId);
   if (!consent.ok) return NextResponse.json({ error: "Your AI consent could not be checked just now, so nothing was sent. Try again shortly." }, { status: 503 });
-  if (!consent.data.granted)
+  const status = consentStatus(consent.data, consentDocuments().published);
+  if (status === "awaiting_legal") return NextResponse.json({ error: CONSENT_AWAITING_LEGAL }, { status: 403 });
+  if (status === "outdated") return NextResponse.json({ error: CONSENT_UPDATED }, { status: 403 });
+  if (status !== "on")
     return NextResponse.json({ error: "Turn on AI processing of your material in My Learning before asking for explanations or questions." }, { status: 403 });
   const quota = await checkAiQuota(ctx.admin, ctx.userId);
   if (!quota.ok) return NextResponse.json({ error: `You have reached the limit of ${quota.limit} AI requests an hour. Try again later.` }, { status: 429 });

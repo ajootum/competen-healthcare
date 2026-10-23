@@ -4,7 +4,7 @@ export const maxDuration = 60;
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { createMaterial, discardUpload, isUuid, readUpload, uploadPath } from "@/lib/individual/scholar/store";
-import { ALLOWED_MIME, MAX_UPLOAD_BYTES, type MaterialMime } from "@/lib/individual/scholar/config";
+import { ALLOWED_MIME, MAX_UPLOAD_BYTES, type MaterialMime, UPLOAD_ATTESTATION_REQUIRED } from "@/lib/individual/scholar/config";
 import { EXTRACTION_MESSAGE, PII_LABEL, chunkPages, extractMaterial, findPatientIdentifiers, sniffMime, titleFromFileName } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
 
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   if (!isUuid(uploadId) || !(ALLOWED_MIME as readonly string[]).includes(declared))
     return NextResponse.json({ error: "That upload could not be found." }, { status: 400 });
   if (body?.piiAttested !== true)
-    return NextResponse.json({ error: "Confirm the file contains no patient-identifiable information." }, { status: 400 });
+    return NextResponse.json({ error: UPLOAD_ATTESTATION_REQUIRED }, { status: 400 });
 
   const path = uploadPath(ctx.userId, uploadId, declared);
   const bytes = await readUpload(ctx.admin, path);

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Requirements of record, revised 2026-10-23 (Revision 1, §6–§10). **Production schema freeze in force** until the owner signs off §10. Backup and isolated restore are verified on production. |
+| **Status** | Requirements of record, revised 2026-10-23 (Revision 1, §6–§12). **Freeze lifted for Low-tier changes under the §8 gate** (owner GO, 2026-10-23); 370, 372 and 373 are applied (§11). R9–R11 are open (§12). |
 | **Scope** | The production Supabase project `rnnqhlrcgvsauigxwszl` (Competen Platform, Practice, Enterprise, Individual). |
 | **Not covered** | Application rollback, which is a Vercel concern and already has a verified path. See `COMPETEN-WEB-IND-001-website-redesign.md` §3a. |
 
@@ -110,7 +110,7 @@ Scripts are in `ops/backup/` and installed at `C:\Users\elish\CompetenBackup\bin
 
 | Migration | Tier | Basis |
 |---|---|---|
-| **370** Individual membership and entitlement | **Low** | Two new tables and one view.<br>• RLS and own-row policies on the new tables only.<br>• Its drop/add constraint statements touch only its own tables.<br>• The view is `security_invoker`, so it cannot read past the base table's RLS.<br>• FKs to `profiles` act only on the new rows. |
+| **370** Individual membership and entitlement | **Low** (see correction) | Two new tables and one view.<br>• RLS and own-row policies on the new tables only.<br>• Its drop/add constraint statements touch only its own tables.<br>• The view is `security_invoker`, so it cannot read past the base table's RLS.<br>• FKs to `profiles` act only on the new rows.<br>**Correction (2026-10-23):** 370 also inserts HQ catalogue rows into existing tables: capability `hq.individual.pilot.grant`, position `individual_product_administrator`, and two `hq_position_capability` grants. The first classification was made from an earlier draft without this section. These rows are additive, and no one is appointed, so no one's access changed; strictly, though, they are data in existing tables. The rule from now on: **classify from the file on `main`, by checksum**. |
 | **372** Scholar learning | **Low** | Six new tables and one private bucket.<br>• Own-row RLS, no write policies.<br>• Composite keys among its own tables; FK to `profiles` only.<br>• No `storage.objects` policies.<br>• No functions. |
 | **373** Professional record | **Low** | Six new tables and one private bucket.<br>• Own-row RLS.<br>• FKs to `profiles`, `frameworks`, `framework_competencies` (`set null`) and `passport_share_tokens` (`cascade`) act only on the new rows.<br>• No `storage.objects` policies. |
 
@@ -126,4 +126,29 @@ Scripts are in `ops/backup/` and installed at `C:\Users\elish\CompetenBackup\bin
 - [x] First production backup verified (2026-10-23, §7).
 - [x] Production isolated restore test **PASS** (2026-10-23, §7).
 - [x] Risk-tier gate adopted (§8); 370, 372 and 373 classified (§9).
-- [ ] The owner records the sign-off date here and gives a separate production GO for the 370 → 372 → 373 batch.
+- [x] Owner production GO for the 370 → 372 → 373 batch, 2026-10-23 ("Production GO for 370 → 372 → 373 … GO"). **The freeze is lifted for Low-tier changes under the §8 gate.**
+
+## 11. Release batch record (production, 2026-10-23)
+
+| Step | Detail |
+|---|---|
+| Recovery reference | `competen-production-20261023-1021.dump.gpg`, sha256 `a31369ef…`. Isolated restore **PASS**: 715/715 tables, 0 errors, schema fingerprint `67c8b840…` matches live. |
+| Pre-check | All 15 objects and both buckets absent. Dependencies `profiles`, `frameworks`, `framework_competencies` and `passport_share_tokens` present (uuid ids). `individual_app` has no row. Baseline 672 tables, 318 policies. |
+| Files | Applied from `main`; checksums match staging (370 `4b327cb8…`, 372 `17a43464…`, 373 `4b53519a…`). Applied by the owner in the SQL editor, one at a time. |
+| 370 | Verified: 2 tables with RLS, 1 own-row policy each, 0 rows. View `security_invoker=true`. HQ capability, position and 2 grants present; nobody appointed. 674 tables, 320 policies. A first attempt ran outside production and changed nothing; the read-only check caught it, and it was re-run in production. |
+| 372 | Verified: 6 tables with RLS, 1 policy each, 0 rows. Private bucket `individual-scholar-materials` (10 MB). 680 tables, 326 policies. |
+| 373 | Verified: 6 tables with RLS, 1 policy each, 0 rows. Private bucket `individual-professional-evidence` (10 MB). **686 tables, 332 policies**; functions unchanged (379). No `storage.objects` policies. |
+| Gate | `individual_app` has no row before and after. Individual stays off. |
+| Rollback | `docs/evidence/COMPETEN-OPS-001/ROLLBACK-370-372-373.sql`: drop the new objects in reverse order, and buckets only if empty. Not used. |
+
+**Dark deploy, same day.** Production deployment `dpl_36p4BL34ipAgrZFuCRVgSqppXFuQ` (`main` `88df2929`), deployed by CLI. Git auto-deploys stay paused (Ignored Build Step = pre-production only). Rollback reference: `dpl_BQufB4JpTK4RHxYBSHCgPCRZ97oc`.
+- **Individual dark:** all 38 Individual page URLs return 404 with the root title; all 31 Individual API method checks return 404; the HQ grant APIs return 403.
+- **No regression:** the public site, Practice, Enterprise, Recruitment, Staff, Platform and `/login` all respond 200. The public disclosure harness gives 213 assertions and 1 failure, the same as the pre-deploy baseline.
+
+## 12. Outstanding recovery requirements
+
+| # | Requirement | Status |
+|---|---|---|
+| R9 | **Storage-file backup.** Supabase Storage objects (uploaded files in `individual-scholar-materials`, `individual-professional-evidence` and the estate buckets) are outside `pg_dump`. A restore can bring back rows whose file is gone. | **Open**, as a separate requirement. Needed before uploads hold anything that cannot be re-uploaded. |
+| R10 | **An independent copy of the archive key.** Without it, the encrypted backups cannot be read if this PC is lost. | **Open (owner action):** connect the backup SSD and run `competen-db-backup.ps1 -ExportRecoveryKey`, then also keep the key in a password manager. |
+| R11 | **Retention keeps the last restore-tested archive.** Today's rule keeps the newest backup per day, which replaced the 09:48 restore-tested archive; the 10:21 archive was then restore-tested too. | Recommended refinement. Until then, a restore test runs on the recovery reference before every production batch. |
