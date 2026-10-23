@@ -271,7 +271,7 @@ export function ChunkActions({ chunkId, consent }: { chunkId: string; consent: b
     setBusy("");
     if (!r.ok) { setError(r.json.error ?? "No questions could be written."); return; }
     if (!r.json.created) { setNote(r.json.message); return; }
-    setNote(`${r.json.created} ${kind === "case" ? "case " : ""}question${r.json.created === 1 ? "" : "s"} added${r.json.dropped ? ` (${r.json.dropped} dropped by the grounding check)` : ""}. ${kind === "case" ? "Find them under Apply." : "Answer them below."}`);
+    setNote(`${r.json.created} ${kind === "case" ? "case " : ""}question${r.json.created === 1 ? "" : "s"} added${r.json.dropped ? ` (${r.json.dropped} dropped by the quality checks)` : ""}. ${kind === "case" ? "Find them under Apply." : "Answer them below."}`);
     router.refresh();
   }
   return (
@@ -392,7 +392,8 @@ export function CardReview({ cards }: { cards: CardView[] }) {
   if (!card) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-        <p className="text-[15px] font-semibold text-gray-900">{done.length ? `Done for today: you reviewed ${done.length} card${done.length === 1 ? "" : "s"}.` : "Nothing is due."}</p>
+        <p className="text-[15px] font-semibold text-gray-900">{done.length ? `Done for today: you reviewed ${done.length} card${done.length === 1 ? "" : "s"}.` : "Nothing is due for review."}</p>
+        {!done.length && <p className="mt-1 text-[13.5px] text-gray-600">Cards appear here when you get a practice or case question wrong. Answer some questions on one of your materials to start.</p>}
         {done.length > 0 && (
           <ul className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200">
             {done.map((d, k) => (

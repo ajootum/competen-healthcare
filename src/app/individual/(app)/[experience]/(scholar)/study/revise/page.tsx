@@ -45,11 +45,9 @@ export default async function Revise({ params }: { params: Promise<{ experience:
       {!cards.ok ? (cards.notProvisioned
         ? <StatePanel title="Revision is not set up on this environment yet"><p>The study store it needs has not been installed here.</p></StatePanel>
         : <Unreadable what="review cards" />)
-        : cards.data.length === 0 ? (
-          <StatePanel title="Nothing is due for review">
-            <p>Cards appear here when you get a practice or case question wrong. Answer some questions on one of your materials to start.</p>
-          </StatePanel>
-        ) : <CardReview cards={views} />}
+        // One component whether or not anything is due, so the session summary survives the refresh
+        // that follows the last card.
+        : <CardReview cards={views} />}
     </>
   );
 }

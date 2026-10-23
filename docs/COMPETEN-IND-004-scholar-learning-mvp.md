@@ -174,6 +174,7 @@ The owner accepted the Scholar journey as the MVP foundation, subject to one foc
 1. Distractors limited to the notes' own terms are safe but sometimes *obviously* wrong ("Take oxygen", "Fatigue, to relieve fluid overload"). That lowers discrimination, but nothing they say is false.
 2. The blind check is a second reading by the same model family. It catches ambiguity and keying errors; it is not a clinical review.
 3. A synonym of a passage term ("administer" for "give") is refused even when harmless. That is the conservative direction.
+4. **Explanations** are checked for numbers, months and clinical finding-words. Explanatory paraphrase is not checked. The live explanation glossed prerenal causes as "problems with blood supply to the kidneys", a phrase the notes do not contain. The source notice and the AI label are there for exactly this, and the passage is one click away.
 
 ### Verification
 
@@ -183,9 +184,9 @@ The owner accepted the Scholar journey as the MVP foundation, subject to one foc
 | `vitest` | **585 / 585**, including 10 new quality and verification cases. The fail-closed verdict and the CT-scan distractor are among them. |
 | `scholar-learning-harness` | **58 / 58**. R1–R5 pin each P0. Planted controls P11 (quality layer off), P12 (blind check skipped) and P13 ("mastery" back on a screen) each go red. |
 | `individual-foundation` / `auth-boundary` / `plane-boundary` / `access-doors` | 44/44 · green · 35/35 · 39/39 |
-| Real model, v3 pipeline, measured before the provider stopped | 11 blind-verified questions across 6 sets (3 passages × MCQ and case), at least 1 per set, 8–17 s per request. Every drop had a stated reason. |
-| Staging acceptance, re-run (flag ON for the run, restored to no row, IND-007 told) | **40 / 43.** All non-AI groups are green, including the new C6, U7 and U8. **A1–A3 failed only because the AI provider rejected every call:** "credit balance is too low" (see Blockers). |
-| Walk-through, updated presentation | 9 desktop (1440) and 3 mobile (390) screenshots in `docs/evidence/COMPETEN-IND-004/owner-review/`: AI help off, the notice before agreeing, AI help on, the two-column material page, feedback against the notes with the source notice, labelled personal scenarios, a revision answer with the notice, the revision summary, practice accuracy, sticky study tabs on mobile, case feedback and progress on mobile. **Because the provider was down, the fixture's questions were seeded.** Their stems and options are real v3-pipeline output from the measured run, the rationales and quotes are verbatim from the notes, and the rows are marked `model: screenshot-seed`. No explanation screenshot was possible. |
+| Real model, v3 pipeline | First run: 11 blind-verified questions across 6 sets, at least 1 per set, 8–17 s. **Re-measured after the credit was restored: 11 kept, every set at least 1 on the first attempt, 8–10 s.** Drops were 4 `unsupported_term` and 2 `ungrounded`, with no blind-check rejections. |
+| Staging acceptance, re-run (flag ON for the run, restored to no row and confirmed in the database, IND-007 told) | First run **40 / 43**: A1–A3 failed only because the AI provider was out of credit. **After the owner topped it up: 43 / 43, A1–A3 green.** The live explanation was shown. Questions kept 0 on the harness's short page-1 passage, which A2 allows: it checks that what is kept is sound, not that something is kept. |
+| Walk-through, updated presentation | 9 desktop (1440) and 3 mobile (390) screenshots in `docs/evidence/COMPETEN-IND-004/owner-review/`: AI help off, the notice before agreeing, AI help on, the two-column material page, feedback against the notes with the source notice, labelled personal scenarios, a revision answer with the notice, the revision summary, practice accuracy, sticky study tabs on mobile, case feedback and progress on mobile. **These were first captured with seeded questions while the provider was down. All of them are now replaced with live output.** That covers r04–r09, r11 and r12, plus **r13, a live explanation** cited to page 1 with the source notice. No screenshot in the set shows seeded data. |
 
 ### P1, done within scope
 
@@ -218,13 +219,13 @@ The owner accepted the Scholar journey as the MVP foundation, subject to one foc
 
 ### Blockers
 
-1. **The AI provider account is out of credit.** Every `generate()` returns `400 invalid_request_error: Your credit balance is too low` (request `req_011CgJciKh2J36AbCTKb1Mbc`). That blocks the live re-verification of P0.1 on staging (A1–A3). It is owner billing, not code. If production shares the key, production AI features are affected too.
+1. ~~The AI provider account was out of credit.~~ **Resolved:** the owner topped it up, and A1–A3 are green.
 2. Unchanged: production for 372 needs a separate GO (production freeze); the LEGAL-001 documents and the consent-notice wording need review; and `individual_app` is OFF in production.
 
 ### Recommended Scholar pilot-readiness decision
 
 **Conditional GO for a closed pilot, on four owner-side conditions. No further code is required.**
-1. Restore AI provider credit, then re-run `scholar-acceptance-harness` on staging until A1–A3 are green.
+1. ~~Restore AI provider credit, then A1–A3 green on staging.~~ **Met** (43/43).
 2. Publish the Holdings and Scholar-operator terms and privacy versions (LEGAL-001) and approve the consent-notice wording.
 3. Give the production GO for 370 and 372, after the recovery mechanism the production freeze requires.
 4. Turn `individual_app` on, and pilot-grant the cohort through the HQ grant right (D8/D9).
