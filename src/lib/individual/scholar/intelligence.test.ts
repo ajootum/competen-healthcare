@@ -87,7 +87,7 @@ describe("competency coverage reads S1 and S2 through interfaces, and is never g
     const catalogue = ["c1", "c2", "c3"].map(id => ({ id, code: null, name: id.toUpperCase(), frameworkId: "f", frameworkName: "NMC proficiencies" }));
     const mappings = [{ questionId: "a", competencyId: "c1" }, { questionId: "b", competencyId: "c2" }];
     const li = buildIntelligence({ ...base, questions, attempts: [at("a", true), at("b", false)], catalogue, mappings });
-    expect(li.coverage).toMatchObject({ state: "measured", total: 3, practised: 2, practisedCorrect: 1, gaps: [{ id: "c3", name: "C3" }] });
+    expect(li.coverage).toMatchObject({ state: "measured", total: 3, covered: 2, coveredPositive: 1, gaps: [{ id: "c3", name: "C3" }] });
     expect(li.recommendations.some(r => r.id === "coverage-gaps")).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import type { CompetencyRef, QuestionCompetency } from "./competency-sources";
+import { buildCompetencyCoverage, type CompetencyCoverage, type CompetencyEvidence, type Insufficient, type NotMeasured } from "@/lib/competency/progress-model";
 
 // ── LEARNING INTELLIGENCE ── COMPETEN-SCHOLAR-01 S5 ─────────────────────────────────────────────────────
 //
@@ -40,15 +41,11 @@ export type Thresholds = {
   windowDays: number;
 };
 
-export type Insufficient = { state: "insufficient"; have: number; need: number; reason: string };
-export type NotMeasured = { state: "not_measured"; reason: string };
-
-export type Coverage =
-  | { state: "measured"; framework: string; total: number; practised: number; practisedCorrect: number;
-      /** Not yet practised, highest expected level first (S1 expectedLevel), then by name. */
-      gaps: { id: string; name: string; expected: string | null }[];
-      rows: { id: string; name: string; answered: number; latestCorrect: number; expected: string | null }[] }
-  | NotMeasured;
+// The measure states and the coverage shape are Holdings-level (src/lib/competency/progress-model.ts), shared
+// with Competen Professional. Scholar fills them from practice: evidence = answered questions mapped to a
+// competency by an ACCEPTED map, positive = right on the latest try.
+export type { Insufficient, NotMeasured };
+export type Coverage = CompetencyCoverage;
 
 export type Engagement =
   | { state: "measured"; windowDays: number; studyDays: number; answered: number;
@@ -103,26 +100,23 @@ export function buildCoverage(
   questions: readonly IQuestion[], idx: ReturnType<typeof attemptIndex>,
   catalogue: readonly CompetencyRef[] | null, mappings: readonly QuestionCompetency[] | null, unreadable = false,
 ): Coverage {
-  if (unreadable) return { state: "not_measured", reason: "Competency information could not be read just now." };
-  if (catalogue === null) return { state: "not_measured", reason: "No competency framework is connected to your study yet." };
-  if (mappings === null) return { state: "not_measured", reason: "Your practice questions are not yet linked to competencies." };
-  if (catalogue.length === 0) return { state: "not_measured", reason: "Your competency framework lists no competencies." };
-  const known = new Set(questions.map(q => q.id));
-  const byComp = new Map<string, string[]>();
-  for (const m of mappings) if (known.has(m.questionId)) byComp.set(m.competencyId, [...(byComp.get(m.competencyId) ?? []), m.questionId]);
-  const rows = catalogue.map(c => {
-    const qs = byComp.get(c.id) ?? [];
-    const answered = qs.filter(q => idx.latest.has(q)).length;
-    const latestCorrect = qs.filter(q => idx.latest.get(q)?.correct).length;
-    return { id: c.id, name: c.name, answered, latestCorrect, expected: c.expectedLevel?.label ?? null, score: c.expectedLevel?.score ?? -1 };
+  let evidence: Map<string, CompetencyEvidence> | null = null;
+  if (mappings !== null) {
+    const known = new Set(questions.map(q => q.id));
+    evidence = new Map();
+    for (const m of mappings) {
+      if (!known.has(m.questionId)) continue;
+      const e = evidence.get(m.competencyId) ?? { evidence: 0, positive: 0 };
+      if (idx.latest.has(m.questionId)) e.evidence++;
+      if (idx.latest.get(m.questionId)?.correct) e.positive++;
+      evidence.set(m.competencyId, e);
+    }
+  }
+  return buildCompetencyCoverage({
+    catalogue: catalogue ? catalogue.map(c => ({ id: c.id, name: c.name, frameworkName: c.frameworkName, expectedLevel: c.expectedLevel ?? null })) : null,
+    evidence, unreadable,
+    reasons: { noCatalogue: "No competency framework is connected to your study yet.", noEvidenceSource: "Your practice questions are not yet linked to competencies." },
   });
-  const frameworks = [...new Set(catalogue.map(c => c.frameworkName))];
-  return {
-    state: "measured", framework: frameworks.join(", "), total: rows.length,
-    practised: rows.filter(r => r.answered > 0).length, practisedCorrect: rows.filter(r => r.latestCorrect > 0).length,
-    gaps: rows.filter(r => r.answered === 0).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).map(r => ({ id: r.id, name: r.name, expected: r.expected })),
-    rows: rows.map(({ score: _s, ...r }) => r),
-  };
 }
 
 export function buildEngagement(input: {
@@ -247,7 +241,7 @@ export function buildIntelligence(input: {
   if (reasoning.state === "measured")
     insights.push(`On your latest try you handle ${reasoning.accuracy}% of your practice scenarios correctly.`);
   if (coverage.state === "measured")
-    insights.push(`Your practice has touched ${coverage.practised} of ${coverage.total} competencies in ${coverage.framework}.`);
+    insights.push(`Your practice has touched ${coverage.covered} of ${coverage.total} competencies in ${coverage.framework}.`);
 
   // ── Recommendations: what to do next, each with its reason, highest priority first ──
   const recs: Recommendation[] = [];
