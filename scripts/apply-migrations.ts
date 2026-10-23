@@ -2,10 +2,14 @@
  * Apply the numbered migration chain to a FRESH Supabase project, in order, stopping at the first
  * failure — COMP-ENG-002E §7.
  *
- * ⚠⚠ IT REFUSES TO RUN AGAINST PRODUCTION. The production project ref is read from .env.local and the
- * target connection string is checked against it before anything executes. This script replays 332
- * migrations; pointed at production that would be catastrophic. The guard is why it is safe to keep in
- * the repository at all.
+ * ⚠⚠ IT REFUSES TO RUN AGAINST PRODUCTION. The target connection string is judged by
+ * scripts/production-guard.ts (judgeDbTarget) before anything executes: the production ref is that
+ * file's constant, never an environment variable, and a target whose project cannot be identified is
+ * refused too. This script replays 332 migrations; pointed at production that would be catastrophic.
+ * The guard is why it is safe to keep in the repository at all.
+ *
+ * ⚠ COMPETEN-OPS-001 R12: it once read the production ref from NEXT_PUBLIC_SUPABASE_URL, which is wrong
+ * in any worktree whose local app points at staging -- "production" then read as staging.
  *
  * ⚠ IT STOPS AT THE FIRST FAILURE. COMP-ENG-002E §7: "preserve and report the failure before
  * remediation; failure is evidence." A runner that continued past an error would leave a half-built
@@ -33,6 +37,7 @@ import { loadEnvConfig } from "@next/env";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
+import { PRODUCTION_REF, judgeDbTarget } from "./production-guard";
 
 loadEnvConfig(process.cwd());
 
@@ -75,17 +80,17 @@ if (!/^postgres(ql)?:\/\/\S+@\S+\/\S+/.test(dbUrl)) {
 }
 
 // ── The production guard ─────────────────────────────────────────────────────────────────────────
-const prodRef = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "")
-  .match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
-if (!prodRef) {
-  console.error("\n⚠ Could not read the production ref from NEXT_PUBLIC_SUPABASE_URL, so the safety");
-  console.error("  guard cannot run. Refusing rather than guessing.\n");
+const target = judgeDbTarget(dbUrl);
+if (!target.ok && target.reason === "PRODUCTION") {
+  console.error(`\n⛔ REFUSING TO RUN — STAGING_DB_URL points at PRODUCTION (${PRODUCTION_REF}).\n`);
   process.exit(1);
 }
-if (dbUrl.includes(prodRef)) {
-  console.error(`\n⛔ REFUSING TO RUN — STAGING_DB_URL points at PRODUCTION (${prodRef}).\n`);
+if (!target.ok) {
+  console.error("\n⛔ REFUSING TO RUN — STAGING_DB_URL does not identify a Supabase project, so this run");
+  console.error("  cannot prove it is not production. Use the SESSION pooler string from the dashboard.\n");
   process.exit(1);
 }
+const targetRef = target.ref;
 
 if (/:6543\//.test(dbUrl)) {
   console.error(`\n⛔ That is the TRANSACTION pooler (port 6543), which cannot run multi-statement SQL.`);
@@ -137,7 +142,7 @@ async function main() {
   }
 
   console.log(`\nApplying ${files.length} migration(s) via node-postgres`);
-  console.log(`(production is ${prodRef} — guard passed)\n`);
+  console.log(`(target is ${targetRef}; production is ${PRODUCTION_REF} — guard passed)\n`);
 
   let applied = 0;
   for (const f of files) {
