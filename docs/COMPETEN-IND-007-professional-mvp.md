@@ -242,6 +242,67 @@ Check ids:
 - Reminder unit tests 6 / 6.
 - vitest 618 / 618, foundation 44 / 44, tsc and eslint clean.
 
+### 8a. Owner review: reminders APPROVED as the MVP baseline (2026-10-23). Release conditions verified.
+
+| # | Condition | Result | Evidence |
+|---|---|---|---|
+| 1 | A failed email stays observable and does not consume the once-only reminder | **Defect found and fixed** (`e4efc18a`). The scan wrote the marker before `dispatch()` and ignored the outcome, so a failed send, or a skipped one (provider not configured), used the reminder up. Now the marker is **claimed** (atomic, no double send) and **kept only when the email delivery reports `sent`**. Otherwise it is released to its prior value and the next run retries. | Unit tests: a planted failed or skipped send releases the claim, and the retry delivers once; red when planted back (`reminders.test.ts`, 8/8). Harness N5 and 3 planted reds (61/61). **Staging acceptance E4**: a failed send against real rows leaves the marker unchanged, and the next run delivers and marks it once (36/36). Observability: `dispatch()` records a `notif_deliveries` row per attempt (status, error); the scan logs each failure and returns `failed` and `failures`; the job run reports "n not delivered, retried next run" plus a warning platform event (counts only). |
+| 2 | 60 days is a configurable policy candidate, not a permanent product rule | Done. It is one named constant, `REMINDER_HORIZON_DAYS` (`vocabulary.ts`), documented as a policy candidate. The email scan, the in-app panels and all UI text read it, and no other "60" remains. No config surface was built: where it is configured is for the CONFIG-001 audit to propose. | `vocabulary.ts`; `ReminderSettings.tsx`; registration and evidence hints |
+| 3 | In-app ON / email OFF defaults and independent preferences preserved | Unchanged by the fix | Acceptance N1, N2 (staging); unit "preferences" tests; harness N4 (schema defaults) |
+| 4 | The missing-374 fallback remains safe | Unchanged | Unit tests: the preferences read as defaults and not configurable when 374 is absent; the email scan sends to nobody when the opt-in cannot be read. The route answers 409 "not available" (`preferences.ts`, `reminders.ts`). |
+| 5 | 374 prepared for the next controlled production batch | Batch sheet below. Nothing applied. | — |
+
+### 8b. Production batch sheet: migration 374 (prepared, NOT applied; needs an owner production GO)
+
+| | |
+|---|---|
+| File | `supabase/migrations/374-individual-professional-reminder-preferences.sql` |
+| sha256 | `8ccd5a48500d53df30d0fe44845df6fb3e6e384ca4e857477dc9cea4a99b25a7`. The applied file must match `main` once PR #18 is merged. Check with `git show main:supabase/migrations/374-individual-professional-reminder-preferences.sql \| sha256sum`. |
+| Dependencies | 373 (`individual_professional_profile`), **applied in production** (OPS-001 §11). Nothing else. Independent of 375. |
+| Order | After 373. It may go alone or in a Low batch with other independent Low migrations. |
+| Risk tier (OPS-001 §8) | **Proposed Low, owner to confirm the wording.** In substance it is additive and non-destructive: two new columns with constant defaults, which is a catalogue-only change on PostgreSQL 11+ with no rewrite and no data change. It adds no constraint, index, policy, grant, trigger or function, and nothing existing relies on it, because the code reads it with its own query and falls back to the defaults without it. **But §8's Low text says "no change to existing tables", and 374 adds columns to an existing (Individual-only) table.** It is not Medium either: it changes none of the things Medium lists. So it needs either an explicit Low classification, or §8 amended to cover "additive columns with constant defaults on Individual tables". The gate for Low: a verified backup under 24 hours old, a recovery reference, and this rollback SQL. |
+| Release gate | `individual_app` stays **OFF** (no row) in production. 374 neither reads nor writes the flag. |
+| Applied by | The owner, by hand, in the Supabase SQL editor for production, as one script (APPLY THIS FILE WHOLE). |
+
+**Pre-check (read-only, production, before applying):**
+```sql
+select count(*) as profile_rows from individual_professional_profile;              -- record it
+select column_name from information_schema.columns
+ where table_schema='public' and table_name='individual_professional_profile'
+   and column_name in ('reminder_in_app','reminder_email');                         -- expect 0 rows
+select count(*) from information_schema.tables
+ where table_schema='public' and table_name like 'individual_professional_%';      -- expect 6 (373 present)
+select enabled from practice_platform_flags where flag='individual_app';           -- expect no row (gate OFF)
+```
+
+**Post-check (read-only, production, after applying):**
+```sql
+select column_name, data_type, is_nullable, column_default from information_schema.columns
+ where table_schema='public' and table_name='individual_professional_profile'
+   and column_name in ('reminder_in_app','reminder_email') order by column_name;
+-- expect: reminder_email boolean NO false / reminder_in_app boolean NO true
+select count(*) as profile_rows,
+       count(*) filter (where reminder_in_app) as in_app_on,
+       count(*) filter (where reminder_email)  as email_on
+  from individual_professional_profile;            -- profile_rows = pre-check; in_app_on = profile_rows; email_on = 0
+select enabled from practice_platform_flags where flag='individual_app';           -- still no row
+```
+
+**Rollback SQL:**
+```sql
+alter table individual_professional_profile drop column if exists reminder_email;
+alter table individual_professional_profile drop column if exists reminder_in_app;
+notify pgrst, 'reload schema';
+```
+No code change is needed after a rollback: without the columns, the app falls back to in-app ON, email OFF, switches not offered, and nobody emailed.
+
+**Recommended release action:**
+1. Merge PR #18 on an owner GO. CI should be green apart from the known staging-secrets smoke job.
+2. Confirm the sha256 on `main`.
+3. Classify 374 Low explicitly, or amend §8's wording.
+4. Apply 374 in the next controlled production batch under the Low gate, with the pre-check, the post-check and this rollback SQL.
+5. Keep `individual_app` OFF. Individual activation is a separate GO.
+
 ## 6. Next
 
 After the staging run: an IND-003 review of the foundation diff, then the owner's production decisions (370 first; 373 is blocked by the same schema freeze). Follow-ups noted, not built:
