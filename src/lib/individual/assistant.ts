@@ -1,5 +1,6 @@
 import { EXPERIENCES, type ExperienceKey } from "./experiences";
 import type { IndividualPassport } from "./passport";
+import { summariseOwn } from "./professional/passport-records";
 
 // ── THE PERSONAL AI, COMPETEN INDIVIDUAL'S ENTRY POINT ── COMPETEN-IND-003 s2(6) ───────────────────────
 //
@@ -75,6 +76,13 @@ export function recordContext(input: {
   if (creds === null) lines.push("Credentials: could not be read just now.");
   else if (!creds.length) lines.push("Credentials on record: none.");
   else lines.push(`Credentials on record: ${creds.slice(0, 10).map(c => `${c.title} (${c.evidence === "institution_verified" ? "verified" : "not verified"}${c.expiryDate ? `, expires ${c.expiryDate}` : ""})`).join("; ")}.`);
+
+  const own = input.passport.own;
+  if (own === null) lines.push("Records they added themselves in Competen Professional: could not be read just now.");
+  else if (own.length) {
+    const s = summariseOwn(own);
+    lines.push(`Records they added themselves (self-declared, not verified by anyone): ${s.byKind.registration ? "a professional registration, " : ""}${s.byKind.credential} credentials, ${s.byKind.competency_evidence} competency evidence items, ${s.byKind.cpd} CPD activities. ${s.byClass.source_linked} of them have a document attached.`);
+  }
 
   const jobs = input.passport.employment;
   if (jobs === null) lines.push("Employment history: could not be read just now.");

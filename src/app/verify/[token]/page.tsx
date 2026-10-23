@@ -1,11 +1,21 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { loadFrameworkCurrency, assessCurrency, summariseCurrency } from "@/lib/competency/framework-currency";
+import { loadOwnRecords, summariseOwn, OWN_KIND_LABEL, PROFESSION_NOT_RECORDED } from "@/lib/individual/professional/passport-records";
+import { shareCarriesOwnRecords } from "@/lib/individual/professional/share";
+import { EVIDENCE_LABEL } from "@/lib/individual/passport";
+import { individualAppEnabled } from "@/lib/individual/gate";
 
 export const dynamic = "force-dynamic";
 
 // COMP-023 PUBLIC passport verification page. NO auth — the unguessable token IS the access control.
 // Renders ONLY a consented subset of the professional's OWN passport (verified/current achievements — never
 // gaps, notes, patient data or anyone else's record), and only while the token is valid (not revoked/expired).
+//
+// COMPETEN-IND-007 s5. A link minted from Competen Professional ALSO carries the records the person added
+// themselves -- and only such a link: its companion row in individual_professional_share (migration 373)
+// is the consent. Those records are labelled with their evidence class and are never called verified, and
+// the page stops calling itself a "Verified Passport" when it shows them. Every other link renders exactly
+// as before.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const nameOf = (row: any) => { const fc = row?.framework_competencies; return (Array.isArray(fc) ? fc[0]?.name : fc?.name) ?? null; };
@@ -53,19 +63,31 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
   const full = share.scope === "full";
   const competencyNames = current.map(nameOf).filter(Boolean) as string[];
 
+  // While the Individual release gate is off (src/lib/individual/gate.ts) Individual does not exist, so no
+  // link shows its records -- every link renders as the estate one.
+  const carriesOwn = (await individualAppEnabled(admin)) && await shareCarriesOwnRecords(admin, share.id, share.nurse_id);
+  const own = carriesOwn ? await loadOwnRecords(admin, share.nurse_id) : null;
+  const ownSummary = own ? summariseOwn(own) : null;
+  // A Professional-minted link names the person's profession as THEY declared it, and says so. It never
+  // shows profiles.role, which the new-user trigger fills with a default (migration 335) and which
+  // Competen Individual neither sets nor relies on (ADR-016).
+  const registration = own?.find(o => o.kind === "registration");
+  const declaredProfession = registration && registration.title !== PROFESSION_NOT_RECORDED ? registration.title : null;
+  const ownSubtitle = declaredProfession ? `${declaredProfession} (self-declared)` : null;
+
   return (
     <Shell>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="bg-gradient-to-r from-teal-700 to-teal-600 px-6 py-5 text-white">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] uppercase tracking-widest text-teal-100/80 font-semibold">Competen · Verified Passport</span>
+            <span className="text-[11px] uppercase tracking-widest text-teal-100/80 font-semibold">{carriesOwn ? "Competen · Passport" : "Competen · Verified Passport"}</span>
             <span className="inline-flex items-center gap-1.5 text-[11px] bg-white/15 rounded-full px-2.5 py-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />Valid</span>
           </div>
           <div className="flex items-center gap-4 mt-3">
             <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-2xl font-bold shrink-0">{profile?.full_name?.[0] ?? "?"}</div>
             <div className="min-w-0">
               <h1 className="text-xl font-bold truncate">{profile?.full_name ?? "Professional"}</h1>
-              <p className="text-teal-50 text-sm capitalize">{roleLabel}{profile?.specialization ? ` · ${profile.specialization}` : ""}</p>
+              <p className="text-teal-50 text-sm capitalize">{carriesOwn ? ownSubtitle : <>{roleLabel}{profile?.specialization ? ` · ${profile.specialization}` : ""}</>}</p>
             </div>
           </div>
         </div>
@@ -122,12 +144,36 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
             </div>
           )}
 
+          {carriesOwn && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900">Records the professional added themselves</h2>
+              <p className="text-[11.5px] text-amber-900 mt-0.5 leading-relaxed">Recorded by the professional in Competen Professional. They are not verified by Competen or by any organisation. Where it says a document is attached, the document was not checked and is not shared here.</p>
+              {own === null ? <p className="text-[12px] text-gray-600 mt-2">These records could not be read just now.</p>
+                : own.length === 0 ? <p className="text-[12px] text-gray-600 mt-2">None recorded.</p>
+                  : !full ? (
+                    <p className="text-[12.5px] text-gray-700 mt-2">{ownSummary!.total} {ownSummary!.total === 1 ? "record" : "records"}: {ownSummary!.byClass.self_declared} {EVIDENCE_LABEL.self_declared.toLowerCase()}, {ownSummary!.byClass.source_linked} {EVIDENCE_LABEL.source_linked.toLowerCase()}.</p>
+                  ) : (
+                    <div className="space-y-1.5 mt-2">
+                      {own.slice(0, 60).map((o, i) => (
+                        <div key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] border-b border-amber-100 pb-1.5">
+                          <span className="font-medium text-gray-800 min-w-0">{o.title}</span>
+                          <span className="text-[10.5px] text-gray-500">{OWN_KIND_LABEL[o.kind]}{o.detail ? ` · ${o.detail}` : ""}{o.date ? ` · ${fmt(o.date)}` : ""}{o.expires ? ` · exp ${fmt(o.expires)}` : ""}</span>
+                          <span className="ml-auto text-[10.5px] font-semibold text-amber-900">{EVIDENCE_LABEL[o.evidence]}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+            </div>
+          )}
+
           {!full && <p className="text-[12px] text-gray-500">This is a summary verification. The professional can share a detailed link that lists their current competencies and verified credentials.</p>}
 
           <div className="border-t border-gray-100 pt-4 text-[11px] text-gray-400 space-y-0.5">
             {share.label && <p className="text-gray-500">Purpose: {share.label}</p>}
             <p>Shared {fmt(share.created_at)} · valid until {fmt(share.expires_at)}.</p>
-            <p>A consented, time-limited verification shared by the professional. It shows only verified, current achievements and can be revoked at any time. Verified by the Competen Competency Passport.</p>
+            {carriesOwn
+              ? <p>A consented, time-limited link shared by the professional, revocable at any time. Competencies and credentials above the self-recorded section were issued or verified by an organisation. The self-recorded section is the professional&apos;s own account.</p>
+              : <p>A consented, time-limited verification shared by the professional. It shows only verified, current achievements and can be revoked at any time. Verified by the Competen Competency Passport.</p>}
           </div>
         </div>
       </div>
