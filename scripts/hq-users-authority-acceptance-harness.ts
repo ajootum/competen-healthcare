@@ -10,7 +10,9 @@
  *   V  the viewer reads the directory API and the page, and sees no account-write controls
  *   W  every owner-only write is refused to the viewer (403) and changes nothing
  *   S  the stranger is refused the directory API
- *   O  the OWNER path is PEND: proving it needs a synthetic super admin, which needs an owner GO
+ *   O  the OWNER path, only with HQ_OWNER_FIXTURE_GO=1 under an owner GO: a temporary super admin held in roles[]
+ *      only reads, changes a role, suspends and reactivates, creates and deletes, cannot delete itself, and the
+ *      last-super-admin count includes roles[] holders; it is then retired (Z0) and kept for the audit trail
  *   Z  fixtures and the appointment are removed
  *
  * Refuses production via assertSafeTarget. Creates and deletes its own harness-usersA-* identities.
@@ -56,6 +58,35 @@ async function cleanup() {
 async function cookieFor(email: string) {
   const { data } = await createClient(url!, anonKey!, { auth: { persistSession: false } }).auth.signInWithPassword({ email, password: PASSWORD });
   return data?.session ? `sb-${new URL(url!).hostname.split(".")[0]}-auth-token=base64-${Buffer.from(JSON.stringify(data.session)).toString("base64")}` : null;
+}
+// The owner group's identities. The owner is retired and KEPT (its audit rows keep their actor); the two
+// throwaway accounts it creates and deletes are removed.
+const FIX_OWNER = { owner: "harness-usersa-owner@competen.test", victim: "harness-usersa-victim@competen.test", created: "harness-usersa-created@competen.test" };
+let ownerCookie: string | null = null;
+async function ownerFixture(): Promise<string> {
+  let u = await findUser(FIX_OWNER.owner);
+  if (!u) u = (await admin.auth.admin.createUser({ email: FIX_OWNER.owner, password: PASSWORD, email_confirm: true, user_metadata: { full_name: "Harness usersA temporary owner (synthetic)", synthetic: true } })).data.user;
+  else await admin.auth.admin.updateUserById(u.id, { password: PASSWORD, ban_duration: "none" });
+  await admin.from("profiles").update({ role: "nurse", roles: ["nurse", "super_admin"], platform_role: null, platform_roles: null }).eq("id", u.id);
+  if (!(await admin.from("platform_membership").select("id").eq("user_id", u.id).maybeSingle()).data)
+    await admin.from("platform_membership").insert({ user_id: u.id, status: "active", source: "admin_grant", note: "HQ-USERS-A temporary owner fixture (owner GO). Staging only." });
+  return u.id;
+}
+async function rolesOnlySuper(email: string): Promise<string> {
+  const { data } = await admin.auth.admin.createUser({ email, password: PASSWORD, email_confirm: true, user_metadata: { full_name: "Harness usersA victim (synthetic)", synthetic: true } });
+  await admin.from("profiles").update({ role: "nurse", roles: ["nurse", "super_admin"] }).eq("id", data.user.id);
+  return data.user.id;
+}
+async function retireOwner(id: string) {
+  await admin.from("profiles").update({ role: null, roles: [], platform_role: null, platform_roles: null }).eq("id", id);
+  await admin.from("platform_membership").delete().eq("user_id", id);
+  await admin.auth.admin.updateUserById(id, { ban_duration: "876000h" });
+  // Revoke every session it holds: the ban stops new sign-ins, this stops the existing ones refreshing.
+  if (ownerCookie) {
+    const token = JSON.parse(Buffer.from(ownerCookie.split("=base64-")[1], "base64").toString()).access_token;
+    await admin.auth.admin.signOut(token, "global").catch(() => {});
+  }
+  for (const e of [FIX_OWNER.victim, FIX_OWNER.created]) { const v = await findUser(e); if (v) await admin.auth.admin.deleteUser(v.id); }
 }
 const call = async (method: string, path: string, cookie: string, body?: unknown) => {
   const r = await fetch(`${BASE}${path}`, { method, redirect: "manual", headers: { "Content-Type": "application/json", Cookie: cookie }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -107,7 +138,58 @@ async function main() {
 
     const s = await call("GET", "/api/super-admin/users/list", stranger);
     ok("S1. ⚠ a person with no HQ position is refused the directory API", s.status === 403, String(s.status));
-    pend("O1. an owner can still do every write", "needs a synthetic staging super admin -- an owner GO; the static harness pins the owner gate (U2/U3)");
+    // ── O. the OWNER path, with a temporary owner-equivalent identity -- ONLY under an explicit owner GO ──
+    // super_admin is held in roles[] ONLY (role is "nurse"): exactly the shape the legacy profiles.role
+    // test refused. The identity is retired afterwards (roles stripped, membership removed, sessions revoked,
+    // banned) and KEPT, so the audit rows it wrote keep their actor.
+    if (process.env.HQ_OWNER_FIXTURE_GO !== "1") {
+      pend("O. the owner path", "needs HQ_OWNER_FIXTURE_GO=1 under an owner GO -- a temporary staging super admin is a privilege grant");
+    } else {
+      const ownerId = await ownerFixture();
+      try {
+        const owner = await cookieFor(FIX_OWNER.owner);
+        if (!owner) { ok("O0. the owner fixture signs in", false); return; }
+        const caps = await resolveHqPositions(admin, ownerId);
+        ok("O0. the owner fixture is an owner through roles[] only (role column is not super_admin)", (await admin.from("profiles").select("role").eq("id", ownerId).single()).data?.role === "nurse", JSON.stringify(caps.positions));
+        const l = await call("GET", "/api/super-admin/users/list", owner);
+        ok("O1. the owner reads the directory API", l.status === 200, String(l.status));
+        const p = await call("PATCH", "/api/super-admin/users", owner, { userId: made.stranger, org_roles: ["healthcare_worker"] });
+        const pr = (await admin.from("profiles").select("org_roles").eq("id", made.stranger).single()).data;
+        ok("O2. the owner changes another person's role", p.status === 200 && (pr?.org_roles ?? []).includes("healthcare_worker"), `${p.status} ${JSON.stringify(pr)}`);
+        const su = await call("POST", "/api/super-admin/users/actions", owner, { userId: made.stranger, action: "suspend" });
+        const bannedNow = (await admin.auth.admin.getUserById(made.stranger)).data?.user?.banned_until ?? null;
+        const un = await call("POST", "/api/super-admin/users/actions", owner, { userId: made.stranger, action: "unsuspend" });
+        const bannedAfter = (await admin.auth.admin.getUserById(made.stranger)).data?.user?.banned_until ?? null;
+        ok("O3. the owner suspends and reactivates an account", su.status === 200 && !!bannedNow && un.status === 200 && (!bannedAfter || Date.parse(bannedAfter) < Date.now() + 60_000), `${su.status}/${un.status} ${bannedNow} -> ${bannedAfter}`);
+        const cr = await call("POST", "/api/super-admin/users", owner, { email: FIX_OWNER.created, full_name: "Harness usersA created", role: "nurse", mode: "password" });
+        const created = await findUser(FIX_OWNER.created);
+        const del = created ? await call("DELETE", `/api/super-admin/users?id=${created.id}`, owner) : { status: 0, text: "" };
+        ok("O4. the owner creates an account and deletes it", cr.status === 201 && !!created && del.status === 200 && !(await findUser(FIX_OWNER.created)), `${cr.status}/${del.status}`);
+        const self = await call("DELETE", `/api/super-admin/users?id=${ownerId}`, owner);
+        ok("O5. ⚠ the owner cannot delete their own account", self.status === 400 && /your own account/.test(self.text), `${self.status} ${self.text.slice(0, 80)}`);
+        // The last-super-admin guard: a roles[]-only super admin is recognised as one, and counted.
+        const victimId = await rolesOnlySuper(FIX_OWNER.victim);
+        const count = async (q: string) => (await admin.from("profiles").select("id", { count: "exact", head: false }).or(q).limit(1)).count ?? 0;
+        const wide = await count("role.eq.super_admin,roles.cs.{super_admin}"), narrow = await count("role.eq.super_admin");
+        ok("O6. the guard's count includes roles[]-only super admins (the owner fixture and the victim)", wide - narrow >= 2, `role or roles[] ${wide}, role only ${narrow}`);
+        const dv = await call("DELETE", `/api/super-admin/users?id=${victimId}`, owner);
+        ok("O7. a roles[]-only super admin is deletable while others remain (the guard branch ran, count above one)", dv.status === 200 && !(await findUser(FIX_OWNER.victim)), String(dv.status));
+        pend("O8. the LAST super admin is refused", "would need every other staging super admin removed; not done on a shared project. O6 proves the count it decides on includes roles[]");
+        const trail = await admin.from("audit_log").select("action").eq("actor_id", ownerId);
+        ok("O9. the owner's account operations are audited under the owner's id", ["create_user", "delete_user", "suspend_user", "reactivate_user"].every(a => (trail.data ?? []).some((r: any) => r.action === a)), (trail.data ?? []).map((r: any) => r.action).join(","));
+        ownerCookie = owner;
+      } finally {
+        await retireOwner(ownerId);
+        const p = (await admin.from("profiles").select("role, roles, platform_role, platform_roles").eq("id", ownerId).single()).data;
+        const pm = (await admin.from("platform_membership").select("id").eq("user_id", ownerId)).data ?? [];
+        const ban = (await admin.auth.admin.getUserById(ownerId)).data?.user?.banned_until ?? null;
+        const stale = ownerCookie ? await call("GET", "/api/super-admin/users/list", ownerCookie) : { status: 0 };
+        ok("Z0. ⚠ the temporary owner is retired: no roles, no membership, banned, its old session refused",
+          !!p && !p.role && !(p.roles ?? []).length && !p.platform_role && !(p.platform_roles ?? []).length && pm.length === 0
+            && !!ban && Date.parse(ban) > Date.parse("2100-01-01") && (stale.status === 401 || stale.status === 403 || stale.status === 0),
+          JSON.stringify({ p, memberships: pm.length, ban, staleSession: stale.status }));
+      }
+    }
   } finally {
     await cleanup();
     const never = await findUser("harness-usersa-never@competen.test");
