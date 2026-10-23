@@ -422,6 +422,18 @@ function main() {
     && scholarStore.indexOf('from("individual_scholar_review").insert(') < scholarStore.indexOf("export async function reviewRows"),
     `writers: ${reviewWriters.join(", ")}`);
 
+  // ── 12q. INDIVIDUAL AI FAILS CLOSED ON AN UNREADABLE QUOTA ──
+  // checkAiQuota stays fail-open for the estate. Every Individual AI entry point goes through individualAiQuota
+  // AND answers with individualQuotaRefusal, so an unreadable count is a 503 refusal, never a free pass.
+  const quotaSites = FILES.filter(f => /individualAiQuota\(/.test(SRC.get(f) ?? "") && !f.endsWith("/policy.ts"));
+  const unfenced = quotaSites.filter(f => !/individualQuotaRefusal\(quota/.test(SRC.get(f) ?? ""));
+  const policyLib = SRC.get("src/lib/individual/policy.ts") ?? "";
+  const directAi = FILES.filter(f => /checkAiQuota\(/.test(SRC.get(f) ?? "") && !/individualAiQuota\(await checkAiQuota\(/.test(SRC.get(f) ?? ""));
+  ok("12q. Individual AI fails closed: every quota site refuses an unreadable count (503) through individualQuotaRefusal",
+    quotaSites.length >= 3 && unfenced.length === 0 && directAi.length === 0
+    && /ok: !unreadable && estate\.ok && estate\.used < limit/.test(policyLib),
+    `sites ${quotaSites.length}, unfenced: ${unfenced.join(", ")}; direct checkAiQuota: ${directAi.join(", ")}`);
+
   ok("9g. D10: no Individual code persists AI conversation",
     !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));
 

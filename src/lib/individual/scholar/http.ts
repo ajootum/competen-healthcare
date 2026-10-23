@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
-import { individualAiQuota, loadIndividualPolicy } from "../policy";
+import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "../policy";
 import { currentTraceId } from "@/lib/trace";
 import type { IndividualContext } from "../guard";
 import { readConsent } from "./store";
@@ -30,7 +30,9 @@ export async function aiPreflight(ctx: IndividualContext): Promise<NextResponse 
     return NextResponse.json({ error: "Turn on AI processing of your material in My Learning before asking for explanations or questions." }, { status: 403 });
   // The estate limit (quota.ts, unchanged) and the Individual policy limit, whichever is tighter (CONFIG-002).
   const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin));
-  if (!quota.ok) return NextResponse.json({ error: `You have reached the limit of ${quota.limit} AI requests an hour. Try again later.` }, { status: 429 });
+  // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
+  const refusal = individualQuotaRefusal(quota, "AI requests");
+  if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
   if (!aiStatus().configured) return NextResponse.json({ error: "AI is not configured on this environment." }, { status: 503 });
   return null;
 }
