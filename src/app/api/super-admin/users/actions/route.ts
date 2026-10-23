@@ -1,5 +1,5 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { hqOwnerApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 
 import { currentTraceId } from "@/lib/trace";
 // Account-level actions on a user (distinct from role assignment, which is the
@@ -8,14 +8,14 @@ import { currentTraceId } from "@/lib/trace";
 
 type Action = "suspend" | "unsuspend" | "send_reset" | "resend_invite";
 
+// HQ-USERS-A: still OWNER-ONLY, now decided by the HQ gate (roles[] and platform_owner) instead of the
+// single legacy profiles.role column. Viewing users (hq.platform.users.view) does not open these.
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const admin = createAdminClient();
-  const { data: me } = await admin.from("profiles").select("role, full_name").eq("id", user.id).single();
-  if (me?.role !== "super_admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const ctx = await hqOwnerApiGate(["hq.platform.users.view"]);
+  if (isHqRefusal(ctx)) return ctx;
+  const admin = ctx.admin;
+  const user = { id: ctx.userId };
+  const me = { full_name: ctx.fullName };
 
   const { userId, action }: { userId: string; action: Action } = await req.json();
   if (!userId || !["suspend", "unsuspend", "send_reset", "resend_invite"].includes(action)) {

@@ -1,19 +1,12 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 
+// HQ-USERS-A: the same capability as the /super-admin/users page it serves, through the HQ gate
+// (owners and appointees holding hq.platform.users.view), not the legacy profiles.role column.
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: me } = await createAdminClient()
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  if (me?.role !== "super_admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  const admin = createAdminClient();
+  const ctx = await hqApiGate(["hq.platform.users.view"]);
+  if (isHqRefusal(ctx)) return ctx;
+  const admin = ctx.admin;
 
   // Try selecting sub_role — ignore error if column doesn't exist yet
   const { data: profiles, error } = await admin
