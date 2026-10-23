@@ -61,8 +61,11 @@ export default async function IndividualPolicyPage() {
           Limits and options for Competen Scholar and Competen Professional. Save a draft, then publish: a value takes effect when
           its version is published. Every limit has a fixed range that this page cannot change.
         </p>
-        <p className="mt-2 rounded-lg border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] px-3 py-2 text-[13px] text-[var(--cmp-text-warning)]">
-          Effective dates: a change takes effect at the moment it is published. Scheduling a change for a later date is not available yet.
+        {/* Owner ruling (CONFIG-002, 2026-10-23): policy takes effect upon governed publication, with version
+            and audit history. Scheduled effective dates were deferred (no migration 377), and legal effective
+            dates are a separate matter, not this page. */}
+        <p className="mt-2 rounded-lg border border-[var(--cmp-color-information)] bg-[var(--cmp-surface-information)] px-3 py-2 text-[13px] text-blue-900">
+          A change takes effect when it is published. Each version below records who published it and when.
         </p>
       </header>
 

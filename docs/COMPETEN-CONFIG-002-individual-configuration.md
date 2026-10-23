@@ -46,14 +46,16 @@ The Workspace Configuration Engine (migration 076) holds the Individual policy w
 | sha256 | `e2a0ed8af49542d8dbe551c072e8f989bff87e19ca54083d6d5d0a9ad2753587` |
 | House rules | ALL CLEAR, 72 lines, 5 statements |
 | Depends on | 264 (`hq_capability`, `hq_position_capability`), 370 (the position), 076 (the WCE tables the door writes) |
-| State | **Authored. Awaiting the owner's staging application (twice).** Not committed until confirmed. |
+| State | **Applied and verified on staging** (state 2). The owner applied it twice on 2026-10-23 (`apply-migrations.ts --only 376`, target ezhvpgtcqcdsgylrxgdb, guard passed, both runs ok). Not in production. |
 
 **Staging pre-state** (`npx tsx scripts/ind007-staging-schema-check.ts --config`, read-only):
 - no `hq.individual.config.manage`;
 - the position holds `hq.individual.pilot.grant` and `hq.platform.home.view`;
 - Individual partition: 0 overrides, 0 versions.
 
-**Expected after:** the capability row exists, and the position holds three open grants. A second run changes nothing.
+**Staging post-state, after two applications** (same read-only check): `hq.individual.config.manage` (platform, "Competen Individual policy") exists, and the position holds exactly three open grants (`hq.individual.config.manage`, `hq.individual.pilot.grant`, `hq.platform.home.view`). The second run added no duplicate grant, so it is idempotent. The partition is still empty. The file checksum matches the one above.
+
+**Production:** not applied, which needs a separate owner GO. Proposed risk tier **Low**: two catalogue rows in existing tables, nobody appointed, nobody gains access. It needs 370 applied there first (the position).
 
 **Rollback (staging):**
 
@@ -101,7 +103,7 @@ A value takes effect when its version is published: `workspace_config_versions.c
 
 **Smallest addition, proposed and not built.** A nullable `effective_from timestamptz` on `workspace_config_versions`, plus a `security_invoker` view that returns, per scope, the latest version whose `coalesce(effective_from, created_at) <= now()`. It is evaluated by the database clock, never compared with an application clock.
 
-That needs a migration (377 or later), and it is the owner's decision.
+**Owner ruling (2026-10-23), verbatim:** "Defer migration 377. Individual policy settings take effect upon governed publication, with version and audit history. Legal effective dates remain separate." So `effective_from` is not built. The page says "A change takes effect when it is published", and each version shows who published it and when.
 
 ## 6. The page (item 6)
 
@@ -126,7 +128,15 @@ Below that: Publish with a reason, the versions (each restorable), and the chang
 - Staging has 6 profession terms: discipline names ("Nursing", "Medicine"). They are not titles like "Registered nurse".
 - **Specialty:** Professional has no specialty field, so there is nothing to suggest into without a schema change. Not done.
 
-## 8. Verification
+## 8. Found in passing (not fixed here)
+
+**`hqApiGate` answers an anonymous caller with 403, not 401, on every HQ API route.**
+- `resolveHqContext` returns `redirectTo: "/login?next=/super-admin"`.
+- `src/lib/hq/api-gate.ts` tests `res.redirectTo === "/login"`, which never matches.
+- It is still a refusal, so nothing is exposed. But the 401 branch is dead, and a client cannot tell "sign in" from "not allowed".
+- Seen on staging: an anonymous POST to `/api/hq/individual/config` got 403.
+
+## 9. Verification
 
 - **P0:**
   - static harness 64/64;
