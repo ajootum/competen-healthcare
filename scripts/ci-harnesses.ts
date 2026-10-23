@@ -69,6 +69,9 @@ const INCLUDED = [
   // HQ-USERS-A: the /api/super-admin/users handlers are gated by the HQ gate (view) and the owner gate (writes),
   // never by profiles.role, with 8 planted-failure controls. Reads files only: no client, no network, no .env.local.
   "hq-users-authority-harness.ts",
+  // HQ-USERS-B: one governed reset path (gate, decision order, Auth address, configured origin, clean audit,
+  // 379 shape, catalogue, reset-page notice), with 15 planted-failure controls. Reads files only.
+  "hq-users-reset-harness.ts",
   "mos-gap-matrix-harness.ts",
   "pd-health-harness.ts",
   "pd-nav-harness.ts",

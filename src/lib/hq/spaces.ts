@@ -50,6 +50,9 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.platform.operations.view",      space: "platform"  },
   { code: "hq.platform.system.view",          space: "platform"  },
   { code: "hq.platform.users.view",           space: "platform"  },
+  // HQ-USERS-B (migration 379): send a password-reset email to another person. Its own code, not users.view:
+  // seeing who has an account is a reporting right, and acting on one is not.
+  { code: "hq.platform.users.reset",          space: "platform"  },
   { code: "hq.platform.tenants.view",         space: "platform"  },
   { code: "hq.platform.settings.view",        space: "platform"  },
   { code: "hq.platform.workflows.view",       space: "platform"  },

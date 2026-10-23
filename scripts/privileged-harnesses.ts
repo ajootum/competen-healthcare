@@ -199,6 +199,14 @@ const STAGING: Listed[] = [
       + "BASE_URL with individual_app ON; NEVER writes the flag (PEND when off). Own harness-access001-* fixtures.",
   },
   {
+    file: "hq-users-reset-acceptance-harness.ts",
+    note: "HQ-USERS-B against migration 379, over HTTP: a stranger is refused, the old owner-only reset is no second door, "
+      + "self-reset is refused by name, verified/unverified/suspended/unknown targets all get the same neutral answer with "
+      + "the true reason audited and no address or link anywhere, and the 3-per-person / 20-per-administrator hourly limits "
+      + "hold (seeded audit rows, DB clock). The email itself and the owner-account rule are PEND. ⚠ NEEDS BASE_URL naming a "
+      + "STAGING-pointed dev server. Creates and deletes harness-usersb-* identities. PEND until 379 is applied.",
+  },
+  {
     file: "hq-users-authority-acceptance-harness.ts",
     note: "HQ-USERS-A: over HTTP, a platform_director appointee (hq.platform.users.view) reads the users directory and its "
       + "page with no write controls, every owner-only write (reset, suspend, role change, create, delete) is 403 and changes "
