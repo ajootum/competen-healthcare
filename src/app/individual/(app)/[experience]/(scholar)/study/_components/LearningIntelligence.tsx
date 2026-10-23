@@ -119,8 +119,8 @@ export default function LearningIntelligence({ li, accent }: { li: LI; accent: s
           {coverage.state === "measured" ? (
             <>
               <dl className="grid grid-cols-2 gap-3">
-                <Fig k="Practised" v={`${coverage.practised} of ${coverage.total}`} />
-                <Fig k="Practised with a right answer" v={`${coverage.practisedCorrect} of ${coverage.total}`} />
+                <Fig k="Practised" v={`${coverage.covered} of ${coverage.total}`} />
+                <Fig k="Practised with a right answer" v={`${coverage.coveredPositive} of ${coverage.total}`} />
               </dl>
               <p className="mt-2 text-[12.5px] text-gray-600">{coverage.framework}.{coverage.gaps.length ? ` Not yet practised: ${coverage.gaps.slice(0, 5).map(g => g.expected ? `${g.name} (expected: ${g.expected})` : g.name).join(", ")}${coverage.gaps.length > 5 ? ` and ${coverage.gaps.length - 5} more` : ""}.` : " Every competency has been practised."}</p>
             </>
