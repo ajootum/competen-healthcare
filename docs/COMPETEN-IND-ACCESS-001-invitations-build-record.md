@@ -144,3 +144,55 @@ Nothing here could be verified against production from a development worktree: t
 3. **The invite email template.** Supabase's "Invite user" template is the one used. Its wording and branding are owner configuration in the Supabase dashboard; nothing in this PR changes it.
 4. **Migration 378 production GO**, with the OPS-001 safeguards: a recovery reference, the rollback SQL in §3, and a post-application catalog check matching §3.
 5. **The release gate stays OFF.** Without `individual_app`, invitations refuse with 404, as they do today.
+
+## 7. Invitation links while `individual_app` is OFF (owner release review item 6)
+**No invitation can be created while the gate is off.** `POST /api/hq/individual/invitations` checks the release gate after the HQ capability and answers 404 before reading the body: no identity, no email, no row. The same is true while migration 378 is absent: the route answers 503 `NOT_SET_UP`, and the HQ screen says invitations are not set up.
+
+**An invitation made while the gate was ON, with the gate later switched OFF:**
+
+| Step | Behaviour |
+|---|---|
+| The person opens the email link | Supabase verifies it and redirects to `/reset-password?next=%2Findividual%2Fhome` (shared IAM, not gated). |
+| They set a password | It succeeds. It is their one Competen identity, and nothing is granted by it. |
+| They choose "Sign in" | `/login?next=/individual/home`, presented as signing in to Competen Individual. |
+| After signing in | `/individual/home` answers **404**, the same as an absent route (the gate is checked before anything else). |
+| Accept | `POST /api/individual/invitation/accept` answers **404** before reading the session or any table. |
+| The neutral sign-in | Offers no destination: Individual is not queried while the gate is off. The person sees "No Competen product access is currently assigned". |
+| The invitation row | Stays `PENDING` and expires on schedule by the database clock. If the gate returns before expiry, it can then be accepted. After expiry it cannot, and the administrator revokes it and re-invites. |
+| What the identity holds throughout | Nothing: `role` null, no membership of any product. |
+
+The link therefore never opens Individual while the gate is off. At most it lets the person set a password on an identity that holds nothing.
+
+## 8. Production build and the development-only test link (owner release review item 3)
+`inviteDeliveryMode()` returns `"link"` only when all three conditions hold:
+1. `INDIVIDUAL_INVITE_TEST_DELIVERY=link` was set deliberately.
+2. `process.env.NODE_ENV !== "production"`.
+3. `judgeTarget(NEXT_PUBLIC_SUPABASE_URL)` identifies a non-production project.
+
+On a production build, Next.js sets `NODE_ENV=production` for `next build` and for the deployed runtime, and Vercel runs that build. Condition 2 cannot hold there, whatever environment variables are set in Vercel. Condition 3 independently refuses the production project, so the mode would still be `"email"` even if a development server were pointed at production.
+
+The link is attached to the API response only on the `"link"` branch. In `"email"` mode it is never generated, because `generateLink` is called only on that branch.
+
+**Proven by:**
+- foundation harness 12m, which runs the function over five environments and checks the code shape; dropping the `NODE_ENV` condition turned it red;
+- unit tests in `invitations.test.ts`;
+- the unit test asserting that `testLink` is absent in `"email"` mode.
+
+## 9. Safe production email and redirect test (owner release review item 7)
+**Status: not run.** It sends a real email from production, so it needs its own owner authorisation and a mailbox the owner controls. It does not need Individual, an invitation, an entitlement, a new identity or the service key. It uses GoTrue's public recovery endpoint, with the production anon key that every browser already receives.
+
+The goal is to exercise the same Auth mailer and the same redirect allowlist that invitations use, without touching Individual:
+```bash
+curl -sS -X POST "https://<production-ref>.supabase.co/auth/v1/recover?redirect_to=https%3A%2F%2F<hq-host>%2Freset-password%3Fnext%3D%252Findividual%252Fhome" \
+  -H "apikey: <production anon key>" -H "Content-Type: application/json" \
+  -d '{"email":"<an existing owner-controlled Competen account>"}'
+```
+
+**Pass criteria:**
+1. **SMTP:** the email arrives promptly, from the configured sender. That proves production SMTP, as ADR-010 requires.
+2. **Redirect allowlist:** opening the link, or reading its `redirect_to`, lands on `https://<hq-host>/reset-password?next=%2Findividual%2Fhome`, not the Site URL. That proves the allowlist entry. Repeat for each host HQ is reached on.
+3. **Nothing else changes:** completing the reset only changes that owner account's password, and it can be skipped. No invitation row, membership or entitlement is created anywhere.
+
+**Failure modes and fixes:**
+- **The email doesn't arrive:** configure production SMTP (ADR-010 steps 1–3).
+- **The link goes to the Site URL:** add `https://<hq-host>/reset-password**` under Authentication → URL Configuration.
