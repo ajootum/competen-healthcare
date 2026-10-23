@@ -144,6 +144,64 @@ The `plat_ai_requests` and `notif_deliveries` rows stay as the platform's usage 
 
 No pre-existing row was altered or deleted.
 
+## 7. Acceptance review (owner GO, 2026-10-23)
+
+Every row rests on code, a harness check or staging evidence. Scope is the approved MVP, so capabilities discussed for later are classified, not built.
+
+- **PASS:** works end to end.
+- **PARTIAL:** works, with a named gap.
+- **BLOCKED:** cannot work today, for the reason given.
+
+Check ids:
+- **PH-** `individual-professional-harness` (47/47);
+- **FH-** `individual-foundation-harness` (44/44);
+- **PA-** staging Professional acceptance (31/31, §5);
+- **IA-** staging foundation acceptance (IND-003 §8).
+
+| Area | Capability | Status | Evidence | Missing |
+|---|---|---|---|---|
+| **Identity** | One Competen identity; gate 3 admits by membership; Professional-only entitlement admitted | PASS | `src/lib/individual/guard.ts:63` (release gate first), `:97` (experience live); PA-A1 (no Scholar row) | — |
+| | Professional identity record: profession, registration body and number, country, renewal date | PASS | `373-…sql:68` (`self_declared_*` names, D5); `(professional)/registration`; staging journey step 1 | — |
+| | Registration checked against a register | BLOCKED | Governed empty state on the registration page; registry `planned: verification` | No regulator lookup or verifier exists. Owner/governance capability, not MVP. |
+| | No use of Practice's identity (D5) | PASS | `grep practice_practitioner_identity` over the Individual code: 0 hits | — |
+| **Passport continuity** | One Passport across experiences: own records (provenance) beside institution records (issuer, D3) | PASS | `src/lib/individual/passport.ts:124` (`own`), `:46` (`source_linked` label); PA-A4, PA-A5; desktop and mobile screenshots 09/04 | — |
+| | Own records survive the end of the Professional entitlement and stay readable | PASS | `passport.ts` reads `own` regardless of experience; documents route needs gate 3 only (`api/individual/professional/documents/route.ts`) | — |
+| | Consented, revocable sharing; `/verify` states each class; estate links unchanged | PASS | `verify/[token]/page.tsx:68` (gate AND companion row); `verify-estate-identity.test.tsx` (6 cases: estate links byte-identical, gate on and off, plus the Professional case); PA-F1–F6; PH-E5 | — |
+| | Scholar study (`individual_scholar_*`) shown in the Passport | PARTIAL | Not read by `passport.ts` or `history.ts` (0 references) | Scholar material and progress are not Passport items. Their shape is IND-004's and the owner's to decide. |
+| **Competencies** | Needs against a shared framework competency (`hospital_id IS NULL` only) | PASS | `professional/frameworks.ts:18,27,60`; PA-G1; journey step 2 (*Emergency Nursing*) | — |
+| | Needs raised from a Passport competency that is not current | PASS | `(professional)/development` "From your Passport" (institution decisions, read-only) | — |
+| | Self-recorded competency evidence, linked to a need, never "verified" | PASS | `373-…sql:300` (class generated); PH-E1–E6; PA-B1–B3 | — |
+| | Assessment or sign-off of an Individual's competence | BLOCKED | `competency_cycles` and `inScope` are hospital-bound (IND-002 §2.5) | No assessor path for a person without an organisation. A governed later capability. |
+| **Learning** | Learning plan: goals with target dates, linked to needs, status | PASS | `api/individual/professional/goals/route.ts`; `373-…sql` composite FK; PA-C1, PA-C3; journey step 3 | — |
+| | Private CPD log (cpd_logs fields + reflection + goal link), hours by year, no target | PASS | `progress.ts:39`; PH-W2/W4 (no `cpd_logs`); PA-A6; journey steps 5–6 | — |
+| | Registration-cycle-aware CPD (hours against the regulator's cycle) | PARTIAL | Hours by calendar year only, by design (no invented targets) | No store of a regulator's requirement or cycle. Needs a governed source. |
+| **Assessment** | Progress: plan completion, CPD by year, evidence coverage, "Not measured" when empty | PASS | `progress.ts:24,39,69`; `professional.test.ts`; PA-A6; screenshot 08 | — |
+| | Knowledge or skills assessment inside Professional | BLOCKED | Not in the IND-007 brief; Scholar holds question generation | Out of MVP scope. |
+| **Evidence** | Documents in a private bucket, owner-only five-minute signed download, never the estate `evidence` table | PASS | `professional/documents.ts:43`; `373-…sql` bucket and path CHECK; PA-C2; PH-R4, PH-W1 | — |
+| | Upload size works on the deployed site | PASS (fixed) | `vocabulary.ts` `DOCUMENT_MAX_BYTES` = 4 MB, below Vercel's ~4.5 MB request body (finding shared with IND-004); `professional.test.ts` | — |
+| | Expiry reminders: once per date, silent while the gate is off, nothing in `cdp_reminders` or `notifications` | PARTIAL | `professional/reminders.ts:48,90`; PA-E1–E3, PA-R1, PA-M1 | Email only, and only where Resend is configured. The in-app surface is the "Renewals due" panel. An in-app notification is a one-word owner choice (§3.1). |
+| **Access controls** | Release gate default OFF; 404 when off, including page titles | PASS | FH-10a–e, FH-11a–e; `gatedMetadata` on all six pages | — |
+| | Experience-owned pages 404 outside Professional | PASS | `shell-context.ts:46` `experienceModulePage`; FH-7e/7f; PH-D1 (and its planted reds) | — |
+| | Own-row RLS, no browser writes, cross-person links unrepresentable | PASS | `373-…sql:273` (SELECT only); PA-D1–D3, PA-C1–C2; PH-S1/S2 | — |
+| | No employer-visible write or read path (D1) | PASS | PH-W1–W4, PH-R1–R5; PA-M1; `plane-boundary` 35/35 | — |
+| | Terms before use (D2) | PASS | FH-9d; terms gate in the staging journey | — |
+| **UX** | Desktop and mobile journey; one `md` edge; five-tab bottom bar; no horizontal overflow at 390 | PASS | Screenshots desktop 01–11 and mobile 01–05; journey notes (§5) | — |
+| | Every evidence class in words; governed empty and unreadable states | PASS | `_components/professional/bits.tsx` `ClassLabel`; PH-E4 | — |
+| | Personal AI: CPD plan and reflection draft, grounded, advisory, not stored (D10) | PARTIAL | `api/individual/professional/assistant/route.ts:65` (person attribution); `assistant.ts:39`; staging journey 4–5 | Works when the AI provider has credit. On 2026-10-23 the key's balance ran out (IND-004 report), and calls then fail with an honest error. Operational, owner's. |
+| | After a create in a collapsed "Add …" panel, the confirmation is hidden when the panel closes on refresh | PARTIAL | Seen in the staging journey; the new item appears in the list | Cosmetic. A visible confirmation outside the collapsible would fix it. Not fixed in this pass. |
+| **Student → Professional lifecycle** | A person can hold Scholar and Professional together and switch; Professional can be added without ending Scholar (D4) | PASS | IA-A (dual), IA-D (graduation keeps Scholar), IA-E (primary fallback); `ExperienceSwitcher` `chrome.tsx:46` | — |
+| | What carries over: identity, Passport (institution and own records), profile and history, personal AI. Professional records belong to the person, not the experience. | PASS | `passport.ts`, `history.ts:36` (all entitlement periods); IA-L | — |
+| | Guided graduation: a Scholar-side flow that confirms profession and terms and writes `source='graduation'` | BLOCKED | Grants write `source: "pilot"` only (`src/lib/individual/grants.ts:82`). `graduation` appears only in a test fixture. | Not built. Professional is added by HQ pilot grant. The flow is WP6 (IND-002 §6) and needs its own GO. |
+
+**What happens today when a Scholar user becomes a Professional:**
+1. An HQ Individual Product Administrator grants Professional through `POST /api/hq/individual/grants`.
+2. The person keeps their account, Scholar entitlement, history and Passport, and the switcher appears.
+3. On first entry to Professional they accept the Holdings terms. If they already accepted them for the foundation, nothing is asked again.
+4. Their Professional record starts empty. Scholar's study material stays in Scholar and is not copied or surfaced in Professional.
+
+**Defects found in this review:**
+- **Fixed (4 MB upload limit):** Professional documents uploaded through a route handler with a 10 MB ceiling, which Vercel would cut off above about 4.5 MB. The app now refuses anything over 4 MB, with a test. The bucket keeps its 10 MB outer limit.
+
 ## 6. Next
 
 After the staging run: an IND-003 review of the foundation diff, then the owner's production decisions (370 first; 373 is blocked by the same schema freeze). Follow-ups noted, not built:
