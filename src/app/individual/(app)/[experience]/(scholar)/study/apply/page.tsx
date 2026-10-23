@@ -40,7 +40,8 @@ export default async function Apply({ params }: { params: Promise<{ experience: 
       <StudyNav dueCount={due} />
 
       <section aria-labelledby="own-cases-h">
-        <h2 id="own-cases-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">From your material</h2>
+        <h2 id="own-cases-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your practice scenarios</h2>
+        <p className="mt-1 text-[13px] text-gray-600">Written by AI from your own notes. They are practice, not clinically reviewed cases, and each one says so.</p>
         <div className="mt-3">
           {!questions.ok ? (questions.notProvisioned
             ? <StatePanel title="Case practice is not set up on this environment yet"><p>The study store it needs has not been installed here.</p></StatePanel>
@@ -59,7 +60,7 @@ export default async function Apply({ params }: { params: Promise<{ experience: 
       </section>
 
       <section aria-labelledby="shared-h" className="mt-10">
-        <h2 id="shared-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Reviewed clinical cases</h2>
+        <h2 id="shared-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Clinically reviewed cases</h2>
         <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
           <p className="text-[15px] font-semibold text-gray-900">Not available yet</p>
           <p className="mt-1 text-[14px] leading-relaxed text-gray-700">

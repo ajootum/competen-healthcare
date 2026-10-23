@@ -3,6 +3,11 @@
 // Pure aggregation over rows the store has already read by the person's own id. Self-directed study:
 // nothing here is an assessment outcome, and the page that shows it says so (SELF_DIRECTED_LABEL).
 //
+// ⚠ NOT COMPETENCE (owner review P0.3). The figure is the share of AI-written practice questions answered
+// correctly on the latest try: practice accuracy on the person's own notes. It is never called mastery, and
+// nothing here implies verified competence. A card the SM-2 engine marks 'mastered' (its own state name, kept
+// in the schema) is presented as a long-interval card.
+//
 // ⚠ NOT MEASURED IS NOT ZERO. A material with no answered questions has mastery null, and the page says
 // "not measured yet". A week with no answers has accuracy null, and the trend shows a gap, not a 0% bar.
 // A zero would read as a measurement, and nothing was measured.
@@ -19,17 +24,19 @@ export type MaterialProgress = {
   answered: number;
   /** Of the questions answered, how many were right on the LATEST try. Null when none answered. */
   latestCorrect: number | null;
-  mastery: number | null;
+  /** Share right on the latest try, as a percentage. Practice accuracy, not mastery. Null when none answered. */
+  latestAccuracy: number | null;
   cardsDue: number;
   cardsActive: number;
-  cardsMastered: number;
+  /** Cards the SM-2 schedule has moved to long intervals (the engine's 'mastered' state). */
+  cardsLongInterval: number;
 };
 
 export type WeekPoint = { weekStart: string; attempts: number; correct: number; accuracy: number | null };
 
 export type Progress = {
   materials: MaterialProgress[];
-  totals: { questions: number; answered: number; attempts: number; cardsDue: number; cardsActive: number; cardsMastered: number };
+  totals: { questions: number; answered: number; attempts: number; cardsDue: number; cardsActive: number; cardsLongInterval: number };
   trend: WeekPoint[];
 };
 
@@ -70,10 +77,10 @@ export function buildProgress(input: {
       questions: qs.length,
       answered: answeredQs.length,
       latestCorrect: answeredQs.length ? right : null,
-      mastery: answeredQs.length ? Math.round((right / answeredQs.length) * 100) : null,
+      latestAccuracy: answeredQs.length ? Math.round((right / answeredQs.length) * 100) : null,
       cardsDue: mc.filter(c => c.status === "active" && c.nextReviewAt <= today).length,
       cardsActive: mc.filter(c => c.status === "active").length,
-      cardsMastered: mc.filter(c => c.status === "mastered").length,
+      cardsLongInterval: mc.filter(c => c.status === "mastered").length,
     };
   });
 
@@ -105,7 +112,7 @@ export function buildProgress(input: {
       attempts: attempts.length,
       cardsDue: rows.reduce((n, r) => n + r.cardsDue, 0),
       cardsActive: rows.reduce((n, r) => n + r.cardsActive, 0),
-      cardsMastered: rows.reduce((n, r) => n + r.cardsMastered, 0),
+      cardsLongInterval: rows.reduce((n, r) => n + r.cardsLongInterval, 0),
     },
     trend,
   };

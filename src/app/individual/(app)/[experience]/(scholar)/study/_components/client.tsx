@@ -6,7 +6,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
-import { AI_LABEL, ALLOWED_MIME, CONSENT_NOTICE, DOCX_MIME, MAX_UPLOAD_BYTES, PDF_MIME, PII_WARNING, QUESTION_MAX } from "@/lib/individual/scholar/config";
+import { AI_LABEL, ALLOWED_MIME, CONSENT_NOTICE, DOCX_MIME, MARKED_AGAINST_NOTES, MAX_UPLOAD_BYTES, PDF_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE } from "@/lib/individual/scholar/config";
 
 // The interactive pieces of My Learning. Each one calls a gate-3 API route and shows what the route says,
 // including its refusals, in words. Nothing here decides access or ownership: the routes do, by the
@@ -54,29 +54,65 @@ export function ConsentPanel({ granted, grantedAt, revokedAt }: { granted: boole
     if (!r.ok) { setError(r.json.error ?? "Your choice could not be saved."); return; }
     router.refresh();
   }
+  // Owner review P1.7: simpler, not weaker. The full notice is still on screen at the moment of agreeing,
+  // the agreement is still its own click, and turning it off is always one click away.
+  const [reviewing, setReviewing] = useState(false);
+  const date = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const notice = (
+    <ul className="mt-3 list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed text-gray-700">
+      {CONSENT_NOTICE.map(l => <li key={l}>{l}</li>)}
+    </ul>
+  );
   return (
     <section aria-labelledby="consent-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="consent-h" className="text-[16px] font-bold text-gray-900">AI processing of your material</h2>
+        <h2 id="consent-h" className="text-[16px] font-bold text-gray-900">AI help with your notes</h2>
         <span className={`rounded-full px-2.5 py-1 text-[12px] font-bold ${granted ? "bg-emerald-50 text-emerald-800" : "bg-gray-100 text-gray-700"}`}>
           {granted ? "On" : "Off"}
         </span>
       </div>
-      <ul className="mt-3 list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed text-gray-700">
-        {CONSENT_NOTICE.map(l => <li key={l}>{l}</li>)}
-      </ul>
-      <p className="mt-3 text-[12.5px] text-gray-500">
-        {granted && grantedAt ? `You turned this on on ${new Date(grantedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}.`
-          : revokedAt ? `You turned this off on ${new Date(revokedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}. Explanations and question writing are paused.`
-            : "It is off until you turn it on. You can still upload and read your material without it."}
-      </p>
-      <div className="mt-4">
-        {granted
-          ? <button type="button" className={ghost} disabled={busy} onClick={() => set(false)}>{busy ? "Saving…" : "Turn off AI processing"}</button>
-          : <button type="button" className={btn} style={{ background: accent }} disabled={busy} onClick={() => set(true)}>{busy ? "Saving…" : "I agree, turn on AI processing"}</button>}
-      </div>
+      {granted ? (
+        <>
+          <p className="mt-2 text-[13.5px] text-gray-700">
+            Explanations and practice questions are on{grantedAt ? ` (since ${date(grantedAt)})` : ""}. Only the passages you ask about are sent to Competen&apos;s AI provider, and only when you ask.
+          </p>
+          <details className="mt-2 text-[13px] text-gray-600">
+            <summary className={`cursor-pointer font-semibold text-gray-700 ${focusRing}`}>What is sent, and what is kept?</summary>
+            {notice}
+          </details>
+          <button type="button" className={`${ghost} mt-3`} disabled={busy} onClick={() => set(false)}>{busy ? "Saving…" : "Turn off"}</button>
+        </>
+      ) : (
+        <>
+          <p className="mt-2 text-[13.5px] text-gray-700">
+            {revokedAt ? `Off since ${date(revokedAt)}. ` : ""}Turn it on to get explanations and practice questions from your notes. You can upload and read your material without it.
+          </p>
+          {!reviewing ? (
+            <button type="button" className={`${btn} mt-3`} style={{ background: accent }} onClick={() => setReviewing(true)}>Review and turn on</button>
+          ) : (
+            <div className="mt-2 rounded-xl bg-gray-50 p-3">
+              <p className="text-[13px] font-semibold text-gray-800">Before you turn it on:</p>
+              {notice}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className={btn} style={{ background: accent }} disabled={busy} onClick={() => set(true)}>{busy ? "Saving…" : "I agree, turn on AI help"}</button>
+                <button type="button" className={ghost} disabled={busy} onClick={() => setReviewing(false)}>Not now</button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
       <ErrorLine text={error} />
     </section>
+  );
+}
+
+/** Owner review P0.2: what a source-derived answer is, and is not, at the place it is read. */
+export function SourceNotice({ compact = false }: { compact?: boolean }) {
+  return (
+    <p className={`flex gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-amber-950 ${compact ? "text-[12px]" : "text-[12.5px]"}`}>
+      <span aria-hidden className="font-bold">!</span>
+      <span>{SOURCE_NOTICE}</span>
+    </p>
   );
 }
 
@@ -190,6 +226,7 @@ function ExplanationView({ item }: { item: Explained }) {
         <>
           <div className="mt-3"><AiBadge /></div>
           <div className="mt-2 whitespace-pre-wrap text-[14.5px] leading-relaxed text-gray-800">{item.answer}</div>
+          <div className="mt-3"><SourceNotice /></div>
         </>
       ) : (
         <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2.5 text-[14px] text-gray-800">{item.message}</p>
@@ -278,18 +315,29 @@ export function QuestionCard({ q, index, chunkId }: { q: QuestionView; index: nu
   const letter = (i: number) => String.fromCharCode(65 + i);
   return (
     <form onSubmit={submit} className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {/* Owner review P0.5: a personal practice case says so where it is read. */}
+        {q.kind === "case" && (
+          <span className="rounded-full border border-gray-300 bg-gray-50 px-2.5 py-0.5 text-[11.5px] font-semibold text-gray-700">{PERSONAL_CASE_LABEL}</span>
+        )}
+        {q.latest && !fb && (
+          <span className={`rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold ${q.latest.correct ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>
+            Last time: {q.latest.correct ? "matched your notes" : "did not match your notes"}
+          </span>
+        )}
+      </div>
       <fieldset disabled={!!fb}>
         <legend className="text-[15px] font-semibold leading-relaxed text-gray-900">
           <span className="mr-1 text-gray-500">{index}.</span>{q.stem}
         </legend>
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 grid gap-2 lg:grid-cols-2">
           {q.options.map((o, i) => {
             const state = fb ? (i === fb.correctIndex ? "right" : i === choice ? "wrong" : "") : "";
             return (
               <label key={i} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 text-[14.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${state === "right" ? "border-emerald-500 bg-emerald-50" : state === "wrong" ? "border-red-400 bg-red-50" : choice === i ? "border-gray-900" : "border-gray-200 hover:bg-gray-50"}`}>
                 <input type="radio" name={`q-${q.id}`} checked={choice === i} onChange={() => setChoice(i)} className="mt-1 h-4 w-4 shrink-0" />
                 <span><span className="font-semibold">{letter(i)}.</span> {o}
-                  {state === "right" && <span className="ml-2 text-[12.5px] font-bold text-emerald-800">Correct answer</span>}
+                  {state === "right" && <span className="ml-2 text-[12.5px] font-bold text-emerald-800">What your notes say</span>}
                   {state === "wrong" && <span className="ml-2 text-[12.5px] font-bold text-red-800">Your answer</span>}
                 </span>
               </label>
@@ -301,14 +349,20 @@ export function QuestionCard({ q, index, chunkId }: { q: QuestionView; index: nu
       <ErrorLine text={error} />
       {fb && (
         <div aria-live="polite" className={`mt-4 rounded-xl border p-4 ${fb.correct ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
-          <p className={`text-[14.5px] font-bold ${fb.correct ? "text-emerald-900" : "text-red-900"}`}>{fb.correct ? "Correct." : `Not quite. The answer is ${letter(fb.correctIndex)}.`}</p>
-          <p className="mt-1 text-[14px] leading-relaxed text-gray-800">{fb.rationale}</p>
+          {/* Owner review P0.2: right or wrong against the notes, never presented as clinical truth. */}
+          <p className={`text-[14.5px] font-bold ${fb.correct ? "text-emerald-900" : "text-red-900"}`}>
+            {fb.correct ? "That matches your notes." : `Your notes support ${letter(fb.correctIndex)}.`}
+          </p>
+          <p className="text-[12px] text-gray-600">{MARKED_AGAINST_NOTES}</p>
+          <p className="mt-2 text-[14px] leading-relaxed text-gray-800">{fb.rationale}</p>
           <blockquote className="mt-3 border-l-4 pl-3 text-[13.5px] italic text-gray-700" style={{ borderColor: accent }}>“{fb.source.quote}”</blockquote>
           <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={chunkId ? sourceHref(fb.source.materialId, chunkId) : studyHref(fb.source.materialId)} className={`underline underline-offset-2 ${focusRing}`}>{fb.source.citation}</Link></p>
-          {fb.card && <p className="mt-2 text-[13px] font-semibold text-gray-800">{fb.card === "created" ? "Added to your review cards. It is due today in Revise." : "Its review card has gone back to the start of its schedule."}</p>}
+          {fb.card && <p className="mt-2 text-[13px] font-semibold text-gray-800">{fb.card === "created" ? "Added to your review cards. It is due today in Revise." : "Its review card has gone back to the start of its schedule, so it comes back today."}</p>}
+          <div className="mt-3"><SourceNotice compact /></div>
+          <button type="button" className={`${ghost} mt-3`} onClick={() => { setFb(null); setChoice(null); }}>Answer again</button>
         </div>
       )}
-      <p className="mt-3 text-[11.5px] text-gray-400">{AI_LABEL} · {q.citation} · model {q.model} · prompt {q.promptVersion}{q.latest ? ` · last answered ${q.latest.correct ? "correctly" : "incorrectly"}` : ""}</p>
+      <p className="mt-3 text-[11.5px] text-gray-500">{AI_LABEL} · {q.citation} · model {q.model} · prompt {q.promptVersion}</p>
     </form>
   );
 }
@@ -331,13 +385,24 @@ export function CardReview({ cards }: { cards: CardView[] }) {
   const [shown, setShown] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [last, setLast] = useState("");
+  // Owner review P1.8: every grade says what it did, and the session ends with what happens next.
+  const [done, setDone] = useState<{ stem: string; next: string; longInterval: boolean }[]>([]);
   const card = cards[i];
+  const when = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   if (!card) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center">
-        <p className="text-[15px] font-semibold text-gray-900">{cards.length ? "That is everything due today." : "Nothing is due."}</p>
-        {last && <p className="mt-1 text-[13.5px] text-gray-600">{last}</p>}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+        <p className="text-[15px] font-semibold text-gray-900">{cards.length ? `Done for today: you reviewed ${done.length} card${done.length === 1 ? "" : "s"}.` : "Nothing is due."}</p>
+        {done.length > 0 && (
+          <ul className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200">
+            {done.map((d, k) => (
+              <li key={k} className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2 text-[13px]">
+                <span className="min-w-0 flex-1 truncate text-gray-800">{d.stem}</span>
+                <span className="font-semibold text-gray-700 tabular-nums">{d.longInterval ? "long interval" : `back ${d.next}`}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         <button type="button" className={`${ghost} mt-4`} onClick={() => router.refresh()}>Check again</button>
       </div>
     );
@@ -347,25 +412,36 @@ export function CardReview({ cards }: { cards: CardView[] }) {
     const r = await post(`/api/individual/scholar/cards/${card.id}`, { quality: q });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "Your review could not be saved."); return; }
-    setLast(r.json.status === "mastered" ? "Last card: mastered." : `Last card: next review in ${r.json.intervalDays} day${r.json.intervalDays === 1 ? "" : "s"}.`);
+    setDone(list => [...list, { stem: card.stem, next: when(r.json.nextReviewAt), longInterval: r.json.status === "mastered" }]);
     setShown(false); setI(n => n + 1);
   }
+  const last = done.at(-1);
   return (
     <section aria-label="Review card" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-      <p className="text-[12.5px] font-semibold text-gray-500 tabular-nums">Card {i + 1} of {cards.length}</p>
-      <p className="mt-2 text-[16px] font-semibold leading-relaxed text-gray-900">{card.stem}</p>
+      <div className="flex items-center gap-3">
+        <p className="text-[12.5px] font-semibold text-gray-500 tabular-nums">Card {i + 1} of {cards.length}</p>
+        <div className="h-1.5 flex-1 rounded-full bg-gray-100" aria-hidden>
+          <div className="h-1.5 rounded-full" style={{ width: `${(i / cards.length) * 100}%`, background: accent }} />
+        </div>
+      </div>
+      {last && <p aria-live="polite" className="mt-2 text-[12.5px] text-gray-600">Previous card: {last.longInterval ? "moved to a long interval (60+ days)" : `comes back ${last.next}`}.</p>}
+      <p className="mt-3 text-[16px] font-semibold leading-relaxed text-gray-900">{card.stem}</p>
+      <p className="mt-1 text-[12.5px] text-gray-500">Try to recall the answer before you reveal it.</p>
       {!shown ? (
         <button type="button" className={`${btn} mt-4`} style={{ background: accent }} onClick={() => setShown(true)}>Show answer</button>
       ) : (
         <>
           <div className="mt-4 rounded-xl bg-gray-50 p-4">
-            <p className="text-[14.5px] font-bold text-gray-900">{card.answer}</p>
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">What your notes say</p>
+            <p className="mt-1 text-[14.5px] font-bold text-gray-900">{card.answer}</p>
             <p className="mt-1 text-[14px] text-gray-800">{card.rationale}</p>
             <blockquote className="mt-2 border-l-4 pl-3 text-[13.5px] italic text-gray-700" style={{ borderColor: accent }}>“{card.quote}”</blockquote>
             <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={card.href} className={`underline underline-offset-2 ${focusRing}`}>{card.citation}</Link></p>
+            <div className="mt-3"><SourceNotice compact /></div>
           </div>
           <fieldset className="mt-4" disabled={busy}>
             <legend className="text-[14px] font-semibold text-gray-900">How well did you remember it?</legend>
+            <p className="text-[12.5px] text-gray-500">Your grade sets when it comes back: sooner if it was hard, later if it was easy.</p>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
               {GRADES.map(g => (
                 <button key={g.q} type="button" onClick={() => grade(g.q)} className={`${ghost} flex-col !px-2`}>

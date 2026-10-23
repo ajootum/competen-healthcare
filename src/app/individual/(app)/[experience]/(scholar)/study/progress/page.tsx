@@ -60,7 +60,7 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
                 { k: "Questions answered", v: `${p.totals.answered} of ${p.totals.questions}` },
                 { k: "Answers given", v: String(p.totals.attempts) },
                 { k: "Cards due now", v: String(p.totals.cardsDue) },
-                { k: "Cards mastered", v: `${p.totals.cardsMastered} of ${p.totals.cardsActive + p.totals.cardsMastered}` },
+                { k: "Cards on long intervals", v: `${p.totals.cardsLongInterval} of ${p.totals.cardsActive + p.totals.cardsLongInterval}` },
               ].map(s => (
                 <div key={s.k} className="rounded-2xl border border-gray-200 bg-white p-4">
                   <dt className="text-[12.5px] font-semibold text-gray-500">{s.k}</dt>
@@ -69,26 +69,26 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
               ))}
             </dl>
 
-            <section aria-labelledby="mastery-h" className="mt-8">
-              <h2 id="mastery-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">By material</h2>
-              <p className="mt-1 text-[13px] text-gray-600">Mastery is the share of a material&apos;s questions you got right the last time you answered them.</p>
+            <section aria-labelledby="accuracy-h" className="mt-8">
+              <h2 id="accuracy-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">By material</h2>
+              <p className="mt-1 text-[13px] text-gray-600">Practice accuracy is the share of a material&apos;s AI-written practice questions you got right the last time you answered them. It reflects how you did on practice questions from your own notes. It is not a measure of competence or of clinical knowledge.</p>
               <ul className="mt-3 divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
                 {p.materials.map(m => (
                   <li key={m.id} className="p-4 sm:p-5">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <Link href={experienceHref("scholar", `study/${m.id}`)} className={`text-[15px] font-semibold text-gray-900 underline-offset-2 hover:underline ${focusRing}`}>{m.title}</Link>
-                      <span className="text-[14px] font-bold tabular-nums" style={{ color: m.mastery === null ? undefined : x.accent }}>
-                        {m.mastery === null ? <span className="font-semibold text-gray-500">Not measured yet</span> : `${m.mastery}% mastery`}
+                      <span className="text-[14px] font-bold tabular-nums" style={{ color: m.latestAccuracy === null ? undefined : x.accent }}>
+                        {m.latestAccuracy === null ? <span className="font-semibold text-gray-500">Not measured yet</span> : `${m.latestAccuracy}% practice accuracy`}
                       </span>
                     </div>
-                    {m.mastery !== null && (
-                      <div className="mt-2 h-2 rounded-full bg-gray-100" role="img" aria-label={`${m.mastery}% mastery`}>
-                        <div className="h-2 rounded-full" style={{ width: `${m.mastery}%`, background: x.accent }} />
+                    {m.latestAccuracy !== null && (
+                      <div className="mt-2 h-2 rounded-full bg-gray-100" role="img" aria-label={`${m.latestAccuracy}% practice accuracy`}>
+                        <div className="h-2 rounded-full" style={{ width: `${m.latestAccuracy}%`, background: x.accent }} />
                       </div>
                     )}
                     <p className="mt-2 text-[12.5px] text-gray-600 tabular-nums">
                       {m.questions === 0 ? "No questions written yet" : `${m.answered} of ${m.questions} question${m.questions === 1 ? "" : "s"} answered${m.latestCorrect !== null ? `, ${m.latestCorrect} right on the latest try` : ""}`}
-                      {" · "}{m.cardsDue} card{m.cardsDue === 1 ? "" : "s"} due · {m.cardsMastered} mastered
+                      {" · "}{m.cardsDue} card{m.cardsDue === 1 ? "" : "s"} due · {m.cardsLongInterval} on long intervals
                     </p>
                   </li>
                 ))}

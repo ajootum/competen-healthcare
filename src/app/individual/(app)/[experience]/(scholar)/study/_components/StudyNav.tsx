@@ -20,7 +20,7 @@ const TABS = [
 export default function StudyNav({ dueCount }: { dueCount?: number | null }) {
   const pathname = usePathname() ?? "";
   return (
-    <nav aria-label="My Learning" className="-mx-4 mb-6 overflow-x-auto px-4 md:mx-0 md:px-0">
+    <nav aria-label="My Learning" className="sticky top-14 z-20 -mx-4 mb-6 overflow-x-auto bg-gray-50/95 px-4 backdrop-blur md:static md:mx-0 md:bg-transparent md:px-0 md:backdrop-blur-none">
       <ul className="flex min-w-max gap-1 border-b border-gray-200">
         {TABS.map(t => {
           const href = experienceHref("scholar", t.segment);

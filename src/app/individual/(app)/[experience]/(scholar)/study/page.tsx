@@ -30,7 +30,7 @@ const JOURNEY = [
   { step: "Assess", text: "Practice questions written from a section." },
   { step: "Revise", text: "Anything you miss comes back on a schedule." },
   { step: "Apply", text: "Case questions built from your material." },
-  { step: "Improve", text: "See where you are strong and what is due." },
+  { step: "Improve", text: "See your practice accuracy and what is due." },
 ];
 
 export default async function MyLearning({ params }: { params: Promise<{ experience: string }> }) {

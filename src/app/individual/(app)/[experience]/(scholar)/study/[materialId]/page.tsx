@@ -83,7 +83,13 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
         </p>
       )}
 
-      <ExplainPanel materialId={m.id} consent={consentOn} title="Ask about this material" />
+      {/* Owner review P1.6: on a wide screen the sections read on the left while the question box stays in
+          view on the right. One column below lg, in the same order. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-6">
+      <div className="lg:order-2 lg:sticky lg:top-20">
+        <ExplainPanel materialId={m.id} consent={consentOn} title="Ask about this material" />
+      </div>
+      <div className="lg:order-1">
 
       {questions.ok && caseCount > 0 && (
         <p className="mt-4 text-[13.5px] text-gray-700">
@@ -93,7 +99,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
       )}
       {!questions.ok && <div className="mt-4"><Unreadable what="questions for this material" /></div>}
 
-      <section aria-labelledby="sections-h" className="mt-8">
+      <section aria-labelledby="sections-h" className="mt-8 lg:mt-0">
         <h2 id="sections-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Sections</h2>
         {!chunks.ok ? <div className="mt-3"><Unreadable what="material text" /></div> : (
           <ol className="mt-3 space-y-4">
@@ -125,6 +131,8 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
           </ol>
         )}
       </section>
+      </div>
+      </div>
     </>
   );
 }
