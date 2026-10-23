@@ -10,13 +10,17 @@ let signedIn = true;
 let entryOwner = ME.id;
 let stored: { name: string; metadata: { mimetype: string; size: number } }[] = [];
 let calls: { table: string; op: string; payload?: any }[] = [];
-let storageCalls: { op: string; arg: any }[] = [];
+let storageCalls: { op: string; arg: any; opts?: any }[] = [];
+let recordedPaths: string[] = [];
 
 function admin() {
   return {
     from(table: string) {
       const b: any = {
-        select: () => b, eq: () => b, order: () => b,
+        _eq: {} as Record<string, unknown>,
+        select: () => b, order: () => b,
+        eq: (k: string, v: unknown) => { b._eq[k] = v; return b; },
+        maybeSingle: async () => (table === "evidence" && recordedPaths.includes(String(b._eq.file_path)) ? { data: { id: "e-rec" } } : { data: null }),
         single: async () => {
           if (table === "profiles") return { data: ME };
           if (table === "skill_log_entries") return { data: { nurse_id: entryOwner } };
@@ -32,7 +36,7 @@ function admin() {
       from: (bucket: string) => ({
         upload: async (path: string) => { storageCalls.push({ op: "upload", arg: { bucket, path } }); return { error: null }; },
         remove: async (paths: string[]) => { storageCalls.push({ op: "remove", arg: paths }); return { error: null }; },
-        createSignedUploadUrl: async (path: string) => { storageCalls.push({ op: "slot", arg: path }); return { data: { token: "tok", path }, error: null }; },
+        createSignedUploadUrl: async (path: string, opts?: any) => { storageCalls.push({ op: "slot", arg: path, opts }); return { data: { token: "tok", path }, error: null }; },
         list: async (prefix: string, opts: any) => { storageCalls.push({ op: "list", arg: { prefix, opts } }); return { data: stored, error: null }; },
       }),
     },
@@ -48,7 +52,7 @@ vi.mock("@/lib/trace", () => ({ currentTraceId: async () => "trace" }));
 const route = () => import("./route");
 const json = (method: string, body: unknown) => new Request("http://x/api/evidence", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
-beforeEach(() => { signedIn = true; entryOwner = ME.id; stored = []; calls = []; storageCalls = []; });
+beforeEach(() => { signedIn = true; entryOwner = ME.id; stored = []; calls = []; storageCalls = []; recordedPaths = []; });
 
 describe("the upload rules are the route's original ones", () => {
   it("keeps 10 MB documents, 50 MB audio/video and the same messages", () => {
@@ -93,6 +97,9 @@ describe("direct upload: signed URL, then PUT", () => {
     const body = await res.json();
     expect(body).toMatchObject({ bucket: "evidence", token: "tok" });
     expect(body.path).toBe(`${ME.id}/${body.upload_id}-voice note.webm`);
+    // One-time and non-overwriting: no upsert, so a slot cannot replace an existing object. Supabase signed
+    // upload URLs expire after 2 hours (storage-js createSignedUploadUrl).
+    expect(storageCalls.find(c => c.op === "slot")!.opts).toBeUndefined();
   });
 
   it("refuses a slot over the limit, of the wrong type, or for somebody else's record -- before any URL exists", async () => {
@@ -131,5 +138,26 @@ describe("direct upload: signed URL, then PUT", () => {
     signedIn = false;
     expect((await r.PUT(json("PUT", { upload_id: "33333333-3333-4333-8333-333333333333", file_name: "x.pdf" }))).status).toBe(401);
     expect((await r.POST(json("POST", { file_name: "a.pdf", mime_type: "application/pdf", size_bytes: 10 }))).status).toBe(401);
+  });
+});
+
+describe("cleanup of a failed direct upload", () => {
+  const del = (q: string) => new Request(`http://x/api/evidence?${q}`, { method: "DELETE" });
+  const uploadId = "44444444-4444-4444-8444-444444444444";
+
+  it("discards the caller's own unrecorded upload at the rebuilt path", async () => {
+    const res = await (await route()).DELETE(del(`upload_id=${uploadId}&file_name=${encodeURIComponent("my note.webm")}`));
+    expect(res.status).toBe(200);
+    expect(storageCalls.find(c => c.op === "remove")!.arg).toEqual([`${ME.id}/${uploadId}-my note.webm`]);
+  });
+
+  it("never discards a recorded file, on a malformed id, or for a signed-out caller", async () => {
+    const r = await route();
+    recordedPaths = [`${ME.id}/${uploadId}-kept.pdf`];
+    expect((await r.DELETE(del(`upload_id=${uploadId}&file_name=kept.pdf`))).status).toBe(409);
+    expect((await r.DELETE(del("upload_id=../x&file_name=a.pdf"))).status).toBe(400);
+    signedIn = false;
+    expect((await r.DELETE(del(`upload_id=${uploadId}&file_name=a.pdf`))).status).toBe(401);
+    expect(storageCalls.some(c => c.op === "remove")).toBe(false);
   });
 });

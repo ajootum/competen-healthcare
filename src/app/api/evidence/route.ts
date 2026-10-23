@@ -201,7 +201,23 @@ export async function DELETE(req: Request) {
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { admin, me } = auth;
 
-  const id = new URL(req.url).searchParams.get("id");
+  const params = new URL(req.url).searchParams;
+
+  // ── Direct upload, cleanup: discard an object whose PUT never succeeded. ──
+  // The path is rebuilt from the caller's id, so only the caller's own unrecorded upload can be removed. A
+  // path an evidence row already points at is never removed here: that is a recorded file, deleted (or
+  // refused, once verified) by the id branch below.
+  const uploadId = params.get("upload_id");
+  if (uploadId !== null) {
+    if (!isUploadId(uploadId)) return NextResponse.json({ error: "upload_id is required" }, { status: 400 });
+    const path = evidencePath(me.id, uploadId, safeFileName(params.get("file_name") ?? ""));
+    const { data: recorded } = await admin.from("evidence").select("id").eq("file_path", path).maybeSingle();
+    if (recorded) return NextResponse.json({ error: "That upload is recorded evidence -- remove it by its id" }, { status: 409 });
+    await admin.storage.from(BUCKET).remove([path]);
+    return NextResponse.json({ ok: true, discarded: true });
+  }
+
+  const id = params.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
   const { data: row } = await admin.from("evidence").select("id, owner_id, file_path, file_name, verified, verified_by, status").eq("id", id).single();
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });

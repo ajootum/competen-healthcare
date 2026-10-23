@@ -22,13 +22,27 @@ export async function uploadEvidence(file: File, links: EvidenceLinks): Promise<
   if (!slotRes.ok || !slot?.token) return { ok: false, error: slot?.error ?? "Upload failed" };
 
   const { error: upErr } = await createClient().storage.from(slot.bucket).uploadToSignedUrl(slot.path, slot.token, file, { contentType: file.type });
-  if (upErr) return { ok: false, error: upErr.message || "Upload failed" };
+  if (upErr) {
+    await discardUpload(slot.upload_id, file.name);
+    return { ok: false, error: upErr.message || "Upload failed" };
+  }
 
   const doneRes = await fetch("/api/evidence", {
     method: "PUT", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ upload_id: slot.upload_id, file_name: file.name, ...links }),
   });
   const done = await doneRes.json().catch(() => ({}));
-  if (!doneRes.ok || !done?.evidence) return { ok: false, error: done?.error ?? "Upload failed" };
+  if (!doneRes.ok || !done?.evidence) {
+    // The file reached storage but was not recorded. Ask the server to discard it, so a failed upload
+    // leaves nothing behind (the server already deletes anything it refused, so this is the safety net).
+    await discardUpload(slot.upload_id, file.name);
+    return { ok: false, error: done?.error ?? "Upload failed" };
+  }
   return { ok: true, evidence: done.evidence };
+}
+
+async function discardUpload(uploadId: string, fileName: string) {
+  try {
+    await fetch(`/api/evidence?upload_id=${encodeURIComponent(uploadId)}&file_name=${encodeURIComponent(fileName)}`, { method: "DELETE" });
+  } catch { /* best effort: the object has no row, so it is unreachable through the API either way */ }
 }
