@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/trace", () => ({ currentTraceId: async () => "trace-test" }));
 vi.mock("@/lib/notifications/dispatch", () => ({ dispatch: vi.fn(async () => ({})) }));
 
-import { ACTOR_LIMIT, NEUTRAL_MESSAGE, RESET_SENT, TARGET_LIMIT, decideReset, isSuspended, requestAdminReset, resetReturnUrl, responseFor, type TargetFacts } from "./user-reset";
+import { ACTOR_LIMIT, NEUTRAL_MESSAGE, RESET_SENT, TARGET_LIMIT, decideReset, isSuspended, redactAddresses, requestAdminReset, resetReturnUrl, responseFor, type TargetFacts } from "./user-reset";
 import { isAdminInitiated } from "@/lib/auth/recovery-link";
 
 const OK: TargetFacts = { email: "person@example.test", emailVerified: true, isOwnerAccount: false, suspended: false };
@@ -39,6 +39,11 @@ describe("decideReset (HQ-USERS-B)", () => {
     expect(isSuspended(null, "active", "2026-10-23T12:00:00Z")).toBe(false);
   });
 
+  it("redacts an address the provider quotes, before it is logged", () => {
+    expect(redactAddresses('Email address "person@example.test" is invalid')).toBe('Email address "[address]" is invalid');
+    expect(redactAddresses("rate limit exceeded")).toBe("rate limit exceeded");
+  });
+
   it("returns to the configured site, marked as administrator-initiated", () => {
     expect(resetReturnUrl()).toMatch(/^https?:\/\/[^/]+\/reset-password\?initiated=admin$/);
     expect(isAdminInitiated("?initiated=admin")).toBe(true);
@@ -53,7 +58,7 @@ function fakeAdmin(opts: { sentForTarget?: number; sentByActor?: number; user?: 
     audit, sends,
     auth: {
       admin: { getUserById: async () => ({ data: opts.user === undefined ? { user: { email: "person@example.test", email_confirmed_at: "2026-01-01T00:00:00Z", banned_until: null } } : opts.user }) },
-      resetPasswordForEmail: async (email: string, o: any) => { sends.push({ email, o }); return { error: opts.sendError ? { message: "x" } : null }; },
+      resetPasswordForEmail: async (email: string, o: any) => { sends.push({ email, o }); return { error: opts.sendError ? { message: `Email address "${email}" is invalid` } : null }; },
     },
     from(table: string) {
       const f: Record<string, any> = {};
@@ -105,6 +110,14 @@ describe("requestAdminReset", () => {
       expect(admin.sends).toHaveLength(0);
       expect(admin.audit.at(-1).new_value).toEqual({ reason });
     }
+  });
+
+  it("a refused send logs the reason without the address", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const admin = fakeAdmin({ sendError: true });
+    expect((await requestAdminReset(admin, actor, TARGET)).body).toEqual({ ok: true, message: NEUTRAL_MESSAGE });
+    expect(warn.mock.calls.flat().join(" ")).not.toMatch(/person@example.test/);
+    warn.mockRestore();
   });
 
   it("the administrator limit answers 429 and sends nothing", async () => {

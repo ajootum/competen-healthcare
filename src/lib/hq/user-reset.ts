@@ -76,6 +76,9 @@ export function isSuspended(bannedUntil: string | null | undefined, accountStatu
   return !!bannedUntil && Date.parse(bannedUntil) > Date.parse(at);
 }
 
+/** Pure: a provider message with any email address replaced, so it can be logged. */
+export const redactAddresses = (s: string) => s.replace(/[^\s"'<>@]+@[^\s"'<>@]+/g, "[address]");
+
 type Actor = { userId: string; fullName: string | null; isOwner: boolean };
 const audit = async (admin: any, actor: Actor, action: string, targetId: string, value: Record<string, unknown>) =>
   admin.from("audit_log").insert({
@@ -129,6 +132,9 @@ export async function requestAdminReset(admin: any, actor: Actor, targetId: stri
 
   const { error } = await admin.auth.resetPasswordForEmail(target.email, { redirectTo: resetReturnUrl() });
   if (error) {
+    // The provider's reason, for whoever runs the platform -- never the address, never a link. The
+    // provider's own message can quote the address ("Email address "x@y" is invalid"), so it is redacted.
+    console.warn(`[admin-password-reset] Supabase recovery refused the send for user ${targetId}: ${redactAddresses(error.message)}`);
     await audit(admin, actor, RESET_REFUSED, targetId, { reason: "send_failed" });
     return responseFor({ kind: "refuse", reason: "send_failed" });
   }

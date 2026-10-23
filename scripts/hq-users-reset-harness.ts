@@ -80,7 +80,10 @@ const checkAuditClean = (src: Src): R => {
   const s = code(src, "lib");
   const values = [...s.matchAll(/audit\(admin, actor, [A-Z_]+, targetId, (\{[^}]*\})\)/g)].map(m => m[1]);
   const bad = values.filter(v => /email|token|link|url|redirect|target\.email/i.test(v));
-  return { ok: values.length >= 5 && bad.length === 0, detail: `${values.length} audit writes, offending: ${bad.join(" | ")}` };
+  // A log line is a record too: the provider's message can quote the address, so it must be redacted.
+  const logs = s.match(/console\.(log|warn|error|info)\([^;]*;/g) ?? [];
+  const leakyLogs = logs.filter(l => /error\.message|target\.email/.test(l) && !/redactAddresses\(error\.message\)/.test(l));
+  return { ok: values.length >= 5 && bad.length === 0 && leakyLogs.length === 0, detail: `${values.length} audit writes, offending: ${bad.join(" | ")}; unredacted logs ${leakyLogs.length}` };
 };
 const checkUi = (src: Src): R => {
   const page = code(src, "page"), ws = code(src, "ws");
@@ -132,6 +135,7 @@ red("R4 on the profiles address", checkDecision(plant("lib", "email: au.user.ema
 red("R4 on an app-clock window", checkDecision(plant("lib", "const at: string = attempt.data.created_at;", "const at: string = new Date(Date.now()).toISOString();")));
 red("R4 on an answer that names the target", checkDecision(plant("lib", "return { status: 202, body: { ok: true, message: NEUTRAL_MESSAGE } };", "return { status: 202, body: { ok: true, message: NEUTRAL_MESSAGE, target: 1 } };")));
 red("R5 on an address in the audit", checkAuditClean(plant("lib", `{ initiated_by: "administrator", channel: "supabase_recovery" }`, `{ initiated_by: "administrator", email: target.email }`)));
+red("R5 on an unredacted provider message in the log", checkAuditClean(plant("lib", "${redactAddresses(error.message)}", "${error.message}")));
 red("R6 on reset sent to the owner-only actions route", checkUi(plant("ws", `? fetch("/api/super-admin/users/reset"`, `? fetch("/api/super-admin/users/actions"`)));
 red("R6 on reset offered to every viewer", checkUi(plant("page", `canReset={isOwner || capabilities.includes("hq.platform.users.reset")}`, "canReset={true}")));
 red("R7 on a grant to a third position", checkMigration(plant("mig", "(values ('chief_executive'), ('platform_director')) as p(code)", "(values ('chief_executive'), ('platform_director'), ('individual_product_administrator')) as p(code)")));
