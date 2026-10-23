@@ -68,12 +68,36 @@ type GrantRow = { position_code: string; capability_code: string; effective_from
 type CapabilityRow = { code: string; label: string | null };
 type AppointmentRow = { id: string; office_id: string; person_id: string | null; person_name: string | null; role: string | null; status: string | null; term_start: string | null; term_end: string | null; scope: string | null; appointed_by: string | null; created_at: string | null };
 
+type ProfileRow = { id: string; full_name: string | null; email: string | null; phone: string | null };
+
 // ── Views ────────────────────────────────────────────────────────────────────
 export type HqCapabilityView = { code: string; label: string | null; effectiveFrom: string | null; effectiveTo: string | null; inWindow: boolean };
+
+/**
+ * Who the appointed person is, read from their profile so the board says who is appointed where (owner
+ * request, 2026-10-23: full name, email and phone for every holder).
+ *
+ * ⚠ THREE STATES, LIKE EVERYTHING ELSE ON THIS BOARD. `unreadable` means the profiles read failed, and it
+ * must never render as "Not recorded" -- that would state that the person has no email when nobody looked.
+ * `no_profile` means the appointment names no person id, or one with no profile row. `found` carries each
+ * field as stored, null meaning the profile genuinely holds no value (rendered "Not recorded").
+ *
+ * ⚠ THERE IS NO GIVEN-NAME FIELD TO READ. `profiles` stores one `full_name` (no given_name or family_name
+ * column exists in the migrations or on staging). The board says so rather than splitting full names,
+ * which would invent a fact that differs across naming conventions. GIVEN_NAME_NOT_STORED is that sentence.
+ */
+export type HqPersonDetails =
+  | { state: "found"; fullName: string | null; email: string | null; phone: string | null }
+  | { state: "no_profile" }
+  | { state: "unreadable"; error: string };
+export const GIVEN_NAME_NOT_STORED = "Not stored separately: Competen records one full name per person";
+
 export type HqHolderView = {
   appointmentId: string;
   personId: string | null;
   personName: string | null;
+  /** The person's profile details, for "who is appointed where". */
+  person: HqPersonDetails;
   status: string;
   /** Whether THIS row currently opens the door — the guard's own allowlist, not a re-implementation. */
   grantsAccess: boolean;
@@ -143,10 +167,21 @@ export function officeForSpace(offices: OfficeRow[], space: HqSpace): { office: 
 export const officeIsUsable = (o: OfficeRow | null): boolean =>
   !!o && o.is_active !== false && o.status !== "dissolved" && o.status !== "archived";
 
-const toHolder = (a: AppointmentRow): HqHolderView => ({
+/** Pure. The details for one appointment's person, from one read of the holders' profiles. */
+export function personDetails(personId: string | null, profiles: Read<Map<string, ProfileRow>>): HqPersonDetails {
+  if (!profiles.ok) return { state: "unreadable", error: profiles.error };
+  const p = personId ? profiles.value.get(personId) : undefined;
+  if (!p) return { state: "no_profile" };
+  const clean = (v: string | null) => (v && v.trim() ? v.trim() : null);
+  return { state: "found", fullName: clean(p.full_name), email: clean(p.email), phone: clean(p.phone) };
+}
+
+/** Pure. Exported for the unit test. */
+export const toHolder = (a: AppointmentRow, profiles: Read<Map<string, ProfileRow>>): HqHolderView => ({
   appointmentId: a.id,
   personId: a.person_id,
   personName: a.person_name,
+  person: personDetails(a.person_id, profiles),
   status: a.status ?? "unknown",
   grantsAccess: appointmentGrantsAccess(a.status),
   termStart: a.term_start,
@@ -208,6 +243,16 @@ export async function loadHqAppointmentBoard(admin: Admin): Promise<HqAppointmen
   );
   if (capRes.error) notes.push(`Capability names could not be read (${capRes.error.message}), so codes are shown without their labels.`);
 
+  // The holders' profiles, in ONE read keyed on the appointed person ids -- nobody else's. A failed read
+  // makes every holder's details `unreadable`; it never empties the roster.
+  const personIds = appts.ok ? [...new Set(appts.value.map(a => a.person_id).filter((id): id is string => !!id))] : [];
+  let profiles: Read<Map<string, ProfileRow>> = readOk(new Map());
+  if (personIds.length) {
+    const { data, error } = await admin.from("profiles").select("id, full_name, email, phone").in("id", personIds);
+    profiles = error ? readFail(error.message) : readOk(new Map(((data ?? []) as ProfileRow[]).map(p => [p.id, p])));
+  }
+  const holderOf = (a: AppointmentRow) => toHolder(a, profiles);
+
   const spaces: HqSpaceView[] = HQ_SPACES.map(space => {
     const { office, note } = officeForSpace(offices, space);
     const spaceOfficeIds = offices.filter(o => o.office_type === hqOfficeType(space)).map(o => o.id);
@@ -226,7 +271,7 @@ export async function loadHqAppointmentBoard(admin: Admin): Promise<HqAppointmen
           const holders: Read<HqHolderView[]> = appts.ok
             ? readOk(appts.value
                 .filter(a => spaceOfficeIds.includes(a.office_id) && a.role === p.code)
-                .map(toHolder)
+                .map(holderOf)
                 .sort((a, b) => Number(b.grantsAccess) - Number(a.grantsAccess) || (a.personName ?? "").localeCompare(b.personName ?? "")))
             : readFail<HqHolderView[]>(appts.error);
           return {
@@ -264,7 +309,7 @@ export async function loadHqAppointmentBoard(admin: Admin): Promise<HqAppointmen
           .map(a => {
             const office = offices.find(o => o.id === a.office_id);
             const space = HQ_SPACES.find(s => hqOfficeType(s) === office?.office_type) ?? null;
-            return { ...toHolder(a), role: a.role, space, spaceLabel: space ? SPACE_LABEL[space] : (office?.name ?? "Unknown space") };
+            return { ...holderOf(a), role: a.role, space, spaceLabel: space ? SPACE_LABEL[space] : (office?.name ?? "Unknown space") };
           }));
 
   if (positions.ok && positions.value.length === 0) notes.push("hq_position has no rows, so there is nothing to appoint anybody to.");

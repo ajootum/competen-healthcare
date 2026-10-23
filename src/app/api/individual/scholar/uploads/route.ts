@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { countMaterials, createUploadSlot } from "@/lib/individual/scholar/store";
-import { ALLOWED_MIME, BUCKET, MAX_MATERIALS_PER_PERSON, MAX_UPLOAD_BYTES, type MaterialMime, UPLOAD_ATTESTATION_REQUIRED } from "@/lib/individual/scholar/config";
+import { ALLOWED_MIME, BUCKET, MAX_UPLOAD_BYTES, type MaterialMime, UPLOAD_ATTESTATION_REQUIRED } from "@/lib/individual/scholar/config";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -29,8 +30,10 @@ export async function POST(req: Request) {
 
   const count = await countMaterials(ctx.admin, ctx.userId);
   if (count === null) return NextResponse.json({ error: "Your study space could not be read just now. Try again shortly." }, { status: 503 });
-  if (count >= MAX_MATERIALS_PER_PERSON)
-    return NextResponse.json({ error: `You can keep up to ${MAX_MATERIALS_PER_PERSON} materials. Delete one to upload another.` }, { status: 409 });
+  // How many a person may keep is Individual policy (COMPETEN-CONFIG-002), never above MAX_MATERIALS_PER_PERSON.
+  const maxMaterials = (await loadIndividualPolicy(ctx.admin)).scholarMaterialsPerPerson;
+  if (count >= maxMaterials)
+    return NextResponse.json({ error: `You can keep up to ${maxMaterials} materials. Delete one to upload another.` }, { status: 409 });
 
   const slot = await createUploadSlot(ctx.admin, ctx.userId, mime);
   if (!slot) return NextResponse.json({ error: "The upload could not be started. Try again shortly." }, { status: 503 });

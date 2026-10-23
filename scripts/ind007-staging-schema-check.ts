@@ -99,6 +99,19 @@ async function main() {
     out.objectCounts = { columns: fp.columns.length, constraints: fp.constraints.length, indexes: fp.indexes.length, policies: fp.policies.length,
       rlsOn: fp.rls.filter(r => r.relrowsecurity).length };
 
+    if (process.argv.includes("--config")) {
+      // COMPETEN-CONFIG-002 migration 376, before and after: the capability, the position's open grants,
+      // who holds an active appointment to it, and the Individual policy partition of the WCE store.
+      out.config376 = {
+        capability: await q("select code, space, label from hq_capability where code = 'hq.individual.config.manage'"),
+        positionGrants: await q(`select capability_code, effective_to from hq_position_capability
+          where position_code = 'individual_product_administrator' order by capability_code`),
+        policyOverrides: await q(`select config_path, draft, published from workspace_config_overrides
+          where scope_type = 'platform' and scope_ref = 'individual' order by config_path`),
+        policyVersions: Number((await q(`select count(*)::int as n from workspace_config_versions
+          where scope_type = 'platform' and scope_ref = 'individual'`))[0].n),
+      };
+    }
     if (process.argv.includes("--taxonomy")) {
       // COMPETEN-CONFIG-002 item 8: the migration 013 vocabularies the Professional fields are offered.
       out.taxonomy = await q(`select t.kind, count(tt.id)::int as terms, coalesce(string_agg(tt.value, ', ' order by tt.sort_order, tt.value), '') as sample

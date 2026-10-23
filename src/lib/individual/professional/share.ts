@@ -14,18 +14,25 @@ import { ORIGIN } from "./vocabulary";
 // the person's own act, not an organisation's, and stamping a hospital would make it countable by one.
 
 export const SHARE_DAYS_MAX = 365;
+/** The lifetime the form suggests, kept within the policy maximum (COMPETEN-CONFIG-002). */
+export const SHARE_DAYS_SUGGESTED = 30;
+export const suggestedShareDays = (maxDays: number) => Math.min(SHARE_DAYS_SUGGESTED, maxDays);
 
 export type ShareLink = {
   id: string; token: string; scope: string; label: string | null; expires_at: string | null;
   revoked: boolean; view_count: number; created_at: string;
 };
 
-/** Pure: the request body, clamped the way the estate route clamps it. */
-export function parseShare(b: Record<string, unknown>): { scope: "summary" | "full"; label: string | null; days: number } {
+/**
+ * Pure: the request body, clamped the way the estate route clamps it. `maxDays` is the Individual policy
+ * maximum (src/lib/individual/policy.ts), itself never above SHARE_DAYS_MAX, applied again here.
+ */
+export function parseShare(b: Record<string, unknown>, maxDays: number = SHARE_DAYS_MAX): { scope: "summary" | "full"; label: string | null; days: number } {
   const scope = b.scope === "full" ? "full" : "summary";
   const label = typeof b.label === "string" && b.label.trim() ? b.label.trim().slice(0, 120) : null;
   const n = Number(b.days);
-  const days = Number.isFinite(n) ? Math.min(SHARE_DAYS_MAX, Math.max(1, Math.floor(n))) : 30;
+  const max = Math.min(SHARE_DAYS_MAX, Math.max(1, Math.floor(maxDays)));
+  const days = Number.isFinite(n) ? Math.min(max, Math.max(1, Math.floor(n))) : suggestedShareDays(max);
   return { scope, label, days };
 }
 
