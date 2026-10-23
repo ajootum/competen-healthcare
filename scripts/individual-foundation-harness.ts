@@ -102,7 +102,9 @@ function main() {
     "src/app/api/individual/terms/route.ts": ["individual_membership.update", "individual_entitlement.update"],
     // The delete is the grant's own compensation (COMPETEN-IND-ACCESS-001): a membership THIS call created,
     // with no entitlement written beside it, is removed again rather than left as a member with nothing live.
-    "src/lib/individual/grants.ts": ["individual_membership.insert", "individual_membership.delete", "individual_entitlement.insert", "individual_entitlement.update"],
+    // individual_membership.update is the membership-status action (LEGAL-001 s13 step 7): suspend, reinstate,
+    // revoke -- 12o pins its transitions.
+    "src/lib/individual/grants.ts": ["individual_membership.insert", "individual_membership.update", "individual_membership.delete", "individual_entitlement.insert", "individual_entitlement.update"],
     // The invitation record (migration 378): created by the HQ invitation, closed by acceptance or revocation.
     // It grants nothing itself -- acceptance goes through grants.ts above.
     // profiles.update is the one role-clearing write 1d pins to its exact argument.
@@ -398,6 +400,15 @@ function main() {
     /auth\.admin\.inviteUserByEmail\(/.test(invSrc) && !/auth\.admin\.createUser\(|auth\.signUp\(/.test(invSrc)
     && !/platform_membership|grantPlatformMembership|practice_|enterprise_/.test(invSrc)
     && /if \(!reuse\) \{\s*const clear = await admin\.from\("profiles"\)\.update\(individualIdentityProfile\(\)\)\.eq\("id", authUserId\);/.test(invSrc));
+
+  // ── 12o. MEMBERSHIP STATUS (LEGAL-001 s13 step 7): suspend, reinstate, revoke ──
+  const memRoute = SRC.get("src/app/api/hq/individual/grants/membership/route.ts") ?? "";
+  ok("12o. the membership action: pilot-grant right, then gate, not yourself; revoke needs a reason, is terminal, and touches only the membership",
+    /hqApiGate\(\["hq\.individual\.pilot\.grant"\]\)/.test(memRoute) && /targetUserId === ctx\.userId/.test(memRoute)
+    && /individualAppEnabled\(ctx\.admin\)\)\) return NextResponse\.json/.test(memRoute)
+    && /const FROM: Record<MembershipAction, string\[\]> = \{ suspend: \["active"\], reinstate: \["suspended"\], revoke: \["active", "suspended"\] \};/.test(grantsLib)
+    && /action === "revoke" && \(reason \?\? ""\)\.length < 8/.test(grantsLib)
+    && !/from\("individual_entitlement"\)/.test(grantsLib.slice(grantsLib.indexOf("export async function setIndividualMembershipStatus"), grantsLib.indexOf("export async function endIndividualExperience"))));
 
   ok("9g. D10: no Individual code persists AI conversation",
     !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));

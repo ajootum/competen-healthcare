@@ -194,7 +194,16 @@ function Person({ p, experiences, nameOf, busy, setBusy, onDone }: {
             <dd className="text-gray-900">{p.membership ? (p.membership.onboarded ? "Completed" : "Not completed yet") : "—"}</dd></div>
         </dl>
         {p.isSelf && <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13px] text-gray-700">This is your own account. Another administrator, or the owner, grants your access.</p>}
-        {membershipBlocked && <p className="mt-3 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[13px] text-amber-900">This membership is {p.membership!.status}. Reinstating it is not a pilot grant and is not done from this screen.</p>}
+        {membershipBlocked && (
+          <p className="mt-3 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[13px] text-amber-900">
+            {p.membership!.status === "suspended"
+              ? "This membership is suspended: access is closed and everything is kept. Reinstate it below to reopen access."
+              : "This membership is revoked. That is final from this screen; nothing new can be granted to it."}
+          </p>
+        )}
+        {p.membership && !p.isSelf && p.membership.status !== "revoked" && (
+          <MembershipControls status={p.membership.status} personId={p.person.id} busy={busy} setBusy={setBusy} onDone={onDone} />
+        )}
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white">
@@ -400,5 +409,54 @@ function InviteForm({ email, experiences, busy, setBusy, onDone }: {
         {busy === "invite" ? "Sending…" : "Send invitation"}
       </button>
     </form>
+  );
+}
+
+// ── MEMBERSHIP STATUS (COMPETEN-LEGAL-001 s13 step 7) ────────────────────────────────────────────────────
+// Suspend (reversible), reinstate (from suspended only), revoke (final here, reason required). The server
+// enforces every one of those rules again; this only offers what the current status allows.
+
+function MembershipControls({ status, personId, busy, setBusy, onDone }: {
+  status: string; personId: string; busy: string | null;
+  setBusy: (b: string | null) => void; onDone: (text: string, tone: "ok" | "error") => Promise<void>;
+}) {
+  const [reason, setReason] = useState("");
+  async function act(action: "suspend" | "reinstate" | "revoke") {
+    if (action === "revoke" && !window.confirm("Revoke this Competen Individual membership? This is final from this screen. Records are kept.")) return;
+    setBusy(`membership-${action}`);
+    try {
+      const r = await call("/api/hq/individual/grants/membership", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: personId, action, reason: reason || null }),
+      });
+      if (r.ok) setReason("");
+      const done = { suspend: "Membership suspended.", reinstate: "Membership reinstated.", revoke: "Membership revoked." }[action];
+      await onDone(r.ok ? done : messageOf(r), r.ok ? "ok" : "error");
+    } catch {
+      await onDone("The change could not be sent. Check your connection.", "error");
+    } finally { setBusy(null); }
+  }
+  return (
+    <div className="mt-3 rounded-lg border border-gray-100 p-3">
+      <label htmlFor="mem-reason" className="block text-[12.5px] font-semibold text-gray-700">Reason (required to revoke)</label>
+      <input id="mem-reason" type="text" maxLength={500} value={reason} onChange={e => setReason(e.target.value)} className={input}
+        placeholder="e.g. Left the pilot cohort" />
+      <div className="mt-2 flex flex-wrap gap-2">
+        {status === "active" && (
+          <button type="button" onClick={() => act("suspend")} disabled={busy !== null} className={`${btn} border border-gray-300 text-gray-800 hover:bg-gray-50`}>
+            {busy === "membership-suspend" ? "Suspending…" : "Suspend membership"}
+          </button>
+        )}
+        {status === "suspended" && (
+          <button type="button" onClick={() => act("reinstate")} disabled={busy !== null} className={`${btn} border border-gray-300 text-gray-800 hover:bg-gray-50`}>
+            {busy === "membership-reinstate" ? "Reinstating…" : "Reinstate membership"}
+          </button>
+        )}
+        <button type="button" onClick={() => act("revoke")} disabled={busy !== null || reason.trim().length < 8}
+          className={`${btn} border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] hover:bg-[var(--cmp-surface-error)]`}>
+          {busy === "membership-revoke" ? "Revoking…" : "Revoke membership"}
+        </button>
+      </div>
+    </div>
   );
 }

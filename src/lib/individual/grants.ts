@@ -121,6 +121,60 @@ export async function grantIndividualAccess(admin: any, req: GrantRequest, grant
   return { ok: true, membership, granted, alreadyLive };
 }
 
+// ── MEMBERSHIP STATUS: SUSPEND, REINSTATE, REVOKE ── COMPETEN-LEGAL-001 s13 step 7 (the route gap) ───────────
+//
+// The gate-3 membership's own lifecycle, during the pilot, behind the same right as the grant. It changes ONE
+// row's status and its time columns, and nothing else: the entitlement ledger is untouched (its history stays),
+// no other product is touched, and no data is deleted. readIndividualAccess already refuses a suspended or
+// revoked membership, and /individual/access already says which.
+//
+//   suspend    active -> suspended     reversible: access closes now, everything is kept
+//   reinstate  suspended -> active     only from suspended
+//   revoke     active|suspended -> revoked   TERMINAL here, and a reason is required. Bringing a revoked
+//              person back is not a pilot act and is not offered.
+//
+// The reason is recorded in audit_log by the route, beside the actor -- 370 has no reason column, and the
+// grant's own note is not overwritten.
+
+export type MembershipAction = "suspend" | "reinstate" | "revoke";
+export const MEMBERSHIP_ACTIONS: readonly MembershipAction[] = ["suspend", "reinstate", "revoke"];
+const FROM: Record<MembershipAction, string[]> = { suspend: ["active"], reinstate: ["suspended"], revoke: ["active", "suspended"] };
+const TO: Record<MembershipAction, string> = { suspend: "suspended", reinstate: "active", revoke: "revoked" };
+/** The past tense, for audit actions and messages: individual_membership_suspended / _reinstated / _revoked. */
+export const MEMBERSHIP_DONE: Record<MembershipAction, string> = { suspend: "suspended", reinstate: "reinstated", revoke: "revoked" };
+
+/** Pure: validate a membership-status request. */
+export function validateMembershipAction(body: any): { targetUserId: string; action: MembershipAction; reason: string | null } | { ok: false; status: number; code: string; message: string } {
+  const targetUserId = typeof body?.targetUserId === "string" ? body.targetUserId.trim() : "";
+  if (!/^[0-9a-f-]{36}$/i.test(targetUserId)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "targetUserId must be a user id" };
+  const action = body?.action;
+  if (!MEMBERSHIP_ACTIONS.includes(action)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "action must be suspend, reinstate or revoke" };
+  const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 500) || null : null;
+  if (action === "revoke" && (reason ?? "").length < 8)
+    return { ok: false, status: 400, code: "REASON_REQUIRED", message: "Say why the membership is revoked (at least 8 characters)." };
+  return { targetUserId, action, reason };
+}
+
+export async function setIndividualMembershipStatus(
+  admin: any, targetUserId: string, action: MembershipAction, actorId: string,
+): Promise<{ ok: true; from: string; to: string } | { ok: false; status: number; code: string; message: string }> {
+  const { data: m, error } = await admin.from("individual_membership").select("id, status").eq("user_id", targetUserId).maybeSingle();
+  if (error) return { ok: false, status: 503, code: "UNAVAILABLE", message: "The membership could not be read." };
+  if (!m) return { ok: false, status: 404, code: "NO_MEMBERSHIP", message: "This person has no Competen Individual membership." };
+  if (!FROM[action].includes(m.status))
+    return { ok: false, status: 409, code: "INVALID_TRANSITION", message: `A ${m.status} membership cannot be ${MEMBERSHIP_DONE[action]}.` };
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = { status: TO[action], updated_at: now };
+  if (action === "suspend") patch.suspended_at = now;
+  if (action === "reinstate") patch.suspended_at = null;
+  if (action === "revoke") { patch.revoked_at = now; patch.revoked_by = actorId; }
+  // Optimistic: only from the status just read, so two administrators cannot both act on a stale view.
+  const upd = await admin.from("individual_membership").update(patch).eq("id", m.id).eq("status", m.status).select("id");
+  if (upd.error) return { ok: false, status: 503, code: "WRITE_FAILED", message: "The membership could not be changed." };
+  if (!(upd.data ?? []).length) return { ok: false, status: 409, code: "CHANGED", message: "The membership changed meanwhile. Look it up again." };
+  return { ok: true, from: m.status, to: TO[action] };
+}
+
 /** End one experience for a person: every live row for it is cancelled. History keeps the rows. */
 export async function endIndividualExperience(admin: any, targetUserId: string, experience: ExperienceKey): Promise<{ ok: true; ended: number } | { ok: false; status: number; message: string }> {
   const { data: liveRows, error } = await admin.from("individual_live_entitlement")

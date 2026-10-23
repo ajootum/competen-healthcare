@@ -343,6 +343,51 @@ async function main() {
     access.status === 200 && access.text.includes("Sign in to Competen Professional") && access.text.includes("/login?next=%2Findividual%2Fprofessional"));
 
   await invitations(hq, s);
+  await membershipStatus(hq, s);
+}
+
+// ── M. MEMBERSHIP STATUS (LEGAL-001 s13 step 7) AND THE HQ 401 ─────────────────────────────────────────────
+async function membershipStatus(hq: Jar, nonHq: Jar) {
+  const act = (body: Record<string, unknown>, jar?: Jar) => send("POST", "/api/hq/individual/grants/membership", body, jar);
+  const target = ids.existing; // granted Professional in S4; holds a platform membership too
+  const e = await signIn(FIX.existing);
+
+  const anon = await act({ targetUserId: target, action: "suspend" });
+  const notHq = await act({ targetUserId: target, action: "suspend" }, nonHq);
+  const self = await act({ targetUserId: ids.grantor, action: "suspend" }, hq);
+  ok("M1. refused: no session is 401 (the hqApiGate fix), no capability is 403, acting on yourself is 403",
+    anon.status === 401 && notHq.status === 403 && self.status === 403 && self.json.error?.code === "SELF_GRANT", `${anon.status}/${notHq.status}/${self.status}`);
+
+  const sus = await act({ targetUserId: target, action: "suspend", reason: "Harness: paused for review" }, hq);
+  const page = await get("/individual/professional", e);
+  const guidance = await get(redirectTarget(page) ?? "/individual/access", e);
+  ok("M2. suspend closes access now: the person is sent to guidance that says access is paused",
+    sus.status === 200 && sus.json.to === "suspended" && redirectTarget(page)?.startsWith("/individual/access") === true && guidance.text.includes("Your Competen Individual access is paused"),
+    `${sus.status} -> ${redirectTarget(page)}`);
+  const { data: ents } = await admin.from("individual_entitlement").select("id, status").eq("user_id", target);
+  ok("M3. suspension keeps the entitlement history untouched", (ents ?? []).length > 0 && (ents ?? []).every((r: any) => r.status === "active"));
+
+  const back = await act({ targetUserId: target, action: "reinstate" }, hq);
+  const home = await get("/individual/home", e);
+  ok("M4. reinstate reopens access", back.status === 200 && back.json.to === "active" && !(redirectTarget(home) ?? "").startsWith("/individual/access"), `${back.status} -> ${redirectTarget(home)}`);
+
+  const noReason = await act({ targetUserId: target, action: "revoke" }, hq);
+  const rev = await act({ targetUserId: target, action: "revoke", reason: "Harness: left the pilot cohort" }, hq);
+  const ended = await get(redirectTarget(await get("/individual/professional", e)) ?? "/individual/access", e);
+  ok("M5. revoke needs a reason, then closes access for good: guidance says access has ended",
+    noReason.status === 400 && noReason.json.error?.code === "REASON_REQUIRED" && rev.status === 200 && ended.text.includes("Your Competen Individual access has ended"));
+  const again = await act({ targetUserId: target, action: "reinstate" }, hq);
+  const regrant = await send("POST", "/api/hq/individual/grants", { targetUserId: target, experiences: ["professional"], adultConfirmed: true }, hq);
+  const { data: m } = await admin.from("individual_membership").select("status, revoked_at, revoked_by").eq("user_id", target).single();
+  ok("M6. revoked is terminal here: no reinstate, no re-grant; the row records when and by whom",
+    again.status === 409 && again.json.error?.code === "INVALID_TRANSITION" && regrant.status === 409 && m?.status === "revoked" && !!m?.revoked_at && m?.revoked_by === ids.grantor);
+  const { data: pm } = await admin.from("platform_membership").select("id").eq("user_id", target);
+  ok("M7. revoking Individual touched no other product: the platform membership is still there", (pm ?? []).length === 1);
+  const { data: trail } = await admin.from("audit_log").select("action, new_value").eq("actor_id", ids.grantor).like("action", "individual_membership_%").limit(10);
+  const acts = (trail ?? []).map((r: any) => r.action);
+  ok("M8. every change is audited with its reason",
+    ["individual_membership_suspended", "individual_membership_reinstated", "individual_membership_revoked"].every(a => acts.includes(a))
+    && (trail ?? []).some((r: any) => r.action === "individual_membership_revoked" && r.new_value?.reason === "Harness: left the pilot cohort"), acts.join(","));
 }
 
 // ── I. INVITATIONS FOR PEOPLE WITHOUT AN ACCOUNT (migration 378) ──────────────────────────────────────
