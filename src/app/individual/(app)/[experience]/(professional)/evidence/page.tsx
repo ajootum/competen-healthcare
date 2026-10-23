@@ -13,6 +13,8 @@ import { experienceModulePage, gatedMetadata } from "../../../../_components/she
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import FrameworkPicker from "../../../../_components/professional/FrameworkPicker";
+import CompetencyLinks from "../../../../_components/professional/CompetencyLinks";
+import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
@@ -37,7 +39,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, frameworks, prefs, policy] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadSharedFrameworks(ctx.admin), loadReminderPrefs(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
+  const [record, frameworks, prefs, policy, map] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadSharedFrameworks(ctx.admin), loadReminderPrefs(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin), loadMappingView(ctx.admin, ctx.userId)]);
   const horizonDays = policy.reminderHorizonDays;
   const evidence = record.evidence;
   const names = evidence ? await referenceNames(ctx.admin,
@@ -77,6 +79,9 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
                             e.need_id && needTitle.get(e.need_id) ? `for: ${needTitle.get(e.need_id)}` : null].filter(Boolean).join(" · ")}
                         </p>
                         {e.detail && <p className="mt-1 whitespace-pre-wrap text-[13.5px] text-gray-700">{e.detail}</p>}
+                        {map.mappings === null ? <p className="mt-2 text-[12.5px] text-gray-600">Competency links could not be read just now.</p> : map.provisioned && (
+                          <CompetencyLinks kind="evidence" subjectId={e.id} links={linksFor(map, "evidence", e.id)} offered={map.offered} accent={x.accent} idPrefix={`ev-${e.id}`} />
+                        )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <ClassLabel value={e.evidence_class} />

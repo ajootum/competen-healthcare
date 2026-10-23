@@ -3,6 +3,7 @@ import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { cpdHoursByYear, evidenceCoverage, planProgress } from "@/lib/individual/professional/progress";
+import { loadMappingView, professionalProgress } from "@/lib/individual/professional/mapping-store";
 import { NEED_STATUS_LABEL } from "@/lib/individual/professional/vocabulary";
 import type { Metadata } from "next";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
@@ -48,11 +49,12 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const record = await loadProfessionalRecord(ctx.admin, ctx.userId);
+  const [record, map] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId)]);
   const { needs, goals, cpd, evidence } = record;
   const plan = goals ? planProgress(goals, today) : null;
   const years = cpd ? cpdHoursByYear(cpd) : null;
   const coverage = needs && goals && cpd && evidence ? evidenceCoverage(needs, goals, cpd, evidence) : null;
+  const prog = professionalProgress(map, record);
   const href = (s: string) => experienceHref("professional", s);
 
   return (
@@ -119,6 +121,52 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
             </ul>
             <p className="mt-3 text-[12.5px] text-gray-500">Coverage counts what you recorded. It does not mean anyone has assessed or verified the need as met.</p>
           </>
+        )}
+      </Section>
+
+      <Section title="Competency coverage" note="The competencies Competen Professional offers, and which of them your CPD and evidence are linked to.">
+        {prog.coverage.state !== "measured" ? (
+          <NotMeasured accent={x.accent} href={href("cpd")} cta="Link CPD to competencies" why={prog.coverage.reason} />
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Stat label="Competencies linked" value={`${prog.coverage.covered} of ${prog.coverage.total}`} sub={prog.coverage.framework} />
+              <Stat label="With a document" value={String(prog.coverage.coveredPositive)} sub="Linked to CPD or evidence that has a document attached" />
+              <Stat label="Not linked yet" value={String(prog.coverage.gaps.length)} sub="Highest expected level first, below" />
+            </div>
+            {prog.coverage.gaps.length > 0 && (
+              <ul className="mt-4 divide-y divide-gray-100">
+                {prog.coverage.gaps.slice(0, 12).map(g => (
+                  <li key={g.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2.5">
+                    <p className="text-[14px] font-semibold text-gray-900">{g.name}</p>
+                    <p className="text-[12.5px] text-gray-600">{g.expected ? `Expected level: ${g.expected}` : "Expected level not set by the framework"}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-3 text-[12.5px] text-gray-500">Linked means you connected a CPD entry or evidence item to the competency. It does not mean you have achieved it, and nobody has verified it.</p>
+          </>
+        )}
+      </Section>
+
+      <Section title="Goal gaps" note="Competencies your open goals aim at that no CPD or evidence is linked to yet.">
+        {prog.goalGaps === null ? <Unreadable what="goals and competency links" /> : prog.coverage.state !== "measured" ? (
+          <p className="text-[13.5px] text-gray-600">Not measured. {prog.coverage.reason}</p>
+        ) : prog.goalGaps.length === 0 ? (
+          <p className="text-[13.5px] text-gray-600">No gaps found. Either every competency an open goal is linked to has CPD or evidence linked too, or no open goal is linked to a competency yet.</p>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {prog.goalGaps.map(g => (
+              <li key={g.goalId} className="py-2.5">
+                <p className="text-[14px] font-semibold text-gray-900">{g.title}</p>
+                <ul className="mt-1 space-y-0.5">
+                  {g.competencies.map(c => (
+                    <li key={c.id} className="text-[12.5px] text-amber-900">No CPD or evidence linked: {c.name}{c.expected ? ` (expected level: ${c.expected})` : ""}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
         )}
       </Section>
     </>

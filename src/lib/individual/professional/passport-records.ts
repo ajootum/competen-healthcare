@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { CPD_ACTIVITY_LABEL, isOwnEvidenceClass, type OwnEvidenceClass } from "./vocabulary";
 import { hasProfile, loadProfessionalRecord, type ProfessionalRecord } from "./record";
+import { listMappings, type SubjectMapping } from "./mapping-store";
+import { referenceNames } from "./frameworks";
 
 // ── THE PERSON'S OWN RECORDS, AS THE PASSPORT SHOWS THEM ── COMPETEN-IND-007 s5, owner ruling D3 ─────────
 //
@@ -29,6 +31,12 @@ export type OwnRecord = {
   date: string | null;
   expires: string | null;
   evidence: OwnEvidenceClass;
+  /**
+   * The competencies the person linked this item to and accepted (migration 393, and the single 373 link on
+   * evidence), by name. Self-declared like the item -- nobody verified the link. Empty: none linked or not
+   * readable; the item itself is still true either way.
+   */
+  competencies: string[];
 };
 
 export const OWN_KIND_LABEL: Record<OwnRecordKind, string> = {
@@ -38,8 +46,17 @@ export const OWN_KIND_LABEL: Record<OwnRecordKind, string> = {
   cpd: "CPD activity",
 };
 
+/** Pure: the accepted competency names per item key ("cpd:<id>", "evidence:<id>"). A proposal is never shown. */
+export function acceptedLinks(record: ProfessionalRecord, mappings: readonly SubjectMapping[] | null, names: ReadonlyMap<string, string>): Map<string, string[]> {
+  const out = new Map<string, Set<string>>();
+  const add = (key: string, id: string) => { const n = names.get(id); if (n) out.set(key, (out.get(key) ?? new Set()).add(n)); };
+  for (const m of mappings ?? []) if (m.state === "accepted" && m.kind !== "goal") add(`${m.kind}:${m.subjectId}`, m.competencyId);
+  for (const e of record.evidence ?? []) if (e.framework_competency_id) add(`evidence:${e.id}`, e.framework_competency_id);
+  return new Map([...out].map(([k, v]) => [k, [...v].sort()]));
+}
+
 /** Pure: the Passport items of one record. Null in, null out -- an unread record is not an empty one. */
-export function ownRecordsFrom(record: ProfessionalRecord): OwnRecord[] | null {
+export function ownRecordsFrom(record: ProfessionalRecord, links: ReadonlyMap<string, string[]> = new Map()): OwnRecord[] | null {
   if (record.profile === null || record.evidence === null || record.cpd === null) return null;
   const out: OwnRecord[] = [];
   const p = record.profile;
@@ -53,6 +70,7 @@ export function ownRecordsFrom(record: ProfessionalRecord): OwnRecord[] | null {
       expires: p.self_declared_registration_expires_on,
       // Migration 270's rule: the profile's facts are self-declared by their column names.
       evidence: "self_declared",
+      competencies: [],
     });
   }
   for (const e of record.evidence) {
@@ -64,6 +82,7 @@ export function ownRecordsFrom(record: ProfessionalRecord): OwnRecord[] | null {
       date: e.issued_on,
       expires: e.expires_on,
       evidence: e.evidence_class,
+      competencies: links.get(`evidence:${e.id}`) ?? [],
     });
   }
   for (const c of record.cpd) {
@@ -75,13 +94,21 @@ export function ownRecordsFrom(record: ProfessionalRecord): OwnRecord[] | null {
       date: c.activity_date,
       expires: null,
       evidence: c.evidence_class,
+      competencies: links.get(`cpd:${c.id}`) ?? [],
     });
   }
   return out;
 }
 
 export async function loadOwnRecords(admin: any, userId: string): Promise<OwnRecord[] | null> {
-  return ownRecordsFrom(await loadProfessionalRecord(admin, userId));
+  const [record, mappings] = await Promise.all([loadProfessionalRecord(admin, userId), listMappings(admin, userId)]);
+  const ids = [...new Set([
+    ...(mappings ?? []).filter(m => m.state === "accepted").map(m => m.competencyId),
+    ...(record.evidence ?? []).map(e => e.framework_competency_id).filter((v): v is string => !!v),
+  ])];
+  // Shared framework competencies only (referenceNames reads hospital_id null), so no organisation is named.
+  const names = ids.length ? await referenceNames(admin, [], ids) : new Map<string, string>();
+  return ownRecordsFrom(record, acceptedLinks(record, mappings, names));
 }
 
 /** Pure: counts by kind and by class, for the summary link and the personal AI's context. */
