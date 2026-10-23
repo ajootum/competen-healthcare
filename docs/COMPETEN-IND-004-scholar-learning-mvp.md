@@ -37,7 +37,7 @@ Every step lives inside the existing Scholar shell at `/individual/scholar/study
 | Private bucket pattern (migration 336) | `individual-scholar-materials`, private, no storage policy, signed URLs. |
 | Shell components | `PageHeader`, `StatePanel`, `Unreadable`, the focus ring and the 44 px touch floor. |
 
-**New dependency:** `unpdf@1.8.1`, pinned exactly. It is the unjs serverless build of Mozilla pdf.js, with no runtime dependencies. `npm audit` counts are identical with and without it (28: 6 moderate, 21 high, 1 critical, all already present). `scripts/audit-gate.ts` fails on the base too: 52 unallowlisted advisories in vite, undici and others, none of them `unpdf`.
+**New dependency:** `unpdf@1.8.1`, pinned exactly. It is the unjs serverless build of Mozilla pdf.js, with no runtime dependencies. `npm audit` counts are identical with and without it (28: 6 moderate, 21 high, 1 critical, all already present). `scripts/audit-gate.ts` failed on the old base (52 unallowlisted advisories in vite, undici and others, none of them `unpdf`). It passes since `main`'s CI baseline (#4).
 
 ## 3. Governance in the code and schema
 
@@ -80,7 +80,7 @@ It has no function or plpgsql, so no APPLY-WHOLE banner is needed. It references
 | `individual-foundation-harness` | **43 / 43** at `79690f12`. That includes 7d, 7e and 7f (pages gated through `experienceModulePage`, each module with its page), 11a (`force-dynamic`), 11c and 11d (no client before the guard), and the per-experience write rule, under which Scholar files write only `individual_scholar_*`. |
 | `access-doors` / `plane-boundary` | 39 / 39 · 35 / 35 |
 | `auth-boundary` | **ALL GREEN** after the merge, which brought in the CI baseline fix from `main` `6fa4cd52`. Every Scholar route is recognised. |
-| `audit-gate` | Fails on base and branch alike. `unpdf` adds no advisory (see §2). |
+| `audit-gate` | **Passes** after merging `main` (3 tolerated by recorded deviation, 0 unexplained high or critical). `unpdf` adds no advisory (see §2). It failed only before `main`'s CI baseline (#4). |
 | `build:verify` with `SUPABASE_SERVICE_ROLE_KEY` empty | Exit 0, 526/526 pages. All 14 Scholar routes and pages are ƒ (dynamic). Only the public `/individual` and `/individual/sign-in` are ○. |
 
 ## 6. Staging (2026-10-23, owner continuation GO)
