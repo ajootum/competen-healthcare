@@ -26,6 +26,8 @@ import { ACCESS_DOORS } from "../src/lib/access-doors";
 import { EXPERIENCES, EXPERIENCE_KEYS, FOUNDATION_NAV, navFor } from "../src/lib/individual/experiences";
 import { capabilityForRoute } from "../src/lib/hq/spaces";
 import { GENERAL_NAV } from "../src/app/super-admin/_components/nav-tables";
+import { inviteDeliveryMode } from "../src/lib/individual/invitations";
+import { PRODUCTION_REF } from "./production-guard";
 
 let pass = 0; const failures: string[] = [];
 const ok = (name: string, cond: boolean, detail = "") => {
@@ -83,9 +85,13 @@ function main() {
   ok("1c. no Individual file grants or writes another product's membership",
     offenders(/grantPlatformMembership|from\("(platform|practice|enterprise)_membership"\)/).length === 0,
     offenders(/grantPlatformMembership|from\("(platform|practice|enterprise)_membership"\)/).join(", "));
-  ok("1d. no Individual file writes profiles (profiles.role stays untouched, ADR-001)",
-    offenders(/from\("profiles"\)\s*\.(insert|update|upsert|delete)\(/).length === 0,
-    offenders(/from\("profiles"\)\s*\.(insert|update|upsert|delete)\(/).join(", "));
+  // ONE WRITE, AND ONLY TO CLEAR STANDING: an identity an Individual invitation just created has the trigger's
+  // default 'nurse' set back to null through the boundary helper -- the rule Competen Practice registration
+  // keeps (practiceIdentityProfile). No Individual code ever SETS a role, or touches an existing profile.
+  const profileWrites = FILES.flatMap(f => [...(SRC.get(f) ?? "").matchAll(/from\("profiles"\)\s*\.(insert|update|upsert|delete)\(([^)]*)\)/g)].map(m => `${f}: ${m[1]}(${m[2]})`));
+  ok("1d. no Individual file writes profiles, except an invitation clearing its own new identity's role to null",
+    profileWrites.length === 1 && profileWrites[0] === "src/lib/individual/invitations.ts: update(individualIdentityProfile()",
+    profileWrites.join("; "));
 
   // ── 2. WHAT INDIVIDUAL MAY WRITE, AND WHERE ─────────────────────────────────────────────────────
   // Every write site names its table on the same chain. audit_log may be written anywhere. Beyond it,
@@ -97,6 +103,10 @@ function main() {
     // The delete is the grant's own compensation (COMPETEN-IND-ACCESS-001): a membership THIS call created,
     // with no entitlement written beside it, is removed again rather than left as a member with nothing live.
     "src/lib/individual/grants.ts": ["individual_membership.insert", "individual_membership.delete", "individual_entitlement.insert", "individual_entitlement.update"],
+    // The invitation record (migration 378): created by the HQ invitation, closed by acceptance or revocation.
+    // It grants nothing itself -- acceptance goes through grants.ts above.
+    // profiles.update is the one role-clearing write 1d pins to its exact argument.
+    "src/lib/individual/invitations.ts": ["individual_invitation.insert", "individual_invitation.update", "profiles.update"],
   };
   const writes: string[] = [];
   for (const [f, src] of SRC) {
@@ -143,20 +153,33 @@ function main() {
 
   // ── 5. EVERY INDIVIDUAL API ROUTE IS GUARDED BY GATE 3 ──────────────────────────────────────────
   const routes = FILES.filter(f => f.startsWith("src/app/api/individual/") && f.endsWith("route.ts"));
-  const unguarded = routes.filter(f => {
+  // ONE NAMED EXCEPTION: accepting an invitation (migration 378) is done by a person who holds no membership
+  // yet, so requireIndividualContext would refuse the only people it serves. 12l pins its own gate order.
+  const ACCEPT_ROUTE = "src/app/api/individual/invitation/accept/route.ts";
+  const unguarded = routes.filter(f => f !== ACCEPT_ROUTE).filter(f => {
     const s = SRC.get(f) ?? "";
     const handlers = [...s.matchAll(/export async function (POST|PUT|PATCH|DELETE)\b/g)].length;
     return handlers > 0 && [...s.matchAll(/requireIndividualContext\(/g)].length < handlers;
   });
   ok("5a. every mutating Individual API handler calls requireIndividualContext", routes.length >= 3 && unguarded.length === 0, unguarded.join(", "));
   const hqRoutes = FILES.filter(f => f.startsWith("src/app/api/hq/individual/") && f.endsWith("route.ts"));
+  // Every HQ Individual route takes the pilot-grant right. The routes that act on a person by id refuse the
+  // caller acting on themselves. The invitation routes act on an email with NO account -- an administrator
+  // always has one, so inviting yourself ends in ACCOUNT_EXISTS rather than needing its own test.
   const hqUngated = hqRoutes.filter(f => !/hqApiGate\(\["hq\.individual\.pilot\.grant"\]\)/.test(SRC.get(f) ?? "")
-    || !/targetUserId === ctx\.userId/.test(SRC.get(f) ?? ""));
-  ok("5b. D9: every HQ Individual route is gated on hq.individual.pilot.grant and refuses acting on yourself",
-    hqRoutes.length >= 2 && hqUngated.length === 0, hqUngated.join(", "));
-  const grantImporters = FILES.filter(f => /from "@\/lib\/individual\/grants"/.test(SRC.get(f) ?? ""));
-  ok("5c. the grant service is reachable only from the HQ grant routes",
-    grantImporters.length >= 2 && grantImporters.every(f => f.startsWith("src/app/api/hq/individual/")), grantImporters.join(", "));
+    || (f.startsWith("src/app/api/hq/individual/grants/") && !/targetUserId === ctx\.userId/.test(SRC.get(f) ?? "")));
+  ok("5b. D9: every HQ Individual route is gated on hq.individual.pilot.grant; the grant routes refuse acting on yourself",
+    hqRoutes.length >= 4 && hqUngated.length === 0, hqUngated.join(", "));
+  // The grant engine's callers: the HQ grant routes, and the invitation library (relative import) whose only
+  // granting function, acceptIndividualInvitation, is called from the accept route alone.
+  const grantImporters = FILES.filter(f => /from "(@\/lib\/individual|\.)\/grants"/.test(SRC.get(f) ?? ""));
+  const callersOf = (fn: string) => FILES.filter(f => !f.endsWith("/invitations.ts") && new RegExp(`\\b${fn}\\(`).test(SRC.get(f) ?? ""));
+  ok("5c. the grant service is reachable only from the HQ grant routes and, through acceptance, the accept route",
+    grantImporters.length >= 3 && grantImporters.every(f => f.startsWith("src/app/api/hq/individual/grants/") || f === "src/lib/individual/invitations.ts")
+    && callersOf("acceptIndividualInvitation").join() === ACCEPT_ROUTE
+    && callersOf("createIndividualInvitation").join() === "src/app/api/hq/individual/invitations/route.ts"
+    && callersOf("revokeIndividualInvitation").join() === "src/app/api/hq/individual/invitations/revoke/route.ts",
+    `importers: ${grantImporters.join(", ")}; accept: ${callersOf("acceptIndividualInvitation").join(", ")}`);
 
   // ── 6. SIGNUP STAYS CLOSED ──────────────────────────────────────────────────────────────────────
   ok("6a. no Individual surface links to /signup or creates an auth user",
@@ -344,6 +367,32 @@ function main() {
     flagsGate && grantsToIndividual.length === 0
     && (gateSrc.match(/\.from\(/g) ?? []).length === 1 && /\.from\("practice_platform_flags"\)/.test(gateSrc) && !/process\.env/.test(gateSrc),
     `flagsGate=${flagsGate} grantsToIndividual=${grantsToIndividual.join(", ")}`);
+
+  // ── 12l-12n. INVITATIONS FOR PEOPLE WITHOUT AN ACCOUNT (migration 378) ──
+  const acceptSrc = SRC.get(ACCEPT_ROUTE) ?? "";
+  ok("12l. the accept route checks the release gate FIRST, then the session, and takes nothing from the body",
+    acceptSrc.indexOf("await connection()") > -1
+    && acceptSrc.indexOf("individualAppEnabled(admin)") > -1 && acceptSrc.indexOf("individualAppEnabled(admin)") < acceptSrc.indexOf("auth.getUser()")
+    && acceptSrc.indexOf("auth.getUser()") < acceptSrc.indexOf("acceptIndividualInvitation(")
+    && !/req\.json\(|request\.json\(|searchParams/.test(acceptSrc) && /acceptIndividualInvitation\(admin, \{ id: user\.id,/.test(acceptSrc));
+  const invSrc = SRC.get("src/lib/individual/invitations.ts") ?? "";
+  const modes = [
+    inviteDeliveryMode({ INDIVIDUAL_INVITE_TEST_DELIVERY: "link", NODE_ENV: "development", NEXT_PUBLIC_SUPABASE_URL: "https://ezhvpgtcqcdsgylrxgdb.supabase.co" }),
+    inviteDeliveryMode({ INDIVIDUAL_INVITE_TEST_DELIVERY: "link", NODE_ENV: "production", NEXT_PUBLIC_SUPABASE_URL: "https://ezhvpgtcqcdsgylrxgdb.supabase.co" }),
+    inviteDeliveryMode({ INDIVIDUAL_INVITE_TEST_DELIVERY: "link", NODE_ENV: "development", NEXT_PUBLIC_SUPABASE_URL: `https://${PRODUCTION_REF}.supabase.co` }),
+    inviteDeliveryMode({ INDIVIDUAL_INVITE_TEST_DELIVERY: "link", NODE_ENV: "development", NEXT_PUBLIC_SUPABASE_URL: "" }),
+    inviteDeliveryMode({ NODE_ENV: "development", NEXT_PUBLIC_SUPABASE_URL: "https://ezhvpgtcqcdsgylrxgdb.supabase.co" }),
+  ];
+  ok("12m. the test 'return the link' delivery runs ONLY under next dev, against an identifiable non-production project, when asked",
+    modes.join() === "link,email,email,email,email"
+    && /from "\.\.\/\.\.\/\.\.\/scripts\/production-guard"/.test(invSrc) && /judgeTarget\(env\.NEXT_PUBLIC_SUPABASE_URL\)/.test(invSrc)
+    && /opts\.delivery === "link" && testLink \? \{ testLink \}/.test(invSrc) && (invSrc.match(/generateLink\(/g) ?? []).length === 1
+    && /const delivery = inviteDeliveryMode\(\);/.test(SRC.get("src/app/api/hq/individual/invitations/route.ts") ?? ""),
+    `modes=${modes.join()}`);
+  ok("12n. an invitation creates the identity through Supabase auth's invite and nothing else: no createUser, no signUp, no other product, and no estate role on its new identity",
+    /auth\.admin\.inviteUserByEmail\(/.test(invSrc) && !/auth\.admin\.createUser\(|auth\.signUp\(/.test(invSrc)
+    && !/platform_membership|grantPlatformMembership|practice_|enterprise_/.test(invSrc)
+    && /if \(!reuse\) \{\s*const clear = await admin\.from\("profiles"\)\.update\(individualIdentityProfile\(\)\)\.eq\("id", authUserId\);/.test(invSrc));
 
   ok("9g. D10: no Individual code persists AI conversation",
     !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));

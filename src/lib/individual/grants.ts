@@ -31,6 +31,11 @@ export type GrantRequest = {
    * application clock.
    */
   endsAt?: string | null;
+  /**
+   * When the 18+ confirmation was actually made, if earlier than this grant -- an invitation's
+   * (src/lib/individual/invitations.ts). Absent: the confirmation is made now, with the grant.
+   */
+  adultConfirmedAt?: string | null;
 };
 
 export type GrantOutcome =
@@ -98,7 +103,7 @@ export async function grantIndividualAccess(admin: any, req: GrantRequest, grant
     const ins = await admin.from("individual_entitlement").insert({
       user_id: req.targetUserId, experience_code: x, status: "active", source: "pilot",
       operating_entity: EXPERIENCES[x].operatingEntity, granted_by: grantedBy, note: req.note,
-      ...(x === "scholar" ? { adult_confirmed_at: now, adult_confirmed_by: grantedBy } : {}),
+      ...(x === "scholar" ? { adult_confirmed_at: req.adultConfirmedAt ?? now, adult_confirmed_by: grantedBy } : {}),
       ...(req.endsAt ? { ends_at: req.endsAt } : {}),
     });
     if (ins.error) {

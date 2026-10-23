@@ -3,6 +3,7 @@ import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { individualAppEnabled } from "@/lib/individual/gate";
 import { currentTraceId } from "@/lib/trace";
 import { grantIndividualAccess, isGrantRefusal, validateGrant, lookupIndividualPerson, normaliseLookupEmail } from "@/lib/individual/grants";
+import { invitationsForEmail } from "@/lib/individual/invitations";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -35,7 +36,11 @@ export async function GET(req: Request) {
   if (!email) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Enter the person's email address." } }, { status: 400 });
   const res = await lookupIndividualPerson(ctx.admin, email);
   if (!res.ok) return NextResponse.json({ error: { code: "UNAVAILABLE", message: res.message } }, { status: 503 });
-  return NextResponse.json({ ...res.value, isSelf: res.value.found && res.value.person.id === ctx.userId });
+  // Invitations for the same address (migration 378): an invitation-created identity, and an address with
+  // no account at all, both show what was offered. Absent table = not set up here, never an error.
+  const inv = await invitationsForEmail(ctx.admin, email);
+  if (!inv.ok) return NextResponse.json({ error: { code: "UNAVAILABLE", message: inv.message } }, { status: 503 });
+  return NextResponse.json({ ...res.value, isSelf: res.value.found && res.value.person.id === ctx.userId, invitations: inv.value, invitationsProvisioned: inv.provisioned });
 }
 
 export async function POST(req: Request) {

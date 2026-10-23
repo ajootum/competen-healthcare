@@ -214,6 +214,16 @@ export function practiceIdentityProfile(
 }
 
 /**
+ * THE SAME RULE FOR A COMPETEN INDIVIDUAL INVITATION (COMPETEN-IND-ACCESS-001, migration 378). An identity
+ * created by an Individual invitation is an identity and nothing else: `role: null`, present and null for
+ * the reason above. Only the role is written -- the row's name and email are the trigger's, from the
+ * invitation's own metadata -- and it is applied only to an identity the invitation itself just created.
+ */
+export function individualIdentityProfile(): { role: null } {
+  return { role: null };
+}
+
+/**
  * Provision Platform membership. The "separate, explicitly initiated Competen Platform workflow"
  * section 11 requires before any identity gets gate 1.
  *
