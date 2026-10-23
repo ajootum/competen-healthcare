@@ -32,7 +32,11 @@ export async function hqApiGate(capabilities: string[]): Promise<HqContext | Nex
   for (const capability of capabilities) {
     const res = await resolveHqContext(capability, { enforce: true });
     if (res.ok) return res.ctx;
-    if (res.redirectTo === "/login") unauthenticated = true;
+    // ⚠ startsWith, NOT ===. resolveHqContext sends an anonymous caller to "/login?next=/super-admin" (the
+    // destination is carried), so an equality test against "/login" never matched and every HQ API route
+    // answered "no session" with 403 -- the 401 branch was dead (CONFIG-002 s8). Its only other refusal goes
+    // to "/dashboard", which is a signed-in person without the capability: 403, unchanged.
+    if (res.redirectTo.startsWith("/login")) unauthenticated = true;
   }
 
   return unauthenticated
