@@ -331,7 +331,7 @@ The superseded v2 consent screenshots (owner-review r01–r03, r14) are kept as 
 - `scholar-learning-harness` **68/68**: S3, S5, S6 and S7, with planted P15 and P16 red.
 - `individual-foundation` **44/44**.
 - **Staging** `scholar-acceptance-harness` **45/45**: C6, C7 and C8 green, fixtures removed, flag restored to its prior state.
-- CI no-credential subset on an LF clone: CI_SUBSET_LINE.
+- CI no-credential subset on an LF clone: **46/46 harnesses green** (`scripts/ci-harnesses.ts`, 5 excluded by record), on a `core.autocrlf=false` clone of this branch after `npm ci`.
 
 ## 8. Next
 
