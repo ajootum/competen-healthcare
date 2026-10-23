@@ -5,6 +5,7 @@ import { experienceModulePage, gatedMetadata } from "../../../../../_components/
 import { experienceHref } from "@/lib/individual/experiences";
 import { listPassportChoices, progressRows } from "@/lib/individual/scholar/store";
 import { eligibleAchievements } from "@/lib/individual/scholar/passport-items";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { PassportChoices } from "../_components/passport-choice";
 import { buildProgress } from "@/lib/individual/scholar/progress";
@@ -41,7 +42,11 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
   const today = new Date().toISOString().slice(0, 10);
   const p = rows.ok ? buildProgress({ ...rows.data, today }) : null;
   const choices = rows.ok ? await listPassportChoices(ctx.admin, ctx.userId) : null;
-  const eligible = rows.ok && choices?.ok ? eligibleAchievements({ ...rows.data, choices: choices.data }) : [];
+  const allEligible = rows.ok && choices?.ok ? eligibleAchievements({ ...rows.data, choices: choices.data }) : [];
+  // Which kinds may be newly chosen is Individual policy (COMPETEN-CONFIG-002). One already chosen stays listed,
+  // so the person can still see it and take it off: switching a kind off never rewrites their Passport.
+  const offered = new Set<string>((await loadIndividualPolicy(ctx.admin)).passportAchievementKinds);
+  const eligible = allEligible.filter(a => a.chosenLabel !== null || offered.has(a.achievement));
 
   return (
     <>
@@ -111,7 +116,9 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
               {!choices?.ok ? (choices?.notProvisioned
                 ? <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Showing study achievements in your Passport is not available on this environment yet.</p>
                 : <div className="mt-3"><Unreadable what="Passport choices" /></div>)
-                : eligible.length === 0 ? (
+                : eligible.length === 0 && allEligible.length > 0 ? (
+                  <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Adding study achievements to your Passport is not offered at the moment. Your study history is unchanged.</p>
+                ) : eligible.length === 0 ? (
                   <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Nothing to show yet. Answer practice questions or scenarios from a material and it can be shown here.</p>
                 ) : <PassportChoices items={eligible} />}
             </section>

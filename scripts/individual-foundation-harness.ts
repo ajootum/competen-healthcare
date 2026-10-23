@@ -162,10 +162,12 @@ function main() {
     return handlers > 0 && [...s.matchAll(/requireIndividualContext\(/g)].length < handlers;
   });
   ok("5a. every mutating Individual API handler calls requireIndividualContext", routes.length >= 3 && unguarded.length === 0, unguarded.join(", "));
-  const hqRoutes = FILES.filter(f => f.startsWith("src/app/api/hq/individual/") && f.endsWith("route.ts"));
-  // Every HQ Individual route takes the pilot-grant right. The routes that act on a person by id refuse the
-  // caller acting on themselves. The invitation routes act on an email with NO account -- an administrator
-  // always has one, so inviting yourself ends in ACCOUNT_EXISTS rather than needing its own test.
+  // The pilot-GRANT routes: grants/ and invitations/ (migration 378). COMPETEN-CONFIG-002 added
+  // /api/hq/individual/config, which is gated on its own capability (hq.individual.config.manage) and pinned
+  // by scripts/individual-config-harness.ts G1, so it is not one of these. The routes that act on a person by
+  // id refuse the caller acting on themselves. The invitation routes act on an email with NO account -- an
+  // administrator always has one, so inviting yourself ends in ACCOUNT_EXISTS rather than needing its own test.
+  const hqRoutes = FILES.filter(f => /^src\/app\/api\/hq\/individual\/(grants|invitations)\//.test(f) && f.endsWith("route.ts"));
   const hqUngated = hqRoutes.filter(f => !/hqApiGate\(\["hq\.individual\.pilot\.grant"\]\)/.test(SRC.get(f) ?? "")
     || (f.startsWith("src/app/api/hq/individual/grants/") && !/targetUserId === ctx\.userId/.test(SRC.get(f) ?? "")));
   ok("5b. D9: every HQ Individual route is gated on hq.individual.pilot.grant; the grant routes refuse acting on yourself",

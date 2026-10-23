@@ -206,6 +206,16 @@ const STAGING: Listed[] = [
       + "harness-ind007-* identities. Refuses production via assertSafeTarget, and reports PEND until migration 373 is applied.",
   },
   {
+    file: "individual-config-acceptance-harness.ts",
+    note: "COMPETEN-CONFIG-002 acceptance for the Competen Individual policy against migration 376: the resolver grant, then "
+      + "over HTTP with real session cookies 401 with no session, 403 for a non-holder, 422 past every hard limit and on "
+      + "individual_app, draft not effective until published, exact scoped rollback, the WCE audit trail, and the reader "
+      + "clamping a hand-written value. ⚠ THE HTTP GROUPS NEED BASE_URL naming a STAGING-pointed dev server (no default), "
+      + "or they print PEND and the run is not acceptance. Creates and deletes its own harness-cfg002-* identities and its "
+      + "appointment, restores the Individual WCE partition to its pre-run rows, never touches individual_app. PEND (exit 0, "
+      + "nothing created) until 376 is applied.",
+  },
+  {
     file: "scholar-acceptance-harness.ts",
     note: "COMPETEN-IND-004 Scholar learning journey against migration 372: consent, real PDF and DOCX upload with the "
       + "anon key, FTS retrieval, questions, SM-2 cards, progress, cross-user isolation (store, RLS, storage, "

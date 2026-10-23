@@ -59,6 +59,9 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // the Individual Product Administrator position (product line `individual`). Its one page is the pilot
   // access screen, /super-admin/individual (COMPETEN-IND-ACCESS-001 s4).
   { code: "hq.individual.pilot.grant",        space: "platform"  },
+  // COMPETEN-CONFIG-002 (migration 376): set the Competen Individual policy within its fixed hard limits, on
+  // /super-admin/individual/configuration. Same position. Not super-admin, not the release gate.
+  { code: "hq.individual.config.manage",      space: "platform"  },
   { code: "hq.practice.operations.view",      space: "practice"  },
   // ⚠ ADDED BY MIGRATION 273, and this list had to follow it. The DB gained the capability and this
   // catalogue did not, so B1 went red -- which is the drift control working.
@@ -179,6 +182,8 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/governance",            capability: "hq.quality.governance.view" },
   { prefix: "/super-admin/cgr",                   capability: "hq.quality.regulation.view" },
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },
+  // The policy page only. /super-admin/individual itself is the pilot-grant page (IND-ACCESS-001, exact).
+  { prefix: "/super-admin/individual/configuration", capability: "hq.individual.config.manage" },
   // COMPETEN-IND-ACCESS-001 s4: the Competen Individual pilot access screen. The capability already existed
   // (migration 370, D9) with no page; this declares the page it opens, so the intent map stays the whole truth.
   // EXACT: the screen has no sub-routes, and a sibling Individual HQ page (IND-007 configuration) must not

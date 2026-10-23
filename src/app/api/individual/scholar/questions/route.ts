@@ -6,6 +6,7 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { getPassage, insertQuestions } from "@/lib/individual/scholar/store";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit } from "@/lib/individual/scholar/http";
 import { runQuestions, type QuestionKind } from "@/lib/individual/scholar/generation";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
   const pre = await aiPreflight(ctx);
   if (pre) return pre;
 
-  const r = await runQuestions(ctx.userId, kind, passage);
+  const r = await runQuestions(ctx.userId, kind, passage, (await loadIndividualPolicy(ctx.admin)).scholarQuestionsPerRequest);
   if (!r.ok) {
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, `individual_scholar_${kind}`, null, { chunk_id: passage.chunkId, outcome: `error:${r.error}` });
     return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });

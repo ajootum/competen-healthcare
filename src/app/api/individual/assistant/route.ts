@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
+import { individualAiQuota, loadIndividualPolicy } from "@/lib/individual/policy";
 import { currentTraceId } from "@/lib/trace";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { isExperienceKey } from "@/lib/individual/experiences";
@@ -48,7 +49,8 @@ export async function POST(req: Request) {
   const question = cleanQuestion(body?.question);
   if (!question) return NextResponse.json({ error: `Ask a question of up to ${QUESTION_MAX} characters.` }, { status: 400 });
 
-  const quota = await checkAiQuota(ctx.admin, ctx.userId);
+  // The estate limit (quota.ts, unchanged) and the Individual policy limit, whichever is tighter (CONFIG-002).
+  const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin));
   if (!quota.ok) return NextResponse.json({ error: `You have reached the limit of ${quota.limit} questions an hour. Try again later.` }, { status: 429 });
   if (!aiStatus().configured) return NextResponse.json({ error: "The personal AI is not configured on this environment." }, { status: 503 });
 
