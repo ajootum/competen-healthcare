@@ -72,6 +72,9 @@ const INCLUDED = [
   // HQ-USERS-B: one governed reset path (gate, decision order, Auth address, configured origin, clean audit,
   // 379 shape, catalogue, reset-page notice), with 15 planted-failure controls. Reads files only.
   "hq-users-reset-harness.ts",
+  // HQ-USERS-C: the directory reads access tables only, HQ seats only from hq_* offices, every source can say
+  // "Not readable", every Auth page is read, with 7 planted-failure controls. Reads files only.
+  "hq-users-directory-harness.ts",
   "mos-gap-matrix-harness.ts",
   "pd-health-harness.ts",
   "pd-nav-harness.ts",
