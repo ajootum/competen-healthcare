@@ -55,15 +55,16 @@ const checkOwnerGate = (src: Src): R => {
 };
 const checkUi = (src: Src): R => {
   const page = code(src, "page"), ws = code(src, "ws");
-  const passes = /const \{ admin, isOwner \} = await requireHqCapability\("hq\.platform\.users\.view"\)/.test(page) && /canManage=\{isOwner\}/.test(page);
+  // HQ-USERS-B moved password reset out of the owner-only set (hq-users-reset-harness R6 pins it). What
+  // stays owner-only here: creation, invitation, suspension, deletion and role editing.
+  const passes = /const \{ admin, isOwner(, capabilities)? \} = await requireHqCapability\("hq\.platform\.users\.view"\)/.test(page) && /canManage=\{isOwner\}/.test(page);
   const guarded = [
     /\{canManage && \(\s*<button onClick=\{\(\) => \{ setAddOpen\(true\)/,
-    /\{canManage && <>\s*<button onClick=\{\(\) => \{ setBulkOpen\(false\); bulkAct\("send_reset"/,
-    /\{canManage && <>\s*<button onClick=\{\(\) => \{ setMenuFor\(null\); act\(u\.id, "send_reset"/,
+    /\{canManage && <>\s*<button onClick=\{\(\) => \{\s*setBulkOpen\(false\);\s*if \(window\.confirm\(`Suspend/,
+    /\{canManage && <>\s*\{u\.status === "pending" && \(\s*<button onClick=\{\(\) => \{ setMenuFor\(null\); act\(u\.id, "resend_invite"/,
     /\{canManage && <UserRoleEditor/,
   ].every(r => r.test(ws));
-  const unguardedCalls = (ws.match(/act\(u\.id, "(suspend|unsuspend|send_reset|resend_invite)"/g) ?? []).length;
-  return { ok: passes && guarded && unguardedCalls === 4, detail: `page passes the owner flag ${passes}, controls guarded ${guarded}` };
+  return { ok: passes && guarded, detail: `page passes the owner flag ${passes}, controls guarded ${guarded}` };
 };
 const checkLastOwner = (src: Src): R => ({
   ok: /if \(estateRolesOf\(target\)\.includes\("super_admin"\)\)/.test(code(src, "users")) && /\.or\("role\.eq\.super_admin,roles\.cs\.\{super_admin\}"\)/.test(code(src, "users")),
@@ -92,7 +93,7 @@ red("U2 on a list route that skips the gate", checkGates(plant("list", `const ct
 red("U2 on actions behind the view right only", checkGates(plant("actions", `await hqOwnerApiGate(["hq.platform.users.view"])`, `await hqApiGate(["hq.platform.users.view"])`)));
 red("U2 on a users handler that skips requireOwner", checkGates(plant("users", `export async function DELETE(req: Request) {\n  const ctx = await requireOwner();`, `export async function DELETE(req: Request) {\n  await Promise.resolve();\n  const ctx = await requireOwner();`)));
 red("U3 on an owner gate that admits any holder", checkOwnerGate(plant("gate", "return ctx.isOwner ? ctx : NextResponse.json(", "return true ? ctx : NextResponse.json(")));
-red("U4 on an unguarded reset in the row menu", checkUi(plant("ws", `{canManage && <>\n                            <button onClick={() => { setMenuFor(null); act(u.id, "send_reset"`, `{<>\n                            <button onClick={() => { setMenuFor(null); act(u.id, "send_reset"`)));
+red("U4 on unguarded owner-only row actions", checkUi(plant("ws", `{canManage && <>\n                            {u.status === "pending" && (`, `{<>\n                            {u.status === "pending" && (`)));
 red("U4 on a page that hands everyone the controls", checkUi(plant("page", "canManage={isOwner}", "canManage={true}")));
 red("U5 on a count over role only", checkLastOwner(plant("users", `.or("role.eq.super_admin,roles.cs.{super_admin}")`, `.eq("role", "super_admin")`)));
 

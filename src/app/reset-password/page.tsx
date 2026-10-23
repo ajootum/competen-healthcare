@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { recoveryCredentialFromUrl } from "@/lib/auth/recovery-link";
+import { isAdminInitiated, recoveryCredentialFromUrl } from "@/lib/auth/recovery-link";
 
 // Landing page for the password-reset email link. The link carries a one-time
 // code which is exchanged for a session; the user then sets a new password.
@@ -16,6 +16,8 @@ export default function ResetPasswordPage() {
   const [done, setDone] = useState(false);
   /** What the provider said, when it said anything. Null means we simply found no credential. */
   const [linkProblem, setLinkProblem] = useState<string | null>(null);
+  /** HQ-USERS-B: the link came from an administrator-initiated reset (?initiated=admin). */
+  const [fromAdmin, setFromAdmin] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -27,6 +29,7 @@ export default function ResetPasswordPage() {
       // automatically. A PKCE-configured client does not. So administrator resets and all invitations
       // landed on "Link invalid or expired" while self-service resets worked.
       // See src/lib/auth/recovery-link.ts.
+      setFromAdmin(isAdminInitiated(window.location.search));
       const cred = recoveryCredentialFromUrl(window.location.search, window.location.hash);
 
       if (cred.kind === "provider_error") {
@@ -84,6 +87,11 @@ export default function ResetPasswordPage() {
             <span className="text-white font-semibold">Competen Healthcare</span>
           </Link>
           <h1 className="text-2xl font-bold text-white">Choose a new password</h1>
+          {fromAdmin && (
+            <p role="note" className="mt-3 rounded-lg bg-white/10 px-3 py-2 text-sm text-white">
+              A Competen administrator sent you this password-reset link. If you did not expect it, do not continue: close this page and contact your administrator.
+            </p>
+          )}
         </div>
 
         {ready === "checking" && (

@@ -71,3 +71,12 @@ export function recoveryCredentialFromUrl(search: string, hash: string): Recover
 
   return { kind: "none" };
 }
+
+/**
+ * HQ-USERS-B: was this link sent by an administrator? The governed reset route builds its return URL as
+ * SITE_URL + "/reset-password?initiated=admin", so the page can say so plainly. It is a label, not a
+ * credential: it grants nothing, and a link without it behaves exactly as before.
+ */
+export function isAdminInitiated(search: string): boolean {
+  return new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("initiated") === "admin";
+}

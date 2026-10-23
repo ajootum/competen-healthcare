@@ -22,15 +22,18 @@
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { Client } from "pg";
+import { judgeDbTarget } from "./production-guard";
 
 const require2 = createRequire(process.cwd() + "/");
 require2("@next/env").loadEnvConfig(process.cwd());
 
 const dbUrl = process.env.STAGING_DB_URL ?? "";
-const prodRef = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
 if (!/^postgres(ql)?:\/\/\S+@\S+\/\S+/.test(dbUrl)) { console.error("STAGING_DB_URL is not set to a Postgres URL."); process.exit(1); }
-if (!prodRef) { console.error("Cannot read the production ref; refusing rather than guessing."); process.exit(1); }
-if (dbUrl.includes(prodRef)) { console.error(`REFUSING: STAGING_DB_URL points at PRODUCTION (${prodRef}).`); process.exit(1); }
+// The production ref is a constant in production-guard.ts, the same judge apply-migrations uses. It used to
+// be read from NEXT_PUBLIC_SUPABASE_URL -- which, since .env.local names STAGING, made this refuse staging
+// itself as "production". Failing closed was right; the source of the ref was wrong.
+const verdict = judgeDbTarget(dbUrl);
+if (!verdict.ok) { console.error(`REFUSING: STAGING_DB_URL is ${verdict.reason === "PRODUCTION" ? `PRODUCTION (${verdict.ref})` : "not identifiable as a project"}.`); process.exit(1); }
 if (/:6543\//.test(dbUrl)) { console.error("Transaction pooler (6543) -- use the session pooler (5432)."); process.exit(1); }
 
 const TABLES = ["individual_professional_profile", "individual_professional_need", "individual_professional_goal",
@@ -121,6 +124,23 @@ async function main() {
       // COMPETEN-CONFIG-002 P0: what a person may choose = shared (no hospital), active, published.
       out.sharedFrameworksByStatus = await q(`select coalesce(pub_status, '(null)') as pub_status, count(*)::int as n
         from frameworks where hospital_id is null and is_active = true group by 1 order by 1`);
+    }
+    if (process.argv.includes("--reset")) {
+      // HQ-USERS-B migrations 382 and 383, before and after (and through 383's rollback rehearsal): the
+      // reservation function's definition, settings and grants, and the chief_executive grants. Hashed, so
+      // "re-applied equals first applied" is one comparison.
+      const fn = await q(`select p.proname, pg_get_function_identity_arguments(p.oid) as args, p.prosecdef, p.proconfig,
+          md5(pg_get_functiondef(p.oid)) as def_md5
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'hq_reserve_password_reset'`);
+      const grants = await q(`select grantee, privilege_type from information_schema.routine_privileges
+        where routine_schema = 'public' and routine_name = 'hq_reserve_password_reset' order by grantee, privilege_type`);
+      const ceo = await q(`select capability_code, effective_to from hq_position_capability
+        where position_code = 'chief_executive' order by capability_code`);
+      const dupes = await q(`select position_code, capability_code, count(*)::int as n from hq_position_capability
+        where effective_to is null group by 1, 2 having count(*) > 1`);
+      out.reset383 = { function: fn, grants, fingerprint: createHash("sha256").update(JSON.stringify({ fn, grants })).digest("hex") };
+      out.ceo382 = { grants: ceo, duplicateOpenGrants: dupes };
     }
     if (process.argv.includes("--detail")) {
       out.policies = fp.policies;

@@ -26,7 +26,7 @@ export default async function AllUsersPage() {
 
   // Per-page guard (PLAT-ARCH-SURVEY-001 s2.5). Next 16: a layout auth check "will not prevent nested
   // route segments and Server Actions from being accessed" -- so the gate lives here, not upstairs.
-  const { admin, isOwner } = await requireHqCapability("hq.platform.users.view");
+  const { admin, isOwner, capabilities } = await requireHqCapability("hq.platform.users.view");
 
   const [
     { data: rawProfiles },
@@ -153,6 +153,7 @@ export default async function AllUsersPage() {
       departments={(rawDepts ?? []).map(d => ({ id: d.id as string, name: d.name as string, hospital_id: (d as Record<string, string>).hospital_id ?? "" }))}
       currentUserId={user.id}
       canManage={isOwner}
+      canReset={isOwner || capabilities.includes("hq.platform.users.reset")}
     />
   );
 }

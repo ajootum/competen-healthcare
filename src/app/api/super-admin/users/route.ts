@@ -4,6 +4,7 @@ import { estateRolesOf, profileUpdateForOrgRoles } from "@/lib/roles";
 import { grantPlatformMembership } from "@/lib/platform-membership";
 
 import { currentTraceId } from "@/lib/trace";
+import { SITE_URL } from "@/lib/marketing/site";
 
 // HQ-USERS-A: every handler here is OWNER-ONLY, as before, but the owner is now decided by the HQ gate
 // (super_admin in roles[], or platform_owner) instead of the single legacy profiles.role column. Role and
@@ -62,7 +63,8 @@ export async function POST(req: Request) {
   let tempPassword: string | null = null;
 
   if (mode === "invite") {
-    const origin = new URL(req.url).origin;
+    // The configured origin, never the request's (HQ-USERS-B).
+    const origin = SITE_URL;
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${origin}/reset-password`,
       data: { full_name },
