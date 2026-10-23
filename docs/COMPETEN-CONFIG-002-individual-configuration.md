@@ -130,6 +130,18 @@ Below that: Publish with a reason, the versions (each restorable), and the chang
 
 ## 8. Found in passing (not fixed here)
 
+**RESOLVED, PR #36 (84e8b106):**
+- **The fix:** `hqApiGate` now tests `res.redirectTo.startsWith("/login")`.
+- **Behaviour now:** an anonymous caller gets **401** on every `hqApiGate` route. A signed-in caller without the capability still gets 403, and no other response changed.
+- **Accepted as an intended behaviour change** under the owner's "fix and proceed".
+- **Checks run:**
+  - `hq-guard` static sections: 51/51;
+  - `auth-boundary`: green;
+  - no harness asserts 403 for an anonymous caller (individual-config H1 accepts 401 or 403);
+  - `individual-access-harness` M1 asserts 401.
+
+The original finding, kept as the record:
+
 **`hqApiGate` answers an anonymous caller with 403, not 401, on every HQ API route.**
 - `resolveHqContext` returns `redirectTo: "/login?next=/super-admin"`.
 - `src/lib/hq/api-gate.ts` tests `res.redirectTo === "/login"`, which never matches.
