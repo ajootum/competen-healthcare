@@ -19,7 +19,8 @@
  *      refusing a malformed case; progress by competency from real answers
  *   A  every AI call is in plat_ai_requests with person attribution and the Scholar operation
  *   E  erasing the material removes its concepts, mappings and decisions THROUGH the append-only trigger
- *   Z  fixtures, programmes and the Scholar allowlist restored exactly
+ *   Z  fixtures and programmes removed; a Scholar allowlist that was set is NEVER touched (shared staging
+ *      configuration); one the run had to add is removed only while it is still unchanged
  *
  * ⚠ IT IMPORTS THE CODE IT TESTS (the store, catalogue adapter, mapping, generation, progress). Nothing
  * below restates their rules.
@@ -67,7 +68,10 @@ const PAGES = [
   ["Oxygen is a medicine and must be prescribed with a target saturation range.",
     "Check the prescription, the delivery device and the flow before starting oxygen therapy.",
     "Monitor the response of the patient and escalate to the nurse in charge if breathing worsens.",
-    "Keep oxygen away from open flames because it supports combustion."],
+    "Keep oxygen away from open flames because it supports combustion.",
+    "If the saturation falls below the target range, check the airway, the position of the patient and the oxygen delivery device.",
+    "Record the saturation, the respiratory rate and the oxygen flow on the observation chart after each check.",
+    "Humidified oxygen can be used when oxygen is given for long periods, to keep the airways moist."],
   ["Clinical reasoning links what you observe to what it may mean and to what you should do next.",
     "Use a structured handover such as SBAR to communicate a deteriorating patient clearly.",
     "Hand hygiene before and after patient contact prevents cross infection."],
@@ -137,7 +141,7 @@ async function main() {
   await cleanupUsers();
   await cleanupProgrammes();
   const before = (await admin.from("workspace_config_overrides").select("*").match(ALLOW).maybeSingle()).data;
-  let a = "", b = "", materialId: string | null = null;
+  let a = "", b = "", materialId: string | null = null, runAllowId: string | null = null;
   try {
     // ── G (setup). Programmes are rows ──
     const ins = await admin.from("individual_scholar_programme").insert([
@@ -157,13 +161,25 @@ async function main() {
     const cat = scholarCatalogue(admin);
 
     // ── N. nothing while the allowlist is empty ──
-    await admin.from("workspace_config_overrides").delete().match(ALLOW);
-    const none = await cat.forProgramme(nursing);
-    ok("N1. ⚠ with the Scholar allowlist empty, the nursing programme is offered nothing -- naming a catalogue is not allowing it",
-      none.ok && none.data.length === 0, JSON.stringify(none.ok ? none.data.length : none));
+    // ⚠ THE ALLOWLIST IS SHARED STAGING CONFIGURATION (the owner's viewing setup lives in it). The run never
+    // removes or changes one that is set: N1 runs only when there is none, and the run's own allowlist is
+    // written only where none exists, and removed at the end only if it is still exactly what the run wrote.
+    if (!before) {
+      const none = await cat.forProgramme(nursing);
+      ok("N1. ⚠ with the Scholar allowlist empty, the nursing programme is offered nothing -- naming a catalogue is not allowing it",
+        none.ok && none.data.length === 0, JSON.stringify(none.ok ? none.data.length : none));
+    } else pend("N1. the empty default", "a Scholar allowlist is set here and is never removed by this run; the default is pinned statically (competency-foundation-harness)");
 
-    // ── G. the run's allowlist, then configuration decides ──
-    await admin.from("workspace_config_overrides").insert({ ...ALLOW, draft: { ids: [cf.id, nr.id] }, published: { ids: [cf.id, nr.id] } });
+    // ── G. the run's allowlist (only where none is set), then configuration decides ──
+    const seedIds = [cf.id, nr.id];
+    const has = (row: any) => seedIds.every(id => (row?.published?.ids ?? []).includes(id));
+    if (!before) {
+      const ins = await admin.from("workspace_config_overrides").insert({ ...ALLOW, draft: { ids: seedIds }, published: { ids: seedIds } }).select("id").single();
+      runAllowId = ins.data?.id ?? null;
+    } else if (!has(before)) {
+      pend("G. the slice", "a Scholar allowlist is set here without both seed catalogues; this run does not change it");
+      return;
+    }
     const nCat = await cat.forProgramme(nursing), oCat = await cat.forProgramme(other), xCat = await cat.forProgramme(notAllowed);
     const comps: CatalogueCompetency[] = nCat.ok ? nCat.data : [];
     ok("G1. the nursing programme is offered 8 foundational then 5 nursing respiratory competencies, foundational first, with S1 layers and outcomes",
@@ -282,16 +298,25 @@ async function main() {
 
     // ── L. S3 ──
     const p1 = await store.getPassage(admin, a, sec1.id);
-    const simplify = await runExplain(a, "Explain this section as simply as possible.", [p1!], "simplify");
-    const deeper = await runExplain(a, "Explain this section in depth.", [p1!], "deeper");
+    // A withheld answer is the check doing its job, and a student can ask again: each step may try twice.
+    // Every answer that IS shown has passed the check either way.
+    const twice = async (go: () => ReturnType<typeof runExplain>, what: string) => {
+      const first = await go();
+      if (first.ok && first.check.ok) return first;
+      const why = !first.ok ? first.error : first.check.ok ? "" : `withheld:${first.check.reason} ${JSON.stringify(first.check.violations ?? [])}`;
+      note(`${what}: first try ${why}, asked again`);
+      return go();
+    };
+    const simplify = await twice(() => runExplain(a, "Explain this section as simply as possible.", [p1!], "simplify"), "simplify");
+    const deeper = await twice(() => runExplain(a, "Explain this section in depth.", [p1!], "deeper"), "deeper");
     note(`simplify: ${simplify.ok ? (simplify.check.ok ? "shown" : `withheld:${simplify.check.reason}`) : simplify.error}; supplementary ${simplify.ok ? JSON.stringify(simplify.supplementary) : "-"}`);
     note(`deeper: ${deeper.ok ? (deeper.check.ok ? "shown" : `withheld:${deeper.check.reason}`) : deeper.error}; supplementary ${deeper.ok ? (deeper.supplementary ? (deeper.supplementary.ok ? "shown" : `withheld:${deeper.supplementary.reason}`) : "none") : "-"}`);
     ok("L1. simplify answers from the notes and never shows background beyond them",
       simplify.ok && simplify.check.ok && (simplify.supplementary === null || (!simplify.supplementary.ok && simplify.supplementary.reason === "not_this_mode")));
     ok("L2. go deeper answers from the notes; any background beyond them is separate, and free of figures and doses when shown",
       deeper.ok && deeper.check.ok && (deeper.supplementary === null || !deeper.supplementary.ok || !/\d|dose|mg\b/i.test(deeper.supplementary.text)));
-    const t1 = await runExplain(a, "Teach me this section step by step.", [p1!], "tutor");
-    const t2 = t1.ok && t1.check.ok ? await runExplain(a, "You count it for a full minute.", [p1!], "tutor", [{ role: "tutor", text: t1.check.text }]) : null;
+    const t1 = await twice(() => runExplain(a, "Teach me this section step by step.", [p1!], "tutor"), "tutor turn 1");
+    const t2 = t1.ok && t1.check.ok ? await twice(() => runExplain(a, "You count it for a full minute.", [p1!], "tutor", [{ speaker: "tutor", text: (t1.check as { text: string }).text }]), "tutor turn 2") : null;
     note(`tutor: turn 1 ${t1.ok ? (t1.check.ok ? "shown" : t1.check.reason) : t1.error}; turn 2 ${t2 ? (t2.ok ? (t2.check.ok ? "shown" : t2.check.reason) : t2.error) : "-"}`);
     ok("L3. the tutor teaches a step and continues from the student's reply, each turn checked against the notes",
       t1.ok && t1.check.ok && !!t2 && t2.ok && t2.check.ok && /\[S1\]/.test(t2.check.text));
@@ -354,10 +379,11 @@ async function main() {
   } finally {
     await cleanupUsers();
     await cleanupProgrammes();
-    await admin.from("workspace_config_overrides").delete().match(ALLOW);
-    if (before) await admin.from("workspace_config_overrides").insert(before);
+    // Compare-and-remove: only the row this run inserted, only while it is unchanged. Anything else is left alone.
+    if (runAllowId) await admin.from("workspace_config_overrides").delete().eq("id", runAllowId).is("updated_by_name", null).is("updated_by", null);
     const now = (await admin.from("workspace_config_overrides").select("*").match(ALLOW).maybeSingle()).data;
-    ok("Z1. the Scholar allowlist is restored exactly", JSON.stringify(now) === JSON.stringify(before));
+    ok("Z1. the Scholar allowlist is as the run found it (the run removes only its own unchanged row)",
+      runAllowId ? !now || now.id !== runAllowId : JSON.stringify(now) === JSON.stringify(before));
     const progLeft = (await admin.from("individual_scholar_programme").select("code").in("code", Object.values(PROG))).data ?? [];
     ok("Z2. the harness programmes and fixture identities are gone", progLeft.length === 0 && !(await findUser(FIX.a)) && !(await findUser(FIX.b)));
   }

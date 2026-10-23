@@ -128,8 +128,8 @@ export const SUPPLEMENTARY_MARKER = "BEYOND THE NOTES:";
 const MODE_INSTRUCTION: Record<Exclude<ExplainMode, "explain">, string> = {
   summary: "MODE: SUMMARY. Instead of an explanation, summarise the passages as a short list of their key points, each line starting '- ' and ending with its citation. Under 150 words. Notes only: add nothing beyond the passages.",
   simplify: "MODE: SIMPLIFY. Explain as simply as you can, for someone meeting the topic for the first time: short sentences and everyday words. When the passages use a technical term, keep the term exactly and say what it means using the passages. Under 200 words. Notes only: add nothing beyond the passages.",
-  deeper: `MODE: GO DEEPER. In two parts. PART ONE, from the passages only: explain in depth how the ideas in the passages connect, the reasoning behind them, and what a student should understand rather than memorise, citing as before. Every rule above applies to part one in full: if a point is not in the passages, it does not belong in part one. Do not use clinical descriptors (such as normal, raised, reduced, stable) the passages do not use. PART TWO, optional: general background that is NOT in the passages, after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 120 words, general principles only, with no numbers, units, doses, drug names, values or thresholds, no citation tags, and no advice about any patient. Anything you know that the passages do not say goes in part two or nowhere.`,
-  tutor: `MODE: TUTOR. Teach one small step at a time. If the student has replied, first say briefly whether their reply matches the passages, and correct it from the passages if it does not. Then explain the next idea, citing as before, and end with ONE short question for the student on its own line starting 'Your turn:'. Under 180 words. Optional background beyond the passages goes after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 80 words, with no numbers, units, doses, drug names or thresholds and no citation tags.`,
+  deeper: `MODE: GO DEEPER. In two parts. PART ONE, from the passages only: explain in depth how the ideas in the passages connect, the reasoning behind them, and what a student should understand rather than memorise, citing as before. Every rule above applies to part one in full: if a point is not in the passages, it does not belong in part one. Do not use clinical descriptors (such as normal, significant, raised, reduced, stable) the passages do not use. Never count or number things in part one: write "the signs it lists", never "three signs" or "two ways". PART TWO, optional: general background that is NOT in the passages, after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 120 words, general principles only, with no numbers, units, doses, drug names, values or thresholds, no citation tags, and no advice about any patient. Anything you know that the passages do not say goes in part two or nowhere.`,
+  tutor: `MODE: TUTOR. Teach one small step at a time. If the student has replied, first say briefly whether their reply matches the passages, and correct it from the passages if it does not. Then explain the next idea, citing as before, and end with ONE short question for the student on its own line starting 'Your turn:'. Never count or number things: write "the signs it lists", never "three signs" -- and never ask the student how many there are. Under 180 words. Optional background beyond the passages goes after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 80 words, with no numbers, units, doses, drug names or thresholds and no citation tags.`,
 };
 
 export function explainSystem(mode: ExplainMode): string {
@@ -138,12 +138,12 @@ export function explainSystem(mode: ExplainMode): string {
 export const explainPromptVersion = (mode: ExplainMode) =>
   mode === "explain" ? PROMPT_VERSIONS.explain : `${PROMPT_VERSIONS.explainModes}:${mode}`;
 
-export type TutorTurn = { role: "tutor" | "student"; text: string };
+export type TutorTurn = { speaker: "tutor" | "student"; text: string };
 
 export function modeUserPrompt(question: string, passages: Passage[], history: TutorTurn[]): string {
   if (!history.length) return explainUserPrompt(question, passages);
   const blocks = passages.map((p, i) => `[${passageTag(i)}] (${passageCitation(p)})\n${p.content}`);
-  const convo = history.map(t => `${t.role === "tutor" ? "TUTOR" : "STUDENT"}: ${t.text}`).join("\n\n");
+  const convo = history.map(t => `${t.speaker === "tutor" ? "TUTOR" : "STUDENT"}: ${t.text}`).join("\n\n");
   return `PASSAGES FROM MY NOTES:\n\n${blocks.join("\n\n")}\n\nOUR CONVERSATION SO FAR:\n\n${convo}\n\nMY REPLY: ${question}`;
 }
 
@@ -335,6 +335,7 @@ export async function runAnalysis(userId: string, sections: MappingSubject[], co
 export const CASE_SYSTEM = [
   "You write ONE short multi-step practice case for a healthcare student, from ONE passage of their own study notes.",
   "The case follows 'a patient' (no name, no age, no dates, no numbers unless the passage gives them) through the steps the passage supports, for example recognising the problem, assessing, prioritising, acting and evaluating.",
+  "Move the scenario on only with words the passage uses. Never use the words again, improved, improving, worsened, worsening, stable, resolved or unchanged unless the passage itself uses them: they assert a change the passage does not describe.",
   `Write a short title (under 80 characters, no names) and between ${CASE_MIN_STEPS} and ${CASE_MAX_STEPS} steps, in order. Each step is one multiple-choice question that moves the scenario on and asks the student to APPLY the passage.`,
   `A step may only describe what the passage itself mentions. If the passage cannot support ${CASE_MIN_STEPS} steps, reply {"title": "", "steps": []}.`,
   "",

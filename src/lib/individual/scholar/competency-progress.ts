@@ -12,12 +12,14 @@ import type { MappingState as MapState } from "@/lib/competency/mapping";
 // is "no notes linked yet". A competency with notes but no answered questions has accuracy null, shown as
 // "not practised yet" -- never 0%, which would read as a measurement when nothing was measured.
 //
-// ⚠ A REJECTED LINK COUNTS FOR NOTHING. Sections count only through accepted or still-proposed links. A
-// question keeps the competency it was written for even if the link is later rejected: what it practised
-// does not change, and the person's answer to it is still theirs.
+// ⚠ PRACTICE COUNTS ONLY THROUGH AN ACCEPTED LINK. A question counts towards a competency only while the
+// link from its section to that competency is ACCEPTED by the person -- a proposal is the AI's suggestion,
+// not the person's, and a rejected link counts for nothing. This is the rule S5's competency coverage uses
+// (accepted maps only), so the two agree number for number. Sections are still listed as accepted or
+// suggested, so the person can see what is waiting for their decision.
 
 export type ProgressMapping = { competencyId: string; chunkId: string; state: MapState };
-export type ProgressQuestionLink = { id: string; competencyId: string | null };
+export type ProgressQuestionLink = { id: string; chunkId: string; competencyId: string | null };
 export type ProgressAnswer = { questionId: string; correct: boolean; answeredAt: string };
 
 export type CompetencyStatus = "no_notes" | "notes_linked" | "practising";
@@ -60,8 +62,9 @@ export function buildCompetencyProgress(input: {
   }
   const qs = new Map<string, string[]>();
   let outsideProgramme = 0;
+  const acceptedPair = new Set(input.mappings.filter(m => m.state === "accepted").map(m => `${m.chunkId}|${m.competencyId}`));
   for (const q of input.questions) {
-    if (!q.competencyId) continue;
+    if (!q.competencyId || !acceptedPair.has(`${q.chunkId}|${q.competencyId}`)) continue;
     if (!inProgramme.has(q.competencyId)) { outsideProgramme++; continue; }
     if (!qs.has(q.competencyId)) qs.set(q.competencyId, []);
     qs.get(q.competencyId)!.push(q.id);

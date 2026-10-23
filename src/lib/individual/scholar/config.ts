@@ -44,9 +44,12 @@ export const PROMPT_VERSIONS = {
   // system prompt, so they carry their own version. A case is several linked steps from one passage.
   // v2: "go deeper" is two explicit parts, after the staging acceptance run saw part one drift past the notes
   // (it was withheld by the check, as it should be). Summary, simplify and tutor are unchanged.
-  explainModes: "scholar-explain-modes-v2",
-  map: "scholar-map-v1",
-  caseSteps: "scholar-case-steps-v1",
+  // v3: go deeper also told not to count things ("three signs") or use "significant" -- the two causes of every
+  // withheld answer in a staging diagnostic. caseSteps v2: progression only in the passage's own words.
+  // v4: the tutor gets the same no-counting rule (the cause of every withheld tutor turn in a diagnostic).
+  explainModes: "scholar-explain-modes-v4",
+  map: "competency-map-v1", // the Holdings engine's MAPPING_PROMPT_VERSION (src/lib/competency/mapping.ts), pinned equal by a unit test
+  caseSteps: "scholar-case-steps-v2",
 } as const;
 
 /** S4: a multi-step practice case has this many steps at most (migration 388 allows 1 to 5). */

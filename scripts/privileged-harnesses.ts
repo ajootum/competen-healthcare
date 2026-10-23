@@ -286,7 +286,7 @@ const STAGING: Listed[] = [
       + "upload, AI concepts and PROPOSED mappings only to offered competencies (foundational and nursing), append-only "
       + "accept/reject/own links with the trigger refusing UPDATE and DELETE, isolation (store, RLS, composite keys), "
       + "explain modes, competency-tagged questions, a multi-step case, progress by competency, erasure cascading through "
-      + "the trail. Needs an AI provider. Sets the Scholar allowlist for the run and restores it exactly; creates and "
+      + "the trail. Needs an AI provider. Never changes a Scholar allowlist that is set (shared viewing config); adds one only where none exists and removes it only while unchanged; creates and "
       + "deletes its own harness-s2-* identities and programmes; never touches individual_app. PEND (exit 0, nothing "
       + "created) until 388 is applied and the seed is published.",
   },

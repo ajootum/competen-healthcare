@@ -105,6 +105,34 @@ This branch merges `origin/s1/competency-foundation` (d32eaac5), so it must merg
 - **Dependencies:** it depends on 387 and 388, and repeats 384's values without depending on 384.
 - **Application order for the whole set:** 384 (S1), 387, 388, 389.
 
+### 389 and 390 on staging
+
+- **389:** applied ×2 by the coordinating session; sha `c8b98bc9…` matches.
+  - Scholar fingerprint: `4007cd406923` before, `a4977fb6f3e3` after.
+  - Only the constraints hash changed (`046681c5` → `b542981a`).
+- **390** (`390-individual-scholar-mapping-provenance.sql`, Low, sha `e9f5c7f99ff29e4d58124c419e7d0946392c7ff7d17efd7a25d9d2c17638cd8f`; rollback `7b290f87…`, which only loosens the check).
+  - **Found by staging acceptance D5:** 388's provenance CHECK enforced only the AI direction, so a person's link could carry a confidence and read as an AI judgement.
+  - Applied ×2 by the coordinating session; the sha matches.
+  - Scholar fingerprint: `a4977fb6f3e3` before, `3512368e69b8` after. Only the constraints hash changed (`b542981a` → `8d57a4a4`).
+  - This session's read-only check shows the live constraint text identical to the file.
+
+**Application order:** 384, 387, 388, 389, 390. **None is on production.**
+
+## 3b. Staging viewing configuration (owner GO, 2026-10-23)
+
+- **What:** `scripts/seed-staging-scholar-viewing.ts` sets the Scholar allowlist to CF-FOUND + NUR-RESP and adds the programme `nursing-ug-diploma`, "Nursing (Uganda), diploma", using both.
+  - It goes through the governed WCE path (`setOverride` then `publishScope`, audited), so the actor is recorded by name only.
+  - It refuses production, and refuses while any other Individual policy draft is pending.
+  - `--remove` undoes exactly this.
+- **Who ran it:** this session's permission check refused the write, so the **owner ran it themselves**.
+  - Audit `set` at 20:22:23Z and `publish` at 20:22:25Z created version `16fce05a`.
+- **Incident:** the owner's `--verify` then read the allowlist as null.
+  - **Cause:** acceptance run 3, started about 20:32Z, deleted the shared allowlist for its N1 step ("empty offers nothing") and re-inserted it (row created at 20:32:28Z). Its end-of-run restore puts back whatever it found.
+  - **Fix (harness):** the run now never removes or changes a set allowlist.
+    - N1 runs only when none is set.
+    - The run adds its own allowlist only where none exists.
+    - At the end it removes that row only while it is still the run's own, unchanged.
+
 ## 4. Verification (this branch)
 
 - Vitest: `src/lib/individual/scholar` 6 files, 78 tests (the new file, `competency.test.ts`, has 16).
