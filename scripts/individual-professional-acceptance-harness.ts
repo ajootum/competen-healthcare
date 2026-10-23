@@ -43,7 +43,7 @@ import { loadIndividualPassport } from "../src/lib/individual/passport";
 import { loadProfessionalRecord } from "../src/lib/individual/professional/record";
 import { evidenceCoverage, planProgress, cpdHoursByYear } from "../src/lib/individual/professional/progress";
 import { mintShare, listShares, revokeShare, shareCarriesOwnRecords } from "../src/lib/individual/professional/share";
-import { scanProfessionalReminders } from "../src/lib/individual/professional/reminders";
+import { scanProfessionalReminders, type ReminderSender } from "../src/lib/individual/professional/reminders";
 import { loadSharedFrameworks, checkSharedReference } from "../src/lib/individual/professional/frameworks";
 import { DOCUMENT_BUCKET } from "../src/lib/individual/professional/vocabulary";
 import { individualAppEnabled, INDIVIDUAL_APP_FLAG } from "../src/lib/individual/gate";
@@ -249,9 +249,13 @@ async function main() {
     // No real mail from a harness: with the provider unset, dispatch records the email as skipped. What is under
     // test is who is chosen and the once-only mark, not Resend.
     delete process.env.RESEND_API_KEY;
-    const r1 = await scanProfessionalReminders(admin);
+    // A provider that DELIVERS, injected: no real mail leaves a harness, and the real sender would report
+    // "skipped" here, which -- correctly -- no longer consumes the reminder (owner review, E4 below).
+    const delivered: ReminderSender = async () => ({ sent: true });
+    const undelivered: ReminderSender = async () => ({ sent: false, error: "harness: provider refused" });
+    const r1 = await scanProfessionalReminders(admin, new Date(), delivered);
     const marked = await admin.from("individual_professional_evidence").select("expiry_reminded_for, expires_on").eq("id", cred.data?.id).single();
-    const r2 = await scanProfessionalReminders(admin);
+    const r2 = await scanProfessionalReminders(admin, new Date(), delivered);
     ok("E1. an expiring credential of a person who opted in is emailed once, recorded on the person's own row",
       r1.recipients.includes(pro) && marked.data?.expiry_reminded_for === marked.data?.expires_on, JSON.stringify({ r1, marked: marked.data }));
     ok("N3. email only when opted in: the person who never opted in is not emailed", !r1.recipients.includes(other), JSON.stringify(r1.recipients));
@@ -260,10 +264,22 @@ async function main() {
     const badMark = await admin.from("individual_professional_evidence").update({ expiry_reminded_for: inDays(400) }).eq("id", cred.data?.id);
     ok("E3. ⚠ a reminder mark can only name the expiry date it was for", !!badMark.error);
 
+    // Owner review: a failed delivery must stay observable and must NOT consume the once-only reminder.
+    const fresh = await admin.from("individual_professional_evidence").insert({ user_id: pro, experience_code: "professional", kind: "credential", title: "Harness second licence", expires_on: inDays(20) }).select("id").single();
+    const failedRun = await scanProfessionalReminders(admin, new Date(), undelivered);
+    const afterFail = await admin.from("individual_professional_evidence").select("expiry_reminded_for").eq("id", fresh.data?.id).single();
+    const retry = await scanProfessionalReminders(admin, new Date(), delivered);
+    const afterRetry = await admin.from("individual_professional_evidence").select("expiry_reminded_for, expires_on").eq("id", fresh.data?.id).single();
+    ok("E4. ⚠ a failed send is reported, releases the reminder (marker unchanged), and the next run delivers and marks it once",
+      failedRun.failed >= 1 && failedRun.failures.some(f => f.userId === pro && /provider refused/.test(f.error))
+      && afterFail.data?.expiry_reminded_for === null
+      && retry.recipients.includes(pro) && afterRetry.data?.expiry_reminded_for === afterRetry.data?.expires_on,
+      JSON.stringify({ failedRun, afterFail: afterFail.data, retry: retry.recipients, afterRetry: afterRetry.data }));
+
     // Entitlement: `other` opts in, then their Professional period ends. Opting in is not enough.
     await admin.from("individual_professional_profile").insert({ user_id: other, experience_code: "professional", reminder_email: true });
     const ended = await endIndividualExperience(admin, other, "professional");
-    const r3 = await scanProfessionalReminders(admin);
+    const r3 = await scanProfessionalReminders(admin, new Date(), delivered);
     ok("N4. entitlement respected: an opted-in person whose Professional has ended is not emailed", ended.ok && !r3.recipients.includes(other), JSON.stringify({ ended, r3 }));
     const estatePrefs = await admin.from("notification_preferences").select("user_id", { count: "exact", head: true }).in("user_id", ids);
     ok("N5. ⚠ nothing was written to the estate notification_preferences for any fixture", !estatePrefs.error && (estatePrefs.count ?? 0) === 0, estatePrefs.error?.message ?? String(estatePrefs.count));

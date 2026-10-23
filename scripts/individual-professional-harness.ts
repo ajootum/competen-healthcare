@@ -248,10 +248,21 @@ const checkNoEstateNotifications = (src: Sources) => {
 const checkEmailOptIn = (src: Sources) => {
   const s = src.get("src/lib/individual/professional/reminders.ts") ?? "";
   const optIn = s.indexOf(`.eq("reminder_email", true)`);
-  const send = s.indexOf("await dispatch(");
+  const send = s.indexOf("await send(admin, c.userId, reminderMessage(c, today))");
   return {
-    ok: optIn > -1 && send > optIn && s.includes(`dispatch(admin, [c.userId], reminderMessage(c, today), ["email"])`),
-    detail: `opt-in filter at ${optIn}, dispatch at ${send}`,
+    ok: optIn > -1 && send > optIn && s.includes(`dispatch(admin, [userId], message, ["email"])`) && !/\["in_app"/.test(s),
+    detail: `opt-in filter at ${optIn}, send at ${send}`,
+  };
+};
+// Owner review: a failed send must not consume the once-only reminder. The claim is kept only when the
+// email was delivered, and released to its prior value otherwise.
+const checkClaimReleasedOnFailure = (src: Sources) => {
+  const s = src.get("src/lib/individual/professional/reminders.ts") ?? "";
+  return {
+    ok: s.includes("if (result.sent) { recipients.add(c.userId); out.sent++; continue; }")
+      && s.includes(`update({ expiry_reminded_for: c.prior })`) && s.includes(`update({ registration_reminded_for: c.prior })`)
+      && s.includes(`return email?.status === "sent" ? { sent: true }`),
+    detail: "the marker must stay only on a confirmed 'sent' and be released to its prior value otherwise",
   };
 };
 // The in-app reminder honours the switch on both surfaces.
@@ -302,6 +313,7 @@ function main() {
   run("N1. no Professional file names notifications, notification_preferences, notif_deliveries or cdp_reminders", checkNoEstateNotifications(ALL));
   run("N2. email reminders go only to people who opted in (reminder_email = true), by email only", checkEmailOptIn(ALL));
   run("N3. the in-app reminder honours the in-app switch on the home and evidence pages", checkInAppSwitch(ALL));
+  run("N5. a failed or skipped email does not consume the once-only reminder: the claim is released", checkClaimReleasedOnFailure(ALL));
   if (MIG374) run("N4. 374: in-app defaults ON, email defaults OFF, both NOT NULL, on the own profile row, no estate table", checkPrefsSchema(MIG374));
   else { pend.push("N4"); console.log(`  PEND  N4. ${MIG374_FILE} is not in this checkout`); }
 
@@ -339,6 +351,9 @@ function main() {
   red("N1 on reading notification_preferences", checkNoEstateNotifications(plant("src/lib/individual/professional/preferences.ts", `admin.from("notification_preferences").select("email")`)));
   red("N2 without the opt-in filter", checkEmailOptIn(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/reminders.ts") ? s.replace(`.eq("reminder_email", true)`, "") : s]))));
   red("N2 on an in-app channel", checkEmailOptIn(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/reminders.ts") ? s.replace(`["email"])`, `["in_app", "email"])`) : s]))));
+  red("N5 when any attempt counts as sent", checkClaimReleasedOnFailure(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/reminders.ts") ? s.replace("if (result.sent) {", "if (result.sent || true) {") : s]))));
+  red("N5 without the release", checkClaimReleasedOnFailure(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/reminders.ts") ? s.replace("update({ expiry_reminded_for: c.prior })", "select()") : s]))));
+  red("N5 when a skipped email counts as delivered", checkClaimReleasedOnFailure(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/reminders.ts") ? s.replace(`email?.status === "sent" ?`, `email?.status !== "failed" ?`) : s]))));
   red("N3 when home ignores the switch", checkInAppSwitch(new Map([...ALL].map(([f, s]) => [f, f.endsWith("HomeReminders.tsx") ? s.replace("if (!prefs.inApp) return null", "") : s]))));
   if (MIG374) red("N4 on email defaulting ON", checkPrefsSchema(MIG374.replace("reminder_email boolean not null default false", "reminder_email boolean not null default true")));
   red("E6 on a verified flag", checkNoVerifiedClassInProfessional(plant("src/app/api/individual/professional/evidence/route.ts", `const row = { verified: true };`)));

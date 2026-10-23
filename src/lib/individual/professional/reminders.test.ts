@@ -7,8 +7,13 @@ import { loadReminderPrefs, parsePrefs, REMINDER_DEFAULTS } from "./preferences"
 // two independent, entitlement respected, and nothing written to the estate notification stores.
 
 const dispatched: { ids: string[]; channels: string[] }[] = [];
+// What the provider answers: "sent", "failed" (provider error) or "skipped" (provider not configured).
+let deliveryStatus: "sent" | "failed" | "skipped" = "sent";
 vi.mock("@/lib/notifications/dispatch", () => ({
-  dispatch: async (_admin: any, ids: string[], _n: any, channels: string[]) => { dispatched.push({ ids, channels }); return { deliveries: [] }; },
+  dispatch: async (_admin: any, ids: string[], _n: any, channels: string[]) => {
+    dispatched.push({ ids, channels });
+    return { deliveries: ids.map(user_id => ({ user_id, channel: "email", status: deliveryStatus, error: deliveryStatus === "sent" ? null : `provider said ${deliveryStatus}` })) };
+  },
 }));
 
 const TODAY = "2026-10-23";
@@ -55,7 +60,10 @@ function fakeAdmin(tables: Record<string, any[]>, opts: { prefsError?: any; flag
           if (table === "individual_professional_profile" && opts.prefsError && op === "select" && filters.length && !payload) {
             return Promise.resolve({ data: null, error: opts.prefsError }).then(res, rej);
           }
-          return Promise.resolve({ data: op === "update" ? rows().slice(0, 1) : rows(), error: null }).then(res, rej);
+          // Updates really change the rows, so a claim and its release can be checked end to end.
+          const matched = rows();
+          if (op === "update") matched.forEach(r => Object.assign(r, payload));
+          return Promise.resolve({ data: matched, error: null }).then(res, rej);
         },
       };
       return b;
@@ -83,7 +91,35 @@ describe("preferences", () => {
 });
 
 describe("the email scan", () => {
-  beforeEach(() => { dispatched.length = 0; });
+  beforeEach(() => { dispatched.length = 0; deliveryStatus = "sent"; });
+
+  it("⚠ a FAILED send does not consume the once-only reminder: the claim is released and the failure is reported", async () => {
+    const { scanProfessionalReminders } = await import("./reminders");
+    deliveryStatus = "failed";
+    const tables = base();
+    const admin = fakeAdmin(tables);
+    const r = await scanProfessionalReminders(admin, new Date(`${TODAY}T06:00:00Z`));
+    expect(r.recipients).toEqual([]);
+    expect(r.failed).toBe(1);
+    expect(r.failures[0]).toMatchObject({ userId: "in" });
+    expect(r.failures[0].error).toContain("provider said failed");
+    expect(tables.individual_professional_evidence.find((e: any) => e.id === "e1")!.expiry_reminded_for).toBeNull();
+    // The next run tries again, and a delivered email is then marked once.
+    deliveryStatus = "sent";
+    const again = await scanProfessionalReminders(admin, new Date(`${TODAY}T06:00:00Z`));
+    expect(again.recipients).toEqual(["in"]);
+    expect(tables.individual_professional_evidence.find((e: any) => e.id === "e1")!.expiry_reminded_for).toBe("2026-11-01");
+  });
+
+  it("a SKIPPED send (provider not configured) is released too, and an injected sender can plant any outcome", async () => {
+    const { scanProfessionalReminders } = await import("./reminders");
+    deliveryStatus = "skipped";
+    const tables = base();
+    expect((await scanProfessionalReminders(fakeAdmin(tables), new Date(`${TODAY}T06:00:00Z`))).failed).toBe(1);
+    expect(tables.individual_professional_evidence.find((e: any) => e.id === "e1")!.expiry_reminded_for).toBeNull();
+    const thrown = await scanProfessionalReminders(fakeAdmin(base()), new Date(`${TODAY}T06:00:00Z`), async () => ({ sent: false, error: "boom" }));
+    expect(thrown).toMatchObject({ sent: 0, failed: 1 });
+  });
 
   const base = () => ({
     individual_live_entitlement: [{ user_id: "in", experience_code: "professional" }, { user_id: "out", experience_code: "professional" }],

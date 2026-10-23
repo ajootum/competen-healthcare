@@ -148,7 +148,7 @@ describe("the Passport and the AI see the same own record", () => {
   });
 
   it("puts nothing about the credential in a reminder's subject line", () => {
-    const m = reminderMessage({ table: "individual_professional_evidence", id: "e", userId: "u", expiresOn: "2026-11-01", title: "Licence ABC" }, TODAY);
+    const m = reminderMessage({ table: "individual_professional_evidence", id: "e", userId: "u", expiresOn: "2026-11-01", title: "Licence ABC", prior: null }, TODAY);
     expect(m.title).not.toContain("Licence ABC");
     expect(m.body).toContain("Competen has not checked this");
   });

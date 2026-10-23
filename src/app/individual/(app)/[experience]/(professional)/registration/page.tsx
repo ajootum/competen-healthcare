@@ -5,6 +5,7 @@ import { experienceModulePage, gatedMetadata } from "../../../../_components/she
 import { PageHeader, Unreadable } from "../../../../_components/chrome";
 import { ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import { ClassLabel, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
+import { REMINDER_HORIZON_DAYS } from "@/lib/individual/professional/vocabulary";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -49,7 +50,7 @@ export default async function RegistrationPage({ params }: { params: Promise<{ e
                 <Field label="Registration number" htmlFor="pr-num">
                   <input id="pr-num" name="registrationNumber" maxLength={60} defaultValue={p?.self_declared_registration_number ?? ""} className={inputCls} autoComplete="off" />
                 </Field>
-                <Field label="Registration renewal date (optional)" htmlFor="pr-exp" hint="You are reminded 60 days before: in Competen, and by email if you turn that on under Credentials & evidence → Reminders.">
+                <Field label="Registration renewal date (optional)" htmlFor="pr-exp" hint={`You are reminded ${REMINDER_HORIZON_DAYS} days before: in Competen, and by email if you turn that on under Credentials & evidence → Reminders.`}>
                   <input id="pr-exp" name="registrationExpiresOn" type="date" defaultValue={p?.self_declared_registration_expires_on ?? ""} className={inputCls} />
                 </Field>
               </div>

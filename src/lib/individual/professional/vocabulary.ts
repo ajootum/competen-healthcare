@@ -69,7 +69,14 @@ export const DOCUMENT_MAX_BYTES = 4 * 1024 * 1024;
 export const DOCUMENT_MAX_LABEL = "4 MB";
 export const DOCUMENT_MIME = ["application/pdf", "image/png", "image/jpeg", "image/webp"] as const;
 
-/** Days before a credential or registration expiry when the reminder is sent. */
+/**
+ * Days before a credential or registration expiry when a reminder is due (in-app and email).
+ *
+ * ⚠ A POLICY CANDIDATE, NOT A PERMANENT PRODUCT RULE (owner review, 2026-10-23). 60 is the MVP default. It
+ * is the one place the number lives -- every surface and the email scan read it from here -- so moving it
+ * into configuration later is one change. Where it is configured is for the CONFIG-001 audit to propose.
+ * It is not a regulator's renewal window, and no surface may present it as one.
+ */
 export const REMINDER_HORIZON_DAYS = 60;
 
 /** Every table migration 373 creates. The harness pins that Professional code writes nothing else. */
