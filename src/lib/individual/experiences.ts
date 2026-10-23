@@ -112,28 +112,27 @@ export const SCHOLAR: ExperienceConfig = {
   tagline: "Learn · Understand · Apply",
   micro: "Healthcare education, revision and clinical reasoning.",
   operatingEntity: "scholar_operator",
-  modules: [],
-  homeIntro: "Your study space. Your Passport, profile and personal AI are already here, and the learning tools below are being built.",
+  // COMPETEN-IND-004: the whole learning journey (Upload, Understand, Assess, Revise, Apply, Improve) sits
+  // under ONE module with its own sub-navigation, so the sidebar and the bottom bar each gain one entry.
+  modules: [
+    { key: "study", segment: "study", label: "My Learning", short: "Study", icon: "✎", bottom: true },
+  ],
+  homeIntro: "Your study space. Open My Learning to upload your notes, have them explained with page citations, practise questions from them and revise what you miss. Your Passport, profile and personal AI are here too.",
   planned: [
     {
-      key: "my-learning", label: "My Learning",
-      summary: "Upload your notes and get explanations grounded in your own sources.",
-      reason: "Study-material upload and source-grounded explanation are not built yet. Nothing you upload could be read back to you today.",
+      key: "reviewed-clinical-content", label: "Reviewed clinical cases and question banks",
+      summary: "Shared case scenarios and question banks written and checked by clinicians.",
+      reason: "Shared clinical content needs a clinical-review record (reviewer, date and scope) before it is served to students, and that record does not exist yet. Case practice from your own notes is in My Learning.",
     },
     {
-      key: "revision", label: "Revision & Exams",
-      summary: "Practice questions from your notes, and revision that adapts to what you miss.",
-      reason: "Question generation from your own material is not built yet.",
+      key: "audio", label: "Audio learning",
+      summary: "Listen to explanations of your notes on the move.",
+      reason: "Text-to-speech of explanations is not built, so nothing can be read aloud yet.",
     },
     {
-      key: "clinical-reasoning", label: "Clinical Reasoning",
-      summary: "Interactive patient scenarios where you explain your thinking.",
-      reason: "Case content needs a clinical-review record before it is served to students, and that record does not exist yet.",
-    },
-    {
-      key: "audio-progress", label: "Audio & Progress",
-      summary: "Listen on the move and see your progress over time.",
-      reason: "Audio learning is not built, and progress needs study activity to measure.",
+      key: "osce-adaptive", label: "OSCE practice and adaptive exams",
+      summary: "Station practice, and tests that adapt to what you know.",
+      reason: "Neither is built for Scholar yet. Nothing you do in My Learning is recorded as OSCE or exam practice.",
     },
   ],
 };
