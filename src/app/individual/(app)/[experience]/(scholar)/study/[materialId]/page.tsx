@@ -78,7 +78,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
 
       {!consentOn && (
         <p className="mb-6 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">
-          AI processing of your material is off, so explaining and question writing are not available. You can turn it on in{" "}
+          AI help is off, so explanations and practice questions are not available. You can turn it on in{" "}
           <Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`}>My Learning</Link>.
         </p>
       )}
@@ -92,7 +92,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
       <div className="lg:order-1">
 
       {questions.ok && caseCount > 0 && (
-        <p className="mt-4 text-[13.5px] text-gray-700">
+        <p className="mt-4 mb-4 text-[13.5px] text-gray-700">
           {caseCount} case question{caseCount === 1 ? "" : "s"} from this material {caseCount === 1 ? "is" : "are"} in{" "}
           <Link href={experienceHref("scholar", "study/apply")} className={`font-semibold underline ${focusRing}`} style={{ color: x.accent }}>Apply</Link>.
         </p>

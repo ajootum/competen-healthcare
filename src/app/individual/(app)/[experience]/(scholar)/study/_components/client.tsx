@@ -199,7 +199,7 @@ export function ExplainPanel({ materialId, consent, title = "Ask your notes", hi
       <h2 id="explain-h" className="text-[16px] font-bold text-gray-900">{title}</h2>
       <p className="mt-1 text-[13.5px] text-gray-600">{hint ?? "Explanations use only your uploaded material and cite the page or section each point came from. They are not saved."}</p>
       {!consent ? (
-        <p className="mt-3 rounded-xl bg-gray-50 px-3.5 py-3 text-[13.5px] text-gray-700">Turn on AI processing of your material (in My Learning) to ask for explanations.</p>
+        <p className="mt-3 rounded-xl bg-gray-50 px-3.5 py-3 text-[13.5px] text-gray-700">Turn on AI help (in My Learning) to ask for explanations.</p>
       ) : (
         <form onSubmit={ask} className="mt-3">
           <label htmlFor={`explain-q-${materialId ?? "all"}`} className="sr-only">Your question</label>
@@ -392,7 +392,7 @@ export function CardReview({ cards }: { cards: CardView[] }) {
   if (!card) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-        <p className="text-[15px] font-semibold text-gray-900">{cards.length ? `Done for today: you reviewed ${done.length} card${done.length === 1 ? "" : "s"}.` : "Nothing is due."}</p>
+        <p className="text-[15px] font-semibold text-gray-900">{done.length ? `Done for today: you reviewed ${done.length} card${done.length === 1 ? "" : "s"}.` : "Nothing is due."}</p>
         {done.length > 0 && (
           <ul className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200">
             {done.map((d, k) => (
@@ -414,6 +414,8 @@ export function CardReview({ cards }: { cards: CardView[] }) {
     if (!r.ok) { setError(r.json.error ?? "Your review could not be saved."); return; }
     setDone(list => [...list, { stem: card.stem, next: when(r.json.nextReviewAt), longInterval: r.json.status === "mastered" }]);
     setShown(false); setI(n => n + 1);
+    // After the last card, refresh the server parts (the due count on the Revise tab). The summary is local state and stays.
+    if (i + 1 >= cards.length) router.refresh();
   }
   const last = done.at(-1);
   return (
