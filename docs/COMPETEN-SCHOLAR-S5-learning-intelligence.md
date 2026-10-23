@@ -51,13 +51,14 @@ A measure is never shown as a blank or a 0 when nothing was measured.
 - **Interfaces:** `CompetencyCatalogueSource.competenciesFor` (S1) and `CompetencyMappingSource.mappingsFor` (S2), in `src/lib/individual/scholar/competency-sources.ts`.
 - **Placeholders:** both answer `{ ok: true, value: null }` ("not available"), so coverage renders **Not measured**, with the reason "No competency framework is connected to your study yet".
 - **Failed reads:** a failed source read is `ok: false`, and renders as "could not be read just now". It is never computed.
-- **Connecting S1/S2:** replace the two entries in `COMPETENCY_SOURCES`. The measures, insights and page already handle a real answer, and the unit tests cover it.
+- **S1 is connected (#39):** `S1_CATALOGUE` reads `loadCatalogueFor(admin, "scholar")`, the Scholar allowlist applied to the shared library. An empty allowlist means "no framework connected"; unreadable means "could not be read". Staging L8 proves it is live: with CF-FOUND allowlisted, coverage turns from "no framework connected" to "questions not yet linked". The harness restores the prior allowlist afterwards.
+- **S2 is not connected yet:** IND-004 388 (accepted maps only) follows in a small PR once it is on main. It means replacing `mappings` in `COMPETENCY_SOURCES`.
 
 ## 3. Migration 391: the four states
 | State | Status | Evidence |
 |---|---|---|
 | 1. Authored | Done | House rules: ALL CLEAR. One warning: a quoted value in a comment, as in 375. No plpgsql. |
-| 2. Applied and verified on staging | **Done.** Applied by the owner with `apply-migrations --only 391` | **Pre-application** (19:19Z, read-only): `individual_scholar_review` absent; card indexes without an owner index; the passport CHECK listing two kinds; 0 passport items. **Post-application** (19:32Z, read-only, `judgeDbTarget`-guarded): the 7 columns; composite FKs to card and material (cascade); the values CHECK; two indexes; RLS with policy `individual_scholar_review_read_own` (SELECT); 0 rows; `ux_individual_scholar_card_owner` present; the passport CHECK listing three kinds. The second idempotent run: **the owner's run output, to be attached by the main session.** |
+| 2. Applied and verified on staging | **Done.** Applied by the owner with `apply-migrations --only 391` | **Pre-application** (19:19Z, read-only): `individual_scholar_review` absent; card indexes without an owner index; the passport CHECK listing two kinds; 0 passport items. **Post-application** (19:32Z, read-only, `judgeDbTarget`-guarded): the 7 columns; composite FKs to card and material (cascade); the values CHECK; two indexes; RLS with policy `individual_scholar_review_read_own` (SELECT); 0 rows; `ux_individual_scholar_card_owner` present; the passport CHECK listing three kinds. **Second, confirming run:** by the main session, under the owner's authorisation for staging applies of 384–392: `npx.cmd tsx scripts/apply-migrations.ts --only 391` from competen-ind-002. The target was `ezhvpgtcqcdsgylrxgdb`, the guard passed, the working copy was CRLF `E90CD0D1…`, and the output was "391-individual-scholar-review-log.sql ... ok". It was a no-op by construction: every statement is IF NOT EXISTS or drop-then-add. |
 | 3. Merged into `main` | Not yet (PR) | The code fails closed while the table is absent: the review insert is skipped, `reviewRows` returns null, and recall and reviews render "Not measured". A revision achievement can't be eligible, because there are no reviews. |
 | 4. Applied to production | **Not authorised** | — |
 
@@ -95,7 +96,7 @@ The rollback deletes every review row, and every `revision_reviews` Passport cho
 - **Typecheck and lint:** `tsc` clean, `eslint src` clean.
 - **Foundation harness: 60/60.** The new check 12p says revision reaches the Passport as which material and when, never the grade, and only `reviewCard` writes the log. Planting a grade read turns it red.
 - **Other harnesses:** `individual-config` 36/36, `scholar-learning` 77/77, `auth-boundary` green.
-- **Staging HTTP:** `scholar-intelligence-harness` 7/7. It uses a real sign-in, real answers through the attempts API and a real review through the cards API:
+- **Staging HTTP:** `scholar-intelligence-harness` 8/8 (L8: S1 live). It uses a real sign-in, real answers through the attempts API and a real review through the cards API:
   - Not measured before any answers;
   - "Too little practice to say", with how many so far;
   - knowledge and reasoning in separate panels with their own figures;

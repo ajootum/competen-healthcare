@@ -159,6 +159,27 @@ async function main() {
     choose.status === 200 && passport.text.includes("Cardiology revision") && passport.text.includes("1 revision review of own notes") && !/recall/i.test(passport.text.slice(passport.text.indexOf("Cardiology revision"), passport.text.indexOf("Cardiology revision") + 400)),
     `choose ${choose.status} ${JSON.stringify(choose.json)}`);
 
+  // L8. S1 is connected (COMPETENCY_SOURCES.catalogue = S1_CATALOGUE). With the Scholar allowlist empty, coverage
+  // says no framework is connected. With one published catalogue allowlisted (CF-FOUND, briefly, restored in
+  // `finally`), it says the questions are not yet linked -- the S1 read reached the page. S2 is not yet wired.
+  const PATH = "individual.policy.scholar_catalogues";
+  const CF_FOUND = "d5944ae0-a6eb-499f-92dd-99fd3b74aaf2";
+  const { data: prior } = await admin.from("workspace_config_overrides").select("id, draft, published")
+    .eq("scope_type", "platform").eq("scope_ref", "individual").eq("config_path", PATH).maybeSingle();
+  const beforeCov = panel(p3.text, "li-cov");
+  let afterCov = "";
+  try {
+    if (prior) await admin.from("workspace_config_overrides").update({ published: { ids: [CF_FOUND] } }).eq("id", prior.id);
+    else await admin.from("workspace_config_overrides").insert({ scope_type: "platform", scope_ref: "individual", config_path: PATH, draft: { ids: [CF_FOUND] }, published: { ids: [CF_FOUND] } });
+    afterCov = panel((await page(PROGRESS, s)).text, "li-cov");
+  } finally {
+    if (prior) await admin.from("workspace_config_overrides").update({ draft: prior.draft, published: prior.published }).eq("id", prior.id);
+    else await admin.from("workspace_config_overrides").delete().eq("scope_type", "platform").eq("scope_ref", "individual").eq("config_path", PATH);
+  }
+  ok("L8. S1 is live: an allowlisted catalogue turns 'no framework connected' into 'questions not yet linked' (S2 pending); allowlist restored",
+    (prior ? true : beforeCov.includes("No competency framework is connected")) && afterCov.includes("not yet linked to competencies"),
+    `before: ${beforeCov.includes("No competency framework") ? "no framework" : "?"}, after: ${afterCov.includes("not yet linked") ? "not linked" : afterCov.slice(0, 160)}`);
+
   ok("L7. recommendations render with their reasons: scenarios short of the threshold ask for 2 more", p3.text.includes("What to do next") && p3.text.includes("Work through 2 more practice scenarios") && p3.text.includes("Then Scholar can show how your clinical reasoning is going"));
 }
 

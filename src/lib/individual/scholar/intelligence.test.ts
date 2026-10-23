@@ -170,3 +170,21 @@ describe("S1/S2 readiness: expected levels order the gaps, and case questions ar
     expect(li.knowledge.state).toBe("not_measured");
   });
 });
+
+describe("S1 adapter (fromCatalogue)", () => {
+  it("unreadable refuses, an empty allowlist is not available, rows map with the expected level", async () => {
+    const { fromCatalogue, COMPETENCY_SOURCES, S1_CATALOGUE } = await import("./competency-sources");
+    expect(fromCatalogue(null)).toEqual({ ok: false });
+    expect(fromCatalogue([])).toEqual({ ok: true, value: null });
+    const row = { competencyId: "c1", code: "F1", title: "Hand hygiene", description: null, layer: "foundational" as const, profession: null,
+      catalogue: { id: "f1", name: "CF-FOUND", code: "CF", version: "1.0.0" }, domain: { id: "d", name: "Safety" }, outcomes: [],
+      expectedLevel: { id: "l", score: 3, label: "Competent" }, cpu: null, links: { prerequisites: [], extends: [], sharedWith: [] } };
+    expect(fromCatalogue([row])).toEqual({ ok: true, value: [{ id: "c1", code: "F1", name: "Hand hygiene", frameworkId: "f1", frameworkName: "CF-FOUND", expectedLevel: { score: 3, label: "Competent" } }] });
+    expect(COMPETENCY_SOURCES.catalogue).toBe(S1_CATALOGUE);
+  });
+  it("with S1 connected and no accepted maps yet, coverage says the questions are not yet linked", () => {
+    const catalogue = [{ id: "c1", code: null, name: "Hand hygiene", frameworkId: "f1", frameworkName: "CF-FOUND", expectedLevel: null }];
+    expect(buildIntelligence({ ...base, questions: [q("a", "m1")], attempts: [], catalogue, mappings: null }).coverage)
+      .toMatchObject({ state: "not_measured", reason: "Your practice questions are not yet linked to competencies." });
+  });
+});

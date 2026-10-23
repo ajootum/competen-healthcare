@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { loadCatalogueFor, type CatalogueCompetency } from "../catalogue";
 
 // ── WHERE COMPETENCY FACTS COME FROM ── COMPETEN-SCHOLAR-01 S5, coded against S1 and S2 ────────────────────
 //
@@ -53,11 +54,36 @@ export const NO_MAPPINGS: CompetencyMappingSource = {
   mappingsFor: async () => ({ ok: true, value: null }),
 };
 
+/** Pure: S1's catalogue rows as the references coverage reads. [] (nothing allowlisted) is "not available". */
+export function fromCatalogue(rows: readonly CatalogueCompetency[] | null): SourceRead<CompetencyRef[]> {
+  if (rows === null) return { ok: false };
+  if (rows.length === 0) return { ok: true, value: null };
+  return {
+    ok: true,
+    value: rows.map(c => ({
+      id: c.competencyId, code: c.code, name: c.title, frameworkId: c.catalogue.id, frameworkName: c.catalogue.name,
+      expectedLevel: c.expectedLevel ? { score: c.expectedLevel.score, label: c.expectedLevel.label } : null,
+    })),
+  };
+}
+
+/**
+ * S1 (COMPETEN-SCHOLAR-01, #39): the Scholar catalogue allowlist (Individual policy `scholar_catalogues`)
+ * applied to the shared competency library. It is per experience, not per person: every Scholar learner
+ * studies against the catalogues HQ chose. null (unreadable) refuses to measure, and an empty allowlist is
+ * "no framework connected" -- coverage says which.
+ */
+export const S1_CATALOGUE: CompetencyCatalogueSource = {
+  name: "S1 Scholar catalogue (loadCatalogueFor)",
+  competenciesFor: async (admin: any) => fromCatalogue(await loadCatalogueFor(admin, "scholar")),
+};
+
 /**
  * The sources Learning Intelligence uses. Plugging in S1 or S2 is replacing one entry here, and nothing
- * else changes: the measures, insights and page already handle a real answer.
+ * else changes: the measures, insights and page already handle a real answer. S2 (IND-004 388, accepted
+ * maps only) follows once it is on main.
  */
 export const COMPETENCY_SOURCES: { catalogue: CompetencyCatalogueSource; mappings: CompetencyMappingSource } = {
-  catalogue: NO_CATALOGUE,
+  catalogue: S1_CATALOGUE,
   mappings: NO_MAPPINGS,
 };
