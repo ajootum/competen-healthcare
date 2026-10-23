@@ -296,8 +296,17 @@ async function main() {
   ok("F5. ⚠ another person cannot revoke it", !(await revokeShare(admin, other, link!.id)));
   ok("F6. the person can revoke it", await revokeShare(admin, pro, link!.id));
 
-  // ── G. shared frameworks only ──
+  // ── G. shared, published AND allowlisted frameworks only ──
+  // S1: the Professional allowlist (Individual policy). The run snapshots its row and restores it exactly.
+  const ALLOW = { scope_type: "platform", scope_ref: "individual", config_path: "individual.policy.professional_catalogues" };
+  const allowBefore = (await admin.from("workspace_config_overrides").select("*").match(ALLOW).maybeSingle()).data;
+  const restoreAllow = async () => {
+    await admin.from("workspace_config_overrides").delete().match(ALLOW);
+    if (allowBefore) await admin.from("workspace_config_overrides").insert(allowBefore);
+  };
   const fws = await loadSharedFrameworks(admin);
+  if (!allowBefore) ok("G0. ⚠ S1: with no Professional allowlist, no framework is offered at all, published or not", fws !== null && fws.length === 0, `${fws?.length} offered`);
+  else console.log("  PEND  G0. an allowlist is already set on this project; the default is pinned by the static harness F2");
   const fwIds = (fws ?? []).map(f => f.id);
   const leak = fwIds.length ? await admin.from("frameworks").select("id").in("id", fwIds).not("hospital_id", "is", null) : { data: [] };
   const unpublished = fwIds.length ? await admin.from("frameworks").select("id").in("id", fwIds).neq("pub_status", "published") : { data: [] };
@@ -311,12 +320,21 @@ async function main() {
   // be accepted as a reference -- exactly what the Professional picker and the write check use.
   const pubFw = await admin.from("frameworks").select("id, name").is("hospital_id", null).eq("is_active", true).eq("pub_status", "published").limit(1).maybeSingle();
   if (pubFw.data) {
-    const comps = await loadSharedCompetencies(admin, pubFw.data.id);
-    ok("G4. a shared, PUBLISHED framework is offered, and it and its competency are accepted as references",
-      fwIds.includes(pubFw.data.id) && !!comps?.length
-        && (await checkSharedReference(admin, pubFw.data.id, null)) === null
-        && (await checkSharedReference(admin, pubFw.data.id, comps![0].id)) === null,
-      `${pubFw.data.name}: offered ${fwIds.includes(pubFw.data.id)}, ${comps?.length ?? 0} competencies`);
+    // Allowlist exactly this framework (as HQ would publish it), test, then restore the prior row.
+    try {
+      await admin.from("workspace_config_overrides").delete().match(ALLOW);
+      await admin.from("workspace_config_overrides").insert({ ...ALLOW, draft: { ids: [pubFw.data.id] }, published: { ids: [pubFw.data.id] } });
+      const offered = ((await loadSharedFrameworks(admin)) ?? []).map(f => f.id);
+      const comps = await loadSharedCompetencies(admin, pubFw.data.id);
+      ok("G4. an ALLOWLISTED, shared, PUBLISHED framework is offered, and it and its competency are accepted as references",
+        offered.length === 1 && offered[0] === pubFw.data.id && !!comps?.length
+          && (await checkSharedReference(admin, pubFw.data.id, null)) === null
+          && (await checkSharedReference(admin, pubFw.data.id, comps![0].id)) === null,
+        `${pubFw.data.name}: offered ${JSON.stringify(offered)}, ${comps?.length ?? 0} competencies`);
+      if (draftFw.data) ok("G5. ⚠ S1: a draft is still refused even while the allowlist names something", (await checkSharedReference(admin, draftFw.data.id, null)) !== null);
+    } finally { await restoreAllow(); }
+    const back = (await admin.from("workspace_config_overrides").select("*").match(ALLOW).maybeSingle()).data;
+    ok("G6. the Professional allowlist is restored exactly", JSON.stringify(back) === JSON.stringify(allowBefore));
   } else console.log("  PEND  G4. staging has no published shared framework to offer");
   const hospFw = await admin.from("frameworks").select("id").not("hospital_id", "is", null).limit(1).maybeSingle();
   if (hospFw.data) ok("G2. ⚠ a hospital framework is refused as a reference", (await checkSharedReference(admin, hospFw.data.id, null)) !== null);

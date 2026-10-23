@@ -86,6 +86,9 @@ const INCLUDED = [
   // writer, the two partitions, every consumer on the policy, the clamping reader, no individual_app, no third
   // HQ door, with 22 planted-failure controls run in memory. Reads files only: no client, no network, no .env.local.
   "individual-config-harness.ts",
+  // COMPETEN-SCHOLAR-01 S1: migration 384 additive, the read API shared-only and fail-closed, the allowlists empty by
+  // default and library-checked, no Nursing root, the seed staging-only and draft-only. 11 planted reds. Files only.
+  "competency-foundation-harness.ts",
   "mos-gap-matrix-harness.ts",
   "pd-health-harness.ts",
   "pd-nav-harness.ts",
