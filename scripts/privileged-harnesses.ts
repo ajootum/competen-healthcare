@@ -205,6 +205,13 @@ const STAGING: Listed[] = [
       + "BASE_URL with individual_app ON; NEVER writes the flag (PEND when off). Own harness-access001-* fixtures.",
   },
   {
+    file: "competency-foundation-acceptance-harness.ts",
+    note: "COMPETEN-SCHOLAR-01 S1 against migration 384: the schema refuses a profession catalogue without a profession, a "
+      + "foundational one with a profession, an unknown layer and non-list outcomes; with no allowlist Scholar and Professional "
+      + "are offered nothing; the staging seed (CF-FOUND, NUR-RESP) has its layers, profession, Core Nursing extension, CPUs and "
+      + "Holdings links; the read API over the allowlisted seed (draft offers nothing). Restores both allowlists exactly. PEND until 384.",
+  },
+  {
     file: "hq-users-directory-acceptance-harness.ts",
     note: "HQ-USERS-C: the directory loader against real staging rows (platform membership, Individual membership and a "
       + "live Professional entitlement, an HQ appointment), every source readable, a stranger with nothing; and over HTTP "

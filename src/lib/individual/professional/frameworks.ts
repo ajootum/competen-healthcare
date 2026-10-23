@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { loadIndividualPolicy } from "../policy";
 
 // ── SHARED COMPETENCY FRAMEWORKS, FOR A PERSON WITH NO ORGANISATION ── migrations 003, 004, 127 ─────────
 //
@@ -15,21 +16,32 @@
 // names a framework an EXISTING record already points at, whatever its status now -- hiding the name of a
 // link the person made would rewrite their record.
 export const PUBLISHED = "published";
+//
+// ⚠ AND ALLOWLISTED (COMPETEN-SCHOLAR-01 S1). Published is no longer enough: a framework is offered, and
+// accepted on write, only when HQ has put it in the Professional catalogue allowlist (Individual policy
+// professional_catalogues, set under hq.individual.config.manage). The allowlist starts EMPTY, so by
+// default Professional offers NO framework -- the shared library does not reach a person by existing.
 
 export type SharedFramework = { id: string; name: string; library: string };
 export type SharedCompetency = { id: string; name: string; domain: string };
 
+/** The Professional allowlist (framework ids). Empty -- the default, and what an unreadable policy gives -- offers nothing. */
+export const professionalAllowlist = async (admin: any): Promise<string[]> => (await loadIndividualPolicy(admin)).professionalCatalogues;
+
 export async function loadSharedFrameworks(admin: any): Promise<SharedFramework[] | null> {
   try {
+    const allowed = await professionalAllowlist(admin);
+    if (!allowed.length) return [];
     const { data, error } = await admin.from("frameworks").select("id, name, library")
-      .is("hospital_id", null).eq("is_active", true).eq("pub_status", PUBLISHED).order("sort_order").order("name").limit(200);
+      .is("hospital_id", null).eq("is_active", true).eq("pub_status", PUBLISHED).in("id", allowed).order("sort_order").order("name").limit(200);
     return error ? null : (data ?? []);
   } catch { return null; }
 }
 
-/** The competencies of one SHARED, ACTIVE, PUBLISHED framework, or null when it is not one or could not be read. */
+/** The competencies of one SHARED, ACTIVE, PUBLISHED, ALLOWLISTED framework, or null when it is not one or could not be read. */
 export async function loadSharedCompetencies(admin: any, frameworkId: string): Promise<SharedCompetency[] | null> {
   try {
+    if (!(await professionalAllowlist(admin)).includes(String(frameworkId).toLowerCase())) return null;
     const { data: fw, error: fwErr } = await admin.from("frameworks").select("id")
       .eq("id", frameworkId).is("hospital_id", null).eq("is_active", true).eq("pub_status", PUBLISHED).maybeSingle();
     if (fwErr || !fw) return null;
@@ -54,7 +66,7 @@ export async function loadSharedCompetencies(admin: any, frameworkId: string): P
 export async function checkSharedReference(admin: any, frameworkId: string | null, competencyId: string | null): Promise<string | null> {
   if (!frameworkId) return null;
   const comps = await loadSharedCompetencies(admin, frameworkId);
-  if (comps === null) return "That framework is not one of the shared frameworks, or it could not be checked just now.";
+  if (comps === null) return "That framework is not one Competen Professional offers, or it could not be checked just now.";
   if (competencyId && !comps.some(c => c.id === competencyId)) return "That competency is not part of the framework you chose.";
   return null;
 }

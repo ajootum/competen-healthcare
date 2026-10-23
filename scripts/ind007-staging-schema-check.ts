@@ -32,6 +32,7 @@ if (!/^postgres(ql)?:\/\/\S+@\S+\/\S+/.test(dbUrl)) { console.error("STAGING_DB_
 // The production ref is a constant in production-guard.ts, the same judge apply-migrations uses. It used to
 // be read from NEXT_PUBLIC_SUPABASE_URL -- which, since .env.local names STAGING, made this refuse staging
 // itself as "production". Failing closed was right; the source of the ref was wrong.
+const hasLayer = (cols: { column_name: string }[]) => cols.some(c => c.column_name === "competency_layer");
 const verdict = judgeDbTarget(dbUrl);
 if (!verdict.ok) { console.error(`REFUSING: STAGING_DB_URL is ${verdict.reason === "PRODUCTION" ? `PRODUCTION (${verdict.ref})` : "not identifiable as a project"}.`); process.exit(1); }
 if (/:6543\//.test(dbUrl)) { console.error("Transaction pooler (6543) -- use the session pooler (5432)."); process.exit(1); }
@@ -124,6 +125,23 @@ async function main() {
       // COMPETEN-CONFIG-002 P0: what a person may choose = shared (no hospital), active, published.
       out.sharedFrameworksByStatus = await q(`select coalesce(pub_status, '(null)') as pub_status, count(*)::int as n
         from frameworks where hospital_id is null and is_active = true group by 1 order by 1`);
+    }
+    if (process.argv.includes("--s1")) {
+      // COMPETEN-SCHOLAR-01 S1, migration 384, before and after (and through its rollback rehearsal): the four
+      // columns, their constraints and index, and how many frameworks are classified. Hashed for comparison.
+      const cols = await q(`select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns
+        where table_schema = 'public' and ((table_name = 'frameworks' and column_name in ('competency_layer', 'profession_term_id'))
+          or (table_name = 'framework_competencies' and column_name in ('learning_outcomes', 'expected_level_id'))) order by 1, 2`);
+      const cons = await q(`select conname, pg_get_constraintdef(oid) as def from pg_constraint
+        where conrelid in ('frameworks'::regclass, 'framework_competencies'::regclass)
+          and (conname like '%competency_layer%' or conname like '%layer_profession%' or conname like '%learning_outcomes%'
+            or conname like '%profession_term_id%' or conname like '%expected_level_id%') order by 1`);
+      const idx = await q(`select indexname, indexdef from pg_indexes where indexname = 'idx_frameworks_competency_layer'`);
+      out.s1 = {
+        columns: cols, constraints: cons, index: idx,
+        fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx })).digest("hex"),
+        classified: hasLayer(cols) ? await q(`select competency_layer, count(*)::int as n from frameworks group by 1 order by 1`) : "column absent",
+      };
     }
     if (process.argv.includes("--reset")) {
       // HQ-USERS-B migrations 382 and 383, before and after (and through 383's rollback rehearsal): the

@@ -36,6 +36,17 @@ export async function POST(req: Request) {
     case "set": {
       const v = validateDraft(body.key, body.value);
       if (!v.ok) return refuse(422, v.error);
+      // S1: a catalogue allowlist may name only shared, active, published frameworks -- checked against the
+      // library now, and again on every read (src/lib/competency/foundation.ts), so a later unpublish offers nothing.
+      if (v.def.kind === "catalogues") {
+        const ids = (v.settings.ids as string[]) ?? [];
+        if (ids.length) {
+          const { data, error } = await ctx.admin.from("frameworks").select("id").in("id", ids).is("hospital_id", null).eq("is_active", true).eq("pub_status", "published");
+          if (error) return refuse(503, "The catalogues could not be checked just now. Nothing has changed.");
+          const ok = new Set((data ?? []).map((r: { id: string }) => String(r.id).toLowerCase()));
+          if (ids.some(id => !ok.has(id))) return refuse(422, `${v.def.label}: only shared, active, published catalogues can be chosen.`);
+        }
+      }
       const r = await setOverride(ctx.admin, actor, SCOPE, policyPath(v.def.key), v.settings);
       return r.ok ? NextResponse.json({ ok: true }) : refuse(500, "The draft could not be saved. Nothing has changed.");
     }

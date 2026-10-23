@@ -242,9 +242,20 @@ const checkCrossPersonLinks = (mig: string) => {
 // published framework. A draft or archived framework is neither offered nor accepted.
 const checkPublishedFrameworks = (src: Sources) => {
   const s = src.get("src/lib/individual/professional/frameworks.ts") ?? "";
-  const list = /\.is\("hospital_id", null\)\.eq\("is_active", true\)\.eq\("pub_status", PUBLISHED\)\.order\(/.test(s);
+  const list = /\.is\("hospital_id", null\)\.eq\("is_active", true\)\.eq\("pub_status", PUBLISHED\)\.in\("id", allowed\)\.order\(/.test(s);
   const write = /\.eq\("id", frameworkId\)\.is\("hospital_id", null\)\.eq\("is_active", true\)\.eq\("pub_status", PUBLISHED\)\.maybeSingle\(\)/.test(s);
   return { ok: list && write && /export const PUBLISHED = "published"/.test(s), detail: `list filter ${list}, write check ${write}` };
+};
+// ── F2. ALLOWLISTED ONLY, AND NOTHING BY DEFAULT (COMPETEN-SCHOLAR-01 S1) ──────────────────────────────
+// Published is not enough: the list and every new reference also need the Professional allowlist, and an
+// empty allowlist -- the default -- offers nothing and accepts nothing.
+const checkAllowlist = (src: Sources): { ok: boolean; detail: string } => {
+  const s = src.get("src/lib/individual/professional/frameworks.ts") ?? "";
+  const p = src.get("src/lib/individual/policy.ts") ?? "";
+  const listGate = /const allowed = await professionalAllowlist\(admin\);\s*if \(!allowed\.length\) return \[\];/.test(s);
+  const writeGate = /if \(!\(await professionalAllowlist\(admin\)\)\.includes\(String\(frameworkId\)\.toLowerCase\(\)\)\) return null;/.test(s);
+  const emptyDefault = /export function clampCatalogues\(p: CataloguePolicy, settings: any\): string\[\] \{\s*if \(settings == null \|\| !Array\.isArray\(settings\.ids\)\) return \[\];/.test(p);
+  return { ok: listGate && writeGate && emptyDefault, detail: `list gate ${listGate}, write gate ${writeGate}, empty by default ${emptyDefault}` };
 };
 // ── N. REMINDERS (migration 374, owner continuation GO Option A) ────────────────────────────────────
 // Individual notifications stay separate from Enterprise and Practice: no Professional file names the
@@ -331,6 +342,7 @@ function main() {
   run("E5. /verify shows own records only with the release gate on and the companion row, labelled by class, without the 'Verified' header", checkVerifyPage(ALL));
   run("E6. no Professional file names a verified class or sets a verified flag", checkNoVerifiedClassInProfessional(ALL));
   run("F1. only shared, active, PUBLISHED frameworks are offered, and only they are accepted on write", checkPublishedFrameworks(ALL));
+  run("F2. only ALLOWLISTED frameworks are offered and accepted, and the allowlist is empty by default (S1)", checkAllowlist(ALL));
 
   run("N1. no Professional file names notifications, notification_preferences, notif_deliveries or cdp_reminders", checkNoEstateNotifications(ALL));
   run("N2. email reminders go only to people who opted in (reminder_email = true), by email only", checkEmailOptIn(ALL));
@@ -384,7 +396,10 @@ function main() {
   red("T1 on a suggestion reader that writes", checkFreeTextSuggestions(plant("src/lib/individual/professional/suggestions.ts", `admin.from("taxonomy_terms").insert({})`)));
   red("E6 on a verified flag", checkNoVerifiedClassInProfessional(plant("src/app/api/individual/professional/evidence/route.ts", `const row = { verified: true };`)));
   const fwFile = "src/lib/individual/professional/frameworks.ts";
-  red("F1 when the list offers drafts", checkPublishedFrameworks(new Map([...ALL].map(([f, s]) => [f, f === fwFile ? s.replace(`.eq("is_active", true).eq("pub_status", PUBLISHED).order(`, `.eq("is_active", true).order(`) : s]))));
+  red("F1 when the list offers drafts", checkPublishedFrameworks(new Map([...ALL].map(([f, s]) => [f, f === fwFile ? s.replace(`.eq("is_active", true).eq("pub_status", PUBLISHED).in("id", allowed).order(`, `.eq("is_active", true).in("id", allowed).order(`) : s]))));
+  red("F2 when the list ignores the allowlist", checkAllowlist(new Map([...ALL].map(([f, s]) => [f, f === fwFile ? s.replace("if (!allowed.length) return [];", "") : s]))));
+  red("F2 when a write accepts an unlisted framework", checkAllowlist(new Map([...ALL].map(([f, s]) => [f, f === fwFile ? s.replace("if (!(await professionalAllowlist(admin)).includes(String(frameworkId).toLowerCase())) return null;", "") : s]))));
+  red("F2 when the default offers everything", checkAllowlist(new Map([...ALL].map(([f, s]) => [f, f === "src/lib/individual/policy.ts" ? s.replace("if (settings == null || !Array.isArray(settings.ids)) return [];", "if (settings == null) return [\"*\"];") : s]))));
   red("F1 when a write accepts a draft", checkPublishedFrameworks(new Map([...ALL].map(([f, s]) => [f, f === fwFile ? s.replace(`.eq("pub_status", PUBLISHED).maybeSingle()`, ".maybeSingle()") : s]))));
   red("D1 when Scholar lists a Professional segment", (() => { const sch = EXPERIENCES.scholar.modules as unknown as { segment: string }[]; sch.push({ segment: "cpd" }); try { return checkDirectEntry(ALL); } finally { sch.pop(); } })());
   red("D1 on a Scholar guard", checkDirectEntry(new Map([...ALL].map(([f, s]) => [f, f.endsWith("professional/cpd/route.ts") ? s.replace('requireIndividualContext("professional")', 'requireIndividualContext("scholar")') : s]))));
