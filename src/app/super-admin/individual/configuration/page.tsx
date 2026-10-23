@@ -12,7 +12,7 @@ import { IntDraft, PublishBar, RollbackButton, SetDraft } from "./_components/Po
 //
 // For every policy it shows what is effective now and since when, where that value came from, the draft,
 // and the fixed hard limit with its reason. Below: the published versions (each one restorable) and the
-// change trail. It does not show or change individual_app: activation is the owner's alone.
+// change trail. It does not show or change the Individual release gate: activation is the owner's alone.
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Competen Individual policy" };

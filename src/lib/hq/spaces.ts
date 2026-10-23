@@ -59,7 +59,7 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // the Individual Product Administrator position (product line `individual`). A write right with no page.
   { code: "hq.individual.pilot.grant",        space: "platform"  },
   // COMPETEN-CONFIG-002 (migration 376): set the Competen Individual policy within its fixed hard limits, on
-  // /super-admin/individual/configuration. Same position. Not super-admin, not the individual_app gate.
+  // /super-admin/individual/configuration. Same position. Not super-admin, not the release gate.
   { code: "hq.individual.config.manage",      space: "platform"  },
   { code: "hq.practice.operations.view",      space: "practice"  },
   // ⚠ ADDED BY MIGRATION 273, and this list had to follow it. The DB gained the capability and this
@@ -181,7 +181,8 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/governance",            capability: "hq.quality.governance.view" },
   { prefix: "/super-admin/cgr",                   capability: "hq.quality.regulation.view" },
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },
-  { prefix: "/super-admin/individual",            capability: "hq.individual.config.manage" },
+  // The policy page only. /super-admin/individual itself is the pilot-grant page (IND-ACCESS-001, exact).
+  { prefix: "/super-admin/individual/configuration", capability: "hq.individual.config.manage" },
 
   // ── The Product Director workspace ────────────────────────────────────────────────────────────────
   //

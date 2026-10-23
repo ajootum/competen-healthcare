@@ -6,6 +6,7 @@ import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX, parseShare } from "./professional/share";
 import { MAX_MATERIALS_PER_PERSON, QUESTIONS_PER_REQUEST } from "./scholar/config";
 import { STUDY_ACHIEVEMENT_KINDS } from "./scholar/passport-items";
+import { INDIVIDUAL_APP_FLAG } from "./gate";
 
 // An in-memory stand-in for the three WCE tables, enough for the shared write lifecycle and the reader.
 function memoryAdmin() {
@@ -64,7 +65,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
     expect(validateDraft("share_link_max_days", 366)).toMatchObject({ ok: false });
     expect(validateDraft("reminder_horizon_days", 6)).toMatchObject({ ok: false });
     expect(validateDraft("reminder_horizon_days", 2.5)).toMatchObject({ ok: false });
-    expect(validateDraft("individual_app", true)).toMatchObject({ ok: false });
+    expect(validateDraft(INDIVIDUAL_APP_FLAG, true)).toMatchObject({ ok: false });
     expect(validateDraft("reminder_horizon_days", "90")).toEqual({ ok: true, def: policyDef("reminder_horizon_days"), settings: { value: 90 } });
     expect(validateDraft("passport_achievement_kinds", ["practice_questions", "certificates"])).toMatchObject({ ok: false });
     expect(validateDraft("passport_achievement_kinds", [])).toMatchObject({ ok: true, settings: { enabled: [] } });
@@ -76,7 +77,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       { config_path: policyPath("reminder_horizon_days"), published: { value: 1 } },
       { config_path: policyPath("share_link_max_days"), published: { value: "x" } },
       { config_path: policyPath("passport_achievement_kinds"), published: { enabled: ["practice_scenarios", "made_up"] } },
-      { config_path: "individual.policy.individual_app", published: { value: 1 } },
+      { config_path: `individual.policy.${INDIVIDUAL_APP_FLAG}`, published: { value: 1 } },
     ]);
     expect(p.scholarQuestionsPerRequest).toBe(QUESTIONS_PER_REQUEST);
     expect(p.reminderHorizonDays).toBe((policyDef("reminder_horizon_days") as IntPolicy).min);

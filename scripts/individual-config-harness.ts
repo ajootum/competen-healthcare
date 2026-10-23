@@ -75,7 +75,10 @@ const checkPageGate = (src: Src): R => {
 const checkCatalogue = (src: Src): R => {
   const s = code(src, "spaces");
   const cat = /\{ code: "hq\.individual\.config\.manage",\s+space: "platform"\s+\}/.test(s);
-  const route = /\{ prefix: "\/super-admin\/individual",\s+capability: "hq\.individual\.config\.manage" \}/.test(s);
+  // The policy page's own path, never the bare /super-admin/individual: that is the pilot-grant page
+  // (IND-ACCESS-001), and a prefix there would hand its route to this capability.
+  const route = /\{ prefix: "\/super-admin\/individual\/configuration",\s*capability: "hq\.individual\.config\.manage" \}/.test(s)
+    && !/\{ prefix: "\/super-admin\/individual",\s*capability: "hq\.individual\.config\.manage"/.test(s);
   const nav = code(src, "nav").includes(`href: "/super-admin/individual/configuration"`);
   return { ok: cat && route && nav, detail: `catalogue ${cat}, route map ${route}, nav ${nav}` };
 };
@@ -196,7 +199,8 @@ function main() {
   red("G1 on a read before the gate", checkRouteGate(plant("route", `const ctx = await hqApiGate(`, `await Promise.resolve(); const ctx = await hqApiGate(`)));
   red("G1 on an added GET", checkRouteGate(plant("route", "export async function POST", "export async function GET() { return null; }\nexport async function POST")));
   red("G2 on a page gated by a view right", checkPageGate(plant("page", `requireHqCapability("hq.individual.config.manage")`, `requireHqCapability("hq.platform.home.view")`)));
-  red("G3 on a missing route-map entry", checkCatalogue(plant("spaces", `  { prefix: "/super-admin/individual",            capability: "hq.individual.config.manage" },\n`, "")));
+  red("G3 on a missing route-map entry", checkCatalogue(plant("spaces", `  { prefix: "/super-admin/individual/configuration", capability: "hq.individual.config.manage" },\n`, "")));
+  red("G3 on the capability claiming the bare /super-admin/individual", checkCatalogue(plant("spaces", `{ prefix: "/super-admin/individual/configuration", capability:`, `{ prefix: "/super-admin/individual", capability: "hq.individual.config.manage" },\n  { prefix: "/super-admin/individual/configuration", capability:`)));
   red("G4 on a capability with no grant", checkMigration(plant("mig", "cross join (values ('hq.individual.config.manage')) as c(code)", "cross join (values ('hq.platform.home.view')) as c(code)")));
   red("G4 on a grant to a second position", checkMigration(plant("mig", "(values ('individual_product_administrator')) as p(code)", "(values ('individual_product_administrator'), ('practice_product_director')) as p(code)")));
   red("G4 on DDL in the data-only file", checkMigration(plant("mig", "notify pgrst, 'reload schema';", "alter table hq_capability add column x int;\nnotify pgrst, 'reload schema';")));

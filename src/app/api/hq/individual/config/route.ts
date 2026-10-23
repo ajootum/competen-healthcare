@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 // Administrator appointment holds. Not super-admin, not landlord authority: this door can write only the
 // paths in the policy catalogue, only at scope platform/individual, only within each fixed hard limit.
 //
-// ⚠ IT CANNOT REACH individual_app (the release gate is owner-only activation, CONFIG-002 item 3), a
+// ⚠ IT CANNOT REACH the Individual release gate (owner-only activation, CONFIG-002 item 3), a
 // workspace setting, or another scope. Rollback names its scope, so a version from any other scope is
 // "not found" here.
 

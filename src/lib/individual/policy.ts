@@ -25,7 +25,7 @@ import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind }
 // published (workspace_config_versions.created_at, the database clock). Scheduling a future date needs a
 // schema addition, proposed in the build record and not built.
 //
-// ⚠ NOT HERE, ON PURPOSE: the individual_app release gate (owner-only activation, CONFIG-002 item 3), and
+// ⚠ NOT HERE, ON PURPOSE: the Individual release gate (owner-only activation, CONFIG-002 item 3), and
 // the limits the schema enforces (the 10 MB upload cap, the MIME types, four answer options). A policy
 // can only ever be as wide as what the database already allows.
 
