@@ -133,7 +133,7 @@ export async function discardUpload(admin: Admin, path: string): Promise<void> {
 export async function createMaterial(admin: Admin, userId: string, input: {
   id: string; path: string; title: string; fileName: string; mime: MaterialMime; bytes: Uint8Array;
   pageCount: number | null; extractor: string; chunks: Chunk[];
-}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+}): Promise<{ ok: true; id: string } | { ok: false; error: string; detail?: string }> {
   const { id, path } = input;
   const { error: mErr } = await admin.from("individual_scholar_material").insert({
     id, user_id: userId, title: input.title, file_name: input.fileName.slice(0, 255), mime_type: input.mime,
@@ -144,7 +144,7 @@ export async function createMaterial(admin: Admin, userId: string, input: {
   });
   if (mErr) {
     await admin.storage.from(BUCKET).remove([path]);
-    return { ok: false, error: "material" };
+    return { ok: false, error: "material", detail: mErr.message };
   }
   for (let i = 0; i < input.chunks.length; i += 200) {
     const { error } = await admin.from("individual_scholar_chunk").insert(input.chunks.slice(i, i + 200).map(c => ({
@@ -153,7 +153,7 @@ export async function createMaterial(admin: Admin, userId: string, input: {
     if (error) {
       await admin.from("individual_scholar_material").delete().eq("id", id).eq("user_id", userId);
       await admin.storage.from(BUCKET).remove([path]);
-      return { ok: false, error: "chunks" };
+      return { ok: false, error: "chunks", detail: error.message };
     }
   }
   return { ok: true, id };

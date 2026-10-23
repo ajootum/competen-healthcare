@@ -122,7 +122,10 @@ async function extractPdf(buffer: Uint8Array): Promise<Extraction> {
   const { getDocumentProxy, extractText } = await import("unpdf");
   let doc;
   try {
-    doc = await getDocumentProxy(buffer);
+    // ⚠ A COPY, NEVER THE CALLER'S BYTES. pdf.js TRANSFERS the ArrayBuffer it is given, which detaches it:
+    // afterwards the caller's array has byteLength 0. The upload route stores byte_size and sha256 from
+    // those same bytes after extraction, so every PDF was refused by the size CHECK (found on staging).
+    doc = await getDocumentProxy(buffer.slice());
   } catch (e) {
     return { ok: false, reason: "unreadable", detail: e instanceof Error ? e.message : String(e) };
   }

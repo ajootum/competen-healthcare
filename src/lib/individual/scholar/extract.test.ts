@@ -3,31 +3,9 @@ import {
   chunkPages, citeChunk, extractMaterial, findPatientIdentifiers, isValidNhsNumber, normaliseText, sniffMime, titleFromFileName,
 } from "./extract";
 import { CHUNK_MAX, PDF_MIME, DOCX_MIME } from "./config";
+import { tinyPdf } from "./test-documents";
 
 // COMPETEN-IND-004 s1. Extraction, page-referenced chunking and the patient-identifier check.
-
-/** A minimal, valid PDF with one line of text per page -- built here so the test needs no fixture file. */
-export function tinyPdf(pages: string[]): Uint8Array {
-  const objs: string[] = [];
-  const add = (s: string) => { objs.push(s); return objs.length; };
-  const font = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
-  const pagesId = 2 + pages.length * 2;
-  const pageIds: number[] = [];
-  for (const t of pages) {
-    const stream = `BT /F1 12 Tf 72 720 Td (${t}) Tj ET`;
-    const c = add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
-    pageIds.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Contents ${c} 0 R /Resources << /Font << /F1 ${font} 0 R >> >> >>`));
-  }
-  add(`<< /Type /Pages /Kids [${pageIds.map(i => `${i} 0 R`).join(" ")}] /Count ${pageIds.length} >>`);
-  const cat = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
-  let out = "%PDF-1.4\n";
-  const offs: number[] = [];
-  objs.forEach((s, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${s}\nendobj\n`; });
-  const x = out.length;
-  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offs.map(n => `${String(n).padStart(10, "0")} 00000 n \n`).join("")}`;
-  out += `trailer\n<< /Size ${objs.length + 1} /Root ${cat} 0 R >>\nstartxref\n${x}\n%%EOF`;
-  return new TextEncoder().encode(out);
-}
 
 describe("PDF extraction", () => {
   it("reads text page by page, so every chunk can cite its page", async () => {
@@ -37,6 +15,14 @@ describe("PDF extraction", () => {
     expect(r.pageCount).toBe(2);
     const chunks = chunkPages(r.pages);
     expect(chunks.map(c => [c.pageFrom, c.content])).toEqual([[1, "Heart failure reduces cardiac output"], [2, "Sepsis six within one hour"]]);
+  });
+
+  it("⚠ leaves the caller's bytes intact (pdf.js would otherwise detach them, and the size and hash read zero)", async () => {
+    const bytes = tinyPdf(["Renal physiology"]);
+    const before = bytes.byteLength;
+    await extractMaterial(PDF_MIME, bytes);
+    expect(bytes.byteLength).toBe(before);
+    expect(String.fromCharCode(...bytes.slice(0, 5))).toBe("%PDF-");
   });
 
   it("refuses a PDF with no text layer rather than storing an empty material", async () => {

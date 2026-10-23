@@ -63,7 +63,12 @@ export async function POST(req: Request) {
     id: uploadId, path, title: titleFromFileName(fileName), fileName, mime, bytes,
     pageCount: extraction.pageCount, extractor: extraction.extractor, chunks,
   });
-  if (!created.ok) return NextResponse.json({ error: "Your material could not be saved. Nothing was kept. Try again shortly." }, { status: 500 });
+  if (!created.ok) {
+    // The database's reason goes to the server log and the audit row, never to the person.
+    console.error(`[scholar] material ${uploadId} not saved: ${created.error} ${created.detail ?? ""}`);
+    await audit(ctx, "individual_scholar_material_refused", "individual_scholar_material", null, { reason: `save:${created.error}`, mime, bytes: bytes.byteLength });
+    return NextResponse.json({ error: "Your material could not be saved. Nothing was kept. Try again shortly." }, { status: 500 });
+  }
 
   await audit(ctx, "individual_scholar_material_uploaded", "individual_scholar_material", created.id,
     { mime, bytes: bytes.byteLength, pages: extraction.pageCount, chunks: chunks.length, extractor: extraction.extractor });
