@@ -33,6 +33,7 @@ import {
 import { landlordCan, type LandlordCaller } from "../src/lib/platform/landlord";
 import { resolveHqPositions } from "../src/lib/hq/context";
 import { PLATFORM_ROLES, type PlatformRole } from "../src/lib/roles";
+import { PRODUCTION_READ_GO_ENV, productionReadDecision } from "./production-guard";
 
 loadEnvConfig(process.cwd());
 
@@ -513,6 +514,17 @@ ok("S3", classifyHqGate(naked).kind === "none",
 // ── 7. Live database ────────────────────────────────────────────────────────
 (async () => {
   console.log("\n7. LIVE DATABASE");
+  // ⚠ COMPETEN-OPS-001 R13: .env.local names PRODUCTION, and this section reads production profiles.
+  // It runs only against a non-production target, or with --production plus a named owner GO.
+  const liveRead = productionReadDecision(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  if (!liveRead.allowed) {
+    console.log(`  SKIP  section 7: ${liveRead.reason === "NOT_AUTHORISED"
+      ? `the target is PRODUCTION and no read is authorised (--production with ${PRODUCTION_READ_GO_ENV})`
+      : "the target project cannot be identified"} -- nothing was read`);
+    console.log(`\n${fail === 0 ? "ALL GREEN" : "RED"}  ${pass} passed, ${fail} failed, ${pending} pending (static sections only; live section skipped)`);
+    if (failures.length) { console.log("\nFAILURES:"); failures.forEach(f => console.log("  " + f)); }
+    process.exit(fail === 0 ? 0 : 1);
+  }
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
   // ⚠ NO head+count -- that combination returns NO ERROR for a missing table, which is how four tables
   // that do not exist were reported PRESENT while writing this.

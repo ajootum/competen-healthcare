@@ -19,7 +19,7 @@
 import { blockProductionTraffic } from "../e2e/helpers/synthetic-practitioner";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PRODUCTION_REF, dbRefOf, isProductionUrl, judgeDbTarget, judgeTarget, refOf } from "./production-guard";
+import { PRODUCTION_READ_GO_ENV, PRODUCTION_REF, dbRefOf, isProductionUrl, judgeDbTarget, judgeTarget, productionReadDecision, refOf } from "./production-guard";
 
 const STAGING = "https://ezhvpgtcqcdsgylrxgdb.supabase.co";
 const SYNTHETIC = "https://abcdefghijklmnopqrst.supabase.co";
@@ -121,6 +121,34 @@ const runner = readFileSync(join(import.meta.dirname, "apply-migrations.ts"), "u
 const runnerCode = runner.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 check("apply-migrations.ts calls judgeDbTarget on STAGING_DB_URL", /judgeDbTarget\(dbUrl\)/.test(runnerCode));
 check("apply-migrations.ts does not read NEXT_PUBLIC_SUPABASE_URL", !/NEXT_PUBLIC_SUPABASE_URL/.test(runnerCode));
+
+// ── Read-only production runs need an explicit flag AND a named GO (COMPETEN-OPS-001 R13) ────────
+console.log("\nPRODUCTION READS (productionReadDecision, used by privileged-harnesses and hq-guard-harness)");
+const goEnv = { [PRODUCTION_READ_GO_ENV]: "OWNER-GO-2026-10-23-X" };
+check("a non-production target needs no authorisation", productionReadDecision(STAGING, [], {}).allowed);
+for (const [label, argv, env] of [
+  ["no flag, no GO", [], {}],
+  ["--production without a GO", ["--production"], {}],
+  ["a GO without --production", [], goEnv],
+  ["--production with a blank GO", ["--production"], { [PRODUCTION_READ_GO_ENV]: "   " }],
+] as Array<[string, string[], Record<string, string>]>) {
+  const d = productionReadDecision(PRODUCTION, argv, env);
+  check(`production refused: ${label}`, !d.allowed && d.reason === "NOT_AUTHORISED", JSON.stringify(d));
+}
+const granted = productionReadDecision(PRODUCTION, ["--production"], goEnv);
+check("production allowed with --production AND a named GO, and the GO is reported",
+  granted.allowed && granted.production && granted.go === "OWNER-GO-2026-10-23-X");
+check("an unidentifiable target is refused", !productionReadDecision("https://example.com", ["--production"], goEnv).allowed);
+const strip = (p: string) => readFileSync(join(import.meta.dirname, p), "utf8").replace(/\r\n/g, "\n")
+  .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+check("privileged-harnesses.ts gates its default run on productionReadDecision(target)",
+  /productionReadDecision\(target\)/.test(strip("privileged-harnesses.ts")) && /process\.exit\(1\)/.test(strip("privileged-harnesses.ts")));
+const hqg = strip("hq-guard-harness.ts");
+check("hq-guard-harness.ts checks productionReadDecision before creating its live client (its section G WRITES)",
+  hqg.indexOf("productionReadDecision(") > -1 && hqg.indexOf("productionReadDecision(") < hqg.indexOf("createClient(process.env"));
+const hqn = strip("hq-nav-filter-harness.ts");
+check("hq-nav-filter-harness.ts checks productionReadDecision before creating its live client",
+  hqn.indexOf("productionReadDecision(") > -1 && hqn.indexOf("productionReadDecision(") < hqn.indexOf("createClient(url, key"));
 
 // ── The request-level block: the half that was twice inert ───────────────────────────────────────
 console.log("\nREQUEST-LEVEL BLOCK (the real handler, driven by a fake route)");

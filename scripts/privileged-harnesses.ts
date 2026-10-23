@@ -59,7 +59,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadEnvConfig } from "@next/env";
-import { assertSafeTarget, judgeTarget, refOf } from "./production-guard";
+import { PRODUCTION_READ_GO_ENV, assertSafeTarget, judgeTarget, productionReadDecision, refOf } from "./production-guard";
 
 const ROOT = join(import.meta.dirname, "..");
 loadEnvConfig(ROOT);
@@ -505,6 +505,22 @@ console.log(`  security ${SECURITY.length} · triaged ${TRIAGED.length} · stagi
 
 let broken = false;
 const fail = (msg: string) => { broken = true; console.log(msg); };
+
+// ── ⚠ THE PRODUCTION GATE (COMPETEN-OPS-001 R13). Without --staging this runner reads whatever .env.local
+// names, which is PRODUCTION. Reading production is an owner decision, so the default run refuses unless
+// `--production` AND COMPETEN_PRODUCTION_READ_GO (the owner GO it runs under) are both given. --list and
+// --untriaged connect to nothing and stay open.
+const reportOnly = process.argv.includes("--list") || process.argv.includes("--untriaged");
+if (!stagingMode && !reportOnly) {
+  const read = productionReadDecision(target);
+  if (!read.allowed) {
+    console.log(read.reason === "NOT_AUTHORISED"
+      ? `⛔ REFUSING: this run would read PRODUCTION. Use --staging, or pass --production with ${PRODUCTION_READ_GO_ENV}=<owner GO reference>.\n`
+      : "⛔ REFUSING: the target project cannot be identified, so this run cannot prove it is not production.\n");
+    process.exit(1);
+  }
+  if (read.production) console.log(`  production read authorised by: ${read.go}\n`);
+}
 
 // ── ⚠ THE STAGING GATE. Nothing that writes runs until this passes ───────────────────────────────
 if (stagingMode) {

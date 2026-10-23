@@ -27,6 +27,7 @@ import { hqSearchCatalogue, matchHqDestinations } from "../src/lib/hq/search-cat
 import { capabilityForRoute, HQ_HOME_CAPABILITY, HQ_CAPABILITY_CODES } from "../src/lib/hq/spaces";
 import { GENERAL_NAV, ALL_NAV_TABLES } from "../src/app/super-admin/_components/nav-tables";
 import { resolveHqPositions } from "../src/lib/hq/context";
+import { PRODUCTION_READ_GO_ENV, productionReadDecision } from "./production-guard";
 
 loadEnvConfig(process.cwd());
 
@@ -189,8 +190,14 @@ const NOBODY = { isOwner: false, capabilities: [] as string[] };
   console.log("\nD. Live data");
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // ⚠ COMPETEN-OPS-001 R13: .env.local names PRODUCTION, and section D reads production profiles.
+  const liveRead = productionReadDecision(url);
   if (!url || !key) {
     skip("D*", "no Supabase service credentials in the environment");
+  } else if (!liveRead.allowed) {
+    skip("D*", liveRead.reason === "NOT_AUTHORISED"
+      ? `the target is PRODUCTION and no read is authorised (--production with ${PRODUCTION_READ_GO_ENV}); nothing was read`
+      : "the target project cannot be identified; nothing was read");
   } else {
     const admin = createClient(url, key, { auth: { persistSession: false } }) as any;
 
