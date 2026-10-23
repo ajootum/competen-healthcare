@@ -5,7 +5,7 @@
 | **Date** | 2026-10-22 |
 | **Status** | Built on branch `ind-007/professional-mvp`, cut from `ind-003/individual-foundation` @ `d6252ad6` and merged with it again @ `dde82336` (release gate, experience-module mechanism, `main` @ `6fa4cd52`). Pushed. **Not merged, not deployed.** Ships dark: every Professional page and API is behind the release gate `individual_app` (default OFF). |
 | **Authority** | Owner GO for COMPETEN-IND-007. ADR-016 and its owner rulings D1–D10. COMPETEN-IND-002 §4. |
-| **Migration** | `373-individual-professional-record.sql`. Drafted, house rules ALL CLEAR. **Not committed and not applied anywhere** (CLAUDE.md: committed only after the owner confirms it is applied). Staging apply is waiting on owner authorisation. |
+| **Migration** | `373-individual-professional-record.sql` (sha256 `4b53519aee7faaef7f2d6aace2f8f24574262677474867f509b21a49e0c75657`). House rules ALL CLEAR. **Applied to STAGING by the owner, twice (2026-10-23), verified, and committed to this branch** under the CLAUDE.md migration-governance amendment (`main` @ `5a9a07cc`). **Not applied to production**; that needs a separate owner GO. See §5a. |
 
 ## 1. The first working journey
 
@@ -73,7 +73,36 @@ The Passport (`passport.ts`, the Passport page) and `assistant.ts` changes are a
 
 **Still to run once 373 is on staging** (per the IND-003 build record §5 template): `apply-migrations.ts --only 373` twice; `privileged-harnesses.ts --staging --only individual-professional-acceptance` (groups A–M); the full journey in the browser with the pilot identity, at desktop and at 375px, with screenshots to `docs/evidence/COMPETEN-IND-007/`; `/verify` for a Full and a Summary link.
 
-**Schema note.** 373 uses `on delete set null (need_id)` (a column list), which needs PostgreSQL 15 or later. The apply will fail loudly, not partially, on anything older. The version on staging and production was not read from this session.
+**Schema note.** 373 uses `on delete set null (need_id)`, which needs PostgreSQL 15 or later. Staging runs 17.6. Production has not been checked from this session.
+
+## 5a. Migration 373 on staging (2026-10-23)
+
+**Who applied it.** The owner ran `npx tsx scripts/apply-migrations.ts --only 373` twice from this worktree. Each run printed `production is rnnqhlrcgvsauigxwszl – guard passed`, `373-individual-professional-record.sql ... ok` and `All 1 migration(s) applied.`. This session's own attempt was refused by its permission check and was not retried. The second run completing without error is the idempotency proof: every statement is `if not exists`, drop-then-add or `on conflict do nothing`.
+
+**Checked with `scripts/ind007-staging-schema-check.ts`.** The script is read-only: it runs inside a read-only transaction, refuses production and refuses the transaction pooler.
+
+| | Before (pre-check) | After the owner's two runs |
+|---|---|---|
+| Server | PostgreSQL 17.6 | same |
+| Dependencies | `profiles`, `frameworks`, `framework_competencies`, `passport_share_tokens`, `storage.buckets`; 370's tables; 371's `attribution_scope` | same; 372 also present (IND-004 applied it in between) |
+| 373 tables | none | all six |
+| Private bucket | absent | `individual-professional-evidence`: private, 10 MB, PDF/PNG/JPEG/WebP |
+| Name collisions with other relations | none | none |
+| Pre-existing rows | `profiles` 20, `frameworks` 14, `framework_competencies` 277, `passport_share_tokens` 0, `storage.buckets` 3 | `profiles` 20, `frameworks` 14, `framework_competencies` 277, `passport_share_tokens` 0, `storage.buckets` 5 (372's and 373's buckets). No existing row changed. |
+| 373 schema | (empty) | 76 columns, 43 constraints, 15 indexes, 6 policies, RLS on 6/6. Fingerprint `bb0de985d084d6079e9e740b3d2e6af5efda05c99df67f9fa333e8b9189b7d9f`, unchanged across repeated reads. |
+
+**Detail (`--detail`).**
+- Each table has exactly one policy, `<table>_read_own FOR SELECT USING (auth.uid() = user_id)`, and no write policy.
+- `evidence_class` is `GENERATED ALWAYS AS (CASE WHEN document_path IS NULL THEN 'self_declared' ELSE 'source_linked' END)` on both CPD and evidence.
+- There are three composite foreign keys, `(…, user_id)` with `ON DELETE SET NULL (col)`.
+- No column names *verif*, and no hospital, organisation, tenant or workspace column exists.
+
+**Staging rows this session created.** All of them are test identities.
+- `harness-ind007-pilot@competen.test` and `harness-ind007-grantor@competen.test`: `auth.users` and `profiles` rows, created 2026-10-22.
+- The pilot's `individual_membership` and one Professional `individual_entitlement` row.
+- The pilot's test-terms acceptance, written to those same two rows.
+
+No pre-existing row was altered or deleted.
 
 ## 6. Next
 

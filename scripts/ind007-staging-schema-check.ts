@@ -99,6 +99,13 @@ async function main() {
     out.objectCounts = { columns: fp.columns.length, constraints: fp.constraints.length, indexes: fp.indexes.length, policies: fp.policies.length,
       rlsOn: fp.rls.filter(r => r.relrowsecurity).length };
 
+    if (process.argv.includes("--detail")) {
+      out.policies = fp.policies;
+      out.generated = fp.columns.filter(r => r.is_generated === "ALWAYS");
+      out.compositeForeignKeys = fp.constraints.filter(r => /foreign key \(\w+, user_id\)/i.test(r.def));
+      out.verifiedColumns = fp.columns.filter(r => /verif/i.test(r.column_name));
+      out.scopeColumns = fp.columns.filter(r => /^(hospital_id|organisation_id|tenant_id|workspace_id)$/.test(r.column_name));
+    }
     console.log(JSON.stringify(out, null, 2));
   } finally {
     await c.query("rollback");
