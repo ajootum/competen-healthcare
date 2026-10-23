@@ -130,3 +130,124 @@ INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_REGISTERED_NAME = <only once the owner confirm
 - The non-material-change policy (R5).
 - Timing of the consent-ledger migration (R1), which is behind the production schema freeze.
 - Whether Scholar has its own contact mailbox, and translation requirements.
+
+---
+
+# Part B — Pilot readiness (added 2026-10-23, owner GO "INDIVIDUAL RELEASE PREPARATION", item 4)
+
+> **DRAFT — NOT LEGALLY APPROVED.** These are templates, checklists and procedures. They contain no legal
+> text and no legal names. A blank cell is a blank to be filled by the owner or counsel, never an omission
+> to be guessed.
+
+## 9. Document register template
+
+Create this as `docs/legal/REGISTER.md` at the first legal sign-off. One row per document version. Rows are append-only: a superseded version keeps its row and its URL.
+
+| Entity (registered name) | Document | Version | Effective date | Permanent URL | SHA-256 of published text | Legal sign-off (who, date) | Owner approval (who, date) | Status | Supersedes |
+|---|---|---|---|---|---|---|---|---|---|
+| *Competen Holdings, as registered: to confirm* | Terms of Use | | | `/legal/holdings/terms/<version>` | | | | draft | — |
+| *Competen Holdings, as registered: to confirm* | Privacy Notice | | | `/legal/holdings/privacy/<version>` | | | | draft | — |
+| *Scholar operator, registered name PENDING* | Terms of Use | | | `/legal/scholar/terms/<version>` | | | | draft | — |
+| *Scholar operator, registered name PENDING* | Privacy Notice | | | `/legal/scholar/privacy/<version>` | | | | draft | — |
+
+**Status values:** `draft` → `legal-review` → `owner-approved` → `published` → `superseded` (§3). Only a `published` row may be referenced by configuration (§10).
+
+## 10. Configuration per environment
+
+These are read by `src/lib/individual/legal.ts`. Unset means the document is unpublished, and the experience it governs stays closed.
+
+| Variable | Development (`.env.local`) | Staging (dev launcher / staging deploy) | Vercel Preview | Production |
+|---|---|---|---|---|
+| `INDIVIDUAL_LEGAL_COMPETEN_HOLDINGS_TERMS_VERSION` | unset, or `dev-test-…` | `staging-test-…` only | unset | the **published** identifier, after register entry and staging verification |
+| `INDIVIDUAL_LEGAL_COMPETEN_HOLDINGS_TERMS_URL` | unset | unset | unset | the permanent `/legal/holdings/terms/<version>` URL |
+| `INDIVIDUAL_LEGAL_COMPETEN_HOLDINGS_PRIVACY_VERSION` | as above | as above | unset | published identifier |
+| `INDIVIDUAL_LEGAL_COMPETEN_HOLDINGS_PRIVACY_URL` | unset | unset | unset | permanent URL |
+| `INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_TERMS_VERSION` | as above | as above | unset | published identifier |
+| `INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_TERMS_URL` | unset | unset | unset | permanent URL |
+| `INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_PRIVACY_VERSION` | as above | as above | unset | published identifier |
+| `INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_PRIVACY_URL` | unset | unset | unset | permanent URL |
+| `INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_REGISTERED_NAME` | unset | unset | unset | **only after the owner confirms the name** |
+| `INDIVIDUAL_LEGAL_COMPETEN_HOLDINGS_REGISTERED_NAME` | unset | unset | unset | only if it differs from the "Competen Holdings" label |
+
+**Rules:**
+- No `staging-test-` or `dev-test-` identifier is ever set in Production.
+- Changing a production version forces re-acceptance (§6).
+- **The release flag is not an environment variable.** `practice_platform_flags.individual_app` is a database row and stays absent until release checklist item 12.
+
+## 11. D2 confirmation checklist for the owner's counsel
+
+These are questions only. This document draws no conclusions. Record each answer and the date in the register's notes.
+
+1. **Entities.**
+   - What are the registered legal names and registration numbers of the Holdings company and the Scholar operating company?
+   - In which jurisdictions are they registered?
+2. **Shared foundation.** For the identity, Competen Passport, profile and history, and personal AI that both experiences share:
+   - Which entity is the controller?
+   - Is the arrangement sole or joint control, or controller and processor?
+   - What written agreement records it?
+3. **Scholar service.** For Scholar's own processing (study materials, explanations, questions, attempts, review cards):
+   - Which entity is the controller?
+   - What is Holdings' role, if any?
+4. **Professional service.** Is Holdings the sole controller of the Professional records (registration, plan, CPD, evidence, shares)?
+5. **Intra-group sharing.** What intra-group data-sharing or processing agreement is required between Holdings and the Scholar operator, and what must it contain?
+6. **Lawful basis.** For each processing purpose:
+   - What is the lawful basis: contract, consent or legitimate interests?
+   - Does any purpose need explicit consent? In particular: AI processing of uploaded material, and sharing a Passport link with a third party.
+7. **AI processing.** Personal data is sent to a third-party AI provider through `generate()`.
+   - What disclosures, international-transfer safeguards and processor terms are required?
+   - Is the current "not saved, general guidance" notice sufficient?
+8. **Uploaded content.** What must users be told, and what must they warrant, about patient-identifiable information in material they upload?
+9. **Retention.** For each record class:
+   - What retention period applies?
+   - What happens on account closure, experience end or membership revocation?
+   - Must `audit_log` rows be kept after erasure?
+10. **Data-subject rights.** What response times and procedures are required for access, export, correction and erasure? (§13 is the interim procedure.)
+11. **Age.** Is "18 and over, confirmed by HQ at grant" (D8) adequate for the pilot jurisdictions, and what evidence of age is acceptable?
+12. **Jurisdictions.**
+    - Which data-protection laws apply to the pilot users, starting with Uganda's Data Protection and Privacy Act 2019?
+    - Is registration with a regulator required before processing begins?
+
+When answered, the owner sets `DATA_ROLES.confirmed = true` in `src/lib/individual/legal.ts`. That is a code change with its own PR.
+
+## 12. Individual Product Administrator appointment procedure
+
+This uses only the existing HQ governance surface. There is no new authority and no grant engine (D9).
+
+1. **Precondition:** migration 370 is applied to production (OPS-002 §3). Until then the position `individual_product_administrator` and its capability `hq.individual.pilot.grant` don't exist there.
+2. **Who appoints:** only a platform owner. `POST /api/hq/appointments` refuses everyone else (`OWNER_ONLY`) and refuses appointing yourself.
+3. **How:**
+   1. Go to Competen HQ → Users → Appointments (`/super-admin/users/appointments`).
+   2. Choose the person and the position **Individual Product Administrator**.
+   3. Optionally set a term end.
+4. **What the appointee holds:** `hq.individual.pilot.grant` (grant and end Scholar and Professional access) and `hq.platform.home.view` (the HQ landing page). Nothing else.
+5. **Audit:**
+   - The appointment writes an `audit_log` row: actor, position, person.
+   - Ending it uses PATCH with an ending status. There is no delete, so the appointment row stays as the record.
+6. **Ending:**
+   - Use the same board.
+   - Ending the appointment removes the capability immediately, because capabilities resolve from active appointments.
+7. **Separation:** the administrator can't grant Individual access to themselves (`SELF_GRANT`).
+
+## 13. Pilot entitlement and consent procedure
+
+**Preconditions:**
+- Release checklist items 1–8 are met (IND-003 build record).
+- The gate is ON (item 12).
+- The legal variables (§10) are set in production.
+
+| Step | Who | How | Record |
+|---|---|---|---|
+| 1. Invitation | Owner / administrator | The person has, or creates, an ordinary Competen account. **No Individual signup surface exists.** | — |
+| 2. Age (Scholar only) | Administrator | Confirm the person is 18 or over, on the evidence counsel accepts (§11 Q11). | `adultConfirmed: true` in the grant. The row records `adult_confirmed_at` and `adult_confirmed_by`. The schema refuses a Scholar row without them. |
+| 3. Grant | Administrator | `POST /api/hq/individual/grants` `{ targetUserId, experiences, adultConfirmed, note }` | Membership (`source = hq_pilot_grant`), one entitlement per experience (`source = pilot`, `operating_entity`), and an `audit_log` row `individual_pilot_grant` |
+| 4. Terms acceptance | The person | At first use, the experience shows the published documents with their versions and links. The person ticks and accepts. | Foundation acceptance on the membership, operator acceptance on the entitlement (versions plus time), and `audit_log` `individual_terms_accepted`. A new version forces re-acceptance. |
+| 5. AI and uploads consent | The person | Scholar's consent records for AI processing of uploads (migration 372). | `individual_scholar_consent` rows |
+| 6. End one experience | Administrator | `POST /api/hq/individual/grants/end` `{ targetUserId, experience }` | The live rows are cancelled, the rows themselves kept (history), and `audit_log` `individual_experience_ended` is written. The other experience is untouched (D4). |
+| 7. Suspend or revoke membership | Owner | **Gap: no route exists.** Interim: an owner-run SQL update of `individual_membership.status` to `suspended` or `revoked`, setting `suspended_at` or `revoked_at` and `revoked_by`. The schema requires `revoked_at` when revoked. | Record the act in `audit_log` by hand until a route exists |
+| 8. Data export on request | Owner | **Gap: no self-service export.** Interim: owner-run SELECT of the subject's rows in `individual_membership`, `individual_entitlement`, `individual_scholar_*` and `individual_professional_*`, plus their objects in the two private buckets. Deliver through a secure channel. | Note the request and its fulfilment in `audit_log` |
+| 9. Erasure on exit | Owner | **Gap: no self-service erasure.** Interim, keeping the person's Competen identity and any other product:<br>1. revoke Passport share links minted from Individual;<br>2. delete the subject's objects from both buckets;<br>3. delete the subject's rows from `individual_scholar_*` and `individual_professional_*`, then `individual_entitlement` and `individual_membership`.<br>Whether audit rows are kept is §11 Q9. Deleting the auth user would erase the identity across every product, so it is never done for an Individual-only exit. | `audit_log` row recording what was erased and when |
+
+**Gaps to build before a wider pilot:** steps 7–9 need routes. These are requirements only; they aren't scheduled in this document.
+- a membership suspend and revoke route behind `hq.individual.pilot.grant`;
+- a self-service export;
+- a governed erasure.
