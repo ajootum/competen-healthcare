@@ -105,7 +105,8 @@ notify pgrst, 'reload schema';
 - **Auth-boundary harness:** green. The accept route enters `requireIndividualSession`, a new pre-membership boundary in `guard.ts`: the release gate, then the session, and it grants nothing. It is registered in `scripts/auth-boundary-harness.ts` with its plane stated. Before it existed, the route entered no boundary and the harness went red, which is how this was caught.
 - **Vitest:** 551/551 across `src/lib` after merging main `bf549efc`, including `invitations.test.ts`.
 - **Typecheck and lint:** clean.
-- **Staging HTTP:** `individual-access-harness` 66/66. Groups H, S1–S9 and I1–I20, with the dev server started with the test delivery mode.
+- **Staging HTTP:** `individual-access-harness` 68/68 after merging main `d6234288`. Groups H, S1–S9 and I1–I22, with the dev server started with the test delivery mode.
+- **`individual-config-harness` (IND-007):** its G5 "no third HQ door" control now knows the `invitations/` routes, which the foundation harness pins. A planted unknown route still turns G5 red.
   - The real invite link is followed to `/reset-password`, and the Individual destination is preserved.
   - Fixtures were deleted afterwards (0 invitation rows remain).
 - **Screenshots:** `docs/evidence/COMPETEN-IND-ACCESS-001/invitations/`
@@ -118,8 +119,28 @@ notify pgrst, 'reload schema';
 ## 5. Decisions recorded (defaults until the owner says otherwise)
 1. **Revocation never deletes the account the invitation created.** The revocation record is kept. Deleting unused accounts is a separate owner decision.
 2. **The test "return the link" mode** runs only under a local dev server against a non-production project (`judgeTarget`). It is pinned by harness check 12m with a planted red, and it never ships enabled.
-3. **An identity created by an invitation and never signed into may be re-invited**, reusing that identity; Supabase sends a recovery link. Once the person has signed in, it is an existing account, and a re-invite goes to the existing grant path.
+3. **An identity created by an invitation and never signed into may be re-invited**, reusing that identity; Supabase sends a recovery link.
+   - **It must still hold nothing** (owner review item 5, `src/lib/identity/standing.ts`): no platform, enterprise, practice or Individual membership, no HQ appointment, and no role. Otherwise the re-invite is refused as `ACCOUNT_EXISTS`, and the administrator grants Individual to it explicitly.
+   - **A failed read counts as standing,** so it refuses.
+   - **Once the person has signed in,** it is an existing account in all cases.
+   - **Proven on staging:**
+     - I21: a clean identity is reused;
+     - I22: the same identity, given a platform membership, is refused;
+     - planting removal of the check turned I22 red.
 
-## 6. Known limits
-- **Email delivery on staging and production:** the real path is Supabase's own mailer for the project, unchanged by this work. ADR-010 records that custom SMTP is not yet proven, so confirm delivery before the first real invitation.
-- **Supabase's redirect allowlist must allow `/reset-password` with a query string.** It does on staging (I8). Check production's allowlist before activation.
+## 6. Production prerequisites (owner review item 7)
+Nothing here could be verified against production from a development worktree: the production key is in the owner's vault and needs a named GO. These are requirements for the owner to confirm.
+
+1. **Redirect allowlist** (Supabase, production project, Authentication → URL Configuration).
+   - **What must be allowed:** the invite `redirectTo` is `<origin>/reset-password?next=%2Findividual%2Fhome`, where `<origin>` is the host the administrator used for HQ (taken from the request).
+   - **How to allow it:** list every production host HQ is reached on, as `https://<host>/reset-password**` (the `**` wildcard covers the query string).
+   - **If it isn't allowed:** Supabase falls back to the Site URL. The person then lands somewhere that is not the password page, and can still recover through "Forgot password", but the flow breaks.
+   - **On staging:** I8 proves the allowlist keeps the path and the `next` query.
+2. **Email delivery.**
+   - **What sends it:** `inviteUserByEmail` sends through the project's own Auth mailer, unchanged by this work.
+   - **What is unproven:** ADR-010 records that custom SMTP is not proven. Supabase's built-in mailer is rate-limited and restricted, and is not for production.
+   - **Why staging proves nothing about it:** staging runs used the development-only link mode, so **no real invitation email was sent anywhere**.
+   - **Before the first real invitation:** configure and prove production SMTP (ADR-010 steps 1–3), send one invitation to a mailbox the owner controls, and confirm the link opens `/reset-password` on the production host.
+3. **The invite email template.** Supabase's "Invite user" template is the one used. Its wording and branding are owner configuration in the Supabase dashboard; nothing in this PR changes it.
+4. **Migration 378 production GO**, with the OPS-001 safeguards: a recovery reference, the rollback SQL in §3, and a post-application catalog check matching §3.
+5. **The release gate stays OFF.** Without `individual_app`, invitations refuse with 404, as they do today.

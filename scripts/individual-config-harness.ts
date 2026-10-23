@@ -152,12 +152,14 @@ const checkReader = (src: Src): R => {
 };
 
 // ── G5. no third HQ Individual door ──
-// individual-foundation-harness pins the grants/ routes, G1 pins config/. A route anywhere else under
+// individual-foundation-harness pins the grants/ and invitations/ routes, G1 pins config/. A route anywhere else under
 // /api/hq/individual would be pinned by neither, so it must not exist without one of them learning of it.
 const listRoutes = (dir: string): string[] => !existsSync(dir) ? [] : readdirSync(dir, { withFileTypes: true })
   .flatMap(e => e.isDirectory() ? listRoutes(join(dir, e.name)) : e.name === "route.ts" ? [join(dir, e.name).replace(/\\/g, "/")] : []);
 const checkKnownDoors = (routes: string[]): R => {
-  const extra = routes.filter(f => !f.startsWith("src/app/api/hq/individual/grants/") && f !== FILES.route);
+  // invitations/ (COMPETEN-IND-ACCESS-001, migration 378) is pinned by individual-foundation-harness 5b, 5c
+  // and 10c beside grants/: the same pilot-grant capability, the same release gate.
+  const extra = routes.filter(f => !/^src\/app\/api\/hq\/individual\/(grants|invitations)\//.test(f) && f !== FILES.route);
   return { ok: routes.includes(FILES.route) && extra.length === 0, detail: `unpinned: ${extra.join(", ")}` };
 };
 

@@ -88,6 +88,7 @@ const INVITEES = {
   both: "harness-access001-invitee@competen.test",
   revoked: "harness-access001-invitee-revoked@competen.test",
   expired: "harness-access001-invitee-expired@competen.test",
+  reuse: "harness-access001-invitee-reuse@competen.test",
 };
 
 async function cleanup() {
@@ -470,6 +471,20 @@ async function invitations(hq: Jar, nonHq: Jar) {
   const dupRow = await admin.from("individual_invitation").insert({ invited_email: INVITEES.expired, invite_professional: true, expires_at: new Date(Date.now() + 86_400_000).toISOString(), auth_user_id: xId, created_by: ids.grantor });
   ok("I20. the schema refuses rewriting an invitation, deleting one, and a second pending invitation for one email",
     !!tamper.error && !!del.error && String(dupRow.error?.code) === "23505", `${tamper.error?.message} | ${del.error?.message} | ${dupRow.error?.code}`);
+
+  // I21-I22. Re-invitation cannot inherit unrelated authority (owner review item 5). An identity an earlier
+  // invitation created, never signed into, is reused only while it holds NOTHING.
+  const ri1 = await invite({ email: INVITEES.reuse, experiences: ["professional"] });
+  await send("POST", "/api/hq/individual/invitations/revoke", { invitationId: ri1.json.invitationId, reason: "Harness: re-invitation test" }, hq);
+  const ri2 = await invite({ email: INVITEES.reuse, experiences: ["professional"] });
+  ok("I21. a clean, never-signed-in identity from a revoked invitation is reused, not duplicated",
+    ri1.status === 201 && ri2.status === 201 && ri2.json.reusedIdentity === true && ri2.json.authUserId === ri1.json.authUserId, `${ri1.status}/${ri2.status} ${JSON.stringify(ri2.json).slice(0, 120)}`);
+  await send("POST", "/api/hq/individual/invitations/revoke", { invitationId: ri2.json.invitationId, reason: "Harness: re-invitation test" }, hq);
+  // Somebody has since given that identity standing (a platform membership, as a fixture).
+  await admin.from("platform_membership").insert({ user_id: ri1.json.authUserId, status: "active", source: "explicit_grant", note: "harness-access001 standing fixture" });
+  const ri3 = await invite({ email: INVITEES.reuse, experiences: ["professional"] });
+  ok("I22. once that identity holds any standing, re-inviting is refused as an existing account -- no fresh sign-in link to an inbox with authority",
+    ri3.status === 409 && ri3.json.error?.code === "ACCOUNT_EXISTS", `${ri3.status} ${JSON.stringify(ri3.json).slice(0, 120)}`);
 }
 
 main()

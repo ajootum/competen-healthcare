@@ -5,6 +5,7 @@ import { isNotProvisioned } from "./access";
 import { grantIndividualAccess, parseEndDate, normaliseLookupEmail, type GrantOutcome } from "./grants";
 import { INDIVIDUAL_HOME } from "./entry";
 import { individualIdentityProfile } from "../platform-membership";
+import { identityHoldsNoStanding } from "../identity/standing";
 
 // ── INVITATIONS FOR PEOPLE WITHOUT A COMPETEN ACCOUNT ── COMPETEN-IND-ACCESS-001, migration 378 ────────────
 //
@@ -161,7 +162,11 @@ export async function createIndividualInvitation(
       admin.auth.admin.getUserById(id),
     ]);
     const neverSignedIn = !au?.error && au?.data?.user && !au.data.user.last_sign_in_at;
-    if (!(prior ?? []).length || !neverSignedIn)
+    // Owner review item 5: and it must still hold NOTHING. If anybody has since given that identity any
+    // standing -- a membership of any product, an HQ appointment, a role -- a fresh sign-in link would hand
+    // the inbox authority this invitation never offered. Then it is an existing account, and the
+    // administrator grants Individual to it explicitly.
+    if (!(prior ?? []).length || !neverSignedIn || !(await identityHoldsNoStanding(admin, id)))
       return { ok: false, status: 409, code: "ACCOUNT_EXISTS", message: "This email already has a Competen account. Grant access to that account instead.", personId: id };
     reuse = id;
   }
