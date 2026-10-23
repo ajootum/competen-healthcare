@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { referenceNames } from "../professional/frameworks";
-import { frameworkCatalogue, type CatalogueCompetency, type ProgrammeConfig } from "./catalogue";
+import { scholarCatalogue, type CatalogueCompetency, type ProgrammeConfig } from "./catalogue";
 import { learnerProgramme } from "./store";
 
 // ── WHAT THE PAGES NEED TO SHOW COMPETENCIES ── COMPETEN-SCHOLAR-01 ──────────────────────────────────────
@@ -21,7 +21,7 @@ export async function loadLearnerCatalogue(admin: any, userId: string): Promise<
   const p = await learnerProgramme(admin, userId);
   if (!p.ok) return { provisioned: !p.notProvisioned, programme: null, competencies: p.notProvisioned ? [] : null };
   if (!p.data) return { provisioned: true, programme: null, competencies: [] };
-  const c = await frameworkCatalogue(admin).forProgramme(p.data);
+  const c = await scholarCatalogue(admin).forProgramme(p.data);
   return { provisioned: true, programme: p.data, competencies: c.ok ? c.data : null };
 }
 

@@ -4,7 +4,7 @@ export const maxDuration = 60;
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { chunkMappings, getPassage, insertQuestions } from "@/lib/individual/scholar/store";
-import { primaryCompetency } from "@/lib/individual/scholar/mapping";
+import { leadingCompetency } from "@/lib/competency/mapping";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit } from "@/lib/individual/scholar/http";
 import { runQuestions, type QuestionKind } from "@/lib/individual/scholar/generation";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   }
   // COMPETEN-SCHOLAR-01 S4: the competency the questions practise is the section's leading link (accepted
   // first, never a rejected one). None, or 388 absent: the questions are stored exactly as before.
-  const competencyId = primaryCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
+  const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
   const saved = await insertQuestions(ctx.admin, ctx.userId, {
     passage, kind, drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId,
   });

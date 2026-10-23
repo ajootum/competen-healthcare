@@ -7,7 +7,7 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { chunkMappings, getPassage, insertQuestions } from "@/lib/individual/scholar/store";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit } from "@/lib/individual/scholar/http";
 import { runCase } from "@/lib/individual/scholar/generation";
-import { primaryCompetency } from "@/lib/individual/scholar/mapping";
+import { leadingCompetency } from "@/lib/competency/mapping";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_steps", null, { chunk_id: passage.chunkId, outcome: `error:${r.error}` });
     return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
   }
-  const competencyId = primaryCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
+  const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
   const caseId = r.steps.length ? randomUUID() : null;
   const saved = await insertQuestions(ctx.admin, ctx.userId, {
     passage, kind: "case", drafts: r.steps, model: r.model, provider: r.provider, promptVersion: r.promptVersion,

@@ -84,6 +84,27 @@ Production application needs a separate owner GO under COMPETEN-OPS-001 (recover
    - Unmeasured is shown as unmeasured, never as 0%.
    - Rejected links are not counted.
 
+## 3a. Built on S1 (IND-007, PR #39, migration 384)
+
+This branch merges `origin/s1/competency-foundation` (d32eaac5), so it must merge **after PR #39**.
+
+- **One gate, and it is HQ's.** `scholarCatalogue()` reads S1's `loadCatalogueFor(admin, "scholar")`. That is the HQ allowlist for Scholar (Individual policy `scholar_catalogues`, empty by default), already restricted to shared, active and published catalogues.
+  - The student's programme then **narrows** it, and never widens it.
+  - The interim adapter over the framework tables was removed, so no Scholar file reads `frameworks`, `framework_domains` or `framework_competencies` (harness K2).
+  - A programme row that names a catalogue HQ has not allowed offers nothing from it.
+- **S1 owns the layer and the profession.** A catalogue's layer is 384's `frameworks.competency_layer`. The programme's layer only fills a catalogue HQ has not classified.
+
+### 389: align the Scholar layer checks with S1
+
+| # | File | Tier | sha256 | State |
+|---|---|---|---|---|
+| 389 | `389-individual-scholar-layers-align-s1.sql` | Low | `c8b98bc9bac657f803dc8575bd7afcc8dd0597075060177507d2eafcaa679780` | Authored. Sent for the staging apply (×2). |
+| — | `docs/evidence/COMPETEN-SCHOLAR-01/ROLLBACK-389.sql` | — | `e3e37bd8ce3c4de95714461c6737778708636b5b51436e325b325906363cbc6c` | — |
+
+- **What it does:** 384 has five layers (foundational, profession, advanced, specialty, context), while 387/388 allowed three. 389 replaces the two layer CHECKs with exactly the 384 list, and nothing else changes (harness K13 counts the statements).
+- **Dependencies:** it depends on 387 and 388, and repeats 384's values without depending on 384.
+- **Application order for the whole set:** 384 (S1), 387, 388, 389.
+
 ## 4. Verification (this branch)
 
 - Vitest: `src/lib/individual/scholar` 6 files, 78 tests (the new file, `competency.test.ts`, has 16).

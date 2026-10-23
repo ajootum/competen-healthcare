@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { addMapping, isUuid, learnerProgramme } from "@/lib/individual/scholar/store";
 import { audit } from "@/lib/individual/scholar/http";
-import { frameworkCatalogue } from "@/lib/individual/scholar/catalogue";
+import { scholarCatalogue } from "@/lib/individual/scholar/catalogue";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 // POST /api/individual/scholar/mappings -- COMPETEN-SCHOLAR-01 S2, the person's own correction.
 //
 // Body { chunkId, competencyId }. Links a section of the person's own notes to a competency the AI did not
-// propose. The competency must be one their programme offers through the catalogue (shared, published,
-// active) -- checked HERE against the catalogue, never trusted from the body. Stored as source "student"
+// propose. The competency must be one the catalogue offers their programme (S1: the HQ allowlist for Scholar,
+// shared, published, active) -- checked HERE, never trusted from the body. Stored as source "student"
 // with an "accepted" decision row. No AI call.
 
 export async function POST(req: Request) {
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const programme = await learnerProgramme(ctx.admin, ctx.userId);
   if (!programme.ok) return NextResponse.json({ error: "Your programme could not be read just now." }, { status: 503 });
   if (!programme.data) return NextResponse.json({ error: "Choose your programme first." }, { status: 409 });
-  const cat = await frameworkCatalogue(ctx.admin).forProgramme(programme.data);
+  const cat = await scholarCatalogue(ctx.admin).forProgramme(programme.data);
   if (!cat.ok) return NextResponse.json({ error: "Your programme's competencies could not be read just now." }, { status: 503 });
   const competency = cat.data.find(c => c.id === body.competencyId);
   if (!competency) return NextResponse.json({ error: "That competency is not part of your programme." }, { status: 404 });

@@ -1,8 +1,8 @@
 import { generate } from "@/lib/ai/client";
-import { verifyGrounded, type PhrasingViolation } from "@/lib/practice/document-phrasing";
+import { parseJsonArray, textGroundingViolations, type PhrasingViolation } from "@/lib/ai/grounding";
+import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib/competency/mapping";
 import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST } from "./config";
 import { citeChunk, findPatientIdentifiers } from "./extract";
-import { MAP_SYSTEM, checkAnalysis, mapUserPrompt, type AnalysisSection } from "./mapping";
 import type { CatalogueCompetency } from "./catalogue";
 import { VERIFY_SYSTEM, applyVerification, passageVocabulary, qualityProblems, verificationPrompt, type QualityReason } from "./question-quality";
 
@@ -41,14 +41,11 @@ export function passageCitation(p: Pick<Passage, "materialTitle" | "ordinal" | "
 
 // ── THE GROUNDING CHECK ─────────────────────────────────────────────────────────────────────────────
 //
-// verifyGrounded's own rules, with one adjustment, stated here: its month check treats the word "may" as
-// the month May. In study prose "may" is almost always the modal verb, so that one token is excused. Every
-// other number, month and finding-word rule applies as written. The fact_missing rule cannot fire,
-// because no structured facts are passed -- the passages are grounding TEXT (verifyGrounded's `typed`).
-export function groundingViolations(output: string, grounding: string[]): PhrasingViolation[] {
-  return verifyGrounded(output, [], grounding)
-    .filter(v => !(v.kind === "ungrounded_month" && v.token === "may"));
-}
+// The Holdings verifier (src/lib/ai/grounding.ts, lifted from Practice under COMPETEN-HOLDINGS-SHARED-ENGINES-01)
+// with the person's passages as grounding TEXT, and its one stated adjustment: the modal verb "may" is not the
+// month May. Every other number, month and finding-word rule applies as written.
+export const groundingViolations = textGroundingViolations;
+export { parseJsonArray };
 
 export function describeViolations(vs: PhrasingViolation[]): string {
   const parts = vs.slice(0, 4).map(v =>
@@ -131,7 +128,7 @@ export const SUPPLEMENTARY_MARKER = "BEYOND THE NOTES:";
 const MODE_INSTRUCTION: Record<Exclude<ExplainMode, "explain">, string> = {
   summary: "MODE: SUMMARY. Instead of an explanation, summarise the passages as a short list of their key points, each line starting '- ' and ending with its citation. Under 150 words. Notes only: add nothing beyond the passages.",
   simplify: "MODE: SIMPLIFY. Explain as simply as you can, for someone meeting the topic for the first time: short sentences and everyday words. When the passages use a technical term, keep the term exactly and say what it means using the passages. Under 200 words. Notes only: add nothing beyond the passages.",
-  deeper: `MODE: GO DEEPER. Explain in depth: how the ideas in the passages connect, the reasoning behind them, and what a student should understand rather than memorise, citing as before. Then, only if it genuinely helps, add general background that is NOT in the passages, after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 120 words, general principles only, with no numbers, units, doses, drug names, values or thresholds, no citation tags, and no advice about any patient.`,
+  deeper: `MODE: GO DEEPER. In two parts. PART ONE, from the passages only: explain in depth how the ideas in the passages connect, the reasoning behind them, and what a student should understand rather than memorise, citing as before. Every rule above applies to part one in full: if a point is not in the passages, it does not belong in part one. Do not use clinical descriptors (such as normal, raised, reduced, stable) the passages do not use. PART TWO, optional: general background that is NOT in the passages, after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 120 words, general principles only, with no numbers, units, doses, drug names, values or thresholds, no citation tags, and no advice about any patient. Anything you know that the passages do not say goes in part two or nowhere.`,
   tutor: `MODE: TUTOR. Teach one small step at a time. If the student has replied, first say briefly whether their reply matches the passages, and correct it from the passages if it does not. Then explain the next idea, citing as before, and end with ONE short question for the student on its own line starting 'Your turn:'. Under 180 words. Optional background beyond the passages goes after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 80 words, with no numbers, units, doses, drug names or thresholds and no citation tags.`,
 };
 
@@ -238,18 +235,6 @@ export function questionUserPrompt(passage: Passage): string {
 
 const squash = (s: string) => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
 
-/** Pure. Pulls the first JSON array out of a model reply. */
-export function parseJsonArray(raw: string): unknown[] | null {
-  const s = raw.replace(/```(?:json)?/gi, "").trim();
-  const start = s.indexOf("["), end = s.lastIndexOf("]");
-  if (start < 0 || end <= start) return null;
-  try {
-    const v = JSON.parse(s.slice(start, end + 1));
-    return Array.isArray(v) ? v : null;
-  } catch {
-    return null;
-  }
-}
 
 export type DropReason = "malformed" | "quote_not_in_passage" | "ungrounded" | QualityReason | "failed_verification" | "verification_unavailable";
 
@@ -321,20 +306,22 @@ export async function runExplain(userId: string, question: string, passages: Pas
   };
 }
 
+/** S2 framing for the Holdings mapping engine. It names no profession: the programme's catalogue does that. */
+export const SCHOLAR_MAPPING_FRAMING: MappingFraming = { person: "a healthcare student", subjects: "sections of their own study notes" };
+
 /**
- * S2: concepts and proposed competency mappings for a few sections at once. The model sees tags, never
- * ids. `competencies` is the programme's catalogue, already shortlisted by the caller (mapping.ts).
+ * S2: concepts and PROPOSED competency mappings for a few sections at once, through the Holdings engine
+ * (src/lib/competency/mapping.ts). The model sees tags, never ids. Person attribution, the Scholar operation,
+ * and Scholar's patient-identifier screen.
  */
-export async function runAnalysis(userId: string, sections: AnalysisSection[], competencies: CatalogueCompetency[]) {
-  const r = await generate({
-    system: MAP_SYSTEM,
-    user: mapUserPrompt(sections, competencies),
-    tier: "reasoning",
-    maxTokens: 2000,
+export async function runAnalysis(userId: string, sections: MappingSubject[], competencies: CatalogueCompetency[]) {
+  return proposeMappings({
+    subjects: sections,
+    candidates: competencies.map(c => ({ competencyId: c.id, layer: c.layer, code: c.code, title: c.title, outcomes: c.outcomes })),
+    framing: SCHOLAR_MAPPING_FRAMING,
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_map" },
+    screen: findPatientIdentifiers,
   });
-  if (!r.ok) return { ok: false, error: r.error } as AiFailure;
-  return { ok: true as const, check: checkAnalysis(r.text, sections, competencies), model: r.model, provider: r.provider, promptVersion: PROMPT_VERSIONS.map };
 }
 
 // ── S4: A MULTI-STEP PRACTICE CASE FROM ONE PASSAGE ── COMPETEN-SCHOLAR-01 ──────────────────────────────

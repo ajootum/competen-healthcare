@@ -26,9 +26,11 @@ async function send(url: string, body: unknown, method = "POST"): Promise<{ ok: 
   }
 }
 
-const LAYER_LABEL: Record<string, string> = { foundational: "Foundational", profession: "Profession", specialty: "Specialty" };
+const LAYER_LABEL: Record<string, string> = { foundational: "Foundational", profession: "Profession", advanced: "Advanced practice", specialty: "Specialty", context: "Context" };
 const LAYER_CLS: Record<string, string> = {
   foundational: "bg-violet-50 text-violet-900 border-violet-200",
+  advanced: "bg-indigo-50 text-indigo-900 border-indigo-200",
+  context: "bg-stone-100 text-stone-800 border-stone-300",
   profession: "bg-teal-50 text-teal-900 border-teal-200",
   specialty: "bg-orange-50 text-orange-900 border-orange-200",
 };

@@ -38,7 +38,9 @@ export const PROMPT_VERSIONS = {
   verify: "scholar-verify-v1",
   // COMPETEN-SCHOLAR-01. explain (above) is unchanged. The other modes add an instruction to the same
   // system prompt, so they carry their own version. A case is several linked steps from one passage.
-  explainModes: "scholar-explain-modes-v1",
+  // v2: "go deeper" is two explicit parts, after the staging acceptance run saw part one drift past the notes
+  // (it was withheld by the check, as it should be). Summary, simplify and tutor are unchanged.
+  explainModes: "scholar-explain-modes-v2",
   map: "scholar-map-v1",
   caseSteps: "scholar-case-steps-v1",
 } as const;

@@ -1,35 +1,41 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { PUBLISHED } from "../professional/frameworks";
+import { COMPETENCY_LAYERS, type CompetencyLayer } from "@/lib/competency/foundation";
+import { loadCatalogueFor } from "../catalogue";
 
-// ── THE COMPETENCY CATALOGUE SCHOLAR LEARNS AGAINST ── COMPETEN-SCHOLAR-01 S2, migrations 003, 127, 387 ──────
+// ── THE COMPETENCY CATALOGUE SCHOLAR LEARNS AGAINST ── COMPETEN-SCHOLAR-01 S2, over S1 (migrations 384, 387) ──
 //
-// ⚠ AN INTERFACE, NOT A CATALOGUE. S1 (IND-007) is building the layered catalogue read API. Scholar codes
-// against CompetencyCatalogue below, and frameworkCatalogue() is the INTERIM adapter over the existing
-// frameworks / framework_domains / framework_competencies. When S1 lands, a second adapter implements the
-// same interface and nothing in S2-S4 changes. The id of a competency IS framework_competencies.id, never a
-// copy: migration 388 stores it as a typed foreign key.
+// ⚠ AN INTERFACE OVER S1, NOT A CATALOGUE. What exists, and what Scholar may offer, is S1's: the shared
+// competency foundation (src/lib/competency/foundation.ts) behind the HQ allowlist for Scholar
+// (loadCatalogueFor(admin, "scholar"), Individual policy `scholar_catalogues`, EMPTY by default). That read
+// already holds a catalogue to shared (hospital_id null), active and published. Nothing in Scholar reads the
+// framework tables itself (scripts/scholar-learning-harness.ts K2), so there is one gate, and it is HQ's.
+// The id of a competency IS framework_competencies.id, never a copy: migration 388 stores it as a typed
+// foreign key.
 //
-// ⚠ PROFESSION-AGNOSTIC. No code path here names a profession. What a student learns against is their
-// programme (individual_scholar_programme, migration 387), and a programme is configuration rows: a
-// profession, and which frameworks it uses in which LAYER (foundational, profession, specialty).
+// ⚠ A PROGRAMME NARROWS, IT NEVER WIDENS. A programme (individual_scholar_programme, migration 387) names
+// the catalogues its students learn against. What a student is offered is the catalogues in BOTH their
+// programme and the HQ allowlist. A programme row naming a catalogue HQ has not allowed offers nothing from
+// it -- configuring a programme is neither publishing nor allowing a catalogue.
 //
-// ⚠ SHARED, ACTIVE AND PUBLISHED ONLY, the same rule Competen Professional applies (frameworks.ts):
-// hospital_id IS NULL (an organisation's own framework is that organisation's content, and listing it to a
-// person outside it would be a cross-tenant read), is_active, and pub_status = 'published'. A programme
-// row that names a draft framework offers nothing from it -- configuring a programme is not publishing a
-// framework. scripts/scholar-learning-harness.ts pins all three filters on every framework read here.
+// ⚠ S1 OWNS THE LAYER AND THE PROFESSION. A catalogue's layer is 384's frameworks.competency_layer. The
+// programme's own layer is used only where HQ has not classified the catalogue. The same for the profession.
+//
+// ⚠ PROFESSION-AGNOSTIC. No code path here names a profession. A new profession is a catalogue (S1) and a
+// programme (rows).
 
-export const LAYERS = ["foundational", "profession", "specialty"] as const;
-export type Layer = (typeof LAYERS)[number];
+export const LAYERS = COMPETENCY_LAYERS;
+export type Layer = CompetencyLayer;
 export const isLayer = (v: unknown): v is Layer => typeof v === "string" && (LAYERS as readonly string[]).includes(v);
 
 export const LAYER_LABEL: Record<Layer, string> = {
   foundational: "Foundational",
   profession: "Profession",
+  advanced: "Advanced practice",
   specialty: "Specialty",
+  context: "Context",
 };
 
-/** One competency as Scholar sees it. The shape S1's read API returns. */
+/** One competency as S2-S4 use it: S1's shape, projected. */
 export type CatalogueCompetency = {
   id: string;
   layer: Layer;
@@ -40,11 +46,11 @@ export type CatalogueCompetency = {
   domain: string;
   code: string | null;
   title: string;
-  /** What a learner should be able to do. Empty when the catalogue states none -- not invented here. */
+  /** What a learner should be able to do, as S1 records it. Empty when none is recorded -- not invented here. */
   outcomes: string[];
 };
 
-/** A programme as configuration: which frameworks, in which layer. Read by the store from 387. */
+/** A programme as configuration: which catalogues, in which layer. Read by the store from 387. */
 export type ProgrammeConfig = {
   code: string;
   label: string;
@@ -61,50 +67,40 @@ export interface CompetencyCatalogue {
   forProgramme(programme: ProgrammeConfig): Promise<CatalogueRead>;
 }
 
-const LAYER_ORDER: Record<Layer, number> = { foundational: 0, profession: 1, specialty: 2 };
+/** Shaped like S1's CatalogueCompetency, so the projection below is pure and unit-tested. */
+export type S1Competency = {
+  competencyId: string; code: string | null; title: string; layer: Layer | null;
+  profession: { label: string } | null; catalogue: { id: string; name: string }; domain: { name: string }; outcomes: string[];
+};
 
-/** Pure. Description text → outcome lines. Bulleted or line-separated text splits, plain prose stays whole. */
-export function outcomesFrom(description: string | null | undefined): string[] {
-  const text = (description ?? "").trim();
-  if (!text) return [];
-  const lines = text.split(/\r?\n/).map(l => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim()).filter(Boolean);
-  return lines.slice(0, 12).map(l => l.slice(0, 300));
+/** Pure. S1's competencies, narrowed to the programme's catalogues, in layer then programme then catalogue order. */
+export function projectForProgramme(all: S1Competency[], programme: ProgrammeConfig): CatalogueCompetency[] {
+  const config = new Map(programme.frameworks.map(f => [f.frameworkId, f]));
+  const order = (l: Layer) => LAYERS.indexOf(l);
+  return all
+    .filter(c => config.has(c.catalogue.id))
+    .map((c, i) => {
+      const f = config.get(c.catalogue.id)!;
+      return {
+        sort: [order(c.layer ?? f.layer), f.sortOrder, i] as const,
+        c: {
+          id: c.competencyId, layer: c.layer ?? f.layer, profession: c.profession?.label ?? programme.profession,
+          catalogue: c.catalogue.name, frameworkId: c.catalogue.id, domain: c.domain.name, code: c.code, title: c.title, outcomes: c.outcomes,
+        },
+      };
+    })
+    .sort((a, b) => a.sort[0] - b.sort[0] || a.sort[1] - b.sort[1] || a.sort[2] - b.sort[2])
+    .map(x => x.c);
 }
 
-/** THE INTERIM ADAPTER, over framework_competencies. Replaced by S1's read API behind the same interface. */
-export function frameworkCatalogue(admin: any): CompetencyCatalogue {
+/** THE ADAPTER: S1's Scholar catalogue (HQ allowlist, shared, active, published), narrowed to the programme. */
+export function scholarCatalogue(admin: any): CompetencyCatalogue {
   return {
     async forProgramme(programme) {
-      const ids = programme.frameworks.map(f => f.frameworkId);
-      if (!ids.length) return { ok: true, data: [] };
-      try {
-        const { data: fws, error: fwErr } = await admin.from("frameworks").select("id, name")
-          .in("id", ids).is("hospital_id", null).eq("is_active", true).eq("pub_status", PUBLISHED);
-        if (fwErr) return { ok: false };
-        const offered = new Map<string, string>(((fws ?? []) as any[]).map(f => [f.id, f.name]));
-        if (!offered.size) return { ok: true, data: [] };
-        const { data, error } = await admin.from("framework_domains")
-          .select("framework_id, name, sort_order, framework_competencies(id, name, description, code, sort_order)")
-          .in("framework_id", [...offered.keys()]).order("sort_order").limit(1000);
-        if (error) return { ok: false };
-        const config = new Map(programme.frameworks.map(f => [f.frameworkId, f]));
-        const out: (CatalogueCompetency & { _f: number; _d: number; _c: number })[] = [];
-        for (const d of (data ?? []) as any[]) {
-          const f = config.get(d.framework_id);
-          if (!f) continue;
-          for (const c of d.framework_competencies ?? []) {
-            out.push({
-              id: c.id, layer: f.layer, profession: programme.profession, catalogue: offered.get(d.framework_id) ?? "",
-              frameworkId: d.framework_id, domain: d.name, code: c.code ?? null, title: c.name, outcomes: outcomesFrom(c.description),
-              _f: f.sortOrder, _d: d.sort_order ?? 0, _c: c.sort_order ?? 0,
-            });
-          }
-        }
-        out.sort((a, b) => LAYER_ORDER[a.layer] - LAYER_ORDER[b.layer] || a._f - b._f || a._d - b._d || a._c - b._c);
-        return { ok: true, data: out.map(({ _f, _d, _c, ...c }) => { void _f; void _d; void _c; return c; }) };
-      } catch {
-        return { ok: false };
-      }
+      if (!programme.frameworks.length) return { ok: true, data: [] };
+      const all = await loadCatalogueFor(admin, "scholar");
+      if (all === null) return { ok: false };
+      return { ok: true, data: projectForProgramme(all, programme) };
     },
   };
 }

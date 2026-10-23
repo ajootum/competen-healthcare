@@ -1,5 +1,5 @@
-import type { CatalogueCompetency, Layer } from "./catalogue";
-import type { MapState } from "./mapping";
+import { LAYERS, type CatalogueCompetency, type Layer } from "./catalogue";
+import type { MappingState as MapState } from "@/lib/competency/mapping";
 
 // ── PROGRESS BY COMPETENCY ── COMPETEN-SCHOLAR-01 S4, migrations 387 and 388 ─────────────────────────────
 //
@@ -85,7 +85,7 @@ export function buildCompetencyProgress(input: {
     };
   });
 
-  const order: Layer[] = ["foundational", "profession", "specialty"];
+  const order: readonly Layer[] = LAYERS;
   return {
     layers: order.map(layer => ({ layer, rows: rows.filter(r => r.layer === layer) })).filter(l => l.rows.length),
     totals: {

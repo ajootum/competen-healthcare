@@ -8,7 +8,9 @@ import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
 import type { ProgressAttempt, ProgressCard, ProgressMaterial, ProgressQuestion } from "./progress";
 import { isLayer, type Layer, type ProgrammeConfig } from "./catalogue";
-import { mapStates, type AnalysisSection, type ChunkMapping, type DecisionRow, type MapSource, type MapState, type SectionAnalysis } from "./mapping";
+import { mappingStates, type LiveMapping, type MappingDecision, type MappingState, type MappingSubject, type SubjectAnalysis } from "@/lib/competency/mapping";
+
+export type MapSource = "ai" | "student" | "reviewer";
 import { STUDY_ACHIEVEMENT, isStudyAchievementKind, studyAchievementsFrom, type ChoiceRow, type StudyAchievement, type StudyAchievementKind } from "./passport-items";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
@@ -511,7 +513,7 @@ export async function analysisStatus(admin: Admin, userId: string, materialId: s
 }
 
 /** The next sections of one material that have not been analysed, in document order. */
-export async function unanalysedSections(admin: Admin, userId: string, materialId: string, limit: number): Promise<Read<AnalysisSection[]>> {
+export async function unanalysedSections(admin: Admin, userId: string, materialId: string, limit: number): Promise<Read<MappingSubject[]>> {
   const [c, a] = await Promise.all([
     admin.from("individual_scholar_chunk").select("id, content").eq("user_id", userId).eq("material_id", materialId).order("ordinal").limit(2000),
     admin.from("individual_scholar_chunk_analysis").select("chunk_id").eq("user_id", userId).eq("material_id", materialId).limit(2000),
@@ -519,7 +521,7 @@ export async function unanalysedSections(admin: Admin, userId: string, materialI
   const err = c.error ?? a.error;
   if (err) return fail(err);
   const done = new Set(((a.data ?? []) as any[]).map(r => r.chunk_id));
-  return { ok: true, data: ((c.data ?? []) as any[]).filter(r => !done.has(r.id)).slice(0, limit).map(r => ({ chunkId: r.id, content: r.content })) };
+  return { ok: true, data: ((c.data ?? []) as any[]).filter(r => !done.has(r.id)).slice(0, limit).map(r => ({ ref: r.id, text: r.content })) };
 }
 
 /**
@@ -528,16 +530,16 @@ export async function unanalysedSections(admin: Admin, userId: string, materialI
  * competency are left as they are (ignoreDuplicates): a proposal is never overwritten.
  */
 export async function saveAnalysis(admin: Admin, userId: string, input: {
-  materialId: string; programmeCode: string | null; model: string; promptVersion: string; sentChunkIds: string[]; sections: SectionAnalysis[];
+  materialId: string; programmeCode: string | null; model: string; promptVersion: string; sentChunkIds: string[]; sections: SubjectAnalysis[];
 }): Promise<{ ok: boolean; proposals: number }> {
-  const byChunk = new Map(input.sections.map(s => [s.chunkId, s]));
+  const byChunk = new Map(input.sections.map(s => [s.ref, s]));
   const { error } = await admin.from("individual_scholar_chunk_analysis").upsert(input.sentChunkIds.map(chunkId => ({
     chunk_id: chunkId, user_id: userId, material_id: input.materialId, concepts: byChunk.get(chunkId)?.concepts ?? [],
     programme_code: input.programmeCode, model: input.model, prompt_version: input.promptVersion,
   })), { onConflict: "chunk_id", ignoreDuplicates: true });
   if (error) return { ok: false, proposals: 0 };
-  const maps = input.sections.filter(s => input.sentChunkIds.includes(s.chunkId)).flatMap(s => s.proposals.map(p => ({
-    user_id: userId, material_id: input.materialId, chunk_id: s.chunkId, competency_id: p.competencyId, layer: p.layer,
+  const maps = input.sections.filter(s => input.sentChunkIds.includes(s.ref)).flatMap(s => s.proposals.filter(p => p.layer !== null).map(p => ({
+    user_id: userId, material_id: input.materialId, chunk_id: s.ref, competency_id: p.competencyId, layer: p.layer,
     source: "ai", confidence: p.confidence, rationale: p.rationale, model: input.model, prompt_version: input.promptVersion,
     programme_code: input.programmeCode,
   })));
@@ -550,7 +552,7 @@ export async function saveAnalysis(admin: Admin, userId: string, input: {
 export type MappingRow = {
   id: string; chunkId: string; materialId: string; competencyId: string; layer: Layer; source: MapSource;
   confidence: number | null; rationale: string | null; model: string | null; promptVersion: string | null; createdAt: string;
-  state: MapState; decidedBy: "student" | "reviewer" | null; decisions: number;
+  state: MappingState; decidedBy: "student" | "reviewer" | null; decisions: number;
 };
 
 /** The person's mappings (one material, or all), each with its current state, and the concepts per section. */
@@ -563,14 +565,14 @@ export async function listMappings(admin: Admin, userId: string, materialId?: st
   const err = maps.error ?? analysis.error;
   if (err) return fail(err);
   const ids = ((maps.data ?? []) as any[]).map(r => r.id);
-  let decisions: DecisionRow[] = [];
+  let decisions: MappingDecision[] = [];
   if (ids.length) {
     const { data, error } = await admin.from("individual_scholar_competency_decision").select("map_id, decision, decided_by, created_at")
       .eq("user_id", userId).in("map_id", ids).order("created_at").limit(20000);
     if (error) return fail(error);
-    decisions = ((data ?? []) as any[]).map(d => ({ mapId: d.map_id, decision: d.decision, decidedBy: d.decided_by, createdAt: d.created_at }));
+    decisions = ((data ?? []) as any[]).map(d => ({ mappingId: d.map_id, decision: d.decision, decidedBy: d.decided_by, createdAt: d.created_at }));
   }
-  const states = mapStates(decisions);
+  const states = mappingStates(decisions);
   return {
     ok: true,
     data: {
@@ -579,7 +581,7 @@ export async function listMappings(admin: Admin, userId: string, materialId?: st
         return {
           id: r.id, chunkId: r.chunk_id, materialId: r.material_id, competencyId: r.competency_id, layer: r.layer, source: r.source,
           confidence: r.confidence === null ? null : Number(r.confidence), rationale: r.rationale, model: r.model, promptVersion: r.prompt_version,
-          createdAt: r.created_at, state: s?.state ?? "proposed", decidedBy: s?.decidedBy ?? null, decisions: s?.history ?? 0,
+          createdAt: r.created_at, state: s?.state ?? "proposed", decidedBy: (s?.decidedBy as "student" | "reviewer" | undefined) ?? null, decisions: s?.history ?? 0,
         };
       }),
       concepts: new Map(((analysis.data ?? []) as any[]).map(r => [r.chunk_id, r.concepts ?? []])),
@@ -588,7 +590,7 @@ export async function listMappings(admin: Admin, userId: string, materialId?: st
 }
 
 /** The current mappings of one section, for choosing the competency a question practises. [] when unreadable. */
-export async function chunkMappings(admin: Admin, userId: string, chunkId: string): Promise<ChunkMapping[]> {
+export async function chunkMappings(admin: Admin, userId: string, chunkId: string): Promise<LiveMapping[]> {
   if (!isUuid(chunkId)) return [];
   const { data, error } = await admin.from("individual_scholar_competency_map").select("id, competency_id, source, confidence")
     .eq("user_id", userId).eq("chunk_id", chunkId).limit(50);
@@ -596,9 +598,9 @@ export async function chunkMappings(admin: Admin, userId: string, chunkId: strin
   const { data: d, error: dErr } = await admin.from("individual_scholar_competency_decision").select("map_id, decision, decided_by, created_at")
     .eq("user_id", userId).in("map_id", (data as any[]).map(r => r.id)).limit(2000);
   if (dErr) return [];
-  const states = mapStates(((d ?? []) as any[]).map(x => ({ mapId: x.map_id, decision: x.decision, decidedBy: x.decided_by, createdAt: x.created_at })));
+  const states = mappingStates(((d ?? []) as any[]).map(x => ({ mappingId: x.map_id, decision: x.decision, decidedBy: x.decided_by, createdAt: x.created_at })));
   return (data as any[]).map(r => ({
-    id: r.id, competencyId: r.competency_id, source: r.source, confidence: r.confidence === null ? null : Number(r.confidence),
+    competencyId: r.competency_id, byPerson: r.source !== "ai", confidence: r.confidence === null ? null : Number(r.confidence),
     state: states.get(r.id)?.state ?? "proposed",
   }));
 }
@@ -632,6 +634,20 @@ export async function addMapping(admin: Admin, userId: string, input: { chunkId:
   const { error: dErr } = await admin.from("individual_scholar_competency_decision")
     .insert({ user_id: userId, map_id: m.id, decision: "accepted", decided_by: "student", reason: null });
   return dErr ? "failed" : "ok";
+}
+
+/**
+ * The competency each of the person's questions practises (388, individual_scholar_question.competency_id),
+ * in the shape S5's CompetencyMappingSource.mappingsFor takes. A question tied to no competency is left out.
+ * value null: 388 is not on this environment (not measured). { ok: false }: it could not be read.
+ */
+export async function questionCompetencies(admin: Admin, userId: string, questionIds: string[]): Promise<
+  { ok: true; value: { questionId: string; competencyId: string }[] | null } | { ok: false }> {
+  if (!questionIds.length) return { ok: true, value: [] };
+  const { data, error } = await admin.from("individual_scholar_question").select("id, competency_id")
+    .eq("user_id", userId).in("id", questionIds.slice(0, 5000)).not("competency_id", "is", null);
+  if (error) return isNotProvisioned(error) ? { ok: true, value: null } : { ok: false };
+  return { ok: true, value: ((data ?? []) as any[]).map(r => ({ questionId: r.id, competencyId: r.competency_id })) };
 }
 
 /** The rows competency progress is built from. Ids, competencies and right-or-wrong only. */
