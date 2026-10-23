@@ -3,18 +3,18 @@ import { NextResponse } from "next/server";
 
 import { currentTraceId } from "@/lib/trace";
 import { estateRolesOf } from "@/lib/roles";
+import { BUCKET, evidencePath, fileProblem, isUploadId, safeFileName } from "@/lib/evidence/upload";
 // Evidence engine (§E): upload files linked to logbook entries, credentials or
 // competencies. Files live in the private "evidence" bucket — every download
 // goes through a short-lived signed URL issued here, after a permission check
 // (owner, or a verifier role in the same hospital). All actions audit-logged.
+//
+// Two upload paths, one set of rules (src/lib/evidence/upload.ts):
+//   multipart POST            the file passes through this handler (small files)
+//   JSON POST, then PUT       a one-time signed upload URL for a server-chosen path, the browser uploads
+//                             straight to storage, and PUT records it -- the only way the 10 MB / 50 MB
+//                             limits hold on Vercel, which caps a function's request body at ~4.5 MB.
 
-const MAX_BYTES = 10 * 1024 * 1024;
-const MAX_MEDIA_BYTES = 50 * 1024 * 1024; // video/audio evidence (voice notes, recordings)
-const ALLOWED_MIME = new Set(["application/pdf", "image/png", "image/jpeg", "image/webp"]);
-const MEDIA_MIME = new Set([
-  "video/mp4", "video/webm",
-  "audio/mpeg", "audio/mp4", "audio/webm", "audio/wav", "audio/ogg",
-]);
 const VERIFIER_ROLES = ["assessor", "educator", "hospital_admin", "super_admin"];
 
 async function requireUser() {
@@ -39,55 +39,44 @@ function canAccess(row: { owner_id: string; hospital_id: string | null }, me: { 
   return !!row.hospital_id && row.hospital_id === me.hospital_id;
 }
 
-export async function POST(req: Request) {
-  const auth = await requireUser();
-  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { admin, me } = auth;
+type Me = { id: string; full_name: string | null; role: string | null; roles: string[] | null; hospital_id: string | null };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Admin = any;
+type Links = { entryId: string | null; credentialId: string | null; competencyId: string | null; note: string | null };
 
-  const form = await req.formData().catch(() => null);
-  const file = form?.get("file");
-  if (!form || !(file instanceof File)) {
-    return NextResponse.json({ error: "A file is required (multipart form field 'file')" }, { status: 400 });
-  }
-  const isMedia = MEDIA_MIME.has(file.type);
-  if (!ALLOWED_MIME.has(file.type) && !isMedia) {
-    return NextResponse.json({ error: "Accepted: PDF, PNG, JPEG, WebP, MP4/WebM video, or MP3/M4A/WAV/OGG/WebM audio" }, { status: 400 });
-  }
-  if (file.size === 0 || file.size > (isMedia ? MAX_MEDIA_BYTES : MAX_BYTES)) {
-    return NextResponse.json({ error: isMedia ? "Media files must be between 1 byte and 50 MB" : "File must be between 1 byte and 10 MB" }, { status: 400 });
-  }
+const text = (v: unknown) => (typeof v === "string" && v ? v : null);
+const linksFrom = (get: (k: string) => unknown): Links => ({
+  entryId: text(get("skill_log_entry_id")),
+  credentialId: text(get("credential_id")),
+  competencyId: text(get("competency_id")),
+  note: (typeof get("note") === "string" ? (get("note") as string).trim() : "") || null,
+});
 
-  const entryId = (form.get("skill_log_entry_id") as string) || null;
-  const credentialId = (form.get("credential_id") as string) || null;
-  const competencyId = (form.get("competency_id") as string) || null;
-  const note = ((form.get("note") as string) || "").trim() || null;
-
-  // You may only attach evidence to your own records.
-  if (entryId) {
-    const { data: entry } = await admin.from("skill_log_entries").select("nurse_id").eq("id", entryId).single();
+/** You may only attach evidence to your own records. A refusal, or null when the links are yours. */
+async function refuseForeignLinks(admin: Admin, me: Me, l: Links): Promise<NextResponse | null> {
+  if (l.entryId) {
+    const { data: entry } = await admin.from("skill_log_entries").select("nurse_id").eq("id", l.entryId).single();
     if (!entry) return NextResponse.json({ error: "Logbook entry not found" }, { status: 404 });
     if (entry.nurse_id !== me.id) return NextResponse.json({ error: "Not your logbook entry" }, { status: 403 });
   }
-  if (credentialId) {
-    const { data: cred } = await admin.from("professional_credentials").select("nurse_id").eq("id", credentialId).single();
+  if (l.credentialId) {
+    const { data: cred } = await admin.from("professional_credentials").select("nurse_id").eq("id", l.credentialId).single();
     if (!cred) return NextResponse.json({ error: "Credential not found" }, { status: 404 });
     if (cred.nurse_id !== me.id) return NextResponse.json({ error: "Not your credential" }, { status: 403 });
   }
+  return null;
+}
 
-  const safeName = file.name.replace(/[^\w.\-()+ ]/g, "_").slice(0, 120) || "file";
-  const path = `${me.id}/${crypto.randomUUID()}-${safeName}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: upErr } = await admin.storage.from("evidence").upload(path, buffer, { contentType: file.type });
-  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
-
+/** The evidence row and its audit entry, for an object already in the bucket at `path`. Same on both paths. */
+async function recordEvidence(admin: Admin, me: Me, l: Links, path: string, safeName: string, mime: string, size: number) {
   const { data: row, error } = await admin.from("evidence").insert({
     owner_id: me.id, hospital_id: me.hospital_id ?? null,
-    file_path: path, file_name: safeName, mime_type: file.type, size_bytes: file.size,
-    kind: credentialId ? "credential_document" : "evidence",
-    skill_log_entry_id: entryId, credential_id: credentialId, competency_id: competencyId, note,
+    file_path: path, file_name: safeName, mime_type: mime, size_bytes: size,
+    kind: l.credentialId ? "credential_document" : "evidence",
+    skill_log_entry_id: l.entryId, credential_id: l.credentialId, competency_id: l.competencyId, note: l.note,
   }).select("id, file_name, mime_type, size_bytes, created_at").single();
   if (error) {
-    await admin.storage.from("evidence").remove([path]);
+    await admin.storage.from(BUCKET).remove([path]);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -97,6 +86,78 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({ ok: true, evidence: row }, { status: 201 });
+}
+
+export async function POST(req: Request) {
+  const auth = await requireUser();
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { admin, me } = auth;
+
+  // ── Direct upload, step 1: a one-time signed upload URL for a path this server chooses. ──
+  if ((req.headers.get("content-type") ?? "").includes("application/json")) {
+    const b = await req.json().catch(() => ({}));
+    const problem = fileProblem({ type: String(b?.mime_type ?? ""), size: Number(b?.size_bytes) });
+    if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+    const refusal = await refuseForeignLinks(admin, me, linksFrom(k => b?.[k]));
+    if (refusal) return refusal;
+    const uploadId = crypto.randomUUID();
+    const path = evidencePath(me.id, uploadId, safeFileName(String(b?.file_name ?? "")));
+    const { data: slot, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
+    if (error || !slot?.token) return NextResponse.json({ error: error?.message ?? "Could not prepare the upload" }, { status: 500 });
+    return NextResponse.json({ upload_id: uploadId, bucket: BUCKET, path, token: slot.token }, { status: 201 });
+  }
+
+  // ── Multipart: the file passes through this handler. ──
+  const form = await req.formData().catch(() => null);
+  const file = form?.get("file");
+  if (!form || !(file instanceof File)) {
+    return NextResponse.json({ error: "A file is required (multipart form field 'file')" }, { status: 400 });
+  }
+  const problem = fileProblem(file);
+  if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+
+  const links = linksFrom(k => form.get(k));
+  const refusal = await refuseForeignLinks(admin, me, links);
+  if (refusal) return refusal;
+
+  const safeName = safeFileName(file.name);
+  const path = evidencePath(me.id, crypto.randomUUID(), safeName);
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { error: upErr } = await admin.storage.from(BUCKET).upload(path, buffer, { contentType: file.type });
+  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+
+  return recordEvidence(admin, me, links, path, safeName, file.type, file.size);
+}
+
+// ── Direct upload, step 2: record an object the browser uploaded with the step-1 URL. ──
+// The path is rebuilt from the caller's id, the upload id and the file name -- never taken from the body --
+// and the type and size are read from the STORED object, not from what the browser claims. Anything that
+// fails the rules is deleted, so a refused upload leaves nothing behind.
+export async function PUT(req: Request) {
+  const auth = await requireUser();
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { admin, me } = auth;
+
+  const b = await req.json().catch(() => ({}));
+  if (!isUploadId(b?.upload_id)) return NextResponse.json({ error: "upload_id is required" }, { status: 400 });
+  const safeName = safeFileName(String(b?.file_name ?? ""));
+  const path = evidencePath(me.id, b.upload_id, safeName);
+
+  const { data: listed, error: listErr } = await admin.storage.from(BUCKET).list(me.id, { search: `${b.upload_id}-` });
+  if (listErr) return NextResponse.json({ error: listErr.message }, { status: 500 });
+  const stored = (listed ?? []).find((o: { name: string }) => o.name === `${b.upload_id}-${safeName}`);
+  if (!stored) return NextResponse.json({ error: "Upload not found -- upload the file first" }, { status: 404 });
+  const mime = String(stored.metadata?.mimetype ?? "");
+  const size = Number(stored.metadata?.size ?? 0);
+
+  const discard = async (res: NextResponse) => { await admin.storage.from(BUCKET).remove([path]); return res; };
+  const problem = fileProblem({ type: mime, size });
+  if (problem) return discard(NextResponse.json({ error: problem }, { status: 400 }));
+  const links = linksFrom(k => b?.[k]);
+  const refusal = await refuseForeignLinks(admin, me, links);
+  if (refusal) return discard(refusal);
+
+  return recordEvidence(admin, me, links, path, safeName, mime, size);
 }
 
 export async function GET(req: Request) {
