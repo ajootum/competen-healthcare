@@ -57,9 +57,12 @@ const PAGES = "src/app/individual/(app)/[experience]/(scholar)/study";
 const API = "src/app/api/individual/scholar";
 const FILES = [...walk(LIB), ...walk(PAGES), ...walk(API)];
 type Src = Map<string, string>;
-const REAL: Src = new Map(FILES.map(f => [f, strip(readFileSync(f, "utf8"))]));
+// Line endings normalised: a Windows checkout (core.autocrlf) has CRLF, and the planted-failure controls match
+// multi-line text. Without this the plants silently stop applying on Windows and the run aborts.
+const read = (f: string) => readFileSync(f, "utf8").replace(/\r\n/g, "\n");
+const REAL: Src = new Map(FILES.map(f => [f, strip(read(f))]));
 const MIG_FILE = "supabase/migrations/372-individual-scholar-learning.sql";
-const MIG_REAL = existsSync(MIG_FILE) ? readFileSync(MIG_FILE, "utf8").replace(/--.*$/gm, "").toLowerCase() : "";
+const MIG_REAL = existsSync(MIG_FILE) ? read(MIG_FILE).replace(/--.*$/gm, "").toLowerCase() : "";
 
 const STORE = `${LIB}/store.ts`;
 const GEN = `${LIB}/generation.ts`;
