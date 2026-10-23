@@ -24,6 +24,8 @@ import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { ACCESS_DOORS } from "../src/lib/access-doors";
 import { EXPERIENCES, EXPERIENCE_KEYS, FOUNDATION_NAV, navFor } from "../src/lib/individual/experiences";
+import { capabilityForRoute } from "../src/lib/hq/spaces";
+import { GENERAL_NAV } from "../src/app/super-admin/_components/nav-tables";
 
 let pass = 0; const failures: string[] = [];
 const ok = (name: string, cond: boolean, detail = "") => {
@@ -92,7 +94,9 @@ function main() {
   const ALLOWED: Record<string, string[]> = {
     "src/app/api/individual/preferences/route.ts": ["individual_membership.update"],
     "src/app/api/individual/terms/route.ts": ["individual_membership.update", "individual_entitlement.update"],
-    "src/lib/individual/grants.ts": ["individual_membership.insert", "individual_entitlement.insert", "individual_entitlement.update"],
+    // The delete is the grant's own compensation (COMPETEN-IND-ACCESS-001): a membership THIS call created,
+    // with no entitlement written beside it, is removed again rather than left as a member with nothing live.
+    "src/lib/individual/grants.ts": ["individual_membership.insert", "individual_membership.delete", "individual_entitlement.insert", "individual_entitlement.update"],
   };
   const writes: string[] = [];
   for (const [f, src] of SRC) {
@@ -129,8 +133,13 @@ function main() {
   ok("4b. access never reads the raw ledger or compares a period with the app clock",
     !/from\("individual_entitlement"\)/.test(access) && !/starts_at|ends_at/.test(access) && !/Date\.now\(\)|new Date\(/.test(access));
   const ledgerReaders = offenders(/from\("individual_entitlement"\)\s*\.select\(/);
-  ok("4c. only the history view READS the raw ledger (all periods, for display) -- every access decision uses the view",
-    ledgerReaders.length === 1 && ledgerReaders[0] === "src/lib/individual/history.ts", ledgerReaders.join(", "));
+  // Two display readers: the person's own history, and the HQ grant screen's lookup (COMPETEN-IND-ACCESS-001),
+  // which shows every period and takes "active now" from the view, never from the dates.
+  const grantsLib = SRC.get("src/lib/individual/grants.ts") ?? "";
+  ok("4c. only the two display readers READ the raw ledger (history, and the HQ lookup) -- every access decision uses the view",
+    ledgerReaders.length === 2 && ledgerReaders.includes("src/lib/individual/history.ts") && ledgerReaders.includes("src/lib/individual/grants.ts")
+      && /from\("individual_live_entitlement"\)\.select\("id"\)\.eq\("user_id", p\.id\)/.test(grantsLib)
+      && !/Date\.now\(\)/.test(grantsLib), ledgerReaders.join(", "));
 
   // ── 5. EVERY INDIVIDUAL API ROUTE IS GUARDED BY GATE 3 ──────────────────────────────────────────
   const routes = FILES.filter(f => f.startsWith("src/app/api/individual/") && f.endsWith("route.ts"));
@@ -268,6 +277,45 @@ function main() {
     && /if \(!admin \|\| !\(await individualAppEnabled\(admin\)\)\) return \{ state: "DISABLED" \}/.test(guardSrc));
   const moduleScopeClients = FILES.filter(f => /^(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:await\s+)?create(?:Admin)?Client(?:OrNull)?\(/m.test(SRC.get(f) ?? ""));
   ok("11c. no Supabase client is created at module scope anywhere in Individual", moduleScopeClients.length === 0, moduleScopeClients.join(", "));
+
+  // ── 12. COMPETEN-IND-ACCESS-001: ENTRY, DESTINATION AND THE HQ GRANT SCREEN ──
+  const doorSrc = strip(readFileSync("src/app/individual/sign-in/page.tsx", "utf8"));
+  ok("12a. the public door asks the release gate on the server (no client = OFF) and otherwise renders the coming-soon screen",
+    /export const dynamic = "force-dynamic";/.test(doorSrc) && doorSrc.indexOf("await connection()") > -1
+    && doorSrc.indexOf("await connection()") < doorSrc.indexOf("createAdminClientOrNull()")
+    && /if \(admin && \(await individualAppEnabled\(admin\)\)\) \{/.test(doorSrc) && /<ProductComingSoon/.test(doorSrc)
+    && !/createAdminClient\(\)/.test(doorSrc) && !/type="password"/.test(doorSrc));
+  ok("12b. with the gate on, the door redirects ONLY to entry.ts destinations -- the ?experience= value is never echoed",
+    /redirect\(user \? entryDestination\(experience\) : signInHref\(experience\)\)/.test(doorSrc)
+    && /requestedExperience\(\(await searchParams\)\.experience\)/.test(doorSrc) && (doorSrc.match(/redirect\(/g) ?? []).length === 1);
+  const marketing = ["src/components/marketing/ExperiencePage.tsx", "src/components/marketing/IndividualFamily.tsx"].map(f => strip(readFileSync(f, "utf8")));
+  ok("12c. every Sign in on the Scholar and Professional pages names its experience; none uses the bare door",
+    marketing.every(s => !/INDIVIDUAL_SIGN_IN/.test(s)) && marketing.reduce((n, s) => n + (s.match(/experienceSignIn\(e\.key\)/g) ?? []).length, 0) === 3);
+  const reqDriven = ["src/app/individual/(app)/layout.tsx", "src/app/individual/(app)/[experience]/layout.tsx",
+    "src/app/individual/_components/shell-context.ts", "src/app/individual/access/page.tsx", "src/app/individual/(app)/welcome/page.tsx"];
+  const rawReq = reqDriven.filter(f => {
+    const s = SRC.get(f) ?? "";
+    return /\?for=\$\{|\?experience=\$\{/.test(s) || /searchParams\)\.(for|experience)/.test(s.replace(/requestedExperience\(\(await searchParams\)\.(for|experience)\)/g, ""));
+  });
+  ok("12d. requested experiences reach redirects and copy only through entry.ts (no raw ?for= or ?experience= use)",
+    rawReq.length === 0, rawReq.join(", "));
+  const exLayout = SRC.get("src/app/individual/(app)/[experience]/layout.tsx") ?? "";
+  const welcomeAt = exLayout.indexOf("membership.onboardedAt) redirect(`/individual/welcome");
+  ok("12e. a not-yet-onboarded member entering an experience goes through the welcome first, AFTER the live check",
+    welcomeAt > -1 && exLayout.indexOf("if (!live.includes(experience))") > -1
+    && exLayout.indexOf("if (!live.includes(experience))") < welcomeAt && welcomeAt < exLayout.indexOf("contextTermsGate(shell.ctx, experience)"));
+  const hqPage = strip(readFileSync("src/app/super-admin/individual/page.tsx", "utf8"));
+  const hqBoard = strip(readFileSync("src/app/super-admin/individual/IndividualAccessBoard.tsx", "utf8"));
+  ok("12f. the HQ grant screen enforces hq.individual.pilot.grant on the page, and the route intent declares the same",
+    /await requireHqCapability\("hq\.individual\.pilot\.grant"\)/.test(hqPage)
+    && capabilityForRoute("/super-admin/individual") === "hq.individual.pilot.grant");
+  ok("12g. the HQ grant screen writes nothing itself: no table call, every change goes through the gated /api/hq/individual routes",
+    !/\.from\("/.test(hqPage + hqBoard) && /"\/api\/hq\/individual\/grants"/.test(hqBoard) && /"\/api\/hq\/individual\/grants\/end"/.test(hqBoard));
+  ok("12h. the HQ sidebar links to the screen (a door, so the page is not left reachable only by URL)",
+    GENERAL_NAV.some(s => s.items.some(i => i.href === "/super-admin/individual")));
+  const loginSrc = strip(readFileSync("src/app/login/page.tsx", "utf8"));
+  ok("12i. the login's Individual presentation is copy only: next is still validated by the one existing rule",
+    /signInProductName\(/.test(loginSrc) && /next && next\.startsWith\("\/"\) && !next\.startsWith\("\/\/"\) && !BUILDING\[next\]/.test(loginSrc));
 
   ok("9g. D10: no Individual code persists AI conversation",
     !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));

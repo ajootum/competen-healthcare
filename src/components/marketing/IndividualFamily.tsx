@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PatternField } from "@/components/marketing/Pattern";
 import {
-  EXPERIENCES, INDIVIDUAL, INDIVIDUAL_SIGN_IN, LIFECYCLE, PASSPORT, siblingOf,
+  EXPERIENCES, INDIVIDUAL, LIFECYCLE, experienceSignIn, PASSPORT, siblingOf,
   type Experience, type ExperienceKey,
 } from "@/lib/marketing/individual-family";
 
@@ -246,7 +246,7 @@ export function ExperienceNav({ e }: { e: Experience }) {
           style={{ color: sibling.accent }}>
           {`Meet ${sibling.name}`} <span aria-hidden className="ml-1">→</span>
         </Link>
-        <Link href={INDIVIDUAL_SIGN_IN}
+        <Link href={experienceSignIn(e.key)}
           className={`shrink-0 inline-flex min-h-[44px] items-center rounded-lg px-4 text-[13.5px] font-semibold text-white hover:opacity-90 ${focusRing}`}
           style={{ background: e.accent }}>
           Sign in

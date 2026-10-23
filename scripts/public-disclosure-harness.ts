@@ -388,7 +388,10 @@ async function main() {
     // never 404 and never render a second copy. Same manual-redirect probe as 7j, for the same reason.
     for (const [p, legacy] of [["/scholar", "/students"], ["/professional", "/professionals"]]) {
       const html = await (await fetch(BASE + p)).text();
-      ok(`7l. ${p} gates into Competen Individual`, html.includes(`href="/individual/sign-in"`));
+      // ⚠ EDITED BY DECISION -- COMPETEN-IND-ACCESS-001 s3: each experience's door names the experience, so a
+      // Scholar visitor's sign-in lands in Scholar. Still the ONE Individual door, never a second one.
+      ok(`7l. ${p} gates into Competen Individual, naming its experience`,
+        html.includes(`href="/individual/sign-in?experience=${p.slice(1)}"`));
       const hop = await fetch(BASE + legacy, { redirect: "manual" });
       ok(`7l. ⚠ ${legacy} permanently redirects to ${p} -- a live indexed route never 404s`,
         (hop.status === 308 || hop.status === 301) && new URL(hop.headers.get("location") ?? "", BASE).pathname === p,

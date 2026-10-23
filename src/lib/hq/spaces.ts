@@ -56,7 +56,8 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.platform.metadata.view",        space: "platform"  },
   { code: "hq.platform.audit.view",           space: "platform"  },
   // COMPETEN-IND-003 D9 (migration 370): the Competen Individual pilot-grant right. Platform space, held by
-  // the Individual Product Administrator position (product line `individual`). A write right with no page.
+  // the Individual Product Administrator position (product line `individual`). Its one page is the pilot
+  // access screen, /super-admin/individual (COMPETEN-IND-ACCESS-001 s4).
   { code: "hq.individual.pilot.grant",        space: "platform"  },
   { code: "hq.practice.operations.view",      space: "practice"  },
   // ⚠ ADDED BY MIGRATION 273, and this list had to follow it. The DB gained the capability and this
@@ -178,6 +179,9 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/governance",            capability: "hq.quality.governance.view" },
   { prefix: "/super-admin/cgr",                   capability: "hq.quality.regulation.view" },
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },
+  // COMPETEN-IND-ACCESS-001 s4: the Competen Individual pilot access screen. The capability already existed
+  // (migration 370, D9) with no page; this declares the page it opens, so the intent map stays the whole truth.
+  { prefix: "/super-admin/individual",            capability: "hq.individual.pilot.grant" },
 
   // ── The Product Director workspace ────────────────────────────────────────────────────────────────
   //

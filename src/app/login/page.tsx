@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { PatternField } from "@/components/marketing/Pattern";
 import { enabledOAuthProviders } from "@/lib/oauth-providers";
+import { signInProductName } from "@/lib/individual/entry";
 
 // Login. Two-panel enterprise sign-in: brand panel left, form right, matching the approved design.
 //
@@ -101,6 +102,15 @@ export default function LoginPage() {
     if (typeof window === "undefined") return null;
     const next = new URLSearchParams(window.location.search).get("next");
     return next ? BUILDING[next] ?? null : null;
+  });
+
+  // COMPETEN-IND-ACCESS-001 s3: a sign-in heading for Competen Scholar or Professional (the public door sent
+  // ?next=/individual/scholar) names that product above the form, the way the building notice does. It is
+  // PRESENTATION ONLY: the same form, the same /api/auth/login, the same validated next below, and the
+  // destination decides access on arrival. There is no second login and no second account.
+  const [individualProduct] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return signInProductName(new URLSearchParams(window.location.search).get("next"));
   });
 
   async function handleSubmit(e: React.FormEvent) {
@@ -218,6 +228,15 @@ export default function LoginPage() {
                 <p className="mt-1 text-[12.5px] leading-relaxed text-indigo-800">
                   {building.blurb} Sign in and we&apos;ll take you to your Competen workspaces in the
                   meantime — you&apos;ll find {building.name} here the moment it opens.
+                </p>
+              </div>
+            )}
+            {individualProduct && !resolution && (
+              <div className="mt-5 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
+                <p className="text-[13px] font-semibold text-teal-900">Signing in to {individualProduct}</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-teal-800">
+                  Use your Competen account: the email address your invitation was sent to. There is no
+                  separate account for {individualProduct}.
                 </p>
               </div>
             )}
@@ -353,10 +372,14 @@ export default function LoginPage() {
               )}
             </div>
 
-            <p className="mt-6 text-center text-[13px] text-gray-500">
-              Don&apos;t have an account?{" "}
-              <Link href="/signup" className="font-semibold text-[var(--cmp-text-success)] hover:underline">Create one free</Link>
-            </p>
+            {/* Individual is invitation-only in the pilot (COMPETEN-IND-ACCESS-001 s1), so a sign-in heading
+                there does not offer to create an account. */}
+            {!individualProduct && (
+              <p className="mt-6 text-center text-[13px] text-gray-500">
+                Don&apos;t have an account?{" "}
+                <Link href="/signup" className="font-semibold text-[var(--cmp-text-success)] hover:underline">Create one free</Link>
+              </p>
+            )}
 
             {/* Security note. Says what is actually true of this deployment rather than claiming a
                 certification nobody has been audited against. */}

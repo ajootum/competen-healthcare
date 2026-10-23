@@ -76,8 +76,12 @@ export const ACCESS_DOORS: readonly AccessDoor[] = [
     path: "/individual/sign-in",
     sourceFile: "src/app/individual/sign-in/page.tsx",
     plane: "customer",
+    // COMPETEN-IND-ACCESS-001: the status describes PRODUCTION, where the release gate is off. With the gate
+    // on (staging, or production after its own owner GO) the same door funnels to /login?next=/individual/...
+    // like the Enterprise door -- still no credential field of its own, and gate 3 decides on arrival.
     status: "being_built",
-    truth: "The product is being built; the door says so before anything else and has no password field.",
+    truth: "The product is being built; the door says so before anything else and has no password field. "
+      + "With the Individual release gate on it funnels to the one sign-in, preserving the experience.",
   },
   {
     code: "RECRUITMENT",
