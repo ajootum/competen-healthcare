@@ -30,7 +30,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EVIDENCE_LABEL } from "../src/lib/individual/passport";
 import { OWN_EVIDENCE_CLASSES, PROFESSIONAL_TABLES, DOCUMENT_BUCKET } from "../src/lib/individual/professional/vocabulary";
-import { ownRecordsFrom } from "../src/lib/individual/professional/passport-records";
+import { ownRecordsFrom, acceptedLinks } from "../src/lib/individual/professional/passport-records";
+import { assembleMappings, evidenceByCompetency } from "../src/lib/individual/professional/mapping-store";
 import { ClassLabel } from "../src/app/individual/_components/professional/bits";
 import { EXPERIENCES } from "../src/lib/individual/experiences";
 
@@ -77,6 +78,7 @@ const WRITES: Record<string, string[]> = {
   "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "individual_professional_share.insert", "passport_share_tokens.update"],
   "src/lib/individual/professional/reminders.ts": ["individual_professional_evidence.update", "individual_professional_profile.update"],
   "src/app/api/individual/professional/reminders/route.ts": ["individual_professional_profile.update", "individual_professional_profile.insert"],
+  "src/lib/individual/professional/mapping-store.ts": ["individual_professional_competency_map.insert", "individual_professional_competency_decision.insert"],
 };
 const ESTATE_NAMED = /^(cpd_logs|professional_credentials|evidence|cdp_reminders|notifications|competency_decisions|employment_records|profiles)\./;
 
@@ -311,6 +313,73 @@ const checkPrefsSchema = (mig: string) => ({
   detail: "374 must add reminder_in_app default true and reminder_email default false to the own profile, and touch no estate table",
 });
 
+// ── M. COMPETENCY MAPPING (migration 393, COMPETEN-HOLDINGS-SHARED-ENGINES-01) ────────────────────────
+// The Holdings engine proposes, the person decides, and only an ACCEPTED link on CPD or evidence counts.
+// A proposal, a rejection or a goal (intent, not evidence) never does -- and nothing says verified.
+const MAP_FILE = "src/lib/individual/professional/mapping-store.ts";
+const MAP_ROUTE = "src/app/api/individual/professional/mappings/route.ts";
+const MIG393_FILE = "supabase/migrations/393-individual-professional-competency-mapping.sql";
+const MIG393 = existsSync(MIG393_FILE) ? readFileSync(MIG393_FILE, "utf8").replace(/--.*$/gm, "").toLowerCase() : "";
+const MAP_ROWS = [
+  { id: "m1", cpd_id: "c1", competency_id: "K1", source: "person" },   // accepted -> counts, document-backed
+  { id: "m2", cpd_id: "c2", competency_id: "K2", source: "ai", confidence: 0.8 }, // proposed -> never counts
+  { id: "m3", evidence_id: "e1", competency_id: "K3", source: "ai", confidence: 0.7 }, // rejected -> never counts
+  { id: "m4", goal_id: "g1", competency_id: "K4", source: "person" },  // a goal -> intent, not evidence
+  { id: "m5", evidence_id: "e1", competency_id: "K5", source: "ai", confidence: 0.9 }, // accepted then rejected
+];
+const MAP_DECISIONS = [
+  { map_id: "m1", decision: "accepted", decided_by: "person", created_at: "2026-10-01T00:00:00Z" },
+  { map_id: "m3", decision: "rejected", decided_by: "person", created_at: "2026-10-01T00:00:00Z" },
+  { map_id: "m4", decision: "accepted", decided_by: "person", created_at: "2026-10-01T00:00:00Z" },
+  { map_id: "m5", decision: "accepted", decided_by: "person", created_at: "2026-10-01T00:00:00Z" },
+  { map_id: "m5", decision: "rejected", decided_by: "person", created_at: "2026-10-02T00:00:00Z" },
+];
+const MAP_RECORD = { cpd: [{ id: "c1", evidence_class: "source_linked" }, { id: "c2", evidence_class: "self_declared" }], evidence: [{ id: "e1", evidence_class: "self_declared", framework_competency_id: null }] };
+const checkCounting = (count: typeof evidenceByCompetency, assemble: typeof assembleMappings) => {
+  const ev = count(assemble(MAP_ROWS, MAP_DECISIONS), MAP_RECORD);
+  const got = [...ev].map(([k, v]) => `${k}:${v.evidence}/${v.positive}`).sort().join(",");
+  return { ok: got === "K1:1/1", detail: got };
+};
+const checkPassportLinks = (links: typeof acceptedLinks) => {
+  const names = new Map([["K1", "Oxygen therapy"], ["K2", "Proposed only"], ["K3", "Rejected"], ["K4", "Goal only"], ["K5", "Withdrawn"]]);
+  const got = [...links({ evidence: MAP_RECORD.evidence } as never, assembleMappings(MAP_ROWS, MAP_DECISIONS), names)].map(([k, v]) => `${k}=${v.join("|")}`).join(",");
+  return { ok: got === "cpd:c1=Oxygen therapy", detail: got };
+};
+const checkMappingWrites = (src: Sources) => {
+  const s = src.get(MAP_FILE) ?? "";
+  const r = src.get(MAP_ROUTE) ?? "";
+  const add = s.slice(s.indexOf("export async function addPersonMapping"), s.indexOf("export async function decideMapping"));
+  const offeredFirst = add.indexOf("if (!offered(catalogue, competencyId)) return \"not_offered\";");
+  const ownFirst = add.indexOf(".eq(\"id\", subjectId).eq(\"user_id\", userId).maybeSingle()");
+  const insert = add.indexOf("insert({ user_id: userId, [COLUMN[kind]]: subjectId, competency_id: competencyId, source: \"person\" })");
+  const proposedOffered = /if \(!offered\(catalogue, p\.competencyId\) \|\| existing\.has\(/.test(s);
+  const aiProvenance = /source: "ai",\s*confidence: Math\.round\(p\.confidence \* 100\) \/ 100, rationale: p\.rationale, model: r\.model, prompt_version: r\.promptVersion/.test(s);
+  const allowlisted = (r.match(/loadCatalogueFor\(ctx\.admin, "professional"\)/g) ?? []).length >= 2;
+  const q = r.indexOf("individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin))");
+  const cfg = r.indexOf("if (!aiStatus().configured)");
+  const call = r.indexOf("await proposeForSubjects(");
+  const audited = r.indexOf("\"ai_assistant_query\"") > call;
+  const ok = offeredFirst > -1 && ownFirst > offeredFirst && insert > ownFirst && proposedOffered && aiProvenance && allowlisted && q > -1 && cfg > q && call > cfg && audited;
+  return { ok, detail: `offered ${offeredFirst}, own ${ownFirst}, insert ${insert}, proposals offered ${proposedOffered}, ai provenance ${aiProvenance}, allowlist ${allowlisted}, order ${q}<${cfg}<${call}, audited ${audited}` };
+};
+const checkMappingWords = (src: Sources) => {
+  const ui = src.get("src/app/individual/_components/professional/CompetencyLinks.tsx") ?? "";
+  const v = src.get("src/app/verify/[token]/page.tsx") ?? "";
+  const words = ui.includes("suggested by AI, not accepted") && ui.includes("linked by you") && !/bg-green|text-green-[0-9]+[^"]*">\{l\./.test(ui);
+  return { ok: words && /Linked by the holder to: \{o\.competencies\.join\(", "\)\} \(not verified\)/.test(v), detail: `ui words ${words}` };
+};
+const checkMappingSchema = (mig: string) => {
+  const rls = ["individual_professional_competency_map", "individual_professional_competency_decision"].every(t =>
+    mig.includes(`alter table ${t} enable row level security`) && new RegExp(`create policy ${t}_read_own on ${t}\\s+for select using \\(auth\\.uid\\(\\) = user_id\\)`).test(mig));
+  const noWrite = !/create policy [a-z_]+ on individual_professional_competency_[a-z_]+\s+for (insert|update|delete|all)/.test(mig);
+  const fks = ["goal_id", "cpd_id", "evidence_id"].every(c => new RegExp(`foreign key \\(${c}, user_id\\)\\s+references individual_professional_[a-z]+\\(id, user_id\\) on delete cascade`).test(mig))
+    && /foreign key \(map_id, user_id\)\s+references individual_professional_competency_map\(id, user_id\) on delete cascade/.test(mig);
+  const one = /check \(\(goal_id is not null\)::int \+ \(cpd_id is not null\)::int \+ \(evidence_id is not null\)::int = 1\)/.test(mig);
+  const appendOnly = /if tg_op = 'delete' and pg_trigger_depth\(\) > 1 then\s+return old;/.test(mig) && /before update or delete on individual_professional_competency_decision/.test(mig);
+  const person = /decided_by = 'person'/.test(mig) && !/verified/.test(mig.replace(/raise exception '[^']*'/g, ""));
+  return { ok: rls && noWrite && fks && one && appendOnly && person, detail: `rls ${rls}, no write ${noWrite}, composite fks ${fks}, one subject ${one}, append-only ${appendOnly}, person-only ${person}` };
+};
+
 function main() {
   console.log("INDIVIDUAL PROFESSIONAL HARNESS (COMPETEN-IND-007)\n");
   const run = (name: string, r: { ok: boolean; detail: string }) => ok(name, r.ok, r.detail);
@@ -357,6 +426,13 @@ function main() {
   schema("S1. D6: RLS on, own-row SELECT only, no write policy, experience_code with no default -- on every 373 table", checkRls(MIG));
   schema("S2. cross-person links are unrepresentable: composite FKs and owner-prefixed document paths", checkCrossPersonLinks(MIG));
 
+  run("M1. only an ACCEPTED link on CPD or evidence counts toward coverage -- never a proposal, a rejection or a goal", checkCounting(evidenceByCompetency, assembleMappings));
+  run("M2. the Passport shows only accepted links on CPD and evidence, by name", checkPassportLinks(acceptedLinks));
+  run("M3. writes: only offered (allowlisted) competencies, own entries only, AI rows carry provenance; propose keeps the assistant order", checkMappingWrites(ALL));
+  run("M4. every state is said in words, never green, and /verify says the links are not verified", checkMappingWords(ALL));
+  if (MIG393) run("M5. 393: RLS own-row SELECT only, composite FKs to own rows, exactly one subject, append-only decisions with the cascade path", checkMappingSchema(MIG393));
+  else { pend.push("M5"); console.log(`  PEND  M5. ${MIG393_FILE} is not in this checkout`); }
+
   // ── P. PLANTED FAILURES -- each check must go red on a copy with one violation in it ─────────────
   console.log("\n  planted-failure controls (in memory, nothing on disk changes):");
   const plant = (f: string, add: string): Sources => { const c = new Map(ALL); c.set(f, (c.get(f) ?? "") + `\n${add}\n`); return c; };
@@ -378,7 +454,7 @@ function main() {
   redSchema("E1 on a verified column", checkGeneratedClass(MIG.replace("create table if not exists individual_professional_evidence (", "create table if not exists individual_professional_evidence (\n  verified boolean,")));
   redSchema("E1 on a stored, writable class", checkGeneratedClass(MIG.replace(/evidence_class text generated always as/, "evidence_class text, x text generated always as")));
   red("E2 on a label that says Verified", checkLabels({ ...EVIDENCE_LABEL, source_linked: "Verified with a document" }));
-  red("E3 when a foreign class passes through", checkPassportItems(r => (ownRecordsFrom(r) ?? []).concat([{ kind: "credential", title: "Forged", detail: null, date: null, expires: null, evidence: "independently_verified" as never }])));
+  red("E3 when a foreign class passes through", checkPassportItems(r => (ownRecordsFrom(r) ?? []).concat([{ kind: "credential", title: "Forged", detail: null, date: null, expires: null, evidence: "independently_verified" as never, competencies: [] }])));
   red("E3 when private text leaks", checkPassportItems(r => (ownRecordsFrom(r) ?? []).map(i => i.kind === "credential" ? { ...i, detail: "private detail" } : i)));
   red("E4 when a foreign class renders", checkRenderedLabel(v => v === "institution_verified" ? "<span>Verified</span>" : renderToStaticMarkup(createElement(ClassLabel, { value: v }))));
   red("E5 without the release gate", checkVerifyPage(new Map([...ALL].map(([f, s]) => [f, f === "src/app/verify/[token]/page.tsx" ? s.replace("(await individualAppEnabled(admin)) && await shareCarriesOwnRecords(admin, share.id, share.nurse_id)", "await shareCarriesOwnRecords(admin, share.id, share.nurse_id)") : s]))));
@@ -407,6 +483,23 @@ function main() {
   redSchema("S1 on a write policy", checkRls(MIG + "\ncreate policy p on individual_professional_cpd for insert with check (true)"));
   redSchema("S1 on a defaulted origin", checkRls(MIG.replace("experience_code text not null,", "experience_code text not null default 'professional',")));
   redSchema("S2 on a single-column need link", checkCrossPersonLinks(MIG.replace("foreign key (need_id, user_id) references individual_professional_need(id, user_id) on delete set null (need_id)", "foreign key (need_id) references individual_professional_need(id)")));
+
+  const mapPlant = (f: string, a: string, b: string) => new Map([...ALL].map(([k, v]) => [k, k === f ? v.replace(a, b) : v]));
+  red("M1 when a proposal counts", checkCounting((m, r) => evidenceByCompetency(m.map(x => ({ ...x, state: x.state === "proposed" ? "accepted" as const : x.state })), r), assembleMappings));
+  red("M1 when a goal counts as evidence", checkCounting((m, r) => evidenceByCompetency(m.map(x => x.kind === "goal" ? { ...x, kind: "cpd" as const, subjectId: "c2" } : x), r), assembleMappings));
+  red("M1 when the first decision wins", checkCounting(evidenceByCompetency, (rows, ds) => assembleMappings(rows, [...ds].reverse().map((d, i) => ({ ...d, created_at: `2026-10-0${i + 1}T00:00:00Z` })))));
+  red("M2 when a proposal is shown", checkPassportLinks((rec, m, n) => acceptedLinks(rec, (m ?? []).map(x => ({ ...x, state: "accepted" as const })), n)));
+  red("M3 without the offered check", checkMappingWrites(mapPlant(MAP_FILE, 'if (!offered(catalogue, competencyId)) return "not_offered";', "")));
+  red("M3 when a proposal outside the catalogue is stored", checkMappingWrites(mapPlant(MAP_FILE, "if (!offered(catalogue, p.competencyId) || existing.has(", "if (existing.has(")));
+  red("M3 when the AI is called before the quota", checkMappingWrites(mapPlant(MAP_ROUTE, "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin))", "{ ok: true, limit: 0 }")));
+  red("M4 on a green chip", checkMappingWords(mapPlant("src/app/individual/_components/professional/CompetencyLinks.tsx", "border-amber-300 bg-amber-50", "border-green-300 bg-green-50")));
+  red("M4 when /verify drops not verified", checkMappingWords(mapPlant("src/app/verify/[token]/page.tsx", " (not verified)</span>", "</span>")));
+  if (MIG393) {
+    red("M5 on a write policy", checkMappingSchema(MIG393 + "\ncreate policy p on individual_professional_competency_map for insert with check (true)"));
+    red("M5 on a single-column subject link", checkMappingSchema(MIG393.replace("foreign key (cpd_id, user_id)", "foreign key (cpd_id)")));
+    red("M5 without the cascade path", checkMappingSchema(MIG393.replace("pg_trigger_depth() > 1", "false")));
+    red("M5 on a decision made by the ai", checkMappingSchema(MIG393.replace("decided_by = 'person'", "decided_by in ('person', 'ai')")));
+  }
 
   console.log(`\n${failures.length ? "RED" : pend.length ? "GREEN, SCHEMA PENDING" : "ALL GREEN"} -- ${pass} passed, ${failures.length} failed${pend.length ? `, ${pend.length} pending (migration 373 draft absent)` : ""}`);
   if (failures.length) { failures.forEach(f => console.log(`  FAILED: ${f}`)); process.exit(1); }
