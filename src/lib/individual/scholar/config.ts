@@ -105,7 +105,8 @@ export const PROMPT_VERSIONS = {
   caseSteps: "scholar-case-steps-v2",
   // COMPETEN-SCHOLAR-LEARN-01: the learning actions, the informal check and the clarification, on the same
   // system prompt and checks as explain (generation.ts). v2: a last no-counting reminder (staging, Simplify).
-  learn: "scholar-learn-v2",
+  // v3: Simplify keeps the passages' own names rather than counting them ("two tubes" for "right and left").
+  learn: "scholar-learn-v3",
 } as const;
 
 /** S4: a multi-step practice case has this many steps at most (migration 388 allows 1 to 5). */
