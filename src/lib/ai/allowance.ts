@@ -4,8 +4,9 @@ import { generate, type GenerateArgs, type GenerateResult } from "./client";
 import { classifyRisk, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision } from "./clinical-risk";
 import {
   activityAt, allowancePeriod, defaultPolicy, fairUsePath, FAIR_USE_SCOPE, maxInputTokens, remainingBand, resolvePolicy, serviceLevel,
-  type AiProduct, type AiServiceLevel, type Balance, type ProductAiPolicy,
+  type AiProduct, type AiServiceLevel, type AiTier, type Balance, type ProductAiPolicy,
 } from "./fair-use-policy";
+import { budgetAccount, budgetPath, loadBudgetPolicy, type ResolvedOwner } from "./consumption";
 
 // ── COMPETEN HOLDINGS AI FAIR USE: THE ENGINE ── COMPETEN-AI-FAIR-USE-01, migrations 410 and 411 ───────────
 //
@@ -163,7 +164,7 @@ export const requestIdFor = (userId: string, clientId: string | null | undefined
  * Run one AI request through the allowance. The caller has already applied its guard and its existing quota.
  * With metering off this is generate() unchanged.
  */
-export async function runMeteredAi(admin: any, args: { userId: string; product: AiProduct; activity: string; requestId: string; generate: GenerateArgs; risk?: RiskContext })
+export async function runMeteredAi(admin: any, args: { userId: string; product: AiProduct; activity: string; requestId: string; generate: GenerateArgs; risk?: RiskContext; record?: { type: string; ref: string } | null })
   : Promise<GenerateResult | MeteredRefusal> {
   if (!(await aiFairUseEnabled(admin))) return generate(args.generate);
   const { policy, readable } = await loadProductPolicy(admin, args.product);
@@ -182,43 +183,118 @@ export async function runMeteredAi(admin: any, args: { userId: string; product: 
     return { ok: false, error, standing: decision.reason ? { ...standing, message: decision.reason } : standing, risk };
   }
 
-  const status = aiStatus();
-  const model = status.models?.[decision.tier];
-  if (!status.provider || !status.canGenerate || !model) return { ok: false, error: "not_configured" };
-  const activity = policy.activities[args.activity];
-  const maxOut = Math.min(activity.maxOutputTokens, args.generate.maxTokens ?? activity.maxOutputTokens);
-  // Everything the reservation is priced and limited by comes from the published policy and the database. The
-  // client supplied only the retry key inside requestId (amendment 3).
-  const { data: held, error: rErr } = await admin.rpc("ai_reserve", {
-    p_request_id: args.requestId, p_account: a.account.id, p_activity: args.activity, p_pool: decision.via, p_provider: status.provider, p_model: model,
-    p_max_input_tokens: maxInputTokens(args.generate.system, args.generate.user), p_max_output_tokens: maxOut, p_policy_version: policy.version,
-    p_currency: policy.currency, p_buffer_pct: policy.fxBufferPct, p_risk_tier: risk!.tier, p_risk_rule: risk!.rule,
-    p_unreconciled_cap_cau: policy.maxUnreconciledCau,
-    p_window_minutes: policy.windowMinutes, p_window_cap_cau: policy.windowCapCau, p_activity_cap: activity.capPerPeriod,
+  const m = await meter(admin, {
+    accountId: a.account.id, policy, activity: args.activity, tier: decision.tier, pool: decision.via, risk: risk!,
+    capPerPeriod: policy.activities[args.activity].capPerPeriod, unreconciledCap: policy.maxUnreconciledCau,
+    windowMinutes: policy.windowMinutes, windowCapCau: policy.windowCapCau,
+    actor: args.userId, service: null, record: args.record ?? null, requestId: args.requestId, generate: args.generate,
   });
-  if (rErr) return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
-  const r = Array.isArray(held) ? held[0] : held;
-  if (typeof r?.reason === "string" && r.reason.startsWith("retry")) return { ok: false, error: "duplicate_request", standing };
-  if (!r?.granted) {
-    if (r?.reason === "not_eligible") return { ok: false, error: "not_eligible", standing: { ...standing, message: NOT_ELIGIBLE }, risk };
-    if (r?.reason === "unreconciled_ceiling") return { ok: false, error: "pending_reconciliation", standing: { ...standing, message: PENDING } };
-    return { ok: false, error: "allowance_exhausted", standing: { ...standing, message: policy.messages[standing.level === "full" ? "optimised" : standing.level] } };
-  }
+  if ("result" in m) return m.result;
+  if (m.refused === "unreadable") return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
+  if (m.refused === "not_configured") return { ok: false, error: "not_configured" };
+  if (m.refused === "duplicate") return { ok: false, error: "duplicate_request", standing };
+  if (m.refused === "not_eligible") return { ok: false, error: "not_eligible", standing: { ...standing, message: NOT_ELIGIBLE }, risk };
+  if (m.refused === "unreconciled_ceiling") return { ok: false, error: "pending_reconciliation", standing: { ...standing, message: PENDING } };
+  return { ok: false, error: "allowance_exhausted", standing: { ...standing, message: policy.messages[standing.level === "full" ? "optimised" : standing.level] } };
+}
 
-  const out = await generate({ ...args.generate, tier: decision.tier, maxTokens: maxOut });
+type MeterArgs = {
+  accountId: string; policy: ProductAiPolicy; activity: string; tier: AiTier; pool: "included" | "reserve"; risk: RiskDecision;
+  capPerPeriod: number | null; unreconciledCap: number; windowMinutes: number | null; windowCapCau: number | null;
+  actor: string | null; service: string | null; record: { type: string; ref: string } | null; requestId: string; generate: GenerateArgs;
+};
+type MeterOutcome = { result: GenerateResult } | { refused: "unreadable" | "not_configured" | "duplicate" | "not_eligible" | "unreconciled_ceiling" | "exhausted" | "owner_mismatch" | "budget_suspended" | string };
+
+/**
+ * The one money path, for every budget owner: model for the tier, maximum consumption, an ATOMIC reservation in the
+ * database (ai_reserve, which also decides who may charge the account), generate(), then settlement of the actual
+ * usage, release when nothing was billed, or unreconciled when the charge is unknown.
+ */
+async function meter(admin: any, m: MeterArgs): Promise<MeterOutcome> {
+  const status = aiStatus();
+  const model = status.models?.[m.tier];
+  if (!status.provider || !status.canGenerate || !model) return { refused: "not_configured" };
+  const activity = m.policy.activities[m.activity];
+  const maxOut = Math.min(activity.maxOutputTokens, m.generate.maxTokens ?? activity.maxOutputTokens);
+  // Everything the reservation is priced and limited by comes from the published policy and the database. The
+  // client supplied only the retry key inside requestId (amendment 3). Who pays was decided on the server.
+  const { data: held, error: rErr } = await admin.rpc("ai_reserve", {
+    p_request_id: m.requestId, p_account: m.accountId, p_activity: m.activity, p_pool: m.pool, p_provider: status.provider, p_model: model,
+    p_max_input_tokens: maxInputTokens(m.generate.system, m.generate.user), p_max_output_tokens: maxOut, p_policy_version: m.policy.version,
+    p_currency: m.policy.currency, p_buffer_pct: m.policy.fxBufferPct, p_risk_tier: m.risk.tier, p_risk_rule: m.risk.rule,
+    p_unreconciled_cap_cau: m.unreconciledCap,
+    p_actor: m.actor, p_service: m.service, p_record_type: m.record?.type ?? null, p_record_ref: m.record?.ref ?? null,
+    p_window_minutes: m.windowMinutes, p_window_cap_cau: m.windowCapCau, p_activity_cap: m.capPerPeriod,
+  });
+  if (rErr) return { refused: "unreadable" };
+  const r = Array.isArray(held) ? held[0] : held;
+  if (typeof r?.reason === "string" && r.reason.startsWith("retry")) return { refused: "duplicate" };
+  if (!r?.granted) return { refused: r?.reason === "not_eligible" || r?.reason === "unreconciled_ceiling" || r?.reason === "owner_mismatch" || r?.reason === "budget_suspended" ? r.reason : "exhausted" };
+
+  const out = await generate({ ...m.generate, tier: m.tier, maxTokens: maxOut });
   if (out.usage) {
-    const s = await settle(admin, args.requestId, out.ok ? out.model : model, out.usage.input, out.usage.output, out.ok ? "ok" : out.error === "refusal" ? "refusal" : "error");
-    if (!s) console.error(`[ai-fair-use] settlement of ${args.requestId} failed: left reserved for reconciliation`);
+    const s = await settle(admin, m.requestId, out.ok ? out.model : model, out.usage.input, out.usage.output, out.ok ? "ok" : out.error === "refusal" ? "refusal" : "error");
+    if (!s) console.error(`[ai-fair-use] settlement of ${m.requestId} failed: left reserved for reconciliation`);
   } else if (!out.ok && (out.error === "not_configured" || out.billing === "none")) {
     // The provider declined before generating, or was never called: nothing was billed.
-    const { error } = await admin.rpc("ai_release", { p_request_id: args.requestId, p_outcome: out.error === "not_configured" ? "not_configured" : "error" });
-    if (error) console.error(`[ai-fair-use] release of ${args.requestId} failed: left reserved for reconciliation`);
+    const { error } = await admin.rpc("ai_release", { p_request_id: m.requestId, p_outcome: out.error === "not_configured" ? "not_configured" : "error" });
+    if (error) console.error(`[ai-fair-use] release of ${m.requestId} failed: left reserved for reconciliation`);
   } else {
     // The charge is unknown. Keep the hold and wait for the provider's usage (amendment 4).
-    const { error } = await admin.rpc("ai_mark_unreconciled", { p_request_id: args.requestId, p_outcome: "timeout" });
-    if (error) console.error(`[ai-fair-use] ${args.requestId} could not be marked unreconciled: left reserved, the stale sweep marks it`);
+    const { error } = await admin.rpc("ai_mark_unreconciled", { p_request_id: m.requestId, p_outcome: "timeout" });
+    if (error) console.error(`[ai-fair-use] ${m.requestId} could not be marked unreconciled: left reserved, the stale sweep marks it`);
   }
-  return out;
+  return { result: out };
+}
+
+// ── Platform and institution budgets (COMPETEN-HOLDINGS-AI-CONSUMPTION-01) ──────────────────────────────────
+
+export type BudgetError = "no_ai" | "no_budget" | "budget_inactive" | "institution_not_funded" | "no_initiator" | "wrong_product"
+  | "budget_exhausted" | "activity_not_funded" | "automated_limit" | "duplicate_request" | "not_eligible" | "pending_reconciliation" | "unreadable" | "unknown_activity";
+export type BudgetRefusal = { ok: false; error: BudgetError; budget: string | null; message: string; risk?: RiskDecision };
+export const isBudgetRefusal = (r: unknown): r is BudgetRefusal => !!r && typeof r === "object" && (r as any).ok === false && "budget" in (r as any);
+
+/**
+ * Run one AI request on behalf of a server-resolved owner (consumption.ts resolveOwner). An individual owner goes
+ * through the person's allowance exactly as runMeteredAi. A platform or institution owner goes through its budget:
+ * the budget policy decides what it funds and its ceiling, the product policy decides the model, the risk floor and
+ * the eligibility. With metering off this is generate() unchanged.
+ */
+export async function runOwnedAi(admin: any, args: {
+  owner: ResolvedOwner; product: AiProduct; activity: string; requestId: string; generate: GenerateArgs; risk?: RiskContext; record?: { type: string; ref: string } | null;
+}): Promise<GenerateResult | MeteredRefusal | BudgetRefusal> {
+  const o = args.owner;
+  if (o.type === "individual") return runMeteredAi(admin, { userId: o.userId, product: args.product, activity: args.activity, requestId: args.requestId, generate: args.generate, risk: args.risk, record: args.record ?? null });
+  if (!(await aiFairUseEnabled(admin))) return generate(args.generate);
+  const refuse = (error: BudgetError, message: string, risk?: RiskDecision): BudgetRefusal => ({ ok: false, error, budget: o.budget.code, message, risk });
+  const [{ policy, readable }, bp] = await Promise.all([loadProductPolicy(admin, args.product), loadBudgetPolicy(admin, o.budget.code)]);
+  if (!readable) return refuse("unreadable", "The AI policy could not be read just now, so nothing was sent.");
+  if (!Object.prototype.hasOwnProperty.call(policy.activities, args.activity)) return refuse("unknown_activity", "This AI activity is not offered.");
+  if (!Object.prototype.hasOwnProperty.call(bp.activities, args.activity)) return refuse("activity_not_funded", "This budget does not fund this kind of AI work.");
+  const acc = await budgetAccount(admin, o.budget, bp, `${budgetPath(o.budget.code)}`);
+  if (!acc.ok) return refuse("unreadable", "The budget could not be read just now, so nothing was sent.");
+  if (o.service && bp.automatedLimit !== null) {
+    // An operational limit on unattended processing, counted here. The money ceiling itself is atomic in ai_reserve.
+    const { count, error } = await admin.from("ai_usage_ledger").select("id", { count: "exact", head: true }).eq("account_id", acc.account.id).not("initiated_by_service", "is", null).neq("status", "released");
+    if (error) return refuse("unreadable", "The budget could not be read just now, so nothing was sent.");
+    if ((count ?? 0) >= bp.automatedLimit) return refuse("automated_limit", "This budget's automated-processing limit for the month is reached.");
+  } else if (o.service) return refuse("automated_limit", "This budget allows no automated processing.");
+  const risk = classifyRisk(policy.risk, await resolveRiskSubject(admin, args.risk), policy.activities[args.activity].riskFloor);
+  const big = { includedCau: 1, reserveCau: 0, usedCau: 0, reservedCau: 0, reserveUsedCau: 0, reserveReservedCau: 0 };
+  const decision = activityAt(policy, "full", args.activity, big, risk.tier);
+  if (!decision.available || !decision.tier) return refuse("unknown_activity", decision.reason ?? "This AI activity is not offered.", risk);
+  const m = await meter(admin, {
+    accountId: acc.account.id, policy, activity: args.activity, tier: decision.tier, pool: "included", risk,
+    capPerPeriod: bp.activities[args.activity].capPerPeriod, unreconciledCap: bp.unreconciledCapCau, windowMinutes: null, windowCapCau: null,
+    actor: o.actorUserId, service: o.service, record: args.record ?? null, requestId: args.requestId, generate: args.generate,
+  });
+  if ("result" in m) return m.result;
+  if (m.refused === "duplicate") return refuse("duplicate_request", "That request was already received.");
+  if (m.refused === "not_eligible") return refuse("not_eligible", NOT_ELIGIBLE, risk);
+  if (m.refused === "unreconciled_ceiling") return refuse("pending_reconciliation", PENDING);
+  if (m.refused === "budget_suspended") return refuse("budget_inactive", "The budget for this work is suspended or closed.");
+  if (m.refused === "not_configured" || m.refused === "unreadable") return refuse("unreadable", "AI could not be reached just now, so nothing was sent.");
+  return refuse("budget_exhausted", "This budget's ceiling for the month is reached. Shared content work waits until it renews; students' learning is unaffected.");
 }
 
 const NOT_ELIGIBLE = "This activity needs an AI model approved for clinical content, and none is available for it right now. Nothing was sent.";

@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
-import { loadEvaluations, loadPolicies, loadRates } from "@/lib/ai/fair-use-admin";
+import { loadBudgets, loadEvaluations, loadPolicies, loadRates, pendingDrafts } from "@/lib/ai/fair-use-admin";
 import { aiFairUseEnabled } from "@/lib/ai/allowance";
 import { RISK_TIER_LABEL, type RiskTier } from "@/lib/ai/clinical-risk";
 import { PolicyEditor, PublishPolicies, RateForm } from "./_components/FairUseControls";
+import { BudgetCreate, BudgetPolicyEditor, BudgetStatus, RoutingEditor } from "./_components/BudgetControls";
 
 // /super-admin/ai/fair-use -- COMPETEN-AI-FAIR-USE-01 s12. Holdings AI usage governance, no code.
 //
@@ -23,8 +24,9 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB",
 
 export default async function FairUsePage() {
   const ctx = await requireHqCapability("hq.platform.ai.manage");
-  const [rates, policies, on, evaluations] = await Promise.all([loadRates(ctx.admin), loadPolicies(ctx.admin), aiFairUseEnabled(ctx.admin), loadEvaluations(ctx.admin)]);
-  const pending = (policies ?? []).filter(p => p.pending).length;
+  const [rates, policies, on, evaluations, budgets, drafts] = await Promise.all([loadRates(ctx.admin), loadPolicies(ctx.admin), aiFairUseEnabled(ctx.admin), loadEvaluations(ctx.admin), loadBudgets(ctx.admin), pendingDrafts(ctx.admin)]);
+  // Every pending draft in the scope -- product policies, assistant profiles, budgets, routing -- publishes together.
+  const pending = drafts ?? (policies ?? []).filter(p => p.pending).length;
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -157,6 +159,54 @@ export default async function FairUsePage() {
               <div className="mt-3"><PolicyEditor product={p.product} initial={(p.draft ?? p.published) as any} /></div>
             </section>
           ))}
+
+          <section aria-labelledby="bu-h" className="rounded-xl border border-gray-200 bg-white p-5">
+            <h2 id="bu-h" className="text-[16px] font-bold text-gray-900">Budgets: who pays</h2>
+            <p className="text-[13px] text-gray-600">
+              One AI ledger, three owners. A person&apos;s own learning is charged to their allowance. Shared content work -- screening, refining and
+              developing shared cases -- is charged to a platform budget, or to an institution budget where an authorised institution funds it. The
+              server decides which from the workflow, never the browser. A budget running out pauses only its own work: students&apos; learning is
+              unaffected.
+            </p>
+            {budgets === null ? (
+              <p className="mt-2 text-[13px] text-amber-900">Budgets could not be read just now (or migration 421 is not applied on this environment).</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="mt-2 w-full min-w-[640px] text-left text-[13px]">
+                    <caption className="sr-only">AI spend this month by owner</caption>
+                    <thead><tr className="border-b border-gray-200 text-[11.5px] uppercase tracking-[0.08em] text-gray-500"><th scope="col" className="py-1.5">Owner (since {budgets.report.since.slice(0, 10)})</th><th scope="col">Requests</th><th scope="col">Provider spend (USD, measured)</th><th scope="col">Allowance used (CAU)</th><th scope="col">Awaiting reconciliation</th></tr></thead>
+                    <tbody>{budgets.report.byOwner.map(o => (
+                      <tr key={o.ownerType} className="border-b border-gray-100"><th scope="row" className="py-1.5 font-normal capitalize">{o.ownerType}</th><td>{o.requests}</td><td>{o.costUsd.toFixed(4)}</td><td>{o.cau.toFixed(2)}</td><td>{o.unreconciled}</td></tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+                {budgets.budgets.length === 0 && <p className="mt-2 text-[13px] text-gray-700">No budget exists. Platform and institution AI work is refused until one is created, funded by a published policy, and assigned to the work.</p>}
+                {budgets.budgets.map(b => (
+                  <div key={b.id} className="mt-3 rounded-lg border border-gray-100 p-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="text-[13.5px] font-semibold text-gray-900">{b.label} <span className="font-mono text-[12px] text-gray-500">{b.code}</span></p>
+                      <BudgetStatus id={b.id} status={b.status} />
+                    </div>
+                    <p className="text-[12.5px] text-gray-600">
+                      {b.ownerType === "institution" ? `Institution ${b.institutionRef} · funding: ${b.fundingRef}` : "Platform"} · funds {b.product} · {b.status}
+                      {" · "}this month: {b.month ? `${b.month.used.toFixed(2)} used + ${b.month.reserved.toFixed(2)} held of ${b.month.included.toFixed(2)} CAU` : "no request yet"}
+                      {b.month?.pct !== null && b.month?.pct !== undefined && b.month.pct >= b.policy.alertAtPct ? <span className="ml-1 font-semibold text-amber-900">· alert: {b.month.pct}% used</span> : null}
+                    </p>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-[13px] font-semibold text-gray-800">Policy{b.draft ? " (an unpublished draft is waiting)" : ""}</summary>
+                      <div className="mt-2"><BudgetPolicyEditor code={b.code} initial={(b.draft ?? b.policy) as any} /></div>
+                    </details>
+                  </div>
+                ))}
+                <div className="mt-4"><p className="text-[13px] font-semibold text-gray-800">Create a budget</p><div className="mt-1"><BudgetCreate /></div></div>
+                <div className="mt-4">
+                  <p className="text-[13px] font-semibold text-gray-800">Which budget funds which work{budgets.routingDraft ? " (an unpublished draft is waiting)" : ""}</p>
+                  <div className="mt-1"><RoutingEditor initial={(budgets.routingDraft ?? budgets.routing) as Record<string, string>} budgets={budgets.budgets} /></div>
+                </div>
+              </>
+            )}
+          </section>
 
           <section aria-labelledby="pub-h" className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 id="pub-h" className="text-[16px] font-bold text-gray-900">Publish</h2>

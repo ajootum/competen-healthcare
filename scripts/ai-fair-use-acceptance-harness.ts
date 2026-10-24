@@ -19,6 +19,10 @@
  *   E   a clinical tier needs an eligibility decision covering it, null or unknown is high risk, the tier and rule
  *       are recorded and frozen, and eligibility is history (411, 412, D1)
  *   A   unknown activities and level-insufficient tiers are refused, never downgraded (amendments 1, 2)
+ *   O   who pays (AI-CONSUMPTION-01): a platform budget charged for shared work leaves the educator's and the
+ *       student's allowances alone; nobody charges another person's allowance; a suspended budget refuses while a
+ *       student's learning runs; 20 concurrent against a budget with room for 5; no unfunded institution; the server
+ *       resolves the owner from the workflow (421). The fixture budget harness.acceptance is reused, left suspended.
  *   U   a signed-in person cannot read, write or call any of it (s13.13)
  *   G   the policy in force was published through the audited engine (s13.14)
  *
@@ -32,6 +36,7 @@ import { assertSafeTarget } from "./production-guard";
 import { loadProductPolicy } from "../src/lib/ai/allowance";
 import { activityAt, allowancePeriod, serviceLevel, type Balance } from "../src/lib/ai/fair-use-policy";
 import { FAIR_USE_SCOPE } from "../src/lib/ai/fair-use-policy";
+import { budgetPeriod, isOwnerRefusal, loadRouting, resolveOwner } from "../src/lib/ai/consumption";
 
 loadEnvConfig(process.cwd());
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY, anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -55,6 +60,9 @@ async function findUser(email: string) {
   return null;
 }
 async function cleanup() {
+  // The fixture budget cannot be deleted (421: a budget is the record). Its accounts go, and it is left suspended.
+  const fb = (await admin.from("ai_budget").select("id").eq("code", FIXTURE_BUDGET).maybeSingle()).data;
+  if (fb) { await admin.from("ai_allowance_account").delete().eq("budget_id", fb.id); await admin.from("ai_budget").update({ status: "suspended" }).eq("id", fb.id); }
   const u = await findUser(EMAIL);
   if (!u) return;
   await admin.from("ai_allowance_account").delete().eq("user_id", u.id);
@@ -62,19 +70,22 @@ async function cleanup() {
   await admin.auth.admin.deleteUser(u.id);
 }
 let BUFFER = 0;
+let ACTOR: string | null = null;
+const FIXTURE_BUDGET = "harness.acceptance";
 const reserve = (req: string, acc: string, activity: string, pool: string, inT: number, outT: number, extra: Record<string, unknown> = {}) =>
   admin.rpc("ai_reserve", { p_request_id: req, p_account: acc, p_activity: activity, p_pool: pool, p_provider: "anthropic", p_model: MODEL,
     p_max_input_tokens: inT, p_max_output_tokens: outT, p_policy_version: "harness", p_currency: "UGX", p_buffer_pct: BUFFER,
-    p_risk_tier: "standard_educational", p_risk_rule: "harness", p_unreconciled_cap_cau: 1e6, ...extra });
+    p_risk_tier: "standard_educational", p_risk_rule: "harness", p_unreconciled_cap_cau: 1e6,
+    p_actor: ACTOR, p_service: null, p_record_type: null, p_record_ref: null, ...extra });
 const ledger = async (req: string) => (await admin.from("ai_usage_ledger").select("*").eq("request_id", req).single()).data;
 const row = (r: any) => (Array.isArray(r.data) ? r.data[0] : r.data);
 const account = async (id: string) => (await admin.from("ai_allowance_account").select("*").eq("id", id).single()).data;
 const toBal = (a: any): Balance => ({ includedCau: +a.included_cau, reserveCau: +a.reserve_cau, usedCau: +a.used_cau, reservedCau: +a.reserved_cau, reserveUsedCau: +a.reserve_used_cau, reserveReservedCau: +a.reserve_reserved_cau });
 
 async function main() {
-  console.log(`AI FAIR USE ACCEPTANCE (410, 411, 412) -- target ${ref}\n`);
-  const probe = await admin.from("ai_usage_ledger").select("risk_tier").limit(0);
-  if (probe.error) { pend("S-G", `migration 412 is not applied here (${probe.error.message}). Nothing created.`); return; }
+  console.log(`AI FAIR USE ACCEPTANCE (410, 411, 412, 420, 421) -- target ${ref}\n`);
+  const probe = await admin.from("ai_usage_ledger").select("owner_type").limit(0);
+  if (probe.error) { pend("S-G", `migration 421 is not applied here (${probe.error.message}). Nothing created.`); return; }
   const price = (await admin.rpc("ai_price_at", { p_provider: "anthropic", p_model: MODEL, p_at: new Date().toISOString() })).data;
   const [scholar, pro] = [await loadProductPolicy(admin, "scholar"), await loadProductPolicy(admin, "professional")];
   const fx = (await admin.from("ai_fx_rate").select("*").eq("currency", "UGX").is("effective_to", null).maybeSingle()).data;
@@ -86,6 +97,7 @@ async function main() {
     const { data: u, error } = await admin.auth.admin.createUser({ email: EMAIL, password: PASSWORD, email_confirm: true, user_metadata: { full_name: "AIFU Harness", synthetic: true } });
     if (error) throw new Error(error.message);
     const uid = u.user.id as string;
+    ACTOR = uid;
     const now = Date.now(), day = 86400000;
     // Accounts are unique per person, product and period start, so each fixture account starts a second apart.
     let opened = 0;
@@ -245,7 +257,8 @@ async function main() {
       const write = await user.from("ai_allowance_account").update({ included_cau: 1e9 }).eq("user_id", uid).select("id");
       // The real 411 signature, so a refusal is a permission refusal (42501) and not merely an unknown function.
       const call = await user.rpc("ai_reserve", { p_request_id: "aifu-browser-0001", p_account: accP, p_activity: "explain", p_pool: "included", p_provider: "anthropic", p_model: MODEL,
-        p_max_input_tokens: 1, p_max_output_tokens: 1, p_policy_version: "x", p_currency: "UGX", p_buffer_pct: 0, p_risk_tier: "standard_educational", p_risk_rule: "x", p_unreconciled_cap_cau: 1e6 });
+        p_max_input_tokens: 1, p_max_output_tokens: 1, p_policy_version: "x", p_currency: "UGX", p_buffer_pct: 0, p_risk_tier: "standard_educational", p_risk_rule: "x", p_unreconciled_cap_cau: 1e6,
+        p_actor: uid, p_service: null, p_record_type: null, p_record_ref: null });
       const settle = await user.rpc("ai_settle", { p_request_id: "aifu-settle-0001", p_model: MODEL, p_input_tokens: 0, p_output_tokens: 0, p_extra_usd: 0, p_outcome: "ok" });
       const mark = await user.rpc("ai_mark_unreconciled", { p_request_id: "aifu-settle-0001", p_outcome: "timeout" });
       const denied = (e: any) => e?.code === "42501";
@@ -254,6 +267,50 @@ async function main() {
         JSON.stringify({ read: read.data?.length, write: write.data?.length, call: call.error?.code, settle: settle.error?.code, mark: mark.error?.code }));
       await user.auth.signOut();
     }
+
+    // ── O. who pays (AI-CONSUMPTION-01): one ledger, independent owners ──
+    let fb = (await admin.from("ai_budget").select("id, status").eq("code", FIXTURE_BUDGET).maybeSingle()).data;
+    if (!fb) fb = (await admin.from("ai_budget").insert({ code: FIXTURE_BUDGET, owner_type: "platform", label: "Acceptance harness fixture budget (synthetic, staging; left suspended)", product: "scholar" }).select("id, status").single()).data;
+    await admin.from("ai_budget").update({ status: "active" }).eq("id", fb.id);
+    const { start: ms, end: me } = budgetPeriod(new Date());
+    const openBudget = async (included: number, offsetSec: number) => {
+      const r = await admin.from("ai_allowance_account").insert({ owner_type: "platform", budget_id: fb.id, product: "scholar", period_start: new Date(ms.getTime() - offsetSec * 1000).toISOString(),
+        period_end: me.toISOString(), included_cau: included, reserve_cau: 0, policy_version: "harness" }).select("id").single();
+      if (r.error) throw new Error(`fixture budget account: ${r.error.message}`);
+      return r.data.id as string;
+    };
+    const accO = await openBudget(1e6, 0);
+    const accMine = await open("scholar", now - day, now + 29 * day, 1e6, 0);
+    const o1 = row(await reserve("aifu-own-0001", accO, "teach", "included", 100, 100, { p_record_type: "shared_case", p_record_ref: "harness" }));
+    const o1l = await ledger("aifu-own-0001"), mine = await account(accMine);
+    ok("O1. (s14.1, s14.12) a platform budget is charged for an educator's shared-content request; the educator's own allowance is untouched",
+      o1?.granted === true && o1l.owner_type === "platform" && o1l.budget_id === fb.id && o1l.user_id === uid && +mine.reserved_cau === 0 && +mine.used_cau === 0, JSON.stringify({ o1, owner: o1l?.owner_type }));
+    await admin.rpc("ai_release", { p_request_id: "aifu-own-0001", p_outcome: "error" });
+    const o2 = row(await reserve("aifu-own-0002", accMine, "teach", "included", 10, 10, { p_actor: "00000000-0000-0000-0000-00000000dead" }));
+    const o2s = row(await reserve("aifu-own-0003", accMine, "teach", "included", 10, 10, { p_actor: null, p_service: "case.screening" }));
+    ok("O2. (s14.4) nobody else, and no service, can charge a person's allowance", o2?.granted === false && o2?.reason === "owner_mismatch" && o2s?.granted === false && o2s?.reason === "owner_mismatch", JSON.stringify({ o2, o2s }));
+    await admin.from("ai_budget").update({ status: "suspended" }).eq("id", fb.id);
+    const o3 = row(await reserve("aifu-own-0004", accO, "teach", "included", 10, 10));
+    const o3s = row(await reserve("aifu-own-0005", accMine, "teach", "included", 10, 10));
+    ok("O3. (s14.16) a suspended or exhausted platform budget refuses its own work, and a student's own learning still runs", o3?.granted === false && o3?.reason === "budget_suspended" && o3s?.granted === true, JSON.stringify({ o3, o3s }));
+    await admin.rpc("ai_release", { p_request_id: "aifu-own-0005", p_outcome: "error" });
+    await admin.from("ai_budget").update({ status: "active" }).eq("id", fb.id);
+    const accRace = await openBudget(perCall * 5 + perCall / 2, 1);
+    const race = await Promise.all(Array.from({ length: 20 }, (_, i) => reserve(`aifu-own-race-${i.toString().padStart(4, "0")}`, accRace, "teach", "included", 1000, 1000)));
+    const raceAcc = await account(accRace);
+    ok("O4. (s14.3) 20 concurrent requests against a budget with room for 5: exactly 5 granted", race.filter(r => row(r)?.granted).length === 5 && +raceAcc.reserved_cau <= +raceAcc.included_cau,
+      `granted ${race.filter(r => row(r)?.granted).length}, held ${raceAcc.reserved_cau} of ${raceAcc.included_cau}`);
+    const inst = await admin.from("ai_budget").insert({ code: "harness.unfunded-inst", owner_type: "institution", label: "never created", product: "scholar" }).select("id");
+    ok("O5. institution funding cannot exist without an authorised institution and funding arrangement", !!inst.error, inst.error?.message ?? "created");
+    const rStudent = await resolveOwner(admin, "case.private_generate", "scholar", { userId: uid });
+    const rScreen = await resolveOwner(admin, "case.candidate_screen", "scholar", { userId: uid });
+    const rReplay = await resolveOwner(admin, "case.replay_stored", "scholar", { userId: uid });
+    const rInst = await resolveOwner(admin, "case.institution_commission", "scholar", { userId: uid });
+    const routed = (await loadRouting(admin))["case.candidate_screen"];
+    ok("O6. (s4) the server resolves who pays from the workflow: the student's case is the student's, replay needs no AI, an institution commission without funding is refused",
+      !isOwnerRefusal(rStudent) && rStudent.type === "individual" && isOwnerRefusal(rReplay) && rReplay.refused === "no_ai" && isOwnerRefusal(rInst) && rInst.refused === "institution_not_funded"
+        && (routed ? !isOwnerRefusal(rScreen) && rScreen.type === "platform" : isOwnerRefusal(rScreen) && rScreen.refused === "no_budget"),
+      JSON.stringify({ student: (rStudent as any).type, screen: (rScreen as any).type ?? (rScreen as any).refused, replay: (rReplay as any).refused, inst: (rInst as any).refused }));
 
     // ── G. governed ──
     const audit = (await admin.from("workspace_config_audit").select("action, config_path").eq("scope_ref", FAIR_USE_SCOPE.scopeRef).limit(20)).data ?? [];
