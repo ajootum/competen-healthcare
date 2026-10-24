@@ -37,6 +37,9 @@
  * ⚠ THE COMBINED STAGE 5 RUN. With CASE_HARNESS_KEEP_PUBLISHED=1 the fixture case is left PUBLISHED and approved for its
  * exact version, titled "Synthetic staging case", so IND-004's steps 14 and 15 can deliver it. Every fixture person is
  * still removed. Retire it afterwards: scripts/staging-case-library-switch.ts --retire-fixtures.
+ * In this mode the harness WRITES NO FLAG: the owner switches case_library (and metering) on and off, so the run
+ * requires the flag ON as it finds it, skips G0 (the gate-off check, which standalone runs keep) and leaves the flag
+ * exactly as it was.
  */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
@@ -140,7 +143,11 @@ async function main() {
     const people = [s1, s2, edu, rev, pub];
     const ai0 = await aiRows(people);
 
-    // ── G0: the gate, off ──
+    // ── G0: the gate, off (standalone runs only: in keep mode the owner holds the switches) ──
+    if (KEEP) {
+      ok("G0k. keep mode: the owner's case_library switch is ON, and this run writes no flag", prior?.enabled === true, JSON.stringify(prior));
+      if (prior?.enabled !== true) throw new Error("keep mode needs the owner's case_library switch ON first: staging-case-library-switch.ts --on");
+    } else {
     await setFlag(false);
     const offGrant = await grantCaseCandidacy(admin, { userId: s1, attestation: "own_notes", attestationVersion: (await loadCasePolicy(admin)).attestationVersion });
     const offWithdraw = await withdrawCaseCandidate(admin, { userId: s1, sourceKey: `harness:case:${stamp}:0`, reason: "student" });
@@ -148,6 +155,7 @@ async function main() {
     ok("G0. with the case_library flag off, granting is refused, a search offers nothing, and a withdrawal still works", !offGrant.ok && (offGrant as any).error === CASE_LIBRARY_OFF
       && Array.isArray(offFind) && offFind.length === 0 && offWithdraw.ok, JSON.stringify({ offGrant, offWithdraw, n: offFind?.length }));
     await setFlag(true);
+    }
 
     // ── P0, D1, D2, D4: the real 423 on staging ──
     const parity = await Promise.all(CASE_SCREEN_CORPUS.map(async c => ({ c, db: (await admin.rpc("case_identifier_kinds", { p_text: c.text })).data, ts: structuredKinds(c.text), app: screenText(c.text) })));
@@ -276,8 +284,10 @@ async function main() {
       ok("K. KEPT for the combined run: the synthetic case stays published and deliverable", deliverable, JSON.stringify({ caseId, kept }));
       console.log(`  KEPT  CASE-HARNESS-${stamp} (case ${caseId}, published version ${kept?.id ?? "none"}), teaching CF-PS-001. Retire after: staging-case-library-switch.ts --retire-fixtures`);
     } else if (caseId) await retireCase(admin, caseId);
-    if (prior) await admin.from("practice_platform_flags").update({ enabled: prior.enabled, note: prior.note }).eq("flag", CASE_LIBRARY_FLAG);
-    else await admin.from("practice_platform_flags").delete().eq("flag", CASE_LIBRARY_FLAG);
+    if (!KEEP) {
+      if (prior) await admin.from("practice_platform_flags").update({ enabled: prior.enabled, note: prior.note }).eq("flag", CASE_LIBRARY_FLAG);
+      else await admin.from("practice_platform_flags").delete().eq("flag", CASE_LIBRARY_FLAG);
+    }
     const after = (await admin.from("practice_platform_flags").select("enabled, note").eq("flag", CASE_LIBRARY_FLAG).maybeSingle()).data;
     ok("Z0. the case_library flag is back exactly as the run found it", JSON.stringify(after ?? null) === JSON.stringify(prior ? { enabled: prior.enabled, note: prior.note } : null), JSON.stringify({ prior, after }));
     await cleanup();
