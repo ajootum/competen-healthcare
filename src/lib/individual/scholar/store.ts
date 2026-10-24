@@ -664,6 +664,27 @@ export async function questionCompetencies(admin: Admin, userId: string, questio
   return { ok: true, value: ((data ?? []) as any[]).map(r => ({ questionId: r.id, competencyId: r.competency_id })) };
 }
 
+/**
+ * ACCEPTED ONLY: question → competency, for the questions given, where the question's section is linked to that
+ * competency by a mapping the person has ACCEPTED (latest decision). The rule progress by competency uses
+ * (competency-progress.ts) and S5's coverage reads through COMPETENCY_SOURCES, so the two agree. value null:
+ * 388 is not on this environment.
+ */
+export async function acceptedQuestionCompetencies(admin: Admin, userId: string, questionIds: readonly string[]): Promise<
+  { ok: true; value: { questionId: string; competencyId: string }[] | null } | { ok: false }> {
+  if (!questionIds.length) return { ok: true, value: [] };
+  const { data, error } = await admin.from("individual_scholar_question").select("id, chunk_id, competency_id")
+    .eq("user_id", userId).in("id", questionIds.slice(0, 5000)).not("competency_id", "is", null);
+  if (error) return isNotProvisioned(error) ? { ok: true, value: null } : { ok: false };
+  const maps = await listMappings(admin, userId);
+  if (!maps.ok) return maps.notProvisioned ? { ok: true, value: null } : { ok: false };
+  const accepted = new Set(maps.data.mappings.filter(m => m.state === "accepted").map(m => `${m.chunkId}|${m.competencyId}`));
+  return {
+    ok: true,
+    value: ((data ?? []) as any[]).filter(r => accepted.has(`${r.chunk_id}|${r.competency_id}`)).map(r => ({ questionId: r.id, competencyId: r.competency_id })),
+  };
+}
+
 /** The rows competency progress is built from. Ids, competencies and right-or-wrong only. */
 export async function competencyProgressRows(admin: Admin, userId: string): Promise<Read<{
   mappings: MappingRow[]; questions: { id: string; chunkId: string; competencyId: string | null }[]; attempts: ProgressAttempt[];

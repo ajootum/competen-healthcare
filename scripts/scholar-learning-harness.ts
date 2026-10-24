@@ -318,6 +318,34 @@ const idsReachModel = (h: Src) => {
   const body = m.slice(m.indexOf("export function mappingUserPrompt"), m.indexOf("const contentWords"));
   return body.length < 50 || /\.(id|competencyId|ref)\b|frameworkId/.test(body) || !/const comp = candidates\[ci\];/.test(m) || !/competencyId: comp\.competencyId/.test(m);
 };
+/**
+ * K17 (COMPETEN-SCHOLAR-01 P0): ONE computation. S5's coverage reads S2's ACCEPTED links (never a proposal) and the
+ * learner's PROGRAMME catalogue -- the same denominator and the same rule as progress by competency -- and the
+ * progress page passes that coverage to the competency section instead of totalling its own.
+ */
+const coverageUnified = (src: Src) => {
+  const cs = src.get(`${LIB}/competency-sources.ts`) ?? "", st = src.get(STORE) ?? "", pg = src.get(`${PAGES}/progress/page.tsx`) ?? "";
+  const fn = st.slice(st.indexOf("export async function acceptedQuestionCompetencies"), st.indexOf("export async function competencyProgressRows"));
+  return /catalogue: SCHOLAR_PROGRAMME_CATALOGUE,\s*mappings: S2_MAPPINGS,/.test(cs)
+    && /mappingsFor: \(admin: any, userId: string, questionIds: readonly string\[\]\) => acceptedQuestionCompetencies\(/.test(cs)
+    && /scholarCatalogue\(admin\)\.forProgramme\(p\.data\)/.test(cs)
+    && /\.filter\(m => m\.state === "accepted"\)/.test(fn) && !/"proposed"/.test(fn)
+    && /coverage=\{li\?\.ok \? li\.data\.coverage : null\}/.test(pg);
+};
+/**
+ * K18 (COMPETEN-SCHOLAR-01 P1, Personal AI): the tutor's view of the student is assembled per request from the
+ * caller's own rows, given to the TUTOR only, never used as grounding (the check sees the question and the
+ * conversation, not the context), and carries no profile data.
+ */
+const tutorContextBounded = (src: Src) => {
+  const g = src.get(GEN) ?? "", r = src.get(`${API}/explain/route.ts`) ?? "", lc = src.get(`${LIB}/learner-context.ts`) ?? "";
+  const v = src.get(`${LIB}/competency-view.ts`) ?? "";
+  const loader = v.slice(v.indexOf("export async function loadTutorContext"));
+  return /user: modeUserPrompt\(question, passages, history, mode === "tutor" \? learnerContext : null\),/.test(g)
+    && /const asked = \[question, \.\.\.history\.map\(t => t\.text\)\]\.join\("\\n"\);/.test(g) && !/asked[^;]*learnerContext/.test(g)
+    && /loadTutorContext\(ctx\.admin, ctx\.userId, passages\.map\(p => p\.chunkId\)\)/.test(r)
+    && loader.length > 100 && !/profile|fullName|full_name|email/i.test(lc + loader);
+};
 /** K4: no Scholar code edits or deletes a mapping or a decision, and every upsert onto them leaves existing rows alone. */
 const trailEdits = (src: Src) => storeStatements(src)
   .filter(x => /^individual_scholar_(competency_decision|competency_map|chunk_analysis)$/.test(x.table))
@@ -560,6 +588,10 @@ function main() {
   ok("K2. competencies come only through the catalogue interface: shared, active and published frameworks, nothing read around it",
     catalogueLeaks(REAL).length === 0, catalogueLeaks(REAL).join(", "));
   ok("K3. the model sees competency tags, never ids, and a stored proposal names only a competency the catalogue offered", !idsReachModel(HOLD));
+  ok("K17. one computation: coverage reads S2's accepted links and the learner's programme catalogue, and the competency section shows that coverage",
+    coverageUnified(REAL));
+  ok("K18. Personal AI: the tutor's view of the student is built per request from the caller's own rows, goes to the tutor only, is never grounding, and holds no profile data",
+    tutorContextBounded(REAL));
   ok("K15. the mapping engine is Holdings code: product-neutral, storing nothing, using the caller's attribution -- Scholar supplies person attribution and its identifier screen",
     engineNeutral(HOLD, REAL));
   ok("K4. proposals, concepts and decisions are never edited or deleted by code -- a correction is a new decision row", trailEdits(REAL).length === 0, trailEdits(REAL).join(", "));
@@ -645,6 +677,13 @@ function main() {
     && catalogueLeaks(plant(`${PAGES}/progress/page.tsx`, "const learner = rows.ok", 'const leak = ctx.admin.from("framework_competencies").select("*");\n  const learner = rows.ok')).length > 0);
   ok("P23. ⚠ K3 goes red when the prompt shows the model competency ids",
     idsReachModel(new Map([...HOLD, [ENGINE, (HOLD.get(ENGINE) ?? "").replace("[${candidateTag(i)}]", "[${c.competencyId}]")]])));
+  ok("P34. ⚠ K17 goes red when coverage counts proposed links, or the section totals its own",
+    !coverageUnified(plant(STORE, '.filter(m => m.state === "accepted").map(m => `${m.chunkId}|${m.competencyId}`));\n  return {\n    ok: true,\n    value: ((data ?? []) as any[]).filter(r => accepted', '.filter(m => m.state !== "rejected").map(m => `${m.chunkId}|${m.competencyId}`));\n  return {\n    ok: true,\n    value: ((data ?? []) as any[]).filter(r => accepted'))
+    && !coverageUnified(plant(`${PAGES}/progress/page.tsx`, "coverage={li?.ok ? li.data.coverage : null}", "coverage={null}")));
+  ok("P35. ⚠ K18 goes red when the context becomes grounding, reaches every mode, or names the person",
+    !tutorContextBounded(plant(GEN, 'const asked = [question, ...history.map(t => t.text)].join("\\n");', 'const asked = [question, ...history.map(t => t.text), learnerContext ?? ""].join("\\n");'))
+    && !tutorContextBounded(plant(GEN, 'mode === "tutor" ? learnerContext : null),', "learnerContext),"))
+    && !tutorContextBounded(plant(`${LIB}/learner-context.ts`, "export const NEEDS_PRACTICE_BELOW", "export const who = (p: { fullName: string }) => p.fullName;\nexport const NEEDS_PRACTICE_BELOW")));
   ok("P32. ⚠ K15 goes red when the engine reads a table or names a product",
     !engineNeutral(new Map([...HOLD, [ENGINE, (HOLD.get(ENGINE) ?? "") + '\nconst x = (a: any) => a.from("individual_scholar_chunk");']]), REAL)
     && !engineNeutral(HOLD, plant(GEN, "screen: findPatientIdentifiers,", "")));

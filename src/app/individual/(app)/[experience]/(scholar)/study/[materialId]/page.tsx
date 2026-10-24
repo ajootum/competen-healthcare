@@ -69,7 +69,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
       const l = labels.get(r.competencyId);
       const list = mappingsByChunk.get(r.chunkId) ?? [];
       list.push({
-        id: r.id, competencyId: r.competencyId, title: l?.title ?? "Competency", code: l?.code ?? null, layer: r.layer, catalogue: l?.catalogue ?? null,
+        id: r.id, competencyId: r.competencyId, title: l?.title ?? "Competency", code: l?.code ?? null, layer: r.layer, catalogue: l?.catalogue ?? null, structure: l?.structure ?? null,
         source: r.source, confidence: r.confidence, rationale: r.rationale, state: r.state, decidedBy: r.decidedBy, decisions: r.decisions,
       });
       mappingsByChunk.set(r.chunkId, list);

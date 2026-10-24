@@ -28,7 +28,8 @@ import type { CompetencyLayer } from "./foundation";
 // ⚠ ONE AI GATEWAY. The call is generate() with the caller's attribution and operation, so usage is
 // recorded and the caller's quota and consent (checked BEFORE calling this) govern it.
 
-export const MAPPING_PROMPT_VERSION = "competency-map-v1";
+// v2: a candidate may carry its place in the clinical structure (the caller's context line), shown to the model.
+export const MAPPING_PROMPT_VERSION = "competency-map-v2";
 /** Subjects analysed in one AI call. */
 export const SUBJECTS_PER_CALL = 6;
 /** Candidates shown to the model at once. A larger set is shortlisted by overlap with the text. */
@@ -39,7 +40,15 @@ export const MAX_CONCEPTS_PER_SUBJECT = 12;
 export const MIN_CONFIDENCE = 0.3;
 
 /** A competency the caller may offer. S1's CatalogueCompetency is one (structurally). */
-export type MappingCandidate = { competencyId: string; layer: CompetencyLayer | null; code: string | null; title: string; outcomes: string[] };
+export type MappingCandidate = {
+  competencyId: string; layer: CompetencyLayer | null; code: string | null; title: string; outcomes: string[];
+  /**
+   * Where the competency sits, in the caller's words -- for clinical catalogues its practice and clinical
+   * practice unit (CKCM: domain, practice, CPU), e.g. "Oxygen Therapy > CPU-OXYSAFE-001 Safe Oxygen
+   * Administration". Shown to the model as context, never checked or stored by the engine. Optional.
+   */
+  context?: string | null;
+};
 /** One piece of a person's own text, with the caller's reference for it (a chunk id, a goal id ...). */
 export type MappingSubject = { ref: string; text: string };
 /** Who the person is and what the text is, in the caller's words. No profession is named here. */
@@ -87,7 +96,8 @@ export function mappingSystem(f: MappingFraming): string {
 export function mappingUserPrompt(subjects: MappingSubject[], candidates: MappingCandidate[]): string {
   const comps = candidates.map((c, i) => {
     const out = c.outcomes.length ? ` -- ${c.outcomes.slice(0, 3).join("; ")}` : "";
-    return `[${candidateTag(i)}] (${c.layer ?? "unclassified"}) ${c.code ? `${c.code} ` : ""}${c.title}${out}`;
+    const where = c.context ? ` [${c.context}]` : "";
+    return `[${candidateTag(i)}] (${c.layer ?? "unclassified"}) ${c.code ? `${c.code} ` : ""}${c.title}${where}${out}`;
   });
   const subs = subjects.map((s, i) => `[${subjectTag(i)}]\n${s.text}`);
   return `COMPETENCIES:\n${comps.join("\n")}\n\nMY TEXT:\n\n${subs.join("\n\n")}`;

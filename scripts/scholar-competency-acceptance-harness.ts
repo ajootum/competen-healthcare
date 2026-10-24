@@ -17,6 +17,7 @@
  *   L  S3: explain modes through the gateway; anything beyond the notes is checked apart
  *   Q  S4: questions tagged to the accepted competency, a multi-step case stored in order, the schema
  *      refusing a malformed case; progress by competency from real answers
+ *   C  P1 Personal AI: the tutor context comes from the person's own rows at request time, words only, not stored
  *   A  every AI call is in plat_ai_requests with person attribution and the Scholar operation
  *   E  erasing the material removes its concepts, mappings and decisions THROUGH the append-only trigger
  *   Z  fixtures and programmes removed; a Scholar allowlist that was set is NEVER touched (shared staging
@@ -41,6 +42,7 @@ import { chunkPages, extractMaterial } from "../src/lib/individual/scholar/extra
 import { BUCKET, CASE_MIN_STEPS, PDF_MIME, PROMPT_VERSIONS } from "../src/lib/individual/scholar/config";
 import { tinyPdf } from "../src/lib/individual/scholar/test-documents";
 import { aiStatus } from "../src/lib/ai/config";
+import { loadTutorContext } from "../src/lib/individual/scholar/competency-view";
 
 loadEnvConfig(process.cwd());
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY, anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -362,6 +364,17 @@ async function main() {
       && !!prog && prog.layers.flatMap(l => l.rows).some(r => r.status === "no_notes" && r.latestAccuracy === null),
       JSON.stringify(prow));
     ok("Q5. a rejected link counts for nothing", rejElsewhere || (!!rejOnly && rejOnly.sectionsAccepted + rejOnly.sectionsProposed === 0), JSON.stringify(rejOnly));
+
+    // ── C. P1, Personal AI: the tutor's view of the student, from their own rows, at request time ──
+    const tctx = await loadTutorContext(admin, a, [sec1.id]);
+    note(`tutor context: ${JSON.stringify(tctx)}`);
+    const bctx = await loadTutorContext(admin, b, [sec1.id]);
+    ok("C1. the tutor's context is built from this person's own record (programme, accepted links here) -- words only -- and another person gets none of it",
+      !!tctx && tctx.includes("Nursing (UG), diploma") && !/\d/.test(tctx) && bctx === null, `${tctx} | other: ${bctx}`);
+    const tc = await twice(() => runExplain(a, "Teach me this section step by step.", [p1!], "tutor", [], tctx), "tutor with context");
+    ok("C2. a tutor turn with that context still answers only from the notes (checked as any other)", tc.ok && tc.check.ok && /\[S1\]/.test(tc.check.text));
+    const stored = (await admin.from("audit_log").select("new_value").eq("actor_id", a).eq("entity_type", "individual_scholar_explain")).data ?? [];
+    ok("C3. nothing about the context is stored: no memory table, and Scholar's audit rows hold no study text", !stored.some((r: any) => JSON.stringify(r.new_value ?? {}).includes("I study")));
 
     // ── A. the gateway ──
     const ai = (await admin.from("plat_ai_requests").select("operation, attribution_scope, tenant_id").eq("actor_id", a)).data ?? [];
