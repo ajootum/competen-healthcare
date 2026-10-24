@@ -79,6 +79,30 @@ export function SetDraft({ policyKey, options, draft, hasOverride, legend = "Dra
   );
 }
 
+/** One value from a fixed list (radio). The route refuses anything not listed. */
+export function ChoiceDraft({ policyKey, options, draft, hasOverride, legend = "Draft" }: {
+  policyKey: string; options: { value: string; label: string }[]; draft: string; hasOverride: boolean; legend?: string;
+}) {
+  const [v, setV] = useState(draft);
+  const { busy, msg, send } = useSend();
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="text-[12.5px] font-semibold text-gray-700">{legend}</legend>
+      {options.map(o => (
+        <label key={o.value} className="flex items-center gap-2 text-[14px] text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]">
+          <input type="radio" name={`${policyKey}-choice`} checked={v === o.value} onChange={() => setV(o.value)} className="h-4 w-4 border-gray-400" />
+          {o.label}
+        </label>
+      ))}
+      <div className="flex flex-wrap gap-2 pt-1">
+        <button type="button" className={primary} disabled={busy || v === draft} onClick={() => send({ action: "set", key: policyKey, value: v }, "Draft saved. Publish to make it effective.")}>Save draft</button>
+        {hasOverride && <button type="button" className={ghost} disabled={busy} onClick={() => send({ action: "reset", key: policyKey }, "Removed. The default applies now, and the change is in the history.")}>Use default now</button>}
+      </div>
+      <Message msg={msg} />
+    </fieldset>
+  );
+}
+
 export function PublishBar({ pending }: { pending: number }) {
   const [note, setNote] = useState("");
   const { busy, msg, send } = useSend();
