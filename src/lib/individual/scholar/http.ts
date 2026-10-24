@@ -100,8 +100,10 @@ export async function scholarRisk(admin: unknown, userId: string, input: {
 /** The request id the engine reserves against: the caller's, from the client's retry key when it is well formed. */
 export const scholarRequestId = (ctx: IndividualContext, req: Request) => requestIdFor(ctx.userId, req.headers.get("x-request-id"));
 
-export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext): { run: ScholarAiRun; refusal: () => MeteredRefusal | null } {
-  const requestId = scholarRequestId(ctx, req);
+export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext, callKey?: string): { run: ScholarAiRun; refusal: () => MeteredRefusal | null } {
+  // `callKey`: one student action that makes several separate generations (a revision session filling its shortfall)
+  // gives each its own deterministic id, `:g1`, `:g2` ..., so each is its own idempotent reservation.
+  const requestId = callKey ? `${scholarRequestId(ctx, req)}:${callKey}` : scholarRequestId(ctx, req);
   let refused: MeteredRefusal | null = null;
   const run: ScholarAiRun = async (g, part = "main") => {
     if (refused) return { ok: false, error: "failed", detail: "metered" } as GenerateResult;

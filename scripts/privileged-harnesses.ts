@@ -341,6 +341,19 @@ const STAGING: Listed[] = [
       + "own harness-upload-* identities.",
   },
   {
+    file: "scholar-revision01-harness.ts",
+    note: "COMPETEN-SCHOLAR-REVISION-01 over HTTP, the owner's first Stage 4 journey on the respiratory materials: open "
+      + "Revision -> the respiratory materials -> ten questions in several formats (reuse first, the shortfall written, "
+      + "private formative, competency-linked where the section is) -> answers with feedback that says how they were "
+      + "marked -> quotes found in the student's own sections -> resume the same session -> Weak areas and the "
+      + "difficult concepts -> Teach Me with the way back -> flashcards and SM-2 with the 391 log -> recall history "
+      + "and progress -> a saved set replayed with no AI -> mock practice holding feedback -> a short answer never "
+      + "wrong by default -> continuity with the quota used up (synthetic usage rows for the fixture only) -> no "
+      + "catalogue -> isolation -> erase-all. Real AI. Needs BASE_URL naming a STAGING-pointed dev server with the "
+      + "legal versions and URLs, an AI provider and 416/417 (else PEND). Reads shared config only. Creates and "
+      + "deletes its own harness-revision01-* identities. The metering-ON variant of R13 is PEND unless metering is on.",
+  },
+  {
     file: "scholar-learn01-harness.ts",
     note: "COMPETEN-SCHOLAR-LEARN-01 over HTTP, the owner's first acceptance journey on the Stage 2 respiratory materials: "
       + "several documents -> Teach Me -> a cited explanation -> Simplify -> a follow-up (Ask) -> a related concept "

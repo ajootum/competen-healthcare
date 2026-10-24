@@ -6,6 +6,7 @@ import { BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, MAX_MATERIALS_PER_PERS
 import type { Chunk, ExtractionQuality } from "./extract";
 import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
+import { SRS_DEFAULTS, scheduleReview, type RevisionDraft, type RevisionKind, type SrsParams } from "./revision";
 import type { ProgressAttempt, ProgressCard, ProgressMaterial, ProgressQuestion } from "./progress";
 import { isLayer, type Layer, type ProgrammeConfig } from "./catalogue";
 import { mappingStates, type LiveMapping, type MappingDecision, type MappingState, type MappingSubject, type SubjectAnalysis } from "@/lib/competency/mapping";
@@ -239,8 +240,12 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   // LEARN-01 L4: learning history and preferences go too. Absent tables (414): nothing to do.
   const { error: lErr } = await admin.from("individual_scholar_learning_session").delete().eq("user_id", userId);
   const { error: pErr } = await admin.from("individual_scholar_learning_preference").delete().eq("user_id", userId);
+  // REVISION-01 (417): saved sets and revision sessions go too. Their items went with the questions; these are the
+  // shells. Absent tables: nothing to do.
+  const { error: rsErr } = await admin.from("individual_scholar_revision_session").delete().eq("user_id", userId);
+  const { error: rtErr } = await admin.from("individual_scholar_revision_set").delete().eq("user_id", userId);
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(cErr) && fine(lErr) && fine(pErr), erased: rows.length };
+  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
@@ -415,12 +420,15 @@ export async function toPassages(admin: Admin, userId: string, chunks: Candidate
 // ── QUESTIONS AND ATTEMPTS ─────────────────────────────────────────────────────────────────────────
 
 export type QuestionRow = {
-  id: string; materialId: string; chunkId: string; kind: QuestionKind; stem: string; options: string[];
-  correctIndex: number; rationale: string; sourceQuote: string; model: string; promptVersion: string; createdAt: string;
+  id: string; materialId: string; chunkId: string; kind: RevisionKind; stem: string; options: string[];
+  /** The key of mcq and case. Null for the 416 kinds, whose key is `answer`. */
+  correctIndex: number | null; rationale: string; sourceQuote: string; model: string; promptVersion: string; createdAt: string;
+  /** REVISION-01 (416): the key of the other kinds, and the difficulty (1-3). Null where 416 is absent or unrecorded. */
+  answer: unknown; difficulty: number | null;
   materialTitle: string; ordinal: number | null; pageFrom: number | null; pageTo: number | null;
   /** UPLOAD-01: the material's citable unit, so a question from a PowerPoint cites its slide. */
   unit: "page" | "slide" | "section";
-  latest: { correct: boolean; chosenIndex: number; answeredAt: string } | null;
+  latest: { correct: boolean; chosenIndex: number | null; answeredAt: string } | null;
   /** Migration 388. Null where 388 is absent, or the question practises no particular competency. */
   competencyId: string | null;
   caseId: string | null; caseStep: number | null; caseTitle: string | null;
@@ -454,11 +462,12 @@ export async function insertQuestions(admin: Admin, userId: string, input: {
 async function hydrate(admin: Admin, userId: string, rows: any[]): Promise<QuestionRow[]> {
   if (!rows.length) return [];
   const ids = rows.map(r => r.id);
-  const [titles, chunksRes, attRes, extra] = await Promise.all([
+  const [titles, chunksRes, attRes, extra, revision] = await Promise.all([
     titlesOf(admin, userId, [...new Set(rows.map(r => r.material_id as string))]),
     admin.from("individual_scholar_chunk").select("id, ordinal, page_from, page_to").eq("user_id", userId).in("id", [...new Set(rows.map(r => r.chunk_id as string))]),
     admin.from("individual_scholar_attempt").select("question_id, correct, chosen_index, answered_at").eq("user_id", userId).in("question_id", ids).order("answered_at", { ascending: false }),
     questionExtras(admin, userId, ids),
+    revisionExtras(admin, userId, ids),
   ]);
   const chunk = new Map(((chunksRes.data ?? []) as any[]).map(c => [c.id, c]));
   const latest = new Map<string, any>();
@@ -468,7 +477,8 @@ async function hydrate(admin: Admin, userId: string, rows: any[]): Promise<Quest
     const l = latest.get(r.id);
     return {
       id: r.id, materialId: r.material_id, chunkId: r.chunk_id, kind: r.kind, stem: r.stem, options: r.options,
-      correctIndex: r.correct_index, rationale: r.rationale, sourceQuote: r.source_quote, model: r.model,
+      correctIndex: r.correct_index ?? null, rationale: r.rationale, sourceQuote: r.source_quote, model: r.model,
+      answer: revision.get(r.id)?.answer ?? null, difficulty: revision.get(r.id)?.difficulty ?? null,
       promptVersion: r.prompt_version, createdAt: r.created_at, materialTitle: (titles.get(r.material_id) ?? UNNAMED).title,
       unit: (titles.get(r.material_id) ?? UNNAMED).unit,
       ordinal: c?.ordinal ?? null, pageFrom: c?.page_from ?? null, pageTo: c?.page_to ?? null,
@@ -477,6 +487,14 @@ async function hydrate(admin: Admin, userId: string, rows: any[]): Promise<Quest
       caseStep: extra.get(r.id)?.case_step ?? null, caseTitle: extra.get(r.id)?.case_title ?? null,
     };
   });
+}
+
+/** The 416 columns, read apart likewise: where 416 is absent there are none, and only mcq and case exist. */
+async function revisionExtras(admin: Admin, userId: string, ids: string[]): Promise<Map<string, { answer: unknown; difficulty: number | null }>> {
+  if (!ids.length) return new Map();
+  const { data, error } = await admin.from("individual_scholar_question").select("id, answer, difficulty").eq("user_id", userId).in("id", ids);
+  if (error) return new Map();
+  return new Map(((data ?? []) as any[]).map(r => [r.id, { answer: r.answer ?? null, difficulty: r.difficulty ?? null }]));
 }
 
 /** The 388 columns, read apart from the 372 ones so that their absence costs nothing but themselves. */
@@ -488,10 +506,14 @@ async function questionExtras(admin: Admin, userId: string, ids: string[]): Prom
   return new Map(((data ?? []) as any[]).map(r => [r.id, r]));
 }
 
+/**
+ * Practice questions and cases (372 kinds). REVISION-01: the 416 kinds are Revision's and are read through
+ * revisionPool, so the practice and Apply surfaces, which render four options and one key, never receive them.
+ */
 export async function listQuestions(admin: Admin, userId: string, opts: { materialId?: string; kind?: QuestionKind } = {}): Promise<Read<QuestionRow[]>> {
   let q = admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId);
   if (opts.materialId) q = q.eq("material_id", opts.materialId);
-  if (opts.kind) q = q.eq("kind", opts.kind);
+  q = opts.kind ? q.eq("kind", opts.kind) : q.in("kind", ["mcq", "case"]);
   const { data, error } = await q.order("created_at", { ascending: false }).limit(200);
   if (error) return fail(error);
   return { ok: true, data: await hydrate(admin, userId, data ?? []) };
@@ -557,16 +579,20 @@ export async function countDue(admin: Admin, userId: string): Promise<number | n
   return error ? null : (count ?? 0);
 }
 
-/** The learner self-grades recall 0..5. SM-2 (imported) reschedules. Owner-keyed. */
-export async function reviewCard(admin: Admin, userId: string, cardId: string, quality: number) {
+/**
+ * The learner self-grades recall 0..5. SM-2 (imported) reschedules, within the policy's bounds (REVISION-01 R3,
+ * revision.ts scheduleReview; the defaults are exactly the earlier rule). Owner-keyed.
+ */
+export async function reviewCard(admin: Admin, userId: string, cardId: string, quality: number, params: SrsParams = SRS_DEFAULTS) {
   if (!isUuid(cardId)) return { ok: false as const, error: "not_found" };
-  const { data: card } = await admin.from("individual_scholar_card").select("id, material_id, ease_factor, interval_days, repetitions, reviews")
+  const { data: card } = await admin.from("individual_scholar_card").select("id, question_id, material_id, ease_factor, interval_days, repetitions, reviews")
     .eq("user_id", userId).eq("id", cardId).maybeSingle();
   if (!card) return { ok: false as const, error: "not_found" };
-  const next = sm2({ ease: Number(card.ease_factor ?? 2.5), interval: card.interval_days ?? 0, reps: card.repetitions ?? 0 }, quality);
+  const difficulty = (await revisionExtras(admin, userId, [card.question_id])).get(card.question_id)?.difficulty ?? null;
+  const next = scheduleReview({ ease: Number(card.ease_factor ?? 2.5), interval: card.interval_days ?? 0, reps: card.repetitions ?? 0 }, quality, difficulty, params);
   const nextDate = new Date(Date.now() + next.interval * 864e5).toISOString().slice(0, 10);
-  // The mastery rule reinforcement.ts applies to its own cards, applied the same way here.
-  const status = next.reps >= 5 && next.interval >= 60 ? "mastered" : "active";
+  // The mastery rule reinforcement.ts applies to its own cards, with the policy's thresholds (five and sixty by default).
+  const status = next.status;
   const now = new Date().toISOString();
   const { error } = await admin.from("individual_scholar_card").update({
     ease_factor: next.ease, interval_days: next.interval, repetitions: next.reps, next_review_at: nextDate,
@@ -588,6 +614,252 @@ export async function reviewRows(admin: Admin, userId: string): Promise<Read<{ m
     .eq("user_id", userId).order("reviewed_at", { ascending: false }).limit(10000);
   if (error) return isNotProvisioned(error) ? { ok: true, data: null } : fail(error);
   return { ok: true, data: ((data ?? []) as any[]).map(r => ({ materialId: r.material_id, quality: r.quality, reviewedAt: r.reviewed_at })) };
+}
+
+// ── REVISION ── COMPETEN-SCHOLAR-REVISION-01, migrations 416 and 417 ───────────────────────────────────────────────
+//
+// The revision questions ARE individual_scholar_question rows (416 kinds), their answers attempts, their schedule the
+// 372 card and the 391 log. A session (417) is which questions in what order and where the student is; its answers
+// are the attempts that name it. Every statement is keyed on the caller's user id. Where 416 or 417 is absent the
+// reads say not provisioned and the workspace offers what exists without them.
+
+export type PoolStats = { misses: number; latestCorrect: boolean | null; lastAnsweredAt: string | null; due: boolean };
+
+/** Questions of the chosen kinds within some sections (or the whole library when none are named), with their stats. */
+export async function revisionPool(admin: Admin, userId: string, opts: { chunkIds?: readonly string[] | null; kinds: readonly RevisionKind[] }): Promise<Read<{ questions: QuestionRow[]; stats: Map<string, PoolStats> }>> {
+  if (!opts.kinds.length || (opts.chunkIds && !opts.chunkIds.length)) return { ok: true, data: { questions: [], stats: new Map() } };
+  let q = admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId).in("kind", [...opts.kinds]);
+  if (opts.chunkIds) q = q.in("chunk_id", [...opts.chunkIds].slice(0, 200));
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(500);
+  if (error) return fail(error);
+  const questions = await hydrate(admin, userId, data ?? []);
+  const ids = questions.map(x => x.id);
+  const stats = new Map<string, PoolStats>(ids.map(id => [id, { misses: 0, latestCorrect: null, lastAnsweredAt: null, due: false }]));
+  if (ids.length) {
+    const [att, cards] = await Promise.all([
+      admin.from("individual_scholar_attempt").select("question_id, correct, answered_at").eq("user_id", userId).in("question_id", ids).order("answered_at", { ascending: false }).limit(5000),
+      admin.from("individual_scholar_card").select("question_id, next_review_at, status").eq("user_id", userId).in("question_id", ids),
+    ]);
+    for (const a of (att.data ?? []) as any[]) {
+      const s = stats.get(a.question_id)!;
+      if (s.lastAnsweredAt === null) { s.lastAnsweredAt = a.answered_at; s.latestCorrect = a.correct; }
+      if (!a.correct) s.misses++;
+    }
+    for (const c of (cards.data ?? []) as any[]) if (c.status === "active" && c.next_review_at <= todayIso()) stats.get(c.question_id)!.due = true;
+  }
+  return { ok: true, data: { questions, stats } };
+}
+
+/**
+ * New revision questions of a 416 kind from one passage. private_formative only (416 refuses anything else). A
+ * flashcard gets its spaced-review card at once, due today: recall is what it is for.
+ */
+export async function insertRevisionQuestions(admin: Admin, userId: string, input: {
+  passage: Passage; kind: Exclude<RevisionKind, "mcq" | "case">; drafts: RevisionDraft[]; model: string; provider: string; promptVersion: string; competencyId?: string | null;
+}): Promise<{ ok: boolean; ids: string[]; notProvisioned?: boolean }> {
+  if (!input.drafts.length) return { ok: true, ids: [] };
+  const { data, error } = await admin.from("individual_scholar_question").insert(input.drafts.map(d => ({
+    user_id: userId, material_id: input.passage.materialId, chunk_id: input.passage.chunkId, kind: input.kind,
+    stem: d.stem, options: d.options, correct_index: null, answer: d.answer, difficulty: d.difficulty, review_status: "private_formative",
+    rationale: d.rationale, source_quote: d.sourceQuote, model: input.model, provider: input.provider, prompt_version: input.promptVersion,
+    ...(input.competencyId ? { competency_id: input.competencyId } : {}),
+  }))).select("id");
+  if (error) return { ok: false, ids: [], notProvisioned: isNotProvisioned(error) || /check constraint|column/i.test(String((error as any)?.message ?? "")) };
+  const ids = ((data ?? []) as any[]).map(r => r.id as string);
+  if (input.kind === "flashcard" && ids.length)
+    await admin.from("individual_scholar_card").insert(ids.map(id => ({ user_id: userId, question_id: id, material_id: input.passage.materialId, next_review_at: todayIso(), status: "active" })))
+      .then((r: unknown) => r, () => {});
+  return { ok: true, ids };
+}
+
+/** A missed question's card: created due today, or put back to the start of its schedule by SM-2 itself (a lapse). */
+async function missCard(admin: Admin, userId: string, q: QuestionRow): Promise<"created" | "reset" | null> {
+  const { data: existing } = await admin.from("individual_scholar_card").select("id, ease_factor, interval_days, repetitions")
+    .eq("user_id", userId).eq("question_id", q.id).maybeSingle();
+  if (!existing) {
+    const { error } = await admin.from("individual_scholar_card").insert({ user_id: userId, question_id: q.id, material_id: q.materialId, next_review_at: todayIso(), status: "active" });
+    return error ? null : "created";
+  }
+  const next = sm2({ ease: Number(existing.ease_factor ?? 2.5), interval: existing.interval_days ?? 0, reps: existing.repetitions ?? 0 }, 1);
+  const { error } = await admin.from("individual_scholar_card").update({
+    ease_factor: next.ease, interval_days: next.interval, repetitions: next.reps, status: "active", next_review_at: todayIso(), updated_at: new Date().toISOString(),
+  }).eq("user_id", userId).eq("id", existing.id);
+  return error ? null : "reset";
+}
+
+/**
+ * One revision answer, as an attempt (416 columns, 417 session). A flashcard's answer is its recall grade, which
+ * reschedules its card through reviewCard (and the 391 log). Any other missed answer makes or resets a card.
+ */
+export async function recordRevisionAttempt(admin: Admin, userId: string, q: QuestionRow, a: {
+  chosenIndex: number | null; response: Record<string, unknown> | null; correct: boolean; score: number | null;
+  marking: "deterministic" | "self_graded" | "ai_evaluation"; evaluator?: { model: string; promptVersion: string } | null; sessionId: string | null;
+  quality?: number | null; srs?: SrsParams;
+}): Promise<{ ok: boolean; card: "created" | "reset" | "reviewed" | null; nextReviewAt?: string }> {
+  const { error } = await admin.from("individual_scholar_attempt").insert({
+    user_id: userId, question_id: q.id, chosen_index: a.chosenIndex, response: a.response, correct: a.correct, score: a.score,
+    marking: a.marking, evaluator_model: a.evaluator?.model ?? null, evaluator_prompt_version: a.evaluator?.promptVersion ?? null,
+    revision_session_id: a.sessionId,
+  });
+  if (error) return { ok: false, card: null };
+  // A flashcard's answer IS its recall grade. Any other question whose card is due is reviewed by the answer: right is
+  // a good recall (4), wrong a lapse (1). Otherwise a missed answer makes or resets its card, as practice always has.
+  const { data: card } = await admin.from("individual_scholar_card").select("id, next_review_at, status").eq("user_id", userId).eq("question_id", q.id).maybeSingle();
+  const quality = q.kind === "flashcard" ? a.quality ?? null : card && card.status === "active" && card.next_review_at <= todayIso() ? (a.correct ? 4 : 1) : null;
+  if (card && quality !== null) {
+    const r = await reviewCard(admin, userId, card.id, quality, a.srs);
+    return { ok: true, card: r.ok ? "reviewed" : null, nextReviewAt: r.ok ? r.nextReviewAt : undefined };
+  }
+  if (a.correct) return { ok: true, card: null };
+  return { ok: true, card: await missCard(admin, userId, q) };
+}
+
+export type RevisionSessionRow = {
+  id: string; setId: string | null; mode: string; feedback: "immediate" | "end"; status: "active" | "completed";
+  position: number; total: number; createdAt: string; lastActiveAt: string; completedAt: string | null;
+};
+const REV_SESSION_COLS = "id, set_id, mode, feedback, status, position, total, created_at, last_active_at, completed_at";
+const toRevSession = (r: any): RevisionSessionRow => ({
+  id: r.id, setId: r.set_id ?? null, mode: r.mode, feedback: r.feedback, status: r.status, position: r.position, total: r.total,
+  createdAt: r.created_at, lastActiveAt: r.last_active_at, completedAt: r.completed_at ?? null,
+});
+
+/** A new revision session and its questions in order (a snapshot). not_provisioned where 417 is absent. */
+export async function createRevisionSession(admin: Admin, userId: string, input: { mode: string; feedback: "immediate" | "end"; setId?: string | null; questionIds: readonly string[] }): Promise<{ ok: true; id: string } | { ok: false; notProvisioned: boolean }> {
+  const ids = [...new Set(input.questionIds)].slice(0, 50);
+  if (!ids.length) return { ok: false, notProvisioned: false };
+  const { data, error } = await admin.from("individual_scholar_revision_session")
+    .insert({ user_id: userId, set_id: input.setId ?? null, mode: input.mode, feedback: input.feedback, total: ids.length }).select("id").single();
+  if (error || !data) return { ok: false, notProvisioned: !!error && isNotProvisioned(error) };
+  const { error: iErr } = await admin.from("individual_scholar_revision_session_item").insert(ids.map((question_id, i) => ({ session_id: data.id, user_id: userId, ordinal: i + 1, question_id })));
+  if (iErr) { await admin.from("individual_scholar_revision_session").delete().eq("user_id", userId).eq("id", data.id); return { ok: false, notProvisioned: false }; }
+  return { ok: true, id: data.id };
+}
+
+export type SessionAttempt = { questionId: string; correct: boolean; score: number | null; marking: string; answeredAt: string };
+
+/** A revision session, its questions in order and its answers so far. null when it is not the caller's. */
+export async function getRevisionSession(admin: Admin, userId: string, id: string): Promise<Read<{ session: RevisionSessionRow; questionIds: string[]; attempts: SessionAttempt[] } | null>> {
+  if (!isUuid(id)) return { ok: true, data: null };
+  const { data: s, error } = await admin.from("individual_scholar_revision_session").select(REV_SESSION_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  if (error) return fail(error);
+  if (!s) return { ok: true, data: null };
+  const [items, att] = await Promise.all([
+    admin.from("individual_scholar_revision_session_item").select("ordinal, question_id").eq("user_id", userId).eq("session_id", id).order("ordinal"),
+    admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at").eq("user_id", userId).eq("revision_session_id", id).order("answered_at"),
+  ]);
+  if (items.error || att.error) return fail(items.error ?? att.error);
+  return {
+    ok: true,
+    data: {
+      session: toRevSession(s), questionIds: ((items.data ?? []) as any[]).map(r => r.question_id),
+      attempts: ((att.data ?? []) as any[]).map(a => ({ questionId: a.question_id, correct: a.correct, score: a.score === null ? null : Number(a.score), marking: a.marking, answeredAt: a.answered_at })),
+    },
+  };
+}
+
+/** Where the student is, and whether they have finished. Owner-keyed. */
+export async function updateRevisionSession(admin: Admin, userId: string, id: string, patch: { position?: number; completed?: boolean }): Promise<boolean> {
+  const now = new Date().toISOString();
+  const { error } = await admin.from("individual_scholar_revision_session").update({
+    last_active_at: now, ...(patch.position !== undefined ? { position: patch.position } : {}), ...(patch.completed ? { status: "completed", completed_at: now } : {}),
+  }).eq("user_id", userId).eq("id", id);
+  return !error;
+}
+
+/** The student's recent revision sessions, newest first. */
+export async function listRevisionSessions(admin: Admin, userId: string, limit = 10): Promise<Read<RevisionSessionRow[]>> {
+  const { data, error } = await admin.from("individual_scholar_revision_session").select(REV_SESSION_COLS).eq("user_id", userId).order("last_active_at", { ascending: false }).limit(limit);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(toRevSession) };
+}
+
+export type RevisionSetRow = {
+  id: string; title: string; mode: string; scope: Record<string, unknown>; formats: string[]; quantity: number; difficulty: string; feedback: "immediate" | "end";
+  createdAt: string; updatedAt: string; lastUsedAt: string | null; questionIds: string[];
+};
+const REV_SET_COLS = "id, title, mode, scope, formats, quantity, difficulty, feedback, created_at, updated_at, last_used_at";
+
+/** Save a revision set: how it was built and its questions in order. */
+export async function createRevisionSet(admin: Admin, userId: string, input: {
+  title: string; mode: string; scope: Record<string, unknown>; formats: readonly string[]; quantity: number; difficulty: string; feedback: "immediate" | "end"; questionIds: readonly string[];
+}): Promise<{ ok: true; id: string } | { ok: false; notProvisioned: boolean }> {
+  const ids = [...new Set(input.questionIds)].slice(0, 50);
+  if (!ids.length) return { ok: false, notProvisioned: false };
+  const { data, error } = await admin.from("individual_scholar_revision_set").insert({
+    user_id: userId, title: input.title, mode: input.mode, scope: input.scope, formats: [...input.formats], quantity: input.quantity, difficulty: input.difficulty, feedback: input.feedback,
+  }).select("id").single();
+  if (error || !data) return { ok: false, notProvisioned: !!error && isNotProvisioned(error) };
+  const { error: iErr } = await admin.from("individual_scholar_revision_set_item").insert(ids.map((question_id, i) => ({ set_id: data.id, user_id: userId, ordinal: i + 1, question_id })));
+  if (iErr) { await admin.from("individual_scholar_revision_set").delete().eq("user_id", userId).eq("id", data.id); return { ok: false, notProvisioned: false }; }
+  return { ok: true, id: data.id };
+}
+
+/** The student's saved sets, each with its questions in order (those still stored: a deleted material takes its own). */
+export async function listRevisionSets(admin: Admin, userId: string, limit = 30): Promise<Read<RevisionSetRow[]>> {
+  const { data, error } = await admin.from("individual_scholar_revision_set").select(REV_SET_COLS).eq("user_id", userId).order("updated_at", { ascending: false }).limit(limit);
+  if (error) return fail(error);
+  const sets = (data ?? []) as any[];
+  if (!sets.length) return { ok: true, data: [] };
+  const { data: items, error: iErr } = await admin.from("individual_scholar_revision_set_item").select("set_id, ordinal, question_id").eq("user_id", userId).in("set_id", sets.map(s => s.id)).order("ordinal");
+  if (iErr) return fail(iErr);
+  const by = new Map<string, string[]>();
+  for (const i of (items ?? []) as any[]) by.set(i.set_id, [...(by.get(i.set_id) ?? []), i.question_id]);
+  return {
+    ok: true,
+    data: sets.map(s => ({
+      id: s.id, title: s.title, mode: s.mode, scope: s.scope ?? {}, formats: Array.isArray(s.formats) ? s.formats : [], quantity: s.quantity, difficulty: s.difficulty, feedback: s.feedback,
+      createdAt: s.created_at, updatedAt: s.updated_at, lastUsedAt: s.last_used_at ?? null, questionIds: by.get(s.id) ?? [],
+    })),
+  };
+}
+
+export async function getRevisionSet(admin: Admin, userId: string, id: string): Promise<RevisionSetRow | null> {
+  if (!isUuid(id)) return null;
+  const all = await listRevisionSets(admin, userId, 200);
+  return all.ok ? all.data.find(s => s.id === id) ?? null : null;
+}
+
+/** A saved set's last use. Owner-keyed. */
+export async function touchRevisionSet(admin: Admin, userId: string, id: string): Promise<void> {
+  const now = new Date().toISOString();
+  await admin.from("individual_scholar_revision_set").update({ last_used_at: now, updated_at: now }).eq("user_id", userId).eq("id", id).then((r: unknown) => r, () => {});
+}
+
+/** Delete a saved set (its items go with it). Its sessions keep their own snapshot. Owner-keyed. */
+export async function deleteRevisionSet(admin: Admin, userId: string, id: string): Promise<boolean> {
+  if (!isUuid(id)) return false;
+  const { error } = await admin.from("individual_scholar_revision_set").delete().eq("user_id", userId).eq("id", id);
+  return !error;
+}
+
+/**
+ * The rows Revision intelligence (revision.ts buildRevisionInsights) is built from. Where 416 or 417 is absent the
+ * attempts are read with the 372 columns: every one marked by code, none in a session.
+ */
+export async function revisionInsightRows(admin: Admin, userId: string): Promise<Read<{
+  attempts: { questionId: string; correct: boolean; answeredAt: string; marking: string; sessionId: string | null }[];
+  questions: { id: string; stem: string; kind: RevisionKind; chunkId: string; materialId: string; competencyId: string | null }[];
+  reviews: { quality: number; reviewedAt: string; materialId: string }[] | null;
+  cards: { nextReviewAt: string; status: "active" | "mastered" }[];
+}>> {
+  let att = await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at, marking, revision_session_id").eq("user_id", userId).order("answered_at", { ascending: false }).limit(5000);
+  if (att.error) att = await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at").eq("user_id", userId).order("answered_at", { ascending: false }).limit(5000);
+  if (att.error) return fail(att.error);
+  let qs = await admin.from("individual_scholar_question").select("id, stem, kind, chunk_id, material_id, competency_id").eq("user_id", userId).limit(5000);
+  if (qs.error) qs = await admin.from("individual_scholar_question").select("id, stem, kind, chunk_id, material_id").eq("user_id", userId).limit(5000);
+  if (qs.error) return fail(qs.error);
+  const [reviews, cards] = await Promise.all([reviewRows(admin, userId), admin.from("individual_scholar_card").select("next_review_at, status").eq("user_id", userId).limit(5000)]);
+  if (cards.error) return fail(cards.error);
+  return {
+    ok: true,
+    data: {
+      attempts: ((att.data ?? []) as any[]).map(a => ({ questionId: a.question_id, correct: a.correct, answeredAt: a.answered_at, marking: a.marking ?? "deterministic", sessionId: a.revision_session_id ?? null })),
+      questions: ((qs.data ?? []) as any[]).map(q => ({ id: q.id, stem: q.stem, kind: q.kind, chunkId: q.chunk_id, materialId: q.material_id, competencyId: q.competency_id ?? null })),
+      reviews: reviews.ok ? reviews.data : null,
+      cards: ((cards.data ?? []) as any[]).map(c => ({ nextReviewAt: c.next_review_at, status: c.status })),
+    },
+  };
 }
 
 // ── IMPROVE: THE ROWS PROGRESS IS BUILT FROM ───────────────────────────────────────────────────────

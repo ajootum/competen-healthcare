@@ -4,8 +4,9 @@ import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
 import {
   DEFAULT_UPLOAD_MB, FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, LEARN_ACTIONS, LEARN_ACTION_LABEL, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES,
-  MAX_SESSION_FILES, MAX_SESSION_MB, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, SESSION_MAX_STEPS, TUTOR_MAX_TURNS, UPLOAD_SESSION_MINUTES,
-  type ExplanationDepth, type LearnAction, type UploadFormat,
+  MAX_SESSION_FILES, MAX_SESSION_MB, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, REVISION_FORMATS, REVISION_FORMAT_LABEL, REVISION_MODES, REVISION_MODE_LABEL, REVISION_QUANTITY_MAX,
+  SESSION_MAX_STEPS, TUTOR_MAX_TURNS, UPLOAD_SESSION_MINUTES,
+  type ExplanationDepth, type LearnAction, type RevisionDifficulty, type RevisionFormat, type RevisionMode, type UploadFormat,
 } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
 
@@ -42,8 +43,10 @@ export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
 export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
   | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides"
-  | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns";
-export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats" | "scholar_learning_actions";
+  | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns"
+  | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent";
+export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats" | "scholar_learning_actions"
+  | "scholar_revision_formats" | "scholar_revision_modes";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -52,7 +55,8 @@ export type OptionsPolicyKey = "scholar_institutions";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
 export type ChoicePolicyKey = "scholar_catalogue_min_status"
-  | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history";
+  | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
+  | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -318,6 +322,101 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "record",
     limitReason: "Structure only, by design. A student can erase their history with their materials.",
   },
+  // ── COMPETEN-SCHOLAR-REVISION-01 (Stage 4): REVISION, in the existing engine (owner GO s9) ──
+  // What is offered and its defaults. The rules beneath are not settings: grounding and the identifier screen on
+  // every generated item, private_formative only (416), deterministic marking where the kind allows it, AI
+  // evaluation always labelled, and nothing here ever becomes assessment or competence.
+  {
+    key: "scholar_revision_formats", kind: "set", product: "Scholar",
+    label: "Revision question formats",
+    help: "Which question formats Revision may generate and offer. Questions already saved in a format that is switched off are kept, and not offered.",
+    options: REVISION_FORMATS.map(v => ({ value: v, label: REVISION_FORMAT_LABEL[v] })),
+    fallback: [...REVISION_FORMATS],
+    limitReason: "Only the six formats migration 416 stores. Default: all.",
+  },
+  {
+    key: "scholar_revision_modes", kind: "set", product: "Scholar",
+    label: "Revision modes offered",
+    help: "Which ways of revising the Revision workspace offers. A mode switched off is not shown and is refused if asked for.",
+    options: REVISION_MODES.map(v => ({ value: v, label: REVISION_MODE_LABEL[v] })),
+    fallback: [...REVISION_MODES],
+    limitReason: "Only the modes Scholar implements. Default: all.",
+  },
+  {
+    key: "scholar_revision_quantity", kind: "int", product: "Scholar", unit: "questions",
+    label: "Default number of questions in a revision session",
+    help: "How many questions a session offers when the student does not choose. A student may choose up to the fixed limit.",
+    fallback: 10, min: 3, max: REVISION_QUANTITY_MAX,
+    limitReason: "Three to fifty: migration 417 holds at most fifty questions in one session.",
+  },
+  {
+    key: "scholar_revision_difficulty", kind: "choice", product: "Scholar",
+    label: "Default revision difficulty",
+    help: "Which questions a session prefers when the student does not choose. Questions with no recorded difficulty count as standard.",
+    options: [{ value: "any", label: "Any" }, { value: "easy", label: "Easier" }, { value: "standard", label: "Standard" }, { value: "harder", label: "Harder" }],
+    fallback: "any",
+    limitReason: "Four choices. Default: any.",
+  },
+  {
+    key: "scholar_revision_feedback", kind: "choice", product: "Scholar",
+    label: "Revision feedback",
+    help: "When a student sees whether an answer was right: straight away, or at the end of the session. Mock practice always gives it at the end.",
+    options: [{ value: "immediate", label: "Immediately after each answer" }, { value: "end", label: "At the end of the session" }],
+    fallback: "immediate",
+    limitReason: "Two choices. Default: immediately.",
+  },
+  {
+    key: "scholar_revision_generation", kind: "choice", product: "Scholar",
+    label: "New revision questions",
+    help: "Whether Revision may write new questions from a student's notes when their saved ones are not enough. Saved questions are always reused first, and replaying saved ones never uses AI.",
+    options: [{ value: "generate", label: "Reuse saved questions, write new ones for the shortfall" }, { value: "saved_only", label: "Saved questions only: no new AI" }],
+    fallback: "generate",
+    limitReason: "Two choices. New questions pass the same checks whatever is chosen.",
+  },
+  {
+    key: "scholar_short_answer_marking", kind: "choice", product: "Scholar",
+    label: "Short-answer marking",
+    help: "How a short answer that does not match a stored accepted answer is marked: by AI evaluation where it is available (labelled as such), or by the student comparing with the accepted answers.",
+    options: [{ value: "ai_then_self", label: "AI evaluation where available, otherwise the student's own judgement" }, { value: "self", label: "The student's own judgement only" }],
+    fallback: "ai_then_self",
+    limitReason: "A match with an accepted answer is always marked by code first. AI evaluation is always labelled.",
+  },
+  {
+    key: "scholar_revision_recommendations", kind: "choice", product: "Scholar",
+    label: "Revision recommendations",
+    help: "Whether the Revision workspace suggests what to revise next, from the student's own answers and reviews.",
+    options: [{ value: "on", label: "Show recommendations" }, { value: "off", label: "Do not show" }],
+    fallback: "on",
+    limitReason: "Recommendations come only from recorded answers and reviews, each with its reason.",
+  },
+  {
+    key: "scholar_srs_mastery_reps", kind: "int", product: "Scholar", unit: "reviews",
+    label: "Spaced review: consecutive good reviews for a long interval",
+    help: "How many reviews in a row graded Okay or better move a card to a long interval.",
+    fallback: 5, min: 3, max: 10,
+    limitReason: "The rule the Holdings reinforcement cards use is five. Three to ten.",
+  },
+  {
+    key: "scholar_srs_mastery_days", kind: "int", product: "Scholar", unit: "days",
+    label: "Spaced review: the interval that counts as long",
+    help: "A card whose interval reaches this, after enough good reviews, moves to a long interval.",
+    fallback: 60, min: 14, max: 365,
+    limitReason: "Two weeks to a year. Default: sixty days.",
+  },
+  {
+    key: "scholar_srs_max_interval_days", kind: "int", product: "Scholar", unit: "days",
+    label: "Spaced review: longest interval between reviews",
+    help: "However well a card is remembered, it comes back within this many days.",
+    fallback: 3650, min: 30, max: 3650,
+    limitReason: "One month to ten years. Default: ten years (no practical cap).",
+  },
+  {
+    key: "scholar_srs_harder_interval_percent", kind: "int", product: "Scholar", unit: "percent",
+    label: "Spaced review: interval for harder questions",
+    help: "Harder questions come back sooner: their interval is this share of the usual one.",
+    fallback: 100, min: 50, max: 100,
+    limitReason: "Fifty to one hundred percent. Default: one hundred (no difference).",
+  },
   {
     key: "professional_catalogues", kind: "catalogues", product: "Professional", max: CATALOGUES_MAX,
     label: "Competency catalogues Professional may offer",
@@ -511,6 +610,19 @@ export type IndividualPolicy = {
   professionalCatalogues: string[];
   /** LEARN-01 item 5: the governed reference collections. Empty = the student's programme catalogue (the CFCA). */
   scholarReferenceCollections: string[];
+  /** REVISION-01 (Stage 4). */
+  scholarRevisionFormats: RevisionFormat[];
+  scholarRevisionModes: RevisionMode[];
+  scholarRevisionQuantity: number;
+  scholarRevisionDifficulty: RevisionDifficulty;
+  scholarRevisionFeedback: "immediate" | "end";
+  scholarRevisionGeneration: "generate" | "saved_only";
+  scholarShortAnswerMarking: "ai_then_self" | "self";
+  scholarRevisionRecommendations: "on" | "off";
+  scholarSrsMasteryReps: number;
+  scholarSrsMasteryDays: number;
+  scholarSrsMaxIntervalDays: number;
+  scholarSrsHarderIntervalPercent: number;
   /** JOIN-01: programme codes offered at join, or null for every active programme. */
   scholarOnboardingProgrammes: string[] | null;
   scholarProgrammeLevels: Record<string, ContextOption[]>;
@@ -553,6 +665,18 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarCatalogues: clampCatalogues(policyDef("scholar_catalogues") as CataloguePolicy, published.get(policyPath("scholar_catalogues"))),
     professionalCatalogues: clampCatalogues(policyDef("professional_catalogues") as CataloguePolicy, published.get(policyPath("professional_catalogues"))),
     scholarReferenceCollections: clampCatalogues(policyDef("scholar_reference_collections") as CataloguePolicy, published.get(policyPath("scholar_reference_collections"))),
+    scholarRevisionFormats: clampSet(policyDef("scholar_revision_formats") as SetPolicy, published.get(policyPath("scholar_revision_formats"))) as RevisionFormat[],
+    scholarRevisionModes: clampSet(policyDef("scholar_revision_modes") as SetPolicy, published.get(policyPath("scholar_revision_modes"))) as RevisionMode[],
+    scholarRevisionQuantity: int("scholar_revision_quantity"),
+    scholarRevisionDifficulty: clampChoice(policyDef("scholar_revision_difficulty") as ChoicePolicy, published.get(policyPath("scholar_revision_difficulty"))) as RevisionDifficulty,
+    scholarRevisionFeedback: clampChoice(policyDef("scholar_revision_feedback") as ChoicePolicy, published.get(policyPath("scholar_revision_feedback"))) as "immediate" | "end",
+    scholarRevisionGeneration: clampChoice(policyDef("scholar_revision_generation") as ChoicePolicy, published.get(policyPath("scholar_revision_generation"))) as "generate" | "saved_only",
+    scholarShortAnswerMarking: clampChoice(policyDef("scholar_short_answer_marking") as ChoicePolicy, published.get(policyPath("scholar_short_answer_marking"))) as "ai_then_self" | "self",
+    scholarRevisionRecommendations: clampChoice(policyDef("scholar_revision_recommendations") as ChoicePolicy, published.get(policyPath("scholar_revision_recommendations"))) as "on" | "off",
+    scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),
+    scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
+    scholarSrsMaxIntervalDays: int("scholar_srs_max_interval_days"),
+    scholarSrsHarderIntervalPercent: int("scholar_srs_harder_interval_percent"),
     scholarOnboardingProgrammes: clampProgrammes(policyDef("scholar_onboarding_programmes") as ProgrammesPolicy, published.get(policyPath("scholar_onboarding_programmes"))),
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),

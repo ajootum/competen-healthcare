@@ -3,11 +3,11 @@ import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { countDue, getLearningPreference, getLearningSession, isUuid, learningEvents, listLearningSessions, listMaterials, readConsent } from "@/lib/individual/scholar/store";
+import { countDue, getLearningPreference, getLearningSession, getRevisionSession, isUuid, learningEvents, listLearningSessions, listMaterials, readConsent } from "@/lib/individual/scholar/store";
 import { sessionTopics } from "@/lib/individual/scholar/learn";
 import { offeredActions, sessionView } from "@/lib/individual/scholar/learn-view";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
-import { LEARN_ACTION_LABEL } from "@/lib/individual/scholar/config";
+import { LEARN_ACTION_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { LearnWorkspace, type StartScope } from "../_components/learn-client";
@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Learn" });
 }
 
-type Search = { session?: string; materials?: string; material?: string; section?: string; competency?: string; topic?: string };
+type Search = { session?: string; materials?: string; material?: string; section?: string; competency?: string; topic?: string; revision?: string; action?: string };
 
 export default async function LearnPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<Search> }) {
   const page = await experienceModulePage((await params).experience, "study");
@@ -46,6 +46,11 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
   const standing = await getScholarAiStanding(ctx.admin, ctx.userId);
   const standingMessage = !standing.readable || standing.level === "continuity" ? (standing.message ?? "New AI help is limited right now.") : null;
   const offered = offeredActions(policy, pref?.defaultAction);
+  // REVISION-01 R4: from a revision answer, "Explain the answer" opens Explain (if offered) and every link keeps the
+  // way back to the same revision session, which resumes at the same question.
+  const startAction = q.action && offered.actions.includes(q.action as LearnAction) ? (q.action as LearnAction) : offered.start;
+  const fromRevision = q.revision && isUuid(q.revision) ? await getRevisionSession(ctx.admin, ctx.userId, q.revision) : null;
+  const backToRevision = fromRevision?.ok && fromRevision.data ? `${experienceHref("scholar", "study/revise")}?session=${fromRevision.data.session.id}` : null;
 
   // A session to resume: the student's own, with what was done at each step.
   let resume: { session: ReturnType<typeof sessionView>; progress: Record<number, { actions: string[]; verdict: string | null }> } | null = null;
@@ -73,6 +78,11 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
       <PageHeader accent={x.accent} eyebrow="My Learning" title="Learn"
         intro="Scholar teaches you from your own notes, one step at a time. Ask anything, at any point. Skip, go back or explore: the steps are a suggestion." />
       <StudyNav dueCount={due} />
+      {backToRevision && (
+        <p className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[13.5px] text-gray-800">
+          You came here from a revision session. <Link href={backToRevision} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Back to your revision</Link> -- it carries on where you left it.
+        </p>
+      )}
       {q.session && !resume ? (
         <StatePanel title="That session could not be found" actions={<Link href={experienceHref("scholar", "study/learn")} className={secondaryBtn}>Start learning</Link>}>
           <p>It may have been removed with the materials it used.</p>
@@ -82,7 +92,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
       ) : (
         <LearnWorkspace
           initial={resume?.session ?? null} initialProgress={resume?.progress ?? {}} start={start}
-          actions={offered.actions} startAction={offered.start} labels={LEARN_ACTION_LABEL}
+          actions={offered.actions} startAction={startAction} labels={LEARN_ACTION_LABEL}
           consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? null : "Your AI help setting could not be read just now."}
           checks={policy.scholarCheckBehaviour} depth={pref?.depth ?? policy.scholarExplanationDepth} maxTurns={policy.scholarTutorTurns}
           materials={materials} standingMessage={standingMessage}

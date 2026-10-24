@@ -13,7 +13,7 @@
 import { createHash } from "node:crypto";
 import { STEP_MAX_SECTIONS } from "./config";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "./retrieval";
-import { competencyChunks, getPassage, searchCandidates, sectionLinks, sectionRefs, sectionsOf, topicsOfSections, type LearningStep, type SectionRef } from "./store";
+import { competencyChunks, getPassage, isUuid, searchCandidates, sectionLinks, sectionRefs, sectionsOf, topicsOfSections, type LearningStep, type SectionRef } from "./store";
 import { competencyLabels } from "./competency-view";
 import { referenceCollections, type CatalogueCompetency, type ReferenceCompetency } from "./catalogue";
 import type { GovernedReference } from "./generation";
@@ -103,6 +103,26 @@ export async function resolveScope(admin: any, userId: string, scope: LearningSc
   if (!linked.ok) return { ok: false, status: 503, error: "Your notes could not be read just now." };
   if (!linked.data.length) return { ok: false, status: 404, error: "None of your notes is linked to that competency yet. Find the topics in a material and accept the links that fit." };
   return { ok: true, title: labels?.competencyTitle ?? "A competency", sections: await sectionRefs(admin, userId, linked.data), topic: null, competencyId: scope.competencyId };
+}
+
+/** A scope from a request body: a section, a document, chosen documents, a topic (optionally within materials) or a competency. Learn and Revision both use it. A string is the reason it was refused. */
+export function parseScope(body: { scope?: Record<string, unknown> } | null): LearningScope | string {
+  const s = body?.scope ?? {};
+  const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter(isUuid))].slice(0, MAX_SCOPE_MATERIALS) : []);
+  if (s.kind === "section") return isUuid(s.chunkId) ? { kind: "section", chunkId: s.chunkId } : "Choose a section.";
+  if (s.kind === "document") return isUuid(s.materialId) ? { kind: "document", materialId: s.materialId } : "Choose a material.";
+  if (s.kind === "documents") {
+    const m = ids(s.materialIds);
+    return m.length ? (m.length === 1 ? { kind: "document", materialId: m[0] } : { kind: "documents", materialIds: m }) : "Choose at least one material.";
+  }
+  if (s.kind === "topic") {
+    const topic = typeof s.topic === "string" ? s.topic.replace(/\s+/g, " ").trim() : "";
+    if (topic.length < 2 || topic.length > 120) return "Name a topic in a few words.";
+    const m = ids(s.materialIds);
+    return { kind: "topic", topic, materialIds: m.length ? m : undefined };
+  }
+  if (s.kind === "competency") return isUuid(s.competencyId) ? { kind: "competency", competencyId: s.competencyId } : "Choose a competency.";
+  return "Choose what to learn.";
 }
 
 /** L1/L3: the topics of a session's sections, read from Stage 2 (the student's corrections included). */
