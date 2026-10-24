@@ -310,19 +310,22 @@ const artefactsBounded = (src: Src) => {
  * metered runner with its activity code and passes it to its generator, and returns the refusal before anything else;
  * the generators make no direct generate() call (only the default runner does); the runner sends only Scholar's
  * product, the activity, and a request id from the client's retry key -- never an amount, a policy or a level.
+ * D1: each route passes the request's risk subject (scholarRisk), which the runner requires and sends on every call.
  */
 const AI_ROUTES: [string, string, RegExp][] = [
-  [`${API}/explain/route.ts`, `scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode)`, /runExplain\([^)]*ai\.run\)/],
-  [`${API}/learn/act/route.ts`, "scholarAiRunner(ctx, req, action as", /runLearn\([\s\S]*?\}, ai\.run\)/],
-  [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions")`, /runQuestions\([^;]*ai\.run\)/],
-  [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps")`, /runCase\([^)]*ai\.run\)/],
-  [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map")`, /runAnalysis\([^)]*ai\.run\)/],
+  [`${API}/explain/route.ts`, `scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode, await scholarRisk(ctx.admin, ctx.userId, { text: question, passages }))`, /runExplain\([^)]*ai\.run\)/],
+  [`${API}/learn/act/route.ts`, `scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages }))`, /runLearn\([\s\S]*?\}, ai\.run\)/],
+  [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runQuestions\([^;]*ai\.run\)/],
+  [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run\)/],
+  [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }))`, /runAnalysis\([^)]*ai\.run\)/],
 ];
 const meteredEverywhere = (src: Src) => {
   const gen = src.get(GEN) ?? "", http = src.get(`${LIB}/http.ts`) ?? "";
   return AI_ROUTES.every(([f, runner, call]) => { const s = src.get(f) ?? ""; return s.includes(runner) && call.test(s) && /ai\.refusal\(\)/.test(s); })
     && [...gen.matchAll(/\bgenerate\(/g)].length === 1 && /const direct: AiRun = g => generate\(g\);/.test(gen)
-    && /runMeteredAi\(ctx\.admin, \{ userId: ctx\.userId, product: "scholar", activity, requestId: part === "main" \? requestId : `\$\{requestId\}:\$\{part\}`, generate: g \}\)/.test(http)
+    && /runMeteredAi\(ctx\.admin, \{ userId: ctx\.userId, product: "scholar", activity, requestId: part === "main" \? requestId : `\$\{requestId\}:\$\{part\}`, generate: g, risk \}\)/.test(http)
+    && /export function scholarAiRunner\(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext\)/.test(http)
+    && /text: \[input\.text \?\? "", \.\.\.input\.passages\.map\(p => p\.content\)\]/.test(http)
     && /const requestId = requestIdFor\(ctx\.userId, req\.headers\.get\("x-request-id"\)\);/.test(http);
 };
 /**
@@ -840,6 +843,9 @@ function main() {
   ok("P42. ⚠ K25 goes red when the AI runs before the saved answer is looked up, or conversation becomes an artefact",
     !artefactsBounded(plant(`${API}/learn/act/route.ts`, "const pre = await aiPreflight(ctx);", "const pre0 = 0;"))
     && !artefactsBounded(plant(`${API}/learn/act/route.ts`, "const storable = isArtefactAction(action) && !hasHistory && oneMaterial;", "const storable = !hasHistory && oneMaterial;")));
+  ok("P46. ⚠ K26 goes red when a route drops the risk subject, or the runner stops sending it",
+    !meteredEverywhere(plant(`${API}/cases/route.ts`, `"case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, `"case_steps", {})`))
+    && !meteredEverywhere(plant(`${LIB}/http.ts`, "generate: g, risk })", "generate: g })")));
   ok("P43. ⚠ K26 goes red when a route stops passing the runner, or a generator calls generate() directly",
     !meteredEverywhere(plant(`${API}/questions/route.ts`, ".scholarQuestionsPerRequest, ai.run)", ".scholarQuestionsPerRequest)"))
     && !meteredEverywhere(plant(GEN, "    const r = await run({\n      system: QUESTION_SYSTEM[kind],", "    const r = await generate({\n      system: QUESTION_SYSTEM[kind],")));

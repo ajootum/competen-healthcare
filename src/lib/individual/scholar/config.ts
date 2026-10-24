@@ -107,7 +107,20 @@ export const PROMPT_VERSIONS = {
   // system prompt and checks as explain (generation.ts). v2: a last no-counting reminder (staging, Simplify).
   // v3: Simplify keeps the passages' own names rather than counting them ("two tubes" for "right and left").
   learn: "scholar-learn-v3",
+  // COMPETEN-SCHOLAR-REVISION-01 R4: AI evaluation of a short answer (Holdings activity `evaluate`).
+  evaluate: "scholar-evaluate-v1",
 } as const;
+
+// ── REVISION-01 R4: HOW AN ANSWER WAS MARKED ── always said beside the result (migration 416 `marking`) ──
+// Deterministic marking and AI evaluation are never presented alike. Where AI evaluation is unavailable (metering
+// refuses it, e.g. not_eligible, or AI is off), a short answer falls back to the stored accepted answers: matched by
+// code where it can be, otherwise the student compares and says -- labelled as what it is.
+export const MARKING_LABEL = {
+  deterministic: "Marked against the stored answer",
+  self_graded: "Your own judgement, against the stored answer",
+  ai_evaluation: "AI evaluation: an AI judged your answer against your notes. Not verified.",
+} as const;
+export type Marking = keyof typeof MARKING_LABEL;
 
 /** S4: a multi-step practice case has this many steps at most (migration 388 allows 1 to 5). */
 export const CASE_MAX_STEPS = 4;
