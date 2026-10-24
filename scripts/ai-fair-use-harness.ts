@@ -1,5 +1,5 @@
 /**
- * AI FAIR USE -- STATIC HARNESS (COMPETEN-AI-FAIR-USE-01, migrations 410 and 411).
+ * AI FAIR USE -- STATIC HARNESS (COMPETEN-AI-FAIR-USE-01 and IND-007 D1, migrations 410, 411 and 412).
  *
  *   npx tsx scripts/ai-fair-use-harness.ts
  *
@@ -17,8 +17,10 @@
  *       releases only when nothing was billed, and otherwise marks the request unreconciled (amendment 4)
  *   A6  fail closed and dark: metering off is generate() unchanged, an unreadable standing sends nothing, the
  *       unpublished default allows nothing and no ceiling refuses
- *   A7  clinical safety: no level serves an activity below its floor (level_insufficient), unstated sensitivity
- *       counts as sensitive, and a sensitive activity reserves only on an evidence-backed eligible model (D1)
+ *   A7  clinical risk (owner D1): the subject decides, not the activity name (Teach Me on medication safety is
+ *       high risk under the provisional rules), an unknown subject is high risk, no level runs below a risk tier's
+ *       model floor, the engine passes the classified tier, and ai_reserve treats a null or unknown tier as high
+ *       risk and needs an eligibility decision covering the tier
  *   A8  the admin door: gated first by hq.platform.ai.manage, POST only, no credential, no activation
  *   A9  history cannot move: every rate and eligibility table is append-only, and a request settles at the price,
  *       reference rate and CAU basis fixed when it was reserved
@@ -31,10 +33,13 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { activityAt, defaultPolicy, resolvePolicy, serviceLevel } from "../src/lib/ai/fair-use-policy";
+import { classifyRisk, resolveRiskPolicy } from "../src/lib/ai/clinical-risk";
+import { PROVISIONAL_ACTIVITIES, PROVISIONAL_RISK } from "./ai-provisional-policy";
 
 const F = {
   mig410: "supabase/migrations/410-ai-usage-ledger-and-allowances.sql",
   mig411: "supabase/migrations/411-ai-reconciliation-fx-basis-and-eligibility.sql",
+  mig412: "supabase/migrations/412-ai-risk-tiers-and-rate-source.sql",
   engine: "src/lib/ai/allowance.ts",
   policy: "src/lib/ai/fair-use-policy.ts",
   admin: "src/lib/ai/fair-use-admin.ts",
@@ -46,6 +51,7 @@ const F = {
   assistant: "src/app/api/individual/assistant/route.ts",
   proAssistant: "src/app/api/individual/professional/assistant/route.ts",
   mappings: "src/app/api/individual/professional/mappings/route.ts",
+  personal: "src/lib/ai/personal-assistant.ts",
 } as const;
 type K = keyof typeof F;
 type Src = Map<string, string>;
@@ -53,9 +59,9 @@ const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"
 const RAW: Src = new Map(Object.values(F).map(f => [f, existsSync(f) ? readFileSync(f, "utf8").replace(/\r\n/g, "\n") : ""]));
 const sqlCode = (s: string) => s.split("\n").filter(l => !l.trim().startsWith("--")).join("\n").toLowerCase();
 /** 410 then 411, comment lines dropped: what the database holds after both. */
-const mig = (src: Src) => sqlCode(src.get(F.mig410) ?? "") + "\n" + sqlCode(src.get(F.mig411) ?? "");
+const mig = (src: Src) => [F.mig410, F.mig411, F.mig412].map(f => sqlCode(src.get(f) ?? "")).join("\n");
 const code = (src: Src, k: K) => strip(src.get(F[k]) ?? "");
-const HAS_MIG = !!RAW.get(F.mig410) && !!RAW.get(F.mig411);
+const HAS_MIG = !!RAW.get(F.mig410) && !!RAW.get(F.mig411) && !!RAW.get(F.mig412);
 function walk(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).flatMap(n => { const p = join(dir, n); return statSync(p).isDirectory() ? walk(p) : /\.(ts|tsx)$/.test(n) && !/\.test\./.test(n) ? [p.replace(/\\/g, "/")] : []; });
@@ -95,9 +101,15 @@ const checkSettleOnce = (src: Src): R => {
   return { ok: settle && release && guard, detail: `settle once ${settle}, release once ${release}, ledger guard ${guard}` };
 };
 const checkNoClientAllowance = (src: Src, all: Src): R => {
-  const calls = (["assistant", "proAssistant", "mappings"] as K[]).map(k => code(src, k));
-  const metered = calls.every(s => /runMeteredAi\(ctx\.admin, \{\s*userId: ctx\.userId, product: /.test(s));
-  const fromBody = calls.some(s => { const i = s.indexOf("runMeteredAi("); return /body\.|fields\./.test(s.slice(i, s.indexOf("});", i))); });
+  // The assistant routes call the Personal AI (owner D3: Individual composes, Holdings meters). Each route passes
+  // the session's identity, and from the request only a mode the engine checks against the product's profile.
+  const block = (s: string, call: string) => { const i = s.indexOf(call); return i < 0 ? "" : s.slice(i, s.indexOf("});", i)); };
+  const routes = [code(src, "assistant"), code(src, "proAssistant")].map(s => block(s, "runIndividualAssistant("));
+  const mapping = block(code(src, "mappings"), "runMeteredAi(");
+  const personal = block(code(src, "personal"), "runMeteredAi(");
+  const metered = routes.every(b => /^runIndividualAssistant\(ctx\.admin, \{\s*userId: ctx\.userId,/.test(b)) && /^runMeteredAi\(ctx\.admin, \{ userId: ctx\.userId, product: /.test(mapping)
+    && /^runMeteredAi\(admin, \{\s*userId: r\.userId, product: r\.product, activity: MODE_ACTIVITY\[mode\], requestId: r\.requestId,/.test(personal);
+  const fromBody = [...routes, mapping].some(b => /body\??\.(?!mode\b)\w+|fields\./.test(b));
   const standing = code(src, "standingRoute");
   const readOnly = !/export async function (POST|PUT|PATCH|DELETE)/.test(standing) && /getAiStanding\(ctx\.admin, \{ userId: ctx\.userId, product: experience \}\)/.test(standing);
   const rpcOnly = [...all].filter(([f, s]) => /rpc\("ai_(reserve|settle|release|mark_unreconciled)/.test(s) && f !== F.engine).map(([f]) => f);
@@ -123,16 +135,25 @@ const checkFailClosed = (src: Src): R => {
   const noCeiling = !HAS_MIG || /if p_unreconciled_cap_cau is null or v_open \+ v_max > p_unreconciled_cap_cau then/.test(fn(mig(src), "ai_reserve"));
   return { ok: dark && unreadable && nothing && noCeiling, detail: `off = generate unchanged ${dark}, unreadable sends nothing ${unreadable}, default allows nothing ${nothing}, no ceiling refuses ${noCeiling}` };
 };
-const checkClinical = (src: Src, resolve: typeof resolvePolicy, at: typeof activityAt): R => {
-  const p = resolve("scholar", { includedCau: 100, activities: { questions: { tier: "reasoning", minTier: "reasoning", clinicallySensitive: true }, unstated: { tier: "reasoning" } } }, "t");
+type Classify = typeof classifyRisk;
+const checkRisk = (src: Src, classify: Classify, at: typeof activityAt): R => {
+  const rules = resolveRiskPolicy(PROVISIONAL_RISK);
+  const subj = (text: string) => ({ text, competencyRisks: [] as string[], frameworkCodes: [] as string[] });
+  const teach = PROVISIONAL_ACTIVITIES.scholar.teach.riskFloor;
+  const medication = classify(rules, subj("Teach me about medication safety"), teach).tier === "high_risk_clinical";
+  const unknown = classify(rules, subj("Tell me about the weather"), teach).tier === "high_risk_clinical" && classify(rules, subj(""), teach).tier === "high_risk_clinical";
+  const p = resolvePolicy("scholar", { includedCau: 100, risk: { minTier: { standard_educational: "cheap", clinical_educational: "reasoning", high_risk_clinical: "heavy" }, rules: [] },
+    activities: { teach: { tier: "reasoning", minTier: "cheap", riskFloor: "standard_educational" } } }, "t");
   const b = { includedCau: 100, reserveCau: 0, usedCau: 75, reservedCau: 0, reserveUsedCau: 0, reserveReservedCau: 0 };
-  const floor = at(p, "optimised", "questions", b).refusal === "level_insufficient" && at(p, "full", "questions", { ...b, usedCau: 0 }).tier === "reasoning";
-  const unstated = p.activities.unstated?.clinicallySensitive === true;
-  const passed = /p_clinically_sensitive: activity\.clinicallySensitive,/.test(code(src, "engine"));
+  const opt = at(p, "optimised", "teach", b, "high_risk_clinical"), full = at(p, "full", "teach", { ...b, usedCau: 0 }, "high_risk_clinical");
+  const floor = !opt.available && opt.refusal === "level_insufficient" && full.tier === "heavy";
+  const e = code(src, "engine");
+  const passed = /p_risk_tier: risk!\.tier, p_risk_rule: risk!\.rule,/.test(e) && e.indexOf("classifyRisk(policy.risk") > -1 && e.indexOf("classifyRisk(policy.risk") < e.indexOf("const decision = activityAt(");
   const r = fn(mig(src), "ai_reserve");
-  const db = !HAS_MIG || (/if coalesce\(p_clinically_sensitive, true\) and not exists \(/.test(r) && /and e\.eligible and e\.effective_from <= now\(\)/.test(r) && /'not_eligible'/.test(r)
-    && /and \(not eligible or \(evidence_ref is not null and char_length\(btrim\(evidence_ref\)\) >= 5\)\)/.test(mig(src)));
-  return { ok: floor && unstated && passed && db, detail: `floor kept ${floor}, unstated is sensitive ${unstated}, engine passes sensitivity ${passed}, database requires an evidenced eligible model ${db}` };
+  const db = !HAS_MIG || (/v_tier := case when p_risk_tier in \('standard_educational', 'clinical_educational', 'high_risk_clinical'\) then p_risk_tier else 'high_risk_clinical' end;/.test(r)
+    && /if v_rank > 1 and not exists \(/.test(r) && /and e\.eligible and ai_risk_rank\(coalesce\(e\.max_risk_tier, 'clinical_educational'\)\) >= v_rank/.test(r)
+    && /select case p_tier when 'standard_educational' then 1 when 'clinical_educational' then 2 else 3 end/.test(fn(mig(src), "ai_risk_rank")));
+  return { ok: medication && unknown && floor && passed && db, detail: `medication by subject is high ${medication}, unknown is high ${unknown}, tier floor kept ${floor}, engine passes the classified tier ${passed}, database fails closed on tier and eligibility ${db}` };
 };
 const checkAdminDoor = (src: Src): R => {
   const r = code(src, "adminRoute"), p = code(src, "adminPage"), a = code(src, "admin");
@@ -186,7 +207,7 @@ const plant = (k: K, from: string, to: string): Src => {
 const red = (n: string, r: R) => ok(`P. ${n} goes RED`, !r.ok, "the check passed on a planted violation");
 const run = (n: string, r: R) => ok(n, r.ok, r.detail);
 
-console.log("AI FAIR USE HARNESS (COMPETEN-AI-FAIR-USE-01, migrations 410 and 411)\n");
+console.log("AI FAIR USE HARNESS (COMPETEN-AI-FAIR-USE-01 and IND-007 D1, migrations 410, 411 and 412)\n");
 const missing = Object.entries(F).filter(([k, f]) => !k.startsWith("mig") && !RAW.get(f)).map(([, f]) => f);
 ok("0. every pinned file exists", missing.length === 0, missing.join(", "));
 if (HAS_MIG) {
@@ -195,36 +216,42 @@ if (HAS_MIG) {
   run("A3. (FI) a double settle or release is refused", checkSettleOnce(RAW));
   run("A9. history cannot move: append-only rates and eligibility, settled at the reserved price, rate and basis", checkHistory(RAW));
   run("A10. (FI) two records: buffer on the hold only, provider expenditure and allowance consumption frozen once settled", checkTwoRecords(RAW));
-} else console.log(`  PEND  A1-A3, A9, A10. ${F.mig410} and ${F.mig411} are not both in this checkout`);
+} else console.log(`  PEND  A1-A3, A9, A10. ${F.mig410}, ${F.mig411} and ${F.mig412} are not all in this checkout`);
 run("A4. (FI) a client cannot send an allowance: routes meter by session, standing is read-only, only the engine calls the money functions", checkNoClientAllowance(RAW, ALL));
 run("A5. (FI) an unknown charge is never settled on the estimate: settle reported usage, release only when unbilled, otherwise wait", checkNoEstimate(RAW));
 run("A6. fail closed and dark: off is generate() unchanged, unreadable sends nothing, the default allows nothing", checkFailClosed(RAW));
-run("A7. clinical safety: floors kept, unstated is sensitive, sensitive needs an evidenced eligible model", checkClinical(RAW, resolvePolicy, activityAt));
+run("A7. clinical risk (D1): subject decides, unknown is high, no downgrade below the tier floor, tier enforced in ai_reserve", checkRisk(RAW, classifyRisk, activityAt));
 run("A8. the admin door: gated first, POST only, no credential, no activation", checkAdminDoor(RAW));
 run("A11. no allowance figure in code", checkNoFigures(RAW));
 run("A12. activities are policy data: an undefined activity is refused before any reservation", checkActivitiesAreData(RAW, resolvePolicy, activityAt));
 console.log("");
 if (HAS_MIG) {
-  red("A1 (FI) concurrent overspend: the row lock removed", checkLock(plant("mig411", "  select * into a from ai_allowance_account where id = p_account for update;", "  select * into a from ai_allowance_account where id = p_account;"), ALL));
+  red("A1 (FI) concurrent overspend: the row lock removed", checkLock(plant("mig412", "  select * into a from ai_allowance_account where id = p_account for update;", "  select * into a from ai_allowance_account where id = p_account;"), ALL));
   red("A1 (FI) an app-side balance write", checkLock(RAW, new Map([...ALL, ["src/lib/ai/evil.ts", `admin.from("ai_allowance_account").update({ used_cau: 0 })`]])));
   red("A2 (FI) the unique request id dropped", checkIdempotent(plant("mig410", "create unique index if not exists ux_ai_usage_ledger_request on ai_usage_ledger(request_id);", "create index if not exists ix_ai_usage_ledger_request on ai_usage_ledger(request_id);")));
   red("A3 (FI) a double settle", checkSettleOnce(plant("mig411", "  if l.status not in ('reserved', 'unreconciled') then raise exception 'ai_settle: request % is already %', p_request_id, l.status; end if;\n", "")));
   red("A9 a price rewritten", checkHistory(plant("mig411", "  select * into pr from ai_price where id = l.price_id;", "  select * into pr from ai_price_at(l.provider, l.model, now());")));
   red("A9 settled at today's reference rate", checkHistory(plant("mig411", "    select per_usd into v_rate from ai_fx_rate where id = l.fx_rate_id;", "    select per_usd into v_rate from ai_fx_rate where currency = 'UGX' and effective_to is null;")));
   red("A10 (FI) the buffer charged to the allowance", checkTwoRecords(plant("mig411", "    v_cau := round(v_cost * v_rate / v_basis, 6);", "    v_cau := round(v_cost * v_rate * (1 + l.reserve_buffer_pct / 100) / v_basis, 6);")));
-  red("A10 (FI) a settled record left rewritable", checkTwoRecords(plant("mig411", "  if old.status not in ('reserved', 'unreconciled') or (old.status = 'unreconciled' and new.status = 'reserved')", "  if (old.status = 'unreconciled' and new.status = 'reserved')")));
-  red("A7 the eligibility check removed from ai_reserve", checkClinical(plant("mig411", "  if coalesce(p_clinically_sensitive, true) and not exists (", "  if false and not exists ("), resolvePolicy, activityAt));
+  red("A10 (FI) a settled record left rewritable", checkTwoRecords(plant("mig412", "  if old.status not in ('reserved', 'unreconciled') or (old.status = 'unreconciled' and new.status = 'reserved')", "  if (old.status = 'unreconciled' and new.status = 'reserved')")));
+  red("A7 an unknown tier let through as standard in ai_reserve", checkRisk(plant("mig412", "then p_risk_tier else 'high_risk_clinical' end;", "then p_risk_tier else 'standard_educational' end;"), classifyRisk, activityAt));
+  red("A7 the tier eligibility check removed from ai_reserve", checkRisk(plant("mig412", "  if v_rank > 1 and not exists (", "  if false and not exists ("), classifyRisk, activityAt));
+  red("A1 (FI) the row lock removed from 411's superseded copy is NOT what runs", checkLock(plant("mig411", "  select * into a from ai_allowance_account where id = p_account for update;", "  select * into a from ai_allowance_account where id = p_account;"), ALL).ok
+    ? { ok: false, detail: "" } as R : { ok: true, detail: "the check read a superseded definition" } as R);
   red("A5 (FI) a stale hold released as free", checkNoEstimate(plant("mig411", "    perform ai_mark_unreconciled(r.request_id, 'expired');", "    perform ai_release(r.request_id, 'expired');")));
 }
 red("A2 (FI) a known id sent to the provider again", checkIdempotent(plant("engine", `  if (typeof r?.reason === "string" && r.reason.startsWith("retry")) return { ok: false, error: "duplicate_request", standing };\n`, "")));
-red("A4 (FI) a client-sent allowance", checkNoClientAllowance(plant("assistant", "userId: ctx.userId, product: experience, activity: \"assistant\",", "userId: ctx.userId, product: experience, activity: body.activity ?? \"assistant\","), ALL));
+red("A4 (FI) a client-sent activity through the assistant route", checkNoClientAllowance(plant("assistant", "mode: typeof body?.mode === \"string\" ? body.mode as AssistantMode : null, question,", "mode: typeof body?.mode === \"string\" ? body.mode as AssistantMode : null, question, activity: body.activity,"), ALL));
+red("A4 (FI) the engine metering a client-chosen activity", checkNoClientAllowance(plant("personal", "activity: MODE_ACTIVITY[mode], requestId: r.requestId,", "activity: (r as any).activity ?? MODE_ACTIVITY[mode], requestId: r.requestId,"), ALL));
 red("A4 (FI) a route calling the money functions itself", checkNoClientAllowance(RAW, new Map([...ALL, ["src/app/api/individual/evil/route.ts", `await admin.rpc("ai_mark_unreconciled", {})`]])));
 red("A5 (FI) settled on the estimate", checkNoEstimate(plant("engine", `    const { error } = await admin.rpc("ai_mark_unreconciled", { p_request_id: args.requestId, p_outcome: "timeout" });`,
   `    const { error } = { error: !(await settle(admin, args.requestId, model, maxInputTokens(args.generate.system, args.generate.user), maxOut, "timeout")) };`)));
 red("A5 (FI) an unknown charge released as free", checkNoEstimate(plant("engine", `  } else if (!out.ok && (out.error === "not_configured" || out.billing === "none")) {`, `  } else if (!out.ok) {`)));
 red("A6 metering on with no flag check", checkFailClosed(plant("engine", "  if (!(await aiFairUseEnabled(admin))) return generate(args.generate);\n  const { policy, readable }", "  const { policy, readable }")));
-red("A7 a sensitive activity downgraded below its floor", checkClinical(RAW, resolvePolicy, (p, l, c, b) => { const d = activityAt(p, l, c, b); return d.refusal === "level_insufficient" ? { available: true, via: "included", tier: "cheap", refusal: null, reason: null } : d; }));
-red("A7 sensitivity not passed to the reservation", checkClinical(plant("engine", "p_clinically_sensitive: activity.clinicallySensitive,", "p_clinically_sensitive: false,"), resolvePolicy, activityAt));
+red("A7 Teach Me on medication safety classified as standard (by activity name)", checkRisk(RAW, (pol, sub, floor) => sub.text.toLowerCase().startsWith("teach me") ? { tier: "standard_educational", rule: "activity:teach", reason: "" } : classifyRisk(pol, sub, floor), activityAt));
+red("A7 an unknown subject treated as standard", checkRisk(RAW, (pol, sub, floor) => { const d = classifyRisk(pol, sub, floor); return d.rule.startsWith("unknown:") ? { ...d, tier: "standard_educational" } : d; }, activityAt));
+red("A7 a downgrade below the risk tier's model floor", checkRisk(RAW, classifyRisk, (p, l, c, b) => activityAt(p, l, c, b)));
+red("A7 the engine reserving at standard whatever the subject", checkRisk(plant("engine", "p_risk_tier: risk!.tier, p_risk_rule: risk!.rule,", "p_risk_tier: \"standard_educational\", p_risk_rule: risk!.rule,"), classifyRisk, activityAt));
 red("A8 an admin door that activates metering", checkAdminDoor(plant("adminRoute", "    default:\n      return refuse(400, \"Unknown action\");", "    case \"activate\": await ctx.admin.from(\"practice_platform_flags\").upsert({ flag: \"ai_fair_use\", enabled: true }); return NextResponse.json({});\n    default:\n      return refuse(400, \"Unknown action\");")));
 red("A11 an allowance hard-coded in the engine", checkNoFigures(plant("policy", "export const CAU_MAX = 1_000_000;", "export const CAU_MAX = 1_000_000;\nconst PILOT_INCLUDED = 4000;")));
 red("A11 a reserve default bound in the admin surface", checkNoFigures(plant("adminControls", `{field("Essential reserve (CAU), hard cap", p.reserveCau, v => setP({ ...p, reserveCau: v ?? 0 }))}`, `{field("Essential reserve (CAU), hard cap", p.reserveCau, v => setP({ ...p, reserveCau: v ?? 500 }))}`)));

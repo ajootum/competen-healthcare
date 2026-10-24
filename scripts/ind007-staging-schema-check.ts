@@ -193,9 +193,9 @@ async function main() {
       out.ai410 = { tables: [...new Set(cols.map((c: any) => c.table_name))], constraints: cons.length, indexes: idx.length, policies: pol.length, rls, triggers: trg.length, functions: fn, caps, grants,
         fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, rls, trg, fn, caps, grants })).digest("hex") };
     }
-    if (process.argv.includes("--ai411")) {
-      // AI-FAIR-USE-01, migration 411: the 410 tables as widened, the two new tables, every AI guard and accounting
-      // function with who may execute it. PRE (410 only) must equal the state after ROLLBACK-411.
+    for (const flag of ["--ai411", "--ai412"] as const) if (process.argv.includes(flag)) {
+      // AI-FAIR-USE-01, migrations 411 and 412 (same reading, named by the flag): the 410 tables as widened, the two new tables, every AI guard and accounting
+      // function with who may execute it. PRE must equal the state after the matching ROLLBACK. ai_risk_rank exists only from 412.
       const T = ["ai_price", "ai_fx_rate", "ai_cau_rate", "ai_cau_basis", "ai_model_eligibility", "ai_allowance_account", "ai_usage_ledger"];
       const cols = await q(`select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns
         where table_schema = 'public' and table_name = any($1) order by 1, 2`, [T]);
@@ -208,9 +208,23 @@ async function main() {
         has_function_privilege('anon', p.oid, 'execute') as anon_exec, has_function_privilege('authenticated', p.oid, 'execute') as auth_exec,
         has_function_privilege('service_role', p.oid, 'execute') as service_exec from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname in ('ai_reserve', 'ai_settle', 'ai_release', 'ai_release_stale', 'ai_mark_unreconciled', 'ai_price_at',
-          'ai_rate_history_guard', 'ai_usage_ledger_guard', 'ai_allowance_account_guard') order by 1, 2`);
-      out.ai411 = { tables: [...new Set(cols.map((c: any) => c.table_name))], constraints: cons.length, indexes: idx.length, policies: pol.length, rls, triggers: trg.length,
+          'ai_rate_history_guard', 'ai_usage_ledger_guard', 'ai_allowance_account_guard', 'ai_risk_rank') order by 1, 2`);
+      out[flag.slice(2)] = { tables: [...new Set(cols.map((c: any) => c.table_name))], constraints: cons.length, indexes: idx.length, policies: pol.length, rls, triggers: trg.length,
         functions: fn.map((f: any) => `${f.proname}/${f.pronargs}`),
+        fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, rls, trg, fn })).digest("hex") };
+    }
+    if (process.argv.includes("--ai419")) {
+      // IND-007 D5, migration 419: the model-evaluation evidence tables, their guards and functions.
+      const T = ["ai_model_evaluation_run", "ai_model_evaluation_result", "ai_model_evaluation_proposal"];
+      const cols = await q(`select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns
+        where table_schema = 'public' and table_name = any($1) order by 1, 2`, [T]);
+      const cons = await q(`select conrelid::regclass::text as t, conname, pg_get_constraintdef(oid) as def from pg_constraint where conrelid::regclass::text = any($1) order by 1, 2`, [T]);
+      const idx = await q(`select tablename, indexname, indexdef from pg_indexes where schemaname = 'public' and tablename = any($1) order by 1, 2`, [T]);
+      const pol = await q(`select tablename, policyname from pg_policies where tablename = any($1) order by 1, 2`, [T]);
+      const rls = await q(`select relname, relrowsecurity from pg_class where relname = any($1) order by 1`, [T]);
+      const trg = await q(`select tgname, pg_get_triggerdef(oid) as def from pg_trigger where tgname like 'ai\\_model\\_evaluation%' order by 1`);
+      const fn = await q(`select p.proname, md5(pg_get_functiondef(p.oid)) as def_md5 from pg_proc p where p.proname in ('ai_model_evaluation_run_guard', 'ai_model_evaluation_evidence_guard') order by 1`);
+      out.ai419 = { tables: [...new Set(cols.map((c: any) => c.table_name))], constraints: cons.length, indexes: idx.length, policies: pol.length, rls, triggers: trg.length, functions: fn.length,
         fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, rls, trg, fn })).digest("hex") };
     }
     if (process.argv.includes("--s1")) {
