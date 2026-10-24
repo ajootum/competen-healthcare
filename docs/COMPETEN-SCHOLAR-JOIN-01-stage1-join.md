@@ -107,9 +107,72 @@ The 403 rollback should be refused, and that refusal is correct, if a self-decla
   These checks were updated with stated reasons: 1d (the join's role clear), 2a (the join's writes), 5a (the join routes serve people with no membership yet), 5c (`join.ts` may reach only `selfActivateScholar`), and 6a (`auth.signUp` only in the gated join).
 - **Controls proven red, then restored:** an ungated register route (14b), an HQ confirmer on a self-declared period (14d), and the application writing the history (14e).
 - **Config harness:** 36/36.
-- **`next build`:** *(see section 5)*.
-- **Staging journey** (`scripts/scholar-join-harness.ts`, registered as privileged): *pending 402 and 403.*
+- **`next build`:** see the PR for the merged-tree result.
+- **Staging journey over HTTP:** `scripts/scholar-join-harness.ts`, registered as privileged, run against a staging-pointed dev server on 2026-10-24. Result: **28 pass / 0 fail / 2 PEND.**
+  - **F0:** with the flag off, the join answers 404.
+  - **R1–R4:** registration works, and one identity is kept:
+    - a second sign-up is refused, with sign-in offered;
+    - the new identity has no estate role;
+    - nothing Individual is created before verification.
+  - **V1–V3:** checked on a genuinely unconfirmed identity:
+    - sign-in is refused before confirmation;
+    - the confirmation token confirms the address;
+    - after confirmation the person signs in and reaches the context step.
+  - **A1–A7:** activation:
+    - the governed programme, level and institution are offered;
+    - a missing declaration, a stale policy version and a missing level are refused;
+    - the refusals record nothing;
+    - activation writes the membership (`signup`), a Scholar period resting on the declaration with no HQ confirmer, a declaration with its time, words, version and source, and the pointer plus its first period with labels.
+  - **W1–W3:** the welcome's primary action is "Upload my notes"; the terms gate (D2) appears first; Upload is reachable after acceptance.
+  - **H1–H3:** a later change of level closes period 1, which still says Year 1, and opens period 2. The history refuses a rewrite, and the declaration refuses an edit.
+  - **E1–E3, J1:** a Professional member is offered Scholar and activates it on the same `hq_pilot_grant` membership. Both experiences are live, the declaration source is `self_activation`, and a repeat activation is reported rather than duplicated.
+  - **F1–F2:** after switching off again, the join answers 404 and existing holders are unaffected.
+  - **Z1:** fixtures are deleted, and the flag and both policy rows are restored exactly.
+  - **The two PENDs:**
+    - **V4:** staging auth has `mailer_autoconfirm: true`, unlike production, so the confirm-ON registration answer (`VERIFY_EMAIL`) is proved by unit test and by V1–V3, not by a sign-up on staging.
+    - **V5:** delivery to a real mailbox is not proved, because fixtures use `@competen.test`.
+- **Mobile check:** `/individual/join` at 375 px renders as one column, with full-width 44 px controls and the sign-in path visible. The flag was switched on for the check and removed after.
 
 ## 5. Readiness
 
-*Filled in after the staging run.*
+| Area | Existing (before JOIN-01) | Missing (before) | Action taken / state now |
+|---|---|---|---|
+| **Identity** | One Supabase identity per person. Invitations (378) create identities without a role. | No self-service identity creation for Individual. | Registration through Supabase sign-up. A signed-in caller or an existing email is refused, with sign-in offered. The estate role is cleared to null. **Done; staging R1–R4.** |
+| **Registration** | Practice self-serve signup (the precedent); the estate `/signup` is closed. | No Individual or Scholar registration. | `/individual/join` and `POST /api/individual/join/register`, behind `individual_self_registration` (default OFF). **Done, dark.** |
+| **Email verification** | Supabase confirm-email is ON in production; `/auth/callback` exchanges the code. | The join never relied on verification before. | Verification is required before anything Individual is created: the start page and the activate route refuse an unconfirmed email, and the confirmation returns to `/individual/join/start`. **Done; staging V1–V3. PEND:** confirm-ON sign-up on a confirm-ON project (staging auto-confirms), and real-mailbox delivery. |
+| **Educational profile** | 387 programmes and a learner pointer, programme only, overwritten on change. | Level, institution and history. | 402 adds level and institution with copied labels, plus a trigger-written, append-only history; records keep their context by time. The programme route changes context later, with history. **Done; staging A7, H1, H2.** |
+| **Entitlements** | `grants.ts` as the one writer; 399 plan and source interfaces (merged in #48). | Self-activation, and a self-declared 18+ basis. | `selfActivateScholar`: membership `signup`, a Scholar period `signup` resting on the 403 declaration, optional `plan_code`, no payment provider. Scholar and Professional stay independent. **Done; staging A5, E2, E3.** |
+| **Terms and privacy** | The D2 terms gate with versions; Scholar AI consent is separate; uploads are private. | — | Unchanged and reused. The gate appears on first entry to Scholar. **Done; staging W2, W3.** |
+| **Welcome** | `/individual/welcome` with a primary-experience choice. | An upload-first action. | When the welcome continues into Scholar, its primary action is "Upload my notes", leading to `/individual/scholar/study#upload`. **Done; staging W1.** |
+| **Commercial integration** | P1 Commercial (#48), dark. | — | Self-activation writes the 399 `source` and `plan_code`. Commerce carries a self-declared basis forward as recorded, never upgrading it. **Done.** |
+| **No-code configuration** | CONFIG-002/WCE Individual policy page. | Programmes offered, levels, institutions and onboarding fields. | Four new policies on the existing page, versioned, audited and rolled back by WCE, with codes checked against active programme rows. No new engine. **Done; config harness 36/36; staging A1 reads them.** Creating a brand-new programme *row* (387) still has no UI; see the gap below. |
+
+**Answers to the five questions:**
+
+1. **Is it functional?** Yes. The full journey runs end to end on staging: Get Started → Create Account → Verify → Context → Activate → Welcome → Terms → Upload, plus a later change of context and the J1 path for an existing member.
+2. **Is it implemented?** Yes: J1, J2 and J3, migrations 402 and 403, four governed policies, harness group 14, a staging journey harness, unit tests, and rollbacks rehearsed on staging.
+3. **Are there blockers?** None in the code. Before production activation, the owner and legal need to decide the items below.
+4. **Does it work on staging?** Yes: 28/28, with 2 PENDs (the confirm-email setting and mailbox delivery). 402 and 403 are applied and rehearsed.
+5. **Is it ready for acceptance?** Yes for staging acceptance. Production is not authorised and depends on the list below.
+
+### Production activation dependencies (exact)
+
+1. **Migrations.** A separate owner GO for each of 402 and 403, applied by the owner in the SQL editor with:
+   - a recorded recovery reference (COMPETEN-OPS-001);
+   - the rehearsed rollbacks;
+   - post-application verification.
+
+   P1 Commercial migrations 399 and 400 also need production first, for the `plan_code` column that `selfActivateScholar` may name and that commerce reads. Self-activation itself writes no `plan_code` today, so it needs 403, not 399.
+2. **Legal confirmation** of self-declared 18+ in place of HQ confirmation (the evidence-model change), and of the eligibility statement and its version (`scholar-eligibility-18plus-2026-10`).
+3. **Owner approval to open self-registration:** write `individual_self_registration = true` in production. This is a new public account-creation surface; CLAUDE.md requires an owner decision.
+4. **`individual_app` ON in production** (Individual activation), a separate owner GO.
+5. **Real-mailbox proof of the confirmation email**, and that the production auth redirect allowlist includes `/auth/callback?next=/individual/join/start`. If it does not, GoTrue falls back to the Site URL and the person signs in manually; the flow still works, but it is a worse experience.
+6. **Scholar legal documents published**, so the D2 gate has versions in production (the staging test versions are not documents).
+7. **HQ configuration in production:** programmes offered, levels and institutions on the Individual policy page.
+
+### Remaining material risks
+
+- **Evidence model.** Self-declared age is not verified age. It is recorded and exclusive of HQ confirmation, but it is the person's word. The owner and legal must accept this.
+- **Programme rows have no admin UI.** HQ governs which programmes are offered and their levels, but creating a new 387 programme row (and its framework map) is still a seeded data act.
+- **Staging auth auto-confirms email,** unlike production, so a confirm-ON sign-up has not been exercised end to end on a live project.
+- **A self-declared membership is a new route into Individual** alongside invitations and, later, purchase. It is dark today; opening it is decision 3 above.

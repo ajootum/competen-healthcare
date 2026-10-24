@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { ContextOption, IndividualPolicy } from "../policy";
+import { learnerContextPeriods, listProgrammes, writeLearnerContext } from "./store";
 
 // ── A SCHOLAR LEARNER'S EDUCATIONAL CONTEXT ── COMPETEN-SCHOLAR-JOIN-01 J2, migration 402 ───────────────────
 //
@@ -15,10 +16,11 @@ import type { ContextOption, IndividualPolicy } from "../policy";
 // ⚠ LABELS ARE COPIED onto the pointer (and so into the period) when chosen, so renaming or retiring an
 // option in the policy later never rewrites what a past period says.
 //
+// ⚠ THE STORE DOES THE READING AND WRITING (./store.ts, the one Scholar write site, scholar-learning A4). This
+// file holds the rules: what is offered, what a choice must contain, and which period a record falls in.
+//
 // ⚠ OPTIONS ARE RE-CHECKED ON EVERY READ. An offered programme that is no longer an active row is not
 // offered, whatever the policy says -- the same posture as the S1 catalogues.
-
-const NOT_PROVISIONED = new Set(["PGRST204", "PGRST205", "42703", "42P01"]);
 
 export type ProgrammeOption = { code: string; label: string; levels: ContextOption[] };
 export type JoinOptions = { programmes: ProgrammeOption[]; institutions: ContextOption[]; asksLevel: boolean; asksInstitution: boolean };
@@ -36,9 +38,9 @@ export function buildJoinOptions(rows: readonly { code: string; label: string }[
 }
 
 export async function loadJoinOptions(admin: any, policy: IndividualPolicy): Promise<{ ok: true; options: JoinOptions } | { ok: false; notProvisioned: boolean }> {
-  const { data, error } = await admin.from("individual_scholar_programme").select("code, label").eq("is_active", true).order("label");
-  if (error) return { ok: false, notProvisioned: NOT_PROVISIONED.has(String(error.code ?? "")) };
-  return { ok: true, options: buildJoinOptions((data ?? []) as any[], policy) };
+  const rows = await listProgrammes(admin);
+  if (!rows.ok) return { ok: false, notProvisioned: rows.notProvisioned };
+  return { ok: true, options: buildJoinOptions(rows.data, policy) };
 }
 
 export type ContextChoice = {
@@ -70,13 +72,12 @@ export function validateContextChoice(options: JoinOptions, body: any): { ok: tr
  * Write the CURRENT context. The trigger (402) closes the open period and opens a new one when, and only
  * when, the programme, level or institution actually changed.
  */
-export async function setLearnerContext(admin: any, userId: string, c: ContextChoice): Promise<"ok" | "failed"> {
-  const { error } = await admin.from("individual_scholar_learner").upsert({
-    user_id: userId, programme_code: c.programmeCode, chosen_at: new Date().toISOString(),
+export function setLearnerContext(admin: any, userId: string, c: ContextChoice): Promise<"ok" | "failed"> {
+  return writeLearnerContext(admin, userId, {
+    programme_code: c.programmeCode,
     level_code: c.level?.code ?? null, level_label: c.level?.label ?? null,
     institution_code: c.institution?.code ?? null, institution_label: c.institution?.label ?? null,
-  }, { onConflict: "user_id" });
-  return error ? "failed" : "ok";
+  });
 }
 
 export type ContextPeriod = {
@@ -86,13 +87,11 @@ export type ContextPeriod = {
 
 /** The person's context periods, newest first. */
 export async function contextHistory(admin: any, userId: string): Promise<{ ok: true; periods: ContextPeriod[] } | { ok: false; notProvisioned: boolean }> {
-  const { data, error } = await admin.from("individual_scholar_learner_context")
-    .select("programme_code, level_label, institution_label, effective_from, effective_to")
-    .eq("user_id", userId).order("effective_from", { ascending: false }).limit(100);
-  if (error) return { ok: false, notProvisioned: NOT_PROVISIONED.has(String(error.code ?? "")) };
+  const read = await learnerContextPeriods(admin, userId);
+  if (!read.ok) return { ok: false, notProvisioned: read.notProvisioned };
   return {
     ok: true,
-    periods: ((data ?? []) as any[]).map(r => ({
+    periods: read.data.map(r => ({
       programmeCode: r.programme_code, levelLabel: r.level_label ?? null, institutionLabel: r.institution_label ?? null,
       effectiveFrom: r.effective_from, effectiveTo: r.effective_to ?? null,
     })),

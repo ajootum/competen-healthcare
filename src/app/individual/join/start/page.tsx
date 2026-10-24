@@ -7,6 +7,7 @@ import { JOIN_SIGN_IN, SCHOLAR_ELIGIBILITY, selfRegistrationEnabled } from "@/li
 import { readIndividualAccess } from "@/lib/individual/access";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadJoinOptions } from "@/lib/individual/scholar/context";
+import { learnerContextPointer } from "@/lib/individual/scholar/store";
 import { EXPERIENCES } from "@/lib/individual/experiences";
 import { gatedMetadata } from "../../_components/shell-context";
 import { ExperienceMark, StatePanel, secondaryBtn } from "../../_components/chrome";
@@ -68,8 +69,8 @@ export default async function JoinStartPage() {
     </StatePanel></Frame>;
   }
 
-  const { data: current } = await admin.from("individual_scholar_learner")
-    .select("programme_code, level_code, institution_code").eq("user_id", user.id).maybeSingle();
+  const pointer = await learnerContextPointer(admin, user.id);
+  const current = pointer.ok ? pointer.data : null;
 
   return (
     <Frame>

@@ -6,6 +6,10 @@
       "reason": "Ending a session cannot require a valid session. Gating logout behind the caller gateway would mean a user whose session is already broken -- the case where signing out matters most -- has no way to clear it. It destroys credentials and creates nothing."
     },
     {
+      "route": "src/app/api/individual/join/register/route.ts",
+      "reason": "COMPETEN-SCHOLAR-JOIN-01 Create Account: account creation is reached before any session exists by definition. It is not unchecked: it answers 404 before reading anything unless individual_app AND individual_self_registration are on (default OFF, owner ruling), refuses a signed-in caller, refuses an email that already has an account (sign-in offered), and creates only a Supabase identity with confirm-email and no estate role -- no membership or entitlement until the person returns verified and activates behind requireIndividualSession. Pinned by individual-foundation-harness 14a-14c and proved over HTTP by scholar-join-harness."
+    },
+    {
       "route": "src/app/api/auth/oauth/[provider]/route.ts",
       "reason": "The OAuth START route, reached before any session exists by definition. It is not unchecked: the provider must be in the code's own closed list, enabled in NEXT_PUBLIC_OAUTH_PROVIDERS, and ON at GoTrue read live from its public settings; `next` passes through safeNextPath, and an unreadable settings response refuses rather than proceeding. Verified in sso-harness (18/0)."
     },

@@ -546,10 +546,11 @@ function main() {
       && /adult_confirmed_at: a\.declaredAt, adult_declaration_id: a\.declarationId/.test(selfAct) && !/adult_confirmed_by/.test(selfAct)
       && /source: "signup"/.test(selfAct) && callersOf("selfActivateScholar").filter(f => f !== "src/lib/individual/grants.ts").join() === "src/lib/individual/join.ts");
 
-  const ctxLib = SRC.get("src/lib/individual/scholar/context.ts") ?? "";
+  // The pointer is written in the Scholar store (the one Scholar write site, scholar-learning A4).
+  const ctxLib = SRC.get("src/lib/individual/scholar/store.ts") ?? "";
   const m402 = readFileSync("supabase/migrations/402-individual-scholar-educational-context-history.sql", "utf8");
   ok("14e. context history is the database's: the app writes only the pointer, and 402's trigger copies every change and refuses a rewrite",
-    /from\("individual_scholar_learner"\)\.upsert\(/.test(ctxLib) && !FILES.some(f => /from\("individual_scholar_learner_context"\)\s*\.(insert|update|upsert|delete)\(/.test(SRC.get(f) ?? ""))
+    /export async function writeLearnerContext[\s\S]*?from\("individual_scholar_learner"\)\s*\.upsert\(/.test(ctxLib) && !FILES.some(f => /from\("individual_scholar_learner_context"\)\s*\.(insert|update|upsert|delete)\(/.test(SRC.get(f) ?? ""))
       && /after insert or update or delete on individual_scholar_learner/.test(m402) && /before update on individual_scholar_learner_context/.test(m402)
       && /raise exception 'individual_scholar_learner_context is append-only/.test(m402));
 
