@@ -69,7 +69,8 @@ async function main() {
     const seed = (await admin.from("frameworks").select("id, code, name, competency_layer, profession_term_id, parent_framework_id, pub_status").is("hospital_id", null).in("code", ["CF-FOUND", "NUR-RESP"])).data ?? [];
     const cf = seed.find((f: any) => f.code === "CF-FOUND"), nr = seed.find((f: any) => f.code === "NUR-RESP");
     if (!cf || !nr) { pend("S/R. the seed and the read API over it", "not seeded here (scripts/seed-staging-competency-foundation.ts)"); return; }
-    const core = (await admin.from("frameworks").select("id").is("hospital_id", null).eq("name", "Core Nursing").maybeSingle()).data;
+    // By the parent id, not by name: a CFCA mirror (scripts/seed-staging-cfca.ts) puts production's Core Nursing beside staging's.
+    const core = (await admin.from("frameworks").select("id").is("hospital_id", null).eq("id", nr.parent_framework_id ?? "").eq("name", "Core Nursing").maybeSingle()).data;
     ok("S1. Competen Foundational is foundational with no profession; Nursing: Respiratory Care is a Nursing profession catalogue extending Core Nursing",
       cf.competency_layer === "foundational" && !cf.profession_term_id && nr.competency_layer === "profession" && nr.profession_term_id === nursing?.id && nr.parent_framework_id === core?.id, JSON.stringify({ cf, nr }));
 

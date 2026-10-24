@@ -83,8 +83,12 @@ async function main() {
       const cps = prIds.length ? await one(admin.from("clinical_practice_units").select("id").in("practice_id", prIds)) : [];
       const byPractice = prIds.length ? await one(admin.from("framework_competencies").select("id, domain_id").in("practice_id", prIds)) : [];
       const byCpu = cps.length ? await one(admin.from("framework_competencies").select("id, domain_id").in("cpu_id", cps.map((u: any) => u.id))) : [];
-      // 2. Core Nursing Airway / Breathing / Circulation.
-      const core = shared.find((f: any) => f.name === "Core Nursing");
+      // 2. Core Nursing Airway / Breathing / Circulation. Staging may hold two (its own, and production's from
+      // the CFCA mirror): the one whose domains hold the clinical practices is production's, and it is the
+      // one a catalogue must reference so the same ids exist where it is eventually published.
+      const withPractices = new Set(prs.map((p: any) => doms.find((d: any) => d.id === p.domain_id)?.framework_id));
+      const cores = shared.filter((f: any) => f.name === "Core Nursing");
+      const core = cores.find((f: any) => withPractices.has(f.id)) ?? (cores.length === 1 ? cores[0] : undefined);
       const coreDoms = core ? doms.filter((d: any) => d.framework_id === core.id && CORE_DOMAIN.test(d.name)).map((d: any) => d.id) : [];
       const byDomain = coreDoms.length ? await one(admin.from("framework_competencies").select("id, domain_id").in("domain_id", coreDoms).order("sort_order")) : [];
       const ids = [...new Set([...byPractice, ...byCpu, ...byDomain].filter((c: any) => sharedDom.has(c.domain_id)).map((c: any) => c.id))];

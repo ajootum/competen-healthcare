@@ -121,7 +121,8 @@ async function verify() {
 async function create() {
   const existing = await one(admin.from("frameworks").select("code").is("hospital_id", null).in("code", ["CF-FOUND", "NUR-RESP"]));
   if (existing.length) { console.log(`already seeded (${existing.map((e: any) => e.code).join(", ")}) -- nothing created. Use --remove first to reseed.`); return; }
-  const core = await one(admin.from("frameworks").select("id").is("hospital_id", null).eq("name", "Core Nursing").maybeSingle());
+  // The oldest shared Core Nursing: a CFCA mirror (scripts/seed-staging-cfca.ts) adds production's beside the original.
+  const core = await one(admin.from("frameworks").select("id").is("hospital_id", null).eq("name", "Core Nursing").order("created_at").limit(1).maybeSingle());
   if (!core) throw new Error("Core Nursing (shared) not found -- refusing to seed an extension of nothing");
   const nursingTax = await one(admin.from("taxonomies").select("id").eq("kind", "profession").maybeSingle());
   const nursing = nursingTax ? await one(admin.from("taxonomy_terms").select("id").eq("taxonomy_id", nursingTax.id).eq("value", "Nursing").maybeSingle()) : null;
