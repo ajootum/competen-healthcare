@@ -7,6 +7,8 @@ import { experienceModulePage, gatedMetadata } from "../../../../_components/she
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { ApiButton } from "../../../../_components/professional/forms";
 import CpdForm from "../../../../_components/professional/CpdForm";
+import CompetencyLinks from "../../../../_components/professional/CompetencyLinks";
+import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
@@ -30,7 +32,7 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const record = await loadProfessionalRecord(ctx.admin, ctx.userId);
+  const [record, map] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId)]);
   const cpd = record.cpd;
   const years = cpd ? cpdHoursByYear(cpd) : null;
   const goalTitle = new Map((record.goals ?? []).map(g => [g.id, g.title]));
@@ -88,6 +90,9 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
                   </div>
                 </div>
                 {c.reflection && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-[13.5px] leading-relaxed text-gray-700">{c.reflection}</p>}
+                {map.mappings === null ? <p className="mt-2 text-[12.5px] text-gray-600">Competency links could not be read just now.</p> : map.provisioned && (
+                  <CompetencyLinks kind="cpd" subjectId={c.id} links={linksFor(map, "cpd", c.id)} offered={map.offered} accent={x.accent} idPrefix={`cpd-${c.id}`} />
+                )}
               </li>
             ))}
           </ul>

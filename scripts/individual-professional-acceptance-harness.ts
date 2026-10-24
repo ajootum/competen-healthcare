@@ -47,6 +47,10 @@ import { scanProfessionalReminders, type ReminderSender } from "../src/lib/indiv
 import { loadSharedFrameworks, loadSharedCompetencies, checkSharedReference } from "../src/lib/individual/professional/frameworks";
 import { DOCUMENT_BUCKET } from "../src/lib/individual/professional/vocabulary";
 import { individualAppEnabled, INDIVIDUAL_APP_FLAG } from "../src/lib/individual/gate";
+import { loadCatalogueFor } from "../src/lib/individual/catalogue";
+import { MAPPING_PROMPT_VERSION } from "../src/lib/competency/mapping";
+import { addPersonMapping, decideMapping, linksFor, listMappings, loadMappingView, professionalProgress, PROFESSIONAL_COVERAGE_REASONS } from "../src/lib/individual/professional/mapping-store";
+import { loadOwnRecords } from "../src/lib/individual/professional/passport-records";
 
 loadEnvConfig(process.cwd());
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -119,6 +123,121 @@ async function grantProfessional(target: string, by: string) {
   if (isGrantRefusal(req)) throw new Error(`grant refused: ${req.message}`);
   const out = await grantIndividualAccess(admin, req, by);
   if (!out.ok) throw new Error(`grant failed: ${out.message}`);
+}
+
+// ── K. COMPETENCY MAPPING (migration 393, COMPETEN-HOLDINGS-SHARED-ENGINES-01) ──────────────────────────
+// Run inside G's allowlist window (one published shared framework allowlisted, restored after). The AI is
+// not called: an AI proposal is written as the engine's result would be stored, because what is under
+// test is the store, the schema and what counts -- the engine is the Holdings one and has its own harness.
+type KCtx = { pro: string; other: string; goalId: string; cpdPlain: string; cpdDoc: string; today: string };
+
+async function mappingDefault(pro: string, cpdDoc: string) {
+  const view = await loadMappingView(admin, pro);
+  const cat = await loadCatalogueFor(admin, "professional");
+  const anyComp = (await admin.from("framework_competencies").select("id").limit(1).maybeSingle()).data?.id;
+  const add = anyComp ? await addPersonMapping(admin, pro, "cpd", cpdDoc, anyComp, cat ?? []) : "no competency";
+  const prog = professionalProgress(view, await loadProfessionalRecord(admin, pro));
+  ok("K0. ⚠ default: nothing offered, a link is refused as not offered, and coverage is Not measured with the reason",
+    view.provisioned && view.offered?.length === 0 && add === "not_offered" && prog.coverage.state === "not_measured" && prog.coverage.reason === PROFESSIONAL_COVERAGE_REASONS.noCatalogue,
+    JSON.stringify({ provisioned: view.provisioned, offered: view.offered?.length, add, coverage: prog.coverage }));
+}
+
+async function mappingGroup(k: KCtx) {
+  const cat = await loadCatalogueFor(admin, "professional");
+  if (!cat || cat.length < 2) { console.log(`  PEND  K1-K12: the allowlisted framework offers ${cat?.length ?? "unreadable"} competencies (need 2)`); return; }
+  const [A, B] = cat;
+  const notOffered = (await admin.from("framework_competencies").select("id").not("id", "in", `(${cat.map(c => c.competencyId).join(",")})`).limit(1).maybeSingle()).data?.id;
+
+  // K1-K3: the person links; only offered competencies, only their own entries.
+  const addA = await addPersonMapping(admin, k.pro, "cpd", k.cpdDoc, A.competencyId, cat);
+  const addGoal = await addPersonMapping(admin, k.pro, "goal", k.goalId, B.competencyId, cat);
+  const again = await addPersonMapping(admin, k.pro, "cpd", k.cpdDoc, A.competencyId, cat);
+  let m = await listMappings(admin, k.pro);
+  ok("K1. the person links a CPD entry and a goal: source person, accepted at once; a second identical link is 'exists'",
+    addA === "ok" && addGoal === "ok" && again === "exists" && m?.length === 2 && m.every(x => x.source === "person" && x.state === "accepted"), JSON.stringify({ addA, addGoal, again, m }));
+  ok("K2. ⚠ a competency Professional does not offer is refused", notOffered ? (await addPersonMapping(admin, k.pro, "cpd", k.cpdDoc, notOffered, cat)) === "not_offered" : false, notOffered ? "" : "no competency outside the catalogue to try");
+  const otherCpd = await admin.from("individual_professional_cpd").insert({ user_id: k.other, experience_code: "professional", activity_type: "course", title: "Harness OTHER course", hours: 1, activity_date: k.today }).select("id").single();
+  const viaStore = await addPersonMapping(admin, k.pro, "cpd", otherCpd.data?.id, A.competencyId, cat);
+  const viaSchema = await admin.from("individual_professional_competency_map").insert({ user_id: k.pro, cpd_id: otherCpd.data?.id, competency_id: A.competencyId, source: "person" });
+  ok("K3. ⚠ another person's entry cannot be linked: the store says not found, and the schema refuses it (composite FK)",
+    viaStore === "not_found" && !!viaSchema.error, `${viaStore} / ${viaSchema.error?.message ?? "insert succeeded"}`);
+
+  // K4: provenance is the schema's.
+  const aiBare = await admin.from("individual_professional_competency_map").insert({ user_id: k.pro, cpd_id: k.cpdPlain, competency_id: B.competencyId, source: "ai" });
+  const personWithModel = await admin.from("individual_professional_competency_map").insert({ user_id: k.pro, cpd_id: k.cpdPlain, competency_id: B.competencyId, source: "person", model: "x", prompt_version: "y", confidence: 0.5 });
+  const twoSubjects = await admin.from("individual_professional_competency_map").insert({ user_id: k.pro, cpd_id: k.cpdPlain, goal_id: k.goalId, competency_id: A.competencyId, source: "person" });
+  ok("K4. ⚠ the schema refuses an AI row without model, prompt and confidence, a person row with them, and two subjects",
+    !!aiBare.error && !!personWithModel.error && !!twoSubjects.error);
+
+  // K5-K7: a proposal is not evidence until the person accepts it.
+  const proposal = await admin.from("individual_professional_competency_map").insert({ user_id: k.pro, cpd_id: k.cpdPlain, competency_id: B.competencyId, source: "ai",
+    confidence: 0.72, rationale: "Harness rationale", model: "harness-model", prompt_version: MAPPING_PROMPT_VERSION }).select("id").single();
+  let view = await loadMappingView(admin, k.pro);
+  let record = await loadProfessionalRecord(admin, k.pro);
+  let prog = professionalProgress(view, record);
+  let own = await loadOwnRecords(admin, k.pro);
+  const linksOn = (id: string, title: string) => (own ?? []).find(o => o.kind === "cpd" && o.title === title)?.competencies ?? [];
+  ok("K5. a proposal is shown as proposed and counts for nothing: coverage 1 (document-backed), the goal's competency is a gap, the Passport omits it",
+    !proposal.error && linksFor(view, "cpd", k.cpdPlain)[0]?.state === "proposed"
+      && prog.coverage.state === "measured" && prog.coverage.covered === 1 && prog.coverage.coveredPositive === 1
+      && prog.goalGaps?.[0]?.competencies.map(c => c.id).join() === B.competencyId
+      && linksOn(k.cpdDoc, "Harness workshop").join() === A.title && linksOn(k.cpdPlain, "Harness ALS course").length === 0,
+    JSON.stringify({ err: proposal.error?.message, coverage: prog.coverage, gaps: prog.goalGaps, own: own?.map(o => [o.title, o.competencies]) }));
+  const accepted = await decideMapping(admin, k.pro, proposal.data?.id, "accepted");
+  view = await loadMappingView(admin, k.pro); record = await loadProfessionalRecord(admin, k.pro);
+  prog = professionalProgress(view, record); own = await loadOwnRecords(admin, k.pro);
+  ok("K6. once accepted it counts: coverage 2 (one with a document), no goal gap, and the Passport names it",
+    accepted === "ok" && prog.coverage.state === "measured" && prog.coverage.covered === 2 && prog.coverage.coveredPositive === 1 && prog.goalGaps?.length === 0
+      && linksOn(k.cpdPlain, "Harness ALS course").join() === B.title, JSON.stringify({ accepted, coverage: prog.coverage, gaps: prog.goalGaps }));
+  ok("K7. ⚠ another person cannot decide on it", (await decideMapping(admin, k.other, proposal.data?.id, "rejected")) === "not_found");
+
+  // K8: append-only, and a correction is a new row.
+  const ds = await admin.from("individual_professional_competency_decision").select("id").eq("map_id", proposal.data?.id);
+  const upd = await admin.from("individual_professional_competency_decision").update({ decision: "rejected" }).eq("id", ds.data?.[0]?.id);
+  const del = await admin.from("individual_professional_competency_decision").delete().eq("id", ds.data?.[0]?.id);
+  const aiDecider = await admin.from("individual_professional_competency_decision").insert({ user_id: k.pro, map_id: proposal.data?.id, decision: "accepted", decided_by: "ai" });
+  await decideMapping(admin, k.pro, proposal.data?.id, "rejected");
+  m = await listMappings(admin, k.pro);
+  ok("K8. ⚠ decisions are append-only (update and delete refused, only the person decides); a rejection is a new row and wins",
+    !!upd.error && !!del.error && !!aiDecider.error && m?.find(x => x.mapId === proposal.data?.id)?.state === "rejected", JSON.stringify({ upd: upd.error?.message, del: del.error?.message }));
+  const relink = await addPersonMapping(admin, k.pro, "cpd", k.cpdPlain, B.competencyId, cat);
+  m = await listMappings(admin, k.pro);
+  ok("K9. linking again after a rejection is a new 'accepted' decision on the same row", relink === "ok" && m?.find(x => x.mapId === proposal.data?.id)?.state === "accepted", relink);
+
+  // K10: erasing the entry still works -- the cascade path through the append-only trigger.
+  const tmp = await admin.from("individual_professional_cpd").insert({ user_id: k.pro, experience_code: "professional", activity_type: "course", title: "Harness cascade", hours: 1, activity_date: k.today }).select("id").single();
+  await addPersonMapping(admin, k.pro, "cpd", tmp.data?.id, A.competencyId, cat);
+  const gone = await admin.from("individual_professional_cpd").delete().eq("id", tmp.data?.id);
+  const leftMap = await admin.from("individual_professional_competency_map").select("id").eq("cpd_id", tmp.data?.id);
+  ok("K10. deleting a CPD entry removes its links and their decisions (cascade through the append-only trigger)", !gone.error && (leftMap.data ?? []).length === 0, gone.error?.message ?? "");
+
+  // K11: RLS -- own rows from a browser session, nobody else's, no writes.
+  await addPersonMapping(admin, k.other, "cpd", otherCpd.data?.id, A.competencyId, cat);
+  const user = createClient(url!, anonKey!, { auth: { persistSession: false } }) as any;
+  const signIn = await user.auth.signInWithPassword({ email: FIX.pro, password: FIX_PASSWORD });
+  if (signIn.error) ok("K11. the fixture can sign in for the mapping RLS check", false, signIn.error.message);
+  else {
+    const rows = await user.from("individual_professional_competency_map").select("user_id");
+    const dec = await user.from("individual_professional_competency_decision").select("user_id");
+    const w1 = await user.from("individual_professional_competency_map").insert({ user_id: k.pro, cpd_id: k.cpdDoc, competency_id: B.competencyId, source: "person" });
+    const w2 = await user.from("individual_professional_competency_decision").insert({ user_id: k.pro, map_id: proposal.data?.id, decision: "rejected", decided_by: "person" });
+    ok("K11. ⚠ RLS: a browser session reads only its own links and decisions and can write neither",
+      (rows.data ?? []).length >= 3 && rows.data.every((r: any) => r.user_id === k.pro) && (dec.data ?? []).length > 0 && dec.data.every((r: any) => r.user_id === k.pro) && !!w1.error && !!w2.error,
+      JSON.stringify({ rows: rows.data?.length, dec: dec.data?.length, w1: w1.error?.message, w2: w2.error?.message }));
+    await user.auth.signOut();
+  }
+  return { A, B };
+}
+
+/** After G6 restored the allowlist: existing links stay, named, and nothing is measured. */
+async function mappingAfterRestore(pro: string, names: { A: { title: string }; B: { title: string } } | undefined) {
+  if (!names) return;
+  const view = await loadMappingView(admin, pro);
+  const prog = professionalProgress(view, await loadProfessionalRecord(admin, pro));
+  const titles = new Set((view.mappings ?? []).map(x => view.names.get(x.competencyId)));
+  ok("K12. with the allowlist restored (empty), the person's links remain and keep their names, and coverage is Not measured again",
+    view.offered?.length === 0 && titles.has(names.A.title) && titles.has(names.B.title) && prog.coverage.state === "not_measured",
+    JSON.stringify({ offered: view.offered?.length, titles: [...titles], coverage: prog.coverage }));
 }
 
 async function main() {
@@ -305,6 +424,10 @@ async function main() {
     if (allowBefore) await admin.from("workspace_config_overrides").insert(allowBefore);
   };
   const fws = await loadSharedFrameworks(admin);
+  const has393 = !(await admin.from("individual_professional_competency_map").select("id").limit(0)).error;
+  if (!has393) console.log("  PEND  K0-K12: migration 393 is not applied on this project");
+  if (has393 && !allowBefore) await mappingDefault(pro, cpdDoc.data!.id);
+  let kNames: Awaited<ReturnType<typeof mappingGroup>> | undefined;
   if (!allowBefore) ok("G0. ⚠ S1: with no Professional allowlist, no framework is offered at all, published or not", fws !== null && fws.length === 0, `${fws?.length} offered`);
   else console.log("  PEND  G0. an allowlist is already set on this project; the default is pinned by the static harness F2");
   const fwIds = (fws ?? []).map(f => f.id);
@@ -332,9 +455,11 @@ async function main() {
           && (await checkSharedReference(admin, pubFw.data.id, comps![0].id)) === null,
         `${pubFw.data.name}: offered ${JSON.stringify(offered)}, ${comps?.length ?? 0} competencies`);
       if (draftFw.data) ok("G5. ⚠ S1: a draft is still refused even while the allowlist names something", (await checkSharedReference(admin, draftFw.data.id, null)) !== null);
+      if (has393) kNames = await mappingGroup({ pro, other, goalId: goal.data!.id, cpdPlain: cpdPlain.data!.id, cpdDoc: cpdDoc.data!.id, today });
     } finally { await restoreAllow(); }
     const back = (await admin.from("workspace_config_overrides").select("*").match(ALLOW).maybeSingle()).data;
     ok("G6. the Professional allowlist is restored exactly", JSON.stringify(back) === JSON.stringify(allowBefore));
+    if (has393 && !allowBefore) await mappingAfterRestore(pro, kNames);
   } else console.log("  PEND  G4. staging has no published shared framework to offer");
   const hospFw = await admin.from("frameworks").select("id").not("hospital_id", "is", null).limit(1).maybeSingle();
   if (hospFw.data) ok("G2. ⚠ a hospital framework is refused as a reference", (await checkSharedReference(admin, hospFw.data.id, null)) !== null);
@@ -351,6 +476,8 @@ async function main() {
   await cleanup();
   const left = await Promise.all(PRO_TABLES.map(t => admin.from(t).select("*", { count: "exact", head: true }).in("user_id", ids)));
   ok("Z1. fixtures removed -- no Professional row left for any fixture", left.every(r => !r.error && (r.count ?? 0) === 0));
+  const leftMaps = await Promise.all(["individual_professional_competency_map", "individual_professional_competency_decision"].map(t => admin.from(t).select("*", { count: "exact", head: true }).in("user_id", ids)));
+  if (!leftMaps[0].error) ok("Z3. no competency link or decision left for any fixture (393 cascade)", leftMaps.every(r => !r.error && (r.count ?? 0) === 0));
   await restoreFlag();
   const flagAfter = await admin.from("practice_platform_flags").select("enabled").eq("flag", INDIVIDUAL_APP_FLAG).maybeSingle();
   ok("Z2. the release flag is restored to its state before the run",

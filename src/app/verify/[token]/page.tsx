@@ -165,6 +165,7 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
                           <span className="font-medium text-gray-800 min-w-0">{o.title}</span>
                           <span className="text-[10.5px] text-gray-500">{OWN_KIND_LABEL[o.kind]}{o.detail ? ` · ${o.detail}` : ""}{o.date ? ` · ${fmt(o.date)}` : ""}{o.expires ? ` · exp ${fmt(o.expires)}` : ""}</span>
                           <span className="ml-auto text-[10.5px] font-semibold text-amber-900">{EVIDENCE_LABEL[o.evidence]}</span>
+                          {o.competencies.length > 0 && <span className="w-full text-[10.5px] text-gray-600">Linked by the holder to: {o.competencies.join(", ")} (not verified)</span>}
                         </div>
                       ))}
                     </div>
