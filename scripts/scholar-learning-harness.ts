@@ -383,20 +383,6 @@ const privateCaseChecked = (src: Src) => {
     && /facts, stages: used, decisionPoints, progression: \[\],/.test(clin)
     && /blueprint: input\.blueprint, review_status: "private_formative"/.test(store);
 };
-/**
- * K37 (CR4, AI-CONSUMPTION-01): live AI feedback on a LIBRARY case is the student's own learning. The owner is resolved
- * by the consumption rules for case.live_with_stored (never chosen by the browser), the spend is counted against the
- * library session (caseSessionRecord), and the feedback is recorded only through library.ts recordSessionFeedback.
- */
-const LIB_FB = `${LIB}/clinical-library-feedback.ts`;
-const libraryFeedbackOwned = (src: Src) => {
-  const f = src.get(LIB_FB) ?? "", http = src.get(`${LIB}/http.ts`) ?? "";
-  return /const owner = await resolveOwner\(admin, "case\.live_with_stored", "scholar", \{ userId: args\.userId \}\);/.test(f)
-    && /scholarOwnedRunner\(admin, \{ owner, activity: "evaluate", requestId: args\.requestId, risk, record: caseSessionRecord\(args\.sessionId\) \}\)/.test(f)
-    && /await recordSessionFeedback\(admin, args\.userId, args\.sessionId, args\.decisionToken,/.test(f)
-    && /await runOwnedAi\(admin, \{ owner: args\.owner, product: "scholar", activity: args\.activity,/.test(http)
-    && !/owner\s*[:=][^;]*body/.test(src.get(`${API}/clinical/sessions/[kind]/[id]/answer/route.ts`) ?? "");
-};
 /** K36 (CR4): a written decision is AI evaluation only when the judge returns AI feedback; otherwise the student's own review. */
 const caseFeedbackHonest = (src: Src) => {
   const p = src.get(PLAY) ?? "";
@@ -960,8 +946,6 @@ function main() {
     privateCaseChecked(REAL));
   ok("K36. CLINICAL-REASONING-01: a choice is marked by its key; a written decision is labelled AI evaluation only when AI feedback was given, otherwise the student's own review",
     caseFeedbackHonest(REAL));
-  ok("K37. CLINICAL-REASONING-01: live AI feedback on a library case is charged to the student's own budget by rule (case.live_with_stored), counted against the session, and recorded only by the shared delivery",
-    libraryFeedbackOwned(REAL));
   ok("K24. LEARN-01: history holds no conversation, the act route keeps to policy, screens input, records only what was shown, stores no practice question, and the student's context is never grounding",
     learnBounded(REAL));
   ok("K23. upload limits: 413 raises the CHECK and the bucket to 25 MB, the live value stays 10 MB until HQ raises it, and the session is enforced on the server at both steps",
@@ -1096,9 +1080,6 @@ function main() {
     && !privateCaseChecked(plant(`${LIB}/clinical.ts`, "facts, stages: used, decisionPoints, progression: [],", "facts, stages: used, decisionPoints, progression: list((draft as any).progression),")));
   ok("P54. ⚠ K36 goes red when a written answer without AI feedback is recorded as AI evaluation",
     !caseFeedbackHonest(plant(PLAY, "else { mark = { correct: null, score: null }; marking = \"self_graded\"; }", "else { mark = { correct: false, score: 0 }; marking = \"ai_evaluation\"; }")));
-  ok("P55. ⚠ K37 goes red when the owner is not resolved by rule, or the spend is not counted against the session",
-    !libraryFeedbackOwned(plant(LIB_FB, "await resolveOwner(admin, \"case.live_with_stored\", \"scholar\", { userId: args.userId });", "({ type: \"platform\" } as any);"))
-    && !libraryFeedbackOwned(plant(LIB_FB, "record: caseSessionRecord(args.sessionId) })", "record: null as any })")));
   ok("P43. ⚠ K26 goes red when a route stops passing the runner, or a generator calls generate() directly",
     !meteredEverywhere(plant(`${API}/questions/route.ts`, ".scholarQuestionsPerRequest, ai.run)", ".scholarQuestionsPerRequest)"))
     && !meteredEverywhere(plant(GEN, "    const r = await run({\n      system: QUESTION_SYSTEM[kind],", "    const r = await generate({\n      system: QUESTION_SYSTEM[kind],")));

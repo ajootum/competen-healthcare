@@ -14,7 +14,7 @@ import { caseHistory, listMaterials, listPrivateCases, readConsent } from "@/lib
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { ATTESTATION_TEXT, caseLibraryEnabled, loadCasePolicy } from "@/lib/cases/policy";
 import { candidacyStatus, myCaseOffers } from "@/lib/cases/candidates";
-import { loadLibraryCase } from "@/lib/cases/library";
+import { caseSessionView } from "@/lib/cases/library";
 import { consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { CaseOfferPanel, CaseStart, ReplayCase } from "../_components/case-client";
@@ -54,10 +54,11 @@ export default async function Apply({ params, searchParams }: { params: Promise<
     : !consentOn ? "AI help is off, so new cases are not written. Your stored cases and library cases are still playable."
       : !standing.available ? `${standing.message ?? "New AI help is limited right now."} Your stored cases and library cases are still playable.` : null;
   const [candidacy, offers, casePolicy] = libraryOn ? await Promise.all([candidacyStatus(ctx.admin, ctx.userId), myCaseOffers(ctx.admin, ctx.userId), loadCasePolicy(ctx.admin)]) : [null, null, null];
+  // A library play's title from the student's own learner-facing view (library.ts caseSessionView), never the blueprint.
   const libTitles = new Map<string, string>();
-  for (const h of history.ok ? history.data.filter(r => r.kind === "library" && r.versionId) : []) {
-    const c = await loadLibraryCase(ctx.admin, h.versionId!, { resumeFor: ctx.userId });
-    if (c) libTitles.set(h.id, c.blueprint.title);
+  for (const h of history.ok ? history.data.filter(r => r.kind === "library") : []) {
+    const v = await caseSessionView(ctx.admin, ctx.userId, h.id);
+    if (v) libTitles.set(h.id, v.view.title);
   }
   const preset = sp.section && /^[0-9a-f-]{36}$/i.test(sp.section) ? { chunkId: sp.section, from: sp.from === "revision" ? "revision" as const : "teach" as const } : null;
 
