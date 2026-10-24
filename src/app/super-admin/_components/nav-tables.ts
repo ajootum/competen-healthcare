@@ -61,6 +61,10 @@ export const GENERAL_NAV: NavSection[] = [
   { group: "CLINICAL CONTENT", items: [
     { label: "Clinical Review", href: "/super-admin/clinical-review", icon: "🩺" },
     { label: "Clinical Review Governance", href: "/super-admin/clinical-review/governance", icon: "⚖️" },
+    // Migrations 422-423: the shared clinical case library, on the same approval process.
+    { label: "Case Studio", href: "/super-admin/cases", icon: "🧪" },
+    { label: "Case Publication", href: "/super-admin/cases/publication", icon: "📢" },
+    { label: "Case Intelligence", href: "/super-admin/cases/intelligence", icon: "📊" },
   ]},
   { group: "STRATEGY & PRIORITIES", items: [
     { label: "Strategy Manager", href: "/super-admin/priorities", icon: "🎯" },

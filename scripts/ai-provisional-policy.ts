@@ -39,6 +39,10 @@ export const PROVISIONAL_ACTIVITIES: Record<"scholar" | "professional", Record<s
     // COMPETEN-SCHOLAR-REVISION-01 (Stage 4): AI marking of short answers. Its output is an AI evaluation, labelled as
     // such -- not deterministic marking, never competence. Never below clinical educational, never on the cheapest tier.
     evaluate: a("AI evaluation of short answers", "reasoning", "reasoning", 800, "clinical_educational"),
+    // COMPETEN-HOLDINGS-AI-CONSUMPTION-01 s8 (C2): an educator drafts a shared case with AI. Platform-funded
+    // (case.educator_develop), never a student's allowance. Clinical content, so never below clinical educational,
+    // and every draft goes to independent clinical review before any student sees it. PROPOSED: not yet published.
+    case_author: a("Clinical case drafting (educators)", "reasoning", "reasoning", 3000, "clinical_educational"),
   },
   professional: {
     assistant: a("Professional development assistance", "reasoning", "cheap", 900, "standard_educational"),
