@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { deleteMaterial, signedOriginalUrl } from "@/lib/individual/scholar/store";
+import { deleteMaterial, fileMaterial, renameMaterial, signedOriginalUrl } from "@/lib/individual/scholar/store";
+import { cleanTitle } from "@/lib/individual/scholar/library";
 import { audit } from "@/lib/individual/scholar/http";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -13,6 +14,8 @@ export const dynamic = "force-dynamic";
 // stored object, then the row, which cascades to its chunks, questions, attempts and review cards.
 // Both look the material up by the caller's own id, so another person's id answers 404, not 403 --
 // nothing confirms that it exists.
+// PATCH (UPLOAD-01 U5) renames it ({ title }) or puts it on one of the caller's collections ({ collectionId },
+// null to take it off). The same own-id lookup: another person's material or collection answers 404.
 
 export async function GET(_req: Request, ctx2: { params: Promise<{ id: string }> }) {
   const ctx = await requireIndividualContext("scholar");
@@ -21,6 +24,31 @@ export async function GET(_req: Request, ctx2: { params: Promise<{ id: string }>
   const url = await signedOriginalUrl(ctx.admin, ctx.userId, id);
   if (!url) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.redirect(url, 303);
+}
+
+export async function PATCH(req: Request, ctx2: { params: Promise<{ id: string }> }) {
+  const ctx = await requireIndividualContext("scholar");
+  if (isGuardRefusal(ctx)) return ctx;
+  const { id } = await ctx2.params;
+  const body = await req.json().catch(() => ({}));
+  const changed: string[] = [];
+  if (body?.title !== undefined) {
+    const t = cleanTitle(body.title);
+    if (!t.ok) return NextResponse.json({ error: t.error }, { status: 400 });
+    const r = await renameMaterial(ctx.admin, ctx.userId, id, t.value);
+    if (r === "not_found") return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (r === "failed") return NextResponse.json({ error: "The new name could not be saved just now. Try again shortly." }, { status: 500 });
+    changed.push("title");
+  }
+  if (body?.collectionId !== undefined) {
+    const r = await fileMaterial(ctx.admin, ctx.userId, id, body.collectionId === null ? null : String(body.collectionId));
+    if (r === "not_found") return NextResponse.json({ error: "That material or collection could not be found." }, { status: 404 });
+    if (r === "failed") return NextResponse.json({ error: "The material could not be moved just now. Try again shortly." }, { status: 500 });
+    changed.push("collection");
+  }
+  if (!changed.length) return NextResponse.json({ error: "Nothing to change." }, { status: 400 });
+  await audit(ctx, "individual_scholar_material_organised", "individual_scholar_material", id, { changed });
+  return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(_req: Request, ctx2: { params: Promise<{ id: string }> }) {

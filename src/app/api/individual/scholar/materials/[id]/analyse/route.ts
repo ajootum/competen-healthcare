@@ -66,6 +66,7 @@ export async function POST(_req: Request, ctx2: { params: Promise<{ id: string }
   const saved = await saveAnalysis(ctx.admin, ctx.userId, {
     materialId: id, programmeCode: programme.data?.code ?? null, model: r.model, promptVersion: r.promptVersion,
     sentChunkIds: next.data.map(s => s.ref), sections: r.check.subjects,
+    versions: new Map(competencies.data.map(c => [c.id, c.catalogueVersion ?? null])),
   });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_map", id, {
     chunk_ids: next.data.map(s => s.ref), competencies_shown: r.shown, proposals: saved.proposals,

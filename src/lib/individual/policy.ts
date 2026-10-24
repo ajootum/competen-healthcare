@@ -2,7 +2,7 @@
 import type { PlanAiLimit } from "./commerce";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
-import { FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST } from "./scholar/config";
+import { FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, type UploadFormat } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
 
 // ── COMPETEN INDIVIDUAL POLICY ── COMPETEN-CONFIG-002 items 4-7 ─────────────────────────────────────────
@@ -37,7 +37,7 @@ export const POLICY_PATH_PREFIX = "individual.policy.";
 export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
 export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
-  | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages";
+  | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues";
@@ -174,9 +174,10 @@ export const POLICIES: readonly PolicyDef[] = [
     key: "scholar_upload_formats", kind: "set", product: "Scholar",
     label: "Formats a student may upload",
     help: "Which kinds of study material can be uploaded. Plain text covers a .txt file and text pasted into the page. Turning a format off stops new uploads of it; materials already uploaded are kept.",
-    options: (["pdf", "docx", "text"] as const).map(v => ({ value: v, label: FORMAT_LABEL[v] })),
+    options: (["pdf", "docx", "pptx", "text"] as const).map(v => ({ value: v, label: FORMAT_LABEL[v] })),
     // ⚠ Plain text is OFF by default: it needs migration 405 (the bucket and the material CHECK). Turn it on
-    // only where 405 is applied -- until then an upload of it could not be saved.
+    // only where 405 is applied -- until then an upload of it could not be saved. PowerPoint is OFF by default
+    // for the same reason: it needs migration 406 (UPLOAD-01 U1).
     fallback: ["pdf", "docx"],
     limitReason: "Only formats Scholar can read on its own servers. Photos of notes need text recognition (OCR), which is not available.",
   },
@@ -193,6 +194,13 @@ export const POLICIES: readonly PolicyDef[] = [
     help: "A longer PDF is refused with a message asking the student to split it.",
     fallback: MAX_PDF_PAGES, min: 10, max: MAX_PDF_PAGES,
     limitReason: "Three hundred pages is the reviewed extraction size for one material.",
+  },
+  {
+    key: "scholar_pptx_max_slides", kind: "int", product: "Scholar", unit: "slides",
+    label: "Most slides in one uploaded PowerPoint",
+    help: "A longer presentation is refused with a message asking the student to split it.",
+    fallback: 150, min: 5, max: MAX_PPTX_SLIDES,
+    limitReason: "Three hundred slides is the reviewed extraction size for one material.",
   },
   {
     key: "scholar_onboarding_fields", kind: "set", product: "Scholar",
@@ -369,9 +377,11 @@ export type IndividualPolicy = {
   scholarQuestionsPerRequest: number;
   scholarMaterialsPerPerson: number;
   /** Stage 2: which formats may be uploaded, the size limit (MB) and the PDF page limit. */
-  scholarUploadFormats: ("pdf" | "docx" | "text")[];
+  scholarUploadFormats: UploadFormat[];
   scholarUploadMaxMb: number;
   scholarPdfMaxPages: number;
+  /** UPLOAD-01 U1: the slide limit for one PowerPoint. */
+  scholarPptxMaxSlides: number;
   scholarInsightMinAnswers: number;
   scholarInsightWindowDays: number;
   passportAchievementKinds: StudyAchievementKind[];
@@ -399,9 +409,10 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     aiHourlyLimit: int("ai_hourly_limit"),
     scholarQuestionsPerRequest: int("scholar_questions_per_request"),
     scholarMaterialsPerPerson: int("scholar_materials_per_person"),
-    scholarUploadFormats: clampSet(policyDef("scholar_upload_formats") as SetPolicy, published.get(policyPath("scholar_upload_formats"))) as ("pdf" | "docx" | "text")[],
+    scholarUploadFormats: clampSet(policyDef("scholar_upload_formats") as SetPolicy, published.get(policyPath("scholar_upload_formats"))) as UploadFormat[],
     scholarUploadMaxMb: int("scholar_upload_max_mb"),
     scholarPdfMaxPages: int("scholar_pdf_max_pages"),
+    scholarPptxMaxSlides: int("scholar_pptx_max_slides"),
     scholarInsightMinAnswers: int("scholar_insight_min_answers"),
     scholarInsightWindowDays: int("scholar_insight_window_days"),
     passportAchievementKinds: clampSet(policyDef("passport_achievement_kinds") as SetPolicy, published.get(policyPath("passport_achievement_kinds"))) as StudyAchievementKind[],

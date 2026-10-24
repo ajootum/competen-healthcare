@@ -8,7 +8,7 @@ import { PROMPT_VERSIONS } from "./config";
 import { buildIntelligence } from "./intelligence";
 import { buildLearnerContext, CONTEXT_PREAMBLE } from "./learner-context";
 import { fromProgrammeCatalogue, type CompetencyRef } from "./competency-sources";
-import { MAPPING_PROMPT_VERSION } from "@/lib/competency/mapping";
+import { MAPPING_PROMPT_VERSION_OUTCOMES } from "@/lib/competency/mapping";
 
 // COMPETEN-SCHOLAR-01 S2-S4: competency proposals, explanation modes, multi-step cases, progress by competency.
 
@@ -78,7 +78,7 @@ describe("one computation: progress by competency agrees with S5 coverage, numbe
 
 describe("provenance", () => {
   it("the map prompt version Scholar records is the Holdings engine's own", () => {
-    expect(PROMPT_VERSIONS.map).toBe(MAPPING_PROMPT_VERSION);
+    expect(PROMPT_VERSIONS.map).toBe(MAPPING_PROMPT_VERSION_OUTCOMES);
   });
 });
 

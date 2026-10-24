@@ -10,13 +10,16 @@ import type { QuestionView } from "./client";
 export function questionView(q: QuestionRow): QuestionView {
   return {
     id: q.id, kind: q.kind, stem: q.stem, options: q.options, materialId: q.materialId, materialTitle: q.materialTitle,
-    citation: `${q.materialTitle}, ${q.ordinal !== null ? citeChunk({ ordinal: q.ordinal, pageFrom: q.pageFrom, pageTo: q.pageTo }) : "source section"}`,
+    citation: `${q.materialTitle}, ${q.ordinal !== null ? citeChunk({ ordinal: q.ordinal, pageFrom: q.pageFrom, pageTo: q.pageTo }, q.unit) : "source section"}`,
     model: q.model, promptVersion: q.promptVersion, latest: q.latest ? { correct: q.latest.correct } : null,
   };
 }
 
 /** A My Learning URL. Plain functions here, not in client.tsx, so server pages can call them too. */
 export const studyHref = (seg = "") => experienceHref("scholar", seg ? `study/${seg}` : "study");
+
+/** UPLOAD-01 U5: "Your notes are ready", for the materials just uploaded. */
+export const readyHref = (ids: readonly string[]) => `${studyHref("ready")}?ids=${ids.join(",")}`;
 
 /** The link to one section of a material, which explanations, feedback and cards cite. */
 export function sourceHref(materialId: string, chunkId: string) {

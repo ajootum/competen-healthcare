@@ -2,8 +2,8 @@
 import { createHash } from "node:crypto";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import { isNotProvisioned } from "../access";
-import { BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, type MaterialMime } from "./config";
-import type { Chunk } from "./extract";
+import { BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
+import type { Chunk, ExtractionQuality } from "./extract";
 import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
 import type { ProgressAttempt, ProgressCard, ProgressMaterial, ProgressQuestion } from "./progress";
@@ -109,7 +109,16 @@ export async function countMaterials(admin: Admin, userId: string): Promise<numb
 // enforces its size and type). Processing then reads the object back by the same server-built path.
 
 export const uploadPath = (userId: string, uploadId: string, mime: MaterialMime) =>
-  `${userId}/${uploadId}.${mime === "application/pdf" ? "pdf" : mime === "text/plain" ? "txt" : "docx"}`;
+  `${userId}/${uploadId}.${mime === "application/pdf" ? "pdf" : mime === "text/plain" ? "txt" : mime === PPTX_MIME ? "pptx" : "docx"}`;
+
+/** UPLOAD-01 U1: the hex sha256 of an upload, the duplicate key (migration 409 makes it unique per person). */
+export const sha256Hex = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+
+/** The person's own material with exactly these bytes, if any. */
+export async function findDuplicate(admin: Admin, userId: string, sha256: string): Promise<{ id: string; title: string } | null> {
+  const { data } = await admin.from("individual_scholar_material").select("id, title").eq("user_id", userId).eq("sha256", sha256).limit(1).maybeSingle();
+  return data ? { id: data.id, title: data.title } : null;
+}
 
 export async function createUploadSlot(admin: Admin, userId: string, mime: MaterialMime): Promise<{ uploadId: string; path: string; token: string } | null> {
   const uploadId = crypto.randomUUID();
@@ -138,15 +147,24 @@ export async function discardUpload(admin: Admin, path: string): Promise<void> {
 export async function createMaterial(admin: Admin, userId: string, input: {
   id: string; path: string; title: string; fileName: string; mime: MaterialMime; bytes: Uint8Array;
   pageCount: number | null; extractor: string; chunks: Chunk[];
-}): Promise<{ ok: true; id: string } | { ok: false; error: string; detail?: string }> {
+  /** UPLOAD-01 U2 (migration 406). Where 406 is absent the row is stored without it: quality "not measured". */
+  quality?: ExtractionQuality | null;
+}): Promise<{ ok: true; id: string; qualityStored: boolean } | { ok: false; error: string; detail?: string }> {
   const { id, path } = input;
-  const { error: mErr } = await admin.from("individual_scholar_material").insert({
+  const row = {
     id, user_id: userId, title: input.title, file_name: input.fileName.slice(0, 255), mime_type: input.mime,
-    byte_size: input.bytes.byteLength, sha256: createHash("sha256").update(input.bytes).digest("hex"),
+    byte_size: input.bytes.byteLength, sha256: sha256Hex(input.bytes),
     storage_path: path, page_count: input.pageCount, chunk_count: input.chunks.length,
     char_count: input.chunks.reduce((n, c) => n + c.content.length, 0), extractor: input.extractor,
     pii_attested_at: new Date().toISOString(),
-  });
+  };
+  let qualityStored = !!input.quality;
+  let { error: mErr } = await admin.from("individual_scholar_material")
+    .insert({ ...row, user_id: userId, ...(input.quality ? { extraction_quality: toQualityJson(input.quality) } : {}) });
+  if (mErr && input.quality && isNotProvisioned(mErr)) {
+    qualityStored = false;
+    ({ error: mErr } = await admin.from("individual_scholar_material").insert({ ...row, user_id: userId }));
+  }
   if (mErr) {
     await admin.storage.from(BUCKET).remove([path]);
     return { ok: false, error: "material", detail: mErr.message };
@@ -161,8 +179,15 @@ export async function createMaterial(admin: Admin, userId: string, input: {
       return { ok: false, error: "chunks", detail: error.message };
     }
   }
-  return { ok: true, id };
+  return { ok: true, id, qualityStored };
 }
+
+/** The stored shape (migration 406's CHECK names these keys). */
+const toQualityJson = (q: ExtractionQuality) => ({ unit: q.unit, units: q.units, empty_units: q.emptyUnits, chars: q.chars, sections: q.sections });
+export const fromQualityJson = (j: any): ExtractionQuality | null =>
+  j && typeof j === "object" && Array.isArray(j.empty_units)
+    ? { unit: j.unit, units: Number(j.units), emptyUnits: (j.empty_units as unknown[]).map(Number), chars: Number(j.chars), sections: Number(j.sections) }
+    : null;
 
 /** Owner erasure of one material: the object, then the row (which cascades to everything derived). */
 export async function deleteMaterial(admin: Admin, userId: string, id: string): Promise<{ ok: boolean; found: boolean }> {
@@ -194,7 +219,83 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
     if (rm.error) return { ok: false, erased: 0 };
   }
   const { error: dErr } = await admin.from("individual_scholar_material").delete().eq("user_id", userId);
-  return { ok: !dErr, erased: dErr ? 0 : rows.length };
+  if (dErr) return { ok: false, erased: 0 };
+  // UPLOAD-01 U5 (407): the shelves go too -- erase-all leaves nothing of the library. Absent table: nothing to do.
+  const { error: cErr } = await admin.from("individual_scholar_collection").delete().eq("user_id", userId);
+  return { ok: !cErr || isNotProvisioned(cErr), erased: rows.length };
+}
+
+// ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
+
+/**
+ * Per material: how completely it was read (406) and its collection (407). Read apart from the 372 columns so
+ * that an absent migration costs only its own feature. `qualityOn`/`collectionsOn` false: that migration is
+ * absent here. A material with quality null was uploaded before quality was measured.
+ */
+export async function materialExtras(admin: Admin, userId: string, ids: string[]): Promise<{
+  qualityOn: boolean; collectionsOn: boolean; byId: Map<string, { quality: ExtractionQuality | null; collectionId: string | null }>;
+}> {
+  const byId = new Map<string, { quality: ExtractionQuality | null; collectionId: string | null }>(ids.map(id => [id, { quality: null, collectionId: null }]));
+  if (!ids.length) return { qualityOn: true, collectionsOn: true, byId };
+  const [q, c] = await Promise.all([
+    admin.from("individual_scholar_material").select("id, extraction_quality").eq("user_id", userId).in("id", ids),
+    admin.from("individual_scholar_material").select("id, collection_id").eq("user_id", userId).in("id", ids),
+  ]);
+  for (const r of (q.error ? [] : q.data ?? []) as any[]) byId.get(r.id)!.quality = fromQualityJson(r.extraction_quality);
+  for (const r of (c.error ? [] : c.data ?? []) as any[]) byId.get(r.id)!.collectionId = r.collection_id ?? null;
+  return { qualityOn: !q.error, collectionsOn: !c.error, byId };
+}
+
+/** Rename one of the person's own materials. */
+export async function renameMaterial(admin: Admin, userId: string, id: string, title: string): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(id)) return "not_found";
+  const { data, error } = await admin.from("individual_scholar_material").update({ title, updated_at: new Date().toISOString() })
+    .eq("user_id", userId).eq("id", id).select("id");
+  if (error) return "failed";
+  return (data ?? []).length ? "ok" : "not_found";
+}
+
+export type CollectionRow = { id: string; name: string; createdAt: string };
+
+export async function listCollections(admin: Admin, userId: string): Promise<Read<CollectionRow[]>> {
+  const { data, error } = await admin.from("individual_scholar_collection").select("id, name, created_at").eq("user_id", userId).order("name").limit(200);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(r => ({ id: r.id, name: r.name, createdAt: r.created_at })) };
+}
+
+export async function createCollection(admin: Admin, userId: string, name: string): Promise<{ ok: true; id: string } | { ok: false; error: "exists" | "not_provisioned" | "failed" }> {
+  const { data, error } = await admin.from("individual_scholar_collection").insert({ user_id: userId, name }).select("id").single();
+  if (error) return { ok: false, error: error.code === "23505" ? "exists" : isNotProvisioned(error) ? "not_provisioned" : "failed" };
+  return { ok: true, id: data.id };
+}
+
+/** Delete one of the person's collections. Its materials are kept: they are taken off the shelf first. */
+export async function deleteCollection(admin: Admin, userId: string, id: string): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(id)) return "not_found";
+  const { data, error } = await admin.from("individual_scholar_collection").select("id").eq("user_id", userId).eq("id", id).maybeSingle();
+  if (error) return "failed";
+  if (!data) return "not_found";
+  const { error: uErr } = await admin.from("individual_scholar_material").update({ collection_id: null }).eq("user_id", userId).eq("collection_id", id);
+  if (uErr) return "failed";
+  const { error: dErr } = await admin.from("individual_scholar_collection").delete().eq("user_id", userId).eq("id", id);
+  return dErr ? "failed" : "ok";
+}
+
+/**
+ * Put one of the person's materials on one of their collections, or take it off (null). The composite foreign
+ * key (407) makes another person's collection unstorable; the lookup here answers it as not found first.
+ */
+export async function fileMaterial(admin: Admin, userId: string, id: string, collectionId: string | null): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(id) || (collectionId !== null && !isUuid(collectionId))) return "not_found";
+  if (collectionId) {
+    const { data, error } = await admin.from("individual_scholar_collection").select("id").eq("user_id", userId).eq("id", collectionId).maybeSingle();
+    if (error) return "failed";
+    if (!data) return "not_found";
+  }
+  const { data, error } = await admin.from("individual_scholar_material").update({ collection_id: collectionId })
+    .eq("user_id", userId).eq("id", id).select("id");
+  if (error) return "failed";
+  return (data ?? []).length ? "ok" : "not_found";
 }
 
 /** A five-minute signed URL to the owner's own original. */
@@ -218,43 +319,79 @@ export async function listChunks(admin: Admin, userId: string, materialId: strin
   return { ok: true, data: (data ?? []).map((r: any) => ({ id: r.id, ordinal: r.ordinal, pageFrom: r.page_from, pageTo: r.page_to, content: r.content })) };
 }
 
-async function titlesOf(admin: Admin, userId: string, ids: string[]): Promise<Map<string, string>> {
+type MaterialName = { title: string; unit: "page" | "slide" | "section" };
+/** Each material's title and the name of its citable unit (UPLOAD-01: a PowerPoint's is the slide). */
+async function titlesOf(admin: Admin, userId: string, ids: string[]): Promise<Map<string, MaterialName>> {
   if (!ids.length) return new Map();
-  const { data } = await admin.from("individual_scholar_material").select("id, title").eq("user_id", userId).in("id", ids);
-  return new Map(((data ?? []) as any[]).map(r => [r.id, r.title]));
+  const { data } = await admin.from("individual_scholar_material").select("id, title, mime_type").eq("user_id", userId).in("id", ids);
+  return new Map(((data ?? []) as any[]).map(r => [r.id, { title: r.title, unit: UNIT_OF(r.mime_type) }]));
 }
+const UNNAMED: MaterialName = { title: "Your material", unit: "page" };
 
 export async function getPassage(admin: Admin, userId: string, chunkId: string): Promise<Passage | null> {
   if (!isUuid(chunkId)) return null;
   const { data } = await admin.from("individual_scholar_chunk").select("id, material_id, ordinal, page_from, page_to, content")
     .eq("user_id", userId).eq("id", chunkId).maybeSingle();
   if (!data) return null;
-  const titles = await titlesOf(admin, userId, [data.material_id]);
+  const name = (await titlesOf(admin, userId, [data.material_id])).get(data.material_id) ?? UNNAMED;
   return {
-    chunkId: data.id, materialId: data.material_id, materialTitle: titles.get(data.material_id) ?? "Your material",
+    chunkId: data.id, materialId: data.material_id, materialTitle: name.title, unit: name.unit,
     ordinal: data.ordinal, pageFrom: data.page_from, pageTo: data.page_to, content: data.content,
   };
 }
 
-/** FTS candidates from the person's OWN chunks, optionally one material. The tsquery is pre-sanitised. */
-export async function searchCandidates(admin: Admin, userId: string, tsquery: string, materialId?: string | null): Promise<Read<CandidateChunk[]>> {
+/**
+ * FTS candidates from the person's OWN chunks: the whole library, one material, chosen materials, or chosen
+ * sections (UPLOAD-01 U4). The tsquery is pre-sanitised. Every narrowing is on top of the user_id filter.
+ */
+export async function searchCandidates(admin: Admin, userId: string, tsquery: string,
+  scope?: string | null | { materialIds?: readonly string[]; chunkIds?: readonly string[] }): Promise<Read<CandidateChunk[]>> {
   let q = admin.from("individual_scholar_chunk").select("id, material_id, ordinal, page_from, page_to, content")
     .eq("user_id", userId).textSearch("tsv", tsquery, { config: "english" });
-  if (materialId) q = q.eq("material_id", materialId);
-  const { data, error } = await q.limit(40);
+  if (typeof scope === "string") q = q.eq("material_id", scope);
+  else if (scope && typeof scope === "object") {
+    if (scope.materialIds?.length) q = q.in("material_id", [...scope.materialIds]);
+    if (scope.chunkIds) q = q.in("id", scope.chunkIds.length ? [...scope.chunkIds] : ["00000000-0000-0000-0000-000000000000"]);
+  }
+  const { data, error } = await q.limit(60);
   if (error) return fail(error);
-  return {
-    ok: true,
-    data: (data ?? []).map((r: any) => ({ id: r.id, materialId: r.material_id, ordinal: r.ordinal, pageFrom: r.page_from, pageTo: r.page_to, content: r.content })),
-  };
+  return { ok: true, data: (data ?? []).map(toCandidate) };
+}
+
+const toCandidate = (r: any): CandidateChunk => ({ id: r.id, materialId: r.material_id, ordinal: r.ordinal, pageFrom: r.page_from, pageTo: r.page_to, content: r.content });
+
+/**
+ * UPLOAD-01 U4: the person's own sections linked to one competency -- accepted links first, then suggestions by
+ * confidence. A rejected link is not a link. [] where nothing is linked (or 388 is absent): never a guess.
+ */
+export async function competencyChunks(admin: Admin, userId: string, competencyId: string, limit = 40): Promise<Read<CandidateChunk[]>> {
+  if (!isUuid(competencyId)) return { ok: true, data: [] };
+  const { data: maps, error } = await admin.from("individual_scholar_competency_map").select("id, chunk_id, confidence, source")
+    .eq("user_id", userId).eq("competency_id", competencyId).limit(500);
+  if (error) return isNotProvisioned(error) ? { ok: true, data: [] } : fail(error);
+  if (!maps?.length) return { ok: true, data: [] };
+  const { data: d, error: dErr } = await admin.from("individual_scholar_competency_decision").select("map_id, decision, decided_by, created_at")
+    .eq("user_id", userId).in("map_id", (maps as any[]).map(m => m.id)).limit(5000);
+  if (dErr) return fail(dErr);
+  const states = mappingStates(((d ?? []) as any[]).map(x => ({ mappingId: x.map_id, decision: x.decision, decidedBy: x.decided_by, createdAt: x.created_at })));
+  const live = (maps as any[]).map(m => ({ chunkId: m.chunk_id as string, state: states.get(m.id)?.state ?? "proposed", confidence: m.source === "ai" ? Number(m.confidence ?? 0) : 1 }))
+    .filter(m => m.state !== "rejected")
+    .sort((a, b) => (a.state === "accepted" ? 0 : 1) - (b.state === "accepted" ? 0 : 1) || b.confidence - a.confidence)
+    .slice(0, limit);
+  if (!live.length) return { ok: true, data: [] };
+  const { data: chunks, error: cErr } = await admin.from("individual_scholar_chunk").select("id, material_id, ordinal, page_from, page_to, content")
+    .eq("user_id", userId).in("id", live.map(m => m.chunkId));
+  if (cErr) return fail(cErr);
+  const byId = new Map(((chunks ?? []) as any[]).map(r => [r.id, toCandidate(r)]));
+  return { ok: true, data: live.map(m => byId.get(m.chunkId)).filter((c): c is CandidateChunk => !!c) };
 }
 
 export async function toPassages(admin: Admin, userId: string, chunks: CandidateChunk[]): Promise<Passage[]> {
   const titles = await titlesOf(admin, userId, [...new Set(chunks.map(c => c.materialId))]);
-  return chunks.map(c => ({
-    chunkId: c.id, materialId: c.materialId, materialTitle: titles.get(c.materialId) ?? "Your material",
-    ordinal: c.ordinal, pageFrom: c.pageFrom, pageTo: c.pageTo, content: c.content,
-  }));
+  return chunks.map(c => {
+    const name = titles.get(c.materialId) ?? UNNAMED;
+    return { chunkId: c.id, materialId: c.materialId, materialTitle: name.title, unit: name.unit, ordinal: c.ordinal, pageFrom: c.pageFrom, pageTo: c.pageTo, content: c.content };
+  });
 }
 
 // ── QUESTIONS AND ATTEMPTS ─────────────────────────────────────────────────────────────────────────
@@ -263,6 +400,8 @@ export type QuestionRow = {
   id: string; materialId: string; chunkId: string; kind: QuestionKind; stem: string; options: string[];
   correctIndex: number; rationale: string; sourceQuote: string; model: string; promptVersion: string; createdAt: string;
   materialTitle: string; ordinal: number | null; pageFrom: number | null; pageTo: number | null;
+  /** UPLOAD-01: the material's citable unit, so a question from a PowerPoint cites its slide. */
+  unit: "page" | "slide" | "section";
   latest: { correct: boolean; chosenIndex: number; answeredAt: string } | null;
   /** Migration 388. Null where 388 is absent, or the question practises no particular competency. */
   competencyId: string | null;
@@ -312,7 +451,8 @@ async function hydrate(admin: Admin, userId: string, rows: any[]): Promise<Quest
     return {
       id: r.id, materialId: r.material_id, chunkId: r.chunk_id, kind: r.kind, stem: r.stem, options: r.options,
       correctIndex: r.correct_index, rationale: r.rationale, sourceQuote: r.source_quote, model: r.model,
-      promptVersion: r.prompt_version, createdAt: r.created_at, materialTitle: titles.get(r.material_id) ?? "Your material",
+      promptVersion: r.prompt_version, createdAt: r.created_at, materialTitle: (titles.get(r.material_id) ?? UNNAMED).title,
+      unit: (titles.get(r.material_id) ?? UNNAMED).unit,
       ordinal: c?.ordinal ?? null, pageFrom: c?.page_from ?? null, pageTo: c?.page_to ?? null,
       latest: l ? { correct: l.correct, chosenIndex: l.chosen_index, answeredAt: l.answered_at } : null,
       competencyId: extra.get(r.id)?.competency_id ?? null, caseId: extra.get(r.id)?.case_id ?? null,
@@ -575,6 +715,8 @@ export async function unanalysedSections(admin: Admin, userId: string, materialI
  */
 export async function saveAnalysis(admin: Admin, userId: string, input: {
   materialId: string; programmeCode: string | null; model: string; promptVersion: string; sentChunkIds: string[]; sections: SubjectAnalysis[];
+  /** UPLOAD-01 U3: each offered competency's catalogue version, recorded with the proposal (migration 408). */
+  versions?: ReadonlyMap<string, string | null>;
 }): Promise<{ ok: boolean; proposals: number }> {
   const byChunk = new Map(input.sections.map(s => [s.ref, s]));
   const { error } = await admin.from("individual_scholar_chunk_analysis").upsert(input.sentChunkIds.map(chunkId => ({
@@ -588,8 +730,12 @@ export async function saveAnalysis(admin: Admin, userId: string, input: {
     programme_code: input.programmeCode,
   })));
   if (!maps.length) return { ok: true, proposals: 0 };
-  const { error: mErr } = await admin.from("individual_scholar_competency_map")
-    .upsert(maps.map(r => ({ ...r, user_id: userId })), { onConflict: "chunk_id,competency_id", ignoreDuplicates: true });
+  // U3 (408): the catalogue version and the named learning outcome. Where 408 is absent the 388 row is written.
+  const outcomeOf = new Map(input.sections.flatMap(s => s.proposals.map(p => [`${s.ref}|${p.competencyId}`, p.outcome ?? null] as const)));
+  const full = maps.map(r => ({ ...r, user_id: userId, catalogue_version: input.versions?.get(r.competency_id) ?? null, outcome: outcomeOf.get(`${r.chunk_id}|${r.competency_id}`) ?? null }));
+  let { error: mErr } = await admin.from("individual_scholar_competency_map").upsert(full.map(r => ({ ...r, user_id: userId })), { onConflict: "chunk_id,competency_id", ignoreDuplicates: true });
+  if (mErr && isNotProvisioned(mErr))
+    ({ error: mErr } = await admin.from("individual_scholar_competency_map").upsert(maps.map(r => ({ ...r, user_id: userId })), { onConflict: "chunk_id,competency_id", ignoreDuplicates: true }));
   return { ok: !mErr, proposals: mErr ? 0 : maps.length };
 }
 
@@ -597,10 +743,30 @@ export type MappingRow = {
   id: string; chunkId: string; materialId: string; competencyId: string; layer: Layer; source: MapSource;
   confidence: number | null; rationale: string | null; model: string | null; promptVersion: string | null; createdAt: string;
   state: MappingState; decidedBy: "student" | "reviewer" | null; decisions: number;
+  /** UPLOAD-01 U3 (408). Null: none named, not recorded, or 408 absent. */
+  outcome: string | null; catalogueVersion: string | null;
 };
 
-/** The person's mappings (one material, or all), each with its current state, and the concepts per section. */
-export async function listMappings(admin: Admin, userId: string, materialId?: string | null): Promise<Read<{ mappings: MappingRow[]; concepts: Map<string, string[]> }>> {
+/** The 408 columns, read apart so their absence costs nothing but themselves. */
+async function mappingExtras(admin: Admin, userId: string, ids: string[]): Promise<Map<string, { outcome: string | null; catalogue_version: string | null }>> {
+  if (!ids.length) return new Map();
+  const out = new Map<string, any>();
+  for (let i = 0; i < ids.length; i += 500) {
+    const { data, error } = await admin.from("individual_scholar_competency_map").select("id, outcome, catalogue_version").eq("user_id", userId).in("id", ids.slice(i, i + 500));
+    if (error) return new Map();
+    for (const r of (data ?? []) as any[]) out.set(r.id, r);
+  }
+  return out;
+}
+
+/**
+ * The person's mappings (one material, or all), each with its current state, and the concepts per section.
+ * UPLOAD-01 U5: where the person corrected a section's topics (408), `concepts` holds THEIR list and `corrected`
+ * names the section; `correctionsOn` is false where 408 is absent (correction not offered).
+ */
+export async function listMappings(admin: Admin, userId: string, materialId?: string | null): Promise<Read<{
+  mappings: MappingRow[]; concepts: Map<string, string[]>; corrected: Set<string>; correctionsOn: boolean;
+}>> {
   let m = admin.from("individual_scholar_competency_map")
     .select("id, chunk_id, material_id, competency_id, layer, source, confidence, rationale, model, prompt_version, created_at").eq("user_id", userId);
   let a = admin.from("individual_scholar_chunk_analysis").select("chunk_id, concepts").eq("user_id", userId);
@@ -617,6 +783,9 @@ export async function listMappings(admin: Admin, userId: string, materialId?: st
     decisions = ((data ?? []) as any[]).map(d => ({ mappingId: d.map_id, decision: d.decision, decidedBy: d.decided_by, createdAt: d.created_at }));
   }
   const states = mappingStates(decisions);
+  const [extras, corrections] = await Promise.all([mappingExtras(admin, userId, ids), topicCorrections(admin, userId, materialId ?? null)]);
+  const concepts = new Map<string, string[]>(((analysis.data ?? []) as any[]).map(r => [r.chunk_id, r.concepts ?? []]));
+  for (const [chunkId, topics] of corrections.byChunk) concepts.set(chunkId, topics);
   return {
     ok: true,
     data: {
@@ -626,11 +795,67 @@ export async function listMappings(admin: Admin, userId: string, materialId?: st
           id: r.id, chunkId: r.chunk_id, materialId: r.material_id, competencyId: r.competency_id, layer: r.layer, source: r.source,
           confidence: r.confidence === null ? null : Number(r.confidence), rationale: r.rationale, model: r.model, promptVersion: r.prompt_version,
           createdAt: r.created_at, state: s?.state ?? "proposed", decidedBy: (s?.decidedBy as "student" | "reviewer" | undefined) ?? null, decisions: s?.history ?? 0,
+          outcome: extras.get(r.id)?.outcome ?? null, catalogueVersion: extras.get(r.id)?.catalogue_version ?? null,
         };
       }),
-      concepts: new Map(((analysis.data ?? []) as any[]).map(r => [r.chunk_id, r.concepts ?? []])),
+      concepts, corrected: new Set(corrections.byChunk.keys()), correctionsOn: corrections.on,
     },
   };
+}
+
+// ── UPLOAD-01 U5: THE STUDENT'S OWN TOPICS FOR A SECTION (408) ──────────────────────────────────────────
+//
+// A correction REPLACES what the student sees for that section. The AI analysis row is kept, untouched, as the
+// record of what was suggested. Nothing here reads or writes a shared catalogue.
+
+async function topicCorrections(admin: Admin, userId: string, materialId: string | null): Promise<{ on: boolean; byChunk: Map<string, string[]> }> {
+  let chunkIds: string[] | null = null;
+  if (materialId) {
+    const { data } = await admin.from("individual_scholar_chunk").select("id").eq("user_id", userId).eq("material_id", materialId).limit(2000);
+    chunkIds = ((data ?? []) as any[]).map(r => r.id);
+    if (!chunkIds.length) chunkIds = null;
+  }
+  let q = admin.from("individual_scholar_topic_correction").select("chunk_id, topics").eq("user_id", userId);
+  if (chunkIds) q = q.in("chunk_id", chunkIds);
+  const { data, error } = await q.limit(5000);
+  if (error) return { on: false, byChunk: new Map() };
+  return { on: true, byChunk: new Map(((data ?? []) as any[]).map(r => [r.chunk_id, r.topics ?? []])) };
+}
+
+/**
+ * UPLOAD-01 U4: the topics of every section of the person's library, per material -- the student's correction
+ * where they made one. Feeds "what this material is about" and related materials. Null where unreadable.
+ */
+export async function libraryTopics(admin: Admin, userId: string): Promise<Map<string, string[][]> | null> {
+  const { data, error } = await admin.from("individual_scholar_chunk_analysis").select("chunk_id, material_id, concepts").eq("user_id", userId).limit(10000);
+  if (error) return isNotProvisioned(error) ? new Map() : null;
+  const corrections = await topicCorrections(admin, userId, null);
+  const out = new Map<string, string[][]>();
+  for (const r of (data ?? []) as any[]) {
+    const list = out.get(r.material_id) ?? [];
+    list.push(corrections.byChunk.get(r.chunk_id) ?? r.concepts ?? []);
+    out.set(r.material_id, list);
+  }
+  return out;
+}
+
+/** Save the person's own topics for one of their sections. "not_provisioned" where 408 is absent. */
+export async function setTopicCorrection(admin: Admin, userId: string, chunkId: string, topics: string[]): Promise<"ok" | "not_found" | "not_provisioned" | "failed"> {
+  if (!isUuid(chunkId)) return "not_found";
+  const { data: c, error } = await admin.from("individual_scholar_chunk").select("id").eq("user_id", userId).eq("id", chunkId).maybeSingle();
+  if (error) return "failed";
+  if (!c) return "not_found";
+  const { error: uErr } = await admin.from("individual_scholar_topic_correction")
+    .upsert({ chunk_id: chunkId, user_id: userId, topics, updated_at: new Date().toISOString() }, { onConflict: "chunk_id" });
+  if (uErr) return isNotProvisioned(uErr) ? "not_provisioned" : "failed";
+  return "ok";
+}
+
+/** Remove the person's correction: the AI topics show again. */
+export async function clearTopicCorrection(admin: Admin, userId: string, chunkId: string): Promise<"ok" | "failed"> {
+  if (!isUuid(chunkId)) return "ok";
+  const { error } = await admin.from("individual_scholar_topic_correction").delete().eq("user_id", userId).eq("chunk_id", chunkId);
+  return error && !isNotProvisioned(error) ? "failed" : "ok";
 }
 
 /** The current mappings of one section, for choosing the competency a question practises. [] when unreadable. */
@@ -665,15 +890,22 @@ export async function decideMapping(admin: Admin, userId: string, mapId: string,
  * student, no model or confidence) and their acceptance of it is recorded at once, as a decision row.
  * The caller has already checked the competency is in the person's programme.
  */
-export async function addMapping(admin: Admin, userId: string, input: { chunkId: string; competencyId: string; layer: Layer; programmeCode: string | null }): Promise<"ok" | "exists" | "not_found" | "failed"> {
+export async function addMapping(admin: Admin, userId: string, input: {
+  chunkId: string; competencyId: string; layer: Layer; programmeCode: string | null;
+  /** UPLOAD-01 U3 (408): the catalogue version, and the outcome the student chose (one of the competency's own). */
+  catalogueVersion?: string | null; outcome?: string | null;
+}): Promise<"ok" | "exists" | "not_found" | "failed"> {
   if (!isUuid(input.chunkId)) return "not_found";
   const { data: c, error } = await admin.from("individual_scholar_chunk").select("id, material_id").eq("user_id", userId).eq("id", input.chunkId).maybeSingle();
   if (error) return "failed";
   if (!c) return "not_found";
-  const { data: m, error: mErr } = await admin.from("individual_scholar_competency_map").insert({
+  const row = {
     user_id: userId, material_id: c.material_id, chunk_id: c.id, competency_id: input.competencyId, layer: input.layer,
     source: "student", programme_code: input.programmeCode,
-  }).select("id").single();
+  };
+  let { data: m, error: mErr } = await admin.from("individual_scholar_competency_map")
+    .insert({ ...row, user_id: userId, catalogue_version: input.catalogueVersion ?? null, outcome: input.outcome ?? null }).select("id").single();
+  if (mErr && isNotProvisioned(mErr)) ({ data: m, error: mErr } = await admin.from("individual_scholar_competency_map").insert({ ...row, user_id: userId }).select("id").single());
   if (mErr) return mErr.code === "23505" ? "exists" : "failed";
   const { error: dErr } = await admin.from("individual_scholar_competency_decision")
     .insert({ user_id: userId, map_id: m.id, decision: "accepted", decided_by: "student", reason: null });

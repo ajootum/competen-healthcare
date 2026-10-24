@@ -7,6 +7,8 @@
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_PDF_PAGES = 300;
+/** UPLOAD-01 U1: the most slides one PowerPoint material may hold (the policy can only lower it). */
+export const MAX_PPTX_SLIDES = 300;
 /** Total extracted characters kept from one file. Beyond this the upload is refused, not truncated. */
 export const MAX_MATERIAL_CHARS = 600_000;
 export const MAX_MATERIALS_PER_PERSON = 50;
@@ -15,10 +17,15 @@ export const PDF_MIME = "application/pdf";
 export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 /** COMPETEN-SCHOLAR-UPLOAD (Stage 2): plain text -- a .txt file, or text pasted into the page and kept as one. Migration 405. */
 export const TEXT_MIME = "text/plain";
-export const ALLOWED_MIME = [PDF_MIME, DOCX_MIME, TEXT_MIME] as const;
+/** COMPETEN-SCHOLAR-UPLOAD-01 U1: a PowerPoint lecture, read slide by slide with its speaker notes. Migration 406. */
+export const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+export const ALLOWED_MIME = [PDF_MIME, DOCX_MIME, PPTX_MIME, TEXT_MIME] as const;
+export type UploadFormat = "pdf" | "docx" | "pptx" | "text";
 /** The format a policy names (scholar_upload_formats), for each MIME type. */
-export const FORMAT_OF: Record<(typeof ALLOWED_MIME)[number], "pdf" | "docx" | "text"> = { [PDF_MIME]: "pdf", [DOCX_MIME]: "docx", [TEXT_MIME]: "text" };
-export const FORMAT_LABEL: Record<"pdf" | "docx" | "text", string> = { pdf: "PDF", docx: "Word (.docx)", text: "Plain text (.txt or pasted)" };
+export const FORMAT_OF: Record<(typeof ALLOWED_MIME)[number], UploadFormat> = { [PDF_MIME]: "pdf", [DOCX_MIME]: "docx", [PPTX_MIME]: "pptx", [TEXT_MIME]: "text" };
+export const FORMAT_LABEL: Record<UploadFormat, string> = { pdf: "PDF", docx: "Word (.docx)", pptx: "PowerPoint (.pptx)", text: "Plain text (.txt or pasted)" };
+/** What one citable unit of a material is called: a PDF has pages, a PowerPoint has slides, the rest have sections. */
+export const UNIT_OF = (mime: string): "page" | "slide" | "section" => (mime === PDF_MIME ? "page" : mime === PPTX_MIME ? "slide" : "section");
 
 /**
  * Pure. What may be uploaded now, from the Individual policy (scholar_upload_formats, scholar_upload_max_mb):
@@ -67,7 +74,9 @@ export const PROMPT_VERSIONS = {
   // v4: the tutor gets the same no-counting rule (the cause of every withheld tutor turn in a diagnostic).
   // v5: the tutor may receive the student's own study context (P1, learner-context.ts) ahead of the passages.
   explainModes: "scholar-explain-modes-v5",
-  map: "competency-map-v2", // the Holdings engine's MAPPING_PROMPT_VERSION (src/lib/competency/mapping.ts), pinned equal by a unit test
+  // UPLOAD-01 U3: Scholar opts in to outcome-level mapping -- the Holdings engine's MAPPING_PROMPT_VERSION_OUTCOMES
+  // (src/lib/competency/mapping.ts), pinned equal by a unit test.
+  map: "competency-map-v3-outcomes",
   caseSteps: "scholar-case-steps-v2",
 } as const;
 

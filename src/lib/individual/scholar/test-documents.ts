@@ -27,3 +27,39 @@ export function tinyPdf(pages: (string | string[])[]): Uint8Array {
   out += `trailer\n<< /Size ${objs.length + 1} /Root ${cat} 0 R >>\nstartxref\n${x}\n%%EOF`;
   return new TextEncoder().encode(out);
 }
+
+// ── UPLOAD-01: a minimal PowerPoint and Word file, built in code the same way ──────────────────────────────
+//
+// Real Office Open XML packages (a ZIP of XML parts), just enough for the readers: PowerPoint slides with
+// DrawingML text and optional speaker notes, and a Word body of paragraphs. `extra` adds raw parts (a test of
+// the screening, such as a macro project). ASCII text only.
+
+const xmlEsc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const drawingParas = (lines: string[]) => lines.map(l => `<a:p><a:r><a:t>${xmlEsc(l)}</a:t></a:r></a:p>`).join("");
+
+export async function tinyPptx(slides: { text: string[]; notes?: string[] }[], extra: Record<string, string> = {}): Promise<Uint8Array> {
+  const { default: JSZip } = await import("jszip");
+  const zip = new JSZip();
+  const A = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
+  zip.file("[Content_Types].xml", `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/></Types>`);
+  zip.file("ppt/presentation.xml", `<?xml version="1.0"?><p:presentation ${A}><p:sldIdLst>${slides.map((_, i) => `<p:sldId id="${256 + i}"/>`).join("")}</p:sldIdLst></p:presentation>`);
+  slides.forEach((s, i) => {
+    const n = i + 1;
+    zip.file(`ppt/slides/slide${n}.xml`, `<?xml version="1.0"?><p:sld ${A}><p:cSld><p:spTree><p:sp><p:txBody>${drawingParas(s.text)}</p:txBody></p:sp></p:spTree></p:cSld></p:sld>`);
+    if (s.notes?.length) {
+      zip.file(`ppt/slides/_rels/slide${n}.xml.rels`, `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide${n}.xml"/></Relationships>`);
+      zip.file(`ppt/notesSlides/notesSlide${n}.xml`, `<?xml version="1.0"?><p:notes ${A}><p:cSld><p:spTree><p:sp><p:txBody>${drawingParas([...s.notes, String(n)])}</p:txBody></p:sp></p:spTree></p:cSld></p:notes>`);
+    }
+  });
+  for (const [name, body] of Object.entries(extra)) zip.file(name, body);
+  return new Uint8Array(await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" }));
+}
+
+export async function tinyDocx(paragraphs: string[]): Promise<Uint8Array> {
+  const { default: JSZip } = await import("jszip");
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
+  zip.file("_rels/.rels", `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+  zip.file("word/document.xml", `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphs.map(p => `<w:p><w:r><w:t xml:space="preserve">${xmlEsc(p)}</w:t></w:r></w:p>`).join("")}</w:body></w:document>`);
+  return new Uint8Array(await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" }));
+}

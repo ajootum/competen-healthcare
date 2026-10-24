@@ -47,6 +47,26 @@ export type CandidateChunk = {
 };
 
 /**
+ * Pure. UPLOAD-01 U4: across several materials, the best passages SPREAD over the materials that matched --
+ * the best passage of each material first, in rank order, then the rest -- so a question asked of the whole
+ * library (or of chosen documents) is answered from each relevant document, not five passages of one.
+ * The input is already ranked; the output keeps rank order within each round.
+ */
+export function spreadAcrossMaterials<T extends { materialId: string }>(ranked: readonly T[], limit: number): T[] {
+  const byMaterial = new Map<string, T[]>();
+  for (const c of ranked) byMaterial.set(c.materialId, [...(byMaterial.get(c.materialId) ?? []), c]);
+  const out: T[] = [];
+  for (let round = 0; out.length < limit; round++) {
+    let added = false;
+    for (const list of byMaterial.values()) {
+      if (round < list.length && out.length < limit) { out.push(list[round]); added = true; }
+    }
+    if (!added) break;
+  }
+  return out;
+}
+
+/**
  * Pure. Ranks the database's candidates by how many distinct query terms each contains (by prefix, so a
  * stemmed "infarct" still finds "infarction"), then by how often, then by document order. Returns the
  * top `limit`. A chunk matching no term at all is dropped.

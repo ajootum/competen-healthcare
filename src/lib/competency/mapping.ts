@@ -30,6 +30,13 @@ import type { CompetencyLayer } from "./foundation";
 
 // v2: a candidate may carry its place in the clinical structure (the caller's context line), shown to the model.
 export const MAPPING_PROMPT_VERSION = "competency-map-v2";
+// COMPETEN-SCHOLAR-UPLOAD-01 U3: OPT-IN outcome-level mapping. A caller that passes `outcomes: true` shows each
+// competency's learning outcomes numbered under it ([C3.1], [C3.2] ...) and the model may name the ONE outcome a
+// piece of text supports. Without the option the prompt and its version are exactly v2, so a consumer that has
+// not opted in (Professional today) is unchanged.
+export const MAPPING_PROMPT_VERSION_OUTCOMES = "competency-map-v3-outcomes";
+/** Outcomes shown per competency when outcome-level mapping is on. */
+export const OUTCOMES_SHOWN = 6;
 /** Subjects analysed in one AI call. */
 export const SUBJECTS_PER_CALL = 6;
 /** Candidates shown to the model at once. A larger set is shortlisted by overlap with the text. */
@@ -54,10 +61,12 @@ export type MappingSubject = { ref: string; text: string };
 /** Who the person is and what the text is, in the caller's words. No profession is named here. */
 export type MappingFraming = { person: string; subjects: string };
 
-export type MappingProposal = { competencyId: string; layer: CompetencyLayer | null; confidence: number; rationale: string | null };
+/** `outcome` (U3, opt-in): the text of the one learning outcome of that competency the model named, verified. */
+export type MappingProposal = { competencyId: string; layer: CompetencyLayer | null; confidence: number; rationale: string | null; outcome?: string };
+export type MappingOptions = { outcomes?: boolean };
 export type SubjectAnalysis = { ref: string; concepts: string[]; proposals: MappingProposal[] };
 export type MappingDrop = {
-  reason: "malformed" | "unknown_subject" | "unknown_competency" | "low_confidence" | "concept_not_in_text" | "identifier" | "rationale_ungrounded" | "over_limit";
+  reason: "malformed" | "unknown_subject" | "unknown_competency" | "low_confidence" | "concept_not_in_text" | "identifier" | "rationale_ungrounded" | "over_limit" | "unknown_outcome";
 };
 export type MappingCheck = { subjects: SubjectAnalysis[]; dropped: MappingDrop[] };
 export type IdentifierScreen = (text: string) => readonly unknown[];
@@ -77,7 +86,13 @@ export function shortlist<C extends MappingCandidate>(subjects: MappingSubject[]
   return scored.slice(0, limit).sort((a, b) => a.i - b.i).map(s => s.c);
 }
 
-export function mappingSystem(f: MappingFraming): string {
+export function mappingSystem(f: MappingFraming, opts: MappingOptions = {}): string {
+  const outcomeRule = opts.outcomes
+    ? ["   outcome is optional: if the text supports ONE particular learning outcome listed under that competency, give its tag (for example \"C3.2\"). Leave it out when no single outcome fits."]
+    : [];
+  const shape = opts.outcomes
+    ? 'Reply with JSON ONLY, no prose and no code fence: [{"section": "S1", "concepts": ["..."], "competencies": [{"tag": "C3", "confidence": 0.8, "rationale": "...", "outcome": "C3.2"}]}]'
+    : 'Reply with JSON ONLY, no prose and no code fence: [{"section": "S1", "concepts": ["..."], "competencies": [{"tag": "C3", "confidence": 0.8, "rationale": "..."}]}]';
   return [
     `You help ${f.person} organise ${f.subjects} against the competencies they are working towards.`,
     "You are given numbered competencies, tagged [C1], [C2] and so on, and numbered pieces of their own text, tagged [S1], [S2] and so on.",
@@ -87,17 +102,20 @@ export function mappingSystem(f: MappingFraming): string {
     `2. competencies: up to ${MAX_PROPOSALS_PER_SUBJECT} competencies it supports, using ONLY the tags you were given. Several are fine, across layers. None is fine if nothing fits.`,
     "   confidence is a number from 0 to 1: how directly the text supports that competency.",
     "   rationale is ONE short sentence, in the text's own terms, saying why. Do not add any number, dose, value or finding the text does not contain.",
+    ...outcomeRule,
     "3. Never include a name, NHS number, date of birth or anything that could identify a real person.",
     "",
-    'Reply with JSON ONLY, no prose and no code fence: [{"section": "S1", "concepts": ["..."], "competencies": [{"tag": "C3", "confidence": 0.8, "rationale": "..."}]}]',
+    shape,
   ].join("\n");
 }
 
-export function mappingUserPrompt(subjects: MappingSubject[], candidates: MappingCandidate[]): string {
+export function mappingUserPrompt(subjects: MappingSubject[], candidates: MappingCandidate[], opts: MappingOptions = {}): string {
   const comps = candidates.map((c, i) => {
-    const out = c.outcomes.length ? ` -- ${c.outcomes.slice(0, 3).join("; ")}` : "";
     const where = c.context ? ` [${c.context}]` : "";
-    return `[${candidateTag(i)}] (${c.layer ?? "unclassified"}) ${c.code ? `${c.code} ` : ""}${c.title}${where}${out}`;
+    const head = `[${candidateTag(i)}] (${c.layer ?? "unclassified"}) ${c.code ? `${c.code} ` : ""}${c.title}${where}`;
+    if (opts.outcomes) return [head, ...c.outcomes.slice(0, OUTCOMES_SHOWN).map((o, k) => `    [${candidateTag(i)}.${k + 1}] ${o}`)].join("\n");
+    const out = c.outcomes.length ? ` -- ${c.outcomes.slice(0, 3).join("; ")}` : "";
+    return `${head}${out}`;
   });
   const subs = subjects.map((s, i) => `[${subjectTag(i)}]\n${s.text}`);
   return `COMPETENCIES:\n${comps.join("\n")}\n\nMY TEXT:\n\n${subs.join("\n\n")}`;
@@ -157,7 +175,15 @@ export function checkMappingReply(raw: string, subjects: MappingSubject[], candi
         out.dropped.push({ reason: "rationale_ungrounded" });
         rationale = "";
       }
-      proposals.push({ competencyId: comp.competencyId, layer: comp.layer, confidence: conf, rationale: rationale || null });
+      // U3: an outcome tag must name one of THIS competency's shown outcomes. Anything else is dropped, the proposal kept.
+      let outcome: string | undefined;
+      if (typeof q.outcome === "string" && q.outcome.trim()) {
+        const om = /^\[?C(\d+)\.(\d+)\]?$/i.exec(q.outcome.trim());
+        const oi = om && Number(om[1]) - 1 === ci ? Number(om[2]) - 1 : -1;
+        if (oi >= 0 && oi < Math.min(OUTCOMES_SHOWN, comp.outcomes.length)) outcome = comp.outcomes[oi];
+        else out.dropped.push({ reason: "unknown_outcome" });
+      }
+      proposals.push({ competencyId: comp.competencyId, layer: comp.layer, confidence: conf, rationale: rationale || null, ...(outcome ? { outcome } : {}) });
     }
     proposals.sort((a, b) => b.confidence - a.confidence);
     out.subjects.push({ ref: subject.ref, concepts, proposals });
@@ -173,12 +199,15 @@ export function checkMappingReply(raw: string, subjects: MappingSubject[], candi
 export async function proposeMappings(args: {
   subjects: MappingSubject[]; candidates: MappingCandidate[]; framing: MappingFraming;
   context: NonNullable<GenerateArgs["context"]>; screen?: IdentifierScreen;
+  /** U3, opt-in: offer each competency's learning outcomes and let the model name one. */
+  outcomes?: boolean;
 }) {
   const shown = shortlist(args.subjects.slice(0, SUBJECTS_PER_CALL), args.candidates);
   const subjects = args.subjects.slice(0, SUBJECTS_PER_CALL);
+  const opts: MappingOptions = { outcomes: !!args.outcomes };
   const r = await generate({
-    system: mappingSystem(args.framing),
-    user: mappingUserPrompt(subjects, shown),
+    system: mappingSystem(args.framing, opts),
+    user: mappingUserPrompt(subjects, shown, opts),
     tier: "reasoning",
     maxTokens: 2000,
     context: args.context,
@@ -186,7 +215,7 @@ export async function proposeMappings(args: {
   if (!r.ok) return { ok: false as const, error: r.error };
   return {
     ok: true as const, check: checkMappingReply(r.text, subjects, shown, args.screen), shown: shown.length,
-    model: r.model, provider: r.provider, promptVersion: MAPPING_PROMPT_VERSION,
+    model: r.model, provider: r.provider, promptVersion: opts.outcomes ? MAPPING_PROMPT_VERSION_OUTCOMES : MAPPING_PROMPT_VERSION,
   };
 }
 

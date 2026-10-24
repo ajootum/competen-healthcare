@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     rationale: q.rationale,
     source: {
       quote: q.sourceQuote,
-      citation: `${q.materialTitle}, ${q.ordinal !== null ? citeChunk({ ordinal: q.ordinal, pageFrom: q.pageFrom, pageTo: q.pageTo }) : "source section"}`,
+      citation: `${q.materialTitle}, ${q.ordinal !== null ? citeChunk({ ordinal: q.ordinal, pageFrom: q.pageFrom, pageTo: q.pageTo }, q.unit) : "source section"}`,
       materialId: q.materialId,
     },
     card: r.card,

@@ -3,11 +3,14 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { countDue, learnerProgramme, listMaterials, listProgrammes, readConsent } from "@/lib/individual/scholar/store";
+import { countDue, learnerProgramme, listCollections, listMappings, listMaterials, listProgrammes, materialExtras, readConsent } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { uploadRules } from "@/lib/individual/scholar/config";
+import { FORMAT_LABEL, FORMAT_OF, UNIT_OF, uploadRules } from "@/lib/individual/scholar/config";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
+import { competencyLabels, loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
+import { qualitySummary } from "@/lib/individual/scholar/extract";
 import { ProgrammeChooser } from "./_components/competency-client";
+import { CollectionsManager } from "./_components/library-client";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
 import StudyNav from "./_components/StudyNav";
 import { ConsentPanel, EraseAll, ExplainPanel, UploadPanel } from "./_components/client";
@@ -31,7 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 const JOURNEY = [
-  { step: "Upload", text: "Add your notes, slides or guidance as PDF or Word." },
+  { step: "Upload", text: "Add your notes, slides or guidance." },
   { step: "Understand", text: "Ask about them. Answers cite your pages." },
   { step: "Assess", text: "Practice questions written from a section." },
   { step: "Revise", text: "Anything you miss comes back on a schedule." },
@@ -55,6 +58,25 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
   const stampOf = (createdAt: string) => (history.ok ? contextStamp(history.periods, createdAt, programmeLabels) : null);
   // COMPETEN-SCHOLAR-01 S2: the programme choice exists only where 387 does (fail closed).
   const programmeOn = programmes.ok && mine.ok;
+  // UPLOAD-01 U4/U5: the library -- each material's read quality (406) and collection (407), the collections, and
+  // the competencies the notes are linked to (for asking "notes linked to a competency"). Each absent migration
+  // removes only its own feature.
+  const list = materials.ok ? materials.data : [];
+  const [extras, collections, linked, learner] = await Promise.all([
+    materialExtras(ctx.admin, ctx.userId, list.map(m => m.id)), listCollections(ctx.admin, ctx.userId),
+    listMappings(ctx.admin, ctx.userId), loadLearnerCatalogue(ctx.admin, ctx.userId),
+  ]);
+  const shelves = extras.collectionsOn && collections.ok ? collections.data : null;
+  const liveIds = linked.ok ? [...new Set(linked.data.mappings.filter(r => r.state !== "rejected").map(r => r.competencyId))] : [];
+  const names = linked.ok ? await competencyLabels(ctx.admin, learner.competencies, liveIds, new Map(linked.data.mappings.map(r => [r.competencyId, r.layer]))) : new Map();
+  const scopes = {
+    materials: list.map(m => ({ id: m.id, title: m.title })),
+    competencies: liveIds.map(id => ({ id, title: `${names.get(id)?.code ? `${names.get(id)!.code} ` : ""}${names.get(id)?.title ?? "Competency"}` })).sort((a, b) => a.title.localeCompare(b.title)),
+  };
+  const groups = shelves
+    ? [...shelves.map(s => ({ key: s.id, name: s.name, items: list.filter(m => extras.byId.get(m.id)?.collectionId === s.id) })),
+      { key: "none", name: shelves.length ? "Not in a collection" : "", items: list.filter(m => !extras.byId.get(m.id)?.collectionId) }].filter(g => g.items.length)
+    : [{ key: "none", name: "", items: list }];
 
   if (!materials.ok && materials.notProvisioned) {
     return (
@@ -99,36 +121,52 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
       )}
 
       <section aria-labelledby="materials-h" className="mt-8">
-        <h2 id="materials-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your materials</h2>
+        <h2 id="materials-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your library</h2>
         {!materials.ok ? <div className="mt-3"><Unreadable what="study materials" /></div>
           : materials.data.length === 0 ? (
             <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">
-              None yet. Upload a PDF or Word file above to start.
+              None yet. Upload {rules.describe} above to start.
             </p>
           ) : (
-            <ul className="mt-3 divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
-              {materials.data.map(m => (
-                <li key={m.id}>
-                  <Link href={experienceHref("scholar", `study/${m.id}`)} className={`flex flex-wrap items-center justify-between gap-2 p-4 hover:bg-gray-50 sm:p-5 ${focusRing}`}>
-                    <span className="min-w-0">
-                      <span className="block truncate text-[15px] font-semibold text-gray-900">{m.title}</span>
-                      <span className="block text-[12.5px] text-gray-500">
-                        {m.mimeType === "application/pdf" ? `PDF · ${m.pageCount} page${m.pageCount === 1 ? "" : "s"}` : m.mimeType === "text/plain" ? "Text" : "Word document"} · {m.chunkCount} section{m.chunkCount === 1 ? "" : "s"} · added {new Date(m.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                        {stampOf(m.createdAt) ? ` · while studying ${stampOf(m.createdAt)}` : ""}
-                      </span>
-                    </span>
-                    <span className="text-[13px] font-semibold" style={{ color: x.accent }}>Open →</span>
-                  </Link>
-                </li>
+            <div className="mt-3 space-y-4">
+              {groups.map(g => (
+                <div key={g.key}>
+                  {g.name && <h3 className="mb-1.5 text-[14px] font-bold text-gray-900">{g.name}</h3>}
+                  <ul className="divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
+                    {g.items.map(m => {
+                      const unit = UNIT_OF(m.mimeType);
+                      const q = extras.qualityOn ? extras.byId.get(m.id)?.quality ?? null : null;
+                      const partial = q ? qualitySummary(q).partial : false;
+                      return (
+                        <li key={m.id}>
+                          <Link href={experienceHref("scholar", `study/${m.id}`)} className={`flex flex-wrap items-center justify-between gap-2 p-4 hover:bg-gray-50 sm:p-5 ${focusRing}`}>
+                            <span className="min-w-0">
+                              <span className="block truncate text-[15px] font-semibold text-gray-900">{m.title}</span>
+                              <span className="block text-[12.5px] text-gray-500">
+                                {FORMAT_LABEL[FORMAT_OF[m.mimeType]]}{m.pageCount !== null ? ` · ${m.pageCount} ${unit}${m.pageCount === 1 ? "" : "s"}` : ""} · {m.chunkCount} section{m.chunkCount === 1 ? "" : "s"} · added {new Date(m.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                                {stampOf(m.createdAt) ? ` · while studying ${stampOf(m.createdAt)}` : ""}
+                              </span>
+                              {partial && <span className="mt-1 inline-block rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11.5px] font-semibold text-amber-900">Partly read: {q!.emptyUnits.length} {unit}{q!.emptyUnits.length === 1 ? "" : "s"} without readable text</span>}
+                            </span>
+                            <span className="text-[13px] font-semibold" style={{ color: x.accent }}>Open →</span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
+        {shelves && materials.ok && materials.data.length > 0 && (
+          <div className="mt-4"><CollectionsManager collections={shelves.map(s => ({ id: s.id, name: s.name }))} /></div>
+        )}
       </section>
 
       {materials.ok && materials.data.length > 0 && (
         <div className="mt-8">
-          <ExplainPanel consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? undefined : undefined} title="Ask across all your notes"
-            hint="Searches every material you have uploaded and answers only from what it finds, citing the page or section. Explanations are not saved." />
+          <ExplainPanel consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? undefined : undefined} title="Ask across your library" scopes={scopes}
+            hint="Searches your materials and answers only from what it finds, naming each material it used and citing the page, slide or section. Explanations are not saved." />
         </div>
       )}
 
