@@ -1,6 +1,6 @@
 # The shared clinical case blueprint, `case-blueprint/1`, and the case interfaces: FOR AGREEMENT
 
-**Status:** revision 2, for IND-004's re-read. IND-004's second review (B1 to B11, blocking, endorsed by the coordinator) is adopted in full, and N1 to N4 are folded in (below). Nothing is built on it, and 422 stays unfrozen, until it is AGREED. The contract is the type, validator and projections in `src/lib/cases/blueprint.ts`, with its tests in `blueprint.test.ts` (22/22, and 7 planted violations each go red).
+**Status:** **AGREED** by IND-004 on revision 2 (7114f987), with two runtime fixes, R1 and R2, which are in (below). IND-004 needs no further review. The contract is the type, validator and projections in `src/lib/cases/blueprint.ts`, with its tests in `blueprint.test.ts` (24/24, and 9 planted violations each go red).
 
 ## One structure, two profiles
 
@@ -60,6 +60,10 @@
 - **B10:** with explicit progression, every stage is reachable from the first, at least one stage ends the case, and there is no cycle (a case always moves forward to an end). A stage with option transitions needs a default, or a transition for every one of its options.
   - No progression means the stages run in order, which is always sound.
 - **B11:** one option never leads to two stages. Because a transition names options by id, option ids must not repeat between the decision points of one stage.
+- **R1:** with explicit progression, a stage with no outgoing transition ENDS the case. `nextStage` reads this the same way as the validator, so a terminal branch stage placed mid-array never runs on into the next stage in the array. The in-order fallback applies only when `progression` is empty.
+- **R2 (option a: unrepresentable, not documented):** an answer chooses a branch only where it is ONE choice. Option-keyed transitions are allowed only from a stage with exactly one decision point, and that decision must be `single`.
+  - A stage with several decisions, or with a `multiple` or `free_text` one, moves on by its default only.
+  - So array order never decides a branch.
 
 **Non-blocking, folded in now so the contract changes once:**
 - **N1:** fact `aliases`.
@@ -70,7 +74,8 @@
 **The leak tests** (`blueprint.test.ts`, the browser boundary) use a branching case, `BRANCH`, with distinctive ids and planted secrets: the summary, the rationales, the expected response, the rubric, the safety text, and future and off-path titles, prompts, options and facts.
 - They check, at the start, on the key path and off it, that no id and nothing server-only appears in the serialised view.
 - They also cover: a requested reveal; tokens that differ per view, are distinct per option and resolve only with the salt; hints only in guided mode; and the answered view.
-- **Each control was proven by planting the violation:** showing every stage, exposing the summary, unscoped option tokens, raw ids, auto-revealing a request fact, dropping the cycle check, and dropping the overlap check. Each turns tests red (3, 3, 1, 3, 2, 1 and 1 failures), and all pass again once restored.
+- Two further tests cover R1 (a terminal branch stage that is not last in the array) and R2 (a `multiple` decision, and a stage of two decisions, with keyed transitions).
+- **Each control was proven by planting the violation:** showing every stage, exposing the summary, unscoped option tokens, raw ids, auto-revealing a request fact, dropping the cycle check, dropping the overlap check, the old in-order fall-through (R1), and keyed transitions from any stage (R2). Each turns tests red (3, 3, 1, 3, 2, 1, 1, 1 and 1 failures), and all pass again once restored.
 
 ## The minimal form: Scholar's existing private case (S4)
 

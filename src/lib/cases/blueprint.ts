@@ -99,7 +99,12 @@ function progressionProblems(stages: any[], dps: any[], trans: any[]): string[] 
   for (const t of trans) out.get(t?.from)?.push(t);
   for (const [from, ts] of out) {
     if (!ts.length) continue;
-    const opts = new Set(dps.filter(d => d?.stageId === from).flatMap(d => arr(d?.options).map((o: any) => o?.id)));
+    // IND-004 R2 (a): an answer picks a branch only where it is ONE choice -- a stage with exactly one decision point,
+    // a single choice. Otherwise (several decisions, a multiple or a free-text one) the stage moves on by its default.
+    const own = dps.filter(d => d?.stageId === from);
+    if (ts.some(t => arr(t?.onOptions).length) && !(own.length === 1 && own[0]?.kind === "single"))
+      p.push(`progression from ${from}: option transitions need a stage with exactly one single-choice decision (otherwise the default only)`);
+    const opts = new Set(own.flatMap(d => arr(d?.options).map((o: any) => o?.id)));
     const seen = new Set<string>();
     for (const t of ts) for (const o of arr(t?.onOptions)) { if (seen.has(o)) p.push(`progression from ${from}: option ${o} leads to two stages (overlapping transitions)`); seen.add(o); }
     const hasDefault = ts.some(t => t?.isDefault);
@@ -208,10 +213,15 @@ export function validateBlueprint(b: any, profile: Profile, dimensions: readonly
 /** Pure: the competencies a blueprint teaches: what its version links to, and what a reviewer's scope must cover. */
 export const blueprintCompetencies = (b: Blueprint) => [...new Set(b.learningObjectives.flatMap(l => l.competencyIds))];
 
-/** Pure: where a choice leads. Explicit progression where given, otherwise the stages in order. */
+/**
+ * Pure: where a choice leads. With no progression, the stages run in order. With explicit progression, the
+ * transitions decide, and a stage with none ENDS the case (IND-004 R1: the same reading as validateBlueprint, so a
+ * terminal branch stage placed mid-array never runs on into another branch).
+ */
 export function nextStage(b: Blueprint, from: string, chosen: string[]): { stageId: string | null; consequenceFactIds: string[] } {
+  if (!b.progression.length) { const i = b.stages.findIndex(s => s.id === from); return { stageId: i < 0 ? null : b.stages[i + 1]?.id ?? null, consequenceFactIds: [] }; }
   const out = b.progression.filter(t => t.from === from);
-  if (!out.length) { const i = b.stages.findIndex(s => s.id === from); return { stageId: b.stages[i + 1]?.id ?? null, consequenceFactIds: [] }; }
+  if (!out.length) return { stageId: null, consequenceFactIds: [] };
   const hit = out.find(t => (t.onOptions ?? []).some(o => chosen.includes(o))) ?? out.find(t => t.isDefault);
   return hit ? { stageId: hit.to, consequenceFactIds: hit.consequenceFactIds } : { stageId: null, consequenceFactIds: [] };
 }

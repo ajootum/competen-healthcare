@@ -173,6 +173,29 @@ describe("the clinical case blueprint: one structure, two profiles", () => {
     expect(errors(shared, "private")).toMatch(/stage s1: option ids repeat between its decision points/);
   });
 
+  it("a branching answer is ONE single choice: no keyed transitions from a multiple choice or a stage of two decisions (R2)", () => {
+    const multiple = { ...LIBRARY, decisionPoints: LIBRARY.decisionPoints.map(d => (d.id === "d1" ? { ...d, kind: "multiple" as const } : d)) };
+    expect(errors(multiple)).toMatch(/progression from s1: option transitions need a stage with exactly one single-choice decision/);
+    const two = { ...LIBRARY,
+      stages: [{ ...LIBRARY.stages[0], decisionPointIds: ["d1", "d3"] }, LIBRARY.stages[1]],
+      decisionPoints: [...LIBRARY.decisionPoints, { id: "d3", stageId: "s1", kind: "single" as const, dimension: "decision", prompt: "And then?", permittedReveals: [],
+        options: [{ id: "c", text: "C", correct: true, rationale: "r" }, { id: "d", text: "D", correct: false, rationale: "r" }] }] };
+    expect(errors(two)).toMatch(/progression from s1: option transitions need a stage with exactly one single-choice decision/);
+    const twoByDefault = { ...two, progression: [{ from: "s1", isDefault: true, to: "s2", consequenceFactIds: [] }] };
+    expect(validateBlueprint(twoByDefault, "library")).toEqual([]);                                   // default only: fine
+    expect(validateBlueprint({ ...multiple, progression: [{ from: "s1", isDefault: true, to: "s2", consequenceFactIds: [] }] }, "library")).toEqual([]);
+  });
+
+  it("with explicit progression, a stage with no transition ends the case, wherever it sits in the array (R1)", () => {
+    // stage_escalated is terminal and sits BEFORE stage_delayed: it must end, never run on into the other branch.
+    const terminalMid = { ...BRANCH, progression: BRANCH.progression.filter(t => t.from !== "stage_escalated") };
+    expect(validateBlueprint(terminalMid, "library")).toEqual([]);
+    expect(nextStage(terminalMid, "stage_escalated", ["opt_x"])).toEqual({ stageId: null, consequenceFactIds: [] });
+    expect(nextStage(terminalMid, "stage_delayed", ["opt_p"]).stageId).toBe("stage_outcome");
+    expect(nextStage(terminalMid, "stage_outcome", []).stageId).toBeNull();
+    expect(nextStage(MINIMAL_S4, "nope", []).stageId).toBeNull();                                   // unknown stage: nowhere
+  });
+
   it("a single choice has exactly one key, every id resolves, and a stage has one default", () => {
     const twoKeys = { ...MINIMAL_S4, decisionPoints: [{ ...MINIMAL_S4.decisionPoints[0], options: MINIMAL_S4.decisionPoints[0].options.map(o => ({ ...o, correct: true })) }, MINIMAL_S4.decisionPoints[1]] };
     expect(errors(twoKeys, "private")).toMatch(/exactly one correct/);
