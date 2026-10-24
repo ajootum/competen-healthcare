@@ -333,6 +333,17 @@ const STAGING: Listed[] = [
       + "own harness-upload-* identities.",
   },
   {
+    file: "scholar-learn01-harness.ts",
+    note: "COMPETEN-SCHOLAR-LEARN-01 over HTTP, the owner's first acceptance journey on the Stage 2 respiratory materials: "
+      + "several documents -> Teach Me -> a cited explanation -> Simplify -> a follow-up (Ask) -> a related concept "
+      + "across the library -> an informal check -> a clarification with a verdict -> continue -> leave and resume -> "
+      + "source references -> learning activity against the CFCA (labelled not competence); the same without a "
+      + "catalogue; Start learning opens Teach Me; history structure-only and pruned with a deleted material; "
+      + "isolation; erase-all. Real AI, no mocks. Needs BASE_URL naming a STAGING-pointed dev server with the legal "
+      + "versions AND URLs, an AI provider and 414 (else PEND). Reads shared config only. Creates and deletes its own "
+      + "harness-learn01-* identities.",
+  },
+  {
     file: "scholar-upload01-harness.ts",
     note: "COMPETEN-SCHOLAR-UPLOAD-01 over HTTP, the owner's three-resource scenario: a respiratory anatomy PDF with a "
       + "scanned (empty) page, a pneumonia PowerPoint with speaker notes and oxygen therapy Word notes in one session; "
