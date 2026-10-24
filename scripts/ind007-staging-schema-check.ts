@@ -230,6 +230,25 @@ async function main() {
       out.cases422 = { tables: [...new Set(cols.map((c: any) => c.table_name))], functions: fn.map((f: any) => f.proname), grants: auth.length,
         fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, rls, trg, fn, auth, caps })).digest("hex") };
     }
+    if (process.argv.includes("--cases423")) {
+      // Migration 423: candidacy, candidates, delivery sessions, the identifier backstop, and the two triggers it adds
+      // to case_library_version. Reads 422's case_library_version too, so PRE (422 only) must equal the state after
+      // ROLLBACK-423, which removes the foreign key and the triggers it added there.
+      const T = ["case_library_version", "case_candidacy", "case_candidacy_event", "case_candidate", "case_library_session"];
+      const cols = await q(`select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns where table_schema = 'public' and table_name = any($1) order by 1, 2`, [T]);
+      const cons = await q(`select conrelid::regclass::text as t, conname, pg_get_constraintdef(oid) as def from pg_constraint where conrelid::regclass::text = any($1) order by 1, 2`, [T]);
+      const idx = await q(`select tablename, indexname, indexdef from pg_indexes where schemaname = 'public' and tablename = any($1) order by 1, 2`, [T]);
+      const pol = await q(`select tablename, policyname from pg_policies where tablename = any($1) order by 1, 2`, [T]);
+      const rls = await q(`select relname, relrowsecurity from pg_class where relname = any($1) order by 1`, [T]);
+      const trg = await q(`select tgname, pg_get_triggerdef(oid) as def from pg_trigger where not tgisinternal and tgrelid::regclass::text = any($1) order by 1`, [T]);
+      const fn = await q(`select p.proname, md5(pg_get_functiondef(p.oid)) as def_md5, has_function_privilege('authenticated', p.oid, 'execute') as auth_exec from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like 'case\\_%' order by 1`);
+      const view = await q(`select v.table_name, (select string_agg(c.column_name, ',' order by c.ordinal_position) from information_schema.columns c where c.table_schema = 'public' and c.table_name = v.table_name) as cols,
+        has_table_privilege('anon', 'public.' || v.table_name, 'select') as anon_select, has_table_privilege('authenticated', 'public.' || v.table_name, 'select') as auth_select
+        from information_schema.views v where v.table_schema = 'public' and v.table_name like 'case\\_%' order by 1`);
+      out.cases423 = { tables: [...new Set(cols.map((c: any) => c.table_name))], functions: fn.map((f: any) => f.proname), views: view,
+        fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, rls, trg, fn, view })).digest("hex") };
+    }
     if (process.argv.includes("--ai420")) {
       // Migration 420: the scale of every AI amount column. The other AI readings take data_type only ("numeric"),
       // which cannot see a precision or scale change -- this one does.
