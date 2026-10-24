@@ -2,6 +2,7 @@
 import type { PlanAiLimit } from "./commerce";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
+import { LEARN_ACTIONS, LEARN_ACTION_LABEL, SESSION_MAX_STEPS, TUTOR_MAX_TURNS, type ExplanationDepth, type LearnAction } from "./scholar/config";
 import { FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, type UploadFormat } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
 
@@ -37,8 +38,9 @@ export const POLICY_PATH_PREFIX = "individual.policy.";
 export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
 export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
-  | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides";
-export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats";
+  | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides"
+  | "scholar_session_max_steps" | "scholar_tutor_turns";
+export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats" | "scholar_learning_actions";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -46,7 +48,8 @@ export type ProgrammesPolicyKey = "scholar_onboarding_programmes";
 export type OptionsPolicyKey = "scholar_institutions";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
-export type ChoicePolicyKey = "scholar_catalogue_min_status";
+export type ChoicePolicyKey = "scholar_catalogue_min_status"
+  | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -209,6 +212,79 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [{ value: "level", label: "Level within the programme" }, { value: "institution", label: "Institution (always optional)" }],
     fallback: ["level", "institution"],
     limitReason: "Only these two can be asked. A field with nothing configured behind it is not shown.",
+  },
+  // ── COMPETEN-SCHOLAR-LEARN-01 L5: how Scholar teaches, governed here. Each default is today's behaviour or the
+  // owner's stated default (Teach Me first). Security, privacy and clinical-safety rules are NOT settings: the
+  // grounding check, the identifier screen, the labels and the background rules apply whatever is chosen.
+  {
+    key: "scholar_learning_actions", kind: "set", product: "Scholar",
+    label: "Learning actions offered to students",
+    help: "Which ways of learning the Learn workspace offers. An action switched off is not shown and is refused if asked for.",
+    options: LEARN_ACTIONS.map(v => ({ value: v, label: LEARN_ACTION_LABEL[v] })),
+    fallback: [...LEARN_ACTIONS],
+    limitReason: "Only the seven actions Scholar implements. Default: all.",
+  },
+  {
+    key: "scholar_default_action", kind: "choice", product: "Scholar",
+    label: "The learning action a session starts with",
+    help: "What Start learning opens with. A student can switch at any time.",
+    options: LEARN_ACTIONS.map(v => ({ value: v, label: LEARN_ACTION_LABEL[v] })),
+    fallback: "teach",
+    limitReason: "One of the learning actions. Default: Teach me. If it is switched off, the first action that is on is used.",
+  },
+  {
+    key: "scholar_beyond_notes", kind: "choice", product: "Scholar",
+    label: "Background beyond the student's notes",
+    help: "Whether Go deeper, Teach me and Give examples may add general background that is not in the notes. It is always shown apart, labelled, and withheld if it carries figures, doses or citations.",
+    options: [{ value: "labelled", label: "Allowed, shown apart and labelled" }, { value: "off", label: "Off: notes only" }],
+    fallback: "labelled",
+    limitReason: "Two choices. The background rules themselves are fixed.",
+  },
+  {
+    key: "scholar_explanation_depth", kind: "choice", product: "Scholar",
+    label: "Default explanation depth",
+    help: "How long and detailed explanations are for a student who has not chosen. A student may choose their own.",
+    options: [{ value: "brief", label: "Brief" }, { value: "standard", label: "Standard" }, { value: "detailed", label: "Detailed" }],
+    fallback: "standard",
+    limitReason: "Three depths. Default: standard.",
+  },
+  {
+    key: "scholar_session_max_steps", kind: "int", product: "Scholar", unit: "steps",
+    label: "Most steps in one suggested learning session",
+    help: "A session's suggested sequence is at most this long. Students may skip, revisit and reorder steps, and explore freely.",
+    fallback: 8, min: 3, max: SESSION_MAX_STEPS,
+    limitReason: "Each step teaches up to three sections. Twenty steps is the reviewed length of one session.",
+  },
+  {
+    key: "scholar_check_behaviour", kind: "choice", product: "Scholar",
+    label: "Informal understanding checks",
+    help: "Whether Scholar offers a quick check after teaching a step. A check is formative: never an assessment, never competence.",
+    options: [{ value: "offer", label: "Offered after each step (the student chooses)" }, { value: "prompt", label: "Suggested after each step" }, { value: "off", label: "Off" }],
+    fallback: "offer",
+    limitReason: "Three choices. Checks never become assessment results, whatever is chosen.",
+  },
+  {
+    key: "scholar_learning_objectives", kind: "choice", product: "Scholar",
+    label: "Learning objectives in a session",
+    help: "Whether a session shows the learning outcomes (from the programme's competency catalogue) that its sections support.",
+    options: [{ value: "outcomes", label: "Show competency learning outcomes" }, { value: "off", label: "Do not show" }],
+    fallback: "outcomes",
+    limitReason: "Outcomes come only from links the student's notes have to the catalogue, labelled with their review state.",
+  },
+  {
+    key: "scholar_tutor_turns", kind: "int", product: "Scholar", unit: "turns",
+    label: "Conversation turns Scholar keeps in view",
+    help: "How many earlier turns of a conversation (asking, clarifying) Scholar is shown again. Turns are not stored.",
+    fallback: TUTOR_MAX_TURNS, min: 2, max: 10,
+    limitReason: "Two to ten. More turns cost more per answer and add little.",
+  },
+  {
+    key: "scholar_learning_history", kind: "choice", product: "Scholar",
+    label: "Learning history",
+    help: "Whether Scholar records learning sessions (the steps, the sections used, the actions taken and informal check outcomes) so a student can resume. It never records what the AI said or what the student typed.",
+    options: [{ value: "record", label: "Record structured history (no conversation text)" }, { value: "off", label: "Off: nothing is recorded, sessions cannot be resumed" }],
+    fallback: "record",
+    limitReason: "Structure only, by design. A student can erase their history with their materials.",
   },
   {
     key: "professional_catalogues", kind: "catalogues", product: "Professional", max: CATALOGUES_MAX,
@@ -382,6 +458,16 @@ export type IndividualPolicy = {
   scholarPdfMaxPages: number;
   /** UPLOAD-01 U1: the slide limit for one PowerPoint. */
   scholarPptxMaxSlides: number;
+  /** COMPETEN-SCHOLAR-LEARN-01 L5. */
+  scholarLearningActions: LearnAction[];
+  scholarDefaultAction: LearnAction;
+  scholarBeyondNotes: "labelled" | "off";
+  scholarExplanationDepth: ExplanationDepth;
+  scholarSessionMaxSteps: number;
+  scholarCheckBehaviour: "offer" | "prompt" | "off";
+  scholarLearningObjectives: "outcomes" | "off";
+  scholarTutorTurns: number;
+  scholarLearningHistory: "record" | "off";
   scholarInsightMinAnswers: number;
   scholarInsightWindowDays: number;
   passportAchievementKinds: StudyAchievementKind[];
@@ -413,6 +499,15 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarUploadMaxMb: int("scholar_upload_max_mb"),
     scholarPdfMaxPages: int("scholar_pdf_max_pages"),
     scholarPptxMaxSlides: int("scholar_pptx_max_slides"),
+    scholarLearningActions: clampSet(policyDef("scholar_learning_actions") as SetPolicy, published.get(policyPath("scholar_learning_actions"))) as LearnAction[],
+    scholarDefaultAction: clampChoice(policyDef("scholar_default_action") as ChoicePolicy, published.get(policyPath("scholar_default_action"))) as LearnAction,
+    scholarBeyondNotes: clampChoice(policyDef("scholar_beyond_notes") as ChoicePolicy, published.get(policyPath("scholar_beyond_notes"))) as "labelled" | "off",
+    scholarExplanationDepth: clampChoice(policyDef("scholar_explanation_depth") as ChoicePolicy, published.get(policyPath("scholar_explanation_depth"))) as ExplanationDepth,
+    scholarSessionMaxSteps: int("scholar_session_max_steps"),
+    scholarCheckBehaviour: clampChoice(policyDef("scholar_check_behaviour") as ChoicePolicy, published.get(policyPath("scholar_check_behaviour"))) as "offer" | "prompt" | "off",
+    scholarLearningObjectives: clampChoice(policyDef("scholar_learning_objectives") as ChoicePolicy, published.get(policyPath("scholar_learning_objectives"))) as "outcomes" | "off",
+    scholarTutorTurns: int("scholar_tutor_turns"),
+    scholarLearningHistory: clampChoice(policyDef("scholar_learning_history") as ChoicePolicy, published.get(policyPath("scholar_learning_history"))) as "record" | "off",
     scholarInsightMinAnswers: int("scholar_insight_min_answers"),
     scholarInsightWindowDays: int("scholar_insight_window_days"),
     passportAchievementKinds: clampSet(policyDef("passport_achievement_kinds") as SetPolicy, published.get(policyPath("passport_achievement_kinds"))) as StudyAchievementKind[],

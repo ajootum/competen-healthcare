@@ -289,6 +289,29 @@ const MIG390_FILE = "supabase/migrations/390-individual-scholar-mapping-provenan
 const MIG390 = migText(MIG390_FILE);
 const MIG405 = migText("supabase/migrations/405-individual-scholar-plain-text-materials.sql");
 const MIG406 = migText("supabase/migrations/406-individual-scholar-pptx-and-extraction-quality.sql");
+const MIG414 = migText("supabase/migrations/414-individual-scholar-learning-history.sql");
+/**
+ * K24 (COMPETEN-SCHOLAR-LEARN-01): Stage 3's boundaries hold in the code.
+ *   - 414 has no column that could hold conversation: no answer, question, content, text or note column anywhere.
+ *   - An event row is structure only: the store inserts session, step, action and verdict -- nothing the AI said.
+ *   - The act route refuses an action the policy has off (403), screens what the student typed for identifiers,
+ *     records an event only for what was SHOWN and only when history is on, and never stores a practice question.
+ *   - The student's context is never grounding: runLearn checks the notes part against the passages, the
+ *     governed references and what the student typed -- the learner context is not in `asked`.
+ */
+const learnBounded = (src: Src) => {
+  const act = src.get(`${API}/learn/act/route.ts`) ?? "", gen = src.get(GEN) ?? "", st = src.get(STORE) ?? "";
+  const rec = st.slice(st.indexOf("export async function recordLearningEvent"), st.indexOf("export type LearningEventRow"));
+  const run = gen.slice(gen.indexOf("export async function runLearn"), gen.indexOf("S2 framing for the Holdings mapping engine"));
+  return MIG414.length > 0 && !/\b(answer|question|content|note|body|transcript|message)\b\s+text/.test(MIG414)
+    && /\.insert\(\{ session_id: input\.sessionId, user_id: userId, step: input\.step, action: input\.action, verdict: input\.verdict \}\)/.test(rec)
+    && /if \(isLearnAction\(action\) && !policy\.scholarLearningActions\.includes\(action\)\) return NextResponse\.json\(\{[^}]*\}, \{ status: 403 \}\)/.test(act)
+    && /findPatientIdentifiers\(t\)/.test(act)
+    && /if \(recorded && sessionId && shown && policy\.scholarLearningHistory === "record"\)/.test(act)
+    && !/insertQuestions|individual_scholar_question/.test(act)
+    && /const asked = \[args\.question, \.\.\.args\.history\.map\(t => t\.text\)\]\.join\("\\n"\);/.test(run) && !/asked[^;]*learnerContext/.test(run)
+    && /attribution: \{ scope: "person" \}, operation: "individual_scholar_learn"/.test(run);
+};
 /**
  * K20 (Stage 2, Upload): what may be uploaded is Individual policy, enforced at BOTH steps (the slot and the
  * processing), the PDF page limit reaches the extractor, plain text is OFF until HQ turns it on (it needs 405),
@@ -326,7 +349,8 @@ const upload01Holds = (src: Src) => {
     && /outcomes: true,/.test(gen)
     && /const absence = competencyAbsence\(learner\);/.test(mp) && /absence=\{absence\}/.test(mp) && /competencyAbsence\(learner\)/.test(ready)
     && /findPatientIdentifiers\(t\)/.test(topics)
-    && /href=\{experienceHref\("scholar", `study\/\$\{m\.id\}`\)\} className=\{primaryBtn\}/.test(ready);
+    // LEARN-01 lifted the Stage 3 hold: Start learning now opens Teach Me in the Learn workspace (owner GO s8).
+    && /href=\{experienceHref\("scholar", `study\/learn\?material=\$\{m\.id\}`\)\} className=\{primaryBtn\}/.test(ready);
 };
 /** K16: 390 makes a person's mapping unable to carry AI provenance -- both directions of the rule, one CHECK, nothing else. */
 const mig390Shape = (m: string) => /\(source = 'ai'\) = \(model is not null and prompt_version is not null and confidence is not null\)/.test(m)
@@ -653,7 +677,9 @@ function main() {
     contentStatusLabelled(REAL));
   ok("K20. Stage 2: formats, size and pages are Individual policy, enforced at both upload steps; plain text is off until HQ enables it; the panel reads the server's rules; every material shows its educational context",
     uploadGoverned(REAL));
-  ok("K22. UPLOAD-01: the real kind is read from the bytes, a duplicate is refused before extraction, read quality is stored and returned (partial is never a bare success), outcomes are opted in, the no-catalogue absence is said through one rule, student topics are screened, and Start learning is the existing page",
+  ok("K24. LEARN-01: history holds no conversation, the act route keeps to policy, screens input, records only what was shown, stores no practice question, and the student's context is never grounding",
+    learnBounded(REAL));
+  ok("K22. UPLOAD-01: the real kind is read from the bytes, a duplicate is refused before extraction, read quality is stored and returned (partial is never a bare success), outcomes are opted in, the no-catalogue absence is said through one rule, student topics are screened, and Start learning opens Teach Me (LEARN-01)",
     upload01Holds(REAL));
   ok("K15. the mapping engine is Holdings code: product-neutral, storing nothing, using the caller's attribution -- Scholar supplies person attribution and its identifier screen",
     engineNeutral(HOLD, REAL));
@@ -754,6 +780,10 @@ function main() {
   ok("P37. ⚠ K20 goes red when processing stops re-checking the format, or a material stops showing its context",
     !uploadGoverned(plant(`${API}/materials/route.ts`, "(rules.mimes as readonly string[]).includes(declared)", "true"))
     && !uploadGoverned(plant(`${PAGES}/[materialId]/page.tsx`, "contextStamp(", "(() => null)(")));
+  ok("P41. ⚠ K24 goes red when the policy gate goes, an event is recorded before it is shown, or the context becomes grounding",
+    !learnBounded(plant(`${API}/learn/act/route.ts`, "if (isLearnAction(action) && !policy.scholarLearningActions.includes(action))", "if (false)"))
+    && !learnBounded(plant(`${API}/learn/act/route.ts`, "if (recorded && sessionId && shown && policy.scholarLearningHistory === \"record\")", "if (recorded && sessionId)"))
+    && !learnBounded(plant(GEN, "const asked = [args.question, ...args.history.map(t => t.text)].join(\"\\n\");", "const asked = [args.question, ...args.history.map(t => t.text), args.learnerContext ?? \"\"].join(\"\\n\");")));
   ok("P39. ⚠ K22 goes red when the duplicate check moves after extraction, partial is reported as ready, or the no-catalogue absence goes unsaid",
     !upload01Holds(plant(`${API}/materials/route.ts`, 'status: summary.partial ? "partial" : "ready"', 'status: "ready"'))
     && !upload01Holds(plant(`${API}/materials/route.ts`, "if (sniffed.unsafe) return refuse(422", "if (false) return refuse(422"))

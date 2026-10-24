@@ -85,9 +85,9 @@ describe("provenance", () => {
 describe("explanation modes and what lies beyond the notes", () => {
   it("explain keeps the v2 prompt and version; every other mode adds to it and has its own version", () => {
     expect(explainSystem("explain")).toBe(EXPLAIN_SYSTEM);
-    expect(explainPromptVersion("explain")).toBe("scholar-explain-v2");
+    expect(explainPromptVersion("explain")).toBe("scholar-explain-v3");
     expect(explainSystem("summary").startsWith(EXPLAIN_SYSTEM)).toBe(true);
-    expect(explainPromptVersion("tutor")).toBe("scholar-explain-modes-v5:tutor");
+    expect(explainPromptVersion("tutor")).toBe("scholar-explain-modes-v6:tutor");
   });
 
   it("splits the background off the answer at the marker line", () => {

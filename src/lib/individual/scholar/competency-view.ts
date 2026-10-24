@@ -4,6 +4,7 @@ import { scholarCatalogue, structureLabel, type CatalogueCompetency, type Progra
 import { competencyProgressRows, learnerProgramme } from "./store";
 import { buildCompetencyProgress } from "./competency-progress";
 import { buildLearnerContext } from "./learner-context";
+import { contextHistory } from "./context";
 
 // ── WHAT THE PAGES NEED TO SHOW COMPETENCIES ── COMPETEN-SCHOLAR-01 ──────────────────────────────────────
 //
@@ -70,9 +71,14 @@ export async function competencyLabels(admin: any, catalogue: CatalogueCompetenc
 export async function loadTutorContext(admin: any, userId: string, chunkIds: readonly string[]): Promise<string | null> {
   try {
     const learner = await loadLearnerCatalogue(admin, userId);
-    if (!learner.provisioned || !learner.programme || !learner.competencies) return null;
+    if (!learner.provisioned || !learner.programme) return null;
+    // LEARN-01 L3: the level (402 history, the current period) pitches every explanation, catalogue or not.
+    const history = await contextHistory(admin, userId);
+    const level = history.ok ? history.periods.find(p => p.effectiveTo === null)?.levelLabel ?? null : null;
+    // A programme with no usable catalogue (R1) still has a programme and a level: the rest is simply absent.
+    if (!learner.competencies || !learner.competencies.length) return buildLearnerContext({ programme: learner.programme.label, level, passageCompetencies: [], progress: null });
     const rows = await competencyProgressRows(admin, userId);
-    if (!rows.ok) return null;
+    if (!rows.ok) return buildLearnerContext({ programme: learner.programme.label, level, passageCompetencies: [], progress: null });
     const byId = new Map(learner.competencies.map(c => [c.id, c]));
     const here = new Set(chunkIds);
     const passageCompetencies = rows.data.mappings
@@ -83,7 +89,7 @@ export async function loadTutorContext(admin: any, userId: string, chunkIds: rea
       mappings: rows.data.mappings.map(m => ({ competencyId: m.competencyId, chunkId: m.chunkId, state: m.state })),
       questions: rows.data.questions, attempts: rows.data.attempts,
     }).layers.flatMap(l => l.rows);
-    return buildLearnerContext({ programme: learner.programme.label, passageCompetencies, progress });
+    return buildLearnerContext({ programme: learner.programme.label, level, passageCompetencies, progress });
   } catch {
     return null;
   }

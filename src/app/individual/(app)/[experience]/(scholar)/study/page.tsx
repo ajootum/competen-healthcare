@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { countDue, learnerProgramme, listCollections, listMappings, listMaterials, listProgrammes, materialExtras, readConsent } from "@/lib/individual/scholar/store";
+import { countDue, learnerProgramme, listCollections, listLearningSessions, listMappings, listMaterials, listProgrammes, materialExtras, readConsent } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { FORMAT_LABEL, FORMAT_OF, UNIT_OF, uploadRules } from "@/lib/individual/scholar/config";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
@@ -67,6 +67,8 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
     listMappings(ctx.admin, ctx.userId), loadLearnerCatalogue(ctx.admin, ctx.userId),
   ]);
   const shelves = extras.collectionsOn && collections.ok ? collections.data : null;
+  // LEARN-01 L4: sessions to resume (none where 414 is absent: the section then just offers Learn).
+  const sessions = await listLearningSessions(ctx.admin, ctx.userId, 3);
   const liveIds = linked.ok ? [...new Set(linked.data.mappings.filter(r => r.state !== "rejected").map(r => r.competencyId))] : [];
   const names = linked.ok ? await competencyLabels(ctx.admin, learner.competencies, liveIds, new Map(linked.data.mappings.map(r => [r.competencyId, r.layer]))) : new Map();
   const scopes = {
@@ -118,6 +120,25 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
       )}
       {!programmeOn && ((!programmes.ok && !programmes.notProvisioned) || (!mine.ok && !mine.notProvisioned)) && (
         <div className="mt-5"><Unreadable what="your programme" /></div>
+      )}
+
+      {materials.ok && materials.data.length > 0 && (
+        <section aria-labelledby="learn-h" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 id="learn-h" className="text-[16px] font-bold text-gray-900">Learn</h2>
+            <Link href={experienceHref("scholar", "study/learn")} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Teach me something →</Link>
+          </div>
+          {sessions.ok && sessions.data.length > 0 ? (
+            <ul className="mt-2 space-y-1">
+              {sessions.data.map(s => (
+                <li key={s.id} className="text-[13.5px] text-gray-800">
+                  <Link href={experienceHref("scholar", `study/learn?session=${s.id}`)} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Continue: {s.title}</Link>
+                  <span className="text-gray-500"> · {s.status === "completed" ? "completed" : `step ${s.currentStep + 1}`}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="mt-1 text-[13.5px] text-gray-600">Scholar teaches you from your notes, step by step, and you can ask anything as you go.</p>}
+        </section>
       )}
 
       <section aria-labelledby="materials-h" className="mt-8">

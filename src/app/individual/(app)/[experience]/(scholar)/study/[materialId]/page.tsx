@@ -116,6 +116,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
       )}
 
       <div className="mb-6 flex flex-wrap items-start gap-3">
+        <Link href={experienceHref("scholar", `study/learn?material=${m.id}`)} className={secondaryBtn}>Teach me this material</Link>
         <a href={`/api/individual/scholar/materials/${m.id}`} className={secondaryBtn}>Download original</a>
         <DeleteMaterial id={m.id} title={m.title} />
       </div>

@@ -61,7 +61,9 @@ export const INSIGHT_WINDOW_DAYS = 28;
 // generation.ts and its version here changes with it, so a stored question always says which prompt
 // produced it.
 export const PROMPT_VERSIONS = {
-  explain: "scholar-explain-v2",
+  // v3 (Stage 3, carried from the parked Learn branch): rule 3 also forbids counting what a passage lists -- the
+  // cause of every withheld plain explanation in a staging run. Every mode builds on it, so they move too.
+  explain: "scholar-explain-v3",
   mcq: "scholar-mcq-v3",
   case: "scholar-case-v3",
   verify: "scholar-verify-v1",
@@ -73,11 +75,14 @@ export const PROMPT_VERSIONS = {
   // withheld answer in a staging diagnostic. caseSteps v2: progression only in the passage's own words.
   // v4: the tutor gets the same no-counting rule (the cause of every withheld tutor turn in a diagnostic).
   // v5: the tutor may receive the student's own study context (P1, learner-context.ts) ahead of the passages.
-  explainModes: "scholar-explain-modes-v5",
+  explainModes: "scholar-explain-modes-v6",
   // UPLOAD-01 U3: Scholar opts in to outcome-level mapping -- the Holdings engine's MAPPING_PROMPT_VERSION_OUTCOMES
   // (src/lib/competency/mapping.ts), pinned equal by a unit test.
   map: "competency-map-v3-outcomes",
   caseSteps: "scholar-case-steps-v2",
+  // COMPETEN-SCHOLAR-LEARN-01: the learning actions, the informal check and the clarification, on the same
+  // system prompt and checks as explain (generation.ts). v1.
+  learn: "scholar-learn-v1",
 } as const;
 
 /** S4: a multi-step practice case has this many steps at most (migration 388 allows 1 to 5). */
@@ -85,6 +90,40 @@ export const CASE_MAX_STEPS = 4;
 export const CASE_MIN_STEPS = 2;
 /** S3: tutor turns the browser may send back. Nothing is stored (owner ruling D10). */
 export const TUTOR_MAX_TURNS = 6;
+
+// ── STAGE 3: LEARN ── COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24) ─────────────────────────────────────
+//
+// The student-facing learning actions, in the order the workspace offers them. Teach Me is the default. Each is
+// one way of using the SAME engine (generation.ts): the student's own sections as passages, cited, checked.
+// "check" and "clarify" are the informal understanding check -- never a practice question, never assessment.
+export const LEARN_ACTIONS = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask"] as const;
+export type LearnAction = (typeof LEARN_ACTIONS)[number];
+export const LEARN_ACTION_LABEL: Record<LearnAction, string> = {
+  teach: "Teach me", explain: "Explain this", simplify: "Simplify", deeper: "Go deeper", examples: "Give examples", summary: "Summarise", ask: "Ask Scholar",
+};
+export const isLearnAction = (v: unknown): v is LearnAction => typeof v === "string" && (LEARN_ACTIONS as readonly string[]).includes(v);
+export const EXPLANATION_DEPTHS = ["brief", "standard", "detailed"] as const;
+export type ExplanationDepth = (typeof EXPLANATION_DEPTHS)[number];
+export const CHECK_VERDICTS = ["understood", "partly", "not_yet"] as const;
+export type CheckVerdict = (typeof CHECK_VERDICTS)[number];
+export const CHECK_VERDICT_LABEL: Record<CheckVerdict, string> = { understood: "Understood", partly: "Partly understood", not_yet: "Not yet" };
+/** Sections one learning step teaches together, at most. */
+export const STEP_MAX_SECTIONS = 3;
+export const SESSION_MAX_STEPS = 20;
+/**
+ * The informal check is the student's own formative signal. Said wherever a verdict is shown, so it is never
+ * read as an assessment result or as competence.
+ */
+export const INFORMAL_CHECK_LABEL = "A quick check for your own learning. It is not an assessment and does not count towards any competency.";
+/** Learning activity shown against a competency (Progress) is activity, not evidence. */
+export const NOT_COMPETENCE_LABEL = "Learning activity, not evidence of competence.";
+/** The four kinds of content an answer may hold, said where each appears (owner GO s7). */
+export const SOURCE_KIND_LABEL = {
+  notes: "From your notes",
+  reference: "Governed reference: your programme's competency catalogue",
+  interpretation: "AI explanation beyond your notes: general background, not from your notes and not verified",
+  flag: "Flagged by AI for you to check: possibly contradictory, unclear or unsafe in your notes. Not verified.",
+} as const;
 
 /**
  * S3: background the AI adds beyond the notes is shown APART from the notes-based answer, under this

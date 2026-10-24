@@ -20,7 +20,8 @@ import { buildCompetencyProgress, type CompetencyProgress, type CompetencyProgre
 import { LAYER_LABEL } from "@/lib/individual/scholar/catalogue";
 import { LayerTag } from "../_components/competency-client";
 import { ContentStatusTag } from "../_components/client";
-import { NO_APPROVED_COMPETENCIES } from "@/lib/individual/scholar/config";
+import { CHECK_VERDICT_LABEL, NO_APPROVED_COMPETENCIES, NOT_COMPETENCE_LABEL, type CheckVerdict } from "@/lib/individual/scholar/config";
+import { learningActivityByCompetency } from "@/lib/individual/scholar/store";
 import type { CompetencyCoverage } from "@/lib/competency/progress-model";
 
 const STATUS_TEXT: Record<CompetencyProgressRow["status"], string> = {
@@ -35,8 +36,10 @@ const STATUS_TEXT: Record<CompetencyProgressRow["status"], string> = {
  * section and the Learning Intelligence panel (COMPETEN-SCHOLAR-01 P0). The rows below are this section's own
  * detail from the same accepted links (a unit test pins that each row's figures equal coverage's).
  */
-function CompetencySection({ learner, progress, coverage, unreadable, accent }: {
+function CompetencySection({ learner, progress, coverage, unreadable, accent, activity }: {
   learner: LearnerCatalogue | null; progress: CompetencyProgress | null; coverage: CompetencyCoverage | null; unreadable: boolean; accent: string;
+  /** LEARN-01 L4: learning activity on sections linked to each competency. Null: not recorded here (414 absent). */
+  activity: Map<string, { actions: number; lastVerdict: string | null; lastAt: string }> | null;
 }) {
   if (!learner?.provisioned) return null;
   return (
@@ -96,6 +99,20 @@ function CompetencySection({ learner, progress, coverage, unreadable, accent }: 
                             {r.domain}{r.structure ? ` · ${r.structure}` : ""} · {r.sectionsAccepted} section{r.sectionsAccepted === 1 ? "" : "s"} accepted, {r.sectionsProposed} suggested
                             {r.questions ? ` · ${r.answered} of ${r.questions} question${r.questions === 1 ? "" : "s"} answered` : ""}
                           </p>
+                          {(r.sectionsAccepted + r.sectionsProposed > 0 || activity?.get(r.id)) && (
+                            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-gray-700">
+                              {r.sectionsAccepted + r.sectionsProposed > 0 && (
+                                <Link href={experienceHref("scholar", `study/learn?competency=${r.id}`)} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: accent }}>Learn this competency</Link>
+                              )}
+                              {activity?.get(r.id) && (
+                                <span>
+                                  Learning activity: {activity.get(r.id)!.actions} action{activity.get(r.id)!.actions === 1 ? "" : "s"}
+                                  {activity.get(r.id)!.lastVerdict ? ` · last check: ${CHECK_VERDICT_LABEL[activity.get(r.id)!.lastVerdict as CheckVerdict] ?? activity.get(r.id)!.lastVerdict}` : ""}
+                                  <span className="text-gray-500"> · {NOT_COMPETENCE_LABEL}</span>
+                                </span>
+                              )}
+                            </p>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -160,6 +177,8 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
     })
     : null;
   const cUnreadable = !!learner?.programme && (learner.competencies === null || (cRows !== null && !cRows.ok));
+  // LEARN-01 L4: learning activity per competency, read from the structured history (null where 414 is absent).
+  const activity = cp ? await learningActivityByCompetency(ctx.admin, ctx.userId) : null;
 
   return (
     <>
@@ -193,7 +212,7 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
               ))}
             </dl>
 
-            <CompetencySection learner={learner} progress={cp} coverage={li?.ok ? li.data.coverage : null} unreadable={cUnreadable} accent={x.accent} />
+            <CompetencySection learner={learner} progress={cp} coverage={li?.ok ? li.data.coverage : null} unreadable={cUnreadable} accent={x.accent} activity={activity} />
 
             {li?.ok ? <LearningIntelligence li={li.data} accent={x.accent} /> : <div className="mt-8"><Unreadable what="learning intelligence" /></div>}
 

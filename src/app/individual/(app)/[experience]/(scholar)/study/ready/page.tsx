@@ -119,7 +119,9 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
               </p>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <Link href={experienceHref("scholar", `study/${m.id}`)} className={primaryBtn} style={{ background: x.accent }}>Start learning</Link>
+                {/* LEARN-01 (owner GO 2026-10-24): Start learning opens Teach Me directly, in the Learn workspace. */}
+                <Link href={experienceHref("scholar", `study/learn?material=${m.id}`)} className={primaryBtn} style={{ background: x.accent }}>Start learning</Link>
+                <Link href={experienceHref("scholar", `study/${m.id}`)} className={secondaryBtn}>Open the material</Link>
                 <Link href={`${experienceHref("scholar", `study/${m.id}`)}#sections-h`} className={secondaryBtn}>Practise questions</Link>
                 <Link href={experienceHref("scholar", "study/progress")} className={secondaryBtn}>Explore competencies</Link>
                 <a href={`/api/individual/scholar/materials/${m.id}`} className={secondaryBtn}>View original notes</a>
@@ -205,6 +207,13 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
         })}
       </div>
 
+      {materials.length > 1 && (
+        <p className="mt-6">
+          <Link href={experienceHref("scholar", `study/learn?materials=${materials.map(m => m.id).join(",")}`)} className={primaryBtn} style={{ background: x.accent }}>
+            Start learning from all {materials.length}
+          </Link>
+        </p>
+      )}
       {materials.length > 1 && (
         <div className="mt-8">
           <ExplainPanel materialIds={materials.map(m => m.id)} consent={consentOn} offMessage={status ? aiOffMessage(status) ?? undefined : undefined}
