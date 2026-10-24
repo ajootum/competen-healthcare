@@ -29,7 +29,7 @@ export type LearnerContextInput = {
 };
 
 /** Words only: no digits, no codes, one line. */
-const words = (s: string) => s.replace(/\b[A-Z]{2,}(?:-[A-Z0-9]+)+\b/g, "").replace(/\d+/g, "").replace(/\s+/g, " ").replace(/\s+([,.;:)])/g, "$1").trim();
+const words = (s: string) => s.replace(/\b[A-Z]{2,}(?:-[A-Z0-9]+)+\b/g, "").replace(/\d+/g, "").replace(/\s+/g, " ").replace(/\s+([,.;:)])/g, "$1").replace(/\(\s+/g, "(").trim();
 const list = (xs: string[]) => [...new Set(xs.map(words).filter(Boolean))].slice(0, MAX_ITEMS).join("; ");
 
 /** Pure. The context block, or null when there is nothing worth saying. */

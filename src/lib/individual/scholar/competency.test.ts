@@ -183,3 +183,10 @@ describe("P1: the tutor's view of the student (learner-context.ts)", () => {
     expect(modeUserPrompt("Teach me", [P], [])).not.toContain(CONTEXT_PREAMBLE);
   });
 });
+
+describe("P1: codes come out cleanly", () => {
+  it("a CPU code is removed without leaving a gap inside the brackets", () => {
+    expect(buildLearnerContext({ programme: null, progress: null, passageCompetencies: [{ title: "T", structure: "CPU-RESPASS-001 Systematic Respiratory Assessment" }] }))
+      .toContain("T (Systematic Respiratory Assessment)");
+  });
+});
