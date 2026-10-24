@@ -137,7 +137,8 @@ const generateOutsideGen = (src: Src) => [...src].filter(([f, s]) => f !== GEN &
 function preflightOrder(src: Src): string[] {
   const bad: string[] = [];
   for (const [file, call] of [[`${API}/explain/route.ts`, "runExplain("], [`${API}/questions/route.ts`, "runQuestions("],
-    [`${API}/materials/[id]/analyse/route.ts`, "runAnalysis("], [`${API}/cases/route.ts`, "runCase("]] as const) {
+    [`${API}/materials/[id]/analyse/route.ts`, "runAnalysis("], [`${API}/cases/route.ts`, "runCase("],
+    [`${API}/revision/sessions/route.ts`, "runRevisionQuestions("], [`${API}/revision/answer/route.ts`, "runEvaluate("]] as const) {
     const s = src.get(file) ?? "";
     const p = s.indexOf("await aiPreflight(ctx)"), c = s.indexOf(call);
     if (p < 0 || c < 0 || p > c) bad.push(file);
@@ -318,7 +319,60 @@ const AI_ROUTES: [string, string, RegExp][] = [
   [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runQuestions\([^;]*ai\.run\)/],
   [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run\)/],
   [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }))`, /runAnalysis\([^)]*ai\.run\)/],
+  // REVISION-01: a session's new questions (one id per call, `:g1` ...) and a short answer's AI evaluation.
+  [`${API}/revision/sessions/route.ts`, "scholarAiRunner(ctx, req, \"questions\", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`)", /runRevisionQuestions\([^)]*ai\.run\)/],
+  [`${API}/revision/answer/route.ts`, "scholarAiRunner(ctx, req, \"evaluate\", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\\n${r.text}`, passages: [passage] }))", /runEvaluate\([^)]*ai\.run\)/],
 ];
+/**
+ * K30 (REVISION-01 R2/R4): ANSWERS STAY ON THE SERVER. A question goes to the browser before it is answered only as
+ * revisionItemView -- learnerItem, which carries no key, rationale or source quote -- from every revision route and
+ * page. The key is revealed only by feedbackView after an answer, or a flashcard's back on reveal.
+ */
+const REV = `${LIB}/revision.ts`, REV_VIEW = `${LIB}/revision-view.ts`;
+const answersServerSide = (src: Src) => {
+  const rev = src.get(REV) ?? "", view = src.get(REV_VIEW) ?? "";
+  const learner = rev.slice(rev.indexOf("export function learnerItem"), rev.indexOf("export type Response ="));
+  // The page's session view only: the review cards below it are the 372 self-review cards, revealed on request as before.
+  const page = src.get(`${PAGES}/revise/page.tsx`) ?? "";
+  const routes = [src.get(`${API}/revision/sessions/route.ts`) ?? "", src.get(`${API}/revision/sessions/[id]/route.ts`) ?? "",
+    page.slice(page.indexOf("if (q.session) {"), page.indexOf("const [policy, materials, sets"))];
+  return learner.length > 50 && learner.length < 3000 && !/rationale|sourceQuote|correctIndex/.test(learner)
+    && /return \{ \.\.\.learnerItem\(q\), materialId: q\.materialId, materialTitle: q\.materialTitle, chunkId: q\.chunkId, citation: citationOf\(q\), label: REVISION_LABEL \};/.test(view)
+    // Every list of items any of them sends is the learner view, none raw.
+    && routes.every(s => /items: \S*\.map\(revisionItemView\)|items=\{questions\.map\(revisionItemView\)\}/.test(s)
+      && !/\bitems: (?![A-Z]|\S*\.map\(revisionItemView\))/.test(s) && !/\bitems=\{(?!questions\.map\(revisionItemView\))/.test(s))
+    && routes.every(s => !/sourceQuote|correctIndex|\.answer\b/.test(s.replace(/feedbackView\([^)]*\)/g, "")));
+};
+/**
+ * K31 (REVISION-01 R4, s10): MARKING SAYS WHAT IT WAS. Every revision question is stored private_formative; code
+ * marks every kind it can; a short answer that matches nothing is AI evaluation (with the evaluator recorded) or the
+ * student's own judgement -- never marked wrong by default; and the label shown is MARKING_LABEL's for that marking.
+ */
+const markingHonest = (src: Src) => {
+  const rev = src.get(REV) ?? "", store = src.get(STORE) ?? "", ans = src.get(`${API}/revision/answer/route.ts`) ?? "", view = src.get(REV_VIEW) ?? "";
+  return /if \(k\.kind === "accepted" && r\.kind === "text"\) return markShortAnswer\(r\.text, k\.answers\) \? \{ correct: true, score: 1, marking: "deterministic" \} : \{ needsJudgement: true \};/.test(rev)
+    && /return a && accepted\.some\(x => normaliseAnswer\(x\) === a\) \? true : null;/.test(rev)
+    && /review_status: "private_formative"/.test(store) && /evaluator_model: a\.evaluator\?\.model \?\? null/.test(store)
+    && /const marking = evaluator \? "ai_evaluation" as const : mark\.marking;/.test(ans)
+    && /if \(!evaluator\) return NextResponse\.json\(\{ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL\.self_graded \}\);/.test(ans)
+    && /markingLabel: MARKING_LABEL\[m\.marking\]/.test(view);
+};
+/**
+ * K32 (REVISION-01 R2, s8): REUSE FIRST, AND NO AI FOR WHAT IS STORED. A session is filled from saved questions before
+ * anything is written; only a shortfall in a writing mode is generated, never a section and format already written at
+ * this prompt version; a saved set replays with no AI call at all; policy can keep it to saved questions only.
+ */
+const reuseFirst = (src: Src) => {
+  const s = src.get(`${API}/revision/sessions/route.ts`) ?? "", rev = src.get(REV) ?? "";
+  const custom = s.slice(s.indexOf("if (mode === \"custom\") {"), s.indexOf("let chunkIds: string[] | null = null;"));
+  const fill = s.indexOf("let pick = pickQuestions("), gen = s.indexOf("runRevisionQuestions(");
+  return custom.length > 50 && custom.length < 4000 && !/scholarAiRunner|runQuestions|runRevisionQuestions|aiPreflight/.test(custom)
+    && fill > -1 && gen > fill && /if \(pick\.shortfall > 0 && GENERATING_MODES\.includes\(mode\) && scopeSections\.length\)/.test(s)
+    && /if \(policy\.scholarRevisionGeneration === "saved_only"\)/.test(s)
+    && /const plan = planGeneration\(\{ shortfall: pick\.shortfall, chunkIds: scopeSections, formats: kinds, existing \}\);/.test(s)
+    && /export const GENERATING_MODES: readonly RevisionMode\[\] = \["today", "quick", "mock", "flashcards"\];/.test(rev)
+    && /const fresh = pairs\.filter\(p => !input\.existing\.has\(`\$\{p\.chunkId\}\|\$\{p\.kind\}`\)\);/.test(rev);
+};
 const meteredEverywhere = (src: Src) => {
   const gen = src.get(GEN) ?? "", http = src.get(`${LIB}/http.ts`) ?? "";
   return AI_ROUTES.every(([f, runner, call]) => { const s = src.get(f) ?? ""; return s.includes(runner) && call.test(s) && /ai\.refusal\(\)/.test(s); })
@@ -807,6 +861,12 @@ function main() {
     referencesGoverned(REAL));
   ok("K28. Stage 3 item 4: an unsupported answer is withheld with the plain reason and notes-only next steps; the withheld text is never sent; background only where policy allows and it passed its checks",
     withheldPlain(REAL));
+  ok("K30. REVISION-01: a question reaches the browser before it is answered only as the learner view -- no key, rationale or source quote",
+    answersServerSide(REAL));
+  ok("K31. REVISION-01: revision questions are private formative; code marks what it can; an unmatched short answer is labelled AI evaluation or the student's own judgement, never wrong by default",
+    markingHonest(REAL));
+  ok("K32. REVISION-01: reuse first -- a shortfall only is written, never a section and format already written; a saved set replays with no AI; policy can keep to saved questions",
+    reuseFirst(REAL));
   ok("K24. LEARN-01: history holds no conversation, the act route keeps to policy, screens input, records only what was shown, stores no practice question, and the student's context is never grounding",
     learnBounded(REAL));
   ok("K23. upload limits: 413 raises the CHECK and the bucket to 25 MB, the live value stays 10 MB until HQ raises it, and the session is enforced on the server at both steps",
@@ -922,6 +982,15 @@ function main() {
     !assistantShared(plant(ASSIST, "if (findPatientIdentifiers(question).length)", "if (false)"))
     && !assistantShared(plant(ASSIST, "  const study = await scholarRisk(", "  await saveArtefact(ctx.admin, ctx.userId, {} as never);\n  const study = await scholarRisk("))
     && !assistantShared(plant(ASSIST, "label: PERSONAL_AI_LABEL", "label: null")));
+  ok("P48. ⚠ K30 goes red when the learner view carries the rationale, or a route sends a raw question",
+    !answersServerSide(plant(REV, "  const base = { id: q.id, kind: q.kind, stem: q.stem,", "  const base = { id: q.id, kind: q.kind, rationale: q.rationale, stem: q.stem,"))
+    && !answersServerSide(plant(`${API}/revision/sessions/route.ts`, "items: ordered.map(revisionItemView), generated, reused", "items: ordered, generated, reused")));
+  ok("P49. ⚠ K31 goes red when an unmatched short answer is marked wrong, or AI evaluation is recorded as code",
+    !markingHonest(plant(REV, ": { needsJudgement: true };", ": { correct: false, score: 0, marking: \"deterministic\" };"))
+    && !markingHonest(plant(`${API}/revision/answer/route.ts`, "const marking = evaluator ? \"ai_evaluation\" as const : mark.marking;", "const marking = mark.marking;")));
+  ok("P50. ⚠ K32 goes red when a saved set calls AI, or spaced review writes new questions",
+    !reuseFirst(plant(`${API}/revision/sessions/route.ts`, "    await touchRevisionSet(ctx.admin, ctx.userId, set.id);", "    await touchRevisionSet(ctx.admin, ctx.userId, set.id);\n    await aiPreflight(ctx);"))
+    && !reuseFirst(plant(REV, "[\"today\", \"quick\", \"mock\", \"flashcards\"];", "[\"today\", \"quick\", \"mock\", \"flashcards\", \"spaced\"];")));
   ok("P43. ⚠ K26 goes red when a route stops passing the runner, or a generator calls generate() directly",
     !meteredEverywhere(plant(`${API}/questions/route.ts`, ".scholarQuestionsPerRequest, ai.run)", ".scholarQuestionsPerRequest)"))
     && !meteredEverywhere(plant(GEN, "    const r = await run({\n      system: QUESTION_SYSTEM[kind],", "    const r = await generate({\n      system: QUESTION_SYSTEM[kind],")));
