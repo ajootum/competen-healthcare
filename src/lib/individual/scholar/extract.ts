@@ -153,11 +153,12 @@ async function openOfficeZip(buffer: Uint8Array): Promise<{ ok: true; zip: JSZip
 
 /**
  * The Office kind of a ZIP upload, from the parts it holds: a Word document or a PowerPoint presentation.
- * Null for any other ZIP (or an unreadable or unsafe one -- the extractor then says which).
+ * Null for any other ZIP or an unreadable one. `unsafe` carries the screening verdict, so the person is told the
+ * file was not opened and why -- not that it is the wrong kind.
  */
-export async function officeKind(buffer: Uint8Array): Promise<typeof DOCX_MIME | typeof PPTX_MIME | null> {
+export async function officeKind(buffer: Uint8Array): Promise<typeof DOCX_MIME | typeof PPTX_MIME | { unsafe: string } | null> {
   const z = await openOfficeZip(buffer);
-  if (!z.ok) return null;
+  if (!z.ok) return z.reason === "unsafe" ? { unsafe: z.detail } : null;
   if (z.zip.file("word/document.xml")) return DOCX_MIME;
   if (z.zip.file("ppt/presentation.xml")) return PPTX_MIME;
   return null;
@@ -287,10 +288,12 @@ export function sniffMime(bytes: Uint8Array): MaterialMime | null {
   return null;
 }
 
-/** The real kind of an uploaded file: magic bytes, then for a ZIP the Office parts it holds. */
-export async function sniffUpload(bytes: Uint8Array): Promise<MaterialMime | null> {
+/** The real kind of an uploaded file: magic bytes, then for a ZIP the Office parts it holds -- or why it was not opened. */
+export async function sniffUpload(bytes: Uint8Array): Promise<{ mime: MaterialMime | null; unsafe?: string }> {
   const first = sniffMime(bytes);
-  return first === DOCX_MIME ? await officeKind(bytes) : first;
+  if (first !== DOCX_MIME) return { mime: first };
+  const kind = await officeKind(bytes);
+  return kind && typeof kind === "object" ? { mime: null, unsafe: kind.unsafe } : { mime: kind };
 }
 
 export function titleFromFileName(name: string): string {

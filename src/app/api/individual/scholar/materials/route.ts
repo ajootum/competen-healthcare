@@ -50,7 +50,9 @@ export async function POST(req: Request) {
 
   if (bytes.byteLength === 0 || bytes.byteLength > rules.maxBytes) return refuse(400, "That file is empty or too large.", "size");
   // UPLOAD-01 U1: a ZIP is opened (screened first) to tell a Word file from a PowerPoint.
-  const mime = await sniffUpload(bytes);
+  const sniffed = await sniffUpload(bytes);
+  if (sniffed.unsafe) return refuse(422, EXTRACTION_MESSAGE.unsafe, `unsafe:${sniffed.unsafe}`);
+  const mime = sniffed.mime;
   if (mime !== declared) return refuse(400, `That file is not a readable ${rules.describe} file.`, "type_mismatch");
 
   // UPLOAD-01 U1: the same bytes twice are one material. The person is sent to the one they already have.

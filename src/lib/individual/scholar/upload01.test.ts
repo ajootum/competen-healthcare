@@ -17,7 +17,7 @@ describe("U1: PowerPoint, and telling the Office files apart", () => {
       { text: ["Community-acquired pneumonia", "Typical organisms include Streptococcus pneumoniae."], notes: ["Ask about recent travel and contacts."] },
       { text: ["Oxygen is prescribed to a target saturation range."] },
     ]);
-    expect(await sniffUpload(bytes)).toBe(PPTX_MIME);
+    expect(await sniffUpload(bytes)).toEqual({ mime: PPTX_MIME });
     const r = await extractMaterial(PPTX_MIME, bytes);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -31,14 +31,15 @@ describe("U1: PowerPoint, and telling the Office files apart", () => {
   });
 
   it("knows a Word file from a PowerPoint by its parts, not its ZIP header", async () => {
-    expect(await sniffUpload(await tinyDocx(["Oxygen therapy notes."]))).toBe(DOCX_MIME);
+    expect(await sniffUpload(await tinyDocx(["Oxygen therapy notes."]))).toEqual({ mime: DOCX_MIME });
     expect(await officeKind(await tinyPptx([{ text: ["x"] }]))).toBe(PPTX_MIME);
-    expect(await sniffUpload(tinyPdf(["p"]))).toBe(PDF_MIME);
-    expect(await sniffUpload(new TextEncoder().encode("plain notes"))).toBe(TEXT_MIME);
+    expect(await sniffUpload(tinyPdf(["p"]))).toEqual({ mime: PDF_MIME });
+    expect(await sniffUpload(new TextEncoder().encode("plain notes"))).toEqual({ mime: TEXT_MIME });
   });
 
-  it("⚠ refuses a macro-enabled Office file before reading it", async () => {
+  it("⚠ refuses a macro-enabled Office file before reading it -- and the upload's first look already says why", async () => {
     const bytes = await tinyPptx([{ text: ["Slide"] }], { "ppt/vbaProject.bin": "macro" });
+    expect(await sniffUpload(bytes)).toEqual({ mime: null, unsafe: "macros" });
     const r = await extractMaterial(PPTX_MIME, bytes);
     expect(r).toMatchObject({ ok: false, reason: "unsafe", detail: "macros" });
     const d = await extractMaterial(DOCX_MIME, await tinyDocx(["x"]).then(async b => {

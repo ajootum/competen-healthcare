@@ -320,7 +320,7 @@ const upload01Holds = (src: Src) => {
   const mat = src.get(`${API}/materials/route.ts`) ?? "", gen = src.get(GEN) ?? "", mp = src.get(`${PAGES}/[materialId]/page.tsx`) ?? "";
   const ready = src.get(`${PAGES}/ready/page.tsx`) ?? "", topics = src.get(`${API}/topics/route.ts`) ?? "";
   const dup = mat.indexOf("findDuplicate("), ext = mat.indexOf("extractMaterial(mime");
-  return /const mime = await sniffUpload\(bytes\);/.test(mat) && dup > 0 && ext > dup && /status: 409/.test(mat)
+  return /const sniffed = await sniffUpload\(bytes\);/.test(mat) && /if \(sniffed\.unsafe\) return refuse\(422/.test(mat) && dup > 0 && ext > dup && /status: 409/.test(mat)
     && /const quality = extractionQuality\(mime, extraction\.pages, chunks\);/.test(mat) && /chunks, quality,/.test(mat)
     && /status: summary\.partial \? "partial" : "ready"/.test(mat)
     && /outcomes: true,/.test(gen)
@@ -756,6 +756,7 @@ function main() {
     && !uploadGoverned(plant(`${PAGES}/[materialId]/page.tsx`, "contextStamp(", "(() => null)(")));
   ok("P39. ⚠ K22 goes red when the duplicate check moves after extraction, partial is reported as ready, or the no-catalogue absence goes unsaid",
     !upload01Holds(plant(`${API}/materials/route.ts`, 'status: summary.partial ? "partial" : "ready"', 'status: "ready"'))
+    && !upload01Holds(plant(`${API}/materials/route.ts`, "if (sniffed.unsafe) return refuse(422", "if (false) return refuse(422"))
     && !upload01Holds(plant(`${PAGES}/[materialId]/page.tsx`, "const absence = competencyAbsence(learner);", "const absence = null;"))
     && !upload01Holds(plant(`${API}/topics/route.ts`, "findPatientIdentifiers(t)", "[]"))
     && !upload01Holds(plant(GEN, "outcomes: true,", "outcomes: false,")));
