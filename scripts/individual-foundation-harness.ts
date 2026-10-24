@@ -89,8 +89,10 @@ function main() {
   // default 'nurse' set back to null through the boundary helper -- the rule Competen Practice registration
   // keeps (practiceIdentityProfile). No Individual code ever SETS a role, or touches an existing profile.
   const profileWrites = FILES.flatMap(f => [...(SRC.get(f) ?? "").matchAll(/from\("profiles"\)\s*\.(insert|update|upsert|delete)\(([^)]*)\)/g)].map(m => `${f}: ${m[1]}(${m[2]})`));
-  ok("1d. no Individual file writes profiles, except an invitation clearing its own new identity's role to null",
-    profileWrites.length === 1 && profileWrites[0] === "src/lib/individual/invitations.ts: update(individualIdentityProfile()",
+  // JOIN-01: and the Scholar join, for the identity its own registration just created (14c pins the order).
+  ok("1d. no Individual file writes profiles, except an invitation or the Scholar join clearing its own new identity's role to null",
+    profileWrites.length === 2 && profileWrites.includes("src/lib/individual/invitations.ts: update(individualIdentityProfile()")
+      && profileWrites.includes("src/lib/individual/join.ts: update(individualIdentityProfile()"),
     profileWrites.join("; "));
 
   // ── 2. WHAT INDIVIDUAL MAY WRITE, AND WHERE ─────────────────────────────────────────────────────
@@ -116,6 +118,10 @@ function main() {
     "src/lib/individual/commerce.ts": ["individual_checkout.insert", "individual_checkout.update", "individual_membership.insert", "individual_entitlement.insert"],
     // Plans as data, behind hq.individual.commercial.manage (13c). Retired by deactivating -- never deleted.
     "src/lib/individual/plans.ts": ["individual_plan.update", "individual_plan.insert"],
+    // COMPETEN-SCHOLAR-JOIN-01 (migration 403), dark behind individual_self_registration (14a-14b). The person's
+    // own 18+ declaration, and the role-clearing write 1d pins. The membership and the entitlement it activates
+    // are written by grants.ts (selfActivateScholar), still the one writer of gate-3 rows.
+    "src/lib/individual/join.ts": ["profiles.update", "individual_age_declaration.insert"],
   };
   const writes: string[] = [];
   for (const [f, src] of SRC) {
@@ -159,7 +165,7 @@ function main() {
   // adult_confirmed_at/by only, never a period. Its liveness question (where a paid period ends) uses the view.
   const commerceLib = SRC.get("src/lib/individual/commerce.ts") ?? "";
   const commerceLedger = [...commerceLib.matchAll(/from\("individual_entitlement"\)\s*\.select\("([^"]*)"\)/g)].map(m => m[1]);
-  const nonLiveness = commerceLedger.length === 1 && commerceLedger[0] === "adult_confirmed_at, adult_confirmed_by";
+  const nonLiveness = commerceLedger.length === 1 && commerceLedger[0] === "adult_confirmed_at, adult_confirmed_by, adult_declaration_id";
   ok("4c. only the two display readers READ the raw ledger (history, and the HQ lookup) -- every access decision uses the view",
     ledgerReaders.length === 3 && nonLiveness && ledgerReaders.includes("src/lib/individual/commerce.ts")
       && ledgerReaders.includes("src/lib/individual/history.ts") && ledgerReaders.includes("src/lib/individual/grants.ts")
@@ -174,7 +180,11 @@ function main() {
   // AND ONE MORE: a first purchase (P1 Commercial) may come from a signed-in person with no membership yet --
   // the settlement writes it, after payment. 13b pins that route's own gate order.
   const CHECKOUT_ROUTE = "src/app/api/individual/billing/checkout/route.ts";
-  const unguarded = routes.filter(f => f !== ACCEPT_ROUTE && f !== CHECKOUT_ROUTE).filter(f => {
+  // AND THE SCHOLAR JOIN (JOIN-01): registering and activating are done by a person who holds no membership yet.
+  // 14b pins each route's own gate order.
+  const REGISTER_ROUTE = "src/app/api/individual/join/register/route.ts";
+  const ACTIVATE_ROUTE = "src/app/api/individual/join/activate/route.ts";
+  const unguarded = routes.filter(f => ![ACCEPT_ROUTE, CHECKOUT_ROUTE, REGISTER_ROUTE, ACTIVATE_ROUTE].includes(f)).filter(f => {
     const s = SRC.get(f) ?? "";
     const handlers = [...s.matchAll(/export async function (POST|PUT|PATCH|DELETE)\b/g)].length;
     return handlers > 0 && [...s.matchAll(/requireIndividualContext\(/g)].length < handlers;
@@ -195,16 +205,21 @@ function main() {
   const grantImporters = FILES.filter(f => /from "(@\/lib\/individual|\.)\/grants"/.test(SRC.get(f) ?? ""));
   const callersOf = (fn: string) => FILES.filter(f => !f.endsWith("/invitations.ts") && new RegExp(`\\b${fn}\\(`).test(SRC.get(f) ?? ""));
   ok("5c. the grant service is reachable only from the HQ grant routes and, through acceptance, the accept route",
-    grantImporters.length >= 3 && grantImporters.every(f => f.startsWith("src/app/api/hq/individual/grants/") || f === "src/lib/individual/invitations.ts")
+    grantImporters.length >= 3 && grantImporters.every(f => f.startsWith("src/app/api/hq/individual/grants/") || f === "src/lib/individual/invitations.ts" || f === "src/lib/individual/join.ts")
+    && !/grantIndividualAccess/.test(SRC.get("src/lib/individual/join.ts") ?? "")
     && callersOf("acceptIndividualInvitation").join() === ACCEPT_ROUTE
     && callersOf("createIndividualInvitation").join() === "src/app/api/hq/individual/invitations/route.ts"
     && callersOf("revokeIndividualInvitation").join() === "src/app/api/hq/individual/invitations/revoke/route.ts",
     `importers: ${grantImporters.join(", ")}; accept: ${callersOf("acceptIndividualInvitation").join(", ")}`);
 
   // ── 6. SIGNUP STAYS CLOSED ──────────────────────────────────────────────────────────────────────
-  ok("6a. no Individual surface links to /signup or creates an auth user",
-    offenders(/["'`]\/signup|auth\.signUp\(|auth\.admin\.createUser\(/).length === 0,
-    offenders(/["'`]\/signup|auth\.signUp\(|auth\.admin\.createUser\(/).join(", "));
+  // JOIN-01: one exception, behind individual_self_registration (default OFF) -- join.ts's auth.signUp, reached
+  // only from the register route after the flag (14b, 14c). Nothing links to the estate /signup, and nothing
+  // creates a user through the admin API.
+  const signupOffenders = offenders(/["'`]\/signup|auth\.signUp\(|auth\.admin\.createUser\(/).filter(f => f !== "src/lib/individual/join.ts");
+  ok("6a. no Individual surface links to /signup or creates an auth user, except the gated Scholar join",
+    signupOffenders.length === 0 && !/["'`]\/signup|auth\.admin\.createUser\(/.test(SRC.get("src/lib/individual/join.ts") ?? ""),
+    signupOffenders.join(", "));
   const door = ACCESS_DOORS.find(d => d.code === "INDIVIDUAL");
   ok("6b. the public Individual door is still being_built -- the pilot enters through /login", door?.status === "being_built");
   ok("6c. no person-facing Individual API route can create membership or entitlement",
@@ -480,7 +495,7 @@ function main() {
       && /code: "hq\.individual\.commercial\.manage"/.test(readFileSync("src/lib/hq/spaces.ts", "utf8")));
 
   ok("13d. D8 is not relaxed: a paid Scholar period carries forward the recorded HQ confirmation and never invents one",
-    [...commerceLib.matchAll(/adult_confirmed_at:/g)].length === 1 && /adult_confirmed_at: adult\.at, adult_confirmed_by: adult\.by/.test(commerceLib)
+    [...commerceLib.matchAll(/adult_confirmed_at:/g)].length === 1 && /adult_confirmed_at: adult\.at, adult_confirmed_by: adult\.by, adult_declaration_id: adult\.declarationId/.test(commerceLib)
       && /ADULT_CONFIRMATION_REQUIRED/.test(commerceLib));
 
   const practiceGw = readFileSync("src/lib/practice/subscription-gateway.ts", "utf8");
@@ -494,6 +509,52 @@ function main() {
   ok("13f. AI fair use per plan: every Individual quota site passes the plan limit, which can only replace the policy base inside the hard limit",
     quotaCalls.length >= 3 && noPlan.length === 0 && /Math\.min\(INDIVIDUAL_AI_HOURLY_DEFAULT/.test(commerceLib)
       && /plan\.state === "unreadable"/.test(policyLib), noPlan.join(", "));
+
+  // ── 14. COMPETEN-SCHOLAR-JOIN-01 -- DARK, ONE IDENTITY, A RECORDED DECLARATION, CONTEXT WITH HISTORY ──
+  const joinLib = SRC.get("src/lib/individual/join.ts") ?? "";
+  const joinGate = /export async function selfRegistrationEnabled[\s\S]*?individualAppEnabled\(admin\)[\s\S]*?eq\("flag", INDIVIDUAL_SELF_REGISTRATION_FLAG\)[\s\S]*?return data\?\.enabled === true;[\s\S]*?catch \{\s*return false;/.test(joinLib)
+    && /INDIVIDUAL_SELF_REGISTRATION_FLAG = "individual_self_registration"/.test(joinLib);
+  const selfRegFlagWritten = readdirSync("supabase/migrations")
+    .filter(m => /individual_self_registration/.test(readFileSync(`supabase/migrations/${m}`, "utf8").replace(/--.*$/gm, "")));
+  ok("14a. the join is dark by default: BOTH individual_app and individual_self_registration, a failed read is OFF, and no migration writes the flag",
+    joinGate && selfRegFlagWritten.length === 0, selfRegFlagWritten.join(", "));
+
+  const regSrc = SRC.get(REGISTER_ROUTE) ?? "";
+  const actSrc = SRC.get(ACTIVATE_ROUTE) ?? "";
+  const joinPage = SRC.get("src/app/individual/join/page.tsx") ?? "";
+  const startPage = SRC.get("src/app/individual/join/start/page.tsx") ?? "";
+  const accessSrc = SRC.get("src/app/individual/access/page.tsx") ?? "";
+  const expLayout = SRC.get("src/app/individual/(app)/[experience]/layout.tsx") ?? "";
+  ok("14b. every join entry point asks the flag first: register (flag, then session, then body), activate (session, flag, then body), both pages, and the two J1 offers",
+    before(regSrc, "selfRegistrationEnabled(admin)", "auth.getUser()") && before(regSrc, "auth.getUser()", "req.json()")
+      && before(actSrc, "requireIndividualSession()", "selfRegistrationEnabled(s.admin)") && before(actSrc, "selfRegistrationEnabled(s.admin)", "req.json()")
+      && /selfRegistrationEnabled\(admin\)\)\) notFound\(\)/.test(joinPage) && /selfRegistrationEnabled\(admin\)\)\) notFound\(\)/.test(startPage)
+      && /access\.reason === "no_membership" && \(await selfRegistrationEnabled\(admin\)\)/.test(accessSrc)
+      && /experience === "scholar" && \(await selfRegistrationEnabled\(shell\.ctx\.admin\)\)/.test(expLayout));
+
+  const signUpFiles = FILES.filter(f => /auth\.signUp\(/.test(SRC.get(f) ?? ""));
+  ok("14c. one identity: auth.signUp exists only in join.ts, after refusing an existing email; the route refuses a signed-in caller; the new identity holds no estate role",
+    signUpFiles.join() === "src/lib/individual/join.ts" && before(joinLib, 'from("profiles").select("id").eq("email", input.email)', "auth.signUp(")
+      && /if \(user\) return refuse\(409, "ALREADY_AUTHENTICATED"/.test(regSrc)
+      && before(joinLib, "auth.signUp(", "update(individualIdentityProfile())")
+      && callersOf("registerForScholar").filter(f => f !== "src/lib/individual/join.ts").join() === REGISTER_ROUTE, signUpFiles.join(", "));
+
+  const selfAct = grantsLib.slice(grantsLib.indexOf("export async function selfActivateScholar"), grantsLib.indexOf("// ── MEMBERSHIP STATUS"));
+  ok("14d. age: an explicit declaration under the current policy version is recorded first, and a self-activated period rests on it -- never on an HQ confirmation",
+    /body\?\.adultDeclaration !== true/.test(joinLib) && /body\?\.policyVersion !== SCHOLAR_ELIGIBILITY\.policyVersion/.test(joinLib)
+      && before(joinLib, 'from("individual_age_declaration").insert(', "selfActivateScholar(admin")
+      && /adult_confirmed_at: a\.declaredAt, adult_declaration_id: a\.declarationId/.test(selfAct) && !/adult_confirmed_by/.test(selfAct)
+      && /source: "signup"/.test(selfAct) && callersOf("selfActivateScholar").filter(f => f !== "src/lib/individual/grants.ts").join() === "src/lib/individual/join.ts");
+
+  const ctxLib = SRC.get("src/lib/individual/scholar/context.ts") ?? "";
+  const m402 = readFileSync("supabase/migrations/402-individual-scholar-educational-context-history.sql", "utf8");
+  ok("14e. context history is the database's: the app writes only the pointer, and 402's trigger copies every change and refuses a rewrite",
+    /from\("individual_scholar_learner"\)\.upsert\(/.test(ctxLib) && !FILES.some(f => /from\("individual_scholar_learner_context"\)\s*\.(insert|update|upsert|delete)\(/.test(SRC.get(f) ?? ""))
+      && /after insert or update or delete on individual_scholar_learner/.test(m402) && /before update on individual_scholar_learner_context/.test(m402)
+      && /raise exception 'individual_scholar_learner_context is append-only/.test(m402));
+
+  ok("14f. the invitation flow does not depend on self-registration: the accept route never reads the join flag",
+    !/selfRegistrationEnabled|individual_self_registration/.test(SRC.get(ACCEPT_ROUTE) ?? ""));
 
   ok("9g. D10: no Individual code persists AI conversation",
     !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));

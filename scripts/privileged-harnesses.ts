@@ -200,6 +200,15 @@ const STAGING: Listed[] = [
       + "PEND (exit 0, nothing created) until 399 is applied.",
   },
   {
+    file: "scholar-join-harness.ts",
+    note: "COMPETEN-SCHOLAR-JOIN-01 Stage 1 over HTTP: registration (one identity, no estate role), email verification "
+      + "(the confirmation token followed; mailbox delivery PEND), the 18+ declaration and governed context refused then "
+      + "accepted, activation on the declared basis, welcome -> terms -> Upload, context history (402) and the J1 path for "
+      + "an existing member. Needs a staging-pointed dev server at BASE_URL with individual_app ON; never writes that flag. "
+      + "Turns individual_self_registration ON for the run and restores it, and restores the two policy rows it sets. "
+      + "Own harness-join-* identities. PEND (exit 0, nothing created) until 402/403 are applied.",
+  },
+  {
     file: "scholar-intelligence-harness.ts",
     note: "COMPETEN-SCHOLAR-01 S5 over HTTP: the four Learning Intelligence measures (not measured, too little practice, measured "
       + "separately), coverage Not measured until S1/S2, the review log (391) and revision in the Passport as a count. Needs a "
