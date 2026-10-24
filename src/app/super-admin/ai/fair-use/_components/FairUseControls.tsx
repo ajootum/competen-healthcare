@@ -6,13 +6,13 @@ import { useRouter } from "next/navigation";
 // The write half of /super-admin/ai/fair-use (AI-FAIR-USE-01 s12). Every control posts to /api/hq/ai-governance,
 // which re-checks the capability and clamps every value. Nothing here can change a person's balance.
 
-const btn = "inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-[13px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)]";
-const primary = `${btn} bg-teal-700 text-white hover:bg-teal-800`;
-const ghost = `${btn} border border-gray-300 bg-white text-gray-800 hover:bg-gray-50`;
-const input = "rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-[13px] text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700 pointer-coarse:min-h-[var(--cmp-touch-min)]";
+export const btn = "inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-[13px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)]";
+export const primary = `${btn} bg-teal-700 text-white hover:bg-teal-800`;
+export const ghost = `${btn} border border-gray-300 bg-white text-gray-800 hover:bg-gray-50`;
+export const input = "rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-[13px] text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700 pointer-coarse:min-h-[var(--cmp-touch-min)]";
 const TIERS = ["cheap", "reasoning", "heavy"] as const;
 
-function useSend() {
+export function useSend() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -28,7 +28,7 @@ function useSend() {
   }
   return { busy, msg, send };
 }
-function Message({ msg }: { msg: { ok: boolean; text: string } | null }) {
+export function Message({ msg }: { msg: { ok: boolean; text: string } | null }) {
   if (!msg) return null;
   return <p role={msg.ok ? "status" : "alert"} className={`text-[12.5px] ${msg.ok ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-critical)]"}`}>{msg.text}</p>;
 }

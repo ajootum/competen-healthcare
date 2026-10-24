@@ -29,17 +29,26 @@
  *   A11 no allowance figure in code: no literal 4000, 500 or 1000 in the engine, and none bound to an allowance field
  *       in the admin or student surfaces (owner D5)
  *   A12 activities are policy data: a code the published policy does not define is refused (amendment 1)
+ *   A13 who pays follows the workflow (AI-CONSUMPTION-01 s4): a student's own work on the student, platform screening,
+ *       de-duplication, promotion and shared variations on the platform -- promotion never re-charges the student
+ *   A14 (FI) the ledger enforces ownership (421): a person's account only for that person, a budget only while
+ *       active, an institution budget never without its institution and funding, an account a person's xor a budget's
+ *   A15 the owner is decided on the server: student routes run no platform work, and no request input reaches it
  */
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { activityAt, defaultPolicy, resolvePolicy, serviceLevel } from "../src/lib/ai/fair-use-policy";
 import { classifyRisk, resolveRiskPolicy } from "../src/lib/ai/clinical-risk";
 import { PROVISIONAL_ACTIVITIES, PROVISIONAL_RISK } from "./ai-provisional-policy";
+import { ATTRIBUTION } from "../src/lib/ai/consumption";
 
 const F = {
   mig410: "supabase/migrations/410-ai-usage-ledger-and-allowances.sql",
   mig411: "supabase/migrations/411-ai-reconciliation-fx-basis-and-eligibility.sql",
   mig412: "supabase/migrations/412-ai-risk-tiers-and-rate-source.sql",
+  mig420: "supabase/migrations/420-ai-allowance-balance-scale.sql",
+  mig421: "supabase/migrations/421-ai-consumption-ownership.sql",
+  consumption: "src/lib/ai/consumption.ts",
   engine: "src/lib/ai/allowance.ts",
   policy: "src/lib/ai/fair-use-policy.ts",
   admin: "src/lib/ai/fair-use-admin.ts",
@@ -59,9 +68,9 @@ const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"
 const RAW: Src = new Map(Object.values(F).map(f => [f, existsSync(f) ? readFileSync(f, "utf8").replace(/\r\n/g, "\n") : ""]));
 const sqlCode = (s: string) => s.split("\n").filter(l => !l.trim().startsWith("--")).join("\n").toLowerCase();
 /** 410 then 411, comment lines dropped: what the database holds after both. */
-const mig = (src: Src) => [F.mig410, F.mig411, F.mig412].map(f => sqlCode(src.get(f) ?? "")).join("\n");
+const mig = (src: Src) => [F.mig410, F.mig411, F.mig412, F.mig420, F.mig421].map(f => sqlCode(src.get(f) ?? "")).join("\n");
 const code = (src: Src, k: K) => strip(src.get(F[k]) ?? "");
-const HAS_MIG = !!RAW.get(F.mig410) && !!RAW.get(F.mig411) && !!RAW.get(F.mig412);
+const HAS_MIG = !!RAW.get(F.mig410) && !!RAW.get(F.mig411) && !!RAW.get(F.mig412) && !!RAW.get(F.mig421);
 function walk(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).flatMap(n => { const p = join(dir, n); return statSync(p).isDirectory() ? walk(p) : /\.(ts|tsx)$/.test(n) && !/\.test\./.test(n) ? [p.replace(/\\/g, "/")] : []; });
@@ -87,8 +96,8 @@ const checkIdempotent = (src: Src): R => {
   const unique = /create unique index if not exists ux_ai_usage_ledger_request on ai_usage_ledger\(request_id\);/.test(m);
   const r = fn(m, "ai_reserve");
   const retry = (r.match(/select \* into existing from ai_usage_ledger l where l\.request_id = p_request_id;/g) ?? []).length === 2;
-  const refusedBeforeCall = e.indexOf(`r.reason.startsWith("retry")) return { ok: false, error: "duplicate_request"`) > -1
-    && e.indexOf(`r.reason.startsWith("retry")) return { ok: false, error: "duplicate_request"`) < e.indexOf("const out = await generate(");
+  const refusedBeforeCall = e.indexOf(`r.reason.startsWith("retry")) return { refused: "duplicate" }`) > -1
+    && e.indexOf(`r.reason.startsWith("retry")) return { refused: "duplicate" }`) < e.indexOf("const out = await generate(");
   const namespaced = /`\$\{userId\}:\$\{clientId && REQ\.test\(clientId\) \? clientId : crypto\.randomUUID\(\)\}`/.test(e);
   return { ok: unique && retry && refusedBeforeCall && namespaced, detail: `unique ${unique}, retry found before and under the lock ${retry}, known id refused before the provider ${refusedBeforeCall}, namespaced ${namespaced}` };
 };
@@ -117,8 +126,9 @@ const checkNoClientAllowance = (src: Src, all: Src): R => {
 };
 const checkNoEstimate = (src: Src): R => {
   const e = code(src, "engine");
-  const branch = e.slice(e.indexOf("const out = await generate("), e.indexOf("return out;", e.indexOf("const out = await generate(")));
-  const settleOnlyReported = /if \(out\.usage\) \{\s+const s = await settle\(admin, args\.requestId, out\.ok \? out\.model : model, out\.usage\.input, out\.usage\.output/.test(branch)
+  // The one money path (meter), from the provider call to its return.
+  const branch = e.slice(e.indexOf("const out = await generate("), e.indexOf("return { result: out };", e.indexOf("const out = await generate(")));
+  const settleOnlyReported = /if \(out\.usage\) \{\s+const s = await settle\(admin, m\.requestId, out\.ok \? out\.model : model, out\.usage\.input, out\.usage\.output/.test(branch)
     && (branch.match(/settle\(/g) ?? []).length === 1;
   const releaseOnlyUnbilled = /\} else if \(!out\.ok && \(out\.error === "not_configured" \|\| out\.billing === "none"\)\) \{[\s\S]*?admin\.rpc\("ai_release"/.test(branch);
   const unknownWaits = /\} else \{[\s\S]*?admin\.rpc\("ai_mark_unreconciled"/.test(branch) && (branch.match(/admin\.rpc\("ai_release"/g) ?? []).length === 1;
@@ -127,7 +137,8 @@ const checkNoEstimate = (src: Src): R => {
 };
 const checkFailClosed = (src: Src): R => {
   const e = code(src, "engine");
-  const dark = /if \(!\(await aiFairUseEnabled\(admin\)\)\) return generate\(args\.generate\);/.test(e);
+  // Both entry points -- a person's allowance and a budget -- are dark when the flag is off.
+  const dark = (e.match(/if \(!\(await aiFairUseEnabled\(admin\)\)\) return generate\(args\.generate\);/g) ?? []).length === 2;
   const unreadable = e.indexOf(`if (!readable) return { ok: false, error: "unreadable"`) > -1 && e.indexOf(`if (!readable) return { ok: false, error: "unreadable"`) < e.indexOf("const out = await generate(");
   const d = defaultPolicy("scholar");
   const nothing = d.includedCau === 0 && d.reserveCau === 0 && d.maxUnreconciledCau === 0 && Object.keys(d.activities).length === 0
@@ -148,7 +159,7 @@ const checkRisk = (src: Src, classify: Classify, at: typeof activityAt): R => {
   const opt = at(p, "optimised", "teach", b, "high_risk_clinical"), full = at(p, "full", "teach", { ...b, usedCau: 0 }, "high_risk_clinical");
   const floor = !opt.available && opt.refusal === "level_insufficient" && full.tier === "heavy";
   const e = code(src, "engine");
-  const passed = /p_risk_tier: risk!\.tier, p_risk_rule: risk!\.rule,/.test(e) && e.indexOf("classifyRisk(policy.risk") > -1 && e.indexOf("classifyRisk(policy.risk") < e.indexOf("const decision = activityAt(");
+  const passed = /p_risk_tier: m\.risk\.tier, p_risk_rule: m\.risk\.rule,/.test(e) && /risk: risk!,/.test(e) && e.indexOf("classifyRisk(policy.risk") > -1 && e.indexOf("classifyRisk(policy.risk") < e.indexOf("const decision = activityAt(");
   const r = fn(mig(src), "ai_reserve");
   const db = !HAS_MIG || (/v_tier := case when p_risk_tier in \('standard_educational', 'clinical_educational', 'high_risk_clinical'\) then p_risk_tier else 'high_risk_clinical' end;/.test(r)
     && /if v_rank > 1 and not exists \(/.test(r) && /and e\.eligible and ai_risk_rank\(coalesce\(e\.max_risk_tier, 'clinical_educational'\)\) >= v_rank/.test(r)
@@ -199,6 +210,33 @@ const checkActivitiesAreData = (src: Src, resolve: typeof resolvePolicy, at: typ
   return { ok: refused && before && noCatalogue, detail: `unknown refused ${refused}, before any reservation ${before}, no activity list in code ${noCatalogue}` };
 };
 
+// ── COMPETEN-HOLDINGS-AI-CONSUMPTION-01: who pays ──
+type Attribution = Record<string, string>;
+const checkAttribution = (attr: Attribution): R => {
+  const student = ["case.private_generate", "case.private_interact", "case.feedback", "case.live_with_stored"].every(w => attr[w] === "individual");
+  const platform = ["case.candidate_screen", "case.dedupe", "case.promote", "case.shared_variation"].every(w => attr[w] === "platform");
+  const replay = attr["case.replay_stored"] === "none";
+  const institution = attr["case.institution_commission"] === "institution";
+  return { ok: student && platform && replay && institution, detail: `student work on the student ${student}, promotion and screening on the platform ${platform}, replay needs no AI ${replay}, institution commissions on the institution ${institution}` };
+};
+const checkReserveOwnership = (src: Src): R => {
+  const m = mig(src), r = fn(m, "ai_reserve");
+  const person = /if p_actor is null or p_actor is distinct from a\.user_id or p_service is not null then\s+return query select null::uuid, false, 'owner_mismatch'/.test(r);
+  const active = /if not found or b\.status <> 'active' then return query select null::uuid, false, 'budget_suspended'/.test(r);
+  const funded = /and \(owner_type <> 'institution' or \(institution_ref is not null and funding_ref is not null and char_length\(btrim\(funding_ref\)\) >= 5\)\)/.test(m);
+  const xor = /and \(owner_type <> 'individual' or \(user_id is not null and budget_id is null\)\)/.test(m) && /and \(owner_type = 'individual' or \(budget_id is not null and user_id is null\)\)/.test(m);
+  return { ok: !HAS_MIG || (person && active && funded && xor), detail: `a person's account only for that person ${person}, a budget only while active ${active}, no unfunded institution ${funded}, an account is a person's xor a budget's ${xor}` };
+};
+const checkOwnerFromServer = (src: Src, all: Src): R => {
+  // Student routes never run a platform or institution workflow, and nothing passes request input into the owner.
+  const platformWorkflows = ["case.candidate_screen", "case.dedupe", "case.promote", "case.shared_variation", "case.educator_develop", "case.reviewer_assist", "case.institution_commission"];
+  const student = [...all].filter(([f, s]) => /^src\/app\/(api\/)?individual\//.test(f) && platformWorkflows.some(w => s.includes(`"${w}"`))).map(([f]) => f);
+  const fromBody = [...all].filter(([, s]) => { const i = s.indexOf("resolveOwner("); return i > -1 && /body\??\.|searchParams|formData/.test(s.slice(i, s.indexOf(")", s.indexOf("}", i)) + 1)); }).map(([f]) => f);
+  const c = code(src, "consumption");
+  const fromWorkflow = /const rule: OwnerRule = ATTRIBUTION\[workflow\];/.test(c);
+  return { ok: student.length === 0 && fromBody.length === 0 && fromWorkflow, detail: `student routes running platform work: ${student.join(", ")}; request input into the owner: ${fromBody.join(", ")}; owner from the workflow ${fromWorkflow}` };
+};
+
 const plant = (k: K, from: string, to: string): Src => {
   const s = RAW.get(F[k]) ?? ""; const n = s.replace(from, to);
   if (n === s) throw new Error(`plant did not apply in ${F[k]}: ${from.slice(0, 70)}`);
@@ -207,7 +245,7 @@ const plant = (k: K, from: string, to: string): Src => {
 const red = (n: string, r: R) => ok(`P. ${n} goes RED`, !r.ok, "the check passed on a planted violation");
 const run = (n: string, r: R) => ok(n, r.ok, r.detail);
 
-console.log("AI FAIR USE HARNESS (COMPETEN-AI-FAIR-USE-01 and IND-007 D1, migrations 410, 411 and 412)\n");
+console.log("AI FAIR USE HARNESS (COMPETEN-AI-FAIR-USE-01, IND-007 D1 and AI-CONSUMPTION-01, migrations 410 to 421)\n");
 const missing = Object.entries(F).filter(([k, f]) => !k.startsWith("mig") && !RAW.get(f)).map(([, f]) => f);
 ok("0. every pinned file exists", missing.length === 0, missing.join(", "));
 if (HAS_MIG) {
@@ -224,38 +262,50 @@ run("A7. clinical risk (D1): subject decides, unknown is high, no downgrade belo
 run("A8. the admin door: gated first, POST only, no credential, no activation", checkAdminDoor(RAW));
 run("A11. no allowance figure in code", checkNoFigures(RAW));
 run("A12. activities are policy data: an undefined activity is refused before any reservation", checkActivitiesAreData(RAW, resolvePolicy, activityAt));
+run("A13. who pays follows the workflow: student work on the student, promotion and screening on the platform", checkAttribution(ATTRIBUTION));
+run("A14. (FI) the ledger enforces ownership: a person's account only for that person, a budget only while active, no unfunded institution", checkReserveOwnership(RAW));
+run("A15. the owner is decided on the server: student routes run no platform work, no request input reaches the owner", checkOwnerFromServer(RAW, ALL));
 console.log("");
 if (HAS_MIG) {
-  red("A1 (FI) concurrent overspend: the row lock removed", checkLock(plant("mig412", "  select * into a from ai_allowance_account where id = p_account for update;", "  select * into a from ai_allowance_account where id = p_account;"), ALL));
+  red("A1 (FI) concurrent overspend: the row lock removed", checkLock(plant("mig421", "  select * into a from ai_allowance_account where id = p_account for update;", "  select * into a from ai_allowance_account where id = p_account;"), ALL));
   red("A1 (FI) an app-side balance write", checkLock(RAW, new Map([...ALL, ["src/lib/ai/evil.ts", `admin.from("ai_allowance_account").update({ used_cau: 0 })`]])));
   red("A2 (FI) the unique request id dropped", checkIdempotent(plant("mig410", "create unique index if not exists ux_ai_usage_ledger_request on ai_usage_ledger(request_id);", "create index if not exists ix_ai_usage_ledger_request on ai_usage_ledger(request_id);")));
   red("A3 (FI) a double settle", checkSettleOnce(plant("mig411", "  if l.status not in ('reserved', 'unreconciled') then raise exception 'ai_settle: request % is already %', p_request_id, l.status; end if;\n", "")));
   red("A9 a price rewritten", checkHistory(plant("mig411", "  select * into pr from ai_price where id = l.price_id;", "  select * into pr from ai_price_at(l.provider, l.model, now());")));
   red("A9 settled at today's reference rate", checkHistory(plant("mig411", "    select per_usd into v_rate from ai_fx_rate where id = l.fx_rate_id;", "    select per_usd into v_rate from ai_fx_rate where currency = 'UGX' and effective_to is null;")));
   red("A10 (FI) the buffer charged to the allowance", checkTwoRecords(plant("mig411", "    v_cau := round(v_cost * v_rate / v_basis, 6);", "    v_cau := round(v_cost * v_rate * (1 + l.reserve_buffer_pct / 100) / v_basis, 6);")));
-  red("A10 (FI) a settled record left rewritable", checkTwoRecords(plant("mig412", "  if old.status not in ('reserved', 'unreconciled') or (old.status = 'unreconciled' and new.status = 'reserved')", "  if (old.status = 'unreconciled' and new.status = 'reserved')")));
-  red("A7 an unknown tier let through as standard in ai_reserve", checkRisk(plant("mig412", "then p_risk_tier else 'high_risk_clinical' end;", "then p_risk_tier else 'standard_educational' end;"), classifyRisk, activityAt));
-  red("A7 the tier eligibility check removed from ai_reserve", checkRisk(plant("mig412", "  if v_rank > 1 and not exists (", "  if false and not exists ("), classifyRisk, activityAt));
+  red("A10 (FI) a settled record left rewritable", checkTwoRecords(plant("mig421", "  if old.status not in ('reserved', 'unreconciled') or (old.status = 'unreconciled' and new.status = 'reserved')", "  if (old.status = 'unreconciled' and new.status = 'reserved')")));
+  red("A7 an unknown tier let through as standard in ai_reserve", checkRisk(plant("mig421", "then p_risk_tier else 'high_risk_clinical' end;", "then p_risk_tier else 'standard_educational' end;"), classifyRisk, activityAt));
+  red("A7 the tier eligibility check removed from ai_reserve", checkRisk(plant("mig421", "  if v_rank > 1 and not exists (", "  if false and not exists ("), classifyRisk, activityAt));
   red("A1 (FI) the row lock removed from 411's superseded copy is NOT what runs", checkLock(plant("mig411", "  select * into a from ai_allowance_account where id = p_account for update;", "  select * into a from ai_allowance_account where id = p_account;"), ALL).ok
     ? { ok: false, detail: "" } as R : { ok: true, detail: "the check read a superseded definition" } as R);
   red("A5 (FI) a stale hold released as free", checkNoEstimate(plant("mig411", "    perform ai_mark_unreconciled(r.request_id, 'expired');", "    perform ai_release(r.request_id, 'expired');")));
 }
-red("A2 (FI) a known id sent to the provider again", checkIdempotent(plant("engine", `  if (typeof r?.reason === "string" && r.reason.startsWith("retry")) return { ok: false, error: "duplicate_request", standing };\n`, "")));
+red("A2 (FI) a known id sent to the provider again", checkIdempotent(plant("engine", `  if (typeof r?.reason === "string" && r.reason.startsWith("retry")) return { refused: "duplicate" };\n`, "")));
 red("A4 (FI) a client-sent activity through the assistant route", checkNoClientAllowance(plant("assistant", "mode: typeof body?.mode === \"string\" ? body.mode as AssistantMode : null, question,", "mode: typeof body?.mode === \"string\" ? body.mode as AssistantMode : null, question, activity: body.activity,"), ALL));
 red("A4 (FI) the engine metering a client-chosen activity", checkNoClientAllowance(plant("personal", "activity: MODE_ACTIVITY[mode], requestId: r.requestId,", "activity: (r as any).activity ?? MODE_ACTIVITY[mode], requestId: r.requestId,"), ALL));
 red("A4 (FI) a route calling the money functions itself", checkNoClientAllowance(RAW, new Map([...ALL, ["src/app/api/individual/evil/route.ts", `await admin.rpc("ai_mark_unreconciled", {})`]])));
-red("A5 (FI) settled on the estimate", checkNoEstimate(plant("engine", `    const { error } = await admin.rpc("ai_mark_unreconciled", { p_request_id: args.requestId, p_outcome: "timeout" });`,
-  `    const { error } = { error: !(await settle(admin, args.requestId, model, maxInputTokens(args.generate.system, args.generate.user), maxOut, "timeout")) };`)));
+red("A5 (FI) settled on the estimate", checkNoEstimate(plant("engine", `    const { error } = await admin.rpc("ai_mark_unreconciled", { p_request_id: m.requestId, p_outcome: "timeout" });`,
+  `    const { error } = { error: !(await settle(admin, m.requestId, model, maxInputTokens(m.generate.system, m.generate.user), maxOut, "timeout")) };`)));
 red("A5 (FI) an unknown charge released as free", checkNoEstimate(plant("engine", `  } else if (!out.ok && (out.error === "not_configured" || out.billing === "none")) {`, `  } else if (!out.ok) {`)));
 red("A6 metering on with no flag check", checkFailClosed(plant("engine", "  if (!(await aiFairUseEnabled(admin))) return generate(args.generate);\n  const { policy, readable }", "  const { policy, readable }")));
 red("A7 Teach Me on medication safety classified as standard (by activity name)", checkRisk(RAW, (pol, sub, floor) => sub.text.toLowerCase().startsWith("teach me") ? { tier: "standard_educational", rule: "activity:teach", reason: "" } : classifyRisk(pol, sub, floor), activityAt));
 red("A7 an unknown subject treated as standard", checkRisk(RAW, (pol, sub, floor) => { const d = classifyRisk(pol, sub, floor); return d.rule.startsWith("unknown:") ? { ...d, tier: "standard_educational" } : d; }, activityAt));
 red("A7 a downgrade below the risk tier's model floor", checkRisk(RAW, classifyRisk, (p, l, c, b) => activityAt(p, l, c, b)));
-red("A7 the engine reserving at standard whatever the subject", checkRisk(plant("engine", "p_risk_tier: risk!.tier, p_risk_rule: risk!.rule,", "p_risk_tier: \"standard_educational\", p_risk_rule: risk!.rule,"), classifyRisk, activityAt));
+red("A7 the engine reserving at standard whatever the subject", checkRisk(plant("engine", "p_risk_tier: m.risk.tier, p_risk_rule: m.risk.rule,", "p_risk_tier: \"standard_educational\", p_risk_rule: m.risk.rule,"), classifyRisk, activityAt));
 red("A8 an admin door that activates metering", checkAdminDoor(plant("adminRoute", "    default:\n      return refuse(400, \"Unknown action\");", "    case \"activate\": await ctx.admin.from(\"practice_platform_flags\").upsert({ flag: \"ai_fair_use\", enabled: true }); return NextResponse.json({});\n    default:\n      return refuse(400, \"Unknown action\");")));
 red("A11 an allowance hard-coded in the engine", checkNoFigures(plant("policy", "export const CAU_MAX = 1_000_000;", "export const CAU_MAX = 1_000_000;\nconst PILOT_INCLUDED = 4000;")));
 red("A11 a reserve default bound in the admin surface", checkNoFigures(plant("adminControls", `{field("Essential reserve (CAU), hard cap", p.reserveCau, v => setP({ ...p, reserveCau: v ?? 0 }))}`, `{field("Essential reserve (CAU), hard cap", p.reserveCau, v => setP({ ...p, reserveCau: v ?? 500 }))}`)));
 red("A11 a window cap in the engine", checkNoFigures(plant("engine", "export const AI_FAIR_USE_FLAG = \"ai_fair_use\";", "export const AI_FAIR_USE_FLAG = \"ai_fair_use\";\nconst WINDOW = 1000;")));
+red("A13 promotion charged to the student", checkAttribution({ ...ATTRIBUTION, "case.promote": "individual" }));
+red("A13 a student's private case charged to the platform", checkAttribution({ ...ATTRIBUTION, "case.private_generate": "platform" }));
+red("A15 a student route running platform screening", checkOwnerFromServer(RAW, new Map([...ALL, ["src/app/api/individual/scholar/evil/route.ts", `await resolveOwner(admin, "case.candidate_screen", "scholar", { userId: ctx.userId })`]])));
+red("A15 a browser-sent owner", checkOwnerFromServer(RAW, new Map([...ALL, ["src/app/api/hq/evil/route.ts", `await resolveOwner(admin, body.workflow, "scholar", { userId: ctx.userId, institutionBudgetCode: body.budget })`]])));
+if (HAS_MIG) {
+  red("A14 (FI) another person's account chargeable", checkReserveOwnership(plant("mig421", "    if p_actor is null or p_actor is distinct from a.user_id or p_service is not null then", "    if false then")));
+  red("A14 (FI) a suspended budget chargeable", checkReserveOwnership(plant("mig421", "    if not found or b.status <> 'active' then return query select null::uuid, false, 'budget_suspended', null::numeric; return; end if;", "")));
+  red("A14 an institution budget without funding", checkReserveOwnership(plant("mig421", "     and (owner_type <> 'institution' or (institution_ref is not null and funding_ref is not null and char_length(btrim(funding_ref)) >= 5))\n", "")));
+}
 red("A12 an undefined activity served", checkActivitiesAreData(RAW, resolvePolicy, (p, l, c, b) => { const d = activityAt(p, l, c, b); return d.refusal === "unknown_activity" ? { available: true, via: "included", tier: "reasoning", refusal: null, reason: null } : d; }));
 
 console.log(fails.length ? `\nRED -- ${pass} passed, ${fails.length} failed` : `\nALL GREEN -- ${pass} passed, 0 failed`);
