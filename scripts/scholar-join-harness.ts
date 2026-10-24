@@ -36,6 +36,11 @@ import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { INDIVIDUAL_APP_FLAG } from "../src/lib/individual/gate";
 import { INDIVIDUAL_SELF_REGISTRATION_FLAG, SCHOLAR_ELIGIBILITY } from "../src/lib/individual/join";
+import { isProgrammeRefusal, listProgrammesForHq, saveProgramme, validateProgramme } from "../src/lib/individual/programme-admin";
+import { loadJoinOptions } from "../src/lib/individual/scholar/context";
+import { loadIndividualPolicy } from "../src/lib/individual/policy";
+
+const HARNESS_PROGRAMME = "zz-harness-join-programme";
 
 loadEnvConfig(process.cwd());
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -87,6 +92,9 @@ async function cleanup() {
   const { data } = await admin.from("profiles").select("id").like("email", "harness-join-%@competen.test");
   for (const r of (data ?? []) as any[]) await removeUser(r.id);
   for (const email of Object.values(FIX)) { const u = await findUser(email); if (u) await removeUser(u.id); }
+  // The fixture programme of section G: links first, then the row (a harness fixture, never a real programme).
+  await admin.from("individual_scholar_programme_framework").delete().eq("programme_code", HARNESS_PROGRAMME);
+  await admin.from("individual_scholar_programme").delete().eq("code", HARNESS_PROGRAMME);
 }
 
 // ── HTTP with a cookie jar (the IND-ACCESS-001 harness pattern) ──
@@ -289,6 +297,33 @@ async function main() {
     const twice = await send("POST", "/api/individual/join/activate", { programme: programme.code, level: "year-1", adultDeclaration: true, policyVersion: SCHOLAR_ELIGIBILITY.policyVersion }, pj);
     const proEnt2 = await admin.from("individual_entitlement").select("id").eq("user_id", proId).eq("experience_code", "scholar");
     ok("E3. activating again is reported, not duplicated", twice.status === 200 && twice.json?.alreadyLive === true && (proEnt2.data ?? []).length === 1);
+
+    // ── G. PROGRAMME ADMINISTRATION (library level, the code the HQ route calls) ──
+    const { data: shared } = await admin.from("frameworks").select("id").is("hospital_id", null).eq("is_active", true).eq("pub_status", "published").limit(1);
+    const fw = (shared ?? [])[0]?.id ? String((shared ?? [])[0].id).toLowerCase() : null;
+    const draft = validateProgramme({ code: HARNESS_PROGRAMME, label: "Harness Programme", profession: "Nursing", country: "ug", level: "Diploma", active: true,
+      frameworks: fw ? [{ frameworkId: fw, layer: "profession" }] : [] });
+    const created = isProgrammeRefusal(draft) ? draft : await saveProgramme(admin, draft);
+    const hq1 = await listProgrammesForHq(admin);
+    const mine = hq1.ok ? hq1.programmes.find(p => p.code === HARNESS_PROGRAMME) : null;
+    ok("G1. HQ creates a programme with its catalogue link, no SQL: the row and the link exist, country normalised",
+      created.ok === true && !!mine && mine.country === "UG" && mine.is_active && (!fw || mine.frameworks.some(f => String(f.framework_id).toLowerCase() === fw && f.layer === "profession")),
+      JSON.stringify({ created, mine }));
+    if (!fw) pend("G1 catalogue link", "no shared, active, published framework on this project to link.");
+    const offered1 = await loadJoinOptions(admin, await loadIndividualPolicy(admin));
+    ok("G2. a new active programme is offered at join (no published restriction)", offered1.ok && offered1.options.programmes.some(p => p.code === HARNESS_PROGRAMME));
+    const notShared = validateProgramme({ code: HARNESS_PROGRAMME, label: "Harness Programme", profession: "Nursing", frameworks: [{ frameworkId: "00000000-0000-4000-8000-000000000000", layer: "profession" }] });
+    const refusedLink = isProgrammeRefusal(notShared) ? notShared : await saveProgramme(admin, notShared);
+    ok("G3. a link to a catalogue that is not shared and published is refused, and nothing changes", refusedLink.ok === false && (refusedLink as any).status === 422);
+    const retire = validateProgramme({ code: HARNESS_PROGRAMME, label: "Harness Programme (renamed)", profession: "Nursing", country: "UG", level: "Diploma", active: false, frameworks: [] });
+    const retired = isProgrammeRefusal(retire) ? retire : await saveProgramme(admin, retire);
+    const hq2 = await listProgrammesForHq(admin);
+    const after2 = hq2.ok ? hq2.programmes.find(p => p.code === HARNESS_PROGRAMME) : null;
+    const offered2 = await loadJoinOptions(admin, await loadIndividualPolicy(admin));
+    ok("G4. editing renames and drops the link; retiring keeps the row (never deleted) and stops it being offered",
+      retired.ok === true && (retired as any).before?.is_active === true && !!after2 && after2.label === "Harness Programme (renamed)" && !after2.is_active
+        && after2.frameworks.length === 0 && offered2.ok && !offered2.options.programmes.some(p => p.code === HARNESS_PROGRAMME),
+      JSON.stringify({ after2 }));
 
     // ── F. OFF AGAIN ──
     await admin.from("practice_platform_flags").delete().eq("flag", INDIVIDUAL_SELF_REGISTRATION_FLAG);

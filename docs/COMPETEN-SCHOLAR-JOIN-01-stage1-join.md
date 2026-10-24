@@ -145,14 +145,14 @@ The 403 rollback should be refused, and that refusal is correct, if a self-decla
 | **Terms and privacy** | The D2 terms gate with versions; Scholar AI consent is separate; uploads are private. | — | Unchanged and reused. The gate appears on first entry to Scholar. **Done; staging W2, W3.** |
 | **Welcome** | `/individual/welcome` with a primary-experience choice. | An upload-first action. | When the welcome continues into Scholar, its primary action is "Upload my notes", leading to `/individual/scholar/study#upload`. **Done; staging W1.** |
 | **Commercial integration** | P1 Commercial (#48), dark. | — | Self-activation writes the 399 `source` and `plan_code`. Commerce carries a self-declared basis forward as recorded, never upgrading it. **Done.** |
-| **No-code configuration** | CONFIG-002/WCE Individual policy page. | Programmes offered, levels, institutions and onboarding fields. | Four new policies on the existing page, versioned, audited and rolled back by WCE, with codes checked against active programme rows. No new engine. **Done; config harness 36/36; staging A1 reads them.** Creating a brand-new programme *row* (387) still has no UI; see the gap below. |
+| **No-code configuration** | CONFIG-002/WCE Individual policy page. | Programmes offered, levels, institutions and onboarding fields. | Four new policies on the existing page, versioned, audited and rolled back by WCE, with codes checked against active programme rows. No new engine. **Done; config harness 41/41; staging A1 reads them.** Programmes themselves: see §6. |
 
 **Answers to the five questions:**
 
 1. **Is it functional?** Yes. The full journey runs end to end on staging: Get Started → Create Account → Verify → Context → Activate → Welcome → Terms → Upload, plus a later change of context and the J1 path for an existing member.
 2. **Is it implemented?** Yes: J1, J2 and J3, migrations 402 and 403, four governed policies, harness group 14, a staging journey harness, unit tests, and rollbacks rehearsed on staging.
 3. **Are there blockers?** None in the code. Before production activation, the owner and legal need to decide the items below.
-4. **Does it work on staging?** Yes: 28/28, with 2 PENDs (the confirm-email setting and mailbox delivery). 402 and 403 are applied and rehearsed.
+4. **Does it work on staging?** Yes: 32/32 including programme administration (§6), with 2 PENDs (the confirm-email setting and mailbox delivery). 402 and 403 are applied and rehearsed.
 5. **Is it ready for acceptance?** Yes for staging acceptance. Production is not authorised and depends on the list below.
 
 ### Production activation dependencies (exact)
@@ -168,11 +168,43 @@ The 403 rollback should be refused, and that refusal is correct, if a self-decla
 4. **`individual_app` ON in production** (Individual activation), a separate owner GO.
 5. **Real-mailbox proof of the confirmation email**, and that the production auth redirect allowlist includes `/auth/callback?next=/individual/join/start`. If it does not, GoTrue falls back to the Site URL and the person signs in manually; the flow still works, but it is a worse experience.
 6. **Scholar legal documents published**, so the D2 gate has versions in production (the staging test versions are not documents).
-7. **HQ configuration in production:** programmes offered, levels and institutions on the Individual policy page.
+7. **HQ configuration in production:** programmes and their catalogues on the Scholar programmes page; programmes offered, levels and institutions on the Individual policy page.
 
 ### Remaining material risks
 
 - **Evidence model.** Self-declared age is not verified age. It is recorded and exclusive of HQ confirmation, but it is the person's word. The owner and legal must accept this.
-- **Programme rows have no admin UI.** HQ governs which programmes are offered and their levels, but creating a new 387 programme row (and its framework map) is still a seeded data act.
 - **Staging auth auto-confirms email,** unlike production, so a confirm-ON sign-up has not been exercised end to end on a live project.
 - **A self-declared membership is a new route into Individual** alongside invitations and, later, purchase. It is dark today; opening it is decision 3 above.
+
+## 6. Programme administration (Stage 1 acceptance: remaining development)
+
+Owner acceptance, 2026-10-24: Stage 1 is accepted for development and staging. The remaining development was no-code programme administration: create, edit, retire and govern programmes, including profession, levels and catalogue relationships, with no SQL and no parallel engine.
+
+**Built:**
+
+| Piece | What it does |
+|---|---|
+| `/super-admin/individual/programmes` | HQ page, behind `hq.individual.config.manage`, the right that governs the Individual policy (migration 376). It lists every programme (active or deactivated) with profession, country, qualification and its catalogue links by layer, and has create and edit forms. It links to and from the Individual policy page. Its route-map entry is in `spaces.ts`. |
+| `GET/POST /api/hq/individual/programmes` | Behind the same right. It works whether or not Individual is switched on, like the policy route, so HQ can prepare programmes before activation. **Every save is audited** in `audit_log` with the programme as it was before and after (`individual_scholar_programme_created`, `_changed` or `_retired`). |
+| `src/lib/individual/programme-admin.ts` | The one writer of `individual_scholar_programme` and `individual_scholar_programme_framework`. Validation mirrors every CHECK in 387 and 389: code shape, label, profession, two-letter country, qualification, the five layers from S1 `COMPETENCY_LAYERS`, and no duplicate links. A catalogue link may name only a **shared, active, published** framework, checked on write and again by Scholar on every read. Links are replaced exactly. **A programme is never deleted:** it is retired by deactivation, its code is fixed, and learners and their 402 history keep its name. |
+
+**Reuse, not a new engine:**
+- **Authority:** the existing HQ capability and gate.
+- **Audit:** `audit_log` with before and after values.
+- **Levels:** stay in the versioned, rolled-back WCE Individual policy (`scholar_programme_levels`), next to programmes offered, institutions and fields.
+- **Programmes:** they are **rows**, because the competency mapping and every learner keep a typed foreign key to the code. A programme is therefore administered as governed data with an audited before and after, not as a WCE setting.
+
+**Verification:**
+- **Unit tests:** `programme-admin.test.ts` (6).
+- **Foundation harness: 74/74.**
+  - New check 14g: only the HQ route saves, both handlers check the capability, every save is audited, programmes are never deleted, and links go to shared published catalogues only.
+  - 2a names the writer, with its reason.
+  - Proven red, then restored: a planted programme delete, and an ungated GET.
+- **Config harness 41/41.** G5 knows the new door.
+- **scholar-learning 110/110.** K1 still holds: the programme tables remain read-only for Scholar code. That is why the writer sits outside the Scholar store.
+- **Staging, `scholar-join-harness` section G (32/32 overall):**
+  - G1: create a programme with its catalogue link;
+  - G2: a new active programme is offered at join;
+  - G3: a link to a catalogue that is not shared and published is refused, and nothing changes;
+  - G4: rename and drop the link, then retire it: the row is kept and is no longer offered.
+- **Not covered:** the HQ page was not rendered with a signed-in administrator on staging; `next build` compiles it.

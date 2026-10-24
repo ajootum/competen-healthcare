@@ -122,6 +122,11 @@ function main() {
     // own 18+ declaration, and the role-clearing write 1d pins. The membership and the entitlement it activates
     // are written by grants.ts (selfActivateScholar), still the one writer of gate-3 rows.
     "src/lib/individual/join.ts": ["profiles.update", "individual_age_declaration.insert"],
+    // JOIN-01 programme administration (owner ruling CONFIGURATION): the one writer of the Scholar programme rows
+    // and their catalogue links, reached only from the HQ programmes route behind hq.individual.config.manage
+    // (14g). Never a programme delete -- a programme is retired by deactivation. Kept out of the Scholar store on
+    // purpose: scholar-learning K1 keeps those configuration tables read-only for Scholar code.
+    "src/lib/individual/programme-admin.ts": ["individual_scholar_programme.update", "individual_scholar_programme.insert", "individual_scholar_programme_framework.delete", "individual_scholar_programme_framework.upsert"],
   };
   const writes: string[] = [];
   for (const [f, src] of SRC) {
@@ -553,6 +558,17 @@ function main() {
     /export async function writeLearnerContext[\s\S]*?from\("individual_scholar_learner"\)\s*\.upsert\(/.test(ctxLib) && !FILES.some(f => /from\("individual_scholar_learner_context"\)\s*\.(insert|update|upsert|delete)\(/.test(SRC.get(f) ?? ""))
       && /after insert or update or delete on individual_scholar_learner/.test(m402) && /before update on individual_scholar_learner_context/.test(m402)
       && /raise exception 'individual_scholar_learner_context is append-only/.test(m402));
+
+  const progAdmin = SRC.get("src/lib/individual/programme-admin.ts") ?? "";
+  const progRoute = SRC.get("src/app/api/hq/individual/programmes/route.ts") ?? "";
+  const progCallers = FILES.filter(f => f !== "src/lib/individual/programme-admin.ts" && /\bsaveProgramme\(/.test(SRC.get(f) ?? ""));
+  ok("14g. programme administration: only the HQ programmes route saves, behind hq.individual.config.manage for every handler, every save is audited, and no programme row is ever deleted",
+    progCallers.join() === "src/app/api/hq/individual/programmes/route.ts"
+      && [...progRoute.matchAll(/export async function (GET|POST)\(/g)].length === 2
+      && [...progRoute.matchAll(/hqApiGate\(\["hq\.individual\.config\.manage"\]\);\s*if \(isHqRefusal\(ctx\)\) return ctx;/g)].length === 2
+      && before(progRoute, "saveProgramme(", 'from("audit_log").insert(')
+      && !/from\("individual_scholar_programme"\)\s*\.delete\(/.test(progAdmin)
+      && /\.eq\("is_active", true\)\.eq\("pub_status", "published"\)/.test(progAdmin), progCallers.join(", "));
 
   ok("14f. the invitation flow does not depend on self-registration: the accept route never reads the join flag",
     !/selfRegistrationEnabled|individual_self_registration/.test(SRC.get(ACCEPT_ROUTE) ?? ""));

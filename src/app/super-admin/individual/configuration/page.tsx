@@ -90,6 +90,10 @@ export default async function IndividualPolicyPage() {
           Limits and options for Competen Scholar and Competen Professional. Save a draft, then publish: a value takes effect when
           its version is published. Every limit has a fixed range that this page cannot change.
         </p>
+        <p className="mt-1 text-sm text-gray-600">
+          The Scholar study programmes themselves, and the catalogues each learns against, are on the{" "}
+          <a href="/super-admin/individual/programmes" className="font-semibold underline">Scholar programmes</a> page.
+        </p>
         {/* Owner ruling (CONFIG-002, 2026-10-23): policy takes effect upon governed publication, with version
             and audit history. Scheduled effective dates were deferred (no migration 377), and legal effective
             dates are a separate matter, not this page. */}
