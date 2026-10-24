@@ -9,6 +9,7 @@ import { rankChunks, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import {
   EXPLAIN_REFUSAL, SUPPLEMENTARY_WITHHELD, describeViolations, isExplainMode, passageCitation, passageTag, runExplain, type ExplainMode, type TutorTurn,
 } from "@/lib/individual/scholar/generation";
+import { loadTutorContext } from "@/lib/individual/scholar/competency-view";
 import { AI_LABEL, QUESTION_MAX, RETRIEVAL_LIMIT, SUPPLEMENTARY_LABEL, TUTOR_MAX_TURNS } from "@/lib/individual/scholar/config";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -69,9 +70,11 @@ export async function POST(req: Request) {
   const pre = await aiPreflight(ctx);
   if (pre) return pre;
 
-  const r = await runExplain(ctx.userId, question, passages, mode, history);
+  // P1: the tutor sees the student's own study context, assembled now from their rows (never stored, never grounding).
+  const learnerContext = mode === "tutor" ? await loadTutorContext(ctx.admin, ctx.userId, passages.map(p => p.chunkId)) : null;
+  const r = await runExplain(ctx.userId, question, passages, mode, history, learnerContext);
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_explain", null, {
-    chunk_ids: passages.map(p => p.chunkId), question_chars: question.length, mode, tutor_turns: history.length,
+    chunk_ids: passages.map(p => p.chunkId), question_chars: question.length, mode, tutor_turns: history.length, learner_context: learnerContext !== null,
     outcome: r.ok ? (r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,
     supplementary: r.ok && r.supplementary ? (r.supplementary.ok ? "shown" : `withheld:${r.supplementary.reason}`) : null,
     model: r.ok ? r.model : null, prompt_version: r.ok ? r.promptVersion : null,
