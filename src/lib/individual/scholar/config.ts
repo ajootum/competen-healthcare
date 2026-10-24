@@ -112,6 +112,9 @@ export const PROMPT_VERSIONS = {
   // COMPETEN-SCHOLAR-REVISION-01 R2: revision questions of the 416 kinds, one prompt per kind, on the question rules.
   // v2: answers and rationale in the passage's own words; [] when a kind does not fit; a matching item only with three pairs.
   revision: "scholar-revision-v2",
+  // COMPETEN-SCHOLAR-CLINICAL-REASONING-01: a private case drafted from the notes, and AI feedback on written reasoning.
+  caseBlueprint: "scholar-case-blueprint-v1",
+  caseReasoning: "scholar-case-reasoning-v1",
 } as const;
 
 // ── STAGE 4: REVISION ── COMPETEN-SCHOLAR-REVISION-01 (owner GO 2026-10-24) ─────────────────────────────────────
@@ -141,6 +144,22 @@ export type RevisionDifficulty = (typeof REVISION_DIFFICULTIES)[number];
 export const REVISION_QUANTITY_MAX = 50;
 /** Most AI generation calls one revision session may make to fill its shortfall. */
 export const REVISION_GENERATION_CALLS_MAX = 8;
+// ── STAGE 5A: CLINICAL REASONING ── COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (owner GO 2026-10-25) ───────────────────
+export const CASE_CONTEXTS = ["general", "medical", "surgical", "paediatric", "maternal", "emergency", "critical_care"] as const;
+export type CaseContext = (typeof CASE_CONTEXTS)[number];
+export const CASE_CONTEXT_LABEL: Record<CaseContext, string> = {
+  general: "General", medical: "Medical", surgical: "Surgical", paediatric: "Paediatric", maternal: "Maternal health", emergency: "Emergency", critical_care: "Critical care",
+};
+export const CASE_ENTRIES = ["notes", "competency", "library", "surprise"] as const;
+export type CaseEntry = (typeof CASE_ENTRIES)[number];
+export const CASE_ENTRY_LABEL: Record<CaseEntry, string> = {
+  notes: "Generate a case from my notes", competency: "Practise a competency", library: "Choose an existing case", surprise: "Surprise me",
+};
+export const CASE_DIMENSION_LABEL: Record<string, string> = {
+  recognition: "Recognition", interpretation: "Interpretation", prioritisation: "Prioritisation", decision: "Decision-making", reassessment: "Reassessment", escalation: "Communication and escalation",
+};
+export const PRIVATE_CASE_LABEL = "Practice case written by AI from your notes · formative simulation, not a clinically reviewed case";
+export const LIBRARY_CASE_LABEL = "Governed library case · clinically approved for this exact version · formative simulation";
 export const MOCK_LABEL = "Mock practice from your own notes: formative revision, not an assessment, and never evidence of competence.";
 export const REVISION_LABEL = "Revision from your notes · formative practice, not an assessment";
 

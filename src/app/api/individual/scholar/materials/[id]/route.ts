@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { deleteMaterial, fileMaterial, renameMaterial, signedOriginalUrl } from "@/lib/individual/scholar/store";
+import { withdrawCasesOf } from "@/lib/individual/scholar/clinical-routes";
 import { cleanTitle } from "@/lib/individual/scholar/library";
 import { audit } from "@/lib/individual/scholar/http";
 
@@ -55,9 +56,11 @@ export async function DELETE(_req: Request, ctx2: { params: Promise<{ id: string
   const ctx = await requireIndividualContext("scholar");
   if (isGuardRefusal(ctx)) return ctx;
   const { id } = await ctx2.params;
+  // CLINICAL-REASONING-01 C-e: cases written from it are withdrawn from the shared library first.
+  const withdrawn = await withdrawCasesOf(ctx.admin, ctx.userId, id);
   const r = await deleteMaterial(ctx.admin, ctx.userId, id);
   if (!r.found && r.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!r.ok) return NextResponse.json({ error: "That material could not be deleted just now. Nothing was removed. Try again shortly." }, { status: 500 });
-  await audit(ctx, "individual_scholar_material_erased", "individual_scholar_material", id, {});
+  await audit(ctx, "individual_scholar_material_erased", "individual_scholar_material", id, { case_candidates_withdrawn: withdrawn.withdrawn, case_withdrawals_failed: withdrawn.failed });
   return NextResponse.json({ ok: true });
 }

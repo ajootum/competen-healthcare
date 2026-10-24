@@ -438,6 +438,8 @@ function FeedbackPanel({ f, sessionId, compact = false }: { f: RevisionFeedback;
         {!f.correct && <Link href={learnHref(f.source.chunkId, sessionId, "explain")} className={ghost}>Explain the answer</Link>}
         <Link href={sourceHref(f.source.materialId, f.source.chunkId)} className={ghost}>Show the source</Link>
         {!f.correct && <Link href={learnHref(f.source.chunkId, sessionId)} className={ghost}>Teach me this</Link>}
+        {/* CLINICAL-REASONING-01 CR1: from Revision, a case written from the same section. */}
+        <Link href={`${studyHref("apply")}?section=${f.source.chunkId}&from=revision`} className={ghost}>Practise in a case</Link>
       </div>
     </div>
   );
