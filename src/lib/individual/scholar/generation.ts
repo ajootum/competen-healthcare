@@ -494,6 +494,65 @@ export async function runLearn(userId: string, args: {
   };
 }
 
+// ── REVISION-01 R4: A SHORT ANSWER, MARKED ── deterministic first, AI evaluation only where it adds something ──
+//
+// markShortAnswer is code: the student's answer against the stored accepted answers, normalised. A match is correct.
+// No match is NOT "incorrect" -- a short answer can be right in other words -- so it returns null, and the caller
+// asks AI evaluation (activity `evaluate`) or, where that is unavailable, the student's own judgement.
+// runEvaluate judges ONLY against the passage and the accepted answers. Its feedback must add nothing they and the
+// student's own answer do not hold, or it is withheld. It is labelled AI evaluation wherever it is shown.
+
+const normaliseAnswer = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+
+/** Pure. True on a match with an accepted answer, null when code cannot tell. Never false: that is not code's call. */
+export function markShortAnswer(answer: string, accepted: readonly string[]): true | null {
+  const a = normaliseAnswer(answer);
+  return a && accepted.some(x => normaliseAnswer(x) === a) ? true : null;
+}
+
+export const EVALUATE_SYSTEM = [
+  "You mark a healthcare student's short answer to a revision question, for their own formative study.",
+  "Judge the answer ONLY against the passage from their notes and the accepted answers given. Do not use outside knowledge.",
+  "Accept an answer that says the same thing in other words. Do not reward an answer for things the passage does not say.",
+  "Your first line is exactly one of 'VERDICT: correct', 'VERDICT: partly' or 'VERDICT: incorrect'.",
+  "Then, in one to three short sentences: what the answer got right, and what is missing or wrong, using the passage's own words.",
+  "No new facts, numbers, doses, drugs or advice. No patient names. If the passage does not let you judge, reply with exactly NOT_IN_NOTES.",
+].join("\n");
+
+export type EvaluateVerdict = "correct" | "partly" | "incorrect";
+export type ShortAnswerEvaluation =
+  | { ok: true; verdict: EvaluateVerdict; score: number; feedback: string }
+  | { ok: false; reason: "malformed" | "not_in_notes" | "ungrounded" | "identifier" };
+const VERDICT_SCORE: Record<EvaluateVerdict, number> = { correct: 1, partly: 0.5, incorrect: 0 };
+
+/** Pure. The evaluator's reply, checked: a verdict, and feedback that adds nothing the grounding does not hold. */
+export function parseEvaluation(raw: string, grounding: readonly string[]): ShortAnswerEvaluation {
+  const text = raw.trim();
+  if (text.replace(/[^A-Z_]/g, "") === NOT_IN_NOTES) return { ok: false, reason: "not_in_notes" };
+  const m = /^\s*\**VERDICT:\s*(correct|partly|incorrect)\**\s*$/im.exec(text);
+  if (!m) return { ok: false, reason: "malformed" };
+  const feedback = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim();
+  if (!feedback || feedback.length > 800) return { ok: false, reason: "malformed" };
+  if (findPatientIdentifiers(feedback).length) return { ok: false, reason: "identifier" };
+  if (groundingViolations(feedback, [...grounding]).length) return { ok: false, reason: "ungrounded" };
+  const verdict = m[1].toLowerCase() as EvaluateVerdict;
+  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback };
+}
+
+/** AI evaluation of one short answer. `run` is the metered runner (activity `evaluate`); the caller screened the answer. */
+export async function runEvaluate(userId: string, input: { question: string; accepted: readonly string[]; answer: string; passage: Passage }, run: AiRun = direct) {
+  const r = await run({
+    system: EVALUATE_SYSTEM,
+    user: `PASSAGE FROM MY NOTES (${passageCitation(input.passage)}):\n${input.passage.content}\n\nQUESTION: ${input.question}\nACCEPTED ANSWERS: ${input.accepted.join(" | ")}\nMY ANSWER: ${input.answer}`,
+    tier: "reasoning",
+    maxTokens: 400,
+    context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_evaluate" },
+  });
+  if (!r.ok) return { ok: false as const, error: r.error };
+  return { ok: true as const, model: r.model, provider: r.provider, promptVersion: PROMPT_VERSIONS.evaluate,
+    evaluation: parseEvaluation(r.text, [input.passage.content, ...input.accepted, input.answer, input.question]) };
+}
+
 /** S2 framing for the Holdings mapping engine. It names no profession: the programme's catalogue does that. */
 export const SCHOLAR_MAPPING_FRAMING: MappingFraming = { person: "a healthcare student", subjects: "sections of their own study notes" };
 

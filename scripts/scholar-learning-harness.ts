@@ -310,20 +310,43 @@ const artefactsBounded = (src: Src) => {
  * metered runner with its activity code and passes it to its generator, and returns the refusal before anything else;
  * the generators make no direct generate() call (only the default runner does); the runner sends only Scholar's
  * product, the activity, and a request id from the client's retry key -- never an amount, a policy or a level.
+ * D1: each route passes the request's risk subject (scholarRisk), which the runner requires and sends on every call.
  */
 const AI_ROUTES: [string, string, RegExp][] = [
-  [`${API}/explain/route.ts`, `scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode)`, /runExplain\([^)]*ai\.run\)/],
-  [`${API}/learn/act/route.ts`, "scholarAiRunner(ctx, req, action as", /runLearn\([\s\S]*?\}, ai\.run\)/],
-  [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions")`, /runQuestions\([^;]*ai\.run\)/],
-  [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps")`, /runCase\([^)]*ai\.run\)/],
-  [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map")`, /runAnalysis\([^)]*ai\.run\)/],
+  [`${API}/explain/route.ts`, `scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode, await scholarRisk(ctx.admin, ctx.userId, { text: question, passages }))`, /runExplain\([^)]*ai\.run\)/],
+  [`${API}/learn/act/route.ts`, `scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages }))`, /runLearn\([\s\S]*?\}, ai\.run\)/],
+  [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runQuestions\([^;]*ai\.run\)/],
+  [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run\)/],
+  [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }))`, /runAnalysis\([^)]*ai\.run\)/],
 ];
 const meteredEverywhere = (src: Src) => {
   const gen = src.get(GEN) ?? "", http = src.get(`${LIB}/http.ts`) ?? "";
   return AI_ROUTES.every(([f, runner, call]) => { const s = src.get(f) ?? ""; return s.includes(runner) && call.test(s) && /ai\.refusal\(\)/.test(s); })
     && [...gen.matchAll(/\bgenerate\(/g)].length === 1 && /const direct: AiRun = g => generate\(g\);/.test(gen)
-    && /runMeteredAi\(ctx\.admin, \{ userId: ctx\.userId, product: "scholar", activity, requestId: part === "main" \? requestId : `\$\{requestId\}:\$\{part\}`, generate: g \}\)/.test(http)
-    && /const requestId = requestIdFor\(ctx\.userId, req\.headers\.get\("x-request-id"\)\);/.test(http);
+    && /runMeteredAi\(ctx\.admin, \{ userId: ctx\.userId, product: "scholar", activity, requestId: part === "main" \? requestId : `\$\{requestId\}:\$\{part\}`, generate: g, risk \}\)/.test(http)
+    && /export function scholarAiRunner\(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext\)/.test(http)
+    && /text: \[input\.text \?\? "", \.\.\.input\.passages\.map\(p => p\.content\)\]/.test(http)
+    && /export const scholarRequestId = \(ctx: IndividualContext, req: Request\) => requestIdFor\(ctx\.userId, req\.headers\.get\("x-request-id"\)\);/.test(http)
+    && /const requestId = scholarRequestId\(ctx, req\);/.test(http);
+};
+/**
+ * K29 (owner D3, coordinator conditions): Learn's "Continue with your personal assistant" is the ONE Holdings personal
+ * AI (runIndividualAssistant, Scholar, Teach Me by default) given the step's own sections as study context. The
+ * student's text is screened before anything else, consent and quota run before the call, and its answer is never a
+ * Learn answer: it is not saved as an artefact or recorded as a learning event, makes no direct model call, and is
+ * shown apart under PERSONAL_AI_LABEL. Ask Scholar stays the grounded Learn `ask` action.
+ */
+const ASSIST = `${API}/learn/assistant/route.ts`;
+const assistantShared = (src: Src) => {
+  const r = src.get(ASSIST) ?? "", client = src.get(`${PAGES}/_components/learn-client.tsx`) ?? "", act = src.get(`${API}/learn/act/route.ts`) ?? "";
+  const screen = r.indexOf("findPatientIdentifiers(question)"), pre = r.indexOf("await aiPreflight(ctx)"), call = r.indexOf("await runIndividualAssistant(");
+  return screen > -1 && pre > screen && call > pre
+    && /experience: "scholar", mode, question,/.test(r) && /const mode = body\?\.mode === "ask" \? "ask" : "teach";/.test(r)
+    && /const study = await scholarRisk\(ctx\.admin, ctx\.userId, \{ passages \}\);/.test(r) && /, study,\n/.test(r)
+    && !/saveArtefact|recordLearningEvent|updateLearningSession|runMeteredAi|scholarAiRunner|generate\(/.test(r)
+    && /label: PERSONAL_AI_LABEL/.test(r)
+    && /\{PERSONAL_AI_LABEL\}/.test(client) && /setAssist\(/.test(client) && !/setCards\([^;]*assistant/.test(client)
+    && !/runIndividualAssistant/.test(act);
 };
 /**
  * K27 (Stage 3 acceptance, items 3 and 5): the governed reference source is policy, read only through S1, and
@@ -778,6 +801,8 @@ function main() {
     artefactsBounded(REAL));
   ok("K26. AI-FAIR-USE-01 swap: every Scholar AI route runs through the metered runner with its activity code and returns a refusal first; generators make no direct generate() call; the runner sends no amount, policy or level",
     meteredEverywhere(REAL));
+  ok("K29. D3: Learn's personal-assistant entry is the shared Holdings assistant on the step's sections, screened and preflighted first, never saved or recorded as Learn, shown apart under its own label",
+    assistantShared(REAL));
   ok("K27. Stage 3 items 3 and 5: governed references come from policy through S1; 'clinically approved' only by the one rule (395, current content, outcome held), everywhere a reference is shown; AI flags rendered apart under their own heading",
     referencesGoverned(REAL));
   ok("K28. Stage 3 item 4: an unsupported answer is withheld with the plain reason and notes-only next steps; the withheld text is never sent; background only where policy allows and it passed its checks",
@@ -890,6 +915,13 @@ function main() {
   ok("P42. ⚠ K25 goes red when the AI runs before the saved answer is looked up, or conversation becomes an artefact",
     !artefactsBounded(plant(`${API}/learn/act/route.ts`, "const pre = await aiPreflight(ctx);", "const pre0 = 0;"))
     && !artefactsBounded(plant(`${API}/learn/act/route.ts`, "const storable = isArtefactAction(action) && !hasHistory && oneMaterial;", "const storable = !hasHistory && oneMaterial;")));
+  ok("P46. ⚠ K26 goes red when a route drops the risk subject, or the runner stops sending it",
+    !meteredEverywhere(plant(`${API}/cases/route.ts`, `"case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, `"case_steps", {})`))
+    && !meteredEverywhere(plant(`${LIB}/http.ts`, "generate: g, risk })", "generate: g })")));
+  ok("P47. ⚠ K29 goes red when the screen moves after the call, the answer is saved as an artefact, or the label goes",
+    !assistantShared(plant(ASSIST, "if (findPatientIdentifiers(question).length)", "if (false)"))
+    && !assistantShared(plant(ASSIST, "  const study = await scholarRisk(", "  await saveArtefact(ctx.admin, ctx.userId, {} as never);\n  const study = await scholarRisk("))
+    && !assistantShared(plant(ASSIST, "label: PERSONAL_AI_LABEL", "label: null")));
   ok("P43. ⚠ K26 goes red when a route stops passing the runner, or a generator calls generate() directly",
     !meteredEverywhere(plant(`${API}/questions/route.ts`, ".scholarQuestionsPerRequest, ai.run)", ".scholarQuestionsPerRequest)"))
     && !meteredEverywhere(plant(GEN, "    const r = await run({\n      system: QUESTION_SYSTEM[kind],", "    const r = await generate({\n      system: QUESTION_SYSTEM[kind],")));

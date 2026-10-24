@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { chunkMappings, getPassage, insertQuestions } from "@/lib/individual/scholar/store";
-import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner } from "@/lib/individual/scholar/http";
+import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { runCase } from "@/lib/individual/scholar/generation";
 import { leadingCompetency } from "@/lib/competency/mapping";
 
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 
   // AI-FAIR-USE-01: every call through the Holdings allowance (activity case_steps). A refusal is shown as the
   // engine words it, and nothing was sent, so nothing is audited as an AI query.
-  const ai = scholarAiRunner(ctx, req, "case_steps");
+  const ai = scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }));
   const r = await runCase(ctx.userId, passage, ai.run);
   const refused = meteredRefusal(ai.refusal());
   if (refused) return refused;

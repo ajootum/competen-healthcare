@@ -4,12 +4,13 @@ export const maxDuration = 60;
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { competencyChunks, getPassage, isUuid, searchCandidates, toPassages } from "@/lib/individual/scholar/store";
-import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner } from "@/lib/individual/scholar/http";
+import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import {
   EXPLAIN_REFUSAL, SUPPLEMENTARY_WITHHELD, describeViolations, isExplainMode, passageCitation, passageTag, runExplain, type ExplainMode, type TutorTurn,
 } from "@/lib/individual/scholar/generation";
 import { loadTutorContext } from "@/lib/individual/scholar/competency-view";
+import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { AI_LABEL, QUESTION_MAX, RETRIEVAL_LIMIT, SUPPLEMENTARY_LABEL, TUTOR_MAX_TURNS } from "@/lib/individual/scholar/config";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -56,6 +57,10 @@ export async function POST(req: Request) {
       ? [{ speaker: t.speaker, text: t.text.trim().slice(0, 1500) }] : [];
   });
 
+  // What the student typed goes to the model and, as the request's subject, to the risk classification (D1): screened
+  // first, as Learn screens it. Nothing that identifies a patient is sent.
+  if ([question, ...history.filter(t => t.speaker === "student").map(t => t.text)].some(t => findPatientIdentifiers(t).length))
+    return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
   let passages;
   if (Array.isArray(body?.chunkIds) && body.chunkIds.length) {
     // The tutor continues on the passages it started from.
@@ -94,7 +99,7 @@ export async function POST(req: Request) {
   // P1: the tutor sees the student's own study context, assembled now from their rows (never stored, never grounding).
   const learnerContext = mode === "tutor" ? await loadTutorContext(ctx.admin, ctx.userId, passages.map(p => p.chunkId)) : null;
   // AI-FAIR-USE-01: through the Holdings allowance, with the mode as the activity (the tutor's turn is tutor_continue).
-  const ai = scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode);
+  const ai = scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode, await scholarRisk(ctx.admin, ctx.userId, { text: question, passages }));
   const r = await runExplain(ctx.userId, question, passages, mode, history, learnerContext, ai.run);
   const refused = meteredRefusal(ai.refusal());
   if (refused) return refused;

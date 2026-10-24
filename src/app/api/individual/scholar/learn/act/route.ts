@@ -10,7 +10,7 @@ import {
 } from "@/lib/individual/scholar/store";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 
-import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner } from "@/lib/individual/scholar/http";
+import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import { SUPPLEMENTARY_WITHHELD, describeViolations, learnPromptVersion, passageCitation, passageTag, runLearn, type Passage, type TutorTurn } from "@/lib/individual/scholar/generation";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
@@ -159,7 +159,7 @@ export async function POST(req: Request) {
 
   // AI-FAIR-USE-01: through the Holdings allowance, the learning action as the activity. A refusal becomes
   // Learning Continuity (s7): said plainly, with what is saved for these sections -- and nothing was sent.
-  const ai = scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify");
+  const ai = scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages }));
   const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext }, ai.run);
   const refusal = ai.refusal();
   if (refusal) { const w = refusalWords(refusal); return continuity(w.message, w.insufficient); }
