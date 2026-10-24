@@ -25,7 +25,8 @@
  *       Scholar's AI feedback and debrief reach it only through recordSessionFeedback and recordSessionDebrief
  *  K12  the AI feedback context (expected response, rubric) can never reach a browser: only server src/lib code may
  *       reference sessionFeedbackContext or feedbackContextFrom (no page, no component, no route handler), and no
- *       "use client" file imports the case library or the blueprint at all
+ *       "use client" file VALUE-imports the case library or the blueprint. A type-only import (`import type`) is
+ *       erased at compile time and bundles nothing, so it is allowed -- Scholar's case client takes LearnerView that way
  *  K13  the context, run for real on a branching case, carries no unrevealed fact, no other decision and no option key
  */
 import { feedbackContextFrom } from "../src/lib/cases/library";
@@ -133,7 +134,8 @@ function k12(files: Src): string[] {
   const bad: string[] = [];
   for (const [f, t] of Object.entries(files)) {
     const client = /^\s*["']use client["']/.test(t);
-    if (client && /from ["'](?:@\/lib\/cases\/(?:library|blueprint)|\.\.?\/[^"']*(?:cases\/)?(?:library|blueprint))["']/.test(t)) bad.push(`${f} is a client file importing the case library`);
+    const valueImport = /^\s*import\s+(?!type\b)[^;]*?from\s+["'](?:@\/lib\/cases\/(?:library|blueprint)|\.\.?\/[^"']*(?:cases\/)?(?:library|blueprint))["']/m;
+    if (client && valueImport.test(t)) bad.push(`${f} is a client file importing the case library`);
     if (/\b(sessionFeedbackContext|feedbackContextFrom)\b/.test(t) && !(f.startsWith("src/lib/") && !client)) bad.push(`${f} names the feedback context outside server library code`);
   }
   return bad;
@@ -199,6 +201,8 @@ red("K10 on an ungated studio route", k10(cand, lib, route.replace("if (!(await 
 red("K10 on a gated withdrawal", k10(cand.replace("if (!UUID.test(args.userId) || !SOURCE_KEY.test(args.sourceKey ?? \"\")) return { ok: false, error: \"Nothing to withdraw.\" };", "if (!(await caseLibraryEnabled(admin))) return { ok: false, error: CASE_LIBRARY_OFF };"), lib, route, pages));
 red("K11 on Scholar keeping its own feedback on a library session", k11({ ...everyFile, "src/lib/individual/scholar/case-feedback.ts": `await admin.from("case_library_session").update({ feedback: [] }).eq("id", id);\n` }));
 red("K12 on a client component importing the case library", k12({ ...everyFile, "src/app/individual/x/Feedback.tsx": `"use client";\nimport { sessionFeedbackContext } from "@/lib/cases/library";\n` }));
+ok("P. K12 control: a client file's type-only import stays GREEN", k12({ "src/app/x/Type.tsx": `"use client";\nimport type { LearnerView } from "@/lib/cases/blueprint";\n` }).length === 0);
+red("K12 on a client value import of the blueprint", k12({ ...everyFile, "src/app/x/Value.tsx": `"use client";\nimport { learnerView, type LearnerView } from "@/lib/cases/blueprint";\n` }));
 red("K12 on a route handler returning the context", k12({ ...everyFile, "src/app/api/individual/case-feedback/route.ts": `import { sessionFeedbackContext } from "@/lib/cases/library";\nexport async function GET() { return Response.json(await sessionFeedbackContext(a, u, s, d)); }\n` }));
 red("K13 on a context returning an unrevealed fact", k13({ ...(k13ctx as any), visibleFacts: [...((k13ctx as any).visibleFacts ?? []), { label: "Hidden finding", value: "HIDDEN-9", unit: null }] }));
 red("K13 on a context returning another decision", k13({ ...(k13ctx as any), otherDecisions: [{ prompt: "OTHER-DECISION-PROMPT", options: [{ text: "KEY-OPTION-TEXT", correct: true }] }] }));
