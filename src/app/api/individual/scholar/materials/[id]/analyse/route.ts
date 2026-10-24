@@ -4,7 +4,7 @@ export const maxDuration = 60;
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { analysisStatus, getMaterial, learnerProgramme, saveAnalysis, unanalysedSections } from "@/lib/individual/scholar/store";
-import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner } from "@/lib/individual/scholar/http";
+import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { runAnalysis } from "@/lib/individual/scholar/generation";
 import { SUBJECTS_PER_CALL } from "@/lib/competency/mapping";
 import { scholarCatalogue, type CatalogueRead } from "@/lib/individual/scholar/catalogue";
@@ -59,7 +59,7 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
 
 
   // AI-FAIR-USE-01: the mapping call through the Holdings allowance (activity map), in the engine's own `run` form.
-  const ai = scholarAiRunner(ctx, req, "map");
+  const ai = scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }));
   const r = await runAnalysis(ctx.userId, next.data, competencies.data, ai.run);
   const refused = meteredRefusal(ai.refusal());
   if (refused) return refused;

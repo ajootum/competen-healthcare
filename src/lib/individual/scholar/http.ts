@@ -5,11 +5,12 @@ import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from 
 import { individualPlanAiLimit } from "../commerce";
 import { currentTraceId } from "@/lib/trace";
 import type { IndividualContext } from "../guard";
-import { readConsent } from "./store";
+import { readConsent, sectionLinks, topicsOfSections } from "./store";
 import { consentDocuments, consentStatus } from "./consent-gate";
 import { CONSENT_AWAITING_LEGAL, CONSENT_UPDATED } from "./config";
 import { isMeteredRefusal, meteredRefusalBody, requestIdFor, runMeteredAi, type MeteredRefusal } from "@/lib/ai/allowance";
 import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
+import type { RiskContext } from "@/lib/ai/clinical-risk";
 import type { ScholarAiActivity } from "./ai-standing";
 
 // ── WHAT EVERY SCHOLAR AI ROUTE CHECKS, IN ORDER ── after requireIndividualContext("scholar") ────────────
@@ -71,12 +72,42 @@ export const SCHOLAR_AI_AUDIT_ACTION = "ai_assistant_query";
 
 export type ScholarAiRun = (g: GenerateArgs, part?: string) => Promise<GenerateResult>;
 
-export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: ScholarAiActivity): { run: ScholarAiRun; refusal: () => MeteredRefusal | null } {
-  const requestId = requestIdFor(ctx.userId, req.headers.get("x-request-id"));
+const RISK_TEXT_MAX = 20000, RISK_MAX_TERMS = 50;
+
+/**
+ * Owner D1 (AI-FAIR-USE-01): the subject of a Scholar AI request, for the Holdings clinical-risk classification. The
+ * student's own words (after the route's identifier screen), the sections the request works from (screened when
+ * they were uploaded), those sections' competencies (their live links, unless the caller names them) and their topic
+ * terms. The engine reads it in memory only. Never omitted: a request with no subject is classified as high risk.
+ */
+export async function scholarRisk(admin: unknown, userId: string, input: {
+  text?: string | null; passages: readonly { chunkId: string; content: string }[]; competencyIds?: readonly string[];
+}): Promise<RiskContext> {
+  const chunkIds = input.passages.map(p => p.chunkId);
+  const [links, topics] = await Promise.all([input.competencyIds ? null : sectionLinks(admin, userId, chunkIds), topicsOfSections(admin, userId, chunkIds)]);
+  return {
+    text: [input.text ?? "", ...input.passages.map(p => p.content)].filter(Boolean).join("\n\n").slice(0, RISK_TEXT_MAX),
+    competencyIds: [...new Set(input.competencyIds ?? (links ?? []).map(l => l.competencyId))].slice(0, RISK_MAX_TERMS),
+    topicTerms: [...new Set([...topics.values()].flat())].slice(0, RISK_MAX_TERMS),
+  };
+}
+
+/**
+ * Every Scholar AI call, through the Holdings allowance: Scholar's activity, one deterministic request id per call of
+ * one student action (`:retry`, `:verify`, `:retry-verify` for the further calls), and the SAME risk subject on each,
+ * so a verification or a retry is never classified below the content it checks (IND-007's contract).
+ */
+/** The request id the engine reserves against: the caller's, from the client's retry key when it is well formed. */
+export const scholarRequestId = (ctx: IndividualContext, req: Request) => requestIdFor(ctx.userId, req.headers.get("x-request-id"));
+
+export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext, callKey?: string): { run: ScholarAiRun; refusal: () => MeteredRefusal | null } {
+  // `callKey`: one student action that makes several separate generations (a revision session filling its shortfall)
+  // gives each its own deterministic id, `:g1`, `:g2` ..., so each is its own idempotent reservation.
+  const requestId = callKey ? `${scholarRequestId(ctx, req)}:${callKey}` : scholarRequestId(ctx, req);
   let refused: MeteredRefusal | null = null;
   const run: ScholarAiRun = async (g, part = "main") => {
     if (refused) return { ok: false, error: "failed", detail: "metered" } as GenerateResult;
-    const x = await runMeteredAi(ctx.admin, { userId: ctx.userId, product: "scholar", activity, requestId: part === "main" ? requestId : `${requestId}:${part}`, generate: g });
+    const x = await runMeteredAi(ctx.admin, { userId: ctx.userId, product: "scholar", activity, requestId: part === "main" ? requestId : `${requestId}:${part}`, generate: g, risk });
     if (isMeteredRefusal(x)) { refused = x; return { ok: false, error: "failed", detail: "metered" } as GenerateResult; }
     return x;
   };

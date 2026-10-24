@@ -10,11 +10,12 @@ import {
 } from "@/lib/individual/scholar/store";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 
-import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner } from "@/lib/individual/scholar/http";
+import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
-import { EXPLAIN_REFUSAL, SUPPLEMENTARY_WITHHELD, describeViolations, learnPromptVersion, passageCitation, passageTag, runLearn, type Passage, type TutorTurn } from "@/lib/individual/scholar/generation";
+import { SUPPLEMENTARY_WITHHELD, describeViolations, learnPromptVersion, passageCitation, passageTag, runLearn, type Passage, type TutorTurn } from "@/lib/individual/scholar/generation";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
-import { artefactKey, governedReferences, isArtefactAction } from "@/lib/individual/scholar/learn";
+import { artefactKey, governedReferences, isArtefactAction, referenceSource, relabelReferences } from "@/lib/individual/scholar/learn";
+import { withheldNext } from "@/lib/individual/scholar/learn-view";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import {
   AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, STEP_MAX_SECTIONS,
@@ -104,7 +105,10 @@ export async function POST(req: Request) {
   const pref = await getLearningPreference(ctx.admin, ctx.userId);
   const depth: ExplanationDepth = (EXPLANATION_DEPTHS as readonly string[]).includes(body?.depth) ? body.depth : pref?.depth ?? policy.scholarExplanationDepth;
   const learner = await loadLearnerCatalogue(ctx.admin, ctx.userId);
-  const references = policy.scholarLearningObjectives === "outcomes" ? await governedReferences(ctx.admin, ctx.userId, passages.map(p => p.chunkId), learner.competencies) : [];
+  // Stage 3 acceptance item 5: the governed reference source is policy (the CFCA by default), and a saved answer's
+  // references are labelled by it as it is now -- "clinically approved" only for content 395 approved as it stands.
+  const refSource = await referenceSource(ctx.admin, policy, learner.competencies);
+  const references = policy.scholarLearningObjectives === "outcomes" ? await governedReferences(ctx.admin, ctx.userId, passages.map(p => p.chunkId), refSource) : [];
   const background = policy.scholarBeyondNotes === "labelled";
 
   // ── s8: a saved artefact for exactly this request is returned, not regenerated ──
@@ -118,7 +122,7 @@ export async function POST(req: Request) {
     return {
       action, step, depth: a.depth, label: AI_LABEL, provenance: { model: a.model, promptVersion: a.promptVersion }, kinds: SOURCE_KIND_LABEL,
       sources: src.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) })),
-      passageIds: src.map(p => p.chunkId), references: a.refs, answer: a.content, cited: src.map((_, i) => i + 1),
+      passageIds: src.map(p => p.chunkId), references: relabelReferences(a.refs, refSource), answer: a.content, cited: src.map((_, i) => i + 1),
       background: a.background ? { text: a.background, label: SUPPLEMENTARY_LABEL } : null, flags: a.flags, verdict: null,
       saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, ...extra,
     };
@@ -155,7 +159,7 @@ export async function POST(req: Request) {
 
   // AI-FAIR-USE-01: through the Holdings allowance, the learning action as the activity. A refusal becomes
   // Learning Continuity (s7): said plainly, with what is saved for these sections -- and nothing was sent.
-  const ai = scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify");
+  const ai = scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages }));
   const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext }, ai.run);
   const refusal = ai.refusal();
   if (refusal) { const w = refusalWords(refusal); return continuity(w.message, w.insufficient); }
@@ -182,8 +186,10 @@ export async function POST(req: Request) {
       : { ...base, withheld: true, message: "A check question could not be written from these sections just now. Try again, or carry on learning." });
   }
   if (!r.check.ok) {
-    const detail = r.check.reason === "ungrounded" && r.check.violations?.length ? ` (${describeViolations(r.check.violations)})` : "";
-    return NextResponse.json({ ...base, withheld: true, reason: r.check.reason, message: EXPLAIN_REFUSAL[r.check.reason] + detail, notInNotes: r.check.reason === "not_in_notes" });
+    // Stage 3 acceptance item 4: why, plainly, and next steps from the notes only. The withheld text is never sent.
+    const detail = r.check.reason === "ungrounded" && r.check.violations?.length ? describeViolations(r.check.violations) : null;
+    const next = withheldNext({ reason: r.check.reason, detail, sources, askOffered: policy.scholarLearningActions.includes("ask"), background: r.background, backgroundAllowed: background });
+    return NextResponse.json({ ...base, withheld: true, reason: r.check.reason, message: next.why, notInNotes: next.notInNotes, next });
   }
   const b = r.background;
   // s8: the shown answer is saved for next time (private formative; replaced when the student asks for a new one).

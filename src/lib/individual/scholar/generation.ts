@@ -6,6 +6,7 @@ import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST,
 import { citeChunk, findPatientIdentifiers } from "./extract";
 import { structureLabel, type CatalogueCompetency } from "./catalogue";
 import { VERIFY_SYSTEM, applyVerification, passageVocabulary, qualityProblems, verificationPrompt, type QualityReason } from "./question-quality";
+import { checkRevisionDraft, type RevisionDraft } from "./revision";
 
 // ── SOURCE-GROUNDED AI FOR SCHOLAR ── COMPETEN-IND-004 s2, s3 and s5 ───────────────────────────────────
 //
@@ -344,7 +345,8 @@ export async function runExplain(userId: string, question: string, passages: Pas
 //     shown as the AI's flag for the student to check, never as a correction. Nothing invents a citation: a tag
 //     outside the ones given withholds the answer.
 
-export type GovernedReference = { title: string; code: string | null; outcome: string | null; status: string; competencyId?: string };
+/** `approved`: 395 approved this exact content (learn.ts referenceStatus). Absent, as on older saved answers, is not approved. */
+export type GovernedReference = { title: string; code: string | null; outcome: string | null; status: string; competencyId?: string; approved?: boolean };
 export const FLAG_MARKER = "CHECK THIS:";
 const DEPTH_WORDS: Record<ExplanationDepth, number> = { brief: 120, standard: 220, detailed: 350 };
 const BACKGROUND_ACTIONS: readonly LearnAction[] = ["teach", "deeper", "examples"];
@@ -491,6 +493,110 @@ export async function runLearn(userId: string, args: {
     flags: checkFlags(split.flags, args.passages),
     verdict, question: null,
   };
+}
+
+// ── REVISION-01 R4: A SHORT ANSWER, MARKED ── deterministic first, AI evaluation only where it adds something ──
+//
+// markShortAnswer is code: the student's answer against the stored accepted answers, normalised. A match is correct.
+// No match is NOT "incorrect" -- a short answer can be right in other words -- so it returns null, and the caller
+// asks AI evaluation (activity `evaluate`) or, where that is unavailable, the student's own judgement.
+// runEvaluate judges ONLY against the passage and the accepted answers. Its feedback must add nothing they and the
+// student's own answer do not hold, or it is withheld. It is labelled AI evaluation wherever it is shown.
+
+// markShortAnswer lives with the revision rules (revision.ts), which mark every kind.
+export { markShortAnswer } from "./revision";
+
+// ── REVISION-01 R2: REVISION QUESTIONS OF THE 416 KINDS ── one passage, one kind, the question rules ───────────────
+//
+// mcq goes through runQuestions (its quality layer and blind verification) unchanged. The other kinds are written here
+// under the same grounding rules and checked item by item by revision.ts checkRevisionDraft: well formed, the quote in
+// the passage, nothing ungrounded, nothing identifying. An item that fails is dropped and counted, never stored. If
+// nothing survives the first attempt, it writes again once.
+
+const REVISION_COMMON = [
+  "You write revision items for a healthcare student, from ONE passage of their own study notes, for their own formative revision.",
+  "RULES:",
+  "1. Every item must be answerable from the passage ALONE. Do not test anything the passage does not state.",
+  "2. Do not add any number, dose, value, date, finding or term that is not in the passage. Never write a number the passage does not contain, in digits or words. Do not count things.",
+  "3. sourceQuote is ONE sentence copied EXACTLY from the passage that supports the answer.",
+  "4. difficulty is 1 (recall a stated fact), 2 (understand or connect) or 3 (apply or distinguish).",
+  "5. Never include a name, NHS number, date of birth or any detail that could identify a real person.",
+  "6. The rationale and every answer use the passage's own words. Do not explain beyond what the passage says, and do not add any term it does not use.",
+  "Reply with a JSON array ONLY, no prose and no code fence. If the passage cannot support an item of this kind, reply [].",
+];
+export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence", string> = {
+  mrq: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? that says to choose all that apply", "options": [4 to 6 short options built only from the passage\'s words], "correct": [the indexes of EVERY option the passage supports, at least one and not all], "rationale": "...", "sourceQuote": "...", "difficulty": 1}'].join("\n"),
+  short: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? whose answer is a few words from the passage", "accepted": [1 to 4 short answers the passage supports, in its own words], "rationale": "...", "sourceQuote": "...", "difficulty": 1}'].join("\n"),
+  flashcard: [...REVISION_COMMON, 'Each item: {"front": "a term or a short question from the passage", "back": "its answer or meaning, in the passage\'s words", "sourceQuote": "...", "difficulty": 1}'].join("\n"),
+  match: [...REVISION_COMMON, 'Each item: {"stem": "what to match, e.g. Match each term to its meaning", "pairs": [{"left": "...", "right": "..."}, {"left": "...", "right": "..."}, {"left": "...", "right": "..."}], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Three to six pairs, each stated by the passage, every left and every right different. Only write one when the passage states at least three such pairs.'].join("\n"),
+  sequence: [...REVISION_COMMON, 'Each item: {"stem": "what to put in order, ending with ?", "steps": [3 to 6 steps IN THE ORDER THE PASSAGE GIVES THEM], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Only write one when the passage itself gives an order.'].join("\n"),
+};
+
+/** One call (and one retry): revision items of one kind from one passage, each checked. `run` is the metered runner. */
+export async function runRevisionQuestions(userId: string, kind: keyof typeof REVISION_SYSTEM, passage: Passage, limit: number, run: AiRun = direct) {
+  const dropped: string[] = [];
+  let kept: RevisionDraft[] = [];
+  let model = "", provider = "";
+  for (let attempt = 1; attempt <= 2 && !kept.length; attempt++) {
+    const r = await run({
+      system: REVISION_SYSTEM[kind],
+      user: `${questionUserPrompt(passage)}\n\nWrite up to ${["one", "two", "three"][Math.min(3, Math.max(1, limit)) - 1]} item${limit === 1 ? "" : "s"}.`,
+      tier: "reasoning",
+      maxTokens: 1400,
+      context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_revision_${kind}` },
+    }, attempt === 1 ? "main" : "retry");
+    if (!r.ok) return { ok: false as const, error: r.error };
+    model = r.model; provider = r.provider;
+    for (const raw of (parseJsonArray(r.text) ?? []).slice(0, limit)) {
+      const c = checkRevisionDraft(kind, raw, passage);
+      if (c.ok) kept.push(c.draft); else dropped.push(c.reason);
+    }
+    kept = kept.slice(0, limit);
+  }
+  return { ok: true as const, kept, dropped, model, provider, promptVersion: `${PROMPT_VERSIONS.revision}:${kind}` };
+}
+
+export const EVALUATE_SYSTEM = [
+  "You mark a healthcare student's short answer to a revision question, for their own formative study.",
+  "Judge the answer ONLY against the passage from their notes and the accepted answers given. Do not use outside knowledge.",
+  "Accept an answer that says the same thing in other words. Do not reward an answer for things the passage does not say.",
+  "Your first line is exactly one of 'VERDICT: correct', 'VERDICT: partly' or 'VERDICT: incorrect'.",
+  "Then, in one to three short sentences: what the answer got right, and what is missing or wrong, using the passage's own words.",
+  "No new facts, numbers, doses, drugs or advice. No patient names. If the passage does not let you judge, reply with exactly NOT_IN_NOTES.",
+].join("\n");
+
+export type EvaluateVerdict = "correct" | "partly" | "incorrect";
+export type ShortAnswerEvaluation =
+  | { ok: true; verdict: EvaluateVerdict; score: number; feedback: string }
+  | { ok: false; reason: "malformed" | "not_in_notes" | "ungrounded" | "identifier" };
+const VERDICT_SCORE: Record<EvaluateVerdict, number> = { correct: 1, partly: 0.5, incorrect: 0 };
+
+/** Pure. The evaluator's reply, checked: a verdict, and feedback that adds nothing the grounding does not hold. */
+export function parseEvaluation(raw: string, grounding: readonly string[]): ShortAnswerEvaluation {
+  const text = raw.trim();
+  if (text.replace(/[^A-Z_]/g, "") === NOT_IN_NOTES) return { ok: false, reason: "not_in_notes" };
+  const m = /^\s*\**VERDICT:\s*(correct|partly|incorrect)\**\s*$/im.exec(text);
+  if (!m) return { ok: false, reason: "malformed" };
+  const feedback = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim();
+  if (!feedback || feedback.length > 800) return { ok: false, reason: "malformed" };
+  if (findPatientIdentifiers(feedback).length) return { ok: false, reason: "identifier" };
+  if (groundingViolations(feedback, [...grounding]).length) return { ok: false, reason: "ungrounded" };
+  const verdict = m[1].toLowerCase() as EvaluateVerdict;
+  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback };
+}
+
+/** AI evaluation of one short answer. `run` is the metered runner (activity `evaluate`); the caller screened the answer. */
+export async function runEvaluate(userId: string, input: { question: string; accepted: readonly string[]; answer: string; passage: Passage }, run: AiRun = direct) {
+  const r = await run({
+    system: EVALUATE_SYSTEM,
+    user: `PASSAGE FROM MY NOTES (${passageCitation(input.passage)}):\n${input.passage.content}\n\nQUESTION: ${input.question}\nACCEPTED ANSWERS: ${input.accepted.join(" | ")}\nMY ANSWER: ${input.answer}`,
+    tier: "reasoning",
+    maxTokens: 400,
+    context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_evaluate" },
+  });
+  if (!r.ok) return { ok: false as const, error: r.error };
+  return { ok: true as const, model: r.model, provider: r.provider, promptVersion: PROMPT_VERSIONS.evaluate,
+    evaluation: parseEvaluation(r.text, [input.passage.content, ...input.accepted, input.answer, input.question]) };
 }
 
 /** S2 framing for the Holdings mapping engine. It names no profession: the programme's catalogue does that. */

@@ -107,7 +107,56 @@ export const PROMPT_VERSIONS = {
   // system prompt and checks as explain (generation.ts). v2: a last no-counting reminder (staging, Simplify).
   // v3: Simplify keeps the passages' own names rather than counting them ("two tubes" for "right and left").
   learn: "scholar-learn-v3",
+  // COMPETEN-SCHOLAR-REVISION-01 R4: AI evaluation of a short answer (Holdings activity `evaluate`).
+  evaluate: "scholar-evaluate-v1",
+  // COMPETEN-SCHOLAR-REVISION-01 R2: revision questions of the 416 kinds, one prompt per kind, on the question rules.
+  // v2: answers and rationale in the passage's own words; [] when a kind does not fit; a matching item only with three pairs.
+  revision: "scholar-revision-v2",
 } as const;
+
+// ── STAGE 4: REVISION ── COMPETEN-SCHOLAR-REVISION-01 (owner GO 2026-10-24) ─────────────────────────────────────
+// Formative revision from the student's own notes. Never assessment, never competence, never Passport evidence as
+// such. Every AI-written question is private_formative (migration 416 makes nothing else storable).
+export const REVISION_FORMATS = ["mcq", "mrq", "short", "flashcard", "match", "sequence"] as const;
+export type RevisionFormat = (typeof REVISION_FORMATS)[number];
+export const REVISION_FORMAT_LABEL: Record<RevisionFormat, string> = {
+  mcq: "Multiple choice", mrq: "Multiple response", short: "Short answer", flashcard: "Flashcards", match: "Matching", sequence: "Sequencing",
+};
+export const REVISION_MODES = ["today", "quick", "spaced", "weak", "mock", "flashcards", "custom"] as const;
+export type RevisionMode = (typeof REVISION_MODES)[number];
+export const REVISION_MODE_LABEL: Record<RevisionMode, string> = {
+  today: "Today's revision", quick: "Quick practice", spaced: "Spaced revision", weak: "Weak areas", mock: "Mock practice", flashcards: "Flashcards", custom: "Saved revision set",
+};
+export const REVISION_MODE_HELP: Record<RevisionMode, string> = {
+  today: "What is due, what you found hard, and something new, in one session.",
+  quick: "A short mix of questions from what you choose.",
+  spaced: "The cards that are due today, on your schedule.",
+  weak: "Questions you got wrong, most-missed first.",
+  mock: "A longer mixed set with the answers at the end. Practice only: not an assessment.",
+  flashcards: "Recall and grade yourself, card by card.",
+  custom: "Replay a set you saved. No new AI is used.",
+};
+export const REVISION_DIFFICULTIES = ["any", "easy", "standard", "harder"] as const;
+export type RevisionDifficulty = (typeof REVISION_DIFFICULTIES)[number];
+export const REVISION_QUANTITY_MAX = 50;
+/** Most AI generation calls one revision session may make to fill its shortfall. */
+export const REVISION_GENERATION_CALLS_MAX = 8;
+export const MOCK_LABEL = "Mock practice from your own notes: formative revision, not an assessment, and never evidence of competence.";
+export const REVISION_LABEL = "Revision from your notes · formative practice, not an assessment";
+
+/** Owner D3: the shared personal AI, reached from Learn. Never a Learn answer: shown apart, under these words. */
+export const PERSONAL_AI_LABEL = "Personal AI assistant — general explanation, not checked against your notes, not clinically reviewed";
+
+// ── REVISION-01 R4: HOW AN ANSWER WAS MARKED ── always said beside the result (migration 416 `marking`) ──
+// Deterministic marking and AI evaluation are never presented alike. Where AI evaluation is unavailable (metering
+// refuses it, e.g. not_eligible, or AI is off), a short answer falls back to the stored accepted answers: matched by
+// code where it can be, otherwise the student compares and says -- labelled as what it is.
+export const MARKING_LABEL = {
+  deterministic: "Marked against the stored answer",
+  self_graded: "Your own judgement, against the stored answer",
+  ai_evaluation: "AI evaluation: an AI judged your answer against your notes. Not verified.",
+} as const;
+export type Marking = keyof typeof MARKING_LABEL;
 
 /** S4: a multi-step practice case has this many steps at most (migration 388 allows 1 to 5). */
 export const CASE_MAX_STEPS = 4;
@@ -142,11 +191,14 @@ export const INFORMAL_CHECK_LABEL = "A quick check for your own learning. It is 
 /** Learning activity shown against a competency (Progress) is activity, not evidence. */
 export const NOT_COMPETENCE_LABEL = "Learning activity, not evidence of competence.";
 /** The four kinds of content an answer may hold, said where each appears (owner GO s7). */
+/** Stage 3 acceptance item 3: an AI flag is the AI's, for the student to check -- never clinical review. */
+export const FLAG_HEADING = "Flagged by AI for you to check";
+export const FLAG_NOTE = "The AI thinks these may be contradictory, unclear or unsafe in your notes. They are not verified and not clinical review: check them against your course materials or with a supervisor.";
 export const SOURCE_KIND_LABEL = {
   notes: "From your notes",
-  reference: "Governed reference: your programme's competency catalogue",
+  reference: "Governed reference: what you are working towards. Clinically reviewed only where marked approved",
   interpretation: "AI explanation beyond your notes: general background, not from your notes and not verified",
-  flag: "Flagged by AI for you to check: possibly contradictory, unclear or unsafe in your notes. Not verified.",
+  flag: `${FLAG_HEADING}: possibly contradictory, unclear or unsafe in your notes. Not verified.`,
 } as const;
 
 /**
@@ -227,5 +279,20 @@ export const CONTENT_STATUS_LABEL: Record<"approved" | "draft" | "unreviewed", s
   draft: "Draft content",
   unreviewed: "Not clinically reviewed",
 };
+// ── STAGE 3 ACCEPTANCE ITEM 4: AN ANSWER WITHHELD AS UNSUPPORTED ── said plainly, with notes-only next steps ──
+// Nothing here is clinical content: the reason, the student's own nearest sections, a rephrase, and -- only where
+// policy allows and it passed its own checks -- the labelled background the same request produced.
+export const NOT_IN_NOTES_LABEL = "This isn't in your notes.";
+export const WITHHELD_WHY: Record<"not_in_notes" | "no_citation" | "bad_citation" | "ungrounded", string> = {
+  not_in_notes: "Scholar answers only from your notes, and could not find this in them. It will not fill the gap with clinical information from anywhere else.",
+  no_citation: "Scholar's answer did not show which part of your notes it came from, so it was not shown. Scholar only shows what it can point to in your notes.",
+  bad_citation: "Scholar's answer pointed to a part of your notes it was not given, so it was not shown.",
+  ungrounded: "Scholar's answer included details that are not in your notes, so it was not shown. Scholar will not show clinical information your notes do not support.",
+};
+/** How many of the student's own sections a withheld answer offers to read instead. */
+export const WITHHELD_NEAREST_MAX = 3;
+
+/** A saved reference whose outcome its competency's current content no longer holds (learn.ts referenceStatus). */
+export const REFERENCE_CHANGED_LABEL = "Changed since: not clinically reviewed";
 /** Shown where the policy floor offers only approved content and the programme has none yet. */
 export const NO_APPROVED_COMPETENCIES = "No clinically approved competencies yet.";

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { COMPETENCY_LAYERS, type CompetencyLayer } from "@/lib/competency/foundation";
+import { COMPETENCY_LAYERS, loadIndividualCatalogue, type CompetencyLayer } from "@/lib/competency/foundation";
 import { loadCatalogueFor } from "../catalogue";
 import { loadIndividualPolicy, meetsMinStatus, type ContentStatusLevel } from "../policy";
 
@@ -136,6 +136,21 @@ export function projectForProgramme(all: S1Competency[], programme: ProgrammeCon
 export function applyContentFloor(rows: CatalogueCompetency[], min: ContentStatusLevel): { kept: CatalogueCompetency[]; belowFloor: number } {
   const kept = rows.filter(c => meetsMinStatus(c.contentStatus, min));
   return { kept, belowFloor: rows.length - kept.length };
+}
+
+/** What a governed reference needs of a competency. A programme catalogue entry is one. */
+export type ReferenceCompetency = Pick<CatalogueCompetency, "id" | "title" | "code" | "outcomes" | "contentStatus">;
+
+/**
+ * LEARN-01 item 5: the governed reference collections HQ lists (Individual policy scholar_reference_collections),
+ * through S1's own read -- shared, active, published, with 395's clinical review state -- and the same content-status
+ * floor as the programme catalogue. Only reached when the list is not empty. null = unreadable.
+ */
+export async function referenceCollections(admin: any, ids: readonly string[], min: ContentStatusLevel): Promise<ReferenceCompetency[] | null> {
+  const all = await loadIndividualCatalogue(admin, ids);
+  if (all === null) return null;
+  return all.map(c => ({ id: c.competencyId, title: c.title, code: c.code, outcomes: c.outcomes, contentStatus: normaliseStatus(c.contentStatus) }))
+    .filter(c => meetsMinStatus(c.contentStatus, min));
 }
 
 /** THE ADAPTER: S1's Scholar catalogue (HQ allowlist, shared, active, published), narrowed to the programme. */

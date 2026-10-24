@@ -62,7 +62,10 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarInsightMinAnswers: INSIGHT_MIN_ANSWERS, scholarInsightWindowDays: INSIGHT_WINDOW_DAYS,
       passportAchievementKinds: [...STUDY_ACHIEVEMENT_KINDS],
       // S1: no catalogue reaches a person until HQ chooses one.
-      scholarCatalogues: [], professionalCatalogues: [],
+      scholarCatalogues: [], professionalCatalogues: [], scholarReferenceCollections: [],
+      scholarRevisionFormats: ["mcq", "mrq", "short", "flashcard", "match", "sequence"], scholarRevisionModes: ["today", "quick", "spaced", "weak", "mock", "flashcards", "custom"],
+      scholarRevisionQuantity: 10, scholarRevisionDifficulty: "any", scholarRevisionFeedback: "immediate", scholarRevisionGeneration: "generate", scholarShortAnswerMarking: "ai_then_self",
+      scholarRevisionRecommendations: "on", scholarSrsMasteryReps: 5, scholarSrsMasteryDays: 60, scholarSrsMaxIntervalDays: 3650, scholarSrsHarderIntervalPercent: 100,
       // JOIN-01: every active programme is offered, no level or institution is asked, both fields may be.
       scholarOnboardingProgrammes: null, scholarProgrammeLevels: {}, scholarInstitutions: [], scholarOnboardingFields: ["level", "institution"],
       // P0: label, do not hide -- everything of a chosen catalogue is offered, labelled, by default.

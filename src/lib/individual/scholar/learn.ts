@@ -13,11 +13,12 @@
 import { createHash } from "node:crypto";
 import { STEP_MAX_SECTIONS } from "./config";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "./retrieval";
-import { competencyChunks, getPassage, searchCandidates, sectionLinks, sectionRefs, sectionsOf, topicsOfSections, type LearningStep, type SectionRef } from "./store";
-import { competencyLabels, type CompetencyLabel } from "./competency-view";
-import type { CatalogueCompetency } from "./catalogue";
+import { competencyChunks, getPassage, isUuid, searchCandidates, sectionLinks, sectionRefs, sectionsOf, topicsOfSections, type LearningStep, type SectionRef } from "./store";
+import { competencyLabels } from "./competency-view";
+import { referenceCollections, type CatalogueCompetency, type ReferenceCompetency } from "./catalogue";
 import type { GovernedReference } from "./generation";
-import { CONTENT_STATUS_LABEL } from "./config";
+import { CONTENT_STATUS_LABEL, REFERENCE_CHANGED_LABEL } from "./config";
+import type { IndividualPolicy } from "../policy";
 
 export type ScopeKind = "section" | "document" | "documents" | "topic" | "competency";
 export type LearningScope =
@@ -104,23 +105,87 @@ export async function resolveScope(admin: any, userId: string, scope: LearningSc
   return { ok: true, title: labels?.competencyTitle ?? "A competency", sections: await sectionRefs(admin, userId, linked.data), topic: null, competencyId: scope.competencyId };
 }
 
+/** A scope from a request body: a section, a document, chosen documents, a topic (optionally within materials) or a competency. Learn and Revision both use it. A string is the reason it was refused. */
+export function parseScope(body: { scope?: Record<string, unknown> } | null): LearningScope | string {
+  const s = body?.scope ?? {};
+  const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter(isUuid))].slice(0, MAX_SCOPE_MATERIALS) : []);
+  if (s.kind === "section") return isUuid(s.chunkId) ? { kind: "section", chunkId: s.chunkId } : "Choose a section.";
+  if (s.kind === "document") return isUuid(s.materialId) ? { kind: "document", materialId: s.materialId } : "Choose a material.";
+  if (s.kind === "documents") {
+    const m = ids(s.materialIds);
+    return m.length ? (m.length === 1 ? { kind: "document", materialId: m[0] } : { kind: "documents", materialIds: m }) : "Choose at least one material.";
+  }
+  if (s.kind === "topic") {
+    const topic = typeof s.topic === "string" ? s.topic.replace(/\s+/g, " ").trim() : "";
+    if (topic.length < 2 || topic.length > 120) return "Name a topic in a few words.";
+    const m = ids(s.materialIds);
+    return { kind: "topic", topic, materialIds: m.length ? m : undefined };
+  }
+  if (s.kind === "competency") return isUuid(s.competencyId) ? { kind: "competency", competencyId: s.competencyId } : "Choose a competency.";
+  return "Choose what to learn.";
+}
+
 /** L1/L3: the topics of a session's sections, read from Stage 2 (the student's corrections included). */
 export const sessionTopics = topicsOfSections;
 
 /**
- * The governed references for some sections: the competencies they are linked to (accepted first) with the
- * outcome named where one was, from the student's programme catalogue, labelled with the review state. [] when
- * the student has no programme or no usable catalogue (R1): learning goes on without them.
+ * LEARN-01 item 5: where Learn's governed references come from. The policy's collections when HQ lists any;
+ * otherwise (the default) the student's programme catalogue -- the CFCA catalogues Scholar is already allowed.
+ * Collections that cannot be read give no reference (fail closed): learning goes on without them, as with no
+ * catalogue (R1).
  */
-export async function governedReferences(admin: any, userId: string, chunkIds: readonly string[], catalogue: CatalogueCompetency[] | null, limit = 4): Promise<GovernedReference[]> {
+export type ReferenceSource = { collections: false; catalogue: readonly ReferenceCompetency[] | null } | { collections: true; catalogue: readonly ReferenceCompetency[] };
+
+export async function referenceSource(admin: any, policy: Pick<IndividualPolicy, "scholarReferenceCollections" | "scholarCatalogueMinStatus">, programme: CatalogueCompetency[] | null): Promise<ReferenceSource> {
+  if (!policy.scholarReferenceCollections.length) return { collections: false, catalogue: programme };
+  return { collections: true, catalogue: (await referenceCollections(admin, policy.scholarReferenceCollections, policy.scholarCatalogueMinStatus)) ?? [] };
+}
+
+/**
+ * Pure. THE ONE RULE for a reference's review label (Stage 3 acceptance, items 3 and 5): "Clinically approved" only
+ * where 395 approved the competency's CURRENT content (S1 reads that, by content hash) and the outcome shown is part
+ * of that content. A competency the source does not hold, or an outcome its content no longer holds, is never approved.
+ */
+export function referenceStatus(c: ReferenceCompetency | undefined, outcome: string | null): { status: string; approved: boolean } {
+  if (!c) return { status: CONTENT_STATUS_LABEL.unreviewed, approved: false };
+  if (outcome !== null && !c.outcomes.includes(outcome)) return { status: REFERENCE_CHANGED_LABEL, approved: false };
+  return { status: CONTENT_STATUS_LABEL[c.contentStatus] ?? CONTENT_STATUS_LABEL.unreviewed, approved: c.contentStatus === "approved" };
+}
+
+/**
+ * The governed references for some sections: the competencies they are linked to (accepted first) with the outcome
+ * named where one was, from the reference source, labelled by referenceStatus. With listed collections, only their
+ * competencies are references. An outcome the competency's current content no longer holds is not given. [] when
+ * there is nothing to give: learning goes on without them.
+ */
+export async function governedReferences(admin: any, userId: string, chunkIds: readonly string[], source: ReferenceSource, limit = 4): Promise<GovernedReference[]> {
   const links = await sectionLinks(admin, userId, chunkIds);
   if (!links.length) return [];
-  const ordered = [...links].sort((a, b) => Number(b.accepted) - Number(a.accepted));
+  const known = new Map((source.catalogue ?? []).map(c => [c.id, c]));
+  const ordered = [...links].sort((a, b) => Number(b.accepted) - Number(a.accepted)).filter(l => !source.collections || known.has(l.competencyId));
   const unique = [...new Map(ordered.map(l => [l.competencyId, l])).values()].slice(0, limit);
-  const labels: Map<string, CompetencyLabel> = await competencyLabels(admin, catalogue, unique.map(l => l.competencyId), new Map());
+  // Names for links the source does not hold (a programme changed since): the person's record, never approved.
+  const missing = unique.map(l => l.competencyId).filter(id => !known.has(id));
+  const names = missing.length ? await competencyLabels(admin, null, missing, new Map()) : new Map();
   return unique.map(l => {
-    const lab = labels.get(l.competencyId);
-    return { competencyId: l.competencyId, title: lab?.title ?? "A competency", code: lab?.code ?? null, outcome: l.outcome, status: CONTENT_STATUS_LABEL[(lab?.contentStatus ?? "unreviewed") as keyof typeof CONTENT_STATUS_LABEL] ?? CONTENT_STATUS_LABEL.unreviewed };
+    const c = known.get(l.competencyId);
+    const outcome = c && l.outcome !== null && !c.outcomes.includes(l.outcome) ? null : l.outcome;
+    return { competencyId: l.competencyId, title: c?.title ?? names.get(l.competencyId)?.title ?? "A competency", code: c?.code ?? names.get(l.competencyId)?.code ?? null, outcome, ...referenceStatus(c, outcome) };
+  });
+}
+
+/**
+ * Pure. A saved answer's references, labelled again by the source as it is NOW: a review label is never carried
+ * from the day the answer was saved (approval is lost the moment the content changes, 395).
+ */
+export function relabelReferences(refs: readonly unknown[], source: ReferenceSource): (GovernedReference & { tag?: string })[] {
+  const known = new Map((source.catalogue ?? []).map(c => [c.id, c]));
+  return refs.flatMap(raw => {
+    const r = raw as Partial<GovernedReference> & { tag?: string } | null;
+    if (!r || typeof r.title !== "string") return [];
+    const outcome = typeof r.outcome === "string" ? r.outcome : null;
+    const c = typeof r.competencyId === "string" ? known.get(r.competencyId) : undefined;
+    return [{ ...(r.tag ? { tag: r.tag } : {}), competencyId: r.competencyId, title: r.title, code: typeof r.code === "string" ? r.code : null, outcome, ...referenceStatus(c, outcome) }];
   });
 }
 

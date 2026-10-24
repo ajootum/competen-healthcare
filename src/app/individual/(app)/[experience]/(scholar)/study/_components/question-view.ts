@@ -9,7 +9,8 @@ import type { QuestionView } from "./client";
 /** A stored question, as the answering card shows it. The correct answer is NOT sent to the browser. */
 export function questionView(q: QuestionRow): QuestionView {
   return {
-    id: q.id, kind: q.kind, stem: q.stem, options: q.options, materialId: q.materialId, materialTitle: q.materialTitle,
+    // listQuestions gives these surfaces mcq and case only (REVISION-01's kinds are Revision's).
+    id: q.id, kind: q.kind === "case" ? "case" : "mcq", stem: q.stem, options: q.options, materialId: q.materialId, materialTitle: q.materialTitle,
     citation: `${q.materialTitle}, ${q.ordinal !== null ? citeChunk({ ordinal: q.ordinal, pageFrom: q.pageFrom, pageTo: q.pageTo }, q.unit) : "source section"}`,
     model: q.model, promptVersion: q.promptVersion, latest: q.latest ? { correct: q.latest.correct } : null,
   };

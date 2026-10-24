@@ -137,7 +137,8 @@ const generateOutsideGen = (src: Src) => [...src].filter(([f, s]) => f !== GEN &
 function preflightOrder(src: Src): string[] {
   const bad: string[] = [];
   for (const [file, call] of [[`${API}/explain/route.ts`, "runExplain("], [`${API}/questions/route.ts`, "runQuestions("],
-    [`${API}/materials/[id]/analyse/route.ts`, "runAnalysis("], [`${API}/cases/route.ts`, "runCase("]] as const) {
+    [`${API}/materials/[id]/analyse/route.ts`, "runAnalysis("], [`${API}/cases/route.ts`, "runCase("],
+    [`${API}/revision/sessions/route.ts`, "runRevisionQuestions("], [`${API}/revision/answer/route.ts`, "runEvaluate("]] as const) {
     const s = src.get(file) ?? "";
     const p = s.indexOf("await aiPreflight(ctx)"), c = s.indexOf(call);
     if (p < 0 || c < 0 || p > c) bad.push(file);
@@ -310,20 +311,142 @@ const artefactsBounded = (src: Src) => {
  * metered runner with its activity code and passes it to its generator, and returns the refusal before anything else;
  * the generators make no direct generate() call (only the default runner does); the runner sends only Scholar's
  * product, the activity, and a request id from the client's retry key -- never an amount, a policy or a level.
+ * D1: each route passes the request's risk subject (scholarRisk), which the runner requires and sends on every call.
  */
 const AI_ROUTES: [string, string, RegExp][] = [
-  [`${API}/explain/route.ts`, `scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode)`, /runExplain\([^)]*ai\.run\)/],
-  [`${API}/learn/act/route.ts`, "scholarAiRunner(ctx, req, action as", /runLearn\([\s\S]*?\}, ai\.run\)/],
-  [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions")`, /runQuestions\([^;]*ai\.run\)/],
-  [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps")`, /runCase\([^)]*ai\.run\)/],
-  [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map")`, /runAnalysis\([^)]*ai\.run\)/],
+  [`${API}/explain/route.ts`, `scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode, await scholarRisk(ctx.admin, ctx.userId, { text: question, passages }))`, /runExplain\([^)]*ai\.run\)/],
+  [`${API}/learn/act/route.ts`, `scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages }))`, /runLearn\([\s\S]*?\}, ai\.run\)/],
+  [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runQuestions\([^;]*ai\.run\)/],
+  [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run\)/],
+  [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }))`, /runAnalysis\([^)]*ai\.run\)/],
+  // REVISION-01: a session's new questions (one id per call, `:g1` ...) and a short answer's AI evaluation.
+  [`${API}/revision/sessions/route.ts`, "scholarAiRunner(ctx, req, \"questions\", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`)", /runRevisionQuestions\(ctx\.userId, call\.kind, passage, Math\.max\(call\.count, 3\), ai\.run\)/],
+  [`${API}/revision/answer/route.ts`, "scholarAiRunner(ctx, req, \"evaluate\", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\\n${r.text}`, passages: [passage] }))", /runEvaluate\([^)]*ai\.run\)/],
 ];
+/**
+ * K30 (REVISION-01 R2/R4): ANSWERS STAY ON THE SERVER. A question goes to the browser before it is answered only as
+ * revisionItemView -- learnerItem, which carries no key, rationale or source quote -- from every revision route and
+ * page. The key is revealed only by feedbackView after an answer, or a flashcard's back on reveal.
+ */
+const REV = `${LIB}/revision.ts`, REV_VIEW = `${LIB}/revision-view.ts`;
+const answersServerSide = (src: Src) => {
+  const rev = src.get(REV) ?? "", view = src.get(REV_VIEW) ?? "";
+  const learner = rev.slice(rev.indexOf("export function learnerItem"), rev.indexOf("export type Response ="));
+  // The page's session view only: the review cards below it are the 372 self-review cards, revealed on request as before.
+  const page = src.get(`${PAGES}/revise/page.tsx`) ?? "";
+  const routes = [src.get(`${API}/revision/sessions/route.ts`) ?? "", src.get(`${API}/revision/sessions/[id]/route.ts`) ?? "",
+    page.slice(page.indexOf("if (q.session) {"), page.indexOf("const [policy, materials, sets"))];
+  return learner.length > 50 && learner.length < 3000 && !/rationale|sourceQuote|correctIndex/.test(learner)
+    && /return \{ \.\.\.learnerItem\(q\), materialId: q\.materialId, materialTitle: q\.materialTitle, chunkId: q\.chunkId, citation: citationOf\(q\), label: REVISION_LABEL \};/.test(view)
+    // Every list of items any of them sends is the learner view, none raw.
+    && routes.every(s => /items: \S*\.map\(revisionItemView\)|items=\{questions\.map\(revisionItemView\)\}/.test(s)
+      && !/\bitems: (?![A-Z]|\S*\.map\(revisionItemView\))/.test(s) && !/\bitems=\{(?!questions\.map\(revisionItemView\))/.test(s))
+    && routes.every(s => !/sourceQuote|correctIndex|\.answer\b/.test(s.replace(/feedbackView\([^)]*\)/g, "")));
+};
+/**
+ * K31 (REVISION-01 R4, s10): MARKING SAYS WHAT IT WAS. Every revision question is stored private_formative; code
+ * marks every kind it can; a short answer that matches nothing is AI evaluation (with the evaluator recorded) or the
+ * student's own judgement -- never marked wrong by default; and the label shown is MARKING_LABEL's for that marking.
+ */
+const markingHonest = (src: Src) => {
+  const rev = src.get(REV) ?? "", store = src.get(STORE) ?? "", ans = src.get(`${API}/revision/answer/route.ts`) ?? "", view = src.get(REV_VIEW) ?? "";
+  return /if \(k\.kind === "accepted" && r\.kind === "text"\) return markShortAnswer\(r\.text, k\.answers\) \? \{ correct: true, score: 1, marking: "deterministic" \} : \{ needsJudgement: true \};/.test(rev)
+    && /return a && accepted\.some\(x => normaliseAnswer\(x\) === a\) \? true : null;/.test(rev)
+    && /review_status: "private_formative"/.test(store) && /evaluator_model: a\.evaluator\?\.model \?\? null/.test(store)
+    && /const marking = evaluator \? "ai_evaluation" as const : mark\.marking;/.test(ans)
+    && /if \(!evaluator\) return NextResponse\.json\(\{ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL\.self_graded \}\);/.test(ans)
+    && /markingLabel: MARKING_LABEL\[m\.marking\]/.test(view);
+};
+/**
+ * K32 (REVISION-01 R2, s8): REUSE FIRST, AND NO AI FOR WHAT IS STORED. A session is filled from saved questions before
+ * anything is written; only a shortfall in a writing mode is generated, never a section and format already written at
+ * this prompt version; a saved set replays with no AI call at all; policy can keep it to saved questions only.
+ */
+const reuseFirst = (src: Src) => {
+  const s = src.get(`${API}/revision/sessions/route.ts`) ?? "", rev = src.get(REV) ?? "";
+  const custom = s.slice(s.indexOf("if (mode === \"custom\") {"), s.indexOf("let chunkIds: string[] | null = null;"));
+  const fill = s.indexOf("let pick = pickQuestions("), gen = s.indexOf("runRevisionQuestions(");
+  return custom.length > 50 && custom.length < 4000 && !/scholarAiRunner|runQuestions|runRevisionQuestions|aiPreflight/.test(custom)
+    && fill > -1 && gen > fill && /if \(pick\.shortfall > 0 && GENERATING_MODES\.includes\(mode\) && scopeSections\.length\)/.test(s)
+    && /if \(policy\.scholarRevisionGeneration === "saved_only"\)/.test(s)
+    && /const plan = planGeneration\(\{ shortfall: pick\.shortfall, chunkIds: scopeSections, formats: kinds, existing \}\);/.test(s)
+    && /export const GENERATING_MODES: readonly RevisionMode\[\] = \["today", "quick", "mock", "flashcards"\];/.test(rev)
+    && /const fresh = pairs\.filter\(p => !input\.existing\.has\(`\$\{p\.chunkId\}\|\$\{p\.kind\}`\)\);/.test(rev);
+};
 const meteredEverywhere = (src: Src) => {
   const gen = src.get(GEN) ?? "", http = src.get(`${LIB}/http.ts`) ?? "";
   return AI_ROUTES.every(([f, runner, call]) => { const s = src.get(f) ?? ""; return s.includes(runner) && call.test(s) && /ai\.refusal\(\)/.test(s); })
     && [...gen.matchAll(/\bgenerate\(/g)].length === 1 && /const direct: AiRun = g => generate\(g\);/.test(gen)
-    && /runMeteredAi\(ctx\.admin, \{ userId: ctx\.userId, product: "scholar", activity, requestId: part === "main" \? requestId : `\$\{requestId\}:\$\{part\}`, generate: g \}\)/.test(http)
-    && /const requestId = requestIdFor\(ctx\.userId, req\.headers\.get\("x-request-id"\)\);/.test(http);
+    && /runMeteredAi\(ctx\.admin, \{ userId: ctx\.userId, product: "scholar", activity, requestId: part === "main" \? requestId : `\$\{requestId\}:\$\{part\}`, generate: g, risk \}\)/.test(http)
+    && /export function scholarAiRunner\(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext, callKey\?: string\)/.test(http)
+    && /text: \[input\.text \?\? "", \.\.\.input\.passages\.map\(p => p\.content\)\]/.test(http)
+    && /export const scholarRequestId = \(ctx: IndividualContext, req: Request\) => requestIdFor\(ctx\.userId, req\.headers\.get\("x-request-id"\)\);/.test(http)
+    && /const requestId = callKey \? `\$\{scholarRequestId\(ctx, req\)\}:\$\{callKey\}` : scholarRequestId\(ctx, req\);/.test(http);
+};
+/**
+ * K29 (owner D3, coordinator conditions): Learn's "Continue with your personal assistant" is the ONE Holdings personal
+ * AI (runIndividualAssistant, Scholar, Teach Me by default) given the step's own sections as study context. The
+ * student's text is screened before anything else, consent and quota run before the call, and its answer is never a
+ * Learn answer: it is not saved as an artefact or recorded as a learning event, makes no direct model call, and is
+ * shown apart under PERSONAL_AI_LABEL. Ask Scholar stays the grounded Learn `ask` action.
+ */
+const ASSIST = `${API}/learn/assistant/route.ts`;
+const assistantShared = (src: Src) => {
+  const r = src.get(ASSIST) ?? "", client = src.get(`${PAGES}/_components/learn-client.tsx`) ?? "", act = src.get(`${API}/learn/act/route.ts`) ?? "";
+  const screen = r.indexOf("findPatientIdentifiers(question)"), pre = r.indexOf("await aiPreflight(ctx)"), call = r.indexOf("await runIndividualAssistant(");
+  return screen > -1 && pre > screen && call > pre
+    && /experience: "scholar", mode, question,/.test(r) && /const mode = body\?\.mode === "ask" \? "ask" : "teach";/.test(r)
+    && /const study = await scholarRisk\(ctx\.admin, ctx\.userId, \{ passages \}\);/.test(r) && /, study,\n/.test(r)
+    && !/saveArtefact|recordLearningEvent|updateLearningSession|runMeteredAi|scholarAiRunner|generate\(/.test(r)
+    && /label: PERSONAL_AI_LABEL/.test(r)
+    && /\{PERSONAL_AI_LABEL\}/.test(client) && /setAssist\(/.test(client) && !/setCards\([^;]*assistant/.test(client)
+    && !/runIndividualAssistant/.test(act);
+};
+/**
+ * K27 (Stage 3 acceptance, items 3 and 5): the governed reference source is policy, read only through S1, and
+ * "clinically approved" comes from ONE rule -- 395's approval of the current content, with the outcome shown part of
+ * it. Every place that shows a reference (a new answer, a saved one in Learn, Saved learning) is labelled by that
+ * rule as the source is now, and the shared rendering shows approval only on `approved === true`. An AI flag is
+ * rendered by the one flag component, under its own heading, in Learn and in Saved learning.
+ */
+const KINDS = `${PAGES}/_components/learn-kinds.tsx`;
+const SAVED = `${PAGES}/saved/page.tsx`;
+const LEARN_CLIENT = `${PAGES}/_components/learn-client.tsx`;
+const referencesGoverned = (src: Src) => {
+  const learn = src.get(`${LIB}/learn.ts`) ?? "", cat = src.get(CAT) ?? "", act = src.get(`${API}/learn/act/route.ts`) ?? "";
+  const kinds = src.get(KINDS) ?? "", saved = src.get(SAVED) ?? "", client = src.get(LEARN_CLIENT) ?? "", cfg = src.get(`${LIB}/config.ts`) ?? "";
+  const status = learn.slice(learn.indexOf("export function referenceStatus"), learn.indexOf("export async function governedReferences"));
+  return /const all = await loadIndividualCatalogue\(admin, ids\);/.test(cat) && /\.filter\(c => meetsMinStatus\(c\.contentStatus, min\)\)/.test(cat)
+    && /if \(!policy\.scholarReferenceCollections\.length\) return \{ collections: false, catalogue: programme \};/.test(learn)
+    && /\?\? \[\] \};/.test(learn.slice(learn.indexOf("export async function referenceSource")))
+    && /if \(!c\) return \{ status: CONTENT_STATUS_LABEL\.unreviewed, approved: false \};/.test(status)
+    && /if \(outcome !== null && !c\.outcomes\.includes\(outcome\)\) return \{ status: REFERENCE_CHANGED_LABEL, approved: false \};/.test(status)
+    && /approved: c\.contentStatus === "approved" \}/.test(status) && (status.match(/approved: /g) ?? []).length === 4
+    && /\.filter\(l => !source\.collections \|\| known\.has\(l\.competencyId\)\)/.test(learn)
+    && (learn.match(/\.\.\.referenceStatus\(c, outcome\)/g) ?? []).length === 2
+    && /const refSource = await referenceSource\(ctx\.admin, policy, learner\.competencies\);/.test(act)
+    && /governedReferences\(ctx\.admin, ctx\.userId, passages\.map\(p => p\.chunkId\), refSource\)/.test(act)
+    && /references: relabelReferences\(a\.refs, refSource\)/.test(act) && !/references: a\.refs/.test(act)
+    && /<GovernedReferenceList refs=\{relabelReferences\(a\.refs, refSource\)\} \/>/.test(saved)
+    && /\{x\.approved === true\s*\?/.test(kinds) && !/approved/.test(kinds.replace(/x\.approved === true|CONTENT_STATUS_LABEL\.approved|approved\?: boolean/g, ""))
+    && /export const FLAG_HEADING = "Flagged by AI for you to check";/.test(cfg)
+    && [client, saved].every(s => /<AiFlagList flags=\{/.test(s) && /<GovernedReferenceList refs=\{/.test(s) && !/SOURCE_KIND_LABEL\.(flag|reference)/.test(s));
+};
+/**
+ * K28 (Stage 3 acceptance, item 4): an answer withheld as unsupported is said plainly, with next steps from the
+ * notes only -- the nearest sections, a rephrase where Ask is offered, "this isn't in your notes", and the background
+ * only where policy allows it and it passed its own checks. The withheld text itself is never sent.
+ */
+const withheldPlain = (src: Src) => {
+  const act = src.get(`${API}/learn/act/route.ts`) ?? "", view = src.get(`${LIB}/learn-view.ts`) ?? "";
+  const branch = act.slice(act.indexOf("if (!r.check.ok) {"), act.indexOf("const b = r.background;"));
+  const fn = view.slice(view.indexOf("export function withheldNext"), view.indexOf("export function offeredActions"));
+  return /const next = withheldNext\(\{ reason: r\.check\.reason, detail, sources, askOffered: policy\.scholarLearningActions\.includes\("ask"\), background: r\.background, backgroundAllowed: background \}\);/.test(branch)
+    && /withheld: true, reason: r\.check\.reason, message: next\.why, notInNotes: next\.notInNotes, next \}/.test(branch)
+    && !/answer:|r\.check\.text|split|r\.flags/.test(branch)
+    && /background: input\.backgroundAllowed && b\?\.ok \? \{ text: b\.text, label: SUPPLEMENTARY_LABEL \} : null,/.test(fn)
+    && /nearest: input\.sources\.slice\(0, WITHHELD_NEAREST_MAX\)\.map\(s => \(\{ tag: s\.tag, chunkId: s\.chunkId, materialId: s\.materialId, citation: s\.citation \}\)\)/.test(fn)
+    && /export const NOT_IN_NOTES_LABEL = "This isn't in your notes\.";/.test(src.get(`${LIB}/config.ts`) ?? "");
 };
 /**
  * K24 (COMPETEN-SCHOLAR-LEARN-01): Stage 3's boundaries hold in the code.
@@ -732,6 +855,18 @@ function main() {
     artefactsBounded(REAL));
   ok("K26. AI-FAIR-USE-01 swap: every Scholar AI route runs through the metered runner with its activity code and returns a refusal first; generators make no direct generate() call; the runner sends no amount, policy or level",
     meteredEverywhere(REAL));
+  ok("K29. D3: Learn's personal-assistant entry is the shared Holdings assistant on the step's sections, screened and preflighted first, never saved or recorded as Learn, shown apart under its own label",
+    assistantShared(REAL));
+  ok("K27. Stage 3 items 3 and 5: governed references come from policy through S1; 'clinically approved' only by the one rule (395, current content, outcome held), everywhere a reference is shown; AI flags rendered apart under their own heading",
+    referencesGoverned(REAL));
+  ok("K28. Stage 3 item 4: an unsupported answer is withheld with the plain reason and notes-only next steps; the withheld text is never sent; background only where policy allows and it passed its checks",
+    withheldPlain(REAL));
+  ok("K30. REVISION-01: a question reaches the browser before it is answered only as the learner view -- no key, rationale or source quote",
+    answersServerSide(REAL));
+  ok("K31. REVISION-01: revision questions are private formative; code marks what it can; an unmatched short answer is labelled AI evaluation or the student's own judgement, never wrong by default",
+    markingHonest(REAL));
+  ok("K32. REVISION-01: reuse first -- a shortfall only is written, never a section and format already written; a saved set replays with no AI; policy can keep to saved questions",
+    reuseFirst(REAL));
   ok("K24. LEARN-01: history holds no conversation, the act route keeps to policy, screens input, records only what was shown, stores no practice question, and the student's context is never grounding",
     learnBounded(REAL));
   ok("K23. upload limits: 413 raises the CHECK and the bucket to 25 MB, the live value stays 10 MB until HQ raises it, and the session is enforced on the server at both steps",
@@ -840,9 +975,33 @@ function main() {
   ok("P42. ⚠ K25 goes red when the AI runs before the saved answer is looked up, or conversation becomes an artefact",
     !artefactsBounded(plant(`${API}/learn/act/route.ts`, "const pre = await aiPreflight(ctx);", "const pre0 = 0;"))
     && !artefactsBounded(plant(`${API}/learn/act/route.ts`, "const storable = isArtefactAction(action) && !hasHistory && oneMaterial;", "const storable = !hasHistory && oneMaterial;")));
+  ok("P46. ⚠ K26 goes red when a route drops the risk subject, or the runner stops sending it",
+    !meteredEverywhere(plant(`${API}/cases/route.ts`, `"case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, `"case_steps", {})`))
+    && !meteredEverywhere(plant(`${LIB}/http.ts`, "generate: g, risk })", "generate: g })")));
+  ok("P47. ⚠ K29 goes red when the screen moves after the call, the answer is saved as an artefact, or the label goes",
+    !assistantShared(plant(ASSIST, "if (findPatientIdentifiers(question).length)", "if (false)"))
+    && !assistantShared(plant(ASSIST, "  const study = await scholarRisk(", "  await saveArtefact(ctx.admin, ctx.userId, {} as never);\n  const study = await scholarRisk("))
+    && !assistantShared(plant(ASSIST, "label: PERSONAL_AI_LABEL", "label: null")));
+  ok("P48. ⚠ K30 goes red when the learner view carries the rationale, or a route sends a raw question",
+    !answersServerSide(plant(REV, "  const base = { id: q.id, kind: q.kind, stem: q.stem,", "  const base = { id: q.id, kind: q.kind, rationale: q.rationale, stem: q.stem,"))
+    && !answersServerSide(plant(`${API}/revision/sessions/route.ts`, "items: ordered.map(revisionItemView), generated, reused", "items: ordered, generated, reused")));
+  ok("P49. ⚠ K31 goes red when an unmatched short answer is marked wrong, or AI evaluation is recorded as code",
+    !markingHonest(plant(REV, ": { needsJudgement: true };", ": { correct: false, score: 0, marking: \"deterministic\" };"))
+    && !markingHonest(plant(`${API}/revision/answer/route.ts`, "const marking = evaluator ? \"ai_evaluation\" as const : mark.marking;", "const marking = mark.marking;")));
+  ok("P50. ⚠ K32 goes red when a saved set calls AI, or spaced review writes new questions",
+    !reuseFirst(plant(`${API}/revision/sessions/route.ts`, "    await touchRevisionSet(ctx.admin, ctx.userId, set.id);", "    await touchRevisionSet(ctx.admin, ctx.userId, set.id);\n    await aiPreflight(ctx);"))
+    && !reuseFirst(plant(REV, "[\"today\", \"quick\", \"mock\", \"flashcards\"];", "[\"today\", \"quick\", \"mock\", \"flashcards\", \"spaced\"];")));
   ok("P43. ⚠ K26 goes red when a route stops passing the runner, or a generator calls generate() directly",
     !meteredEverywhere(plant(`${API}/questions/route.ts`, ".scholarQuestionsPerRequest, ai.run)", ".scholarQuestionsPerRequest)"))
     && !meteredEverywhere(plant(GEN, "    const r = await run({\n      system: QUESTION_SYSTEM[kind],", "    const r = await generate({\n      system: QUESTION_SYSTEM[kind],")));
+  ok("P44. ⚠ K27 goes red when a draft counts as approved, a saved answer keeps its saved label, or the rendering trusts a status string",
+    !referencesGoverned(plant(`${LIB}/learn.ts`, 'approved: c.contentStatus === "approved" }', 'approved: c.contentStatus !== "unreviewed" }'))
+    && !referencesGoverned(plant(`${API}/learn/act/route.ts`, "references: relabelReferences(a.refs, refSource)", "references: a.refs"))
+    && !referencesGoverned(plant(KINDS, "{x.approved === true", "{x.status === CONTENT_STATUS_LABEL.approved"))
+    && !referencesGoverned(plant(`${LIB}/learn.ts`, ".filter(l => !source.collections || known.has(l.competencyId))", "")));
+  ok("P45. ⚠ K28 goes red when the withheld text is sent, or background is offered where policy does not allow it",
+    !withheldPlain(plant(`${API}/learn/act/route.ts`, "message: next.why, notInNotes: next.notInNotes, next }", "message: next.why, notInNotes: next.notInNotes, next, answer: r.check }"))
+    && !withheldPlain(plant(`${LIB}/learn-view.ts`, "background: input.backgroundAllowed && b?.ok ?", "background: b?.ok ?")));
   ok("P41. ⚠ K24 goes red when the policy gate goes, an event is recorded before it is shown, or the context becomes grounding",
     !learnBounded(plant(`${API}/learn/act/route.ts`, "if (isLearnAction(action) && !policy.scholarLearningActions.includes(action))", "if (false)"))
     && !learnBounded(plant(`${API}/learn/act/route.ts`, "if (recorded && sessionId && shown && policy.scholarLearningHistory === \"record\")", "if (recorded && sessionId)"))

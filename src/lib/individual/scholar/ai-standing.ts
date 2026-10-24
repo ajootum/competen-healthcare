@@ -15,7 +15,7 @@ export type { AiActivityState, AiStanding };
 export type AiServiceLevel = AiStanding["level"];
 
 /** Scholar's activity codes (the approved list). The engine refuses an unknown code. */
-export const SCHOLAR_AI_ACTIVITIES = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask", "check", "clarify", "tutor_continue", "map", "questions", "case_steps"] as const;
+export const SCHOLAR_AI_ACTIVITIES = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask", "check", "clarify", "tutor_continue", "map", "questions", "case_steps", "evaluate"] as const;
 export type ScholarAiActivity = (typeof SCHOLAR_AI_ACTIVITIES)[number];
 
 /** Where the student stands for Scholar's AI. Never throws (the engine's contract). */
