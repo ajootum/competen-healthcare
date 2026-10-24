@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { currentTraceId } from "@/lib/trace";
 import { wceMissing } from "@/lib/config/workspace-config-write";
-import { changeRate, publishPolicies, savePolicyDraft, type RateKind } from "@/lib/ai/fair-use-admin";
+import { changeRate, publishPolicies, RATE_KINDS, savePolicyDraft, type RateKind } from "@/lib/ai/fair-use-admin";
 import { AI_PRODUCTS, type AiProduct } from "@/lib/ai/fair-use-policy";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 // POST /api/hq/ai-governance -- COMPETEN-AI-FAIR-USE-01 s12.
 //
-// Body: { action: "rate", kind: "price" | "fx" | "cau", ...fields } | { action: "policy", product, settings } |
+// Body: { action: "rate", kind: "price" | "fx" | "basis" | "eligibility", ...fields } | { action: "policy", product, settings } |
 //       { action: "publish", note? }
 //
 // ⚠ GATED BY hqApiGate(["hq.platform.ai.manage"]) (migration 410, the Platform Director). Rates are append-only
@@ -30,10 +30,10 @@ export async function POST(req: Request) {
 
   switch (body?.action) {
     case "rate": {
-      if (!["price", "fx", "cau"].includes(body.kind)) return refuse(400, "Choose a rate kind.");
+      if (!(RATE_KINDS as readonly string[]).includes(body.kind)) return refuse(400, "Choose a rate kind.");
       const r = await changeRate(ctx.admin, body.kind as RateKind, body, ctx.userId);
       if (!r.ok) return refuse(422, r.error);
-      await audit("ai_rate_changed", { kind: body.kind, id: r.id });
+      await audit(body.kind === "eligibility" ? "ai_model_eligibility_decided" : "ai_rate_changed", { kind: body.kind, id: r.id });
       return NextResponse.json({ ok: true });
     }
     case "policy": {

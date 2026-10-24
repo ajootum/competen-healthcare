@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { EXPERIENCES } from "@/lib/individual/experiences";
 import { getAiStanding } from "@/lib/ai/allowance";
-import { ACTIVITY_CATALOGUE, type AiServiceLevel } from "@/lib/ai/fair-use-policy";
+import type { AiServiceLevel } from "@/lib/ai/fair-use-policy";
 import { experiencePage, gatedMetadata } from "../../../_components/shell-context";
 import { PageHeader } from "../../../_components/chrome";
 
@@ -36,7 +36,6 @@ export default async function AiAllowancePage({ params }: { params: Promise<{ ex
   const { ctx, experience } = page;
   const x = EXPERIENCES[experience];
   const standing = await getAiStanding(ctx.admin, { userId: ctx.userId, product: experience });
-  const catalogue = ACTIVITY_CATALOGUE[experience];
   const renew = standing.resetsAt ? new Date(standing.resetsAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : null;
 
   return (
@@ -76,7 +75,7 @@ export default async function AiAllowancePage({ params }: { params: Promise<{ ex
             <ul className="mt-2 divide-y divide-gray-100">
               {Object.entries(standing.activities).map(([code, a]) => (
                 <li key={code} className="flex flex-wrap items-baseline justify-between gap-2 py-2.5">
-                  <span className="text-[14px] text-gray-900">{catalogue[code]?.label ?? code}</span>
+                  <span className="text-[14px] text-gray-900">{a.label}</span>
                   <span className={`text-[13px] font-semibold ${a.available ? "text-gray-800" : "text-amber-900"}`}>
                     {a.available ? (a.via === "reserve" ? "Available from your essential-learning reserve" : "Available") : (a.reason ?? "Not available right now")}
                   </span>
