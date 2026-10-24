@@ -54,7 +54,9 @@ export const INSIGHT_WINDOW_DAYS = 28;
 // generation.ts and its version here changes with it, so a stored question always says which prompt
 // produced it.
 export const PROMPT_VERSIONS = {
-  explain: "scholar-explain-v2",
+  // v3 (Stage 3): rule 3 also forbids counting what a passage lists -- the cause of every withheld plain
+  // explanation in the Stage 3 staging run ("the number three"). Every mode builds on it, so they move too.
+  explain: "scholar-explain-v3",
   mcq: "scholar-mcq-v3",
   case: "scholar-case-v3",
   verify: "scholar-verify-v1",
@@ -66,7 +68,7 @@ export const PROMPT_VERSIONS = {
   // withheld answer in a staging diagnostic. caseSteps v2: progression only in the passage's own words.
   // v4: the tutor gets the same no-counting rule (the cause of every withheld tutor turn in a diagnostic).
   // v5: the tutor may receive the student's own study context (P1, learner-context.ts) ahead of the passages.
-  explainModes: "scholar-explain-modes-v5",
+  explainModes: "scholar-explain-modes-v6",
   map: "competency-map-v2", // the Holdings engine's MAPPING_PROMPT_VERSION (src/lib/competency/mapping.ts), pinned equal by a unit test
   caseSteps: "scholar-case-steps-v2",
 } as const;
