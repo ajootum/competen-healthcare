@@ -109,6 +109,13 @@ function main() {
     // It grants nothing itself -- acceptance goes through grants.ts above.
     // profiles.update is the one role-clearing write 1d pins to its exact argument.
     "src/lib/individual/invitations.ts": ["individual_invitation.insert", "individual_invitation.update", "profiles.update"],
+    // P1 Commercial (migration 399), dark behind individual_commerce (13a-13b). The checkout row is written
+    // before the payer leaves and closed if the gateway refuses it. The membership (source purchase) and the
+    // APPENDED payment period are written only by the settlement adapter, after the three checks -- the engine
+    // (src/lib/commerce/settlement.ts) writes the checkout and delivery rows through the adapter's table names.
+    "src/lib/individual/commerce.ts": ["individual_checkout.insert", "individual_checkout.update", "individual_membership.insert", "individual_entitlement.insert"],
+    // Plans as data, behind hq.individual.commercial.manage (13c). Retired by deactivating -- never deleted.
+    "src/lib/individual/plans.ts": ["individual_plan.update", "individual_plan.insert"],
   };
   const writes: string[] = [];
   for (const [f, src] of SRC) {
@@ -148,8 +155,14 @@ function main() {
   // Two display readers: the person's own history, and the HQ grant screen's lookup (COMPETEN-IND-ACCESS-001),
   // which shows every period and takes "active now" from the view, never from the dates.
   const grantsLib = SRC.get("src/lib/individual/grants.ts") ?? "";
+  // ONE NAMED NON-LIVENESS READER: commerce.ts reads the HQ adult confirmation (D8) a purchase carries forward --
+  // adult_confirmed_at/by only, never a period. Its liveness question (where a paid period ends) uses the view.
+  const commerceLib = SRC.get("src/lib/individual/commerce.ts") ?? "";
+  const commerceLedger = [...commerceLib.matchAll(/from\("individual_entitlement"\)\s*\.select\("([^"]*)"\)/g)].map(m => m[1]);
+  const nonLiveness = commerceLedger.length === 1 && commerceLedger[0] === "adult_confirmed_at, adult_confirmed_by";
   ok("4c. only the two display readers READ the raw ledger (history, and the HQ lookup) -- every access decision uses the view",
-    ledgerReaders.length === 2 && ledgerReaders.includes("src/lib/individual/history.ts") && ledgerReaders.includes("src/lib/individual/grants.ts")
+    ledgerReaders.length === 3 && nonLiveness && ledgerReaders.includes("src/lib/individual/commerce.ts")
+      && ledgerReaders.includes("src/lib/individual/history.ts") && ledgerReaders.includes("src/lib/individual/grants.ts")
       && /from\("individual_live_entitlement"\)\.select\("id"\)\.eq\("user_id", p\.id\)/.test(grantsLib)
       && !/Date\.now\(\)/.test(grantsLib), ledgerReaders.join(", "));
 
@@ -158,7 +171,10 @@ function main() {
   // ONE NAMED EXCEPTION: accepting an invitation (migration 378) is done by a person who holds no membership
   // yet, so requireIndividualContext would refuse the only people it serves. 12l pins its own gate order.
   const ACCEPT_ROUTE = "src/app/api/individual/invitation/accept/route.ts";
-  const unguarded = routes.filter(f => f !== ACCEPT_ROUTE).filter(f => {
+  // AND ONE MORE: a first purchase (P1 Commercial) may come from a signed-in person with no membership yet --
+  // the settlement writes it, after payment. 13b pins that route's own gate order.
+  const CHECKOUT_ROUTE = "src/app/api/individual/billing/checkout/route.ts";
+  const unguarded = routes.filter(f => f !== ACCEPT_ROUTE && f !== CHECKOUT_ROUTE).filter(f => {
     const s = SRC.get(f) ?? "";
     const handlers = [...s.matchAll(/export async function (POST|PUT|PATCH|DELETE)\b/g)].length;
     return handlers > 0 && [...s.matchAll(/requireIndividualContext\(/g)].length < handlers;
@@ -433,6 +449,51 @@ function main() {
     quotaSites.length >= 3 && unfenced.length === 0 && directAi.length === 0
     && /ok: !unreadable && estate\.ok && estate\.used < limit/.test(policyLib),
     `sites ${quotaSites.length}, unfenced: ${unfenced.join(", ")}; direct checkAiQuota: ${directAi.join(", ")}`);
+
+  // ── 13. P1 COMMERCIAL -- DARK, OWNER-HELD, D8 INTACT, PRACTICE UNCHANGED ──
+  const commerceGate = /export async function individualCommerceEnabled[\s\S]*?individualAppEnabled\(admin\)[\s\S]*?eq\("flag", INDIVIDUAL_COMMERCE_FLAG\)[\s\S]*?return data\?\.enabled === true;[\s\S]*?catch \{\s*return false;/.test(commerceLib)
+    && /INDIVIDUAL_COMMERCE_FLAG = "individual_commerce"/.test(commerceLib);
+  const flagRowWritten = readdirSync("supabase/migrations")
+    .filter(m => /individual_commerce/.test(readFileSync(`supabase/migrations/${m}`, "utf8").replace(/--.*$/gm, "")));  // SQL only: a comment may name it
+  ok("13a. commerce is dark by default: BOTH individual_app and individual_commerce, a failed read is OFF, and no migration writes the flag",
+    commerceGate && flagRowWritten.length === 0, flagRowWritten.join(", "));
+
+  const checkoutSrc = SRC.get(CHECKOUT_ROUTE) ?? "";
+  const returnSrc = SRC.get("src/app/individual/billing/return/page.tsx") ?? "";
+  const plansSrc = SRC.get("src/app/api/hq/individual/plans/route.ts") ?? "";
+  const webhookSrc = readFileSync("src/app/api/v1/practice/billing/webhook/flutterwave/route.ts", "utf8");
+  const before = (src: string, a: string, b: string) => src.indexOf(a) >= 0 && src.indexOf(b) > src.indexOf(a);
+  const plansHandlers = [...plansSrc.matchAll(/export async function (GET|POST)\(/g)].length;
+  const plansGated = [...plansSrc.matchAll(/hqApiGate\(\["hq\.individual\.commercial\.manage"\]\);\s*if \(isHqRefusal\(ctx\)\) return ctx;\s*if \(!\(await individualCommerceEnabled\(ctx\.admin\)\)\) return notFound\(\);/g)].length;
+  ok("13b. every commerce entry point asks the gate first: checkout (session, gate, then body), return page, HQ plans, webhook dispatch, plan AI limit",
+    before(checkoutSrc, "requireIndividualSession()", "individualCommerceEnabled(s.admin)") && before(checkoutSrc, "individualCommerceEnabled(s.admin)", "req.json()")
+      && /individualCommerceEnabled\(admin\)\)\) notFound\(\)/.test(returnSrc) && before(returnSrc, "notFound()", 'from("individual_checkout")')
+      && plansHandlers === 2 && plansGated === 2
+      && /isIndividualTxRef\(txRef\) && \(await individualCommerceEnabled\(admin\)\)/.test(webhookSrc)
+      && /individual \? await applyIndividualWebhook\(admin, cfg, ev\) : await applyWebhook\(admin, cfg, ev\)/.test(webhookSrc)
+      && /export async function individualPlanAiLimit[^{]*\{\s*if \(!\(await individualCommerceEnabled\(admin\)\)\) return \{ state: "off" \};/.test(commerceLib),
+    `plans handlers ${plansHandlers}, gated ${plansGated}`);
+
+  const m400 = readFileSync("supabase/migrations/400-individual-commercial-manage-capability.sql", "utf8");
+  ok("13c. pricing is owner-held: migration 400 creates hq.individual.commercial.manage and grants it to NO position, and the catalogue lists it",
+    /'hq\.individual\.commercial\.manage'/.test(m400) && !/insert into hq_position_capability/i.test(m400)
+      && /code: "hq\.individual\.commercial\.manage"/.test(readFileSync("src/lib/hq/spaces.ts", "utf8")));
+
+  ok("13d. D8 is not relaxed: a paid Scholar period carries forward the recorded HQ confirmation and never invents one",
+    [...commerceLib.matchAll(/adult_confirmed_at:/g)].length === 1 && /adult_confirmed_at: adult\.at, adult_confirmed_by: adult\.by/.test(commerceLib)
+      && /ADULT_CONFIRMATION_REQUIRED/.test(commerceLib));
+
+  const practiceGw = readFileSync("src/lib/practice/subscription-gateway.ts", "utf8");
+  const practiceSub = readFileSync("src/lib/practice/subscription.ts", "utf8");
+  ok("13e. Practice is a client of the Holdings code, not a copy: its gateway re-exports it (cpr- refs) and applyWebhook is a settlement adapter",
+    /from "@\/lib\/commerce\/gateway"/.test(practiceGw) && /PRACTICE_TX_PREFIX = "cpr"/.test(practiceGw) && !/fetch\(/.test(practiceGw)
+      && /return settleWebhook\(admin, cfg, ev, PRACTICE_SETTLEMENT\)/.test(practiceSub) && !/verifyTransaction\(/.test(practiceSub));
+
+  const quotaCalls = FILES.flatMap(f => [...(SRC.get(f) ?? "").matchAll(/individualAiQuota\(await checkAiQuota\([^;]*/g)].map(m => `${f}|${m[0]}`));
+  const noPlan = quotaCalls.filter(c => !/await individualPlanAiLimit\(ctx\.admin, ctx\.userId\)\)$/.test(c));
+  ok("13f. AI fair use per plan: every Individual quota site passes the plan limit, which can only replace the policy base inside the hard limit",
+    quotaCalls.length >= 3 && noPlan.length === 0 && /Math\.min\(INDIVIDUAL_AI_HOURLY_DEFAULT/.test(commerceLib)
+      && /plan\.state === "unreadable"/.test(policyLib), noPlan.join(", "));
 
   ok("9g. D10: no Individual code persists AI conversation",
     !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));
