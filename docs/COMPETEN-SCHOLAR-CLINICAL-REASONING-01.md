@@ -92,3 +92,119 @@ Composite (id, user_id) foreign keys throughout. RLS on, own-row read only. A st
 
 - **Application order:** 435, then 436. **In the production release they ship together, in that order.**
 - **Production:** none applied.
+
+## 3. Student Clinical Reasoning (5A) as built
+
+| | Built |
+|---|---|
+| **CR1 Case entry** | **Entries** on Apply, policy-governed: Generate a case from my notes; Practise a competency; Choose an existing case (the governed library, behind `case_library`); Surprise me (one of the student's materials, a different one each day). Also **Practise this in a clinical case** from Teach Me and from a Revision answer, on that section.<br>**Context and mode:** clinical contexts (General, Medical, Surgical, Paediatric, Maternal health, Emergency, Critical care) and guided or independent play.<br>**Library first (CI6):** where `case_library` is on and the case policy says reuse first, suitable approved cases are offered BEFORE anything is written, with no AI and no charge. The student can still ask for one from their notes.<br>**No catalogue needed:** a case works without an assigned competency catalogue. |
+| **CR2 Interactive case** | A progressive scenario on the shared case engine (`blueprint.ts`):<br>- **only what was reached:** the stages reached and their decisions, and the findings revealed so far, nothing ahead or off the path (`learnerView`, tokens, never ids, the salt server-only);<br>- **asking:** the student asks for the findings the current decision permits;<br>- **deciding:** single and multiple choice, plus written reasoning;<br>- **leaving:** the student leaves and resumes at the same place. |
+| **CR3 Governed progression** | **One structure:** a private case is a `case-blueprint/1` in the private profile.<br>**Built by code:** the model writes a small draft from the student's sections only; code (`clinical.ts blueprintFromDraft`) assigns every id, keeps the case LINEAR (no branch, which would need a consequence the notes do not give), takes competencies and sources only from their tags, and turns a stated safety point into a machine-checkable criterion.<br>**Checked before storing:** a case is stored only if it passes `checkPrivateCase`: a valid private blueprint, nothing ungrounded (Holdings grounding verifier), nothing identifying (Scholar's screen and Holdings' `screenBlueprint`).<br>**Library cases** are governed facts approved on their exact version (422), played as stored. |
+| **CR4 Reasoning feedback** | **Choices:** marked by their key, with safety criteria checked by code (`safetyEvents`). After each decision: the key, each option's rationale, any safety point broken, and how it was marked.<br>**Written reasoning:** AI feedback (activity `evaluate`, metered with its risk, checked like any evaluation, labelled AI evaluation in its own box), or the student's own review against "what a good answer contains". Library cases record theirs through the shared delivery (§4).<br>**Debrief, from the record:** per reasoning dimension, the safety points missed, safety-critical findings that could have been asked for and never were, the objectives, and "Teach me what I missed" on the section. Labelled formative simulation, not an assessment, not competence.<br>**Next steps:** Teach me this, Revise related knowledge, Try another case. |
+| **CR5 History and continuation** | 435 keeps:<br>- the case (version by its hash, its source sections and its CFCA competencies);<br>- each session (stages reached, findings revealed, mode, position, debrief);<br>- every decision as made, append-only.<br>"Your cases" lists private and library plays, and stored cases replay with no AI. |
+
+## 4. Clinical Case Intelligence (5B), the Scholar side
+
+- **Offer this case (CI1).** The student's explicit, per-case action. It needs their separate, revocable candidacy permission, on the current attestation text.
+  - **The snapshot is Scholar's** (`privateCaseSnapshot`). It strips the student's source references (B8), carries the attestation, and is checked word for word against the student's own sections (`verbatimCheck`, 12-word runs, C-b).
+  - **Holdings decides** eligibility and the identifier screen (`candidates.ts`). It costs no AI, and the student is never named to an educator.
+  - **Withdrawal:** withdraw and revoke are never gated. Deleting a material, or erase-all, withdraws the cases written from it first (C-e).
+- **Existing S4 practice cases** are offered through the same path, converted to the minimal blueprint (`s4CaseBlueprint`).
+- **Library plays** go only through `library.ts` (`startCaseSession`, `revealInSession`, `answerInSession`). Scholar writes no library session (coordinator decision; K33).
+- **Live AI feedback on a library case's written decision.**
+  - **Who pays:** the owner is resolved by rule for `case.live_with_stored`, the student's Individual budget, never chosen by the browser. The call is `runOwnedAi` counted against `caseSessionRecord(sessionId)`.
+  - **Where it is kept:** it is recorded only through `recordSessionFeedback` (424). It is labelled AI evaluation.
+- **Off by default:** everything library-facing sits behind `case_library` (default OFF).
+
+## 5. Reused Holdings engines
+
+- **Case blueprint and its pure engine:** `blueprint.ts` (`learnerView`, `answeredView`, `resolveToken`, `resolveOptions`, `safetyEvents`, `validateBlueprint`) and `library.ts` (`applyAnswer`), one engine for private and library cases.
+- **Library delivery, candidates and the case policy:** `library.ts`, `candidates.ts`, `policy.ts` (`reuseFirst`, the attestation text), and `screen.ts`.
+- **AI:**
+  - the gateway and the Fair-Use Engine: `case_steps` for drafting and `evaluate` for feedback, each metered with its D1 risk subject;
+  - consumption ownership: `resolveOwner` and `runOwnedAi`.
+- **Holdings grounding verifier, the patient-identifier screens, CFCA links** (Stage 2 mapping) **and the WCE Individual policy.**
+
+## 6. No-code configuration
+
+**Individual policy (existing engine):**
+- `scholar_case_contexts`, `scholar_case_entries`, `scholar_case_dimensions`;
+- `scholar_case_generation` (generate, or stored and library only);
+- `scholar_case_mode` (guided or independent);
+- `scholar_case_reasoning_feedback` (AI where available, otherwise self-review).
+
+**Holdings case policy (IND-007):** reuse first, the offer limit, variations and the attestation version.
+
+**Not settings:** private formative only, grounding, the identifier screens, linear private cases, key marking, machine-checked safety, labelled AI feedback, and delivery only when published and approved.
+
+## 7. AI cost attribution
+
+| Activity | Budget | How |
+|---|---|---|
+| Drafting a private case (`case_steps`) | Individual | `runMeteredAi` via `scholarAiRunner`, with its risk |
+| AI feedback on written reasoning, private case (`evaluate`) | Individual | `runMeteredAi`, with its risk |
+| AI feedback on written reasoning, library case (`evaluate`, `case.live_with_stored`) | Individual, by rule | `resolveOwner` → `runOwnedAi`, `record = caseSessionRecord` |
+| Replaying a stored or library case (`case.replay_stored`) | none | no AI |
+| Offering a case | none | no AI (`candidates.ts`) |
+| Platform screening and shared case development | Platform | IND-007 (not Scholar) |
+
+## 8. End-to-end staging evidence
+
+Run `scripts/scholar-clinical01-harness.ts`:
+- **Where:** a dev server on this branch, against staging `ezhvpgtcqcdsgylrxgdb`.
+- **Conditions:** metering OFF, `case_library` OFF, real AI, the respiratory materials.
+- **Result:** **ALL GREEN, 14 passed, 0 failed**, with C14, C15 and C9 pending.
+
+| Owner's step | Check | Result |
+|---|---|---|
+| 1 A private respiratory case from notes | C1: written, checked, private formative, linear; its session starts | PASS |
+| 2 Mapped to CFCA outcomes | C2: objectives name the linked competencies (typed links: 4), sources named | PASS |
+| 3 A progressive scenario | C3: first stage only; no key, rationale, expected answer, safety flag, source reference or salt | PASS |
+| 4 Findings revealed appropriately | C4: a permitted finding shown when asked for, anything else refused | PASS |
+| 5 Interprets and decides | C5: every decision recorded, the case moves on by its own progression to the end | PASS |
+| 6 Structured reasoning feedback | C6: key and rationale per decision, how it was marked; the debrief by dimension | PASS |
+| 7 Saved and resumable | C7: leave and come back to the same place; decisions append-only (a rewrite is refused) | PASS |
+| 8 Back to Teach Me or Revision | C8: links on the case page; Teach Me opens on the section; Teach Me starts a case | PASS |
+| 9 Candidate enters the review queue (Scholar side) | C9: explicit offer, source-free snapshot | PEND: `case_library` OFF |
+| 14 Another student reuses without generation | C14 | PEND: `case_library` OFF, and no deliverable case yet (IND-007's steps 9–13) |
+| 15 Live AI on the Individual budget | C15 | PEND: metering OFF (the owner's switch) |
+| 17 Privacy | C17: another student reaches no session, answer, case or page | PASS |
+| 18 Stored cases after allowance exhaustion | C18: replayable and key-marked; only a NEW case is refused, saying so | PASS |
+| 19 No mandatory catalogue | C19: a case written and played for a student with no programme | PASS |
+| — Erase-all | E1: no case, session or decision left (the append-only trail yields to the cascade) | PASS |
+
+**How it got there:**
+- **Run 1:** every draft was refused. The reasons were "malformed" (a reply cut off at the output limit) and ungrounded numbering ("Stage 1").
+- **Fix 1:** numbering is stripped by code, the output limit raised, the reply kept short, and JSON and shape refusals told apart.
+- **Run 2 (13/1):** student B's single note was refused for state words ("reduced", "worsening") and counting.
+- **Fix 2:** prompt v2 (no counting, no state or change words the notes do not use).
+- **Run 3:** 14/0.
+- **The checks are never relaxed:** a draft that fails is not stored, and the refusal reasons are audited as rule and token only, never case text.
+
+**Tests:**
+- Unit: `clinical.test.ts` (9); Individual and cases suite 408/408.
+- `scholar-learning-harness` 148/148:
+  - **K33:** library plays are the shared delivery's;
+  - **K34:** the learner view only reaches the browser;
+  - **K35:** a private case is stored only after its checks, private formative and linear;
+  - **K36:** feedback is labelled honestly;
+  - **K37:** library feedback is owned by rule and recorded by the delivery;
+  - **S1 narrowed and S1b added** for the one governed contribution path;
+  - **planted controls:** P51–P55, which go red when the rule is broken.
+- `individual-config-harness` 41/41.
+- `next build`: exit 0.
+
+## 9. Genuine remaining gaps
+
+- **Steps 9, 14 and 15 (mine, pending):** they need `case_library` ON (the owner's), a published, approved library case (IND-007's steps 9–13), and metering ON. The harness runs them when those hold.
+- **Clinical context and the library:** the context shapes a private case. Matching library cases by context needs the library's specialty taxonomy terms, which the context codes do not yet map to. Library search by competency and topic works.
+- **A library case's end-of-case AI debrief** (`recordSessionDebrief`) is not called: a library session's debrief is its deterministic answered views. Calling it is a small follow-up if the owner wants an AI summary on the student's budget.
+- **Private cases are linear by design.** A branching consequence would need a fact the notes do not state; branching cases come from the governed library.
+- **A failed library withdrawal on deletion.** If the library tables are unreachable when a material is deleted, the deletion still happens and the failed count is audited. A retry would need a queue.
+
+## 10. Production activation dependencies (none authorised by this build)
+
+- **Migrations:** 422, 423 and 424 (IND-007), then 435 and 436, each with a separate owner GO and the OPS-001 safeguards.
+- **Flags:** `individual_app`, `case_library` and `ai_fair_use` all stay off in production.
+- **Legal:** the case attestation text (`case-attest/1`, a staging draft pending legal review) and the published legal documents for AI consent.
+- **D5 eligibility:** a reviewer decision before `case_steps` and `evaluate` can run with metering on.

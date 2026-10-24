@@ -1002,6 +1002,13 @@ export async function updatePrivateCaseSession(admin: Admin, userId: string, id:
   return !error;
 }
 
+/** Which library version one of the caller's library plays is on (423, read only). null when it is not theirs. */
+export async function librarySessionVersion(admin: Admin, userId: string, sessionId: string): Promise<string | null> {
+  if (!isUuid(sessionId)) return null;
+  const { data } = await admin.from("case_library_session").select("id, status, started_at, completed_at, version_id").eq("user_id", userId).eq("id", sessionId).maybeSingle();
+  return (data as any)?.version_id ?? null;
+}
+
 /** The caller's case history: private sessions (435) and library plays (423, read only), newest first. */
 export async function caseHistory(admin: Admin, userId: string, limit = 20): Promise<Read<{ kind: "private" | "library"; id: string; title: string | null; versionId: string | null; status: string; startedAt: string; completedAt: string | null }[]>> {
   const [p, l] = await Promise.all([

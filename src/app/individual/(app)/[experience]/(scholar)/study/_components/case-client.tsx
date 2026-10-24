@@ -247,7 +247,17 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
 }
 
 function DecisionFeedback({ d, fb, materialId }: { d: LearnerView["stages"][number]["decisionPoints"][number]; fb: Feedback | null; materialId?: string }) {
-  if (!fb?.answered) return <p className="mt-2 text-[13px] text-gray-600">Decision recorded.</p>;
+  if (!fb?.answered) return (
+    <div className="mt-2">
+      <p className="text-[13px] text-gray-600">Decision recorded.</p>
+      {fb?.aiFeedback && (
+        <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{MARKING_LABEL.ai_evaluation}</p>
+          <p className="mt-1 text-[13.5px] text-amber-950">{fb.aiFeedback}</p>
+        </div>
+      )}
+    </div>
+  );
   const a = fb.answered;
   const marking = fb.marking as keyof typeof MARKING_LABEL;
   return (

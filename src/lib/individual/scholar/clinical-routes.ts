@@ -11,7 +11,7 @@ import { withdrawCaseCandidate } from "@/lib/cases/candidates";
 import { caseSourceKey } from "./clinical";
 import { caseSourcesOf } from "./store";
 import { answerPrivate, privatePlayView, revealPrivate, type ReasoningJudge } from "./clinical-play";
-import { LIBRARY_CASE_LABEL, PRIVATE_CASE_LABEL } from "./config";
+import { LIBRARY_CASE_LABEL, MARKING_LABEL, PRIVATE_CASE_LABEL } from "./config";
 
 export type PlayKind = "private" | "library";
 export const isPlayKind = (v: unknown): v is PlayKind => v === "private" || v === "library";
@@ -20,7 +20,12 @@ export const isPlayKind = (v: unknown): v is PlayKind => v === "private" || v ==
 export async function viewPlay(admin: any, userId: string, kind: PlayKind, id: string, hints: boolean) {
   if (kind === "private") { const v = await privatePlayView(admin, userId, id); return v ? { ...v, label: PRIVATE_CASE_LABEL } : null; }
   const v = await caseSessionView(admin, userId, id, { hints });
-  return v ? { kind: "library" as const, sessionId: v.sessionId, status: v.status === "in_progress" ? "active" : v.status, current: v.current, view: v.view, answered: v.answered, feedback: [], debrief: null, label: LIBRARY_CASE_LABEL } : null;
+  // A library session's AI feedback is the shared delivery's record (424), labelled AI evaluation.
+  return v ? {
+    kind: "library" as const, sessionId: v.sessionId, status: v.status === "in_progress" ? "active" : v.status, current: v.current, view: v.view, answered: v.answered,
+    feedback: (v.feedback ?? []).map(f => ({ token: f.decisionToken, marking: "ai_evaluation" as const, markingLabel: MARKING_LABEL.ai_evaluation, answered: null, aiFeedback: f.text })),
+    debrief: null, label: LIBRARY_CASE_LABEL,
+  } : null;
 }
 
 /** Ask for a finding the current decision permits. */
