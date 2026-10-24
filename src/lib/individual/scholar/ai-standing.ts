@@ -1,42 +1,31 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-// ── THE STUDENT'S AI STANDING (STUB) ── COMPETEN-AI-FAIR-USE-01 s7, Scholar side ─────────────────────────────
+// ── THE STUDENT'S AI STANDING ── COMPETEN-AI-FAIR-USE-01 s7, Scholar side ──────────────────────────────────
 //
-// The interface below is the one the coordinator approved (2026-10-24) for IND-007's Holdings implementation in
-// src/lib/ai/allowance.ts (server-only), which Scholar must not edit. Until it lands, this stub answers "full AI"
-// for every activity, so nothing changes for students today -- and every Scholar caller already goes through
-// getScholarAiStanding(), so switching to the real one is this one file.
+// Scholar reads the Holdings allowance (src/lib/ai/allowance.ts, IND-007's -- not edited here) through this one
+// adapter, so every Scholar surface asks the same question the same way.
 //
-// ⚠ STANDING NEVER GATES READS. `readable: false` means continuity for NEW chargeable AI only. Uploads, extracted
-// knowledge, saved explanations and summaries, questions (marked deterministically), cards, cases, history,
-// progress and the Passport stay available whatever the standing says.
+// ⚠ METERING OFF IS TODAY. With the ai_fair_use flag off, getAiStanding answers metered: false and Scholar behaves
+// exactly as before: every activity is available and the existing Individual quota (scholar/http.ts) applies.
+// ⚠ STANDING NEVER GATES READS. `readable: false` holds back NEW chargeable AI only. Uploads, extracted knowledge,
+// saved explanations and summaries, questions (marked deterministically), cards, cases, history, progress and the
+// Passport stay available whatever the standing says.
 
-export type AiServiceLevel = "full" | "optimised" | "essential" | "continuity";
-export type AiActivityState = { available: boolean; via: "included" | "reserve" | null; reason: string | null };
-export type AiStanding = {
-  readable: boolean;
-  level: AiServiceLevel;
-  remaining: { band: "plenty" | "some" | "low" | "none"; percent: number | null };
-  resetsAt: string | null;
-  activities: Record<string, AiActivityState>;
-  message: string | null;
-};
+import { getAiStanding, type AiActivityState, type AiStanding } from "@/lib/ai/allowance";
 
-/** Scholar's activity codes (the approved list). An unknown code is refused by the real implementation. */
+export type { AiActivityState, AiStanding };
+export type AiServiceLevel = AiStanding["level"];
+
+/** Scholar's activity codes (the approved list). The engine refuses an unknown code. */
 export const SCHOLAR_AI_ACTIVITIES = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask", "check", "clarify", "tutor_continue", "map", "questions", "case_steps"] as const;
 export type ScholarAiActivity = (typeof SCHOLAR_AI_ACTIVITIES)[number];
 
-const FULL: AiActivityState = { available: true, via: "included", reason: null };
-
-/** STUB until IND-007's getAiStanding lands: full AI, every activity available. */
-export async function getScholarAiStanding(_admin: unknown, _userId: string): Promise<AiStanding> {
-  return {
-    readable: true, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null,
-    activities: Object.fromEntries(SCHOLAR_AI_ACTIVITIES.map(a => [a, FULL])), message: null,
-  };
+/** Where the student stands for Scholar's AI. Never throws (the engine's contract). */
+export function getScholarAiStanding(admin: unknown, userId: string): Promise<AiStanding> {
+  return getAiStanding(admin, { userId, product: "scholar" });
 }
 
 /** Pure. Whether new AI may be used for this activity now, and if not the student-facing reason. */
 export function activityState(standing: AiStanding, activity: ScholarAiActivity): { available: boolean; message: string | null; insufficient: boolean } {
+  if (!standing.metered && standing.readable) return { available: true, message: null, insufficient: false };
   const a = standing.activities[activity];
   if (standing.readable && a?.available) return { available: true, message: null, insufficient: false };
   const insufficient = a?.reason === "level_insufficient";

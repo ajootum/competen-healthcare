@@ -9,7 +9,8 @@ import {
   type ArtefactRow,
 } from "@/lib/individual/scholar/store";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
-import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit } from "@/lib/individual/scholar/http";
+
+import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner } from "@/lib/individual/scholar/http";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import { EXPLAIN_REFUSAL, SUPPLEMENTARY_WITHHELD, describeViolations, learnPromptVersion, passageCitation, passageTag, runLearn, type Passage, type TutorTurn } from "@/lib/individual/scholar/generation";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
@@ -152,7 +153,12 @@ export async function POST(req: Request) {
   });
   const prompt = action === "ask" ? question : action === "clarify" ? `Your check question was: ${checkQuestion}\nMy answer: ${answer}` : CANNED[action as LearnAction | "check"];
 
-  const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext });
+  // AI-FAIR-USE-01: through the Holdings allowance, the learning action as the activity. A refusal becomes
+  // Learning Continuity (s7): said plainly, with what is saved for these sections -- and nothing was sent.
+  const ai = scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify");
+  const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext }, ai.run);
+  const refusal = ai.refusal();
+  if (refusal) { const w = refusalWords(refusal); return continuity(w.message, w.insufficient); }
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn", sessionId, {
     action, step, chunk_ids: passages.map(p => p.chunkId), depth, references: references.length, learner_context: learnerContext !== null, recorded,
     outcome: r.ok ? (action === "check" ? (r.question?.ok ? "shown" : `withheld:${r.question?.reason}`) : r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,

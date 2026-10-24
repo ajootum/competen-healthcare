@@ -4,7 +4,7 @@ export const maxDuration = 60;
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { competencyChunks, getPassage, isUuid, searchCandidates, toPassages } from "@/lib/individual/scholar/store";
-import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit } from "@/lib/individual/scholar/http";
+import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner } from "@/lib/individual/scholar/http";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import {
   EXPLAIN_REFUSAL, SUPPLEMENTARY_WITHHELD, describeViolations, isExplainMode, passageCitation, passageTag, runExplain, type ExplainMode, type TutorTurn,
@@ -93,7 +93,11 @@ export async function POST(req: Request) {
 
   // P1: the tutor sees the student's own study context, assembled now from their rows (never stored, never grounding).
   const learnerContext = mode === "tutor" ? await loadTutorContext(ctx.admin, ctx.userId, passages.map(p => p.chunkId)) : null;
-  const r = await runExplain(ctx.userId, question, passages, mode, history, learnerContext);
+  // AI-FAIR-USE-01: through the Holdings allowance, with the mode as the activity (the tutor's turn is tutor_continue).
+  const ai = scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode);
+  const r = await runExplain(ctx.userId, question, passages, mode, history, learnerContext, ai.run);
+  const refused = meteredRefusal(ai.refusal());
+  if (refused) return refused;
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_explain", null, {
     chunk_ids: passages.map(p => p.chunkId), question_chars: question.length, mode, tutor_turns: history.length, learner_context: learnerContext !== null,
     outcome: r.ok ? (r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,

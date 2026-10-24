@@ -8,6 +8,9 @@ import type { IndividualContext } from "../guard";
 import { readConsent } from "./store";
 import { consentDocuments, consentStatus } from "./consent-gate";
 import { CONSENT_AWAITING_LEGAL, CONSENT_UPDATED } from "./config";
+import { isMeteredRefusal, meteredRefusalBody, requestIdFor, runMeteredAi, type MeteredRefusal } from "@/lib/ai/allowance";
+import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
+import type { ScholarAiActivity } from "./ai-standing";
 
 // ── WHAT EVERY SCHOLAR AI ROUTE CHECKS, IN ORDER ── after requireIndividualContext("scholar") ────────────
 //
@@ -53,3 +56,41 @@ export async function audit(ctx: IndividualContext, action: string, entityType: 
 }
 
 export const SCHOLAR_AI_AUDIT_ACTION = "ai_assistant_query";
+
+// ── AI-FAIR-USE-01: EVERY SCHOLAR AI CALL GOES THROUGH THE HOLDINGS ALLOWANCE ──────────────────────────────
+//
+// One runner per student action. It sends each AI call through runMeteredAi with Scholar's activity code and a
+// request id -- the client's retry key if it sent one (x-request-id), never an amount, a policy or a level. With
+// metering off, runMeteredAi is generate() unchanged, and aiPreflight's existing quota stays in front, exactly as
+// today. One action may make several calls (a question set is written, then checked blind, and retried once):
+// each `part` gets its own deterministic id, so a retry of the whole action stays idempotent.
+//
+// The generators take a plain `run` (the Holdings mapping engine's own form). A metered refusal is KEPT here and the
+// generator is told the call failed; the route then shows the refusal plainly (meteredRefusal), never a generic
+// failure, and never a quietly weaker model.
+
+export type ScholarAiRun = (g: GenerateArgs, part?: string) => Promise<GenerateResult>;
+
+export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: ScholarAiActivity): { run: ScholarAiRun; refusal: () => MeteredRefusal | null } {
+  const requestId = requestIdFor(ctx.userId, req.headers.get("x-request-id"));
+  let refused: MeteredRefusal | null = null;
+  const run: ScholarAiRun = async (g, part = "main") => {
+    if (refused) return { ok: false, error: "failed", detail: "metered" } as GenerateResult;
+    const x = await runMeteredAi(ctx.admin, { userId: ctx.userId, product: "scholar", activity, requestId: part === "main" ? requestId : `${requestId}:${part}`, generate: g });
+    if (isMeteredRefusal(x)) { refused = x; return { ok: false, error: "failed", detail: "metered" } as GenerateResult; }
+    return x;
+  };
+  return { run, refusal: () => refused };
+}
+
+/** The engine's student-facing words for a refusal, and whether it is about the level of AI (never quietly weaker). */
+export function refusalWords(refusal: MeteredRefusal): { message: string; insufficient: boolean } {
+  return { message: meteredRefusalBody(refusal).body.error, insufficient: refusal.error === "level_insufficient" || refusal.error === "not_eligible" };
+}
+
+/** The refusal, as the engine words it (with the standing, for Learning Continuity), or null. */
+export function meteredRefusal(refusal: MeteredRefusal | null): NextResponse | null {
+  if (!refusal) return null;
+  const m = meteredRefusalBody(refusal);
+  return NextResponse.json(m.body, { status: m.status });
+}

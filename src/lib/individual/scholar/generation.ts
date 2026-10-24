@@ -1,4 +1,4 @@
-import { generate } from "@/lib/ai/client";
+import { generate, type GenerateArgs, type GenerateResult } from "@/lib/ai/client";
 import { parseJsonArray, textGroundingViolations, type PhrasingViolation } from "@/lib/ai/grounding";
 import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib/competency/mapping";
 import { CONTEXT_PREAMBLE } from "./learner-context";
@@ -296,13 +296,21 @@ export function checkQuestions(raw: string, passage: Passage, limit: number = QU
 export type AiFailure = { ok: false; error: "not_configured" | "refusal" | "failed" };
 
 /**
+ * AI-FAIR-USE-01: how a generator makes its AI calls. The route passes Scholar's metered runner (scholar/http.ts
+ * scholarAiRunner: runMeteredAi with the activity code and a request id per `part`); with none, generate() exactly as
+ * before. `part` names the call within one student action ("main", "verify", "retry", "retry-verify").
+ */
+export type AiRun = (g: GenerateArgs, part?: string) => Promise<GenerateResult>;
+const direct: AiRun = g => generate(g);
+
+/**
  * S3: one answer in the chosen mode. The notes-based part is checked by checkExplanation, with the
  * question and the earlier tutor turns as grounding (the person typed or was already shown them). The part
  * beyond the notes, if any, is split off first and checked by its own rules -- it never reaches
  * checkExplanation, and never grounds anything.
  */
-export async function runExplain(userId: string, question: string, passages: Passage[], mode: ExplainMode = "explain", history: TutorTurn[] = [], learnerContext: string | null = null) {
-  const r = await generate({
+export async function runExplain(userId: string, question: string, passages: Passage[], mode: ExplainMode = "explain", history: TutorTurn[] = [], learnerContext: string | null = null, run: AiRun = direct) {
+  const r = await run({
     system: explainSystem(mode),
     user: modeUserPrompt(question, passages, history, mode === "tutor" ? learnerContext : null),
     tier: "reasoning",
@@ -458,8 +466,8 @@ export type LearnResult = AiFailure | {
 export async function runLearn(userId: string, args: {
   action: LearnAction | "check" | "clarify"; question: string; passages: Passage[]; references: GovernedReference[];
   depth: ExplanationDepth; background: boolean; history: TutorTurn[]; learnerContext: string | null;
-}): Promise<LearnResult> {
-  const r = await generate({
+}, run: AiRun = direct): Promise<LearnResult> {
+  const r = await run({
     system: learnSystem(args.action, { depth: args.depth, background: args.background, references: args.references.length > 0 }),
     user: learnUserPrompt(args.question, args.passages, args.references, args.history, args.learnerContext),
     tier: "reasoning",
@@ -493,8 +501,9 @@ export const SCHOLAR_MAPPING_FRAMING: MappingFraming = { person: "a healthcare s
  * (src/lib/competency/mapping.ts). The model sees tags, never ids. Person attribution, the Scholar operation,
  * and Scholar's patient-identifier screen.
  */
-export async function runAnalysis(userId: string, sections: MappingSubject[], competencies: CatalogueCompetency[]) {
+export async function runAnalysis(userId: string, sections: MappingSubject[], competencies: CatalogueCompetency[], run: AiRun = direct) {
   return proposeMappings({
+    run: g => run(g),
     subjects: sections,
     candidates: competencies.map(c => ({ competencyId: c.id, layer: c.layer, code: c.code, title: c.title, outcomes: c.outcomes, context: structureLabel(c) })),
     framing: SCHOLAR_MAPPING_FRAMING,
@@ -548,7 +557,7 @@ export function checkCaseTitle(title: string, passage: Passage): string {
   return t;
 }
 
-export async function runCase(userId: string, passage: Passage) {
+export async function runCase(userId: string, passage: Passage, run: AiRun = direct) {
   const dropped: QuestionCheck["dropped"] = [];
   let steps: DraftQuestion[] = [];
   let title = CASE_FALLBACK_TITLE;
@@ -557,13 +566,13 @@ export async function runCase(userId: string, passage: Passage) {
   let feedback = "";
   while (attempts < 2 && steps.length < CASE_MIN_STEPS) {
     attempts++;
-    const r = await generate({
+    const r = await run({
       system: CASE_SYSTEM,
       user: questionUserPrompt(passage) + (feedback ? `\n\nA previous attempt was rejected for: ${feedback}. Write a new case that avoids these problems.` : ""),
       tier: "reasoning",
       maxTokens: 2200,
       context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_case_steps" },
-    });
+    }, attempts === 1 ? "main" : "retry");
     if (!r.ok) return { ok: false, error: r.error } as AiFailure;
     model = r.model; provider = r.provider;
     const parsed = parseCase(r.text);
@@ -571,13 +580,13 @@ export async function runCase(userId: string, passage: Passage) {
     const check = checkQuestions(JSON.stringify(parsed.steps), passage, CASE_MAX_STEPS, CASE_MAX_STEPS);
     dropped.push(...check.dropped);
     if (check.kept.length >= CASE_MIN_STEPS) {
-      const v = await generate({
+      const v = await run({
         system: VERIFY_SYSTEM,
         user: verificationPrompt(passage.content, check.kept),
         tier: "reasoning",
         maxTokens: 700,
         context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_case_steps_verify" },
-      });
+      }, attempts === 1 ? "verify" : "retry-verify");
       if (!v.ok) {
         dropped.push(...check.kept.map(() => ({ reason: "verification_unavailable" as const })));
       } else {
@@ -601,7 +610,7 @@ export async function runCase(userId: string, passage: Passage) {
  * that the passage supports exactly the keyed option. If nothing survives, regenerate ONCE on the same
  * provider, telling it what was rejected. A grounding failure is never sent to another vendor (client.ts).
  */
-export async function runQuestions(userId: string, kind: QuestionKind, passage: Passage, limit: number = QUESTIONS_PER_REQUEST) {
+export async function runQuestions(userId: string, kind: QuestionKind, passage: Passage, limit: number = QUESTIONS_PER_REQUEST, run: AiRun = direct) {
   const dropped: QuestionCheck["dropped"] = [];
   let kept: DraftQuestion[] = [];
   let model = "", provider = "";
@@ -609,7 +618,7 @@ export async function runQuestions(userId: string, kind: QuestionKind, passage: 
   let feedback = "";
   while (attempts < 2 && kept.length === 0) {
     attempts++;
-    const r = await generate({
+    const r = await run({
       system: QUESTION_SYSTEM[kind],
       user: questionUserPrompt(passage) + (feedback ? `
 
@@ -617,19 +626,19 @@ A previous attempt was rejected for: ${feedback}. Write new questions that avoid
       tier: "reasoning",
       maxTokens: 1400,
       context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_${kind}` },
-    });
+    }, attempts === 1 ? "main" : "retry");
     if (!r.ok) return { ok: false, error: r.error } as AiFailure;
     model = r.model; provider = r.provider;
     const check = checkQuestions(r.text, passage, limit);
     dropped.push(...check.dropped);
     if (check.kept.length) {
-      const v = await generate({
+      const v = await run({
         system: VERIFY_SYSTEM,
         user: verificationPrompt(passage.content, check.kept),
         tier: "reasoning",
         maxTokens: 600,
         context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_${kind}_verify` },
-      });
+      }, attempts === 1 ? "verify" : "retry-verify");
       if (!v.ok) {
         // Unverifiable is not verified: nothing from this attempt is stored.
         dropped.push(...check.kept.map(() => ({ reason: "verification_unavailable" as const })));
