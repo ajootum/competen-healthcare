@@ -133,6 +133,26 @@ This branch merges `origin/s1/competency-foundation` (d32eaac5), so it must merg
     - The run adds its own allowlist only where none exists.
     - At the end it removes that row only while it is still the run's own, unchanged.
 
+## 3c. Staging acceptance: `scholar-competency-acceptance-harness`, on 384, 387, 388, 389 and 390
+
+| Run | Result | Notes |
+|---|---|---|
+| 1 | 30/33 | Found the 390 gap (D5), a harness bug (D6) and an over-reaching go-deeper prompt (L2). |
+| 2 | 29/33 | Prompt version label, and withheld AI answers. A diagnostic traced every withheld answer to counting ("three signs"), "significant" and change words ("again"). |
+| 3 | 32/33 | Tutor turn 2 was withheld for counting. Its end-of-run restore also deleted the owner's allowlist (§3b), and the harness was fixed. |
+| **4** | **ALL GREEN, 32 passed, 0 failed, 1 PEND** | N1 pends because a Scholar allowlist is set, and the run never removes one. Run against the owner's allowlist **read-only**: the viewing-config `--verify` output was byte-identical before and after the run. |
+
+**Run 4, the slice end to end:**
+- A real PDF of respiratory notes split into 3 sections.
+- The sections mapped as follows: section 1 to COMP-OXY-001, COMP-RESP-002, CF-CR-001 and COMP-RESP-001; section 2 to COMP-OXY-002, COMP-OXY-001, COMP-OXY-003 and COMP-RESP-002; section 3 to CF-IP-001, CF-CM-002, CF-CR-001 and CF-CR-002.
+- Accept, reject and change of mind are recorded as rows. The trail refuses UPDATE and DELETE. The 388 and 390 provenance CHECKs both refuse.
+- A student's own link is stored. Isolation holds in the store, under RLS and through the composite keys.
+- Simplify was shown. Go deeper was shown, with its background separate. Both tutor turns were shown.
+- Questions are tagged to the accepted competency. A 3-step oxygen case was stored in order.
+- Progress by competency was built.
+- Every AI call is in `plat_ai_requests` with person attribution.
+- Erasure cascades through the trail. Fixtures and programmes are removed.
+
 ## 4. Verification (this branch)
 
 - Vitest: `src/lib/individual/scholar` 6 files, 78 tests (the new file, `competency.test.ts`, has 16).
