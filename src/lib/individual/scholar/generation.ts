@@ -3,7 +3,7 @@ import { parseJsonArray, textGroundingViolations, type PhrasingViolation } from 
 import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib/competency/mapping";
 import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST } from "./config";
 import { citeChunk, findPatientIdentifiers } from "./extract";
-import type { CatalogueCompetency } from "./catalogue";
+import { structureLabel, type CatalogueCompetency } from "./catalogue";
 import { VERIFY_SYSTEM, applyVerification, passageVocabulary, qualityProblems, verificationPrompt, type QualityReason } from "./question-quality";
 
 // ── SOURCE-GROUNDED AI FOR SCHOLAR ── COMPETEN-IND-004 s2, s3 and s5 ───────────────────────────────────
@@ -317,7 +317,7 @@ export const SCHOLAR_MAPPING_FRAMING: MappingFraming = { person: "a healthcare s
 export async function runAnalysis(userId: string, sections: MappingSubject[], competencies: CatalogueCompetency[]) {
   return proposeMappings({
     subjects: sections,
-    candidates: competencies.map(c => ({ competencyId: c.id, layer: c.layer, code: c.code, title: c.title, outcomes: c.outcomes })),
+    candidates: competencies.map(c => ({ competencyId: c.id, layer: c.layer, code: c.code, title: c.title, outcomes: c.outcomes, context: structureLabel(c) })),
     framing: SCHOLAR_MAPPING_FRAMING,
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_map" },
     screen: findPatientIdentifiers,

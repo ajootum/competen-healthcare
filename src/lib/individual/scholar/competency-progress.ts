@@ -1,4 +1,4 @@
-import { LAYERS, type CatalogueCompetency, type Layer } from "./catalogue";
+import { LAYERS, structureLabel, type CatalogueCompetency, type Layer } from "./catalogue";
 import type { MappingState as MapState } from "@/lib/competency/mapping";
 
 // ── PROGRESS BY COMPETENCY ── COMPETEN-SCHOLAR-01 S4, migrations 387 and 388 ─────────────────────────────
@@ -26,6 +26,8 @@ export type CompetencyStatus = "no_notes" | "notes_linked" | "practising";
 
 export type CompetencyProgressRow = {
   id: string; layer: Layer; catalogue: string; domain: string; code: string | null; title: string;
+  /** Where it sits in the clinical structure (practice, CPU), or null where the library has not placed it. */
+  structure: string | null;
   sectionsAccepted: number; sectionsProposed: number;
   questions: number; answered: number;
   latestCorrect: number | null;
@@ -80,7 +82,7 @@ export function buildCompetencyProgress(input: {
     const right = answered.filter(id => latest.get(id)!.correct).length;
     const status: CompetencyStatus = answered.length ? "practising" : acc.size + prop.length + ids.length ? "notes_linked" : "no_notes";
     return {
-      id: c.id, layer: c.layer, catalogue: c.catalogue, domain: c.domain, code: c.code, title: c.title,
+      id: c.id, layer: c.layer, catalogue: c.catalogue, domain: c.domain, code: c.code, title: c.title, structure: structureLabel(c),
       sectionsAccepted: acc.size, sectionsProposed: prop.length, questions: ids.length, answered: answered.length,
       latestCorrect: answered.length ? right : null,
       latestAccuracy: answered.length ? Math.round((right / answered.length) * 100) : null,

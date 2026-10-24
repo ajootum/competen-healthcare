@@ -5,6 +5,8 @@ import {
 } from "./generation";
 import { buildCompetencyProgress } from "./competency-progress";
 import { PROMPT_VERSIONS } from "./config";
+import { buildIntelligence } from "./intelligence";
+import { fromProgrammeCatalogue, type CompetencyRef } from "./competency-sources";
 import { MAPPING_PROMPT_VERSION } from "@/lib/competency/mapping";
 
 // COMPETEN-SCHOLAR-01 S2-S4: competency proposals, explanation modes, multi-step cases, progress by competency.
@@ -12,7 +14,7 @@ import { MAPPING_PROMPT_VERSION } from "@/lib/competency/mapping";
 const RESP = "Respiratory assessment includes respiratory rate, oxygen saturation and the use of accessory muscles. Wheeze suggests narrowed airways. Position the patient upright to ease breathing.";
 
 const comp = (id: string, layer: CatalogueCompetency["layer"], title: string, outcomes: string[] = []): CatalogueCompetency => ({
-  id, layer, profession: "Nursing", catalogue: "Test", frameworkId: "f", domain: "D", code: null, title, outcomes,
+  id, layer, profession: "Nursing", catalogue: "Test", frameworkId: "f", domain: "D", code: null, title, outcomes, expectedLevel: null, practice: null, cpu: null,
 });
 const COMPS = [
   comp("u-anat", "foundational", "Respiratory anatomy and physiology"),
@@ -35,6 +37,41 @@ describe("the S1 catalogue, narrowed by a programme", () => {
     expect(out[0]).toMatchObject({ layer: "foundational", profession: "From programme", outcomes: ["o"] });
     expect(out[1]).toMatchObject({ layer: "profession", profession: "From S1" });
     expect(out[2].layer).toBe("specialty");
+  });
+});
+
+describe("one computation: progress by competency agrees with S5 coverage, number for number", () => {
+  it("each competency's answered and right-on-latest equal coverage's evidence and positive, over the same accepted links", () => {
+    const mappings = [
+      { competencyId: "u-assess", chunkId: "k1", state: "accepted" as const },
+      { competencyId: "u-anat", chunkId: "k1", state: "proposed" as const },
+      { competencyId: "u-ipc", chunkId: "k2", state: "accepted" as const },
+    ];
+    const questions = [
+      { id: "q1", chunkId: "k1", competencyId: "u-assess" }, { id: "q2", chunkId: "k1", competencyId: "u-assess" },
+      { id: "q3", chunkId: "k1", competencyId: "u-anat" }, { id: "q4", chunkId: "k2", competencyId: "u-ipc" },
+    ];
+    const attempts = [
+      { questionId: "q1", correct: false, answeredAt: "2026-10-01T10:00:00Z" }, { questionId: "q1", correct: true, answeredAt: "2026-10-02T10:00:00Z" },
+      { questionId: "q2", correct: false, answeredAt: "2026-10-02T10:00:00Z" }, { questionId: "q3", correct: true, answeredAt: "2026-10-02T10:00:00Z" },
+      { questionId: "q4", correct: true, answeredAt: "2026-10-02T10:00:00Z" },
+    ];
+    const mine = buildCompetencyProgress({ competencies: COMPS, mappings, questions, attempts });
+    // What S5 reads: the accepted pairs only (store.acceptedQuestionCompetencies applies the same rule).
+    const accepted = new Set(mappings.filter(m => m.state === "accepted").map(m => `${m.chunkId}|${m.competencyId}`));
+    const li = buildIntelligence({
+      materials: [{ id: "m1", title: "M" }], questions: questions.map(q => ({ id: q.id, materialId: "m1", kind: "mcq" as const })), attempts,
+      cards: [], reviews: null, today: "2026-10-24", t: { minAnswers: 1, windowDays: 28 },
+      catalogue: fromProgrammeCatalogue(COMPS).ok ? (fromProgrammeCatalogue(COMPS) as { value: CompetencyRef[] }).value : null,
+      mappings: questions.filter(q => accepted.has(`${q.chunkId}|${q.competencyId}`)).map(q => ({ questionId: q.id, competencyId: q.competencyId })),
+    });
+    expect(li.coverage.state).toBe("measured");
+    const cov = li.coverage as Extract<typeof li.coverage, { state: "measured" }>;
+    for (const r of mine.layers.flatMap(l => l.rows)) {
+      const c = cov.rows.find(x => x.id === r.id)!;
+      expect([r.id, r.answered, r.latestCorrect ?? 0]).toEqual([r.id, c.evidence, c.positive]);
+    }
+    expect(cov.covered).toBe(mine.layers.flatMap(l => l.rows).filter(r => r.answered > 0).length);
   });
 });
 

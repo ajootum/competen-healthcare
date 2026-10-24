@@ -19,6 +19,7 @@ import { loadLearnerCatalogue, type LearnerCatalogue } from "@/lib/individual/sc
 import { buildCompetencyProgress, type CompetencyProgress, type CompetencyProgressRow } from "@/lib/individual/scholar/competency-progress";
 import { LAYER_LABEL } from "@/lib/individual/scholar/catalogue";
 import { LayerTag } from "../_components/competency-client";
+import type { CompetencyCoverage } from "@/lib/competency/progress-model";
 
 const STATUS_TEXT: Record<CompetencyProgressRow["status"], string> = {
   no_notes: "No notes linked yet",
@@ -27,7 +28,14 @@ const STATUS_TEXT: Record<CompetencyProgressRow["status"], string> = {
 };
 
 /** COMPETEN-SCHOLAR-01 S4. Practice against each competency of the programme -- never a judgement of competence. */
-function CompetencySection({ learner, progress, unreadable, accent }: { learner: LearnerCatalogue | null; progress: CompetencyProgress | null; unreadable: boolean; accent: string }) {
+/**
+ * The totals and the measure state come from S5's coverage (li.coverage) -- ONE computation, read by both this
+ * section and the Learning Intelligence panel (COMPETEN-SCHOLAR-01 P0). The rows below are this section's own
+ * detail from the same accepted links (a unit test pins that each row's figures equal coverage's).
+ */
+function CompetencySection({ learner, progress, coverage, unreadable, accent }: {
+  learner: LearnerCatalogue | null; progress: CompetencyProgress | null; coverage: CompetencyCoverage | null; unreadable: boolean; accent: string;
+}) {
   if (!learner?.provisioned) return null;
   return (
     <section aria-labelledby="competency-h" className="mt-8">
@@ -51,9 +59,18 @@ function CompetencySection({ learner, progress, unreadable, accent }: { learner:
           ) : progress && (
             <>
               <p className="mb-3 text-[13.5px] text-gray-800 tabular-nums">
-                Notes linked to {progress.totals.withNotes} of {progress.totals.competencies} competencies · practising {progress.totals.practising}
+                {coverage?.state === "measured"
+                  ? <>Practised {coverage.covered} of {coverage.total} competencies · right on the latest try for {coverage.coveredPositive}</>
+                  : <span className="text-gray-600">{coverage ? coverage.reason : "Coverage could not be measured just now."}</span>}
+                {" · "}notes linked to {progress.totals.withNotes}
                 {progress.outsideProgramme ? ` · ${progress.outsideProgramme} question${progress.outsideProgramme === 1 ? "" : "s"} practise competencies outside this programme` : ""}
               </p>
+              {coverage?.state === "measured" && coverage.gaps.length > 0 && (
+                <p className="mb-3 text-[13px] text-gray-700">
+                  <span className="font-semibold">Not practised yet, highest expected level first: </span>
+                  {coverage.gaps.slice(0, 5).map(g => `${g.name}${g.expected ? ` (${g.expected})` : ""}`).join(" · ")}{coverage.gaps.length > 5 ? ` and ${coverage.gaps.length - 5} more` : ""}
+                </p>
+              )}
               <div className="space-y-3">
                 {progress.layers.map(l => (
                   <details key={l.layer} open={l.rows.some(r => r.status !== "no_notes")} className="rounded-2xl border border-gray-200 bg-white">
@@ -72,7 +89,7 @@ function CompetencySection({ learner, progress, unreadable, accent }: { learner:
                             </span>
                           </div>
                           <p className="mt-0.5 text-[12.5px] text-gray-600 tabular-nums">
-                            {r.domain} · {r.sectionsAccepted} section{r.sectionsAccepted === 1 ? "" : "s"} accepted, {r.sectionsProposed} suggested
+                            {r.domain}{r.structure ? ` · ${r.structure}` : ""} · {r.sectionsAccepted} section{r.sectionsAccepted === 1 ? "" : "s"} accepted, {r.sectionsProposed} suggested
                             {r.questions ? ` · ${r.answered} of ${r.questions} question${r.questions === 1 ? "" : "s"} answered` : ""}
                           </p>
                         </li>
@@ -172,7 +189,7 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
               ))}
             </dl>
 
-            <CompetencySection learner={learner} progress={cp} unreadable={cUnreadable} accent={x.accent} />
+            <CompetencySection learner={learner} progress={cp} coverage={li?.ok ? li.data.coverage : null} unreadable={cUnreadable} accent={x.accent} />
 
             {li?.ok ? <LearningIntelligence li={li.data} accent={x.accent} /> : <div className="mt-8"><Unreadable what="learning intelligence" /></div>}
 

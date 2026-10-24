@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadCatalogueFor, type CatalogueCompetency } from "../catalogue";
+import { scholarCatalogue, type CatalogueCompetency as ProgrammeCompetency } from "./catalogue";
+import { acceptedQuestionCompetencies, learnerProgramme } from "./store";
 
 // ── WHERE COMPETENCY FACTS COME FROM ── COMPETEN-SCHOLAR-01 S5, coded against S1 and S2 ────────────────────
 //
@@ -79,11 +81,41 @@ export const S1_CATALOGUE: CompetencyCatalogueSource = {
 };
 
 /**
+ * COMPETEN-SCHOLAR-01 P0: the catalogue a person studies against is the Scholar allowlist NARROWED TO THEIR
+ * PROGRAMME -- exactly what Scholar offers them for mapping (scholarCatalogue, S2) -- so coverage and progress by
+ * competency count against the same competencies. No programme chosen: not available (null), never "none".
+ */
+export function fromProgrammeCatalogue(rows: readonly ProgrammeCompetency[]): SourceRead<CompetencyRef[]> {
+  if (rows.length === 0) return { ok: true, value: null };
+  return {
+    ok: true,
+    value: rows.map(c => ({ id: c.id, code: c.code, name: c.title, frameworkId: c.frameworkId, frameworkName: c.catalogue, expectedLevel: c.expectedLevel })),
+  };
+}
+
+export const SCHOLAR_PROGRAMME_CATALOGUE: CompetencyCatalogueSource = {
+  name: "S1 Scholar catalogue narrowed to the learner's programme (scholarCatalogue.forProgramme)",
+  competenciesFor: async (admin: any, userId: string) => {
+    const p = await learnerProgramme(admin, userId);
+    if (!p.ok) return p.notProvisioned ? { ok: true, value: null } : { ok: false };
+    if (!p.data) return { ok: true, value: null };
+    const cat = await scholarCatalogue(admin).forProgramme(p.data);
+    return cat.ok ? fromProgrammeCatalogue(cat.data) : { ok: false };
+  },
+};
+
+/** S2 (IND-004, migration 388): accepted links only -- a proposal alone never counts (store.acceptedQuestionCompetencies). */
+export const S2_MAPPINGS: CompetencyMappingSource = {
+  name: "S2 accepted competency mappings (acceptedQuestionCompetencies)",
+  mappingsFor: (admin: any, userId: string, questionIds: readonly string[]) => acceptedQuestionCompetencies(admin, userId, questionIds),
+};
+
+/**
  * The sources Learning Intelligence uses. Plugging in S1 or S2 is replacing one entry here, and nothing
  * else changes: the measures, insights and page already handle a real answer. S2 (IND-004 388, accepted
  * maps only) follows once it is on main.
  */
 export const COMPETENCY_SOURCES: { catalogue: CompetencyCatalogueSource; mappings: CompetencyMappingSource } = {
-  catalogue: S1_CATALOGUE,
-  mappings: NO_MAPPINGS,
+  catalogue: SCHOLAR_PROGRAMME_CATALOGUE,
+  mappings: S2_MAPPINGS,
 };
