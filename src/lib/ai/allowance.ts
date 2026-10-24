@@ -6,7 +6,7 @@ import {
   type AiProduct, type AiServiceLevel, type Balance, type ProductAiPolicy,
 } from "./fair-use-policy";
 
-// ── COMPETEN HOLDINGS AI FAIR USE: THE ENGINE ── COMPETEN-AI-FAIR-USE-01, migration 410 ─────────────────────
+// ── COMPETEN HOLDINGS AI FAIR USE: THE ENGINE ── COMPETEN-AI-FAIR-USE-01, migrations 410 and 411 ───────────
 //
 // What every product calls. getAiStanding says where a person stands (service level, what each activity may
 // do, when the allowance renews) -- the Learning Continuity signal. runMeteredAi runs one AI request through
@@ -14,6 +14,11 @@ import {
 // database (ai_reserve), generate(), then settlement of the actual tokens (ai_settle) or release when nothing
 // billable happened (ai_release). The database does the arithmetic under a row lock. This file decides only
 // what to ask for.
+//
+// ⚠ AN UNKNOWN CHARGE IS NEVER GUESSED (approved amendment 4). When the provider may have billed but no usage came
+// back -- a timeout, a broken connection or stream -- the request is marked unreconciled (ai_mark_unreconciled):
+// the hold stays against the allowance in its original period until real provider usage settles it, or proof of
+// no billing releases it. It is never settled on the estimate.
 //
 // ⚠ DARK UNTIL SWITCHED ON. The platform flag ai_fair_use (practice_platform_flags) is written by no migration,
 // so it is OFF: runMeteredAi then calls generate() exactly as before and the caller keeps its existing quota
@@ -26,9 +31,10 @@ import {
 // genuine retry cannot charge twice. Ids are namespaced by person.
 
 export const AI_FAIR_USE_FLAG = "ai_fair_use";
-export type AiActivityState = { available: boolean; via: "included" | "reserve" | null; reason: string | null };
+export type AiActivityState = { label: string; available: boolean; via: "included" | "reserve" | null; reason: string | null };
 export type AiStanding = {
-  /** false: the standing could not be established, so treat the person as in Learning Continuity. */
+  /** false: the standing could not be established, so NEW chargeable AI calls are held back (Learning Continuity).
+   *  It never gates stored material: what a person has saved is always theirs to read (amendment 5). */
   readable: boolean;
   /** false: metering is off on this environment, and the product's existing limits apply. */
   metered: boolean;
@@ -38,7 +44,9 @@ export type AiStanding = {
   activities: Record<string, AiActivityState>;
   message: string | null;
 };
-export type MeteredRefusal = { ok: false; error: "allowance_exhausted" | "not_entitled" | "unreadable" | "duplicate_request"; standing: AiStanding };
+export type MeteredError = "allowance_exhausted" | "not_entitled" | "unreadable" | "duplicate_request" | "unknown_activity" | "level_insufficient"
+  | "not_eligible" | "pending_reconciliation";
+export type MeteredRefusal = { ok: false; error: MeteredError; standing: AiStanding };
 
 export async function aiFairUseEnabled(admin: any): Promise<boolean> {
   try {
@@ -91,14 +99,14 @@ function standingFrom(policy: ProductAiPolicy, acc: any): AiStanding {
   const activities: Record<string, AiActivityState> = {};
   for (const code of Object.keys(policy.activities)) {
     const d = activityAt(policy, level, code, b);
-    activities[code] = { available: d.available, via: d.pool, reason: d.reason };
+    activities[code] = { label: policy.activities[code].label, available: d.available, via: d.via, reason: d.reason };
   }
   return { readable: true, metered: true, level, remaining: remainingBand(b), resetsAt: acc.period_end, activities, message: policy.messages[level] };
 }
 
 const closed = (policy: ProductAiPolicy, readable: boolean, reason: string): AiStanding => ({
   readable, metered: true, level: "continuity", remaining: { band: "none", percent: null }, resetsAt: null,
-  activities: Object.fromEntries(Object.keys(policy.activities).map(c => [c, { available: false, via: null, reason }])), message: policy.messages.continuity,
+  activities: Object.fromEntries(Object.entries(policy.activities).map(([c, a]) => [c, { label: a.label, available: false, via: null, reason }])), message: policy.messages.continuity,
 });
 
 /** Where a person stands for one product. Never throws. */
@@ -106,7 +114,7 @@ export async function getAiStanding(admin: any, args: { userId: string; product:
   const { policy, readable } = await loadProductPolicy(admin, args.product);
   if (!(await aiFairUseEnabled(admin))) {
     return { readable: true, metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null,
-      activities: Object.fromEntries(Object.keys(policy.activities).map(c => [c, { available: true, via: "included", reason: null }])), message: null };
+      activities: Object.fromEntries(Object.entries(policy.activities).map(([c, a]) => [c, { label: a.label, available: true, via: "included", reason: null }])), message: null };
   }
   if (!readable) return closed(policy, false, "AI help could not be checked just now.");
   try {
@@ -137,35 +145,52 @@ export async function runMeteredAi(admin: any, args: { userId: string; product: 
   const standing = standingFrom(policy, a.account);
   const b = toBalance(a.account);
   const decision = activityAt(policy, standing.level, args.activity, b);
-  if (!decision.available || !decision.pool || !decision.tier) return { ok: false, error: "allowance_exhausted", standing };
+  if (!decision.available || !decision.via || !decision.tier) {
+    const error: MeteredError = decision.refusal === "unknown_activity" ? "unknown_activity" : decision.refusal === "level_insufficient" ? "level_insufficient" : "allowance_exhausted";
+    return { ok: false, error, standing: decision.reason ? { ...standing, message: decision.reason } : standing };
+  }
 
   const status = aiStatus();
   const model = status.models?.[decision.tier];
   if (!status.provider || !status.canGenerate || !model) return { ok: false, error: "not_configured" };
   const activity = policy.activities[args.activity];
   const maxOut = Math.min(activity.maxOutputTokens, args.generate.maxTokens ?? activity.maxOutputTokens);
+  // Everything the reservation is priced and limited by comes from the published policy and the database. The
+  // client supplied only the retry key inside requestId (amendment 3).
   const { data: held, error: rErr } = await admin.rpc("ai_reserve", {
-    p_request_id: args.requestId, p_account: a.account.id, p_activity: args.activity, p_pool: decision.pool, p_provider: status.provider, p_model: model,
+    p_request_id: args.requestId, p_account: a.account.id, p_activity: args.activity, p_pool: decision.via, p_provider: status.provider, p_model: model,
     p_max_input_tokens: maxInputTokens(args.generate.system, args.generate.user), p_max_output_tokens: maxOut, p_policy_version: policy.version,
+    p_currency: policy.currency, p_buffer_pct: policy.fxBufferPct, p_clinically_sensitive: activity.clinicallySensitive,
+    p_unreconciled_cap_cau: policy.maxUnreconciledCau,
     p_window_minutes: policy.windowMinutes, p_window_cap_cau: policy.windowCapCau, p_activity_cap: activity.capPerPeriod,
   });
   if (rErr) return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
   const r = Array.isArray(held) ? held[0] : held;
   if (typeof r?.reason === "string" && r.reason.startsWith("retry")) return { ok: false, error: "duplicate_request", standing };
-  if (!r?.granted) return { ok: false, error: "allowance_exhausted", standing: { ...standing, message: policy.messages[standing.level === "full" ? "optimised" : standing.level] } };
+  if (!r?.granted) {
+    if (r?.reason === "not_eligible") return { ok: false, error: "not_eligible", standing: { ...standing, message: NOT_ELIGIBLE } };
+    if (r?.reason === "unreconciled_ceiling") return { ok: false, error: "pending_reconciliation", standing: { ...standing, message: PENDING } };
+    return { ok: false, error: "allowance_exhausted", standing: { ...standing, message: policy.messages[standing.level === "full" ? "optimised" : standing.level] } };
+  }
 
   const out = await generate({ ...args.generate, tier: decision.tier, maxTokens: maxOut });
-  const billed = out.usage;
-  if (billed) {
-    const s = await settle(admin, args.requestId, out.ok ? out.model : model, billed.input, billed.output, out.ok ? "ok" : out.error === "refusal" ? "refusal" : "error");
+  if (out.usage) {
+    const s = await settle(admin, args.requestId, out.ok ? out.model : model, out.usage.input, out.usage.output, out.ok ? "ok" : out.error === "refusal" ? "refusal" : "error");
     if (!s) console.error(`[ai-fair-use] settlement of ${args.requestId} failed: left reserved for reconciliation`);
-  } else {
-    // Nothing the provider reported as consumed: a request that failed before billing costs nothing.
-    const { error } = await admin.rpc("ai_release", { p_request_id: args.requestId, p_outcome: out.ok ? "ok" : out.error === "not_configured" ? "not_configured" : "error" });
+  } else if (!out.ok && (out.error === "not_configured" || out.billing === "none")) {
+    // The provider declined before generating, or was never called: nothing was billed.
+    const { error } = await admin.rpc("ai_release", { p_request_id: args.requestId, p_outcome: out.error === "not_configured" ? "not_configured" : "error" });
     if (error) console.error(`[ai-fair-use] release of ${args.requestId} failed: left reserved for reconciliation`);
+  } else {
+    // The charge is unknown. Keep the hold and wait for the provider's usage (amendment 4).
+    const { error } = await admin.rpc("ai_mark_unreconciled", { p_request_id: args.requestId, p_outcome: "timeout" });
+    if (error) console.error(`[ai-fair-use] ${args.requestId} could not be marked unreconciled: left reserved, the stale sweep marks it`);
   }
   return out;
 }
+
+const NOT_ELIGIBLE = "This activity needs an AI model approved for clinical content, and none is available for it right now. Nothing was sent.";
+const PENDING = "Some earlier AI requests are still being confirmed with the provider. New AI help resumes once they are settled.";
 
 async function settle(admin: any, requestId: string, model: string, input: number, output: number, outcome: string): Promise<boolean> {
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -185,8 +210,10 @@ export const isMeteredRefusal = (r: GenerateResult | MeteredRefusal): r is Meter
  */
 export function meteredRefusalBody(r: MeteredRefusal): { status: number; body: { error: string; continuity: boolean; standing: AiStanding } } {
   const error = r.error === "duplicate_request" ? "That request was already received."
+    : r.error === "unknown_activity" ? "This AI activity is not offered."
     : r.error === "unreadable" ? "AI help could not be checked just now, so nothing was sent. Try again shortly."
     : r.error === "not_entitled" ? "This needs an active subscription."
     : r.standing.message ?? "This AI activity is not available right now.";
-  return { status: r.error === "unreadable" ? 503 : r.error === "duplicate_request" ? 409 : 429, body: { error, continuity: r.error === "allowance_exhausted", standing: r.standing } };
+  const status = r.error === "unreadable" || r.error === "not_eligible" ? 503 : r.error === "duplicate_request" ? 409 : r.error === "unknown_activity" ? 400 : r.error === "not_entitled" ? 403 : 429;
+  return { status, body: { error, continuity: r.error === "allowance_exhausted" || r.error === "level_insufficient", standing: r.standing } };
 }

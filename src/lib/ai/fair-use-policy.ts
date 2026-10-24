@@ -1,24 +1,30 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// ── COMPETEN HOLDINGS AI FAIR USE: THE POLICY ── COMPETEN-AI-FAIR-USE-01, migration 410 ─────────────────────
+// ── COMPETEN HOLDINGS AI FAIR USE: THE POLICY ── COMPETEN-AI-FAIR-USE-01, migrations 410 and 411 ───────────
 //
 // One engine, a policy per product. Scholar and Professional differ only in the policy document each one
 // publishes through the CONFIG-002 engine (scope platform / ai_fair_use, path ai.fair_use.<product>). This
 // file is pure: the shape, the validation that clamps every value, and the decisions that follow from a
 // policy and a balance -- the service level and what each activity may do at it.
 //
-// ⚠ NO MONEY IN CODE. Allowances are in CAU (Competen AI Allowance Units), priced by versioned rate rows in
-// the database (ai_price, ai_cau_rate, ai_fx_rate). The unpublished default allows NOTHING: with no published
-// policy every product is in Learning Continuity, so turning metering on before a policy exists fails closed.
+// ⚠ NO MONEY IN CODE. Allowances are in CAU (1 CAU = UGX 1, owner D4), priced by versioned rate rows in the
+// database (ai_price, ai_fx_rate, ai_cau_basis). Every figure a person is allowed comes from the published
+// policy. The unpublished default allows NOTHING: with no published policy every product is in Learning
+// Continuity, so turning metering on before a policy exists fails closed.
 //
-// ⚠ NEVER A SILENT CLINICAL DOWNGRADE. An activity marked clinically sensitive keeps its tier at every level.
-// Where a level would need a cheaper model than such an activity allows, the activity is unavailable at that
-// level -- it is never quietly answered by a model that may not meet its standard.
+// ⚠ ACTIVITIES ARE POLICY DATA (approved amendment 1). There is no fixed list in code: an activity exists only
+// if the published policy defines it, and a request for any other code is refused as unknown.
+//
+// ⚠ NEVER A SILENT DOWNGRADE (amendment 2). Each activity names the cheapest tier it may run on (minTier). At
+// the Optimised and Essential levels the engine moves to a cheaper model only where that tier is at least the
+// activity's minTier. Where it is not, the activity is refused as level_insufficient and the reason says so --
+// it is never quietly answered by a model below its standard. Whether a model may serve a clinically sensitive
+// activity at all is a separate, evidence-based record in the database (ai_model_eligibility, owner D1).
 
 export type AiProduct = "scholar" | "professional";
 export const AI_PRODUCTS: readonly AiProduct[] = ["scholar", "professional"];
 export type AiTier = "cheap" | "reasoning" | "heavy";
-const TIERS: readonly AiTier[] = ["cheap", "reasoning", "heavy"];
+export const AI_TIERS: readonly AiTier[] = ["cheap", "reasoning", "heavy"];
 export type AiServiceLevel = "full" | "optimised" | "essential" | "continuity";
 
 export type ActivityPolicy = {
@@ -26,14 +32,18 @@ export type ActivityPolicy = {
   /** essential: may continue at the Essential level and, when eligible, from the reserve. */
   class: "essential" | "standard";
   tier: AiTier;
-  /** The cheapest tier this activity may ever run on. A clinically sensitive activity is never below its tier. */
+  /** The cheapest tier this activity may ever run on. Never above its tier. */
   minTier: AiTier;
   maxOutputTokens: number;
   /** Requests of this activity per allowance period. null = no count cap. */
   capPerPeriod: number | null;
+  /** Needs an eligible model record (ai_model_eligibility) to run at all. Unstated = sensitive (fails closed). */
   clinicallySensitive: boolean;
+  /** May draw on the essential reserve. Only an essential activity, and only when the policy says so. */
   reserveEligible: boolean;
 };
+
+export type ResetRule = "subscription_anniversary" | "calendar_month" | "entitlement_cycle";
 
 export type ProductAiPolicy = {
   version: string;
@@ -43,95 +53,113 @@ export type ProductAiPolicy = {
   windowCapCau: number | null;
   /** Remaining share of the included allowance below which the level drops. */
   levels: { optimisedBelowPct: number; essentialBelowPct: number };
-  reset: { rule: "entitlement_cycle" | "calendar_month"; cycleDays: number };
+  reset: { rule: ResetRule; cycleDays: number };
+  /** The currency the CAU basis and the reference rate are read in (owner D3, D4). */
+  currency: string;
+  /** Widens the reservation hold only. Settlement uses the reference rate itself (owner D3). */
+  fxBufferPct: number;
+  /** Outstanding unreconciled holds a person may have, including a new hold, before new requests wait. */
+  maxUnreconciledCau: number;
   activities: Record<string, ActivityPolicy>;
-  messages: { full: string; optimised: string; essential: string; continuity: string };
+  messages: { full: string; optimised: string; essential: string; continuity: string; levelInsufficient: string };
 };
 
 export const FAIR_USE_SCOPE = { scopeType: "platform", scopeRef: "ai_fair_use" } as const;
 export const fairUsePath = (p: AiProduct) => `ai.fair_use.${p}`;
 export const CAU_MAX = 1_000_000;
+export const ACTIVITY_CODE = /^[a-z][a-z0-9_]{1,40}$/;
+export const MAX_ACTIVITIES = 40;
+export const MAX_OUTPUT_TOKENS = 8000;
+// An activity that does not state its output size gets this. Tokens, not allowance: no money is in code.
+export const DEFAULT_OUTPUT_TOKENS = 800;
 
 const MESSAGES = {
   full: "Your AI study help is available.",
   optimised: "Your AI help is running in an efficient mode to make your allowance last.",
   essential: "Your AI allowance is nearly used. Essential help, like clarifying an explanation, is still available.",
   continuity: "Your AI allowance for this period is used. Everything you have saved stays available, and new AI help returns when your allowance renews.",
+  levelInsufficient: "This needs a fuller level of AI help than your allowance has left, so it was not answered by a lighter model. It returns when your allowance renews.",
 };
 
-// The activity catalogue each product's policy may configure. Structure only: no money.
-const act = (label: string, cls: "essential" | "standard", tier: AiTier, minTier: AiTier, maxOutputTokens: number, sensitive: boolean, reserve = false): ActivityPolicy =>
-  ({ label, class: cls, tier, minTier, maxOutputTokens, capPerPeriod: null, clinicallySensitive: sensitive, reserveEligible: reserve });
-export const ACTIVITY_CATALOGUE: Record<AiProduct, Record<string, ActivityPolicy>> = {
-  scholar: {
-    explain: act("Explanations", "standard", "reasoning", "cheap", 1500, false),
-    questions: act("Practice questions", "standard", "reasoning", "reasoning", 2000, true),
-    case_steps: act("Clinical cases", "standard", "reasoning", "reasoning", 2500, true),
-    map: act("Competency mapping", "standard", "reasoning", "cheap", 2000, false),
-    assistant: act("Personal AI questions", "standard", "reasoning", "cheap", 900, false),
-    clarify: act("Clarify an existing explanation", "essential", "cheap", "cheap", 600, false, true),
-    tutor_continue: act("Finish an interrupted tutoring session", "essential", "reasoning", "cheap", 900, false, true),
-  },
-  professional: {
-    assistant: act("CPD planning and reflection drafting", "standard", "reasoning", "cheap", 900, false),
-    map: act("Competency suggestions", "standard", "reasoning", "cheap", 2000, false),
-  },
-};
-
-/** The unpublished default: nothing allowed, so metering fails closed until a policy is published. */
-export function defaultPolicy(product: AiProduct): ProductAiPolicy {
+/** The unpublished default: nothing allowed and no activities, so metering fails closed until a policy is published. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- the product stays in the signature: every product has its own default
+export function defaultPolicy(_product: AiProduct): ProductAiPolicy {
   return {
     version: "default-nothing-allowed", includedCau: 0, reserveCau: 0, windowMinutes: null, windowCapCau: null,
-    levels: { optimisedBelowPct: 30, essentialBelowPct: 10 }, reset: { rule: "entitlement_cycle", cycleDays: 30 },
-    activities: ACTIVITY_CATALOGUE[product], messages: { ...MESSAGES },
+    levels: { optimisedBelowPct: 30, essentialBelowPct: 10 }, reset: { rule: "subscription_anniversary", cycleDays: 30 },
+    currency: "UGX", fxBufferPct: 0, maxUnreconciledCau: 0, activities: {}, messages: { ...MESSAGES },
   };
 }
 
 const num = (v: unknown, lo: number, hi: number, fallback: number) => {
+  if (v === null || v === undefined || v === "") return fallback;
   const n = Number(v);
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
 };
 const nullableNum = (v: unknown, lo: number, hi: number) => (v === null || v === undefined || v === "" ? null : num(v, lo, hi, lo));
-const tier = (v: unknown, fallback: AiTier): AiTier => (TIERS as readonly string[]).includes(v as string) ? v as AiTier : fallback;
+const tier = (v: unknown, fallback: AiTier): AiTier => (AI_TIERS as readonly string[]).includes(v as string) ? v as AiTier : fallback;
 const text = (v: unknown, fallback: string) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 300) : fallback);
+const tierAtLeast = (t: AiTier, min: AiTier) => AI_TIERS.indexOf(t) >= AI_TIERS.indexOf(min);
+
+/** Pure: one activity from a policy document, or null when its code is not a valid activity code. */
+export function resolveActivity(code: string, s: any): ActivityPolicy | null {
+  if (!ACTIVITY_CODE.test(code) || !s || typeof s !== "object") return null;
+  const t = tier(s.tier, "reasoning");
+  const min = tier(s.minTier, t);
+  const cls = s.class === "essential" ? "essential" : "standard";
+  return {
+    label: text(s.label, code),
+    class: cls,
+    tier: t,
+    minTier: tierAtLeast(t, min) ? min : t,
+    maxOutputTokens: Math.round(num(s.maxOutputTokens, 50, MAX_OUTPUT_TOKENS, DEFAULT_OUTPUT_TOKENS)),
+    capPerPeriod: nullableNum(s.capPerPeriod, 0, 100000),
+    clinicallySensitive: s.clinicallySensitive !== false,
+    reserveEligible: cls === "essential" && s.reserveEligible === true,
+  };
+}
 
 /**
- * Pure: a published settings document as a policy. Every value is clamped. Activities are only those the
- * product catalogue defines -- a policy can tune an activity, never invent one -- and a clinically sensitive
- * activity can never be configured below its catalogue tier.
+ * Pure: a published settings document as a policy. Every value is clamped. The activities are exactly those the
+ * document defines (up to MAX_ACTIVITIES, valid codes only).
  */
 export function resolvePolicy(product: AiProduct, settings: any, version: string): ProductAiPolicy {
   const d = defaultPolicy(product);
   if (!settings || typeof settings !== "object") return d;
   const activities: Record<string, ActivityPolicy> = {};
-  for (const [code, base] of Object.entries(ACTIVITY_CATALOGUE[product])) {
-    const s = settings.activities?.[code] ?? {};
-    const t = tier(s.tier, base.tier);
-    const min = base.clinicallySensitive ? base.tier : tier(s.minTier, base.minTier);
-    activities[code] = {
-      ...base,
-      tier: TIERS.indexOf(t) < TIERS.indexOf(min) ? min : t,
-      minTier: min,
-      maxOutputTokens: num(s.maxOutputTokens, 50, base.maxOutputTokens, base.maxOutputTokens),
-      capPerPeriod: nullableNum(s.capPerPeriod, 0, 100000),
-      reserveEligible: base.class === "essential" && s.reserveEligible !== false,
-    };
+  const given = settings.activities && typeof settings.activities === "object" ? Object.entries(settings.activities) : [];
+  for (const [code, s] of given.slice(0, MAX_ACTIVITIES)) {
+    const a = resolveActivity(code, s);
+    if (a) activities[code] = a;
   }
   const opt = num(settings.levels?.optimisedBelowPct, 0, 100, d.levels.optimisedBelowPct);
+  const rule: ResetRule = settings.reset?.rule === "calendar_month" ? "calendar_month" : settings.reset?.rule === "entitlement_cycle" ? "entitlement_cycle" : "subscription_anniversary";
   return {
     version: text(version, d.version),
     includedCau: num(settings.includedCau, 0, CAU_MAX, 0),
     reserveCau: num(settings.reserveCau, 0, CAU_MAX, 0),
     windowMinutes: nullableNum(settings.windowMinutes, 5, 44640),
     windowCapCau: nullableNum(settings.windowCapCau, 0, CAU_MAX),
-    levels: { optimisedBelowPct: opt, essentialBelowPct: num(settings.levels?.essentialBelowPct, 0, opt, d.levels.essentialBelowPct) },
-    reset: { rule: settings.reset?.rule === "calendar_month" ? "calendar_month" : "entitlement_cycle", cycleDays: Math.round(num(settings.reset?.cycleDays, 7, 366, 30)) },
+    levels: { optimisedBelowPct: opt, essentialBelowPct: num(settings.levels?.essentialBelowPct, 0, opt, Math.min(opt, d.levels.essentialBelowPct)) },
+    reset: { rule, cycleDays: Math.round(num(settings.reset?.cycleDays, 7, 366, 30)) },
+    currency: typeof settings.currency === "string" && /^[A-Z]{3}$/.test(settings.currency) ? settings.currency : d.currency,
+    fxBufferPct: num(settings.fxBufferPct, 0, 100, d.fxBufferPct),
+    maxUnreconciledCau: num(settings.maxUnreconciledCau, 0, CAU_MAX, d.maxUnreconciledCau),
     activities,
     messages: {
       full: text(settings.messages?.full, MESSAGES.full), optimised: text(settings.messages?.optimised, MESSAGES.optimised),
       essential: text(settings.messages?.essential, MESSAGES.essential), continuity: text(settings.messages?.continuity, MESSAGES.continuity),
+      levelInsufficient: text(settings.messages?.levelInsufficient, MESSAGES.levelInsufficient),
     },
   };
+}
+
+/** Pure: `d` moved by k months, on the same day of the month (the last day where the month is shorter). */
+export function addMonthsClamped(d: Date, k: number): Date {
+  const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + k, 1, d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds()));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  first.setUTCDate(Math.min(d.getUTCDate(), last));
+  return first;
 }
 
 /** Pure: the allowance period containing `now`, from the entitlement and the reset rule. */
@@ -143,11 +171,17 @@ export function allowancePeriod(policy: ProductAiPolicy, entitlement: { startsAt
     start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
     if (start < starts) start = starts;
-  } else {
+  } else if (policy.reset.rule === "entitlement_cycle") {
     const cycle = policy.reset.cycleDays * 86400000;
     const n = Math.floor((now.getTime() - starts.getTime()) / cycle);
     start = new Date(starts.getTime() + n * cycle);
     end = new Date(start.getTime() + cycle);
+  } else {
+    // Monthly on the subscription anniversary (owner D5): the start's day of the month, at the start's time.
+    let k = (now.getUTCFullYear() - starts.getUTCFullYear()) * 12 + (now.getUTCMonth() - starts.getUTCMonth());
+    if (addMonthsClamped(starts, k) > now) k--;
+    start = addMonthsClamped(starts, k);
+    end = addMonthsClamped(starts, k + 1);
   }
   if (ends && end > ends) end = ends;
   return { start, end };
@@ -166,27 +200,38 @@ export function serviceLevel(policy: ProductAiPolicy, b: Balance): AiServiceLeve
   return "full";
 }
 
-export type ActivityDecision = { available: boolean; pool: "included" | "reserve" | null; tier: AiTier | null; reason: string | null };
+export type ActivityRefusal = "unknown_activity" | "level_insufficient" | "allowance_exhausted";
+export type ActivityDecision = { available: boolean; via: "included" | "reserve" | null; tier: AiTier | null; refusal: ActivityRefusal | null; reason: string | null };
+
+/** Pure: the tier a level asks for. Full keeps the activity's tier, Optimised one step cheaper, below that the cheapest. */
+export function levelTier(level: AiServiceLevel, a: ActivityPolicy): AiTier {
+  if (level === "full") return a.tier;
+  if (level === "optimised") return AI_TIERS[Math.max(0, AI_TIERS.indexOf(a.tier) - 1)];
+  return "cheap";
+}
+
+const refuse = (refusal: ActivityRefusal, reason: string): ActivityDecision => ({ available: false, via: null, tier: null, refusal, reason });
 
 /** Pure: whether an activity may run at a level, from which pool, on which tier. */
 export function activityAt(policy: ProductAiPolicy, level: AiServiceLevel, code: string, b: Balance): ActivityDecision {
-  const a = policy.activities[code];
-  if (!a) return { available: false, pool: null, tier: null, reason: "This activity is not offered." };
+  const a = Object.prototype.hasOwnProperty.call(policy.activities, code) ? policy.activities[code] : undefined;
+  if (!a) return refuse("unknown_activity", "This activity is not offered.");
   const reserveLeft = b.reserveCau - b.reserveUsedCau - b.reserveReservedCau;
-  if (level === "full") return { available: true, pool: "included", tier: a.tier, reason: null };
-  if (level === "optimised") {
-    // Efficient models where safe. A clinically sensitive activity keeps its tier.
-    return { available: true, pool: "included", tier: a.clinicallySensitive ? a.tier : a.minTier, reason: null };
+  let via: "included" | "reserve";
+  if (level === "full" || level === "optimised") via = "included";
+  else if (level === "essential") {
+    if (a.class !== "essential") return refuse("allowance_exhausted", "Saved for when your allowance renews: only essential help is available now.");
+    via = "included";
+  } else {
+    if (!(a.class === "essential" && a.reserveEligible && reserveLeft > 0)) return refuse("allowance_exhausted", "Available again when your AI allowance renews.");
+    via = "reserve";
   }
-  if (level === "essential") {
-    if (a.class !== "essential") return { available: false, pool: null, tier: null, reason: "Saved for when your allowance renews: only essential help is available now." };
-    return { available: true, pool: "included", tier: a.clinicallySensitive ? a.tier : a.minTier, reason: null };
-  }
-  if (a.class === "essential" && a.reserveEligible && reserveLeft > 0) return { available: true, pool: "reserve", tier: a.clinicallySensitive ? a.tier : a.minTier, reason: null };
-  return { available: false, pool: null, tier: null, reason: "Available again when your AI allowance renews." };
+  const t = levelTier(level, a);
+  if (!tierAtLeast(t, a.minTier)) return refuse("level_insufficient", policy.messages.levelInsufficient);
+  return { available: true, via, tier: t, refusal: null, reason: null };
 }
 
-/** Pure: the band a person sees. Never a token count unless they ask for detail. */
+/** Pure: the band a person sees. Never a unit count (owner D4). */
 export function remainingBand(b: Balance): { band: "plenty" | "some" | "low" | "none"; percent: number | null } {
   if (b.includedCau <= 0) return { band: "none", percent: null };
   const pct = Math.max(0, Math.round(((b.includedCau - b.usedCau - b.reservedCau) / b.includedCau) * 100));

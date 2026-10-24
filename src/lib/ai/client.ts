@@ -42,6 +42,10 @@ export type GenerateResult =
       /** What the provider reported consuming before it declined, when it reported it (a refusal is billed).
        *  Absent for a transport failure or a timeout: unknown is never invented (AI-FAIR-USE-01). */
       usage?: { input: number; output: number };
+      /** With no usage: "none" when the provider answered with an error before generating (not billed),
+       *  "unknown" when the request may have reached the provider and no answer came back (a timeout, a broken
+       *  connection or stream, an unreadable response). An unknown charge is reconciled, never guessed. */
+      billing?: "none" | "unknown";
     };
 
 /** What every adapter returns, before the dispatcher records usage and normalises the result. */
@@ -212,7 +216,7 @@ export async function generate(
     if (!result.ok) {
       void recordAiUsage({ ...base, latencyMs, status: result.kind === "refusal" ? "refusal" : "error", error: result.detail,
         inputTokens: result.input ?? null, outputTokens: result.output ?? null });
-      const billed = result.input != null || result.output != null ? { usage: { input: result.input ?? 0, output: result.output ?? 0 } } : {};
+      const billed = result.input != null || result.output != null ? { usage: { input: result.input ?? 0, output: result.output ?? 0 } } : { billing: "none" as const };
 
       // The fallback that is not enabled. Written as a guarded branch rather than omitted, so the rule
       // above is visible at the point it would be broken.
@@ -237,6 +241,9 @@ export async function generate(
       ...base, latencyMs: Date.now() - t0, status: "error",
       error: e instanceof Error ? e.message : String(e),
     });
-    return { ok: false, error: "failed", detail: e instanceof Error ? e.message : String(e) };
+    // The provider answering with an error status did not generate, so did not bill. Anything else thrown -- a
+    // timeout, a broken connection or stream, an unreadable body -- may have been billed: unknown.
+    const answeredWithError = e instanceof Anthropic.APIError && typeof e.status === "number";
+    return { ok: false, error: "failed", detail: e instanceof Error ? e.message : String(e), billing: answeredWithError ? "none" : "unknown" };
   }
 }
