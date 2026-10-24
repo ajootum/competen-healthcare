@@ -171,16 +171,28 @@ describe("S1/S2 readiness: expected levels order the gaps, and case questions ar
   });
 });
 
+describe("the live sources (COMPETEN-SCHOLAR-01 P0)", () => {
+  it("coverage reads the learner's programme catalogue and S2's ACCEPTED maps, never the placeholders", async () => {
+    const { COMPETENCY_SOURCES, SCHOLAR_PROGRAMME_CATALOGUE, S2_MAPPINGS, fromProgrammeCatalogue } = await import("./competency-sources");
+    expect(COMPETENCY_SOURCES.catalogue).toBe(SCHOLAR_PROGRAMME_CATALOGUE);
+    expect(COMPETENCY_SOURCES.mappings).toBe(S2_MAPPINGS);
+    expect(fromProgrammeCatalogue([])).toEqual({ ok: true, value: null });
+    expect(fromProgrammeCatalogue([{ id: "c1", layer: "foundational", profession: "P", catalogue: "CF-FOUND", frameworkId: "f1", domain: "D", code: "F1",
+      title: "Hand hygiene", outcomes: [], expectedLevel: { score: 3, label: "Competent" }, practice: null, cpu: null }]))
+      .toEqual({ ok: true, value: [{ id: "c1", code: "F1", name: "Hand hygiene", frameworkId: "f1", frameworkName: "CF-FOUND", expectedLevel: { score: 3, label: "Competent" } }] });
+  });
+});
+
 describe("S1 adapter (fromCatalogue)", () => {
   it("unreadable refuses, an empty allowlist is not available, rows map with the expected level", async () => {
-    const { fromCatalogue, COMPETENCY_SOURCES, S1_CATALOGUE } = await import("./competency-sources");
+    const { fromCatalogue } = await import("./competency-sources");
     expect(fromCatalogue(null)).toEqual({ ok: false });
     expect(fromCatalogue([])).toEqual({ ok: true, value: null });
     const row = { competencyId: "c1", code: "F1", title: "Hand hygiene", description: null, layer: "foundational" as const, profession: null,
       catalogue: { id: "f1", name: "CF-FOUND", code: "CF", version: "1.0.0" }, domain: { id: "d", name: "Safety" }, outcomes: [],
       expectedLevel: { id: "l", score: 3, label: "Competent" }, cpu: null, links: { prerequisites: [], extends: [], sharedWith: [] } };
     expect(fromCatalogue([row])).toEqual({ ok: true, value: [{ id: "c1", code: "F1", name: "Hand hygiene", frameworkId: "f1", frameworkName: "CF-FOUND", expectedLevel: { score: 3, label: "Competent" } }] });
-    expect(COMPETENCY_SOURCES.catalogue).toBe(S1_CATALOGUE);
+    // COMPETEN-SCHOLAR-01 P0: the live sources are S2 (accepted maps) and the programme-narrowed catalogue (below).
   });
   it("with S1 connected and no accepted maps yet, coverage says the questions are not yet linked", () => {
     const catalogue = [{ id: "c1", code: null, name: "Hand hygiene", frameworkId: "f1", frameworkName: "CF-FOUND", expectedLevel: null }];

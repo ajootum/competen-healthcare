@@ -1,9 +1,10 @@
 import { generate } from "@/lib/ai/client";
 import { parseJsonArray, textGroundingViolations, type PhrasingViolation } from "@/lib/ai/grounding";
 import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib/competency/mapping";
+import { CONTEXT_PREAMBLE } from "./learner-context";
 import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST } from "./config";
 import { citeChunk, findPatientIdentifiers } from "./extract";
-import type { CatalogueCompetency } from "./catalogue";
+import { structureLabel, type CatalogueCompetency } from "./catalogue";
 import { VERIFY_SYSTEM, applyVerification, passageVocabulary, qualityProblems, verificationPrompt, type QualityReason } from "./question-quality";
 
 // ── SOURCE-GROUNDED AI FOR SCHOLAR ── COMPETEN-IND-004 s2, s3 and s5 ───────────────────────────────────
@@ -140,11 +141,16 @@ export const explainPromptVersion = (mode: ExplainMode) =>
 
 export type TutorTurn = { speaker: "tutor" | "student"; text: string };
 
-export function modeUserPrompt(question: string, passages: Passage[], history: TutorTurn[]): string {
-  if (!history.length) return explainUserPrompt(question, passages);
+/**
+ * The user prompt. `learnerContext` (P1, learner-context.ts) is the tutor's view of the student, framed so the
+ * model uses it for emphasis only. It is NOT grounding: runExplain never passes it to checkExplanation.
+ */
+export function modeUserPrompt(question: string, passages: Passage[], history: TutorTurn[], learnerContext: string | null = null): string {
+  const about = learnerContext ? `${CONTEXT_PREAMBLE}\n${learnerContext}\n\n` : "";
+  if (!history.length) return about + explainUserPrompt(question, passages);
   const blocks = passages.map((p, i) => `[${passageTag(i)}] (${passageCitation(p)})\n${p.content}`);
   const convo = history.map(t => `${t.speaker === "tutor" ? "TUTOR" : "STUDENT"}: ${t.text}`).join("\n\n");
-  return `PASSAGES FROM MY NOTES:\n\n${blocks.join("\n\n")}\n\nOUR CONVERSATION SO FAR:\n\n${convo}\n\nMY REPLY: ${question}`;
+  return `${about}PASSAGES FROM MY NOTES:\n\n${blocks.join("\n\n")}\n\nOUR CONVERSATION SO FAR:\n\n${convo}\n\nMY REPLY: ${question}`;
 }
 
 /** Pure. The notes-based answer, and the part after the marker line (null when there is none). */
@@ -287,10 +293,10 @@ export type AiFailure = { ok: false; error: "not_configured" | "refusal" | "fail
  * beyond the notes, if any, is split off first and checked by its own rules -- it never reaches
  * checkExplanation, and never grounds anything.
  */
-export async function runExplain(userId: string, question: string, passages: Passage[], mode: ExplainMode = "explain", history: TutorTurn[] = []) {
+export async function runExplain(userId: string, question: string, passages: Passage[], mode: ExplainMode = "explain", history: TutorTurn[] = [], learnerContext: string | null = null) {
   const r = await generate({
     system: explainSystem(mode),
-    user: modeUserPrompt(question, passages, history),
+    user: modeUserPrompt(question, passages, history, mode === "tutor" ? learnerContext : null),
     tier: "reasoning",
     maxTokens: mode === "explain" ? 700 : 900,
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_explain" },
@@ -317,7 +323,7 @@ export const SCHOLAR_MAPPING_FRAMING: MappingFraming = { person: "a healthcare s
 export async function runAnalysis(userId: string, sections: MappingSubject[], competencies: CatalogueCompetency[]) {
   return proposeMappings({
     subjects: sections,
-    candidates: competencies.map(c => ({ competencyId: c.id, layer: c.layer, code: c.code, title: c.title, outcomes: c.outcomes })),
+    candidates: competencies.map(c => ({ competencyId: c.id, layer: c.layer, code: c.code, title: c.title, outcomes: c.outcomes, context: structureLabel(c) })),
     framing: SCHOLAR_MAPPING_FRAMING,
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_map" },
     screen: findPatientIdentifiers,

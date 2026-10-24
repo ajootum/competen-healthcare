@@ -150,7 +150,7 @@ export function AnalysePanel({ materialId, consent, sections, analysed, programm
 // ── ONE SECTION: ITS CONCEPTS AND ITS COMPETENCY LINKS ──────────────────────────────────────────────
 
 export type MappingView = {
-  id: string; competencyId: string; title: string; code: string | null; layer: string; catalogue: string | null;
+  id: string; competencyId: string; title: string; code: string | null; layer: string; catalogue: string | null; structure?: string | null;
   source: "ai" | "student" | "reviewer"; confidence: number | null; rationale: string | null;
   state: "proposed" | "accepted" | "rejected"; decidedBy: "student" | "reviewer" | null; decisions: number;
 };
@@ -215,6 +215,7 @@ export function SectionTopics({ chunkId, concepts, mappings, options }: {
                     {m.decisions > 1 ? ` · changed ${m.decisions - 1} time${m.decisions === 2 ? "" : "s"}` : ""}
                   </span>
                 </div>
+                {m.structure && <p className="mt-0.5 text-[12px] font-medium text-gray-600">{m.structure}</p>}
                 {m.rationale && <p className="mt-1 text-[13px] text-gray-700">{m.rationale}</p>}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {m.state !== "accepted" && (

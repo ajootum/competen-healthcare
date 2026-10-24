@@ -48,6 +48,13 @@ export type CatalogueCompetency = {
   title: string;
   /** What a learner should be able to do, as S1 records it. Empty when none is recorded -- not invented here. */
   outcomes: string[];
+  /** The proficiency the framework expects (S1 expectedLevel). Orders gaps. Null when it sets none. */
+  expectedLevel: { score: number; label: string } | null;
+  // THE CLINICAL STRUCTURE (CKCM, migration 011): domain -> practice -> clinical practice unit. Read from S1,
+  // never rebuilt here. Null where the library has not placed the competency in a practice or a CPU -- most
+  // competencies today -- and shown as such, never guessed.
+  practice: { code: string | null; name: string } | null;
+  cpu: { code: string | null; name: string } | null;
 };
 
 /** A programme as configuration: which catalogues, in which layer. Read by the store from 387. */
@@ -71,7 +78,17 @@ export interface CompetencyCatalogue {
 export type S1Competency = {
   competencyId: string; code: string | null; title: string; layer: Layer | null;
   profession: { label: string } | null; catalogue: { id: string; name: string }; domain: { name: string }; outcomes: string[];
+  expectedLevel?: { score: number; label: string } | null;
+  cpu?: { code: string | null; name: string } | null;
+  /** Not yet in S1's read API; carried through when it is (IND-007). */
+  practice?: { code: string | null; name: string } | null;
 };
+
+/** Pure. The clinical-structure line for a competency, e.g. "Oxygen Therapy > CPU-OXYSAFE-001 Safe Oxygen Administration", or null. */
+export function structureLabel(c: Pick<CatalogueCompetency, "practice" | "cpu">): string | null {
+  const parts = [c.practice?.name, c.cpu ? [c.cpu.code, c.cpu.name].filter(Boolean).join(" ") : null].filter((x): x is string => !!x);
+  return parts.length ? parts.join(" \u203a ") : null;
+}
 
 /** Pure. S1's competencies, narrowed to the programme's catalogues, in layer then programme then catalogue order. */
 export function projectForProgramme(all: S1Competency[], programme: ProgrammeConfig): CatalogueCompetency[] {
@@ -86,6 +103,9 @@ export function projectForProgramme(all: S1Competency[], programme: ProgrammeCon
         c: {
           id: c.competencyId, layer: c.layer ?? f.layer, profession: c.profession?.label ?? programme.profession,
           catalogue: c.catalogue.name, frameworkId: c.catalogue.id, domain: c.domain.name, code: c.code, title: c.title, outcomes: c.outcomes,
+          expectedLevel: c.expectedLevel ? { score: c.expectedLevel.score, label: c.expectedLevel.label } : null,
+          practice: c.practice ? { code: c.practice.code, name: c.practice.name } : null,
+          cpu: c.cpu ? { code: c.cpu.code, name: c.cpu.name } : null,
         },
       };
     })

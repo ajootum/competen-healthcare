@@ -159,34 +159,26 @@ async function main() {
     choose.status === 200 && passport.text.includes("Cardiology revision") && passport.text.includes("1 revision review of own notes") && !/recall/i.test(passport.text.slice(passport.text.indexOf("Cardiology revision"), passport.text.indexOf("Cardiology revision") + 400)),
     `choose ${choose.status} ${JSON.stringify(choose.json)}`);
 
-  // L8. S1 is connected (COMPETENCY_SOURCES.catalogue = S1_CATALOGUE). With the Scholar allowlist empty, coverage
-  // says no framework is connected. With one published catalogue allowlisted (CF-FOUND, briefly, restored in
-  // `finally`), it says the questions are not yet linked -- the S1 read reached the page. S2 is not yet wired.
-  const PATH = "individual.policy.scholar_catalogues";
-  const CF_FOUND = "d5944ae0-a6eb-499f-92dd-99fd3b74aaf2";
-  const { data: prior } = await admin.from("workspace_config_overrides").select("id, draft, published")
-    .eq("scope_type", "platform").eq("scope_ref", "individual").eq("config_path", PATH).maybeSingle();
+  // L8. COMPETEN-SCHOLAR-01 P0: S1 and S2 are both live (COMPETENCY_SOURCES = the learner's programme catalogue
+  // + S2 accepted maps). Without a programme, coverage says no framework is connected. With the learner's
+  // programme chosen, coverage is MEASURED against that programme's competencies (the same denominator as
+  // progress by competency). ⚠ SHARED STAGING CONFIG IS ONLY READ: the Scholar allowlist and the viewing
+  // programme (scripts/seed-staging-scholar-viewing.ts) are never written here. The one write is the fixture
+  // learner's own programme choice, removed with the fixture. No allowlisted programme here: PEND.
   const beforeCov = panel(p3.text, "li-cov");
-  let afterCov = "";
-  // ⚠ SHARED STAGING CONFIG. Another session may already have allowlisted catalogues (S2 testing). If CF-FOUND is
-  // already in the published allowlist, nothing is written -- the check only reads. Otherwise the change lasts one
-  // page load and the prior row (or its absence) is put back.
-  const alreadyAllowed = Array.isArray(prior?.published?.ids) && prior.published.ids.includes(CF_FOUND);
-  try {
-    if (!alreadyAllowed) {
-      if (prior) await admin.from("workspace_config_overrides").update({ published: { ids: [CF_FOUND] } }).eq("id", prior.id);
-      else await admin.from("workspace_config_overrides").insert({ scope_type: "platform", scope_ref: "individual", config_path: PATH, draft: { ids: [CF_FOUND] }, published: { ids: [CF_FOUND] } });
-    }
-    afterCov = panel((await page(PROGRESS, s)).text, "li-cov");
-  } finally {
-    if (!alreadyAllowed) {
-      if (prior) await admin.from("workspace_config_overrides").update({ draft: prior.draft, published: prior.published }).eq("id", prior.id);
-      else await admin.from("workspace_config_overrides").delete().eq("scope_type", "platform").eq("scope_ref", "individual").eq("config_path", PATH);
-    }
+  const viewing = (await admin.from("individual_scholar_programme").select("code").eq("code", "nursing-ug-diploma").eq("is_active", true).maybeSingle()).data;
+  const { data: allow } = await admin.from("workspace_config_overrides").select("published")
+    .eq("scope_type", "platform").eq("scope_ref", "individual").eq("config_path", "individual.policy.scholar_catalogues").maybeSingle();
+  if (!viewing || !(allow?.published?.ids ?? []).length) {
+    console.log("  PEND  L8. coverage against the learner's programme -- no allowlisted viewing programme on this environment (nothing written)");
+  } else {
+    await admin.from("individual_scholar_learner").upsert({ user_id: learner, programme_code: viewing.code }, { onConflict: "user_id" });
+    const afterCov = panel((await page(PROGRESS, s)).text, "li-cov");
+    await admin.from("individual_scholar_learner").delete().eq("user_id", learner);
+    ok("L8. S1 and S2 are live: no programme is 'no framework connected'; with the learner's programme, coverage is measured against its competencies",
+      beforeCov.includes("No competency framework is connected") && /Practised\s*0 of \d+/.test(afterCov),
+      `before: ${beforeCov.slice(0, 120)} | after: ${afterCov.slice(0, 160)}`);
   }
-  ok("L8. S1 is live: an allowlisted catalogue turns 'no framework connected' into 'questions not yet linked' (S2 pending); allowlist restored",
-    (prior ? true : beforeCov.includes("No competency framework is connected")) && afterCov.includes("not yet linked to competencies"),
-    `before: ${beforeCov.includes("No competency framework") ? "no framework" : "?"}, after: ${afterCov.includes("not yet linked") ? "not linked" : afterCov.slice(0, 160)}`);
 
   ok("L7. recommendations render with their reasons: scenarios short of the threshold ask for 2 more", p3.text.includes("What to do next") && p3.text.includes("Work through 2 more practice scenarios") && p3.text.includes("Then Scholar can show how your clinical reasoning is going"));
 }
