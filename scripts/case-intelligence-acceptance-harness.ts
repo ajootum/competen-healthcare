@@ -33,6 +33,13 @@
  *
  * ⚠ ONE RECORD STAYS, BY DESIGN: the fixture case CASE-HARNESS-<stamp>, retired at the end. A submitted case version
  * and its clinical review are the record and cannot be deleted (422). PEND until 423.
+ *
+ * ⚠ THE COMBINED STAGE 5 RUN. With CASE_HARNESS_KEEP_PUBLISHED=1 the fixture case is left PUBLISHED and approved for its
+ * exact version, titled "Synthetic staging case", so IND-004's steps 14 and 15 can deliver it. Every fixture person is
+ * still removed. Retire it afterwards: scripts/staging-case-library-switch.ts --retire-fixtures.
+ * In this mode the harness WRITES NO FLAG: the owner switches case_library (and metering) on and off, so the run
+ * requires the flag ON as it finds it, skips G0 (the gate-off check, which standalone runs keep) and leaves the flag
+ * exactly as it was.
  */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
@@ -55,6 +62,7 @@ const admin = createClient(url, key, { auth: { persistSession: false } }) as any
 let pass = 0; const fails: string[] = [];
 const ok = (n: string, c: boolean, d = "") => { if (c) { pass++; console.log(`  PASS  ${n}`); } else { fails.push(n); console.log(`  FAIL  ${n}${d ? ` -- ${d}` : ""}`); } };
 const pend = (n: string, why: string) => console.log(`  PEND  ${n} -- ${why}`);
+const KEEP = process.env.CASE_HARNESS_KEEP_PUBLISHED === "1";
 const EMAILS = { s1: "harness-ci-student1@competen.test", s2: "harness-ci-student2@competen.test", edu: "harness-ci-educator@competen.test", rev: "harness-ci-reviewer@competen.test", pub: "harness-ci-publisher@competen.test" };
 
 async function findUser(email: string) {
@@ -135,7 +143,11 @@ async function main() {
     const people = [s1, s2, edu, rev, pub];
     const ai0 = await aiRows(people);
 
-    // ── G0: the gate, off ──
+    // ── G0: the gate, off (standalone runs only: in keep mode the owner holds the switches) ──
+    if (KEEP) {
+      ok("G0k. keep mode: the owner's case_library switch is ON, and this run writes no flag", prior?.enabled === true, JSON.stringify(prior));
+      if (prior?.enabled !== true) throw new Error("keep mode needs the owner's case_library switch ON first: staging-case-library-switch.ts --on");
+    } else {
     await setFlag(false);
     const offGrant = await grantCaseCandidacy(admin, { userId: s1, attestation: "own_notes", attestationVersion: (await loadCasePolicy(admin)).attestationVersion });
     const offWithdraw = await withdrawCaseCandidate(admin, { userId: s1, sourceKey: `harness:case:${stamp}:0`, reason: "student" });
@@ -143,6 +155,7 @@ async function main() {
     ok("G0. with the case_library flag off, granting is refused, a search offers nothing, and a withdrawal still works", !offGrant.ok && (offGrant as any).error === CASE_LIBRARY_OFF
       && Array.isArray(offFind) && offFind.length === 0 && offWithdraw.ok, JSON.stringify({ offGrant, offWithdraw, n: offFind?.length }));
     await setFlag(true);
+    }
 
     // ── P0, D1, D2, D4: the real 423 on staging ──
     const parity = await Promise.all(CASE_SCREEN_CORPUS.map(async c => ({ c, db: (await admin.rpc("case_identifier_kinds", { p_text: c.text })).data, ts: structuredKinds(c.text), app: screenText(c.text) })));
@@ -168,7 +181,7 @@ async function main() {
     } else pend("D4", "no anon key in this environment");
 
     // ── J2 ──
-    const clean = { ...libraryCase(comp.id, `Harness case ${stamp}`), summary: null, patient: null };
+    const clean = { ...libraryCase(comp.id, `Synthetic staging case (IND-007 harness) ${stamp}`), summary: null, patient: null };
     const leaky = { ...clean, title: `Harness leaky ${stamp}`, facts: [...clean.facts, { id: "n", kind: "context", label: "Notes", value: "MRN 1234567", revealedAt: "start", safetyCritical: false }] };
     const o1 = await offerPrivateCase(admin, { userId: s1, sourceKey: `harness:case:${stamp}:1`, snapshot: clean, verbatim: { passed: true, version: "verbatim/1" } });
     const o2 = await offerPrivateCase(admin, { userId: s1, sourceKey: `harness:case:${stamp}:2`, snapshot: leaky, verbatim: { passed: true, version: "verbatim/1" } });
@@ -190,13 +203,13 @@ async function main() {
 
     // ── J4 ──
     const take = o1.ok ? await takeCandidate(admin, edu, o1.candidateId) : { ok: false };
-    const prom = o1.ok ? await promoteCandidate(admin, edu, o1.candidateId, { code: `CASE-HARNESS-${stamp}`, title: `Harness case ${stamp}` }) : { ok: false } as any;
+    const prom = o1.ok ? await promoteCandidate(admin, edu, o1.candidateId, { code: `CASE-HARNESS-${stamp}`, title: `Synthetic staging case (IND-007 harness) ${stamp}` }) : { ok: false } as any;
     caseId = prom.ok ? prom.caseId : null;
     const draft = prom.ok ? (await admin.from("case_library_version").select("content, origin_kind").eq("id", prom.versionId).single()).data : null;
     const candAfter = o1.ok ? (await admin.from("case_candidate").select("status, promoted_version_id").eq("id", o1.candidateId).single()).data : null;
     ok("J4. take and promote: a library draft of candidate origin on the attested rights, the candidate promoted", take.ok && prom.ok && draft?.origin_kind === "candidate"
       && draft?.content?.metadata?.provenance?.rights === "own_notes" && candAfter?.status === "promoted" && candAfter?.promoted_version_id === prom.versionId, JSON.stringify({ take, prom, prov: draft?.content?.metadata?.provenance, candAfter }));
-    const saved = prom.ok ? await saveDraft(admin, edu, prom.versionId, libraryCase(comp.id, `Harness case ${stamp}`)) : { ok: false } as any;
+    const saved = prom.ok ? await saveDraft(admin, edu, prom.versionId, libraryCase(comp.id, `Synthetic staging case (IND-007 harness) ${stamp}`)) : { ok: false } as any;
     const sub = prom.ok ? await submitCase(admin, edu, prom.versionId) : { ok: false } as any;
     ok("J4b. the educator edits it into a complete case and submits it through 395", saved.ok && saved.problems.length === 0 && sub.ok, JSON.stringify({ saved, sub }));
 
@@ -265,9 +278,16 @@ async function main() {
     ok("J9. case intelligence counts the journey from stored records, and keeps estimates apart", !!ci && (ci.candidates.promoted ?? 0) >= 1 && ci.library.published >= 1 && ci.reuse.sessionsCompleted >= 1
       && (ci.meteringOn || (!ci.spendByOwner.platform.measured && !ci.estimatedAvoided.estimated)), JSON.stringify(ci && { c: ci.candidates, l: ci.library, r: ci.reuse, m: ci.meteringOn }));
   } finally {
-    if (caseId) await retireCase(admin, caseId);
-    if (prior) await admin.from("practice_platform_flags").update({ enabled: prior.enabled, note: prior.note }).eq("flag", CASE_LIBRARY_FLAG);
-    else await admin.from("practice_platform_flags").delete().eq("flag", CASE_LIBRARY_FLAG);
+    if (caseId && KEEP) {
+      const kept = (await admin.from("case_library_version").select("id").eq("case_id", caseId).eq("state", "published").maybeSingle()).data;
+      const deliverable = kept ? (await admin.rpc("case_library_deliverable", { p_version: kept.id })).data === true : false;
+      ok("K. KEPT for the combined run: the synthetic case stays published and deliverable", deliverable, JSON.stringify({ caseId, kept }));
+      console.log(`  KEPT  CASE-HARNESS-${stamp} (case ${caseId}, published version ${kept?.id ?? "none"}), teaching CF-PS-001. Retire after: staging-case-library-switch.ts --retire-fixtures`);
+    } else if (caseId) await retireCase(admin, caseId);
+    if (!KEEP) {
+      if (prior) await admin.from("practice_platform_flags").update({ enabled: prior.enabled, note: prior.note }).eq("flag", CASE_LIBRARY_FLAG);
+      else await admin.from("practice_platform_flags").delete().eq("flag", CASE_LIBRARY_FLAG);
+    }
     const after = (await admin.from("practice_platform_flags").select("enabled, note").eq("flag", CASE_LIBRARY_FLAG).maybeSingle()).data;
     ok("Z0. the case_library flag is back exactly as the run found it", JSON.stringify(after ?? null) === JSON.stringify(prior ? { enabled: prior.enabled, note: prior.note } : null), JSON.stringify({ prior, after }));
     await cleanup();
