@@ -5,7 +5,8 @@
 
 import { citeChunk } from "./extract";
 import type { IndividualPolicy } from "../policy";
-import { LEARN_ACTIONS, type LearnAction } from "./config";
+import { LEARN_ACTIONS, SUPPLEMENTARY_LABEL, WITHHELD_NEAREST_MAX, WITHHELD_WHY, type LearnAction } from "./config";
+import type { SupplementaryCheck } from "./generation";
 import { stepTitle } from "./learn";
 import type { LearningStep } from "./store";
 
@@ -30,6 +31,30 @@ export function sessionView(input: {
       step: s.step, title: stepTitle(s, input.topics),
       sections: s.sections.map(x => ({ chunkId: x.chunkId, materialId: x.materialId, materialTitle: x.materialTitle, citation: `${x.materialTitle}, ${citeChunk(x, x.unit)}` })),
     })),
+  };
+}
+
+export type WithheldReason = keyof typeof WITHHELD_WHY;
+type SourceRef = { tag: string; chunkId: string; materialId: string; citation: string };
+export type WithheldNext = { why: string; notInNotes: boolean; nearest: SourceRef[]; rephrase: boolean; background: { text: string; label: string } | null };
+
+/**
+ * Pure. Stage 3 acceptance item 4: what a student is told when an answer is withheld as unsupported. Why, plainly;
+ * "this isn't in your notes" when it is not; the sections of their notes nearest the question (the passages, nearest
+ * first -- Ask's are ranked by the search); a rephrase where Ask is offered; and the labelled background only where
+ * policy allows it and it passed its own checks. Never the withheld text, and nothing else from the model.
+ */
+export function withheldNext(input: {
+  reason: WithheldReason; detail: string | null; sources: readonly SourceRef[]; askOffered: boolean;
+  background: SupplementaryCheck | null; backgroundAllowed: boolean;
+}): WithheldNext {
+  const b = input.background;
+  return {
+    why: WITHHELD_WHY[input.reason] + (input.detail ? ` (${input.detail})` : ""),
+    notInNotes: input.reason === "not_in_notes",
+    nearest: input.sources.slice(0, WITHHELD_NEAREST_MAX).map(s => ({ tag: s.tag, chunkId: s.chunkId, materialId: s.materialId, citation: s.citation })),
+    rephrase: input.askOffered,
+    background: input.backgroundAllowed && b?.ok ? { text: b.text, label: SUPPLEMENTARY_LABEL } : null,
   };
 }
 

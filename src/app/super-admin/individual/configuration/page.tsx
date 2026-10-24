@@ -26,7 +26,7 @@ function describe(def: PolicyDef, settings: any, names: Map<string, string> = ne
   if (def.kind === "int") return `${clampInt(def, settings)} ${def.unit}`;
   if (def.kind === "catalogues") {
     const ids = clampCatalogues(def, settings);
-    return ids.length ? ids.map(id => names.get(id) ?? "A catalogue no longer shared and published (offers nothing)").join(", ") : "None offered (nothing reaches a person until a catalogue is chosen)";
+    return ids.length ? ids.map(id => names.get(id) ?? "A catalogue no longer shared and published (offers nothing)").join(", ") : def.emptyMeans ?? "None offered (nothing reaches a person until a catalogue is chosen)";
   }
   // JOIN-01: the educational context asked when a person joins Scholar.
   if (def.kind === "programmes") {
@@ -133,7 +133,7 @@ export default async function IndividualPolicyPage() {
                 <div><dt className="text-[12px] font-semibold text-gray-500">Effective now</dt><dd className="font-semibold text-gray-900">{effective}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Source</dt><dd className="text-gray-800">{source}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Effective since</dt><dd className="text-gray-800">{published == null ? "Not applicable: the default has always applied" : at ? fmt(at) : "Not recorded in the recent versions"}</dd></div>
-                <div><dt className="text-[12px] font-semibold text-gray-500">Fixed limit</dt><dd className="text-gray-800">{def.kind === "int" ? `${def.min} to ${def.max} ${def.unit}. Default ${def.fallback}.` : def.kind === "catalogues" ? `Shared, active, published catalogues only, at most ${def.max}. Default: none.` : def.kind === "choice" ? `One of: ${def.options.map(o => o.label).join("; ")}. Default: ${def.options.find(o => o.value === def.fallback)?.label ?? def.fallback}.` : def.kind === "set" ? `Only: ${def.options.map(o => o.label).join(", ")}. Default: all.` : ""} <span className="text-gray-500">{def.limitReason}</span></dd></div>
+                <div><dt className="text-[12px] font-semibold text-gray-500">Fixed limit</dt><dd className="text-gray-800">{def.kind === "int" ? `${def.min} to ${def.max} ${def.unit}. Default ${def.fallback}.` : def.kind === "catalogues" ? `Shared, active, published catalogues only, at most ${def.max}. Default: ${def.emptyMeans ?? "none"}.` : def.kind === "choice" ? `One of: ${def.options.map(o => o.label).join("; ")}. Default: ${def.options.find(o => o.value === def.fallback)?.label ?? def.fallback}.` : def.kind === "set" ? `Only: ${def.options.map(o => o.label).join(", ")}. Default: all.` : ""} <span className="text-gray-500">{def.limitReason}</span></dd></div>
               </dl>
               {draftDiffers && (
                 <p className="mt-3 rounded-lg bg-[var(--cmp-surface-information)] px-3 py-1.5 text-[13px] text-blue-900">
