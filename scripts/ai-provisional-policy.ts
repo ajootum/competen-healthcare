@@ -36,6 +36,9 @@ export const PROVISIONAL_ACTIVITIES: Record<"scholar" | "professional", Record<s
     map: a("Competency mapping", "reasoning", "cheap", 2000, "standard_educational"),
     questions: a("Practice questions", "reasoning", "reasoning", 2000, "clinical_educational"),
     case_steps: a("Clinical cases", "reasoning", "reasoning", 2500, "high_risk_clinical"),
+    // COMPETEN-SCHOLAR-REVISION-01 (Stage 4): AI marking of short answers. Its output is an AI evaluation, labelled as
+    // such -- not deterministic marking, never competence. Never below clinical educational, never on the cheapest tier.
+    evaluate: a("AI evaluation of short answers", "reasoning", "reasoning", 800, "clinical_educational"),
   },
   professional: {
     assistant: a("Professional development assistance", "reasoning", "cheap", 900, "standard_educational"),
