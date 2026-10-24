@@ -54,6 +54,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       passportAchievementKinds: [...STUDY_ACHIEVEMENT_KINDS],
       // S1: no catalogue reaches a person until HQ chooses one.
       scholarCatalogues: [], professionalCatalogues: [],
+      // JOIN-01: every active programme is offered, no level or institution is asked, both fields may be.
+      scholarOnboardingProgrammes: null, scholarProgrammeLevels: {}, scholarInstitutions: [], scholarOnboardingFields: ["level", "institution"],
     });
   });
 

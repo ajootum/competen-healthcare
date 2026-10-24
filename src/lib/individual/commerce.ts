@@ -45,15 +45,20 @@ export async function individualCommerceEnabled(admin: any | null): Promise<bool
   }
 }
 
-/** The HQ adult-eligibility confirmation already recorded for this person, newest first, or null. */
-async function adultConfirmation(admin: any, userId: string): Promise<{ at: string; by: string | null } | null | "unreadable"> {
+/**
+ * The 18+ evidence already recorded for this person, newest first, or null: an HQ confirmation (by), or since
+ * COMPETEN-SCHOLAR-JOIN-01 their own declaration (migration 403, declarationId). Carried forward exactly as
+ * recorded -- a purchase never upgrades a self-declaration into an HQ confirmation, or the other way round.
+ */
+type AdultEvidence = { at: string; by: string | null; declarationId: string | null };
+async function adultConfirmation(admin: any, userId: string): Promise<AdultEvidence | null | "unreadable"> {
   const { data, error } = await admin.from("individual_entitlement")
-    .select("adult_confirmed_at, adult_confirmed_by")
+    .select("adult_confirmed_at, adult_confirmed_by, adult_declaration_id")
     .eq("user_id", userId).eq("experience_code", "scholar").not("adult_confirmed_at", "is", null)
     .order("adult_confirmed_at", { ascending: false }).limit(1);
   if (error) return "unreadable";
   const row = (data ?? [])[0];
-  return row ? { at: row.adult_confirmed_at, by: row.adult_confirmed_by ?? null } : null;
+  return row ? { at: row.adult_confirmed_at, by: row.adult_confirmed_by ?? null, declarationId: row.adult_declaration_id ?? null } : null;
 }
 
 export type StartIndividualResult =
@@ -164,7 +169,7 @@ export const INDIVIDUAL_SETTLEMENT: SettlementAdapter = {
       if (ins.error && !/duplicate|unique/i.test(ins.error.message)) return withoutAccess(`membership not written: ${ins.error.message}`);
     }
 
-    let adult: { at: string; by: string | null } | null = null;
+    let adult: AdultEvidence | null = null;
     if (experience === "scholar") {
       const a = await adultConfirmation(admin, checkout.user_id);
       if (a === "unreadable") return withoutAccess("adult confirmation unreadable");
@@ -185,7 +190,7 @@ export const INDIVIDUAL_SETTLEMENT: SettlementAdapter = {
       // ADR-015 reasoning, 370's comment: the only source that carries billing authority.
       source: "payment", plan_code: checkout.plan_code, checkout_id: checkout.id,
       operating_entity: EXPERIENCES[experience].operatingEntity,
-      ...(adult ? { adult_confirmed_at: adult.at, adult_confirmed_by: adult.by } : {}),
+      ...(adult ? { adult_confirmed_at: adult.at, adult_confirmed_by: adult.by, adult_declaration_id: adult.declarationId } : {}),
     });
     if (ins.error) return withoutAccess(`entitlement not written: ${ins.error.message}`);
 

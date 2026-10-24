@@ -38,18 +38,33 @@ export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
 export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
   | "scholar_insight_min_answers" | "scholar_insight_window_days";
-export type SetPolicyKey = "passport_achievement_kinds";
+export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues";
-export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey;
+/** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
+export type ProgrammesPolicyKey = "scholar_onboarding_programmes";
+export type OptionsPolicyKey = "scholar_institutions";
+export type LevelsPolicyKey = "scholar_programme_levels";
+export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
 export type IntPolicy = Common & { key: IntPolicyKey; kind: "int"; unit: string; fallback: number; min: number; max: number };
 export type SetPolicy = Common & { key: SetPolicyKey; kind: "set"; options: readonly { value: string; label: string }[]; fallback: readonly string[] };
 /** A list of framework ids. Options are not fixed in code: the route checks each against the library. */
 export type CataloguePolicy = Common & { key: CataloguePolicyKey; kind: "catalogues"; max: number };
-export type PolicyDef = IntPolicy | SetPolicy | CataloguePolicy;
+/** Programme codes (rows of individual_scholar_programme, migration 387). The route checks each is an active row. */
+export type ProgrammesPolicy = Common & { key: ProgrammesPolicyKey; kind: "programmes"; max: number };
+/** A governed list of options, each a code and the label shown. The code is derived from the label once. */
+export type OptionsPolicy = Common & { key: OptionsPolicyKey; kind: "options"; max: number };
+/** Per programme, its own list of levels. */
+export type LevelsPolicy = Common & { key: LevelsPolicyKey; kind: "levels"; maxPerProgramme: number };
+export type PolicyDef = IntPolicy | SetPolicy | CataloguePolicy | ProgrammesPolicy | OptionsPolicy | LevelsPolicy;
 export const CATALOGUES_MAX = 50;
+export type ContextOption = { code: string; label: string };
+const OPTION_CODE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+const PROGRAMME_CODE = /^[a-z0-9][a-z0-9-]{1,62}$/;
+/** Pure: the code an option label is stored under -- lower case, dashes, at most 63 characters. */
+export const optionCode = (label: string) => label.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 63).replace(/-+$/g, "");
 
 export const POLICIES: readonly PolicyDef[] = [
   {
@@ -119,6 +134,36 @@ export const POLICIES: readonly PolicyDef[] = [
     help: "The shared competency catalogues Scholar may link a person's study materials to. Nothing is offered until a catalogue is chosen here.",
     limitReason: "Only shared, active, published catalogues can be chosen, at most 50. Empty by default: nothing is offered automatically.",
   },
+  // ── COMPETEN-SCHOLAR-JOIN-01: THE EDUCATIONAL CONTEXT ASKED AT JOIN ── owner ruling CONFIGURATION ──
+  // Governed here, in the existing engine, not in a Scholar-specific one. A programme itself is a row of
+  // individual_scholar_programme (387), because the competency mapping keys on it. What HQ governs here is
+  // which programmes are offered, each programme's levels, the institutions, and which fields are asked.
+  {
+    key: "scholar_onboarding_programmes", kind: "programmes", product: "Scholar", max: 100,
+    label: "Programmes offered when a person joins Scholar",
+    help: "Which study programmes a person may choose when they join Competen Scholar or change their programme. A programme a person already chose keeps its name in their history.",
+    limitReason: "Only active Scholar programmes can be offered, at most 100. Default: every active programme.",
+  },
+  {
+    key: "scholar_programme_levels", kind: "levels", product: "Scholar", maxPerProgramme: 20,
+    label: "Levels within each programme",
+    help: "The levels a person may choose within their programme, such as a year of study. A programme with no levels listed asks for none.",
+    limitReason: "At most 20 levels per programme, each up to 120 characters. Default: none.",
+  },
+  {
+    key: "scholar_institutions", kind: "options", product: "Scholar", max: 300,
+    label: "Institutions a person may name",
+    help: "The schools, colleges and universities a person may choose when they join. Naming one is always optional.",
+    limitReason: "At most 300, each up to 160 characters. Default: none, so no institution is asked.",
+  },
+  {
+    key: "scholar_onboarding_fields", kind: "set", product: "Scholar",
+    label: "Fields asked when a person joins Scholar",
+    help: "Which parts of their educational context a person is asked for after choosing a programme. The programme itself is always asked.",
+    options: [{ value: "level", label: "Level within the programme" }, { value: "institution", label: "Institution (always optional)" }],
+    fallback: ["level", "institution"],
+    limitReason: "Only these two can be asked. A field with nothing configured behind it is not shown.",
+  },
   {
     key: "professional_catalogues", kind: "catalogues", product: "Professional", max: CATALOGUES_MAX,
     label: "Competency catalogues Professional may offer",
@@ -152,6 +197,58 @@ export function clampCatalogues(p: CataloguePolicy, settings: any): string[] {
   return [...new Set(settings.ids.filter((v: unknown): v is string => typeof v === "string" && UUID.test(v)).map((v: string) => v.toLowerCase()))].slice(0, p.max) as string[];
 }
 
+/** Pure: the programmes offered at join, or null for "every active programme" (nothing published). */
+export function clampProgrammes(p: ProgrammesPolicy, settings: any): string[] | null {
+  if (settings == null || !Array.isArray(settings.codes)) return null;
+  return [...new Set(settings.codes.filter((v: unknown): v is string => typeof v === "string" && PROGRAMME_CODE.test(v)))].slice(0, p.max) as string[];
+}
+
+const cleanOptions = (raw: unknown, max: number, labelMax: number): ContextOption[] => {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>(); const out: ContextOption[] = [];
+  for (const o of raw) {
+    const code = typeof o?.code === "string" ? o.code : ""; const label = typeof o?.label === "string" ? o.label.trim() : "";
+    if (!OPTION_CODE.test(code) || !label || label.length > labelMax || seen.has(code)) continue;
+    seen.add(code); out.push({ code, label });
+    if (out.length >= max) break;
+  }
+  return out;
+};
+
+/** Pure: a governed option list from a stored settings object. Well-formed, deduplicated by code, capped. */
+export function clampOptions(p: OptionsPolicy, settings: any): ContextOption[] {
+  return cleanOptions(settings?.options, p.max, 160);
+}
+
+/** Pure: each programme's levels from a stored settings object. */
+export function clampLevels(p: LevelsPolicy, settings: any): Record<string, ContextOption[]> {
+  const by = settings?.byProgramme;
+  if (by == null || typeof by !== "object" || Array.isArray(by)) return {};
+  const out: Record<string, ContextOption[]> = {};
+  for (const [code, list] of Object.entries(by)) {
+    if (!PROGRAMME_CODE.test(code)) continue;
+    const levels = cleanOptions(list, p.maxPerProgramme, 120);
+    if (levels.length) out[code] = levels;
+  }
+  return out;
+}
+
+/** Pure: labels typed by an administrator, one per entry, as stored options -- or why they are refused. */
+function labelsToOptions(raw: unknown, max: number, labelMax: number, what: string): { ok: true; options: ContextOption[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw) || raw.some(v => typeof v !== "string")) return { ok: false, error: `${what}: send a list of names.` };
+  const labels = raw.map(v => v.trim()).filter(Boolean);
+  if (labels.length > max) return { ok: false, error: `${what}: at most ${max}. That limit is fixed.` };
+  const options: ContextOption[] = []; const seen = new Set<string>();
+  for (const label of labels) {
+    if (label.length > labelMax) return { ok: false, error: `${what}: "${label.slice(0, 40)}" is longer than ${labelMax} characters.` };
+    const code = optionCode(label);
+    if (!OPTION_CODE.test(code)) return { ok: false, error: `${what}: "${label.slice(0, 40)}" needs at least one letter or digit.` };
+    if (seen.has(code)) return { ok: false, error: `${what}: "${label.slice(0, 40)}" is listed twice.` };
+    seen.add(code); options.push({ code, label });
+  }
+  return { ok: true, options };
+}
+
 /**
  * Pure: a draft as the administrator sent it, or why it is refused. Out of range is REFUSED here (not
  * silently clamped) so the administrator sees the limit rather than a different number than they typed.
@@ -164,6 +261,29 @@ export function validateDraft(key: unknown, raw: unknown): { ok: true; def: Poli
     if (!Number.isInteger(n)) return { ok: false, error: `${def.label} must be a whole number.` };
     if (n < def.min || n > def.max) return { ok: false, error: `${def.label} must be between ${def.min} and ${def.max} ${def.unit}. That limit is fixed.` };
     return { ok: true, def, settings: { value: n } };
+  }
+  if (def.kind === "programmes") {
+    if (!Array.isArray(raw) || raw.some(v => typeof v !== "string" || !PROGRAMME_CODE.test(v))) return { ok: false, error: `${def.label}: send the list of programme codes to offer.` };
+    const codes = [...new Set(raw as string[])];
+    if (codes.length > def.max) return { ok: false, error: `${def.label}: at most ${def.max}. That limit is fixed.` };
+    // Whether each code is an active programme row is checked by the route.
+    return { ok: true, def, settings: { codes } };
+  }
+  if (def.kind === "options") {
+    const r = labelsToOptions(raw, def.max, 160, def.label);
+    return r.ok ? { ok: true, def, settings: { options: r.options } } : r;
+  }
+  if (def.kind === "levels") {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return { ok: false, error: `${def.label}: send each programme's levels.` };
+    const byProgramme: Record<string, ContextOption[]> = {};
+    for (const [code, list] of Object.entries(raw as Record<string, unknown>)) {
+      if (!PROGRAMME_CODE.test(code)) return { ok: false, error: `${def.label}: ${code.slice(0, 40)} is not a programme code.` };
+      const r = labelsToOptions(list, def.maxPerProgramme, 120, `${def.label} (${code})`);
+      if (!r.ok) return r;
+      if (r.options.length) byProgramme[code] = r.options;
+    }
+    // Whether each programme code is a programme row is checked by the route.
+    return { ok: true, def, settings: { byProgramme } };
   }
   if (def.kind === "catalogues") {
     if (!Array.isArray(raw) || raw.some(v => typeof v !== "string" || !UUID.test(v))) return { ok: false, error: `${def.label}: send the list of catalogue ids to allow.` };
@@ -191,6 +311,11 @@ export type IndividualPolicy = {
   /** S1: framework ids each experience may offer. Empty by default. */
   scholarCatalogues: string[];
   professionalCatalogues: string[];
+  /** JOIN-01: programme codes offered at join, or null for every active programme. */
+  scholarOnboardingProgrammes: string[] | null;
+  scholarProgrammeLevels: Record<string, ContextOption[]>;
+  scholarInstitutions: ContextOption[];
+  scholarOnboardingFields: ("level" | "institution")[];
 };
 
 type Row = { config_path: string; published: any };
@@ -210,6 +335,10 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     passportAchievementKinds: clampSet(policyDef("passport_achievement_kinds") as SetPolicy, published.get(policyPath("passport_achievement_kinds"))) as StudyAchievementKind[],
     scholarCatalogues: clampCatalogues(policyDef("scholar_catalogues") as CataloguePolicy, published.get(policyPath("scholar_catalogues"))),
     professionalCatalogues: clampCatalogues(policyDef("professional_catalogues") as CataloguePolicy, published.get(policyPath("professional_catalogues"))),
+    scholarOnboardingProgrammes: clampProgrammes(policyDef("scholar_onboarding_programmes") as ProgrammesPolicy, published.get(policyPath("scholar_onboarding_programmes"))),
+    scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
+    scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
+    scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
   };
 }
 

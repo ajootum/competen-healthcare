@@ -12,6 +12,7 @@ import { EXPERIENCES } from "@/lib/individual/experiences";
 import { requestedExperience, signInHref } from "@/lib/individual/entry";
 import { liveInvitationFor } from "@/lib/individual/invitations";
 import AcceptInvitation from "../_components/AcceptInvitation";
+import { JOIN_START, selfRegistrationEnabled } from "@/lib/individual/join";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -125,6 +126,20 @@ export default async function IndividualAccessPage({ searchParams }: {
     },
   };
   const c = copy[access.reason];
+
+  // ── COMPETEN-SCHOLAR-JOIN-01 J1: AN EXISTING ACCOUNT MAY ADD SCHOLAR ITSELF -- ONLY WHILE SELF-REGISTRATION IS ON ──
+  // Behind individual_self_registration (default OFF, owner ruling). With it off, this page reads exactly as
+  // before: the pilot is by invitation. No second account is ever offered -- the person adds Scholar to this one.
+  if (access.reason === "no_membership" && (await selfRegistrationEnabled(admin))) {
+    return (
+      <Frame>
+        <StatePanel title="Add Competen Scholar to your account"
+          actions={<><Link href={JOIN_START} className={`${primaryBtn}`} style={{ background: EXPERIENCES.scholar.accent }}>Add Competen Scholar</Link><SignOutButton /></>}>
+          <p>{EXPERIENCES.scholar.micro} It is added to the Competen account you are signed in with. There is nothing new to create.</p>
+        </StatePanel>
+      </Frame>
+    );
+  }
 
   return (
     <Frame>

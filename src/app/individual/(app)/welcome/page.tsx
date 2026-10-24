@@ -38,6 +38,10 @@ export default async function Welcome({ searchParams }: {
   const requested = asked && live.includes(asked) ? asked : null;
   if (membership.onboardedAt) redirect(requested ? `/individual/${requested}` : "/individual/home");
   const initial = requested ?? effectivePrimary(membership.primaryExperience, live) ?? live[0];
+  // COMPETEN-SCHOLAR-JOIN-01: when the welcome continues into Scholar, its primary action is the first thing a
+  // student does there -- upload their notes. The path is fixed here, never taken from the URL.
+  const toScholar = requested === "scholar" || (live.length === 1 && live[0] === "scholar");
+  const uploadPath = toScholar ? "/individual/scholar/study#upload" : null;
   const firstName = profile.fullName?.split(" ")[0] ?? null;
 
   return (
@@ -72,8 +76,8 @@ export default async function Welcome({ searchParams }: {
         </section>
 
         <section className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-          <PrimaryChoice live={live} initial={initial} completeOnboarding continueTo={requested}
-            submitLabel={requested ? `Continue to ${EXPERIENCES[requested].name}` : live.length > 1 ? "Continue" : `Continue to ${EXPERIENCES[live[0]].name}`} />
+          <PrimaryChoice live={live} initial={initial} completeOnboarding continueTo={requested} continuePath={uploadPath}
+            submitLabel={uploadPath ? "Upload my notes" : requested ? `Continue to ${EXPERIENCES[requested].name}` : live.length > 1 ? "Continue" : `Continue to ${EXPERIENCES[live[0]].name}`} />
         </section>
       </div>
     </main>
