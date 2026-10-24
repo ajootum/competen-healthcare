@@ -169,6 +169,8 @@ export const STUDIO_NAV: NavSection[] = [
 export const AI_NAV: NavSection[] = [
   { group: "AI & INTELLIGENCE", items: [
     { label: "AI Home", href: "/super-admin/ai", icon: "🧠" },
+    // AI-FAIR-USE-01 (migration 410): prices, allowance units and product AI policies (hq.platform.ai.manage).
+    { label: "AI Fair Use", href: "/super-admin/ai/fair-use", icon: "⚖️" },
     { label: "1. AI Operations Centre", href: "/super-admin/ai/operations", icon: "⚙️" },
     { label: "2. Clinical Intelligence", href: "/super-admin/ai/clinical", icon: "🩺" },
     { label: "3. Workforce Intelligence", href: "/super-admin/ai/workforce", icon: "👥" },

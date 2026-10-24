@@ -236,6 +236,14 @@ const STAGING: Listed[] = [
       + "SCH-RESPCARD names only production records, all unreviewed, in no allowlist. Writes and removes its own fixtures. PEND until 394.",
   },
   {
+    file: "ai-fair-use-acceptance-harness.ts",
+    note: "AI-FAIR-USE-01 against migration 410's database functions: one engine with independent product policies; 20 concurrent "
+      + "reservations cannot overspend; a retried id holds once; failure before billing releases free, double settle refused; a "
+      + "price change does not re-price; levels follow the balance; the reserve's hard cap; a new period opens at zero; a signed-in "
+      + "person cannot read, write or call it; policies published through the audited engine. Never calls a provider or flips the "
+      + "ai_fair_use flag. Creates and removes one throwaway account. PEND until 410 and the provisional seed.",
+  },
+  {
     file: "clinical-review-acceptance-harness.ts",
     note: "Owner D2, migration 395, against the real triggers: hash and snapshot are the database's; the author cannot approve; a "
       + "suspended or borrowed appointment and an out-of-scope reviewer are refused; a material edit makes approval stale; two-approval "

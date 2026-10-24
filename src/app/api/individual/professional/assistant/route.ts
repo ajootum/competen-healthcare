@@ -2,7 +2,7 @@
 export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
-import { generate } from "@/lib/ai/client";
+import { isMeteredRefusal, meteredRefusalBody, requestIdFor, runMeteredAi } from "@/lib/ai/allowance";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "@/lib/individual/policy";
@@ -62,13 +62,18 @@ export async function POST(req: Request) {
     ? "Suggest a CPD plan for me."
     : `Draft a reflection on this activity.\nActivity: ${activity!.title} (${CPD_ACTIVITY_LABEL[activity!.activityType]}).\nMy notes: ${activity!.notes ?? "none given"}`;
 
-  const result = await generate({
-    system: `${systemPrompt("professional")}\n\n${taskInstruction(task)}`,
-    user: `My Competen record:\n${grounding}\n\n${ask}`,
-    tier: "reasoning",
-    maxTokens: 900,
-    context: { userId: ctx.userId, attribution: { scope: "person" }, operation: `individual_professional_${task}` },
+  // AI-FAIR-USE-01: through the Holdings allowance. With metering off it is generate() unchanged.
+  const result = await runMeteredAi(ctx.admin, {
+    userId: ctx.userId, product: "professional", activity: "assistant", requestId: requestIdFor(ctx.userId, req.headers.get("x-request-id")),
+    generate: {
+      system: `${systemPrompt("professional")}\n\n${taskInstruction(task)}`,
+      user: `My Competen record:\n${grounding}\n\n${ask}`,
+      tier: "reasoning",
+      maxTokens: 900,
+      context: { userId: ctx.userId, attribution: { scope: "person" }, operation: `individual_professional_${task}` },
+    },
   });
+  if (isMeteredRefusal(result)) { const m = meteredRefusalBody(result); return NextResponse.json(m.body, { status: m.status }); }
   if (!result.ok) {
     const status = result.error === "not_configured" ? 503 : 502;
     const msg = result.error === "refusal" ? "The assistant declined that request." : "The assistant could not answer just now. Try again shortly.";

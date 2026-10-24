@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { proposeMappings, mappingStates, type MappingState, type MappingSubject } from "@/lib/competency/mapping";
+import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
 import { buildCompetencyCoverage, type CompetencyCoverage } from "@/lib/competency/progress-model";
 import { reviewLabel, type CatalogueCompetency } from "@/lib/competency/foundation";
 import { findPatientIdentifiers } from "@/lib/privacy/patient-identifiers";
@@ -137,7 +138,8 @@ export function subjectText(kind: SubjectKind, row: any): string {
  * source 'ai' with no decision (proposed). A pair already mapped is not proposed again. The caller has
  * already applied the guard, the AI configuration and quota checks.
  */
-export async function proposeForSubjects(admin: any, userId: string, subjects: { kind: SubjectKind; row: any }[], catalogue: CatalogueCompetency[])
+export async function proposeForSubjects(admin: any, userId: string, subjects: { kind: SubjectKind; row: any }[], catalogue: CatalogueCompetency[],
+  run?: (a: GenerateArgs) => Promise<GenerateResult>)
   : Promise<{ ok: true; proposed: number; model: string; withheld: number } | { ok: false; error: string }> {
   if (!catalogue.length) return { ok: false, error: "no_catalogue" };
   const refs = new Map(subjects.map(s => [`${s.kind}:${s.row.id}`, s]));
@@ -150,7 +152,7 @@ export async function proposeForSubjects(admin: any, userId: string, subjects: {
   const withheld = texted.length - mappingSubjects.length;
   if (!mappingSubjects.length) return { ok: false, error: "identifier" };
   const r = await proposeMappings({ subjects: mappingSubjects, candidates: catalogue, framing: MAP_FRAMING,
-    context: { userId, attribution: { scope: "person" }, operation: "individual_professional_map" }, screen: findPatientIdentifiers });
+    context: { userId, attribution: { scope: "person" }, operation: "individual_professional_map" }, screen: findPatientIdentifiers, run });
   if (!r.ok) return { ok: false, error: String(r.error) };
   const current = await listMappings(admin, userId);
   if (current === null) return { ok: false, error: "failed" };

@@ -175,6 +175,44 @@ async function main() {
       out.clinical395 = { tables: [...new Set(cols.map((c: any) => c.table_name))], constraints: cons.length, indexes: idx.length, policies: pol.length, rls, triggers: trg.length, functions: fn.length, caps, pos, grants,
         fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, rls, trg, fn, caps, pos, grants })).digest("hex") };
     }
+    if (process.argv.includes("--ai410")) {
+      // AI-FAIR-USE-01, migration 410: ledger, allowances, rates, guards, accounting functions and grants.
+      const T = ["ai_price", "ai_fx_rate", "ai_cau_rate", "ai_allowance_account", "ai_usage_ledger"];
+      const cols = await q(`select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns
+        where table_schema = 'public' and table_name = any($1) order by 1, 2`, [T]);
+      const cons = await q(`select conrelid::regclass::text as t, conname, pg_get_constraintdef(oid) as def from pg_constraint where conrelid::regclass::text = any($1) order by 1, 2`, [T]);
+      const idx = await q(`select tablename, indexname, indexdef from pg_indexes where schemaname = 'public' and tablename = any($1) order by 1, 2`, [T]);
+      const pol = await q(`select tablename, policyname from pg_policies where tablename = any($1) order by 1, 2`, [T]);
+      const rls = await q(`select relname, relrowsecurity from pg_class where relname = any($1) order by 1`, [T]);
+      const trg = await q(`select tgname, pg_get_triggerdef(oid) as def from pg_trigger where tgname like 'ai\\_%' order by 1`);
+      const fn = await q(`select p.proname, md5(pg_get_functiondef(p.oid)) as def_md5,
+        has_function_privilege('anon', p.oid, 'execute') as anon_exec from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname in ('ai_reserve', 'ai_settle', 'ai_release', 'ai_release_stale', 'ai_price_at', 'ai_rate_history_guard', 'ai_usage_ledger_guard', 'ai_allowance_account_guard') order by 1`);
+      const caps = await q(`select code, space from hq_capability where code = 'hq.platform.ai.manage'`);
+      const grants = await q(`select position_code, capability_code from hq_position_capability where capability_code = 'hq.platform.ai.manage' and effective_to is null order by 1`);
+      out.ai410 = { tables: [...new Set(cols.map((c: any) => c.table_name))], constraints: cons.length, indexes: idx.length, policies: pol.length, rls, triggers: trg.length, functions: fn, caps, grants,
+        fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, rls, trg, fn, caps, grants })).digest("hex") };
+    }
+    if (process.argv.includes("--ai411")) {
+      // AI-FAIR-USE-01, migration 411: the 410 tables as widened, the two new tables, every AI guard and accounting
+      // function with who may execute it. PRE (410 only) must equal the state after ROLLBACK-411.
+      const T = ["ai_price", "ai_fx_rate", "ai_cau_rate", "ai_cau_basis", "ai_model_eligibility", "ai_allowance_account", "ai_usage_ledger"];
+      const cols = await q(`select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns
+        where table_schema = 'public' and table_name = any($1) order by 1, 2`, [T]);
+      const cons = await q(`select conrelid::regclass::text as t, conname, pg_get_constraintdef(oid) as def from pg_constraint where conrelid::regclass::text = any($1) order by 1, 2`, [T]);
+      const idx = await q(`select tablename, indexname, indexdef from pg_indexes where schemaname = 'public' and tablename = any($1) order by 1, 2`, [T]);
+      const pol = await q(`select tablename, policyname from pg_policies where tablename = any($1) order by 1, 2`, [T]);
+      const rls = await q(`select relname, relrowsecurity from pg_class where relname = any($1) order by 1`, [T]);
+      const trg = await q(`select tgname, pg_get_triggerdef(oid) as def from pg_trigger where tgname like 'ai\\_%' order by 1`);
+      const fn = await q(`select p.proname, p.pronargs, md5(pg_get_functiondef(p.oid)) as def_md5,
+        has_function_privilege('anon', p.oid, 'execute') as anon_exec, has_function_privilege('authenticated', p.oid, 'execute') as auth_exec,
+        has_function_privilege('service_role', p.oid, 'execute') as service_exec from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname in ('ai_reserve', 'ai_settle', 'ai_release', 'ai_release_stale', 'ai_mark_unreconciled', 'ai_price_at',
+          'ai_rate_history_guard', 'ai_usage_ledger_guard', 'ai_allowance_account_guard') order by 1, 2`);
+      out.ai411 = { tables: [...new Set(cols.map((c: any) => c.table_name))], constraints: cons.length, indexes: idx.length, policies: pol.length, rls, triggers: trg.length,
+        functions: fn.map((f: any) => `${f.proname}/${f.pronargs}`),
+        fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, rls, trg, fn })).digest("hex") };
+    }
     if (process.argv.includes("--s1")) {
       // COMPETEN-SCHOLAR-01 S1, migration 384, before and after (and through its rollback rehearsal): the four
       // columns, their constraints and index, and how many frameworks are classified. Hashed for comparison.
