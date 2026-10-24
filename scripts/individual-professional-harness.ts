@@ -368,6 +368,17 @@ const checkMappingWords = (src: Sources) => {
   const words = ui.includes("suggested by AI, not accepted") && ui.includes("linked by you") && !/bg-green|text-green-[0-9]+[^"]*">\{l\./.test(ui);
   return { ok: words && /Linked by the holder to: \{o\.competencies\.join\(", "\)\} \(not verified\)/.test(v), detail: `ui words ${words}` };
 };
+// The Holdings patient-identifier screen, on the way in and the way out, before anything reaches the model.
+const checkIdentifierScreen = (src: Sources) => {
+  const s = src.get(MAP_FILE) ?? "";
+  const fn = s.slice(s.indexOf("export async function proposeForSubjects"), s.indexOf("export function evidenceByCompetency"));
+  const imported = /import \{ findPatientIdentifiers \} from "@\/lib\/privacy\/patient-identifiers";/.test(s);
+  const filter = fn.indexOf("texted.filter(s => findPatientIdentifiers(s.text).length === 0)");
+  const call = fn.indexOf("await proposeMappings(");
+  const screen = /screen: findPatientIdentifiers \}\);/.test(fn);
+  const scholar = /individual\/scholar/.test(s);
+  return { ok: imported && filter > -1 && call > filter && screen && !scholar, detail: `shared import ${imported}, input screened before the call ${filter}<${call}, output screen ${screen}, Scholar import ${scholar}` };
+};
 const checkMappingSchema = (mig: string) => {
   const rls = ["individual_professional_competency_map", "individual_professional_competency_decision"].every(t =>
     mig.includes(`alter table ${t} enable row level security`) && new RegExp(`create policy ${t}_read_own on ${t}\\s+for select using \\(auth\\.uid\\(\\) = user_id\\)`).test(mig));
@@ -430,6 +441,7 @@ function main() {
   run("M2. the Passport shows only accepted links on CPD and evidence, by name", checkPassportLinks(acceptedLinks));
   run("M3. writes: only offered (allowlisted) competencies, own entries only, AI rows carry provenance; propose keeps the assistant order", checkMappingWrites(ALL));
   run("M4. every state is said in words, never green, and /verify says the links are not verified", checkMappingWords(ALL));
+  run("M6. no patient identifier reaches the model: input screened before the call, output screened by the engine, the Holdings screen", checkIdentifierScreen(ALL));
   if (MIG393) run("M5. 393: RLS own-row SELECT only, composite FKs to own rows, exactly one subject, append-only decisions with the cascade path", checkMappingSchema(MIG393));
   else { pend.push("M5"); console.log(`  PEND  M5. ${MIG393_FILE} is not in this checkout`); }
 
@@ -494,6 +506,8 @@ function main() {
   red("M3 when the AI is called before the quota", checkMappingWrites(mapPlant(MAP_ROUTE, "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin))", "{ ok: true, limit: 0 }")));
   red("M4 on a green chip", checkMappingWords(mapPlant("src/app/individual/_components/professional/CompetencyLinks.tsx", "border-amber-300 bg-amber-50", "border-green-300 bg-green-50")));
   red("M4 when /verify drops not verified", checkMappingWords(mapPlant("src/app/verify/[token]/page.tsx", " (not verified)</span>", "</span>")));
+  red("M6 when the input is not screened", checkIdentifierScreen(mapPlant(MAP_FILE, "texted.filter(s => findPatientIdentifiers(s.text).length === 0)", "texted")));
+  red("M6 without the output screen", checkIdentifierScreen(mapPlant(MAP_FILE, ", screen: findPatientIdentifiers });", " });")));
   if (MIG393) {
     red("M5 on a write policy", checkMappingSchema(MIG393 + "\ncreate policy p on individual_professional_competency_map for insert with check (true)"));
     red("M5 on a single-column subject link", checkMappingSchema(MIG393.replace("foreign key (cpd_id, user_id)", "foreign key (cpd_id)")));

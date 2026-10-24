@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assembleMappings, evidenceByCompetency, goalGaps, linksFor, professionalProgress, subjectText, PROFESSIONAL_COVERAGE_REASONS } from "./mapping-store";
+import { assembleMappings, evidenceByCompetency, goalGaps, linksFor, professionalProgress, proposeForSubjects, subjectText, PROFESSIONAL_COVERAGE_REASONS } from "./mapping-store";
 import { acceptedLinks } from "./passport-records";
 
 // Migration 393's store, the pure parts: states from append-only decisions, what counts as evidence for the
@@ -79,6 +79,12 @@ describe("professional competency mapping store", () => {
 
   it("the engine reads only the person's own words for a subject", () => {
     expect(subjectText("cpd", { title: "ALS course", provider: "RC UK", reflection: "  ", hours: 8 })).toBe("ALS course. RC UK");
+  });
+
+  it("an entry whose words carry a patient identifier is refused before anything reaches the model", async () => {
+    const admin = { from: () => { throw new Error("must not be called"); } };
+    const r = await proposeForSubjects(admin, "u", [{ kind: "cpd", row: { id: "c9", title: "Reflection on bed 4", reflection: "NHS number 943 476 5919 deteriorated overnight" } }], CATALOGUE);
+    expect(r).toEqual({ ok: false, error: "identifier" });
   });
 
   it("the Passport shows accepted CPD and evidence links only", () => {

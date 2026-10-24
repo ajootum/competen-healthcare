@@ -100,10 +100,12 @@ export async function POST(req: Request) {
     if (!r.ok) {
       if (r.error === "failed") return writeFailed("suggestions");
       if (r.error === "no_text") return refuse("Those entries have too little text to suggest links from.");
+      // The patient-identifier screen: nothing was sent to the model, so nothing is counted against the quota.
+      if (r.error === "identifier") return refuse("That entry looks as if it contains a patient identifier (an NHS number, a date of birth or a hospital number), so it was not sent to the AI. Remove it from the entry, then ask again.", 422);
       const status = r.error === "not_configured" ? 503 : 502;
       return refuse(r.error === "refusal" ? "The assistant declined that request." : "Suggestions could not be made just now. Try again shortly.", status);
     }
-    return NextResponse.json({ ok: true, proposed: r.proposed });
+    return NextResponse.json({ ok: true, proposed: r.proposed, withheld: r.withheld });
   }
 
   return refuse("Unknown action");

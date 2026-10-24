@@ -2,6 +2,7 @@
 import { proposeMappings, mappingStates, type MappingState, type MappingSubject } from "@/lib/competency/mapping";
 import { buildCompetencyCoverage, type CompetencyCoverage } from "@/lib/competency/progress-model";
 import type { CatalogueCompetency } from "@/lib/competency/foundation";
+import { findPatientIdentifiers } from "@/lib/privacy/patient-identifiers";
 import { loadCatalogueFor } from "@/lib/individual/catalogue";
 import { isNotProvisioned } from "../access";
 import { referenceNames } from "./frameworks";
@@ -135,13 +136,19 @@ export function subjectText(kind: SubjectKind, row: any): string {
  * already applied the guard, the AI configuration and quota checks.
  */
 export async function proposeForSubjects(admin: any, userId: string, subjects: { kind: SubjectKind; row: any }[], catalogue: CatalogueCompetency[])
-  : Promise<{ ok: true; proposed: number; model: string } | { ok: false; error: string }> {
+  : Promise<{ ok: true; proposed: number; model: string; withheld: number } | { ok: false; error: string }> {
   if (!catalogue.length) return { ok: false, error: "no_catalogue" };
   const refs = new Map(subjects.map(s => [`${s.kind}:${s.row.id}`, s]));
-  const mappingSubjects: MappingSubject[] = subjects.map(s => ({ ref: `${s.kind}:${s.row.id}`, text: subjectText(s.kind, s.row) })).filter(s => s.text.length >= 3);
-  if (!mappingSubjects.length) return { ok: false, error: "no_text" };
+  const texted: MappingSubject[] = subjects.map(s => ({ ref: `${s.kind}:${s.row.id}`, text: subjectText(s.kind, s.row) })).filter(s => s.text.length >= 3);
+  if (!texted.length) return { ok: false, error: "no_text" };
+  // ⚠ NO PATIENT IDENTIFIER REACHES THE MODEL (the Holdings screen, src/lib/privacy/patient-identifiers.ts).
+  // An entry whose own words carry an NHS number, a date of birth or a hospital number is not sent at all,
+  // and the engine also drops any concept or rationale the screen flags in what comes back.
+  const mappingSubjects = texted.filter(s => findPatientIdentifiers(s.text).length === 0);
+  const withheld = texted.length - mappingSubjects.length;
+  if (!mappingSubjects.length) return { ok: false, error: "identifier" };
   const r = await proposeMappings({ subjects: mappingSubjects, candidates: catalogue, framing: MAP_FRAMING,
-    context: { userId, attribution: { scope: "person" }, operation: "individual_professional_map" } });
+    context: { userId, attribution: { scope: "person" }, operation: "individual_professional_map" }, screen: findPatientIdentifiers });
   if (!r.ok) return { ok: false, error: String(r.error) };
   const current = await listMappings(admin, userId);
   if (current === null) return { ok: false, error: "failed" };
@@ -160,7 +167,7 @@ export async function proposeForSubjects(admin: any, userId: string, subjects: {
     const { error } = await admin.from("individual_professional_competency_map").insert(rows);
     if (error) return { ok: false, error: "failed" };
   }
-  return { ok: true, proposed: rows.length, model: r.model };
+  return { ok: true, proposed: rows.length, model: r.model, withheld };
 }
 
 /**
