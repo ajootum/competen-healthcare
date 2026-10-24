@@ -66,6 +66,9 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarRevisionFormats: ["mcq", "mrq", "short", "flashcard", "match", "sequence"], scholarRevisionModes: ["today", "quick", "spaced", "weak", "mock", "flashcards", "custom"],
       scholarRevisionQuantity: 10, scholarRevisionDifficulty: "any", scholarRevisionFeedback: "immediate", scholarRevisionGeneration: "generate", scholarShortAnswerMarking: "ai_then_self",
       scholarRevisionRecommendations: "on", scholarSrsMasteryReps: 5, scholarSrsMasteryDays: 60, scholarSrsMaxIntervalDays: 3650, scholarSrsHarderIntervalPercent: 100,
+      scholarCaseContexts: ["general", "medical", "surgical", "paediatric", "maternal", "emergency", "critical_care"], scholarCaseEntries: ["notes", "competency", "library", "surprise"],
+      scholarCaseDimensions: ["recognition", "interpretation", "prioritisation", "decision", "reassessment", "escalation"], scholarCaseGeneration: "generate", scholarCaseMode: "guided",
+      scholarCaseReasoningFeedback: "ai_then_self",
       // JOIN-01: every active programme is offered, no level or institution is asked, both fields may be.
       scholarOnboardingProgrammes: null, scholarProgrammeLevels: {}, scholarInstitutions: [], scholarOnboardingFields: ["level", "institution"],
       // P0: label, do not hide -- everything of a chosen catalogue is offered, labelled, by default.

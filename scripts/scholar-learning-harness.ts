@@ -138,7 +138,8 @@ function preflightOrder(src: Src): string[] {
   const bad: string[] = [];
   for (const [file, call] of [[`${API}/explain/route.ts`, "runExplain("], [`${API}/questions/route.ts`, "runQuestions("],
     [`${API}/materials/[id]/analyse/route.ts`, "runAnalysis("], [`${API}/cases/route.ts`, "runCase("],
-    [`${API}/revision/sessions/route.ts`, "runRevisionQuestions("], [`${API}/revision/answer/route.ts`, "runEvaluate("]] as const) {
+    [`${API}/revision/sessions/route.ts`, "runRevisionQuestions("], [`${API}/revision/answer/route.ts`, "runEvaluate("],
+    [`${API}/clinical/cases/route.ts`, "runCaseBlueprint("], [`${API}/clinical/sessions/[kind]/[id]/answer/route.ts`, "runCaseReasoning("]] as const) {
     const s = src.get(file) ?? "";
     const p = s.indexOf("await aiPreflight(ctx)"), c = s.indexOf(call);
     if (p < 0 || c < 0 || p > c) bad.push(file);
@@ -220,8 +221,22 @@ const masteryWords = (src: Src) => [...src].filter(([f]) => f.startsWith(PAGES) 
  */
 // Sharing constructs, not form submits (type="submit") or the word "published" in the legal-links UI.
 const SHARING = /contribut|shared[_ -]?library|learning[_ -]?library|submit\w*(library|review|share)|publish\w*(material|library)|share\w*material|\btrain(ing)?\b|fine[_ -]?tun/i;
+// Owner Stage 5 GO (COMPETEN-SCHOLAR-CLINICAL-REASONING-01 CI1, case interface approval 2026-10-25): ONE contribution path
+// now exists, and it is not Scholar's own -- the student's separate, revocable candidacy permission and their per-case
+// offer, both held by Holdings (src/lib/cases/candidates.ts). These two routes may name it, and only by calling
+// candidates.ts (S1b below). Training stays absent everywhere.
+const CANDIDACY_ROUTES = [`${API}/clinical/cases/[id]/offer/route.ts`, `${API}/clinical/candidacy/route.ts`];
 const sharingPaths = (src: Src) => [...src].filter(([f]) => f !== `${LIB}/config.ts`)
-  .filter(([, s]) => SHARING.test(s)).map(([f]) => f);
+  .filter(([f, s]) => (CANDIDACY_ROUTES.includes(f) ? /\btrain(ing)?\b|fine[_ -]?tun/i.test(s) : SHARING.test(s))).map(([f]) => f);
+/** S1b: the candidacy routes go through candidates.ts only, never the tables, and the offer is one case at a time. */
+const candidacyGoverned = (src: Src) => {
+  const offer = src.get(CANDIDACY_ROUTES[0]) ?? "", cand = src.get(CANDIDACY_ROUTES[1]) ?? "";
+  return /from "@\/lib\/cases\/candidates"/.test(offer) && /from "@\/lib\/cases\/candidates"/.test(cand)
+    && /await offerPrivateCase\(ctx\.admin, \{ userId: ctx\.userId, sourceKey: caseSourceKey\(kind, id\), snapshot, verbatim: verbatimCheck\(snapshot, snap\.sources\) \}\)/.test(offer)
+    && /const snapshot = privateCaseSnapshot\(snap\.blueprint, status\.attestation, status\.attestationVersion\);/.test(offer)
+    && ![...src].some(([f, s]) => /from\("case_(candidate|candidacy)\w*"\)/.test(s) && f.startsWith(LIB) === false && !f.includes("/lib/cases/"))
+    && ![...src].some(([, s]) => /\.from\("case_(candidate|candidacy)\w*"\)/.test(s));
+};
 
 /**
  * s11, owner continuation GO 2026-10-23 item 3: Scholar study achievements in the Passport (migration 375).
@@ -322,7 +337,59 @@ const AI_ROUTES: [string, string, RegExp][] = [
   // REVISION-01: a session's new questions (one id per call, `:g1` ...) and a short answer's AI evaluation.
   [`${API}/revision/sessions/route.ts`, "scholarAiRunner(ctx, req, \"questions\", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`)", /runRevisionQuestions\(ctx\.userId, call\.kind, passage, Math\.max\(call\.count, 3\), ai\.run\)/],
   [`${API}/revision/answer/route.ts`, "scholarAiRunner(ctx, req, \"evaluate\", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\\n${r.text}`, passages: [passage] }))", /runEvaluate\([^)]*ai\.run\)/],
+  // CLINICAL-REASONING-01: a private case drafted from the notes, and AI feedback on a written decision.
+  [`${API}/clinical/cases/route.ts`, "scholarAiRunner(ctx, req, \"case_steps\", await scholarRisk(ctx.admin, ctx.userId, { text: resolved.topic, passages, competencyIds }))", /runCaseBlueprint\([\s\S]*?\}, ai\.run\)/],
+  [`${API}/clinical/sessions/[kind]/[id]/answer/route.ts`, "scholarAiRunner(ctx, req, \"evaluate\", await scholarRisk(ctx.admin, ctx.userId, { text: `${d.prompt}\\n${d.answer}`, passages, competencyIds: c?.competencyIds }))", /runCaseReasoning\([^;]*ai\.run\)/],
 ];
+/**
+ * K33 (CLINICAL-REASONING-01, coordinator decision 2026-10-25): A LIBRARY PLAY IS THE SHARED DELIVERY'S. No Scholar file
+ * writes case_library_session or any case-library or candidate table; it reads case_library_session only for the
+ * student's own history; library plays go through library.ts (startCaseSession, revealInSession, answerInSession).
+ */
+const CLIN_ROUTES = `${LIB}/clinical-routes.ts`;
+const libraryPlayShared = (src: Src) => {
+  const writes = [...src].filter(([, s]) => /\.from\("(case_library_\w+|case_candidat\w+)"\)\s*\.(insert|update|upsert|delete)\(/.test(s)).map(([f]) => f);
+  const reads = [...src].flatMap(([f, s]) => [...s.matchAll(/\.from\("case_library_session"\)([^;]*)/g)].map(m => ({ f, rest: m[1] })));
+  const r = src.get(CLIN_ROUTES) ?? "";
+  return writes.length === 0 && reads.every(x => x.f === STORE && /^\.select\("id, status, started_at, completed_at, version_id"\)\.eq\("user_id", userId\)/.test(x.rest))
+    && /from "@\/lib\/cases\/library"/.test(r) && /await answerInSession\(admin, userId, id, args\)/.test(r) && /await revealInSession\(admin, userId, id, factToken\)/.test(r)
+    && /startCaseSession\(ctx\.admin, ctx\.userId, body\.versionId/.test(src.get(`${API}/clinical/sessions/route.ts`) ?? "");
+};
+/**
+ * K34 (CR2, blueprint B1-B5): THE BROWSER SEES THE LEARNER VIEW ONLY. A private play is projected by learnerView and
+ * answeredView (tokens, never ids); no clinical route or page sends a blueprint; the client components take only TYPES
+ * from the case engine (it is server-only, node:crypto), never its values.
+ */
+const PLAY = `${LIB}/clinical-play.ts`, CASE_CLIENT = `${PAGES}/_components/case-client.tsx`;
+const caseBrowserBoundary = (src: Src) => {
+  const p = src.get(PLAY) ?? "", client = src.get(CASE_CLIENT) ?? "";
+  const clinicalFiles = [...src].filter(([f]) => f.startsWith(`${API}/clinical/`) || f.startsWith(`${PAGES}/apply/case`));
+  return /view: learnerView\(b, \{ reachedStageIds: s\.reachedStageIds, revealedFactIds: s\.revealedFactIds \}, s\.viewSalt, \{ hints: s\.mode === "guided" \}\)/.test(p)
+    && /answered: answeredView\(b, a\.decisionPointId, a\.chosen, s\.viewSalt\)/.test(p)
+    && !/viewSalt[^,;]*:/.test(p.slice(p.indexOf("function playView"), p.indexOf("async function load")).replace(/s\.viewSalt/g, ""))
+    && clinicalFiles.every(([, s]) => !/NextResponse\.json\(\{[^)]*\bblueprint\b/.test(s))
+    && !/import \{[^}]*\} from "@\/lib\/cases\/(blueprint|library)"/.test(client.replace(/import type \{[^}]*\} from "@\/lib\/cases\/blueprint"/g, ""));
+};
+/**
+ * K35 (CR3, s10): A PRIVATE CASE IS STORED ONLY WHEN IT IS THE NOTES' CASE. The generator returns a blueprint only when
+ * checkPrivateCase finds nothing (a valid private blueprint, nothing ungrounded, nothing identifying); the route stores
+ * only that; the row is private_formative; the case is linear (no invented branch).
+ */
+const privateCaseChecked = (src: Src) => {
+  const g = src.get(GEN) ?? "", route = src.get(`${API}/clinical/cases/route.ts`) ?? "", clin = src.get(`${LIB}/clinical.ts`) ?? "", store = src.get(STORE) ?? "";
+  return /if \(!found\.length\) return \{ ok: true as const, blueprint, model, provider, promptVersion: PROMPT_VERSIONS\.caseBlueprint, problems \};/.test(g)
+    && /return \{ ok: true as const, blueprint: null, model, provider, promptVersion: PROMPT_VERSIONS\.caseBlueprint, problems \};/.test(g)
+    && /if \(!r\.blueprint\) return NextResponse\.json/.test(route) && route.indexOf("if (!r.blueprint)") < route.indexOf("await insertPrivateCase(")
+    && /facts, stages: used, decisionPoints, progression: \[\],/.test(clin)
+    && /blueprint: input\.blueprint, review_status: "private_formative"/.test(store);
+};
+/** K36 (CR4): a written decision is AI evaluation only when the judge returns AI feedback; otherwise the student's own review. */
+const caseFeedbackHonest = (src: Src) => {
+  const p = src.get(PLAY) ?? "";
+  return /if \(j\.kind === "ai"\) \{ mark = \{ correct: j\.correct, score: j\.score \}; marking = "ai_evaluation"; aiFeedback = j\.feedback; evaluator = j\.evaluator; \}/.test(p)
+    && /else \{ mark = \{ correct: null, score: null \}; marking = "self_graded"; \}/.test(p)
+    && /let mark: \{ correct: boolean \| null; score: number \| null \} = markDecision\(x\.b, dpId, chosen\);/.test(p);
+};
 /**
  * K30 (REVISION-01 R2/R4): ANSWERS STAY ON THE SERVER. A question goes to the browser before it is answered only as
  * revisionItemView -- learnerItem, which carries no key, rationale or source quote -- from every revision route and
@@ -682,8 +749,10 @@ function main() {
   // ── B. SEPARATION ───────────────────────────────────────────────────────────────────────────────
   ok("B1. D1: no Scholar file touches an estate learning table", estateOffenders(REAL).length === 0, estateOffenders(REAL).join(", "));
   ok("B2. no Scholar file reads shared clinical content (no clinical-review record exists)", clinicalOffenders(REAL).length === 0, clinicalOffenders(REAL).join(", "));
-  ok("B3. Apply shows the governed state for reviewed clinical cases, in a section apart from the person's own scenarios",
-    /Clinically reviewed cases/.test(REAL.get(`${PAGES}/apply/page.tsx`) ?? "") && /Not available yet/.test(REAL.get(`${PAGES}/apply/page.tsx`) ?? "")
+  // CLINICAL-REASONING-01: the governed library now exists behind case_library; the section says which state it is in.
+  ok("B3. Apply shows the governed state for clinically approved cases (the library, or not available), in a section apart from the person's own scenarios",
+    /Clinically approved cases/.test(REAL.get(`${PAGES}/apply/page.tsx`) ?? "") && /Not available yet/.test(REAL.get(`${PAGES}/apply/page.tsx`) ?? "")
+    && /\{libraryOn \? \(/.test(REAL.get(`${PAGES}/apply/page.tsx`) ?? "")
     && /Your practice scenarios/.test(REAL.get(`${PAGES}/apply/page.tsx`) ?? ""));
   ok("B4. SM-2 is imported from the estate engine, not copied",
     /import \{ sm2 \} from "@\/lib\/delivery\/reinforcement"/.test(REAL.get(STORE) ?? "") && !FILES.some(f => /function sm2\b/.test(REAL.get(f) ?? "")));
@@ -750,6 +819,8 @@ function main() {
   // ── S. OWNER CONSENT GO (2026-10-23) ───────────────────────────────────────────────────────────
   ok("S1. no Scholar code shares, submits, contributes or publishes a person's material, or mentions training (outside the notice text)",
     sharingPaths(REAL).length === 0, sharingPaths(REAL).join(", "));
+  ok("S1b. CLINICAL-REASONING-01 CI1: the one contribution path is the student's per-case offer and their candidacy permission, through Holdings candidates.ts only, with the snapshot Scholar builds -- never Scholar's own write to a candidate table",
+    candidacyGoverned(REAL));
   ok("S2. the only consent Scholar asks for is AI processing: one feature value in code and in the schema, so no training permission exists",
     CONSENT_FEATURE === "ai_processing_uploads" && (!MIG_REAL || /check \(feature in \('ai_processing_uploads'\)\)/.test(MIG_REAL)));
   ok("S3. the consent notice is v3: no contribution sentence, the plain no-sharing/no-training statement, Terms of Use, feedback scoped to practice questions, the How-it-works list, and its version recorded with each grant",
@@ -867,6 +938,14 @@ function main() {
     markingHonest(REAL));
   ok("K32. REVISION-01: reuse first -- a shortfall only is written, never a section and format already written; a saved set replays with no AI; policy can keep to saved questions",
     reuseFirst(REAL));
+  ok("K33. CLINICAL-REASONING-01: a library play is the shared delivery's -- no Scholar write to a case-library or candidate table, the session read only for the student's own history, plays through library.ts",
+    libraryPlayShared(REAL));
+  ok("K34. CLINICAL-REASONING-01: the browser sees the learner view only -- learnerView and answeredView with tokens, no blueprint sent, the salt kept, the case engine never bundled for the browser",
+    caseBrowserBoundary(REAL));
+  ok("K35. CLINICAL-REASONING-01: a private case is stored only when it passed its checks (valid, grounded, nothing identifying), private formative and linear",
+    privateCaseChecked(REAL));
+  ok("K36. CLINICAL-REASONING-01: a choice is marked by its key; a written decision is labelled AI evaluation only when AI feedback was given, otherwise the student's own review",
+    caseFeedbackHonest(REAL));
   ok("K24. LEARN-01: history holds no conversation, the act route keeps to policy, screens input, records only what was shown, stores no practice question, and the student's context is never grounding",
     learnBounded(REAL));
   ok("K23. upload limits: 413 raises the CHECK and the bucket to 25 MB, the live value stays 10 MB until HQ raises it, and the session is enforced on the server at both steps",
@@ -991,6 +1070,16 @@ function main() {
   ok("P50. ⚠ K32 goes red when a saved set calls AI, or spaced review writes new questions",
     !reuseFirst(plant(`${API}/revision/sessions/route.ts`, "    await touchRevisionSet(ctx.admin, ctx.userId, set.id);", "    await touchRevisionSet(ctx.admin, ctx.userId, set.id);\n    await aiPreflight(ctx);"))
     && !reuseFirst(plant(REV, "[\"today\", \"quick\", \"mock\", \"flashcards\"];", "[\"today\", \"quick\", \"mock\", \"flashcards\", \"spaced\"];")));
+  ok("P51. ⚠ K33 goes red when Scholar writes a library session itself",
+    !libraryPlayShared(plant(CLIN_ROUTES, "  const r = await answerInSession(admin, userId, id, args);", "  await admin.from(\"case_library_session\").update({ status: \"completed\" }).eq(\"id\", id);\n  const r = await answerInSession(admin, userId, id, args);")));
+  ok("P52. ⚠ K34 goes red when a route sends the blueprint, or the client imports the engine's values",
+    !caseBrowserBoundary(plant(`${API}/clinical/cases/route.ts`, "return NextResponse.json({ caseId: made.id, play });", "return NextResponse.json({ caseId: made.id, play, blueprint: r.blueprint });"))
+    && !caseBrowserBoundary(plant(CASE_CLIENT, "import type { LearnerView } from \"@/lib/cases/blueprint\";", "import { learnerView, type LearnerView } from \"@/lib/cases/blueprint\";")));
+  ok("P53. ⚠ K35 goes red when an unchecked case is stored, or a private case may branch",
+    !privateCaseChecked(plant(`${API}/clinical/cases/route.ts`, "  if (!r.blueprint) return NextResponse.json(", "  if (false) return NextResponse.json("))
+    && !privateCaseChecked(plant(`${LIB}/clinical.ts`, "facts, stages: used, decisionPoints, progression: [],", "facts, stages: used, decisionPoints, progression: list((draft as any).progression),")));
+  ok("P54. ⚠ K36 goes red when a written answer without AI feedback is recorded as AI evaluation",
+    !caseFeedbackHonest(plant(PLAY, "else { mark = { correct: null, score: null }; marking = \"self_graded\"; }", "else { mark = { correct: false, score: 0 }; marking = \"ai_evaluation\"; }")));
   ok("P43. ⚠ K26 goes red when a route stops passing the runner, or a generator calls generate() directly",
     !meteredEverywhere(plant(`${API}/questions/route.ts`, ".scholarQuestionsPerRequest, ai.run)", ".scholarQuestionsPerRequest)"))
     && !meteredEverywhere(plant(GEN, "    const r = await run({\n      system: QUESTION_SYSTEM[kind],", "    const r = await generate({\n      system: QUESTION_SYSTEM[kind],")));

@@ -862,6 +862,177 @@ export async function revisionInsightRows(admin: Admin, userId: string): Promise
   };
 }
 
+// ── CLINICAL REASONING ── COMPETEN-SCHOLAR-CLINICAL-REASONING-01, migrations 435 and 436 ───────────────────────────
+//
+// A student's PRIVATE cases and their sessions. A LIBRARY case is played only through src/lib/cases/library.ts on
+// case_library_session (IND-007's), never here: this file reads that table for the student's own history, and writes
+// nothing to it. Every statement is keyed on the caller's user id. Where 435/436 are absent, the reads say not
+// provisioned and clinical reasoning is not offered.
+
+export type PrivateCaseRow = {
+  id: string; materialId: string; title: string; origin: string; context: string; blueprint: any; blueprintHash: string;
+  model: string; promptVersion: string; createdAt: string; chunkIds: string[]; competencyIds: string[];
+};
+const CASE_COLS = "id, material_id, title, origin, context, blueprint, blueprint_hash, model, prompt_version, created_at";
+
+/** A new private case with its sources and competencies. private_formative only (435 refuses anything else). */
+export async function insertPrivateCase(admin: Admin, userId: string, input: {
+  materialId: string; title: string; origin: string; context: string; blueprint: unknown; model: string; promptVersion: string; chunkIds: readonly string[]; competencyIds: readonly string[];
+}): Promise<{ ok: true; id: string } | { ok: false; notProvisioned: boolean }> {
+  const { data, error } = await admin.from("individual_scholar_case").insert({
+    user_id: userId, material_id: input.materialId, title: input.title.slice(0, 200), origin: input.origin, context: input.context,
+    blueprint: input.blueprint, review_status: "private_formative", model: input.model, prompt_version: input.promptVersion,
+  }).select("id").single();
+  if (error || !data) return { ok: false, notProvisioned: !!error && isNotProvisioned(error) };
+  const chunks = [...new Set(input.chunkIds)].slice(0, 20);
+  if (chunks.length) await admin.from("individual_scholar_case_source").insert(chunks.map((chunk_id, i) => ({ case_id: data.id, user_id: userId, ordinal: i + 1, chunk_id })));
+  const comps = [...new Set(input.competencyIds)];
+  if (comps.length) await admin.from("individual_scholar_case_competency").insert(comps.map(competency_id => ({ case_id: data.id, user_id: userId, competency_id })))
+    .then((r: unknown) => r, () => {});
+  return { ok: true, id: data.id };
+}
+
+const toCase = (r: any, chunkIds: string[] = [], competencyIds: string[] = []): PrivateCaseRow => ({
+  id: r.id, materialId: r.material_id, title: r.title, origin: r.origin, context: r.context, blueprint: r.blueprint, blueprintHash: r.blueprint_hash,
+  model: r.model, promptVersion: r.prompt_version, createdAt: r.created_at, chunkIds, competencyIds,
+});
+
+/** One of the caller's private cases, with its sources and competencies. null when it is not theirs. */
+export async function getPrivateCase(admin: Admin, userId: string, id: string): Promise<PrivateCaseRow | null> {
+  if (!isUuid(id)) return null;
+  const { data, error } = await admin.from("individual_scholar_case").select(CASE_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  if (error || !data) return null;
+  const [src, comp] = await Promise.all([
+    admin.from("individual_scholar_case_source").select("chunk_id, ordinal").eq("user_id", userId).eq("case_id", id).order("ordinal"),
+    admin.from("individual_scholar_case_competency").select("competency_id").eq("user_id", userId).eq("case_id", id),
+  ]);
+  return toCase(data, ((src.data ?? []) as any[]).map(r => r.chunk_id), ((comp.data ?? []) as any[]).map(r => r.competency_id));
+}
+
+/** The caller's private cases, newest first (no blueprint: a list). */
+export async function listPrivateCases(admin: Admin, userId: string, limit = 30): Promise<Read<{ id: string; title: string; context: string; origin: string; materialId: string; createdAt: string }[]>> {
+  const { data, error } = await admin.from("individual_scholar_case").select("id, title, context, origin, material_id, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(limit);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(r => ({ id: r.id, title: r.title, context: r.context, origin: r.origin, materialId: r.material_id, createdAt: r.created_at })) };
+}
+
+/** The private cases written from one material: what to withdraw from the shared library when it is deleted (C-e). */
+export async function privateCaseIdsOfMaterial(admin: Admin, userId: string, materialId: string): Promise<string[]> {
+  if (!isUuid(materialId)) return [];
+  const { data } = await admin.from("individual_scholar_case").select("id").eq("user_id", userId).eq("material_id", materialId);
+  return ((data ?? []) as any[]).map(r => r.id);
+}
+/**
+ * The caller's cases written from one material (or from all of them): the private cases (435) and the S4 practice
+ * cases (388 case_id), by id -- what to withdraw from the shared library before the source is deleted (C-e).
+ */
+export async function caseSourcesOf(admin: Admin, userId: string, materialId: string | null): Promise<{ cases: string[]; s4: string[] }> {
+  if (materialId !== null && !isUuid(materialId)) return { cases: [], s4: [] };
+  let c = admin.from("individual_scholar_case").select("id").eq("user_id", userId);
+  let q = admin.from("individual_scholar_question").select("case_id").eq("user_id", userId).eq("kind", "case").not("case_id", "is", null);
+  if (materialId) { c = c.eq("material_id", materialId); q = q.eq("material_id", materialId); }
+  const [cases, steps] = await Promise.all([c.limit(5000), q.limit(5000)]);
+  return { cases: ((cases.data ?? []) as any[]).map(r => r.id), s4: [...new Set(((steps.data ?? []) as any[]).map(r => r.case_id as string))] };
+}
+
+export type CaseSessionRow = {
+  id: string; caseId: string; mode: "guided" | "independent"; status: "active" | "completed"; viewSalt: string; currentStageId: string | null;
+  reachedStageIds: string[]; revealedFactIds: string[]; debrief: any; createdAt: string; lastActiveAt: string; completedAt: string | null;
+};
+export type CaseAnswerRow = {
+  decisionPointId: string; chosen: string[]; reasoning: string | null; marking: string; correct: boolean | null; score: number | null;
+  safety: string[]; aiFeedback: string | null; evaluatorModel: string | null; createdAt: string;
+};
+const CASE_SESSION_COLS = "id, private_case_id, mode, status, view_salt, current_stage_id, reached_stage_ids, revealed_fact_ids, debrief, created_at, last_active_at, completed_at";
+const toCaseSession = (r: any): CaseSessionRow => ({
+  id: r.id, caseId: r.private_case_id, mode: r.mode, status: r.status, viewSalt: r.view_salt, currentStageId: r.current_stage_id ?? null,
+  reachedStageIds: Array.isArray(r.reached_stage_ids) ? r.reached_stage_ids : [], revealedFactIds: Array.isArray(r.revealed_fact_ids) ? r.revealed_fact_ids : [],
+  debrief: r.debrief ?? null, createdAt: r.created_at, lastActiveAt: r.last_active_at, completedAt: r.completed_at ?? null,
+});
+
+/** A new session on one of the caller's private cases, at its first stage. The salt is server-only. */
+export async function createPrivateCaseSession(admin: Admin, userId: string, input: { caseId: string; mode: "guided" | "independent"; viewSalt: string; firstStageId: string }): Promise<{ ok: true; id: string } | { ok: false; notProvisioned: boolean }> {
+  const { data, error } = await admin.from("individual_scholar_case_session").insert({
+    user_id: userId, private_case_id: input.caseId, mode: input.mode, view_salt: input.viewSalt, current_stage_id: input.firstStageId, reached_stage_ids: [input.firstStageId],
+  }).select("id").single();
+  if (error || !data) return { ok: false, notProvisioned: !!error && isNotProvisioned(error) };
+  return { ok: true, id: data.id };
+}
+
+/** A private case session with its decisions in order. null when it is not the caller's. */
+export async function getPrivateCaseSession(admin: Admin, userId: string, id: string): Promise<{ session: CaseSessionRow; answers: CaseAnswerRow[] } | null> {
+  if (!isUuid(id)) return null;
+  const { data, error } = await admin.from("individual_scholar_case_session").select(CASE_SESSION_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  if (error || !data) return null;
+  const { data: ans } = await admin.from("individual_scholar_case_answer")
+    .select("decision_point_id, chosen_option_ids, reasoning, marking, correct, score, safety_criterion_ids, ai_feedback, evaluator_model, created_at")
+    .eq("user_id", userId).eq("session_id", id).order("created_at");
+  return {
+    session: toCaseSession(data),
+    answers: ((ans ?? []) as any[]).map(a => ({
+      decisionPointId: a.decision_point_id, chosen: Array.isArray(a.chosen_option_ids) ? a.chosen_option_ids : [], reasoning: a.reasoning ?? null, marking: a.marking,
+      correct: a.correct ?? null, score: a.score === null ? null : Number(a.score), safety: Array.isArray(a.safety_criterion_ids) ? a.safety_criterion_ids : [],
+      aiFeedback: a.ai_feedback ?? null, evaluatorModel: a.evaluator_model ?? null, createdAt: a.created_at,
+    })),
+  };
+}
+
+/** One decision, as it was made. Append-only (435): it can never be rewritten. */
+export async function insertCaseAnswer(admin: Admin, userId: string, sessionId: string, a: {
+  decisionPointId: string; chosen: string[] | null; reasoning: string | null; marking: "deterministic" | "self_graded" | "ai_evaluation"; correct: boolean | null; score: number | null;
+  safety: string[]; aiFeedback?: string | null; evaluator?: { model: string; promptVersion: string } | null;
+}): Promise<boolean> {
+  const { error } = await admin.from("individual_scholar_case_answer").insert({
+    session_id: sessionId, user_id: userId, decision_point_id: a.decisionPointId, chosen_option_ids: a.chosen, reasoning: a.reasoning, marking: a.marking,
+    correct: a.correct, score: a.score, safety_criterion_ids: a.safety, ai_feedback: a.aiFeedback ?? null,
+    evaluator_model: a.evaluator?.model ?? null, evaluator_prompt_version: a.evaluator?.promptVersion ?? null,
+  });
+  return !error;
+}
+
+/** Where a private session is: stages reached, facts revealed, the current stage, finished with its debrief. */
+export async function updatePrivateCaseSession(admin: Admin, userId: string, id: string, patch: { reached?: string[]; revealed?: string[]; current?: string | null; completed?: boolean; debrief?: unknown }): Promise<boolean> {
+  const now = new Date().toISOString();
+  const { error } = await admin.from("individual_scholar_case_session").update({
+    last_active_at: now,
+    ...(patch.reached ? { reached_stage_ids: patch.reached } : {}), ...(patch.revealed ? { revealed_fact_ids: patch.revealed } : {}),
+    ...(patch.current !== undefined ? { current_stage_id: patch.current } : {}),
+    ...(patch.completed ? { status: "completed", completed_at: now } : {}), ...(patch.debrief !== undefined ? { debrief: patch.debrief } : {}),
+  }).eq("user_id", userId).eq("id", id);
+  return !error;
+}
+
+/** Which library version one of the caller's library plays is on (423, read only). null when it is not theirs. */
+export async function librarySessionVersion(admin: Admin, userId: string, sessionId: string): Promise<string | null> {
+  if (!isUuid(sessionId)) return null;
+  const { data } = await admin.from("case_library_session").select("id, status, started_at, completed_at, version_id").eq("user_id", userId).eq("id", sessionId).maybeSingle();
+  return (data as any)?.version_id ?? null;
+}
+
+/** The caller's case history: private sessions (435) and library plays (423, read only), newest first. */
+export async function caseHistory(admin: Admin, userId: string, limit = 20): Promise<Read<{ kind: "private" | "library"; id: string; title: string | null; versionId: string | null; status: string; startedAt: string; completedAt: string | null }[]>> {
+  const [p, l] = await Promise.all([
+    admin.from("individual_scholar_case_session").select("id, status, created_at, completed_at, private_case_id").eq("user_id", userId).order("last_active_at", { ascending: false }).limit(limit),
+    admin.from("case_library_session").select("id, status, started_at, completed_at, version_id").eq("user_id", userId).order("started_at", { ascending: false }).limit(limit),
+  ]);
+  if (p.error && !isNotProvisioned(p.error)) return fail(p.error);
+  const privateRows = ((p.data ?? []) as any[]);
+  const titles = new Map<string, string>();
+  if (privateRows.length) {
+    const { data } = await admin.from("individual_scholar_case").select("id, title").eq("user_id", userId).in("id", [...new Set(privateRows.map(r => r.private_case_id))]);
+    for (const r of (data ?? []) as any[]) titles.set(r.id, r.title);
+  }
+  // A library play names its version; its title comes from src/lib/cases/library.ts, never a read of the library here.
+  const libRows = l.error ? [] : ((l.data ?? []) as any[]);
+  return {
+    ok: true,
+    data: [
+      ...privateRows.map(r => ({ kind: "private" as const, id: r.id, title: titles.get(r.private_case_id) ?? "Your case", versionId: null, status: r.status, startedAt: r.created_at, completedAt: r.completed_at ?? null })),
+      ...libRows.map(r => ({ kind: "library" as const, id: r.id, title: null, versionId: r.version_id as string, status: r.status === "in_progress" ? "active" : r.status, startedAt: r.started_at, completedAt: r.completed_at ?? null })),
+    ].sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, limit),
+  };
+}
+
 // ── IMPROVE: THE ROWS PROGRESS IS BUILT FROM ───────────────────────────────────────────────────────
 
 export async function progressRows(admin: Admin, userId: string): Promise<Read<{
