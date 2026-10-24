@@ -136,6 +136,10 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.quality.governance.view",       space: "quality"   },
   { code: "hq.quality.regulation.view",       space: "quality"   },
   { code: "hq.quality.policy.view",           space: "quality"   },
+  // Migration 395, owner decision D2: Holdings clinical-content approval. Approve is the Clinical Content
+  // Reviewer position; govern (reviewer scopes, review counts) is granted to the Quality Council Member.
+  { code: "hq.quality.clinical.approve",      space: "quality"   },
+  { code: "hq.quality.clinical.govern",       space: "quality"   },
 ];
 
 export const HQ_CAPABILITY_CODES = HQ_CAPABILITIES.map(c => c.code);
@@ -185,6 +189,9 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/import",                capability: "hq.learning.import.view" },
   { prefix: "/super-admin/assurance",             capability: "hq.quality.assurance.view" },
   { prefix: "/super-admin/quality-intelligence",  capability: "hq.quality.intelligence.view" },
+  // Migration 395 (D2). Governance first: the first matching prefix wins, and it must not inherit approve.
+  { prefix: "/super-admin/clinical-review/governance", capability: "hq.quality.clinical.govern" },
+  { prefix: "/super-admin/clinical-review",       capability: "hq.quality.clinical.approve" },
   { prefix: "/super-admin/governance",            capability: "hq.quality.governance.view" },
   { prefix: "/super-admin/cgr",                   capability: "hq.quality.regulation.view" },
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },

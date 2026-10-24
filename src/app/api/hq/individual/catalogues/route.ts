@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { currentTraceId } from "@/lib/trace";
 import { addEntries, checkStatusChange, removeEntry, setEntryStatus } from "@/lib/competency/catalogue-entries";
+import { submitForReview } from "@/lib/competency/clinical-review";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
 
 // POST /api/hq/individual/catalogues -- P0 controlled competency catalogues (migration 394).
 //
-// Body: { catalogueId, action: "add", competencyIds: [] } | { catalogueId, action: "status", entryId,
+// Body: { catalogueId, action: "add", competencyIds: [] } | { catalogueId, action: "review", entryId } (D2) |
+// { catalogueId, action: "status", entryId,
 // status, note? } | { catalogueId, action: "remove", entryId }.
 //
 // ⚠ GATED BY hqApiGate(["hq.individual.config.manage"]) -- the Individual Product Administrator. It curates
@@ -54,6 +56,17 @@ export async function POST(req: Request) {
       if (!isId(body.entryId)) return refuse(400, "Choose an entry.");
       result = await removeEntry(ctx.admin, fw.id, body.entryId);
       detail = { entry_id: body.entryId };
+      break;
+    }
+    case "review": {
+      // D2: put the entry's CURRENT content forward for clinical review (migration 395). The curator becomes
+      // its submitter, so the database will never let them approve it. Publication is untouched.
+      if (!isId(body.entryId)) return refuse(400, "Choose an entry.");
+      const { data: e } = await ctx.admin.from("competency_catalogue_entry").select("competency_id").eq("id", body.entryId).eq("catalogue_id", fw.id).maybeSingle();
+      if (!e) return refuse(404, "That entry is not in this catalogue.");
+      const r = await submitForReview(ctx.admin, e.competency_id, ctx.userId);
+      result = r.ok ? { ok: true } : r;
+      detail = { entry_id: body.entryId, competency_id: e.competency_id, version_id: r.ok ? r.versionId : null, required_approvals: r.ok ? r.required : null };
       break;
     }
     default:

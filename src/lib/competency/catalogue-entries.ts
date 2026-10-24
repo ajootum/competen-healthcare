@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { CONTENT_STATUSES, type ContentStatus } from "./foundation";
+import { loadClinicalReviews, type ClinicalReview } from "./clinical-review";
 
 // ── CONTROLLED CATALOGUES: CURATION ── migration 394, P0 competency catalogue ─────────────────────────────
 //
@@ -13,14 +14,17 @@ import { CONTENT_STATUSES, type ContentStatus } from "./foundation";
 // approved or published -- what the independent approver saw is what is offered. This module says so in
 // words instead of surfacing the database error.
 //
-// ⚠ "APPROVED" NEEDS A REASON. Content status is a claim about clinical content. Approved is accepted only
-// with a note that says who reviewed it, so the claim always carries its source. Unreviewed is the default.
+// ⚠ "APPROVED" IS NOT SET HERE (owner decision D2). Clinical approval is migration 395: an appointed, in-scope,
+// independent reviewer approving the exact content version. A curator may mark an entry as a draft or not
+// reviewed, and may put its content forward for clinical review -- never mark it approved.
 
 export type CatalogueSummary = { id: string; name: string; code: string | null; status: string; layer: string | null; entries: number };
 export type EntryView = {
   id: string; competencyId: string; title: string; code: string | null; home: string; domain: string;
   practice: { code: string | null; name: string } | null; cpu: { code: string | null; name: string } | null;
   contentStatus: ContentStatus; statusNote: string | null; sortOrder: number;
+  /** The 395 clinical review of the competency's current content, when it could be read. */
+  clinical: ClinicalReview | null;
 };
 export type ReferenceCompetency = { id: string; title: string; code: string | null; home: string; domain: string; practiceId: string | null; cpuId: string | null };
 export type ReferencePractice = { id: string; code: string | null; name: string; home: string; cpus: { id: string; code: string | null; name: string }[] };
@@ -32,14 +36,13 @@ export const CONTENT_STATUS_LABEL: Record<ContentStatus, string> = {
   unreviewed: "Not clinically reviewed",
 };
 export const NOTE_MAX = 500;
-export const APPROVED_NOTE_MIN = 10;
 
-/** Pure: whether a status change is acceptable before it reaches the database. */
+/** Pure: whether a status change is acceptable before it reaches the database. Never "approved" (D2). */
 export function checkStatusChange(status: unknown, note: unknown): { ok: true; status: ContentStatus; note: string | null } | { ok: false; error: string } {
-  if (!isContentStatus(status)) return { ok: false, error: "Choose approved, draft or not reviewed." };
+  if (status === "approved") return { ok: false, error: "Approval is clinical review, not a catalogue setting. Put the content forward for clinical review instead." };
+  if (!isContentStatus(status)) return { ok: false, error: "Choose draft or not reviewed." };
   const n = typeof note === "string" && note.trim() ? note.trim() : null;
   if (n && n.length > NOTE_MAX) return { ok: false, error: `Keep the note under ${NOTE_MAX} characters.` };
-  if (status === "approved" && (!n || n.length < APPROVED_NOTE_MIN)) return { ok: false, error: "Say who reviewed the content (at least 10 characters) before marking it approved." };
   return { ok: true, status, note: n };
 }
 
@@ -79,6 +82,7 @@ export async function loadEntries(admin: any, catalogueId: string): Promise<Entr
   const tree = await spineFor(admin, comps);
   if (!tree) return null;
   const byId = new Map(comps.map((c: any) => [c.id, c]));
+  const reviews = await loadClinicalReviews(admin, comps.map((c: any) => c.id));
   return entries.flatMap((e: any) => {
     const c: any = byId.get(e.competency_id);
     if (!c) return [];
@@ -86,7 +90,8 @@ export async function loadEntries(admin: any, catalogueId: string): Promise<Entr
     return [{
       id: e.id, competencyId: c.id, title: c.name, code: c.code ?? null, home: tree.frameworks.get(d?.framework_id ?? "")?.name ?? "Unknown framework",
       domain: d?.name ?? "Unknown domain", practice: p ? { code: p.code ?? null, name: p.name } : null, cpu: u ? { code: u.code ?? null, name: u.name } : null,
-      contentStatus: isContentStatus(e.content_status) ? e.content_status : "unreviewed", statusNote: e.status_note ?? null, sortOrder: e.sort_order ?? 0,
+      contentStatus: reviews?.get(c.id)?.state === "approved" ? "approved" : e.content_status === "draft" ? "draft" : "unreviewed",
+      statusNote: e.status_note ?? null, sortOrder: e.sort_order ?? 0, clinical: reviews?.get(c.id) ?? null,
     }];
   });
 }

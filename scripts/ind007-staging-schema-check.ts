@@ -156,6 +156,25 @@ async function main() {
       out.cfca394 = { tables: [...new Set(cols.map((c: any) => c.table_name))], constraints: cons.length, indexes: idx.length, policies: pol.length, rls, trigger: trg.length, function: fn,
         fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, rls, trg, fn })).digest("hex") };
     }
+    if (process.argv.includes("--clinical395")) {
+      // D2 clinical-content approval, migration 395, before and after (and through its rollback rehearsal).
+      const T = ["clinical_content_version", "clinical_reviewer_scope", "clinical_review_decision"];
+      const cols = await q(`select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns
+        where table_schema = 'public' and (table_name = any($1) or (table_name = 'frameworks' and column_name = 'specialty_term_id')) order by 1, 2`, [T]);
+      const cons = await q(`select conrelid::regclass::text as t, conname, pg_get_constraintdef(oid) as def from pg_constraint
+        where conrelid::regclass::text = any($1) or conname like 'frameworks_specialty_term_id%' order by 1, 2`, [T]);
+      const idx = await q(`select tablename, indexname, indexdef from pg_indexes where schemaname = 'public' and tablename = any($1) order by 1, 2`, [T]);
+      const pol = await q(`select tablename, policyname from pg_policies where tablename = any($1) order by 1, 2`, [T]);
+      const rls = await q(`select relname, relrowsecurity from pg_class where relname = any($1) order by 1`, [T]);
+      const trg = await q(`select tgname, pg_get_triggerdef(oid) as def from pg_trigger where tgname in ('clinical_content_version_guard', 'clinical_review_decision_guard', 'clinical_reviewer_scope_guard') order by 1`);
+      const fn = await q(`select p.proname, md5(pg_get_functiondef(p.oid)) as def_md5 from pg_proc p where p.proname in ('competency_content_hash', 'competency_content_hashes', 'clinical_scope_covers',
+        'clinical_content_version_guard', 'clinical_review_decision_guard', 'clinical_reviewer_scope_guard') order by 1`);
+      const caps = await q(`select code, space from hq_capability where code in ('hq.quality.clinical.approve', 'hq.quality.clinical.govern') order by 1`);
+      const pos = await q(`select code, space from hq_position where code = 'clinical_content_reviewer'`);
+      const grants = await q(`select position_code, capability_code from hq_position_capability where (capability_code in ('hq.quality.clinical.approve', 'hq.quality.clinical.govern') or position_code = 'clinical_content_reviewer') and effective_to is null order by 1, 2`);
+      out.clinical395 = { tables: [...new Set(cols.map((c: any) => c.table_name))], constraints: cons.length, indexes: idx.length, policies: pol.length, rls, triggers: trg.length, functions: fn.length, caps, pos, grants,
+        fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, rls, trg, fn, caps, pos, grants })).digest("hex") };
+    }
     if (process.argv.includes("--s1")) {
       // COMPETEN-SCHOLAR-01 S1, migration 384, before and after (and through its rollback rehearsal): the four
       // columns, their constraints and index, and how many frameworks are classified. Hashed for comparison.
