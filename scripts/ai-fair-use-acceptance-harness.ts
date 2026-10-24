@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * AI FAIR USE -- ACCEPTANCE on STAGING (COMPETEN-AI-FAIR-USE-01 s13, migration 410).
+ * AI FAIR USE -- ACCEPTANCE on STAGING (COMPETEN-AI-FAIR-USE-01 s13, migrations 410 and 411).
  *
  *   npx tsx scripts/privileged-harnesses.ts --staging --only ai-fair-use-acceptance-harness
  *
@@ -13,11 +13,16 @@
  *   L   service levels follow the balance, and Continuity keeps only reserve-eligible essentials (s13.7, s13.9, s13.11)
  *   R   the essential reserve stops at its hard cap (s13.8)
  *   P   a new allowance period opens at zero (s13.12)
+ *   X   an unknown charge keeps its hold, is reconciled into its original account, or released on proof (411)
+ *   Y   outstanding unreconciled holds stop at the per-person ceiling (411)
+ *   B   the buffer widens the hold only; provider expenditure and allowance consumption are immutable (411, D3)
+ *   E   a clinically sensitive activity needs an eligible model; eligibility is history (411, D1)
+ *   A   unknown activities and level-insufficient tiers are refused, never downgraded (amendments 1, 2)
  *   U   a signed-in person cannot read, write or call any of it (s13.13)
  *   G   the policy in force was published through the audited engine (s13.14)
  *
  * It never calls an AI provider and never switches the ai_fair_use flag: the engine's decisions are exercised
- * through its own pure functions and the database functions it calls. PEND (exit 0) until 410 and the
+ * through its own pure functions and the database functions it calls. PEND (exit 0) until 411 and the
  * provisional seed (scripts/seed-staging-ai-fair-use.ts) are present.
  */
 import { loadEnvConfig } from "@next/env";
@@ -55,29 +60,40 @@ async function cleanup() {
   await admin.from("profiles").delete().eq("id", u.id);
   await admin.auth.admin.deleteUser(u.id);
 }
+let BUFFER = 0;
 const reserve = (req: string, acc: string, activity: string, pool: string, inT: number, outT: number, extra: Record<string, unknown> = {}) =>
   admin.rpc("ai_reserve", { p_request_id: req, p_account: acc, p_activity: activity, p_pool: pool, p_provider: "anthropic", p_model: MODEL,
-    p_max_input_tokens: inT, p_max_output_tokens: outT, p_policy_version: "harness", ...extra });
+    p_max_input_tokens: inT, p_max_output_tokens: outT, p_policy_version: "harness", p_currency: "UGX", p_buffer_pct: BUFFER,
+    p_clinically_sensitive: false, p_unreconciled_cap_cau: 1e6, ...extra });
+const ledger = async (req: string) => (await admin.from("ai_usage_ledger").select("*").eq("request_id", req).single()).data;
 const row = (r: any) => (Array.isArray(r.data) ? r.data[0] : r.data);
 const account = async (id: string) => (await admin.from("ai_allowance_account").select("*").eq("id", id).single()).data;
 const toBal = (a: any): Balance => ({ includedCau: +a.included_cau, reserveCau: +a.reserve_cau, usedCau: +a.used_cau, reservedCau: +a.reserved_cau, reserveUsedCau: +a.reserve_used_cau, reserveReservedCau: +a.reserve_reserved_cau });
 
 async function main() {
-  console.log(`AI FAIR USE ACCEPTANCE (410) -- target ${ref}\n`);
-  const probe = await admin.from("ai_usage_ledger").select("id").limit(0);
-  if (probe.error) { pend("S-G", `migration 410 is not applied here (${probe.error.message}). Nothing created.`); return; }
+  console.log(`AI FAIR USE ACCEPTANCE (410, 411) -- target ${ref}\n`);
+  const probe = await admin.from("ai_model_eligibility").select("id").limit(0);
+  if (probe.error) { pend("S-G", `migration 411 is not applied here (${probe.error.message}). Nothing created.`); return; }
   const price = (await admin.rpc("ai_price_at", { p_provider: "anthropic", p_model: MODEL, p_at: new Date().toISOString() })).data;
   const [scholar, pro] = [await loadProductPolicy(admin, "scholar"), await loadProductPolicy(admin, "professional")];
-  if (!price?.id || scholar.policy.includedCau <= 0) { pend("S-G", "the provisional seed is not present (scripts/seed-staging-ai-fair-use.ts)"); return; }
+  const fx = (await admin.from("ai_fx_rate").select("*").eq("currency", "UGX").is("effective_to", null).maybeSingle()).data;
+  const basis = (await admin.from("ai_cau_basis").select("*").eq("currency", "UGX").is("effective_to", null).maybeSingle()).data;
+  if (!price?.id || !fx || !basis || scholar.policy.includedCau <= 0) { pend("S-G", "the provisional seed is not present (scripts/seed-staging-ai-fair-use.ts)"); return; }
+  BUFFER = scholar.policy.fxBufferPct;
   await cleanup();
   try {
     const { data: u, error } = await admin.auth.admin.createUser({ email: EMAIL, password: PASSWORD, email_confirm: true, user_metadata: { full_name: "AIFU Harness", synthetic: true } });
     if (error) throw new Error(error.message);
     const uid = u.user.id as string;
     const now = Date.now(), day = 86400000;
-    const open = async (product: string, start: number, end: number, included: number, reserveCau: number) =>
-      (await admin.from("ai_allowance_account").insert({ user_id: uid, product, period_start: new Date(start).toISOString(), period_end: new Date(end).toISOString(),
-        included_cau: included, reserve_cau: reserveCau, policy_version: "harness" }).select("id").single()).data.id as string;
+    // Accounts are unique per person, product and period start, so each fixture account starts a second apart.
+    let opened = 0;
+    const open = async (product: string, start: number, end: number, included: number, reserveCau: number) => {
+      const r = await admin.from("ai_allowance_account").insert({ user_id: uid, product, period_start: new Date(start - 1000 * opened++).toISOString(), period_end: new Date(end).toISOString(),
+        included_cau: included, reserve_cau: reserveCau, policy_version: "harness" }).select("id").single();
+      if (r.error) throw new Error(`fixture account: ${r.error.message}`);
+      return r.data.id as string;
+    };
 
     // ── S. one engine, independent policies ──
     ok("S1. Scholar and Professional read their own published policies from the same engine",
@@ -122,8 +138,69 @@ async function main() {
     const hl = (await admin.from("ai_usage_ledger").select("cost_usd, price_id").eq("request_id", "aifu-hist-0001").single()).data;
     ok("H2. settlement uses the price row fixed at reservation", hl.price_id === priceRow.price_id && +hl.cost_usd === +((1000 * +price.input_per_mtok_usd + 1000 * +price.output_per_mtok_usd) / 1e6 + +price.extra_per_request_usd).toFixed(6), JSON.stringify(hl));
 
+    // ── B. the buffer is on the hold only; the two records are immutable ──
+    const bl = await ledger("aifu-hist-0001");
+    const settledPerCall = +(+bl.cost_usd * +fx.per_usd / +basis.currency_per_cau).toFixed(6);
+    ok("B1. (D3) the hold carries the buffer, the settled allowance consumption does not: cost x reference rate / basis",
+      +bl.settled_cau === settledPerCall && Math.abs(+bl.max_cau - settledPerCall * (1 + BUFFER / 100)) < 0.01 && +bl.reserve_buffer_pct === BUFFER && !!bl.fx_rate_id && !!bl.cau_basis_id,
+      JSON.stringify({ hold: bl.max_cau, settled: bl.settled_cau, expected: settledPerCall, buffer: bl.reserve_buffer_pct }));
+    const rwCost = await admin.from("ai_usage_ledger").update({ cost_usd: 0 }).eq("request_id", "aifu-hist-0001").select("id");
+    const rwCau = await admin.from("ai_usage_ledger").update({ settled_cau: 0 }).eq("request_id", "aifu-hist-0001").select("id");
+    const rwFx = await admin.from("ai_fx_rate").update({ per_usd: 1 }).eq("id", fx.id).select("id");
+    ok("B2. provider expenditure and allowance consumption cannot be rewritten, and neither can the reference rate they used",
+      !!rwCost.error && !!rwCau.error && !!rwFx.error, JSON.stringify({ cost: rwCost.error?.message, cau: rwCau.error?.message, fx: rwFx.error?.message }));
+
+    // ── X. unknown charges: the hold stays, reconciliation goes to the original account, release only on proof ──
+    const accX = await open("professional", now - day, now + 29 * day, 1e6, 0);
+    await reserve("aifu-unrec-0001", accX, "assistant", "included", 1000, 1000);
+    const mk = await admin.rpc("ai_mark_unreconciled", { p_request_id: "aifu-unrec-0001", p_outcome: "timeout" });
+    const xa = await account(accX), xl = await ledger("aifu-unrec-0001");
+    const retry = row(await reserve("aifu-unrec-0001", accX, "assistant", "included", 1000, 1000));
+    ok("X1. (amendment 4) an unknown charge is never settled on the estimate: the row waits as unreconciled with its hold kept",
+      !mk.error && xl.status === "unreconciled" && xl.settled_at === null && +xa.reserved_cau === +xl.max_cau && +xa.used_cau === 0 && retry?.reason === "retry: unreconciled",
+      JSON.stringify({ status: xl.status, held: xa.reserved_cau, retry }));
+    await admin.rpc("ai_settle", { p_request_id: "aifu-unrec-0001", p_model: MODEL, p_input_tokens: 1000, p_output_tokens: 1000, p_extra_usd: 0, p_outcome: "ok" });
+    const xa2 = await account(accX), xl2 = await ledger("aifu-unrec-0001");
+    ok("X2. reconciliation from real provider usage settles into the original account and period",
+      xl2.status === "settled" && xl2.account_id === accX && +xa2.reserved_cau === 0 && +xa2.used_cau === +xl2.settled_cau && +xl2.settled_cau === settledPerCall, JSON.stringify({ status: xl2.status, used: xa2.used_cau }));
+    await reserve("aifu-unrec-0002", accX, "assistant", "included", 1000, 1000);
+    await admin.rpc("ai_mark_unreconciled", { p_request_id: "aifu-unrec-0002", p_outcome: "timeout" });
+    await admin.rpc("ai_release", { p_request_id: "aifu-unrec-0002", p_outcome: "error" });
+    const xa3 = await account(accX), xl3 = await ledger("aifu-unrec-0002");
+    ok("X3. on proof of no billing an unreconciled hold is released at no cost", xl3.status === "released" && +xl3.settled_cau === 0 && +xa3.reserved_cau === 0 && +xa3.used_cau === +xa2.used_cau);
+
+    // ── Y. the unreconciled ceiling ──
+    const cap = perCall * 2.5;
+    for (const i of [1, 2]) {
+      await reserve(`aifu-ceil-000${i}`, accX, "assistant", "included", 1000, 1000, { p_unreconciled_cap_cau: cap });
+      await admin.rpc("ai_mark_unreconciled", { p_request_id: `aifu-ceil-000${i}`, p_outcome: "timeout" });
+    }
+    const y3 = row(await reserve("aifu-ceil-0003", accX, "assistant", "included", 1000, 1000, { p_unreconciled_cap_cau: cap }));
+    const yNull = row(await reserve("aifu-ceil-0004", accX, "assistant", "included", 10, 10, { p_unreconciled_cap_cau: null }));
+    ok("Y1. outstanding unreconciled holds stop at the per-person ceiling, and no ceiling refuses (fails closed)",
+      y3?.granted === false && y3?.reason === "unreconciled_ceiling" && yNull?.granted === false && yNull?.reason === "unreconciled_ceiling", JSON.stringify({ y3, yNull }));
+    for (const i of [1, 2]) await admin.rpc("ai_release", { p_request_id: `aifu-ceil-000${i}`, p_outcome: "error" });
+
+    // ── E. clinical eligibility, by evidence ──
+    const sensitiveCode = Object.entries(scholar.policy.activities).find(([, x]) => x.clinicallySensitive)?.[0] ?? "questions";
+    const e1 = row(await reserve("aifu-elig-0001", accX, sensitiveCode, "included", 100, 100, { p_clinically_sensitive: true }));
+    const e2 = row(await reserve("aifu-elig-0002", accX, sensitiveCode, "included", 100, 100, { p_clinically_sensitive: null }));
+    const seededNo = (await admin.from("ai_model_eligibility").select("id").eq("eligible", false).is("effective_to", null).limit(1)).data?.[0];
+    const rwElig = seededNo ? await admin.from("ai_model_eligibility").update({ eligible: true, evidence_ref: "harness-forged" }).eq("id", seededNo.id).select("id") : { error: { message: "no row" } };
+    ok("E1. (D1) a clinically sensitive activity with no eligible model in force is refused, and unstated sensitivity counts as sensitive",
+      e1?.granted === false && e1?.reason === "not_eligible" && e2?.granted === false && e2?.reason === "not_eligible", JSON.stringify({ sensitiveCode, e1, e2 }));
+    ok("E2. an eligibility decision cannot be rewritten into eligible (history, evidence-based)", !!seededNo && !!rwElig.error, rwElig.error?.message ?? "rewrite accepted");
+
+    // ── A. activities are policy data, and a level never downgrades below an activity's floor ──
+    const bFull = { includedCau: 100, reserveCau: 0, usedCau: 0, reservedCau: 0, reserveUsedCau: 0, reserveReservedCau: 0 };
+    const unknown = activityAt(scholar.policy, "full", "not_a_policy_activity", bFull);
+    const floored = Object.entries(scholar.policy.activities).find(([, x]) => x.minTier === x.tier && x.tier !== "cheap");
+    const lvl = floored ? activityAt(scholar.policy, "optimised", floored[0], bFull) : null;
+    ok("A1. (amendments 1, 2) an activity the policy does not define is refused, and one whose floor a level cannot meet is refused as level_insufficient",
+      unknown.refusal === "unknown_activity" && !!lvl && lvl.refusal === "level_insufficient" && !lvl.available, JSON.stringify({ unknown: unknown.refusal, floored: floored?.[0], lvl }));
+
     // ── L. levels follow the balance; Continuity keeps only reserve-eligible essentials ──
-    const accL = await open("scholar", now - day, now + 29 * day, perCall * 10.5, perCall);
+    const accL = await open("scholar", now - day, now + 29 * day, settledPerCall * 10.5, perCall);
     const levels: string[] = [];
     for (let i = 0; i < 10; i++) {
       levels.push(serviceLevel(scholar.policy, toBal(await account(accL))));
@@ -137,7 +214,7 @@ async function main() {
     const exhausted = row(await reserve("aifu-after-0001", accL, "explain", "included", 1000, 1000));
     ok("L2. (s13.11) a new chargeable request is refused when no included allowance remains", exhausted?.granted === false && exhausted?.reason === "included_exhausted", JSON.stringify(exhausted));
     const cont = activityAt(scholar.policy, "continuity", "clarify", bL), contStd = activityAt(scholar.policy, "continuity", "questions", bL);
-    ok("L3. (s13.9) Continuity: only reserve-eligible essential help, from the reserve; other AI activities wait for renewal", cont.available && cont.pool === "reserve" && !contStd.available);
+    ok("L3. (s13.9) Continuity: only reserve-eligible essential help, from the reserve; other AI activities wait for renewal", cont.available && cont.via === "reserve" && !contStd.available);
 
     // ── R. the reserve's hard cap ──
     const r1 = row(await reserve("aifu-reserve-0001", accL, "clarify", "reserve", 900, 900));
@@ -159,11 +236,15 @@ async function main() {
     else {
       const read = await user.from("ai_allowance_account").select("id");
       const write = await user.from("ai_allowance_account").update({ included_cau: 1e9 }).eq("user_id", uid).select("id");
-      const call = await user.rpc("ai_reserve", { p_request_id: "aifu-browser-0001", p_account: accP, p_activity: "explain", p_pool: "included", p_provider: "anthropic", p_model: MODEL, p_max_input_tokens: 1, p_max_output_tokens: 1, p_policy_version: "x" });
+      // The real 411 signature, so a refusal is a permission refusal (42501) and not merely an unknown function.
+      const call = await user.rpc("ai_reserve", { p_request_id: "aifu-browser-0001", p_account: accP, p_activity: "explain", p_pool: "included", p_provider: "anthropic", p_model: MODEL,
+        p_max_input_tokens: 1, p_max_output_tokens: 1, p_policy_version: "x", p_currency: "UGX", p_buffer_pct: 0, p_clinically_sensitive: false, p_unreconciled_cap_cau: 1e6 });
       const settle = await user.rpc("ai_settle", { p_request_id: "aifu-settle-0001", p_model: MODEL, p_input_tokens: 0, p_output_tokens: 0, p_extra_usd: 0, p_outcome: "ok" });
-      ok("U1. (s13.13) a signed-in person cannot read their balance rows, raise their allowance, or call reserve or settle",
-        (read.data ?? []).length === 0 && (write.data ?? []).length === 0 && !!call.error && !!settle.error,
-        JSON.stringify({ read: read.data?.length, write: write.data?.length, call: call.error?.code, settle: settle.error?.code }));
+      const mark = await user.rpc("ai_mark_unreconciled", { p_request_id: "aifu-settle-0001", p_outcome: "timeout" });
+      const denied = (e: any) => e?.code === "42501";
+      ok("U1. (s13.13) a signed-in person cannot read their balance rows, raise their allowance, or call reserve, settle or mark unreconciled",
+        (read.data ?? []).length === 0 && (write.data ?? []).length === 0 && denied(call.error) && denied(settle.error) && denied(mark.error),
+        JSON.stringify({ read: read.data?.length, write: write.data?.length, call: call.error?.code, settle: settle.error?.code, mark: mark.error?.code }));
       await user.auth.signOut();
     }
 
