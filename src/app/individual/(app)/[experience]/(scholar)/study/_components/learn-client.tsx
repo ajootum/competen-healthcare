@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
-import { INFORMAL_CHECK_LABEL, QUESTION_MAX, SOURCE_KIND_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
+import { INFORMAL_CHECK_LABEL, PERSONAL_AI_LABEL, QUESTION_MAX, SOURCE_KIND_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import type { SessionView } from "@/lib/individual/scholar/learn-view";
 import { sourceHref } from "./question-view";
 import { AiBadge } from "./client";
@@ -67,6 +67,8 @@ export function LearnWorkspace(props: {
   const [check, setCheck] = useState<{ question: string; answer: string } | null>(null);
   const [ask, setAsk] = useState("");
   const [askThread, setAskThread] = useState<Card[]>([]);
+  // Owner D3: the shared personal AI on this step. Its own thread, never mixed into a Learn answer, never saved.
+  const [assist, setAssist] = useState<{ id: number; asked: string; answer?: string; error?: string }[]>([]);
   const seq = useRef(0);
   const started = useRef(false);
   const step = session?.steps.find(s => s.step === at) ?? session?.steps[0] ?? null;
@@ -88,6 +90,17 @@ export function LearnWorkspace(props: {
     if (!r.json.withheld && !r.json.continuity) setProgress(p => ({ ...p, [step.step]: { actions: [...new Set([...(p[step.step]?.actions ?? []), action])], verdict: r.json.verdict?.value ?? p[step.step]?.verdict ?? null } }));
     return r.json as Reply;
   }, [session, step, depth]);
+  // Owner D3: the step, handed to the shared personal AI (Teach Me). Shown apart under PERSONAL_AI_LABEL, never saved.
+  const continueWithAssistant = useCallback(async (question: string) => {
+    if (!session || !step) return;
+    setBusy("assistant");
+    const r = await call("/api/individual/scholar/learn/assistant", {
+      question, mode: "teach", step: step.step,
+      ...(session.id ? { sessionId: session.id } : { chunkIds: step.sections.map(x => x.chunkId) }),
+    });
+    setBusy("");
+    setAssist(list => [{ id: ++seq.current, asked: question, ...(r.ok ? { answer: String(r.json.answer ?? "") } : { error: r.json.error ?? "Your assistant could not answer just now." }) }, ...list]);
+  }, [session, step]);
 
   // A new scope: start the session, then open it with the policy's starting action (Teach Me by default).
   useEffect(() => {
@@ -273,6 +286,23 @@ export function LearnWorkspace(props: {
           <div aria-live="polite" className="mt-3 space-y-3">
             {askThread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} compact />)}
           </div>
+          {props.consent && step && (
+            <div className="mt-4 border-t border-gray-100 pt-3">
+              <button type="button" className={ghost} disabled={!!busy} onClick={() => void continueWithAssistant(ask.trim() || `Teach me: ${step.title}`)}>
+                {busy === "assistant" ? "Asking your assistant…" : "Continue with your personal assistant"}
+              </button>
+              <p className="mt-1 text-[12px] text-gray-600">Your general personal AI, given this step&apos;s sections. Its answers are not checked against your notes.</p>
+              <div aria-live="polite" className="mt-3 space-y-3">
+                {assist.map(a => (
+                  <article key={a.id} className="rounded-xl border-2 border-indigo-200 bg-indigo-50/50 p-3">
+                    <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-indigo-900">{PERSONAL_AI_LABEL}</p>
+                    <p className="mt-1 text-[12.5px] text-gray-600"><span className="font-semibold">You:</span> {a.asked}</p>
+                    {a.error ? <p className="mt-1 text-[13px] text-red-800">{a.error}</p> : <div className="mt-1.5 whitespace-pre-wrap text-[14px] leading-relaxed text-gray-800">{a.answer}</div>}
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
       </div>
     </div>

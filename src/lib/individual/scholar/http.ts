@@ -97,8 +97,11 @@ export async function scholarRisk(admin: unknown, userId: string, input: {
  * one student action (`:retry`, `:verify`, `:retry-verify` for the further calls), and the SAME risk subject on each,
  * so a verification or a retry is never classified below the content it checks (IND-007's contract).
  */
+/** The request id the engine reserves against: the caller's, from the client's retry key when it is well formed. */
+export const scholarRequestId = (ctx: IndividualContext, req: Request) => requestIdFor(ctx.userId, req.headers.get("x-request-id"));
+
 export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext): { run: ScholarAiRun; refusal: () => MeteredRefusal | null } {
-  const requestId = requestIdFor(ctx.userId, req.headers.get("x-request-id"));
+  const requestId = scholarRequestId(ctx, req);
   let refused: MeteredRefusal | null = null;
   const run: ScholarAiRun = async (g, part = "main") => {
     if (refused) return { ok: false, error: "failed", detail: "metered" } as GenerateResult;

@@ -111,6 +111,9 @@ export const PROMPT_VERSIONS = {
   evaluate: "scholar-evaluate-v1",
 } as const;
 
+/** Owner D3: the shared personal AI, reached from Learn. Never a Learn answer: shown apart, under these words. */
+export const PERSONAL_AI_LABEL = "Personal AI assistant — general explanation, not checked against your notes, not clinically reviewed";
+
 // ── REVISION-01 R4: HOW AN ANSWER WAS MARKED ── always said beside the result (migration 416 `marking`) ──
 // Deterministic marking and AI evaluation are never presented alike. Where AI evaluation is unavailable (metering
 // refuses it, e.g. not_eligible, or AI is off), a short answer falls back to the stored accepted answers: matched by
