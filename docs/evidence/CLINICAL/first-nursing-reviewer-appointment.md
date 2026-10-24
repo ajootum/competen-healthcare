@@ -1,6 +1,8 @@
 # The first Nursing clinical content reviewer: appointment package (PREPARED, NOT RUN)
 
-**Status:** prepared only, by owner direction (24 October 2026). **Nobody has been appointed on staging or in production.** No placeholder person exists. No scope has been granted, and no content has been approved. Every step below is for the **owner** to run, in their own HQ session, once they have confirmed the person.
+**Status:** prepared only, by owner direction (24 October 2026, re-confirmed in CONSOLIDATED PRODUCTION READINESS: "Await the owner's named nominee. Do not grant clinical approval authority automatically"). **Nobody has been appointed on staging or in production.** No placeholder person exists. No scope has been granted, and no content has been approved. Every step below is for the **owner** to run, in their own HQ session, once they have confirmed the person.
+
+**The authority, in one line:** position `clinical_content_reviewer` (Quality space), granting exactly `hq.quality.clinical.approve` and `hq.platform.home.view`, deciding only within scope `framework` = CF-FOUND (required for CF-FOUND) and, if the owner wants it, `profession` = Nursing.
 
 **Authority this rests on:**
 - Owner decision D2 and migration 395 (clinical content approval).
@@ -45,6 +47,38 @@ A reviewer decides only within an active scope on their appointment (`clinical_r
 
 Whether a Nursing reviewer should review cross-professional foundational content is the owner's call. The framework scope is the mechanism if so.
 
+## 3a. What is waiting for the reviewer (staging, read 24 October 2026)
+
+CF-FOUND's eight competencies were put forward on staging under the owner's Option B GO (`cf-found-staging-review.md`). Read-only re-check, target ezhvpgtcqcdsgylrxgdb, after migration 422 was applied there:
+
+- All eight are **In clinical review**: CF-CM-001, CF-CM-002, CF-CR-001, CF-CR-002, CF-IP-001, CF-IP-002, CF-PS-001 and CF-PS-002.
+- Each latest version is a competency version.
+- Each hash still equals the competency's current content hash, so none is stale.
+- Each needs one approval and has **0 decisions**.
+- No reviewer appointment exists (any status), so no appointment covers them yet.
+
+They are decidable by an appointed reviewer holding the CF-FOUND framework scope. The rules are proven by `clinical-review-acceptance-harness`, 16/16, re-run on staging with 422 in place.
+
+The submitter, and the only author, of all eight is the retired synthetic curator `324636db`. Independence therefore bars nobody real, but the nominee must not be anyone who edits these competencies before deciding. An edit makes the version stale, and the edited content needs a new version.
+
+## 3b. If migration 422 is applied: clinical cases (staging only, not on main, not in production)
+
+Migration 422 (COMPETEN-SCHOLAR-CLINICAL-REASONING-01, case interface approval s3) extends this same approval process to clinical case versions. There is no second approval engine. It is applied on staging only, and its PR is not merged.
+
+Where 422 is applied, **the same appointment and the same scopes** also decide case versions:
+
+- A case version is in scope only if an active scope of the appointment covers **every** CFCA competency the case teaches. A case naming no competency cannot be decided.
+- A case is stale if its content changed after it was put forward, as for a competency.
+- Independence, append-only decisions and the configured approval count apply unchanged.
+
+**A CF-FOUND framework scope therefore also covers any case that teaches only CF-FOUND competencies.** That is a widening the owner should know about when granting it.
+
+The reviewer still may **not** author, edit or publish a case:
+- authoring is `hq.quality.case.author` (position `clinical_case_educator`);
+- publishing is `hq.quality.case.publish` (`quality_council_member`).
+
+Publication is a separate act that requires an approval of that exact version.
+
 ## 4. What the reviewer may and may not do
 
 **May:**
@@ -58,6 +92,7 @@ Whether a Nursing reviewer should review cross-professional foundational content
 - Approve content that changed after the version was put forward (*stale*). A changed competency needs a new version and renewed approval.
 - Edit, rewrite or delete a decision, a version or a scope. All three are append-only.
 - Change competency content, publish or archive frameworks, or curate catalogues. The position grants none of that.
+- Author, edit or publish a clinical case (where 422 is applied, §3b).
 - Grant themselves scope, change how many approvals content needs, or appoint anyone. Those belong to the Quality Council Member (`hq.quality.clinical.govern`) and the platform owner.
 - Make content "approved" by their decision alone where the configured count is higher. The count is `holdings.clinical.required_approvals` (CONFIG-002, scope platform / holdings_clinical). It is unpublished on staging today, so the default of **one** independent approval applies.
 
