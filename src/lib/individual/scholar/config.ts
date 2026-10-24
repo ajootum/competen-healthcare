@@ -142,11 +142,14 @@ export const INFORMAL_CHECK_LABEL = "A quick check for your own learning. It is 
 /** Learning activity shown against a competency (Progress) is activity, not evidence. */
 export const NOT_COMPETENCE_LABEL = "Learning activity, not evidence of competence.";
 /** The four kinds of content an answer may hold, said where each appears (owner GO s7). */
+/** Stage 3 acceptance item 3: an AI flag is the AI's, for the student to check -- never clinical review. */
+export const FLAG_HEADING = "Flagged by AI for you to check";
+export const FLAG_NOTE = "The AI thinks these may be contradictory, unclear or unsafe in your notes. They are not verified and not clinical review: check them against your course materials or with a supervisor.";
 export const SOURCE_KIND_LABEL = {
   notes: "From your notes",
-  reference: "Governed reference: your programme's competency catalogue",
+  reference: "Governed reference: what you are working towards. Clinically reviewed only where marked approved",
   interpretation: "AI explanation beyond your notes: general background, not from your notes and not verified",
-  flag: "Flagged by AI for you to check: possibly contradictory, unclear or unsafe in your notes. Not verified.",
+  flag: `${FLAG_HEADING}: possibly contradictory, unclear or unsafe in your notes. Not verified.`,
 } as const;
 
 /**
@@ -227,5 +230,20 @@ export const CONTENT_STATUS_LABEL: Record<"approved" | "draft" | "unreviewed", s
   draft: "Draft content",
   unreviewed: "Not clinically reviewed",
 };
+// ── STAGE 3 ACCEPTANCE ITEM 4: AN ANSWER WITHHELD AS UNSUPPORTED ── said plainly, with notes-only next steps ──
+// Nothing here is clinical content: the reason, the student's own nearest sections, a rephrase, and -- only where
+// policy allows and it passed its own checks -- the labelled background the same request produced.
+export const NOT_IN_NOTES_LABEL = "This isn't in your notes.";
+export const WITHHELD_WHY: Record<"not_in_notes" | "no_citation" | "bad_citation" | "ungrounded", string> = {
+  not_in_notes: "Scholar answers only from your notes, and could not find this in them. It will not fill the gap with clinical information from anywhere else.",
+  no_citation: "Scholar's answer did not show which part of your notes it came from, so it was not shown. Scholar only shows what it can point to in your notes.",
+  bad_citation: "Scholar's answer pointed to a part of your notes it was not given, so it was not shown.",
+  ungrounded: "Scholar's answer included details that are not in your notes, so it was not shown. Scholar will not show clinical information your notes do not support.",
+};
+/** How many of the student's own sections a withheld answer offers to read instead. */
+export const WITHHELD_NEAREST_MAX = 3;
+
+/** A saved reference whose outcome its competency's current content no longer holds (learn.ts referenceStatus). */
+export const REFERENCE_CHANGED_LABEL = "Changed since: not clinically reviewed";
 /** Shown where the policy floor offers only approved content and the programme has none yet. */
 export const NO_APPROVED_COMPETENCIES = "No clinically approved competencies yet.";

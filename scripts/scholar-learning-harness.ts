@@ -326,6 +326,52 @@ const meteredEverywhere = (src: Src) => {
     && /const requestId = requestIdFor\(ctx\.userId, req\.headers\.get\("x-request-id"\)\);/.test(http);
 };
 /**
+ * K27 (Stage 3 acceptance, items 3 and 5): the governed reference source is policy, read only through S1, and
+ * "clinically approved" comes from ONE rule -- 395's approval of the current content, with the outcome shown part of
+ * it. Every place that shows a reference (a new answer, a saved one in Learn, Saved learning) is labelled by that
+ * rule as the source is now, and the shared rendering shows approval only on `approved === true`. An AI flag is
+ * rendered by the one flag component, under its own heading, in Learn and in Saved learning.
+ */
+const KINDS = `${PAGES}/_components/learn-kinds.tsx`;
+const SAVED = `${PAGES}/saved/page.tsx`;
+const LEARN_CLIENT = `${PAGES}/_components/learn-client.tsx`;
+const referencesGoverned = (src: Src) => {
+  const learn = src.get(`${LIB}/learn.ts`) ?? "", cat = src.get(CAT) ?? "", act = src.get(`${API}/learn/act/route.ts`) ?? "";
+  const kinds = src.get(KINDS) ?? "", saved = src.get(SAVED) ?? "", client = src.get(LEARN_CLIENT) ?? "", cfg = src.get(`${LIB}/config.ts`) ?? "";
+  const status = learn.slice(learn.indexOf("export function referenceStatus"), learn.indexOf("export async function governedReferences"));
+  return /const all = await loadIndividualCatalogue\(admin, ids\);/.test(cat) && /\.filter\(c => meetsMinStatus\(c\.contentStatus, min\)\)/.test(cat)
+    && /if \(!policy\.scholarReferenceCollections\.length\) return \{ collections: false, catalogue: programme \};/.test(learn)
+    && /\?\? \[\] \};/.test(learn.slice(learn.indexOf("export async function referenceSource")))
+    && /if \(!c\) return \{ status: CONTENT_STATUS_LABEL\.unreviewed, approved: false \};/.test(status)
+    && /if \(outcome !== null && !c\.outcomes\.includes\(outcome\)\) return \{ status: REFERENCE_CHANGED_LABEL, approved: false \};/.test(status)
+    && /approved: c\.contentStatus === "approved" \}/.test(status) && (status.match(/approved: /g) ?? []).length === 4
+    && /\.filter\(l => !source\.collections \|\| known\.has\(l\.competencyId\)\)/.test(learn)
+    && (learn.match(/\.\.\.referenceStatus\(c, outcome\)/g) ?? []).length === 2
+    && /const refSource = await referenceSource\(ctx\.admin, policy, learner\.competencies\);/.test(act)
+    && /governedReferences\(ctx\.admin, ctx\.userId, passages\.map\(p => p\.chunkId\), refSource\)/.test(act)
+    && /references: relabelReferences\(a\.refs, refSource\)/.test(act) && !/references: a\.refs/.test(act)
+    && /<GovernedReferenceList refs=\{relabelReferences\(a\.refs, refSource\)\} \/>/.test(saved)
+    && /\{x\.approved === true\s*\?/.test(kinds) && !/approved/.test(kinds.replace(/x\.approved === true|CONTENT_STATUS_LABEL\.approved|approved\?: boolean/g, ""))
+    && /export const FLAG_HEADING = "Flagged by AI for you to check";/.test(cfg)
+    && [client, saved].every(s => /<AiFlagList flags=\{/.test(s) && /<GovernedReferenceList refs=\{/.test(s) && !/SOURCE_KIND_LABEL\.(flag|reference)/.test(s));
+};
+/**
+ * K28 (Stage 3 acceptance, item 4): an answer withheld as unsupported is said plainly, with next steps from the
+ * notes only -- the nearest sections, a rephrase where Ask is offered, "this isn't in your notes", and the background
+ * only where policy allows it and it passed its own checks. The withheld text itself is never sent.
+ */
+const withheldPlain = (src: Src) => {
+  const act = src.get(`${API}/learn/act/route.ts`) ?? "", view = src.get(`${LIB}/learn-view.ts`) ?? "";
+  const branch = act.slice(act.indexOf("if (!r.check.ok) {"), act.indexOf("const b = r.background;"));
+  const fn = view.slice(view.indexOf("export function withheldNext"), view.indexOf("export function offeredActions"));
+  return /const next = withheldNext\(\{ reason: r\.check\.reason, detail, sources, askOffered: policy\.scholarLearningActions\.includes\("ask"\), background: r\.background, backgroundAllowed: background \}\);/.test(branch)
+    && /withheld: true, reason: r\.check\.reason, message: next\.why, notInNotes: next\.notInNotes, next \}/.test(branch)
+    && !/answer:|r\.check\.text|split|r\.flags/.test(branch)
+    && /background: input\.backgroundAllowed && b\?\.ok \? \{ text: b\.text, label: SUPPLEMENTARY_LABEL \} : null,/.test(fn)
+    && /nearest: input\.sources\.slice\(0, WITHHELD_NEAREST_MAX\)\.map\(s => \(\{ tag: s\.tag, chunkId: s\.chunkId, materialId: s\.materialId, citation: s\.citation \}\)\)/.test(fn)
+    && /export const NOT_IN_NOTES_LABEL = "This isn't in your notes\.";/.test(src.get(`${LIB}/config.ts`) ?? "");
+};
+/**
  * K24 (COMPETEN-SCHOLAR-LEARN-01): Stage 3's boundaries hold in the code.
  *   - 414 has no column that could hold conversation: no answer, question, content, text or note column anywhere.
  *   - An event row is structure only: the store inserts session, step, action and verdict -- nothing the AI said.
@@ -732,6 +778,10 @@ function main() {
     artefactsBounded(REAL));
   ok("K26. AI-FAIR-USE-01 swap: every Scholar AI route runs through the metered runner with its activity code and returns a refusal first; generators make no direct generate() call; the runner sends no amount, policy or level",
     meteredEverywhere(REAL));
+  ok("K27. Stage 3 items 3 and 5: governed references come from policy through S1; 'clinically approved' only by the one rule (395, current content, outcome held), everywhere a reference is shown; AI flags rendered apart under their own heading",
+    referencesGoverned(REAL));
+  ok("K28. Stage 3 item 4: an unsupported answer is withheld with the plain reason and notes-only next steps; the withheld text is never sent; background only where policy allows and it passed its checks",
+    withheldPlain(REAL));
   ok("K24. LEARN-01: history holds no conversation, the act route keeps to policy, screens input, records only what was shown, stores no practice question, and the student's context is never grounding",
     learnBounded(REAL));
   ok("K23. upload limits: 413 raises the CHECK and the bucket to 25 MB, the live value stays 10 MB until HQ raises it, and the session is enforced on the server at both steps",
@@ -843,6 +893,14 @@ function main() {
   ok("P43. ⚠ K26 goes red when a route stops passing the runner, or a generator calls generate() directly",
     !meteredEverywhere(plant(`${API}/questions/route.ts`, ".scholarQuestionsPerRequest, ai.run)", ".scholarQuestionsPerRequest)"))
     && !meteredEverywhere(plant(GEN, "    const r = await run({\n      system: QUESTION_SYSTEM[kind],", "    const r = await generate({\n      system: QUESTION_SYSTEM[kind],")));
+  ok("P44. ⚠ K27 goes red when a draft counts as approved, a saved answer keeps its saved label, or the rendering trusts a status string",
+    !referencesGoverned(plant(`${LIB}/learn.ts`, 'approved: c.contentStatus === "approved" }', 'approved: c.contentStatus !== "unreviewed" }'))
+    && !referencesGoverned(plant(`${API}/learn/act/route.ts`, "references: relabelReferences(a.refs, refSource)", "references: a.refs"))
+    && !referencesGoverned(plant(KINDS, "{x.approved === true", "{x.status === CONTENT_STATUS_LABEL.approved"))
+    && !referencesGoverned(plant(`${LIB}/learn.ts`, ".filter(l => !source.collections || known.has(l.competencyId))", "")));
+  ok("P45. ⚠ K28 goes red when the withheld text is sent, or background is offered where policy does not allow it",
+    !withheldPlain(plant(`${API}/learn/act/route.ts`, "message: next.why, notInNotes: next.notInNotes, next }", "message: next.why, notInNotes: next.notInNotes, next, answer: r.check }"))
+    && !withheldPlain(plant(`${LIB}/learn-view.ts`, "background: input.backgroundAllowed && b?.ok ?", "background: b?.ok ?")));
   ok("P41. ⚠ K24 goes red when the policy gate goes, an event is recorded before it is shown, or the context becomes grounding",
     !learnBounded(plant(`${API}/learn/act/route.ts`, "if (isLearnAction(action) && !policy.scholarLearningActions.includes(action))", "if (false)"))
     && !learnBounded(plant(`${API}/learn/act/route.ts`, "if (recorded && sessionId && shown && policy.scholarLearningHistory === \"record\")", "if (recorded && sessionId)"))
