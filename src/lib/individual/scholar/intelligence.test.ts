@@ -178,7 +178,7 @@ describe("the live sources (COMPETEN-SCHOLAR-01 P0)", () => {
     expect(COMPETENCY_SOURCES.mappings).toBe(S2_MAPPINGS);
     expect(fromProgrammeCatalogue([])).toEqual({ ok: true, value: null });
     expect(fromProgrammeCatalogue([{ id: "c1", layer: "foundational", profession: "P", catalogue: "CF-FOUND", frameworkId: "f1", domain: "D", code: "F1",
-      title: "Hand hygiene", outcomes: [], expectedLevel: { score: 3, label: "Competent" }, practice: null, cpu: null }]))
+      title: "Hand hygiene", outcomes: [], expectedLevel: { score: 3, label: "Competent" }, practice: null, cpu: null, contentStatus: "unreviewed", statusNote: null }]))
       .toEqual({ ok: true, value: [{ id: "c1", code: "F1", name: "Hand hygiene", frameworkId: "f1", frameworkName: "CF-FOUND", expectedLevel: { score: 3, label: "Competent" } }] });
   });
 });

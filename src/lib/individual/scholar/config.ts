@@ -127,3 +127,15 @@ export const UPLOAD_ATTESTATION_REQUIRED = "Confirm the file contains no identif
 
 export const PII_WARNING =
   "Do not upload anything that identifies a patient: no names with clinical details, NHS or hospital numbers, dates of birth or addresses. Only upload material you have permission to use, such as your own notes, lecture slides and published guidance.";
+
+/**
+ * COMPETEN-SCHOLAR-01, owner ruling 2026-10-24: a competency's content status is LABELLED wherever it appears, never
+ * hidden silently. "Clinically approved" is said only where the catalogue entry says so (S1, migration 394).
+ */
+export const CONTENT_STATUS_LABEL: Record<"approved" | "draft" | "unreviewed", string> = {
+  approved: "Clinically approved",
+  draft: "Draft content",
+  unreviewed: "Not clinically reviewed",
+};
+/** Shown where the policy floor offers only approved content and the programme has none yet. */
+export const NO_APPROVED_COMPETENCIES = "No clinically approved competencies yet.";

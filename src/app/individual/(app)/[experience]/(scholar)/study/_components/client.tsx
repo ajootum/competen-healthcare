@@ -6,7 +6,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
-import { AI_LABEL, ALLOWED_MIME, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, MAX_UPLOAD_BYTES, PDF_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
+import { AI_LABEL, ALLOWED_MIME, CONTENT_STATUS_LABEL, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, MAX_UPLOAD_BYTES, PDF_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
 import type { ConsentStatus, LegalLink } from "@/lib/individual/scholar/consent-gate";
 
 // The interactive pieces of My Learning. Each one calls a gate-3 API route and shows what the route says,
@@ -31,6 +31,18 @@ async function post(url: string, body: unknown, method = "POST"): Promise<{ ok: 
 
 function ErrorLine({ text }: { text: string }) {
   return text ? <p role="alert" className="mt-3 text-[13.5px] font-medium text-red-700">{text}</p> : null;
+}
+
+/** COMPETEN-SCHOLAR-01 (owner ruling 2026-10-24): a competency's content status, beside it wherever it appears. */
+const STATUS_CLS: Record<string, string> = {
+  approved: "border-emerald-300 bg-emerald-50 text-emerald-900",
+  draft: "border-amber-300 bg-amber-50 text-amber-900",
+  unreviewed: "border-gray-300 bg-gray-50 text-gray-700",
+};
+export function ContentStatusTag({ status }: { status: string | null | undefined }) {
+  if (!status) return null;
+  const s = status === "approved" || status === "draft" ? status : "unreviewed";
+  return <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS_CLS[s]}`}>{CONTENT_STATUS_LABEL[s]}</span>;
 }
 
 /** The label every AI output carries, in the position the output is read. */
@@ -355,7 +367,7 @@ const SECTION_PROMPT: Record<Mode, { q: string; shown: string }> = {
   deeper: { q: "Explain this section in depth.", shown: "Go deeper into this section" },
 };
 
-export function ChunkActions({ chunkId, consent }: { chunkId: string; consent: boolean }) {
+export function ChunkActions({ chunkId, consent, linked = [] }: { chunkId: string; consent: boolean; linked?: { title: string; contentStatus: string | null }[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"" | "explain" | "mcq" | "case" | "steps">("");
   const [error, setError] = useState("");
@@ -402,7 +414,7 @@ export function ChunkActions({ chunkId, consent }: { chunkId: string; consent: b
       <ErrorLine text={error} />
       {note && <p aria-live="polite" className="mt-2 text-[13.5px] text-gray-700">{note}</p>}
       {explained && <div className="mt-3"><ExplanationView item={explained} /></div>}
-      {tutor && <TutorPanel chunkId={chunkId} />}
+      {tutor && <TutorPanel chunkId={chunkId} linked={linked} />}
     </div>
   );
 }
@@ -412,7 +424,7 @@ export function ChunkActions({ chunkId, consent }: { chunkId: string; consent: b
 
 type TutorTurn = { speaker: "tutor" | "student"; text: string; supplementary?: Supplementary };
 
-function TutorPanel({ chunkId }: { chunkId: string }) {
+function TutorPanel({ chunkId, linked }: { chunkId: string; linked: { title: string; contentStatus: string | null }[] }) {
   const [turns, setTurns] = useState<TutorTurn[]>([]);
   const [ids, setIds] = useState<string[]>([]);
   const [reply, setReply] = useState("");
@@ -435,6 +447,11 @@ function TutorPanel({ chunkId }: { chunkId: string }) {
   return (
     <section aria-label="Tutor" className="mt-3 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
       <div className="flex flex-wrap items-center gap-2"><AiBadge /><span className="text-[12.5px] text-gray-600">Taught from this section of your notes. Not saved.</span></div>
+      {linked.length > 0 && (
+        <ul aria-label="Competencies this section is linked to" className="mt-2 flex flex-wrap gap-2 text-[12.5px] text-gray-700">
+          {linked.map(l => <li key={l.title} className="flex flex-wrap items-center gap-1.5"><span>{l.title}</span><ContentStatusTag status={l.contentStatus} /></li>)}
+        </ul>
+      )}
       {turns.length === 0 && (
         <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={busy} onClick={() => send("Teach me this section step by step.", true)}>
           {busy ? "Reading your notes…" : "Start"}

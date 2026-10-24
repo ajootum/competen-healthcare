@@ -75,7 +75,7 @@ export default async function Apply({ params }: { params: Promise<{ experience: 
                   const l = steps[0].competencyId ? labels.get(steps[0].competencyId) : undefined;
                   return (
                     <CasePlayer key={steps[0].caseId} title={steps[0].caseTitle ?? "Practice case"}
-                      competency={l ? { title: `${l.code ? `${l.code} ` : ""}${l.title}`, layer: l.layer } : null}
+                      competency={l ? { title: `${l.code ? `${l.code} ` : ""}${l.title}`, layer: l.layer, contentStatus: l.contentStatus ?? null } : null}
                       steps={steps.map(q => ({ q: questionView(q), chunkId: q.chunkId, answered: q.latest !== null }))} />
                   );
                 })}

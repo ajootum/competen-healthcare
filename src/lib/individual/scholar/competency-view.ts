@@ -17,17 +17,20 @@ export type LearnerCatalogue = {
   provisioned: boolean;
   programme: ProgrammeConfig | null;
   competencies: CatalogueCompetency[] | null;
+  /** How many competencies the content-status floor holds back (said on the page, never silently missing). */
+  belowFloor: number;
+  minStatus: "unreviewed" | "draft" | "approved";
 };
 
 export async function loadLearnerCatalogue(admin: any, userId: string): Promise<LearnerCatalogue> {
   const p = await learnerProgramme(admin, userId);
-  if (!p.ok) return { provisioned: !p.notProvisioned, programme: null, competencies: p.notProvisioned ? [] : null };
-  if (!p.data) return { provisioned: true, programme: null, competencies: [] };
+  if (!p.ok) return { provisioned: !p.notProvisioned, programme: null, competencies: p.notProvisioned ? [] : null, belowFloor: 0, minStatus: "unreviewed" };
+  if (!p.data) return { provisioned: true, programme: null, competencies: [], belowFloor: 0, minStatus: "unreviewed" };
   const c = await scholarCatalogue(admin).forProgramme(p.data);
-  return { provisioned: true, programme: p.data, competencies: c.ok ? c.data : null };
+  return { provisioned: true, programme: p.data, competencies: c.ok ? c.data : null, belowFloor: c.ok ? c.belowFloor ?? 0 : 0, minStatus: c.ok ? c.minStatus ?? "unreviewed" : "unreviewed" };
 }
 
-export type CompetencyLabel = { title: string; code: string | null; layer: string; catalogue: string | null; structure?: string | null };
+export type CompetencyLabel = { title: string; code: string | null; layer: string; catalogue: string | null; structure?: string | null; contentStatus?: "approved" | "draft" | "unreviewed" | null };
 
 /**
  * Names for competency ids on the person's own rows. From the catalogue when it offers them, otherwise from
@@ -36,7 +39,7 @@ export type CompetencyLabel = { title: string; code: string | null; layer: strin
  */
 export async function competencyLabels(admin: any, catalogue: CatalogueCompetency[] | null, ids: string[], layers: Map<string, string>): Promise<Map<string, CompetencyLabel>> {
   const out = new Map<string, CompetencyLabel>();
-  for (const c of catalogue ?? []) out.set(c.id, { title: c.title, code: c.code, layer: c.layer, catalogue: c.catalogue, structure: structureLabel(c) });
+  for (const c of catalogue ?? []) out.set(c.id, { title: c.title, code: c.code, layer: c.layer, catalogue: c.catalogue, structure: structureLabel(c), contentStatus: c.contentStatus });
   const missing = [...new Set(ids)].filter(id => !out.has(id));
   if (missing.length) {
     const names = await referenceNames(admin, [], missing);

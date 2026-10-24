@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
+import { NO_APPROVED_COMPETENCIES } from "@/lib/individual/scholar/config";
 import { analysisStatus, countDue, getMaterial, listChunks, listMappings, listQuestions, readConsent } from "@/lib/individual/scholar/store";
 import { competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
 import { AnalysePanel, SectionTopics, type CompetencyOption, type MappingView } from "../_components/competency-client";
@@ -69,7 +70,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
       const l = labels.get(r.competencyId);
       const list = mappingsByChunk.get(r.chunkId) ?? [];
       list.push({
-        id: r.id, competencyId: r.competencyId, title: l?.title ?? "Competency", code: l?.code ?? null, layer: r.layer, catalogue: l?.catalogue ?? null, structure: l?.structure ?? null,
+        id: r.id, competencyId: r.competencyId, title: l?.title ?? "Competency", code: l?.code ?? null, layer: r.layer, catalogue: l?.catalogue ?? null, structure: l?.structure ?? null, contentStatus: l?.contentStatus ?? null,
         source: r.source, confidence: r.confidence, rationale: r.rationale, state: r.state, decidedBy: r.decidedBy, decisions: r.decisions,
       });
       mappingsByChunk.set(r.chunkId, list);
@@ -122,6 +123,12 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
         <AnalysePanel materialId={m.id} consent={consentOn} sections={analysis.data.sections} analysed={analysis.data.analysed}
           programmeLabel={learner.programme?.label ?? null} />
       )}
+      {/* Owner ruling 2026-10-24: content held back by the status floor is SAID, never silently missing. */}
+      {competenciesOn && learner.programme && learner.belowFloor > 0 && (
+        <p className="mb-6 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">
+          {learner.competencies?.length ? "" : `${NO_APPROVED_COMPETENCIES} `}{learner.belowFloor} competenc{learner.belowFloor === 1 ? "y" : "ies"} in your programme {learner.belowFloor === 1 ? "is" : "are"} not offered here because only {learner.minStatus === "approved" ? "clinically approved" : "reviewed"} content is used for suggestions.
+        </p>
+      )}
       {competenciesOn && learner.programme && learner.competencies === null && (
         <p className="mb-6 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">The competencies of your programme could not be read just now, so suggested links are shown without their full names. Try again shortly.</p>
       )}
@@ -157,7 +164,8 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
                     <SectionTopics chunkId={c.id} concepts={mapped.data.concepts.get(c.id) ?? []} mappings={mappingsByChunk.get(c.id) ?? []}
                       options={learner.programme ? options : []} />
                   )}
-                  <ChunkActions chunkId={c.id} consent={consentOn} />
+                  <ChunkActions chunkId={c.id} consent={consentOn}
+                    linked={(mappingsByChunk.get(c.id) ?? []).filter(x => x.state === "accepted").map(x => ({ title: x.title, contentStatus: x.contentStatus ?? null }))} />
                   {qs.length > 0 && (
                     <div className="mt-4 space-y-3">
                       <p className="text-[13px] font-bold text-gray-700">Practice questions from this section</p>

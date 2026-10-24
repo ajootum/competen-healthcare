@@ -28,6 +28,8 @@ export type CompetencyProgressRow = {
   id: string; layer: Layer; catalogue: string; domain: string; code: string | null; title: string;
   /** Where it sits in the clinical structure (practice, CPU), or null where the library has not placed it. */
   structure: string | null;
+  /** The content status (S1, migration 394), shown beside it: never hidden. */
+  contentStatus: "approved" | "draft" | "unreviewed";
   sectionsAccepted: number; sectionsProposed: number;
   questions: number; answered: number;
   latestCorrect: number | null;
@@ -82,7 +84,7 @@ export function buildCompetencyProgress(input: {
     const right = answered.filter(id => latest.get(id)!.correct).length;
     const status: CompetencyStatus = answered.length ? "practising" : acc.size + prop.length + ids.length ? "notes_linked" : "no_notes";
     return {
-      id: c.id, layer: c.layer, catalogue: c.catalogue, domain: c.domain, code: c.code, title: c.title, structure: structureLabel(c),
+      id: c.id, layer: c.layer, catalogue: c.catalogue, domain: c.domain, code: c.code, title: c.title, structure: structureLabel(c), contentStatus: c.contentStatus,
       sectionsAccepted: acc.size, sectionsProposed: prop.length, questions: ids.length, answered: answered.length,
       latestCorrect: answered.length ? right : null,
       latestAccuracy: answered.length ? Math.round((right / answered.length) * 100) : null,
