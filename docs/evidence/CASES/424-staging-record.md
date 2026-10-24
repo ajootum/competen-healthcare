@@ -44,3 +44,14 @@ Five planted violations each turned the suite red. Local rehearsal: PRE (equal t
 **Dependencies:** 423. **Application order:** 395, 422, 423, 424.
 
 **Production:** not applied, not authorised. It needs its own GO. The code is behind the `case_library` gate with the rest of the case library.
+
+## Staging acceptance run (25 October 2026, target ezhvpgtcqcdsgylrxgdb)
+
+`npx tsx scripts/privileged-harnesses.ts --staging --only case-intelligence-acceptance-harness`: **ALL GREEN, 23 passed, 0 failed** (commit 3374ba8c). This adds J7d to the 22 checks of the 423 run, on the real 424:
+- feedback on an answered decision and the debrief are recorded on the one session, and returned labelled "AI evaluation" with their model;
+- feedback naming no decision is refused, and so is a second debrief;
+- direct writes are refused: emptying the feedback, changing the finished play's answers, and an entry calling itself an approval.
+
+No model was called: the entries are synthetic and named `harness-no-call`, so J7c (no AI request) still holds.
+
+As in every run, one retired fixture case (`CASE-HARNESS-<stamp>`) stays as the record. The flag was restored, and every fixture person was removed.
