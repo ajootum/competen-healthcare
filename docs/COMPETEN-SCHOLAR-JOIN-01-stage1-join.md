@@ -1,6 +1,6 @@
 # COMPETEN-SCHOLAR-JOIN-01: Stage 1 Join, J1–J3 (build record)
 
-**Status:** development authorised; **production activation not authorised.**
+**Status:** development authorised; **production activation not authorised.** **Stage 1 closed for development, 2026-10-24 (§7).**
 
 - Every join surface sits behind `individual_self_registration` (no row is written by any migration, so it is OFF) *and* the Individual release gate `individual_app`.
 - **Owner ruling:** public self-registration stays disabled pending legal confirmation and separate production approval.
@@ -207,4 +207,83 @@ Owner acceptance, 2026-10-24: Stage 1 is accepted for development and staging. T
   - G2: a new active programme is offered at join;
   - G3: a link to a catalogue that is not shared and published is refused, and nothing changes;
   - G4: rename and drop the link, then retire it: the row is kept and is no longer offered.
-- **Not covered:** the HQ page was not rendered with a signed-in administrator on staging; `next build` compiles it.
+- **Not covered here:** the HQ page was not rendered with a signed-in administrator on staging; `next build` compiles it. **Closed by §7.1.**
+
+## 7. Stage 1 close-out (final development acceptance, 2026-10-24)
+
+**Stage 1 is closed for development.** Production activation is still not authorised. Everything below ran on staging (`ezhvpgtcqcdsgylrxgdb`), from `main` at 852b427, with a dev server pointed at staging.
+
+### 7.1 Authenticated HQ walkthrough
+
+This closes the gap §6 left open ("the HQ page was not rendered with a signed-in administrator on staging").
+
+**Fixtures.**
+- **Setup:** an uncommitted fixture script (sha256 `42120d0e…610b`), run by the owner because its appointment grant is an owner action.
+- **Holder:** a synthetic account (`harness-hqwalk-holder@competen.test`) with active `platform_membership`, appointed Individual Product Administrator on the HQ platform office. That position resolves to `hq.individual.config.manage`.
+- **Non-holder:** a synthetic account (`harness-hqwalk-nonholder@competen.test`) with membership and no appointment.
+- **Snapshot:** setup recorded the Individual policy partition and refused to run while any draft was pending.
+
+**Steps.** The screenshots are in `docs/evidence/COMPETEN-SCHOLAR-JOIN-01/`.
+
+| # | Step (as the holder, unless stated) | Result | Evidence |
+|---|---|---|---|
+| W1 | Sign in, then open `/super-admin/individual/programmes`. | The page renders. The rail names the person "Individual Product Administrator". | 01 |
+| W2 | Create `zz-walkthrough-nurs` (Nursing, UG) linked to Competen Foundational, layer foundational. | "Programme created." It is listed Active with its catalogue. | 02, 03 |
+| W3 | Edit it: rename it, add the qualification "diploma", and add Nursing: Respiratory Care at layer profession. | Persisted after a reload: the new name, "Diploma", and both catalogues by layer. | 04 |
+| W4 | On the Individual policy page, offer Nursing (Uganda) only (the zz programme unticked), give the zz programme the levels Year 1 to 3, and name one synthetic institution. Run the partition check, then **"Publish 3 changes"** (exactly the three). | Published 11:36:30 UTC. The policy page shows the levels Effective now, Source Published. The learner join options (`loadJoinOptions`, the join page's own reader) **leave out** the zz programme and **offer** the institution. | 05, 06, 07 |
+| W5 | Re-offer the zz programme. Run the partition check, then **"Publish 1 change"**. | Published 11:37:59 UTC. The join options now offer the zz programme **with Year 1, Year 2 and Year 3**. | — |
+| W6 | Retire it with **Deactivate**. The confirmation reads: "Deactivate ZZ Walkthrough Nursing (synthetic, edited)? Nobody new can choose it. Students who chose it keep its name." | Shown as Deactivated. The row is kept (`is_active` false). The join options **no longer offer it, although the offered policy still names it.** | 08 |
+| W7 | Sign in as the **non-holder**. | Both HQ pages are locked: "open to platform owners and to people holding an HQ position". Both writes return **403** "You do not hold a position that opens this part of Competen HQ": `POST /api/hq/individual/programmes` (a create) and `POST /api/hq/individual/config` (a publish). Nothing was created. | 09 |
+
+**Restore.** The teardown restored exactly the three paths the walkthrough wrote:
+- `scholar_onboarding_programmes`;
+- `scholar_programme_levels`;
+- `scholar_institutions`.
+
+Before the teardown wrote anything, it confirmed that every other path in the partition was unchanged since the snapshot. Every check printed true. It then removed the zz programme and both fixtures. The learner join options are back to the pre-walkthrough state: Nursing (Uganda) with no levels, and no institutions. IND-007's `professional_catalogues` (published 11:29:54 UTC, before setup) was in the snapshot and was not touched.
+
+**History retained by design.** The walkthrough leaves the following on staging:
+- two `workspace_config_versions` rows published by "Harness HQ walkthrough holder" (`0357b656…`, `e9602ae2…`);
+- six `workspace_config_audit` rows (four drafts, two publishes);
+- the programme's `audit_log` rows (created, changed, retired).
+
+The restore was a direct write of the three override rows, not a publish. The latest version snapshot (`e9602ae2…`) therefore records the walkthrough values, while the live published values are the restored defaults. The runtime reads the override rows, so behaviour follows the restored values.
+
+**Method notes.**
+- The Deactivate confirmation was answered by the automation in the page, and its text was captured.
+- After "Create programme", the list showed the new row only on reload. The editor calls `router.refresh()`, so this was dev-server compile latency, not a defect.
+
+### 7.2 A learner with no catalogue
+
+The question: can an entitled learner whose programme has **no catalogue** still upload and learn, with the mapping absent and labelled rather than blocking?
+
+**Learner with no programme: proved on staging.** A variant of `scholar-upload-harness` was run (uncommitted). The only change: the fixture learner chooses no programme, so there is no catalogue, and M1 is replaced by NC1. Result: **15/15 GREEN**:
+- W1, W2, U1 to U4, T1, P1 and P2: upload, refusals, plain text, sections and the original, all as normal.
+- **NC1:** topic finding completes every section with **0 proposals and 0 mapping rows**. The material page labels the mapping as absent: "Choose your programme in My Learning to also see which competencies your notes support."
+- **L1:** a cited explanation and practice questions from the notes.
+- I1, E1 and Z1: isolation, erasure and cleanup.
+
+**The control fails when it should.** In the same run with the catalogue-linked programme chosen, NC1 goes **RED**: 8 proposals, 8 mapping rows, no absent label.
+
+**Programme chosen, but zero catalogue links (or only links not on the Scholar allowlist): residual R1.** Staging has no such programme, so this was established by reading the code, not over HTTP. Nothing is blocked:
+- upload and learn do not read the programme;
+- analysis runs with an empty candidate list and finds concepts only.
+
+But the material page then says Scholar "suggests which competencies of {programme} it supports", and **no absent label** is shown. The mapping is absent and unlabelled.
+
+### 7.3 Residual issues
+
+| # | Issue | Disposition |
+|---|---|---|
+| **R1** | A programme with no usable catalogue claims competency suggestions on the material page and shows no absent label (§7.2). | Accepted by the owner as a genuine residual. To be fixed in **COMPETEN-SCHOLAR-UPLOAD-01 U3/U5** ("missing or uncertain competency mappings must not prevent learning"), pinned by an HTTP check against a catalogue-less `zz-` programme. |
+
+No other defect was found in the walkthrough.
+
+### 7.4 Retained
+
+- **Production dependencies:** all of §5 "Production activation dependencies" stands unchanged. Migrations 402 and 403 are not in production. `individual_self_registration` and `individual_app` stay OFF in production. Each needs a separate owner GO.
+- **The two email-verification PENDs stay open:**
+  - **V4:** a confirm-ON sign-up on a confirm-ON project. Staging auth auto-confirms.
+  - **V5:** delivery of the confirmation email to a real mailbox.
+
+  Both are production-readiness checks, not development work.
