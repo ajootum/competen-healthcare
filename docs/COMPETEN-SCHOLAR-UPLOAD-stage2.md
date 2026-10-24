@@ -80,13 +80,9 @@ These are enforced at **both** upload steps: the slot, and processing. A format 
 
 ## 4. Production activation dependencies (none authorised by this build)
 
-1. **Migrations on production, each with its own owner GO** (Supabase SQL editor; OPS-001 recovery reference, rollback, verification), in this order:
-   - 372 and 375 (already in production);
-   - S1 384 and 394;
-   - 387, 388, 389, 390;
-   - 391;
-   - Join 402 and 403;
-   - **405** (only if plain text is wanted).
+1. **Migrations on production, each with its own owner GO** (Supabase SQL editor; OPS-001 recovery reference, rollback, verification).
+   - **Already applied and verified in production (24 Oct 2026):** 372, 375, 384, 387, 388, 389, 390, 391, 393.
+   - **Remaining, in order:** **394** (S1 controlled catalogue entries), **402** and **403** (Join), **405** (plain text, only if plain text is wanted).
 2. **The Individual release gate `individual_app`** turned on in production (owner decision).
 3. **Legal:** the Holdings and Scholar Operator Privacy Notice and Terms of Use **published with production URLs and versions** (COMPETEN-LEGAL-001). Without them, AI help, and therefore topic finding and learning, stays unavailable by design.
 4. **The Scholar catalogue allowlist** (S1 seed catalogues published in production) and at least one **programme** row: HQ configuration.
