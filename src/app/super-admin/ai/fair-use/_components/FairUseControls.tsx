@@ -33,8 +33,14 @@ function Message({ msg }: { msg: { ok: boolean; text: string } | null }) {
   return <p role={msg.ok ? "status" : "alert"} className={`text-[12.5px] ${msg.ok ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-critical)]"}`}>{msg.text}</p>;
 }
 
+// The default source of the reference rate (owner D4): the Bank of Uganda's official rates page. The figure and its
+// publication date are always entered by the admin from that page -- it is published as an embedded report, so it is
+// never read or guessed by the server. The admin can name another official source.
+const BOU_RATES = "https://www.bou.or.ug/interest_rates_exchange_rates";
+
 export function RateForm({ kind }: { kind: "price" | "fx" | "basis" | "eligibility" }) {
-  const [f, setF] = useState<Record<string, string>>({ provider: "anthropic", sourceKind: "list", product: "scholar", eligible: "false", currency: "UGX" });
+  const [f, setF] = useState<Record<string, string>>({ provider: "anthropic", sourceKind: "list", product: "scholar", eligible: "false", currency: "UGX",
+    ...(kind === "fx" ? { sourceRef: BOU_RATES, updateKind: "monthly" } : {}) });
   const { busy, msg, send } = useSend();
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(s => ({ ...s, [k]: e.target.value }));
   const provider = <label className="text-[12.5px] text-gray-700">Provider<select value={f.provider} onChange={set("provider")} className={`${input} ml-1`}><option>anthropic</option><option>openai</option><option>gemini</option></select></label>;

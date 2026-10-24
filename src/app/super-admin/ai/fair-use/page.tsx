@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
-import { loadPolicies, loadRates } from "@/lib/ai/fair-use-admin";
+import { loadEvaluations, loadPolicies, loadRates } from "@/lib/ai/fair-use-admin";
 import { aiFairUseEnabled } from "@/lib/ai/allowance";
 import { RISK_TIER_LABEL, type RiskTier } from "@/lib/ai/clinical-risk";
 import { PolicyEditor, PublishPolicies, RateForm } from "./_components/FairUseControls";
@@ -23,7 +23,7 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB",
 
 export default async function FairUsePage() {
   const ctx = await requireHqCapability("hq.platform.ai.manage");
-  const [rates, policies, on] = await Promise.all([loadRates(ctx.admin), loadPolicies(ctx.admin), aiFairUseEnabled(ctx.admin)]);
+  const [rates, policies, on, evaluations] = await Promise.all([loadRates(ctx.admin), loadPolicies(ctx.admin), aiFairUseEnabled(ctx.admin), loadEvaluations(ctx.admin)]);
   const pending = (policies ?? []).filter(p => p.pending).length;
 
   return (
@@ -79,6 +79,54 @@ export default async function FairUsePage() {
               {rates.fx.length === 0 && <li className="text-amber-900">No reference rate is set: nothing can be reserved while metering is on.</li>}
             </ul>
             <div className="mt-3 space-y-2"><RateForm kind="basis" /><RateForm kind="fx" /></div>
+          </section>
+
+          <section aria-labelledby="ev-h" className="rounded-xl border border-gray-200 bg-white p-5">
+            <h2 id="ev-h" className="text-[16px] font-bold text-gray-900">Model evaluations</h2>
+            <p className="text-[13px] text-gray-600">
+              Evidence for the reviewer: each candidate model answered a focused clinical and educational set with the production prompt. A score
+              screens the answers, it does not judge them, and a proposal is not a decision. Read the answers, then record your decision under Clinical
+              model eligibility, citing the run as its evidence.
+            </p>
+            {evaluations === null ? (
+              <p className="mt-2 text-[13px] text-amber-900">Evaluations could not be read just now (or migration 419 is not applied on this environment).</p>
+            ) : evaluations.length === 0 ? (
+              <p className="mt-2 text-[13px] text-gray-700">No evaluation has been recorded.</p>
+            ) : evaluations.map(run => (
+              <div key={run.id} className="mt-3 rounded-lg border border-gray-100 p-3">
+                <p className="text-[13px] font-semibold text-gray-900">{run.label ?? "Evaluation"} · set {run.version} · {fmt(run.createdAt)}</p>
+                <p className="text-[12.5px] text-gray-600">Cite as evidence: <span className="font-mono">eval-run:{run.id}</span>{run.note ? ` · ${run.note}` : ""}</p>
+                <div className="overflow-x-auto">
+                  <table className="mt-2 w-full min-w-[640px] text-left text-[13px]">
+                    <thead><tr className="border-b border-gray-200 text-[11.5px] uppercase tracking-[0.08em] text-gray-500"><th scope="col" className="py-1.5">Model (version returned)</th><th scope="col">Items passed</th><th scope="col">Cost (USD)</th><th scope="col">Proposed, not decided</th></tr></thead>
+                    <tbody>{run.models.map(m => (
+                      <tr key={m.model} className="border-b border-gray-100 align-top">
+                        <th scope="row" className="py-1.5 font-normal">{m.provider} · {m.model}{m.returned.length ? <span className="block text-[12px] text-gray-500">{m.returned.join(", ")}</span> : null}</th>
+                        <td>{m.passed} of {m.of}</td><td>{m.costUsd.toFixed(4)}</td>
+                        <td>{m.proposed ? `Up to ${RISK_TIER_LABEL[m.proposed as RiskTier]?.toLowerCase()}` : <span className="text-amber-900">No clinical tier</span>}{m.rationale ? <span className="block text-[12px] text-gray-600">{m.rationale}</span> : null}</td>
+                      </tr>))}</tbody>
+                  </table>
+                </div>
+                {run.models.map(m => (
+                  <details key={m.model} className="mt-2 text-[13px]">
+                    <summary className="cursor-pointer font-semibold text-gray-800">Read {m.model}&apos;s answers</summary>
+                    <ul className="mt-1 space-y-2">
+                      {m.items.map(it => (
+                        <li key={it.code} className="rounded-lg border border-gray-100 p-2">
+                          <p className="font-mono text-[12px] text-gray-600">{it.code} · {RISK_TIER_LABEL[it.tier as RiskTier] ?? it.tier} · {it.status} · {it.passed ? "rubric passed" : "rubric not passed"}{it.score === null ? "" : ` (${Math.round(it.score * 100)}%)`}</p>
+                          {Array.isArray(it.rubric?.required) && (
+                            <p className="text-[12px] text-gray-600">
+                              {it.rubric.required.filter((r: any) => !r.met).map((r: any) => `missing: ${r.label}`).concat((it.rubric.forbidden ?? []).filter((f: any) => f.found).map((f: any) => `flagged: ${f.label}`)).join(" · ") || "every rubric element present"}
+                            </p>
+                          )}
+                          <p className="mt-1 whitespace-pre-wrap text-[12.5px] text-gray-900">{it.output ?? "No answer was returned."}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ))}
+              </div>
+            ))}
           </section>
 
           <section aria-labelledby="el-h" className="rounded-xl border border-gray-200 bg-white p-5">

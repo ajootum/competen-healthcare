@@ -72,7 +72,7 @@ const account = async (id: string) => (await admin.from("ai_allowance_account").
 const toBal = (a: any): Balance => ({ includedCau: +a.included_cau, reserveCau: +a.reserve_cau, usedCau: +a.used_cau, reservedCau: +a.reserved_cau, reserveUsedCau: +a.reserve_used_cau, reserveReservedCau: +a.reserve_reserved_cau });
 
 async function main() {
-  console.log(`AI FAIR USE ACCEPTANCE (410, 411) -- target ${ref}\n`);
+  console.log(`AI FAIR USE ACCEPTANCE (410, 411, 412) -- target ${ref}\n`);
   const probe = await admin.from("ai_usage_ledger").select("risk_tier").limit(0);
   if (probe.error) { pend("S-G", `migration 412 is not applied here (${probe.error.message}). Nothing created.`); return; }
   const price = (await admin.rpc("ai_price_at", { p_provider: "anthropic", p_model: MODEL, p_at: new Date().toISOString() })).data;

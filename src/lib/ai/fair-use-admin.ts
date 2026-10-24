@@ -105,6 +105,40 @@ export async function changeRate(admin: any, kind: RateKind, b: any, actorId: st
   return error ? { ok: false, error: "The new rate could not be saved. The previous one has been ended: add the rate again." } : { ok: true, id: data.id };
 }
 
+// ── Model evaluations (owner D5, migration 419): evidence for the reviewer, never a decision ─────────────────
+export type EvalModelView = {
+  provider: string; model: string; returned: string[]; passed: number; of: number; costUsd: number;
+  proposed: string | null; rationale: string | null;
+  items: { code: string; task: string; tier: string; status: string; score: number | null; passed: boolean; output: string | null; rubric: any }[];
+};
+export type EvalRunView = { id: string; label: string | null; version: string; createdAt: string; note: string | null; models: EvalModelView[] };
+
+/** The latest evaluation runs with their results and proposals. Null: unreadable (or 419 not applied here). */
+export async function loadEvaluations(admin: any, limit = 3): Promise<EvalRunView[] | null> {
+  const runs = await rows(admin.from("ai_model_evaluation_run").select("id, label, eval_set_version, created_at, note").order("created_at", { ascending: false }).limit(limit));
+  if (runs === null) return null;
+  if (!runs.length) return [];
+  const ids = runs.map((r: any) => r.id);
+  const [results, proposals] = await Promise.all([
+    rows(admin.from("ai_model_evaluation_result").select("run_id, item_code, task, risk_tier, provider, model_requested, model_returned, cost_usd, status, output, rubric, score, passed").in("run_id", ids).order("item_code")),
+    rows(admin.from("ai_model_evaluation_proposal").select("run_id, provider, model_prefix, proposed_max_risk_tier, rationale").in("run_id", ids)),
+  ]);
+  if (results === null || proposals === null) return null;
+  return runs.map((run: any) => {
+    const rs = results.filter((r: any) => r.run_id === run.id);
+    const models = [...new Set(rs.map((r: any) => `${r.provider}|${r.model_requested}`))] as string[];
+    return { id: run.id, label: run.label, version: run.eval_set_version, createdAt: run.created_at, note: run.note, models: models.map(k => {
+      const [provider, model] = k.split("|");
+      const mine = rs.filter((r: any) => r.provider === provider && r.model_requested === model);
+      const p = proposals.find((x: any) => x.run_id === run.id && x.provider === provider && x.model_prefix === model);
+      return { provider, model, returned: [...new Set(mine.map((r: any) => r.model_returned).filter(Boolean))] as string[],
+        passed: mine.filter((r: any) => r.passed).length, of: mine.length, costUsd: +mine.reduce((s: number, r: any) => s + Number(r.cost_usd ?? 0), 0).toFixed(6),
+        proposed: p?.proposed_max_risk_tier ?? null, rationale: p?.rationale ?? null,
+        items: mine.map((r: any) => ({ code: r.item_code, task: r.task, tier: r.risk_tier, status: r.status, score: r.score === null ? null : Number(r.score), passed: r.passed, output: r.output, rubric: r.rubric })) };
+    }) };
+  });
+}
+
 export type PolicyRow = { product: AiProduct; draft: ProductAiPolicy | null; published: ProductAiPolicy; publishedAt: string | null; pending: boolean };
 
 /** Every product's published policy (what runs) and its draft, if one is saved. */

@@ -213,6 +213,14 @@ async function main() {
         functions: fn.map((f: any) => `${f.proname}/${f.pronargs}`),
         fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, rls, trg, fn })).digest("hex") };
     }
+    if (process.argv.includes("--ai420")) {
+      // Migration 420: the scale of every AI amount column. The other AI readings take data_type only ("numeric"),
+      // which cannot see a precision or scale change -- this one does.
+      const cols = await q(`select table_name, column_name, numeric_precision, numeric_scale from information_schema.columns
+        where table_schema = 'public' and table_name like 'ai\\_%' and data_type = 'numeric' order by 1, 2`);
+      out.ai420 = { account: cols.filter((c: any) => c.table_name === "ai_allowance_account").map((c: any) => `${c.column_name}:${c.numeric_precision},${c.numeric_scale}`),
+        fingerprint: createHash("sha256").update(JSON.stringify(cols)).digest("hex") };
+    }
     if (process.argv.includes("--ai419")) {
       // IND-007 D5, migration 419: the model-evaluation evidence tables, their guards and functions.
       const T = ["ai_model_evaluation_run", "ai_model_evaluation_result", "ai_model_evaluation_proposal"];
