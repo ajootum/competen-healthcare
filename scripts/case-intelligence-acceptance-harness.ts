@@ -20,6 +20,8 @@
  *   J5  an author or material editor cannot approve, even holding an in-scope reviewer appointment
  *   J6  nothing publishes before approval, an independent scoped reviewer approves, a publisher publishes
  *   J7  another student finds it, works through it deterministically, finishes, and no AI is used
+ *   J7d AI reasoning feedback and the debrief live on the same session (424): appended as AI evaluations naming their
+ *       model, only on an answered decision, the debrief once at the end, and the finished play stays fixed
  *   J8  revoking the permission withdraws what was not promoted and keeps the promoted case
  *   J9  case intelligence counts the journey from stored records, and spend reads "not measured" with metering off
  *   Z   fixtures removed: the people (their permission, offers and sessions go with them), their appointments
@@ -40,7 +42,7 @@ import { grantCaseCandidacy, offerPrivateCase, revokeCaseCandidacy, withdrawCase
 import { CASE_LIBRARY_FLAG, CASE_LIBRARY_OFF, loadCasePolicy } from "../src/lib/cases/policy";
 import { candidateQueue, promoteCandidate, publishCase, retireCase, saveDraft, submitCase, takeCandidate } from "../src/lib/cases/studio";
 import { decideReview } from "../src/lib/competency/clinical-review";
-import { answerInSession, findLibraryCases, loadLibraryCase, startCaseSession } from "../src/lib/cases/library";
+import { answerInSession, findLibraryCases, loadLibraryCase, recordSessionDebrief, recordSessionFeedback, startCaseSession } from "../src/lib/cases/library";
 import { caseIntelligence } from "../src/lib/cases/analytics";
 import type { Blueprint } from "../src/lib/cases/blueprint";
 import { CASE_SCREEN_CORPUS, screenText, structuredKinds } from "../src/lib/cases/screen";
@@ -233,6 +235,23 @@ async function main() {
       done = "session" in a2 && a2.session.status === "completed" && "answered" in a1 && a1.answered?.options[0].correct === true;
     }
     ok("J7b. the case runs deterministically to the end, by its own key and progression", done);
+    if (view && "sessionId" in start) {
+      const ai = (n: number) => ({ provider: "anthropic", model: "harness-no-call", requestId: `harness.case.fb:${stamp}:${n}`, text: `Harness AI evaluation ${n} (no model was called).` });
+      const d1 = view.stages[0].decisionPoints[0].token;
+      const fb = await recordSessionFeedback(admin, s2, start.sessionId, d1, ai(1));
+      const bogus = await recordSessionFeedback(admin, s2, start.sessionId, "not-a-decision", ai(2));
+      const deb = await recordSessionDebrief(admin, s2, start.sessionId, ai(3));
+      const deb2 = await recordSessionDebrief(admin, s2, start.sessionId, ai(4));
+      const row = (await admin.from("case_library_session").select("feedback, debrief, answers").eq("id", start.sessionId).single()).data;
+      const rewrite = await admin.from("case_library_session").update({ feedback: [] }).eq("id", start.sessionId).select("id");
+      const replay = await admin.from("case_library_session").update({ answers: [] }).eq("id", start.sessionId).select("id");
+      const approval = await admin.from("case_library_session").update({ feedback: [...(row?.feedback ?? []), { ...ai(5), kind: "approval", decisionPointId: row?.feedback?.[0]?.decisionPointId, at: new Date().toISOString() }] }).eq("id", start.sessionId).select("id");
+      ok("J7d. AI feedback and the debrief sit on the one session, as labelled AI evaluations, append-only, and the finished play stays fixed",
+        "sessionId" in fb && fb.feedback.length === 1 && fb.feedback[0].label === "AI evaluation" && fb.feedback[0].model === "harness-no-call" && "error" in bogus
+        && "sessionId" in deb && deb.debrief?.label === "AI evaluation" && "error" in deb2 && row?.feedback?.[0]?.kind === "ai_evaluation"
+        && !!rewrite.error && !!replay.error && !!approval.error && (row?.answers ?? []).length === 2,
+        JSON.stringify({ fb: "error" in fb ? fb : fb.feedback, bogus, deb: "error" in deb ? deb : deb.debrief, deb2, rewrite: rewrite.error?.message, replay: replay.error?.message, approval: approval.error?.message }));
+    } else ok("J7d. AI feedback and the debrief on the one session", false, "no session");
     ok("J7c. delivering and working through a stored case made no AI request", ai0 !== null && (await aiRows(people)) === ai0);
 
     // ── J8 ──

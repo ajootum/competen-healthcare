@@ -20,6 +20,8 @@
  *       no AI for a stored replay), and no workflow exists for offering a case
  *  K10  the gate (CLAUDE.md lifecycle state 3): everything that STARTS case work checks the case_library flag, which
  *       is off unless written, and nothing that is a student's privacy right (revoke, withdraw, see own offers) does
+ *  K11  one session record for a library play (424): nothing outside src/lib/cases writes case_library_session, so
+ *       Scholar's AI feedback and debrief reach it only through recordSessionFeedback and recordSessionDebrief
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -115,6 +117,10 @@ function k10(cand: string, lib: string, route: string, pages: Src): string[] {
   for (const n of ["revokeCaseCandidacy", "withdrawCaseCandidate", "myCaseOffers"]) if (/caseLibraryEnabled/.test(body(cand, n))) bad.push(`${n} waits for the gate, but a privacy right never does`);
   return bad;
 }
+// K11: who writes a library session.
+function k11(files: Src): string[] {
+  return Object.entries(files).filter(([f, t]) => !f.startsWith("src/lib/cases/") && /\.from\("case_library_session"\)[\s\S]{0,200}?\.(insert|update|upsert|delete)\(/.test(t)).map(([f]) => `${f} writes case_library_session`);
+}
 const hq = load(HQ_FILES);
 const sql = read("supabase/migrations/423-case-candidates-and-delivery.sql");
 const c1c4 = load(["src/lib/cases/candidates.ts", "src/lib/cases/library.ts", "src/lib/cases/screen.ts", "src/lib/cases/policy.ts", "src/lib/cases/blueprint.ts"]);
@@ -134,6 +140,7 @@ run("K8. the database backstop refuses identifiable content and offers without p
 run("K9. the workflows are attributed as the owner GO says, and offering is not an AI workflow", k9(cons));
 const pages = load(["src/app/super-admin/cases/page.tsx", "src/app/super-admin/cases/[caseId]/page.tsx", "src/app/super-admin/cases/publication/page.tsx"]);
 run("K10. everything that starts case work is behind the case_library flag, and no privacy right is", k10(cand, lib, route, pages));
+run("K11. only the case library writes a library session (one record per play)", k11(everyFile));
 
 // ── Plants: each check must go red on its violation ──
 const red = (n: string, problems: string[]) => ok(`P. ${n} goes RED`, problems.length > 0);
@@ -154,6 +161,7 @@ red("K9 on educator work charged to the student", k9(cons.replace(`"case.educato
 red("K10 on an ungated offer", k10(cand.replace(/  if \(!\(await caseLibraryEnabled\(admin\)\)\) return \{ ok: false, error: CASE_LIBRARY_OFF \};\n  const status/, "  const status"), lib, route, pages));
 red("K10 on an ungated studio route", k10(cand, lib, route.replace("if (!(await caseLibraryEnabled(ctx.admin))) return refuse(409", "if (false) return refuse(409"), pages));
 red("K10 on a gated withdrawal", k10(cand.replace("if (!UUID.test(args.userId) || !SOURCE_KEY.test(args.sourceKey ?? \"\")) return { ok: false, error: \"Nothing to withdraw.\" };", "if (!(await caseLibraryEnabled(admin))) return { ok: false, error: CASE_LIBRARY_OFF };"), lib, route, pages));
+red("K11 on Scholar keeping its own feedback on a library session", k11({ ...everyFile, "src/lib/individual/scholar/case-feedback.ts": `await admin.from("case_library_session").update({ feedback: [] }).eq("id", id);\n` }));
 red("K9 on an offering workflow", k9(cons.replace(`"case.dedupe": "platform",`, `"case.dedupe": "platform",\n  "case.offer": "individual",`)));
 
 console.log(fails.length ? `RED -- ${pass} passed, ${fails.length} failed: ${fails.join(", ")}` : `ALL GREEN -- ${pass} passed, 0 failed`);

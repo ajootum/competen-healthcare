@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
-import { applyAnswer, applyVariation, caseMatches, pickVariation } from "./library";
+import { aiEntry, applyAnswer, applyVariation, caseMatches, pickVariation } from "./library";
 import { judgeOffer } from "./candidates";
 import { resolveCasePolicy, DEFAULT_CASE_POLICY } from "./policy";
 import type { Blueprint } from "./blueprint";
@@ -74,6 +74,16 @@ describe("case delivery (C4)", () => {
     expect(caseMatches(v, { topic: "sepsis recognition" })).toBe(true);
     expect(caseMatches(v, { topic: "fracture" })).toBe(false);
     expect(caseMatches(v, { level: "advanced" })).toBe(false);
+  });
+});
+
+describe("AI feedback on a library session (424)", () => {
+  it("is always an AI evaluation naming its provider, model and request, or nothing", () => {
+    const e = aiEntry({ provider: "anthropic", model: "claude-sonnet-4-6", requestId: "case.fb:00000001", text: " Good escalation. " }, "2026-10-25T10:00:00Z");
+    expect(e).toEqual({ kind: "ai_evaluation", provider: "anthropic", model: "claude-sonnet-4-6", modelVersion: null, policyVersion: null, requestId: "case.fb:00000001", text: "Good escalation.", at: "2026-10-25T10:00:00Z" });
+    expect(aiEntry({ provider: "anthropic", model: "", requestId: "case.fb:00000001", text: "x" }, "t")).toBeNull();
+    expect(aiEntry({ provider: "anthropic", model: "m", requestId: "short", text: "x" }, "t")).toBeNull();
+    expect(aiEntry({ provider: "anthropic", model: "m", requestId: "case.fb:00000001", text: "  " }, "t")).toBeNull();
   });
 });
 
