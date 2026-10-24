@@ -140,8 +140,9 @@ function main() {
   //
   // The grounding check is the product's safety control, and it must not vary with the vendor.
   const phrasing = strip(read("src/lib/practice/document-phrasing.ts"));
+  // The verifier itself now lives in Holdings (src/lib/ai/grounding.ts); the phrasing module re-exports it.
   ok("5a. the grounding verifier names no provider",
-    !/anthropic|openai|gemini/i.test(phrasing));
+    !/anthropic|openai|gemini/i.test(phrasing) && !/anthropic|openai|gemini/i.test(strip(read("src/lib/ai/grounding.ts"))));
   ok("5b. and it still runs on whatever the model returned, after generation",
     /verifyGrounded\(result\.text/.test(phrasing));
 

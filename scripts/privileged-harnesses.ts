@@ -287,6 +287,17 @@ const STAGING: Listed[] = [
       + "VERIFY_BASE_URL names a running server). Creates and deletes its own harness-ind004p-* identities, turns "
       + "individual_app ON and restores the prior row. PEND (exit 0, nothing created) until 375 is applied. 32/32 on staging.",
   },
+  {
+    file: "scholar-competency-acceptance-harness.ts",
+    note: "COMPETEN-SCHOLAR-01 S2-S4 against migrations 384/387/388/389 and the S1 seed: nothing offered with an empty "
+      + "Scholar allowlist, programmes as configuration (a second profession and a non-allowlisted catalogue), real PDF "
+      + "upload, AI concepts and PROPOSED mappings only to offered competencies (foundational and nursing), append-only "
+      + "accept/reject/own links with the trigger refusing UPDATE and DELETE, isolation (store, RLS, composite keys), "
+      + "explain modes, competency-tagged questions, a multi-step case, progress by competency, erasure cascading through "
+      + "the trail. Needs an AI provider. Never changes a Scholar allowlist that is set (shared viewing config); adds one only where none exists and removes it only while unchanged; creates and "
+      + "deletes its own harness-s2-* identities and programmes; never touches individual_app. PEND (exit 0, nothing "
+      + "created) until 388 is applied and the seed is published.",
+  },
   { file: "mos-phase1-harness.ts", note: "CPR-CORE-MOS-001 phase 1. 20/20." },
   { file: "mos-phase2-harness.ts", note: "MOS phase 2. 25/25." },
   { file: "mos-phase3-harness.ts", note: "MOS phase 3. 73/73." },
