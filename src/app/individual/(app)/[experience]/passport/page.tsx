@@ -119,6 +119,7 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
                     <div className="min-w-0">
                       <p className="text-[14.5px] font-semibold text-gray-900">{o.title}</p>
                       <p className="text-[12.5px] text-gray-500">{[OWN_KIND_LABEL[o.kind], o.detail, o.date ? fmt(o.date) : null].filter(Boolean).join(" · ")}</p>
+                      {o.competencies.length > 0 && <p className="text-[12.5px] text-gray-600">Linked by you to: {o.competencies.join(", ")}</p>}
                     </div>
                     <p className="text-[12.5px] font-semibold text-amber-800">
                       {EVIDENCE_LABEL[o.evidence]}{o.expires ? ` · ${o.expires < new Date().toISOString().slice(0, 10) ? "expired" : "expires"} ${fmt(o.expires)}` : ""}
