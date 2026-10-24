@@ -65,3 +65,31 @@ Its run is recorded below the dependencies.
 - searching, loading and starting a library case.
 
 It is unwritten in production. A student's revocation, withdrawal and view of their own offers are never gated. The code also fails closed if 423 is absent. The static harness K10 checks the gate, with plants. The staging journey switches the flag on for its own run and restores it (Z0).
+
+## Staging acceptance run (24 October 2026, target ezhvpgtcqcdsgylrxgdb)
+
+`npx tsx scripts/privileged-harnesses.ts --staging --only case-intelligence-acceptance-harness`: **ALL GREEN, 22 passed, 0 failed** (commit b194515e).
+
+- **G0:** with the flag off, granting is refused and a search offers nothing, while a withdrawal still works.
+- **P0:** staging's `case_identifier_kinds()` and the application screen agree on all 15 corpus texts, and the application is at least as strict.
+- **D1:** the real trigger refuses an offer without the permission, even written directly.
+- **D2:** the real backstop refuses an eligible offer carrying an NHS number written directly past the screen. The offer carried "AI screen says de-identified" in its provenance.
+- **D4:** the anon key cannot read the queue view, and reads nothing from the candidate table.
+- **D5:** the real trigger refuses a session on a submitted, unapproved version.
+- **J1 to J9:** the journey.
+  - Candidacy is granted only on the current text.
+  - Offers are eligible or ineligible correctly, and an ineligible one keeps no content.
+  - The 24-hour queue lists only eligible offers, names no student, and spends no AI.
+  - Take, promote, edit and submit work, through 395.
+  - The editor cannot approve their own case.
+  - Nothing publishes before an independent scoped reviewer approves.
+  - A second student finds the case and works through it deterministically, with no AI.
+  - Revocation keeps only the promoted case.
+  - Intelligence counts the journey.
+- **Z0, Z1:** the flag is back exactly as found (unwritten), and the five synthetic people, their appointments, scopes, permission, offers and sessions are removed.
+
+**Read-only after the run:**
+- The one retired fixture case `CASE-HARNESS-202610242133` remains, by design.
+- `case_library` is unwritten.
+- There are 0 candidacy rows, 0 sessions and 0 reviewer appointments.
+- The eight CF-FOUND versions still have 0 decisions.
