@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { COMPETENCY_LAYERS, type CompetencyLayer } from "@/lib/competency/foundation";
 import { loadCatalogueFor } from "../catalogue";
+import { loadIndividualPolicy, meetsMinStatus, type ContentStatusLevel } from "../policy";
 
 // ── THE COMPETENCY CATALOGUE SCHOLAR LEARNS AGAINST ── COMPETEN-SCHOLAR-01 S2, over S1 (migrations 384, 387) ──
 //
@@ -55,6 +56,10 @@ export type CatalogueCompetency = {
   // competencies today -- and shown as such, never guessed.
   practice: { code: string | null; name: string } | null;
   cpu: { code: string | null; name: string } | null;
+  // CONTENT STATUS (S1, migration 394; owner ruling 2026-10-24: LABEL, never hide silently). Whether the
+  // competency's content is clinically approved, a draft, or unreviewed -- shown beside it wherever it appears.
+  contentStatus: ContentStatusLevel;
+  statusNote: string | null;
 };
 
 /** A programme as configuration: which catalogues, in which layer. Read by the store from 387. */
@@ -67,7 +72,12 @@ export type ProgrammeConfig = {
   frameworks: { frameworkId: string; layer: Layer; sortOrder: number }[];
 };
 
-export type CatalogueRead = { ok: true; data: CatalogueCompetency[] } | { ok: false };
+/**
+ * `belowFloor`: competencies the programme's catalogues hold that the content-status floor
+ * (Individual policy scholar_catalogue_min_status) does not offer. Counted, so a page can SAY so -- never silently
+ * missing. `minStatus`: the floor applied.
+ */
+export type CatalogueRead = { ok: true; data: CatalogueCompetency[]; belowFloor?: number; minStatus?: ContentStatusLevel } | { ok: false };
 
 export interface CompetencyCatalogue {
   /** Every competency a programme learns against, in layer order. Unreadable is { ok: false }, never []. */
@@ -80,9 +90,14 @@ export type S1Competency = {
   profession: { label: string } | null; catalogue: { id: string; name: string }; domain: { name: string }; outcomes: string[];
   expectedLevel?: { score: number; label: string } | null;
   cpu?: { code: string | null; name: string } | null;
-  /** Not yet in S1's read API; carried through when it is (IND-007). */
+  /** The CKCM practice (S1, #49): the competency's own, or its CPU's. */
   practice?: { code: string | null; name: string } | null;
+  contentStatus?: string;
+  statusNote?: string | null;
 };
+
+/** Pure. An unknown or missing status is unreviewed -- never approved by default (S1's own rule). */
+export const normaliseStatus = (s: string | undefined): ContentStatusLevel => (s === "approved" || s === "draft" ? s : "unreviewed");
 
 /** Pure. The clinical-structure line for a competency, e.g. "Oxygen Therapy > CPU-OXYSAFE-001 Safe Oxygen Administration", or null. */
 export function structureLabel(c: Pick<CatalogueCompetency, "practice" | "cpu">): string | null {
@@ -106,11 +121,18 @@ export function projectForProgramme(all: S1Competency[], programme: ProgrammeCon
           expectedLevel: c.expectedLevel ? { score: c.expectedLevel.score, label: c.expectedLevel.label } : null,
           practice: c.practice ? { code: c.practice.code, name: c.practice.name } : null,
           cpu: c.cpu ? { code: c.cpu.code, name: c.cpu.name } : null,
+          contentStatus: normaliseStatus(c.contentStatus), statusNote: c.statusNote ?? null,
         },
       };
     })
     .sort((a, b) => a.sort[0] - b.sort[0] || a.sort[1] - b.sort[1] || a.sort[2] - b.sort[2])
     .map(x => x.c);
+}
+
+/** Pure. The content-status floor: what is offered, and how many the floor holds back (said, never hidden). */
+export function applyContentFloor(rows: CatalogueCompetency[], min: ContentStatusLevel): { kept: CatalogueCompetency[]; belowFloor: number } {
+  const kept = rows.filter(c => meetsMinStatus(c.contentStatus, min));
+  return { kept, belowFloor: rows.length - kept.length };
 }
 
 /** THE ADAPTER: S1's Scholar catalogue (HQ allowlist, shared, active, published), narrowed to the programme. */
@@ -120,7 +142,9 @@ export function scholarCatalogue(admin: any): CompetencyCatalogue {
       if (!programme.frameworks.length) return { ok: true, data: [] };
       const all = await loadCatalogueFor(admin, "scholar");
       if (all === null) return { ok: false };
-      return { ok: true, data: projectForProgramme(all, programme) };
+      const min = (await loadIndividualPolicy(admin)).scholarCatalogueMinStatus;
+      const { kept, belowFloor } = applyContentFloor(projectForProgramme(all, programme), min);
+      return { ok: true, data: kept, belowFloor, minStatus: min };
     },
   };
 }

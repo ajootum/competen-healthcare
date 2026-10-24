@@ -19,6 +19,8 @@ import { loadLearnerCatalogue, type LearnerCatalogue } from "@/lib/individual/sc
 import { buildCompetencyProgress, type CompetencyProgress, type CompetencyProgressRow } from "@/lib/individual/scholar/competency-progress";
 import { LAYER_LABEL } from "@/lib/individual/scholar/catalogue";
 import { LayerTag } from "../_components/competency-client";
+import { ContentStatusTag } from "../_components/client";
+import { NO_APPROVED_COMPETENCIES } from "@/lib/individual/scholar/config";
 import type { CompetencyCoverage } from "@/lib/competency/progress-model";
 
 const STATUS_TEXT: Record<CompetencyProgressRow["status"], string> = {
@@ -53,8 +55,10 @@ function CompetencySection({ learner, progress, coverage, unreadable, accent }: 
           </StatePanel>
         ) : unreadable ? <Unreadable what="progress by competency" />
           : progress && progress.totals.competencies === 0 ? (
-            <StatePanel title="Your programme has no competencies to show yet">
-              <p>None of the frameworks your programme uses is published yet, so there is nothing to measure against. Nothing about your study has changed.</p>
+            <StatePanel title={learner.belowFloor > 0 ? NO_APPROVED_COMPETENCIES : "Your programme has no competencies to show yet"}>
+              <p>{learner.belowFloor > 0
+                ? `Only clinically approved content is offered, and none of the ${learner.belowFloor} competencies in your programme is approved yet. Nothing about your study has changed.`
+                : "None of the frameworks your programme uses is published yet, so there is nothing to measure against. Nothing about your study has changed."}</p>
             </StatePanel>
           ) : progress && (
             <>
@@ -83,7 +87,7 @@ function CompetencySection({ learner, progress, coverage, unreadable, accent }: 
                       {l.rows.map(r => (
                         <li key={r.id} className="px-4 py-3">
                           <div className="flex flex-wrap items-baseline justify-between gap-2">
-                            <span className="text-[14px] font-semibold text-gray-900">{r.code ? `${r.code} ` : ""}{r.title}</span>
+                            <span className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-gray-900">{r.code ? `${r.code} ` : ""}{r.title}<ContentStatusTag status={r.contentStatus} /></span>
                             <span className="text-[13px] font-semibold tabular-nums" style={{ color: r.latestAccuracy === null ? undefined : accent }}>
                               {r.latestAccuracy === null ? <span className="text-gray-500">{STATUS_TEXT[r.status]}</span> : `${r.latestAccuracy}% practice accuracy`}
                             </span>

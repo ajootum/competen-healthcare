@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectForProgramme, type CatalogueCompetency, type ProgrammeConfig, type S1Competency } from "./catalogue";
+import { applyContentFloor, normaliseStatus, projectForProgramme, structureLabel, type CatalogueCompetency, type ProgrammeConfig, type S1Competency } from "./catalogue";
 import {
   checkCaseTitle, checkSupplementary, explainPromptVersion, explainSystem, modeUserPrompt, parseCase, splitSupplementary, CASE_FALLBACK_TITLE, EXPLAIN_SYSTEM, type Passage,
 } from "./generation";
@@ -15,7 +15,7 @@ import { MAPPING_PROMPT_VERSION } from "@/lib/competency/mapping";
 const RESP = "Respiratory assessment includes respiratory rate, oxygen saturation and the use of accessory muscles. Wheeze suggests narrowed airways. Position the patient upright to ease breathing.";
 
 const comp = (id: string, layer: CatalogueCompetency["layer"], title: string, outcomes: string[] = []): CatalogueCompetency => ({
-  id, layer, profession: "Nursing", catalogue: "Test", frameworkId: "f", domain: "D", code: null, title, outcomes, expectedLevel: null, practice: null, cpu: null,
+  id, layer, profession: "Nursing", catalogue: "Test", frameworkId: "f", domain: "D", code: null, title, outcomes, expectedLevel: null, practice: null, cpu: null, contentStatus: "unreviewed", statusNote: null,
 });
 const COMPS = [
   comp("u-anat", "foundational", "Respiratory anatomy and physiology"),
@@ -155,7 +155,7 @@ describe("progress by competency", () => {
 
 describe("P1: the tutor's view of the student (learner-context.ts)", () => {
   const row = (title: string, status: "no_notes" | "notes_linked" | "practising", latestAccuracy: number | null) =>
-    ({ id: title, layer: "profession" as const, catalogue: "C", domain: "D", code: null, title, structure: null, sectionsAccepted: 1, sectionsProposed: 0,
+    ({ id: title, layer: "profession" as const, catalogue: "C", domain: "D", code: null, title, structure: null, contentStatus: "unreviewed" as const, sectionsAccepted: 1, sectionsProposed: 0,
       questions: 1, answered: latestAccuracy === null ? 0 : 1, latestCorrect: latestAccuracy === null ? null : 1, latestAccuracy, status });
 
   it("is words only: programme, accepted links here, needs-practice and not-yet -- no figure or code survives", () => {
@@ -188,5 +188,30 @@ describe("P1: codes come out cleanly", () => {
   it("a CPU code is removed without leaving a gap inside the brackets", () => {
     expect(buildLearnerContext({ programme: null, progress: null, passageCompetencies: [{ title: "T", structure: "CPU-RESPASS-001 Systematic Respiratory Assessment" }] }))
       .toContain("T (Systematic Respiratory Assessment)");
+  });
+});
+
+describe("content status: labelled, never hidden silently (owner ruling 2026-10-24)", () => {
+  const programme: ProgrammeConfig = { code: "p", label: "P", profession: "X", country: null, level: null, frameworks: [{ frameworkId: "f", layer: "profession", sortOrder: 0 }] };
+  const s1 = (id: string, contentStatus?: string): S1Competency => ({
+    competencyId: id, code: null, title: id, layer: "profession", profession: null, catalogue: { id: "f", name: "F" }, domain: { name: "D" }, outcomes: [],
+    practice: { code: "PRA-OXY-001", name: "Oxygen Therapy" }, cpu: { code: "CPU-OXYSAFE-001", name: "Safe Oxygen Administration" }, contentStatus, statusNote: contentStatus === "draft" ? "Awaiting review" : null,
+  });
+
+  it("the projection carries practice, CPU and status; an unknown or missing status is unreviewed, never approved", () => {
+    const [a, b, c] = projectForProgramme([s1("a", "approved"), s1("b", "draft"), s1("c")], programme);
+    expect(a).toMatchObject({ contentStatus: "approved", practice: { name: "Oxygen Therapy" }, cpu: { code: "CPU-OXYSAFE-001" } });
+    expect(b).toMatchObject({ contentStatus: "draft", statusNote: "Awaiting review" });
+    expect(c.contentStatus).toBe("unreviewed");
+    expect(normaliseStatus("weird")).toBe("unreviewed");
+    expect(structureLabel(a)).toBe("Oxygen Therapy › CPU-OXYSAFE-001 Safe Oxygen Administration");
+  });
+
+  it("the floor offers what meets it and COUNTS what it holds back", () => {
+    const rows = projectForProgramme([s1("a", "approved"), s1("b", "draft"), s1("c", "unreviewed")], programme);
+    expect(applyContentFloor(rows, "unreviewed")).toMatchObject({ belowFloor: 0 });
+    expect(applyContentFloor(rows, "unreviewed").kept).toHaveLength(3);
+    expect(applyContentFloor(rows, "draft").kept.map(r => r.id)).toEqual(["a", "b"]);
+    expect(applyContentFloor(rows, "approved")).toMatchObject({ kept: [{ id: "a" }], belowFloor: 2 });
   });
 });
