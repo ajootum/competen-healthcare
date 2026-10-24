@@ -22,6 +22,8 @@ export async function POST(req: Request) {
   if (!Number.isInteger(chosen) || chosen < 0 || chosen > 3) return NextResponse.json({ error: "Choose one of the four answers." }, { status: 400 });
   const q = await getQuestion(ctx.admin, ctx.userId, body?.questionId);
   if (!q) return NextResponse.json({ error: "That question could not be found." }, { status: 404 });
+  // REVISION-01: only the single-choice kinds are answered here. The 416 kinds are answered in a revision session.
+  if ((q.kind !== "mcq" && q.kind !== "case") || q.correctIndex === null) return NextResponse.json({ error: "Answer this question in Revision." }, { status: 400 });
 
   const r = await recordAttempt(ctx.admin, ctx.userId, q, chosen);
   if (!r.ok) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });

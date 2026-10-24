@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { createLearningSession, isUuid, listLearningSessions } from "@/lib/individual/scholar/store";
+import { createLearningSession, listLearningSessions } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
-import { MAX_SCOPE_MATERIALS, planSteps, resolveScope, sessionTopics, type LearningScope } from "@/lib/individual/scholar/learn";
+import { parseScope, planSteps, resolveScope, sessionTopics } from "@/lib/individual/scholar/learn";
 import { sessionView } from "@/lib/individual/scholar/learn-view";
 import { audit } from "@/lib/individual/scholar/http";
 
@@ -19,24 +19,6 @@ export const dynamic = "force-dynamic";
 // the Individual policy keeps learning history and 414 is here -- recorded, structure only. Otherwise the session is
 // returned unrecorded and the workspace holds it. No AI call here. GET lists the student's recent sessions to resume.
 
-function parseScope(body: { scope?: Record<string, unknown> } | null): LearningScope | string {
-  const s = body?.scope ?? {};
-  const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter(isUuid))].slice(0, MAX_SCOPE_MATERIALS) : []);
-  if (s.kind === "section") return isUuid(s.chunkId) ? { kind: "section", chunkId: s.chunkId } : "Choose a section.";
-  if (s.kind === "document") return isUuid(s.materialId) ? { kind: "document", materialId: s.materialId } : "Choose a material.";
-  if (s.kind === "documents") {
-    const m = ids(s.materialIds);
-    return m.length ? (m.length === 1 ? { kind: "document", materialId: m[0] } : { kind: "documents", materialIds: m }) : "Choose at least one material.";
-  }
-  if (s.kind === "topic") {
-    const topic = typeof s.topic === "string" ? s.topic.replace(/\s+/g, " ").trim() : "";
-    if (topic.length < 2 || topic.length > 120) return "Name a topic in a few words.";
-    const m = ids(s.materialIds);
-    return { kind: "topic", topic, materialIds: m.length ? m : undefined };
-  }
-  if (s.kind === "competency") return isUuid(s.competencyId) ? { kind: "competency", competencyId: s.competencyId } : "Choose a competency.";
-  return "Choose what to learn.";
-}
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");

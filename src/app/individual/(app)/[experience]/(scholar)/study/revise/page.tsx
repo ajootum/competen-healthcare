@@ -3,6 +3,7 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { dueCards, countDue } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
+import { answerText } from "@/lib/individual/scholar/revision";
 import { PageHeader, StatePanel, Unreadable } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { CardReview, type CardView } from "../_components/client";
@@ -31,7 +32,8 @@ export default async function Revise({ params }: { params: Promise<{ experience:
   const views: CardView[] = cards.ok ? cards.data.map(c => {
     const q = c.question;
     return {
-      id: c.id, stem: q.stem, answer: q.options[q.correctIndex], rationale: q.rationale, quote: q.sourceQuote,
+      // REVISION-01: a card may be any kind (a flashcard, a missed matching item ...): its key in words.
+      id: c.id, stem: q.stem, answer: answerText(q), rationale: q.rationale, quote: q.sourceQuote,
       citation: `${q.materialTitle}, ${q.ordinal !== null ? citeChunk({ ordinal: q.ordinal, pageFrom: q.pageFrom, pageTo: q.pageTo }, q.unit) : "source section"}`,
       href: sourceHref(q.materialId, q.chunkId),
     };

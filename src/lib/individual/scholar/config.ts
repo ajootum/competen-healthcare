@@ -109,7 +109,39 @@ export const PROMPT_VERSIONS = {
   learn: "scholar-learn-v3",
   // COMPETEN-SCHOLAR-REVISION-01 R4: AI evaluation of a short answer (Holdings activity `evaluate`).
   evaluate: "scholar-evaluate-v1",
+  // COMPETEN-SCHOLAR-REVISION-01 R2: revision questions of the 416 kinds, one prompt per kind, on the question rules.
+  revision: "scholar-revision-v1",
 } as const;
+
+// ── STAGE 4: REVISION ── COMPETEN-SCHOLAR-REVISION-01 (owner GO 2026-10-24) ─────────────────────────────────────
+// Formative revision from the student's own notes. Never assessment, never competence, never Passport evidence as
+// such. Every AI-written question is private_formative (migration 416 makes nothing else storable).
+export const REVISION_FORMATS = ["mcq", "mrq", "short", "flashcard", "match", "sequence"] as const;
+export type RevisionFormat = (typeof REVISION_FORMATS)[number];
+export const REVISION_FORMAT_LABEL: Record<RevisionFormat, string> = {
+  mcq: "Multiple choice", mrq: "Multiple response", short: "Short answer", flashcard: "Flashcards", match: "Matching", sequence: "Sequencing",
+};
+export const REVISION_MODES = ["today", "quick", "spaced", "weak", "mock", "flashcards", "custom"] as const;
+export type RevisionMode = (typeof REVISION_MODES)[number];
+export const REVISION_MODE_LABEL: Record<RevisionMode, string> = {
+  today: "Today's revision", quick: "Quick practice", spaced: "Spaced revision", weak: "Weak areas", mock: "Mock practice", flashcards: "Flashcards", custom: "Saved revision set",
+};
+export const REVISION_MODE_HELP: Record<RevisionMode, string> = {
+  today: "What is due, what you found hard, and something new, in one session.",
+  quick: "A short mix of questions from what you choose.",
+  spaced: "The cards that are due today, on your schedule.",
+  weak: "Questions you got wrong, most-missed first.",
+  mock: "A longer mixed set with the answers at the end. Practice only: not an assessment.",
+  flashcards: "Recall and grade yourself, card by card.",
+  custom: "Replay a set you saved. No new AI is used.",
+};
+export const REVISION_DIFFICULTIES = ["any", "easy", "standard", "harder"] as const;
+export type RevisionDifficulty = (typeof REVISION_DIFFICULTIES)[number];
+export const REVISION_QUANTITY_MAX = 50;
+/** Most AI generation calls one revision session may make to fill its shortfall. */
+export const REVISION_GENERATION_CALLS_MAX = 6;
+export const MOCK_LABEL = "Mock practice from your own notes: formative revision, not an assessment, and never evidence of competence.";
+export const REVISION_LABEL = "Revision from your notes · formative practice, not an assessment";
 
 /** Owner D3: the shared personal AI, reached from Learn. Never a Learn answer: shown apart, under these words. */
 export const PERSONAL_AI_LABEL = "Personal AI assistant — general explanation, not checked against your notes, not clinically reviewed";

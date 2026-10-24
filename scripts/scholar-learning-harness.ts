@@ -324,10 +324,10 @@ const meteredEverywhere = (src: Src) => {
   return AI_ROUTES.every(([f, runner, call]) => { const s = src.get(f) ?? ""; return s.includes(runner) && call.test(s) && /ai\.refusal\(\)/.test(s); })
     && [...gen.matchAll(/\bgenerate\(/g)].length === 1 && /const direct: AiRun = g => generate\(g\);/.test(gen)
     && /runMeteredAi\(ctx\.admin, \{ userId: ctx\.userId, product: "scholar", activity, requestId: part === "main" \? requestId : `\$\{requestId\}:\$\{part\}`, generate: g, risk \}\)/.test(http)
-    && /export function scholarAiRunner\(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext\)/.test(http)
+    && /export function scholarAiRunner\(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext, callKey\?: string\)/.test(http)
     && /text: \[input\.text \?\? "", \.\.\.input\.passages\.map\(p => p\.content\)\]/.test(http)
     && /export const scholarRequestId = \(ctx: IndividualContext, req: Request\) => requestIdFor\(ctx\.userId, req\.headers\.get\("x-request-id"\)\);/.test(http)
-    && /const requestId = scholarRequestId\(ctx, req\);/.test(http);
+    && /const requestId = callKey \? `\$\{scholarRequestId\(ctx, req\)\}:\$\{callKey\}` : scholarRequestId\(ctx, req\);/.test(http);
 };
 /**
  * K29 (owner D3, coordinator conditions): Learn's "Continue with your personal assistant" is the ONE Holdings personal
