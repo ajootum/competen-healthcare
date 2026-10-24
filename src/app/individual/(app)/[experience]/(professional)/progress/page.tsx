@@ -2,13 +2,13 @@ import Link from "next/link";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
-import { cpdHoursByYear, evidenceCoverage, planProgress } from "@/lib/individual/professional/progress";
+import { cpdHoursByYear, evidenceCoverage, goalActivity, planProgress } from "@/lib/individual/professional/progress";
 import { loadMappingView, professionalProgress } from "@/lib/individual/professional/mapping-store";
-import { NEED_STATUS_LABEL } from "@/lib/individual/professional/vocabulary";
+import { GOAL_STATUS_LABEL, NEED_STATUS_LABEL } from "@/lib/individual/professional/vocabulary";
 import type { Metadata } from "next";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
-import { NotProvisioned, Section } from "../../../../_components/professional/bits";
+import { NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -55,6 +55,8 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
   const years = cpd ? cpdHoursByYear(cpd) : null;
   const coverage = needs && goals && cpd && evidence ? evidenceCoverage(needs, goals, cpd, evidence) : null;
   const prog = professionalProgress(map, record);
+  const activity = goals && cpd ? goalActivity(goals, cpd, today) : null;
+  const goalTitle = new Map((goals ?? []).map(g => [g.id, g.title]));
   const href = (s: string) => experienceHref("professional", s);
 
   return (
@@ -73,6 +75,28 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
             <Stat label="In progress" value={String(plan.inProgress)} sub={`${plan.planned} more planned`} />
             <Stat label="Past target date" value={String(plan.overdue)} sub="Planned or in progress, target date passed" />
           </div>
+        )}
+      </Section>
+
+      <Section title="Goals and the CPD behind them" note="For each goal, the CPD you linked to it. This needs no framework: it is your own plan and your own activity.">
+        {activity === null ? <Unreadable what="goals and CPD" /> : activity.length === 0 ? (
+          <NotMeasured accent={x.accent} href={href("development")} cta="Add a goal" why="You have no goals that are not dropped, so there is nothing to show here." />
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {activity.map(a => (
+              <li key={a.goalId} className="flex flex-wrap items-baseline justify-between gap-2 py-2.5">
+                <p className="text-[14px] font-semibold text-gray-900">{goalTitle.get(a.goalId) ?? "Goal"}{" "}
+                  <span className="font-normal text-gray-500">· {GOAL_STATUS_LABEL[a.status] ?? a.status} · target {fmtDate(a.targetDate)}</span>
+                  {a.overdue && <span className="font-semibold text-amber-800"> · past target date</span>}
+                </p>
+                <p className={`text-[12.5px] ${a.entries ? "text-gray-700" : "font-semibold text-amber-800"}`}>
+                  {a.entries
+                    ? `${a.entries} CPD ${a.entries === 1 ? "entry" : "entries"} · ${a.hours} ${a.hours === 1 ? "hour" : "hours"} · ${a.withDocument} with a document · last ${fmtDate(a.lastActivity)}`
+                    : "No CPD linked to this goal yet"}
+                </p>
+              </li>
+            ))}
+          </ul>
         )}
       </Section>
 

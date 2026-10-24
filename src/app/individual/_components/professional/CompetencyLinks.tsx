@@ -42,6 +42,9 @@ export default function CompetencyLinks({ kind, subjectId, links, offered, accen
   const live = links.filter(l => l.state !== "rejected");
   const linked = new Set(live.map(l => l.competencyId));
   const choices = (offered ?? []).filter(o => !linked.has(o.competencyId));
+  // Nothing offered (the default) and nothing linked: the entry stands on its own. Repeating "nothing is
+  // offered" under every goal and CPD entry would read as something missing from the person's record.
+  if (offered?.length === 0 && live.length === 0) return null;
 
   return (
     <div className="mt-2">

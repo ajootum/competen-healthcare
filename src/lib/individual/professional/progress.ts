@@ -84,3 +84,25 @@ export function evidenceCoverage(
   }
   return { needs: rows, covered, counted: counted.length, ratio: counted.length ? covered / counted.length : null, byClass };
 }
+
+export type GoalActivity = {
+  goalId: string; status: string; targetDate: string; overdue: boolean;
+  entries: number; hours: number; withDocument: number; lastActivity: string | null;
+};
+
+/**
+ * Pure: for each goal that is not dropped, the CPD the person linked to it -- entries, hours, how many
+ * carry a document, and the latest activity date. Self-directed: it needs no framework and no catalogue,
+ * only the person's own goals and CPD. A goal with no CPD is 0 entries, which IS a count of the person's
+ * rows (nothing linked yet), not a missing measurement. Open goals first, by target date.
+ */
+export function goalActivity(goals: readonly GoalLike[], cpd: readonly CpdLike[], today: string): GoalActivity[] {
+  const open = (s: string) => s === "planned" || s === "in_progress";
+  return goals.filter(g => g.status !== "dropped").map(g => {
+    const mine = cpd.filter(c => c.goal_id === g.id);
+    const hours = Math.round(mine.reduce((s, c) => s + Number(c.hours || 0), 0) * 100) / 100;
+    const last = mine.map(c => c.activity_date).sort().at(-1) ?? null;
+    return { goalId: g.id, status: g.status, targetDate: g.target_date, overdue: open(g.status) && g.target_date < today,
+      entries: mine.length, hours, withDocument: mine.filter(c => c.evidence_class === "source_linked").length, lastActivity: last };
+  }).sort((a, b) => Number(open(b.status)) - Number(open(a.status)) || a.targetDate.localeCompare(b.targetDate));
+}
