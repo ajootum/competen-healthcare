@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DOCX_MIME, PDF_MIME, PPTX_MIME, TEXT_MIME, UNIT_OF, uploadRules } from "./config";
-import { chunkPages, citeChunk, drawingText, extractMaterial, extractionQuality, officeKind, qualitySummary, screenZipEntries, sniffUpload, ZIP_LIMITS } from "./extract";
+import { chunkPages, citeChunk, drawingText, extractMaterial, extractionQuality, officeKind, qualitySummary, screenPdfBytes, screenZipEntries, sniffUpload, ZIP_LIMITS } from "./extract";
 import { cleanCollectionName, cleanTitle, cleanTopics, materialTopics, relatedMaterials } from "./library";
 import { spreadAcrossMaterials } from "./retrieval";
 import { competencyAbsence } from "./competency-view";
@@ -56,6 +56,18 @@ describe("U1: PowerPoint, and telling the Office files apart", () => {
     expect(screenZipEntries(e(ZIP_LIMITS.entries + 1, 1, 1))).toBe("too_many_entries");
     expect(screenZipEntries(e(2, 60 * 1024 * 1024, 61 * 1024 * 1024))).toBe("expands_too_far");
     expect(screenZipEntries(e(1, 1000, 1000 * (ZIP_LIMITS.ratio + 1)))).toBe("compression_ratio");
+  });
+
+  it("⚠ refuses a PDF that carries a script or a launch action, before reading it", async () => {
+    const clean = tinyPdf(["Respiratory assessment"]);
+    expect(screenPdfBytes(clean)).toBeNull();
+    const withJs = new TextEncoder().encode(new TextDecoder("latin1").decode(clean).replace("/Type /Catalog", "/Type /Catalog /OpenAction << /S /JavaScript /JS (app.alert(1)) >>"));
+    const withLaunch = new TextEncoder().encode(new TextDecoder("latin1").decode(clean).replace("/Type /Catalog", "/Type /Catalog /OpenAction << /S /Launch /F (calc.exe) >>"));
+    expect(screenPdfBytes(withJs)).toBe("pdf_javascript");
+    expect(screenPdfBytes(withLaunch)).toBe("pdf_launch");
+    expect(await extractMaterial(PDF_MIME, withJs)).toMatchObject({ ok: false, reason: "unsafe", detail: "pdf_javascript" });
+    // A name that merely starts the same way is not a script.
+    expect(screenPdfBytes(new TextEncoder().encode("%PDF-1.4 /JSmith /Launcher"))).toBeNull();
   });
 
   it("caps slides at the policy's limit, refusing (never truncating) a longer deck", async () => {

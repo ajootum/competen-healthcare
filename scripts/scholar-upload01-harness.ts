@@ -225,10 +225,13 @@ async function main() {
   bomb.file("word/media/padding.xml", "0".repeat(130 * 1024 * 1024));
   const mac = await upload(sa.jar, DOCX_MIME, new Uint8Array(await macro.generateAsync({ type: "uint8array", compression: "DEFLATE" })), "macro.docx");
   const bom = await upload(sa.jar, DOCX_MIME, new Uint8Array(await bomb.generateAsync({ type: "uint8array", compression: "DEFLATE" })), "bomb.docx");
+  const scripted = new TextEncoder().encode(new TextDecoder("latin1").decode(tinyPdf([["A lecture handout."]]))
+    .replace("/Type /Catalog", "/Type /Catalog /OpenAction << /S /JavaScript /JS (app.alert(1)) >>"));
+  const js = await upload(sa.jar, PDF_MIME, scripted, "handout.pdf");
   const objectsEnd = ((await admin.storage.from(BUCKET).list(a, { limit: 100 })).data ?? []).length;
-  ok("U1d. ⚠ a macro-enabled Word file and a zip bomb are refused before they are opened, and their objects removed",
-    mac.done?.status === 422 && bom.done?.status === 422 && /not opened/.test(mac.done?.json?.error ?? "") && objectsEnd === objectsBefore,
-    `${mac.done?.status} ${mac.done?.json?.error} / ${bom.done?.status} / objects ${objectsEnd}`);
+  ok("U1d. ⚠ a macro-enabled Word file, a zip bomb and a PDF carrying a script are refused before they are read, and their objects removed",
+    mac.done?.status === 422 && bom.done?.status === 422 && js.done?.status === 422 && /not read/.test(mac.done?.json?.error ?? "") && objectsEnd === objectsBefore,
+    `${mac.done?.status} ${mac.done?.json?.error} / ${bom.done?.status} / pdf ${js.done?.status} / objects ${objectsEnd}`);
 
   const all = [ids.pdf, ids.docx, ids.pptx].filter((x): x is string => !!x);
   // ── U5: "Your notes are ready" ──

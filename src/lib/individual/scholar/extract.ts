@@ -207,7 +207,22 @@ export { findPatientIdentifiers, isValidNhsNumber, PII_LABEL, type PiiKind } fro
 
 // ── THE EXTRACTORS ─────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * UPLOAD-01 U1: a PDF that carries a script or a launch action is refused before it is read. Study notes need
+ * neither. Pure, over the raw bytes: a /JavaScript, /JS or /Launch name in any UNCOMPRESSED dictionary (an
+ * annotation, an open action). Names inside compressed object streams are not visible here -- the document's
+ * own script table is asked as well (extractPdf), which pdf.js reads from either.
+ */
+export function screenPdfBytes(bytes: Uint8Array): string | null {
+  const raw = new TextDecoder("latin1").decode(bytes);
+  if (/\/(JavaScript|JS)(?![A-Za-z0-9])/.test(raw)) return "pdf_javascript";
+  if (/\/Launch(?![A-Za-z0-9])/.test(raw)) return "pdf_launch";
+  return null;
+}
+
 async function extractPdf(buffer: Uint8Array, maxPages: number = MAX_PDF_PAGES): Promise<Extraction> {
+  const screened = screenPdfBytes(buffer);
+  if (screened) return { ok: false, reason: "unsafe", detail: screened };
   const { getDocumentProxy, extractText } = await import("unpdf");
   let doc;
   try {
@@ -220,6 +235,9 @@ async function extractPdf(buffer: Uint8Array, maxPages: number = MAX_PDF_PAGES):
   }
   try {
     if (doc.numPages > maxPages) return { ok: false, reason: "too_many_pages", detail: String(doc.numPages) };
+    // The document's script table (named scripts, document actions), as pdf.js reads it -- compressed or not.
+    const scripts = await doc.getJSActions().catch(() => null);
+    if (scripts && Object.keys(scripts).length) return { ok: false, reason: "unsafe", detail: "pdf_javascript" };
     const { text, totalPages } = await extractText(doc, { mergePages: false });
     const pages = (text as string[]).map((t, i) => ({ page: i + 1, text: t ?? "" }));
     return { ok: true, pages, pageCount: totalPages, extractor: "unpdf@1.8.1" };
@@ -304,7 +322,7 @@ export function titleFromFileName(name: string): string {
 export const EXTRACTION_MESSAGE: Record<Exclude<Extraction, { ok: true }>["reason"], string> = {
   unreadable: "That file could not be read. It may be damaged or password-protected.",
   too_many_pages: "That file has more pages or slides than one material can hold. Split it into smaller files and upload them separately.",
-  unsafe: "That file was not opened: it is built in a way Scholar does not accept (it holds macros, or expands far beyond its size). Save it again as an ordinary document and upload it.",
+  unsafe: "That file was not read: it is built in a way Scholar does not accept (it holds macros or scripts, or expands far beyond its size). Save it again as an ordinary document, or print it to a new PDF, and upload it.",
   no_text: "No text could be found in that file. A scanned PDF has no text layer, and reading scanned pages (OCR) is not available yet.",
   too_long: "That file holds more text than one material can. Split it into smaller files and upload them separately.",
 };
