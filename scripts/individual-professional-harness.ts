@@ -355,7 +355,7 @@ const checkMappingWrites = (src: Sources) => {
   const proposedOffered = /if \(!offered\(catalogue, p\.competencyId\) \|\| existing\.has\(/.test(s);
   const aiProvenance = /source: "ai",\s*confidence: Math\.round\(p\.confidence \* 100\) \/ 100, rationale: p\.rationale, model: r\.model, prompt_version: r\.promptVersion/.test(s);
   const allowlisted = (r.match(/loadCatalogueFor\(ctx\.admin, "professional"\)/g) ?? []).length >= 2;
-  const q = r.indexOf("individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin))");
+  const q = r.indexOf("individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId))");
   const cfg = r.indexOf("if (!aiStatus().configured)");
   const call = r.indexOf("await proposeForSubjects(");
   const audited = r.indexOf("\"ai_assistant_query\"") > call;
@@ -503,7 +503,7 @@ function main() {
   red("M2 when a proposal is shown", checkPassportLinks((rec, m, n) => acceptedLinks(rec, (m ?? []).map(x => ({ ...x, state: "accepted" as const })), n)));
   red("M3 without the offered check", checkMappingWrites(mapPlant(MAP_FILE, 'if (!offered(catalogue, competencyId)) return "not_offered";', "")));
   red("M3 when a proposal outside the catalogue is stored", checkMappingWrites(mapPlant(MAP_FILE, "if (!offered(catalogue, p.competencyId) || existing.has(", "if (existing.has(")));
-  red("M3 when the AI is called before the quota", checkMappingWrites(mapPlant(MAP_ROUTE, "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin))", "{ ok: true, limit: 0 }")));
+  red("M3 when the AI is called before the quota", checkMappingWrites(mapPlant(MAP_ROUTE, "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId))", "{ ok: true, limit: 0 }")));
   red("M4 on a green chip", checkMappingWords(mapPlant("src/app/individual/_components/professional/CompetencyLinks.tsx", "border-amber-300 bg-amber-50", "border-green-300 bg-green-50")));
   red("M4 when /verify drops not verified", checkMappingWords(mapPlant("src/app/verify/[token]/page.tsx", " (not verified)</span>", "</span>")));
   red("M6 when the input is not screened", checkIdentifierScreen(mapPlant(MAP_FILE, "texted.filter(s => findPatientIdentifiers(s.text).length === 0)", "texted")));
