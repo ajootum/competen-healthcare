@@ -54,6 +54,8 @@ export const GENERAL_NAV: NavSection[] = [
   // Administrator appointment (hq.individual.config.manage) as well as the owners.
   { group: "COMPETEN INDIVIDUAL", items: [
     { label: "Individual Policy", href: "/super-admin/individual/configuration", icon: "🎓" },
+    // P0 controlled catalogues (migration 394): what a catalogue names, and its content status.
+    { label: "Controlled Catalogues", href: "/super-admin/individual/catalogues", icon: "📚" },
   ]},
   { group: "STRATEGY & PRIORITIES", items: [
     { label: "Strategy Manager", href: "/super-admin/priorities", icon: "🎯" },

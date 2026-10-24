@@ -44,6 +44,9 @@ const FILES = {
   evidence: "src/app/individual/(app)/[experience]/(professional)/evidence/page.tsx",
   home: "src/app/individual/_components/professional/HomeReminders.tsx",
   registration: "src/app/individual/(app)/[experience]/(professional)/registration/page.tsx",
+  // P0 controlled catalogues (migration 394): the second door under /api/hq/individual, same capability.
+  catRoute: "src/app/api/hq/individual/catalogues/route.ts",
+  catPage: "src/app/super-admin/individual/catalogues/page.tsx",
 } as const;
 type K = keyof typeof FILES;
 
@@ -151,6 +154,21 @@ const checkReader = (src: Src): R => {
   };
 };
 
+// ── G6. the controlled-catalogue door (migration 394) ──
+// The same capability, gate first, POST only; the page gated first; route map and nav declare it; and it
+// never publishes -- publication stays the governed framework lifecycle.
+const checkCatalogueDoor = (src: Src): R => {
+  const r = code(src, "catRoute"), p = code(src, "catPage"), sp = code(src, "spaces"), nav = code(src, "nav");
+  const body = r.slice(r.indexOf("export async function POST"));
+  const gate = body.indexOf(`await hqApiGate(["hq.individual.config.manage"])`), first = body.indexOf("await ");
+  const pageBody = p.slice(p.indexOf("export default async function"));
+  const pGate = pageBody.indexOf(`await requireHqCapability("hq.individual.config.manage")`), pFirst = pageBody.indexOf("await ");
+  const routeOk = gate > -1 && gate === first && /if \(isHqRefusal\(ctx\)\) return ctx;/.test(body) && !/export async function (GET|PUT|PATCH|DELETE)/.test(r);
+  const noPublish = !/transitionFramework|pub_status:\s*"|\.update\(\{\s*pub_status/.test(r + p);
+  const mapped = /\{ prefix: "\/super-admin\/individual\/catalogues",\s*capability: "hq\.individual\.config\.manage" \}/.test(sp) && nav.includes(`href: "/super-admin/individual/catalogues"`);
+  return { ok: routeOk && pGate > -1 && pGate === pFirst && noPublish && mapped, detail: `route ${routeOk}, page gate ${pGate}/${pFirst}, no publish ${noPublish}, mapped ${mapped}` };
+};
+
 // ── G5. no third HQ Individual door ──
 // individual-foundation-harness pins the grants/ and invitations/ routes, G1 pins config/. A route anywhere else under
 // /api/hq/individual would be pinned by neither, so it must not exist without one of them learning of it.
@@ -159,7 +177,8 @@ const listRoutes = (dir: string): string[] => !existsSync(dir) ? [] : readdirSyn
 const checkKnownDoors = (routes: string[]): R => {
   // invitations/ (COMPETEN-IND-ACCESS-001, migration 378) is pinned by individual-foundation-harness 5b, 5c
   // and 10c beside grants/: the same pilot-grant capability, the same release gate.
-  const extra = routes.filter(f => !/^src\/app\/api\/hq\/individual\/(grants|invitations)\//.test(f) && f !== FILES.route);
+  // catalogues/ (migration 394) is pinned by G6 here.
+  const extra = routes.filter(f => !/^src\/app\/api\/hq\/individual\/(grants|invitations)\//.test(f) && f !== FILES.route && f !== FILES.catRoute);
   return { ok: routes.includes(FILES.route) && extra.length === 0, detail: `unpinned: ${extra.join(", ")}` };
 };
 
@@ -193,7 +212,8 @@ function main() {
   run("W3. the Individual door writes only catalogue paths, after validateDraft refuses out-of-range (422)", checkPolicyPathsOnly(RAW));
   run("R1. every consumer reads its setting from the policy and none compares the old constant", checkConsumers(RAW));
   run("L1. the reader reads published values only, fails soft and clamps every one", checkReader(RAW));
-  run("G5. every route under /api/hq/individual is a pinned grants route or this config route", checkKnownDoors(listRoutes("src/app/api/hq/individual")));
+  run("G5. every route under /api/hq/individual is a pinned grants route, this config route or the catalogue route", checkKnownDoors(listRoutes("src/app/api/hq/individual")));
+  run("G6. the controlled-catalogue door: same capability first, POST only, page gated first, mapped, never publishes", checkCatalogueDoor(RAW));
   run("A1. ⚠ nothing on this surface names individual_app", checkNoActivation(RAW));
 
   console.log("");
@@ -219,6 +239,10 @@ function main() {
   red("L1 on a reader that reads drafts", checkReader(plant("policy", `.select("config_path, published")`, `.select("config_path, draft")`)));
   red("L1 on a reader that does not clamp", checkReader(plant("policy", "return Math.min(p.max, Math.max(p.min, Math.floor(n)));", "return Math.floor(n);")));
   red("G5 on a third, unpinned door", checkKnownDoors([...listRoutes("src/app/api/hq/individual"), "src/app/api/hq/individual/export/route.ts"]));
+  red("G6 on a read before the gate", checkCatalogueDoor(plant("catRoute", `  const ctx = await hqApiGate(["hq.individual.config.manage"]);`, `  await ctx0();\n  const ctx = await hqApiGate(["hq.individual.config.manage"]);`)));
+  red("G6 on a view right", checkCatalogueDoor(plant("catPage", `requireHqCapability("hq.individual.config.manage")`, `requireHqCapability("hq.learning.competencies.view")`)));
+  red("G6 on a publish from this door", checkCatalogueDoor(plant("catRoute", `  if (!result.ok) return refuse(409, result.error);`, `  if (!result.ok) return refuse(409, result.error);\n  await transitionFramework(ctx.admin, fw.id, "publish", actor);`)));
+  red("G6 on a missing route-map entry", checkCatalogueDoor(plant("spaces", `  { prefix: "/super-admin/individual/catalogues", capability: "hq.individual.config.manage" },\n`, "")));
   red("A1 on the route touching the release gate", checkNoActivation(plant("route", "switch (body?.action) {", `await ctx.admin.from("practice_platform_flags").select("enabled");\n  switch (body?.action) {`)));
 
   console.log(fails.length ? `\nRED -- ${pass} passed, ${fails.length} failed` : `\nALL GREEN -- ${pass} passed, 0 failed`);

@@ -50,9 +50,15 @@ export async function transitionFramework(
       .single();
 
     if (fullFw) {
+      // A controlled catalogue (migration 394) publishes what it NAMES, with each content status, so the
+      // version records what the approver saw. Where 394 is absent, or the framework names nothing, the
+      // snapshot is exactly what it was before.
+      const { data: entries, error: entErr } = await admin.from("competency_catalogue_entry")
+        .select("competency_id, content_status, status_note, sort_order").eq("catalogue_id", frameworkId).order("sort_order");
+      const snapshot = !entErr && entries?.length ? { ...fullFw, catalogue_entries: entries } : fullFw;
       const nextVersion = (framework.version_num ?? 0) + 1;
       const { error: insErr } = await admin.from("framework_versions").insert({
-        framework_id: frameworkId, version_num: nextVersion, snapshot: fullFw, published_by_name: actor.name,
+        framework_id: frameworkId, version_num: nextVersion, snapshot, published_by_name: actor.name,
       });
       if (insErr) warning = "Published, but the version snapshot failed — republish to retry it.";
       else await admin.from("frameworks").update({ version_num: nextVersion }).eq("id", frameworkId);
