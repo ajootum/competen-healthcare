@@ -192,6 +192,14 @@ const STAGING: Listed[] = [
       + "reports PEND (exit 0, nothing created) until migration 370 is applied.",
   },
   {
+    file: "individual-commerce-staging-harness.ts",
+    note: "P1 Commercial: migrations 399/400 at library level -- post-state (capability held by no position, "
+      + "individual_commerce absent), plan CHECKs, the composite plan keys, one delivery row per event, the Individual "
+      + "settlement adapter (purchase membership, appended paid period, renewal start, D8) and AI fair use off while "
+      + "commerce is off. Never writes either flag. Own harness-p1c-* identities and zz_p1c_* plans, deleted after. "
+      + "PEND (exit 0, nothing created) until 399 is applied.",
+  },
+  {
     file: "scholar-intelligence-harness.ts",
     note: "COMPETEN-SCHOLAR-01 S5 over HTTP: the four Learning Intelligence measures (not measured, too little practice, measured "
       + "separately), coverage Not measured until S1/S2, the review log (391) and revision in the Passport as a count. Needs a "
