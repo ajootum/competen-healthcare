@@ -210,6 +210,9 @@ export async function deleteMaterial(admin: Admin, userId: string, id: string): 
   const rm = await admin.storage.from(BUCKET).remove([data.storage_path]);
   if (rm.error) return { ok: false, found: true };
   const { error: dErr } = await admin.from("individual_scholar_material").delete().eq("user_id", userId).eq("id", id);
+  // LEARN-01 L4: the deleted material's steps and sources went with it (414 cascades); a session left with nothing to
+  // teach goes too.
+  if (!dErr) await pruneEmptySessions(admin, userId);
   return { ok: !dErr, found: true };
 }
 
@@ -233,7 +236,11 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   if (dErr) return { ok: false, erased: 0 };
   // UPLOAD-01 U5 (407): the shelves go too -- erase-all leaves nothing of the library. Absent table: nothing to do.
   const { error: cErr } = await admin.from("individual_scholar_collection").delete().eq("user_id", userId);
-  return { ok: !cErr || isNotProvisioned(cErr), erased: rows.length };
+  // LEARN-01 L4: learning history and preferences go too. Absent tables (414): nothing to do.
+  const { error: lErr } = await admin.from("individual_scholar_learning_session").delete().eq("user_id", userId);
+  const { error: pErr } = await admin.from("individual_scholar_learning_preference").delete().eq("user_id", userId);
+  const fine = (e: any) => !e || isNotProvisioned(e);
+  return { ok: fine(cErr) && fine(lErr) && fine(pErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
@@ -848,6 +855,269 @@ export async function libraryTopics(admin: Admin, userId: string): Promise<Map<s
     out.set(r.material_id, list);
   }
   return out;
+}
+
+// ── STAGE 3: LEARN ── COMPETEN-SCHOLAR-LEARN-01 L1 and L4 (migration 414) ──────────────────────────────
+//
+// L1 reads only what Stage 2 built: the person's chunks, in order, and their topics. L4 writes STRUCTURE ONLY --
+// sessions, steps (the sections each step teaches), events (the action, the step, an informal check verdict) and
+// the sections each event used -- never what the AI said or what the student typed. Absent tables (414 not applied)
+// read as "history off here", never as an error.
+
+export type SectionRef = { chunkId: string; materialId: string; ordinal: number; pageFrom: number | null; pageTo: number | null; materialTitle: string; unit: "page" | "slide" | "section" };
+
+/** The person's own sections of these materials, in the order given and then document order. */
+export async function sectionsOf(admin: Admin, userId: string, materialIds: readonly string[]): Promise<Read<SectionRef[]>> {
+  const ids = materialIds.filter(isUuid);
+  if (!ids.length) return { ok: true, data: [] };
+  const { data, error } = await admin.from("individual_scholar_chunk").select("id, material_id, ordinal, page_from, page_to")
+    .eq("user_id", userId).in("material_id", ids).order("ordinal").limit(4000);
+  if (error) return fail(error);
+  const names = await titlesOf(admin, userId, ids);
+  const rank = new Map(ids.map((id, i) => [id, i]));
+  return {
+    ok: true,
+    data: ((data ?? []) as any[]).sort((a, b) => (rank.get(a.material_id)! - rank.get(b.material_id)!) || a.ordinal - b.ordinal).map(r => ({
+      chunkId: r.id, materialId: r.material_id, ordinal: r.ordinal, pageFrom: r.page_from, pageTo: r.page_to,
+      materialTitle: (names.get(r.material_id) ?? UNNAMED).title, unit: (names.get(r.material_id) ?? UNNAMED).unit,
+    })),
+  };
+}
+
+/** The same shape for sections already chosen (a search, a competency), keeping their order. */
+export async function sectionRefs(admin: Admin, userId: string, chunks: readonly CandidateChunk[]): Promise<SectionRef[]> {
+  const names = await titlesOf(admin, userId, [...new Set(chunks.map(c => c.materialId))]);
+  return chunks.map(c => ({ chunkId: c.id, materialId: c.materialId, ordinal: c.ordinal, pageFrom: c.pageFrom, pageTo: c.pageTo,
+    materialTitle: (names.get(c.materialId) ?? UNNAMED).title, unit: (names.get(c.materialId) ?? UNNAMED).unit }));
+}
+
+/** Topics per section: the student's correction where they made one, otherwise what topic finding found. */
+export async function topicsOfSections(admin: Admin, userId: string, chunkIds: readonly string[]): Promise<Map<string, string[]>> {
+  if (!chunkIds.length) return new Map();
+  const [a, c] = await Promise.all([
+    admin.from("individual_scholar_chunk_analysis").select("chunk_id, concepts").eq("user_id", userId).in("chunk_id", [...chunkIds]),
+    admin.from("individual_scholar_topic_correction").select("chunk_id, topics").eq("user_id", userId).in("chunk_id", [...chunkIds]),
+  ]);
+  const out = new Map<string, string[]>(((a.error ? [] : a.data ?? []) as any[]).map(r => [r.chunk_id, r.concepts ?? []]));
+  for (const r of (c.error ? [] : c.data ?? []) as any[]) out.set(r.chunk_id, r.topics ?? []);
+  return out;
+}
+
+/** The live (not rejected) competency links of these sections, with any outcome named (408). [] where unreadable. */
+export async function sectionLinks(admin: Admin, userId: string, chunkIds: readonly string[]): Promise<{ chunkId: string; competencyId: string; outcome: string | null; accepted: boolean }[]> {
+  if (!chunkIds.length) return [];
+  const { data, error } = await admin.from("individual_scholar_competency_map").select("id, chunk_id, competency_id").eq("user_id", userId).in("chunk_id", [...chunkIds]).limit(500);
+  if (error || !data?.length) return [];
+  const [{ data: d }, extras] = await Promise.all([
+    admin.from("individual_scholar_competency_decision").select("map_id, decision, decided_by, created_at").eq("user_id", userId).in("map_id", (data as any[]).map(r => r.id)).limit(5000),
+    mappingExtras(admin, userId, (data as any[]).map(r => r.id)),
+  ]);
+  const states = mappingStates(((d ?? []) as any[]).map(x => ({ mappingId: x.map_id, decision: x.decision, decidedBy: x.decided_by, createdAt: x.created_at })));
+  return (data as any[]).map(r => ({ chunkId: r.chunk_id, competencyId: r.competency_id, outcome: extras.get(r.id)?.outcome ?? null, state: states.get(r.id)?.state ?? "proposed" }))
+    .filter(r => r.state !== "rejected").map(r => ({ chunkId: r.chunkId, competencyId: r.competencyId, outcome: r.outcome, accepted: r.state === "accepted" }));
+}
+
+export type LearningStep = { step: number; sections: SectionRef[] };
+export type LearningSessionRow = {
+  id: string; scopeKind: "section" | "document" | "documents" | "topic" | "competency"; title: string; topic: string | null; competencyId: string | null;
+  currentStep: number; status: "active" | "completed"; createdAt: string; lastActiveAt: string;
+};
+const toSession = (r: any): LearningSessionRow => ({
+  id: r.id, scopeKind: r.scope_kind, title: r.title, topic: r.topic, competencyId: r.competency_id, currentStep: r.current_step,
+  status: r.status, createdAt: r.created_at, lastActiveAt: r.last_active_at,
+});
+const SESSION_COLS = "id, scope_kind, title, topic, competency_id, current_step, status, created_at, last_active_at";
+
+/** A new session with its steps. "not_provisioned" where 414 is absent: the workspace then teaches without history. */
+export async function createLearningSession(admin: Admin, userId: string, input: {
+  scopeKind: LearningSessionRow["scopeKind"]; title: string; topic: string | null; competencyId: string | null; steps: LearningStep[];
+}): Promise<{ ok: true; id: string } | { ok: false; error: "not_provisioned" | "failed" }> {
+  const { data, error } = await admin.from("individual_scholar_learning_session").insert({
+    user_id: userId, scope_kind: input.scopeKind, title: input.title.slice(0, 160), topic: input.topic, competency_id: input.competencyId,
+  }).select("id").single();
+  if (error) return { ok: false, error: isNotProvisioned(error) ? "not_provisioned" : "failed" };
+  const rows = input.steps.flatMap(s => s.sections.map(x => ({ session_id: data.id, user_id: userId, step: s.step, chunk_id: x.chunkId, material_id: x.materialId })));
+  const { error: sErr } = rows.length ? await admin.from("individual_scholar_learning_step").insert(rows.map(r => ({ ...r, user_id: userId }))) : { error: null };
+  if (sErr) { await admin.from("individual_scholar_learning_session").delete().eq("user_id", userId).eq("id", data.id); return { ok: false, error: "failed" }; }
+  return { ok: true, id: data.id };
+}
+
+/** The person's sessions, most recently active first. Read<[]> with notProvisioned where 414 is absent. */
+export async function listLearningSessions(admin: Admin, userId: string, limit = 10): Promise<Read<LearningSessionRow[]>> {
+  const { data, error } = await admin.from("individual_scholar_learning_session").select(SESSION_COLS).eq("user_id", userId).order("last_active_at", { ascending: false }).limit(limit);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(toSession) };
+}
+
+/** One of the person's sessions with its steps (sections in document order within a step), or null. */
+export async function getLearningSession(admin: Admin, userId: string, id: string): Promise<Read<{ session: LearningSessionRow; steps: LearningStep[] } | null>> {
+  if (!isUuid(id)) return { ok: true, data: null };
+  const { data, error } = await admin.from("individual_scholar_learning_session").select(SESSION_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  if (error) return fail(error);
+  if (!data) return { ok: true, data: null };
+  const { data: st, error: sErr } = await admin.from("individual_scholar_learning_step").select("step, chunk_id").eq("user_id", userId).eq("session_id", id).order("step").limit(200);
+  if (sErr) return fail(sErr);
+  const ids = [...new Set(((st ?? []) as any[]).map(r => r.chunk_id))];
+  const { data: ch } = ids.length ? await admin.from("individual_scholar_chunk").select("id, material_id, ordinal, page_from, page_to").eq("user_id", userId).in("id", ids) : { data: [] };
+  const refs = new Map((await sectionRefs(admin, userId, ((ch ?? []) as any[]).map(r => ({ id: r.id, materialId: r.material_id, ordinal: r.ordinal, pageFrom: r.page_from, pageTo: r.page_to, content: "" })))).map(s => [s.chunkId, s]));
+  const byStep = new Map<number, SectionRef[]>();
+  for (const r of (st ?? []) as any[]) { const s = refs.get(r.chunk_id); if (s) byStep.set(r.step, [...(byStep.get(r.step) ?? []), s]); }
+  const steps = [...byStep.entries()].sort((a, b) => a[0] - b[0]).map(([step, sections]) => ({ step, sections: sections.sort((a, b) => a.materialId.localeCompare(b.materialId) || a.ordinal - b.ordinal) }));
+  return { ok: true, data: { session: toSession(data), steps } };
+}
+
+/** Move the session on (or back): the current step, active or completed, and when it was last used. */
+export async function updateLearningSession(admin: Admin, userId: string, id: string, patch: { currentStep?: number; status?: "active" | "completed" }): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(id)) return "not_found";
+  const { data, error } = await admin.from("individual_scholar_learning_session")
+    .update({ ...(patch.currentStep !== undefined ? { current_step: patch.currentStep } : {}), ...(patch.status ? { status: patch.status } : {}), last_active_at: new Date().toISOString() })
+    .eq("user_id", userId).eq("id", id).select("id");
+  if (error) return "failed";
+  return (data ?? []).length ? "ok" : "not_found";
+}
+
+/** One learning action, with the sections it used and, for a clarification, the informal verdict. Structure only. */
+export async function recordLearningEvent(admin: Admin, userId: string, input: { sessionId: string; step: number; action: string; verdict: string | null; chunkIds: readonly string[] }): Promise<"ok" | "failed"> {
+  const { data, error } = await admin.from("individual_scholar_learning_event")
+    .insert({ session_id: input.sessionId, user_id: userId, step: input.step, action: input.action, verdict: input.verdict }).select("id").single();
+  if (error) return "failed";
+  const ids = [...new Set(input.chunkIds.filter(isUuid))];
+  if (ids.length) {
+    const { error: e2 } = await admin.from("individual_scholar_learning_event_source").insert(ids.map(chunk_id => ({ event_id: data.id, user_id: userId, chunk_id })));
+    if (e2) return "failed";
+  }
+  await admin.from("individual_scholar_learning_session").update({ last_active_at: new Date().toISOString() }).eq("user_id", userId).eq("id", input.sessionId);
+  return "ok";
+}
+
+export type LearningEventRow = { step: number; action: string; verdict: string | null; createdAt: string };
+
+/** A session's events, in order (what was done, and the informal check outcomes). */
+export async function learningEvents(admin: Admin, userId: string, sessionId: string): Promise<Read<LearningEventRow[]>> {
+  const { data, error } = await admin.from("individual_scholar_learning_event").select("step, action, verdict, created_at").eq("user_id", userId).eq("session_id", sessionId).order("created_at").limit(2000);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(r => ({ step: r.step, action: r.action, verdict: r.verdict, createdAt: r.created_at })) };
+}
+
+export type LearningPreference = { depth: "brief" | "standard" | "detailed"; defaultAction: string };
+
+export async function getLearningPreference(admin: Admin, userId: string): Promise<LearningPreference | null> {
+  const { data, error } = await admin.from("individual_scholar_learning_preference").select("depth, default_action").eq("user_id", userId).maybeSingle();
+  if (error || !data) return null;
+  return { depth: data.depth, defaultAction: data.default_action };
+}
+
+export async function setLearningPreference(admin: Admin, userId: string, pref: LearningPreference): Promise<"ok" | "not_provisioned" | "failed"> {
+  const { error } = await admin.from("individual_scholar_learning_preference")
+    .upsert({ user_id: userId, depth: pref.depth, default_action: pref.defaultAction, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (error) return isNotProvisioned(error) ? "not_provisioned" : "failed";
+  return "ok";
+}
+
+/**
+ * L4: learning activity per competency, for Progress -- the actions taken on sections linked (not rejected) to each
+ * competency, and the latest informal check outcome among them. ACTIVITY, NOT EVIDENCE: nothing here is assessment.
+ * Null where 414 is absent (not measured).
+ */
+export async function learningActivityByCompetency(admin: Admin, userId: string): Promise<Map<string, { actions: number; lastVerdict: string | null; lastAt: string }> | null> {
+  const { data: src, error } = await admin.from("individual_scholar_learning_event_source").select("event_id, chunk_id").eq("user_id", userId).limit(10000);
+  if (error) return isNotProvisioned(error) ? null : new Map();
+  if (!src?.length) return new Map();
+  const { data: ev } = await admin.from("individual_scholar_learning_event").select("id, verdict, created_at").eq("user_id", userId).in("id", [...new Set((src as any[]).map(r => r.event_id))]).limit(10000);
+  const events = new Map(((ev ?? []) as any[]).map(r => [r.id, r]));
+  const links = await sectionLinks(admin, userId, [...new Set((src as any[]).map(r => r.chunk_id))]);
+  const out = new Map<string, { actions: number; lastVerdict: string | null; lastAt: string; seen: Set<string> }>();
+  for (const s of src as any[]) {
+    const e = events.get(s.event_id); if (!e) continue;
+    for (const l of links.filter(x => x.chunkId === s.chunk_id)) {
+      const cur = out.get(l.competencyId) ?? { actions: 0, lastVerdict: null, lastAt: "", seen: new Set<string>() };
+      if (!cur.seen.has(e.id)) { cur.seen.add(e.id); cur.actions++; }
+      if (e.created_at > cur.lastAt) { cur.lastAt = e.created_at; if (e.verdict) cur.lastVerdict = e.verdict; }
+      else if (e.verdict && !cur.lastVerdict) cur.lastVerdict = e.verdict;
+      out.set(l.competencyId, cur);
+    }
+  }
+  return new Map([...out].map(([k, v]) => [k, { actions: v.actions, lastVerdict: v.lastVerdict, lastAt: v.lastAt }]));
+}
+
+// ── AI-FAIR-USE-01 s8: THE LEARNING ARTEFACT LIBRARY (migration 415) ──────────────────────────────────
+//
+// A saved explanation or summary: the notes part (cited [S n] to its sources in order), the background and flags
+// as shown, the governed references as shown, provenance, and a review status that can only be private_formative.
+// One per dedupe key per student: the same request returns the saved one. Absent table (415): nothing is saved.
+
+export type ArtefactRow = {
+  id: string; materialId: string; action: string; depth: string; content: string; background: string | null;
+  flags: { text: string; cited: number[] }[]; refs: any[]; model: string; promptVersion: string; reviewStatus: "private_formative"; createdAt: string;
+  sources: string[];
+};
+const ARTEFACT_COLS = "id, material_id, action, depth, content, background, flags, refs, model, prompt_version, review_status, created_at";
+const toArtefact = (r: any, sources: string[]): ArtefactRow => ({
+  id: r.id, materialId: r.material_id, action: r.action, depth: r.depth, content: r.content, background: r.background ?? null,
+  flags: Array.isArray(r.flags) ? r.flags : [], refs: Array.isArray(r.refs) ? r.refs : [], model: r.model, promptVersion: r.prompt_version,
+  reviewStatus: "private_formative", createdAt: r.created_at, sources,
+});
+
+async function artefactSources(admin: Admin, userId: string, ids: string[]): Promise<Map<string, string[]>> {
+  if (!ids.length) return new Map();
+  const { data } = await admin.from("individual_scholar_artefact_source").select("artefact_id, ordinal, chunk_id").eq("user_id", userId).in("artefact_id", ids).order("ordinal").limit(5000);
+  const out = new Map<string, string[]>();
+  for (const r of (data ?? []) as any[]) out.set(r.artefact_id, [...(out.get(r.artefact_id) ?? []), r.chunk_id]);
+  return out;
+}
+
+/** The person's saved artefact for this request, or null (none, or 415 absent). */
+export async function findArtefact(admin: Admin, userId: string, dedupeKey: string): Promise<ArtefactRow | null> {
+  const { data, error } = await admin.from("individual_scholar_artefact").select(ARTEFACT_COLS).eq("user_id", userId).eq("dedupe_key", dedupeKey).maybeSingle();
+  if (error || !data) return null;
+  return toArtefact(data, (await artefactSources(admin, userId, [data.id])).get(data.id) ?? []);
+}
+
+/** Save (or replace, for the same key) one artefact. "not_provisioned" where 415 is absent. */
+export async function saveArtefact(admin: Admin, userId: string, a: {
+  materialId: string; action: string; depth: string; content: string; background: string | null; flags: unknown[]; refs: unknown[];
+  dedupeKey: string; model: string; promptVersion: string; chunkIds: readonly string[];
+}): Promise<"ok" | "not_provisioned" | "failed"> {
+  const del = await admin.from("individual_scholar_artefact").delete().eq("user_id", userId).eq("dedupe_key", a.dedupeKey);
+  if (del.error) return isNotProvisioned(del.error) ? "not_provisioned" : "failed";
+  const { data, error } = await admin.from("individual_scholar_artefact").insert({
+    user_id: userId, material_id: a.materialId, action: a.action, depth: a.depth, content: a.content.slice(0, 20000),
+    background: a.background ? a.background.slice(0, 2000) : null, flags: a.flags, refs: a.refs, dedupe_key: a.dedupeKey,
+    model: a.model.slice(0, 200), prompt_version: a.promptVersion.slice(0, 200), review_status: "private_formative",
+  }).select("id").single();
+  if (error) return isNotProvisioned(error) ? "not_provisioned" : "failed";
+  const rows = a.chunkIds.slice(0, 10).map((chunk_id, i) => ({ artefact_id: data.id, user_id: userId, ordinal: i + 1, chunk_id }));
+  const { error: sErr } = rows.length ? await admin.from("individual_scholar_artefact_source").insert(rows.map(r => ({ ...r, user_id: userId }))) : { error: null };
+  if (sErr) { await admin.from("individual_scholar_artefact").delete().eq("user_id", userId).eq("id", data.id); return "failed"; }
+  return "ok";
+}
+
+/** The person's saved artefacts (all, or one material's, or those built on some sections), newest first. */
+export async function listArtefacts(admin: Admin, userId: string, opts: { materialId?: string; chunkIds?: readonly string[] } = {}): Promise<Read<ArtefactRow[]>> {
+  let ids: string[] | null = null;
+  if (opts.chunkIds?.length) {
+    const { data, error } = await admin.from("individual_scholar_artefact_source").select("artefact_id").eq("user_id", userId).in("chunk_id", [...opts.chunkIds]).limit(2000);
+    if (error) return fail(error);
+    ids = [...new Set(((data ?? []) as any[]).map(r => r.artefact_id))];
+    if (!ids.length) return { ok: true, data: [] };
+  }
+  let q = admin.from("individual_scholar_artefact").select(ARTEFACT_COLS).eq("user_id", userId);
+  if (opts.materialId) q = q.eq("material_id", opts.materialId);
+  if (ids) q = q.in("id", ids);
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(500);
+  if (error) return fail(error);
+  const src = await artefactSources(admin, userId, ((data ?? []) as any[]).map(r => r.id));
+  return { ok: true, data: ((data ?? []) as any[]).map(r => toArtefact(r, src.get(r.id) ?? [])) };
+}
+
+/** After a material is deleted: sessions with no step left have nothing to teach, and go too. */
+async function pruneEmptySessions(admin: Admin, userId: string): Promise<void> {
+  const { data: sessions, error } = await admin.from("individual_scholar_learning_session").select("id").eq("user_id", userId).limit(1000);
+  if (error || !sessions?.length) return;
+  const { data: steps } = await admin.from("individual_scholar_learning_step").select("session_id").eq("user_id", userId).limit(20000);
+  const live = new Set(((steps ?? []) as any[]).map(r => r.session_id));
+  const empty = (sessions as any[]).map(r => r.id).filter(id => !live.has(id));
+  if (empty.length) await admin.from("individual_scholar_learning_session").delete().eq("user_id", userId).in("id", empty);
 }
 
 /** Save the person's own topics for one of their sections. "not_provisioned" where 408 is absent. */

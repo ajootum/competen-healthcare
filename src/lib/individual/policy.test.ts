@@ -52,6 +52,11 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarQuestionsPerRequest: QUESTIONS_PER_REQUEST, scholarMaterialsPerPerson: MAX_MATERIALS_PER_PERSON,
       // Stage 2: PDF and Word only until HQ turns plain text on (it needs migration 405); 10 MB; 300 pages.
       scholarUploadFormats: ["pdf", "docx"], scholarUploadMaxMb: 10, scholarPdfMaxPages: 300, scholarPptxMaxSlides: 150,
+      // LEARN-01 L5: every action offered, Teach me first, background labelled, standard depth, 8 steps, checks
+      // offered, outcomes shown, 6 turns, structured history recorded.
+      scholarLearningActions: ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask"], scholarDefaultAction: "teach",
+      scholarBeyondNotes: "labelled", scholarExplanationDepth: "standard", scholarSessionMaxSteps: 8, scholarCheckBehaviour: "offer",
+      scholarLearningObjectives: "outcomes", scholarTutorTurns: 6, scholarLearningHistory: "record",
       // Upload limits (owner GO 2026-10-24): the per-file value stays 10 MB (ceiling 25); a session is 10 files, 100 MB.
       scholarUploadSessionFiles: 10, scholarUploadSessionMb: 100,
       scholarInsightMinAnswers: INSIGHT_MIN_ANSWERS, scholarInsightWindowDays: INSIGHT_WINDOW_DAYS,

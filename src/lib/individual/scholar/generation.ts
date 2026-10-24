@@ -2,7 +2,7 @@ import { generate } from "@/lib/ai/client";
 import { parseJsonArray, textGroundingViolations, type PhrasingViolation } from "@/lib/ai/grounding";
 import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib/competency/mapping";
 import { CONTEXT_PREAMBLE } from "./learner-context";
-import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST } from "./config";
+import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, type CheckVerdict, type ExplanationDepth, type LearnAction } from "./config";
 import { citeChunk, findPatientIdentifiers } from "./extract";
 import { structureLabel, type CatalogueCompetency } from "./catalogue";
 import { VERIFY_SYSTEM, applyVerification, passageVocabulary, qualityProblems, verificationPrompt, type QualityReason } from "./question-quality";
@@ -72,6 +72,7 @@ export const EXPLAIN_SYSTEM = [
   "2. After every sentence that uses a passage, cite it with its tag in square brackets, for example [S2]. Cite only tags you were given.",
   "3. Keep every number, unit and clinical term exactly as the passages write it. Do not introduce clinical descriptors (such as normal, raised, reduced, positive, stable) that the passages do not use.",
   "   Never write a number, in digits or in words, that the passages do not contain. That includes counting: write 'by creatinine and by urine output', not 'in two ways'.",
+  "   Never count or number the things a passage lists: write 'the signs it describes', never 'three signs', and never number your own points ('first', 'second' are fine, 'three steps' is not).",
   `4. If the passages do not answer the question, reply with exactly ${NOT_IN_NOTES} and nothing else.`,
   "5. Explain clearly and simply, as a good tutor would: short paragraphs, or a simple list with lines starting '- '. No markdown headings, bold, tables or emoji.",
   "6. Do not give advice about a real patient. This is study, not clinical guidance.",
@@ -172,6 +173,11 @@ const UNIT_OR_DOSE = /%|\b(mg|mcg|micrograms?|milligrams?|kg|ml|millilitres?|mil
 /** Pure. Background beyond the notes, or why it is withheld. */
 export function checkSupplementary(text: string, mode: ExplainMode): SupplementaryCheck {
   if (!SUPPLEMENTARY_MODES.includes(mode)) return { ok: false, reason: "not_this_mode" };
+  return checkBackgroundText(text);
+}
+
+/** Pure. The background rules themselves, whatever asked for it: general principles only, no figures or doses. */
+export function checkBackgroundText(text: string): SupplementaryCheck {
   const t = text.trim();
   if (t.length > 900) return { ok: false, reason: "too_long" };
   if (/\[S\d+\]/.test(t)) return { ok: false, reason: "citation" };
@@ -311,6 +317,171 @@ export async function runExplain(userId: string, question: string, passages: Pas
     check: checkExplanation(split.main, asked, passages),
     supplementary: split.extra === null ? null : checkSupplementary(split.extra, mode),
     model: r.model, provider: r.provider, promptVersion: explainPromptVersion(mode),
+  };
+}
+
+// ── STAGE 3: LEARN ── COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24) ───────────────────────────────────
+//
+// The learning actions run on THIS engine: EXPLAIN_SYSTEM's rules, generate() with person attribution, the
+// Holdings grounding check. Not a second engine. What Stage 3 adds:
+//   - more actions (teach, examples, ask) and the informal check (check, then clarify with a verdict);
+//   - a depth (brief, standard, detailed);
+//   - GOVERNED REFERENCES: the competencies and learning outcomes of the student's programme catalogue that the
+//     sections are linked to, tagged [R1] ... and labelled with their review state. They may be cited only to say
+//     what the student is working towards. They ground nothing clinical beyond their own words.
+//   - FOUR KINDS OF CONTENT, kept apart (owner GO s7): from the notes ([S n], checked), governed reference
+//     ([R n]), AI background beyond the notes (after BEYOND THE NOTES:, checked by the background rules, only
+//     where policy allows), and AI flags (after CHECK THIS:) -- statements in the notes the model thinks
+//     contradict another passage or look unclear or unsafe. Each flag must cite the passage it concerns, and is
+//     shown as the AI's flag for the student to check, never as a correction. Nothing invents a citation: a tag
+//     outside the ones given withholds the answer.
+
+export type GovernedReference = { title: string; code: string | null; outcome: string | null; status: string; competencyId?: string };
+export const FLAG_MARKER = "CHECK THIS:";
+const DEPTH_WORDS: Record<ExplanationDepth, number> = { brief: 120, standard: 220, detailed: 350 };
+const BACKGROUND_ACTIONS: readonly LearnAction[] = ["teach", "deeper", "examples"];
+
+const LEARN_INSTRUCTION: Record<LearnAction | "check" | "clarify", string> = {
+  teach: "MODE: TEACH ME, one step of a guided lesson. First INTRODUCE the idea of these passages in one or two sentences: what it is and why it matters, from the passages. Then EXPLAIN it clearly, building from simple to more detailed, citing as you go. Teach, do not just list.",
+  explain: "MODE: EXPLAIN THIS. Explain the passages clearly, as a good tutor would, citing as you go.",
+  simplify: "MODE: SIMPLIFY. Explain as simply as you can, for someone meeting the topic for the first time: short sentences and everyday words. Keep every technical term exactly and say what it means using the passages. Keep the passages' own names for things -- write 'the right and left main bronchi', never 'two tubes': simpler words, never a count instead of the names. Notes only.",
+  deeper: "MODE: GO DEEPER. Explain how the ideas in the passages connect, the reasoning and mechanisms behind them, and what a student should understand rather than memorise, citing as you go. If a point is not in the passages, it does not belong here.",
+  examples: "MODE: GIVE EXAMPLES. Give up to three short practical situations that show the ideas of the passages at work, each one or two sentences about 'a patient' or 'the person caring for them', using ONLY what the passages say: their signs, actions and reasons. Cite the passage each example rests on. No names, ages, numbers, drugs or findings the passages do not contain.",
+  summary: "MODE: SUMMARISE. List the important learning points of the passages, each line starting '- ' and ending with its citation. Notes only.",
+  ask: "MODE: ASK SCHOLAR. Answer the student's question from the passages, citing as you go. If they do not answer it, reply with exactly NOT_IN_NOTES.",
+  check: "MODE: CHECK UNDERSTANDING. Write ONE short open question that checks whether the student understood the main idea of the passages -- a question they could answer in a sentence or two from the passages, asking them to explain, not to recall a number. Never ask how many of anything. Reply with exactly one line: 'QUESTION: ' followed by the question. Nothing else.",
+  clarify: "MODE: CLARIFY. You asked the student a check question and they answered. Judge their answer ONLY against the passages. Your first line is exactly one of 'VERDICT: understood', 'VERDICT: partly' or 'VERDICT: not_yet'. Then, briefly and kindly: say what they got right, then correct or complete it from the passages, citing as you go. Do not judge anything the passages do not cover.",
+};
+
+/** The system prompt for one learning action: EXPLAIN_SYSTEM's rules, the action, the depth, and what may follow. */
+export function learnSystem(action: LearnAction | "check" | "clarify", opts: { depth: ExplanationDepth; background: boolean; references: boolean }): string {
+  const parts = [EXPLAIN_SYSTEM, "", LEARN_INSTRUCTION[action]];
+  if (action !== "check") parts.push(`Keep the part from the notes under ${DEPTH_WORDS[opts.depth]} words${opts.depth === "brief" ? ", and keep it short" : ""}.`);
+  // v2: the staging journey saw Simplify withheld twice for "two" -- a count the notes did not contain. Said last,
+  // where it is read just before writing.
+  if (action !== "check") parts.push("LAST, before you reply: if any sentence says how many of something there are (two, three, both, a couple, a few), rewrite it without the count, unless the passages themselves give that number.");
+  if (opts.references && action !== "check")
+    parts.push("GOVERNED REFERENCES, tagged [R1], [R2] ...: competencies and learning outcomes from the student's programme catalogue that these passages are linked to. You may cite one as [R n] only to say what the student is working towards. Never use them as a source of clinical facts.");
+  if (opts.background && BACKGROUND_ACTIONS.includes(action as LearnAction))
+    parts.push(`Optional: general background that is NOT in the passages, after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 100 words, general principles only, with no numbers, units, doses, drug names, values or thresholds, no citation tags, and no advice about any patient.`);
+  if (action !== "check")
+    parts.push(`Optional, last: if a passage says something that contradicts another passage, or that looks unclear, outdated or possibly unsafe to act on, add a line that reads exactly ${FLAG_MARKER} and then one line per concern starting '- ', citing the passage concerned. Do not correct it with outside facts: say only what to check, against their course materials or with a supervisor. Leave this out when there is nothing to flag.`);
+  return parts.join("\n");
+}
+
+export function learnUserPrompt(question: string, passages: Passage[], references: GovernedReference[], history: TutorTurn[], learnerContext: string | null): string {
+  const about = learnerContext ? `${CONTEXT_PREAMBLE}\n${learnerContext}\n\n` : "";
+  const blocks = passages.map((p, i) => `[${passageTag(i)}] (${passageCitation(p)})\n${p.content}`);
+  const refs = references.length ? `\n\nGOVERNED REFERENCES:\n${references.map((r, i) => `[R${i + 1}] ${r.code ? `${r.code} ` : ""}${r.title}${r.outcome ? ` -- outcome: ${r.outcome}` : ""} (${r.status})`).join("\n")}` : "";
+  const convo = history.length ? `\n\nOUR CONVERSATION SO FAR:\n\n${history.map(t => `${t.speaker === "tutor" ? "SCHOLAR" : "STUDENT"}: ${t.text}`).join("\n\n")}` : "";
+  return `${about}PASSAGES FROM MY NOTES:\n\n${blocks.join("\n\n")}${refs}${convo}\n\n${history.length ? "MY REPLY" : "MY REQUEST"}: ${question}`;
+}
+
+/** Pure. The answer, its background (after BEYOND THE NOTES:) and its flags (after CHECK THIS:), in either order. */
+export function splitLearnAnswer(raw: string): { main: string; background: string | null; flags: string | null } {
+  const bg = /^[\s*_#>-]*BEYOND THE NOTES:?[\s*_]*/im.exec(raw), fl = /^[\s*_#>-]*CHECK THIS:?[\s*_]*/im.exec(raw);
+  const cuts = [bg && { k: "background" as const, at: bg.index, end: bg.index + bg[0].length }, fl && { k: "flags" as const, at: fl.index, end: fl.index + fl[0].length }]
+    .filter((x): x is { k: "background" | "flags"; at: number; end: number } => !!x).sort((a, b) => a.at - b.at);
+  const out = { main: (cuts.length ? raw.slice(0, cuts[0].at) : raw).trim(), background: null as string | null, flags: null as string | null };
+  cuts.forEach((c, i) => { const text = raw.slice(c.end, cuts[i + 1]?.at ?? raw.length).trim(); out[c.k] = text || null; });
+  return out;
+}
+
+/**
+ * Pure. The notes-based part of a learning answer: every [S n] and [R n] must be one that was given, there must be
+ * at least one [S n], and nothing may be added that the passages, the governed references (their own words) and
+ * what the student typed do not contain.
+ */
+export function checkLearnMain(main: string, asked: string, passages: Passage[], references: GovernedReference[]): ExplainCheck {
+  const text = main.trim();
+  if (!text || text.replace(/[^A-Z_]/g, "") === NOT_IN_NOTES || text.startsWith(NOT_IN_NOTES)) return { ok: false, reason: "not_in_notes" };
+  const s = [...text.matchAll(/\[S(\d+)\]/g)].map(m => Number(m[1])), r = [...text.matchAll(/\[R(\d+)\]/g)].map(m => Number(m[1]));
+  if (!s.length) return { ok: false, reason: "no_citation" };
+  if (s.some(t => t < 1 || t > passages.length) || r.some(t => t < 1 || t > references.length)) return { ok: false, reason: "bad_citation" };
+  const prose = text.replace(/\[[SR]\d+\]/g, " ");
+  const grounding = [...passages.map(p => `${passageCitation(p)}\n${p.content}`), ...references.map(x => `${x.code ?? ""} ${x.title} ${x.outcome ?? ""}`), asked];
+  const violations = groundingViolations(prose, grounding);
+  if (violations.length) return { ok: false, reason: "ungrounded", violations };
+  return { ok: true, text, cited: [...new Set(s)].sort((a, b) => a - b) };
+}
+
+export type LearnFlag = { text: string; cited: number[] };
+
+/** Pure. The AI's flags: each line must cite a given passage and add nothing the passages do not hold. Others are dropped. */
+export function checkFlags(raw: string | null, passages: Passage[]): { kept: LearnFlag[]; dropped: number } {
+  if (!raw) return { kept: [], dropped: 0 };
+  const lines = raw.split("\n").map(l => l.replace(/^[\s*-]+/, "").trim()).filter(Boolean);
+  const kept: LearnFlag[] = [];
+  let dropped = 0;
+  for (const line of lines.slice(0, 5)) {
+    const tags = [...line.matchAll(/\[S(\d+)\]/g)].map(m => Number(m[1]));
+    const ok = tags.length > 0 && tags.every(t => t >= 1 && t <= passages.length) && !findPatientIdentifiers(line).length
+      && !groundingViolations(line.replace(/\[S\d+\]/g, " "), passages.map(p => p.content)).length;
+    if (ok) kept.push({ text: line, cited: [...new Set(tags)] }); else dropped++;
+  }
+  return { kept, dropped: dropped + Math.max(0, lines.length - 5) };
+}
+
+export type CheckQuestionResult = { ok: true; question: string } | { ok: false; reason: "malformed" | "ungrounded" | "identifier" };
+
+/** Pure. The informal check question: one line, a question, nothing the passages do not hold. */
+export function checkCheckQuestion(raw: string, passages: Passage[]): CheckQuestionResult {
+  const m = /QUESTION:\s*(.+)/i.exec(raw.trim());
+  const q = m?.[1]?.split("\n")[0].trim() ?? "";
+  if (q.length < 8 || q.length > 300 || !q.endsWith("?")) return { ok: false, reason: "malformed" };
+  if (findPatientIdentifiers(q).length) return { ok: false, reason: "identifier" };
+  if (groundingViolations(q, passages.map(p => p.content)).length) return { ok: false, reason: "ungrounded" };
+  return { ok: true, question: q };
+}
+
+/** Pure. The verdict line of a clarification, and the rest of it. */
+export function parseVerdict(raw: string): { verdict: CheckVerdict | null; rest: string } {
+  const m = /^\s*\**VERDICT:\s*(understood|partly|not[_ ]yet)\**\s*$/im.exec(raw);
+  if (!m) return { verdict: null, rest: raw };
+  const verdict = m[1].toLowerCase().replace(" ", "_") as CheckVerdict;
+  return { verdict, rest: (raw.slice(0, m.index) + raw.slice(m.index + m[0].length)).trim() };
+}
+
+export const learnPromptVersion = (action: LearnAction | "check" | "clarify") => `${PROMPT_VERSIONS.learn}:${action}`;
+
+export type LearnResult = AiFailure | {
+  ok: true; action: LearnAction | "check" | "clarify"; model: string; provider: string; promptVersion: string;
+  check: ExplainCheck; background: SupplementaryCheck | null; flags: { kept: LearnFlag[]; dropped: number };
+  verdict: CheckVerdict | null; question: CheckQuestionResult | null;
+};
+
+/**
+ * One learning action on the given passages. `asked` grounding is what the student typed (their question, their
+ * answer to a check) and the check question itself -- they were shown or wrote it. Background is asked for only
+ * when `background` is true and the action may carry it; it is split off and checked by the background rules.
+ */
+export async function runLearn(userId: string, args: {
+  action: LearnAction | "check" | "clarify"; question: string; passages: Passage[]; references: GovernedReference[];
+  depth: ExplanationDepth; background: boolean; history: TutorTurn[]; learnerContext: string | null;
+}): Promise<LearnResult> {
+  const r = await generate({
+    system: learnSystem(args.action, { depth: args.depth, background: args.background, references: args.references.length > 0 }),
+    user: learnUserPrompt(args.question, args.passages, args.references, args.history, args.learnerContext),
+    tier: "reasoning",
+    maxTokens: args.action === "check" ? 200 : args.depth === "detailed" ? 1100 : 800,
+    context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_learn" },
+  });
+  if (!r.ok) return { ok: false, error: r.error };
+  const base = { ok: true as const, action: args.action, model: r.model, provider: r.provider, promptVersion: learnPromptVersion(args.action) };
+  if (args.action === "check") {
+    const question = checkCheckQuestion(r.text, args.passages);
+    return { ...base, check: { ok: false, reason: "not_in_notes" }, background: null, flags: { kept: [], dropped: 0 }, verdict: null, question };
+  }
+  const { verdict, rest } = args.action === "clarify" ? parseVerdict(r.text) : { verdict: null, rest: r.text };
+  const split = splitLearnAnswer(rest);
+  const asked = [args.question, ...args.history.map(t => t.text)].join("\n");
+  const mayBackground = args.background && BACKGROUND_ACTIONS.includes(args.action as LearnAction);
+  return {
+    ...base,
+    check: checkLearnMain(split.main, asked, args.passages, args.references),
+    background: split.background === null ? null : mayBackground ? checkBackgroundText(split.background) : { ok: false, reason: "not_this_mode" },
+    flags: checkFlags(split.flags, args.passages),
+    verdict, question: null,
   };
 }
 

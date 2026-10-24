@@ -22,6 +22,8 @@ const MAX_ITEMS = 5;
 
 export type LearnerContextInput = {
   programme: string | null;
+  /** LEARN-01 L3: the student's level within the programme (402), so explanations are pitched to it. */
+  level?: string | null;
   /** The competencies the passages in this turn are linked to by the person's ACCEPTED mappings. */
   passageCompetencies: { title: string; structure: string | null }[];
   /** Progress by competency (competency-progress.ts), or null when it could not be read. */
@@ -32,10 +34,15 @@ export type LearnerContextInput = {
 const words = (s: string) => s.replace(/\b[A-Z]{2,}(?:-[A-Z0-9]+)+\b/g, "").replace(/\d+/g, "").replace(/\s+/g, " ").replace(/\s+([,.;:)])/g, "$1").replace(/\(\s+/g, "(").trim();
 const list = (xs: string[]) => [...new Set(xs.map(words).filter(Boolean))].slice(0, MAX_ITEMS).join("; ");
 
+const SMALL = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+
 /** Pure. The context block, or null when there is nothing worth saying. */
 export function buildLearnerContext(input: LearnerContextInput): string | null {
   const lines: string[] = [];
   if (input.programme && words(input.programme)) lines.push(`I study: ${words(input.programme)}.`);
+  // A level is often "Year 2": its small numbers are spelled out, so the level survives the words-only rule.
+  const level = input.level ? words(input.level.replace(/\b(\d{1,2})\b/g, (_, n) => SMALL[Number(n)] ?? "")) : "";
+  if (level) lines.push(`My level: ${level}. Pitch explanations to it.`);
   const here = list(input.passageCompetencies.map(c => (c.structure ? `${c.title} (${c.structure})` : c.title)));
   if (here) lines.push(`I have linked these passages to these competencies: ${here}.`);
   if (input.progress) {
