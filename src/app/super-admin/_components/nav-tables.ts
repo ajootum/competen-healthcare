@@ -57,6 +57,11 @@ export const GENERAL_NAV: NavSection[] = [
     // P0 controlled catalogues (migration 394): what a catalogue names, and its content status.
     { label: "Controlled Catalogues", href: "/super-admin/individual/catalogues", icon: "📚" },
   ]},
+  // Migration 395 (owner decision D2): Holdings clinical-content approval, for every product.
+  { group: "CLINICAL CONTENT", items: [
+    { label: "Clinical Review", href: "/super-admin/clinical-review", icon: "🩺" },
+    { label: "Clinical Review Governance", href: "/super-admin/clinical-review/governance", icon: "⚖️" },
+  ]},
   { group: "STRATEGY & PRIORITIES", items: [
     { label: "Strategy Manager", href: "/super-admin/priorities", icon: "🎯" },
     { label: "Priority Distribution", href: "/super-admin/priorities/distribution", icon: "🌊" },

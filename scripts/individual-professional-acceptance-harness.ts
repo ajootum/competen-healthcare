@@ -41,7 +41,7 @@ import { grantIndividualAccess, validateGrant, isGrantRefusal, endIndividualExpe
 import { loadReminderPrefs } from "../src/lib/individual/professional/preferences";
 import { loadIndividualPassport } from "../src/lib/individual/passport";
 import { loadProfessionalRecord } from "../src/lib/individual/professional/record";
-import { evidenceCoverage, planProgress, cpdHoursByYear } from "../src/lib/individual/professional/progress";
+import { evidenceCoverage, goalActivity, planProgress, cpdHoursByYear } from "../src/lib/individual/professional/progress";
 import { mintShare, listShares, revokeShare, shareCarriesOwnRecords } from "../src/lib/individual/professional/share";
 import { scanProfessionalReminders, type ReminderSender } from "../src/lib/individual/professional/reminders";
 import { loadSharedFrameworks, loadSharedCompetencies, checkSharedReference } from "../src/lib/individual/professional/frameworks";
@@ -426,10 +426,22 @@ async function main() {
   const fws = await loadSharedFrameworks(admin);
   const has393 = !(await admin.from("individual_professional_competency_map").select("id").limit(0)).error;
   if (!has393) console.log("  PEND  K0-K12: migration 393 is not applied on this project");
-  if (has393 && !allowBefore) await mappingDefault(pro, cpdDoc.data!.id);
   let kNames: Awaited<ReturnType<typeof mappingGroup>> | undefined;
-  if (!allowBefore) ok("G0. ⚠ S1: with no Professional allowlist, no framework is offered at all, published or not", fws !== null && fws.length === 0, `${fws?.length} offered`);
-  else console.log("  PEND  G0. an allowlist is already set on this project; the default is pinned by the static harness F2");
+  // ⚠ THE EMPTY DEFAULT IS PROVEN EVERY RUN (owner decision D1: Professional must stay usable with no catalogue).
+  // Staging may now offer CF-FOUND, so the run empties the allowlist for these checks and restores it exactly.
+  await admin.from("workspace_config_overrides").delete().match(ALLOW);
+  try {
+    if (has393) await mappingDefault(pro, cpdDoc.data!.id);
+    const none = await loadSharedFrameworks(admin);
+    ok("G0. ⚠ S1: with no Professional allowlist, no framework is offered at all, published or not", none !== null && none.length === 0, `${none?.length} offered`);
+    const rec = await loadProfessionalRecord(admin, pro);
+    const acts = goalActivity(rec.goals ?? [], rec.cpd ?? [], today);
+    const prog0 = has393 ? professionalProgress(await loadMappingView(admin, pro), rec) : null;
+    const mine = acts.find(x => x.goalId === goal.data!.id);
+    ok("OD0. ⚠ owner D1: with no catalogue Professional still works -- goals, CPD by goal and hours read back, coverage is Not measured with its reason",
+      !!rec.goals?.length && mine?.entries === 1 && mine?.hours === 7.5 && (prog0 === null || (prog0.coverage.state === "not_measured" && prog0.coverage.reason === PROFESSIONAL_COVERAGE_REASONS.noCatalogue)),
+      JSON.stringify({ goals: rec.goals?.length, acts, coverage: prog0?.coverage }));
+  } finally { await restoreAllow(); }
   const fwIds = (fws ?? []).map(f => f.id);
   const leak = fwIds.length ? await admin.from("frameworks").select("id").in("id", fwIds).not("hospital_id", "is", null) : { data: [] };
   const unpublished = fwIds.length ? await admin.from("frameworks").select("id").in("id", fwIds).neq("pub_status", "published") : { data: [] };
@@ -459,7 +471,18 @@ async function main() {
     } finally { await restoreAllow(); }
     const back = (await admin.from("workspace_config_overrides").select("*").match(ALLOW).maybeSingle()).data;
     ok("G6. the Professional allowlist is restored exactly", JSON.stringify(back) === JSON.stringify(allowBefore));
-    if (has393 && !allowBefore) await mappingAfterRestore(pro, kNames);
+    if (has393) {
+      await admin.from("workspace_config_overrides").delete().match(ALLOW);
+      try { await mappingAfterRestore(pro, kNames); } finally { await restoreAllow(); }
+    }
+    // D1: with the allowlist as staging holds it, every offered competency carries its real review state.
+    const offeredNow = has393 ? (await loadMappingView(admin, pro)).offered : null;
+    if (offeredNow?.length) {
+      const cat = await loadCatalogueFor(admin, "professional");
+      const truthful = (cat ?? []).every(c => (c.contentStatus === "approved") === (c.clinicalState === "approved"));
+      ok("OD1. owner D1: every competency Professional offers shows its actual clinical review state, and none reads approved without a clinical approval",
+        offeredNow.every(o => !!o.review) && truthful, JSON.stringify([...new Set(offeredNow.map(o => o.review))]));
+    } else console.log("  PEND  OD1. Professional offers nothing on this project (allowlist empty)");
   } else console.log("  PEND  G4. staging has no published shared framework to offer");
   const hospFw = await admin.from("frameworks").select("id").not("hospital_id", "is", null).limit(1).maybeSingle();
   if (hospFw.data) ok("G2. ⚠ a hospital framework is refused as a reference", (await checkSharedReference(admin, hospFw.data.id, null)) !== null);

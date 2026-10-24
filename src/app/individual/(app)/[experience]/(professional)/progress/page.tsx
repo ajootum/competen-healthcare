@@ -168,7 +168,12 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
                 ))}
               </ul>
             )}
-            <p className="mt-3 text-[12.5px] text-gray-500">Linked means you connected a CPD entry or evidence item to the competency. It does not mean you have achieved it, and nobody has verified it.</p>
+            {/* Owner decision D1: the actual clinical review status of what is offered, always shown. */}
+            <p className="mt-3 text-[12.5px] font-semibold text-amber-900">
+              {(() => { const all = map.catalogue ?? []; const ok = all.filter(c => c.contentStatus === "approved").length;
+                return ok === all.length ? `All ${all.length} offered competencies are clinically approved.` : `${ok} of ${all.length} offered competencies are clinically approved. The rest are not clinically reviewed yet.`; })()}
+            </p>
+            <p className="mt-1 text-[12.5px] text-gray-500">Linked means you connected a CPD entry or evidence item to the competency. It does not mean you have achieved it, and nobody has verified it.</p>
           </>
         )}
       </Section>

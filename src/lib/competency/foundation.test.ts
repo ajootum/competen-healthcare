@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedCatalogueIds, assembleCatalogue, loadIndividualCatalogue } from "./foundation";
+import { allowedCatalogueIds, assembleCatalogue, loadIndividualCatalogue, withClinicalReview } from "./foundation";
 
 const base = {
   frameworks: [
@@ -60,7 +60,19 @@ describe("the shared competency foundation read API (S1)", () => {
     expect(out.map(c => c.competencyId)).toEqual(["c-air", "c-oxy"]);
     expect(out[0]).toMatchObject({ catalogue: { id: "fw-c" }, home: { frameworkId: "fw-core", frameworkName: "Core Nursing" }, domain: { name: "Domain 2: Airway" },
       practice: { code: "PRA-AIR-001" }, cpu: null, contentStatus: "unreviewed", layer: "profession", profession: { label: "Nursing" } });
-    expect(out[1]).toMatchObject({ practice: { code: "PRA-OXY-001" }, cpu: { code: "CPU-OXYSAFE-001" }, contentStatus: "approved", statusNote: "Reviewed by the clinical lead" });
+    // D2: an entry can no longer make content approved -- only 395 clinical review can.
+    expect(out[1]).toMatchObject({ practice: { code: "PRA-OXY-001" }, cpu: { code: "CPU-OXYSAFE-001" }, contentStatus: "unreviewed", statusNote: "Reviewed by the clinical lead" });
+  });
+
+  it("D2: approved only when clinical review approved the current content; every other state is labelled", () => {
+    const out = assembleCatalogue(controlled);
+    const reviews = new Map([
+      ["c-oxy", { state: "approved" as const, approvals: 1, required: 1, versionId: "v1", approvedAt: "2026-10-24" }],
+      ["c-air", { state: "stale" as const, approvals: 0, required: 1, versionId: null, approvedAt: null }],
+    ]);
+    const [air, oxy] = withClinicalReview(out, reviews);
+    expect(oxy).toMatchObject({ contentStatus: "approved", clinicalState: "approved", statusNote: "Approved by 1 independent clinical reviewer for this exact content." });
+    expect(air).toMatchObject({ contentStatus: "unreviewed", clinicalState: "stale", statusNote: "The content changed after it was approved, so it needs renewed approval." });
   });
 
   it("a reference to a hospital framework's competency, or from a catalogue not offered, is dropped", () => {

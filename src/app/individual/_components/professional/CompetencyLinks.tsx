@@ -12,8 +12,9 @@ import { inputCls } from "./forms";
 // ⚠ SELF-DECLARED, NEVER VERIFIED. Amber, like Professional's own evidence classes. Green is kept for what an
 // organisation verified, and nothing here is that. Each state is said in words, never in colour alone.
 
-export type LinkView = { mapId: string; competencyId: string; title: string; source: "person" | "ai"; state: "proposed" | "accepted" | "rejected"; rationale: string | null };
-export type OfferedView = { competencyId: string; title: string; catalogue: string };
+/** review: the clinical review state of the competency in words (owner decision D1), null when no longer offered. */
+export type LinkView = { mapId: string; competencyId: string; title: string; source: "person" | "ai"; state: "proposed" | "accepted" | "rejected"; rationale: string | null; review: string | null };
+export type OfferedView = { competencyId: string; title: string; catalogue: string; review: string };
 
 const smallBtn = `inline-flex min-h-[36px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center rounded-lg border border-gray-300 bg-white px-3 text-[12.5px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 ${focusRing}`;
 
@@ -56,6 +57,7 @@ export default function CompetencyLinks({ kind, subjectId, links, offered, accen
             {live.map(l => (
               <li key={l.mapId} className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12.5px] text-amber-950">
                 <span className="font-semibold">{l.title}</span>
+                {l.review && <span className="rounded-full border border-amber-400 bg-white px-1.5 text-[11px] font-semibold text-amber-900">{l.review}</span>}
                 <span className="text-amber-900">
                   {l.state === "proposed" ? "· suggested by AI, not accepted" : l.source === "ai" ? "· AI suggestion you accepted" : "· linked by you"}
                 </span>
@@ -77,7 +79,7 @@ export default function CompetencyLinks({ kind, subjectId, links, offered, accen
           <label htmlFor={`${idPrefix}-comp`} className="sr-only">Link a competency</label>
           <select id={`${idPrefix}-comp`} value={pick} onChange={e => setPick(e.target.value)} className={`${inputCls} max-w-xs`}>
             <option value="">Link a competency…</option>
-            {choices.map(o => <option key={o.competencyId} value={o.competencyId}>{o.title} ({o.catalogue})</option>)}
+            {choices.map(o => <option key={o.competencyId} value={o.competencyId}>{o.title} ({o.catalogue}: {o.review.toLowerCase()})</option>)}
           </select>
           <button type="button" disabled={busy || !pick} className={smallBtn} style={{ color: accent }}
             onClick={() => post({ action: "add", kind, id: subjectId, competencyId: pick }, "Linked.")}>Link</button>

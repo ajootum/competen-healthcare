@@ -27,12 +27,15 @@
 // domain, practice and clinical practice unit (the CKCM spine, migration 011, untouched). The home framework
 // of a referenced competency is NOT offered by this: only the catalogue is, and only what it names.
 //
-// ⚠ CONTENT STATUS IS NEVER INFERRED AS APPROVED. A referenced competency carries its entry's status
-// (approved, draft, unreviewed). A catalogue's own competencies have no review record, so they are
-// "unreviewed" -- publishing a framework is not a clinical review of its content.
+// ⚠ CONTENT STATUS IS NEVER INFERRED AS APPROVED. "approved" means ONE thing: migration 395 records that
+// independent, appointed, in-scope clinical review approved the competency's CURRENT content version (owner
+// decision D2). A catalogue entry (394) can say a competency is a draft. It can no longer make one approved,
+// and publishing a framework or a catalogue is not a clinical review of its content.
 //
 // ⚠ READ ONLY, AND NOTHING ORGANISATIONAL. Only shared rows are read, so no hospital's own framework,
 // mapping or dependency can appear here.
+
+import { CLINICAL_STATE_LABEL, clinicalNote, loadClinicalReviews, type ClinicalReview, type ClinicalState } from "./clinical-review";
 
 export const COMPETENCY_LAYERS = ["foundational", "profession", "advanced", "specialty", "context"] as const;
 export type CompetencyLayer = (typeof COMPETENCY_LAYERS)[number];
@@ -63,10 +66,13 @@ export type CatalogueCompetency = {
   /** Where the competency itself lives: the catalogue when it is the catalogue's own, another shared
    *  framework when the catalogue REFERENCES it (migration 394). */
   home: { frameworkId: string; frameworkName: string };
-  /** Whether the content is clinically approved, a draft, or unreviewed. Never "approved" by default. */
+  /** "approved" only when 395 clinical review approved this exact content; "draft" when the catalogue entry
+   *  says so; otherwise "unreviewed". */
   contentStatus: ContentStatus;
-  /** Why, in words, when the catalogue entry says. Null otherwise. */
+  /** Why, in words: the clinical review state, or the catalogue note. Null when neither says anything. */
   statusNote: string | null;
+  /** The 395 clinical review state, when it was read (approved, in review, changes requested, stale, unreviewed). */
+  clinicalState?: ClinicalState;
   /** Holdings-scope links to other competencies in the offered set (ids), by kind. */
   links: { prerequisites: string[]; extends: string[]; sharedWith: string[] };
 };
@@ -127,7 +133,8 @@ export function assembleCatalogue(r: {
     const l = c.expected_level_id ? lvl.get(c.expected_level_id) : undefined;
     const u = c.cpu_id ? cpu.get(c.cpu_id) : undefined;
     const p = pra.get(c.practice_id ?? "") ?? pra.get(u?.practice_id ?? "");
-    const status: ContentStatus = (CONTENT_STATUSES as readonly string[]).includes(entry?.content_status) ? entry!.content_status : "unreviewed";
+    // An entry may mark content as a draft. "approved" comes only from clinical review (withClinicalReview).
+    const status: ContentStatus = entry?.content_status === "draft" ? "draft" : "unreviewed";
     out.push({
       competencyId: c.id, code: c.code ?? null, title: c.name, description: c.description ?? null,
       layer: (COMPETENCY_LAYERS as readonly string[]).includes(f.competency_layer) ? f.competency_layer : null,
@@ -145,6 +152,26 @@ export function assembleCatalogue(r: {
     });
   }
   return out;
+}
+
+/** Pure: the words every surface shows beside a competency for its clinical review (owner decision D1). */
+export function reviewLabel(c: Pick<CatalogueCompetency, "contentStatus" | "clinicalState">): string {
+  if (c.clinicalState) return CLINICAL_STATE_LABEL[c.clinicalState];
+  return c.contentStatus === "approved" ? CLINICAL_STATE_LABEL.approved : c.contentStatus === "draft" ? "Draft content" : CLINICAL_STATE_LABEL.unreviewed;
+}
+
+/**
+ * Pure: the clinical review state onto each competency. Approved only when 395 says the current content is
+ * approved -- never from a catalogue entry. A competency with no review record reads "Not clinically reviewed".
+ */
+export function withClinicalReview(items: CatalogueCompetency[], reviews: ReadonlyMap<string, ClinicalReview>): CatalogueCompetency[] {
+  return items.map(c => {
+    const r = reviews.get(c.competencyId);
+    if (!r) return c;
+    const approved = r.state === "approved";
+    return { ...c, contentStatus: approved ? "approved" : c.contentStatus, clinicalState: r.state,
+      statusNote: approved || r.state !== "unreviewed" || !c.statusNote ? clinicalNote(r) : c.statusNote };
+  });
 }
 
 const rows = async (p: Promise<any>) => { try { const { data, error } = await p; return error ? null : (data ?? []); } catch { return null; } };
@@ -205,8 +232,12 @@ async function readCatalogue(admin: any, allowedFrameworkIds: readonly string[])
   const practiceIds = [...new Set([...competencies.map((c: Row) => c.practice_id), ...cpus!.map((u: Row) => u.practice_id)].filter(Boolean))];
   const practices = practiceIds.length ? await rows(admin.from("practices").select("id, code, name").in("id", practiceIds)) : [];
   if (practices === null) return null;
-  return assembleCatalogue({ frameworks, domains, competencies, cpus: cpus!, levels: levels!, terms: terms!, dependencies: dependencies!,
+  const items = assembleCatalogue({ frameworks, domains, competencies, cpus: cpus!, levels: levels!, terms: terms!, dependencies: dependencies!,
     equivalencies: equivalencies!, entries, homeFrameworks: homeFrameworks!, practices });
+  // The clinical state of each, from 395. Unreadable is unreadable: the whole catalogue fails closed.
+  const reviews = await loadClinicalReviews(admin, items.map(c => c.competencyId));
+  if (reviews === null) return null;
+  return withClinicalReview(items, reviews);
 }
 
 /** The entries of the offered catalogues. [] when migration 394 is not applied here, null when unreadable. */

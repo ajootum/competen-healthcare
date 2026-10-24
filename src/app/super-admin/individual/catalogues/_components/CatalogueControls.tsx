@@ -41,19 +41,30 @@ export function EntryStatus({ catalogueId, entryId, status, note, idPrefix }: { 
   const changed = s !== status || n !== (note ?? "");
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <label className="text-[12px] text-gray-700" htmlFor={`${idPrefix}-s`}>Content status</label>
+      {/* D2: approval is clinical review (migration 395), never a catalogue setting. */}
+      <label className="text-[12px] text-gray-700" htmlFor={`${idPrefix}-s`}>Curation</label>
       <select id={`${idPrefix}-s`} value={s} onChange={e => setS(e.target.value)} className={input}>
         <option value="unreviewed">Not clinically reviewed</option>
         <option value="draft">Draft content</option>
-        <option value="approved">Approved content</option>
       </select>
       <label className="sr-only" htmlFor={`${idPrefix}-n`}>Note</label>
-      <input id={`${idPrefix}-n`} value={n} onChange={e => setN(e.target.value)} maxLength={500} className={`${input} min-w-[14rem]`}
-        placeholder={s === "approved" ? "Who reviewed it (required)" : "Note (optional)"} />
+      <input id={`${idPrefix}-n`} value={n} onChange={e => setN(e.target.value)} maxLength={500} className={`${input} min-w-[14rem]`} placeholder="Note (optional)" />
       <button type="button" disabled={busy || !changed} className={ghost} onClick={() => send({ action: "status", entryId, status: s, note: n }, () => "Saved.")}>Save</button>
       <button type="button" disabled={busy} className={ghost} onClick={() => send({ action: "remove", entryId }, () => "Removed from the catalogue.")}>Remove</button>
       <Message msg={msg} />
     </div>
+  );
+}
+
+/** D2: put this entry's current content forward for independent clinical review. Separate from publication. */
+export function RequestReview({ catalogueId, entryId }: { catalogueId: string; entryId: string }) {
+  const { busy, msg, send } = useSend(catalogueId);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <button type="button" disabled={busy} className={ghost}
+        onClick={() => send({ action: "review", entryId }, () => "Put forward for clinical review. You cannot review it yourself.")}>Request clinical review</button>
+      <Message msg={msg} />
+    </span>
   );
 }
 

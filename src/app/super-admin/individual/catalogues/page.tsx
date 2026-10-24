@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import { CONTENT_STATUS_LABEL, listCatalogues, loadEntries, loadReference, type EntryView } from "@/lib/competency/catalogue-entries";
-import { AddEntries, EntryStatus } from "./_components/CatalogueControls";
+import { AddEntries, EntryStatus, RequestReview } from "./_components/CatalogueControls";
+import { CLINICAL_STATE_LABEL, clinicalNote } from "@/lib/competency/clinical-review";
 
 // /super-admin/individual/catalogues -- P0 controlled competency catalogues (migration 394).
 //
@@ -55,7 +56,7 @@ export default async function CataloguesPage({ searchParams }: { searchParams: P
         <h1 className="text-xl font-bold text-gray-900">Controlled catalogues</h1>
         <p className="mt-1 text-sm text-gray-600">
           A controlled catalogue names existing competencies, with their practice and clinical practice unit, and copies none. Each one says
-          whether its content is approved, a draft, or not clinically reviewed. Publishing goes through the framework review, and a published
+          its clinical review state: approved only by an independent, appointed clinical reviewer for its exact content. Publishing is separate and goes through the framework review, and a published
           catalogue reaches a person only once it is chosen on the Individual policy page.
         </p>
       </header>
@@ -94,8 +95,13 @@ export default async function CataloguesPage({ searchParams }: { searchParams: P
                           <span className={`rounded-full border px-2 py-0.5 text-[11.5px] font-semibold ${STATUS_STYLE[e.contentStatus]}`}>{CONTENT_STATUS_LABEL[e.contentStatus]}</span>
                         </div>
                         <p className="text-[12.5px] text-gray-600">From {e.home} · {e.domain}{e.cpu ? ` · CPU ${e.cpu.code ?? ""} ${e.cpu.name}` : " · no clinical practice unit"}</p>
+                        <p className="text-[12.5px] text-gray-700">
+                          <span className="font-semibold">{e.clinical ? CLINICAL_STATE_LABEL[e.clinical.state] : "Clinical review state could not be read"}</span>
+                          {e.clinical ? ` -- ${clinicalNote(e.clinical)}` : ""}
+                        </p>
                         {e.statusNote && <p className="text-[12.5px] text-gray-700">{e.statusNote}</p>}
-                        {current.status === "draft" && <div className="mt-2"><EntryStatus catalogueId={current.id} entryId={e.id} status={e.contentStatus} note={e.statusNote} idPrefix={`e-${e.id}`} /></div>}
+                        {e.clinical && e.clinical.state !== "approved" && e.clinical.state !== "in_review" && <div className="mt-2"><RequestReview catalogueId={current.id} entryId={e.id} /></div>}
+                        {current.status === "draft" && <div className="mt-2"><EntryStatus catalogueId={current.id} entryId={e.id} status={e.contentStatus === "draft" ? "draft" : "unreviewed"} note={e.statusNote} idPrefix={`e-${e.id}`} /></div>}
                       </li>
                     ))}
                   </ul>

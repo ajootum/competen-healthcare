@@ -236,6 +236,13 @@ const STAGING: Listed[] = [
       + "SCH-RESPCARD names only production records, all unreviewed, in no allowlist. Writes and removes its own fixtures. PEND until 394.",
   },
   {
+    file: "clinical-review-acceptance-harness.ts",
+    note: "Owner D2, migration 395, against the real triggers: hash and snapshot are the database's; the author cannot approve; a "
+      + "suspended or borrowed appointment and an out-of-scope reviewer are refused; a material edit makes approval stale; two-approval "
+      + "content; rejection, one decision per reviewer, append-only; the catalogue read shows approved only for approved content. "
+      + "Creates and removes four throwaway accounts, their reviewer appointments to an existing HQ office, and one draft framework. PEND until 395.",
+  },
+  {
     file: "hq-users-directory-acceptance-harness.ts",
     note: "HQ-USERS-C: the directory loader against real staging rows (platform membership, Individual membership and a "
       + "live Professional entitlement, an HQ appointment), every source readable, a stranger with nothing; and over HTTP "

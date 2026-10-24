@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { proposeMappings, mappingStates, type MappingState, type MappingSubject } from "@/lib/competency/mapping";
 import { buildCompetencyCoverage, type CompetencyCoverage } from "@/lib/competency/progress-model";
-import type { CatalogueCompetency } from "@/lib/competency/foundation";
+import { reviewLabel, type CatalogueCompetency } from "@/lib/competency/foundation";
 import { findPatientIdentifiers } from "@/lib/privacy/patient-identifiers";
 import { loadCatalogueFor } from "@/lib/individual/catalogue";
 import { isNotProvisioned } from "../access";
@@ -60,7 +60,8 @@ export async function listMappings(admin: any, userId: string, onNotProvisioned?
   } catch { return null; }
 }
 
-export type OfferedCompetency = { competencyId: string; code: string | null; title: string; catalogue: string };
+/** review: the clinical review state in words (owner decision D1: its actual review status, always shown). */
+export type OfferedCompetency = { competencyId: string; code: string | null; title: string; catalogue: string; review: string };
 
 /** What a page needs: the mappings, what is offered, and names for linked competencies no longer offered. */
 export type MappingView = {
@@ -76,7 +77,7 @@ export type MappingView = {
 export async function loadMappingView(admin: any, userId: string): Promise<MappingView> {
   let provisioned = true;
   const [mappings, catalogue] = await Promise.all([listMappings(admin, userId, () => { provisioned = false; }), loadCatalogueFor(admin, "professional")]);
-  const offered = catalogue?.map(c => ({ competencyId: c.competencyId, code: c.code, title: c.title, catalogue: c.catalogue.name })) ?? null;
+  const offered = catalogue?.map(c => ({ competencyId: c.competencyId, code: c.code, title: c.title, catalogue: c.catalogue.name, review: reviewLabel(c) })) ?? null;
   const names = new Map((offered ?? []).map(o => [o.competencyId, o.title]));
   const missing = [...new Set((mappings ?? []).map(m => m.competencyId).filter(id => !names.has(id)))];
   if (missing.length) for (const [id, n] of await referenceNames(admin, [], missing)) names.set(id, n);
@@ -84,9 +85,10 @@ export async function loadMappingView(admin: any, userId: string): Promise<Mappi
 }
 
 /** Pure: one entry's links for the page, named. A competency with no readable name says so. */
-export function linksFor(view: Pick<MappingView, "mappings" | "names">, kind: SubjectKind, subjectId: string) {
+export function linksFor(view: Pick<MappingView, "mappings" | "names"> & Partial<Pick<MappingView, "offered">>, kind: SubjectKind, subjectId: string) {
   return (view.mappings ?? []).filter(m => m.kind === kind && m.subjectId === subjectId).map(m => ({
     mapId: m.mapId, competencyId: m.competencyId, title: view.names.get(m.competencyId) ?? "A competency no longer offered",
+    review: view.offered?.find(o => o.competencyId === m.competencyId)?.review ?? null,
     source: m.source, state: m.state, rationale: m.rationale,
   }));
 }
