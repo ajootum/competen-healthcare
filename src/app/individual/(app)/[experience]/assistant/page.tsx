@@ -30,6 +30,8 @@ export default async function AssistantPage({ params }: { params: Promise<{ expe
       <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13px] leading-relaxed text-gray-600">
         <p><span className="font-semibold text-gray-800">What it can see:</span> your name, the experiences on your account, and the competencies, credentials and employment in your Passport. It cannot see files, courses or other people.</p>
         <p className="mt-1"><span className="font-semibold text-gray-800">Not saved:</span> each question is answered and then forgotten. Answers are general guidance, not clinical advice.</p>
+        {/* AI-FAIR-USE-01: where the person's AI allowance stands, and what stays available. */}
+        <p className="mt-1"><a href={experienceHref(experience, "ai-allowance")} className="font-semibold underline underline-offset-2" style={{ color: x.accent }}>Your AI allowance</a></p>
       </div>
       {configured ? <AssistantPanel experience={experience} accent={x.accent} />
         : <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-900">The personal AI is not configured on this environment, so it cannot answer here.</p>}
