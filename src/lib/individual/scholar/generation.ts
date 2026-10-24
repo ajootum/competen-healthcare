@@ -293,9 +293,13 @@ export type AiFailure = { ok: false; error: "not_configured" | "refusal" | "fail
  * beyond the notes, if any, is split off first and checked by its own rules -- it never reaches
  * checkExplanation, and never grounds anything.
  */
-export async function runExplain(userId: string, question: string, passages: Passage[], mode: ExplainMode = "explain", history: TutorTurn[] = [], learnerContext: string | null = null) {
+/** Stage 3: added to the system prompt when the policy has background beyond the notes switched off. */
+export const NOTES_ONLY = "BACKGROUND IS OFF: do not add any section beyond the passages and do not write the line BEYOND THE NOTES. Answer from the passages only.";
+
+export async function runExplain(userId: string, question: string, passages: Passage[], mode: ExplainMode = "explain", history: TutorTurn[] = [], learnerContext: string | null = null, allowBackground: boolean = true) {
+  const notesOnly = !allowBackground && SUPPLEMENTARY_MODES.includes(mode);
   const r = await generate({
-    system: explainSystem(mode),
+    system: notesOnly ? `${explainSystem(mode)}\n\n${NOTES_ONLY}` : explainSystem(mode),
     user: modeUserPrompt(question, passages, history, mode === "tutor" ? learnerContext : null),
     tier: "reasoning",
     maxTokens: mode === "explain" ? 700 : 900,
@@ -307,8 +311,9 @@ export async function runExplain(userId: string, question: string, passages: Pas
   return {
     ok: true as const,
     check: checkExplanation(split.main, asked, passages),
-    supplementary: split.extra === null ? null : checkSupplementary(split.extra, mode),
-    model: r.model, provider: r.provider, promptVersion: explainPromptVersion(mode),
+    // Background off: anything after the marker is dropped unseen, whatever the model did.
+    supplementary: split.extra === null || notesOnly ? null : checkSupplementary(split.extra, mode),
+    model: r.model, provider: r.provider, promptVersion: notesOnly ? `${explainPromptVersion(mode)}:notes-only` : explainPromptVersion(mode),
   };
 }
 

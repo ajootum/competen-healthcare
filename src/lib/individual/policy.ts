@@ -2,7 +2,7 @@
 import type { PlanAiLimit } from "./commerce";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
-import { FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST } from "./scholar/config";
+import { FORMAT_LABEL, LEARNING_MODES, LEARNING_MODE_LABEL, type LearningMode, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
 
 // ── COMPETEN INDIVIDUAL POLICY ── COMPETEN-CONFIG-002 items 4-7 ─────────────────────────────────────────
@@ -38,7 +38,7 @@ export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
 export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
   | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages";
-export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats";
+export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats" | "scholar_learning_modes";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -46,7 +46,7 @@ export type ProgrammesPolicyKey = "scholar_onboarding_programmes";
 export type OptionsPolicyKey = "scholar_institutions";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
-export type ChoicePolicyKey = "scholar_catalogue_min_status";
+export type ChoicePolicyKey = "scholar_catalogue_min_status" | "scholar_beyond_notes";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -179,6 +179,24 @@ export const POLICIES: readonly PolicyDef[] = [
     // only where 405 is applied -- until then an upload of it could not be saved.
     fallback: ["pdf", "docx"],
     limitReason: "Only formats Scholar can read on its own servers. Photos of notes need text recognition (OCR), which is not available.",
+  },
+  // COMPETEN-SCHOLAR Stage 3, Learn: which ways of learning are offered, and whether "go deeper" and the tutor may
+  // add labelled background beyond a student's notes. The notes-based answer is checked against the notes either way.
+  {
+    key: "scholar_learning_modes", kind: "set", product: "Scholar",
+    label: "Ways of learning Scholar offers",
+    help: "Which ways of learning from a student's own notes are offered. Each one answers only from the notes and cites them; a mode switched off is not shown and is refused if asked for.",
+    options: LEARNING_MODES.map(v => ({ value: v, label: LEARNING_MODE_LABEL[v] })),
+    fallback: [...LEARNING_MODES],
+    limitReason: "Only the reviewed modes, each held to the same grounding check.",
+  },
+  {
+    key: "scholar_beyond_notes", kind: "choice", product: "Scholar",
+    label: "Background beyond a student's notes",
+    help: "Whether 'Go deeper' and the tutor may add general background that is not in the student's notes, shown apart under its own label and withheld if it carries figures or doses.",
+    options: [{ value: "shown", label: "Shown, labelled 'Beyond your notes'" }, { value: "off", label: "Off: answers come from the notes only" }],
+    fallback: "shown",
+    limitReason: "Background is never mixed into the notes-based answer, whichever is chosen.",
   },
   {
     key: "scholar_upload_max_mb", kind: "int", product: "Scholar", unit: "MB",
@@ -370,6 +388,9 @@ export type IndividualPolicy = {
   scholarMaterialsPerPerson: number;
   /** Stage 2: which formats may be uploaded, the size limit (MB) and the PDF page limit. */
   scholarUploadFormats: ("pdf" | "docx" | "text")[];
+  /** Stage 3: the ways of learning offered, and whether labelled background beyond the notes may be shown. */
+  scholarLearningModes: LearningMode[];
+  scholarBeyondNotes: "shown" | "off";
   scholarUploadMaxMb: number;
   scholarPdfMaxPages: number;
   scholarInsightMinAnswers: number;
@@ -401,6 +422,8 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarMaterialsPerPerson: int("scholar_materials_per_person"),
     scholarUploadFormats: clampSet(policyDef("scholar_upload_formats") as SetPolicy, published.get(policyPath("scholar_upload_formats"))) as ("pdf" | "docx" | "text")[],
     scholarUploadMaxMb: int("scholar_upload_max_mb"),
+    scholarLearningModes: clampSet(policyDef("scholar_learning_modes") as SetPolicy, published.get(policyPath("scholar_learning_modes"))) as LearningMode[],
+    scholarBeyondNotes: clampChoice(policyDef("scholar_beyond_notes") as ChoicePolicy, published.get(policyPath("scholar_beyond_notes"))) as "shown" | "off",
     scholarPdfMaxPages: int("scholar_pdf_max_pages"),
     scholarInsightMinAnswers: int("scholar_insight_min_answers"),
     scholarInsightWindowDays: int("scholar_insight_window_days"),

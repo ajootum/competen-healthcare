@@ -3,14 +3,15 @@ export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { getPassage, isUuid, searchCandidates, toPassages } from "@/lib/individual/scholar/store";
+import { getMaterial, getPassage, isUuid, listChunks, searchCandidates, toPassages } from "@/lib/individual/scholar/store";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit } from "@/lib/individual/scholar/http";
 import { rankChunks, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import {
   EXPLAIN_REFUSAL, SUPPLEMENTARY_WITHHELD, describeViolations, isExplainMode, passageCitation, passageTag, runExplain, type ExplainMode, type TutorTurn,
 } from "@/lib/individual/scholar/generation";
 import { loadTutorContext } from "@/lib/individual/scholar/competency-view";
-import { AI_LABEL, QUESTION_MAX, RETRIEVAL_LIMIT, SUPPLEMENTARY_LABEL, TUTOR_MAX_TURNS } from "@/lib/individual/scholar/config";
+import { AI_LABEL, MATERIAL_SCOPE_SECTIONS, QUESTION_MAX, RETRIEVAL_LIMIT, SUPPLEMENTARY_LABEL, TUTOR_MAX_TURNS } from "@/lib/individual/scholar/config";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -46,8 +47,27 @@ export async function POST(req: Request) {
       ? [{ speaker: t.speaker, text: t.text.trim().slice(0, 1500) }] : [];
   });
 
+  // Stage 3: which ways of learning are offered, and whether background beyond the notes may be shown, are
+  // Individual policy (CONFIG-002). A mode switched off is refused, not quietly swapped for another.
+  const policy = await loadIndividualPolicy(ctx.admin);
+  if (!(policy.scholarLearningModes as readonly string[]).includes(mode)) return NextResponse.json({ error: "That way of learning is not offered." }, { status: 403 });
+  const allowBackground = policy.scholarBeyondNotes === "shown";
+
   let passages;
-  if (Array.isArray(body?.chunkIds) && body.chunkIds.length) {
+  let coverage: { sections: number; of: number } | null = null;
+  if (body?.scope === "material" && materialId && !(Array.isArray(body?.chunkIds) && body.chunkIds.length)) {
+    // "Summarise this material" / "Tutor me on this material": the material's sections in order, from the start,
+    // up to MATERIAL_SCOPE_SECTIONS -- and the answer says how much it covered. Never a silent sample.
+    const m = await getMaterial(ctx.admin, ctx.userId, materialId);
+    if (!m.ok) return NextResponse.json({ error: "That material could not be read just now." }, { status: 503 });
+    if (!m.data) return NextResponse.json({ error: "That material could not be found." }, { status: 404 });
+    const all = await listChunks(ctx.admin, ctx.userId, materialId);
+    if (!all.ok) return NextResponse.json({ error: "That material could not be read just now." }, { status: 503 });
+    if (!all.data.length) return NextResponse.json({ notInNotes: true, message: EXPLAIN_REFUSAL.not_in_notes });
+    const used = all.data.slice(0, MATERIAL_SCOPE_SECTIONS);
+    passages = await toPassages(ctx.admin, ctx.userId, used.map(c => ({ id: c.id, materialId, ordinal: c.ordinal, pageFrom: c.pageFrom, pageTo: c.pageTo, content: c.content })));
+    coverage = { sections: used.length, of: all.data.length };
+  } else if (Array.isArray(body?.chunkIds) && body.chunkIds.length) {
     // The tutor continues on the passages it started from.
     const ids = [...new Set(body.chunkIds as unknown[])].slice(0, RETRIEVAL_LIMIT);
     const found = await Promise.all(ids.map(id => getPassage(ctx.admin, ctx.userId, id as string)));
@@ -72,7 +92,7 @@ export async function POST(req: Request) {
 
   // P1: the tutor sees the student's own study context, assembled now from their rows (never stored, never grounding).
   const learnerContext = mode === "tutor" ? await loadTutorContext(ctx.admin, ctx.userId, passages.map(p => p.chunkId)) : null;
-  const r = await runExplain(ctx.userId, question, passages, mode, history, learnerContext);
+  const r = await runExplain(ctx.userId, question, passages, mode, history, learnerContext, allowBackground);
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_explain", null, {
     chunk_ids: passages.map(p => p.chunkId), question_chars: question.length, mode, tutor_turns: history.length, learner_context: learnerContext !== null,
     outcome: r.ok ? (r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,
@@ -95,6 +115,6 @@ export async function POST(req: Request) {
     : s.ok ? { text: s.text, label: SUPPLEMENTARY_LABEL } : { withheld: SUPPLEMENTARY_WITHHELD[s.reason as Exclude<typeof s.reason, "not_this_mode">] };
   return NextResponse.json({
     answer: r.check.text, label: AI_LABEL, sources: sources.filter((_, i) => r.check.ok && r.check.cited.includes(i + 1)),
-    provenance: { model: r.model, promptVersion: r.promptVersion }, mode, supplementary, passageIds: passages.map(p => p.chunkId),
+    provenance: { model: r.model, promptVersion: r.promptVersion }, mode, supplementary, passageIds: passages.map(p => p.chunkId), coverage,
   });
 }

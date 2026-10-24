@@ -128,7 +128,7 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
       {materials.ok && materials.data.length > 0 && (
         <div className="mt-8">
           <ExplainPanel consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? undefined : undefined} title="Ask across all your notes"
-            hint="Searches every material you have uploaded and answers only from what it finds, citing the page or section. Explanations are not saved." />
+            hint="Searches every material you have uploaded and answers only from what it finds, citing the page or section. Explanations are not saved." modes={policy.scholarLearningModes.filter(x => x !== "tutor")} />
         </div>
       )}
 

@@ -315,6 +315,15 @@ const STAGING: Listed[] = [
       + "created) until 388 is applied and the seed is published.",
   },
   {
+    file: "scholar-learn-harness.ts",
+    note: "COMPETEN-SCHOLAR Stage 3 Learn over HTTP: the material workspace with the policy's ways of learning and the "
+      + "whole-material actions; explain, summarise, simplify, go deeper from the notes, cited and AI-labelled, with "
+      + "background beyond the notes never inside the answer; 'Summarise this material' saying its coverage; the tutor "
+      + "over the whole material for two turns with the personal AI context (audited without text); refusals; isolation; "
+      + "nothing stored. Needs BASE_URL naming a STAGING-pointed dev server with the legal versions AND URLs and an AI "
+      + "provider. Reads shared config only. Creates and deletes its own harness-learn-* identities.",
+  },
+  {
     file: "scholar-upload-harness.ts",
     note: "COMPETEN-SCHOLAR-UPLOAD Stage 2 over HTTP: Welcome (Upload my notes) to the upload panel stating the POLICY's "
       + "formats and size; a real PDF through the browser path; refusals (attestation, size, photo/no OCR, a format the "

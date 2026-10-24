@@ -6,7 +6,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
-import { AI_LABEL, CONTENT_STATUS_LABEL, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, PDF_MIME, TEXT_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
+import { AI_LABEL, CONTENT_STATUS_LABEL, LEARNING_MODES, TUTOR_CONTEXT_NOTICE, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, PDF_MIME, TEXT_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
 import type { ConsentStatus, LegalLink } from "@/lib/individual/scholar/consent-gate";
 
 // The interactive pieces of My Learning. Each one calls a gate-3 API route and shows what the route says,
@@ -302,7 +302,7 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
 
 type Source = { tag: string; chunkId: string; materialId: string; citation: string; excerpt: string };
 type Supplementary = { text?: string; label?: string; withheld?: string } | null;
-type Explained = { q: string; answer?: string; message?: string; sources: Source[]; provenance?: { model: string; promptVersion: string }; supplementary?: Supplementary };
+type Explained = { q: string; answer?: string; message?: string; sources: Source[]; provenance?: { model: string; promptVersion: string }; supplementary?: Supplementary; coverage?: { sections: number; of: number } | null };
 
 // COMPETEN-SCHOLAR-01 S3: ways of learning from the same passages. "Tutor me" is per section (TutorPanel).
 type Mode = "explain" | "summary" | "simplify" | "deeper";
@@ -313,12 +313,16 @@ const MODES: { key: Mode; label: string; hint: string }[] = [
   { key: "deeper", label: "Go deeper", hint: "How it connects, plus labelled background beyond your notes" },
 ];
 
-function ModePicker({ mode, setMode, idPrefix }: { mode: Mode; setMode: (m: Mode) => void; idPrefix: string }) {
+/** Stage 3: only the modes the Individual policy offers (scholar_learning_modes). */
+const offered = (modes: readonly string[]) => MODES.filter(m => modes.includes(m.key));
+
+function ModePicker({ mode, setMode, idPrefix, modes }: { mode: Mode; setMode: (m: Mode) => void; idPrefix: string; modes: readonly string[] }) {
+  if (offered(modes).length < 2) return null;
   return (
     <fieldset className="mt-3">
       <legend className="text-[12.5px] font-semibold text-gray-600">How should it explain?</legend>
       <div className="mt-1.5 flex flex-wrap gap-2">
-        {MODES.map(m => (
+        {offered(modes).map(m => (
           <label key={m.key} htmlFor={`${idPrefix}-${m.key}`} title={m.hint}
             className={`inline-flex cursor-pointer items-center rounded-full border px-3 py-1.5 text-[13px] font-semibold has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] ${mode === m.key ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}>
             <input id={`${idPrefix}-${m.key}`} type="radio" name={`${idPrefix}-mode`} className="sr-only" checked={mode === m.key} onChange={() => setMode(m.key)} />
@@ -345,12 +349,24 @@ function BeyondNotes({ s }: { s: Supplementary | undefined }) {
 }
 
 
-export function ExplainPanel({ materialId, consent, offMessage, title = "Ask your notes", hint }: { materialId?: string; consent: boolean; offMessage?: string; title?: string; hint?: string }) {
+export function ExplainPanel({ materialId, consent, offMessage, title = "Ask your notes", hint, modes = LEARNING_MODES }: {
+  materialId?: string; consent: boolean; offMessage?: string; title?: string; hint?: string; modes?: readonly string[];
+}) {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [items, setItems] = useState<Explained[]>([]);
-  const [mode, setMode] = useState<Mode>("explain");
+  const [mode, setMode] = useState<Mode>(offered(modes)[0]?.key ?? "explain");
+  const [tutor, setTutor] = useState(false);
+  /** Stage 3: the whole material, in order from the start -- the answer says how much it covered. */
+  async function summariseMaterial() {
+    if (!materialId || busy) return;
+    setBusy(true); setError("");
+    const r = await post("/api/individual/scholar/explain", { question: "Summarise this material.", materialId, scope: "material", mode: "summary" });
+    setBusy(false);
+    if (!r.ok) { setError(r.json.error ?? "No summary could be produced."); return; }
+    setItems(list => [{ q: "Summarise this material", answer: r.json.answer, message: r.json.message, sources: r.json.sources ?? [], provenance: r.json.provenance, supplementary: r.json.supplementary, coverage: r.json.coverage }, ...list]);
+  }
   async function ask(e: React.FormEvent) {
     e.preventDefault();
     const text = q.trim();
@@ -359,7 +375,7 @@ export function ExplainPanel({ materialId, consent, offMessage, title = "Ask you
     const r = await post("/api/individual/scholar/explain", { question: text, materialId, mode });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "No explanation could be produced."); return; }
-    setItems(list => [{ q: text, answer: r.json.answer, message: r.json.message, sources: r.json.sources ?? [], provenance: r.json.provenance, supplementary: r.json.supplementary }, ...list]);
+    setItems(list => [{ q: text, answer: r.json.answer, message: r.json.message, sources: r.json.sources ?? [], provenance: r.json.provenance, supplementary: r.json.supplementary, coverage: r.json.coverage }, ...list]);
     setQ("");
   }
   return (
@@ -369,14 +385,25 @@ export function ExplainPanel({ materialId, consent, offMessage, title = "Ask you
       {!consent ? (
         <p className="mt-3 rounded-xl bg-gray-50 px-3.5 py-3 text-[13.5px] text-gray-700">{offMessage ?? "Turn on AI help (in My Learning) to ask for explanations."}</p>
       ) : (
+        <>
+        {materialId && (modes.includes("summary") || modes.includes("tutor")) && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {modes.includes("summary") && <button type="button" className={ghost} disabled={busy} onClick={summariseMaterial}>{busy ? "Reading your notes…" : "Summarise this material"}</button>}
+            {modes.includes("tutor") && <button type="button" className={ghost} disabled={busy} aria-expanded={tutor} onClick={() => setTutor(t => !t)}>{tutor ? "Close tutor" : "Tutor me on this material"}</button>}
+          </div>
+        )}
+        {tutor && materialId && <TutorPanel materialId={materialId} linked={[]} />}
+        {offered(modes).length > 0 && (
         <form onSubmit={ask} className="mt-3">
           <label htmlFor={`explain-q-${materialId ?? "all"}`} className="sr-only">Your question</label>
           <textarea id={`explain-q-${materialId ?? "all"}`} rows={2} maxLength={QUESTION_MAX} value={q} onChange={e => setQ(e.target.value)}
             placeholder="For example: explain the stages of acute kidney injury"
             className={`w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5 text-[15px] text-gray-900 ${focusRing}`} />
-          <ModePicker mode={mode} setMode={setMode} idPrefix={`explain-${materialId ?? "all"}`} />
-          <button type="submit" className={`${btn} mt-3`} style={{ background: accent }} disabled={busy || !q.trim()}>{busy ? "Reading your notes…" : MODES.find(m => m.key === mode)!.label}</button>
+          <ModePicker mode={mode} setMode={setMode} idPrefix={`explain-${materialId ?? "all"}`} modes={modes} />
+          <button type="submit" className={`${btn} mt-3`} style={{ background: accent }} disabled={busy || !q.trim()}>{busy ? "Reading your notes…" : MODES.find(m => m.key === mode)?.label ?? "Explain"}</button>
         </form>
+        )}
+        </>
       )}
       <ErrorLine text={error} />
       <div aria-live="polite" className="mt-4 space-y-4">
@@ -395,6 +422,13 @@ function ExplanationView({ item }: { item: Explained }) {
         <>
           <div className="mt-3"><AiBadge /></div>
           <div className="mt-2 whitespace-pre-wrap text-[14.5px] leading-relaxed text-gray-800">{item.answer}</div>
+          {item.coverage && (
+            <p className="mt-2 text-[12.5px] font-medium text-gray-600">
+              {item.coverage.sections < item.coverage.of
+                ? `Covers sections 1 to ${item.coverage.sections} of ${item.coverage.of}. Ask about a later section, or use its own Explain button, for the rest.`
+                : `Covers all ${item.coverage.of} section${item.coverage.of === 1 ? "" : "s"} of this material.`}
+            </p>
+          )}
           <div className="mt-3"><SourceNotice /></div>
           <BeyondNotes s={item.supplementary} />
         </>
@@ -427,13 +461,13 @@ const SECTION_PROMPT: Record<Mode, { q: string; shown: string }> = {
   deeper: { q: "Explain this section in depth.", shown: "Go deeper into this section" },
 };
 
-export function ChunkActions({ chunkId, consent, linked = [] }: { chunkId: string; consent: boolean; linked?: { title: string; contentStatus: string | null }[] }) {
+export function ChunkActions({ chunkId, consent, linked = [], modes = LEARNING_MODES }: { chunkId: string; consent: boolean; linked?: { title: string; contentStatus: string | null }[]; modes?: readonly string[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"" | "explain" | "mcq" | "case" | "steps">("");
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [explained, setExplained] = useState<Explained | null>(null);
-  const [mode, setMode] = useState<Mode>("explain");
+  const [mode, setMode] = useState<Mode>(offered(modes)[0]?.key ?? "explain");
   const [tutor, setTutor] = useState(false);
   if (!consent) return null;
   async function explain() {
@@ -463,10 +497,10 @@ export function ChunkActions({ chunkId, consent, linked = [] }: { chunkId: strin
   }
   return (
     <div className="mt-3">
-      <ModePicker mode={mode} setMode={setMode} idPrefix={`mode-${chunkId}`} />
+      <ModePicker mode={mode} setMode={setMode} idPrefix={`mode-${chunkId}`} modes={modes} />
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" className={ghost} disabled={!!busy} onClick={explain}>{busy === "explain" ? "Reading your notes…" : SECTION_PROMPT[mode].shown}</button>
-        <button type="button" className={ghost} disabled={!!busy} aria-expanded={tutor} onClick={() => setTutor(t => !t)}>{tutor ? "Close tutor" : "Tutor me"}</button>
+        {offered(modes).length > 0 && <button type="button" className={ghost} disabled={!!busy} onClick={explain}>{busy === "explain" ? "Reading your notes…" : SECTION_PROMPT[mode].shown}</button>}
+        {modes.includes("tutor") && <button type="button" className={ghost} disabled={!!busy} aria-expanded={tutor} onClick={() => setTutor(t => !t)}>{tutor ? "Close tutor" : "Tutor me"}</button>}
         <button type="button" className={ghost} disabled={!!busy} onClick={() => questions("mcq")}>{busy === "mcq" ? "Writing…" : "Practice questions"}</button>
         <button type="button" className={ghost} disabled={!!busy} onClick={() => questions("case")}>{busy === "case" ? "Writing…" : "Case question"}</button>
         <button type="button" className={ghost} disabled={!!busy} onClick={stepCase}>{busy === "steps" ? "Writing the case…" : "Step-by-step case"}</button>
@@ -484,7 +518,8 @@ export function ChunkActions({ chunkId, consent, linked = [] }: { chunkId: strin
 
 type TutorTurn = { speaker: "tutor" | "student"; text: string; supplementary?: Supplementary };
 
-function TutorPanel({ chunkId, linked }: { chunkId: string; linked: { title: string; contentStatus: string | null }[] }) {
+function TutorPanel({ chunkId, materialId, linked }: { chunkId?: string; materialId?: string; linked: { title: string; contentStatus: string | null }[] }) {
+  const key = chunkId ?? `m-${materialId}`;
   const [turns, setTurns] = useState<TutorTurn[]>([]);
   const [ids, setIds] = useState<string[]>([]);
   const [reply, setReply] = useState("");
@@ -495,25 +530,26 @@ function TutorPanel({ chunkId, linked }: { chunkId: string; linked: { title: str
     setBusy(true); setError(""); setHeld("");
     const history = first ? [] : turns.map(t => ({ speaker: t.speaker, text: t.text }));
     const r = await post("/api/individual/scholar/explain", first
-      ? { question: text, chunkId, mode: "tutor" }
+      ? (chunkId ? { question: text, chunkId, mode: "tutor" } : { question: text, materialId, scope: "material", mode: "tutor" })
       : { question: text, chunkIds: ids, mode: "tutor", history });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "The tutor could not answer just now."); return; }
     if (!r.json.answer) { setHeld(r.json.message ?? "That answer was not shown."); return; }
-    if (first) setIds(r.json.passageIds ?? [chunkId]);
+    if (first) setIds(r.json.passageIds ?? (chunkId ? [chunkId] : []));
     setTurns(list => [...list, ...(first ? [] : [{ speaker: "student" as const, text }]), { speaker: "tutor" as const, text: r.json.answer, supplementary: r.json.supplementary }]);
     setReply("");
   }
   return (
     <section aria-label="Tutor" className="mt-3 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
-      <div className="flex flex-wrap items-center gap-2"><AiBadge /><span className="text-[12.5px] text-gray-600">Taught from this section of your notes. Not saved.</span></div>
+      <div className="flex flex-wrap items-center gap-2"><AiBadge /><span className="text-[12.5px] text-gray-600">{chunkId ? "Taught from this section of your notes." : "Taught from this material, from the start."} Not saved.</span></div>
+      <p className="mt-1.5 text-[12px] text-gray-600">{TUTOR_CONTEXT_NOTICE}</p>
       {linked.length > 0 && (
         <ul aria-label="Competencies this section is linked to" className="mt-2 flex flex-wrap gap-2 text-[12.5px] text-gray-700">
           {linked.map(l => <li key={l.title} className="flex flex-wrap items-center gap-1.5"><span>{l.title}</span><ContentStatusTag status={l.contentStatus} /></li>)}
         </ul>
       )}
       {turns.length === 0 && (
-        <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={busy} onClick={() => send("Teach me this section step by step.", true)}>
+        <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={busy} onClick={() => send(chunkId ? "Teach me this section step by step." : "Teach me this material step by step.", true)}>
           {busy ? "Reading your notes…" : "Start"}
         </button>
       )}
@@ -529,8 +565,8 @@ function TutorPanel({ chunkId, linked }: { chunkId: string; linked: { title: str
       {held && <p className="mt-3 rounded-lg bg-white px-3 py-2.5 text-[14px] text-gray-800">{held}</p>}
       {turns.length > 0 && (
         <form className="mt-3" onSubmit={e => { e.preventDefault(); if (reply.trim() && !busy) void send(reply.trim(), false); }}>
-          <label htmlFor={`tutor-${chunkId}`} className="text-[13px] font-semibold text-gray-700">Your answer</label>
-          <textarea id={`tutor-${chunkId}`} rows={2} maxLength={QUESTION_MAX} value={reply} onChange={e => setReply(e.target.value)}
+          <label htmlFor={`tutor-${key}`} className="text-[13px] font-semibold text-gray-700">Your answer</label>
+          <textarea id={`tutor-${key}`} rows={2} maxLength={QUESTION_MAX} value={reply} onChange={e => setReply(e.target.value)}
             className={`mt-1 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-[15px] text-gray-900 ${focusRing}`} />
           <button type="submit" className={`${btn} mt-2`} style={{ background: accent }} disabled={busy || !reply.trim()}>{busy ? "Checking against your notes…" : "Send"}</button>
         </form>

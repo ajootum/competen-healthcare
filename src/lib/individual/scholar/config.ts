@@ -77,6 +77,21 @@ export const CASE_MIN_STEPS = 2;
 /** S3: tutor turns the browser may send back. Nothing is stored (owner ruling D10). */
 export const TUTOR_MAX_TURNS = 6;
 
+// ── STAGE 3, LEARN (owner GO 2026-10-24) ─────────────────────────────────────────────────────────────
+/** The ways of learning Scholar offers. Which are offered is Individual policy (scholar_learning_modes). */
+export const LEARNING_MODES = ["explain", "summary", "simplify", "deeper", "tutor"] as const;
+export type LearningMode = (typeof LEARNING_MODES)[number];
+export const LEARNING_MODE_LABEL: Record<LearningMode, string> = {
+  explain: "Explain", summary: "Summarise", simplify: "Simplify", deeper: "Go deeper", tutor: "Tutor me",
+};
+/**
+ * "Summarise this material" and "Tutor me on this material" read the material's sections IN ORDER, from the
+ * start, up to this many -- never a silent sample. The answer says how many of how many it covered.
+ */
+export const MATERIAL_SCOPE_SECTIONS = 8;
+/** What the tutor knows about the student, said where the tutor is used (P1 learner-context.ts). */
+export const TUTOR_CONTEXT_NOTICE = "The tutor uses your programme and what you have practised to choose what to focus on. It is not saved, and nothing about you is shown to anyone.";
+
 /**
  * S3: background the AI adds beyond the notes is shown APART from the notes-based answer, under this
  * label, and never counts as coming from them. The notes-only modes (summary, simplify) never show it.

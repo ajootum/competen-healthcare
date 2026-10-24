@@ -7,6 +7,7 @@ import { experienceHref } from "@/lib/individual/experiences";
 import { NO_APPROVED_COMPETENCIES } from "@/lib/individual/scholar/config";
 import { analysisStatus, countDue, getMaterial, listChunks, listMappings, listProgrammes, listQuestions, readConsent } from "@/lib/individual/scholar/store";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
 import { AnalysePanel, SectionTopics, type CompetencyOption, type MappingView } from "../_components/competency-client";
 import { citeChunk } from "@/lib/individual/scholar/extract";
@@ -51,7 +52,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
   if (!material.data) notFound();
   const m = material.data;
 
-  const [stampHistory, stampProgrammes] = await Promise.all([contextHistory(ctx.admin, ctx.userId), listProgrammes(ctx.admin)]);
+  const [stampHistory, stampProgrammes, policy] = await Promise.all([contextHistory(ctx.admin, ctx.userId), listProgrammes(ctx.admin), loadIndividualPolicy(ctx.admin)]);
   // Stage 2: the educational context this material was uploaded in (402 history by its created_at).
   const stamp = stampHistory.ok
     ? contextStamp(stampHistory.periods, m.createdAt, new Map((stampProgrammes.ok ? stampProgrammes.data : []).map(p => [p.code, p.label])))
@@ -121,7 +122,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
           view on the right. One column below lg, in the same order. */}
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-6">
       <div className="lg:order-2 lg:sticky lg:top-20">
-        <ExplainPanel materialId={m.id} consent={consentOn} offMessage={offMessage ?? undefined} title="Ask about this material" />
+        <ExplainPanel materialId={m.id} consent={consentOn} offMessage={offMessage ?? undefined} title="Ask about this material" modes={policy.scholarLearningModes} />
       </div>
       <div className="lg:order-1">
 
@@ -170,7 +171,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
                     <SectionTopics chunkId={c.id} concepts={mapped.data.concepts.get(c.id) ?? []} mappings={mappingsByChunk.get(c.id) ?? []}
                       options={learner.programme ? options : []} />
                   )}
-                  <ChunkActions chunkId={c.id} consent={consentOn}
+                  <ChunkActions chunkId={c.id} consent={consentOn} modes={policy.scholarLearningModes}
                     linked={(mappingsByChunk.get(c.id) ?? []).filter(x => x.state === "accepted").map(x => ({ title: x.title, contentStatus: x.contentStatus ?? null }))} />
                   {qs.length > 0 && (
                     <div className="mt-4 space-y-3">

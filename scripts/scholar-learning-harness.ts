@@ -377,6 +377,20 @@ const contentStatusLabelled = (src: Src) => {
     && /<ContentStatusTag status=\{l\.contentStatus\} \/>/.test(cl) && /<ContentStatusTag status=\{r\.contentStatus\} \/>/.test(pg)
     && /learner\.belowFloor > 0/.test(mp) && /learner\.belowFloor > 0/.test(pg);
 };
+/**
+ * K21 (Stage 3, Learn): which ways of learning are offered, and whether background beyond the notes may be shown,
+ * are Individual policy, enforced on the server (a mode switched off is refused; background off is dropped unseen
+ * and the prompt told so); "this material" reads its sections in order and SAYS how much it covered; the tutor
+ * tells the student what it knows about them.
+ */
+const learnGoverned = (src: Src) => {
+  const r = src.get(`${API}/explain/route.ts`) ?? "", g = src.get(GEN) ?? "", cl = src.get(CLIENT) ?? "";
+  return /if \(!\(policy\.scholarLearningModes as readonly string\[\]\)\.includes\(mode\)\) return NextResponse\.json\(\{ error: "That way of learning is not offered\." \}, \{ status: 403 \}\);/.test(r)
+    && /const allowBackground = policy\.scholarBeyondNotes === "shown";/.test(r) && /runExplain\(ctx\.userId, question, passages, mode, history, learnerContext, allowBackground\)/.test(r)
+    && /const used = all\.data\.slice\(0, MATERIAL_SCOPE_SECTIONS\);/.test(r) && /coverage = \{ sections: used\.length, of: all\.data\.length \};/.test(r)
+    && /const notesOnly = !allowBackground && SUPPLEMENTARY_MODES\.includes\(mode\);/.test(g)
+    && /\{TUTOR_CONTEXT_NOTICE\}/.test(cl) && /item\.coverage\.sections < item\.coverage\.of/.test(cl) && /offered\(modes\)\.map\(m =>/.test(cl);
+};
 /** K4: no Scholar code edits or deletes a mapping or a decision, and every upsert onto them leaves existing rows alone. */
 const trailEdits = (src: Src) => storeStatements(src)
   .filter(x => /^individual_scholar_(competency_decision|competency_map|chunk_analysis)$/.test(x.table))
@@ -385,7 +399,7 @@ const trailEdits = (src: Src) => storeStatements(src)
 /** K5: what lies beyond the notes is split off before the check, checked on its own, and shown apart under its label. */
 const supplementaryApart = (src: Src) => {
   const g = src.get(GEN) ?? "", r = src.get(`${API}/explain/route.ts`) ?? "", c = src.get(CLIENT) ?? "";
-  return /supplementary: split\.extra === null \? null : checkSupplementary\(split\.extra, mode\)/.test(g)
+  return /supplementary: split\.extra === null \|\| notesOnly \? null : checkSupplementary\(split\.extra, mode\)/.test(g)
     && /label: SUPPLEMENTARY_LABEL/.test(r) && /SUPPLEMENTARY_WITHHELD\[/.test(r) && !/answer: [^,\n]*supplementary/.test(r)
     && /<SourceNotice \/><\/div>\s*<BeyondNotes s=\{item\.supplementary\} \/>/.test(c) && /Beyond your notes/.test(c);
 };
@@ -628,6 +642,8 @@ function main() {
     contentStatusLabelled(REAL));
   ok("K20. Stage 2: formats, size and pages are Individual policy, enforced at both upload steps; plain text is off until HQ enables it; the panel reads the server's rules; every material shows its educational context",
     uploadGoverned(REAL));
+  ok("K21. Stage 3: learning modes and background beyond the notes are policy, enforced on the server; 'this material' says how much it covered; the tutor says what it knows",
+    learnGoverned(REAL));
   ok("K15. the mapping engine is Holdings code: product-neutral, storing nothing, using the caller's attribution -- Scholar supplies person attribution and its identifier screen",
     engineNeutral(HOLD, REAL));
   ok("K4. proposals, concepts and decisions are never edited or deleted by code -- a correction is a new decision row", trailEdits(REAL).length === 0, trailEdits(REAL).join(", "));
@@ -727,6 +743,10 @@ function main() {
   ok("P37. ⚠ K20 goes red when processing stops re-checking the format, or a material stops showing its context",
     !uploadGoverned(plant(`${API}/materials/route.ts`, "(rules.mimes as readonly string[]).includes(declared)", "true"))
     && !uploadGoverned(plant(`${PAGES}/[materialId]/page.tsx`, "contextStamp(", "(() => null)(")));
+  ok("P38. ⚠ K21 goes red when a switched-off mode is served, background-off still shows background, or coverage goes unsaid",
+    !learnGoverned(plant(`${API}/explain/route.ts`, 'if (!(policy.scholarLearningModes as readonly string[]).includes(mode)) return NextResponse.json({ error: "That way of learning is not offered." }, { status: 403 });', ""))
+    && !learnGoverned(plant(GEN, "const notesOnly = !allowBackground && SUPPLEMENTARY_MODES.includes(mode);", "const notesOnly = false;"))
+    && !learnGoverned(plant(CLIENT, "item.coverage.sections < item.coverage.of", "false")));
   ok("P32. ⚠ K15 goes red when the engine reads a table or names a product",
     !engineNeutral(new Map([...HOLD, [ENGINE, (HOLD.get(ENGINE) ?? "") + '\nconst x = (a: any) => a.from("individual_scholar_chunk");']]), REAL)
     && !engineNeutral(HOLD, plant(GEN, "screen: findPatientIdentifiers,", "")));
