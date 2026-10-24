@@ -54,8 +54,8 @@ export function IntDraft({ policyKey, label, unit, min, max, draft, hasOverride 
   );
 }
 
-export function SetDraft({ policyKey, options, draft, hasOverride, legend = "Draft: offered kinds" }: {
-  policyKey: string; options: { value: string; label: string }[]; draft: string[]; hasOverride: boolean; legend?: string;
+export function SetDraft({ policyKey, options, draft, hasOverride, legend = "Draft: offered kinds", emptyText = "Nothing can be chosen yet: no shared catalogue is published." }: {
+  policyKey: string; options: { value: string; label: string }[]; draft: string[]; hasOverride: boolean; legend?: string; emptyText?: string;
 }) {
   const [on, setOn] = useState<Set<string>>(new Set(draft));
   const { busy, msg, send } = useSend();
@@ -63,7 +63,7 @@ export function SetDraft({ policyKey, options, draft, hasOverride, legend = "Dra
   return (
     <fieldset className="space-y-1.5">
       <legend className="text-[12.5px] font-semibold text-gray-700">{legend}</legend>
-      {options.length === 0 && <p className="text-[13px] text-gray-600">Nothing can be chosen yet: no shared catalogue is published.</p>}
+      {options.length === 0 && <p className="text-[13px] text-gray-600">{emptyText}</p>}
       {options.map(o => (
         <label key={o.value} className="flex items-center gap-2 text-[14px] text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]">
           <input type="checkbox" checked={on.has(o.value)} onChange={() => toggle(o.value)} className="h-4 w-4 rounded border-gray-400" />
@@ -72,6 +72,59 @@ export function SetDraft({ policyKey, options, draft, hasOverride, legend = "Dra
       ))}
       <div className="flex flex-wrap gap-2 pt-1">
         <button type="button" className={primary} disabled={busy} onClick={() => send({ action: "set", key: policyKey, value: options.map(o => o.value).filter(v => on.has(v)) }, "Draft saved. Publish to make it effective.")}>Save draft</button>
+        {hasOverride && <button type="button" className={ghost} disabled={busy} onClick={() => send({ action: "reset", key: policyKey }, "Removed. The default applies now, and the change is in the history.")}>Use default now</button>}
+      </div>
+      <Message msg={msg} />
+    </fieldset>
+  );
+}
+
+// JOIN-01: a governed list typed one entry per line. The route derives each code from its label and refuses
+// duplicates, overlong names and anything over the fixed limit.
+const lines = (t: string) => t.split("\n").map(l => l.trim()).filter(Boolean);
+
+export function OptionsDraft({ policyKey, label, max, draft, hasOverride }: {
+  policyKey: string; label: string; max: number; draft: string[]; hasOverride: boolean;
+}) {
+  const [text, setText] = useState(draft.join("\n"));
+  const { busy, msg, send } = useSend();
+  const id = `p-${policyKey}`;
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="block text-[12.5px] font-semibold text-gray-700">{label}</label>
+      <textarea id={id} rows={5} value={text} onChange={e => setText(e.target.value)} aria-describedby={`${id}-limit`}
+        className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-[14px]" />
+      <p id={`${id}-limit`} className="text-[12px] text-gray-500">At most {max}. Renaming one later does not change what past history says.</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={primary} disabled={busy} onClick={() => send({ action: "set", key: policyKey, value: lines(text) }, "Draft saved. Publish to make it effective.")}>Save draft</button>
+        {hasOverride && <button type="button" className={ghost} disabled={busy} onClick={() => send({ action: "reset", key: policyKey }, "Removed. The default applies now, and the change is in the history.")}>Use default now</button>}
+      </div>
+      <Message msg={msg} />
+    </div>
+  );
+}
+
+export function LevelsDraft({ policyKey, programmes, max, draft, hasOverride }: {
+  policyKey: string; programmes: { value: string; label: string }[]; max: number;
+  draft: Record<string, { code: string; label: string }[]>; hasOverride: boolean;
+}) {
+  const [text, setText] = useState<Record<string, string>>(Object.fromEntries(programmes.map(p => [p.value, (draft[p.value] ?? []).map(l => l.label).join("\n")])));
+  const { busy, msg, send } = useSend();
+  const value = () => Object.fromEntries(Object.entries(text).map(([code, t]) => [code, lines(t)]).filter(([, l]) => (l as string[]).length));
+  return (
+    <fieldset className="space-y-3">
+      <legend className="text-[12.5px] font-semibold text-gray-700">Draft: levels, one per line, for each programme</legend>
+      {programmes.length === 0 && <p className="text-[13px] text-gray-600">No active Scholar programme exists yet.</p>}
+      {programmes.map(p => (
+        <div key={p.value} className="space-y-1">
+          <label htmlFor={`lv-${p.value}`} className="block text-[13px] font-semibold text-gray-800">{p.label}</label>
+          <textarea id={`lv-${p.value}`} rows={3} value={text[p.value] ?? ""} onChange={e => setText(t => ({ ...t, [p.value]: e.target.value }))}
+            className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-[14px]" />
+        </div>
+      ))}
+      <p className="text-[12px] text-gray-500">At most {max} levels per programme. A programme left empty asks for no level.</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={primary} disabled={busy} onClick={() => send({ action: "set", key: policyKey, value: value() }, "Draft saved. Publish to make it effective.")}>Save draft</button>
         {hasOverride && <button type="button" className={ghost} disabled={busy} onClick={() => send({ action: "reset", key: policyKey }, "Removed. The default applies now, and the change is in the history.")}>Use default now</button>}
       </div>
       <Message msg={msg} />

@@ -212,7 +212,7 @@ export function UploadPanel() {
   }
 
   return (
-    <form onSubmit={upload} aria-labelledby="upload-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+    <form id="upload" onSubmit={upload} aria-labelledby="upload-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
       <h2 id="upload-h" className="text-[16px] font-bold text-gray-900">Upload study material</h2>
       <p className="mt-1 text-[13.5px] text-gray-600">PDF or Word (.docx), up to {MAX_UPLOAD_BYTES / 1024 / 1024} MB. The text is read on Competen&apos;s servers and kept private to you.</p>
       <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-3 text-[13.5px] leading-relaxed text-amber-950">

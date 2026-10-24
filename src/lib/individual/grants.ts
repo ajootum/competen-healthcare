@@ -121,6 +121,61 @@ export async function grantIndividualAccess(admin: any, req: GrantRequest, grant
   return { ok: true, membership, granted, alreadyLive };
 }
 
+// ── SELF-ACTIVATION OF COMPETEN SCHOLAR ── COMPETEN-SCHOLAR-JOIN-01 J1-J3, migrations 399 and 403 ─────────────
+//
+// The person activates Scholar themselves, behind individual_self_registration (src/lib/individual/join.ts,
+// the only caller). The same gate-3 rows the pilot grant writes, from the same file, so there is still one
+// writer of individual_membership and individual_entitlement.
+//
+//   membership   source 'signup' (370 already allows it) when the person holds none. An existing active
+//                membership is used as it is -- a Professional member adds Scholar to the same account.
+//   entitlement  source 'signup', operating entity from the registry, and the 18+ evidence is the person's
+//                OWN DECLARATION (403): adult_declaration_id names it, adult_confirmed_at is its time, and
+//                adult_confirmed_by stays null. The 403 CHECK keeps that exclusive of an HQ confirmation.
+//   plan         399's plan_code, when a plan is named. Nothing is charged and no provider is involved:
+//                identity and access are independent of payment, and a later paid period APPENDS.
+//
+// ⚠ IT NEVER REINSTATES. A suspended or revoked membership is refused, exactly as the pilot grant refuses it.
+
+export type SelfActivation = { declarationId: string; declaredAt: string; planCode?: string | null; note?: string | null };
+export type SelfActivationOutcome =
+  | { ok: true; membership: "created" | "existing"; alreadyLive: boolean }
+  | { ok: false; status: number; code: string; message: string };
+
+export async function selfActivateScholar(admin: any, userId: string, a: SelfActivation): Promise<SelfActivationOutcome> {
+  const { data: existing, error: mErr } = await admin.from("individual_membership")
+    .select("id, status").eq("user_id", userId).maybeSingle();
+  if (mErr) return { ok: false, status: 503, code: "UNAVAILABLE", message: "Your Competen Individual membership could not be read." };
+  if (existing && existing.status !== "active")
+    return { ok: false, status: 409, code: "MEMBERSHIP_NOT_ACTIVE", message: `Your Competen Individual membership is ${existing.status}.` };
+
+  const { data: liveRows, error: lErr } = await admin.from("individual_live_entitlement")
+    .select("id").eq("user_id", userId).eq("experience_code", "scholar").limit(1);
+  if (lErr) return { ok: false, status: 503, code: "UNAVAILABLE", message: "Your access could not be read." };
+  if (existing && (liveRows ?? []).length) return { ok: true, membership: "existing", alreadyLive: true };
+
+  let membership: "created" | "existing" = "existing";
+  if (!existing) {
+    const ins = await admin.from("individual_membership").insert({ user_id: userId, status: "active", source: "signup", note: a.note ?? null });
+    if (ins.error) return { ok: false, status: 503, code: "WRITE_FAILED", message: "Your membership could not be written." };
+    membership = "created";
+  }
+
+  const ins = await admin.from("individual_entitlement").insert({
+    user_id: userId, experience_code: "scholar", status: "active", source: "signup",
+    operating_entity: EXPERIENCES.scholar.operatingEntity, note: a.note ?? null,
+    adult_confirmed_at: a.declaredAt, adult_declaration_id: a.declarationId,
+    ...(a.planCode ? { plan_code: a.planCode } : {}),
+  });
+  if (ins.error) {
+    // ⚠ NO STRANDED MEMBERSHIP -- the pilot grant's own compensation.
+    if (membership === "created")
+      await admin.from("individual_membership").delete().eq("user_id", userId).eq("source", "signup").is("onboarded_at", null);
+    return { ok: false, status: 503, code: "WRITE_FAILED", message: "Competen Scholar could not be activated." };
+  }
+  return { ok: true, membership, alreadyLive: false };
+}
+
 // ── MEMBERSHIP STATUS: SUSPEND, REINSTATE, REVOKE ── COMPETEN-LEGAL-001 s13 step 7 (the route gap) ───────────
 //
 // The gate-3 membership's own lifecycle, during the pilot, behind the same right as the grant. It changes ONE

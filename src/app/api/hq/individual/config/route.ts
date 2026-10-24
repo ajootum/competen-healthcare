@@ -47,6 +47,17 @@ export async function POST(req: Request) {
           if (ids.some(id => !ok.has(id))) return refuse(422, `${v.def.label}: only shared, active, published catalogues can be chosen.`);
         }
       }
+      // JOIN-01: programmes offered at join, and programmes given levels, must be active Scholar programme rows
+      // (migration 387) -- checked now, and again on every read (src/lib/individual/scholar/context.ts).
+      if (v.def.kind === "programmes" || v.def.kind === "levels") {
+        const codes = v.def.kind === "programmes" ? (v.settings.codes as string[]) : Object.keys(v.settings.byProgramme as Record<string, unknown>);
+        if (codes.length) {
+          const { data, error } = await ctx.admin.from("individual_scholar_programme").select("code").in("code", codes).eq("is_active", true);
+          if (error) return refuse(503, "The programmes could not be checked just now. Nothing has changed.");
+          const ok = new Set((data ?? []).map((r: { code: string }) => r.code));
+          if (codes.some(c => !ok.has(c))) return refuse(422, `${v.def.label}: only active Scholar programmes can be named.`);
+        }
+      }
       const r = await setOverride(ctx.admin, actor, SCOPE, policyPath(v.def.key), v.settings);
       return r.ok ? NextResponse.json({ ok: true }) : refuse(500, "The draft could not be saved. Nothing has changed.");
     }

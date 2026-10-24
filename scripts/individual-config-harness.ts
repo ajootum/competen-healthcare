@@ -181,7 +181,9 @@ const checkKnownDoors = (routes: string[]): R => {
   // hq.individual.commercial.manage (no position holds it), then individual_app AND individual_commerce.
   // catalogues/ (migration 394) is pinned by G6 here.
   const extra = routes.filter(f => !/^src\/app\/api\/hq\/individual\/(grants|invitations)\//.test(f)
-    && f !== "src/app/api/hq/individual/plans/route.ts" && f !== FILES.route && f !== FILES.catRoute);
+    && f !== "src/app/api/hq/individual/plans/route.ts"
+    // programmes/ (JOIN-01) is pinned by individual-foundation-harness 14g: this same right, every save audited.
+    && f !== "src/app/api/hq/individual/programmes/route.ts" && f !== FILES.route && f !== FILES.catRoute);
   return { ok: routes.includes(FILES.route) && extra.length === 0, detail: `unpinned: ${extra.join(", ")}` };
 };
 

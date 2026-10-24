@@ -515,6 +515,36 @@ export async function setLearnerProgramme(admin: Admin, userId: string, code: st
   return error ? "failed" : "ok";
 }
 
+// ── COMPETEN-SCHOLAR-JOIN-01: THE EDUCATIONAL CONTEXT (migration 402) ── rules in ./context.ts, reads and writes here ──
+
+export type LearnerContextRow = {
+  programme_code: string; level_code: string | null; level_label: string | null;
+  institution_code: string | null; institution_label: string | null;
+};
+
+/** Write the CURRENT context. 402's trigger copies a real change into the history -- this never writes the history. */
+export async function writeLearnerContext(admin: Admin, userId: string, c: LearnerContextRow): Promise<"ok" | "failed"> {
+  const { error } = await admin.from("individual_scholar_learner")
+    .upsert({ user_id: userId, ...c, chosen_at: new Date().toISOString() }, { onConflict: "user_id" });
+  return error ? "failed" : "ok";
+}
+
+/** The current context's codes, to preselect a form, or null. */
+export async function learnerContextPointer(admin: Admin, userId: string): Promise<Read<{ programme_code: string; level_code: string | null; institution_code: string | null } | null>> {
+  const { data, error } = await admin.from("individual_scholar_learner").select("programme_code, level_code, institution_code").eq("user_id", userId).maybeSingle();
+  if (error) return fail(error);
+  return { ok: true, data: data ?? null };
+}
+
+/** The person's context periods, newest first. */
+export async function learnerContextPeriods(admin: Admin, userId: string): Promise<Read<any[]>> {
+  const { data, error } = await admin.from("individual_scholar_learner_context")
+    .select("programme_code, level_label, institution_label, effective_from, effective_to")
+    .eq("user_id", userId).order("effective_from", { ascending: false }).limit(100);
+  if (error) return fail(error);
+  return { ok: true, data: data ?? [] };
+}
+
 /** How much of one material has been analysed. */
 export async function analysisStatus(admin: Admin, userId: string, materialId: string): Promise<Read<{ sections: number; analysed: number }>> {
   const [c, a] = await Promise.all([

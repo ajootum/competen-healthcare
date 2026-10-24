@@ -10,6 +10,7 @@ import { contextTermsGate } from "@/lib/individual/guard";
 import { publishedVersions } from "@/lib/individual/legal";
 import { experienceOfPath, forQuery, isIndividualNext, signInHref } from "@/lib/individual/entry";
 import { headers } from "next/headers";
+import { JOIN_START, selfRegistrationEnabled } from "@/lib/individual/join";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -52,6 +53,24 @@ export default async function ExperienceLayout({ children, params }: {
 
   if (!live.includes(experience)) {
     const other = live[0] ? EXPERIENCES[live[0]] : null;
+    // COMPETEN-SCHOLAR-JOIN-01 J1: a member may add Scholar themselves, only while individual_self_registration is on.
+    const canJoin = experience === "scholar" && (await selfRegistrationEnabled(shell.ctx.admin));
+    if (canJoin) {
+      return (
+        <main className="min-h-screen bg-gray-50 px-4 py-10 sm:py-16">
+          <div className="mx-auto max-w-xl">
+            <div className="mb-6"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></div>
+            <StatePanel title={`Add ${x.name} to your account`}
+              actions={<>
+                <Link href={JOIN_START} className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-5 py-2.5 text-[14.5px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Add {x.name}</Link>
+                {other && <Link href={experienceHref(other.key)} className={secondaryBtn}>Back to {other.name}</Link>}
+              </>}>
+              <p>{x.micro} It joins the account you already have, with the same Passport and profile.</p>
+            </StatePanel>
+          </div>
+        </main>
+      );
+    }
     return (
       <main className="min-h-screen bg-gray-50 px-4 py-10 sm:py-16">
         <div className="mx-auto max-w-xl">
