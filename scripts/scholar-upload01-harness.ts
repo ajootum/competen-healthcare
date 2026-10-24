@@ -336,6 +336,19 @@ async function main() {
   ok("U5d. Start learning is the existing material page, with its Learn experience", learn?.status === 200 && /Ask about this material/.test(learn.text) && /Sections/.test(learn.text));
 
   // ── L: upload limits (owner GO 2026-10-24) ──
+  {
+    // L0: the STORAGE layer alone, whatever the policy says: a ~24 MB object through a one-time signed URL into the
+    // Scholar bucket (the browser path). Passes only if the bucket (413) AND the project's global limit allow it.
+    const probe = `${a}/limits-probe-${Date.now()}.pptx`;
+    const signed = await admin.storage.from(BUCKET).createSignedUploadUrl(probe);
+    const blob = new Uint8Array(24 * 1024 * 1024); for (let i = 0; i < blob.length; i += 4096) blob[i] = (i * 2654435761) % 251;
+    const browser = createClient(url!, anonKey!, { auth: { persistSession: false } });
+    const put = signed.data ? await browser.storage.from(BUCKET).uploadToSignedUrl(probe, signed.data.token, blob, { contentType: PPTX_MIME }) : { error: signed.error };
+    const listed = ((await admin.storage.from(BUCKET).list(a, { limit: 100 })).data ?? []).find((o: any) => probe.endsWith(o.name));
+    await admin.storage.from(BUCKET).remove([probe]);
+    ok("L0. storage takes a 24 MB file on a signed URL into the Scholar bucket (413's limit, within the project's global limit), and the probe is removed",
+      !put.error && Number((listed as any)?.metadata?.size ?? 0) >= 24 * 1024 * 1024, `${put.error?.message ?? "stored"} ${(listed as any)?.metadata?.size ?? ""}`);
+  }
   if (rules.maxBytes < 20 * 1024 * 1024 || !pptxOn) pend("L1. a file over 20 MB goes through the signed URL and is kept", `the policy allows ${rules.maxMb} MB here${pptxOn ? "" : " and pptx is off"} -- needs 413, then seed-staging-scholar-upload-25mb.ts (owner-run)`);
   else {
     const { default: Zip } = await import("jszip");
