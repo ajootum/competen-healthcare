@@ -1,8 +1,7 @@
 import { audit } from "./audit";
 import { openAccessPeriod } from "./entitlement-writer";
-import {
-  type GatewayConfig, createHostedCheckout, verifyTransaction, newTxRef, minorToMajor,
-} from "./subscription-gateway";
+import { type GatewayConfig, createHostedCheckout, newTxRef } from "./subscription-gateway";
+import { settleWebhook, type SettlementAdapter, type WebhookResult } from "@/lib/commerce/settlement";
 
 // The SUBSCRIPTION engine -- Competen billing the PRACTITIONER. subscription-gateway.ts talks to Flutterwave;
 // this file decides what a verified payment MEANS, and it is the only place that grants paid access.
@@ -74,126 +73,79 @@ export async function startCheckout(admin: Admin, cfg: GatewayConfig | null, arg
   return { ok: true, link: link.link, txRef };
 }
 
-export type WebhookVerdict = "applied" | "duplicate" | "unverified" | "mismatched" | "unknown_ref" | "not_successful";
-export type WebhookResult = { verdict: WebhookVerdict; detail?: string };
+export type { WebhookVerdict, WebhookResult } from "@/lib/commerce/settlement";
 
 /**
  * Apply one webhook delivery. Returns a verdict for every path, because "nothing happened" and "we refused"
  * are different facts and the difference is the whole audit trail.
  *
  * The caller has ALREADY checked verif-hash. This function assumes nothing else.
+ *
+ * ⚠ THE CLAIM / VERIFY / COMPARE STEPS NOW LIVE AT HOLDINGS LEVEL (src/lib/commerce/settlement.ts), moved
+ * there unchanged so Competen Individual settles through the same code. What stays here is what a proven
+ * Practice payment MEANS: the subscription row, the access period and Practice's audit events.
  */
-export async function applyWebhook(admin: Admin, cfg: GatewayConfig, ev: {
+export function applyWebhook(admin: Admin, cfg: GatewayConfig, ev: {
   providerEventId: string; providerTxId: string | null; txRef: string | null;
 }): Promise<WebhookResult> {
-  // 1. CLAIM. The unique (provider, provider_event_id) is the idempotency guard; a retry loses here and
-  //    never reaches the grant below.
-  const { data: claim, error: claimErr } = await admin.from("practice_checkout_event").insert({
-    provider: "flutterwave", provider_event_id: ev.providerEventId, tx_ref: ev.txRef,
-    verdict: "unverified", detail: "claimed, verification pending",
-  }).select("id").single();
-  if (claimErr) {
-    if (/duplicate|unique/i.test(claimErr.message)) return { verdict: "duplicate" };
-    return { verdict: "unverified", detail: `claim failed: ${claimErr.message}` };
-  }
+  return settleWebhook(admin, cfg, ev, PRACTICE_SETTLEMENT);
+}
 
-  const settle = async (verdict: WebhookVerdict, detail: string) => {
-    await admin.from("practice_checkout_event").update({ verdict, detail: detail.slice(0, 500) }).eq("id", claim.id);
-    return { verdict, detail };
-  };
+const PRACTICE_SETTLEMENT: SettlementAdapter = {
+  eventTable: "practice_checkout_event",
+  checkoutTable: "practice_checkout",
+  checkoutColumns: "id, workspace_id, plan_code, amount_minor, currency, status",
 
-  if (!ev.providerTxId) return await settle("unverified", "no transaction id on the event");
-
-  // 2. VERIFY with the gateway. Never the payload.
-  const v = await verifyTransaction(cfg, ev.providerTxId);
-  if (!v.ok) {
-    const notSuccessful = /transaction status/i.test(v.reason);
-    return await settle(notSuccessful ? "not_successful" : "unverified", v.reason);
-  }
-
-  // 3. COMPARE against the row we wrote before the practitioner left.
-  const ref = v.txRef || ev.txRef;
-  if (!ref) return await settle("unknown_ref", "verified transaction carries no tx_ref");
-
-  const { data: checkout, error: coErr } = await admin.from("practice_checkout")
-    .select("id, workspace_id, plan_code, amount_minor, currency, status")
-    .eq("tx_ref", ref).maybeSingle();
-  if (coErr) return await settle("unverified", `checkout unreadable: ${coErr.message}`);
-  if (!checkout) return await settle("unknown_ref", `no checkout for tx_ref ${ref}`);
-
-  await admin.from("practice_checkout_event").update({ checkout_id: checkout.id }).eq("id", claim.id);
-
-  // A checkout already paid is not an error and not a second grant -- the guard above normally catches the
-  // retry, but a DIFFERENT event id for the same transaction must not pay twice either.
-  if (checkout.status === "paid") return await settle("duplicate", "checkout already settled");
-
-  const expectedMajor = minorToMajor(checkout.amount_minor, checkout.currency);
-  const currencyOk = v.currency === String(checkout.currency).toUpperCase();
-  // Money compared in MINOR units after an explicit conversion, so a float cent never decides a grant.
-  const amountOk = expectedMajor !== null && Math.round(v.amountMajor * 1000) >= Math.round(expectedMajor * 1000);
-
-  if (!currencyOk || !amountOk) {
-    await admin.from("practice_checkout").update({
-      status: "mismatched", provider_tx_id: v.providerTxId, channel: v.channel,
-      failure_reason: `expected ${expectedMajor} ${checkout.currency}, verified ${v.amountMajor} ${v.currency}`,
-      updated_at: new Date().toISOString(),
-    }).eq("id", checkout.id);
+  async onMismatched(admin, checkout, v, ref) {
     await audit(admin, {
       workspaceId: checkout.workspace_id, eventType: "practice.checkout_mismatched",
       payload: { txRef: ref, expectedMinor: checkout.amount_minor, expectedCurrency: checkout.currency, verifiedMajor: v.amountMajor, verifiedCurrency: v.currency },
     });
-    return await settle("mismatched", `expected ${expectedMajor} ${checkout.currency}, got ${v.amountMajor} ${v.currency}`);
-  }
+  },
 
-  // 4. GRANT.
-  const now = new Date();
-  const periodEnd = new Date(now.getTime() + 30 * DAY).toISOString();
+  // GRANT. The checkout is already marked paid by the engine.
+  async onPaid(admin, checkout, v, ref, now) {
+    const periodEnd = new Date(now.getTime() + 30 * DAY).toISOString();
 
-  await admin.from("practice_checkout").update({
-    status: "paid", provider_tx_id: v.providerTxId, channel: v.channel,
-    settled_at: now.toISOString(), updated_at: now.toISOString(),
-  }).eq("id", checkout.id);
+    // ux_practice_subscription_workspace is a PLAIN unique index, so this on-conflict is a real target --
+    // see migration 349's header for why the partial version it replaced was refused.
+    await admin.from("practice_subscription").upsert({
+      workspace_id: checkout.workspace_id, plan_code: checkout.plan_code, status: "active",
+      current_period_start: now.toISOString(), current_period_end: periodEnd,
+      last_checkout_id: checkout.id, updated_at: now.toISOString(),
+    }, { onConflict: "workspace_id" });
 
-  // ux_practice_subscription_workspace is a PLAIN unique index, so this on-conflict is a real target --
-  // see migration 349's header for why the partial version it replaced was refused.
-  await admin.from("practice_subscription").upsert({
-    workspace_id: checkout.workspace_id, plan_code: checkout.plan_code, status: "active",
-    current_period_start: now.toISOString(), current_period_end: periodEnd,
-    last_checkout_id: checkout.id, updated_at: now.toISOString(),
-  }, { onConflict: "workspace_id" });
-
-  // The entitlement is what the shell already reads, so paid access arrives through the existing gate
-  // rather than a second one nothing consults. CPR-PD-PROV-001 §12: the payment is billing-authoritative,
-  // and the way it exercises that authority is by writing a period -- not by becoming a second gate.
-  //
-  // ⚠ THIS APPENDS. It used to be an UPDATE filtered only by workspace and a status list, which rewrote
-  // plan_code, status and ends_at on EVERY period the practice had ever held -- a trial, an extension and
-  // a lapse all resurrected as `active` with one shared end date, each still claiming its original start.
-  // Harmless while a practice only ever had one row; a fabricated ledger the moment periods began to
-  // append (§9). Never reached in production -- no plan is both active and priced, so no checkout can be
-  // raised -- which is exactly why nothing caught it. See entitlement-writer.ts.
-  const opened = await openAccessPeriod(admin, {
-    workspaceId: checkout.workspace_id, planCode: checkout.plan_code,
-    status: "active", startsAt: now.toISOString(), endsAt: periodEnd,
-    // ADR-015: the ONLY source that carries billing authority.
-    source: "payment",
-  });
-  // ⚠ THE MONEY IS ALREADY TAKEN BY THIS POINT, so a failure here must not look like a failed payment.
-  // The checkout and the subscription rows above are written and correct; what is missing is the access
-  // the payment bought, which a Director can grant from the practice's own record. Recorded loudly and
-  // named in the audit event rather than swallowed.
-  if (!opened.ok) {
-    console.error(`[practice] paid checkout ${checkout.id} could not open an access period: ${opened.message}`);
-    await audit(admin, {
-      workspaceId: checkout.workspace_id, eventType: "practice.subscription_paid_without_access",
-      payload: { txRef: ref, planCode: checkout.plan_code, code: opened.code, detail: opened.message },
+    // The entitlement is what the shell already reads, so paid access arrives through the existing gate
+    // rather than a second one nothing consults. CPR-PD-PROV-001 §12: the payment is billing-authoritative,
+    // and the way it exercises that authority is by writing a period -- not by becoming a second gate.
+    //
+    // ⚠ THIS APPENDS. It used to be an UPDATE filtered only by workspace and a status list, which rewrote
+    // plan_code, status and ends_at on EVERY period the practice had ever held -- a trial, an extension and
+    // a lapse all resurrected as `active` with one shared end date, each still claiming its original start.
+    // Harmless while a practice only ever had one row; a fabricated ledger the moment periods began to
+    // append (§9). Never reached in production -- no plan is both active and priced, so no checkout can be
+    // raised -- which is exactly why nothing caught it. See entitlement-writer.ts.
+    const opened = await openAccessPeriod(admin, {
+      workspaceId: checkout.workspace_id, planCode: checkout.plan_code,
+      status: "active", startsAt: now.toISOString(), endsAt: periodEnd,
+      // ADR-015: the ONLY source that carries billing authority.
+      source: "payment",
     });
-  }
+    // ⚠ THE MONEY IS ALREADY TAKEN BY THIS POINT, so a failure here must not look like a failed payment.
+    // The checkout and the subscription rows above are written and correct; what is missing is the access
+    // the payment bought, which a Director can grant from the practice's own record. Recorded loudly and
+    // named in the audit event rather than swallowed.
+    if (!opened.ok) {
+      console.error(`[practice] paid checkout ${checkout.id} could not open an access period: ${opened.message}`);
+      await audit(admin, {
+        workspaceId: checkout.workspace_id, eventType: "practice.subscription_paid_without_access",
+        payload: { txRef: ref, planCode: checkout.plan_code, code: opened.code, detail: opened.message },
+      });
+    }
 
-  await audit(admin, {
-    workspaceId: checkout.workspace_id, eventType: "practice.subscription_paid",
-    payload: { txRef: ref, planCode: checkout.plan_code, channel: v.channel, periodEnd },
-  });
-
-  return await settle("applied", `paid via ${v.channel}`);
-}
+    await audit(admin, {
+      workspaceId: checkout.workspace_id, eventType: "practice.subscription_paid",
+      payload: { txRef: ref, planCode: checkout.plan_code, channel: v.channel, periodEnd },
+    });
+  },
+};
