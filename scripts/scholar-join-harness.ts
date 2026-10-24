@@ -54,7 +54,7 @@ const ok = (name: string, cond: boolean, detail = "") => {
 const pend = (name: string, why: string) => { pends.push(name); console.log(`  PEND  ${name} -- ${why}`); };
 
 const RUN = Math.random().toString(36).slice(2, 8);
-const FIX = { newbie: `harness-join-new-${RUN}@competen.test`, pro: "harness-join-pro@competen.test" };
+const FIX = { newbie: `harness-join-new-${RUN}@competen.test`, unconfirmed: `harness-join-unconfirmed-${RUN}@competen.test`, pro: "harness-join-pro@competen.test" };
 const PW = `join-${Math.random().toString(36).slice(2)}-Aa1!`;
 const LEGAL = {
   holdings: { terms: "staging-test-h-terms-1", privacy: "staging-test-h-privacy-1" },
@@ -167,16 +167,22 @@ async function main() {
     // ── R. REGISTRATION ──
     const page = await get("/individual/join");
     ok("R1. Get Started renders the create-account form, and offers sign-in for an existing account", page.status === 200 && /Create account/.test(page.text) && /Already have a Competen account/.test(page.text), String(page.status));
+    // What this auth server does at sign-up: confirm the address by email, or confirm it automatically. Read
+    // from its own public settings, so the expectations below follow the configuration rather than guessing.
+    const authSettings: any = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: anonKey! } }).then(r => r.json()).catch(() => ({}));
+    const autoconfirm = authSettings?.mailer_autoconfirm === true;
     const reg = await send("POST", "/api/individual/join/register", { fullName: "Harness Newbie", email: FIX.newbie, password: PW });
     if (reg.status === 400 && /sending|email|rate/i.test(JSON.stringify(reg.json))) {
-      pend("R2-V3", `the auth server refused to send the confirmation email (${JSON.stringify(reg.json)}). Check staging SMTP and rate limits.`);
+      pend("R2-V4", `the auth server refused to send the confirmation email (${JSON.stringify(reg.json)}). Check staging SMTP and rate limits.`);
       return;
     }
-    ok("R2. registration answers VERIFY_EMAIL and creates the identity", reg.status === 202 && reg.json.status === "VERIFY_EMAIL", `${reg.status} ${JSON.stringify(reg.json)}`);
+    ok(`R2. registration creates the identity and answers ${autoconfirm ? "REGISTERED (this auth server auto-confirms email)" : "VERIFY_EMAIL"}`,
+      reg.status === 202 && reg.json.status === (autoconfirm ? "REGISTERED" : "VERIFY_EMAIL"), `${reg.status} ${JSON.stringify(reg.json)}`);
     const nu = await findUser(FIX.newbie);
     const prof = nu ? await admin.from("profiles").select("role").eq("id", nu.id).maybeSingle() : { data: null };
     const mem0 = nu ? await admin.from("individual_membership").select("id").eq("user_id", nu.id) : { data: [1] };
-    ok("R3. the new identity holds no estate role, is unconfirmed, and has nothing Individual yet", !!nu && prof.data?.role === null && !nu.email_confirmed_at && (mem0.data ?? []).length === 0,
+    ok(`R3. the new identity holds no estate role, ${autoconfirm ? "" : "is unconfirmed, "}and has nothing Individual yet`,
+      !!nu && prof.data?.role === null && (autoconfirm || !nu.email_confirmed_at) && (mem0.data ?? []).length === 0,
       JSON.stringify({ role: prof.data?.role, confirmed: nu?.email_confirmed_at }));
     const again = await send("POST", "/api/individual/join/register", { fullName: "Harness Newbie", email: FIX.newbie, password: PW });
     const count = await admin.from("profiles").select("id", { count: "exact" }).eq("email", FIX.newbie).limit(1);
@@ -184,18 +190,34 @@ async function main() {
       again.status === 409 && again.json?.error?.code === "IDENTITY_EXISTS" && /\/login\?next=/.test(again.json?.nextUrl ?? "") && count.count === 1, `${again.status} count=${count.count}`);
 
     // ── V. VERIFICATION ──
-    const early = await signIn(FIX.newbie);
-    ok("V1. sign-in is refused before the email is confirmed", early.status !== 200 || early.jar.size === 0, `${early.status}`);
-    const link = await admin.auth.admin.generateLink({ type: "signup", email: FIX.newbie, password: PW, options: { redirectTo: `${BASE}/auth/callback?next=/individual/join/start` } });
+    // Proved on an identity that is genuinely unconfirmed, made directly by the auth admin API, so the controls
+    // are exercised whatever this server's sign-up setting is. Its confirmation token is the one the email carries.
+    const uc = await admin.auth.admin.createUser({ email: FIX.unconfirmed, password: PW, email_confirm: false });
+    const early = await signIn(FIX.unconfirmed);
+    if (early.status === 200 && early.jar.size > 0) {
+      // This server admits an unconfirmed sign-in, so the application's own control is what holds.
+      const startUc = await get("/individual/join/start", early.jar);
+      const actUc = await send("POST", "/api/individual/join/activate", { programme: programme.code, level: "year-1", adultDeclaration: true, policyVersion: SCHOLAR_ELIGIBILITY.policyVersion }, early.jar);
+      ok("V1. before confirmation, the join itself refuses: the start page asks to confirm the email, and activation answers 403 EMAIL_UNCONFIRMED",
+        startUc.status === 200 && /Confirm your email first/.test(startUc.text) && actUc.status === 403 && actUc.json?.error?.code === "EMAIL_UNCONFIRMED", `${startUc.status}/${actUc.status}`);
+    } else {
+      ok("V1. before confirmation, the auth server refuses the sign-in", true);
+    }
+    const link = await admin.auth.admin.generateLink({ type: "signup", email: FIX.unconfirmed, password: PW, options: { redirectTo: `${BASE}/auth/callback?next=/individual/join/start` } });
     const action = link.data?.properties?.action_link as string | undefined;
     const followed = action ? await fetch(action, { redirect: "manual" }) : null;
-    const after = await findUser(FIX.newbie);
-    ok("V2. the confirmation link (the token the email carries) confirms the address", !!action && !!followed && [302, 303].includes(followed.status) && !!after?.email_confirmed_at,
-      `${link.error?.message ?? ""} ${followed?.status} confirmed=${after?.email_confirmed_at}`);
-    pend("V3. delivery of the confirmation email to a real mailbox", "not provable here: fixtures use @competen.test. Prove with a real inbox on staging before activation.");
+    const confirmed = await findUser(FIX.unconfirmed);
+    ok("V2. the confirmation link (the token the email carries) confirms the address", !uc.error && !!action && !!followed && [302, 303].includes(followed.status) && !!confirmed?.email_confirmed_at,
+      `${uc.error?.message ?? ""} ${link.error?.message ?? ""} ${followed?.status} confirmed=${confirmed?.email_confirmed_at}`);
+    const late = await signIn(FIX.unconfirmed);
+    const lateStart = late.status === 200 ? await get("/individual/join/start", late.jar) : { status: 0, text: "" };
+    ok("V3. after confirmation the same person signs in and reaches the educational-context step", late.status === 200 && lateStart.status === 200 && /What are you studying\?/.test(lateStart.text), `${late.status}/${lateStart.status}`);
+    if (autoconfirm) pend("V4. the confirm-email setting itself", "this staging auth server auto-confirms at sign-up (mailer_autoconfirm true), unlike production. The confirm-ON registration answer (VERIFY_EMAIL) is proved by unit test and by V1-V3 here. Prove on a confirm-ON project before activation.");
+    pend("V5. delivery of the confirmation email to a real mailbox", "not provable here: fixtures use @competen.test. Prove with a real inbox before activation.");
     const s = await signIn(FIX.newbie);
-    ok("V4. after confirmation the person signs in", s.status === 200 && s.jar.size > 0, `${s.status} ${JSON.stringify(s.json)}`);
+    ok("V6. the registered person signs in", s.status === 200 && s.jar.size > 0, `${s.status} ${JSON.stringify(s.json)}`);
     const jar = s.jar;
+    const after = (await findUser(FIX.newbie))!;
 
     // ── A. EDUCATIONAL CONTEXT AND ACTIVATION ──
     const start = await get("/individual/join/start", jar);
