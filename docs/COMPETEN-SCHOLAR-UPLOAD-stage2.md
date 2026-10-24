@@ -41,12 +41,14 @@ These are enforced at **both** upload steps: the slot, and processing. A format 
 
 | File | sha256 (LF) | Tier | State |
 |---|---|---|---|
-| `405-individual-scholar-plain-text-materials.sql` | `c2aaea38a8714978bb994fa94c532aa513733210c3279101a7b6227b5428b09a` | Low | Sent for the staging apply (×2) |
+| `405-individual-scholar-plain-text-materials.sql` | `c2aaea38a8714978bb994fa94c532aa513733210c3279101a7b6227b5428b09a` | Low | **Applied ×2 on staging** (coordinating session, 2026-10-24; both ok, guard passed; sha matches). **Not on production.** |
 | `docs/evidence/COMPETEN-SCHOLAR-UPLOAD/ROLLBACK-405.sql` | `c62b7127ba4d074dbdc38631cf605e71583173e721f92339b9f5e3c2b1f1cac2` | — | — |
 
 - **What it does:** adds `text/plain` to the material MIME CHECK and to the private bucket's allowed types. Nothing else changes.
 - **Depends on:** 372.
 - **House rules:** ALL CLEAR.
+- **Verified read-only by this session:** the material CHECK lists pdf, docx and text/plain; the bucket is still private, with a 10 MB cap and the same three types; 0 text materials before enabling.
+- **Turning text on (staging):** `npx tsx scripts/seed-staging-scholar-text-format.ts`, run by the owner. It uses the governed WCE path and refuses production and any pending draft. `--remove` restores the default.
 
 ## 3. Verification
 
