@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
-import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, individualQuotaRefusal, loadIndividualPolicy, policyDef, policyPath, resolvePolicy, validateDraft, type IntPolicy } from "./policy";
+import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, individualQuotaRefusal, loadIndividualPolicy, meetsMinStatus, policyDef, policyPath, resolvePolicy, validateDraft, type IntPolicy } from "./policy";
 import { publishScope, rollbackVersion, setOverride } from "@/lib/config/workspace-config-write";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX, parseShare } from "./professional/share";
@@ -56,7 +56,20 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarCatalogues: [], professionalCatalogues: [],
       // JOIN-01: every active programme is offered, no level or institution is asked, both fields may be.
       scholarOnboardingProgrammes: null, scholarProgrammeLevels: {}, scholarInstitutions: [], scholarOnboardingFields: ["level", "institution"],
+      // P0: label, do not hide -- everything of a chosen catalogue is offered, labelled, by default.
+      scholarCatalogueMinStatus: "unreviewed",
     });
+  });
+
+  it("P0: the content-status minimum is one listed value, defaults to everything, and filters only when raised", () => {
+    const path = policyPath("scholar_catalogue_min_status");
+    expect(resolvePolicy([{ config_path: path, published: { value: "approved" } }]).scholarCatalogueMinStatus).toBe("approved");
+    expect(resolvePolicy([{ config_path: path, published: { value: "verified" } }]).scholarCatalogueMinStatus).toBe("unreviewed");
+    expect(validateDraft("scholar_catalogue_min_status", "draft")).toMatchObject({ ok: true, settings: { value: "draft" } });
+    expect(validateDraft("scholar_catalogue_min_status", "verified").ok).toBe(false);
+    expect(["unreviewed", "draft", "approved", "bogus"].map(s => meetsMinStatus(s, "unreviewed"))).toEqual([true, true, true, true]);
+    expect(["unreviewed", "draft", "approved", "bogus"].map(s => meetsMinStatus(s, "draft"))).toEqual([false, true, true, false]);
+    expect(["unreviewed", "draft", "approved", "bogus"].map(s => meetsMinStatus(s, "approved"))).toEqual([false, false, true, false]);
   });
 
   it("S1: a catalogue allowlist is ids only, deduplicated, capped, and empty when absent or malformed", () => {

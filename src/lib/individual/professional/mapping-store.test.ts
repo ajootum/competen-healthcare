@@ -9,6 +9,7 @@ const comp = (id: string, title: string, score: number | null) => ({
   competencyId: id, code: null, title, description: null, layer: "profession" as const, profession: null,
   catalogue: { id: "F", name: "Nursing: Respiratory Care", code: "NUR-RESP", version: "1" }, domain: { id: "D", name: "Resp" },
   outcomes: [], expectedLevel: score === null ? null : { id: `L${score}`, score, label: `Level ${score}` }, cpu: null,
+  practice: null, home: { frameworkId: "F", frameworkName: "Nursing: Respiratory Care" }, contentStatus: "unreviewed" as const, statusNote: null,
   links: { prerequisites: [], extends: [], sharedWith: [] },
 });
 const CATALOGUE = [comp("K1", "Oxygen therapy", 3), comp("K2", "Respiratory assessment", 4), comp("K3", "Airway", null)];

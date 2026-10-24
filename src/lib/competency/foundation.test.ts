@@ -33,6 +33,52 @@ describe("the shared competency foundation read API (S1)", () => {
     expect(c.layer).toBeNull();
   });
 
+  // Migration 394: a controlled catalogue REFERENCES existing competencies, with their own practice and CPU.
+  const controlled = {
+    ...base,
+    frameworks: [{ id: "fw-c", name: "Scholar: Respiratory and Cardiovascular", code: "SCH-RC", competency_layer: "profession", profession_term_id: "t-nursing" }],
+    homeFrameworks: [{ id: "fw-core", name: "Core Nursing" }],
+    domains: [{ id: "d-air", framework_id: "fw-core", name: "Domain 2: Airway" }, { id: "d-hosp", framework_id: "fw-hosp", name: "Ward airway" }],
+    competencies: [
+      { id: "c-air", domain_id: "d-air", name: "Maintains Airway Safety", description: null, code: null, practice_id: "p-air", cpu_id: null, learning_outcomes: [], expected_level_id: null },
+      { id: "c-oxy", domain_id: "d-air", name: "Administers oxygen", description: null, code: null, practice_id: null, cpu_id: "u-1", learning_outcomes: [], expected_level_id: null },
+      { id: "c-hosp", domain_id: "d-hosp", name: "Ward airway", description: null, code: null, practice_id: null, cpu_id: null, learning_outcomes: [], expected_level_id: null },
+    ],
+    cpus: [{ id: "u-1", code: "CPU-OXYSAFE-001", name: "Safe Oxygen Administration", practice_id: "p-oxy" }],
+    practices: [{ id: "p-air", code: "PRA-AIR-001", name: "Airway Management" }, { id: "p-oxy", code: "PRA-OXY-001", name: "Oxygen Therapy" }],
+    entries: [
+      { catalogue_id: "fw-c", competency_id: "c-oxy", content_status: "approved", status_note: "Reviewed by the clinical lead", sort_order: 2 },
+      { catalogue_id: "fw-c", competency_id: "c-air", content_status: "unreviewed", status_note: null, sort_order: 1 },
+      { catalogue_id: "fw-c", competency_id: "c-hosp", content_status: "approved", status_note: null, sort_order: 3 },
+      { catalogue_id: "fw-other", competency_id: "c-air", content_status: "approved", status_note: null, sort_order: 0 },
+    ],
+    dependencies: [], equivalencies: [],
+  };
+
+  it("a controlled catalogue offers what it references, in its order, with home, practice (own or via the CPU) and status", () => {
+    const out = assembleCatalogue(controlled);
+    expect(out.map(c => c.competencyId)).toEqual(["c-air", "c-oxy"]);
+    expect(out[0]).toMatchObject({ catalogue: { id: "fw-c" }, home: { frameworkId: "fw-core", frameworkName: "Core Nursing" }, domain: { name: "Domain 2: Airway" },
+      practice: { code: "PRA-AIR-001" }, cpu: null, contentStatus: "unreviewed", layer: "profession", profession: { label: "Nursing" } });
+    expect(out[1]).toMatchObject({ practice: { code: "PRA-OXY-001" }, cpu: { code: "CPU-OXYSAFE-001" }, contentStatus: "approved", statusNote: "Reviewed by the clinical lead" });
+  });
+
+  it("a reference to a hospital framework's competency, or from a catalogue not offered, is dropped", () => {
+    const ids = assembleCatalogue(controlled).map(c => c.competencyId);
+    expect(ids).not.toContain("c-hosp");
+    // fw-other is not an offered catalogue, so its "approved" entry for c-air never applies.
+    expect(assembleCatalogue(controlled).find(c => c.competencyId === "c-air")?.contentStatus).toBe("unreviewed");
+  });
+
+  it("a catalogue's own competencies are unreviewed: publication is not a clinical review", () => {
+    expect(assembleCatalogue(base).every(c => c.contentStatus === "unreviewed" && c.statusNote === null && c.home.frameworkId === c.catalogue.id)).toBe(true);
+  });
+
+  it("an unknown status string is never read as approved", () => {
+    const [c] = assembleCatalogue({ ...controlled, entries: [{ catalogue_id: "fw-c", competency_id: "c-oxy", content_status: "APPROVED", sort_order: 0 }] });
+    expect(c.contentStatus).toBe("unreviewed");
+  });
+
   it("nothing allowed reads nothing, and an unreadable library is null (fail closed)", async () => {
     expect(await loadIndividualCatalogue({ from: () => { throw new Error("must not be called"); } }, [])).toEqual([]);
     expect(await loadIndividualCatalogue({ from: () => { throw new Error("down"); } }, ["fw-f"])).toBeNull();

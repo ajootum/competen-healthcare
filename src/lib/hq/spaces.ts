@@ -190,6 +190,8 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },
   // The policy page only. /super-admin/individual itself is the pilot-grant page (IND-ACCESS-001, exact).
   { prefix: "/super-admin/individual/configuration", capability: "hq.individual.config.manage" },
+  // P0 controlled catalogues (migration 394): the same administrator curates what a catalogue names.
+  { prefix: "/super-admin/individual/catalogues", capability: "hq.individual.config.manage" },
   // COMPETEN-IND-ACCESS-001 s4: the Competen Individual pilot access screen. The capability already existed
   // (migration 370, D9) with no page; this declares the page it opens, so the intent map stays the whole truth.
   // EXACT: the screen has no sub-routes, and a sibling Individual HQ page (IND-007 configuration) must not

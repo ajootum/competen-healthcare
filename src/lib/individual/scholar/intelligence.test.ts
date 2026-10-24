@@ -190,7 +190,8 @@ describe("S1 adapter (fromCatalogue)", () => {
     expect(fromCatalogue([])).toEqual({ ok: true, value: null });
     const row = { competencyId: "c1", code: "F1", title: "Hand hygiene", description: null, layer: "foundational" as const, profession: null,
       catalogue: { id: "f1", name: "CF-FOUND", code: "CF", version: "1.0.0" }, domain: { id: "d", name: "Safety" }, outcomes: [],
-      expectedLevel: { id: "l", score: 3, label: "Competent" }, cpu: null, links: { prerequisites: [], extends: [], sharedWith: [] } };
+      expectedLevel: { id: "l", score: 3, label: "Competent" }, cpu: null, practice: null, home: { frameworkId: "f1", frameworkName: "CF-FOUND" },
+      contentStatus: "unreviewed" as const, statusNote: null, links: { prerequisites: [], extends: [], sharedWith: [] } };
     expect(fromCatalogue([row])).toEqual({ ok: true, value: [{ id: "c1", code: "F1", name: "Hand hygiene", frameworkId: "f1", frameworkName: "CF-FOUND", expectedLevel: { score: 3, label: "Competent" } }] });
     // COMPETEN-SCHOLAR-01 P0: the live sources are S2 (accepted maps) and the programme-narrowed catalogue (below).
   });

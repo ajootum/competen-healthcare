@@ -45,7 +45,9 @@ export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues
 export type ProgrammesPolicyKey = "scholar_onboarding_programmes";
 export type OptionsPolicyKey = "scholar_institutions";
 export type LevelsPolicyKey = "scholar_programme_levels";
-export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey;
+/** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
+export type ChoicePolicyKey = "scholar_catalogue_min_status";
+export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
 export type IntPolicy = Common & { key: IntPolicyKey; kind: "int"; unit: string; fallback: number; min: number; max: number };
@@ -58,7 +60,17 @@ export type ProgrammesPolicy = Common & { key: ProgrammesPolicyKey; kind: "progr
 export type OptionsPolicy = Common & { key: OptionsPolicyKey; kind: "options"; max: number };
 /** Per programme, its own list of levels. */
 export type LevelsPolicy = Common & { key: LevelsPolicyKey; kind: "levels"; maxPerProgramme: number };
-export type PolicyDef = IntPolicy | SetPolicy | CataloguePolicy | ProgrammesPolicy | OptionsPolicy | LevelsPolicy;
+export type ChoicePolicy = Common & { key: ChoicePolicyKey; kind: "choice"; options: readonly { value: string; label: string }[]; fallback: string };
+export type PolicyDef = IntPolicy | SetPolicy | CataloguePolicy | ChoicePolicy | ProgrammesPolicy | OptionsPolicy | LevelsPolicy;
+/** Content statuses from least to most reviewed (migration 394). "At least draft" offers draft and approved. */
+export const CONTENT_STATUS_ORDER = ["unreviewed", "draft", "approved"] as const;
+export type ContentStatusLevel = (typeof CONTENT_STATUS_ORDER)[number];
+/** Pure: whether a competency's content status meets the policy minimum. An unknown status never does,
+ *  except at the lowest minimum, where everything is offered (and labelled). */
+export function meetsMinStatus(status: string, min: ContentStatusLevel): boolean {
+  const i = (CONTENT_STATUS_ORDER as readonly string[]).indexOf(status);
+  return min === "unreviewed" || (i > -1 && i >= CONTENT_STATUS_ORDER.indexOf(min));
+}
 export const CATALOGUES_MAX = 50;
 export type ContextOption = { code: string; label: string };
 const OPTION_CODE = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -170,6 +182,21 @@ export const POLICIES: readonly PolicyDef[] = [
     help: "The shared competency catalogues a person may link a development need or evidence to in Competen Professional. Links already made keep their names.",
     limitReason: "Only shared, active, published catalogues can be chosen, at most 50. Empty by default: nothing is offered automatically.",
   },
+  // P0 controlled catalogues (migration 394), owner direction 2026-10-24: LABEL, DO NOT HIDE. By default every
+  // competency of a chosen catalogue is offered, each labelled with its content status. Raising the minimum
+  // withholds less-reviewed content from mapping -- a filter HQ can set and undo, never a silent one.
+  {
+    key: "scholar_catalogue_min_status", kind: "choice", product: "Scholar",
+    label: "Least-reviewed competency content Scholar offers",
+    help: "Which competencies of the chosen catalogues Scholar may link study to, by content status. Every competency shown is labelled with its status either way.",
+    options: [
+      { value: "unreviewed", label: "All, labelled (including not clinically reviewed)" },
+      { value: "draft", label: "Draft and approved content only" },
+      { value: "approved", label: "Approved content only" },
+    ],
+    fallback: "unreviewed",
+    limitReason: "Only the three content statuses of migration 394. Default: everything, labelled.",
+  },
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -249,6 +276,12 @@ function labelsToOptions(raw: unknown, max: number, labelMax: number, what: stri
   return { ok: true, options };
 }
 
+/** Pure: a choice policy's effective value. Only a listed option; anything else is the fallback. */
+export function clampChoice(p: ChoicePolicy, settings: any): string {
+  const v = settings?.value;
+  return typeof v === "string" && p.options.some(o => o.value === v) ? v : p.fallback;
+}
+
 /**
  * Pure: a draft as the administrator sent it, or why it is refused. Out of range is REFUSED here (not
  * silently clamped) so the administrator sees the limit rather than a different number than they typed.
@@ -292,6 +325,10 @@ export function validateDraft(key: unknown, raw: unknown): { ok: true; def: Poli
     // Whether each id is a shared, active, published framework is checked by the route, against the library.
     return { ok: true, def, settings: { ids } };
   }
+  if (def.kind === "choice") {
+    if (typeof raw !== "string" || !def.options.some(o => o.value === raw)) return { ok: false, error: `${def.label}: choose one of ${def.options.map(o => o.label).join("; ")}.` };
+    return { ok: true, def, settings: { value: raw } };
+  }
   if (!Array.isArray(raw) || raw.some(v => typeof v !== "string")) return { ok: false, error: `${def.label}: send the list of kinds to allow.` };
   const known = new Set(def.options.map(o => o.value));
   const unknown = raw.filter(v => !known.has(v));
@@ -316,6 +353,8 @@ export type IndividualPolicy = {
   scholarProgrammeLevels: Record<string, ContextOption[]>;
   scholarInstitutions: ContextOption[];
   scholarOnboardingFields: ("level" | "institution")[];
+  /** P0: the least-reviewed content status Scholar offers. Default "unreviewed": everything, labelled. */
+  scholarCatalogueMinStatus: ContentStatusLevel;
 };
 
 type Row = { config_path: string; published: any };
@@ -339,6 +378,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
+    scholarCatalogueMinStatus: clampChoice(policyDef("scholar_catalogue_min_status") as ChoicePolicy, published.get(policyPath("scholar_catalogue_min_status"))) as ContentStatusLevel,
   };
 }
 

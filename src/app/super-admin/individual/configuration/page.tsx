@@ -2,9 +2,9 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import {
-  POLICIES, POLICY_SCOPE, POLICY_PATH_PREFIX, clampInt, clampSet, clampCatalogues, clampProgrammes, clampOptions, clampLevels, policyPath, type PolicyDef,
+  POLICIES, POLICY_SCOPE, POLICY_PATH_PREFIX, clampInt, clampSet, clampCatalogues, clampChoice, clampProgrammes, clampOptions, clampLevels, policyPath, type PolicyDef,
 } from "@/lib/individual/policy";
-import { IntDraft, LevelsDraft, OptionsDraft, PublishBar, RollbackButton, SetDraft } from "./_components/PolicyControls";
+import { ChoiceDraft, IntDraft, LevelsDraft, OptionsDraft, PublishBar, RollbackButton, SetDraft } from "./_components/PolicyControls";
 
 // /super-admin/individual/configuration -- COMPETEN-CONFIG-002 item 6.
 //
@@ -42,6 +42,7 @@ function describe(def: PolicyDef, settings: any, names: Map<string, string> = ne
     const by = Object.entries(clampLevels(def, settings));
     return by.length ? by.map(([c, l]) => `${names.get(c) ?? c}: ${l.map(x => x.label).join(", ")}`).join(". ") : "None (no level is asked)";
   }
+  if (def.kind === "choice") { const v = clampChoice(def, settings); return def.options.find(o => o.value === v)?.label ?? v; }
   const on = clampSet(def, settings);
   return on.length ? def.options.filter(o => on.includes(o.value)).map(o => o.label).join(", ") : "None offered";
 }
@@ -128,7 +129,7 @@ export default async function IndividualPolicyPage() {
                 <div><dt className="text-[12px] font-semibold text-gray-500">Effective now</dt><dd className="font-semibold text-gray-900">{effective}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Source</dt><dd className="text-gray-800">{source}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Effective since</dt><dd className="text-gray-800">{published == null ? "Not applicable: the default has always applied" : at ? fmt(at) : "Not recorded in the recent versions"}</dd></div>
-                <div><dt className="text-[12px] font-semibold text-gray-500">Fixed limit</dt><dd className="text-gray-800">{def.kind === "int" ? `${def.min} to ${def.max} ${def.unit}. Default ${def.fallback}.` : def.kind === "catalogues" ? `Shared, active, published catalogues only, at most ${def.max}. Default: none.` : def.kind === "set" ? `Only: ${def.options.map(o => o.label).join(", ")}. Default: all.` : ""} <span className="text-gray-500">{def.limitReason}</span></dd></div>
+                <div><dt className="text-[12px] font-semibold text-gray-500">Fixed limit</dt><dd className="text-gray-800">{def.kind === "int" ? `${def.min} to ${def.max} ${def.unit}. Default ${def.fallback}.` : def.kind === "catalogues" ? `Shared, active, published catalogues only, at most ${def.max}. Default: none.` : def.kind === "choice" ? `One of: ${def.options.map(o => o.label).join("; ")}. Default: ${def.options.find(o => o.value === def.fallback)?.label ?? def.fallback}.` : def.kind === "set" ? `Only: ${def.options.map(o => o.label).join(", ")}. Default: all.` : ""} <span className="text-gray-500">{def.limitReason}</span></dd></div>
               </dl>
               {draftDiffers && (
                 <p className="mt-3 rounded-lg bg-[var(--cmp-surface-information)] px-3 py-1.5 text-[13px] text-blue-900">
@@ -140,7 +141,9 @@ export default async function IndividualPolicyPage() {
                   ? <IntDraft policyKey={def.key} label={def.label} unit={def.unit} min={def.min} max={def.max} draft={clampInt(def, r?.draft ?? published)} hasOverride={!!r} />
                   : def.kind === "catalogues"
                     ? <SetDraft policyKey={def.key} legend="Draft: catalogues offered" options={catalogueOptions} draft={clampCatalogues(def, r?.draft ?? published)} hasOverride={!!r} />
-                    : def.kind === "programmes"
+                    : def.kind === "choice"
+                      ? <ChoiceDraft policyKey={def.key} options={[...def.options]} draft={clampChoice(def, r?.draft ?? published)} hasOverride={!!r} />
+                      : def.kind === "programmes"
                       ? <SetDraft policyKey={def.key} legend="Draft: programmes offered" emptyText="No active Scholar programme exists yet." options={programmeOptions}
                           draft={clampProgrammes(def, r?.draft ?? published) ?? programmeOptions.map(o => o.value)} hasOverride={!!r} />
                       : def.kind === "options"
