@@ -5,7 +5,8 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
 import { NO_APPROVED_COMPETENCIES } from "@/lib/individual/scholar/config";
-import { analysisStatus, countDue, getMaterial, listChunks, listMappings, listQuestions, readConsent } from "@/lib/individual/scholar/store";
+import { analysisStatus, countDue, getMaterial, listChunks, listMappings, listProgrammes, listQuestions, readConsent } from "@/lib/individual/scholar/store";
+import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
 import { competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
 import { AnalysePanel, SectionTopics, type CompetencyOption, type MappingView } from "../_components/competency-client";
 import { citeChunk } from "@/lib/individual/scholar/extract";
@@ -50,6 +51,11 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
   if (!material.data) notFound();
   const m = material.data;
 
+  const [stampHistory, stampProgrammes] = await Promise.all([contextHistory(ctx.admin, ctx.userId), listProgrammes(ctx.admin)]);
+  // Stage 2: the educational context this material was uploaded in (402 history by its created_at).
+  const stamp = stampHistory.ok
+    ? contextStamp(stampHistory.periods, m.createdAt, new Map((stampProgrammes.ok ? stampProgrammes.data : []).map(p => [p.code, p.label])))
+    : null;
   const [chunks, questions, consent, due, analysis, mapped, learner] = await Promise.all([
     listChunks(ctx.admin, ctx.userId, m.id),
     listQuestions(ctx.admin, ctx.userId, { materialId: m.id }),
@@ -96,7 +102,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
     <>
       <p className="mb-2 text-[13px]"><Link href={experienceHref("scholar", "study")} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>← My Learning</Link></p>
       <PageHeader accent={x.accent} eyebrow="Your material" title={m.title}
-        intro={`${m.mimeType === "application/pdf" ? `PDF, ${m.pageCount} page${m.pageCount === 1 ? "" : "s"}` : "Word document (cited by section, because a Word file has no fixed pages)"} · ${m.chunkCount} section${m.chunkCount === 1 ? "" : "s"} · ${m.fileName}`} />
+        intro={`${m.mimeType === "application/pdf" ? `PDF, ${m.pageCount} page${m.pageCount === 1 ? "" : "s"}` : m.mimeType === "text/plain" ? "Text (cited by section)" : "Word document (cited by section, because a Word file has no fixed pages)"} · ${m.chunkCount} section${m.chunkCount === 1 ? "" : "s"} · ${m.fileName}${stamp ? ` · uploaded while studying ${stamp}` : ""}`} />
       <StudyNav dueCount={due} />
 
       <div className="mb-6 flex flex-wrap items-start gap-3">

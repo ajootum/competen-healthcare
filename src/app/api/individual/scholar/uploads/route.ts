@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { countMaterials, createUploadSlot } from "@/lib/individual/scholar/store";
-import { ALLOWED_MIME, BUCKET, MAX_UPLOAD_BYTES, type MaterialMime, UPLOAD_ATTESTATION_REQUIRED } from "@/lib/individual/scholar/config";
+import { BUCKET, type MaterialMime, UPLOAD_ATTESTATION_REQUIRED, uploadRules } from "@/lib/individual/scholar/config";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -22,16 +22,19 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const mime = body?.mime as MaterialMime;
   const size = Number(body?.size);
-  if (!(ALLOWED_MIME as readonly string[]).includes(mime)) return NextResponse.json({ error: "Upload a PDF or a Word (.docx) file." }, { status: 400 });
-  if (!Number.isFinite(size) || size <= 0 || size > MAX_UPLOAD_BYTES)
-    return NextResponse.json({ error: `Files must be between 1 byte and ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.` }, { status: 400 });
+  // Stage 2: the formats and the size limit are Individual policy (CONFIG-002), never above what 372/405 allow.
+  const policy = await loadIndividualPolicy(ctx.admin);
+  const rules = uploadRules(policy);
+  if (!(rules.mimes as readonly string[]).includes(mime)) return NextResponse.json({ error: `Upload ${rules.describe}.` }, { status: 400 });
+  if (!Number.isFinite(size) || size <= 0 || size > rules.maxBytes)
+    return NextResponse.json({ error: `Files must be between 1 byte and ${rules.maxMb} MB.` }, { status: 400 });
   if (body?.piiAttested !== true)
     return NextResponse.json({ error: UPLOAD_ATTESTATION_REQUIRED }, { status: 400 });
 
   const count = await countMaterials(ctx.admin, ctx.userId);
   if (count === null) return NextResponse.json({ error: "Your study space could not be read just now. Try again shortly." }, { status: 503 });
   // How many a person may keep is Individual policy (COMPETEN-CONFIG-002), never above MAX_MATERIALS_PER_PERSON.
-  const maxMaterials = (await loadIndividualPolicy(ctx.admin)).scholarMaterialsPerPerson;
+  const maxMaterials = policy.scholarMaterialsPerPerson;
   if (count >= maxMaterials)
     return NextResponse.json({ error: `You can keep up to ${maxMaterials} materials. Delete one to upload another.` }, { status: 409 });
 

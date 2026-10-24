@@ -4,7 +4,8 @@ export const maxDuration = 60;
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { createMaterial, discardUpload, isUuid, readUpload, uploadPath } from "@/lib/individual/scholar/store";
-import { ALLOWED_MIME, MAX_UPLOAD_BYTES, type MaterialMime, UPLOAD_ATTESTATION_REQUIRED } from "@/lib/individual/scholar/config";
+import { type MaterialMime, UPLOAD_ATTESTATION_REQUIRED, uploadRules } from "@/lib/individual/scholar/config";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { EXTRACTION_MESSAGE, PII_LABEL, chunkPages, extractMaterial, findPatientIdentifiers, sniffMime, titleFromFileName } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
 
@@ -29,7 +30,10 @@ export async function POST(req: Request) {
   const uploadId = body?.uploadId;
   const declared = body?.mime as MaterialMime;
   const fileName = typeof body?.fileName === "string" && body.fileName.trim() ? body.fileName.trim() : "material";
-  if (!isUuid(uploadId) || !(ALLOWED_MIME as readonly string[]).includes(declared))
+  // Stage 2: the policy is checked again here, so a format switched off between the two steps is refused.
+  const policy = await loadIndividualPolicy(ctx.admin);
+  const rules = uploadRules(policy);
+  if (!isUuid(uploadId) || !(rules.mimes as readonly string[]).includes(declared))
     return NextResponse.json({ error: "That upload could not be found." }, { status: 400 });
   if (body?.piiAttested !== true)
     return NextResponse.json({ error: UPLOAD_ATTESTATION_REQUIRED }, { status: 400 });
@@ -44,11 +48,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error }, { status });
   };
 
-  if (bytes.byteLength === 0 || bytes.byteLength > MAX_UPLOAD_BYTES) return refuse(400, "That file is empty or too large.", "size");
+  if (bytes.byteLength === 0 || bytes.byteLength > rules.maxBytes) return refuse(400, "That file is empty or too large.", "size");
   const mime = sniffMime(bytes);
-  if (mime !== declared) return refuse(400, "That file is not a readable PDF or Word (.docx) document.", "type_mismatch");
+  if (mime !== declared) return refuse(400, `That file is not a readable ${rules.describe} file.`, "type_mismatch");
 
-  const extraction = await extractMaterial(mime, bytes);
+  const extraction = await extractMaterial(mime, bytes, policy.scholarPdfMaxPages);
   if (!extraction.ok) return refuse(422, EXTRACTION_MESSAGE[extraction.reason], extraction.reason);
 
   const allText = extraction.pages.map(p => p.text).join("\n");

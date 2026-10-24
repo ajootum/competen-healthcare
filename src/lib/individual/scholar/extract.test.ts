@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { uploadRules } from "./config";
 import {
   chunkPages, citeChunk, extractMaterial, findPatientIdentifiers, isValidNhsNumber, normaliseText, sniffMime, titleFromFileName,
 } from "./extract";
@@ -91,11 +92,38 @@ describe("file type", () => {
   it("is read from the bytes, not the browser's label", () => {
     expect(sniffMime(new TextEncoder().encode("%PDF-1.7\n"))).toBe(PDF_MIME);
     expect(sniffMime(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0, 0]))).toBe(DOCX_MIME);
-    expect(sniffMime(new TextEncoder().encode("<html>"))).toBeNull();
+    // Stage 2: anything else that is valid UTF-8 with no NUL byte is plain text -- a binary file renamed .txt is not.
+    expect(sniffMime(new TextEncoder().encode("<html>"))).toBe("text/plain");
+    expect(sniffMime(new Uint8Array([0x68, 0x00, 0x69]))).toBeNull();
+    expect(sniffMime(new Uint8Array([0xff, 0xfe, 0xfd]))).toBeNull();
   });
 
   it("titles a material from its file name", () => {
     expect(titleFromFileName("Cardiology_week_3.pdf")).toBe("Cardiology week 3");
     expect(titleFromFileName(".pdf")).toBe("Untitled material");
+  });
+});
+
+describe("Stage 2: plain text and the upload rules", () => {
+  it("reads plain text as one section-cited page, and refuses binary or non-UTF-8 bytes", async () => {
+    const r = await extractMaterial("text/plain", new TextEncoder().encode("﻿Respiratory rate is counted for a full minute.\n\nWheeze suggests narrowed airways."));
+    expect(r).toMatchObject({ ok: true, pageCount: null, extractor: "utf8-text" });
+    expect(r.ok && r.pages[0].page).toBeNull();
+    expect(r.ok && r.pages[0].text.startsWith("Respiratory")).toBe(true);
+    expect(await extractMaterial("text/plain", new Uint8Array([0x41, 0x00, 0x42]))).toMatchObject({ ok: false, reason: "unreadable" });
+    expect(await extractMaterial("text/plain", new Uint8Array([0xc3, 0x28]))).toMatchObject({ ok: false, reason: "unreadable" });
+    expect(await extractMaterial("text/plain", new TextEncoder().encode("   \n  "))).toMatchObject({ ok: false, reason: "no_text" });
+    const chunks = r.ok ? chunkPages(r.pages) : [];
+    expect(chunks[0]).toMatchObject({ pageFrom: null, pageTo: null });
+  });
+
+  it("the policy decides the formats and the size, never above what the database allows", () => {
+    const off = uploadRules({ scholarUploadFormats: ["pdf", "docx"], scholarUploadMaxMb: 10 });
+    expect(off).toMatchObject({ text: false, maxMb: 10, describe: "PDF or Word (.docx)" });
+    expect(off.mimes).not.toContain("text/plain");
+    const on = uploadRules({ scholarUploadFormats: ["pdf", "docx", "text"], scholarUploadMaxMb: 4 });
+    expect(on).toMatchObject({ text: true, maxMb: 4, maxBytes: 4 * 1024 * 1024 });
+    expect(on.describe).toBe("PDF, Word (.docx) or Plain text (.txt or pasted)");
+    expect(uploadRules({ scholarUploadFormats: ["pdf"], scholarUploadMaxMb: 999 }).maxBytes).toBe(10 * 1024 * 1024);
   });
 });
