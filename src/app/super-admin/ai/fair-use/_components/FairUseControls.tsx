@@ -52,7 +52,10 @@ export function RateForm({ kind }: { kind: "price" | "fx" | "basis" | "eligibili
       </>}
       {kind === "fx" && <>
         <label className="text-[12.5px] text-gray-700">Currency<input value={f.currency ?? ""} onChange={set("currency")} maxLength={3} className={`${input} ml-1 w-20`} /></label>
-        <label className="text-[12.5px] text-gray-700">Reference rate, units per USD<input inputMode="decimal" value={f.perUsd ?? ""} onChange={set("perUsd")} className={`${input} ml-1 w-28`} /></label>
+        <label className="text-[12.5px] text-gray-700">Official rate, units per USD<input inputMode="decimal" value={f.perUsd ?? ""} onChange={set("perUsd")} className={`${input} ml-1 w-28`} /></label>
+        <label className="text-[12.5px] text-gray-700">Published on<input type="date" value={f.publishedOn ?? ""} onChange={set("publishedOn")} className={`${input} ml-1`} /></label>
+        <label className="text-[12.5px] text-gray-700">Published at (URL)<input value={f.sourceRef ?? ""} onChange={set("sourceRef")} maxLength={500} className={`${input} ml-1 w-64`} /></label>
+        <label className="text-[12.5px] text-gray-700">Update<select value={f.updateKind ?? "monthly"} onChange={set("updateKind")} className={`${input} ml-1`}><option value="monthly">Monthly</option><option value="exceptional">Exceptional</option></select></label>
       </>}
       {kind === "basis" && <>
         <label className="text-[12.5px] text-gray-700">Currency<input value={f.currency ?? ""} onChange={set("currency")} maxLength={3} className={`${input} ml-1 w-20`} /></label>
@@ -63,9 +66,11 @@ export function RateForm({ kind }: { kind: "price" | "fx" | "basis" | "eligibili
         <label className="text-[12.5px] text-gray-700">Activity code<input value={f.activity ?? ""} onChange={set("activity")} maxLength={41} className={`${input} ml-1 w-32`} /></label>
         {provider}{model}
         <label className="text-[12.5px] text-gray-700">Decision<select value={f.eligible} onChange={set("eligible")} className={`${input} ml-1`}><option value="false">Not eligible</option><option value="true">Eligible</option></select></label>
+        <label className="text-[12.5px] text-gray-700">Highest clinical risk covered<select value={f.maxRiskTier ?? ""} onChange={set("maxRiskTier")} className={`${input} ml-1`}>
+          <option value="">Choose (for an eligible decision)</option>{RISK.map(r => <option key={r.code} value={r.code}>{r.label}</option>)}</select></label>
         <label className="text-[12.5px] text-gray-700">Evaluation evidence<input value={f.evidenceRef ?? ""} onChange={set("evidenceRef")} maxLength={500} className={`${input} ml-1 w-64`} /></label>
       </>}
-      <label className="text-[12.5px] text-gray-700">{kind === "fx" ? "Source (for example the Bank of Uganda reference rate and month)" : "Note"}<input value={f.note ?? ""} onChange={set("note")} maxLength={500} className={`${input} ml-1 w-56`} /></label>
+      <label className="text-[12.5px] text-gray-700">{kind === "fx" ? "Note (for example the reading method)" : "Note"}<input value={f.note ?? ""} onChange={set("note")} maxLength={500} className={`${input} ml-1 w-56`} /></label>
       <button type="button" disabled={busy} className={primary} onClick={() => send({ action: "rate", kind, ...f }, "Saved. The previous record is kept as history.")}>
         {kind === "eligibility" ? "Record decision" : "Save new rate"}
       </button>
@@ -74,12 +79,19 @@ export function RateForm({ kind }: { kind: "price" | "fx" | "basis" | "eligibili
   );
 }
 
-type ActivityRow = { label: string; class: "essential" | "standard"; tier: string; minTier: string; maxOutputTokens: number; capPerPeriod: number | null; clinicallySensitive: boolean; reserveEligible: boolean };
+type ActivityRow = { label: string; class: "essential" | "standard"; tier: string; minTier: string; maxOutputTokens: number; capPerPeriod: number | null; riskFloor: RiskTierCode; reserveEligible: boolean };
+type RiskTierCode = "standard_educational" | "clinical_educational" | "high_risk_clinical";
+const RISK: { code: RiskTierCode; label: string }[] = [
+  { code: "standard_educational", label: "Standard educational" }, { code: "clinical_educational", label: "Clinical educational" }, { code: "high_risk_clinical", label: "High-risk clinical" },
+];
+type RuleRow = { id: string; label: string; tier: RiskTierCode; all: string[][]; competencyRisk: string[]; frameworks: string[] };
+type RiskForm = { minTier: Record<RiskTierCode, string>; rules: RuleRow[] };
 type PolicyForm = {
   includedCau: number; reserveCau: number; windowMinutes: number | null; windowCapCau: number | null;
   levels: { optimisedBelowPct: number; essentialBelowPct: number }; reset: { rule: string; cycleDays: number };
   currency: string; fxBufferPct: number; maxUnreconciledCau: number;
   messages: { full: string; optimised: string; essential: string; continuity: string; levelInsufficient: string };
+  risk: RiskForm;
   activities: Record<string, ActivityRow>;
 };
 const CODE = /^[a-z][a-z0-9_]{1,40}$/;
@@ -123,7 +135,7 @@ export function PolicyEditor({ product, initial }: { product: string; initial: P
         <table className="w-full min-w-[760px] text-left text-[13px]">
           <caption className="sr-only">Activities</caption>
           <thead><tr className="border-b border-gray-200 text-[11.5px] uppercase tracking-[0.08em] text-gray-500">
-            <th scope="col" className="py-1.5">Activity</th><th scope="col">Class</th><th scope="col">Tier</th><th scope="col">Lowest tier</th><th scope="col">Max output</th><th scope="col">Per period</th><th scope="col">Clinical</th><th scope="col">Reserve</th><th scope="col"><span className="sr-only">Remove</span></th></tr></thead>
+            <th scope="col" className="py-1.5">Activity</th><th scope="col">Class</th><th scope="col">Tier</th><th scope="col">Lowest tier</th><th scope="col">Max output</th><th scope="col">Per period</th><th scope="col">Lowest clinical risk</th><th scope="col">Reserve</th><th scope="col"><span className="sr-only">Remove</span></th></tr></thead>
           <tbody>
             {Object.entries(p.activities).map(([code, a]) => (
               <tr key={code} className="border-b border-gray-100 align-top">
@@ -139,7 +151,8 @@ export function PolicyEditor({ product, initial }: { product: string; initial: P
                   {TIERS.map(t => <option key={t} value={t}>{t}</option>)}</select></td>
                 <td><input aria-label={`${code} max output tokens`} inputMode="numeric" value={a.maxOutputTokens} onChange={e => setA(code, { ...a, maxOutputTokens: Number(e.target.value) || 0 })} className={`${input} w-20`} /></td>
                 <td><input aria-label={`${code} per period`} inputMode="numeric" value={a.capPerPeriod ?? ""} placeholder="no cap" onChange={e => setA(code, { ...a, capPerPeriod: n(e.target.value) })} className={`${input} w-20`} /></td>
-                <td><input type="checkbox" aria-label={`${code} clinically sensitive`} checked={a.clinicallySensitive} onChange={e => setA(code, { ...a, clinicallySensitive: e.target.checked })} className="h-4 w-4 pointer-coarse:h-6 pointer-coarse:w-6" /></td>
+                <td><select aria-label={`${code} lowest clinical risk`} value={a.riskFloor} onChange={e => setA(code, { ...a, riskFloor: e.target.value as RiskTierCode })} className={input}>
+                  {RISK.map(r => <option key={r.code} value={r.code}>{r.label}</option>)}</select></td>
                 <td><input type="checkbox" aria-label={`${code} may use the reserve`} disabled={a.class !== "essential"} checked={a.reserveEligible} onChange={e => setA(code, { ...a, reserveEligible: e.target.checked })} className="h-4 w-4 pointer-coarse:h-6 pointer-coarse:w-6" /></td>
                 <td><button type="button" className={ghost} onClick={() => remove(code)}>Remove</button></td>
               </tr>
@@ -154,10 +167,11 @@ export function PolicyEditor({ product, initial }: { product: string; initial: P
         </label>
         <button type="button" className={ghost} disabled={!CODE.test(newCode) || newCode in p.activities} onClick={() => {
           // A new activity starts sensitive, at its own tier: it is made cheaper or non-clinical deliberately, never by default.
-          setA(newCode, { label: newCode, class: "standard", tier: "reasoning", minTier: "reasoning", maxOutputTokens: 800, capPerPeriod: null, clinicallySensitive: true, reserveEligible: false });
+          setA(newCode, { label: newCode, class: "standard", tier: "reasoning", minTier: "reasoning", maxOutputTokens: 800, capPerPeriod: null, riskFloor: "clinical_educational", reserveEligible: false });
           setNewCode("");
         }}>Add activity</button>
       </div>
+      <RiskEditor risk={p.risk} onChange={risk => setP({ ...p, risk })} />
       <div className="grid gap-2">
         {(["full", "optimised", "essential", "continuity", "levelInsufficient"] as const).map(k => (
           <label key={k} className="block text-[12.5px] text-gray-700">{k === "levelInsufficient" ? "Message when a level cannot serve an activity" : `Message shown at the ${k} level`}
@@ -185,5 +199,72 @@ export function PublishPolicies({ pending }: { pending: number }) {
       </button>
       <Message msg={msg} />
     </div>
+  );
+}
+
+/** A text field that keeps what is typed and hands it over on blur, so a list can be typed comma by comma. */
+function Draft({ value, onCommit, className, multiline = false }: { value: string; onCommit: (v: string) => void; className: string; multiline?: boolean }) {
+  const [text, setText] = useState(value);
+  return multiline
+    ? <textarea rows={2} value={text} onChange={e => setText(e.target.value)} onBlur={() => onCommit(text)} className={className} />
+    : <input value={text} onChange={e => setText(e.target.value)} onBlur={() => onCommit(text)} className={className} />;
+}
+const splitList = (v: string) => v.split(",").map(x => x.trim()).filter(Boolean);
+const RULE = /^[a-z][a-z0-9_.-]{1,60}$/;
+
+/**
+ * Clinical risk rules (owner D1), no code. A request is classified from its subject: the highest tier any rule gives
+ * wins, and a subject no rule recognises is high-risk clinical. Each line of "Matches when" is one group of terms;
+ * every line must have a term present. A term ending in * matches any word starting with it.
+ */
+function RiskEditor({ risk, onChange }: { risk: RiskForm; onChange: (r: RiskForm) => void }) {
+  const [newId, setNewId] = useState("");
+  const setRule = (i: number, r: RuleRow) => onChange({ ...risk, rules: risk.rules.map((x, j) => (j === i ? r : x)) });
+  return (
+    <fieldset className="space-y-3 rounded-lg border border-gray-200 p-3">
+      <legend className="px-1 text-[13px] font-semibold text-gray-800">Clinical risk</legend>
+      <p className="text-[12.5px] text-gray-600">
+        Each request is classified from what it is about, not the activity name. The highest matching tier wins. A subject no rule recognises is
+        treated as high-risk clinical. Standard educational applies only where a rule says so and nothing higher matches.
+      </p>
+      <div className="flex flex-wrap gap-3">
+        {RISK.map(t => (
+          <label key={t.code} className="text-[12.5px] text-gray-700">Lowest model for {t.label.toLowerCase()}
+            <select value={risk.minTier[t.code]} onChange={e => onChange({ ...risk, minTier: { ...risk.minTier, [t.code]: e.target.value } })} className={`${input} ml-1`}>
+              {TIERS.map(x => <option key={x} value={x}>{x}</option>)}
+            </select>
+          </label>
+        ))}
+      </div>
+      {risk.rules.length === 0 && <p className="text-[13px] text-amber-900">No rules: every request is treated as high-risk clinical.</p>}
+      <ul className="space-y-2">
+        {risk.rules.map((r, i) => (
+          <li key={r.id} className="rounded-lg border border-gray-100 p-2">
+            <div className="flex flex-wrap items-end gap-2">
+              <span className="font-mono text-[12px] text-gray-500">{r.id}</span>
+              <label className="text-[12.5px] text-gray-700">Label<input value={r.label} maxLength={120} onChange={e => setRule(i, { ...r, label: e.target.value })} className={`${input} ml-1 w-56`} /></label>
+              <label className="text-[12.5px] text-gray-700">Tier<select value={r.tier} onChange={e => setRule(i, { ...r, tier: e.target.value as RiskTierCode })} className={`${input} ml-1`}>
+                {RISK.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}</select></label>
+              <button type="button" className={ghost} onClick={() => onChange({ ...risk, rules: risk.rules.filter((_, j) => j !== i) })}>Remove rule</button>
+            </div>
+            <label className="mt-1 block text-[12.5px] text-gray-700">Matches when (one group of comma-separated terms per line; every line must match)
+              <Draft multiline value={r.all.map(g => g.join(", ")).join("\n")} onCommit={v => setRule(i, { ...r, all: v.split("\n").map(splitList).filter(g => g.length) })} className="mt-0.5 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-[13px]" />
+            </label>
+            <div className="mt-1 flex flex-wrap gap-2">
+              <label className="text-[12.5px] text-gray-700">or a competency of risk<Draft value={r.competencyRisk.join(", ")} onCommit={v => setRule(i, { ...r, competencyRisk: splitList(v) })} className={`${input} ml-1 w-32`} /></label>
+              <label className="text-[12.5px] text-gray-700">or a framework<Draft value={r.frameworks.join(", ")} onCommit={v => setRule(i, { ...r, frameworks: splitList(v) })} className={`${input} ml-1 w-48`} /></label>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-[12.5px] text-gray-700">New rule id<input value={newId} maxLength={61} onChange={e => setNewId(e.target.value.trim())} className={`${input} ml-1 w-48 font-mono`} /></label>
+        <button type="button" className={ghost} disabled={!RULE.test(newId) || risk.rules.some(r => r.id === newId)} onClick={() => {
+          // A new rule starts at high risk: it is lowered deliberately, never by default.
+          onChange({ ...risk, rules: [...risk.rules, { id: newId, label: newId, tier: "high_risk_clinical", all: [], competencyRisk: [], frameworks: [] }] });
+          setNewId("");
+        }}>Add rule</button>
+      </div>
+    </fieldset>
   );
 }

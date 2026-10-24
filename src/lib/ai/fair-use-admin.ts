@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { publishScope, setOverride, type WceActor } from "@/lib/config/workspace-config-write";
+import { RISK_TIERS } from "./clinical-risk";
 import { ACTIVITY_CODE, AI_PRODUCTS, FAIR_USE_SCOPE, fairUsePath, resolvePolicy, type AiProduct, type ProductAiPolicy } from "./fair-use-policy";
 
 // ── AI FAIR USE: WHAT HQ CONFIGURES ── COMPETEN-AI-FAIR-USE-01 s12, migrations 410 and 411 ───────────────
@@ -59,7 +60,14 @@ export function checkRate(kind: RateKind, b: any): { ok: true; row: Record<strin
     const currency = typeof b?.currency === "string" ? b.currency.trim().toUpperCase() : "";
     const r = positive(b?.perUsd, false);
     if (!/^[A-Z]{3}$/.test(currency) || r === null) return { ok: false, error: "Give a three-letter currency and its units per USD." };
-    return { ok: true, row: { currency, per_usd: r, note }, match: { currency } };
+    // Owner D4: the official rate with its actual publication date and source, monthly or as an exceptional update.
+    // Never an estimate: a rate with no publication and no source is not accepted (412 checks it too).
+    const updateKind = b?.updateKind === "exceptional" ? "exceptional" : "monthly";
+    const publishedOn = typeof b?.publishedOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.publishedOn) ? b.publishedOn : null;
+    const sourceRef = typeof b?.sourceRef === "string" ? b.sourceRef.trim().slice(0, 500) : "";
+    if (!publishedOn || publishedOn > new Date().toISOString().slice(0, 10)) return { ok: false, error: "Give the date the official rate was published (not in the future)." };
+    if (sourceRef.length < 10) return { ok: false, error: "Give where the official rate was published (its URL)." };
+    return { ok: true, row: { currency, per_usd: r, published_on: publishedOn, source_ref: sourceRef, update_kind: updateKind, note }, match: { currency } };
   }
   if (kind === "basis") {
     const currency = typeof b?.currency === "string" ? b.currency.trim().toUpperCase() : "";
@@ -77,7 +85,10 @@ export function checkRate(kind: RateKind, b: any): { ok: true; row: Record<strin
   const evidence = typeof b?.evidenceRef === "string" ? b.evidenceRef.trim().slice(0, 500) : "";
   // Eligibility rests on evaluation evidence, never on a price or a tier (owner D1).
   if (eligible && evidence.length < 5) return { ok: false, error: "A model is made eligible only with the evaluation evidence it rests on." };
-  return { ok: true, row: { product: b.product, activity, provider: b.provider, model_prefix: prefix, eligible, evidence_ref: evidence || null, note },
+  // An eligible decision names the highest clinical risk tier it covers (owner D1, migration 412).
+  const maxRiskTier = (RISK_TIERS as readonly string[]).includes(b?.maxRiskTier) ? b.maxRiskTier : null;
+  if (eligible && !maxRiskTier) return { ok: false, error: "Say the highest clinical risk tier the evaluation supports." };
+  return { ok: true, row: { product: b.product, activity, provider: b.provider, model_prefix: prefix, eligible, evidence_ref: evidence || null, max_risk_tier: eligible ? maxRiskTier : null, note },
     match: { product: b.product, activity, provider: b.provider, model_prefix: prefix } };
 }
 
@@ -122,8 +133,9 @@ export function settingsFor(product: AiProduct, input: any): Record<string, unkn
     currency: p.currency, fxBufferPct: p.fxBufferPct, maxUnreconciledCau: p.maxUnreconciledCau,
     activities: Object.fromEntries(Object.entries(p.activities).map(([k, a]) => [k, {
       label: a.label, class: a.class, tier: a.tier, minTier: a.minTier, maxOutputTokens: a.maxOutputTokens, capPerPeriod: a.capPerPeriod,
-      clinicallySensitive: a.clinicallySensitive, reserveEligible: a.reserveEligible,
+      riskFloor: a.riskFloor, reserveEligible: a.reserveEligible,
     }])),
+    risk: { minTier: p.risk.minTier, rules: p.risk.rules },
   };
 }
 

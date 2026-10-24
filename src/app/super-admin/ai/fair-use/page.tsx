@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadPolicies, loadRates } from "@/lib/ai/fair-use-admin";
 import { aiFairUseEnabled } from "@/lib/ai/allowance";
+import { RISK_TIER_LABEL, type RiskTier } from "@/lib/ai/clinical-risk";
 import { PolicyEditor, PublishPolicies, RateForm } from "./_components/FairUseControls";
 
 // /super-admin/ai/fair-use -- COMPETEN-AI-FAIR-USE-01 s12. Holdings AI usage governance, no code.
@@ -67,7 +68,13 @@ export default async function FairUsePage() {
             <p className="text-[13px] text-gray-600">What one allowance unit is worth, and the reference rate that turns a provider&apos;s USD charge into it. A request keeps the rate in force when it was reserved.</p>
             <ul className="mt-2 space-y-1 text-[13px] text-gray-800">
               {rates.basis.map((r: any) => <li key={r.id} className={r.effective_to ? "text-gray-500" : ""}>1 CAU = {Number(r.currency_per_cau)} {r.currency} · from {fmt(r.effective_from)} to {fmt(r.effective_to)}{r.note ? ` · ${r.note}` : ""}</li>)}
-              {rates.fx.map((r: any) => <li key={r.id} className={r.effective_to ? "text-gray-500" : ""}>1 USD = {Number(r.per_usd)} {r.currency} · from {fmt(r.effective_from)} to {fmt(r.effective_to)}{r.note ? ` · ${r.note}` : ""}</li>)}
+              {rates.fx.map((r: any) => (
+                <li key={r.id} className={r.effective_to ? "text-gray-500" : ""}>
+                  1 USD = {Number(r.per_usd)} {r.currency} · {r.update_kind === "placeholder" || (!r.published_on && !r.source_ref)
+                    ? <span className="font-semibold text-amber-900">placeholder, not an official rate</span>
+                    : <>published {r.published_on} ({r.update_kind === "exceptional" ? "exceptional update" : "monthly"}) at <span className="break-all">{r.source_ref}</span></>}
+                  {" "}· in force from {fmt(r.effective_from)} to {fmt(r.effective_to)}{r.note ? ` · ${r.note}` : ""}
+                </li>))}
               {rates.basis.length === 0 && <li className="text-amber-900">No allowance-unit value is set: nothing can be reserved while metering is on.</li>}
               {rates.fx.length === 0 && <li className="text-amber-900">No reference rate is set: nothing can be reserved while metering is on.</li>}
             </ul>
@@ -77,8 +84,8 @@ export default async function FairUsePage() {
           <section aria-labelledby="el-h" className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 id="el-h" className="text-[16px] font-bold text-gray-900">Clinical model eligibility</h2>
             <p className="text-[13px] text-gray-600">
-              Which model may serve each clinically sensitive activity. Eligibility rests on evaluation evidence, never on price or tier. A sensitive
-              activity with no eligible model in force is refused.
+              Which model may serve each activity, and up to which clinical risk tier. Eligibility rests on a recorded evaluation decision, never on price
+              or tier. A clinical request whose tier no eligible model covers is refused. Standard educational requests need no decision.
             </p>
             <div className="overflow-x-auto">
               <table className="mt-2 w-full min-w-[680px] text-left text-[13px]">
@@ -86,7 +93,7 @@ export default async function FairUsePage() {
                 <tbody>{rates.eligibility.map((r: any) => (
                   <tr key={r.id} className={`border-b border-gray-100 ${r.effective_to ? "text-gray-500" : "text-gray-900"}`}>
                     <th scope="row" className="py-1.5 font-normal">{r.product} · <span className="font-mono">{r.activity}</span></th><td>{r.provider} · {r.model_prefix}</td>
-                    <td>{r.eligible ? "Eligible" : <span className="text-amber-900">Not eligible</span>}</td>
+                    <td>{r.eligible ? `Eligible up to ${RISK_TIER_LABEL[r.max_risk_tier as RiskTier]?.toLowerCase() ?? "clinical educational"}` : <span className="text-amber-900">Not eligible</span>}</td>
                     <td className="break-all">{r.evidence_ref ?? r.note ?? "Evaluation pending"}</td><td>{fmt(r.effective_from)}</td><td>{fmt(r.effective_to)}</td>
                   </tr>))}</tbody>
               </table>
