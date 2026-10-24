@@ -107,7 +107,7 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
       </ol>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <UploadPanel rules={{ mimes: [...rules.mimes], maxMb: rules.maxMb, text: rules.text, describe: rules.describe }} />
+        <UploadPanel rules={{ mimes: [...rules.mimes], maxMb: rules.maxMb, text: rules.text, describe: rules.describe, sessionFiles: rules.sessionFiles, sessionMb: rules.sessionMb }} />
         {consent.ok
           ? <ConsentPanel status={status!} recorded={consent.data.granted} grantedAt={consent.data.grantedAt} revokedAt={consent.data.revokedAt} legal={documents.links} />
           : <Unreadable what="AI consent setting" />}

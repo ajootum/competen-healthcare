@@ -2,7 +2,10 @@
 import type { PlanAiLimit } from "./commerce";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
-import { FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, type UploadFormat } from "./scholar/config";
+import {
+  DEFAULT_UPLOAD_MB, FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES, MAX_SESSION_FILES, MAX_SESSION_MB,
+  MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, UPLOAD_SESSION_MINUTES, type UploadFormat,
+} from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
 
 // ── COMPETEN INDIVIDUAL POLICY ── COMPETEN-CONFIG-002 items 4-7 ─────────────────────────────────────────
@@ -37,7 +40,8 @@ export const POLICY_PATH_PREFIX = "individual.policy.";
 export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
 export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
-  | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides";
+  | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides"
+  | "scholar_upload_session_files" | "scholar_upload_session_mb";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues";
@@ -185,8 +189,24 @@ export const POLICIES: readonly PolicyDef[] = [
     key: "scholar_upload_max_mb", kind: "int", product: "Scholar", unit: "MB",
     label: "Largest file a student may upload",
     help: "The size limit for one uploaded file.",
-    fallback: MAX_UPLOAD_BYTES / 1024 / 1024, min: 1, max: MAX_UPLOAD_BYTES / 1024 / 1024,
-    limitReason: "The database and the private storage bucket cap every file at 10 MB.",
+    // Owner GO 2026-10-24: the ceiling is 25 MB, the value stays 10 MB until HQ raises it. Above 10 needs migration
+    // 413 (the database CHECK and the bucket): raise it only where 413 is applied.
+    fallback: DEFAULT_UPLOAD_MB, min: 1, max: MAX_UPLOAD_BYTES / 1024 / 1024,
+    limitReason: "The database and the private storage bucket cap every file at 25 MB (migration 413; 10 MB where it is not applied). Processing a 25 MB file was measured well inside the server's time and memory limits.",
+  },
+  {
+    key: "scholar_upload_session_files", kind: "int", product: "Scholar", unit: "files",
+    label: "Most files in one upload session",
+    help: `How many files a student may upload at once, and keep within ${UPLOAD_SESSION_MINUTES} minutes. More are refused with a message to try again later.`,
+    fallback: MAX_SESSION_FILES, min: 1, max: MAX_SESSION_FILES,
+    limitReason: "Ten files is the reviewed size of one upload session.",
+  },
+  {
+    key: "scholar_upload_session_mb", kind: "int", product: "Scholar", unit: "MB",
+    label: "Most data in one upload session",
+    help: `The combined size of the files a student may upload at once, and keep within ${UPLOAD_SESSION_MINUTES} minutes.`,
+    fallback: MAX_SESSION_MB, min: 10, max: MAX_SESSION_MB,
+    limitReason: "One hundred megabytes is the reviewed combined size of one upload session. It is never below one file at the size limit.",
   },
   {
     key: "scholar_pdf_max_pages", kind: "int", product: "Scholar", unit: "pages",
@@ -382,6 +402,9 @@ export type IndividualPolicy = {
   scholarPdfMaxPages: number;
   /** UPLOAD-01 U1: the slide limit for one PowerPoint. */
   scholarPptxMaxSlides: number;
+  /** Upload limits (owner GO 2026-10-24): files and combined MB in one upload session. */
+  scholarUploadSessionFiles: number;
+  scholarUploadSessionMb: number;
   scholarInsightMinAnswers: number;
   scholarInsightWindowDays: number;
   passportAchievementKinds: StudyAchievementKind[];
@@ -413,6 +436,8 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarUploadMaxMb: int("scholar_upload_max_mb"),
     scholarPdfMaxPages: int("scholar_pdf_max_pages"),
     scholarPptxMaxSlides: int("scholar_pptx_max_slides"),
+    scholarUploadSessionFiles: int("scholar_upload_session_files"),
+    scholarUploadSessionMb: int("scholar_upload_session_mb"),
     scholarInsightMinAnswers: int("scholar_insight_min_answers"),
     scholarInsightWindowDays: int("scholar_insight_window_days"),
     passportAchievementKinds: clampSet(policyDef("passport_achievement_kinds") as SetPolicy, published.get(policyPath("passport_achievement_kinds"))) as StudyAchievementKind[],

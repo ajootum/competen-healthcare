@@ -212,9 +212,12 @@ export { findPatientIdentifiers, isValidNhsNumber, PII_LABEL, type PiiKind } fro
  * neither. Pure, over the raw bytes: a /JavaScript, /JS or /Launch name in any UNCOMPRESSED dictionary (an
  * annotation, an open action). Names inside compressed object streams are not visible here -- the document's
  * own script table is asked as well (extractPdf), which pdf.js reads from either.
+ * ⚠ STREAM DATA IS NOT SCANNED. An image stream is effectively random bytes, and 16 MB of it holds "/JS" by
+ * chance about once: scanning it refused clean, image-heavy PDFs (found measuring the 25 MB limit). Only the
+ * text between streams -- the dictionaries -- is scanned.
  */
 export function screenPdfBytes(bytes: Uint8Array): string | null {
-  const raw = new TextDecoder("latin1").decode(bytes);
+  const raw = new TextDecoder("latin1").decode(bytes).replace(/stream\r?\n[\s\S]*?endstream/g, "stream endstream");
   if (/\/(JavaScript|JS)(?![A-Za-z0-9])/.test(raw)) return "pdf_javascript";
   if (/\/Launch(?![A-Za-z0-9])/.test(raw)) return "pdf_launch";
   return null;

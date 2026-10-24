@@ -68,6 +68,9 @@ describe("U1: PowerPoint, and telling the Office files apart", () => {
     expect(await extractMaterial(PDF_MIME, withJs)).toMatchObject({ ok: false, reason: "unsafe", detail: "pdf_javascript" });
     // A name that merely starts the same way is not a script.
     expect(screenPdfBytes(new TextEncoder().encode("%PDF-1.4 /JSmith /Launcher"))).toBeNull();
+    // Image data that happens to hold "/JS " is stream content, not a dictionary: never a false refusal.
+    expect(screenPdfBytes(new TextEncoder().encode("%PDF-1.4\n1 0 obj << /Length 9 >>\nstream\n\x89/JS (x)\x00\nendstream\nendobj"))).toBeNull();
+    expect(screenPdfBytes(new TextEncoder().encode("%PDF-1.4\n1 0 obj << /S /JavaScript >>\nendobj\n2 0 obj << /Length 4 >>\nstream\nabcd\nendstream"))).toBe("pdf_javascript");
   });
 
   it("caps slides at the policy's limit, refusing (never truncating) a longer deck", async () => {
