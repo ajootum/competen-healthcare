@@ -48,7 +48,7 @@ These are enforced at **both** upload steps: the slot, and processing. A format 
 - **Depends on:** 372.
 - **House rules:** ALL CLEAR.
 - **Verified read-only by this session:** the material CHECK lists pdf, docx and text/plain; the bucket is still private, with a 10 MB cap and the same three types; 0 text materials before enabling.
-- **Turning text on (staging):** `npx tsx scripts/seed-staging-scholar-text-format.ts`, run by the owner. It uses the governed WCE path and refuses production and any pending draft. `--remove` restores the default.
+- **Turning text on (staging):** `npx tsx scripts/seed-staging-scholar-text-format.ts`. **The owner ran it on 2026-10-24.** `--verify` shows draft and published = pdf, docx, text, actor "COMPETEN-SCHOLAR-UPLOAD Stage 2 staging script (owner-run)". It uses the governed WCE path and refuses production and any pending draft. `--remove` restores the default.
 
 ## 3. Verification
 
@@ -61,7 +61,7 @@ These are enforced at **both** upload steps: the slot, and processing. A format 
   - competency-foundation 33/33;
   - ratchet green.
 - **Build:** real `next build` compiled, exit 0.
-- **Staging over HTTP:** `scholar-upload-harness`, against a staging-pointed dev server with the staging-test legal versions. **ALL GREEN, 14 passed, 0 failed, 1 PEND.**
+- **Staging over HTTP:** `scholar-upload-harness`, against a staging-pointed dev server with the staging-test legal versions. **First run: ALL GREEN, 14 passed, 0 failed, 1 PEND (T1). Re-run on main 9f83aefa after text was enabled: ALL GREEN, 15 passed, 0 failed, 0 PEND.**
   - W1: Welcome leads to the upload panel.
   - W2: the panel states the policy's formats and size.
   - U1: refusals for the attestation, size, a photo (no OCR), and a format the policy has off.
@@ -75,7 +75,7 @@ These are enforced at **both** upload steps: the slot, and processing. A format 
   - I1: another student gets 404.
   - E1: erasure removes everything.
   - Z1: fixtures are cleaned up.
-  - **PEND T1:** pasted text waits for 405 and the policy.
+  - T1 (re-run): pasted text is kept as a `.txt` original, a text material with no pages.
   - The run reads shared configuration and never writes it.
 
 ## 4. Production activation dependencies (none authorised by this build)
