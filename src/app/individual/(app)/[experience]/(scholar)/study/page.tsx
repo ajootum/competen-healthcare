@@ -79,7 +79,7 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
         {JOURNEY.map((j, i) => (
           <li key={j.step} className="rounded-xl border border-gray-200 bg-white p-3">
             <p className="text-[12px] font-bold tabular-nums" style={{ color: x.accent }}>{i + 1}. {j.step}</p>
-            <p className="mt-0.5 text-[12.5px] leading-snug text-gray-600">{j.text}</p>
+            <p className="mt-0.5 text-[12.5px] leading-snug text-gray-600">{j.step === "Upload" ? `Add your notes, slides or guidance: ${rules.describe}.` : j.text}</p>
           </li>
         ))}
       </ol>
