@@ -2,7 +2,7 @@
 export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
-import { generate } from "@/lib/ai/client";
+import { isMeteredRefusal, meteredRefusalBody, requestIdFor, runMeteredAi } from "@/lib/ai/allowance";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "@/lib/individual/policy";
@@ -60,13 +60,19 @@ export async function POST(req: Request) {
   const passport = await loadIndividualPassport(ctx.admin, ctx.userId, new Date().toISOString().slice(0, 10));
   const record = recordContext({ name: ctx.profile.fullName, experience, live: ctx.live, passport });
 
-  const result = await generate({
-    system: systemPrompt(experience),
-    user: `My Competen record:\n${record}\n\nMy question: ${question}`,
-    tier: "reasoning",
-    maxTokens: 900,
-    context: { userId: ctx.userId, attribution: { scope: "person" }, operation: `individual_assistant_${experience}` },
+  // AI-FAIR-USE-01: through the Holdings allowance (atomic reservation, settlement). With metering off it is
+  // generate() unchanged, behind the quota above.
+  const result = await runMeteredAi(ctx.admin, {
+    userId: ctx.userId, product: experience, activity: "assistant", requestId: requestIdFor(ctx.userId, req.headers.get("x-request-id")),
+    generate: {
+      system: systemPrompt(experience),
+      user: `My Competen record:\n${record}\n\nMy question: ${question}`,
+      tier: "reasoning",
+      maxTokens: 900,
+      context: { userId: ctx.userId, attribution: { scope: "person" }, operation: `individual_assistant_${experience}` },
+    },
   });
+  if (isMeteredRefusal(result)) { const m = meteredRefusalBody(result); return NextResponse.json(m.body, { status: m.status }); }
   if (!result.ok) {
     const status = result.error === "not_configured" ? 503 : 502;
     const msg = result.error === "refusal" ? "The assistant declined to answer that question." : "The assistant could not answer just now. Try again shortly.";

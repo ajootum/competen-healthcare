@@ -90,6 +90,7 @@ const INCLUDED = [
   // default and library-checked, no Nursing root, the seed staging-only and draft-only. 11 planted reds. Files only.
   "competency-foundation-harness.ts",
   "clinical-review-harness.ts",
+  "ai-fair-use-harness.ts",
   "mos-gap-matrix-harness.ts",
   "pd-health-harness.ts",
   "pd-nav-harness.ts",

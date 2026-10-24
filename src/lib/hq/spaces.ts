@@ -47,6 +47,8 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.executive.enterprise.view",     space: "executive" },
   { code: HQ_HOME_CAPABILITY,                 space: "platform"  },
   { code: "hq.platform.ai.view",              space: "platform"  },
+  // Migration 410 (AI-FAIR-USE-01): prices, FX, allowance-unit rates and product AI policies. Platform Director.
+  { code: "hq.platform.ai.manage",            space: "platform"  },
   { code: "hq.platform.operations.view",      space: "platform"  },
   { code: "hq.platform.system.view",          space: "platform"  },
   { code: "hq.platform.users.view",           space: "platform"  },
@@ -167,6 +169,9 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/reports",               capability: "hq.executive.reports.view" },
   { prefix: "/super-admin/performance",           capability: "hq.executive.performance.view" },
   { prefix: "/super-admin/enterprise",            capability: "hq.executive.enterprise.view" },
+  // AI-FAIR-USE-01 (migration 410). Before /super-admin/ai: the first matching prefix wins, and the fair-use
+  // page must not be reachable on the view right.
+  { prefix: "/super-admin/ai/fair-use",           capability: "hq.platform.ai.manage" },
   { prefix: "/super-admin/ai",                    capability: "hq.platform.ai.view" },
   { prefix: "/super-admin/assistant",             capability: "hq.platform.ai.view" },
   { prefix: "/super-admin/system",                capability: "hq.platform.system.view" },

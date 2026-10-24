@@ -2,6 +2,8 @@
 export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
+import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
+import { isMeteredRefusal, meteredRefusalBody, requestIdFor, runMeteredAi, type MeteredRefusal } from "@/lib/ai/allowance";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "@/lib/individual/policy";
@@ -91,7 +93,17 @@ export async function POST(req: Request) {
     });
     if (!subjects.length) return refuse("Those entries are not in your record.", 404);
 
-    const r = await proposeForSubjects(ctx.admin, ctx.userId, subjects, catalogue);
+    // AI-FAIR-USE-01: the suggestion runs through the Holdings allowance. A metered refusal is kept so the
+    // page can show what stays available instead of a failure. With metering off it is generate() unchanged.
+    let metered: MeteredRefusal | null = null;
+    const requestId = requestIdFor(ctx.userId, req.headers.get("x-request-id"));
+    const run = async (g: GenerateArgs): Promise<GenerateResult> => {
+      const x = await runMeteredAi(ctx.admin, { userId: ctx.userId, product: "professional", activity: "map", requestId, generate: g });
+      if (isMeteredRefusal(x)) { metered = x; return { ok: false, error: "failed", detail: "metered" }; }
+      return x;
+    };
+    const r = await proposeForSubjects(ctx.admin, ctx.userId, subjects, catalogue, run);
+    if (metered) { const m = meteredRefusalBody(metered); return NextResponse.json(m.body, { status: m.status }); }
     // The action the quota counts, whenever the model answered (a store failure after it still counts).
     // Sizes and kinds only, never the person's words.
     if (r.ok || r.error === "failed") {
