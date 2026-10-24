@@ -76,7 +76,7 @@ session. Production needs a separate owner GO for each migration.
 
 ## 2. Migrations
 
-| File | sha256 (CRLF, as committed) | sha256 (LF) | Depends on |
+| File | sha256 (CRLF: working copy, as applied on staging) | sha256 (LF: the git blob) | Depends on |
 |---|---|---|---|
 | `399-individual-plans-and-checkout.sql` | `219ac81cfe0ba9650511c0e12e58a97a2fda009fc5e9c78e5c2c6ffd9ee603c0` | `bbbe9e21f896fdaa42ae9172bfa13db9af6fcaa21b1669e3ed212908877bcc73` | 370 (`individual_membership`, `individual_entitlement`, the live view) |
 | `400-individual-commercial-manage-capability.sql` | `c4fbfbb6beb25a1f9eb3396c89688db349be0213b4ee73060cded707e673d388` | `12bb67395273b904de360b5d88b03b1e8a6d5714ffe927e9ff6d0e528ae9c1c5` | 264 (the HQ catalogue) |
