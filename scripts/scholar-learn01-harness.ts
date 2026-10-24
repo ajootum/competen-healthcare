@@ -142,6 +142,12 @@ async function analyseAll(jar: Jar, id: string) {
 async function act(jar: Jar, body: Record<string, unknown>) {
   // A student may ask again more than once; every try is checked, and the harness reports how many it took.
   let r = await send("POST", "/api/individual/scholar/learn/act", body, jar);
+  // A provider failure (502) is retried ONCE and reported with its detail -- never counted as a pass.
+  if (r.status === 502) {
+    note(`${String(body.action)}: provider failure 502 (${r.json?.error ?? ""}) -- retrying once`);
+    r = await send("POST", "/api/individual/scholar/learn/act", body, jar);
+    if (r.status === 502) note(`${String(body.action)}: provider failure persisted: 502 ${JSON.stringify(r.json)}`);
+  }
   const shown = (x: any) => !!(x.json?.answer || x.json?.checkQuestion || x.json?.continuity);
   for (let tries = 1; tries < 3 && r.status === 200 && !shown(r) && !r.json?.notInNotes; tries++) {
     note(`${String(body.action)}: withheld (${r.json?.message ?? ""}) -- asking again`);
@@ -325,7 +331,8 @@ async function main() {
   const bTeach = bStart?.status === 200 ? await act(sb.jar, { action: "teach", ...(bStart.json.session.id ? { sessionId: bStart.json.session.id, step: 0 } : { step: 0, chunkIds: bStart.json.session.steps[0].sections.map((x: any) => x.chunkId) }) }) : null;
   const bPage = bDoc ? await get(`/individual/scholar/study/learn?material=${bDoc}`, sb.jar) : null;
   ok("NC1. without a competency catalogue the journey works: a session starts, Teach Me answers from the notes, cited, with no governed reference, and the workspace renders",
-    !!bTeach && bTeach.status === 200 && cites(bTeach.json?.answer) && (bTeach.json?.references ?? []).length === 0 && bPage?.status === 200, `${bStart?.status} ${bTeach?.status} ${bTeach?.json?.message ?? ""}`);
+    !!bTeach && bTeach.status === 200 && cites(bTeach.json?.answer) && (bTeach.json?.references ?? []).length === 0 && bPage?.status === 200,
+    `${bStart?.status} ${bTeach?.status} ${bTeach?.status === 502 ? `PROVIDER FAILURE: ${JSON.stringify(bTeach?.json)}` : bTeach?.json?.message ?? ""}`);
 
   // ── I: isolation ──
   const iGet = sid ? await send("GET", `/api/individual/scholar/learn/sessions/${sid}`, undefined, sb.jar) : { status: 404 };
