@@ -30,6 +30,7 @@ import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { grantIndividualAccess, validateGrant, isGrantRefusal } from "../src/lib/individual/grants";
 import { loadIndividualPolicy } from "../src/lib/individual/policy";
+import { getAiStanding } from "../src/lib/ai/allowance";
 import { BUCKET, DOCX_MIME, PDF_MIME, PPTX_MIME, TEXT_MIME, uploadRules } from "../src/lib/individual/scholar/config";
 import { loadJoinOptions } from "../src/lib/individual/scholar/context";
 import { tinyDocx, tinyPdf, tinyPptx } from "../src/lib/individual/scholar/test-documents";
@@ -234,6 +235,8 @@ async function main() {
     items.length === 10 && kinds.size >= 3 && qRows.every(q => q.review_status === "private_formative") && new Set(items.map(i => i.materialId)).size >= 2,
     `${items.length} items · kinds ${[...kinds].join(",")} · generated ${quick.json?.generated} · linked ${qRows.filter(q => q.competency_id).length}`);
   note(`competency-linked: ${qRows.filter(q => q.competency_id).length} of ${qRows.length} (the rest have no accepted or proposed link on their section)`);
+  const gens = ((await admin.from("audit_log").select("new_value").eq("actor_id", a).eq("entity_type", "individual_scholar_revision_generate").order("created_at")).data ?? []) as any[];
+  note(`generation calls: ${gens.map(g => `${g.new_value.kind}x${g.new_value.asked}=>${g.new_value.outcome}`).join(" · ")}`);
   ok("R4b. ⚠ no question reaches the browser with its key, rationale or source quote", items.every(i => !("answer" in i) && !("rationale" in i) && !("sourceQuote" in i) && !("correctIndex" in i)));
 
   // ── R5/R6: answer, with feedback; the explanations are grounded ──
@@ -339,7 +342,22 @@ async function main() {
     cToday.status === 200 && (cToday.json.generated ?? 0) === 0 && !!cAns && cAns.status === 200 && cAns.json?.feedback?.marking === "deterministic" && cReplay?.status === 200 && cPages.every(p => p.status === 200),
     `${cToday.status} ${cToday.json?.note ?? cToday.json?.error ?? ""} · answer ${cAns?.status} · replay ${cReplay?.status} · pages ${cPages.map(p => p.status)}`);
   await admin.from("audit_log").delete().eq("actor_id", a).eq("entity_type", "harness_revision01_continuity");
-  pend("R13-metered", "the metering-ON variant (allowance from the Holdings engine) needs metering switched on for the run: owner command, then this harness with METERED=1");
+  // ── R13m: the same with the Holdings allowance ON (the owner switches it: scripts/staging-ai-fair-use-switch.ts) ──
+  if (process.env.METERED !== "1") pend("R13-metered", "the metering-ON variant needs metering switched on for the run: the owner's --on, then this harness with METERED=1, then --off");
+  else {
+    const standing = await getAiStanding(admin, { userId: a, product: "scholar" });
+    note(`metered standing: metered ${standing.metered} · level ${standing.level} · questions ${JSON.stringify(standing.activities?.questions ?? null)} · evaluate ${JSON.stringify(standing.activities?.evaluate ?? null)}`);
+    const mToday = await start(sa.jar, { mode: "today" });
+    const mShort = shortQ ? await send("POST", "/api/individual/scholar/revision/answer", { questionId: shortQ.id, response: { text: "said another way entirely" } }, sa.jar) : null;
+    const mItem = (mToday.json?.items ?? []).find((i: any) => ["mcq", "case", "mrq", "match", "sequence"].includes(i.kind));
+    const mAns = mItem ? await send("POST", "/api/individual/scholar/revision/answer", { questionId: mItem.id, sessionId: mToday.json.session?.id, response: await rightResponse(a, mItem.id) }, sa.jar) : null;
+    const mReplay = saveSet?.status === 200 ? await start(sa.jar, { mode: "custom", setId: saveSet.json.id }) : null;
+    const questionsOpen = standing.activities?.questions?.available === true;
+    ok("R13m. with metering ON, revision carries on from what is stored: Today's Revision from saved questions (new questions only if the allowance allows them), code marking, a short answer falling back to the student's own judgement when AI evaluation is refused, saved sets",
+      standing.metered === true && mToday.status === 200 && (questionsOpen || (mToday.json.generated ?? 0) === 0) && mAns?.status === 200 && mAns.json?.feedback?.marking === "deterministic"
+        && (!mShort || mShort.json?.needsSelfGrade === true || mShort.json?.feedback?.marking === "ai_evaluation") && mReplay?.status === 200,
+      `metered ${standing.metered} · today ${mToday.status} gen ${mToday.json?.generated} ${mToday.json?.note ?? ""} · short ${mShort?.status} ${mShort?.json?.reason ?? mShort?.json?.feedback?.marking ?? ""} · answer ${mAns?.status} · replay ${mReplay?.status}`);
+  }
 
   // ── R14: no competency catalogue ──
   const bDoc = await upload(sb.jar, DOCX_MIME, await tinyDocx(OXYGEN), "Oxygen therapy notes.docx");

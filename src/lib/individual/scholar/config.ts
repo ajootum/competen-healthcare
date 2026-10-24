@@ -110,7 +110,8 @@ export const PROMPT_VERSIONS = {
   // COMPETEN-SCHOLAR-REVISION-01 R4: AI evaluation of a short answer (Holdings activity `evaluate`).
   evaluate: "scholar-evaluate-v1",
   // COMPETEN-SCHOLAR-REVISION-01 R2: revision questions of the 416 kinds, one prompt per kind, on the question rules.
-  revision: "scholar-revision-v1",
+  // v2: answers and rationale in the passage's own words; [] when a kind does not fit; a matching item only with three pairs.
+  revision: "scholar-revision-v2",
 } as const;
 
 // ── STAGE 4: REVISION ── COMPETEN-SCHOLAR-REVISION-01 (owner GO 2026-10-24) ─────────────────────────────────────
@@ -139,7 +140,7 @@ export const REVISION_DIFFICULTIES = ["any", "easy", "standard", "harder"] as co
 export type RevisionDifficulty = (typeof REVISION_DIFFICULTIES)[number];
 export const REVISION_QUANTITY_MAX = 50;
 /** Most AI generation calls one revision session may make to fill its shortfall. */
-export const REVISION_GENERATION_CALLS_MAX = 6;
+export const REVISION_GENERATION_CALLS_MAX = 8;
 export const MOCK_LABEL = "Mock practice from your own notes: formative revision, not an assessment, and never evidence of competence.";
 export const REVISION_LABEL = "Revision from your notes · formative practice, not an assessment";
 

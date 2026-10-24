@@ -320,7 +320,7 @@ const AI_ROUTES: [string, string, RegExp][] = [
   [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run\)/],
   [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }))`, /runAnalysis\([^)]*ai\.run\)/],
   // REVISION-01: a session's new questions (one id per call, `:g1` ...) and a short answer's AI evaluation.
-  [`${API}/revision/sessions/route.ts`, "scholarAiRunner(ctx, req, \"questions\", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`)", /runRevisionQuestions\([^)]*ai\.run\)/],
+  [`${API}/revision/sessions/route.ts`, "scholarAiRunner(ctx, req, \"questions\", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`)", /runRevisionQuestions\(ctx\.userId, call\.kind, passage, Math\.max\(call\.count, 3\), ai\.run\)/],
   [`${API}/revision/answer/route.ts`, "scholarAiRunner(ctx, req, \"evaluate\", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\\n${r.text}`, passages: [passage] }))", /runEvaluate\([^)]*ai\.run\)/],
 ];
 /**

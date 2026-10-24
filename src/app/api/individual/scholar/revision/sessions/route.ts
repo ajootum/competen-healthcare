@@ -18,7 +18,7 @@ import { runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/gen
 import { GENERATING_MODES, keyOf, pickQuestions, planGeneration, type PoolItem } from "@/lib/individual/scholar/revision";
 import { revisionItemView } from "@/lib/individual/scholar/revision-view";
 import {
-  MOCK_LABEL, PROMPT_VERSIONS, REVISION_DIFFICULTIES, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
+  MOCK_LABEL, PROMPT_VERSIONS, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
   type RevisionDifficulty, type RevisionFormat, type RevisionMode,
 } from "@/lib/individual/scholar/config";
 
@@ -131,32 +131,42 @@ export async function POST(req: Request) {
         // Identical content is not written twice: a section and format that already has questions at this prompt version is skipped.
         const version = (k: string) => (k === "mcq" ? PROMPT_VERSIONS.mcq : `${PROMPT_VERSIONS.revision}:${k}`);
         const existing = new Set(pool.questions.filter(q => q.promptVersion.startsWith(version(q.kind))).map(q => `${q.chunkId}|${q.kind}`));
-        const plan = planGeneration({ shortfall: pick.shortfall, chunkIds: scopeSections, formats: kinds, existing });
-        let i = 0;
-        for (const call of plan) {
-          i++;
-          const passage = await getPassage(ctx.admin, ctx.userId, call.chunkId);
-          if (!passage) continue;
-          const ai = scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`);
-          const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
-          let ids: string[] = [], outcome = "";
-          if (call.kind === "mcq") {
-            const r = await runQuestions(ctx.userId, "mcq", passage, call.count, ai.run);
-            if (r.ok) { const s = await insertQuestions(ctx.admin, ctx.userId, { passage, kind: "mcq", drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId }); ids = s.ids; outcome = `kept:${ids.length}`; }
-            else outcome = `error:${r.error}`;
-          } else {
-            const r = await runRevisionQuestions(ctx.userId, call.kind, passage, call.count, ai.run);
-            if (r.ok) {
-              const s = await insertRevisionQuestions(ctx.admin, ctx.userId, { passage, kind: call.kind, drafts: r.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
-              ids = s.ids; outcome = s.ok ? `kept:${ids.length},dropped:${r.dropped.length}` : s.notProvisioned ? "not_provisioned" : "save_failed";
-            } else outcome = `error:${r.error}`;
+        // Rounds: an item the checks drop leaves the session short, so a second round writes for what is still
+        // missing -- never a section and format already written, and never more than REVISION_GENERATION_CALLS_MAX calls.
+        let i = 0, refused = false;
+        for (let round = 0; round < 2 && pick.shortfall > 0 && i < REVISION_GENERATION_CALLS_MAX && !refused; round++) {
+          const plan = planGeneration({ shortfall: pick.shortfall, chunkIds: scopeSections, formats: kinds, existing });
+          let made = 0;
+          for (const call of plan.slice(0, REVISION_GENERATION_CALLS_MAX - i)) {
+            existing.add(`${call.chunkId}|${call.kind}`);
+            i++;
+            const passage = await getPassage(ctx.admin, ctx.userId, call.chunkId);
+            if (!passage) continue;
+            const ai = scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`);
+            const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
+            let ids: string[] = [], outcome = "";
+            if (call.kind === "mcq") {
+              // Each call asks for up to three: the checks drop some, and what is kept beyond this session is saved
+              // for the next one (reuse first), never written again.
+              const r = await runQuestions(ctx.userId, "mcq", passage, Math.max(call.count, 3), ai.run);
+              if (r.ok) { const s = await insertQuestions(ctx.admin, ctx.userId, { passage, kind: "mcq", drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId }); ids = s.ids; outcome = `kept:${ids.length}`; }
+              else outcome = `error:${r.error}`;
+            } else {
+              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, Math.max(call.count, 3), ai.run);
+              if (r.ok) {
+                const s = await insertRevisionQuestions(ctx.admin, ctx.userId, { passage, kind: call.kind, drafts: r.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
+                // The reasons items were dropped, counted (never their text): what the checks are refusing.
+                const why = [...new Set(r.dropped)].map(x => `${x}:${r.dropped.filter(y => y === x).length}`).join("/");
+                ids = s.ok ? s.ids : []; outcome = s.ok ? `kept:${ids.length},dropped:${r.dropped.length}${why ? `(${why})` : ""}` : s.notProvisioned ? "not_provisioned" : "save_failed";
+              } else outcome = `error:${r.error}`;
+            }
+            const refusal = ai.refusal();
+            if (refusal) { note = `${refusalWords(refusal).message} This session uses your saved questions.`; refused = true; break; }
+            await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_revision_generate", null, { chunk_id: passage.chunkId, kind: call.kind, asked: call.count, outcome, competency_id: competencyId });
+            made += ids.length;
           }
-          const refusal = ai.refusal();
-          if (refusal) { note = `${refusalWords(refusal).message} This session uses your saved questions.`; break; }
-          await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_revision_generate", null, { chunk_id: passage.chunkId, kind: call.kind, asked: call.count, outcome, competency_id: competencyId });
-          generated += ids.length;
-        }
-        if (generated) {
+          generated += made;
+          if (!made) break;
           pool = (await poolOf()) ?? pool;
           pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed });
         }

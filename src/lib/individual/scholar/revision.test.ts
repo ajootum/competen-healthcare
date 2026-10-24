@@ -109,11 +109,11 @@ describe("R1/R3: which questions a session offers", () => {
     const mixed = [P("e", { difficulty: 1 }), P("h", { difficulty: 3 })];
     expect(pickQuestions({ mode: "quick", pool: mixed, quantity: 2, formats: ["mcq"], difficulty: "harder", seed: "s" }).ids).toEqual(["h", "e"]);
   });
-  it("new questions: never a section and format that already has them, and at most six calls", () => {
+  it("new questions: never a section and format that already has them, and at most REVISION_GENERATION_CALLS_MAX calls", () => {
     const plan = planGeneration({ shortfall: 10, chunkIds: ["a", "b"], formats: ["mcq", "short"], existing: new Set(["a|mcq"]) });
     expect(plan.map(p => `${p.chunkId}|${p.kind}`)).not.toContain("a|mcq");
     expect(plan.reduce((n, p) => n + p.count, 0)).toBe(9);
-    expect(planGeneration({ shortfall: 100, chunkIds: ["a", "b", "c", "d"], formats: ["mcq", "short"], existing: new Set() }).length).toBe(6);
+    expect(planGeneration({ shortfall: 100, chunkIds: ["a", "b", "c", "d"], formats: ["mcq", "short"], existing: new Set() }).length).toBe(8);
   });
 });
 

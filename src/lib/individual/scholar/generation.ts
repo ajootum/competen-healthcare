@@ -521,13 +521,14 @@ const REVISION_COMMON = [
   "3. sourceQuote is ONE sentence copied EXACTLY from the passage that supports the answer.",
   "4. difficulty is 1 (recall a stated fact), 2 (understand or connect) or 3 (apply or distinguish).",
   "5. Never include a name, NHS number, date of birth or any detail that could identify a real person.",
-  "Reply with a JSON array ONLY, no prose and no code fence.",
+  "6. The rationale and every answer use the passage's own words. Do not explain beyond what the passage says, and do not add any term it does not use.",
+  "Reply with a JSON array ONLY, no prose and no code fence. If the passage cannot support an item of this kind, reply [].",
 ];
 export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence", string> = {
   mrq: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? that says to choose all that apply", "options": [4 to 6 short options built only from the passage\'s words], "correct": [the indexes of EVERY option the passage supports, at least one and not all], "rationale": "...", "sourceQuote": "...", "difficulty": 1}'].join("\n"),
   short: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? whose answer is a few words from the passage", "accepted": [1 to 4 short answers the passage supports, in its own words], "rationale": "...", "sourceQuote": "...", "difficulty": 1}'].join("\n"),
   flashcard: [...REVISION_COMMON, 'Each item: {"front": "a term or a short question from the passage", "back": "its answer or meaning, in the passage\'s words", "sourceQuote": "...", "difficulty": 1}'].join("\n"),
-  match: [...REVISION_COMMON, 'Each item: {"stem": "what to match, e.g. Match each term to its meaning", "pairs": [3 to 6 {"left": "...", "right": "..."} pairs the passage states, every left and every right different], "rationale": "...", "sourceQuote": "...", "difficulty": 1}'].join("\n"),
+  match: [...REVISION_COMMON, 'Each item: {"stem": "what to match, e.g. Match each term to its meaning", "pairs": [{"left": "...", "right": "..."}, {"left": "...", "right": "..."}, {"left": "...", "right": "..."}], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Three to six pairs, each stated by the passage, every left and every right different. Only write one when the passage states at least three such pairs.'].join("\n"),
   sequence: [...REVISION_COMMON, 'Each item: {"stem": "what to put in order, ending with ?", "steps": [3 to 6 steps IN THE ORDER THE PASSAGE GIVES THEM], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Only write one when the passage itself gives an order.'].join("\n"),
 };
 
