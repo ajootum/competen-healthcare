@@ -58,3 +58,37 @@ Composite (id, user_id) foreign keys throughout. RLS on, own-row read only. A st
 - **Dependencies:** 372 (material and chunk, with their (id, user_id) indexes), 384 (`framework_competencies`), 422 (`case_library_version`) and profiles. Uses generated columns (PostgreSQL 12 or later).
 - **Fail-closed without it:** clinical reasoning is not offered, and the existing practice cases (388) work as today.
 - **Production:** none applied. Production needs a separate owner GO with the OPS-001 safeguards, after 422.
+
+### 436: a Scholar case session plays a private case only (fix-forward of 435)
+
+**Why.** A library-case play was storable in two places: 423's `case_library_session` (IND-007, with its delivery guard) and 435's session (private case XOR library version). The coordinator decided, under the owner's case interface approval §2 ("Do not create incompatible case structures"):
+- library plays go through the shared delivery (`src/lib/cases/library.ts`) only;
+- private plays use 435;
+- both run on one engine (`blueprint.ts` and `library.ts`'s `applyAnswer`).
+
+436 makes anything else unrepresentable. On `individual_scholar_case_session` it:
+- drops `library_version_id`, with its foreign key and index;
+- makes `private_case_id` NOT NULL;
+- re-adds the CHECK without the either-or (every other clause unchanged).
+
+| File | sha256 (LF) | Tier | State |
+|---|---|---|---|
+| `436-individual-scholar-case-session-private-only.sql` | `0bd76878dc7ed70c281e8b1164ce774a43c43a3d790ae7aab0d532274ab7a016` | Low | **Applied ×2 on staging**, rolled back and re-applied ×2. Frozen. **Not on production.** |
+| `docs/evidence/COMPETEN-SCHOLAR-CLINICAL-REASONING-01/ROLLBACK-436.sql` | `3a73000cd2562bd57f5ab5bc7adcec27a6243230fee605d14cd3f0a4acb431d4` | — | — |
+| `docs/evidence/COMPETEN-SCHOLAR-CLINICAL-REASONING-01/VERIFY-436.sql` | `b38c1f0b6d6f9edaccb4d1be31255a6a66b5ab4517f6680b2a5f86df00a12c9d` | read-only | — |
+
+**Staging run record** (coordinating session, 2026-10-25, after 435):
+- The target was `ezhvpgtcqcdsgylrxgdb` at every step; the guard passed and every run reported "ok".
+- The bytes matched the shas before and after.
+- House rules: ALL CLEAR (51 lines, 7 statements, 1 constraint, 0 warnings).
+- Pre-check: 0 sessions with a library version.
+
+| Step | Fingerprint (`individual_scholar%`) | VERIFY |
+|---|---|---|
+| PRE (435 applied) | `0552fa3a8d28` | — |
+| Apply ×2 (F1) | `e87579ca0163` | `library_version_id`: 0 rows; `private_case_id` NOT NULL; 0 library FKs; 1 CHECK |
+| ROLLBACK-436, committed (F2) | `0552fa3a8d28` = PRE (the 435 shape exactly) | — |
+| Re-apply ×2 (F3) | `e87579ca0163` = F1 | as F1 |
+
+- **Application order:** 435, then 436. **In the production release they ship together, in that order.**
+- **Production:** none applied.
