@@ -1,4 +1,4 @@
-import { generate, type GenerateArgs } from "@/lib/ai/client";
+import { generate, type GenerateArgs, type GenerateResult } from "@/lib/ai/client";
 import { parseJsonArray, textGroundingViolations } from "@/lib/ai/grounding";
 import type { CompetencyLayer } from "./foundation";
 
@@ -201,11 +201,13 @@ export async function proposeMappings(args: {
   context: NonNullable<GenerateArgs["context"]>; screen?: IdentifierScreen;
   /** U3, opt-in: offer each competency's learning outcomes and let the model name one. */
   outcomes?: boolean;
+  /** AI-FAIR-USE-01: how the request is run. Default generate(); a product passes its metered runner. */
+  run?: (a: GenerateArgs) => Promise<GenerateResult>;
 }) {
   const shown = shortlist(args.subjects.slice(0, SUBJECTS_PER_CALL), args.candidates);
   const subjects = args.subjects.slice(0, SUBJECTS_PER_CALL);
   const opts: MappingOptions = { outcomes: !!args.outcomes };
-  const r = await generate({
+  const r = await (args.run ?? generate)({
     system: mappingSystem(args.framing, opts),
     user: mappingUserPrompt(subjects, shown, opts),
     tier: "reasoning",

@@ -37,12 +37,17 @@ export type GenerateResult =
       model: string;
       usage: { input: number; output: number };
     }
-  | { ok: false; error: GenerateFailure; detail?: string };
+  | {
+      ok: false; error: GenerateFailure; detail?: string;
+      /** What the provider reported consuming before it declined, when it reported it (a refusal is billed).
+       *  Absent for a transport failure or a timeout: unknown is never invented (AI-FAIR-USE-01). */
+      usage?: { input: number; output: number };
+    };
 
 /** What every adapter returns, before the dispatcher records usage and normalises the result. */
 type AdapterResult =
   | { ok: true; text: string; model: string; input: number; output: number }
-  | { ok: false; kind: "refusal" | "failed"; detail?: string };
+  | { ok: false; kind: "refusal" | "failed"; detail?: string; input?: number; output?: number };
 
 type AdapterArgs = { system: string; user: string; model: string; maxTokens: number; key: string };
 
@@ -62,7 +67,7 @@ async function anthropicAdapter(a: AdapterArgs): Promise<AdapterResult> {
 
   // A refusal is the model declining, which is a RESULT, not a transport failure. The distinction
   // matters to the fallback policy below: a refusal must never be retried elsewhere.
-  if (message.stop_reason === "refusal") return { ok: false, kind: "refusal" };
+  if (message.stop_reason === "refusal") return { ok: false, kind: "refusal", input: message.usage.input_tokens, output: message.usage.output_tokens };
 
   return {
     ok: true,
@@ -93,7 +98,7 @@ async function openaiAdapter(a: AdapterArgs): Promise<AdapterResult> {
   const j = await res.json();
   const choice = j.choices?.[0];
   // OpenAI signals a content-policy stop here. Same class as an Anthropic refusal.
-  if (choice?.finish_reason === "content_filter") return { ok: false, kind: "refusal" };
+  if (choice?.finish_reason === "content_filter") return { ok: false, kind: "refusal", input: Number(j.usage?.prompt_tokens ?? 0), output: Number(j.usage?.completion_tokens ?? 0) };
 
   return {
     ok: true,
@@ -127,9 +132,9 @@ async function geminiAdapter(a: AdapterArgs): Promise<AdapterResult> {
   const candidate = j.candidates?.[0];
 
   // Gemini reports a blocked prompt separately from a blocked candidate. Both are refusals.
-  if (j.promptFeedback?.blockReason) return { ok: false, kind: "refusal" };
+  if (j.promptFeedback?.blockReason) return { ok: false, kind: "refusal", input: Number(j.usageMetadata?.promptTokenCount ?? 0), output: 0 };
   if (candidate?.finishReason === "SAFETY" || candidate?.finishReason === "PROHIBITED_CONTENT") {
-    return { ok: false, kind: "refusal" };
+    return { ok: false, kind: "refusal", input: Number(j.usageMetadata?.promptTokenCount ?? 0), output: Number(j.usageMetadata?.candidatesTokenCount ?? 0) };
   }
 
   return {
@@ -205,7 +210,9 @@ export async function generate(
     const latencyMs = Date.now() - t0;
 
     if (!result.ok) {
-      void recordAiUsage({ ...base, latencyMs, status: result.kind === "refusal" ? "refusal" : "error", error: result.detail });
+      void recordAiUsage({ ...base, latencyMs, status: result.kind === "refusal" ? "refusal" : "error", error: result.detail,
+        inputTokens: result.input ?? null, outputTokens: result.output ?? null });
+      const billed = result.input != null || result.output != null ? { usage: { input: result.input ?? 0, output: result.output ?? 0 } } : {};
 
       // The fallback that is not enabled. Written as a guarded branch rather than omitted, so the rule
       // above is visible at the point it would be broken.
@@ -213,8 +220,8 @@ export async function generate(
         // A policy would choose the next provider here. There is no policy, so there is no next.
       }
       return result.kind === "refusal"
-        ? { ok: false, error: "refusal" }
-        : { ok: false, error: "failed", detail: result.detail };
+        ? { ok: false, error: "refusal", ...billed }
+        : { ok: false, error: "failed", detail: result.detail, ...billed };
     }
 
     void recordAiUsage({ ...base, model: result.model, inputTokens: result.input, outputTokens: result.output, latencyMs, status: "ok" });

@@ -375,7 +375,7 @@ const checkIdentifierScreen = (src: Sources) => {
   const imported = /import \{ findPatientIdentifiers \} from "@\/lib\/privacy\/patient-identifiers";/.test(s);
   const filter = fn.indexOf("texted.filter(s => findPatientIdentifiers(s.text).length === 0)");
   const call = fn.indexOf("await proposeMappings(");
-  const screen = /screen: findPatientIdentifiers \}\);/.test(fn);
+  const screen = /screen: findPatientIdentifiers(, run)? \}\);/.test(fn);
   const scholar = /individual\/scholar/.test(s);
   return { ok: imported && filter > -1 && call > filter && screen && !scholar, detail: `shared import ${imported}, input screened before the call ${filter}<${call}, output screen ${screen}, Scholar import ${scholar}` };
 };
@@ -507,7 +507,7 @@ function main() {
   red("M4 on a green chip", checkMappingWords(mapPlant("src/app/individual/_components/professional/CompetencyLinks.tsx", "border-amber-300 bg-amber-50", "border-green-300 bg-green-50")));
   red("M4 when /verify drops not verified", checkMappingWords(mapPlant("src/app/verify/[token]/page.tsx", " (not verified)</span>", "</span>")));
   red("M6 when the input is not screened", checkIdentifierScreen(mapPlant(MAP_FILE, "texted.filter(s => findPatientIdentifiers(s.text).length === 0)", "texted")));
-  red("M6 without the output screen", checkIdentifierScreen(mapPlant(MAP_FILE, ", screen: findPatientIdentifiers });", " });")));
+  red("M6 without the output screen", checkIdentifierScreen(mapPlant(MAP_FILE, ", screen: findPatientIdentifiers, run });", ", run });")));
   if (MIG393) {
     red("M5 on a write policy", checkMappingSchema(MIG393 + "\ncreate policy p on individual_professional_competency_map for insert with check (true)"));
     red("M5 on a single-column subject link", checkMappingSchema(MIG393.replace("foreign key (cpd_id, user_id)", "foreign key (cpd_id)")));
