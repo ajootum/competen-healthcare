@@ -21,6 +21,11 @@ import { caseLibraryEnabled, loadCasePolicy } from "./policy";
 // ⚠ THE SERVER KEEPS THE CASE. The full blueprint and the session's progress stay here. The browser gets
 // learnerView and answeredView, with tokens it hands back. A variation picks values only inside the approved rules
 // (variationWithinBounds), so a varied case is still the approved version.
+//
+// ⚠ ONE SESSION RECORD FOR A LIBRARY PLAY (migration 424, coordinator decision on the Stage 5A overlap). Scholar's
+// AI reasoning feedback on an answered decision, and the end-of-case debrief, are written here, onto the session --
+// never into a second store. Each is an AI EVALUATION naming the provider, model and request that produced it, and the
+// database keeps it append-only. It is never an approval, a mark or a competence judgement.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const missing = (e: any) => /does not exist|schema cache|could not find/i.test(e?.message ?? "");
@@ -121,9 +126,16 @@ export function applyVariation(b: Blueprint, variation: Record<string, string>):
   return { ...b, facts: b.facts.map(f => (variation[f.id] !== undefined ? { ...f, value: variation[f.id] } : f)) };
 }
 
+type AiEntry = { kind: "ai_evaluation"; provider: string; model: string; modelVersion?: string | null; policyVersion?: string | null; requestId: string; text: string; at: string };
 type SessionRow = { id: string; user_id: string; version_id: string; view_salt: string; variation: Record<string, string>; reached_stage_ids: string[];
-  revealed_fact_ids: string[]; answers: { decisionPointId: string; chosen: string[]; text?: string; at: string; safety: number }[]; safety_events: number; status: string };
-export type SessionView = { sessionId: string; status: string; current: boolean; view: LearnerView; answered: string[] };
+  revealed_fact_ids: string[]; answers: { decisionPointId: string; chosen: string[]; text?: string; at: string; safety: number }[]; safety_events: number; status: string;
+  feedback?: (AiEntry & { decisionPointId: string })[]; debrief?: AiEntry | null };
+/** What a learner is shown of an AI evaluation: always labelled as one, with the model that wrote it. */
+export type AiEvaluationView = { label: "AI evaluation"; text: string; provider: string; model: string; at: string };
+export type SessionView = { sessionId: string; status: string; current: boolean; view: LearnerView; answered: string[];
+  feedback: (AiEvaluationView & { decisionToken: string })[]; debrief: AiEvaluationView | null };
+/** What Scholar passes when it records an AI evaluation: the generation's own provider, model and request id. */
+export type AiEvaluation = { provider: string; model: string; modelVersion?: string | null; policyVersion?: string | null; requestId: string; text: string };
 
 async function sessionFor(admin: any, userId: string, sessionId: string): Promise<{ s: SessionRow; c: LoadedCase; b: Blueprint } | null> {
   if (!UUID.test(userId) || !UUID.test(sessionId)) return null;
@@ -136,7 +148,47 @@ async function sessionFor(admin: any, userId: string, sessionId: string): Promis
 
 function viewOf(x: { s: SessionRow; c: LoadedCase; b: Blueprint }, hints: boolean): SessionView {
   const view = learnerView(x.b, { reachedStageIds: x.s.reached_stage_ids, revealedFactIds: x.s.revealed_fact_ids }, x.s.view_salt, { hints });
-  return { sessionId: x.s.id, status: x.s.status, current: x.c.current, view, answered: x.s.answers.map(a => viewToken(x.s.view_salt, "decision", a.decisionPointId)) };
+  const shown = (e: AiEntry): AiEvaluationView => ({ label: "AI evaluation", text: e.text, provider: e.provider, model: e.model, at: e.at });
+  return { sessionId: x.s.id, status: x.s.status, current: x.c.current, view, answered: x.s.answers.map(a => viewToken(x.s.view_salt, "decision", a.decisionPointId)),
+    feedback: (x.s.feedback ?? []).map(f => ({ ...shown(f), decisionToken: viewToken(x.s.view_salt, "decision", f.decisionPointId) })),
+    debrief: x.s.debrief ? shown(x.s.debrief) : null };
+}
+
+/** Pure: an AI evaluation entry as the database will accept it (424), or null when it would be refused. */
+export function aiEntry(e: AiEvaluation, at: string): AiEntry | null {
+  const t = (v: unknown, lo: number, hi: number) => (typeof v === "string" && v.trim().length >= lo && v.trim().length <= hi ? v.trim() : null);
+  const provider = t(e?.provider, 1, 40), model = t(e?.model, 1, 120), requestId = t(e?.requestId, 8, 200), text = t(e?.text, 1, 8000);
+  if (!provider || !model || !requestId || !text) return null;
+  return { kind: "ai_evaluation", provider, model, modelVersion: t(e.modelVersion, 1, 120), policyVersion: t(e.policyVersion, 1, 200), requestId, text, at };
+}
+
+/**
+ * Record Scholar's AI reasoning feedback on ONE answered decision of a library session (CR4). Appended, never
+ * rewritten (424). Two writers at once: the second is refused by the append-only check and may retry.
+ */
+export async function recordSessionFeedback(admin: any, userId: string, sessionId: string, decisionToken: string, e: AiEvaluation): Promise<SessionView | { error: string }> {
+  const x = await sessionFor(admin, userId, sessionId);
+  if (!x) return { error: "No such session." };
+  const dpId = resolveToken(x.b, x.s.view_salt, "decision", decisionToken);
+  if (!dpId || !x.s.answers.some(a => a.decisionPointId === dpId)) return { error: "Feedback is only on a decision you have answered." };
+  const entry = aiEntry(e, new Date().toISOString());
+  if (!entry) return { error: "That feedback is not a complete AI evaluation." };
+  const { data: s, error } = await admin.from("case_library_session").update({ feedback: [...(x.s.feedback ?? []), { decisionPointId: dpId, ...entry }] }).eq("id", x.s.id).select("*").single();
+  if (error || !s) return { error: /append-only/i.test(error?.message ?? "") ? "Feedback was added meanwhile. Try again." : "The feedback could not be recorded just now." };
+  return viewOf({ ...x, s }, false);
+}
+
+/** Record the end-of-case AI debrief of a COMPLETED library session. Once (424). */
+export async function recordSessionDebrief(admin: any, userId: string, sessionId: string, e: AiEvaluation): Promise<SessionView | { error: string }> {
+  const x = await sessionFor(admin, userId, sessionId);
+  if (!x) return { error: "No such session." };
+  if (x.s.status !== "completed") return { error: "The debrief comes at the end of the case." };
+  if (x.s.debrief) return { error: "This case already has its debrief." };
+  const entry = aiEntry(e, new Date().toISOString());
+  if (!entry) return { error: "That debrief is not a complete AI evaluation." };
+  const { data: s, error } = await admin.from("case_library_session").update({ debrief: entry }).eq("id", x.s.id).is("debrief", null).select("*").single();
+  if (error || !s) return { error: "The debrief could not be recorded just now." };
+  return viewOf({ ...x, s }, false);
 }
 
 /** Start a session on a deliverable case. The database refuses any other (423). No AI, no charge. */
