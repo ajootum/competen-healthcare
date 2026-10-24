@@ -335,6 +335,44 @@ async function main() {
   const learn = ids.docx ? await get(`/individual/scholar/study/${ids.docx}`, sa.jar) : null;
   ok("U5d. Start learning is the existing material page, with its Learn experience", learn?.status === 200 && /Ask about this material/.test(learn.text) && /Sections/.test(learn.text));
 
+  // ── L: upload limits (owner GO 2026-10-24) ──
+  {
+    // L0: the STORAGE layer alone, whatever the policy says: a ~24 MB object through a one-time signed URL into the
+    // Scholar bucket (the browser path). Passes only if the bucket (413) AND the project's global limit allow it.
+    const probe = `${a}/limits-probe-${Date.now()}.pptx`;
+    const signed = await admin.storage.from(BUCKET).createSignedUploadUrl(probe);
+    const blob = new Uint8Array(24 * 1024 * 1024); for (let i = 0; i < blob.length; i += 4096) blob[i] = (i * 2654435761) % 251;
+    const browser = createClient(url!, anonKey!, { auth: { persistSession: false } });
+    const put = signed.data ? await browser.storage.from(BUCKET).uploadToSignedUrl(probe, signed.data.token, blob, { contentType: PPTX_MIME }) : { error: signed.error };
+    const listed = ((await admin.storage.from(BUCKET).list(a, { limit: 100 })).data ?? []).find((o: any) => probe.endsWith(o.name));
+    await admin.storage.from(BUCKET).remove([probe]);
+    ok("L0. storage takes a 24 MB file on a signed URL into the Scholar bucket (413's limit, within the project's global limit), and the probe is removed",
+      !put.error && Number((listed as any)?.metadata?.size ?? 0) >= 24 * 1024 * 1024, `${put.error?.message ?? "stored"} ${(listed as any)?.metadata?.size ?? ""}`);
+  }
+  if (rules.maxBytes < 20 * 1024 * 1024 || !pptxOn) pend("L1. a file over 20 MB goes through the signed URL and is kept", `the policy allows ${rules.maxMb} MB here${pptxOn ? "" : " and pptx is off"} -- needs 413, then seed-staging-scholar-upload-25mb.ts (owner-run)`);
+  else {
+    const { default: Zip } = await import("jszip");
+    const big = await Zip.loadAsync(await tinyPptx([{ text: ["Chest X-ray interpretation", "Look at the airway, the breathing and the cardiac outline."] }]));
+    const media = new Uint8Array(23 * 1024 * 1024); for (let i = 0; i < media.length; i += 4096) media[i] = (i * 2654435761) % 251;
+    big.file("ppt/media/image1.png", media, { compression: "STORE" });
+    const bytes = new Uint8Array(await big.generateAsync({ type: "uint8array" }));
+    const t = Date.now();
+    const lg = await upload(sa.jar, PPTX_MIME, bytes, "Chest X-ray lecture (large).pptx");
+    const row = lg.done?.json?.id ? (await admin.from("individual_scholar_material").select("byte_size").eq("id", lg.done.json.id).single()).data : null;
+    ok("L1. a file over 20 MB goes browser -> storage on the signed URL (the project's global limit allows it) and is processed and kept",
+      lg.done?.status === 200 && Number(row?.byte_size) > 20 * 1024 * 1024, `${(bytes.byteLength / 1048576).toFixed(1)} MB: slot ${lg.slot.status} done ${lg.done?.status} ${lg.done?.json?.error ?? ""} in ${Date.now() - t} ms`);
+  }
+  {
+    const since = new Date(Date.now() - 60 * 60_000).toISOString();
+    const kept = ((await admin.from("individual_scholar_material").select("id").eq("user_id", a).gte("created_at", since)).data ?? []).length;
+    const room = rules.sessionFiles - kept;
+    const fill = await Promise.all(Array.from({ length: Math.max(0, room) }, (_, i) =>
+      upload(sa.jar, "text/plain", new TextEncoder().encode(`Session filler note ${i}: hand hygiene before and after patient contact.`), `filler-${i}.txt`)));
+    const over = await send("POST", "/api/individual/scholar/uploads", { mime: "text/plain", size: 100, piiAttested: true }, sa.jar);
+    ok("L2. the upload session holds the policy's number of files: one more is refused at the slot (429) with the reason",
+      fill.every(f => f.done?.status === 200) && over.status === 429 && /last hour/.test(over.json?.error ?? ""), `kept ${kept} + ${room} filled: ${fill.map(f => f.done?.status)} / over ${over.status} ${over.json?.error ?? ""}`);
+  }
+
   // ── R1: a catalogue-less programme (flagged) ──
   if (!R1_ZZ) pend("R1. a catalogue-less zz programme says the absence and does not block learning", "run with SCHOLAR_R1_ZZ=1 (it creates and removes a synthetic programme row: owner's call)");
   else {

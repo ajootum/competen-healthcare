@@ -57,6 +57,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarLearningActions: ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask"], scholarDefaultAction: "teach",
       scholarBeyondNotes: "labelled", scholarExplanationDepth: "standard", scholarSessionMaxSteps: 8, scholarCheckBehaviour: "offer",
       scholarLearningObjectives: "outcomes", scholarTutorTurns: 6, scholarLearningHistory: "record",
+      // Upload limits (owner GO 2026-10-24): the per-file value stays 10 MB (ceiling 25); a session is 10 files, 100 MB.
+      scholarUploadSessionFiles: 10, scholarUploadSessionMb: 100,
       scholarInsightMinAnswers: INSIGHT_MIN_ANSWERS, scholarInsightWindowDays: INSIGHT_WINDOW_DAYS,
       passportAchievementKinds: [...STUDY_ACHIEVEMENT_KINDS],
       // S1: no catalogue reaches a person until HQ chooses one.

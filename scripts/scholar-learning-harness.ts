@@ -312,6 +312,20 @@ const learnBounded = (src: Src) => {
     && /const asked = \[args\.question, \.\.\.args\.history\.map\(t => t\.text\)\]\.join\("\\n"\);/.test(run) && !/asked[^;]*learnerContext/.test(run)
     && /attribution: \{ scope: "person" \}, operation: "individual_scholar_learn"/.test(run);
 };
+const MIG413 = migText("supabase/migrations/413-individual-scholar-upload-25mb.sql");
+/**
+ * K23 (upload limits, owner GO 2026-10-24): the 25 MB ceiling is 413's on BOTH the material CHECK and the bucket,
+ * the policy's live value stays 10 MB until HQ raises it, and the upload session (files and combined size) is
+ * enforced on the server at BOTH steps -- the slot (an early answer) and processing (the decision, on the bytes).
+ */
+const uploadLimitsHold = (src: Src) => {
+  const up = src.get(`${API}/uploads/route.ts`) ?? "", mat = src.get(`${API}/materials/route.ts`) ?? "", pol = read("src/lib/individual/policy.ts");
+  const cfg = src.get(`${LIB}/config.ts`) ?? "";
+  return /byte_size <= 26214400/.test(MIG413) && /set file_size_limit = 26214400/.test(MIG413) && /export const MAX_UPLOAD_BYTES = 25 \* 1024 \* 1024;/.test(cfg)
+    && /export const DEFAULT_UPLOAD_MB = 10;/.test(cfg) && /key: "scholar_upload_max_mb"[\s\S]*?fallback: DEFAULT_UPLOAD_MB,/.test(pol)
+    && /const overSession = sessionRefusal\(rules, recent, size\);/.test(up) && /const overSession = sessionRefusal\(rules, recent, bytes\.byteLength\);/.test(mat)
+    && /if \(overSession\) return refuse\(429/.test(mat);
+};
 /**
  * K20 (Stage 2, Upload): what may be uploaded is Individual policy, enforced at BOTH steps (the slot and the
  * processing), the PDF page limit reaches the extractor, plain text is OFF until HQ turns it on (it needs 405),
@@ -623,9 +637,11 @@ function main() {
       .every(k => MIG_REAL.includes(`individual_scholar_${k} foreign key`)));
   ok("F4. a material cannot be stored without the patient-data attestation", /pii_attested_at timestamptz not null/.test(MIG_REAL));
   // Stage 2: plain text is 405's, so the formats the code knows are checked against 372 and 405 together.
-  ok("F5. the bucket is private and its size and type limits match the code (372, plus 405 for plain text and 406 for PowerPoint)",
-    MIG_REAL.includes(`'${BUCKET}', '${BUCKET}', false, ${MAX_UPLOAD_BYTES}`) && ALLOWED_MIME.every(m => MIG_REAL.includes(`'${m}'`) || MIG405.includes(`'${m}'`) || MIG406.includes(`'${m}'`))
-    && MIG_REAL.includes(`byte_size <= ${MAX_UPLOAD_BYTES}`) && (!MIG405 || /update storage\.buckets[\s\S]*'text\/plain'[\s\S]*where id = 'individual-scholar-materials'/.test(MIG405))
+  // The size ceiling is 413's since the owner raised it (2026-10-24): 372 still creates the bucket private at 10 MB.
+  ok("F5. the bucket is private and its size and type limits match the code (372, plus 405 for plain text, 406 for PowerPoint, 413 for 25 MB)",
+    MIG_REAL.includes(`'${BUCKET}', '${BUCKET}', false, 10485760`) && ALLOWED_MIME.every(m => MIG_REAL.includes(`'${m}'`) || MIG405.includes(`'${m}'`) || MIG406.includes(`'${m}'`))
+    && MIG_REAL.includes("byte_size <= 10485760") && MIG413.includes(`byte_size <= ${MAX_UPLOAD_BYTES}`) && MIG413.includes(`file_size_limit = ${MAX_UPLOAD_BYTES}`)
+    && (!MIG405 || /update storage\.buckets[\s\S]*'text\/plain'[\s\S]*where id = 'individual-scholar-materials'/.test(MIG405))
     && (!MIG406 || /update storage\.buckets[\s\S]*presentationml\.presentation'[\s\S]*where id = 'individual-scholar-materials'/.test(MIG406)));
   // String literals out first: the table comments NAME the estate tables in order to say they are not used.
   const migDdl = MIG_REAL.replace(/'(?:[^']|'')*'/g, "''");
@@ -679,6 +695,8 @@ function main() {
     uploadGoverned(REAL));
   ok("K24. LEARN-01: history holds no conversation, the act route keeps to policy, screens input, records only what was shown, stores no practice question, and the student's context is never grounding",
     learnBounded(REAL));
+  ok("K23. upload limits: 413 raises the CHECK and the bucket to 25 MB, the live value stays 10 MB until HQ raises it, and the session is enforced on the server at both steps",
+    uploadLimitsHold(REAL));
   ok("K22. UPLOAD-01: the real kind is read from the bytes, a duplicate is refused before extraction, read quality is stored and returned (partial is never a bare success), outcomes are opted in, the no-catalogue absence is said through one rule, student topics are screened, and Start learning opens Teach Me (LEARN-01)",
     upload01Holds(REAL));
   ok("K15. the mapping engine is Holdings code: product-neutral, storing nothing, using the caller's attribution -- Scholar supplies person attribution and its identifier screen",
@@ -784,6 +802,9 @@ function main() {
     !learnBounded(plant(`${API}/learn/act/route.ts`, "if (isLearnAction(action) && !policy.scholarLearningActions.includes(action))", "if (false)"))
     && !learnBounded(plant(`${API}/learn/act/route.ts`, "if (recorded && sessionId && shown && policy.scholarLearningHistory === \"record\")", "if (recorded && sessionId)"))
     && !learnBounded(plant(GEN, "const asked = [args.question, ...args.history.map(t => t.text)].join(\"\\n\");", "const asked = [args.question, ...args.history.map(t => t.text), args.learnerContext ?? \"\"].join(\"\\n\");")));
+  ok("P40. ⚠ K23 goes red when processing stops deciding the session, or the default jumps to the ceiling",
+    !uploadLimitsHold(plant(`${API}/materials/route.ts`, "if (overSession) return refuse(429", "if (false) return refuse(429"))
+    && !uploadLimitsHold(new Map([...REAL, [`${LIB}/config.ts`, (REAL.get(`${LIB}/config.ts`) ?? "").replace("export const DEFAULT_UPLOAD_MB = 10;", "export const DEFAULT_UPLOAD_MB = 25;")]])));
   ok("P39. ⚠ K22 goes red when the duplicate check moves after extraction, partial is reported as ready, or the no-catalogue absence goes unsaid",
     !upload01Holds(plant(`${API}/materials/route.ts`, 'status: summary.partial ? "partial" : "ready"', 'status: "ready"'))
     && !upload01Holds(plant(`${API}/materials/route.ts`, "if (sniffed.unsafe) return refuse(422", "if (false) return refuse(422"))

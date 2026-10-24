@@ -3,8 +3,8 @@ export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { createMaterial, discardUpload, findDuplicate, isUuid, readUpload, sha256Hex, uploadPath } from "@/lib/individual/scholar/store";
-import { type MaterialMime, UPLOAD_ATTESTATION_REQUIRED, uploadRules } from "@/lib/individual/scholar/config";
+import { createMaterial, discardUpload, findDuplicate, isUuid, readUpload, recentUploads, sha256Hex, uploadPath } from "@/lib/individual/scholar/store";
+import { type MaterialMime, UPLOAD_ATTESTATION_REQUIRED, UPLOAD_SESSION_MINUTES, sessionRefusal, uploadRules } from "@/lib/individual/scholar/config";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { EXTRACTION_MESSAGE, PII_LABEL, chunkPages, extractMaterial, extractionQuality, findPatientIdentifiers, qualitySummary, sniffUpload, titleFromFileName } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
@@ -49,6 +49,12 @@ export async function POST(req: Request) {
   };
 
   if (bytes.byteLength === 0 || bytes.byteLength > rules.maxBytes) return refuse(400, "That file is empty or too large.", "size");
+  // Upload limits: the session is decided HERE, on the bytes actually uploaded -- slots requested together all pass
+  // the early check before any of them is kept.
+  const recent = await recentUploads(ctx.admin, ctx.userId, new Date(Date.now() - UPLOAD_SESSION_MINUTES * 60_000).toISOString());
+  if (!recent) return refuse(503, "Your study space could not be read just now. Try again shortly.", "session_unreadable");
+  const overSession = sessionRefusal(rules, recent, bytes.byteLength);
+  if (overSession) return refuse(429, overSession, "session_limit");
   // UPLOAD-01 U1: a ZIP is opened (screened first) to tell a Word file from a PowerPoint.
   const sniffed = await sniffUpload(bytes);
   if (sniffed.unsafe) return refuse(422, EXTRACTION_MESSAGE.unsafe, `unsafe:${sniffed.unsafe}`);

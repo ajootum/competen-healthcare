@@ -5,7 +5,15 @@
 // same values. Migration 372 restates the two that the schema also enforces (the 10 MB cap and the two
 // MIME types). The harness checks the two agree.
 
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+// Owner GO 2026-10-24 (upload limits): the CEILING for one file is 25 MB (migration 413 raises the DB CHECK and the
+// bucket to it). What a student may upload is the Individual policy scholar_upload_max_mb, which stays at
+// DEFAULT_UPLOAD_MB until HQ raises it -- and can never go above this ceiling.
+export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+export const DEFAULT_UPLOAD_MB = 10;
+/** An upload session: the files one upload action sends, and on the server the files kept within this window. */
+export const UPLOAD_SESSION_MINUTES = 60;
+export const MAX_SESSION_FILES = 10;
+export const MAX_SESSION_MB = 100;
 export const MAX_PDF_PAGES = 300;
 /** UPLOAD-01 U1: the most slides one PowerPoint material may hold (the policy can only lower it). */
 export const MAX_PPTX_SLIDES = 300;
@@ -32,12 +40,27 @@ export const UNIT_OF = (mime: string): "page" | "slide" | "section" => (mime ===
  * the MIME types, the byte limit, and the sentence a refusal or the upload panel shows. The routes check it on
  * the way in AND when processing, so a format switched off between the two steps is still refused.
  */
-export function uploadRules(policy: { scholarUploadFormats: readonly string[]; scholarUploadMaxMb: number }) {
+export function uploadRules(policy: { scholarUploadFormats: readonly string[]; scholarUploadMaxMb: number; scholarUploadSessionFiles?: number; scholarUploadSessionMb?: number }) {
   const mimes = ALLOWED_MIME.filter(m => policy.scholarUploadFormats.includes(FORMAT_OF[m]));
   const maxBytes = Math.min(MAX_UPLOAD_BYTES, Math.max(1, Math.floor(policy.scholarUploadMaxMb)) * 1024 * 1024);
   const names = mimes.map(m => FORMAT_LABEL[FORMAT_OF[m]]);
   const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}` : names[0] ?? "nothing";
-  return { mimes, maxBytes, maxMb: maxBytes / 1024 / 1024, text: mimes.includes(TEXT_MIME), describe: list };
+  // The session limits: never above the fixed maxima, and a session always holds at least one file of the limit.
+  const sessionFiles = Math.min(MAX_SESSION_FILES, Math.max(1, Math.floor(policy.scholarUploadSessionFiles ?? MAX_SESSION_FILES)));
+  const sessionBytes = Math.max(maxBytes, Math.min(MAX_SESSION_MB, Math.floor(policy.scholarUploadSessionMb ?? MAX_SESSION_MB)) * 1024 * 1024);
+  return { mimes, maxBytes, maxMb: maxBytes / 1024 / 1024, text: mimes.includes(TEXT_MIME), describe: list, sessionFiles, sessionBytes, sessionMb: sessionBytes / 1024 / 1024 };
+}
+
+/**
+ * Pure. Whether one more file of `size` bytes fits this upload session: the files the person kept within the last
+ * UPLOAD_SESSION_MINUTES, plus this one, against the session limits. The sentence a refusal shows, or null.
+ */
+export function sessionRefusal(rules: { sessionFiles: number; sessionBytes: number; sessionMb: number }, recent: { count: number; bytes: number }, size: number): string | null {
+  if (recent.count + 1 > rules.sessionFiles)
+    return `You have uploaded ${recent.count} file${recent.count === 1 ? "" : "s"} in the last hour, the most one upload session takes. Try again a little later.`;
+  if (recent.bytes + size > rules.sessionBytes)
+    return `This file would take your uploads in the last hour over ${rules.sessionMb} MB, the most one upload session takes. Try again a little later, or upload a smaller file.`;
+  return null;
 }
 export type MaterialMime = (typeof ALLOWED_MIME)[number];
 

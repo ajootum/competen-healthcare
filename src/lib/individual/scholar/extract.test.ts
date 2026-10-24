@@ -124,6 +124,7 @@ describe("Stage 2: plain text and the upload rules", () => {
     const on = uploadRules({ scholarUploadFormats: ["pdf", "docx", "text"], scholarUploadMaxMb: 4 });
     expect(on).toMatchObject({ text: true, maxMb: 4, maxBytes: 4 * 1024 * 1024 });
     expect(on.describe).toBe("PDF, Word (.docx) or Plain text (.txt or pasted)");
-    expect(uploadRules({ scholarUploadFormats: ["pdf"], scholarUploadMaxMb: 999 }).maxBytes).toBe(10 * 1024 * 1024);
+    // The ceiling is the database's (25 MB since migration 413, owner GO 2026-10-24): a policy above it is clamped.
+    expect(uploadRules({ scholarUploadFormats: ["pdf"], scholarUploadMaxMb: 999 }).maxBytes).toBe(25 * 1024 * 1024);
   });
 });

@@ -185,7 +185,7 @@ export function SourceNotice({ compact = false }: { compact?: boolean }) {
 // ── UPLOAD ─────────────────────────────────────────────────────────────────────────────────────────
 
 /** What may be uploaded now (config.ts uploadRules, from the Individual policy). Serialisable, from the server page. */
-export type UploadRulesView = { mimes: string[]; maxMb: number; text: boolean; describe: string };
+export type UploadRulesView = { mimes: string[]; maxMb: number; text: boolean; describe: string; sessionFiles: number; sessionMb: number };
 
 const EXT: Record<string, string> = { [PDF_MIME]: ".pdf", [DOCX_MIME]: ".docx", [PPTX_MIME]: ".pptx", [TEXT_MIME]: ".txt" };
 /** The browser's word for a file, checked by extension too (phones often report an empty type). The server sniffs the bytes. */
@@ -197,8 +197,6 @@ function mimeOf(f: File): string {
   return f.type;
 }
 
-/** UPLOAD-01: the most files one upload takes at once (each is processed on its own, in turn). */
-const MAX_FILES_AT_ONCE = 10;
 type FileOutcome = { name: string; state: "waiting" | "uploading" | "reading" | "done" | "duplicate" | "refused"; message?: string; id?: string; partial?: boolean };
 
 /**
@@ -247,7 +245,9 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
   async function upload(e: React.FormEvent) {
     e.preventDefault();
     if (!chosen.length || !attested || (stage && stage !== "done")) return;
-    if (chosen.length > MAX_FILES_AT_ONCE) { setError(`Choose up to ${MAX_FILES_AT_ONCE} files at once.`); return; }
+    // The upload session's limits are Individual policy, said before anything is sent; the server enforces them too.
+    if (chosen.length > rules.sessionFiles) { setError(`Choose up to ${rules.sessionFiles} files at once.`); return; }
+    if (chosen.reduce((n, f) => n + f.size, 0) > rules.sessionMb * 1024 * 1024) { setError(`Together these files are over ${rules.sessionMb} MB, the most one upload takes. Upload fewer at once.`); return; }
     setError("");
     const list: FileOutcome[] = chosen.map(f => ({ name: f.name, state: "waiting" }));
     setOutcomes([...list]);
@@ -286,7 +286,7 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
           <input id="scholar-file" type="file" multiple accept={[...rules.mimes.map(m => EXT[m]), ...rules.mimes].join(",")}
             onChange={e => setFiles(Array.from(e.target.files ?? []))}
             className={`mt-1.5 block w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-[14px] text-gray-800 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`} />
-          <p className="mt-1.5 text-[12.5px] text-gray-500">You can choose several files at once, up to {MAX_FILES_AT_ONCE}. Photos of handwritten or printed notes, and recordings, cannot be read yet: text recognition (OCR) and transcription are not available.</p>
+          <p className="mt-1.5 text-[12.5px] text-gray-500">You can choose several files at once: up to {rules.sessionFiles}, {rules.sessionMb} MB together. Photos of handwritten or printed notes, and recordings, cannot be read yet: text recognition (OCR) and transcription are not available.</p>
         </>
       ) : (
         <>
