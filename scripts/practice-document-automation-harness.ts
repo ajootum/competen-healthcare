@@ -749,10 +749,15 @@ async function main() {
   // ── 18. THE SHAPE THAT KEEPS SECTION 16 TRUE ─────────────────────────────────────────────────────
   const phrasingSrc = strip(read("src/lib/practice/document-phrasing.ts"));
   const phrasingImports = [...phrasingSrc.matchAll(/^import\s+([\s\S]*?)from\s+"([^"]+)"/gm)].map(m => m[2]);
-  ok("18a. the phrasing module reaches the model and the fact types, and nothing else",
-    phrasingImports.length === 2
+  // The verifier moved to Holdings verbatim (COMPETEN-HOLDINGS-SHARED-ENGINES-01). It is a third import, and
+  // it imports nothing itself, so the module still reaches the model, the fact types and pure code only.
+  const groundingSrc = strip(read("src/lib/ai/grounding.ts"));
+  ok("18a. the phrasing module reaches the model, the fact types and the Holdings verifier (which imports nothing), and nothing else",
+    phrasingImports.length === 3
     && phrasingImports.includes("@/lib/ai/client")
-    && phrasingImports.includes("@/lib/practice/document-facts"),
+    && phrasingImports.includes("@/lib/practice/document-facts")
+    && phrasingImports.includes("@/lib/ai/grounding")
+    && !/^import\s/m.test(groundingSrc) && /export function verifyGrounded\(/.test(groundingSrc),
     phrasingImports.join(", "));
   ok("18b. it cannot read a record -- no client, no query",
     !/\bfrom\s*\(/.test(phrasingSrc) && !/\badmin\b/.test(phrasingSrc) && !/supabase/i.test(phrasingSrc));

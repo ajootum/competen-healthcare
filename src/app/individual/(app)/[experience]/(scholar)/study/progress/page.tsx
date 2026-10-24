@@ -14,6 +14,79 @@ import { buildProgress } from "@/lib/individual/scholar/progress";
 import { SELF_DIRECTED_LABEL } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
+import { competencyProgressRows } from "@/lib/individual/scholar/store";
+import { loadLearnerCatalogue, type LearnerCatalogue } from "@/lib/individual/scholar/competency-view";
+import { buildCompetencyProgress, type CompetencyProgress, type CompetencyProgressRow } from "@/lib/individual/scholar/competency-progress";
+import { LAYER_LABEL } from "@/lib/individual/scholar/catalogue";
+import { LayerTag } from "../_components/competency-client";
+
+const STATUS_TEXT: Record<CompetencyProgressRow["status"], string> = {
+  no_notes: "No notes linked yet",
+  notes_linked: "Notes linked, not practised yet",
+  practising: "Practising",
+};
+
+/** COMPETEN-SCHOLAR-01 S4. Practice against each competency of the programme -- never a judgement of competence. */
+function CompetencySection({ learner, progress, unreadable, accent }: { learner: LearnerCatalogue | null; progress: CompetencyProgress | null; unreadable: boolean; accent: string }) {
+  if (!learner?.provisioned) return null;
+  return (
+    <section aria-labelledby="competency-h" className="mt-8">
+      <h2 id="competency-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">
+        By competency{learner.programme ? ` · ${learner.programme.label}` : ""}
+      </h2>
+      <p className="mt-1 text-[13px] text-gray-600">
+        Which competencies of your programme your notes cover, and how you did on practice questions written for each. Practice counts once you have accepted the link from a section to a competency, so suggestions you have not decided on, and rejected links, are not counted. This is practice on your own notes, not an assessment of competence.
+      </p>
+      <div className="mt-3">
+        {!learner.programme ? (
+          <StatePanel title="No programme chosen">
+            <p>Choose your programme in My Learning to see your study against its competencies.</p>
+            <p><Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`} style={{ color: accent }}>Go to My Learning</Link></p>
+          </StatePanel>
+        ) : unreadable ? <Unreadable what="progress by competency" />
+          : progress && progress.totals.competencies === 0 ? (
+            <StatePanel title="Your programme has no competencies to show yet">
+              <p>None of the frameworks your programme uses is published yet, so there is nothing to measure against. Nothing about your study has changed.</p>
+            </StatePanel>
+          ) : progress && (
+            <>
+              <p className="mb-3 text-[13.5px] text-gray-800 tabular-nums">
+                Notes linked to {progress.totals.withNotes} of {progress.totals.competencies} competencies · practising {progress.totals.practising}
+                {progress.outsideProgramme ? ` · ${progress.outsideProgramme} question${progress.outsideProgramme === 1 ? "" : "s"} practise competencies outside this programme` : ""}
+              </p>
+              <div className="space-y-3">
+                {progress.layers.map(l => (
+                  <details key={l.layer} open={l.rows.some(r => r.status !== "no_notes")} className="rounded-2xl border border-gray-200 bg-white">
+                    <summary className={`flex cursor-pointer flex-wrap items-center gap-2 p-4 ${focusRing}`}>
+                      <LayerTag layer={l.layer} />
+                      <span className="text-[14px] font-semibold text-gray-900">{LAYER_LABEL[l.layer]} competencies</span>
+                      <span className="text-[12.5px] text-gray-600 tabular-nums">{l.rows.filter(r => r.status !== "no_notes").length} of {l.rows.length} with notes</span>
+                    </summary>
+                    <ul className="divide-y divide-gray-100 border-t border-gray-100">
+                      {l.rows.map(r => (
+                        <li key={r.id} className="px-4 py-3">
+                          <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <span className="text-[14px] font-semibold text-gray-900">{r.code ? `${r.code} ` : ""}{r.title}</span>
+                            <span className="text-[13px] font-semibold tabular-nums" style={{ color: r.latestAccuracy === null ? undefined : accent }}>
+                              {r.latestAccuracy === null ? <span className="text-gray-500">{STATUS_TEXT[r.status]}</span> : `${r.latestAccuracy}% practice accuracy`}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[12.5px] text-gray-600 tabular-nums">
+                            {r.domain} · {r.sectionsAccepted} section{r.sectionsAccepted === 1 ? "" : "s"} accepted, {r.sectionsProposed} suggested
+                            {r.questions ? ` · ${r.answered} of ${r.questions} question${r.questions === 1 ? "" : "s"} answered` : ""}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ))}
+              </div>
+            </>
+          )}
+      </div>
+    </section>
+  );
+}
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -54,6 +127,19 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
   const offered = new Set<string>(policy.passportAchievementKinds);
   const eligible = allEligible.filter(a => a.chosenLabel !== null || offered.has(a.achievement));
 
+  // COMPETEN-SCHOLAR-01 S4: progress by competency, through the catalogue interface. Absent where 387/388
+  // are not applied (fail closed). Unreadable is said, never shown as an empty list.
+  const learner = rows.ok ? await loadLearnerCatalogue(ctx.admin, ctx.userId) : null;
+  const cRows = learner?.provisioned && learner.programme && learner.competencies ? await competencyProgressRows(ctx.admin, ctx.userId) : null;
+  const cp = cRows?.ok && learner?.competencies
+    ? buildCompetencyProgress({
+      competencies: learner.competencies,
+      mappings: cRows.data.mappings.map(m => ({ competencyId: m.competencyId, chunkId: m.chunkId, state: m.state })),
+      questions: cRows.data.questions, attempts: cRows.data.attempts,
+    })
+    : null;
+  const cUnreadable = !!learner?.programme && (learner.competencies === null || (cRows !== null && !cRows.ok));
+
   return (
     <>
       <PageHeader accent={x.accent} eyebrow="My Learning" title="Progress" intro="How your own study is going, material by material." />
@@ -85,6 +171,8 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
                 </div>
               ))}
             </dl>
+
+            <CompetencySection learner={learner} progress={cp} unreadable={cUnreadable} accent={x.accent} />
 
             {li?.ok ? <LearningIntelligence li={li.data} accent={x.accent} /> : <div className="mt-8"><Unreadable what="learning intelligence" /></div>}
 

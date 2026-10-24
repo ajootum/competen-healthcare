@@ -4,7 +4,9 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { countDue, getMaterial, listChunks, listQuestions, readConsent } from "@/lib/individual/scholar/store";
+import { analysisStatus, countDue, getMaterial, listChunks, listMappings, listQuestions, readConsent } from "@/lib/individual/scholar/store";
+import { competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
+import { AnalysePanel, SectionTopics, type CompetencyOption, type MappingView } from "../_components/competency-client";
 import { citeChunk } from "@/lib/individual/scholar/extract";
 import { PageHeader, StatePanel, Unreadable, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import { questionView } from "../_components/question-view";
@@ -47,12 +49,34 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
   if (!material.data) notFound();
   const m = material.data;
 
-  const [chunks, questions, consent, due] = await Promise.all([
+  const [chunks, questions, consent, due, analysis, mapped, learner] = await Promise.all([
     listChunks(ctx.admin, ctx.userId, m.id),
     listQuestions(ctx.admin, ctx.userId, { materialId: m.id }),
     readConsent(ctx.admin, ctx.userId),
     countDue(ctx.admin, ctx.userId),
+    analysisStatus(ctx.admin, ctx.userId, m.id),
+    listMappings(ctx.admin, ctx.userId, m.id),
+    loadLearnerCatalogue(ctx.admin, ctx.userId),
   ]);
+  // COMPETEN-SCHOLAR-01 S2. Absent where 387/388 are not applied (fail closed): the page is the MVP page.
+  const competenciesOn = analysis.ok && mapped.ok && learner.provisioned;
+  const labels = mapped.ok
+    ? await competencyLabels(ctx.admin, learner.competencies, mapped.data.mappings.map(r => r.competencyId), new Map(mapped.data.mappings.map(r => [r.competencyId, r.layer])))
+    : new Map<string, CompetencyLabel>();
+  const mappingsByChunk = new Map<string, MappingView[]>();
+  if (mapped.ok) {
+    for (const r of mapped.data.mappings) {
+      const l = labels.get(r.competencyId);
+      const list = mappingsByChunk.get(r.chunkId) ?? [];
+      list.push({
+        id: r.id, competencyId: r.competencyId, title: l?.title ?? "Competency", code: l?.code ?? null, layer: r.layer, catalogue: l?.catalogue ?? null,
+        source: r.source, confidence: r.confidence, rationale: r.rationale, state: r.state, decidedBy: r.decidedBy, decisions: r.decisions,
+      });
+      mappingsByChunk.set(r.chunkId, list);
+    }
+    for (const list of mappingsByChunk.values()) list.sort((a, b) => (b.confidence ?? 1) - (a.confidence ?? 1));
+  }
+  const options: CompetencyOption[] = (learner.competencies ?? []).map(c => ({ id: c.id, title: c.title, code: c.code, layer: c.layer }));
   const status = consent.ok ? consentStatus(consent.data, consentDocuments().published) : null;
   const consentOn = status === "on";
   const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
@@ -94,6 +118,14 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
       </div>
       <div className="lg:order-1">
 
+      {competenciesOn && analysis.ok && (
+        <AnalysePanel materialId={m.id} consent={consentOn} sections={analysis.data.sections} analysed={analysis.data.analysed}
+          programmeLabel={learner.programme?.label ?? null} />
+      )}
+      {competenciesOn && learner.programme && learner.competencies === null && (
+        <p className="mb-6 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">The competencies of your programme could not be read just now, so suggested links are shown without their full names. Try again shortly.</p>
+      )}
+
       {questions.ok && caseCount > 0 && (
         <p className="mt-4 mb-4 text-[13.5px] text-gray-700">
           {caseCount} case question{caseCount === 1 ? "" : "s"} from this material {caseCount === 1 ? "is" : "are"} in{" "}
@@ -121,6 +153,10 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
                     </summary>
                     <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-gray-800">{c.content}</p>
                   </details>
+                  {competenciesOn && mapped.ok && (mapped.data.concepts.has(c.id) || mappingsByChunk.has(c.id)) && (
+                    <SectionTopics chunkId={c.id} concepts={mapped.data.concepts.get(c.id) ?? []} mappings={mappingsByChunk.get(c.id) ?? []}
+                      options={learner.programme ? options : []} />
+                  )}
                   <ChunkActions chunkId={c.id} consent={consentOn} />
                   {qs.length > 0 && (
                     <div className="mt-4 space-y-3">
