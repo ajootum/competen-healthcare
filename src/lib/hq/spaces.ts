@@ -201,6 +201,11 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   // Migration 395 (D2). Governance first: the first matching prefix wins, and it must not inherit approve.
   { prefix: "/super-admin/clinical-review/governance", capability: "hq.quality.clinical.govern" },
   { prefix: "/super-admin/clinical-review",       capability: "hq.quality.clinical.approve" },
+  // Migrations 422-423 (COMPETEN-HOLDINGS-AI-CONSUMPTION-01 C2-C3, s11). Publication and intelligence first: the first
+  // matching prefix wins, and they must not inherit author.
+  { prefix: "/super-admin/cases/publication",     capability: "hq.quality.case.publish" },
+  { prefix: "/super-admin/cases/intelligence",    capability: "hq.quality.case.publish" },
+  { prefix: "/super-admin/cases",                 capability: "hq.quality.case.author" },
   { prefix: "/super-admin/governance",            capability: "hq.quality.governance.view" },
   { prefix: "/super-admin/cgr",                   capability: "hq.quality.regulation.view" },
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },

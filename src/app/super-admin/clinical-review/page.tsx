@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import { reviewQueue } from "@/lib/competency/clinical-review-hq";
 import { Decide } from "./_components/ReviewControls";
+import { CaseContent } from "./_components/CaseContent";
 
 // /super-admin/clinical-review -- owner decision D2, migration 395. The clinical reviewer's queue.
 //
@@ -50,11 +51,12 @@ export default async function ClinicalReviewPage() {
                 <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11.5px] font-semibold text-amber-900">{i.approvals} of {i.required} approval{i.required === 1 ? "" : "s"}</span>
               </div>
               <p className="text-[12.5px] text-gray-600">{i.home} · {i.domain}{i.risk ? ` · reviewed at ${i.risk}` : ""} · put forward {new Date(i.submittedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}</p>
+              {i.kind === "case" ? <div className="mt-3"><p className="mb-2 text-[12.5px] text-gray-600">Clinical case. You are approving every finding, the key, the rationales, the progression and the safety criteria below, for this exact version.</p><CaseContent c={i.caseContent} /></div> : (
               <dl className="mt-3 space-y-2 text-[13.5px]">
                 <div><dt className="text-[12px] font-semibold text-gray-500">Description</dt><dd className="text-gray-800">{i.snapshot.description ?? "None recorded"}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Learning outcomes</dt><dd className="text-gray-800">{i.snapshot.outcomes.length ? <ul className="list-disc pl-5">{i.snapshot.outcomes.map((o, n) => <li key={n}>{o}</li>)}</ul> : "None recorded"}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Skills</dt><dd className="text-gray-800">{i.snapshot.skills.length ? i.snapshot.skills.join(", ") : "None recorded"}</dd></div>
-              </dl>
+              </dl>)}
               <div className="mt-4 border-t border-gray-100 pt-3"><Decide versionId={i.versionId} appointmentId={i.appointmentId} idPrefix={`v-${i.versionId}`} /></div>
             </li>
           ))}

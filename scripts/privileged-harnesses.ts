@@ -251,6 +251,15 @@ const STAGING: Listed[] = [
       + "Creates and removes four throwaway accounts, their reviewer appointments to an existing HQ office, and one draft framework. PEND until 395.",
   },
   {
+    file: "case-intelligence-acceptance-harness.ts",
+    note: "COMPETEN-HOLDINGS-AI-CONSUMPTION-01 s14, migrations 422-423, the owner journey: candidacy on the current text only; a "
+      + "clean offer eligible, an identifiable or unchecked one ineligible with no content kept; the 24-hour queue lists only eligible "
+      + "offers, names no student and spends no AI; take, promote, edit, submit through 395; an author cannot approve; nothing publishes "
+      + "before an independent scoped reviewer approves; another student works through it deterministically with no AI; revocation keeps "
+      + "only the promoted case; case intelligence counts it. Creates and removes five throwaway accounts and their HQ appointments. "
+      + "One retired fixture case (CASE-HARNESS-<stamp>) stays as the record by design. PEND until 423.",
+  },
+  {
     file: "hq-users-directory-acceptance-harness.ts",
     note: "HQ-USERS-C: the directory loader against real staging rows (platform membership, Individual membership and a "
       + "live Professional entitlement, an HQ appointment), every source readable, a stranger with nothing; and over HTTP "
