@@ -22,6 +22,7 @@
  * script never writes "approved", never publishes, and never touches an Individual allowlist: publication
  * is the governed framework lifecycle (submit, independent approval), and the allowlist is HQ's choice.
  */
+import { existsSync, readFileSync } from "node:fs";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { judgeTarget } from "./production-guard";
@@ -40,6 +41,7 @@ export const SEED_NOTE = "Staging seed: not clinically reviewed. Chosen by pract
 export const PRACTICE_CODE = /^PRA-(AIR|BRE|RESP|RESPASS|CIR|CARD|OXY)-/i;
 /** Fallback: Core Nursing domains by name, when their competencies carry no practice. */
 export const CORE_DOMAIN = /\b(airway|breathing|circulation)\b/i;
+const EXPORT = "supabase/reference/cfca-export.json";
 
 const one = async (p: PromiseLike<any>) => { const r = await p; if (r.error) throw new Error(r.error.message); return r.data; };
 
@@ -91,8 +93,16 @@ async function main() {
       const core = cores.find((f: any) => withPractices.has(f.id)) ?? (cores.length === 1 ? cores[0] : undefined);
       const coreDoms = core ? doms.filter((d: any) => d.framework_id === core.id && CORE_DOMAIN.test(d.name)).map((d: any) => d.id) : [];
       const byDomain = coreDoms.length ? await one(admin.from("framework_competencies").select("id, domain_id").in("domain_id", coreDoms).order("sort_order")) : [];
-      const ids = [...new Set([...byPractice, ...byCpu, ...byDomain].filter((c: any) => sharedDom.has(c.domain_id)).map((c: any) => c.id))];
-      const have = new Set((await one(admin.from("competency_catalogue_entry").select("competency_id").eq("catalogue_id", catalogue.id))).map((e: any) => e.competency_id));
+      // ⚠ ONLY WHAT PRODUCTION HOLDS. A catalogue names ids; it must name the ones in the committed CFCA export
+      // (supabase/reference/cfca-export.json), never a staging-only record such as the S1 test catalogue
+      // NUR-RESP, or it could not be published where the export came from.
+      if (!existsSync(EXPORT)) throw new Error(`${EXPORT} is missing: the catalogue names only records production holds`);
+      const exported = new Set<string>(JSON.parse(readFileSync(EXPORT, "utf8")).competencies.map((c: any) => c.id));
+      const ids = [...new Set([...byPractice, ...byCpu, ...byDomain].filter((c: any) => sharedDom.has(c.domain_id) && exported.has(c.id)).map((c: any) => c.id))];
+      const current = await one(admin.from("competency_catalogue_entry").select("id, competency_id").eq("catalogue_id", catalogue.id));
+      const stray = current.filter((e: any) => !exported.has(e.competency_id));
+      if (stray.length) { await one(admin.from("competency_catalogue_entry").delete().in("id", stray.map((e: any) => e.id))); console.log(`  removed ${stray.length} entr${stray.length === 1 ? "y" : "ies"} naming staging-only records`); }
+      const have = new Set(current.filter((e: any) => exported.has(e.competency_id)).map((e: any) => e.competency_id));
       const fresh = ids.filter(id => !have.has(id)).map((id, i) => ({ catalogue_id: catalogue.id, competency_id: id, content_status: "unreviewed", status_note: SEED_NOTE, sort_order: have.size + i + 1 }));
       if (fresh.length) await one(admin.from("competency_catalogue_entry").insert(fresh));
       console.log(`  practices matched ${prs.length} (${prs.map((p: any) => p.code).join(", ") || "none"}), Core Nursing domains ${coreDoms.length}; named ${fresh.length} new, ${have.size} already`);

@@ -212,6 +212,13 @@ const STAGING: Listed[] = [
       + "Holdings links; the read API over the allowlisted seed (draft offers nothing). Restores both allowlists exactly. PEND until 384.",
   },
   {
+    file: "controlled-catalogue-acceptance-harness.ts",
+    note: "P0 controlled catalogues against migration 394 and the CFCA mirror: the mirror holds the committed export by id; the 394 "
+      + "guard refuses a hospital catalogue, a hospital competency and an unknown status, freezes entries once published, and keeps "
+      + "the cascade path; the read API offers exactly what a fixture catalogue names with home, practice, CPU and content status; "
+      + "SCH-RESPCARD names only production records, all unreviewed, in no allowlist. Writes and removes its own fixtures. PEND until 394.",
+  },
+  {
     file: "hq-users-directory-acceptance-harness.ts",
     note: "HQ-USERS-C: the directory loader against real staging rows (platform membership, Individual membership and a "
       + "live Professional entitlement, an HQ appointment), every source readable, a stranger with nothing; and over HTTP "
