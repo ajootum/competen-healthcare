@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { projectForProgramme, type CatalogueCompetency, type ProgrammeConfig, type S1Competency } from "./catalogue";
 import {
-  checkCaseTitle, checkSupplementary, explainPromptVersion, explainSystem, parseCase, splitSupplementary, CASE_FALLBACK_TITLE, EXPLAIN_SYSTEM, type Passage,
+  checkCaseTitle, checkSupplementary, explainPromptVersion, explainSystem, modeUserPrompt, parseCase, splitSupplementary, CASE_FALLBACK_TITLE, EXPLAIN_SYSTEM, type Passage,
 } from "./generation";
 import { buildCompetencyProgress } from "./competency-progress";
 import { PROMPT_VERSIONS } from "./config";
 import { buildIntelligence } from "./intelligence";
+import { buildLearnerContext, CONTEXT_PREAMBLE } from "./learner-context";
 import { fromProgrammeCatalogue, type CompetencyRef } from "./competency-sources";
 import { MAPPING_PROMPT_VERSION } from "@/lib/competency/mapping";
 
@@ -86,7 +87,7 @@ describe("explanation modes and what lies beyond the notes", () => {
     expect(explainSystem("explain")).toBe(EXPLAIN_SYSTEM);
     expect(explainPromptVersion("explain")).toBe("scholar-explain-v2");
     expect(explainSystem("summary").startsWith(EXPLAIN_SYSTEM)).toBe(true);
-    expect(explainPromptVersion("tutor")).toBe("scholar-explain-modes-v4:tutor");
+    expect(explainPromptVersion("tutor")).toBe("scholar-explain-modes-v5:tutor");
   });
 
   it("splits the background off the answer at the marker line", () => {
@@ -149,5 +150,36 @@ describe("progress by competency", () => {
     expect(rows.find(r => r.id === "u-ipc")).toMatchObject({ sectionsAccepted: 0, sectionsProposed: 0, latestAccuracy: null, status: "no_notes" });
     expect(p.totals).toEqual({ competencies: 3, withNotes: 2, practising: 1 });
     expect(p.outsideProgramme).toBe(1);
+  });
+});
+
+describe("P1: the tutor's view of the student (learner-context.ts)", () => {
+  const row = (title: string, status: "no_notes" | "notes_linked" | "practising", latestAccuracy: number | null) =>
+    ({ id: title, layer: "profession" as const, catalogue: "C", domain: "D", code: null, title, structure: null, sectionsAccepted: 1, sectionsProposed: 0,
+      questions: 1, answered: latestAccuracy === null ? 0 : 1, latestCorrect: latestAccuracy === null ? null : 1, latestAccuracy, status });
+
+  it("is words only: programme, accepted links here, needs-practice and not-yet -- no figure or code survives", () => {
+    const ctx = buildLearnerContext({
+      programme: "Nursing (Uganda), diploma",
+      passageCompetencies: [{ title: "Safe oxygen administration", structure: "Oxygen Therapy › CPU-OXYSAFE-001 Safe Oxygen Administration" }],
+      progress: [row("Respiratory assessment", "practising", 40), row("Hand hygiene", "practising", 100), row("Oxygen titration", "notes_linked", null), row("Untouched", "no_notes", null)],
+    })!;
+    expect(ctx).toContain("I study: Nursing (Uganda), diploma.");
+    expect(ctx).toContain("Safe oxygen administration (Oxygen Therapy › Safe Oxygen Administration)");
+    expect(ctx).toContain("need more practice on: Respiratory assessment.");
+    expect(ctx).toContain("not practised yet: Oxygen titration.");
+    expect(ctx).not.toMatch(/\d|Hand hygiene|Untouched|CPU-/);
+  });
+
+  it("is nothing when there is nothing to say", () => {
+    expect(buildLearnerContext({ programme: null, passageCompetencies: [], progress: null })).toBeNull();
+  });
+
+  it("goes ahead of the passages, framed as not-the-notes; other modes and the grounding never see it", () => {
+    const P: Passage = { chunkId: "k1", materialId: "m1", materialTitle: "Notes", ordinal: 1, pageFrom: 1, pageTo: 1, content: RESP };
+    const u = modeUserPrompt("Teach me", [P], [], "I study: Nursing.");
+    expect(u.startsWith(CONTEXT_PREAMBLE)).toBe(true);
+    expect(u.indexOf("I study: Nursing.")).toBeLessThan(u.indexOf("PASSAGES FROM MY NOTES"));
+    expect(modeUserPrompt("Teach me", [P], [])).not.toContain(CONTEXT_PREAMBLE);
   });
 });

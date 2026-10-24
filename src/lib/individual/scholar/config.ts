@@ -47,7 +47,8 @@ export const PROMPT_VERSIONS = {
   // v3: go deeper also told not to count things ("three signs") or use "significant" -- the two causes of every
   // withheld answer in a staging diagnostic. caseSteps v2: progression only in the passage's own words.
   // v4: the tutor gets the same no-counting rule (the cause of every withheld tutor turn in a diagnostic).
-  explainModes: "scholar-explain-modes-v4",
+  // v5: the tutor may receive the student's own study context (P1, learner-context.ts) ahead of the passages.
+  explainModes: "scholar-explain-modes-v5",
   map: "competency-map-v2", // the Holdings engine's MAPPING_PROMPT_VERSION (src/lib/competency/mapping.ts), pinned equal by a unit test
   caseSteps: "scholar-case-steps-v2",
 } as const;
