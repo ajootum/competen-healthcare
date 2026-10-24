@@ -91,6 +91,7 @@ const INCLUDED = [
   "competency-foundation-harness.ts",
   "clinical-review-harness.ts",
   "ai-fair-use-harness.ts",
+  "case-intelligence-harness.ts",
   "mos-gap-matrix-harness.ts",
   "pd-health-harness.ts",
   "pd-nav-harness.ts",

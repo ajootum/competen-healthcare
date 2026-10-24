@@ -11,6 +11,8 @@ export type QueueItem = {
   versionId: string; competencyId: string; title: string; home: string; domain: string;
   snapshot: { description: string | null; outcomes: string[]; skills: string[]; risk: string | null };
   required: number; approvals: number; risk: string | null; submittedAt: string; appointmentId: string;
+  /** Migration 422: a clinical case version, reviewed through the same process. Its content is the exact version. */
+  kind: "competency" | "case"; caseContent?: any;
 };
 
 const rows = async (p: PromiseLike<any>) => { try { const r = await p; return r?.error ? null : (r?.data ?? []); } catch { return null; } };
@@ -20,18 +22,27 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
   const appointments = await reviewerAppointments(admin, reviewerId);
   if (appointments === null) return null;
   if (!appointments.some(a => a.scopes.length)) return { appointments, items: [] };
-  const versions = await rows(admin.from("clinical_content_version").select("id, competency_id, content_hash, content_snapshot, authored_by, submitted_by, required_approvals, risk_basis, created_at")
+  const versions = await rows(admin.from("clinical_content_version").select("*")
     .order("created_at", { ascending: false }).limit(300));
   if (versions === null) return null;
-  const open = versions.filter((v: any) => v.submitted_by !== reviewerId && !(v.authored_by ?? []).includes(reviewerId));
-  if (!open.length) return { appointments, items: [] };
+  const independent = versions.filter((v: any) => v.submitted_by !== reviewerId && !(v.authored_by ?? []).includes(reviewerId));
+  // Migration 422: a case version has no competency_id. The competency path reads competency versions only, so one
+  // case in review never makes the whole queue unreadable. Cases are listed below, by their own rule.
+  const open = independent.filter((v: any) => v.competency_id);
+  const cases = independent.filter((v: any) => !v.competency_id && v.case_version_id);
+  if (!open.length && !cases.length) return { appointments, items: [] };
   const compIds = [...new Set(open.map((v: any) => v.competency_id))] as string[];
-  const [decisions, hashes, comps] = await Promise.all([
-    rows(admin.from("clinical_review_decision").select("version_id, reviewer_id, decision").in("version_id", open.map((v: any) => v.id))),
-    (async () => { const r = await admin.rpc("competency_content_hashes", { p_ids: compIds }); return r.error ? null : r.data ?? []; })(),
-    rows(admin.from("framework_competencies").select("id, name, domain_id").in("id", compIds)),
+  const caseVersionIds = cases.map((v: any) => v.case_version_id);
+  const [decisions, hashes, caseRows, links] = await Promise.all([
+    rows(admin.from("clinical_review_decision").select("version_id, reviewer_id, decision").in("version_id", [...open, ...cases].map((v: any) => v.id))),
+    compIds.length ? (async () => { const r = await admin.rpc("competency_content_hashes", { p_ids: compIds }); return r.error ? null : r.data ?? []; })() : Promise.resolve([]),
+    caseVersionIds.length ? rows(admin.from("case_library_version").select("id, content_hash, state").in("id", caseVersionIds)) : Promise.resolve([]),
+    caseVersionIds.length ? rows(admin.from("case_library_version_competency").select("version_id, competency_id").in("version_id", caseVersionIds)) : Promise.resolve([]),
   ]);
-  if (decisions === null || hashes === null || comps === null) return null;
+  if (decisions === null || hashes === null || caseRows === null || links === null) return null;
+  const allComp = [...new Set([...compIds, ...links.map((l: any) => l.competency_id)])];
+  const comps = allComp.length ? await rows(admin.from("framework_competencies").select("id, name, domain_id").in("id", allComp)) : [];
+  if (comps === null) return null;
   const doms = await rows(admin.from("framework_domains").select("id, name, framework_id").in("id", [...new Set(comps.map((c: any) => c.domain_id))]));
   if (doms === null) return null;
   const fws = await rows(admin.from("frameworks").select("id, name, profession_term_id, specialty_term_id").in("id", [...new Set(doms.map((d: any) => d.framework_id))]).is("hospital_id", null));
@@ -51,8 +62,30 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
     const s = v.content_snapshot ?? {};
     items.push({
       versionId: v.id, competencyId: c.id, title: s.name ?? c.name, home: f.name, domain: d.name, required: v.required_approvals, approvals,
-      risk: v.risk_basis ?? null, submittedAt: v.created_at, appointmentId: covering.id,
+      risk: v.risk_basis ?? null, submittedAt: v.created_at, appointmentId: covering.id, kind: "competency",
       snapshot: { description: s.description ?? null, outcomes: Array.isArray(s.learning_outcomes) ? s.learning_outcomes : [], skills: Array.isArray(s.skills) ? s.skills : [], risk: s.risk_category ?? null },
+    });
+  }
+  // Cases (422): current (the case version's hash still matches), and in scope only if ONE appointment's scopes cover
+  // EVERY competency the case teaches -- the rule the 422 trigger applies to the decision itself.
+  const caseRow = new Map<string, any>(caseRows.map((r: any) => [r.id, r]));
+  for (const v of cases) {
+    const ds = decisions.filter((d: any) => d.version_id === v.id);
+    if (ds.some((d: any) => d.decision === "rejected" || d.reviewer_id === reviewerId)) continue;
+    const approvals = ds.filter((d: any) => d.decision === "approved").length;
+    const cv = caseRow.get(v.case_version_id);
+    if (approvals >= v.required_approvals || !cv || cv.state !== "submitted" || cv.content_hash !== v.content_hash) continue;
+    const taught = links.filter((l: any) => l.version_id === v.case_version_id).map((l: any) => comp.get(l.competency_id)).filter(Boolean);
+    if (!taught.length) continue;
+    const covering = appointments.find(a => taught.every((c: any) => { const d = dom.get(c.domain_id), f = d ? fw.get(d.framework_id) : null;
+      return !!d && !!f && scopeCovers(a.scopes, { domainId: d.id, frameworkId: f.id, professionTermId: f.profession_term_id, specialtyTermId: f.specialty_term_id }); }));
+    if (!covering) continue;
+    const s = v.content_snapshot ?? {};
+    const first = taught[0], d0 = dom.get(first.domain_id), f0 = d0 ? fw.get(d0.framework_id) : null;
+    items.push({
+      versionId: v.id, competencyId: "", title: s.title ?? "Clinical case", home: f0?.name ?? "Clinical case", domain: taught.map((c: any) => c.name).join(", "),
+      required: v.required_approvals, approvals, risk: v.risk_basis ?? null, submittedAt: v.created_at, appointmentId: covering.id, kind: "case", caseContent: s,
+      snapshot: { description: s.summary ?? null, outcomes: Array.isArray(s.learningObjectives) ? s.learningObjectives.map((l: any) => l?.text).filter(Boolean) : [], skills: [], risk: s.metadata?.risk ?? null },
     });
   }
   return { appointments, items };
