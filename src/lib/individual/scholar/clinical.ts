@@ -26,6 +26,8 @@ type DraftDecision = { stage?: unknown; prompt?: unknown; kind?: unknown; dimens
 export type CaseDraft = { title?: unknown; intro?: unknown; facts?: unknown; stages?: unknown; decisions?: unknown; objectives?: unknown };
 
 const str = (v: unknown, max: number): string | null => (typeof v === "string" && v.trim() && v.length <= max ? v.trim() : null);
+/** A model's own numbering ("Stage 2:", "Step 1 -", "1.") is structure, not content: the case shows its own order. */
+const unnumbered = (s: string | null): string | null => (s ? s.replace(/^\s*(?:(?:stage|step|decision|question|part)\s*\d+\s*[:.)-]?\s*|\d+\s*[:.)-]\s+)/i, "").trim() || null : null);
 const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
 const FACT_KINDS: readonly CaseFact["kind"][] = ["history", "observation", "examination", "result", "context"];
 
@@ -37,7 +39,7 @@ const FACT_KINDS: readonly CaseFact["kind"][] = ["history", "observation", "exam
  */
 export function blueprintFromDraft(draft: CaseDraft, ctx: { passages: readonly Passage[]; competencies: readonly { id: string }[]; dimensions?: readonly string[] }): Blueprint | null {
   const dims = ctx.dimensions?.length ? ctx.dimensions : DEFAULT_DIMENSIONS;
-  const stagesIn = list(draft.stages).map(s => str(typeof s === "string" ? s : s?.title, 120)).filter((s): s is string => !!s).slice(0, 6);
+  const stagesIn = list(draft.stages).map(s => unnumbered(str(typeof s === "string" ? s : s?.title, 120))).filter((s): s is string => !!s).slice(0, 6);
   if (!stagesIn.length) return null;
   const stages = stagesIn.map((title, i) => ({ id: `s${i + 1}`, title, reveals: [] as string[], decisionPointIds: [] as string[] }));
   const stageOf = (v: unknown) => { const n = Number(String(v ?? "").replace(/\D/g, "")); return Number.isInteger(n) && n >= 1 && n <= stages.length ? stages[n - 1].id : null; };
@@ -59,7 +61,7 @@ export function blueprintFromDraft(draft: CaseDraft, ctx: { passages: readonly P
   const safetyCriteria: Blueprint["safetyCriteria"] = [];
   for (const d of list(draft.decisions).slice(0, 12) as DraftDecision[]) {
     const stageId = stageOf(d?.stage) ?? stages[Math.min(decisionPoints.length, stages.length - 1)].id;
-    const prompt = str(d?.prompt, 1000);
+    const prompt = unnumbered(str(d?.prompt, 1000));
     const kind = d?.kind === "multiple" || d?.kind === "free_text" ? d.kind : "single";
     if (!prompt) continue;
     const id = `d${decisionPoints.length + 1}`;

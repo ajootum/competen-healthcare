@@ -113,7 +113,8 @@ export const PROMPT_VERSIONS = {
   // v2: answers and rationale in the passage's own words; [] when a kind does not fit; a matching item only with three pairs.
   revision: "scholar-revision-v2",
   // COMPETEN-SCHOLAR-CLINICAL-REASONING-01: a private case drafted from the notes, and AI feedback on written reasoning.
-  caseBlueprint: "scholar-case-blueprint-v1",
+  // v2: no counting, and no state or change words the passages do not use (the staging runs' refusal reasons).
+  caseBlueprint: "scholar-case-blueprint-v2",
   caseReasoning: "scholar-case-reasoning-v1",
 } as const;
 

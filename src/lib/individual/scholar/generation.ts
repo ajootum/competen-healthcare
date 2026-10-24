@@ -611,7 +611,8 @@ export const CASE_BLUEPRINT_SYSTEM = [
   "You write ONE short, progressive clinical reasoning case for a healthcare student, for their own formative practice, from the PASSAGES of their own notes only.",
   "The case follows 'a patient' (no name, no age, no dates) through the stages the passages support: recognising the problem, interpreting findings, prioritising, deciding, and reassessing or escalating.",
   "RULES:",
-  "1. Every finding, value, option, rationale and expected answer comes from the passages. Do not invent any finding, value, consequence or change in the patient. Never write a number the passages do not contain.",
+  "1. Every finding, value, option, rationale and expected answer comes from the passages. Do not invent any finding, value, consequence or change in the patient. Never write a number the passages do not contain, and never count things ('two signs').",
+  "   Do not use words that assert a state or a change -- improved, improving, worse, worsening, reduced, raised, increased, decreased, stable, unstable, normal, abnormal, resolved, deteriorating -- unless the passages use that exact word. Use the passages' own words for findings.",
   "2. Findings: label and value in the passages' own words. shown is 'start', a stage number, or 'request' (the student must ask for it).",
   "3. Two to four stages, each with one decision. A decision is 'single' (one right option), 'multiple' (several right options) or 'free_text' (the student explains, and expectedResponse says what a good answer contains, from the passages).",
   "4. Each option is built from the passages' words. Exactly one right option for 'single'. Give each decision a one or two sentence rationale in the passages' own words.",
@@ -620,9 +621,12 @@ export const CASE_BLUEPRINT_SYSTEM = [
   "7. If missing the right option would be unsafe in the passages' terms, set safety to one short sentence saying what must be done, in the passages' words.",
   "8. objectives: one or two learning objectives in the passages' words, each with the tags (C1 ...) of the competencies given that it serves, if any.",
   "9. Never include a name, NHS number, date of birth or any detail that could identify a real person.",
+  "10. Keep it short: titles under ten words, no numbering in titles or prompts (the case numbers itself), rationales of one or two sentences.",
   "If the passages cannot support a case, reply {\"stages\": []}.",
   'Reply with JSON ONLY: {"title": "...", "intro": "the opening a student reads, from the passages", "stages": ["...", "..."], "facts": [{"ref": "F1", "kind": "observation", "label": "...", "value": "...", "shown": "start", "safetyCritical": false}], "decisions": [{"stage": 1, "prompt": "...", "kind": "single", "dimension": "recognition", "options": [{"text": "...", "correct": true}, {"text": "...", "correct": false}], "rationale": "...", "canAskFor": ["F2"], "sources": ["S1"], "safety": null}], "objectives": [{"text": "...", "competencies": ["C1"]}]}',
 ].join("\n");
+
+const list0 = (v: unknown) => (Array.isArray(v) ? v.length : 0);
 
 export function caseBlueprintPrompt(passages: readonly Passage[], competencies: readonly { title: string; outcomes?: string[] }[], context: string): string {
   const blocks = passages.map((p, i) => `[${passageTag(i)}] (${passageCitation(p)})\n${p.content}`).join("\n\n");
@@ -642,17 +646,18 @@ export async function runCaseBlueprint(userId: string, input: {
       system: CASE_BLUEPRINT_SYSTEM,
       user: caseBlueprintPrompt(input.passages, input.competencies, input.context) + (feedback ? `\n\nA previous attempt was rejected for: ${feedback}. Write the case again without these problems.` : ""),
       tier: "reasoning",
-      maxTokens: 2600,
+      maxTokens: 4000,
       context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_case_blueprint" },
     }, attempt === 1 ? "main" : "retry");
     if (!r.ok) return { ok: false as const, error: r.error };
     model = r.model; provider = r.provider;
     const raw = (() => { const s = r.text.replace(/```(?:json)?/gi, "").trim(); const a = s.indexOf("{"), b = s.lastIndexOf("}"); try { return a >= 0 && b > a ? JSON.parse(s.slice(a, b + 1)) : null; } catch { return null; } })();
-    const blueprint = raw ? blueprintFromDraft(raw, { passages: input.passages, competencies: input.competencies, dimensions: input.dimensions }) : null;
-    if (!blueprint) { problems.push("malformed"); feedback = "the reply was not a usable case"; continue; }
+    if (!raw) { problems.push(`malformed:json (${r.text.length} chars)`); feedback = "the reply was not valid JSON -- reply with the JSON object only, and keep it short"; continue; }
+    const blueprint = blueprintFromDraft(raw, { passages: input.passages, competencies: input.competencies, dimensions: input.dimensions });
+    if (!blueprint) { problems.push(`malformed:shape (${list0(raw.stages)} stages, ${list0(raw.decisions)} decisions)`); feedback = "the case needs two to four stages, each with one decision with its options"; continue; }
     const found = checkPrivateCase(blueprint, [...input.passages.map(p => p.content), input.asked ?? ""], input.dimensions);
     if (!found.length) return { ok: true as const, blueprint, model, provider, promptVersion: PROMPT_VERSIONS.caseBlueprint, problems };
-    problems.push(...found.map(f => f.kind));
+    problems.push(...found.map(f => `${f.kind}:${f.detail.slice(0, 80)}`));
     feedback = [...new Set(found.map(f => `${f.kind}${f.detail ? ` (${f.detail})` : ""}`))].slice(0, 6).join("; ");
   }
   return { ok: true as const, blueprint: null, model, provider, promptVersion: PROMPT_VERSIONS.caseBlueprint, problems };

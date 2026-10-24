@@ -88,7 +88,8 @@ export async function POST(req: Request) {
   const refusal = ai.refusal();
   if (refusal) return NextResponse.json({ error: `${refusalWords(refusal).message} Your stored and library cases are still yours to play.`, continuity: true }, { status: 409 });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_blueprint", null, {
-    entry, context, chunk_ids: chunkIds, outcome: !r.ok ? `error:${r.error}` : r.blueprint ? "stored" : `withheld:${[...new Set(r.problems)].join("/")}`,
+    // Why a draft was refused, by the check's own words (kinds and the token or rule, never the case text).
+    entry, context, chunk_ids: chunkIds, outcome: !r.ok ? `error:${r.error}` : r.blueprint ? "stored" : "withheld", problems: r.ok ? [...new Set(r.problems)].slice(0, 12) : [],
     model: r.ok ? r.model : null, prompt_version: r.ok ? r.promptVersion : null,
   });
   if (!r.ok) return NextResponse.json({ error: "A case could not be written just now. Try again shortly." }, { status: 502 });
