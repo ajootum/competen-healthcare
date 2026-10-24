@@ -6,6 +6,7 @@ import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "@/lib/individual/policy";
+import { individualPlanAiLimit } from "@/lib/individual/commerce";
 import { currentTraceId } from "@/lib/trace";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPassport } from "@/lib/individual/passport";
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
   if (task === "reflection" && !activity) return NextResponse.json({ error: "Name the activity (3 to 200 characters) and keep your notes under 2,000 characters." }, { status: 400 });
 
   // The estate limit (quota.ts, unchanged) and the Individual policy limit, whichever is tighter (CONFIG-002).
-  const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin));
+  const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
   // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
   const refusal = individualQuotaRefusal(quota, "questions");
   if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });

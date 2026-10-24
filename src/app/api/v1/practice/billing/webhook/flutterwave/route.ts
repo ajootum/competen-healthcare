@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { gatewayConfig, verifHashMatches } from "@/lib/practice/subscription-gateway";
 import { applyWebhook } from "@/lib/practice/subscription";
+import { applyIndividualWebhook, individualCommerceEnabled, isIndividualTxRef } from "@/lib/individual/commerce";
 
 // POST /api/v1/practice/billing/webhook/flutterwave
 //
@@ -18,6 +19,13 @@ import { applyWebhook } from "@/lib/practice/subscription";
 //
 // A 401 is returned for a bad signature -- that one is worth retrying against, because it usually means
 // the secret was rotated on one side only.
+//
+// ⚠ ONE FLUTTERWAVE ACCOUNT, ONE WEBHOOK URL, SO THIS ROUTE ALSO RECEIVES COMPETEN INDIVIDUAL PAYMENTS
+// (P1 Commercial). A reference starting `cin-` is settled by the Individual adapter of the same Holdings
+// engine (src/lib/commerce/settlement.ts) -- but ONLY while individual_commerce is on. With it off, or for
+// any other reference, the delivery takes exactly the Practice path it always took. The prefix only picks
+// the ledger: settlement still verifies with Flutterwave and matches the row WE wrote, so a forged prefix
+// finds no checkout and pays nothing.
 
 export const dynamic = "force-dynamic";
 
@@ -48,11 +56,13 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const result = await applyWebhook(admin, cfg, { providerEventId, providerTxId, txRef });
+  const ev = { providerEventId, providerTxId, txRef };
+  const individual = isIndividualTxRef(txRef) && (await individualCommerceEnabled(admin));
+  const result = individual ? await applyIndividualWebhook(admin, cfg, ev) : await applyWebhook(admin, cfg, ev);
 
   // Logged, not returned in detail: the response goes to the gateway, and a verdict is internal.
   if (result.verdict !== "applied" && result.verdict !== "duplicate") {
-    console.error(`[practice] flutterwave webhook ${result.verdict}: ${result.detail ?? ""}`);
+    console.error(`[${individual ? "individual" : "practice"}] flutterwave webhook ${result.verdict}: ${result.detail ?? ""}`);
   }
   return NextResponse.json({ received: true, verdict: result.verdict }, { status: 200 });
 }

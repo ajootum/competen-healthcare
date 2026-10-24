@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "../policy";
+import { individualPlanAiLimit } from "../commerce";
 import { currentTraceId } from "@/lib/trace";
 import type { IndividualContext } from "../guard";
 import { readConsent } from "./store";
@@ -29,7 +30,7 @@ export async function aiPreflight(ctx: IndividualContext): Promise<NextResponse 
   if (status !== "on")
     return NextResponse.json({ error: "Turn on AI processing of your material in My Learning before asking for explanations or questions." }, { status: 403 });
   // The estate limit (quota.ts, unchanged) and the Individual policy limit, whichever is tighter (CONFIG-002).
-  const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin));
+  const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
   // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
   const refusal = individualQuotaRefusal(quota, "AI requests");
   if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
