@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ExperienceKey } from "@/lib/individual/experiences";
-import { QUESTION_MAX } from "@/lib/individual/assistant";
+import { QUESTION_MAX } from "@/lib/individual/assistant-limits";
 
 // The personal AI's question box. One question, one answer, held only in this page's state -- the
 // server stores nothing (see src/lib/individual/assistant.ts). Earlier answers in this visit stay on
