@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { countMaterials, createUploadSlot } from "@/lib/individual/scholar/store";
-import { BUCKET, type MaterialMime, UPLOAD_ATTESTATION_REQUIRED, uploadRules } from "@/lib/individual/scholar/config";
+import { countMaterials, createUploadSlot, recentUploads } from "@/lib/individual/scholar/store";
+import { BUCKET, type MaterialMime, UPLOAD_ATTESTATION_REQUIRED, UPLOAD_SESSION_MINUTES, sessionRefusal, uploadRules } from "@/lib/individual/scholar/config";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -37,6 +37,11 @@ export async function POST(req: Request) {
   const maxMaterials = policy.scholarMaterialsPerPerson;
   if (count >= maxMaterials)
     return NextResponse.json({ error: `You can keep up to ${maxMaterials} materials. Delete one to upload another.` }, { status: 409 });
+  // Upload limits (owner GO 2026-10-24): the session's files and combined size, an early answer. Processing re-checks.
+  const recent = await recentUploads(ctx.admin, ctx.userId, new Date(Date.now() - UPLOAD_SESSION_MINUTES * 60_000).toISOString());
+  if (!recent) return NextResponse.json({ error: "Your study space could not be read just now. Try again shortly." }, { status: 503 });
+  const overSession = sessionRefusal(rules, recent, size);
+  if (overSession) return NextResponse.json({ error: overSession }, { status: 429 });
 
   const slot = await createUploadSlot(ctx.admin, ctx.userId, mime);
   if (!slot) return NextResponse.json({ error: "The upload could not be started. Try again shortly." }, { status: 503 });

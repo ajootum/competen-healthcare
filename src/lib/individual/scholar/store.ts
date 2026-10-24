@@ -95,6 +95,17 @@ export async function getMaterial(admin: Admin, userId: string, id: string): Pro
   return { ok: true, data: data ? toMaterial(data) : null };
 }
 
+/**
+ * The person's own materials kept since `sinceIso` (an upload session): how many, and their combined size.
+ * ⚠ The window start is the app's clock compared with created_at. That is a rate window, not a decision about
+ * whether a grant is live: a few seconds of skew moves the edge of an hour, nothing more.
+ */
+export async function recentUploads(admin: Admin, userId: string, sinceIso: string): Promise<{ count: number; bytes: number } | null> {
+  const { data, error } = await admin.from("individual_scholar_material").select("byte_size").eq("user_id", userId).gte("created_at", sinceIso).limit(1000);
+  if (error) return null;
+  return { count: (data ?? []).length, bytes: ((data ?? []) as any[]).reduce((n, r) => n + Number(r.byte_size ?? 0), 0) };
+}
+
 export async function countMaterials(admin: Admin, userId: string): Promise<number | null> {
   const { count, error } = await admin.from("individual_scholar_material").select("id", { count: "exact", head: true }).eq("user_id", userId);
   return error ? null : (count ?? 0);
