@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
-import { INFORMAL_CHECK_LABEL, PERSONAL_AI_LABEL, QUESTION_MAX, SOURCE_KIND_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
+import { INFORMAL_CHECK_LABEL, NOT_IN_NOTES_LABEL, PERSONAL_AI_LABEL, QUESTION_MAX, SOURCE_KIND_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import type { SessionView } from "@/lib/individual/scholar/learn-view";
 import { sourceHref } from "./question-view";
 import { AiBadge } from "./client";
+import { AiFlagList, GovernedReferenceList } from "./learn-kinds";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -26,9 +27,11 @@ export type StartScope =
   | { kind: "topic"; topic: string } | { kind: "competency"; competencyId: string };
 
 type Source = { tag: string; chunkId: string; materialId: string; materialTitle: string; citation: string };
-type Reference = { tag: string; title: string; code: string | null; outcome: string | null; status: string };
+type Reference = { tag: string; title: string; code: string | null; outcome: string | null; status: string; approved?: boolean };
+/** Stage 3 acceptance item 4: an answer withheld as unsupported -- why, and next steps from the notes only. */
+type WithheldNext = { why: string; notInNotes: boolean; nearest: { tag: string; chunkId: string; materialId: string; citation: string }[]; rephrase: boolean; background: { text: string; label: string } | null };
 type Reply = {
-  action: string; answer?: string; withheld?: boolean; message?: string; sources: Source[]; references: Reference[]; cited?: number[];
+  action: string; answer?: string; withheld?: boolean; message?: string; next?: WithheldNext; sources: Source[]; references: Reference[]; cited?: number[];
   background?: { text?: string; label?: string; withheld?: string } | null; flags?: { text: string; cited: number[] }[];
   verdict?: { value: string; label: string; informal: string } | null; checkQuestion?: string; informal?: string;
   provenance?: { model: string; promptVersion: string }; error?: string;
@@ -101,6 +104,12 @@ export function LearnWorkspace(props: {
     setBusy("");
     setAssist(list => [{ id: ++seq.current, asked: question, ...(r.ok ? { answer: String(r.json.answer ?? "") } : { error: r.json.error ?? "Your assistant could not answer just now." }) }, ...list]);
   }, [session, step]);
+  // Item 4: a withheld answer's rephrase -- to Ask, with the student's own question back in the box to change.
+  const rephrase = useCallback((q: string) => {
+    setTab("ask");
+    if (q) setAsk(q);
+    setTimeout(() => document.getElementById("ask-q")?.focus(), 0);
+  }, []);
 
   // A new scope: start the session, then open it with the policy's starting action (Teach Me by default).
   useEffect(() => {
@@ -239,7 +248,8 @@ export function LearnWorkspace(props: {
 
           <div aria-live="polite" className="mt-4 space-y-4">
             {thread.length === 0 && !busy && <p className="text-[13.5px] text-gray-600">{props.consent ? `Choose ${props.labels[props.startAction]} to begin this step, or ask Scholar anything.` : "Learning needs AI help, which is off."}</p>}
-            {thread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }) : undefined} />)}
+            {thread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }) : undefined}
+              onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} />)}
             {busy && busy !== "ask" && <p className="text-[13px] text-gray-500">Scholar is reading your notes…</p>}
           </div>
 
@@ -284,7 +294,7 @@ export function LearnWorkspace(props: {
             </form>
           ) : <p className="mt-2 text-[13px] text-gray-600">Asking is switched off here.</p>}
           <div aria-live="polite" className="mt-3 space-y-3">
-            {askThread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} compact />)}
+            {askThread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} compact onRephrase={() => rephrase(c.asked ?? "")} />)}
           </div>
           {props.consent && step && (
             <div className="mt-4 border-t border-gray-100 pt-3">
@@ -309,8 +319,40 @@ export function LearnWorkspace(props: {
   );
 }
 
+/** Stage 3 acceptance item 4: a withheld answer says why, and offers only what comes from the student's own notes. */
+function Withheld({ r, asked, onRephrase }: { r: Reply; asked?: string; onRephrase?: () => void }) {
+  const n = r.next;
+  if (!n) return <p className="mt-1.5 rounded-lg bg-gray-50 px-3 py-2 text-[14px] text-gray-800">{r.message}</p>;
+  return (
+    <div className="mt-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+      {n.notInNotes && <p className="text-[14.5px] font-semibold text-gray-900">{NOT_IN_NOTES_LABEL}</p>}
+      <p className="text-[14px] text-gray-800">{n.why}</p>
+      <p className="mt-2 text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-600">What you can do</p>
+      <ul className="mt-1 list-disc space-y-1.5 pl-5 text-[13.5px] text-gray-800">
+        {n.nearest.length > 0 && (
+          <li>Read the parts of your notes nearest {asked ? "your question" : "this step"}:
+            <ul className="mt-0.5 space-y-0.5">{n.nearest.map(s => (
+              <li key={s.chunkId}><Link href={sourceHref(s.materialId, s.chunkId)} className={`underline underline-offset-2 ${focusRing}`}>{s.citation}</Link></li>
+            ))}</ul>
+          </li>
+        )}
+        {n.rephrase && onRephrase && (
+          <li><button type="button" onClick={onRephrase} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{asked ? "Rephrase your question" : "Ask about it in your own words"}</button></li>
+        )}
+        {n.notInNotes && <li>If your course covers it, add the material that does, then ask again.</li>}
+      </ul>
+      {n.background && (
+        <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-sky-900">{SOURCE_KIND_LABEL.interpretation}</p>
+          <p className="mt-1 text-[13.5px] text-gray-800">{n.background.text}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** One reply, its four kinds of content kept apart and labelled (owner GO s7). */
-function ReplyCard({ card, labels, compact = false, onFresh }: { card: Card; labels: Record<LearnAction, string>; compact?: boolean; onFresh?: () => void }) {
+function ReplyCard({ card, labels, compact = false, onFresh, onRephrase }: { card: Card; labels: Record<LearnAction, string>; compact?: boolean; onFresh?: () => void; onRephrase?: () => void }) {
   const r = card.reply;
   if (r.continuity) {
     return (
@@ -333,7 +375,7 @@ function ReplyCard({ card, labels, compact = false, onFresh }: { card: Card; lab
     <article className={`rounded-xl border border-gray-200 ${compact ? "p-3" : "p-4"}`}>
       {card.asked && <p className="mb-1 text-[12.5px] text-gray-600"><span className="font-semibold">You:</span> {card.asked}</p>}
       <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-500">{name}</p>
-      {r.withheld ? <p className="mt-1.5 rounded-lg bg-gray-50 px-3 py-2 text-[14px] text-gray-800">{r.message}</p> : (
+      {r.withheld ? <Withheld r={r} asked={card.asked} onRephrase={onRephrase} /> : (
         <>
           {r.verdict && (
             <p className="mt-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[13px] text-violet-950">
@@ -345,7 +387,7 @@ function ReplyCard({ card, labels, compact = false, onFresh }: { card: Card; lab
           <div className="mt-1 whitespace-pre-wrap text-[14.5px] leading-relaxed text-gray-800">{r.answer}</div>
         </>
       )}
-      {r.sources.length > 0 && (
+      {r.sources.length > 0 && !r.next && (
         <ul className="mt-2 space-y-0.5">
           {r.sources.filter((_, i) => !r.answer || cited.has(i + 1)).map(s => (
             <li key={s.tag} className="text-[12.5px] text-gray-700"><span className="font-mono font-bold" style={{ color: accent }}>[{s.tag}]</span>{" "}
@@ -354,12 +396,7 @@ function ReplyCard({ card, labels, compact = false, onFresh }: { card: Card; lab
         </ul>
       )}
       {!r.withheld && r.references.length > 0 && r.answer && /\[R\d+\]/.test(r.answer) && (
-        <div className="mt-2 rounded-lg border border-teal-200 bg-teal-50/60 px-3 py-2">
-          <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-teal-900">{SOURCE_KIND_LABEL.reference}</p>
-          <ul className="mt-1 space-y-0.5">{r.references.filter(x => r.answer!.includes(`[${x.tag}]`)).map(x => (
-            <li key={x.tag} className="text-[12.5px] text-gray-800"><span className="font-mono font-bold">[{x.tag}]</span> {x.code ? `${x.code} ` : ""}{x.title}{x.outcome ? ` -- ${x.outcome}` : ""} <span className="text-gray-600">({x.status})</span></li>
-          ))}</ul>
-        </div>
+        <GovernedReferenceList refs={r.references.filter(x => r.answer!.includes(`[${x.tag}]`))} />
       )}
       {r.background && (
         r.background.text ? (
@@ -369,12 +406,7 @@ function ReplyCard({ card, labels, compact = false, onFresh }: { card: Card; lab
           </div>
         ) : r.background.withheld ? <p className="mt-2 text-[12.5px] text-gray-600">{r.background.withheld}</p> : null
       )}
-      {r.flags && r.flags.length > 0 && (
-        <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2">
-          <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-amber-900">{SOURCE_KIND_LABEL.flag}</p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] text-amber-950">{r.flags.map((f, i) => <li key={i}>{f.text}</li>)}</ul>
-        </div>
-      )}
+      {r.flags && r.flags.length > 0 && <AiFlagList flags={r.flags} />}
       {r.saved && (
         <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-gray-600">
           <span>Saved {new Date(r.saved.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · private, for your own study · no new AI was used</span>

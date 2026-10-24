@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { publishScope, setOverride, type WceActor } from "@/lib/config/workspace-config-write";
 import { RISK_TIERS } from "./clinical-risk";
+import { BUDGET_CODE, ROUTING_PATH, budgetPath, budgetPeriod, resolveBudgetPolicy, resolveRouting, type BudgetPolicy, type Workflow } from "./consumption";
 import { ACTIVITY_CODE, AI_PRODUCTS, FAIR_USE_SCOPE, fairUsePath, resolvePolicy, type AiProduct, type ProductAiPolicy } from "./fair-use-policy";
 
 // ── AI FAIR USE: WHAT HQ CONFIGURES ── COMPETEN-AI-FAIR-USE-01 s12, migrations 410 and 411 ───────────────
@@ -178,3 +179,87 @@ export const savePolicyDraft = (admin: any, actor: WceActor, product: AiProduct,
 
 export const publishPolicies = (admin: any, actor: WceActor, note: string | null) =>
   publishScope(admin, actor, FAIR_USE_SCOPE, { label: "AI fair-use policies", note });
+
+/** Every draft in the AI governance scope that differs from what is published: policies, profiles, budgets, routing. */
+export async function pendingDrafts(admin: any): Promise<number | null> {
+  const data = await rows(admin.from("workspace_config_overrides").select("draft, published").eq("scope_type", FAIR_USE_SCOPE.scopeType).eq("scope_ref", FAIR_USE_SCOPE.scopeRef));
+  return data === null ? null : data.filter((r: any) => JSON.stringify(r.draft ?? null) !== JSON.stringify(r.published ?? null)).length;
+}
+
+// ── Budgets (COMPETEN-HOLDINGS-AI-CONSUMPTION-01 s6, migration 421) ──────────────────────────────────────────
+//
+// A budget's IDENTITY is an ai_budget row (owner type, product, and for an institution its institution and funding
+// arrangement, which 421 requires). Its POLICY -- ceiling, funded activities, automated limit, alerts, carry-forward --
+// is a CONFIG-002 document at ai.budget.<code>, drafted and published with the rest of the AI governance scope.
+
+export type BudgetView = {
+  id: string; code: string; label: string; ownerType: "platform" | "institution"; product: string; status: string;
+  institutionRef: string | null; fundingRef: string | null; policy: BudgetPolicy; draft: BudgetPolicy | null;
+  month: { included: number; used: number; reserved: number; pct: number | null } | null;
+};
+export type SpendReport = { byOwner: { ownerType: string; requests: number; costUsd: number; cau: number; unreconciled: number }[]; since: string };
+
+export async function loadBudgets(admin: any): Promise<{ budgets: BudgetView[]; routing: Partial<Record<Workflow, string>>; routingDraft: Partial<Record<Workflow, string>> | null; report: SpendReport } | null> {
+  const budgets = await rows(admin.from("ai_budget").select("*").order("code"));
+  if (budgets === null) return null;
+  const { start } = budgetPeriod(new Date());
+  const [accounts, cfg, ledger] = await Promise.all([
+    rows(admin.from("ai_allowance_account").select("budget_id, included_cau, used_cau, reserved_cau").not("budget_id", "is", null).eq("period_start", start.toISOString())),
+    rows(admin.from("workspace_config_overrides").select("config_path, draft, published").eq("scope_type", FAIR_USE_SCOPE.scopeType).eq("scope_ref", FAIR_USE_SCOPE.scopeRef)),
+    rows(admin.from("ai_usage_ledger").select("owner_type, status, cost_usd, settled_cau").gte("created_at", start.toISOString()).limit(20000)),
+  ]);
+  if (accounts === null || cfg === null || ledger === null) return null;
+  const doc = (path: string) => cfg.find((r: any) => r.config_path === path);
+  const byOwner = ["individual", "platform", "institution"].map(t => {
+    const mine = ledger.filter((l: any) => l.owner_type === t);
+    return { ownerType: t, requests: mine.length, costUsd: +mine.reduce((s: number, l: any) => s + Number(l.cost_usd ?? 0), 0).toFixed(6),
+      cau: +mine.reduce((s: number, l: any) => s + Number(l.settled_cau ?? 0), 0).toFixed(6), unreconciled: mine.filter((l: any) => l.status === "unreconciled").length };
+  });
+  const routingRow = doc(ROUTING_PATH);
+  return {
+    budgets: budgets.map((b: any) => {
+      const a = accounts.find((x: any) => x.budget_id === b.id);
+      const row = doc(budgetPath(b.code));
+      const included = a ? Number(a.included_cau) : 0;
+      return { id: b.id, code: b.code, label: b.label, ownerType: b.owner_type, product: b.product, status: b.status, institutionRef: b.institution_ref, fundingRef: b.funding_ref,
+        policy: resolveBudgetPolicy(row?.published ?? null), draft: row?.draft && JSON.stringify(row.draft) !== JSON.stringify(row.published) ? resolveBudgetPolicy(row.draft) : null,
+        month: a ? { included, used: Number(a.used_cau), reserved: Number(a.reserved_cau), pct: included > 0 ? Math.round(((Number(a.used_cau) + Number(a.reserved_cau)) / included) * 100) : null } : null };
+    }),
+    routing: resolveRouting(routingRow?.published ?? null),
+    routingDraft: routingRow?.draft ? resolveRouting(routingRow.draft) : null,
+    report: { byOwner, since: start.toISOString() },
+  };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Create a budget. An institution budget needs its institution and the funding arrangement it rests on (421 too). */
+export async function createBudget(admin: any, b: any, actorId: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const code = typeof b?.code === "string" ? b.code.trim() : "";
+  if (!BUDGET_CODE.test(code)) return { ok: false, error: "Give a budget code: lower case, starting with a letter, 3 to 61 characters." };
+  const ownerType = b?.ownerType === "institution" ? "institution" : b?.ownerType === "platform" ? "platform" : null;
+  if (!ownerType) return { ok: false, error: "Choose platform or institution." };
+  if (!(AI_PRODUCTS as readonly string[]).includes(b?.product)) return { ok: false, error: "Choose the product it funds." };
+  const label = typeof b?.label === "string" ? b.label.trim().slice(0, 200) : "";
+  if (label.length < 2) return { ok: false, error: "Name the budget." };
+  const institutionRef = ownerType === "institution" && typeof b?.institutionRef === "string" && UUID.test(b.institutionRef) ? b.institutionRef : null;
+  const fundingRef = ownerType === "institution" && typeof b?.fundingRef === "string" ? b.fundingRef.trim().slice(0, 300) : null;
+  if (ownerType === "institution" && (!institutionRef || !fundingRef || fundingRef.length < 5))
+    return { ok: false, error: "An institution budget needs the authorised institution and the funding arrangement it rests on." };
+  const { data, error } = await admin.from("ai_budget").insert({ code, owner_type: ownerType, label, product: b.product, institution_ref: institutionRef, funding_ref: fundingRef,
+    note: typeof b?.note === "string" ? b.note.trim().slice(0, 1000) || null : null, created_by: actorId }).select("id").single();
+  return error ? { ok: false, error: /duplicate|unique/i.test(error.message) ? "That budget code is taken." : "The budget could not be created." } : { ok: true, id: data.id };
+}
+
+/** Suspend, resume or close a budget. Closing is final (421). Suspending stops its new charges, nothing else. */
+export async function setBudgetStatus(admin: any, id: string, status: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!UUID.test(id) || !["active", "suspended", "closed"].includes(status as string)) return { ok: false, error: "Choose a budget and a status." };
+  const { data, error } = await admin.from("ai_budget").update({ status }).eq("id", id).select("id");
+  if (error) return { ok: false, error: /stays closed/i.test(error.message) ? "A closed budget stays closed." : "The budget could not be changed." };
+  return data?.length ? { ok: true } : { ok: false, error: "No such budget." };
+}
+
+export const saveBudgetPolicyDraft = (admin: any, actor: WceActor, code: string, input: any) =>
+  setOverride(admin, actor, FAIR_USE_SCOPE, budgetPath(code), resolveBudgetPolicy(input));
+export const saveRoutingDraft = (admin: any, actor: WceActor, input: any) =>
+  setOverride(admin, actor, FAIR_USE_SCOPE, ROUTING_PATH, { workflows: resolveRouting(input) });

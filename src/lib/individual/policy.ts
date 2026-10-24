@@ -45,7 +45,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai
   | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats" | "scholar_learning_actions";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
-export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues";
+export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
 export type ProgrammesPolicyKey = "scholar_onboarding_programmes";
 export type OptionsPolicyKey = "scholar_institutions";
@@ -59,7 +59,8 @@ type Common = { label: string; help: string; product: "Professional" | "Scholar"
 export type IntPolicy = Common & { key: IntPolicyKey; kind: "int"; unit: string; fallback: number; min: number; max: number };
 export type SetPolicy = Common & { key: SetPolicyKey; kind: "set"; options: readonly { value: string; label: string }[]; fallback: readonly string[] };
 /** A list of framework ids. Options are not fixed in code: the route checks each against the library. */
-export type CataloguePolicy = Common & { key: CataloguePolicyKey; kind: "catalogues"; max: number };
+/** `emptyMeans`: what an empty list does, where that is not "nothing is offered". */
+export type CataloguePolicy = Common & { key: CataloguePolicyKey; kind: "catalogues"; max: number; emptyMeans?: string };
 /** Programme codes (rows of individual_scholar_programme, migration 387). The route checks each is an active row. */
 export type ProgrammesPolicy = Common & { key: ProgrammesPolicyKey; kind: "programmes"; max: number };
 /** A governed list of options, each a code and the label shown. The code is derived from the label once. */
@@ -151,6 +152,18 @@ export const POLICIES: readonly PolicyDef[] = [
     label: "Competency catalogues Scholar may map study to",
     help: "The shared competency catalogues Scholar may link a person's study materials to. Nothing is offered until a catalogue is chosen here.",
     limitReason: "Only shared, active, published catalogues can be chosen, at most 50. Empty by default: nothing is offered automatically.",
+  },
+  // ── LEARN-01 (Stage 3 acceptance, item 5): THE GOVERNED REFERENCES LEARN TEACHES TOWARDS ──
+  // Empty (the default) keeps the CFCA: each student's programme catalogue, i.e. the catalogues scholar_catalogues
+  // already allows. A list names the governed collections exactly -- the CFCA catalogues too, if they stay -- and a
+  // new clinically approved collection is added here, with no code. Shared, active and published only, checked when
+  // chosen and again on every read. Whatever the source, "clinically approved" is 395's, for that exact content.
+  {
+    key: "scholar_reference_collections", kind: "catalogues", product: "Scholar", max: CATALOGUES_MAX,
+    label: "Governed reference collections for Learn",
+    help: "The collections whose competencies and learning outcomes Learn may name as what a student is working towards. List every collection to use, the CFCA catalogues included. A reference is labelled clinically approved only where clinical review approved that exact content.",
+    limitReason: "Only shared, active, published catalogues can be chosen, at most 50. Empty by default: each student's programme catalogue (the CFCA catalogues allowed above).",
+    emptyMeans: "Each student's programme catalogue (the CFCA catalogues Scholar is allowed)",
   },
   // ── COMPETEN-SCHOLAR-JOIN-01: THE EDUCATIONAL CONTEXT ASKED AT JOIN ── owner ruling CONFIGURATION ──
   // Governed here, in the existing engine, not in a Scholar-specific one. A programme itself is a row of
@@ -496,6 +509,8 @@ export type IndividualPolicy = {
   /** S1: framework ids each experience may offer. Empty by default. */
   scholarCatalogues: string[];
   professionalCatalogues: string[];
+  /** LEARN-01 item 5: the governed reference collections. Empty = the student's programme catalogue (the CFCA). */
+  scholarReferenceCollections: string[];
   /** JOIN-01: programme codes offered at join, or null for every active programme. */
   scholarOnboardingProgrammes: string[] | null;
   scholarProgrammeLevels: Record<string, ContextOption[]>;
@@ -537,6 +552,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     passportAchievementKinds: clampSet(policyDef("passport_achievement_kinds") as SetPolicy, published.get(policyPath("passport_achievement_kinds"))) as StudyAchievementKind[],
     scholarCatalogues: clampCatalogues(policyDef("scholar_catalogues") as CataloguePolicy, published.get(policyPath("scholar_catalogues"))),
     professionalCatalogues: clampCatalogues(policyDef("professional_catalogues") as CataloguePolicy, published.get(policyPath("professional_catalogues"))),
+    scholarReferenceCollections: clampCatalogues(policyDef("scholar_reference_collections") as CataloguePolicy, published.get(policyPath("scholar_reference_collections"))),
     scholarOnboardingProgrammes: clampProgrammes(policyDef("scholar_onboarding_programmes") as ProgrammesPolicy, published.get(policyPath("scholar_onboarding_programmes"))),
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),

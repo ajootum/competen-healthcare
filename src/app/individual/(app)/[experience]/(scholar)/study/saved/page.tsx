@@ -7,6 +7,10 @@ import { AI_LABEL, LEARN_ACTION_LABEL, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, t
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { sourceHref } from "../_components/question-view";
+import { AiFlagList, GovernedReferenceList } from "../_components/learn-kinds";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
+import { referenceSource, relabelReferences } from "@/lib/individual/scholar/learn";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -32,6 +36,11 @@ export default async function SavedPage({ params }: { params: Promise<{ experien
     listArtefacts(ctx.admin, ctx.userId), listMaterials(ctx.admin, ctx.userId), listQuestions(ctx.admin, ctx.userId),
     countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, 10),
   ]);
+  // Stage 3 acceptance items 3 and 5: a saved answer's references are labelled by the reference source as it is now,
+  // never by the label saved with them. Read only when there is something to label.
+  const refSource = artefacts.ok && artefacts.data.some(a => a.refs.length)
+    ? await referenceSource(ctx.admin, await loadIndividualPolicy(ctx.admin), (await loadLearnerCatalogue(ctx.admin, ctx.userId)).competencies)
+    : { collections: true as const, catalogue: [] };
   const titles = new Map((materials.ok ? materials.data : []).map(m => [m.id, m.title]));
   const byMaterial = new Map<string, ArtefactRow[]>();
   for (const a of artefacts.ok ? artefacts.data : []) byMaterial.set(a.materialId, [...(byMaterial.get(a.materialId) ?? []), a]);
@@ -91,26 +100,14 @@ export default async function SavedPage({ params }: { params: Promise<{ experien
                                     <Link href={sourceHref(a.materialId, chunkId)} className={`underline underline-offset-2 ${focusRing}`}>the section in your notes</Link></li>
                                 ))}
                               </ul>
-                              {a.refs.length > 0 && (
-                                <div className="mt-2 rounded-lg border border-teal-200 bg-teal-50/60 px-3 py-2 text-[12.5px] text-gray-800">
-                                  <p className="font-bold uppercase tracking-[0.1em] text-teal-900">{SOURCE_KIND_LABEL.reference}</p>
-                                  {a.refs.map((r: { tag?: string; title?: string; code?: string | null; outcome?: string | null; status?: string }, i: number) => (
-                                    <p key={i}>{r.tag ? `[${r.tag}] ` : ""}{r.code ? `${r.code} ` : ""}{r.title}{r.outcome ? ` -- ${r.outcome}` : ""}{r.status ? ` (${r.status})` : ""}</p>
-                                  ))}
-                                </div>
-                              )}
+                              {a.refs.length > 0 && <GovernedReferenceList refs={relabelReferences(a.refs, refSource)} />}
                               {a.background && (
                                 <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-[13px] text-gray-800">
                                   <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-sky-900">{SUPPLEMENTARY_LABEL}</p>
                                   <p className="mt-1">{a.background}</p>
                                 </div>
                               )}
-                              {a.flags.length > 0 && (
-                                <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">
-                                  <p className="text-[11.5px] font-bold uppercase tracking-[0.1em]">{SOURCE_KIND_LABEL.flag}</p>
-                                  <ul className="mt-1 list-disc pl-5">{a.flags.map((f, i) => <li key={i}>{f.text}</li>)}</ul>
-                                </div>
-                              )}
+                              {a.flags.length > 0 && <AiFlagList flags={a.flags} />}
                               <p className="mt-2 text-[11px] text-gray-400">Private, formative · model {a.model} · prompt {a.promptVersion}</p>
                             </div>
                           </details>
