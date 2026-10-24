@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "@/lib/individual/policy";
+import { individualPlanAiLimit } from "@/lib/individual/commerce";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadCatalogueFor } from "@/lib/individual/catalogue";
 import { SUBJECTS_PER_CALL } from "@/lib/competency/mapping";
@@ -75,7 +76,7 @@ export async function POST(req: Request) {
     if (!asked.length) return refuse("Choose up to six entries to suggest links for.");
 
     // The estate limit and the Individual policy limit, whichever is tighter (CONFIG-002).
-    const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin));
+    const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
     // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
     const refusal = individualQuotaRefusal(quota, "questions");
     if (refusal) return refuse(refusal.error, refusal.status);
