@@ -125,7 +125,8 @@ const clinicalOffenders = (src: Src) => [...src].filter(([, s]) => /from\("(clin
 const generateUnattributed = (src: Src) => {
   const g = src.get(GEN) ?? "";
   // The S2 analysis calls the Holdings mapping engine, which calls generate() with the context Scholar passes.
-  const calls = [...g.matchAll(/await generate\(\{/g)].length + [...g.matchAll(/return proposeMappings\(\{/g)].length;
+  // AI-FAIR-USE-01: the generators call through `run` (the metered runner, or generate() when none is given).
+  const calls = [...g.matchAll(/await (generate|run)\(\{/g)].length + [...g.matchAll(/return proposeMappings\(\{/g)].length;
   const attributed = [...g.matchAll(/attribution: \{ scope: "person" \}/g)].length;
   return calls === 0 || calls !== attributed;
 };
@@ -302,7 +303,27 @@ const artefactsBounded = (src: Src) => {
   return /review_status = 'private_formative'/.test(MIG415) && /references individual_scholar_material\(id, user_id\) on delete cascade/.test(MIG415)
     && iFind > 0 && iCont > iFind && iPre > iCont && iRun > iPre
     && /const storable = isArtefactAction\(action\) && !hasHistory && oneMaterial;/.test(act) && /if \(key\) savedNow = await saveArtefact\(/.test(act)
-    && ![...src].some(([f, s]) => f !== `${LIB}/ai-standing.ts` && /@\/lib\/ai\/allowance/.test(s));
+    && ![...src].some(([f, s]) => f !== `${LIB}/ai-standing.ts` && f !== `${LIB}/http.ts` && /@\/lib\/ai\/allowance/.test(s));
+};
+/**
+ * K26 (AI-FAIR-USE-01 swap): every Scholar AI call goes through the Holdings allowance. Each AI route builds the
+ * metered runner with its activity code and passes it to its generator, and returns the refusal before anything else;
+ * the generators make no direct generate() call (only the default runner does); the runner sends only Scholar's
+ * product, the activity, and a request id from the client's retry key -- never an amount, a policy or a level.
+ */
+const AI_ROUTES: [string, string, RegExp][] = [
+  [`${API}/explain/route.ts`, `scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode)`, /runExplain\([^)]*ai\.run\)/],
+  [`${API}/learn/act/route.ts`, "scholarAiRunner(ctx, req, action as", /runLearn\([\s\S]*?\}, ai\.run\)/],
+  [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions")`, /runQuestions\([^;]*ai\.run\)/],
+  [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps")`, /runCase\([^)]*ai\.run\)/],
+  [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map")`, /runAnalysis\([^)]*ai\.run\)/],
+];
+const meteredEverywhere = (src: Src) => {
+  const gen = src.get(GEN) ?? "", http = src.get(`${LIB}/http.ts`) ?? "";
+  return AI_ROUTES.every(([f, runner, call]) => { const s = src.get(f) ?? ""; return s.includes(runner) && call.test(s) && /ai\.refusal\(\)/.test(s); })
+    && [...gen.matchAll(/\bgenerate\(/g)].length === 1 && /const direct: AiRun = g => generate\(g\);/.test(gen)
+    && /runMeteredAi\(ctx\.admin, \{ userId: ctx\.userId, product: "scholar", activity, requestId: part === "main" \? requestId : `\$\{requestId\}:\$\{part\}`, generate: g \}\)/.test(http)
+    && /const requestId = requestIdFor\(ctx\.userId, req\.headers\.get\("x-request-id"\)\);/.test(http);
 };
 /**
  * K24 (COMPETEN-SCHOLAR-LEARN-01): Stage 3's boundaries hold in the code.
@@ -709,6 +730,8 @@ function main() {
     uploadGoverned(REAL));
   ok("K25. AI-FAIR-USE-01: artefacts are private formative and go with their material; a saved answer is returned before any AI, continuity is decided before the call, only reusable answers are saved, and the standing has one adapter",
     artefactsBounded(REAL));
+  ok("K26. AI-FAIR-USE-01 swap: every Scholar AI route runs through the metered runner with its activity code and returns a refusal first; generators make no direct generate() call; the runner sends no amount, policy or level",
+    meteredEverywhere(REAL));
   ok("K24. LEARN-01: history holds no conversation, the act route keeps to policy, screens input, records only what was shown, stores no practice question, and the student's context is never grounding",
     learnBounded(REAL));
   ok("K23. upload limits: 413 raises the CHECK and the bucket to 25 MB, the live value stays 10 MB until HQ raises it, and the session is enforced on the server at both steps",
@@ -817,6 +840,9 @@ function main() {
   ok("P42. ⚠ K25 goes red when the AI runs before the saved answer is looked up, or conversation becomes an artefact",
     !artefactsBounded(plant(`${API}/learn/act/route.ts`, "const pre = await aiPreflight(ctx);", "const pre0 = 0;"))
     && !artefactsBounded(plant(`${API}/learn/act/route.ts`, "const storable = isArtefactAction(action) && !hasHistory && oneMaterial;", "const storable = !hasHistory && oneMaterial;")));
+  ok("P43. ⚠ K26 goes red when a route stops passing the runner, or a generator calls generate() directly",
+    !meteredEverywhere(plant(`${API}/questions/route.ts`, ".scholarQuestionsPerRequest, ai.run)", ".scholarQuestionsPerRequest)"))
+    && !meteredEverywhere(plant(GEN, "    const r = await run({\n      system: QUESTION_SYSTEM[kind],", "    const r = await generate({\n      system: QUESTION_SYSTEM[kind],")));
   ok("P41. ⚠ K24 goes red when the policy gate goes, an event is recorded before it is shown, or the context becomes grounding",
     !learnBounded(plant(`${API}/learn/act/route.ts`, "if (isLearnAction(action) && !policy.scholarLearningActions.includes(action))", "if (false)"))
     && !learnBounded(plant(`${API}/learn/act/route.ts`, "if (recorded && sessionId && shown && policy.scholarLearningHistory === \"record\")", "if (recorded && sessionId)"))

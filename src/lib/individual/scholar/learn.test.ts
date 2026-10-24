@@ -90,14 +90,21 @@ describe("AI-FAIR-USE-01 s8 and s7: saved artefacts and continuity", () => {
     expect(["teach", "explain", "simplify", "deeper", "examples", "summary"].every(isArtefactAction)).toBe(true);
     expect(["ask", "check", "clarify"].some(isArtefactAction)).toBe(false);
   });
-  it("the stub is full AI until IND-007's standing lands; a limited standing says so plainly, and never quietly downgrades", async () => {
-    const full = await getScholarAiStanding(null, "u");
-    expect(activityState(full, "teach")).toEqual({ available: true, message: null, insufficient: false });
-    const limited: AiStanding = { ...full, readable: true, level: "continuity", message: "Your AI allowance resets on Monday.", activities: { ...full.activities, teach: { available: false, via: null, reason: "allowance_exhausted" } } };
-    expect(activityState(limited, "teach")).toEqual({ available: false, message: "Your AI allowance resets on Monday.", insufficient: false });
-    const weak: AiStanding = { ...full, activities: { ...full.activities, deeper: { available: false, via: null, reason: "level_insufficient" } } };
-    expect(activityState(weak, "deeper")).toMatchObject({ available: false, insufficient: true, message: expect.stringMatching(/will not use a weaker one/) });
-    expect(activityState({ ...full, readable: false }, "teach").available).toBe(false);
+  it("metering off is today: every activity available, even with no published Scholar policy", () => {
+    const off: AiStanding = { readable: true, metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null, activities: {}, message: null };
+    expect(activityState(off, "teach")).toEqual({ available: true, message: null, insufficient: false });
+    expect(activityState(off, "check")).toEqual({ available: true, message: null, insufficient: false });
+    expect(typeof getScholarAiStanding).toBe("function");
+  });
+  it("metering on: a limited standing says so plainly, and never quietly downgrades", () => {
+    const on: AiStanding = { readable: true, metered: true, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null, message: null,
+      activities: { teach: { label: "Teach me", available: true, via: "included", reason: null }, deeper: { label: "Go deeper", available: false, via: null, reason: "level_insufficient" } } };
+    expect(activityState(on, "teach").available).toBe(true);
+    expect(activityState(on, "deeper")).toMatchObject({ available: false, insufficient: true, message: expect.stringMatching(/will not use a weaker one/) });
+    const spent: AiStanding = { ...on, level: "continuity", message: "Your AI allowance resets on Monday.", activities: { teach: { label: "Teach me", available: false, via: null, reason: "allowance_exhausted" } } };
+    expect(activityState(spent, "teach")).toEqual({ available: false, message: "Your AI allowance resets on Monday.", insufficient: false });
+    expect(activityState(on, "examples").available).toBe(false); // an activity the published policy does not list
+    expect(activityState({ ...on, readable: false }, "teach").available).toBe(false);
   });
 });
 
