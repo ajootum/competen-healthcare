@@ -11,7 +11,7 @@
 | Rollback (ROLLBACK-419.sql, 5fc32c3d, committed) | F2 = a1779d79… = PRE | 90ead680… |
 | Re-apply ×2 | ok. F3 = c60f1722… = F1 | |
 
-`--ai412` stays at 90ead680 through 419. Its trigger reading uses `like 'ai\\_%'` with the backslash inside a JavaScript template string, so it matches only names starting "ai_" followed by a literal character pattern that 419's `ai_model_evaluation_*` triggers do not meet. Either way, 419 leaves the 412 objects untouched (PRE = F2 on both readings).
+`--ai412` was read at PRE and at F2. 419 is absent in both states, so reading 90ead680 both times is expected, and it shows the rollback left the 412 objects exactly as they were. (`--ai412` includes every `ai_%` trigger, so with 419 applied it would read differently. That is why 412's own readings were taken before 419.)
 
 **Files (bytes matched before and after the runs):**
 - 419-ai-model-evaluation.sql: sha256 802f13d9b47e5572fb9ca84016e67e964d5425f73fd9e1172aff0e931f08ca14. House rules ALL CLEAR (150 lines, 30 statements, 3 constraints, 5 non-blocking warnings).
