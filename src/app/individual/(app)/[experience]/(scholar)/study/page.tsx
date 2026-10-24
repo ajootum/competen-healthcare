@@ -126,7 +126,10 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
         <section aria-labelledby="learn-h" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 id="learn-h" className="text-[16px] font-bold text-gray-900">Learn</h2>
-            <Link href={experienceHref("scholar", "study/learn")} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Teach me something →</Link>
+            <span className="flex flex-wrap gap-3">
+              <Link href={experienceHref("scholar", "study/saved")} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`}>Saved learning</Link>
+              <Link href={experienceHref("scholar", "study/learn")} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Teach me something →</Link>
+            </span>
           </div>
           {sessions.ok && sessions.data.length > 0 ? (
             <ul className="mt-2 space-y-1">

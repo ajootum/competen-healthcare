@@ -290,6 +290,20 @@ const MIG390 = migText(MIG390_FILE);
 const MIG405 = migText("supabase/migrations/405-individual-scholar-plain-text-materials.sql");
 const MIG406 = migText("supabase/migrations/406-individual-scholar-pptx-and-extraction-quality.sql");
 const MIG414 = migText("supabase/migrations/414-individual-scholar-learning-history.sql");
+const MIG415 = migText("supabase/migrations/415-individual-scholar-learning-artefacts.sql");
+/**
+ * K25 (AI-FAIR-USE-01 s8 and s7): an artefact can only be private formative (415's CHECK) and goes with its material;
+ * the act route returns a saved artefact BEFORE any AI preflight, decides continuity BEFORE the AI call, saves only
+ * reusable answers (never conversation), and Scholar reads the standing only through its one adapter.
+ */
+const artefactsBounded = (src: Src) => {
+  const act = src.get(`${API}/learn/act/route.ts`) ?? "";
+  const iFind = act.indexOf("await findArtefact("), iCont = act.indexOf("activityState(await getScholarAiStanding("), iPre = act.indexOf("const pre = await aiPreflight(ctx);"), iRun = act.indexOf("await runLearn(");
+  return /review_status = 'private_formative'/.test(MIG415) && /references individual_scholar_material\(id, user_id\) on delete cascade/.test(MIG415)
+    && iFind > 0 && iCont > iFind && iPre > iCont && iRun > iPre
+    && /const storable = isArtefactAction\(action\) && !hasHistory && oneMaterial;/.test(act) && /if \(key\) savedNow = await saveArtefact\(/.test(act)
+    && ![...src].some(([f, s]) => f !== `${LIB}/ai-standing.ts` && /@\/lib\/ai\/allowance/.test(s));
+};
 /**
  * K24 (COMPETEN-SCHOLAR-LEARN-01): Stage 3's boundaries hold in the code.
  *   - 414 has no column that could hold conversation: no answer, question, content, text or note column anywhere.
@@ -693,6 +707,8 @@ function main() {
     contentStatusLabelled(REAL));
   ok("K20. Stage 2: formats, size and pages are Individual policy, enforced at both upload steps; plain text is off until HQ enables it; the panel reads the server's rules; every material shows its educational context",
     uploadGoverned(REAL));
+  ok("K25. AI-FAIR-USE-01: artefacts are private formative and go with their material; a saved answer is returned before any AI, continuity is decided before the call, only reusable answers are saved, and the standing has one adapter",
+    artefactsBounded(REAL));
   ok("K24. LEARN-01: history holds no conversation, the act route keeps to policy, screens input, records only what was shown, stores no practice question, and the student's context is never grounding",
     learnBounded(REAL));
   ok("K23. upload limits: 413 raises the CHECK and the bucket to 25 MB, the live value stays 10 MB until HQ raises it, and the session is enforced on the server at both steps",
@@ -798,6 +814,9 @@ function main() {
   ok("P37. ⚠ K20 goes red when processing stops re-checking the format, or a material stops showing its context",
     !uploadGoverned(plant(`${API}/materials/route.ts`, "(rules.mimes as readonly string[]).includes(declared)", "true"))
     && !uploadGoverned(plant(`${PAGES}/[materialId]/page.tsx`, "contextStamp(", "(() => null)(")));
+  ok("P42. ⚠ K25 goes red when the AI runs before the saved answer is looked up, or conversation becomes an artefact",
+    !artefactsBounded(plant(`${API}/learn/act/route.ts`, "const pre = await aiPreflight(ctx);", "const pre0 = 0;"))
+    && !artefactsBounded(plant(`${API}/learn/act/route.ts`, "const storable = isArtefactAction(action) && !hasHistory && oneMaterial;", "const storable = !hasHistory && oneMaterial;")));
   ok("P41. ⚠ K24 goes red when the policy gate goes, an event is recorded before it is shown, or the context becomes grounding",
     !learnBounded(plant(`${API}/learn/act/route.ts`, "if (isLearnAction(action) && !policy.scholarLearningActions.includes(action))", "if (false)"))
     && !learnBounded(plant(`${API}/learn/act/route.ts`, "if (recorded && sessionId && shown && policy.scholarLearningHistory === \"record\")", "if (recorded && sessionId)"))

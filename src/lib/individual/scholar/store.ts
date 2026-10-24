@@ -1040,6 +1040,76 @@ export async function learningActivityByCompetency(admin: Admin, userId: string)
   return new Map([...out].map(([k, v]) => [k, { actions: v.actions, lastVerdict: v.lastVerdict, lastAt: v.lastAt }]));
 }
 
+// ── AI-FAIR-USE-01 s8: THE LEARNING ARTEFACT LIBRARY (migration 415) ──────────────────────────────────
+//
+// A saved explanation or summary: the notes part (cited [S n] to its sources in order), the background and flags
+// as shown, the governed references as shown, provenance, and a review status that can only be private_formative.
+// One per dedupe key per student: the same request returns the saved one. Absent table (415): nothing is saved.
+
+export type ArtefactRow = {
+  id: string; materialId: string; action: string; depth: string; content: string; background: string | null;
+  flags: { text: string; cited: number[] }[]; refs: any[]; model: string; promptVersion: string; reviewStatus: "private_formative"; createdAt: string;
+  sources: string[];
+};
+const ARTEFACT_COLS = "id, material_id, action, depth, content, background, flags, refs, model, prompt_version, review_status, created_at";
+const toArtefact = (r: any, sources: string[]): ArtefactRow => ({
+  id: r.id, materialId: r.material_id, action: r.action, depth: r.depth, content: r.content, background: r.background ?? null,
+  flags: Array.isArray(r.flags) ? r.flags : [], refs: Array.isArray(r.refs) ? r.refs : [], model: r.model, promptVersion: r.prompt_version,
+  reviewStatus: "private_formative", createdAt: r.created_at, sources,
+});
+
+async function artefactSources(admin: Admin, userId: string, ids: string[]): Promise<Map<string, string[]>> {
+  if (!ids.length) return new Map();
+  const { data } = await admin.from("individual_scholar_artefact_source").select("artefact_id, ordinal, chunk_id").eq("user_id", userId).in("artefact_id", ids).order("ordinal").limit(5000);
+  const out = new Map<string, string[]>();
+  for (const r of (data ?? []) as any[]) out.set(r.artefact_id, [...(out.get(r.artefact_id) ?? []), r.chunk_id]);
+  return out;
+}
+
+/** The person's saved artefact for this request, or null (none, or 415 absent). */
+export async function findArtefact(admin: Admin, userId: string, dedupeKey: string): Promise<ArtefactRow | null> {
+  const { data, error } = await admin.from("individual_scholar_artefact").select(ARTEFACT_COLS).eq("user_id", userId).eq("dedupe_key", dedupeKey).maybeSingle();
+  if (error || !data) return null;
+  return toArtefact(data, (await artefactSources(admin, userId, [data.id])).get(data.id) ?? []);
+}
+
+/** Save (or replace, for the same key) one artefact. "not_provisioned" where 415 is absent. */
+export async function saveArtefact(admin: Admin, userId: string, a: {
+  materialId: string; action: string; depth: string; content: string; background: string | null; flags: unknown[]; refs: unknown[];
+  dedupeKey: string; model: string; promptVersion: string; chunkIds: readonly string[];
+}): Promise<"ok" | "not_provisioned" | "failed"> {
+  const del = await admin.from("individual_scholar_artefact").delete().eq("user_id", userId).eq("dedupe_key", a.dedupeKey);
+  if (del.error) return isNotProvisioned(del.error) ? "not_provisioned" : "failed";
+  const { data, error } = await admin.from("individual_scholar_artefact").insert({
+    user_id: userId, material_id: a.materialId, action: a.action, depth: a.depth, content: a.content.slice(0, 20000),
+    background: a.background ? a.background.slice(0, 2000) : null, flags: a.flags, refs: a.refs, dedupe_key: a.dedupeKey,
+    model: a.model.slice(0, 200), prompt_version: a.promptVersion.slice(0, 200), review_status: "private_formative",
+  }).select("id").single();
+  if (error) return isNotProvisioned(error) ? "not_provisioned" : "failed";
+  const rows = a.chunkIds.slice(0, 10).map((chunk_id, i) => ({ artefact_id: data.id, user_id: userId, ordinal: i + 1, chunk_id }));
+  const { error: sErr } = rows.length ? await admin.from("individual_scholar_artefact_source").insert(rows.map(r => ({ ...r, user_id: userId }))) : { error: null };
+  if (sErr) { await admin.from("individual_scholar_artefact").delete().eq("user_id", userId).eq("id", data.id); return "failed"; }
+  return "ok";
+}
+
+/** The person's saved artefacts (all, or one material's, or those built on some sections), newest first. */
+export async function listArtefacts(admin: Admin, userId: string, opts: { materialId?: string; chunkIds?: readonly string[] } = {}): Promise<Read<ArtefactRow[]>> {
+  let ids: string[] | null = null;
+  if (opts.chunkIds?.length) {
+    const { data, error } = await admin.from("individual_scholar_artefact_source").select("artefact_id").eq("user_id", userId).in("chunk_id", [...opts.chunkIds]).limit(2000);
+    if (error) return fail(error);
+    ids = [...new Set(((data ?? []) as any[]).map(r => r.artefact_id))];
+    if (!ids.length) return { ok: true, data: [] };
+  }
+  let q = admin.from("individual_scholar_artefact").select(ARTEFACT_COLS).eq("user_id", userId);
+  if (opts.materialId) q = q.eq("material_id", opts.materialId);
+  if (ids) q = q.in("id", ids);
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(500);
+  if (error) return fail(error);
+  const src = await artefactSources(admin, userId, ((data ?? []) as any[]).map(r => r.id));
+  return { ok: true, data: ((data ?? []) as any[]).map(r => toArtefact(r, src.get(r.id) ?? [])) };
+}
+
 /** After a material is deleted: sessions with no step left have nothing to teach, and go too. */
 async function pruneEmptySessions(admin: Admin, userId: string): Promise<void> {
   const { data: sessions, error } = await admin.from("individual_scholar_learning_session").select("id").eq("user_id", userId).limit(1000);

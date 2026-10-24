@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { planSteps, stepTitle } from "./learn";
+import { artefactKey, isArtefactAction, planSteps, stepTitle } from "./learn";
+import { activityState, getScholarAiStanding, type AiStanding } from "./ai-standing";
 import { offeredActions } from "./learn-view";
 import { buildLearnerContext } from "./learner-context";
 import { STEP_MAX_SECTIONS } from "./config";
@@ -74,6 +75,29 @@ describe("L3: the informal check and the clarification", () => {
     expect(parseVerdict("VERDICT: partly\nYou named the target range [S1].")).toEqual({ verdict: "partly", rest: "You named the target range [S1]." });
     expect(parseVerdict("**VERDICT: not yet**\nLook again [S2].").verdict).toBe("not_yet");
     expect(parseVerdict("VERDICT: excellent\nWell done [S1].").verdict).toBeNull();
+  });
+});
+
+describe("AI-FAIR-USE-01 s8 and s7: saved artefacts and continuity", () => {
+  const base = { action: "teach", depth: "standard", chunkIds: ["c1", "c2"], promptVersion: "scholar-learn-v1:teach", references: REFS, background: true };
+  it("the same request has the same key, whatever the order of its sections; anything that changes the answer changes it", () => {
+    expect(artefactKey(base)).toBe(artefactKey({ ...base, chunkIds: ["c2", "c1"] }));
+    expect(artefactKey(base)).toMatch(/^[0-9a-f]{64}$/);
+    for (const changed of [{ depth: "brief" }, { action: "simplify" }, { chunkIds: ["c1"] }, { promptVersion: "scholar-learn-v2:teach" }, { references: [] }, { background: false }])
+      expect(artefactKey({ ...base, ...changed })).not.toBe(artefactKey(base));
+  });
+  it("only reusable answers are artefacts: conversation (ask, check, clarify) is not", () => {
+    expect(["teach", "explain", "simplify", "deeper", "examples", "summary"].every(isArtefactAction)).toBe(true);
+    expect(["ask", "check", "clarify"].some(isArtefactAction)).toBe(false);
+  });
+  it("the stub is full AI until IND-007's standing lands; a limited standing says so plainly, and never quietly downgrades", async () => {
+    const full = await getScholarAiStanding(null, "u");
+    expect(activityState(full, "teach")).toEqual({ available: true, message: null, insufficient: false });
+    const limited: AiStanding = { ...full, readable: true, level: "continuity", message: "Your AI allowance resets on Monday.", activities: { ...full.activities, teach: { available: false, via: null, reason: "allowance_exhausted" } } };
+    expect(activityState(limited, "teach")).toEqual({ available: false, message: "Your AI allowance resets on Monday.", insufficient: false });
+    const weak: AiStanding = { ...full, activities: { ...full.activities, deeper: { available: false, via: null, reason: "level_insufficient" } } };
+    expect(activityState(weak, "deeper")).toMatchObject({ available: false, insufficient: true, message: expect.stringMatching(/will not use a weaker one/) });
+    expect(activityState({ ...full, readable: false }, "teach").available).toBe(false);
   });
 });
 

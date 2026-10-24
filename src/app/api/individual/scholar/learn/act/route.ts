@@ -4,12 +4,16 @@ export const maxDuration = 60;
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { getLearningPreference, getLearningSession, getPassage, isUuid, recordLearningEvent, searchCandidates, toPassages, updateLearningSession } from "@/lib/individual/scholar/store";
+import {
+  findArtefact, getLearningPreference, getLearningSession, getPassage, isUuid, listArtefacts, recordLearningEvent, saveArtefact, searchCandidates, toPassages, updateLearningSession,
+  type ArtefactRow,
+} from "@/lib/individual/scholar/store";
+import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit } from "@/lib/individual/scholar/http";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
-import { EXPLAIN_REFUSAL, SUPPLEMENTARY_WITHHELD, describeViolations, passageCitation, passageTag, runLearn, type Passage, type TutorTurn } from "@/lib/individual/scholar/generation";
+import { EXPLAIN_REFUSAL, SUPPLEMENTARY_WITHHELD, describeViolations, learnPromptVersion, passageCitation, passageTag, runLearn, type Passage, type TutorTurn } from "@/lib/individual/scholar/generation";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
-import { governedReferences } from "@/lib/individual/scholar/learn";
+import { artefactKey, governedReferences, isArtefactAction } from "@/lib/individual/scholar/learn";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import {
   AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, STEP_MAX_SECTIONS,
@@ -31,6 +35,12 @@ export const dynamic = "force-dynamic";
 // cited and checked, background and AI flags are split off and checked, and nothing is shown ungrounded.
 // Nothing the AI says or the student types is stored. A recorded session gets one event: the action, the step,
 // the sections used and, for a clarification, the informal verdict -- never assessment, never competence.
+//
+// AI-FAIR-USE-01 s8, NOT REGENERATED: a reusable answer (teach, explain, simplify, deeper, examples, summary, with no
+// conversation) is saved as an artefact, and the same request returns the saved one with no AI call -- unless the
+// student asks for a new one ({ fresh: true }), which replaces it. s7, CONTINUITY: when new AI is not available
+// (the student's standing, or the allowance refusing), the answer says so plainly and returns what is saved for these
+// sections. Nothing claims a new AI answer was made.
 
 const CANNED: Record<LearnAction | "check", string> = {
   teach: "Teach me this step.", explain: "Explain this.", simplify: "Explain this as simply as possible.", deeper: "Help me understand this in more depth.",
@@ -89,21 +99,60 @@ export async function POST(req: Request) {
   } else passages = await ownPassages(ctx.admin, ctx.userId, stepIds);
   if (!passages?.length) return NextResponse.json({ error: "That section could not be found." }, { status: 404 });
 
-  const pre = await aiPreflight(ctx);
-  if (pre) return pre;
-
-  // ── how to teach it: depth, the student's context, the governed references (L5 decides each) ──
+  // ── how to teach it: depth and the governed references (L5 decides each). No AI yet. ──
   const pref = await getLearningPreference(ctx.admin, ctx.userId);
   const depth: ExplanationDepth = (EXPLANATION_DEPTHS as readonly string[]).includes(body?.depth) ? body.depth : pref?.depth ?? policy.scholarExplanationDepth;
-  const [learner, learnerContext] = await Promise.all([loadLearnerCatalogue(ctx.admin, ctx.userId), loadTutorContext(ctx.admin, ctx.userId, passages.map(p => p.chunkId))]);
+  const learner = await loadLearnerCatalogue(ctx.admin, ctx.userId);
   const references = policy.scholarLearningObjectives === "outcomes" ? await governedReferences(ctx.admin, ctx.userId, passages.map(p => p.chunkId), learner.competencies) : [];
+  const background = policy.scholarBeyondNotes === "labelled";
+
+  // ── s8: a saved artefact for exactly this request is returned, not regenerated ──
+  const hasHistory = Array.isArray(body?.history) && body.history.length > 0;
+  const oneMaterial = new Set(passages.map(p => p.materialId)).size === 1;
+  const storable = isArtefactAction(action) && !hasHistory && oneMaterial;
+  const key = storable ? artefactKey({ action, depth, chunkIds: passages.map(p => p.chunkId), promptVersion: learnPromptVersion(action), references, background }) : null;
+  const savedReply = (a: ArtefactRow, extra: Record<string, unknown> = {}) => {
+    const byId = new Map(passages!.map(p => [p.chunkId, p]));
+    const src = a.sources.map(id => byId.get(id)).filter((p): p is Passage => !!p);
+    return {
+      action, step, depth: a.depth, label: AI_LABEL, provenance: { model: a.model, promptVersion: a.promptVersion }, kinds: SOURCE_KIND_LABEL,
+      sources: src.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) })),
+      passageIds: src.map(p => p.chunkId), references: a.refs, answer: a.content, cited: src.map((_, i) => i + 1),
+      background: a.background ? { text: a.background, label: SUPPLEMENTARY_LABEL } : null, flags: a.flags, verdict: null,
+      saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, ...extra,
+    };
+  };
+  if (key && body?.fresh !== true) {
+    const saved = await findArtefact(ctx.admin, ctx.userId, key);
+    if (saved && saved.sources.every(id => passages!.some(p => p.chunkId === id))) {
+      if (recorded && sessionId && policy.scholarLearningHistory === "record") {
+        await recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action, verdict: null, chunkIds: saved.sources });
+        await updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step });
+      }
+      return NextResponse.json(savedReply(saved));
+    }
+  }
+
+  // ── s7: continuity -- no new AI where the standing (or the allowance) says no; what is saved stays available ──
+  const continuity = async (message: string, insufficient: boolean) => {
+    const saved = await listArtefacts(ctx.admin, ctx.userId, { chunkIds: passages!.map(p => p.chunkId) });
+    return NextResponse.json({ action, step, continuity: { message, insufficient }, saved: saved.ok ? saved.data.slice(0, 5).map(a => savedReply(a)) : [] });
+  };
+  const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), action as "teach");
+  if (!standing.available) return continuity(standing.message ?? "", standing.insufficient);
+  const pre = await aiPreflight(ctx);
+  if (pre) {
+    if (pre.status === 429) return continuity(((await pre.clone().json().catch(() => ({}))) as { error?: string }).error ?? "Your AI allowance is used up for now.", false);
+    return pre;
+  }
+  const learnerContext = await loadTutorContext(ctx.admin, ctx.userId, passages.map(p => p.chunkId));
   const history: TutorTurn[] = (Array.isArray(body?.history) ? body.history : []).slice(-policy.scholarTutorTurns).flatMap((raw: unknown) => {
     const t = raw as { speaker?: unknown; text?: unknown } | null;
     return (t?.speaker === "tutor" || t?.speaker === "student") && typeof t.text === "string" && t.text.trim() ? [{ speaker: t.speaker, text: t.text.trim().slice(0, 1500) }] : [];
   });
   const prompt = action === "ask" ? question : action === "clarify" ? `Your check question was: ${checkQuestion}\nMy answer: ${answer}` : CANNED[action as LearnAction | "check"];
 
-  const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background: policy.scholarBeyondNotes === "labelled", history, learnerContext });
+  const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn", sessionId, {
     action, step, chunk_ids: passages.map(p => p.chunkId), depth, references: references.length, learner_context: learnerContext !== null, recorded,
     outcome: r.ok ? (action === "check" ? (r.question?.ok ? "shown" : `withheld:${r.question?.reason}`) : r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,
@@ -131,6 +180,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ...base, withheld: true, reason: r.check.reason, message: EXPLAIN_REFUSAL[r.check.reason] + detail, notInNotes: r.check.reason === "not_in_notes" });
   }
   const b = r.background;
+  // s8: the shown answer is saved for next time (private formative; replaced when the student asks for a new one).
+  let savedNow: "ok" | "not_provisioned" | "failed" | null = null;
+  if (key) savedNow = await saveArtefact(ctx.admin, ctx.userId, {
+    materialId: passages[0].materialId, action, depth, content: r.check.text, background: b?.ok ? b.text : null, flags: r.flags.kept,
+    refs: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), dedupeKey: key, model: r.model, promptVersion: r.promptVersion, chunkIds: passages.map(p => p.chunkId),
+  });
   return NextResponse.json({
     ...base,
     answer: r.check.text,
@@ -138,5 +193,6 @@ export async function POST(req: Request) {
     background: !b || (!b.ok && b.reason === "not_this_mode") ? null : b.ok ? { text: b.text, label: SUPPLEMENTARY_LABEL } : { withheld: SUPPLEMENTARY_WITHHELD[b.reason as Exclude<typeof b.reason, "not_this_mode">] },
     flags: r.flags.kept,
     verdict: r.verdict ? { value: r.verdict, label: CHECK_VERDICT_LABEL[r.verdict], informal: INFORMAL_CHECK_LABEL } : null,
+    savedForLater: savedNow === "ok",
   });
 }

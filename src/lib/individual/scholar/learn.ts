@@ -10,6 +10,7 @@
 // ⚠ SUGGESTED, NOT COMPULSORY. A student may skip, revisit or reorder steps and ask about anything at any point.
 // ⚠ NOTHING HERE IS ASSESSMENT. An informal check is the student's own signal (config INFORMAL_CHECK_LABEL).
 
+import { createHash } from "node:crypto";
 import { STEP_MAX_SECTIONS } from "./config";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "./retrieval";
 import { competencyChunks, getPassage, searchCandidates, sectionLinks, sectionRefs, sectionsOf, topicsOfSections, type LearningStep, type SectionRef } from "./store";
@@ -119,6 +120,21 @@ export async function governedReferences(admin: any, userId: string, chunkIds: r
   const labels: Map<string, CompetencyLabel> = await competencyLabels(admin, catalogue, unique.map(l => l.competencyId), new Map());
   return unique.map(l => {
     const lab = labels.get(l.competencyId);
-    return { title: lab?.title ?? "A competency", code: lab?.code ?? null, outcome: l.outcome, status: CONTENT_STATUS_LABEL[(lab?.contentStatus ?? "unreviewed") as keyof typeof CONTENT_STATUS_LABEL] ?? CONTENT_STATUS_LABEL.unreviewed };
+    return { competencyId: l.competencyId, title: lab?.title ?? "A competency", code: lab?.code ?? null, outcome: l.outcome, status: CONTENT_STATUS_LABEL[(lab?.contentStatus ?? "unreviewed") as keyof typeof CONTENT_STATUS_LABEL] ?? CONTENT_STATUS_LABEL.unreviewed };
   });
+}
+
+/** The learning actions whose answers are reusable artefacts (s8). Conversation -- ask, check, clarify -- is not. */
+export const ARTEFACT_ACTIONS = ["teach", "explain", "simplify", "deeper", "examples", "summary"] as const;
+export const isArtefactAction = (a: string): a is (typeof ARTEFACT_ACTIONS)[number] => (ARTEFACT_ACTIONS as readonly string[]).includes(a);
+
+/**
+ * AI-FAIR-USE-01 s8: the key that makes the same request return the saved artefact instead of a new AI call -- the
+ * action, the depth, the sections (as a set), the prompt version, and which references (by competency and outcome)
+ * it would be given. Anything that would change the answer changes the key.
+ */
+export function artefactKey(input: { action: string; depth: string; chunkIds: readonly string[]; promptVersion: string; references: readonly GovernedReference[]; background: boolean }): string {
+  const refs = input.references.map(r => `${r.competencyId ?? r.title}|${r.outcome ?? ""}`).sort().join(";");
+  const basis = [input.action, input.depth, [...input.chunkIds].sort().join(","), input.promptVersion, refs, input.background ? "bg" : "nobg"].join("\n");
+  return createHash("sha256").update(basis).digest("hex");
 }

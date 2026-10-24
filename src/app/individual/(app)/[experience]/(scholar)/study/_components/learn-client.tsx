@@ -32,6 +32,10 @@ type Reply = {
   background?: { text?: string; label?: string; withheld?: string } | null; flags?: { text: string; cited: number[] }[];
   verdict?: { value: string; label: string; informal: string } | null; checkQuestion?: string; informal?: string;
   provenance?: { model: string; promptVersion: string }; error?: string;
+  /** s8: a saved artefact returned instead of a new AI call. */
+  saved?: { at: string; reviewStatus: string } | null; savedForLater?: boolean;
+  /** s7: no new AI now; what is saved for these sections. */
+  continuity?: { message: string; insufficient: boolean }; savedList?: Reply[];
 };
 type Card = { id: number; asked?: string; reply: Reply };
 
@@ -48,6 +52,8 @@ export function LearnWorkspace(props: {
   initial: SessionView | null; initialProgress: Record<number, { actions: string[]; verdict: string | null }>; start: StartScope | null;
   actions: LearnAction[]; startAction: LearnAction; labels: Record<LearnAction, string>; consent: boolean; offMessage: string | null;
   checks: "offer" | "prompt" | "off"; depth: "brief" | "standard" | "detailed"; maxTurns: number; materials: { id: string; title: string }[];
+  /** s7: when new AI is limited, the plain message from the student's standing. Saved learning stays available. */
+  standingMessage?: string | null;
 }) {
   const [session, setSession] = useState<SessionView | null>(props.initial);
   const [note, setNote] = useState<string | null>(null);
@@ -75,10 +81,11 @@ export function LearnWorkspace(props: {
     });
     setBusy("");
     if (!r.ok && !r.json.withheld) { setError(r.json.error ?? "Scholar could not answer just now."); return null; }
-    const card: Card = { id: ++seq.current, asked, reply: r.json as Reply };
+    const reply = (r.json.continuity ? { ...r.json, savedList: r.json.saved, saved: null, sources: [], references: [] } : r.json) as Reply;
+    const card: Card = { id: ++seq.current, asked, reply };
     if (target === "ask") setAskThread(t => [card, ...t]);
     else setCards(c => ({ ...c, [step.step]: [...(c[step.step] ?? []), card] }));
-    if (!r.json.withheld) setProgress(p => ({ ...p, [step.step]: { actions: [...new Set([...(p[step.step]?.actions ?? []), action])], verdict: r.json.verdict?.value ?? p[step.step]?.verdict ?? null } }));
+    if (!r.json.withheld && !r.json.continuity) setProgress(p => ({ ...p, [step.step]: { actions: [...new Set([...(p[step.step]?.actions ?? []), action])], verdict: r.json.verdict?.value ?? p[step.step]?.verdict ?? null } }));
     return r.json as Reply;
   }, [session, step, depth]);
 
@@ -156,6 +163,11 @@ export function LearnWorkspace(props: {
         </p>
       </div>
       {!props.consent && <p className="mb-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">{props.offMessage} <Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`}>Go to My Learning</Link></p>}
+      {props.standingMessage && (
+        <p className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-[13.5px] text-sky-950">
+          {props.standingMessage} Your saved explanations, questions, cards, cases and progress are all still here. <Link href={experienceHref("scholar", "study/saved")} className={`font-semibold underline ${focusRing}`}>Saved learning</Link>
+        </p>
+      )}
       {error && <p role="alert" className="mb-3 text-[13.5px] font-medium text-red-700">{error}</p>}
 
       <div role="tablist" aria-label="Workspace" className="mb-3 flex gap-2 md:hidden">
@@ -214,7 +226,7 @@ export function LearnWorkspace(props: {
 
           <div aria-live="polite" className="mt-4 space-y-4">
             {thread.length === 0 && !busy && <p className="text-[13.5px] text-gray-600">{props.consent ? `Choose ${props.labels[props.startAction]} to begin this step, or ask Scholar anything.` : "Learning needs AI help, which is off."}</p>}
-            {thread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} />)}
+            {thread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }) : undefined} />)}
             {busy && busy !== "ask" && <p className="text-[13px] text-gray-500">Scholar is reading your notes…</p>}
           </div>
 
@@ -268,8 +280,22 @@ export function LearnWorkspace(props: {
 }
 
 /** One reply, its four kinds of content kept apart and labelled (owner GO s7). */
-function ReplyCard({ card, labels, compact = false }: { card: Card; labels: Record<LearnAction, string>; compact?: boolean }) {
+function ReplyCard({ card, labels, compact = false, onFresh }: { card: Card; labels: Record<LearnAction, string>; compact?: boolean; onFresh?: () => void }) {
   const r = card.reply;
+  if (r.continuity) {
+    return (
+      <article className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+        <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-sky-900">No new AI answer right now</p>
+        <p className="mt-1 text-[14px] text-gray-800">{r.continuity.message}</p>
+        {r.savedList?.length ? (
+          <div className="mt-3 space-y-3">
+            <p className="text-[13px] font-semibold text-gray-800">What you saved for these sections:</p>
+            {r.savedList.map((s, i) => <ReplyCard key={i} card={{ id: i, reply: s }} labels={labels} compact />)}
+          </div>
+        ) : <p className="mt-2 text-[13px] text-gray-600">Nothing is saved for these sections yet. Your notes, questions, cards and progress are still available.</p>}
+      </article>
+    );
+  }
   const name = r.action === "clarify" ? "Clarification" : r.action === "check" ? "Check question" : labels[r.action as LearnAction] ?? r.action;
   if (r.action === "check" && r.checkQuestion) return null; // shown in the check form
   const cited = new Set(r.cited ?? []);
@@ -319,6 +345,13 @@ function ReplyCard({ card, labels, compact = false }: { card: Card; labels: Reco
           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] text-amber-950">{r.flags.map((f, i) => <li key={i}>{f.text}</li>)}</ul>
         </div>
       )}
+      {r.saved && (
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-gray-600">
+          <span>Saved {new Date(r.saved.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · private, for your own study · no new AI was used</span>
+          {onFresh && <button type="button" onClick={onFresh} className={`rounded-lg border border-gray-300 bg-white px-2 py-0.5 font-semibold text-gray-800 hover:bg-gray-50 ${focusRing}`}>Explain it a new way</button>}
+        </p>
+      )}
+      {r.savedForLater && <p className="mt-2 text-[12px] text-gray-500">Saved to your learning, so you can come back to it without using AI again.</p>}
       {r.provenance && <p className="mt-2 text-[11px] text-gray-400">Model {r.provenance.model} · prompt {r.provenance.promptVersion}</p>}
     </article>
   );

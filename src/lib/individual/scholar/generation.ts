@@ -336,7 +336,7 @@ export async function runExplain(userId: string, question: string, passages: Pas
 //     shown as the AI's flag for the student to check, never as a correction. Nothing invents a citation: a tag
 //     outside the ones given withholds the answer.
 
-export type GovernedReference = { title: string; code: string | null; outcome: string | null; status: string };
+export type GovernedReference = { title: string; code: string | null; outcome: string | null; status: string; competencyId?: string };
 export const FLAG_MARKER = "CHECK THIS:";
 const DEPTH_WORDS: Record<ExplanationDepth, number> = { brief: 120, standard: 220, detailed: 350 };
 const BACKGROUND_ACTIONS: readonly LearnAction[] = ["teach", "deeper", "examples"];

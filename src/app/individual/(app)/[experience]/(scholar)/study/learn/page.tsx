@@ -11,6 +11,7 @@ import { LEARN_ACTION_LABEL } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { LearnWorkspace, type StartScope } from "../_components/learn-client";
+import { getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -41,6 +42,9 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
     listLearningSessions(ctx.admin, ctx.userId, 5), listMaterials(ctx.admin, ctx.userId),
   ]);
   const status = consent.ok ? consentStatus(consent.data, consentDocuments().published) : null;
+  // s7: the student's AI standing (IND-007's, through Scholar's one adapter). Limited AI never hides saved learning.
+  const standing = await getScholarAiStanding(ctx.admin, ctx.userId);
+  const standingMessage = !standing.readable || standing.level === "continuity" ? (standing.message ?? "New AI help is limited right now.") : null;
   const offered = offeredActions(policy, pref?.defaultAction);
 
   // A session to resume: the student's own, with what was done at each step.
@@ -81,7 +85,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
           actions={offered.actions} startAction={offered.start} labels={LEARN_ACTION_LABEL}
           consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? null : "Your AI help setting could not be read just now."}
           checks={policy.scholarCheckBehaviour} depth={pref?.depth ?? policy.scholarExplanationDepth} maxTurns={policy.scholarTutorTurns}
-          materials={materials}
+          materials={materials} standingMessage={standingMessage}
         />
       )}
     </>

@@ -16,6 +16,11 @@
  *   S   Start learning (Stage 2's ready page) opens Teach Me
  *   H   history is structure only, and a deleted material takes its steps with it
  *   I   isolation: another student reaches none of it        E  erase-all leaves nothing
+ *   A   AI-FAIR-USE-01 s8: a reusable answer is saved (private formative, with its sources) and the same request
+ *       returns it with no new AI; "a new way" replaces it; Saved learning lists it; it goes with its material
+ *   C   s7 continuity: with the student's allowance used up (synthetic usage rows for THIS fixture only, never shared
+ *       configuration), Learn says so plainly and returns what is saved; a stored question is still marked by its
+ *       answer key; the saved page and progress still open
  *
  * ⚠ NEEDS a dev server pointed at STAGING (BASE_URL) with individual_app ON, the staging-test legal versions AND
  * URLs (AI consent), an AI provider, migrations 406-409 and 414, the viewing programme with its catalogues, and pptx
@@ -274,6 +279,42 @@ async function main() {
       `${progressPage.status} references named: ${refs.length}`);
   }
 
+  // ── A: the artefact library (s8) ──
+  const m415 = !(await admin.from("individual_scholar_artefact").select("id").limit(0)).error;
+  if (!m415) pend("A1-A3. saved explanations", "415 not applied here");
+  else {
+    const again = await send("POST", "/api/individual/scholar/learn/act", { action: "teach", ...where(0) }, sa.jar);
+    const rows = ((await admin.from("individual_scholar_artefact").select("id, review_status, action").eq("user_id", a).eq("action", "teach")).data ?? []) as any[];
+    const src = rows[0] ? ((await admin.from("individual_scholar_artefact_source").select("chunk_id").eq("artefact_id", rows[0].id)).data ?? []) as any[] : [];
+    ok("A1. Teach Me's answer was saved (private formative, with its sources) and the same request returns it with no new AI call",
+      teach.json?.savedForLater === true && again.status === 200 && !!again.json?.saved && again.json?.answer === teach.json?.answer
+      && rows.every(r => r.review_status === "private_formative") && src.length === step0Ids.length, `${again.status} saved ${!!again.json?.saved} rows ${rows.length} sources ${src.length}`);
+    const fresh = await act(sa.jar, { action: "teach", fresh: true, ...where(0) });
+    const after = ((await admin.from("individual_scholar_artefact").select("id").eq("user_id", a).eq("action", "teach").eq("material_id", step0.sections[0].materialId)).data ?? []).length;
+    ok("A2. 'Explain it a new way' makes a new AI answer and replaces the saved one (one kept per request)", fresh.status === 200 && !fresh.json?.saved && !!fresh.json?.answer && after === rows.filter(() => true).length,
+      `${fresh.status} kept ${after}`);
+    const savedPage = await get("/individual/scholar/study/saved", sa.jar);
+    ok("A3. Saved learning lists the saved explanations by material, labelled private and formative, beside the questions, cases, cards and sessions",
+      savedPage.status === 200 && /Saved explanations and summaries/.test(savedPage.text) && /never evidence of competence/.test(savedPage.text) && /Learning sessions/.test(savedPage.text));
+  }
+
+  // ── C: continuity (s7) ──
+  const qChunk = step0Ids[0];
+  const made = await send("POST", "/api/individual/scholar/questions", { chunkId: qChunk, kind: "mcq" }, sa.jar);
+  const storedQ = ((await admin.from("individual_scholar_question").select("id, correct_index").eq("user_id", a).limit(1)).data ?? [])[0] as any;
+  const usage = Array.from({ length: 200 }, () => ({ actor_id: a, actor_name: "harness", action: "ai_assistant_query", entity_type: "harness_learn01_continuity", new_value: { synthetic: true } }));
+  await admin.from("audit_log").insert(usage);
+  const cont = await send("POST", "/api/individual/scholar/learn/act", { action: "deeper", ...where(0) }, sa.jar);
+  const savedTeach = await send("POST", "/api/individual/scholar/learn/act", { action: "teach", ...where(0) }, sa.jar);
+  const marked = storedQ ? await send("POST", "/api/individual/scholar/attempts", { questionId: storedQ.id, chosenIndex: storedQ.correct_index }, sa.jar) : null;
+  const pages = await Promise.all(["/individual/scholar/study/saved", "/individual/scholar/study/progress", `/individual/scholar/study/${step0.sections[0].materialId}`].map(p => get(p, sa.jar)));
+  ok("C1. with the allowance used up, Learn says so plainly, makes no new AI answer, and returns what is saved for the step",
+    cont.status === 200 && !!cont.json?.continuity?.message && !cont.json?.answer && (!m415 || (cont.json?.saved ?? []).length > 0), `${cont.status} ${JSON.stringify(cont.json?.continuity ?? cont.json?.error)}`);
+  ok("C2. a saved answer still opens with no AI, a stored question is still marked by its answer key, and saved learning, progress and the material still open",
+    (!m415 || (savedTeach.status === 200 && !!savedTeach.json?.saved)) && (!storedQ || (marked?.status === 200 && marked.json?.correct === true)) && pages.every(p => p.status === 200),
+    `saved ${savedTeach.status} · question ${made.status}/${marked?.status} ${JSON.stringify(marked?.json ?? {})} · pages ${pages.map(p => p.status)}`);
+  await admin.from("audit_log").delete().eq("actor_id", a).eq("entity_type", "harness_learn01_continuity");
+
   // ── NC: no competency catalogue ──
   const bDoc = await upload(sb.jar, DOCX_MIME, await tinyDocx(OXYGEN), "Oxygen therapy notes.docx");
   const bStart = bDoc ? await send("POST", "/api/individual/scholar/learn/sessions", { scope: { kind: "document", materialId: bDoc } }, sb.jar) : null;
@@ -299,8 +340,9 @@ async function main() {
     const stepsBefore = ((await admin.from("individual_scholar_learning_step").select("material_id").eq("session_id", sid)).data ?? []).length;
     await send("DELETE", `/api/individual/scholar/materials/${ids.anatomy}`, undefined, sa.jar);
     const after = ((await admin.from("individual_scholar_learning_step").select("material_id").eq("session_id", sid)).data ?? []) as any[];
-    ok("H2. deleting a material removes the steps and sources that used it; the session keeps the rest", after.length < stepsBefore && after.every(r => r.material_id !== ids.anatomy) && after.length > 0,
-      `${stepsBefore} -> ${after.length}`);
+    const artefactsLeft = m415 ? ((await admin.from("individual_scholar_artefact").select("id").eq("user_id", a).eq("material_id", ids.anatomy!)).data ?? []).length : 0;
+    ok("H2. deleting a material removes the steps, sources and saved explanations that used it; the session keeps the rest", after.length < stepsBefore && after.every(r => r.material_id !== ids.anatomy) && after.length > 0 && artefactsLeft === 0,
+      `${stepsBefore} -> ${after.length}, artefacts left ${artefactsLeft}`);
   } else pend("H1/H2. structure-only history and material deletion", "414 not applied here");
 
   // ── E: erase-all ──
@@ -308,8 +350,9 @@ async function main() {
   const left = m414 ? {
     sessions: (await admin.from("individual_scholar_learning_session").select("id", { count: "exact" }).eq("user_id", a).limit(1)).count,
     events: (await admin.from("individual_scholar_learning_event").select("id", { count: "exact" }).eq("user_id", a).limit(1)).count,
-  } : { sessions: 0, events: 0 };
-  ok("E1. erase-all leaves no learning history", erase.status === 200 && left.sessions === 0 && left.events === 0, `${erase.status} ${JSON.stringify(left)}`);
+    artefacts: (await admin.from("individual_scholar_artefact").select("id", { count: "exact" }).eq("user_id", a).limit(1)).count ?? 0,
+  } : { sessions: 0, events: 0, artefacts: 0 };
+  ok("E1. erase-all leaves no learning history and no saved explanation", erase.status === 200 && left.sessions === 0 && left.events === 0 && left.artefacts === 0, `${erase.status} ${JSON.stringify(left)}`);
 }
 
 main()
