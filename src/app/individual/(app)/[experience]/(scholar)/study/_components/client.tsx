@@ -6,7 +6,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
-import { AI_LABEL, ALLOWED_MIME, CONTENT_STATUS_LABEL, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, MAX_UPLOAD_BYTES, PDF_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
+import { AI_LABEL, CONTENT_STATUS_LABEL, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, PDF_MIME, TEXT_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
 import type { ConsentStatus, LegalLink } from "@/lib/individual/scholar/consent-gate";
 
 // The interactive pieces of My Learning. Each one calls a gate-3 API route and shows what the route says,
@@ -184,53 +184,113 @@ export function SourceNotice({ compact = false }: { compact?: boolean }) {
 
 // ── UPLOAD ─────────────────────────────────────────────────────────────────────────────────────────
 
-export function UploadPanel() {
+/** What may be uploaded now (config.ts uploadRules, from the Individual policy). Serialisable, from the server page. */
+export type UploadRulesView = { mimes: string[]; maxMb: number; text: boolean; describe: string };
+
+const EXT: Record<string, string> = { [PDF_MIME]: ".pdf", [DOCX_MIME]: ".docx", [TEXT_MIME]: ".txt" };
+/** The browser's word for a file, checked by extension too (phones often report an empty type). The server sniffs the bytes. */
+function mimeOf(f: File): string {
+  if (f.type === PDF_MIME || /\.pdf$/i.test(f.name)) return PDF_MIME;
+  if (f.type === DOCX_MIME || /\.docx$/i.test(f.name)) return DOCX_MIME;
+  if (f.type === TEXT_MIME || /\.txt$/i.test(f.name)) return TEXT_MIME;
+  return f.type;
+}
+
+/**
+ * Stage 2 (COMPETEN-SCHOLAR-UPLOAD). A file, or -- where plain text is enabled -- text pasted straight into the
+ * page, which is kept as a .txt original exactly as a file would be. Both take the same path: a server-chosen
+ * object in the person's private folder, the bytes checked and read on Competen's servers, the patient-identifier
+ * screen before anything is kept, and no AI until the person has turned AI help on.
+ */
+export function UploadPanel({ rules }: { rules: UploadRulesView }) {
   const router = useRouter();
+  const [mode, setMode] = useState<"file" | "paste">("file");
   const [file, setFile] = useState<File | null>(null);
+  const [pasteTitle, setPasteTitle] = useState("");
+  const [pasteText, setPasteText] = useState("");
   const [attested, setAttested] = useState(false);
-  const [stage, setStage] = useState<"" | "uploading" | "reading">("");
+  const [stage, setStage] = useState<"" | "uploading" | "reading" | "done">("");
   const [error, setError] = useState("");
-  const mime = file ? (file.type === PDF_MIME || /\.pdf$/i.test(file.name) ? PDF_MIME : file.type === DOCX_MIME || /\.docx$/i.test(file.name) ? DOCX_MIME : file.type) : "";
+  const maxBytes = rules.maxMb * 1024 * 1024;
+
+  function pasted(): File | null {
+    const t = pasteText.trim();
+    if (!t) return null;
+    const name = (pasteTitle.trim() || "Pasted notes").replace(/[\\/:*?"<>|]+/g, " ").slice(0, 120);
+    return new File([t], `${name}.txt`, { type: TEXT_MIME });
+  }
+  const chosen = mode === "paste" ? pasted() : file;
 
   async function upload(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || !attested || stage) return;
+    const f = chosen;
+    if (!f || !attested || (stage && stage !== "done")) return;
     setError("");
-    if (!(ALLOWED_MIME as readonly string[]).includes(mime)) { setError("Upload a PDF or a Word (.docx) file."); return; }
-    if (file.size > MAX_UPLOAD_BYTES) { setError(`Files must be ${MAX_UPLOAD_BYTES / 1024 / 1024} MB or smaller.`); return; }
+    const mime = mimeOf(f);
+    if (!rules.mimes.includes(mime)) { setError(`Upload ${rules.describe}.`); return; }
+    if (f.size > maxBytes) { setError(`Files must be ${rules.maxMb} MB or smaller.`); return; }
     setStage("uploading");
-    const slot = await post("/api/individual/scholar/uploads", { mime, size: file.size, piiAttested: true });
+    const slot = await post("/api/individual/scholar/uploads", { mime, size: f.size, piiAttested: true });
     if (!slot.ok) { setStage(""); setError(slot.json.error ?? "The upload could not be started."); return; }
-    const { error: upErr } = await createClient().storage.from(slot.json.bucket).uploadToSignedUrl(slot.json.path, slot.json.token, file, { contentType: mime });
+    const { error: upErr } = await createClient().storage.from(slot.json.bucket).uploadToSignedUrl(slot.json.path, slot.json.token, f, { contentType: mime });
     if (upErr) { setStage(""); setError("The file could not be uploaded. Check your connection and try again."); return; }
     setStage("reading");
-    const done = await post("/api/individual/scholar/materials", { uploadId: slot.json.uploadId, mime, fileName: file.name, piiAttested: true });
-    setStage("");
-    if (!done.ok) { setError(done.json.error ?? "Your material could not be read."); return; }
+    const done = await post("/api/individual/scholar/materials", { uploadId: slot.json.uploadId, mime, fileName: f.name, piiAttested: true });
+    if (!done.ok) { setStage(""); setError(`${done.json.error ?? "Your material could not be read."} Nothing was kept, so you can fix it and try again.`); return; }
+    setStage("done");
     router.push(studyHref(done.json.id));
     router.refresh();
   }
 
+  const tab = (m: "file" | "paste", label: string) => (
+    <button type="button" role="tab" aria-selected={mode === m} onClick={() => { setMode(m); setError(""); }}
+      className={`min-h-[44px] rounded-xl px-4 py-2 text-[14px] font-semibold ${mode === m ? "bg-gray-900 text-white" : "border border-gray-300 bg-white text-gray-800 hover:bg-gray-50"} ${focusRing}`}>{label}</button>
+  );
+
   return (
     <form id="upload" onSubmit={upload} aria-labelledby="upload-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
       <h2 id="upload-h" className="text-[16px] font-bold text-gray-900">Upload study material</h2>
-      <p className="mt-1 text-[13.5px] text-gray-600">PDF or Word (.docx), up to {MAX_UPLOAD_BYTES / 1024 / 1024} MB. The text is read on Competen&apos;s servers and kept private to you.</p>
+      <p className="mt-1 text-[13.5px] text-gray-600">{rules.describe}, up to {rules.maxMb} MB. The text is read on Competen&apos;s servers and kept private to you. You do not need to choose a competency first.</p>
       <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-3 text-[13.5px] leading-relaxed text-amber-950">
         <span className="font-bold">No patient information. </span>{PII_WARNING}
       </p>
-      <label htmlFor="scholar-file" className="mt-4 block text-[14px] font-semibold text-gray-900">File</label>
-      <input id="scholar-file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        onChange={e => setFile(e.target.files?.[0] ?? null)}
-        className={`mt-1.5 block w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-[14px] text-gray-800 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:font-semibold ${focusRing}`} />
+      {rules.text && (
+        <div role="tablist" aria-label="How to add your notes" className="mt-4 flex flex-wrap gap-2">
+          {tab("file", "Choose a file")}{tab("paste", "Paste text")}
+        </div>
+      )}
+      {mode === "file" || !rules.text ? (
+        <>
+          <label htmlFor="scholar-file" className="mt-4 block text-[14px] font-semibold text-gray-900">File</label>
+          <input id="scholar-file" type="file" accept={[...rules.mimes.map(m => EXT[m]), ...rules.mimes].join(",")}
+            onChange={e => setFile(e.target.files?.[0] ?? null)}
+            className={`mt-1.5 block w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-[14px] text-gray-800 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`} />
+          <p className="mt-1.5 text-[12.5px] text-gray-500">Photos of handwritten or printed notes cannot be read yet: text recognition (OCR) is not available.</p>
+        </>
+      ) : (
+        <>
+          <label htmlFor="scholar-paste-title" className="mt-4 block text-[14px] font-semibold text-gray-900">Title</label>
+          <input id="scholar-paste-title" type="text" maxLength={120} value={pasteTitle} onChange={e => setPasteTitle(e.target.value)} placeholder="For example: Respiratory lecture notes"
+            className={`mt-1.5 block w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-[15px] text-gray-900 ${focusRing}`} />
+          <label htmlFor="scholar-paste" className="mt-3 block text-[14px] font-semibold text-gray-900">Your notes</label>
+          <textarea id="scholar-paste" rows={8} value={pasteText} onChange={e => setPasteText(e.target.value)}
+            className={`mt-1.5 w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5 text-[15px] text-gray-900 ${focusRing}`} />
+          <p className="mt-1 text-[12.5px] text-gray-500">Kept as a text file, exactly as you pasted it, so you can download it again.</p>
+        </>
+      )}
       <label className="mt-4 flex items-start gap-3 text-[14px] text-gray-800">
         <input type="checkbox" checked={attested} onChange={e => setAttested(e.target.checked)} className="mt-1 h-5 w-5 shrink-0" />
         <span>{UPLOAD_ATTESTATION}</span>
       </label>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="submit" className={btn} style={{ background: accent }} disabled={!file || !attested || !!stage}>
-          {stage === "uploading" ? "Uploading…" : stage === "reading" ? "Reading your file…" : "Upload"}
+        <button type="submit" className={btn} style={{ background: accent }} disabled={!chosen || !attested || stage === "uploading" || stage === "reading"}>
+          {stage === "uploading" ? "Uploading…" : stage === "reading" ? "Reading your notes…" : stage === "done" ? "Opening…" : "Upload"}
         </button>
-        {stage === "reading" && <span className="text-[13px] text-gray-500" aria-live="polite">Extracting text and page numbers. A long PDF can take a little while.</span>}
+        <span className="text-[13px] text-gray-500" aria-live="polite">
+          {stage === "uploading" ? "Step 1 of 3: sending it to your private space."
+            : stage === "reading" ? "Step 2 of 3: reading the text and checking it for patient information. A long PDF can take a little while."
+              : stage === "done" ? "Step 3 of 3: saved. Opening it so Scholar can find its topics." : ""}
+        </span>
       </div>
       <ErrorLine text={error} />
       <p className="mt-3 text-[12px] text-gray-500">Competen also checks the text for NHS numbers, labelled dates of birth and hospital numbers, and will not keep a file that has them. That check cannot find everything, which is why your confirmation is needed.</p>

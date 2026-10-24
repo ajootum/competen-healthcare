@@ -107,3 +107,14 @@ export function contextAt(periods: readonly ContextPeriod[], createdAt: string):
   const t = new Date(createdAt).getTime();
   return periods.find(p => new Date(p.effectiveFrom).getTime() <= t && (p.effectiveTo === null || t < new Date(p.effectiveTo).getTime())) ?? null;
 }
+
+/**
+ * Stage 2: the educational-context stamp a material shows -- the context it was uploaded in, from 402's history
+ * by its created_at (contextAt). Labels as recorded at the time (levels and institutions are copied when chosen;
+ * a programme is named from the programme rows). null when the material predates every period.
+ */
+export function contextStamp(periods: readonly ContextPeriod[], createdAt: string, programmeLabels: ReadonlyMap<string, string>): string | null {
+  const p = contextAt(periods, createdAt);
+  if (!p) return null;
+  return [programmeLabels.get(p.programmeCode) ?? p.programmeCode, p.levelLabel, p.institutionLabel].filter(Boolean).join(" · ");
+}

@@ -314,6 +314,17 @@ const STAGING: Listed[] = [
       + "deletes its own harness-s2-* identities and programmes; never touches individual_app. PEND (exit 0, nothing "
       + "created) until 388 is applied and the seed is published.",
   },
+  {
+    file: "scholar-upload-harness.ts",
+    note: "COMPETEN-SCHOLAR-UPLOAD Stage 2 over HTTP: Welcome (Upload my notes) to the upload panel stating the POLICY's "
+      + "formats and size; a real PDF through the browser path; refusals (attestation, size, photo/no OCR, a format the "
+      + "policy has off, an NHS-number shape with its object removed); audit; plain text where 405 and the policy allow "
+      + "it (else PEND); the material page with sections, original download and its educational-context stamp; topic "
+      + "finding with clinical-status labels; an explanation and questions from the upload; isolation (404 for another "
+      + "student); erasure. Needs BASE_URL naming a STAGING-pointed dev server with the legal versions and an AI "
+      + "provider. Reads shared config only (never individual_app, the allowlist or the policy). Creates and deletes its "
+      + "own harness-upload-* identities.",
+  },
   { file: "mos-phase1-harness.ts", note: "CPR-CORE-MOS-001 phase 1. 20/20." },
   { file: "mos-phase2-harness.ts", note: "MOS phase 2. 25/25." },
   { file: "mos-phase3-harness.ts", note: "MOS phase 3. 73/73." },

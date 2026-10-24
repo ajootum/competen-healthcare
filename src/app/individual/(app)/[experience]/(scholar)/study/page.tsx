@@ -4,6 +4,9 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
 import { countDue, learnerProgramme, listMaterials, listProgrammes, readConsent } from "@/lib/individual/scholar/store";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { uploadRules } from "@/lib/individual/scholar/config";
+import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
 import { ProgrammeChooser } from "./_components/competency-client";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
 import StudyNav from "./_components/StudyNav";
@@ -41,10 +44,15 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
-  const [materials, consent, due, programmes, mine] = await Promise.all([
+  const [materials, consent, due, programmes, mine, policy, history] = await Promise.all([
     listMaterials(ctx.admin, ctx.userId), readConsent(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId),
-    listProgrammes(ctx.admin), learnerProgramme(ctx.admin, ctx.userId),
+    listProgrammes(ctx.admin), learnerProgramme(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin), contextHistory(ctx.admin, ctx.userId),
   ]);
+  // Stage 2: what may be uploaded is Individual policy (formats, size), shown and enforced from one place.
+  const rules = uploadRules(policy);
+  // Stage 2: each material shows the educational context it was uploaded in (402), never today's by default.
+  const programmeLabels = new Map((programmes.ok ? programmes.data : []).map(p => [p.code, p.label]));
+  const stampOf = (createdAt: string) => (history.ok ? contextStamp(history.periods, createdAt, programmeLabels) : null);
   // COMPETEN-SCHOLAR-01 S2: the programme choice exists only where 387 does (fail closed).
   const programmeOn = programmes.ok && mine.ok;
 
@@ -71,13 +79,13 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
         {JOURNEY.map((j, i) => (
           <li key={j.step} className="rounded-xl border border-gray-200 bg-white p-3">
             <p className="text-[12px] font-bold tabular-nums" style={{ color: x.accent }}>{i + 1}. {j.step}</p>
-            <p className="mt-0.5 text-[12.5px] leading-snug text-gray-600">{j.text}</p>
+            <p className="mt-0.5 text-[12.5px] leading-snug text-gray-600">{j.step === "Upload" ? `Add your notes, slides or guidance: ${rules.describe}.` : j.text}</p>
           </li>
         ))}
       </ol>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <UploadPanel />
+        <UploadPanel rules={{ mimes: [...rules.mimes], maxMb: rules.maxMb, text: rules.text, describe: rules.describe }} />
         {consent.ok
           ? <ConsentPanel status={status!} recorded={consent.data.granted} grantedAt={consent.data.grantedAt} revokedAt={consent.data.revokedAt} legal={documents.links} />
           : <Unreadable what="AI consent setting" />}
@@ -105,7 +113,8 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
                     <span className="min-w-0">
                       <span className="block truncate text-[15px] font-semibold text-gray-900">{m.title}</span>
                       <span className="block text-[12.5px] text-gray-500">
-                        {m.mimeType === "application/pdf" ? `PDF · ${m.pageCount} page${m.pageCount === 1 ? "" : "s"}` : "Word document"} · {m.chunkCount} section{m.chunkCount === 1 ? "" : "s"} · added {new Date(m.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        {m.mimeType === "application/pdf" ? `PDF · ${m.pageCount} page${m.pageCount === 1 ? "" : "s"}` : m.mimeType === "text/plain" ? "Text" : "Word document"} · {m.chunkCount} section{m.chunkCount === 1 ? "" : "s"} · added {new Date(m.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        {stampOf(m.createdAt) ? ` · while studying ${stampOf(m.createdAt)}` : ""}
                       </span>
                     </span>
                     <span className="text-[13px] font-semibold" style={{ color: x.accent }}>Open →</span>

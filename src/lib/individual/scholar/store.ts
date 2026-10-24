@@ -109,7 +109,7 @@ export async function countMaterials(admin: Admin, userId: string): Promise<numb
 // enforces its size and type). Processing then reads the object back by the same server-built path.
 
 export const uploadPath = (userId: string, uploadId: string, mime: MaterialMime) =>
-  `${userId}/${uploadId}.${mime === "application/pdf" ? "pdf" : "docx"}`;
+  `${userId}/${uploadId}.${mime === "application/pdf" ? "pdf" : mime === "text/plain" ? "txt" : "docx"}`;
 
 export async function createUploadSlot(admin: Admin, userId: string, mime: MaterialMime): Promise<{ uploadId: string; path: string; token: string } | null> {
   const uploadId = crypto.randomUUID();

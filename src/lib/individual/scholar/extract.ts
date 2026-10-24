@@ -1,4 +1,4 @@
-import { CHUNK_MAX, CHUNK_TARGET, DOCX_MIME, MAX_MATERIAL_CHARS, MAX_PDF_PAGES, PDF_MIME, type MaterialMime } from "./config";
+import { CHUNK_MAX, CHUNK_TARGET, DOCX_MIME, MAX_MATERIAL_CHARS, MAX_PDF_PAGES, PDF_MIME, TEXT_MIME, type MaterialMime } from "./config";
 
 // ── UPLOAD → TEXT → PAGE-REFERENCED CHUNKS ── COMPETEN-IND-004 s1, COMPETEN-IND-002 s3.2(2) ──────────────
 //
@@ -84,7 +84,7 @@ export { findPatientIdentifiers, isValidNhsNumber, PII_LABEL, type PiiKind } fro
 
 // ── THE EXTRACTORS ─────────────────────────────────────────────────────────────────────────────────
 
-async function extractPdf(buffer: Uint8Array): Promise<Extraction> {
+async function extractPdf(buffer: Uint8Array, maxPages: number = MAX_PDF_PAGES): Promise<Extraction> {
   const { getDocumentProxy, extractText } = await import("unpdf");
   let doc;
   try {
@@ -96,7 +96,7 @@ async function extractPdf(buffer: Uint8Array): Promise<Extraction> {
     return { ok: false, reason: "unreadable", detail: e instanceof Error ? e.message : String(e) };
   }
   try {
-    if (doc.numPages > MAX_PDF_PAGES) return { ok: false, reason: "too_many_pages", detail: String(doc.numPages) };
+    if (doc.numPages > maxPages) return { ok: false, reason: "too_many_pages", detail: String(doc.numPages) };
     const { text, totalPages } = await extractText(doc, { mergePages: false });
     const pages = (text as string[]).map((t, i) => ({ page: i + 1, text: t ?? "" }));
     return { ok: true, pages, pageCount: totalPages, extractor: "unpdf@1.8.1" };
@@ -117,9 +117,26 @@ async function extractDocx(buffer: Uint8Array): Promise<Extraction> {
   }
 }
 
-/** File bytes → pages. Refuses (never truncates) a file with no text layer or with too much text. */
-export async function extractMaterial(mime: MaterialMime, buffer: Uint8Array): Promise<Extraction> {
-  const r = mime === PDF_MIME ? await extractPdf(buffer) : mime === DOCX_MIME ? await extractDocx(buffer) : null;
+/**
+ * Stage 2: plain text, UTF-8. Like a Word file it has no pages, so its chunks are cited by section. Text that is
+ * not valid UTF-8, or that holds a NUL byte (a binary file renamed .txt), is unreadable, not guessed at.
+ */
+export function extractText(buffer: Uint8Array): Extraction {
+  if (buffer.includes(0)) return { ok: false, reason: "unreadable", detail: "binary" };
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(buffer).replace(/^\uFEFF/, "");
+    return { ok: true, pages: [{ page: null, text }], pageCount: null, extractor: "utf8-text" };
+  } catch {
+    return { ok: false, reason: "unreadable", detail: "not utf-8" };
+  }
+}
+
+/**
+ * File bytes → pages. Refuses (never truncates) a file with no text layer or with too much text. `maxPages` is
+ * the Individual policy page limit (scholar_pdf_max_pages), never above MAX_PDF_PAGES.
+ */
+export async function extractMaterial(mime: MaterialMime, buffer: Uint8Array, maxPages: number = MAX_PDF_PAGES): Promise<Extraction> {
+  const r = mime === PDF_MIME ? await extractPdf(buffer, Math.min(maxPages, MAX_PDF_PAGES)) : mime === DOCX_MIME ? await extractDocx(buffer) : mime === TEXT_MIME ? extractText(buffer) : null;
   if (!r) return { ok: false, reason: "unreadable" };
   if (!r.ok) return r;
   const chars = r.pages.reduce((n, p) => n + normaliseText(p.text).length, 0);
@@ -128,10 +145,13 @@ export async function extractMaterial(mime: MaterialMime, buffer: Uint8Array): P
   return r;
 }
 
-/** Magic bytes, not the browser's word for it: %PDF for a PDF, a ZIP header for a DOCX. */
+/** Magic bytes, not the browser's word for it: %PDF for a PDF, a ZIP header for a DOCX, otherwise valid UTF-8 with no NUL for text. */
 export function sniffMime(bytes: Uint8Array): MaterialMime | null {
   if (bytes.length >= 5 && String.fromCharCode(...bytes.slice(0, 5)) === "%PDF-") return PDF_MIME;
   if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) return DOCX_MIME;
+  if (bytes.length && !bytes.includes(0)) {
+    try { new TextDecoder("utf-8", { fatal: true }).decode(bytes); return TEXT_MIME; } catch { /* not text */ }
+  }
   return null;
 }
 
@@ -142,7 +162,7 @@ export function titleFromFileName(name: string): string {
 
 export const EXTRACTION_MESSAGE: Record<Exclude<Extraction, { ok: true }>["reason"], string> = {
   unreadable: "That file could not be read. It may be damaged or password-protected.",
-  too_many_pages: `That PDF has more than ${MAX_PDF_PAGES} pages. Split it into smaller files and upload them separately.`,
+  too_many_pages: "That PDF has more pages than one material can hold. Split it into smaller files and upload them separately.",
   no_text: "No text could be found in that file. A scanned PDF has no text layer, and reading scanned pages (OCR) is not available yet.",
   too_long: "That file holds more text than one material can. Split it into smaller files and upload them separately.",
 };

@@ -287,6 +287,23 @@ const MIG388 = migText(MIG388_FILE);
 const MIG389 = migText(MIG389_FILE);
 const MIG390_FILE = "supabase/migrations/390-individual-scholar-mapping-provenance.sql";
 const MIG390 = migText(MIG390_FILE);
+const MIG405 = migText("supabase/migrations/405-individual-scholar-plain-text-materials.sql");
+/**
+ * K20 (Stage 2, Upload): what may be uploaded is Individual policy, enforced at BOTH steps (the slot and the
+ * processing), the PDF page limit reaches the extractor, plain text is OFF until HQ turns it on (it needs 405),
+ * the panel takes its rules from the server rather than a constant, and every material shows the educational
+ * context it was uploaded in.
+ */
+const uploadGoverned = (src: Src) => {
+  const up = src.get(`${API}/uploads/route.ts`) ?? "", mat = src.get(`${API}/materials/route.ts`) ?? "", cl = src.get(CLIENT) ?? "";
+  const pol = read("src/lib/individual/policy.ts"), home = src.get(`${PAGES}/page.tsx`) ?? "", mp = src.get(`${PAGES}/[materialId]/page.tsx`) ?? "";
+  return /const rules = uploadRules\(policy\);/.test(up) && /\(rules\.mimes as readonly string\[\]\)\.includes\(mime\)/.test(up) && /size > rules\.maxBytes/.test(up)
+    && /const rules = uploadRules\(policy\);/.test(mat) && /\(rules\.mimes as readonly string\[\]\)\.includes\(declared\)/.test(mat) && /> rules\.maxBytes/.test(mat)
+    && /extractMaterial\(mime, bytes, policy\.scholarPdfMaxPages\)/.test(mat)
+    && /key: "scholar_upload_formats"[\s\S]*?fallback: \["pdf", "docx"\],/.test(pol)
+    && /export function UploadPanel\(\{ rules \}/.test(cl) && !/ALLOWED_MIME|MAX_UPLOAD_BYTES/.test(cl)
+    && /contextStamp\(/.test(home) && /contextStamp\(/.test(mp);
+};
 /** K16: 390 makes a person's mapping unable to carry AI provenance -- both directions of the rule, one CHECK, nothing else. */
 const mig390Shape = (m: string) => /\(source = 'ai'\) = \(model is not null and prompt_version is not null and confidence is not null\)/.test(m)
   && /\(source = 'ai' or \(model is null and prompt_version is null and confidence is null\)\)/.test(m)
@@ -557,9 +574,10 @@ function main() {
     ["chunk_material_fk", "question_material_fk", "question_chunk_fk", "attempt_question_fk", "card_question_fk", "card_material_fk"]
       .every(k => MIG_REAL.includes(`individual_scholar_${k} foreign key`)));
   ok("F4. a material cannot be stored without the patient-data attestation", /pii_attested_at timestamptz not null/.test(MIG_REAL));
-  ok("F5. the bucket is private and its size and type limits match the code",
-    MIG_REAL.includes(`'${BUCKET}', '${BUCKET}', false, ${MAX_UPLOAD_BYTES}`) && ALLOWED_MIME.every(m => MIG_REAL.includes(`'${m}'`))
-    && MIG_REAL.includes(`byte_size <= ${MAX_UPLOAD_BYTES}`));
+  // Stage 2: plain text is 405's, so the formats the code knows are checked against 372 and 405 together.
+  ok("F5. the bucket is private and its size and type limits match the code (372, plus 405 for plain text)",
+    MIG_REAL.includes(`'${BUCKET}', '${BUCKET}', false, ${MAX_UPLOAD_BYTES}`) && ALLOWED_MIME.every(m => MIG_REAL.includes(`'${m}'`) || MIG405.includes(`'${m}'`))
+    && MIG_REAL.includes(`byte_size <= ${MAX_UPLOAD_BYTES}`) && (!MIG405 || /update storage\.buckets[\s\S]*'text\/plain'[\s\S]*where id = 'individual-scholar-materials'/.test(MIG405)));
   // String literals out first: the table comments NAME the estate tables in order to say they are not used.
   const migDdl = MIG_REAL.replace(/'(?:[^']|'')*'/g, "''");
   ok("F6. 372 creates no function and touches no estate table", !/create (or replace )?function|plpgsql|\$\$/.test(migDdl)
@@ -608,6 +626,8 @@ function main() {
     tutorContextBounded(REAL));
   ok("K19. content status is labelled on links, progress rows, the tutor and cases, the policy floor is applied and what it holds back is said -- never hidden silently",
     contentStatusLabelled(REAL));
+  ok("K20. Stage 2: formats, size and pages are Individual policy, enforced at both upload steps; plain text is off until HQ enables it; the panel reads the server's rules; every material shows its educational context",
+    uploadGoverned(REAL));
   ok("K15. the mapping engine is Holdings code: product-neutral, storing nothing, using the caller's attribution -- Scholar supplies person attribution and its identifier screen",
     engineNeutral(HOLD, REAL));
   ok("K4. proposals, concepts and decisions are never edited or deleted by code -- a correction is a new decision row", trailEdits(REAL).length === 0, trailEdits(REAL).join(", "));
@@ -704,6 +724,9 @@ function main() {
     !contentStatusLabelled(plant(CAT, "const kept = rows.filter(c => meetsMinStatus(c.contentStatus, min));", "const kept = rows;"))
     && !contentStatusLabelled(plant(`${PAGES}/progress/page.tsx`, "<ContentStatusTag status={r.contentStatus} />", ""))
     && !contentStatusLabelled(plant(`${PAGES}/[materialId]/page.tsx`, "learner.belowFloor > 0", "false")));
+  ok("P37. ⚠ K20 goes red when processing stops re-checking the format, or a material stops showing its context",
+    !uploadGoverned(plant(`${API}/materials/route.ts`, "(rules.mimes as readonly string[]).includes(declared)", "true"))
+    && !uploadGoverned(plant(`${PAGES}/[materialId]/page.tsx`, "contextStamp(", "(() => null)(")));
   ok("P32. ⚠ K15 goes red when the engine reads a table or names a product",
     !engineNeutral(new Map([...HOLD, [ENGINE, (HOLD.get(ENGINE) ?? "") + '\nconst x = (a: any) => a.from("individual_scholar_chunk");']]), REAL)
     && !engineNeutral(HOLD, plant(GEN, "screen: findPatientIdentifiers,", "")));

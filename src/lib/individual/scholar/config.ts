@@ -13,7 +13,25 @@ export const MAX_MATERIALS_PER_PERSON = 50;
 
 export const PDF_MIME = "application/pdf";
 export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-export const ALLOWED_MIME = [PDF_MIME, DOCX_MIME] as const;
+/** COMPETEN-SCHOLAR-UPLOAD (Stage 2): plain text -- a .txt file, or text pasted into the page and kept as one. Migration 405. */
+export const TEXT_MIME = "text/plain";
+export const ALLOWED_MIME = [PDF_MIME, DOCX_MIME, TEXT_MIME] as const;
+/** The format a policy names (scholar_upload_formats), for each MIME type. */
+export const FORMAT_OF: Record<(typeof ALLOWED_MIME)[number], "pdf" | "docx" | "text"> = { [PDF_MIME]: "pdf", [DOCX_MIME]: "docx", [TEXT_MIME]: "text" };
+export const FORMAT_LABEL: Record<"pdf" | "docx" | "text", string> = { pdf: "PDF", docx: "Word (.docx)", text: "Plain text (.txt or pasted)" };
+
+/**
+ * Pure. What may be uploaded now, from the Individual policy (scholar_upload_formats, scholar_upload_max_mb):
+ * the MIME types, the byte limit, and the sentence a refusal or the upload panel shows. The routes check it on
+ * the way in AND when processing, so a format switched off between the two steps is still refused.
+ */
+export function uploadRules(policy: { scholarUploadFormats: readonly string[]; scholarUploadMaxMb: number }) {
+  const mimes = ALLOWED_MIME.filter(m => policy.scholarUploadFormats.includes(FORMAT_OF[m]));
+  const maxBytes = Math.min(MAX_UPLOAD_BYTES, Math.max(1, Math.floor(policy.scholarUploadMaxMb)) * 1024 * 1024);
+  const names = mimes.map(m => FORMAT_LABEL[FORMAT_OF[m]]);
+  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}` : names[0] ?? "nothing";
+  return { mimes, maxBytes, maxMb: maxBytes / 1024 / 1024, text: mimes.includes(TEXT_MIME), describe: list };
+}
 export type MaterialMime = (typeof ALLOWED_MIME)[number];
 
 export const BUCKET = "individual-scholar-materials";
