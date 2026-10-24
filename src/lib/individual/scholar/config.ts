@@ -104,8 +104,8 @@ export const PROMPT_VERSIONS = {
   map: "competency-map-v3-outcomes",
   caseSteps: "scholar-case-steps-v2",
   // COMPETEN-SCHOLAR-LEARN-01: the learning actions, the informal check and the clarification, on the same
-  // system prompt and checks as explain (generation.ts). v1.
-  learn: "scholar-learn-v1",
+  // system prompt and checks as explain (generation.ts). v2: a last no-counting reminder (staging, Simplify).
+  learn: "scholar-learn-v2",
 } as const;
 
 /** S4: a multi-step practice case has this many steps at most (migration 388 allows 1 to 5). */

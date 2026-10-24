@@ -140,9 +140,13 @@ async function analyseAll(jar: Jar, id: string) {
 }
 /** A learning action. A withheld answer is the grounding check doing its job; the student may ask again (once). */
 async function act(jar: Jar, body: Record<string, unknown>) {
+  // A student may ask again more than once; every try is checked, and the harness reports how many it took.
   let r = await send("POST", "/api/individual/scholar/learn/act", body, jar);
-  const shown = (x: any) => !!(x.json?.answer || x.json?.checkQuestion);
-  if (r.status === 200 && !shown(r) && !r.json?.notInNotes) r = await send("POST", "/api/individual/scholar/learn/act", body, jar);
+  const shown = (x: any) => !!(x.json?.answer || x.json?.checkQuestion || x.json?.continuity);
+  for (let tries = 1; tries < 3 && r.status === 200 && !shown(r) && !r.json?.notInNotes; tries++) {
+    note(`${String(body.action)}: withheld (${r.json?.message ?? ""}) -- asking again`);
+    r = await send("POST", "/api/individual/scholar/learn/act", body, jar);
+  }
   return r;
 }
 const cites = (s: string) => /\[S\d+\]/.test(s ?? "");

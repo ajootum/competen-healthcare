@@ -357,6 +357,9 @@ const LEARN_INSTRUCTION: Record<LearnAction | "check" | "clarify", string> = {
 export function learnSystem(action: LearnAction | "check" | "clarify", opts: { depth: ExplanationDepth; background: boolean; references: boolean }): string {
   const parts = [EXPLAIN_SYSTEM, "", LEARN_INSTRUCTION[action]];
   if (action !== "check") parts.push(`Keep the part from the notes under ${DEPTH_WORDS[opts.depth]} words${opts.depth === "brief" ? ", and keep it short" : ""}.`);
+  // v2: the staging journey saw Simplify withheld twice for "two" -- a count the notes did not contain. Said last,
+  // where it is read just before writing.
+  if (action !== "check") parts.push("LAST, before you reply: if any sentence says how many of something there are (two, three, both, a couple, a few), rewrite it without the count, unless the passages themselves give that number.");
   if (opts.references && action !== "check")
     parts.push("GOVERNED REFERENCES, tagged [R1], [R2] ...: competencies and learning outcomes from the student's programme catalogue that these passages are linked to. You may cite one as [R n] only to say what the student is working towards. Never use them as a source of clinical facts.");
   if (opts.background && BACKGROUND_ACTIONS.includes(action as LearnAction))
