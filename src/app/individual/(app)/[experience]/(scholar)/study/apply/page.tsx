@@ -10,6 +10,14 @@ import StudyNav from "../_components/StudyNav";
 import { QuestionCard } from "../_components/client";
 import { CasePlayer } from "../_components/competency-client";
 import { competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
+import { caseHistory, listMaterials, listPrivateCases, readConsent } from "@/lib/individual/scholar/store";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { ATTESTATION_TEXT, caseLibraryEnabled, loadCasePolicy } from "@/lib/cases/policy";
+import { candidacyStatus, myCaseOffers } from "@/lib/cases/candidates";
+import { caseSessionView } from "@/lib/cases/library";
+import { consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
+import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
+import { CaseOfferPanel, CaseStart, ReplayCase } from "../_components/case-client";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -28,12 +36,31 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Apply" });
 }
 
-export default async function Apply({ params }: { params: Promise<{ experience: string }> }) {
+export default async function Apply({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ section?: string; from?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
+  const sp = await searchParams;
   const [questions, due] = await Promise.all([listQuestions(ctx.admin, ctx.userId, { kind: "case" }), countDue(ctx.admin, ctx.userId)]);
+  // ── CLINICAL REASONING (CLINICAL-REASONING-01): starting a case, the student's own cases, history, and the library ──
+  const [policy, materials, learner, privateCases, history, libraryOn, consent] = await Promise.all([
+    loadIndividualPolicy(ctx.admin), listMaterials(ctx.admin, ctx.userId), loadLearnerCatalogue(ctx.admin, ctx.userId),
+    listPrivateCases(ctx.admin, ctx.userId), caseHistory(ctx.admin, ctx.userId, 10), caseLibraryEnabled(ctx.admin), readConsent(ctx.admin, ctx.userId),
+  ]);
+  const consentOn = consent.ok && consentStatus(consent.data, consentDocuments().published) === "on";
+  const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "case_steps");
+  const aiNote = policy.scholarCaseGeneration === "stored_only" ? "New cases are not written here: play your stored cases or a library case."
+    : !consentOn ? "AI help is off, so new cases are not written. Your stored cases and library cases are still playable."
+      : !standing.available ? `${standing.message ?? "New AI help is limited right now."} Your stored cases and library cases are still playable.` : null;
+  const [candidacy, offers, casePolicy] = libraryOn ? await Promise.all([candidacyStatus(ctx.admin, ctx.userId), myCaseOffers(ctx.admin, ctx.userId), loadCasePolicy(ctx.admin)]) : [null, null, null];
+  // A library play's title from the student's own learner-facing view (library.ts caseSessionView), never the blueprint.
+  const libTitles = new Map<string, string>();
+  for (const h of history.ok ? history.data.filter(r => r.kind === "library") : []) {
+    const v = await caseSessionView(ctx.admin, ctx.userId, h.id);
+    if (v) libTitles.set(h.id, v.view.title);
+  }
+  const preset = sp.section && /^[0-9a-f-]{36}$/i.test(sp.section) ? { chunkId: sp.section, from: sp.from === "revision" ? "revision" as const : "teach" as const } : null;
 
   // COMPETEN-SCHOLAR-01 S4: steps of one case play together, in order. Where 388 is absent no question has
   // a case_id, and the page is the MVP page.
@@ -56,6 +83,40 @@ export default async function Apply({ params }: { params: Promise<{ experience: 
       <PageHeader accent={x.accent} eyebrow="My Learning" title="Apply"
         intro="Case questions put what you have studied into a scenario. They are written from your own notes, and the feedback shows the passage each answer rests on." />
       <StudyNav dueCount={due} />
+
+      <div className="mb-8 grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="space-y-5">
+          <CaseStart entries={policy.scholarCaseEntries} contexts={policy.scholarCaseContexts} mode={policy.scholarCaseMode} libraryOn={libraryOn}
+            materials={(materials.ok ? materials.data : []).filter(m => m.chunkCount > 0).map(m => ({ id: m.id, title: m.title }))}
+            competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote} preset={preset} />
+          {libraryOn && candidacy && casePolicy && (
+            <CaseOfferPanel libraryOn={libraryOn} granted={candidacy.granted && candidacy.current} attestationVersion={casePolicy.attestationVersion}
+              text={ATTESTATION_TEXT[casePolicy.attestationVersion] ?? null} cases={privateCases.ok ? privateCases.data.map(c => ({ id: c.id, title: c.title })) : []}
+              offers={(offers ?? []).map(o => ({ sourceKey: o.sourceKey, status: o.status, reasons: o.reasons }))} />
+          )}
+        </div>
+        <aside aria-labelledby="case-history-h" className="space-y-4">
+          <section className="rounded-2xl border border-gray-200 bg-white p-4">
+            <h2 id="case-history-h" className="text-[14px] font-bold text-gray-900">Your cases</h2>
+            <p className="text-[12px] text-gray-600">Formative simulation: never an assessment, never evidence of competence. Stored cases replay with no AI.</p>
+            {!history.ok ? <p className="mt-2 text-[13px] text-gray-600">Clinical reasoning history is not available on this environment yet.</p>
+              : history.data.length === 0 ? <p className="mt-2 text-[13px] text-gray-600">None yet.</p> : (
+                <ul className="mt-2 space-y-1.5">{history.data.map(h => (
+                  <li key={`${h.kind}${h.id}`} className="text-[13.5px]">
+                    <Link href={`${experienceHref("scholar", "study/apply/case")}?kind=${h.kind}&session=${h.id}`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{h.title ?? libTitles.get(h.id) ?? "Library case"}</Link>
+                    <span className="text-[12px] text-gray-500"> · {h.kind === "library" ? "library" : "your case"} · {h.status === "completed" ? "finished" : "in progress"}</span>
+                  </li>
+                ))}</ul>
+              )}
+            {privateCases.ok && privateCases.data.length > 0 && (
+              <>
+                <h3 className="mt-3 text-[13px] font-bold text-gray-800">Play one of your stored cases again</h3>
+                <ul className="mt-1 space-y-1">{privateCases.data.slice(0, 8).map(c => <li key={c.id}><ReplayCase caseId={c.id} title={c.title} /></li>)}</ul>
+              </>
+            )}
+          </section>
+        </aside>
+      </div>
 
       <section aria-labelledby="own-cases-h">
         <h2 id="own-cases-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your practice scenarios</h2>
@@ -86,13 +147,19 @@ export default async function Apply({ params }: { params: Promise<{ experience: 
       </section>
 
       <section aria-labelledby="shared-h" className="mt-10">
-        <h2 id="shared-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Clinically reviewed cases</h2>
+        <h2 id="shared-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Clinically approved cases</h2>
         <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-          <p className="text-[15px] font-semibold text-gray-900">Not available yet</p>
-          <p className="mt-1 text-[14px] leading-relaxed text-gray-700">
-            Competen has shared clinical cases, but none of them carries a record of clinical review (who reviewed it, when, and for what).
-            Until that record exists, they are not shown to students here. Your own case questions above are not clinically reviewed either, and are labelled as such.
-          </p>
+          {libraryOn ? (
+            <p className="text-[14px] leading-relaxed text-gray-700">
+              The case library holds cases an independent clinical reviewer approved, each for its exact version. Choose <span className="font-semibold">Choose an existing case</span> above to play one: it uses no AI.
+              Cases written from your notes are practice, not clinically reviewed, and each one says so.
+            </p>
+          ) : (
+            <>
+              <p className="text-[15px] font-semibold text-gray-900">Not available yet</p>
+              <p className="mt-1 text-[14px] leading-relaxed text-gray-700">The case library is not switched on in this environment. Your own cases are practice, not clinically reviewed, and are labelled as such.</p>
+            </>
+          )}
         </div>
       </section>
     </>

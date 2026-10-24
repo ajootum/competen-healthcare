@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { eraseAllMaterial } from "@/lib/individual/scholar/store";
+import { withdrawCasesOf } from "@/lib/individual/scholar/clinical-routes";
 import { audit } from "@/lib/individual/scholar/http";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -16,8 +17,10 @@ export async function POST(req: Request) {
   if (isGuardRefusal(ctx)) return ctx;
   const body = await req.json().catch(() => ({}));
   if (body?.confirm !== "ERASE") return NextResponse.json({ error: "Confirm the erasure." }, { status: 400 });
+  // CLINICAL-REASONING-01 C-e: every case offered from them is withdrawn from the shared library first.
+  const withdrawn = await withdrawCasesOf(ctx.admin, ctx.userId, null);
   const r = await eraseAllMaterial(ctx.admin, ctx.userId);
   if (!r.ok) return NextResponse.json({ error: "Your material could not be erased just now. Try again shortly." }, { status: 500 });
-  await audit(ctx, "individual_scholar_material_erased_all", "individual_scholar_material", null, { erased: r.erased });
+  await audit(ctx, "individual_scholar_material_erased_all", "individual_scholar_material", null, { erased: r.erased, case_candidates_withdrawn: withdrawn.withdrawn, case_withdrawals_failed: withdrawn.failed });
   return NextResponse.json({ ok: true, erased: r.erased });
 }

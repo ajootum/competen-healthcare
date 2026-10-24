@@ -7,6 +7,7 @@ import { citeChunk, findPatientIdentifiers } from "./extract";
 import { structureLabel, type CatalogueCompetency } from "./catalogue";
 import { VERIFY_SYSTEM, applyVerification, passageVocabulary, qualityProblems, verificationPrompt, type QualityReason } from "./question-quality";
 import { checkRevisionDraft, type RevisionDraft } from "./revision";
+import { blueprintFromDraft, checkPrivateCase } from "./clinical";
 
 // ── SOURCE-GROUNDED AI FOR SCHOLAR ── COMPETEN-IND-004 s2, s3 and s5 ───────────────────────────────────
 //
@@ -597,6 +598,91 @@ export async function runEvaluate(userId: string, input: { question: string; acc
   if (!r.ok) return { ok: false as const, error: r.error };
   return { ok: true as const, model: r.model, provider: r.provider, promptVersion: PROMPT_VERSIONS.evaluate,
     evaluation: parseEvaluation(r.text, [input.passage.content, ...input.accepted, input.answer, input.question]) };
+}
+
+// ── STAGE 5A (CR1-CR3): A PRIVATE CASE FROM THE STUDENT'S NOTES ── written as a draft, made a blueprint by code ──
+//
+// The model writes a small structured DRAFT -- stages, findings, decisions with their options and key, what may be
+// asked for -- from the passages only. clinical.ts makes the blueprint (ids, linear progression, the boundary) and
+// checks it: a valid private blueprint, nothing ungrounded, nothing identifying. If it fails, it is written again
+// once with the reasons; if it fails again, nothing is stored.
+
+export const CASE_BLUEPRINT_SYSTEM = [
+  "You write ONE short, progressive clinical reasoning case for a healthcare student, for their own formative practice, from the PASSAGES of their own notes only.",
+  "The case follows 'a patient' (no name, no age, no dates) through the stages the passages support: recognising the problem, interpreting findings, prioritising, deciding, and reassessing or escalating.",
+  "RULES:",
+  "1. Every finding, value, option, rationale and expected answer comes from the passages. Do not invent any finding, value, consequence or change in the patient. Never write a number the passages do not contain, and never count things ('two signs').",
+  "   Do not use words that assert a state or a change -- improved, improving, worse, worsening, reduced, raised, increased, decreased, stable, unstable, normal, abnormal, resolved, deteriorating -- unless the passages use that exact word. Use the passages' own words for findings.",
+  "2. Findings: label and value in the passages' own words. shown is 'start', a stage number, or 'request' (the student must ask for it).",
+  "3. Two to four stages, each with one decision. A decision is 'single' (one right option), 'multiple' (several right options) or 'free_text' (the student explains, and expectedResponse says what a good answer contains, from the passages).",
+  "4. Each option is built from the passages' words. Exactly one right option for 'single'. Give each decision a one or two sentence rationale in the passages' own words.",
+  "5. canAskFor lists the refs of findings the student may ask for at that decision. sources lists the passage tags (S1, S2 ...) the decision rests on.",
+  "6. dimension is one of: recognition, interpretation, prioritisation, decision, reassessment, escalation.",
+  "7. If missing the right option would be unsafe in the passages' terms, set safety to one short sentence saying what must be done, in the passages' words.",
+  "8. objectives: one or two learning objectives in the passages' words, each with the tags (C1 ...) of the competencies given that it serves, if any.",
+  "9. Never include a name, NHS number, date of birth or any detail that could identify a real person.",
+  "10. Keep it short: titles under ten words, no numbering in titles or prompts (the case numbers itself), rationales of one or two sentences.",
+  "If the passages cannot support a case, reply {\"stages\": []}.",
+  'Reply with JSON ONLY: {"title": "...", "intro": "the opening a student reads, from the passages", "stages": ["...", "..."], "facts": [{"ref": "F1", "kind": "observation", "label": "...", "value": "...", "shown": "start", "safetyCritical": false}], "decisions": [{"stage": 1, "prompt": "...", "kind": "single", "dimension": "recognition", "options": [{"text": "...", "correct": true}, {"text": "...", "correct": false}], "rationale": "...", "canAskFor": ["F2"], "sources": ["S1"], "safety": null}], "objectives": [{"text": "...", "competencies": ["C1"]}]}',
+].join("\n");
+
+const list0 = (v: unknown) => (Array.isArray(v) ? v.length : 0);
+
+export function caseBlueprintPrompt(passages: readonly Passage[], competencies: readonly { title: string; outcomes?: string[] }[], context: string): string {
+  const blocks = passages.map((p, i) => `[${passageTag(i)}] (${passageCitation(p)})\n${p.content}`).join("\n\n");
+  const comps = competencies.length ? `\n\nCOMPETENCIES these notes are linked to:\n${competencies.map((c, i) => `[C${i + 1}] ${c.title}${c.outcomes?.length ? ` -- ${c.outcomes.slice(0, 2).join("; ")}` : ""}`).join("\n")}` : "";
+  return `CLINICAL CONTEXT: ${context}\n\nPASSAGES FROM MY NOTES:\n\n${blocks}${comps}`;
+}
+
+/** One private case from some passages: drafted, made a blueprint and checked, with one retry on its reasons. */
+export async function runCaseBlueprint(userId: string, input: {
+  passages: Passage[]; competencies: { id: string; title: string; outcomes?: string[] }[]; context: string; dimensions: readonly string[]; asked?: string | null;
+}, run: AiRun = direct) {
+  let feedback = "";
+  let model = "", provider = "";
+  const problems: string[] = [];
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const r = await run({
+      system: CASE_BLUEPRINT_SYSTEM,
+      user: caseBlueprintPrompt(input.passages, input.competencies, input.context) + (feedback ? `\n\nA previous attempt was rejected for: ${feedback}. Write the case again without these problems.` : ""),
+      tier: "reasoning",
+      maxTokens: 4000,
+      context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_case_blueprint" },
+    }, attempt === 1 ? "main" : "retry");
+    if (!r.ok) return { ok: false as const, error: r.error };
+    model = r.model; provider = r.provider;
+    const raw = (() => { const s = r.text.replace(/```(?:json)?/gi, "").trim(); const a = s.indexOf("{"), b = s.lastIndexOf("}"); try { return a >= 0 && b > a ? JSON.parse(s.slice(a, b + 1)) : null; } catch { return null; } })();
+    if (!raw) { problems.push(`malformed:json (${r.text.length} chars)`); feedback = "the reply was not valid JSON -- reply with the JSON object only, and keep it short"; continue; }
+    const blueprint = blueprintFromDraft(raw, { passages: input.passages, competencies: input.competencies, dimensions: input.dimensions });
+    if (!blueprint) { problems.push(`malformed:shape (${list0(raw.stages)} stages, ${list0(raw.decisions)} decisions)`); feedback = "the case needs two to four stages, each with one decision with its options"; continue; }
+    const found = checkPrivateCase(blueprint, [...input.passages.map(p => p.content), input.asked ?? ""], input.dimensions);
+    if (!found.length) return { ok: true as const, blueprint, model, provider, promptVersion: PROMPT_VERSIONS.caseBlueprint, problems };
+    problems.push(...found.map(f => `${f.kind}:${f.detail.slice(0, 80)}`));
+    feedback = [...new Set(found.map(f => `${f.kind}${f.detail ? ` (${f.detail})` : ""}`))].slice(0, 6).join("; ");
+  }
+  return { ok: true as const, blueprint: null, model, provider, promptVersion: PROMPT_VERSIONS.caseBlueprint, problems };
+}
+
+export const CASE_REASONING_SYSTEM = [
+  "You give formative feedback on a healthcare student's written reasoning in a practice case from their own notes.",
+  "Judge the answer ONLY against the expected answer and the case facts and passages given. Do not use outside knowledge.",
+  "Your first line is exactly one of 'VERDICT: correct', 'VERDICT: partly' or 'VERDICT: incorrect'.",
+  "Then, in two to four short sentences: what the reasoning got right, any misconception, and any finding or step it missed, using the passages' own words.",
+  "No new facts, numbers, doses, drugs or advice. No patient names. If the material does not let you judge, reply with exactly NOT_IN_NOTES.",
+].join("\n");
+
+/** AI feedback on one written decision (activity `evaluate`). Checked like any evaluation; labelled where shown. */
+export async function runCaseReasoning(userId: string, input: { prompt: string; expected: string; facts: string[]; answer: string; passages: Passage[] }, run: AiRun = direct) {
+  const r = await run({
+    system: CASE_REASONING_SYSTEM,
+    user: `CASE FACTS:\n${input.facts.join("\n")}\n\nPASSAGES:\n${input.passages.map((p, i) => `[${passageTag(i)}] ${p.content}`).join("\n\n")}\n\nDECISION: ${input.prompt}\nEXPECTED ANSWER: ${input.expected}\nMY ANSWER: ${input.answer}`,
+    tier: "reasoning",
+    maxTokens: 500,
+    context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_case_reasoning" },
+  });
+  if (!r.ok) return { ok: false as const, error: r.error };
+  return { ok: true as const, model: r.model, provider: r.provider, promptVersion: PROMPT_VERSIONS.caseReasoning,
+    evaluation: parseEvaluation(r.text, [...input.passages.map(p => p.content), input.expected, ...input.facts, input.answer, input.prompt]) };
 }
 
 /** S2 framing for the Holdings mapping engine. It names no profession: the programme's catalogue does that. */

@@ -350,6 +350,17 @@ const STAGING: Listed[] = [
       + "own harness-upload-* identities.",
   },
   {
+    file: "scholar-clinical01-harness.ts",
+    note: "COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (Stage 5A) over HTTP, IND-004's steps of the owner's 19-step journey: a "
+      + "private respiratory case written from the notes and checked (private formative, linear) -> CFCA links -> a "
+      + "progressive scenario with nothing ahead -> findings asked for -> decisions to the end with feedback and the "
+      + "debrief -> resume, decisions append-only -> back to Teach Me/Revision -> stored cases playable with the quota "
+      + "used up (synthetic rows for the fixture only) -> no catalogue -> isolation -> erase-all. Library reuse and "
+      + "offering a case need the case_library flag (PEND when off); the Individual budget needs metering ON (PEND). "
+      + "Real AI. Needs BASE_URL naming a STAGING-pointed dev server with the legal versions and URLs, an AI provider "
+      + "and 435/436. Reads shared config only. Creates and deletes its own harness-clinical01-* identities.",
+  },
+  {
     file: "scholar-revision01-harness.ts",
     note: "COMPETEN-SCHOLAR-REVISION-01 over HTTP, the owner's first Stage 4 journey on the respiratory materials: open "
       + "Revision -> the respiratory materials -> ten questions in several formats (reuse first, the shortfall written, "

@@ -8,7 +8,8 @@ import type { IndividualContext } from "../guard";
 import { readConsent, sectionLinks, topicsOfSections } from "./store";
 import { consentDocuments, consentStatus } from "./consent-gate";
 import { CONSENT_AWAITING_LEGAL, CONSENT_UPDATED } from "./config";
-import { isMeteredRefusal, meteredRefusalBody, requestIdFor, runMeteredAi, type MeteredRefusal } from "@/lib/ai/allowance";
+import { isMeteredRefusal, meteredRefusalBody, requestIdFor, runMeteredAi, runOwnedAi, type MeteredRefusal } from "@/lib/ai/allowance";
+import type { ResolvedOwner } from "@/lib/ai/consumption";
 import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
 import type { RiskContext } from "@/lib/ai/clinical-risk";
 import type { ScholarAiActivity } from "./ai-standing";
@@ -110,6 +111,22 @@ export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: 
     const x = await runMeteredAi(ctx.admin, { userId: ctx.userId, product: "scholar", activity, requestId: part === "main" ? requestId : `${requestId}:${part}`, generate: g, risk });
     if (isMeteredRefusal(x)) { refused = x; return { ok: false, error: "failed", detail: "metered" } as GenerateResult; }
     return x;
+  };
+  return { run, refusal: () => refused };
+}
+
+/**
+ * CLINICAL-REASONING-01: a Scholar call whose spend owner the consumption-ownership rules resolved (resolveOwner, by
+ * workflow -- never chosen by the browser), counted against `record` (e.g. caseSessionRecord). The same refusal rule
+ * as the metered runner: a refusal stops the action and is kept, nothing quietly weaker.
+ */
+export function scholarOwnedRunner(admin: unknown, args: { owner: ResolvedOwner; activity: ScholarAiActivity; requestId: string; risk: RiskContext; record: { type: string; ref: string } }): { run: ScholarAiRun; refusal: () => string | null } {
+  let refused: string | null = null;
+  const run: ScholarAiRun = async (g, part = "main") => {
+    if (refused) return { ok: false, error: "failed", detail: "metered" } as GenerateResult;
+    const x = await runOwnedAi(admin, { owner: args.owner, product: "scholar", activity: args.activity, requestId: part === "main" ? args.requestId : `${args.requestId}:${part}`, generate: g, risk: args.risk, record: args.record });
+    if (x && x.ok === false && ("standing" in x || "budget" in x)) { refused = x.error; return { ok: false, error: "failed", detail: "metered" } as GenerateResult; }
+    return x as GenerateResult;
   };
   return { run, refusal: () => refused };
 }

@@ -5,7 +5,8 @@ import { SHARE_DAYS_MAX } from "./professional/share";
 import {
   DEFAULT_UPLOAD_MB, FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, LEARN_ACTIONS, LEARN_ACTION_LABEL, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES,
   MAX_SESSION_FILES, MAX_SESSION_MB, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, REVISION_FORMATS, REVISION_FORMAT_LABEL, REVISION_MODES, REVISION_MODE_LABEL, REVISION_QUANTITY_MAX,
-  SESSION_MAX_STEPS, TUTOR_MAX_TURNS, UPLOAD_SESSION_MINUTES,
+  SESSION_MAX_STEPS, TUTOR_MAX_TURNS, UPLOAD_SESSION_MINUTES, CASE_CONTEXTS, CASE_CONTEXT_LABEL, CASE_ENTRIES, CASE_ENTRY_LABEL, CASE_DIMENSION_LABEL,
+  type CaseContext, type CaseEntry,
   type ExplanationDepth, type LearnAction, type RevisionDifficulty, type RevisionFormat, type RevisionMode, type UploadFormat,
 } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
@@ -46,7 +47,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai
   | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns"
   | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats" | "scholar_learning_actions"
-  | "scholar_revision_formats" | "scholar_revision_modes";
+  | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -56,7 +57,8 @@ export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
 export type ChoicePolicyKey = "scholar_catalogue_min_status"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
-  | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking";
+  | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
+  | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -417,6 +419,58 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: 100, min: 50, max: 100,
     limitReason: "Fifty to one hundred percent. Default: one hundred (no difference).",
   },
+  // ── COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (Stage 5A): CLINICAL REASONING, in the existing engine (owner GO s8) ──
+  // Beneath configuration, fixed: a private case is private_formative and grounded in the notes, linear, screened for
+  // identifiers; choices are marked by their key; safety criteria are machine-checked; AI feedback is labelled; a
+  // library case is played only through the shared delivery, and only when published and approved for that version.
+  {
+    key: "scholar_case_contexts", kind: "set", product: "Scholar",
+    label: "Clinical contexts offered for cases",
+    help: "The clinical contexts a student may choose for a practice case. The context shapes the case the AI writes from their notes and which library cases are offered.",
+    options: CASE_CONTEXTS.map(v => ({ value: v, label: CASE_CONTEXT_LABEL[v] })),
+    fallback: [...CASE_CONTEXTS],
+    limitReason: "Only the contexts Scholar names. Default: all.",
+  },
+  {
+    key: "scholar_case_entries", kind: "set", product: "Scholar",
+    label: "Ways to start a clinical case",
+    help: "Which ways of starting a case are offered. Choosing an existing case also needs the case library switched on.",
+    options: CASE_ENTRIES.map(v => ({ value: v, label: CASE_ENTRY_LABEL[v] })),
+    fallback: [...CASE_ENTRIES],
+    limitReason: "Only the four entries Scholar implements. Default: all.",
+  },
+  {
+    key: "scholar_case_dimensions", kind: "set", product: "Scholar",
+    label: "Reasoning dimensions cases are written and fed back on",
+    help: "The dimensions of clinical reasoning a private case's decisions name, and its debrief reports on.",
+    options: Object.entries(CASE_DIMENSION_LABEL).map(([value, label]) => ({ value, label })),
+    fallback: Object.keys(CASE_DIMENSION_LABEL),
+    limitReason: "The six dimensions of the shared case blueprint. Default: all.",
+  },
+  {
+    key: "scholar_case_generation", kind: "choice", product: "Scholar",
+    label: "Private cases from a student's notes",
+    help: "Whether Scholar may write a new practice case from a student's notes. Stored cases are always replayable, and library cases need no AI.",
+    options: [{ value: "generate", label: "Write new cases from the notes" }, { value: "stored_only", label: "Stored and library cases only: no new AI" }],
+    fallback: "generate",
+    limitReason: "Two choices. A written case passes the same checks whatever is chosen.",
+  },
+  {
+    key: "scholar_case_mode", kind: "choice", product: "Scholar",
+    label: "Default way of playing a case",
+    help: "Guided shows the case's governed hints; independent does not. A student may choose either.",
+    options: [{ value: "guided", label: "Guided (hints shown)" }, { value: "independent", label: "Independent reasoning" }],
+    fallback: "guided",
+    limitReason: "Two choices. Default: guided.",
+  },
+  {
+    key: "scholar_case_reasoning_feedback", kind: "choice", product: "Scholar",
+    label: "Feedback on written reasoning",
+    help: "How a written answer in a case gets feedback: AI reasoning feedback where it is available (labelled), or the student compares it with what a good answer contains.",
+    options: [{ value: "ai_then_self", label: "AI feedback where available, otherwise the student's own review" }, { value: "self", label: "The student's own review only" }],
+    fallback: "ai_then_self",
+    limitReason: "Choices are always marked by their key first. AI feedback is always labelled.",
+  },
   {
     key: "professional_catalogues", kind: "catalogues", product: "Professional", max: CATALOGUES_MAX,
     label: "Competency catalogues Professional may offer",
@@ -623,6 +677,13 @@ export type IndividualPolicy = {
   scholarSrsMasteryDays: number;
   scholarSrsMaxIntervalDays: number;
   scholarSrsHarderIntervalPercent: number;
+  /** CLINICAL-REASONING-01 (Stage 5A). */
+  scholarCaseContexts: CaseContext[];
+  scholarCaseEntries: CaseEntry[];
+  scholarCaseDimensions: string[];
+  scholarCaseGeneration: "generate" | "stored_only";
+  scholarCaseMode: "guided" | "independent";
+  scholarCaseReasoningFeedback: "ai_then_self" | "self";
   /** JOIN-01: programme codes offered at join, or null for every active programme. */
   scholarOnboardingProgrammes: string[] | null;
   scholarProgrammeLevels: Record<string, ContextOption[]>;
@@ -677,6 +738,12 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
     scholarSrsMaxIntervalDays: int("scholar_srs_max_interval_days"),
     scholarSrsHarderIntervalPercent: int("scholar_srs_harder_interval_percent"),
+    scholarCaseContexts: clampSet(policyDef("scholar_case_contexts") as SetPolicy, published.get(policyPath("scholar_case_contexts"))) as CaseContext[],
+    scholarCaseEntries: clampSet(policyDef("scholar_case_entries") as SetPolicy, published.get(policyPath("scholar_case_entries"))) as CaseEntry[],
+    scholarCaseDimensions: clampSet(policyDef("scholar_case_dimensions") as SetPolicy, published.get(policyPath("scholar_case_dimensions"))),
+    scholarCaseGeneration: clampChoice(policyDef("scholar_case_generation") as ChoicePolicy, published.get(policyPath("scholar_case_generation"))) as "generate" | "stored_only",
+    scholarCaseMode: clampChoice(policyDef("scholar_case_mode") as ChoicePolicy, published.get(policyPath("scholar_case_mode"))) as "guided" | "independent",
+    scholarCaseReasoningFeedback: clampChoice(policyDef("scholar_case_reasoning_feedback") as ChoicePolicy, published.get(policyPath("scholar_case_reasoning_feedback"))) as "ai_then_self" | "self",
     scholarOnboardingProgrammes: clampProgrammes(policyDef("scholar_onboarding_programmes") as ProgrammesPolicy, published.get(policyPath("scholar_onboarding_programmes"))),
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
