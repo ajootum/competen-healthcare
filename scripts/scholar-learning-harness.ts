@@ -346,6 +346,20 @@ const tutorContextBounded = (src: Src) => {
     && /loadTutorContext\(ctx\.admin, ctx\.userId, passages\.map\(p => p\.chunkId\)\)/.test(r)
     && loader.length > 100 && !/profile|fullName|full_name|email/i.test(lc + loader);
 };
+/**
+ * K19 (owner ruling 2026-10-24): content status is LABELLED, never hidden silently. The projection applies the
+ * policy floor (scholar_catalogue_min_status) through meetsMinStatus and COUNTS what it holds back; the status tag
+ * is shown on links, progress rows, the tutor and the case player; a held-back count is said on the page.
+ */
+const contentStatusLabelled = (src: Src) => {
+  const c = src.get(CAT) ?? "", cc = src.get(`${PAGES}/_components/competency-client.tsx`) ?? "", cl = src.get(CLIENT) ?? "";
+  const pg = src.get(`${PAGES}/progress/page.tsx`) ?? "", mp = src.get(`${PAGES}/[materialId]/page.tsx`) ?? "";
+  return /const min = \(await loadIndividualPolicy\(admin\)\)\.scholarCatalogueMinStatus;/.test(c)
+    && /const kept = rows\.filter\(c => meetsMinStatus\(c\.contentStatus, min\)\);/.test(c) && /belowFloor: rows\.length - kept\.length/.test(c)
+    && /<ContentStatusTag status=\{m\.contentStatus\} \/>/.test(cc) && /<ContentStatusTag status=\{competency\.contentStatus\} \/>/.test(cc)
+    && /<ContentStatusTag status=\{l\.contentStatus\} \/>/.test(cl) && /<ContentStatusTag status=\{r\.contentStatus\} \/>/.test(pg)
+    && /learner\.belowFloor > 0/.test(mp) && /learner\.belowFloor > 0/.test(pg);
+};
 /** K4: no Scholar code edits or deletes a mapping or a decision, and every upsert onto them leaves existing rows alone. */
 const trailEdits = (src: Src) => storeStatements(src)
   .filter(x => /^individual_scholar_(competency_decision|competency_map|chunk_analysis)$/.test(x.table))
@@ -592,6 +606,8 @@ function main() {
     coverageUnified(REAL));
   ok("K18. Personal AI: the tutor's view of the student is built per request from the caller's own rows, goes to the tutor only, is never grounding, and holds no profile data",
     tutorContextBounded(REAL));
+  ok("K19. content status is labelled on links, progress rows, the tutor and cases, the policy floor is applied and what it holds back is said -- never hidden silently",
+    contentStatusLabelled(REAL));
   ok("K15. the mapping engine is Holdings code: product-neutral, storing nothing, using the caller's attribution -- Scholar supplies person attribution and its identifier screen",
     engineNeutral(HOLD, REAL));
   ok("K4. proposals, concepts and decisions are never edited or deleted by code -- a correction is a new decision row", trailEdits(REAL).length === 0, trailEdits(REAL).join(", "));
@@ -684,6 +700,10 @@ function main() {
     !tutorContextBounded(plant(GEN, 'const asked = [question, ...history.map(t => t.text)].join("\\n");', 'const asked = [question, ...history.map(t => t.text), learnerContext ?? ""].join("\\n");'))
     && !tutorContextBounded(plant(GEN, 'mode === "tutor" ? learnerContext : null),', "learnerContext),"))
     && !tutorContextBounded(plant(`${LIB}/learner-context.ts`, "export const NEEDS_PRACTICE_BELOW", "export const who = (p: { fullName: string }) => p.fullName;\nexport const NEEDS_PRACTICE_BELOW")));
+  ok("P36. ⚠ K19 goes red when the floor is ignored, a progress row loses its label, or held-back content goes unsaid",
+    !contentStatusLabelled(plant(CAT, "const kept = rows.filter(c => meetsMinStatus(c.contentStatus, min));", "const kept = rows;"))
+    && !contentStatusLabelled(plant(`${PAGES}/progress/page.tsx`, "<ContentStatusTag status={r.contentStatus} />", ""))
+    && !contentStatusLabelled(plant(`${PAGES}/[materialId]/page.tsx`, "learner.belowFloor > 0", "false")));
   ok("P32. ⚠ K15 goes red when the engine reads a table or names a product",
     !engineNeutral(new Map([...HOLD, [ENGINE, (HOLD.get(ENGINE) ?? "") + '\nconst x = (a: any) => a.from("individual_scholar_chunk");']]), REAL)
     && !engineNeutral(HOLD, plant(GEN, "screen: findPatientIdentifiers,", "")));

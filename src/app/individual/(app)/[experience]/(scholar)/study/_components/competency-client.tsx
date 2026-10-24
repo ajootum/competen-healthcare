@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { AI_LABEL, MAPPING_LABEL, PERSONAL_CASE_LABEL } from "@/lib/individual/scholar/config";
-import { AiBadge, QuestionCard, type QuestionView } from "./client";
+import { AiBadge, ContentStatusTag, QuestionCard, type QuestionView } from "./client";
 
 // COMPETEN-SCHOLAR-01 S2 and S4, the interactive pieces: the programme a person studies, finding the topics
 // and competencies in their notes, accepting or rejecting each suggested link, and playing a multi-step case.
@@ -150,7 +150,7 @@ export function AnalysePanel({ materialId, consent, sections, analysed, programm
 // ── ONE SECTION: ITS CONCEPTS AND ITS COMPETENCY LINKS ──────────────────────────────────────────────
 
 export type MappingView = {
-  id: string; competencyId: string; title: string; code: string | null; layer: string; catalogue: string | null; structure?: string | null;
+  id: string; competencyId: string; title: string; code: string | null; layer: string; catalogue: string | null; structure?: string | null; contentStatus?: string | null;
   source: "ai" | "student" | "reviewer"; confidence: number | null; rationale: string | null;
   state: "proposed" | "accepted" | "rejected"; decidedBy: "student" | "reviewer" | null; decisions: number;
 };
@@ -215,7 +215,9 @@ export function SectionTopics({ chunkId, concepts, mappings, options }: {
                     {m.decisions > 1 ? ` · changed ${m.decisions - 1} time${m.decisions === 2 ? "" : "s"}` : ""}
                   </span>
                 </div>
-                {m.structure && <p className="mt-0.5 text-[12px] font-medium text-gray-600">{m.structure}</p>}
+                {(m.structure || m.contentStatus) && (
+                  <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] font-medium text-gray-600">{m.structure}<ContentStatusTag status={m.contentStatus} /></p>
+                )}
                 {m.rationale && <p className="mt-1 text-[13px] text-gray-700">{m.rationale}</p>}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {m.state !== "accepted" && (
@@ -256,7 +258,7 @@ export function SectionTopics({ chunkId, concepts, mappings, options }: {
 
 export type CaseStepView = { q: QuestionView; chunkId: string; answered: boolean };
 
-export function CasePlayer({ title, competency, steps }: { title: string; competency: { title: string; layer: string } | null; steps: CaseStepView[] }) {
+export function CasePlayer({ title, competency, steps }: { title: string; competency: { title: string; layer: string; contentStatus?: string | null } | null; steps: CaseStepView[] }) {
   const firstOpen = steps.findIndex(s => !s.answered);
   const [open, setOpen] = useState(firstOpen < 0 ? steps.length : firstOpen + 1);
   return (
@@ -267,7 +269,7 @@ export function CasePlayer({ title, competency, steps }: { title: string; compet
       </div>
       <h3 className="mt-3 text-[17px] font-bold text-gray-900">{title}</h3>
       {competency && (
-        <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-gray-700"><span>Practises</span><LayerTag layer={competency.layer} /><span className="font-semibold">{competency.title}</span></p>
+        <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-gray-700"><span>Practises</span><LayerTag layer={competency.layer} /><span className="font-semibold">{competency.title}</span><ContentStatusTag status={competency.contentStatus} /></p>
       )}
       <p className="mt-1 text-[12.5px] text-gray-600">{steps.length} steps. Each step opens when you have answered the one before.</p>
       <ol className="mt-4 space-y-4">
