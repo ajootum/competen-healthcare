@@ -23,4 +23,4 @@
 
 **Staging acceptance:** `clinical-review-acceptance` passes 16/16 against these triggers. It made and removed its own fixtures. Its first run preceded this record, and the main session confirmed it did not overlap the rehearsal.
 
-**Production:** not applied, not authorised.
+**Production:** applied 2026-10-24 by the owner under a separate GO, from `main` (PR #56, `82a2205`), and verified read-only as identical to staging. See OPS-001 §11c.

@@ -160,6 +160,18 @@ Scripts are in `ops/backup/` and installed at `C:\Users\elish\CompetenBackup\bin
 | Gate | `individual_app` has no row, before and after. |
 | Rollback | `docs/evidence/COMPETEN-OPS-001/ROLLBACK-374-375.sql`. Not used. |
 
+### 11c. Migration 395, Holdings clinical-content approval (production, 2026-10-24, owner GO)
+
+| Step | Detail |
+|---|---|
+| Tier | **Medium.** New trigger functions, a nullable column on the existing `frameworks`, and HQ catalogue additions that confer no authority until someone is appointed. The staging compatibility check and recovery rehearsal are done: F1 87dda360, rollback F2 = PRE 299a0776, F3 = F1 (`docs/evidence/CLINICAL/395-staging-record.md`). |
+| Recovery reference | `competen-production-20261024-0816.dump.gpg`, the latest restore-tested archive (isolated restore **PASS**, 08:23). **No fresh backup was taken immediately before applying**, which falls short of R11: the archive predates 395. **A post-application backup was declined for now by the owner** ("Not now", 2026-10-24). |
+| Pre-check | **Not captured.** The runbook step-2 output was not recorded, so the baseline counts before applying are not on file. |
+| File | 395 from `main`: PR #56, merged as `82a2205`. sha256 `142ac7165ee4389ed897b573306906acceacd60b3f603cd10cdec8bb9bd71611`, matching staging. Applied by the owner, by hand, in the SQL editor. |
+| Verified (read-only, main session, `run-prod-readonly.ps1`) | Every value as the runbook expects: 3 tables with RLS and 0 policies on them; 3 triggers; 6 functions, whose bodies hash (CR-stripped md5) to `21cbb8aa…`, **identical to staging**; `frameworks.specialty_term_id` present. Grants are exactly clinical_content_reviewer → hq.platform.home.view and → hq.quality.clinical.approve, plus quality_council_member → hq.quality.clinical.govern. **0 reviewer appointments and 0 rows**, so nobody holds the new authority. `competency_content_hash()` works. **700 tables, 341 policies, 390 functions** after applying. |
+| Gate | Nothing for people changes until a Clinical Content Reviewer is appointed and scoped: every competency reads "Not clinically reviewed". The Individual release gate, publication and catalogues are untouched. |
+| Rollback | `docs/evidence/CLINICAL/ROLLBACK-395-production.sql`: the same statements as the rehearsed `ROLLBACK-395.sql` (b8503d33); only the header comments differ. Not used. |
+
 ## 12. Outstanding recovery requirements
 
 | # | Requirement | Status |
