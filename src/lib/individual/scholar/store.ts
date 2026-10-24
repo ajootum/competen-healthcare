@@ -240,8 +240,12 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   // LEARN-01 L4: learning history and preferences go too. Absent tables (414): nothing to do.
   const { error: lErr } = await admin.from("individual_scholar_learning_session").delete().eq("user_id", userId);
   const { error: pErr } = await admin.from("individual_scholar_learning_preference").delete().eq("user_id", userId);
+  // REVISION-01 (417): saved sets and revision sessions go too. Their items went with the questions; these are the
+  // shells. Absent tables: nothing to do.
+  const { error: rsErr } = await admin.from("individual_scholar_revision_session").delete().eq("user_id", userId);
+  const { error: rtErr } = await admin.from("individual_scholar_revision_set").delete().eq("user_id", userId);
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(cErr) && fine(lErr) && fine(pErr), erased: rows.length };
+  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
