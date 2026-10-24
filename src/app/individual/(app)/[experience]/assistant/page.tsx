@@ -1,4 +1,4 @@
-import { EXPERIENCES } from "@/lib/individual/experiences";
+import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { aiStatus } from "@/lib/ai/config";
 import { experiencePage, gatedMetadata } from "../../../_components/shell-context";
 import type { Metadata } from "next";
