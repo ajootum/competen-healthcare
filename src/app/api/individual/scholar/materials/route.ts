@@ -3,10 +3,10 @@ export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { createMaterial, discardUpload, isUuid, readUpload, uploadPath } from "@/lib/individual/scholar/store";
+import { createMaterial, discardUpload, findDuplicate, isUuid, readUpload, sha256Hex, uploadPath } from "@/lib/individual/scholar/store";
 import { type MaterialMime, UPLOAD_ATTESTATION_REQUIRED, uploadRules } from "@/lib/individual/scholar/config";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { EXTRACTION_MESSAGE, PII_LABEL, chunkPages, extractMaterial, findPatientIdentifiers, sniffMime, titleFromFileName } from "@/lib/individual/scholar/extract";
+import { EXTRACTION_MESSAGE, PII_LABEL, chunkPages, extractMaterial, extractionQuality, findPatientIdentifiers, qualitySummary, sniffUpload, titleFromFileName } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -49,11 +49,22 @@ export async function POST(req: Request) {
   };
 
   if (bytes.byteLength === 0 || bytes.byteLength > rules.maxBytes) return refuse(400, "That file is empty or too large.", "size");
-  const mime = sniffMime(bytes);
+  // UPLOAD-01 U1: a ZIP is opened (screened first) to tell a Word file from a PowerPoint.
+  const sniffed = await sniffUpload(bytes);
+  if (sniffed.unsafe) return refuse(422, EXTRACTION_MESSAGE.unsafe, `unsafe:${sniffed.unsafe}`);
+  const mime = sniffed.mime;
   if (mime !== declared) return refuse(400, `That file is not a readable ${rules.describe} file.`, "type_mismatch");
 
-  const extraction = await extractMaterial(mime, bytes, policy.scholarPdfMaxPages);
-  if (!extraction.ok) return refuse(422, EXTRACTION_MESSAGE[extraction.reason], extraction.reason);
+  // UPLOAD-01 U1: the same bytes twice are one material. The person is sent to the one they already have.
+  const duplicate = await findDuplicate(ctx.admin, ctx.userId, sha256Hex(bytes));
+  if (duplicate) {
+    await discardUpload(ctx.admin, path);
+    await audit(ctx, "individual_scholar_material_refused", "individual_scholar_material", duplicate.id, { reason: "duplicate", mime: declared, bytes: bytes.byteLength });
+    return NextResponse.json({ error: `This file is already in your library as "${duplicate.title}".`, duplicateOf: duplicate }, { status: 409 });
+  }
+
+  const extraction = await extractMaterial(mime, bytes, policy.scholarPdfMaxPages, policy.scholarPptxMaxSlides);
+  if (!extraction.ok) return refuse(422, EXTRACTION_MESSAGE[extraction.reason], extraction.detail && extraction.reason === "unsafe" ? `unsafe:${extraction.detail}` : extraction.reason);
 
   const allText = extraction.pages.map(p => p.text).join("\n");
   const pii = findPatientIdentifiers(allText);
@@ -63,9 +74,11 @@ export async function POST(req: Request) {
   const chunks = chunkPages(extraction.pages);
   if (!chunks.length) return refuse(422, EXTRACTION_MESSAGE.no_text, "no_chunks");
 
+  // UPLOAD-01 U2: how completely it was read, stored with it and returned -- "partial" is never reported as clean.
+  const quality = extractionQuality(mime, extraction.pages, chunks);
   const created = await createMaterial(ctx.admin, ctx.userId, {
     id: uploadId, path, title: titleFromFileName(fileName), fileName, mime, bytes,
-    pageCount: extraction.pageCount, extractor: extraction.extractor, chunks,
+    pageCount: extraction.pageCount, extractor: extraction.extractor, chunks, quality,
   });
   if (!created.ok) {
     // The database's reason goes to the server log and the audit row, never to the person.
@@ -74,7 +87,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Your material could not be saved. Nothing was kept. Try again shortly." }, { status: 500 });
   }
 
+  const summary = qualitySummary(quality);
   await audit(ctx, "individual_scholar_material_uploaded", "individual_scholar_material", created.id,
-    { mime, bytes: bytes.byteLength, pages: extraction.pageCount, chunks: chunks.length, extractor: extraction.extractor });
-  return NextResponse.json({ ok: true, id: created.id, chunks: chunks.length, pages: extraction.pageCount });
+    { mime, bytes: bytes.byteLength, pages: extraction.pageCount, chunks: chunks.length, extractor: extraction.extractor, partial: summary.partial, empty_units: quality.emptyUnits.length });
+  return NextResponse.json({ ok: true, id: created.id, chunks: chunks.length, pages: extraction.pageCount,
+    status: summary.partial ? "partial" : "ready", quality: { ...quality, recorded: created.qualityStored, summary: summary.text } });
 }

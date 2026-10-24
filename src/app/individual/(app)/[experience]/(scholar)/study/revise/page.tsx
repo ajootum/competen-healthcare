@@ -32,7 +32,7 @@ export default async function Revise({ params }: { params: Promise<{ experience:
     const q = c.question;
     return {
       id: c.id, stem: q.stem, answer: q.options[q.correctIndex], rationale: q.rationale, quote: q.sourceQuote,
-      citation: `${q.materialTitle}, ${q.ordinal !== null ? citeChunk({ ordinal: q.ordinal, pageFrom: q.pageFrom, pageTo: q.pageTo }) : "source section"}`,
+      citation: `${q.materialTitle}, ${q.ordinal !== null ? citeChunk({ ordinal: q.ordinal, pageFrom: q.pageFrom, pageTo: q.pageTo }, q.unit) : "source section"}`,
       href: sourceHref(q.materialId, q.chunkId),
     };
   }) : [];

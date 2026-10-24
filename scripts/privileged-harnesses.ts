@@ -332,6 +332,19 @@ const STAGING: Listed[] = [
       + "provider. Reads shared config only (never individual_app, the allowlist or the policy). Creates and deletes its "
       + "own harness-upload-* identities.",
   },
+  {
+    file: "scholar-upload01-harness.ts",
+    note: "COMPETEN-SCHOLAR-UPLOAD-01 over HTTP, the owner's three-resource scenario: a respiratory anatomy PDF with a "
+      + "scanned (empty) page, a pneumonia PowerPoint with speaker notes and oxygen therapy Word notes in one session; "
+      + "duplicate, macro and zip-bomb refusals with their objects removed; read quality (partial, never a clean "
+      + "success); 'Your notes are ready' ending in the EXISTING material page; AI suggestions with catalogue version "
+      + "and verified learning outcomes; student links naming an outcome; questions across documents, chosen documents "
+      + "and a competency; rename, collections and topic correction; isolation for each new route; erase-all leaving "
+      + "nothing. Needs BASE_URL naming a STAGING-pointed dev server with the legal versions AND URLs, an AI provider, "
+      + "406-409 and pptx in the policy (else PEND). Reads shared config only, EXCEPT R1 (SCHOLAR_R1_ZZ=1): it creates "
+      + "and removes a synthetic catalogue-less programme row, so that section runs only when the owner asks. Creates "
+      + "and deletes its own harness-upl01-* identities.",
+  },
   { file: "mos-phase1-harness.ts", note: "CPR-CORE-MOS-001 phase 1. 20/20." },
   { file: "mos-phase2-harness.ts", note: "MOS phase 2. 25/25." },
   { file: "mos-phase3-harness.ts", note: "MOS phase 3. 73/73." },

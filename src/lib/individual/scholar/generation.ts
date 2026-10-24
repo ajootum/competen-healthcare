@@ -31,13 +31,15 @@ export type Passage = {
   pageFrom: number | null;
   pageTo: number | null;
   content: string;
+  /** UPLOAD-01: what the material's unit is called -- a PowerPoint cites "slide 4", not "page 4". Absent: page. */
+  unit?: "page" | "slide" | "section";
 };
 
 /** The label the model and the person both see for passage i: [S1], [S2] ... */
 export const passageTag = (i: number) => `S${i + 1}`;
 
-export function passageCitation(p: Pick<Passage, "materialTitle" | "ordinal" | "pageFrom" | "pageTo">): string {
-  return `${p.materialTitle}, ${citeChunk(p)}`;
+export function passageCitation(p: Pick<Passage, "materialTitle" | "ordinal" | "pageFrom" | "pageTo" | "unit">): string {
+  return `${p.materialTitle}, ${citeChunk(p, p.unit)}`;
 }
 
 // ── THE GROUNDING CHECK ─────────────────────────────────────────────────────────────────────────────
@@ -327,6 +329,8 @@ export async function runAnalysis(userId: string, sections: MappingSubject[], co
     framing: SCHOLAR_MAPPING_FRAMING,
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_map" },
     screen: findPatientIdentifiers,
+    // UPLOAD-01 U3: Domain > CPU > Competency > Learning Outcome -- the engine may name the outcome a section supports.
+    outcomes: true,
   });
 }
 

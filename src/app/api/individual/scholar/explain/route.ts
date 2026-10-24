@@ -3,9 +3,9 @@ export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { getPassage, isUuid, searchCandidates, toPassages } from "@/lib/individual/scholar/store";
+import { competencyChunks, getPassage, isUuid, searchCandidates, toPassages } from "@/lib/individual/scholar/store";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit } from "@/lib/individual/scholar/http";
-import { rankChunks, toTsQuery } from "@/lib/individual/scholar/retrieval";
+import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import {
   EXPLAIN_REFUSAL, SUPPLEMENTARY_WITHHELD, describeViolations, isExplainMode, passageCitation, passageTag, runExplain, type ExplainMode, type TutorTurn,
 } from "@/lib/individual/scholar/generation";
@@ -23,9 +23,19 @@ export const dynamic = "force-dynamic";
 // first) and the best RETRIEVAL_LIMIT are used. No passage found means NO AI call: there is nothing to
 // ground an answer on, and saying so is the honest answer.
 //
+// UPLOAD-01 U4, the cumulative library. materialIds (up to MAX_SELECTED) asks the question of CHOSEN documents.
+// competencyId asks it of the sections the student linked to that competency (accepted links first, then
+// suggestions; never a rejected one) -- with no searchable words, those sections themselves. Without either,
+// the whole library is searched. Across several materials the passages are spread over the documents that
+// matched, so each relevant one is cited by name. Retrieval stays Postgres FTS: no embeddings.
+//
 // The answer is shown only if it passes the grounding check (generation.ts), with each [S n] citation
 // resolved to material and page. It is NOT stored (owner ruling D10). The audit row records ids and
 // counts, never the question text.
+
+/** UPLOAD-01 U4: the most documents one question may be asked of at once. */
+const MAX_SELECTED = 10;
+const NOT_LINKED = "None of your notes is linked to that competency yet. Find the topics in a material and accept the links that fit, then ask again.";
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");
@@ -57,14 +67,25 @@ export async function POST(req: Request) {
     const p = await getPassage(ctx.admin, ctx.userId, body.chunkId);
     if (!p) return NextResponse.json({ error: "That section could not be found." }, { status: 404 });
     passages = [p];
+  } else if (isUuid(body?.competencyId)) {
+    const linked = await competencyChunks(ctx.admin, ctx.userId, body.competencyId);
+    if (!linked.ok) return NextResponse.json({ error: "Your notes could not be searched just now. Try again shortly." }, { status: 503 });
+    if (!linked.data.length) return NextResponse.json({ notInNotes: true, message: NOT_LINKED });
+    const tsq = toTsQuery(question);
+    const found = tsq ? await searchCandidates(ctx.admin, ctx.userId, tsq, { chunkIds: linked.data.map(c => c.id) }) : null;
+    if (found && !found.ok) return NextResponse.json({ error: "Your notes could not be searched just now. Try again shortly." }, { status: 503 });
+    const ranked = found?.ok && found.data.length ? rankChunks(question, found.data, 40) : [];
+    passages = await toPassages(ctx.admin, ctx.userId, spreadAcrossMaterials(ranked.length ? ranked : linked.data, RETRIEVAL_LIMIT));
   } else {
     const tsq = toTsQuery(question);
     if (!tsq) return NextResponse.json({ notInNotes: true, message: EXPLAIN_REFUSAL.not_in_notes });
-    const found = await searchCandidates(ctx.admin, ctx.userId, tsq, materialId);
+    const chosen = Array.isArray(body?.materialIds) ? [...new Set((body.materialIds as unknown[]).filter(isUuid))].slice(0, MAX_SELECTED) : [];
+    if (Array.isArray(body?.materialIds) && !chosen.length) return NextResponse.json({ error: "Choose at least one of your materials." }, { status: 400 });
+    const found = await searchCandidates(ctx.admin, ctx.userId, tsq, materialId ?? (chosen.length ? { materialIds: chosen } : null));
     if (!found.ok) return NextResponse.json({ error: "Your notes could not be searched just now. Try again shortly." }, { status: 503 });
-    const ranked = rankChunks(question, found.data, RETRIEVAL_LIMIT);
+    const ranked = rankChunks(question, found.data, 40);
     if (!ranked.length) return NextResponse.json({ notInNotes: true, message: EXPLAIN_REFUSAL.not_in_notes });
-    passages = await toPassages(ctx.admin, ctx.userId, ranked);
+    passages = await toPassages(ctx.admin, ctx.userId, materialId ? ranked.slice(0, RETRIEVAL_LIMIT) : spreadAcrossMaterials(ranked, RETRIEVAL_LIMIT));
   }
 
   const pre = await aiPreflight(ctx);
@@ -82,7 +103,7 @@ export async function POST(req: Request) {
   if (!r.ok) return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
 
   const sources = passages.map((p, i) => ({
-    tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, citation: passageCitation(p), excerpt: p.content.slice(0, 400),
+    tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400),
   }));
   if (!r.check.ok) {
     const detail = r.check.reason === "ungrounded" && r.check.violations?.length ? ` (${describeViolations(r.check.violations)})` : "";

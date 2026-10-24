@@ -60,6 +60,8 @@ export type CatalogueCompetency = {
   // competency's content is clinically approved, a draft, or unreviewed -- shown beside it wherever it appears.
   contentStatus: ContentStatusLevel;
   statusNote: string | null;
+  /** UPLOAD-01 U3: the catalogue version S1 read it from (major.minor.revision), recorded on every mapping. */
+  catalogueVersion?: string | null;
 };
 
 /** A programme as configuration: which catalogues, in which layer. Read by the store from 387. */
@@ -87,7 +89,7 @@ export interface CompetencyCatalogue {
 /** Shaped like S1's CatalogueCompetency, so the projection below is pure and unit-tested. */
 export type S1Competency = {
   competencyId: string; code: string | null; title: string; layer: Layer | null;
-  profession: { label: string } | null; catalogue: { id: string; name: string }; domain: { name: string }; outcomes: string[];
+  profession: { label: string } | null; catalogue: { id: string; name: string; version?: string }; domain: { name: string }; outcomes: string[];
   expectedLevel?: { score: number; label: string } | null;
   cpu?: { code: string | null; name: string } | null;
   /** The CKCM practice (S1, #49): the competency's own, or its CPU's. */
@@ -122,6 +124,7 @@ export function projectForProgramme(all: S1Competency[], programme: ProgrammeCon
           practice: c.practice ? { code: c.practice.code, name: c.practice.name } : null,
           cpu: c.cpu ? { code: c.cpu.code, name: c.cpu.name } : null,
           contentStatus: normaliseStatus(c.contentStatus), statusNote: c.statusNote ?? null,
+          catalogueVersion: c.catalogue.version ?? null,
         },
       };
     })

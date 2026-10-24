@@ -30,6 +30,20 @@ export async function loadLearnerCatalogue(admin: any, userId: string): Promise<
   return { provisioned: true, programme: p.data, competencies: c.ok ? c.data : null, belowFloor: c.ok ? c.belowFloor ?? 0 : 0, minStatus: c.ok ? c.minStatus ?? "unreviewed" : "unreviewed" };
 }
 
+/**
+ * UPLOAD-01 U3 and R1 (Stage 1 close-out): why no competency is suggested for this person's notes, said where
+ * the suggestions would be -- or null when suggestions can be made. Absent is a state with a reason, never a
+ * silent blank, and never a block: the notes are studied the same either way.
+ */
+export function competencyAbsence(l: Pick<LearnerCatalogue, "provisioned" | "programme" | "competencies" | "belowFloor">): string | null {
+  if (!l.provisioned) return null;
+  if (!l.programme) return "No programme is chosen, so your notes are not linked to competencies. Choose your programme in My Learning to see which competencies they support. You can study them either way.";
+  if (l.competencies === null) return null; // unreadable: the page says so on its own
+  if (l.competencies.length === 0 && l.belowFloor === 0)
+    return `${l.programme.label} has no competency catalogue Scholar can use yet, so no competencies are suggested for your notes. You can still study them: explanations, practice questions and revision work without it.`;
+  return null;
+}
+
 export type CompetencyLabel = { title: string; code: string | null; layer: string; catalogue: string | null; structure?: string | null; contentStatus?: "approved" | "draft" | "unreviewed" | null };
 
 /**

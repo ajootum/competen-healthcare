@@ -27,7 +27,11 @@ export async function POST(req: Request) {
   if (!cat.ok) return NextResponse.json({ error: "Your programme's competencies could not be read just now." }, { status: 503 });
   const competency = cat.data.find(c => c.id === body.competencyId);
   if (!competency) return NextResponse.json({ error: "That competency is not part of your programme." }, { status: 404 });
-  const r = await addMapping(ctx.admin, ctx.userId, { chunkId: body.chunkId, competencyId: competency.id, layer: competency.layer, programmeCode: programme.data.code });
+  // UPLOAD-01 U3: an outcome, if named, must be one of THIS competency's own outcomes, word for word.
+  const outcome = typeof body?.outcome === "string" && body.outcome.trim() ? body.outcome.trim() : null;
+  if (outcome && !competency.outcomes.includes(outcome)) return NextResponse.json({ error: "That learning outcome is not one of this competency's." }, { status: 400 });
+  const r = await addMapping(ctx.admin, ctx.userId, { chunkId: body.chunkId, competencyId: competency.id, layer: competency.layer, programmeCode: programme.data.code,
+    catalogueVersion: competency.catalogueVersion ?? null, outcome });
   if (r === "not_found") return NextResponse.json({ error: "That section could not be found." }, { status: 404 });
   if (r === "exists") return NextResponse.json({ error: "That section is already linked to this competency. Accept the suggestion instead." }, { status: 409 });
   if (r === "failed") return NextResponse.json({ error: "The link could not be saved just now. Try again shortly." }, { status: 500 });

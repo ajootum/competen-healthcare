@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SCHOLAR } from "@/lib/individual/experiences";
-import { sourceHref, studyHref } from "./question-view";
-import { AI_LABEL, CONTENT_STATUS_LABEL, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, PDF_MIME, TEXT_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
+import { readyHref, sourceHref, studyHref } from "./question-view";
+import { AI_LABEL, CONTENT_STATUS_LABEL, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, PDF_MIME, PPTX_MIME, TEXT_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
 import type { ConsentStatus, LegalLink } from "@/lib/individual/scholar/consent-gate";
 
 // The interactive pieces of My Learning. Each one calls a gate-3 API route and shows what the route says,
@@ -187,14 +187,19 @@ export function SourceNotice({ compact = false }: { compact?: boolean }) {
 /** What may be uploaded now (config.ts uploadRules, from the Individual policy). Serialisable, from the server page. */
 export type UploadRulesView = { mimes: string[]; maxMb: number; text: boolean; describe: string };
 
-const EXT: Record<string, string> = { [PDF_MIME]: ".pdf", [DOCX_MIME]: ".docx", [TEXT_MIME]: ".txt" };
+const EXT: Record<string, string> = { [PDF_MIME]: ".pdf", [DOCX_MIME]: ".docx", [PPTX_MIME]: ".pptx", [TEXT_MIME]: ".txt" };
 /** The browser's word for a file, checked by extension too (phones often report an empty type). The server sniffs the bytes. */
 function mimeOf(f: File): string {
   if (f.type === PDF_MIME || /\.pdf$/i.test(f.name)) return PDF_MIME;
   if (f.type === DOCX_MIME || /\.docx$/i.test(f.name)) return DOCX_MIME;
+  if (f.type === PPTX_MIME || /\.pptx$/i.test(f.name)) return PPTX_MIME;
   if (f.type === TEXT_MIME || /\.txt$/i.test(f.name)) return TEXT_MIME;
   return f.type;
 }
+
+/** UPLOAD-01: the most files one upload takes at once (each is processed on its own, in turn). */
+const MAX_FILES_AT_ONCE = 10;
+type FileOutcome = { name: string; state: "waiting" | "uploading" | "reading" | "done" | "duplicate" | "refused"; message?: string; id?: string; partial?: boolean };
 
 /**
  * Stage 2 (COMPETEN-SCHOLAR-UPLOAD). A file, or -- where plain text is enabled -- text pasted straight into the
@@ -205,12 +210,13 @@ function mimeOf(f: File): string {
 export function UploadPanel({ rules }: { rules: UploadRulesView }) {
   const router = useRouter();
   const [mode, setMode] = useState<"file" | "paste">("file");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [pasteTitle, setPasteTitle] = useState("");
   const [pasteText, setPasteText] = useState("");
   const [attested, setAttested] = useState(false);
   const [stage, setStage] = useState<"" | "uploading" | "reading" | "done">("");
   const [error, setError] = useState("");
+  const [outcomes, setOutcomes] = useState<FileOutcome[]>([]);
   const maxBytes = rules.maxMb * 1024 * 1024;
 
   function pasted(): File | null {
@@ -219,26 +225,41 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
     const name = (pasteTitle.trim() || "Pasted notes").replace(/[\\/:*?"<>|]+/g, " ").slice(0, 120);
     return new File([t], `${name}.txt`, { type: TEXT_MIME });
   }
-  const chosen = mode === "paste" ? pasted() : file;
+  const chosen: File[] = mode === "paste" ? (pasted() ? [pasted()!] : []) : files;
+
+  /** One file, start to finish. Each is refused or kept on its own: one bad file never stops the others. */
+  async function uploadOne(f: File, set: (o: Partial<FileOutcome>) => void): Promise<void> {
+    const mime = mimeOf(f);
+    if (!rules.mimes.includes(mime)) return set({ state: "refused", message: `Not a format you can upload here: ${rules.describe}.` });
+    if (f.size > maxBytes) return set({ state: "refused", message: `Larger than ${rules.maxMb} MB.` });
+    set({ state: "uploading" });
+    const slot = await post("/api/individual/scholar/uploads", { mime, size: f.size, piiAttested: true });
+    if (!slot.ok) return set({ state: "refused", message: slot.json.error ?? "The upload could not be started." });
+    const { error: upErr } = await createClient().storage.from(slot.json.bucket).uploadToSignedUrl(slot.json.path, slot.json.token, f, { contentType: mime });
+    if (upErr) return set({ state: "refused", message: "It could not be uploaded. Check your connection and try again." });
+    set({ state: "reading" });
+    const done = await post("/api/individual/scholar/materials", { uploadId: slot.json.uploadId, mime, fileName: f.name, piiAttested: true });
+    if (done.json.duplicateOf) return set({ state: "duplicate", message: done.json.error, id: done.json.duplicateOf.id });
+    if (!done.ok) return set({ state: "refused", message: `${done.json.error ?? "It could not be read."} Nothing was kept.` });
+    set({ state: "done", id: done.json.id, partial: done.json.status === "partial", message: done.json.quality?.summary });
+  }
 
   async function upload(e: React.FormEvent) {
     e.preventDefault();
-    const f = chosen;
-    if (!f || !attested || (stage && stage !== "done")) return;
+    if (!chosen.length || !attested || (stage && stage !== "done")) return;
+    if (chosen.length > MAX_FILES_AT_ONCE) { setError(`Choose up to ${MAX_FILES_AT_ONCE} files at once.`); return; }
     setError("");
-    const mime = mimeOf(f);
-    if (!rules.mimes.includes(mime)) { setError(`Upload ${rules.describe}.`); return; }
-    if (f.size > maxBytes) { setError(`Files must be ${rules.maxMb} MB or smaller.`); return; }
+    const list: FileOutcome[] = chosen.map(f => ({ name: f.name, state: "waiting" }));
+    setOutcomes([...list]);
     setStage("uploading");
-    const slot = await post("/api/individual/scholar/uploads", { mime, size: f.size, piiAttested: true });
-    if (!slot.ok) { setStage(""); setError(slot.json.error ?? "The upload could not be started."); return; }
-    const { error: upErr } = await createClient().storage.from(slot.json.bucket).uploadToSignedUrl(slot.json.path, slot.json.token, f, { contentType: mime });
-    if (upErr) { setStage(""); setError("The file could not be uploaded. Check your connection and try again."); return; }
-    setStage("reading");
-    const done = await post("/api/individual/scholar/materials", { uploadId: slot.json.uploadId, mime, fileName: f.name, piiAttested: true });
-    if (!done.ok) { setStage(""); setError(`${done.json.error ?? "Your material could not be read."} Nothing was kept, so you can fix it and try again.`); return; }
-    setStage("done");
-    router.push(studyHref(done.json.id));
+    for (const [i, f] of chosen.entries()) {
+      await uploadOne(f, o => { list[i] = { ...list[i], ...o }; setOutcomes([...list]); setStage(o.state === "reading" ? "reading" : "uploading"); });
+    }
+    const kept = list.filter(o => o.state === "done").map(o => o.id!);
+    setStage(kept.length ? "done" : "");
+    if (!kept.length) { setError(list.length === 1 ? (list[0].message ?? "Your material could not be read.") : "None of the files was kept. Each one says why."); return; }
+    // UPLOAD-01 U5: every upload ends on "Your notes are ready", the files read and what Scholar found in them.
+    router.push(readyHref(kept));
     router.refresh();
   }
 
@@ -262,10 +283,10 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
       {mode === "file" || !rules.text ? (
         <>
           <label htmlFor="scholar-file" className="mt-4 block text-[14px] font-semibold text-gray-900">File</label>
-          <input id="scholar-file" type="file" accept={[...rules.mimes.map(m => EXT[m]), ...rules.mimes].join(",")}
-            onChange={e => setFile(e.target.files?.[0] ?? null)}
+          <input id="scholar-file" type="file" multiple accept={[...rules.mimes.map(m => EXT[m]), ...rules.mimes].join(",")}
+            onChange={e => setFiles(Array.from(e.target.files ?? []))}
             className={`mt-1.5 block w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-[14px] text-gray-800 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`} />
-          <p className="mt-1.5 text-[12.5px] text-gray-500">Photos of handwritten or printed notes cannot be read yet: text recognition (OCR) is not available.</p>
+          <p className="mt-1.5 text-[12.5px] text-gray-500">You can choose several files at once, up to {MAX_FILES_AT_ONCE}. Photos of handwritten or printed notes, and recordings, cannot be read yet: text recognition (OCR) and transcription are not available.</p>
         </>
       ) : (
         <>
@@ -283,16 +304,33 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
         <span>{UPLOAD_ATTESTATION}</span>
       </label>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="submit" className={btn} style={{ background: accent }} disabled={!chosen || !attested || stage === "uploading" || stage === "reading"}>
-          {stage === "uploading" ? "Uploading…" : stage === "reading" ? "Reading your notes…" : stage === "done" ? "Opening…" : "Upload"}
+        <button type="submit" className={btn} style={{ background: accent }} disabled={!chosen.length || !attested || stage === "uploading" || stage === "reading"}>
+          {stage === "uploading" ? "Uploading…" : stage === "reading" ? "Reading your notes…" : stage === "done" ? "Opening…" : chosen.length > 1 ? `Upload ${chosen.length} files` : "Upload"}
         </button>
         <span className="text-[13px] text-gray-500" aria-live="polite">
           {stage === "uploading" ? "Step 1 of 3: sending it to your private space."
-            : stage === "reading" ? "Step 2 of 3: reading the text and checking it for patient information. A long PDF can take a little while."
-              : stage === "done" ? "Step 3 of 3: saved. Opening it so Scholar can find its topics." : ""}
+            : stage === "reading" ? "Step 2 of 3: reading the text and checking it for patient information. A long file can take a little while."
+              : stage === "done" ? "Step 3 of 3: saved. Opening what Scholar found." : ""}
         </span>
       </div>
-      <ErrorLine text={error} />
+      {outcomes.length > 1 && (
+        <ul aria-live="polite" className="mt-3 space-y-1.5">
+          {outcomes.map((o, i) => (
+            <li key={i} className="rounded-lg border border-gray-200 px-3 py-2 text-[13px]">
+              <span className="font-semibold text-gray-900">{o.name}</span>{" "}
+              <span className={o.state === "refused" ? "text-red-700" : o.state === "duplicate" ? "text-amber-800" : o.partial ? "text-amber-800" : "text-gray-600"}>
+                {o.state === "waiting" ? "waiting" : o.state === "uploading" ? "uploading…" : o.state === "reading" ? "reading…" : o.state === "done" ? (o.partial ? "kept, partly read" : "kept") : o.state === "duplicate" ? "already in your library" : "not kept"}
+              </span>
+              {o.message && o.state !== "done" && <span className="block text-gray-700">{o.message}</span>}
+              {o.state === "duplicate" && o.id && <Link href={studyHref(o.id)} className={`text-[12.5px] font-semibold underline ${focusRing}`} style={{ color: accent }}>Open the copy you have</Link>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {outcomes.length === 1 && outcomes[0].state === "duplicate" && outcomes[0].id && (
+        <p className="mt-3 text-[13.5px] text-amber-900">{outcomes[0].message} <Link href={studyHref(outcomes[0].id)} className={`font-semibold underline ${focusRing}`}>Open it</Link></p>
+      )}
+      <ErrorLine text={outcomes.length === 1 && outcomes[0].state === "duplicate" ? "" : error} />
       <p className="mt-3 text-[12px] text-gray-500">Competen also checks the text for NHS numbers, labelled dates of birth and hospital numbers, and will not keep a file that has them. That check cannot find everything, which is why your confirmation is needed.</p>
     </form>
   );
@@ -345,18 +383,34 @@ function BeyondNotes({ s }: { s: Supplementary | undefined }) {
 }
 
 
-export function ExplainPanel({ materialId, consent, offMessage, title = "Ask your notes", hint }: { materialId?: string; consent: boolean; offMessage?: string; title?: string; hint?: string }) {
+/**
+ * UPLOAD-01 U4: what a library-wide question may be asked of. `materials`: the person's documents, to choose
+ * from. `competencies`: competencies their notes are linked to. Absent: the whole library only.
+ */
+export type ExplainScopes = { materials: { id: string; title: string }[]; competencies: { id: string; title: string }[] };
+
+export function ExplainPanel({ materialId, materialIds, scopes, consent, offMessage, title = "Ask your notes", hint }: {
+  materialId?: string; materialIds?: string[]; scopes?: ExplainScopes; consent: boolean; offMessage?: string; title?: string; hint?: string;
+}) {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [items, setItems] = useState<Explained[]>([]);
   const [mode, setMode] = useState<Mode>("explain");
+  const [scope, setScope] = useState<"all" | "chosen" | "competency">("all");
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [competency, setCompetency] = useState("");
   async function ask(e: React.FormEvent) {
     e.preventDefault();
     const text = q.trim();
     if (!text || busy) return;
+    if (scope === "chosen" && !chosen.length) { setError("Choose at least one material."); return; }
+    if (scope === "competency" && !competency) { setError("Choose a competency."); return; }
     setBusy(true); setError("");
-    const r = await post("/api/individual/scholar/explain", { question: text, materialId, mode });
+    const r = await post("/api/individual/scholar/explain", {
+      question: text, materialId, mode,
+      ...(materialIds?.length ? { materialIds } : scope === "chosen" ? { materialIds: chosen } : scope === "competency" ? { competencyId: competency } : {}),
+    });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "No explanation could be produced."); return; }
     setItems(list => [{ q: text, answer: r.json.answer, message: r.json.message, sources: r.json.sources ?? [], provenance: r.json.provenance, supplementary: r.json.supplementary }, ...list]);
@@ -374,6 +428,32 @@ export function ExplainPanel({ materialId, consent, offMessage, title = "Ask you
           <textarea id={`explain-q-${materialId ?? "all"}`} rows={2} maxLength={QUESTION_MAX} value={q} onChange={e => setQ(e.target.value)}
             placeholder="For example: explain the stages of acute kidney injury"
             className={`w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5 text-[15px] text-gray-900 ${focusRing}`} />
+          {scopes && !materialId && !materialIds?.length && (
+            <fieldset className="mt-3">
+              <legend className="text-[12.5px] font-semibold text-gray-700">Ask it of</legend>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[13.5px] text-gray-800">
+                <label className="inline-flex items-center gap-1.5"><input type="radio" name="explain-scope" checked={scope === "all"} onChange={() => setScope("all")} /> All my notes</label>
+                {scopes.materials.length > 1 && <label className="inline-flex items-center gap-1.5"><input type="radio" name="explain-scope" checked={scope === "chosen"} onChange={() => setScope("chosen")} /> Materials I choose</label>}
+                {scopes.competencies.length > 0 && <label className="inline-flex items-center gap-1.5"><input type="radio" name="explain-scope" checked={scope === "competency"} onChange={() => setScope("competency")} /> Notes linked to a competency</label>}
+              </div>
+              {scope === "chosen" && (
+                <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+                  {scopes.materials.map(m => (
+                    <li key={m.id}><label className="flex items-start gap-2 text-[13.5px] text-gray-800">
+                      <input type="checkbox" className="mt-1" checked={chosen.includes(m.id)} onChange={e => setChosen(c => e.target.checked ? [...c, m.id] : c.filter(x => x !== m.id))} />{m.title}
+                    </label></li>
+                  ))}
+                </ul>
+              )}
+              {scope === "competency" && (
+                <select aria-label="Competency" value={competency} onChange={e => setCompetency(e.target.value)}
+                  className={`mt-2 block w-full rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-[14px] text-gray-900 ${focusRing}`}>
+                  <option value="">Choose…</option>
+                  {scopes.competencies.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                </select>
+              )}
+            </fieldset>
+          )}
           <ModePicker mode={mode} setMode={setMode} idPrefix={`explain-${materialId ?? "all"}`} />
           <button type="submit" className={`${btn} mt-3`} style={{ background: accent }} disabled={busy || !q.trim()}>{busy ? "Reading your notes…" : MODES.find(m => m.key === mode)!.label}</button>
         </form>

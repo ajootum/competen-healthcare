@@ -4,12 +4,13 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { NO_APPROVED_COMPETENCIES } from "@/lib/individual/scholar/config";
-import { analysisStatus, countDue, getMaterial, listChunks, listMappings, listProgrammes, listQuestions, readConsent } from "@/lib/individual/scholar/store";
+import { FORMAT_LABEL, FORMAT_OF, NO_APPROVED_COMPETENCIES, UNIT_OF } from "@/lib/individual/scholar/config";
+import { analysisStatus, countDue, getMaterial, listChunks, listCollections, listMappings, listProgrammes, listQuestions, materialExtras, readConsent } from "@/lib/individual/scholar/store";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
-import { competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
+import { competencyAbsence, competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
 import { AnalysePanel, SectionTopics, type CompetencyOption, type MappingView } from "../_components/competency-client";
-import { citeChunk } from "@/lib/individual/scholar/extract";
+import { OrganiseMaterial } from "../_components/library-client";
+import { citeChunk, qualitySummary } from "@/lib/individual/scholar/extract";
 import { PageHeader, StatePanel, Unreadable, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
@@ -56,6 +57,9 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
   const stamp = stampHistory.ok
     ? contextStamp(stampHistory.periods, m.createdAt, new Map((stampProgrammes.ok ? stampProgrammes.data : []).map(p => [p.code, p.label])))
     : null;
+  const [extras, collections] = await Promise.all([materialExtras(ctx.admin, ctx.userId, [m.id]), listCollections(ctx.admin, ctx.userId)]);
+  const unit = UNIT_OF(m.mimeType);
+  const quality = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null) : null;
   const [chunks, questions, consent, due, analysis, mapped, learner] = await Promise.all([
     listChunks(ctx.admin, ctx.userId, m.id),
     listQuestions(ctx.admin, ctx.userId, { materialId: m.id }),
@@ -78,12 +82,15 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
       list.push({
         id: r.id, competencyId: r.competencyId, title: l?.title ?? "Competency", code: l?.code ?? null, layer: r.layer, catalogue: l?.catalogue ?? null, structure: l?.structure ?? null, contentStatus: l?.contentStatus ?? null,
         source: r.source, confidence: r.confidence, rationale: r.rationale, state: r.state, decidedBy: r.decidedBy, decisions: r.decisions,
+        outcome: r.outcome, catalogueVersion: r.catalogueVersion,
       });
       mappingsByChunk.set(r.chunkId, list);
     }
     for (const list of mappingsByChunk.values()) list.sort((a, b) => (b.confidence ?? 1) - (a.confidence ?? 1));
   }
-  const options: CompetencyOption[] = (learner.competencies ?? []).map(c => ({ id: c.id, title: c.title, code: c.code, layer: c.layer }));
+  const options: CompetencyOption[] = (learner.competencies ?? []).map(c => ({ id: c.id, title: c.title, code: c.code, layer: c.layer, outcomes: c.outcomes.slice(0, 6) }));
+  // R1 (Stage 1 close-out, fixed in UPLOAD-01): no programme, or a programme with no usable catalogue, is SAID.
+  const absence = competencyAbsence(learner);
   const status = consent.ok ? consentStatus(consent.data, consentDocuments().published) : null;
   const consentOn = status === "on";
   const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
@@ -102,12 +109,19 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
     <>
       <p className="mb-2 text-[13px]"><Link href={experienceHref("scholar", "study")} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>← My Learning</Link></p>
       <PageHeader accent={x.accent} eyebrow="Your material" title={m.title}
-        intro={`${m.mimeType === "application/pdf" ? `PDF, ${m.pageCount} page${m.pageCount === 1 ? "" : "s"}` : m.mimeType === "text/plain" ? "Text (cited by section)" : "Word document (cited by section, because a Word file has no fixed pages)"} · ${m.chunkCount} section${m.chunkCount === 1 ? "" : "s"} · ${m.fileName}${stamp ? ` · uploaded while studying ${stamp}` : ""}`} />
+        intro={`${unit === "section" ? (m.mimeType === "text/plain" ? "Text (cited by section)" : "Word document (cited by section, because a Word file has no fixed pages)") : `${FORMAT_LABEL[FORMAT_OF[m.mimeType]]}, ${m.pageCount} ${unit}${m.pageCount === 1 ? "" : "s"}`} · ${m.chunkCount} section${m.chunkCount === 1 ? "" : "s"} · ${m.fileName}${stamp ? ` · uploaded while studying ${stamp}` : ""}`} />
       <StudyNav dueCount={due} />
+      {quality && (
+        <p className={`mb-4 rounded-xl px-4 py-2.5 text-[13.5px] ${quality.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "border border-gray-200 bg-white text-gray-700"}`}>{quality.text}</p>
+      )}
 
       <div className="mb-6 flex flex-wrap items-start gap-3">
         <a href={`/api/individual/scholar/materials/${m.id}`} className={secondaryBtn}>Download original</a>
         <DeleteMaterial id={m.id} title={m.title} />
+      </div>
+      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4">
+        <OrganiseMaterial id={m.id} title={m.title} collectionId={extras.byId.get(m.id)?.collectionId ?? null}
+          collections={extras.collectionsOn && collections.ok ? collections.data.map(c => ({ id: c.id, name: c.name })) : null} />
       </div>
 
       {!consentOn && (
@@ -127,7 +141,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
 
       {competenciesOn && analysis.ok && (
         <AnalysePanel materialId={m.id} consent={consentOn} sections={analysis.data.sections} analysed={analysis.data.analysed}
-          programmeLabel={learner.programme?.label ?? null} />
+          programmeLabel={learner.programme?.label ?? null} absence={absence} />
       )}
       {/* Owner ruling 2026-10-24: content held back by the status floor is SAID, never silently missing. */}
       {competenciesOn && learner.programme && learner.belowFloor > 0 && (
@@ -156,7 +170,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
               return (
                 <li key={c.id} id={`c-${c.id}`} className="scroll-mt-20 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
                   <p className="text-[12px] font-bold uppercase tracking-[0.12em]" style={{ color: x.accent }}>
-                    {citeChunk(c).replace(/^./, s => s.toUpperCase())}{c.pageFrom !== null ? ` · section ${c.ordinal}` : ""}
+                    {citeChunk(c, unit).replace(/^./, s => s.toUpperCase())}{c.pageFrom !== null ? ` · section ${c.ordinal}` : ""}
                   </p>
                   <details className="mt-1 group">
                     <summary className={`cursor-pointer list-none text-[14px] leading-relaxed text-gray-800 ${focusRing}`}>
@@ -168,7 +182,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
                   </details>
                   {competenciesOn && mapped.ok && (mapped.data.concepts.has(c.id) || mappingsByChunk.has(c.id)) && (
                     <SectionTopics chunkId={c.id} concepts={mapped.data.concepts.get(c.id) ?? []} mappings={mappingsByChunk.get(c.id) ?? []}
-                      options={learner.programme ? options : []} />
+                      options={learner.programme ? options : []} corrected={mapped.data.corrected.has(c.id)} correction={mapped.data.correctionsOn} />
                   )}
                   <ChunkActions chunkId={c.id} consent={consentOn}
                     linked={(mappingsByChunk.get(c.id) ?? []).filter(x => x.state === "accepted").map(x => ({ title: x.title, contentStatus: x.contentStatus ?? null }))} />

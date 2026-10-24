@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { AI_LABEL, MAPPING_LABEL, PERSONAL_CASE_LABEL } from "@/lib/individual/scholar/config";
 import { AiBadge, ContentStatusTag, QuestionCard, type QuestionView } from "./client";
+import { TopicEditor } from "./library-client";
 
 // COMPETEN-SCHOLAR-01 S2 and S4, the interactive pieces: the programme a person studies, finding the topics
 // and competencies in their notes, accepting or rejecting each suggested link, and playing a multi-step case.
@@ -89,8 +90,10 @@ export function ProgrammeChooser({ programmes, current }: { programmes: Programm
 
 // ── FIND TOPICS AND COMPETENCIES ───────────────────────────────────────────────────────────────────
 
-export function AnalysePanel({ materialId, consent, sections, analysed, programmeLabel }: {
+export function AnalysePanel({ materialId, consent, sections, analysed, programmeLabel, absence = null }: {
   materialId: string; consent: boolean; sections: number; analysed: number; programmeLabel: string | null;
+  /** UPLOAD-01 R1: why no competency will be suggested (no programme, or no usable catalogue). Said, never blank. */
+  absence?: string | null;
 }) {
   const router = useRouter();
   const [done, setDone] = useState(analysed);
@@ -126,9 +129,11 @@ export function AnalysePanel({ materialId, consent, sections, analysed, programm
     <section aria-labelledby="topics-h" className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
       <h2 id="topics-h" className="text-[16px] font-bold text-gray-900">Topics and competencies</h2>
       <p className="mt-1 text-[13.5px] text-gray-600">
-        {programmeLabel
+        {programmeLabel && !absence
           ? <>Scholar finds the concepts in each section and suggests which competencies of <span className="font-semibold">{programmeLabel}</span> it supports.</>
-          : <>Scholar finds the concepts in each section. Choose your programme in My Learning to also see which competencies your notes support.</>}
+          : absence
+            ? <>Scholar finds the concepts in each section. {absence}</>
+            : <>Scholar finds the concepts in each section. Choose your programme in My Learning to also see which competencies your notes support.</>}
       </p>
       <p className="mt-2 text-[13.5px] text-gray-800" aria-live="polite">
         {done} of {sections} section{sections === 1 ? "" : "s"} analysed{running ? "…" : "."}
@@ -153,20 +158,26 @@ export type MappingView = {
   id: string; competencyId: string; title: string; code: string | null; layer: string; catalogue: string | null; structure?: string | null; contentStatus?: string | null;
   source: "ai" | "student" | "reviewer"; confidence: number | null; rationale: string | null;
   state: "proposed" | "accepted" | "rejected"; decidedBy: "student" | "reviewer" | null; decisions: number;
+  /** UPLOAD-01 U3: the learning outcome named for this link, and the catalogue version it was read from. */
+  outcome?: string | null; catalogueVersion?: string | null;
 };
-export type CompetencyOption = { id: string; title: string; code: string | null; layer: string };
+export type CompetencyOption = { id: string; title: string; code: string | null; layer: string; outcomes?: string[] };
 
 const STATE_CLS = { proposed: "border-amber-300 bg-amber-50/50", accepted: "border-emerald-300 bg-emerald-50/50", rejected: "border-gray-200 bg-gray-50 opacity-80" };
 const STATE_TEXT = { proposed: "Suggested", accepted: "Accepted", rejected: "Rejected" };
 
-export function SectionTopics({ chunkId, concepts, mappings, options }: {
+export function SectionTopics({ chunkId, concepts, mappings, options, corrected = false, correction = false }: {
   chunkId: string; concepts: string[]; mappings: MappingView[]; options: CompetencyOption[];
+  /** UPLOAD-01 U5: `concepts` is the student's own list; `correction`: correcting is available here (408). */
+  corrected?: boolean; correction?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [adding, setAdding] = useState("");
+  const [outcome, setOutcome] = useState("");
   const free = options.filter(o => !mappings.some(m => m.competencyId === o.id));
+  const addingOutcomes = free.find(o => o.id === adding)?.outcomes ?? [];
 
   async function decide(id: string, decision: "accepted" | "rejected") {
     setBusy(id); setError("");
@@ -179,22 +190,25 @@ export function SectionTopics({ chunkId, concepts, mappings, options }: {
     e.preventDefault();
     if (!adding) return;
     setBusy("add"); setError("");
-    const r = await send("/api/individual/scholar/mappings", { chunkId, competencyId: adding });
+    const r = await send("/api/individual/scholar/mappings", { chunkId, competencyId: adding, ...(outcome ? { outcome } : {}) });
     setBusy("");
     if (!r.ok) { setError(r.json.error ?? "The link could not be saved."); return; }
-    setAdding("");
+    setAdding(""); setOutcome("");
     router.refresh();
   }
 
-  if (!concepts.length && !mappings.length && !options.length) return null;
+  if (!concepts.length && !mappings.length && !options.length && !corrected) return null;
   return (
     <div className="mt-3 rounded-xl border border-gray-200 p-3.5">
-      {concepts.length > 0 && (
+      {(concepts.length > 0 || corrected) && (
         <div>
-          <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-500">Concepts</p>
-          <ul className="mt-1.5 flex flex-wrap gap-1.5">
-            {concepts.map(c => <li key={c} className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[12.5px] text-gray-800">{c}</li>)}
-          </ul>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-500">Concepts</p>
+            {correction && <TopicEditor chunkId={chunkId} topics={concepts} corrected={corrected} />}
+          </div>
+          {concepts.length > 0
+            ? <ul className="mt-1.5 flex flex-wrap gap-1.5">{concepts.map(c => <li key={c} className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[12.5px] text-gray-800">{c}</li>)}</ul>
+            : <p className="mt-1.5 text-[12.5px] text-gray-600">You removed every topic from this section.</p>}
         </div>
       )}
       {mappings.length > 0 && (
@@ -218,7 +232,9 @@ export function SectionTopics({ chunkId, concepts, mappings, options }: {
                 {(m.structure || m.contentStatus) && (
                   <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] font-medium text-gray-600">{m.structure}<ContentStatusTag status={m.contentStatus} /></p>
                 )}
+                {m.outcome && <p className="mt-1 text-[12.5px] text-gray-700"><span className="font-semibold">Learning outcome:</span> {m.outcome}</p>}
                 {m.rationale && <p className="mt-1 text-[13px] text-gray-700">{m.rationale}</p>}
+                {m.catalogueVersion && <p className="mt-0.5 text-[11.5px] text-gray-500">Catalogue version {m.catalogueVersion}</p>}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {m.state !== "accepted" && (
                     <button type="button" className={`${small} border-emerald-400 bg-white text-emerald-900 hover:bg-emerald-50`} disabled={!!busy} onClick={() => decide(m.id, "accepted")}>
@@ -240,12 +256,22 @@ export function SectionTopics({ chunkId, concepts, mappings, options }: {
         <form onSubmit={add} className="mt-3 flex flex-wrap items-end gap-2">
           <div className="min-w-[220px] flex-1">
             <label htmlFor={`add-${chunkId}`} className="block text-[12.5px] font-semibold text-gray-700">Link another competency</label>
-            <select id={`add-${chunkId}`} value={adding} onChange={e => setAdding(e.target.value)}
+            <select id={`add-${chunkId}`} value={adding} onChange={e => { setAdding(e.target.value); setOutcome(""); }}
               className={`mt-1 block w-full rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-[14px] text-gray-900 ${focusRing}`}>
               <option value="">Choose…</option>
               {free.map(o => <option key={o.id} value={o.id}>{LAYER_LABEL[o.layer] ?? o.layer}: {o.code ? `${o.code} ` : ""}{o.title}</option>)}
             </select>
           </div>
+          {addingOutcomes.length > 0 && (
+            <div className="min-w-[220px] flex-1">
+              <label htmlFor={`outcome-${chunkId}`} className="block text-[12.5px] font-semibold text-gray-700">Learning outcome (optional)</label>
+              <select id={`outcome-${chunkId}`} value={outcome} onChange={e => setOutcome(e.target.value)}
+                className={`mt-1 block w-full rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-[14px] text-gray-900 ${focusRing}`}>
+                <option value="">None in particular</option>
+                {addingOutcomes.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+          )}
           <button type="submit" className={`${small} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`} disabled={!adding || !!busy}>{busy === "add" ? "Saving…" : "Link"}</button>
         </form>
       )}

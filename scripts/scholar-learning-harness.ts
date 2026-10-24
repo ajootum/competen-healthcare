@@ -288,6 +288,7 @@ const MIG389 = migText(MIG389_FILE);
 const MIG390_FILE = "supabase/migrations/390-individual-scholar-mapping-provenance.sql";
 const MIG390 = migText(MIG390_FILE);
 const MIG405 = migText("supabase/migrations/405-individual-scholar-plain-text-materials.sql");
+const MIG406 = migText("supabase/migrations/406-individual-scholar-pptx-and-extraction-quality.sql");
 /**
  * K20 (Stage 2, Upload): what may be uploaded is Individual policy, enforced at BOTH steps (the slot and the
  * processing), the PDF page limit reaches the extractor, plain text is OFF until HQ turns it on (it needs 405),
@@ -299,10 +300,33 @@ const uploadGoverned = (src: Src) => {
   const pol = read("src/lib/individual/policy.ts"), home = src.get(`${PAGES}/page.tsx`) ?? "", mp = src.get(`${PAGES}/[materialId]/page.tsx`) ?? "";
   return /const rules = uploadRules\(policy\);/.test(up) && /\(rules\.mimes as readonly string\[\]\)\.includes\(mime\)/.test(up) && /size > rules\.maxBytes/.test(up)
     && /const rules = uploadRules\(policy\);/.test(mat) && /\(rules\.mimes as readonly string\[\]\)\.includes\(declared\)/.test(mat) && /> rules\.maxBytes/.test(mat)
-    && /extractMaterial\(mime, bytes, policy\.scholarPdfMaxPages\)/.test(mat)
+    && /extractMaterial\(mime, bytes, policy\.scholarPdfMaxPages(, policy\.scholarPptxMaxSlides)?\)/.test(mat)
     && /key: "scholar_upload_formats"[\s\S]*?fallback: \["pdf", "docx"\],/.test(pol)
     && /export function UploadPanel\(\{ rules \}/.test(cl) && !/ALLOWED_MIME|MAX_UPLOAD_BYTES/.test(cl)
     && /contextStamp\(/.test(home) && /contextStamp\(/.test(mp);
+};
+/**
+ * K22 (COMPETEN-SCHOLAR-UPLOAD-01): the upload pipeline's new rules hold in the code.
+ *   U1  the real kind is read from the bytes (sniffUpload: a ZIP is opened to tell Word from PowerPoint), and the
+ *       same bytes twice are refused BEFORE anything is extracted, pointing at the copy the person has.
+ *   U2  how completely the file was read is computed from what extraction produced, stored with the material,
+ *       and returned as "partial" or "ready" -- never a bare success.
+ *   U3  Scholar opts in to outcome-level mapping, and the R1 absence (no programme, or no usable catalogue) is
+ *       said on the material page and the ready page through ONE rule (competencyAbsence).
+ *   U5  a student's topic list is screened for patient identifiers before it is kept, and "Start learning" on
+ *       the ready page is the EXISTING material page (the Stage 3 hold stands).
+ */
+const upload01Holds = (src: Src) => {
+  const mat = src.get(`${API}/materials/route.ts`) ?? "", gen = src.get(GEN) ?? "", mp = src.get(`${PAGES}/[materialId]/page.tsx`) ?? "";
+  const ready = src.get(`${PAGES}/ready/page.tsx`) ?? "", topics = src.get(`${API}/topics/route.ts`) ?? "";
+  const dup = mat.indexOf("findDuplicate("), ext = mat.indexOf("extractMaterial(mime");
+  return /const sniffed = await sniffUpload\(bytes\);/.test(mat) && /if \(sniffed\.unsafe\) return refuse\(422/.test(mat) && dup > 0 && ext > dup && /status: 409/.test(mat)
+    && /const quality = extractionQuality\(mime, extraction\.pages, chunks\);/.test(mat) && /chunks, quality,/.test(mat)
+    && /status: summary\.partial \? "partial" : "ready"/.test(mat)
+    && /outcomes: true,/.test(gen)
+    && /const absence = competencyAbsence\(learner\);/.test(mp) && /absence=\{absence\}/.test(mp) && /competencyAbsence\(learner\)/.test(ready)
+    && /findPatientIdentifiers\(t\)/.test(topics)
+    && /href=\{experienceHref\("scholar", `study\/\$\{m\.id\}`\)\} className=\{primaryBtn\}/.test(ready);
 };
 /** K16: 390 makes a person's mapping unable to carry AI provenance -- both directions of the rule, one CHECK, nothing else. */
 const mig390Shape = (m: string) => /\(source = 'ai'\) = \(model is not null and prompt_version is not null and confidence is not null\)/.test(m)
@@ -575,9 +599,10 @@ function main() {
       .every(k => MIG_REAL.includes(`individual_scholar_${k} foreign key`)));
   ok("F4. a material cannot be stored without the patient-data attestation", /pii_attested_at timestamptz not null/.test(MIG_REAL));
   // Stage 2: plain text is 405's, so the formats the code knows are checked against 372 and 405 together.
-  ok("F5. the bucket is private and its size and type limits match the code (372, plus 405 for plain text)",
-    MIG_REAL.includes(`'${BUCKET}', '${BUCKET}', false, ${MAX_UPLOAD_BYTES}`) && ALLOWED_MIME.every(m => MIG_REAL.includes(`'${m}'`) || MIG405.includes(`'${m}'`))
-    && MIG_REAL.includes(`byte_size <= ${MAX_UPLOAD_BYTES}`) && (!MIG405 || /update storage\.buckets[\s\S]*'text\/plain'[\s\S]*where id = 'individual-scholar-materials'/.test(MIG405)));
+  ok("F5. the bucket is private and its size and type limits match the code (372, plus 405 for plain text and 406 for PowerPoint)",
+    MIG_REAL.includes(`'${BUCKET}', '${BUCKET}', false, ${MAX_UPLOAD_BYTES}`) && ALLOWED_MIME.every(m => MIG_REAL.includes(`'${m}'`) || MIG405.includes(`'${m}'`) || MIG406.includes(`'${m}'`))
+    && MIG_REAL.includes(`byte_size <= ${MAX_UPLOAD_BYTES}`) && (!MIG405 || /update storage\.buckets[\s\S]*'text\/plain'[\s\S]*where id = 'individual-scholar-materials'/.test(MIG405))
+    && (!MIG406 || /update storage\.buckets[\s\S]*presentationml\.presentation'[\s\S]*where id = 'individual-scholar-materials'/.test(MIG406)));
   // String literals out first: the table comments NAME the estate tables in order to say they are not used.
   const migDdl = MIG_REAL.replace(/'(?:[^']|'')*'/g, "''");
   ok("F6. 372 creates no function and touches no estate table", !/create (or replace )?function|plpgsql|\$\$/.test(migDdl)
@@ -628,6 +653,8 @@ function main() {
     contentStatusLabelled(REAL));
   ok("K20. Stage 2: formats, size and pages are Individual policy, enforced at both upload steps; plain text is off until HQ enables it; the panel reads the server's rules; every material shows its educational context",
     uploadGoverned(REAL));
+  ok("K22. UPLOAD-01: the real kind is read from the bytes, a duplicate is refused before extraction, read quality is stored and returned (partial is never a bare success), outcomes are opted in, the no-catalogue absence is said through one rule, student topics are screened, and Start learning is the existing page",
+    upload01Holds(REAL));
   ok("K15. the mapping engine is Holdings code: product-neutral, storing nothing, using the caller's attribution -- Scholar supplies person attribution and its identifier screen",
     engineNeutral(HOLD, REAL));
   ok("K4. proposals, concepts and decisions are never edited or deleted by code -- a correction is a new decision row", trailEdits(REAL).length === 0, trailEdits(REAL).join(", "));
@@ -727,6 +754,12 @@ function main() {
   ok("P37. ⚠ K20 goes red when processing stops re-checking the format, or a material stops showing its context",
     !uploadGoverned(plant(`${API}/materials/route.ts`, "(rules.mimes as readonly string[]).includes(declared)", "true"))
     && !uploadGoverned(plant(`${PAGES}/[materialId]/page.tsx`, "contextStamp(", "(() => null)(")));
+  ok("P39. ⚠ K22 goes red when the duplicate check moves after extraction, partial is reported as ready, or the no-catalogue absence goes unsaid",
+    !upload01Holds(plant(`${API}/materials/route.ts`, 'status: summary.partial ? "partial" : "ready"', 'status: "ready"'))
+    && !upload01Holds(plant(`${API}/materials/route.ts`, "if (sniffed.unsafe) return refuse(422", "if (false) return refuse(422"))
+    && !upload01Holds(plant(`${PAGES}/[materialId]/page.tsx`, "const absence = competencyAbsence(learner);", "const absence = null;"))
+    && !upload01Holds(plant(`${API}/topics/route.ts`, "findPatientIdentifiers(t)", "[]"))
+    && !upload01Holds(plant(GEN, "outcomes: true,", "outcomes: false,")));
   ok("P32. ⚠ K15 goes red when the engine reads a table or names a product",
     !engineNeutral(new Map([...HOLD, [ENGINE, (HOLD.get(ENGINE) ?? "") + '\nconst x = (a: any) => a.from("individual_scholar_chunk");']]), REAL)
     && !engineNeutral(HOLD, plant(GEN, "screen: findPatientIdentifiers,", "")));
