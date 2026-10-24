@@ -142,6 +142,10 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // Reviewer position; govern (reviewer scopes, review counts) is granted to the Quality Council Member.
   { code: "hq.quality.clinical.approve",      space: "quality"   },
   { code: "hq.quality.clinical.govern",       space: "quality"   },
+  // Migration 422, AI-CONSUMPTION-01 C2/C3: the governed case library. Author is the Clinical Case Educator
+  // position, publish is the Quality Council Member. Case review uses hq.quality.clinical.approve and its scopes.
+  { code: "hq.quality.case.author",           space: "quality"   },
+  { code: "hq.quality.case.publish",          space: "quality"   },
 ];
 
 export const HQ_CAPABILITY_CODES = HQ_CAPABILITIES.map(c => c.code);
