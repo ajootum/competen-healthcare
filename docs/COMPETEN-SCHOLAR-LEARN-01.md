@@ -82,7 +82,7 @@ Every answer keeps **four kinds of content apart**, each labelled where it appea
 
 ## 6. Verification
 
-- **Unit tests:** Vitest **898/898**. New `learn.test.ts` covers:
+- **Unit tests:** Vitest **898/898** (`src/lib/individual` 320/320 after the prompt fixes). New `learn.test.ts` covers:
   - step planning, coverage and titles;
   - the four-kind split;
   - the notes check with `[R n]`, invented tags and added figures;
@@ -99,12 +99,49 @@ Every answer keeps **four kinds of content apart**, each labelled where it appea
   - **K25** (**P42**): an artefact is private formative and cascades with its material; a saved answer is returned before any AI; continuity is decided before the call; only reusable answers are saved; the standing has one adapter.
   - **K22** now pins Start learning to Teach Me.
 - **ci-harnesses:** the two known Windows CRLF artefacts only.
-- **Build:** BUILD-RESULT.
-- **Staging, the owner's first acceptance journey:** STAGING-RESULT.
+- **Build:** a real `next build` passes (exit 0) on the PR head. These routes compile:
+  - `/api/individual/scholar/learn/{act, preferences, sessions, sessions/[id]}`;
+  - `/individual/[experience]/study/learn`;
+  - `/individual/[experience]/study/saved`.
+- **Staging, the owner's first acceptance journey:** `scripts/scholar-learn01-harness.ts`, run alone against a staging-pointed dev server at f72f18d7 (the code is that of the PR head), with real AI and nothing mocked. **ALL GREEN, 26 passed, 0 failed.** Materials: the Stage 2 respiratory set (an anatomy PDF, a pneumonia PowerPoint with speaker notes, oxygen therapy notes in Word). Student A's programme is `nursing-ug-diploma`; student B has no programme and no catalogue.
+
+  | # | Owner's step | Proved |
+  |---|---|---|
+  | S1 | Teach Me from Stage 2 | "Start learning" on the ready page opens the Learn workspace, for each material and for all of them |
+  | J1 | Select several documents | One session; its suggested steps span all three; recorded |
+  | J2–J3 | Teach Me; a coherent, grounded explanation | Cited only to the step's sections, each source named, labelled AI-generated and not clinically reviewed. A governed reference was named, and background was shown apart. |
+  | J4 | Simplify | Same step, same sections, cited, notes only (no background) |
+  | J5 | A contextual follow-up | Ask Scholar answers from the session's own sections, cited |
+  | J6 | Explore a related concept | A topic session on hypoxaemia gathers sections from more than one material, explained and cited |
+  | J7 | Informal understanding check | One open question from the step's notes, labelled "not an assessment" |
+  | J8 | Clarification | A verdict (understood, partly or not yet), corrected from the notes and cited. J8b: no practice question was created. |
+  | J9 | Continue | The next step is taught from its own sections |
+  | J10 | Leave and resume | After signing in again the session is at step two, with step one's actions (teach, simplify, ask, check, clarify) and its check outcome kept |
+  | J11 | Review source references | Each reference resolves to the student's own section on its material page |
+  | J12 | CFCA outcomes | Progress shows learning activity against the linked competencies, labelled "not evidence of competence", with "Learn this competency" |
+  | A1–A3 | s8 library | The answer is saved (private formative, with its sources) and the same request returns it with **no new AI call**. "Explain it a new way" replaces it. Saved learning lists it with questions, cases, cards and sessions. |
+  | C1–C2 | s7 continuity | With the student's own allowance used up (synthetic usage rows for that fixture only, removed after): Learn says so plainly, makes no new answer and returns the saved one. A stored question is still marked by its answer key, and saved learning, progress and the material still open. |
+  | NC1 | No catalogue | Student B's session starts and Teach Me answers from the notes, cited, with no governed reference; the workspace renders |
+  | I1 | Isolation | Another student gets not-found for the session, an action on it, its sections and a session over its materials |
+  | H1–H2 | Structure-only history; material deletion | Events hold only action, step and verdict. Deleting a material removes its steps, sources and saved explanations, and the session keeps the rest. |
+  | E1, Z1 | Erasure; cleanup | Erase-all leaves no history and no artefacts. Fixtures are gone: 0 `harness-learn01-*` identities, checked read-only afterwards. |
+
+  **How the journey got to green, recorded:**
+  1. A first run stopped mid-way when the Windows shell ran out of processes. Its fixtures were removed by the next run.
+  2. A second run had 24 passed and 2 failed: Simplify was **correctly withheld** three times for "two", with J10 failing as a consequence. The prompt fix was learn v2 (a last no-counting reminder), then v3 (Simplify keeps the notes' own names: "the right and left main bronchi", not "two tubes").
+  3. A third run had 25 passed and 1 failed: NC1 got a 502 from the AI call itself (a provider failure). The harness now retries a 502 once and reports it, never counting it as a pass.
+  4. The final run had no 502.
+
+  One Teach Me answer in the final run was withheld once ("reduced") and shown when asked again: the grounding check working as designed.
 
 ## 7. Remaining material gaps
 
-GAPS-RESULT
+1. **The switch to IND-007's metered AI is a separate PR** (owner and coordinator instruction). `scholar/ai-standing.ts` is still the stub (full AI), and `scholar/http.ts` still uses `individualAiQuota`. With PR #62 merged, the swap passes `runMeteredAi` the approved activity codes and, per owner decision D1, subject context (the sources' competency or domain and topic terms, plus the screened request text) for the engine to classify. Metering stays OFF behind its flag.
+2. **Owner decision pending:** IND-007's provisional policy marks `check` as clinically sensitive (not_eligible under metering). With metering on, that would switch off Stage 3's informal understanding check, which is formative, not assessment. Under D1 the engine now classifies by subject, not activity name.
+3. **The shared assistant (owner decision D3)** is Holdings'. The workspace's "Ask Scholar" will move to it, configured to default to Teach Me, when IND-007 publishes the per-product interface. Today it is the Scholar Learn route on the same engine.
+4. **Governed supplementary references** have no source on `main` beyond the CFCA catalogue. Category 2 is labelled honestly as that, and no reference library was invented.
+5. **AI flags (contradictions, possibly unsafe statements) are model judgements.** They are labelled "flagged by AI for you to check", each tied to a passage, and never presented as verified.
+6. **Grounding strictness:** a correct but reworded answer can be withheld (for example a count, or a descriptor the notes do not use). The student is told why and may ask again. The prompts carry the rules that cut this, but it cannot be zero by design.
 
 ## 8. Production dependencies (none authorised by this build)
 
