@@ -128,14 +128,29 @@ Owner GO 2026-10-24: "COMPETEN-SCHOLAR-UPLOAD-01 Stage 2 — Upload: Infrastruct
   - F5 and K20 know 406 and the slide limit.
 - **ci-harnesses:** 51/53 on this Windows checkout. The two reds, `pd-screen-doctrine` and `pui-tokens`, are known CRLF artefacts of a Windows worktree, in files this build does not touch. They pass on an LF clone, and main's CI is green (#56, 9/9 at 82a2205).
 - **Build:** a real `next build`, exit 0. The new routes `/api/individual/scholar/collections`, `/api/individual/scholar/topics` and `/individual/[experience]/study/ready` compile.
-- **Staging over HTTP:** `scholar-upload01-harness` at e7afa068, against a staging-pointed dev server. The owner's three-resource scenario. **ALL GREEN, 20 passed, 0 failed**, with 2 PENDs: **U1b**, the PowerPoint lecture (PowerPoint is not yet enabled in the staging policy, which is an owner-run script), and **R1** (the flagged catalogue-less programme run, which writes shared config, so it is the owner's call). Results:
+- **Staging over HTTP:** `scholar-upload01-harness`, against a staging-pointed dev server, running the owner's three-resource scenario.
+  - **Final run at the PR head a6a11d79: ALL GREEN, 21 passed, 0 failed.**
+    - All three resources ran, the PowerPoint included.
+    - The analysis proposed 17 AI links; 13 named a learning outcome, each verified to be the competency's own.
+    - The one PEND is R1, which was run by the owner (below) and deliberately not re-run.
+  - **Earlier run at e7afa068:** 20 passed, 0 failed, with U1b PEND, before PowerPoint was enabled.
+  - **PowerPoint on staging:** the owner ran `seed-staging-scholar-pptx-format.ts` (2026-10-24 12:44 UTC). `--verify` shows `pdf, docx, pptx, text`, draft = published, actor "COMPETEN-SCHOLAR-UPLOAD-01 staging script (owner-run)", with 406 present.
+  - **R1 (owner-run):** the owner ran the flagged `SCHOLAR_R1_ZZ=1` run against 3032 at e7afa068 and **reported it done**. This session cannot see its output: the harness deletes its own audit rows on cleanup. What this session verified read-only afterwards is the teardown:
+    - no `zz-%` programme row remains;
+    - 0 learner and 0 context rows name `zz-harness-no-catalogue`;
+    - 0 `harness-upl01-*` identities are left.
+
+    R1's behaviour is also pinned by unit tests and by static K22/P39.
+
+  Results:
 
   | Check | What it proved |
   |---|---|
   | U1a | The anatomy PDF and the oxygen Word notes are kept. |
+| U1b | The pneumonia PowerPoint: 3 slides, speaker notes kept with their slide, each section on its slide. |
   | U2 | The scanned page 2 is recorded (`empty_units [2]`), and the upload says partial. |
   | U1c | A duplicate gets 409, pointing at the copy, and its object is removed. |
-  | U1d | A macro Word file and a zip bomb get 422 and are not opened; objects are removed. A first run found that these were refused as the wrong kind; fixed in e7afa068. From 311d362b, a script-carrying PDF is refused the same way (unit-tested; in the harness from that commit). |
+  | U1d | A macro Word file, a zip bomb and a PDF carrying a script get 422 and are not read; their objects are removed. The first run found the Office files refused as the wrong kind, fixed in e7afa068. The PDF screen is 311d362b. |
   | U5a | "Your notes are ready" shows each material, its quality, Start learning on the existing page, and the original. |
   | U3a | Every AI suggestion has a catalogue version x.y.z and `competency-map-v3-outcomes`. Each outcome named is the competency's own: 4 of 6 named in the final run, 5 of 8 in the first. |
   | U3b | A student link with an outcome gets 200, and a bogus outcome gets 400. |
