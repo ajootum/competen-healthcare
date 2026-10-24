@@ -7,6 +7,10 @@ import type { Chunk } from "./extract";
 import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
 import type { ProgressAttempt, ProgressCard, ProgressMaterial, ProgressQuestion } from "./progress";
+import { isLayer, type Layer, type ProgrammeConfig } from "./catalogue";
+import { mappingStates, type LiveMapping, type MappingDecision, type MappingState, type MappingSubject, type SubjectAnalysis } from "@/lib/competency/mapping";
+
+export type MapSource = "ai" | "student" | "reviewer";
 import { STUDY_ACHIEVEMENT, isStudyAchievementKind, studyAchievementsFrom, type ChoiceRow, type StudyAchievement, type StudyAchievementKind } from "./passport-items";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
@@ -260,18 +264,31 @@ export type QuestionRow = {
   correctIndex: number; rationale: string; sourceQuote: string; model: string; promptVersion: string; createdAt: string;
   materialTitle: string; ordinal: number | null; pageFrom: number | null; pageTo: number | null;
   latest: { correct: boolean; chosenIndex: number; answeredAt: string } | null;
+  /** Migration 388. Null where 388 is absent, or the question practises no particular competency. */
+  competencyId: string | null;
+  caseId: string | null; caseStep: number | null; caseTitle: string | null;
 };
 
 const QUESTION_COLS = "id, material_id, chunk_id, kind, stem, options, correct_index, rationale, source_quote, model, prompt_version, created_at";
 
+/**
+ * The 388 columns are written ONLY when there is something to write. Where 388 is not applied, a question
+ * with no competency and no case is the 372 insert exactly, so the MVP keeps working (fail closed: the
+ * competency features are simply absent). A case is its steps in order: one case_id, case_step 1..n, and
+ * the title on step 1.
+ */
 export async function insertQuestions(admin: Admin, userId: string, input: {
   passage: Passage; kind: QuestionKind; drafts: DraftQuestion[]; model: string; provider: string; promptVersion: string;
+  competencyId?: string | null; caseId?: string | null; caseTitle?: string | null;
 }): Promise<{ ok: boolean; ids: string[] }> {
   if (!input.drafts.length) return { ok: true, ids: [] };
-  const { data, error } = await admin.from("individual_scholar_question").insert(input.drafts.map(d => ({
+  if (input.caseId && input.kind !== "case") return { ok: false, ids: [] };
+  const { data, error } = await admin.from("individual_scholar_question").insert(input.drafts.map((d, i) => ({
     user_id: userId, material_id: input.passage.materialId, chunk_id: input.passage.chunkId, kind: input.kind,
     stem: d.stem, options: d.options, correct_index: d.correctIndex, rationale: d.rationale, source_quote: d.sourceQuote,
     model: input.model, provider: input.provider, prompt_version: input.promptVersion,
+    ...(input.competencyId ? { competency_id: input.competencyId } : {}),
+    ...(input.caseId ? { case_id: input.caseId, case_step: i + 1, ...(i === 0 ? { case_title: input.caseTitle ?? null } : {}) } : {}),
   }))).select("id");
   if (error) return { ok: false, ids: [] };
   return { ok: true, ids: ((data ?? []) as any[]).map(r => r.id) };
@@ -280,10 +297,11 @@ export async function insertQuestions(admin: Admin, userId: string, input: {
 async function hydrate(admin: Admin, userId: string, rows: any[]): Promise<QuestionRow[]> {
   if (!rows.length) return [];
   const ids = rows.map(r => r.id);
-  const [titles, chunksRes, attRes] = await Promise.all([
+  const [titles, chunksRes, attRes, extra] = await Promise.all([
     titlesOf(admin, userId, [...new Set(rows.map(r => r.material_id as string))]),
     admin.from("individual_scholar_chunk").select("id, ordinal, page_from, page_to").eq("user_id", userId).in("id", [...new Set(rows.map(r => r.chunk_id as string))]),
     admin.from("individual_scholar_attempt").select("question_id, correct, chosen_index, answered_at").eq("user_id", userId).in("question_id", ids).order("answered_at", { ascending: false }),
+    questionExtras(admin, userId, ids),
   ]);
   const chunk = new Map(((chunksRes.data ?? []) as any[]).map(c => [c.id, c]));
   const latest = new Map<string, any>();
@@ -297,8 +315,19 @@ async function hydrate(admin: Admin, userId: string, rows: any[]): Promise<Quest
       promptVersion: r.prompt_version, createdAt: r.created_at, materialTitle: titles.get(r.material_id) ?? "Your material",
       ordinal: c?.ordinal ?? null, pageFrom: c?.page_from ?? null, pageTo: c?.page_to ?? null,
       latest: l ? { correct: l.correct, chosenIndex: l.chosen_index, answeredAt: l.answered_at } : null,
+      competencyId: extra.get(r.id)?.competency_id ?? null, caseId: extra.get(r.id)?.case_id ?? null,
+      caseStep: extra.get(r.id)?.case_step ?? null, caseTitle: extra.get(r.id)?.case_title ?? null,
     };
   });
+}
+
+/** The 388 columns, read apart from the 372 ones so that their absence costs nothing but themselves. */
+async function questionExtras(admin: Admin, userId: string, ids: string[]): Promise<Map<string, any>> {
+  if (!ids.length) return new Map();
+  const { data, error } = await admin.from("individual_scholar_question").select("id, competency_id, case_id, case_step, case_title")
+    .eq("user_id", userId).in("id", ids);
+  if (error) return new Map();
+  return new Map(((data ?? []) as any[]).map(r => [r.id, r]));
 }
 
 export async function listQuestions(admin: Admin, userId: string, opts: { materialId?: string; kind?: QuestionKind } = {}): Promise<Read<QuestionRow[]>> {
@@ -423,6 +452,257 @@ export async function progressRows(admin: Admin, userId: string): Promise<Read<{
       questions: (q.data ?? []).map((r: any) => ({ id: r.id, materialId: r.material_id, kind: r.kind })),
       attempts: (a.data ?? []).map((r: any) => ({ questionId: r.question_id, correct: r.correct, answeredAt: r.answered_at })),
       cards: (c.data ?? []).map((r: any) => ({ materialId: r.material_id, status: r.status, nextReviewAt: r.next_review_at })),
+    },
+  };
+}
+
+// ── COMPETEN-SCHOLAR-01: PROGRAMMES, CONCEPTS, PROPOSED MAPPINGS, DECISIONS (migrations 387, 388) ─────
+//
+// ⚠ CONFIGURATION IS NOT PERSONAL. individual_scholar_programme and individual_scholar_programme_framework
+// carry no user_id: they say which frameworks a programme learns against, for everyone. They are the two
+// tables here read without the caller's id, and they are only ever read (CONFIG_TABLES in the harness).
+// Everything else below is keyed on the caller's own user_id like the rest of this file.
+//
+// ⚠ A DECISION IS A NEW ROW. Accepting or rejecting a mapping inserts into the append-only decision table
+// (its trigger refuses UPDATE and DELETE). Nothing here updates or deletes a mapping or a decision -- they
+// go only by cascade, when the person deletes the material they came from.
+
+export type ProgrammeSummary = { code: string; label: string; profession: string; country: string | null; level: string | null };
+
+export async function listProgrammes(admin: Admin): Promise<Read<ProgrammeSummary[]>> {
+  const { data, error } = await admin.from("individual_scholar_programme").select("code, label, profession, country, level")
+    .eq("is_active", true).order("label").limit(200);
+  if (error) return fail(error);
+  return { ok: true, data: (data ?? []) as ProgrammeSummary[] };
+}
+
+export async function loadProgramme(admin: Admin, code: string): Promise<Read<ProgrammeConfig | null>> {
+  const { data: p, error } = await admin.from("individual_scholar_programme").select("code, label, profession, country, level")
+    .eq("code", code).eq("is_active", true).maybeSingle();
+  if (error) return fail(error);
+  if (!p) return { ok: true, data: null };
+  const { data: f, error: fErr } = await admin.from("individual_scholar_programme_framework").select("framework_id, layer, sort_order")
+    .eq("programme_code", code).order("sort_order").limit(50);
+  if (fErr) return fail(fErr);
+  return {
+    ok: true,
+    data: {
+      ...(p as ProgrammeSummary),
+      frameworks: ((f ?? []) as any[]).filter(r => isLayer(r.layer)).map(r => ({ frameworkId: r.framework_id, layer: r.layer, sortOrder: r.sort_order ?? 0 })),
+    },
+  };
+}
+
+/** The programme the person chose, as configuration, or null when they have not chosen one. */
+export async function learnerProgramme(admin: Admin, userId: string): Promise<Read<ProgrammeConfig | null>> {
+  const { data, error } = await admin.from("individual_scholar_learner").select("programme_code").eq("user_id", userId).maybeSingle();
+  if (error) return fail(error);
+  if (!data) return { ok: true, data: null };
+  return loadProgramme(admin, data.programme_code);
+}
+
+/** Choose a programme (an active one only), or clear the choice with null. */
+export async function setLearnerProgramme(admin: Admin, userId: string, code: string | null): Promise<"ok" | "unknown_programme" | "failed"> {
+  if (code === null) {
+    const { error } = await admin.from("individual_scholar_learner").delete().eq("user_id", userId);
+    return error ? "failed" : "ok";
+  }
+  const p = await loadProgramme(admin, code);
+  if (!p.ok) return "failed";
+  if (!p.data) return "unknown_programme";
+  const { error } = await admin.from("individual_scholar_learner")
+    .upsert({ user_id: userId, programme_code: code, chosen_at: new Date().toISOString() }, { onConflict: "user_id" });
+  return error ? "failed" : "ok";
+}
+
+/** How much of one material has been analysed. */
+export async function analysisStatus(admin: Admin, userId: string, materialId: string): Promise<Read<{ sections: number; analysed: number }>> {
+  const [c, a] = await Promise.all([
+    admin.from("individual_scholar_chunk").select("id", { count: "exact" }).eq("user_id", userId).eq("material_id", materialId).limit(1),
+    admin.from("individual_scholar_chunk_analysis").select("chunk_id", { count: "exact" }).eq("user_id", userId).eq("material_id", materialId).limit(1),
+  ]);
+  const err = c.error ?? a.error;
+  if (err) return fail(err);
+  return { ok: true, data: { sections: c.count ?? 0, analysed: a.count ?? 0 } };
+}
+
+/** The next sections of one material that have not been analysed, in document order. */
+export async function unanalysedSections(admin: Admin, userId: string, materialId: string, limit: number): Promise<Read<MappingSubject[]>> {
+  const [c, a] = await Promise.all([
+    admin.from("individual_scholar_chunk").select("id, content").eq("user_id", userId).eq("material_id", materialId).order("ordinal").limit(2000),
+    admin.from("individual_scholar_chunk_analysis").select("chunk_id").eq("user_id", userId).eq("material_id", materialId).limit(2000),
+  ]);
+  const err = c.error ?? a.error;
+  if (err) return fail(err);
+  const done = new Set(((a.data ?? []) as any[]).map(r => r.chunk_id));
+  return { ok: true, data: ((c.data ?? []) as any[]).filter(r => !done.has(r.id)).slice(0, limit).map(r => ({ ref: r.id, text: r.content })) };
+}
+
+/**
+ * Store one analysis call. EVERY section sent is marked analysed, including one the model said nothing
+ * about, so a section is never sent again and again. Proposals already stored for the same section and
+ * competency are left as they are (ignoreDuplicates): a proposal is never overwritten.
+ */
+export async function saveAnalysis(admin: Admin, userId: string, input: {
+  materialId: string; programmeCode: string | null; model: string; promptVersion: string; sentChunkIds: string[]; sections: SubjectAnalysis[];
+}): Promise<{ ok: boolean; proposals: number }> {
+  const byChunk = new Map(input.sections.map(s => [s.ref, s]));
+  const { error } = await admin.from("individual_scholar_chunk_analysis").upsert(input.sentChunkIds.map(chunkId => ({
+    chunk_id: chunkId, user_id: userId, material_id: input.materialId, concepts: byChunk.get(chunkId)?.concepts ?? [],
+    programme_code: input.programmeCode, model: input.model, prompt_version: input.promptVersion,
+  })), { onConflict: "chunk_id", ignoreDuplicates: true });
+  if (error) return { ok: false, proposals: 0 };
+  const maps = input.sections.filter(s => input.sentChunkIds.includes(s.ref)).flatMap(s => s.proposals.filter(p => p.layer !== null).map(p => ({
+    user_id: userId, material_id: input.materialId, chunk_id: s.ref, competency_id: p.competencyId, layer: p.layer,
+    source: "ai", confidence: p.confidence, rationale: p.rationale, model: input.model, prompt_version: input.promptVersion,
+    programme_code: input.programmeCode,
+  })));
+  if (!maps.length) return { ok: true, proposals: 0 };
+  const { error: mErr } = await admin.from("individual_scholar_competency_map")
+    .upsert(maps.map(r => ({ ...r, user_id: userId })), { onConflict: "chunk_id,competency_id", ignoreDuplicates: true });
+  return { ok: !mErr, proposals: mErr ? 0 : maps.length };
+}
+
+export type MappingRow = {
+  id: string; chunkId: string; materialId: string; competencyId: string; layer: Layer; source: MapSource;
+  confidence: number | null; rationale: string | null; model: string | null; promptVersion: string | null; createdAt: string;
+  state: MappingState; decidedBy: "student" | "reviewer" | null; decisions: number;
+};
+
+/** The person's mappings (one material, or all), each with its current state, and the concepts per section. */
+export async function listMappings(admin: Admin, userId: string, materialId?: string | null): Promise<Read<{ mappings: MappingRow[]; concepts: Map<string, string[]> }>> {
+  let m = admin.from("individual_scholar_competency_map")
+    .select("id, chunk_id, material_id, competency_id, layer, source, confidence, rationale, model, prompt_version, created_at").eq("user_id", userId);
+  let a = admin.from("individual_scholar_chunk_analysis").select("chunk_id, concepts").eq("user_id", userId);
+  if (materialId) { m = m.eq("material_id", materialId); a = a.eq("material_id", materialId); }
+  const [maps, analysis] = await Promise.all([m.order("created_at").limit(5000), a.limit(5000)]);
+  const err = maps.error ?? analysis.error;
+  if (err) return fail(err);
+  const ids = ((maps.data ?? []) as any[]).map(r => r.id);
+  let decisions: MappingDecision[] = [];
+  if (ids.length) {
+    const { data, error } = await admin.from("individual_scholar_competency_decision").select("map_id, decision, decided_by, created_at")
+      .eq("user_id", userId).in("map_id", ids).order("created_at").limit(20000);
+    if (error) return fail(error);
+    decisions = ((data ?? []) as any[]).map(d => ({ mappingId: d.map_id, decision: d.decision, decidedBy: d.decided_by, createdAt: d.created_at }));
+  }
+  const states = mappingStates(decisions);
+  return {
+    ok: true,
+    data: {
+      mappings: ((maps.data ?? []) as any[]).map(r => {
+        const s = states.get(r.id);
+        return {
+          id: r.id, chunkId: r.chunk_id, materialId: r.material_id, competencyId: r.competency_id, layer: r.layer, source: r.source,
+          confidence: r.confidence === null ? null : Number(r.confidence), rationale: r.rationale, model: r.model, promptVersion: r.prompt_version,
+          createdAt: r.created_at, state: s?.state ?? "proposed", decidedBy: (s?.decidedBy as "student" | "reviewer" | undefined) ?? null, decisions: s?.history ?? 0,
+        };
+      }),
+      concepts: new Map(((analysis.data ?? []) as any[]).map(r => [r.chunk_id, r.concepts ?? []])),
+    },
+  };
+}
+
+/** The current mappings of one section, for choosing the competency a question practises. [] when unreadable. */
+export async function chunkMappings(admin: Admin, userId: string, chunkId: string): Promise<LiveMapping[]> {
+  if (!isUuid(chunkId)) return [];
+  const { data, error } = await admin.from("individual_scholar_competency_map").select("id, competency_id, source, confidence")
+    .eq("user_id", userId).eq("chunk_id", chunkId).limit(50);
+  if (error || !data?.length) return [];
+  const { data: d, error: dErr } = await admin.from("individual_scholar_competency_decision").select("map_id, decision, decided_by, created_at")
+    .eq("user_id", userId).in("map_id", (data as any[]).map(r => r.id)).limit(2000);
+  if (dErr) return [];
+  const states = mappingStates(((d ?? []) as any[]).map(x => ({ mappingId: x.map_id, decision: x.decision, decidedBy: x.decided_by, createdAt: x.created_at })));
+  return (data as any[]).map(r => ({
+    competencyId: r.competency_id, byPerson: r.source !== "ai", confidence: r.confidence === null ? null : Number(r.confidence),
+    state: states.get(r.id)?.state ?? "proposed",
+  }));
+}
+
+/** Accept or reject one of the person's own mappings: a new decision row, never an edit. */
+export async function decideMapping(admin: Admin, userId: string, mapId: string, decision: "accepted" | "rejected", reason: string | null): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(mapId)) return "not_found";
+  const { data, error } = await admin.from("individual_scholar_competency_map").select("id").eq("user_id", userId).eq("id", mapId).maybeSingle();
+  if (error) return "failed";
+  if (!data) return "not_found";
+  const { error: iErr } = await admin.from("individual_scholar_competency_decision")
+    .insert({ user_id: userId, map_id: mapId, decision, decided_by: "student", reason });
+  return iErr ? "failed" : "ok";
+}
+
+/**
+ * The person links a section to a competency the AI did not propose. It is their own mapping (source
+ * student, no model or confidence) and their acceptance of it is recorded at once, as a decision row.
+ * The caller has already checked the competency is in the person's programme.
+ */
+export async function addMapping(admin: Admin, userId: string, input: { chunkId: string; competencyId: string; layer: Layer; programmeCode: string | null }): Promise<"ok" | "exists" | "not_found" | "failed"> {
+  if (!isUuid(input.chunkId)) return "not_found";
+  const { data: c, error } = await admin.from("individual_scholar_chunk").select("id, material_id").eq("user_id", userId).eq("id", input.chunkId).maybeSingle();
+  if (error) return "failed";
+  if (!c) return "not_found";
+  const { data: m, error: mErr } = await admin.from("individual_scholar_competency_map").insert({
+    user_id: userId, material_id: c.material_id, chunk_id: c.id, competency_id: input.competencyId, layer: input.layer,
+    source: "student", programme_code: input.programmeCode,
+  }).select("id").single();
+  if (mErr) return mErr.code === "23505" ? "exists" : "failed";
+  const { error: dErr } = await admin.from("individual_scholar_competency_decision")
+    .insert({ user_id: userId, map_id: m.id, decision: "accepted", decided_by: "student", reason: null });
+  return dErr ? "failed" : "ok";
+}
+
+/**
+ * The competency each of the person's questions practises (388, individual_scholar_question.competency_id),
+ * in the shape S5's CompetencyMappingSource.mappingsFor takes. A question tied to no competency is left out.
+ * value null: 388 is not on this environment (not measured). { ok: false }: it could not be read.
+ */
+export async function questionCompetencies(admin: Admin, userId: string, questionIds: string[]): Promise<
+  { ok: true; value: { questionId: string; competencyId: string }[] | null } | { ok: false }> {
+  if (!questionIds.length) return { ok: true, value: [] };
+  const { data, error } = await admin.from("individual_scholar_question").select("id, competency_id")
+    .eq("user_id", userId).in("id", questionIds.slice(0, 5000)).not("competency_id", "is", null);
+  if (error) return isNotProvisioned(error) ? { ok: true, value: null } : { ok: false };
+  return { ok: true, value: ((data ?? []) as any[]).map(r => ({ questionId: r.id, competencyId: r.competency_id })) };
+}
+
+/**
+ * ACCEPTED ONLY: question → competency, for the questions given, where the question's section is linked to that
+ * competency by a mapping the person has ACCEPTED (latest decision). The rule progress by competency uses
+ * (competency-progress.ts) and S5's coverage reads through COMPETENCY_SOURCES, so the two agree. value null:
+ * 388 is not on this environment.
+ */
+export async function acceptedQuestionCompetencies(admin: Admin, userId: string, questionIds: readonly string[]): Promise<
+  { ok: true; value: { questionId: string; competencyId: string }[] | null } | { ok: false }> {
+  if (!questionIds.length) return { ok: true, value: [] };
+  const { data, error } = await admin.from("individual_scholar_question").select("id, chunk_id, competency_id")
+    .eq("user_id", userId).in("id", questionIds.slice(0, 5000)).not("competency_id", "is", null);
+  if (error) return isNotProvisioned(error) ? { ok: true, value: null } : { ok: false };
+  const maps = await listMappings(admin, userId);
+  if (!maps.ok) return maps.notProvisioned ? { ok: true, value: null } : { ok: false };
+  const accepted = new Set(maps.data.mappings.filter(m => m.state === "accepted").map(m => `${m.chunkId}|${m.competencyId}`));
+  return {
+    ok: true,
+    value: ((data ?? []) as any[]).filter(r => accepted.has(`${r.chunk_id}|${r.competency_id}`)).map(r => ({ questionId: r.id, competencyId: r.competency_id })),
+  };
+}
+
+/** The rows competency progress is built from. Ids, competencies and right-or-wrong only. */
+export async function competencyProgressRows(admin: Admin, userId: string): Promise<Read<{
+  mappings: MappingRow[]; questions: { id: string; chunkId: string; competencyId: string | null }[]; attempts: ProgressAttempt[];
+}>> {
+  const maps = await listMappings(admin, userId);
+  if (!maps.ok) return maps;
+  const [q, a] = await Promise.all([
+    admin.from("individual_scholar_question").select("id, chunk_id, competency_id").eq("user_id", userId).limit(5000),
+    admin.from("individual_scholar_attempt").select("question_id, correct, answered_at").eq("user_id", userId).order("answered_at", { ascending: false }).limit(10000),
+  ]);
+  const err = q.error ?? a.error;
+  if (err) return fail(err);
+  return {
+    ok: true,
+    data: {
+      mappings: maps.data.mappings,
+      questions: ((q.data ?? []) as any[]).map(r => ({ id: r.id, chunkId: r.chunk_id, competencyId: r.competency_id ?? null })),
+      attempts: ((a.data ?? []) as any[]).map(r => ({ questionId: r.question_id, correct: r.correct, answeredAt: r.answered_at })),
     },
   };
 }

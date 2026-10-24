@@ -128,9 +128,9 @@ const CONSUMERS: [K, string, RegExp | null][] = [
   ["registration", "policy.reminderHorizonDays", /REMINDER_HORIZON_DAYS/],
   ["shareRoute", "parseShare(fields, (await loadIndividualPolicy(ctx.admin)).shareLinkMaxDays)", null],
   ["sharePage", "max={maxDays}", /max=\{365\}/],
-  ["scholarHttp", "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin))", /const quota = await checkAiQuota/],
-  ["assistant", "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin))", /const quota = await checkAiQuota/],
-  ["proAssistant", "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin))", /const quota = await checkAiQuota/],
+  ["scholarHttp", "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId))", /const quota = await checkAiQuota/],
+  ["assistant", "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId))", /const quota = await checkAiQuota/],
+  ["proAssistant", "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId))", /const quota = await checkAiQuota/],
   ["questions", "runQuestions(ctx.userId, kind, passage, (await loadIndividualPolicy(ctx.admin)).scholarQuestionsPerRequest)", null],
   ["generation", "checkQuestions(r.text, passage, limit)", /arr\.slice\(0, QUESTIONS_PER_REQUEST\)/],
   ["uploads", "if (count >= maxMaterials)", /MAX_MATERIALS_PER_PERSON/],
@@ -177,8 +177,11 @@ const listRoutes = (dir: string): string[] => !existsSync(dir) ? [] : readdirSyn
 const checkKnownDoors = (routes: string[]): R => {
   // invitations/ (COMPETEN-IND-ACCESS-001, migration 378) is pinned by individual-foundation-harness 5b, 5c
   // and 10c beside grants/: the same pilot-grant capability, the same release gate.
+  // plans/ (P1 Commercial, migration 400) is pinned by individual-foundation-harness 13b: its own capability,
+  // hq.individual.commercial.manage (no position holds it), then individual_app AND individual_commerce.
   // catalogues/ (migration 394) is pinned by G6 here.
-  const extra = routes.filter(f => !/^src\/app\/api\/hq\/individual\/(grants|invitations)\//.test(f) && f !== FILES.route && f !== FILES.catRoute);
+  const extra = routes.filter(f => !/^src\/app\/api\/hq\/individual\/(grants|invitations)\//.test(f)
+    && f !== "src/app/api/hq/individual/plans/route.ts" && f !== FILES.route && f !== FILES.catRoute);
   return { ok: routes.includes(FILES.route) && extra.length === 0, detail: `unpinned: ${extra.join(", ")}` };
 };
 
@@ -234,7 +237,7 @@ function main() {
   red("W3 on a raw config path", checkPolicyPathsOnly(plant("route", "setOverride(ctx.admin, actor, SCOPE, policyPath(v.def.key), v.settings)", "setOverride(ctx.admin, actor, SCOPE, String(body.path), v.settings)")));
   red("R1 on the reminder scan using the constant", checkConsumers(plant("reminders", "const horizonDays = (await loadIndividualPolicy(admin)).reminderHorizonDays;", "const horizonDays = REMINDER_HORIZON_DAYS;")));
   red("R1 on the upload cap reverting to the constant", checkConsumers(plant("uploads", "if (count >= maxMaterials)", "if (count >= MAX_MATERIALS_PER_PERSON)")));
-  red("R1 on an AI route with only the estate quota", checkConsumers(plant("proAssistant", "const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin));", "const quota = await checkAiQuota(ctx.admin, ctx.userId);")));
+  red("R1 on an AI route with only the estate quota", checkConsumers(plant("proAssistant", "const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));", "const quota = await checkAiQuota(ctx.admin, ctx.userId);")));
   red("R1 on the Passport route ignoring switched-off kinds", checkConsumers(plant("passportRoute", "passportAchievementKinds.includes(body.achievement)", "length >= 0")));
   red("L1 on a reader that reads drafts", checkReader(plant("policy", `.select("config_path, published")`, `.select("config_path, draft")`)));
   red("L1 on a reader that does not clamp", checkReader(plant("policy", "return Math.min(p.max, Math.max(p.min, Math.floor(n)));", "return Math.floor(n);")));

@@ -65,6 +65,9 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // COMPETEN-CONFIG-002 (migration 376): set the Competen Individual policy within its fixed hard limits, on
   // /super-admin/individual/configuration. Same position. Not super-admin, not the release gate.
   { code: "hq.individual.config.manage",      space: "platform"  },
+  // P1 Commercial (migration 400): create, price, activate and retire the Competen Individual plans, through
+  // /api/hq/individual/plans. Granted to NO position -- the platform owners only, until a separate owner GO.
+  { code: "hq.individual.commercial.manage",  space: "platform"  },
   { code: "hq.practice.operations.view",      space: "practice"  },
   // ⚠ ADDED BY MIGRATION 273, and this list had to follow it. The DB gained the capability and this
   // catalogue did not, so B1 went red -- which is the drift control working.

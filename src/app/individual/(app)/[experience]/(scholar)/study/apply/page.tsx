@@ -3,11 +3,13 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { countDue, listQuestions } from "@/lib/individual/scholar/store";
+import { countDue, listQuestions, type QuestionRow } from "@/lib/individual/scholar/store";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
 import { QuestionCard } from "../_components/client";
+import { CasePlayer } from "../_components/competency-client";
+import { competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -33,6 +35,22 @@ export default async function Apply({ params }: { params: Promise<{ experience: 
   const x = SCHOLAR;
   const [questions, due] = await Promise.all([listQuestions(ctx.admin, ctx.userId, { kind: "case" }), countDue(ctx.admin, ctx.userId)]);
 
+  // COMPETEN-SCHOLAR-01 S4: steps of one case play together, in order. Where 388 is absent no question has
+  // a case_id, and the page is the MVP page.
+  const cases = new Map<string, QuestionRow[]>();
+  const singles: QuestionRow[] = [];
+  if (questions.ok) {
+    for (const q of questions.data) {
+      if (q.caseId) cases.set(q.caseId, [...(cases.get(q.caseId) ?? []), q]);
+      else singles.push(q);
+    }
+  }
+  const caseList = [...cases.values()].map(steps => steps.sort((a, b) => (a.caseStep ?? 0) - (b.caseStep ?? 0)));
+  const competencyIds = caseList.map(s => s[0].competencyId).filter((x): x is string => !!x);
+  const labels = competencyIds.length
+    ? await competencyLabels(ctx.admin, (await loadLearnerCatalogue(ctx.admin, ctx.userId)).competencies, competencyIds, new Map())
+    : new Map<string, CompetencyLabel>();
+
   return (
     <>
       <PageHeader accent={x.accent} eyebrow="My Learning" title="Apply"
@@ -48,12 +66,20 @@ export default async function Apply({ params }: { params: Promise<{ experience: 
             : <Unreadable what="case questions" />)
             : questions.data.length === 0 ? (
               <StatePanel title="No case questions yet">
-                <p>Open one of your materials and choose <span className="font-semibold">Case question</span> on a section that describes a condition, an assessment or its management.</p>
+                <p>Open one of your materials and choose <span className="font-semibold">Step-by-step case</span> or <span className="font-semibold">Case question</span> on a section that describes a condition, an assessment or its management.</p>
                 <p><Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`} style={{ color: x.accent }}>Go to your materials</Link></p>
               </StatePanel>
             ) : (
               <div className="space-y-4">
-                {questions.data.map((q, i) => <QuestionCard key={q.id} q={questionView(q)} index={i + 1} chunkId={q.chunkId} />)}
+                {caseList.map(steps => {
+                  const l = steps[0].competencyId ? labels.get(steps[0].competencyId) : undefined;
+                  return (
+                    <CasePlayer key={steps[0].caseId} title={steps[0].caseTitle ?? "Practice case"}
+                      competency={l ? { title: `${l.code ? `${l.code} ` : ""}${l.title}`, layer: l.layer } : null}
+                      steps={steps.map(q => ({ q: questionView(q), chunkId: q.chunkId, answered: q.latest !== null }))} />
+                  );
+                })}
+                {singles.map((q, i) => <QuestionCard key={q.id} q={questionView(q)} index={i + 1} chunkId={q.chunkId} />)}
               </div>
             )}
         </div>

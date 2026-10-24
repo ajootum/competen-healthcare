@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { PlanAiLimit } from "./commerce";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
 import { INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, MAX_MATERIALS_PER_PERSON, QUESTIONS_PER_REQUEST } from "./scholar/config";
@@ -270,10 +271,15 @@ export async function loadIndividualPolicy(admin: any): Promise<IndividualPolicy
  * ⚠ FAILS CLOSED. When the count could not be read (`unreadable`), the estate quota still answers ok (it
  * treats the limit as protection); Individual does not. An unreadable count is a refusal here, with
  * `unreadable` set so the route can say "could not be checked" rather than "limit reached".
+ *
+ * AI FAIR USE PER PLAN (P1 Commercial): `plan` is individualPlanAiLimit's answer (src/lib/individual/commerce.ts).
+ * A live paid plan that sets its own limit replaces the policy base for that person -- already clamped to
+ * the Individual hard limit -- and the estate limit still applies. `off` and `none` change nothing, and a
+ * plan that could not be read is refused exactly like an unreadable count.
  */
-export function individualAiQuota(estate: { ok: boolean; used: number; limit: number; unreadable?: boolean }, policy: IndividualPolicy) {
-  const limit = Math.min(estate.limit, policy.aiHourlyLimit);
-  const unreadable = estate.unreadable === true;
+export function individualAiQuota(estate: { ok: boolean; used: number; limit: number; unreadable?: boolean }, policy: IndividualPolicy, plan: PlanAiLimit = { state: "off" }) {
+  const limit = Math.min(estate.limit, plan.state === "limit" ? plan.limit : policy.aiHourlyLimit);
+  const unreadable = estate.unreadable === true || plan.state === "unreadable";
   return { ok: !unreadable && estate.ok && estate.used < limit, used: estate.used, limit, unreadable };
 }
 

@@ -10,6 +10,8 @@ import { PageHeader, Unreadable } from "../../../../_components/chrome";
 import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import FrameworkPicker from "../../../../_components/professional/FrameworkPicker";
 import AssistPanel from "../../../../_components/professional/AssistPanel";
+import CompetencyLinks from "../../../../_components/professional/CompetencyLinks";
+import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
 import { Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
@@ -30,10 +32,11 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, passport, frameworks] = await Promise.all([
+  const [record, passport, frameworks, map] = await Promise.all([
     loadProfessionalRecord(ctx.admin, ctx.userId),
     loadIndividualPassport(ctx.admin, ctx.userId, today),
     loadSharedFrameworks(ctx.admin),
+    loadMappingView(ctx.admin, ctx.userId),
   ]);
   const needs = record.needs;
   const goals = record.goals;
@@ -130,6 +133,9 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
                         {g.need_id && needTitle.get(g.need_id) ? ` · for: ${needTitle.get(g.need_id)}` : ""}
                       </p>
                       {g.detail && <p className="mt-1 text-[13.5px] text-gray-700">{g.detail}</p>}
+                      {map.mappings === null ? <p className="mt-2 text-[12.5px] text-gray-600">Competency links could not be read just now.</p> : map.provisioned && (
+                        <CompetencyLinks kind="goal" subjectId={g.id} links={linksFor(map, "goal", g.id)} offered={map.offered} accent={x.accent} idPrefix={`goal-${g.id}`} />
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {GOAL_STATUS.filter(([s]) => s !== g.status).map(([s, label]) => (

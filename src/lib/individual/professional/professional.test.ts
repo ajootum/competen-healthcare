@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from "vitest";
 import { parseCpd, parseEvidence, parseGoal, parseNeed, parseProfile, isoDate, documentPath } from "./validate";
-import { cpdHoursByYear, evidenceCoverage, planProgress } from "./progress";
+import { cpdHoursByYear, evidenceCoverage, goalActivity, planProgress } from "./progress";
 import { ownRecordsFrom, summariseOwn, loadOwnRecords } from "./passport-records";
 import { loadProfessionalRecord } from "./record";
 import { reminderMessage } from "./reminders";
@@ -61,6 +61,27 @@ describe("validation mirrors migration 373", () => {
 
   it("clamps a share request the way the estate route does", () => {
     expect(parseShare({ scope: "everything", days: 9999 })).toEqual({ scope: "summary", label: null, days: 365 });
+  });
+});
+
+describe("self-directed goal progress needs no catalogue", () => {
+  it("counts each goal's own CPD, skips dropped goals, and puts open goals first by target date", () => {
+    const goals = [
+      { id: "g-done", need_id: null, status: "done", target_date: "2026-01-01" },
+      { id: "g-late", need_id: null, status: "in_progress", target_date: "2026-02-01" },
+      { id: "g-drop", need_id: null, status: "dropped", target_date: "2026-01-01" },
+      { id: "g-new", need_id: null, status: "planned", target_date: "2027-01-01" },
+    ];
+    const cpd = [
+      { id: "c1", goal_id: "g-late", hours: "2.5", activity_date: "2026-03-01", evidence_class: "source_linked" },
+      { id: "c2", goal_id: "g-late", hours: 1, activity_date: "2026-04-01", evidence_class: "self_declared" },
+      { id: "c3", goal_id: "g-drop", hours: 5, activity_date: "2026-04-01", evidence_class: "self_declared" },
+      { id: "c4", goal_id: null, hours: 9, activity_date: "2026-04-01", evidence_class: "self_declared" },
+    ];
+    const a = goalActivity(goals, cpd, TODAY);
+    expect(a.map(x => x.goalId)).toEqual(["g-late", "g-new", "g-done"]);
+    expect(a[0]).toMatchObject({ entries: 2, hours: 3.5, withDocument: 1, lastActivity: "2026-04-01", overdue: TODAY > "2026-02-01" });
+    expect(a[1]).toMatchObject({ entries: 0, hours: 0, lastActivity: null });
   });
 });
 

@@ -20,7 +20,8 @@ import { summariseOwn } from "./professional/passport-records";
 // ⚠ GROUNDING IS THE PERSON'S OWN RECORD ONLY -- counts and names from their Passport, read by their own
 // id. No other person's data, no organisation's aggregate, and no patient data is ever in the context.
 
-export const QUESTION_MAX = 1000;
+import { QUESTION_MAX } from "./assistant-limits";
+export { QUESTION_MAX };
 
 const PERSONA: Record<ExperienceKey, string[]> = {
   scholar: [

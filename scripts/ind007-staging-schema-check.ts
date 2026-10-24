@@ -126,6 +126,21 @@ async function main() {
       out.sharedFrameworksByStatus = await q(`select coalesce(pub_status, '(null)') as pub_status, count(*)::int as n
         from frameworks where hospital_id is null and is_active = true group by 1 order by 1`);
     }
+    if (process.argv.includes("--prof393")) {
+      // Professional vertical slice, migration 393, before and after (and through its rollback rehearsal).
+      const T = ["individual_professional_competency_map", "individual_professional_competency_decision"];
+      const cols = await q(`select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns
+        where table_schema = 'public' and table_name = any($1) order by 1, 2`, [T]);
+      const cons = await q(`select conrelid::regclass::text as t, conname, pg_get_constraintdef(oid) as def from pg_constraint
+        where conrelid::regclass::text = any($1) order by 1, 2`, [T]);
+      const idx = await q(`select tablename, indexname, indexdef from pg_indexes where schemaname = 'public'
+        and (tablename = any($1) or indexname in ('ux_individual_professional_cpd_id_user', 'ux_individual_professional_evidence_id_user')) order by 1, 2`, [T]);
+      const pol = await q(`select tablename, policyname, cmd, qual from pg_policies where tablename = any($1) order by 1, 2`, [T]);
+      const trg = await q(`select tgname, pg_get_triggerdef(oid) as def from pg_trigger where tgname = 'individual_professional_competency_decision_append_only'`);
+      const fn = await q(`select md5(pg_get_functiondef(p.oid)) as def_md5 from pg_proc p where p.proname = 'individual_professional_decision_append_only'`);
+      out.prof393 = { tables: [...new Set(cols.map((c: any) => c.table_name))], constraints: cons.length, indexes: idx.length, policies: pol.length, trigger: trg.length, function: fn,
+        fingerprint: createHash("sha256").update(JSON.stringify({ cols, cons, idx, pol, trg, fn })).digest("hex") };
+    }
     if (process.argv.includes("--cfca394")) {
       // P0 controlled catalogues, migration 394, before and after (and through its rollback rehearsal).
       const T = ["competency_catalogue_entry"];

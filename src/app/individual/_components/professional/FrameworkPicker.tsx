@@ -15,7 +15,8 @@ export default function FrameworkPicker({ frameworks, idPrefix }: { frameworks: 
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
 
   if (frameworks === null) return <p className="text-[13px] text-amber-900">The shared frameworks could not be read just now. You can still save this without one.</p>;
-  if (frameworks.length === 0) return <p className="text-[13px] text-gray-600">No shared competency frameworks are published on Competen yet, so this cannot be linked to one.</p>;
+  // Empty is the default: Professional offers only the frameworks HQ allowlists (S1). Not "none exist".
+  if (frameworks.length === 0) return <p className="text-[13px] text-gray-600">Competen Professional does not offer a competency framework yet. This works without one.</p>;
 
   async function choose(id: string) {
     setFw(id); setComps(null);
