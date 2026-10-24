@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { publishScope, setOverride, type WceActor } from "@/lib/config/workspace-config-write";
+import { RISK_TIERS } from "./clinical-risk";
 import { ACTIVITY_CODE, AI_PRODUCTS, FAIR_USE_SCOPE, fairUsePath, resolvePolicy, type AiProduct, type ProductAiPolicy } from "./fair-use-policy";
 
 // ── AI FAIR USE: WHAT HQ CONFIGURES ── COMPETEN-AI-FAIR-USE-01 s12, migrations 410 and 411 ───────────────
@@ -59,7 +60,14 @@ export function checkRate(kind: RateKind, b: any): { ok: true; row: Record<strin
     const currency = typeof b?.currency === "string" ? b.currency.trim().toUpperCase() : "";
     const r = positive(b?.perUsd, false);
     if (!/^[A-Z]{3}$/.test(currency) || r === null) return { ok: false, error: "Give a three-letter currency and its units per USD." };
-    return { ok: true, row: { currency, per_usd: r, note }, match: { currency } };
+    // Owner D4: the official rate with its actual publication date and source, monthly or as an exceptional update.
+    // Never an estimate: a rate with no publication and no source is not accepted (412 checks it too).
+    const updateKind = b?.updateKind === "exceptional" ? "exceptional" : "monthly";
+    const publishedOn = typeof b?.publishedOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.publishedOn) ? b.publishedOn : null;
+    const sourceRef = typeof b?.sourceRef === "string" ? b.sourceRef.trim().slice(0, 500) : "";
+    if (!publishedOn || publishedOn > new Date().toISOString().slice(0, 10)) return { ok: false, error: "Give the date the official rate was published (not in the future)." };
+    if (sourceRef.length < 10) return { ok: false, error: "Give where the official rate was published (its URL)." };
+    return { ok: true, row: { currency, per_usd: r, published_on: publishedOn, source_ref: sourceRef, update_kind: updateKind, note }, match: { currency } };
   }
   if (kind === "basis") {
     const currency = typeof b?.currency === "string" ? b.currency.trim().toUpperCase() : "";
@@ -77,7 +85,10 @@ export function checkRate(kind: RateKind, b: any): { ok: true; row: Record<strin
   const evidence = typeof b?.evidenceRef === "string" ? b.evidenceRef.trim().slice(0, 500) : "";
   // Eligibility rests on evaluation evidence, never on a price or a tier (owner D1).
   if (eligible && evidence.length < 5) return { ok: false, error: "A model is made eligible only with the evaluation evidence it rests on." };
-  return { ok: true, row: { product: b.product, activity, provider: b.provider, model_prefix: prefix, eligible, evidence_ref: evidence || null, note },
+  // An eligible decision names the highest clinical risk tier it covers (owner D1, migration 412).
+  const maxRiskTier = (RISK_TIERS as readonly string[]).includes(b?.maxRiskTier) ? b.maxRiskTier : null;
+  if (eligible && !maxRiskTier) return { ok: false, error: "Say the highest clinical risk tier the evaluation supports." };
+  return { ok: true, row: { product: b.product, activity, provider: b.provider, model_prefix: prefix, eligible, evidence_ref: evidence || null, max_risk_tier: eligible ? maxRiskTier : null, note },
     match: { product: b.product, activity, provider: b.provider, model_prefix: prefix } };
 }
 
@@ -92,6 +103,40 @@ export async function changeRate(admin: any, kind: RateKind, b: any, actorId: st
   if (ended.error) return { ok: false, error: "The current rate could not be ended, so nothing changed." };
   const { data, error } = await admin.from(TABLE[kind]).insert({ ...v.row, effective_from: now, [ACTOR_COLUMN[kind]]: actorId }).select("id").single();
   return error ? { ok: false, error: "The new rate could not be saved. The previous one has been ended: add the rate again." } : { ok: true, id: data.id };
+}
+
+// ── Model evaluations (owner D5, migration 419): evidence for the reviewer, never a decision ─────────────────
+export type EvalModelView = {
+  provider: string; model: string; returned: string[]; passed: number; of: number; costUsd: number;
+  proposed: string | null; rationale: string | null;
+  items: { code: string; task: string; tier: string; status: string; score: number | null; passed: boolean; output: string | null; rubric: any }[];
+};
+export type EvalRunView = { id: string; label: string | null; version: string; createdAt: string; note: string | null; models: EvalModelView[] };
+
+/** The latest evaluation runs with their results and proposals. Null: unreadable (or 419 not applied here). */
+export async function loadEvaluations(admin: any, limit = 3): Promise<EvalRunView[] | null> {
+  const runs = await rows(admin.from("ai_model_evaluation_run").select("id, label, eval_set_version, created_at, note").order("created_at", { ascending: false }).limit(limit));
+  if (runs === null) return null;
+  if (!runs.length) return [];
+  const ids = runs.map((r: any) => r.id);
+  const [results, proposals] = await Promise.all([
+    rows(admin.from("ai_model_evaluation_result").select("run_id, item_code, task, risk_tier, provider, model_requested, model_returned, cost_usd, status, output, rubric, score, passed").in("run_id", ids).order("item_code")),
+    rows(admin.from("ai_model_evaluation_proposal").select("run_id, provider, model_prefix, proposed_max_risk_tier, rationale").in("run_id", ids)),
+  ]);
+  if (results === null || proposals === null) return null;
+  return runs.map((run: any) => {
+    const rs = results.filter((r: any) => r.run_id === run.id);
+    const models = [...new Set(rs.map((r: any) => `${r.provider}|${r.model_requested}`))] as string[];
+    return { id: run.id, label: run.label, version: run.eval_set_version, createdAt: run.created_at, note: run.note, models: models.map(k => {
+      const [provider, model] = k.split("|");
+      const mine = rs.filter((r: any) => r.provider === provider && r.model_requested === model);
+      const p = proposals.find((x: any) => x.run_id === run.id && x.provider === provider && x.model_prefix === model);
+      return { provider, model, returned: [...new Set(mine.map((r: any) => r.model_returned).filter(Boolean))] as string[],
+        passed: mine.filter((r: any) => r.passed).length, of: mine.length, costUsd: +mine.reduce((s: number, r: any) => s + Number(r.cost_usd ?? 0), 0).toFixed(6),
+        proposed: p?.proposed_max_risk_tier ?? null, rationale: p?.rationale ?? null,
+        items: mine.map((r: any) => ({ code: r.item_code, task: r.task, tier: r.risk_tier, status: r.status, score: r.score === null ? null : Number(r.score), passed: r.passed, output: r.output, rubric: r.rubric })) };
+    }) };
+  });
 }
 
 export type PolicyRow = { product: AiProduct; draft: ProductAiPolicy | null; published: ProductAiPolicy; publishedAt: string | null; pending: boolean };
@@ -122,8 +167,9 @@ export function settingsFor(product: AiProduct, input: any): Record<string, unkn
     currency: p.currency, fxBufferPct: p.fxBufferPct, maxUnreconciledCau: p.maxUnreconciledCau,
     activities: Object.fromEntries(Object.entries(p.activities).map(([k, a]) => [k, {
       label: a.label, class: a.class, tier: a.tier, minTier: a.minTier, maxOutputTokens: a.maxOutputTokens, capPerPeriod: a.capPerPeriod,
-      clinicallySensitive: a.clinicallySensitive, reserveEligible: a.reserveEligible,
+      riskFloor: a.riskFloor, reserveEligible: a.reserveEligible,
     }])),
+    risk: { minTier: p.risk.minTier, rules: p.risk.rules },
   };
 }
 

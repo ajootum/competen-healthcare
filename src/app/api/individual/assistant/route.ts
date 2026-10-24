@@ -2,7 +2,9 @@
 export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
-import { isMeteredRefusal, meteredRefusalBody, requestIdFor, runMeteredAi } from "@/lib/ai/allowance";
+import { meteredRefusalBody, requestIdFor } from "@/lib/ai/allowance";
+import type { AssistantMode } from "@/lib/ai/personal-assistant";
+import { runIndividualAssistant } from "@/lib/individual/personal-ai";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "@/lib/individual/policy";
@@ -10,14 +12,17 @@ import { individualPlanAiLimit } from "@/lib/individual/commerce";
 import { currentTraceId } from "@/lib/trace";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { isExperienceKey } from "@/lib/individual/experiences";
-import { loadIndividualPassport } from "@/lib/individual/passport";
-import { cleanQuestion, recordContext, systemPrompt, QUESTION_MAX } from "@/lib/individual/assistant";
+import { cleanQuestion, QUESTION_MAX } from "@/lib/individual/assistant";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
 export const dynamic = "force-dynamic";
 
 // POST /api/individual/assistant -- COMPETEN-IND-003 s2(6), the personal AI entry point.
+//
+// Body: { experience, question, mode? }. The engine is the Holdings Personal AI (src/lib/ai/personal-assistant.ts,
+// owner D3): one persona, one engine, no memory, with each product's modes and authorised data as no-code policy.
+// Scholar opens in Teach Me, Professional in professional-development assistance. An unoffered mode is refused.
 //
 // Gate 3 first (requireIndividualContext, never getCaller -- see src/lib/individual/guard.ts), and the
 // experience named in the body must be LIVE for this person. Then the estate's existing AI controls, in
@@ -57,33 +62,24 @@ export async function POST(req: Request) {
   if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
   if (!aiStatus().configured) return NextResponse.json({ error: "The personal AI is not configured on this environment." }, { status: 503 });
 
-  const passport = await loadIndividualPassport(ctx.admin, ctx.userId, new Date().toISOString().slice(0, 10));
-  const record = recordContext({ name: ctx.profile.fullName, experience, live: ctx.live, passport });
-
-  // AI-FAIR-USE-01: through the Holdings allowance (atomic reservation, settlement). With metering off it is
-  // generate() unchanged, behind the quota above.
-  const result = await runMeteredAi(ctx.admin, {
-    userId: ctx.userId, product: experience, activity: "assistant", requestId: requestIdFor(ctx.userId, req.headers.get("x-request-id")),
-    generate: {
-      system: systemPrompt(experience),
-      user: `My Competen record:\n${record}\n\nMy question: ${question}`,
-      tier: "reasoning",
-      maxTokens: 900,
-      context: { userId: ctx.userId, attribution: { scope: "person" }, operation: `individual_assistant_${experience}` },
-    },
+  const out = await runIndividualAssistant(ctx.admin, {
+    userId: ctx.userId, fullName: ctx.profile.fullName, live: ctx.live, experience,
+    mode: typeof body?.mode === "string" ? body.mode as AssistantMode : null, question,
+    requestId: requestIdFor(ctx.userId, req.headers.get("x-request-id")),
   });
-  if (isMeteredRefusal(result)) { const m = meteredRefusalBody(result); return NextResponse.json(m.body, { status: m.status }); }
-  if (!result.ok) {
-    const status = result.error === "not_configured" ? 503 : 502;
-    const msg = result.error === "refusal" ? "The assistant declined to answer that question." : "The assistant could not answer just now. Try again shortly.";
+  if (!out.ok && out.kind === "invalid") return NextResponse.json({ error: out.error }, { status: out.status });
+  if (!out.ok && out.kind === "metered") { const m = meteredRefusalBody(out.refusal); return NextResponse.json(m.body, { status: m.status }); }
+  if (!out.ok) {
+    const status = out.result.error === "not_configured" ? 503 : 502;
+    const msg = out.result.error === "refusal" ? "The assistant declined to answer that question." : "The assistant could not answer just now. Try again shortly.";
     return NextResponse.json({ error: msg }, { status });
   }
 
   await ctx.admin.from("audit_log").insert({
     trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.profile.fullName,
     action: "ai_assistant_query", entity_type: "individual_assistant", entity_id: null,
-    new_value: { experience, question_chars: question.length, model: result.model },
+    new_value: { experience, mode: out.mode, question_chars: question.length, model: out.model },
   }).then((r: unknown) => r, () => {});
 
-  return NextResponse.json({ answer: result.text });
+  return NextResponse.json({ answer: out.answer, mode: out.mode });
 }

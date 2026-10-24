@@ -38,7 +38,7 @@ describe("AI fair use policy (shared by every product)", () => {
     expect(p.fxBufferPct).toBe(100);
     expect(Object.keys(p.activities)).toEqual(["plain", "std"]);
     expect(p.activities.plain.minTier).toBe("cheap");
-    expect(p.activities.plain.clinicallySensitive).toBe(true);
+    expect(p.activities.plain.riskFloor).toBe("clinical_educational");
     expect(p.activities.std.reserveEligible).toBe(false);
   });
 

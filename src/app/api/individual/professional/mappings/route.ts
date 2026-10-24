@@ -98,7 +98,10 @@ export async function POST(req: Request) {
     let metered: MeteredRefusal | null = null;
     const requestId = requestIdFor(ctx.userId, req.headers.get("x-request-id"));
     const run = async (g: GenerateArgs): Promise<GenerateResult> => {
-      const x = await runMeteredAi(ctx.admin, { userId: ctx.userId, product: "professional", activity: "map", requestId, generate: g });
+      // Owner D1: the clinical risk is classified from what is being mapped -- the person's own entries -- not
+      // from the catalogue the model chooses among. Read in memory by the engine, never stored.
+      const subjectText = subjects.flatMap(s => Object.values(s.row).filter((v): v is string => typeof v === "string" && v.length > 2 && !/^[0-9a-f-]{36}$/i.test(v))).join("\n");
+      const x = await runMeteredAi(ctx.admin, { userId: ctx.userId, product: "professional", activity: "map", requestId, generate: g, risk: { text: subjectText } });
       if (isMeteredRefusal(x)) { metered = x; return { ok: false, error: "failed", detail: "metered" }; }
       return x;
     };

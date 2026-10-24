@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * AI FAIR USE -- ACCEPTANCE on STAGING (COMPETEN-AI-FAIR-USE-01 s13, migrations 410 and 411).
+ * AI FAIR USE -- ACCEPTANCE on STAGING (COMPETEN-AI-FAIR-USE-01 s13 and IND-007 D1, migrations 410, 411 and 412).
  *
  *   npx tsx scripts/privileged-harnesses.ts --staging --only ai-fair-use-acceptance-harness
  *
@@ -16,7 +16,8 @@
  *   X   an unknown charge keeps its hold, is reconciled into its original account, or released on proof (411)
  *   Y   outstanding unreconciled holds stop at the per-person ceiling (411)
  *   B   the buffer widens the hold only; provider expenditure and allowance consumption are immutable (411, D3)
- *   E   a clinically sensitive activity needs an eligible model; eligibility is history (411, D1)
+ *   E   a clinical tier needs an eligibility decision covering it, null or unknown is high risk, the tier and rule
+ *       are recorded and frozen, and eligibility is history (411, 412, D1)
  *   A   unknown activities and level-insufficient tiers are refused, never downgraded (amendments 1, 2)
  *   U   a signed-in person cannot read, write or call any of it (s13.13)
  *   G   the policy in force was published through the audited engine (s13.14)
@@ -64,16 +65,16 @@ let BUFFER = 0;
 const reserve = (req: string, acc: string, activity: string, pool: string, inT: number, outT: number, extra: Record<string, unknown> = {}) =>
   admin.rpc("ai_reserve", { p_request_id: req, p_account: acc, p_activity: activity, p_pool: pool, p_provider: "anthropic", p_model: MODEL,
     p_max_input_tokens: inT, p_max_output_tokens: outT, p_policy_version: "harness", p_currency: "UGX", p_buffer_pct: BUFFER,
-    p_clinically_sensitive: false, p_unreconciled_cap_cau: 1e6, ...extra });
+    p_risk_tier: "standard_educational", p_risk_rule: "harness", p_unreconciled_cap_cau: 1e6, ...extra });
 const ledger = async (req: string) => (await admin.from("ai_usage_ledger").select("*").eq("request_id", req).single()).data;
 const row = (r: any) => (Array.isArray(r.data) ? r.data[0] : r.data);
 const account = async (id: string) => (await admin.from("ai_allowance_account").select("*").eq("id", id).single()).data;
 const toBal = (a: any): Balance => ({ includedCau: +a.included_cau, reserveCau: +a.reserve_cau, usedCau: +a.used_cau, reservedCau: +a.reserved_cau, reserveUsedCau: +a.reserve_used_cau, reserveReservedCau: +a.reserve_reserved_cau });
 
 async function main() {
-  console.log(`AI FAIR USE ACCEPTANCE (410, 411) -- target ${ref}\n`);
-  const probe = await admin.from("ai_model_eligibility").select("id").limit(0);
-  if (probe.error) { pend("S-G", `migration 411 is not applied here (${probe.error.message}). Nothing created.`); return; }
+  console.log(`AI FAIR USE ACCEPTANCE (410, 411, 412) -- target ${ref}\n`);
+  const probe = await admin.from("ai_usage_ledger").select("risk_tier").limit(0);
+  if (probe.error) { pend("S-G", `migration 412 is not applied here (${probe.error.message}). Nothing created.`); return; }
   const price = (await admin.rpc("ai_price_at", { p_provider: "anthropic", p_model: MODEL, p_at: new Date().toISOString() })).data;
   const [scholar, pro] = [await loadProductPolicy(admin, "scholar"), await loadProductPolicy(admin, "professional")];
   const fx = (await admin.from("ai_fx_rate").select("*").eq("currency", "UGX").is("effective_to", null).maybeSingle()).data;
@@ -182,13 +183,19 @@ async function main() {
     for (const i of [1, 2]) await admin.rpc("ai_release", { p_request_id: `aifu-ceil-000${i}`, p_outcome: "error" });
 
     // ── E. clinical eligibility, by evidence ──
-    const sensitiveCode = Object.entries(scholar.policy.activities).find(([, x]) => x.clinicallySensitive)?.[0] ?? "questions";
-    const e1 = row(await reserve("aifu-elig-0001", accX, sensitiveCode, "included", 100, 100, { p_clinically_sensitive: true }));
-    const e2 = row(await reserve("aifu-elig-0002", accX, sensitiveCode, "included", 100, 100, { p_clinically_sensitive: null }));
+    const sensitiveCode = "teach";
+    const e1 = row(await reserve("aifu-elig-0001", accX, sensitiveCode, "included", 100, 100, { p_risk_tier: "clinical_educational", p_risk_rule: "clinical.topics" }));
+    const e2 = row(await reserve("aifu-elig-0002", accX, sensitiveCode, "included", 100, 100, { p_risk_tier: null, p_risk_rule: null }));
+    const e3 = row(await reserve("aifu-elig-0003", accX, sensitiveCode, "included", 100, 100, { p_risk_tier: "standard_educational", p_risk_rule: "standard.study-and-career" }));
+    const e3row = await ledger("aifu-elig-0003");
+    await admin.rpc("ai_settle", { p_request_id: "aifu-elig-0003", p_model: MODEL, p_input_tokens: 10, p_output_tokens: 10, p_extra_usd: 0, p_outcome: "ok" });
+    const rwTier = await admin.from("ai_usage_ledger").update({ risk_tier: "high_risk_clinical" }).eq("request_id", "aifu-elig-0003").select("id");
     const seededNo = (await admin.from("ai_model_eligibility").select("id").eq("eligible", false).is("effective_to", null).limit(1)).data?.[0];
     const rwElig = seededNo ? await admin.from("ai_model_eligibility").update({ eligible: true, evidence_ref: "harness-forged" }).eq("id", seededNo.id).select("id") : { error: { message: "no row" } };
-    ok("E1. (D1) a clinically sensitive activity with no eligible model in force is refused, and unstated sensitivity counts as sensitive",
-      e1?.granted === false && e1?.reason === "not_eligible" && e2?.granted === false && e2?.reason === "not_eligible", JSON.stringify({ sensitiveCode, e1, e2 }));
+    ok("E1. (D1) a clinical tier with no eligibility decision covering it is refused, a null tier is high risk, a standard tier runs",
+      e1?.granted === false && e1?.reason === "not_eligible" && e2?.granted === false && e2?.reason === "not_eligible" && e3?.granted === true, JSON.stringify({ e1, e2, e3 }));
+    ok("E3. (D1) the classified tier and the deciding rule are recorded on the ledger and cannot be rewritten",
+      e3row?.risk_tier === "standard_educational" && e3row?.risk_rule === "standard.study-and-career" && !!rwTier.error, JSON.stringify({ tier: e3row?.risk_tier, rule: e3row?.risk_rule, rewrite: rwTier.error?.message }));
     ok("E2. an eligibility decision cannot be rewritten into eligible (history, evidence-based)", !!seededNo && !!rwElig.error, rwElig.error?.message ?? "rewrite accepted");
 
     // ── A. activities are policy data, and a level never downgrades below an activity's floor ──
@@ -238,7 +245,7 @@ async function main() {
       const write = await user.from("ai_allowance_account").update({ included_cau: 1e9 }).eq("user_id", uid).select("id");
       // The real 411 signature, so a refusal is a permission refusal (42501) and not merely an unknown function.
       const call = await user.rpc("ai_reserve", { p_request_id: "aifu-browser-0001", p_account: accP, p_activity: "explain", p_pool: "included", p_provider: "anthropic", p_model: MODEL,
-        p_max_input_tokens: 1, p_max_output_tokens: 1, p_policy_version: "x", p_currency: "UGX", p_buffer_pct: 0, p_clinically_sensitive: false, p_unreconciled_cap_cau: 1e6 });
+        p_max_input_tokens: 1, p_max_output_tokens: 1, p_policy_version: "x", p_currency: "UGX", p_buffer_pct: 0, p_risk_tier: "standard_educational", p_risk_rule: "x", p_unreconciled_cap_cau: 1e6 });
       const settle = await user.rpc("ai_settle", { p_request_id: "aifu-settle-0001", p_model: MODEL, p_input_tokens: 0, p_output_tokens: 0, p_extra_usd: 0, p_outcome: "ok" });
       const mark = await user.rpc("ai_mark_unreconciled", { p_request_id: "aifu-settle-0001", p_outcome: "timeout" });
       const denied = (e: any) => e?.code === "42501";

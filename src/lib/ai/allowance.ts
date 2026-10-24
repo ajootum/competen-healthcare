@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { aiStatus } from "./config";
 import { generate, type GenerateArgs, type GenerateResult } from "./client";
+import { classifyRisk, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision } from "./clinical-risk";
 import {
   activityAt, allowancePeriod, defaultPolicy, fairUsePath, FAIR_USE_SCOPE, maxInputTokens, remainingBand, resolvePolicy, serviceLevel,
   type AiProduct, type AiServiceLevel, type Balance, type ProductAiPolicy,
@@ -46,7 +47,35 @@ export type AiStanding = {
 };
 export type MeteredError = "allowance_exhausted" | "not_entitled" | "unreadable" | "duplicate_request" | "unknown_activity" | "level_insufficient"
   | "not_eligible" | "pending_reconciliation";
-export type MeteredRefusal = { ok: false; error: MeteredError; standing: AiStanding };
+/** `risk` is the request's classified clinical risk where it was decided, so the page can say why. Never the text. */
+export type MeteredRefusal = { ok: false; error: MeteredError; standing: AiStanding; risk?: RiskDecision };
+
+/**
+ * The subject as the classifier sees it: the request text and topic terms as given, and the risk category and
+ * framework of each competency named, read from the shared library. A competency read that fails counts as a
+ * high-risk competency, so an unreadable subject is never classified lower than it might be.
+ */
+export async function resolveRiskSubject(admin: any, ctx: RiskContext | undefined): Promise<ResolvedRiskSubject> {
+  const text = subjectText(ctx);
+  const frameworkCodes = [...(ctx?.frameworkCodes ?? [])];
+  const ids = [...new Set(ctx?.competencyIds ?? [])].slice(0, 200);
+  if (!ids.length) return { text, competencyRisks: [], frameworkCodes };
+  try {
+    const { data: comps, error } = await admin.from("framework_competencies").select("id, risk_category, cpu_id, domain_id").in("id", ids);
+    if (error || !comps) return { text, competencyRisks: ["high"], frameworkCodes };
+    const cpuIds = [...new Set(comps.map((c: any) => c.cpu_id).filter(Boolean))];
+    const domIds = [...new Set(comps.map((c: any) => c.domain_id).filter(Boolean))];
+    const [cpus, doms] = await Promise.all([
+      cpuIds.length ? admin.from("clinical_practice_units").select("risk_category").in("id", cpuIds) : Promise.resolve({ data: [] }),
+      domIds.length ? admin.from("framework_domains").select("framework_id").in("id", domIds) : Promise.resolve({ data: [] }),
+    ]);
+    const fwIds = [...new Set((doms.data ?? []).map((d: any) => d.framework_id))];
+    const fws = fwIds.length ? await admin.from("frameworks").select("code").in("id", fwIds) : { data: [] };
+    if (cpus.error || doms.error || fws.error) return { text, competencyRisks: ["high"], frameworkCodes };
+    const risks = [...comps.map((c: any) => c.risk_category), ...(cpus.data ?? []).map((c: any) => c.risk_category)].filter(Boolean).map((r: string) => r.toLowerCase());
+    return { text, competencyRisks: risks, frameworkCodes: [...frameworkCodes, ...(fws.data ?? []).map((f: any) => f.code).filter(Boolean)] };
+  } catch { return { text, competencyRisks: ["high"], frameworkCodes }; }
+}
 
 export async function aiFairUseEnabled(admin: any): Promise<boolean> {
   try {
@@ -134,7 +163,7 @@ export const requestIdFor = (userId: string, clientId: string | null | undefined
  * Run one AI request through the allowance. The caller has already applied its guard and its existing quota.
  * With metering off this is generate() unchanged.
  */
-export async function runMeteredAi(admin: any, args: { userId: string; product: AiProduct; activity: string; requestId: string; generate: GenerateArgs })
+export async function runMeteredAi(admin: any, args: { userId: string; product: AiProduct; activity: string; requestId: string; generate: GenerateArgs; risk?: RiskContext })
   : Promise<GenerateResult | MeteredRefusal> {
   if (!(await aiFairUseEnabled(admin))) return generate(args.generate);
   const { policy, readable } = await loadProductPolicy(admin, args.product);
@@ -144,10 +173,13 @@ export async function runMeteredAi(admin: any, args: { userId: string; product: 
   if (a.state === "not_entitled") return { ok: false, error: "not_entitled", standing: closed(policy, true, "This needs an active subscription.") };
   const standing = standingFrom(policy, a.account);
   const b = toBalance(a.account);
-  const decision = activityAt(policy, standing.level, args.activity, b);
+  const known = Object.prototype.hasOwnProperty.call(policy.activities, args.activity);
+  // Owner D1: the request's clinical risk, from its subject. It sets the model floor and the eligibility needed.
+  const risk = known ? classifyRisk(policy.risk, await resolveRiskSubject(admin, args.risk), policy.activities[args.activity].riskFloor) : undefined;
+  const decision = activityAt(policy, standing.level, args.activity, b, risk?.tier);
   if (!decision.available || !decision.via || !decision.tier) {
     const error: MeteredError = decision.refusal === "unknown_activity" ? "unknown_activity" : decision.refusal === "level_insufficient" ? "level_insufficient" : "allowance_exhausted";
-    return { ok: false, error, standing: decision.reason ? { ...standing, message: decision.reason } : standing };
+    return { ok: false, error, standing: decision.reason ? { ...standing, message: decision.reason } : standing, risk };
   }
 
   const status = aiStatus();
@@ -160,7 +192,7 @@ export async function runMeteredAi(admin: any, args: { userId: string; product: 
   const { data: held, error: rErr } = await admin.rpc("ai_reserve", {
     p_request_id: args.requestId, p_account: a.account.id, p_activity: args.activity, p_pool: decision.via, p_provider: status.provider, p_model: model,
     p_max_input_tokens: maxInputTokens(args.generate.system, args.generate.user), p_max_output_tokens: maxOut, p_policy_version: policy.version,
-    p_currency: policy.currency, p_buffer_pct: policy.fxBufferPct, p_clinically_sensitive: activity.clinicallySensitive,
+    p_currency: policy.currency, p_buffer_pct: policy.fxBufferPct, p_risk_tier: risk!.tier, p_risk_rule: risk!.rule,
     p_unreconciled_cap_cau: policy.maxUnreconciledCau,
     p_window_minutes: policy.windowMinutes, p_window_cap_cau: policy.windowCapCau, p_activity_cap: activity.capPerPeriod,
   });
@@ -168,7 +200,7 @@ export async function runMeteredAi(admin: any, args: { userId: string; product: 
   const r = Array.isArray(held) ? held[0] : held;
   if (typeof r?.reason === "string" && r.reason.startsWith("retry")) return { ok: false, error: "duplicate_request", standing };
   if (!r?.granted) {
-    if (r?.reason === "not_eligible") return { ok: false, error: "not_eligible", standing: { ...standing, message: NOT_ELIGIBLE } };
+    if (r?.reason === "not_eligible") return { ok: false, error: "not_eligible", standing: { ...standing, message: NOT_ELIGIBLE }, risk };
     if (r?.reason === "unreconciled_ceiling") return { ok: false, error: "pending_reconciliation", standing: { ...standing, message: PENDING } };
     return { ok: false, error: "allowance_exhausted", standing: { ...standing, message: policy.messages[standing.level === "full" ? "optimised" : standing.level] } };
   }

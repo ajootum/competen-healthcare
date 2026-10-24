@@ -15,11 +15,14 @@
 // ⚠ ACTIVITIES ARE POLICY DATA (approved amendment 1). There is no fixed list in code: an activity exists only
 // if the published policy defines it, and a request for any other code is refused as unknown.
 //
-// ⚠ NEVER A SILENT DOWNGRADE (amendment 2). Each activity names the cheapest tier it may run on (minTier). At
-// the Optimised and Essential levels the engine moves to a cheaper model only where that tier is at least the
-// activity's minTier. Where it is not, the activity is refused as level_insufficient and the reason says so --
-// it is never quietly answered by a model below its standard. Whether a model may serve a clinically sensitive
-// activity at all is a separate, evidence-based record in the database (ai_model_eligibility, owner D1).
+// ⚠ NEVER A SILENT DOWNGRADE (amendment 2, owner D1). Each activity names the cheapest tier it may run on
+// (minTier), and each clinical risk tier names one too (risk.minTier). A request's floor is the higher of the two.
+// At the Optimised and Essential levels the engine moves to a cheaper model only where that tier meets the floor.
+// Where it does not, the request is refused as level_insufficient and the reason says so. The risk tier itself is
+// classified from the request's subject (clinical-risk.ts), and whether a model may serve that tier at all is an
+// evidence-based record in the database (ai_model_eligibility, enforced by ai_reserve, migration 412).
+
+import { resolveRiskPolicy, RISK_TIERS, type RiskPolicy, type RiskTier } from "./clinical-risk";
 
 export type AiProduct = "scholar" | "professional";
 export const AI_PRODUCTS: readonly AiProduct[] = ["scholar", "professional"];
@@ -37,8 +40,8 @@ export type ActivityPolicy = {
   maxOutputTokens: number;
   /** Requests of this activity per allowance period. null = no count cap. */
   capPerPeriod: number | null;
-  /** Needs an eligible model record (ai_model_eligibility) to run at all. Unstated = sensitive (fails closed). */
-  clinicallySensitive: boolean;
+  /** The lowest clinical risk tier a request of this activity can be classified at. It only raises the subject's tier. */
+  riskFloor: RiskTier;
   /** May draw on the essential reserve. Only an essential activity, and only when the policy says so. */
   reserveEligible: boolean;
 };
@@ -61,6 +64,8 @@ export type ProductAiPolicy = {
   /** Outstanding unreconciled holds a person may have, including a new hold, before new requests wait. */
   maxUnreconciledCau: number;
   activities: Record<string, ActivityPolicy>;
+  /** The clinical risk rules and the per-tier model floor (owner D1). */
+  risk: RiskPolicy;
   messages: { full: string; optimised: string; essential: string; continuity: string; levelInsufficient: string };
 };
 
@@ -87,7 +92,7 @@ export function defaultPolicy(_product: AiProduct): ProductAiPolicy {
   return {
     version: "default-nothing-allowed", includedCau: 0, reserveCau: 0, windowMinutes: null, windowCapCau: null,
     levels: { optimisedBelowPct: 30, essentialBelowPct: 10 }, reset: { rule: "subscription_anniversary", cycleDays: 30 },
-    currency: "UGX", fxBufferPct: 0, maxUnreconciledCau: 0, activities: {}, messages: { ...MESSAGES },
+    currency: "UGX", fxBufferPct: 0, maxUnreconciledCau: 0, activities: {}, risk: resolveRiskPolicy(null), messages: { ...MESSAGES },
   };
 }
 
@@ -114,7 +119,8 @@ export function resolveActivity(code: string, s: any): ActivityPolicy | null {
     minTier: tierAtLeast(t, min) ? min : t,
     maxOutputTokens: Math.round(num(s.maxOutputTokens, 50, MAX_OUTPUT_TOKENS, DEFAULT_OUTPUT_TOKENS)),
     capPerPeriod: nullableNum(s.capPerPeriod, 0, 100000),
-    clinicallySensitive: s.clinicallySensitive !== false,
+    // A 411-era document said clinicallySensitive. Read as clinical educational, never as standard.
+    riskFloor: (RISK_TIERS as readonly string[]).includes(s.riskFloor) ? s.riskFloor : s.clinicallySensitive === false ? "standard_educational" : "clinical_educational",
     reserveEligible: cls === "essential" && s.reserveEligible === true,
   };
 }
@@ -146,6 +152,7 @@ export function resolvePolicy(product: AiProduct, settings: any, version: string
     fxBufferPct: num(settings.fxBufferPct, 0, 100, d.fxBufferPct),
     maxUnreconciledCau: num(settings.maxUnreconciledCau, 0, CAU_MAX, d.maxUnreconciledCau),
     activities,
+    risk: resolveRiskPolicy(settings.risk),
     messages: {
       full: text(settings.messages?.full, MESSAGES.full), optimised: text(settings.messages?.optimised, MESSAGES.optimised),
       essential: text(settings.messages?.essential, MESSAGES.essential), continuity: text(settings.messages?.continuity, MESSAGES.continuity),
@@ -203,17 +210,24 @@ export function serviceLevel(policy: ProductAiPolicy, b: Balance): AiServiceLeve
 export type ActivityRefusal = "unknown_activity" | "level_insufficient" | "allowance_exhausted";
 export type ActivityDecision = { available: boolean; via: "included" | "reserve" | null; tier: AiTier | null; refusal: ActivityRefusal | null; reason: string | null };
 
-/** Pure: the tier a level asks for. Full keeps the activity's tier, Optimised one step cheaper, below that the cheapest. */
-export function levelTier(level: AiServiceLevel, a: ActivityPolicy): AiTier {
-  if (level === "full") return a.tier;
-  if (level === "optimised") return AI_TIERS[Math.max(0, AI_TIERS.indexOf(a.tier) - 1)];
+const maxTier = (a: AiTier, b: AiTier): AiTier => (AI_TIERS.indexOf(a) >= AI_TIERS.indexOf(b) ? a : b);
+/** Pure: the cheapest tier a request may run on -- the activity's floor or the risk tier's, whichever is higher. */
+export const floorTier = (policy: ProductAiPolicy, a: ActivityPolicy, risk?: RiskTier) => (risk ? maxTier(a.minTier, policy.risk.minTier[risk]) : a.minTier);
+
+/** Pure: the tier a level asks for, from the request's base tier. Full keeps it, Optimised one step cheaper, below that the cheapest. */
+export function levelTier(level: AiServiceLevel, base: AiTier): AiTier {
+  if (level === "full") return base;
+  if (level === "optimised") return AI_TIERS[Math.max(0, AI_TIERS.indexOf(base) - 1)];
   return "cheap";
 }
 
 const refuse = (refusal: ActivityRefusal, reason: string): ActivityDecision => ({ available: false, via: null, tier: null, refusal, reason });
 
-/** Pure: whether an activity may run at a level, from which pool, on which tier. */
-export function activityAt(policy: ProductAiPolicy, level: AiServiceLevel, code: string, b: Balance): ActivityDecision {
+/**
+ * Pure: whether an activity may run at a level, from which pool, on which tier. With a risk tier (a classified
+ * request), the floor is the higher of the activity's and the tier's, and the full level runs at least on that floor.
+ */
+export function activityAt(policy: ProductAiPolicy, level: AiServiceLevel, code: string, b: Balance, risk?: RiskTier): ActivityDecision {
   const a = Object.prototype.hasOwnProperty.call(policy.activities, code) ? policy.activities[code] : undefined;
   if (!a) return refuse("unknown_activity", "This activity is not offered.");
   const reserveLeft = b.reserveCau - b.reserveUsedCau - b.reserveReservedCau;
@@ -226,8 +240,9 @@ export function activityAt(policy: ProductAiPolicy, level: AiServiceLevel, code:
     if (!(a.class === "essential" && a.reserveEligible && reserveLeft > 0)) return refuse("allowance_exhausted", "Available again when your AI allowance renews.");
     via = "reserve";
   }
-  const t = levelTier(level, a);
-  if (!tierAtLeast(t, a.minTier)) return refuse("level_insufficient", policy.messages.levelInsufficient);
+  const floor = floorTier(policy, a, risk);
+  const t = levelTier(level, maxTier(a.tier, floor));
+  if (!tierAtLeast(t, floor)) return refuse("level_insufficient", policy.messages.levelInsufficient);
   return { available: true, via, tier: t, refusal: null, reason: null };
 }
 
