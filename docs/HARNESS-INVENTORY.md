@@ -171,6 +171,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `hq-appointment-harness.ts` | hq-appointment-harness — proves the screen that grants access to Competen HQ. | privileged-live | — | insert/update/delete | no — verify | no |
 | `hq-guard-harness.ts` | hq-guard-harness — proves the HQ guard refuses. | privileged-live | PLAT-ARCH-SURVEY-001, CPR-PD-001 | insert/update/delete | no — verify | no |
 | `hq-nav-filter-harness.ts` | CP-HQ-NAV-001 — the capability-filtered HQ sidebar, and the switcher entry that leads to it. | privileged-live | CPR-PD-001, COMP-HQ-ACCESS-001 | read-only | n/a | no |
+| `hq-nav-registry-harness.ts` | COMPETEN-HQ-IA-02 — the HQ navigation registry holds the whole HQ estate, and holds it honestly. | pure/local | — | read-only | n/a | no |
 | `hww-access-harness.ts` | One-off harness for the HWW frontline read-scope filters (task: nurse read | privileged-live | — | read-only | n/a | no |
 | `hww-assessments-harness.ts` | One-off harness for the Acuity & Workload engine (migration 153). Exercises | privileged-live | — | update/delete | no — verify | no |
 | `hww-assignment-harness.ts` | One-off harness for the Assignment & Workload Engine (HWW-AE-001). | privileged-live | — | insert/delete | no — verify | no |

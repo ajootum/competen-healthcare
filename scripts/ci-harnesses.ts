@@ -103,6 +103,10 @@ const INCLUDED = [
   // HQ-USERS-C: the directory reads access tables only, HQ seats only from hq_* offices, every source can say
   // "Not readable", every Auth page is read, with 7 planted-failure controls. Reads files only.
   "hq-users-directory-harness.ts",
+  // COMPETEN-HQ-IA-02: every static /super-admin page registered once in the HQ navigation registry, no capability in
+  // the registry, children on their parent's capability, shared approvals homed once, PD_NAV reached unchanged, switch
+  // badges never a visibility input, owner search covering the estate. Reads files and the real registry only.
+  "hq-nav-registry-harness.ts",
   // COMPETEN-CONFIG-002 Individual policy invariants (source and migration 376): the capability door, one WCE
   // writer, the two partitions, every consumer on the policy, the clamping reader, no individual_app, no third
   // HQ door, with 22 planted-failure controls run in memory. Reads files only: no client, no network, no .env.local.
