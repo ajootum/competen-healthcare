@@ -2,6 +2,7 @@
 import { AI_PROVIDERS, type AiProvider } from "./config";
 import type { AiTier } from "./fair-use-policy";
 import { riskRank, type RiskTier } from "./clinical-risk";
+import { PROVIDER_ID, type ProviderRegistry } from "./provider-registry";
 
 // ── MODEL ROUTING ── owner "COMPETEN — MULTI-PROVIDER AI DIRECTION", 25 October 2026 ───────────────────────────────
 //
@@ -32,11 +33,13 @@ import { riskRank, type RiskTier } from "./clinical-risk";
 
 export const MODEL_ROUTING_PATH = "ai.model_routing";
 export const TIERS: readonly AiTier[] = ["cheap", "reasoning", "heavy"];
-export type Route = { provider: AiProvider; model: string };
+/** A built-in provider, or a REGISTERED one (provider-registry.ts) by its id, which carries its approved endpoint. */
+export type Route = { provider: string; model: string; endpoint?: string };
 export type ModelRouting = {
   published: boolean;
   providers: Record<AiProvider, { enabled: boolean; models: Partial<Record<AiTier, string>> }>;
-  tiers: Record<AiTier, AiProvider[]>;
+  /** Built-in provider names and registered provider ids, in order. */
+  tiers: Record<AiTier, string[]>;
   /** `${product}.${activity}` → its own ordered candidates. */
   activities: Record<string, Route[]>;
 };
@@ -44,7 +47,9 @@ export type ModelRouting = {
 const MODEL_ID = /^[a-z0-9][a-z0-9._:-]{1,79}$/i;
 const ACTIVITY_KEY = /^(scholar|professional)\.[a-z][a-z0-9_]{1,40}$/;
 const isProvider = (v: unknown): v is AiProvider => (AI_PROVIDERS as readonly string[]).includes(v as string);
-const route = (v: any): Route | null => (isProvider(v?.provider) && typeof v?.model === "string" && MODEL_ID.test(v.model.trim()) ? { provider: v.provider, model: v.model.trim() } : null);
+/** A provider name routing may hold: built-in, or the shape of a registered id (which must exist when it is used). */
+const isProviderRef = (v: unknown): v is string => isProvider(v) || (typeof v === "string" && PROVIDER_ID.test(v));
+const route = (v: any): Route | null => (isProviderRef(v?.provider) && typeof v?.model === "string" && MODEL_ID.test(v.model.trim()) ? { provider: v.provider, model: v.model.trim() } : null);
 
 /** Pure: a routing document, kept to its known fields and clamped. null/absent = unpublished (today's behaviour). */
 export function resolveModelRouting(s: any): ModelRouting {
@@ -54,7 +59,7 @@ export function resolveModelRouting(s: any): ModelRouting {
     for (const t of TIERS) if (typeof v?.models?.[t] === "string" && MODEL_ID.test(v.models[t].trim())) models[t] = v.models[t].trim();
     return [p, { enabled: v?.enabled === true, models }];
   })) as ModelRouting["providers"];
-  const tiers = Object.fromEntries(TIERS.map(t => [t, [...new Set((Array.isArray(s?.tiers?.[t]) ? s.tiers[t] : []).filter(isProvider))] as AiProvider[]])) as ModelRouting["tiers"];
+  const tiers = Object.fromEntries(TIERS.map(t => [t, [...new Set((Array.isArray(s?.tiers?.[t]) ? s.tiers[t] : []).filter(isProviderRef))].slice(0, 6) as string[]])) as ModelRouting["tiers"];
   const activities: Record<string, Route[]> = {};
   for (const [k, v] of Object.entries(s?.activities && typeof s.activities === "object" ? s.activities : {}).slice(0, 100)) {
     if (!ACTIVITY_KEY.test(k) || !Array.isArray(v)) continue;
@@ -69,11 +74,15 @@ export function resolveModelRouting(s: any): ModelRouting {
  * providers with the model each serves for that tier, keeping only enabled providers. Unpublished: the deployment's
  * primary provider and its model for the tier (`legacy`), exactly as before.
  */
-export function routeCandidates(r: ModelRouting, legacy: Route | null, ctx: { product: string; activity: string; tier: AiTier }): Route[] {
+export function routeCandidates(r: ModelRouting, legacy: Route | null, ctx: { product: string; activity: string; tier: AiTier }, registry: ProviderRegistry = {}): Route[] {
   if (!r.published) return legacy ? [legacy] : [];
   const own = r.activities[`${ctx.product}.${ctx.activity}`];
-  const list = own ?? r.tiers[ctx.tier].map(p => (r.providers[p].models[ctx.tier] ? { provider: p, model: r.providers[p].models[ctx.tier]! } : null)).filter((x): x is Route => !!x);
-  return list.filter(c => r.providers[c.provider].enabled);
+  const modelOf = (p: string): string | undefined => (isProvider(p) ? r.providers[p].models[ctx.tier] : registry[p]?.models[ctx.tier]);
+  const list = own ?? r.tiers[ctx.tier].map(p => (modelOf(p) ? { provider: p, model: modelOf(p)! } : null)).filter((x): x is Route => !!x);
+  // Built-in: enabled in routing. Registered: it must exist in the registry, and carries its approved endpoint. Whether
+  // it is ACTIVE (and keyed, and still permitted) is availability, decided in selectRoute's `available`.
+  return list.flatMap(c => isProvider(c.provider) ? (r.providers[c.provider].enabled ? [c] : [])
+    : registry[c.provider] ? [{ ...c, endpoint: registry[c.provider].endpoint }] : []);
 }
 
 export type EligibilityLike = { activity: string; provider: string; model_prefix: string; eligible: boolean; max_risk_tier: string | null };
@@ -87,7 +96,7 @@ export const eligibleFor = (rows: readonly EligibilityLike[], activity: string, 
  * Pure: the route a request runs on, or null. The first candidate whose provider has a key and that passes the gate.
  * For a request above standard educational the gate is eligibility: an alternative is chosen only if it is eligible.
  */
-export function selectRoute(cands: readonly Route[], available: readonly AiProvider[], gate: (c: Route) => boolean): Route | null {
+export function selectRoute(cands: readonly Route[], available: readonly string[], gate: (c: Route) => boolean): Route | null {
   return cands.find(c => available.includes(c.provider) && gate(c)) ?? null;
 }
 

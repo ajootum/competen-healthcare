@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { aiStatus } from "./config";
 import { clinicalGate, MODEL_ROUTING_PATH, resolveModelRouting, routeCandidates, selectRoute, type ModelRouting, type Route } from "./model-routing";
+import { PROVIDER_REGISTRY_PATH, registeredAvailable, resolveRegistry, type ProviderRegistry } from "./provider-registry";
 import { generate, type GenerateArgs, type GenerateResult } from "./client";
 import { classifyRisk, riskRank, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision, type RiskTier } from "./clinical-risk";
 import {
@@ -213,13 +214,18 @@ export const requestIdFor = (userId: string, clientId: string | null | undefined
   `${userId}:${clientId && REQ.test(clientId) ? clientId : crypto.randomUUID()}`;
 
 /** The published Holdings model routing (model-routing.ts). null = unreadable: nothing is sent on a guess. */
-export async function loadModelRouting(admin: any): Promise<ModelRouting | null> {
+export async function loadModelRouting(admin: any): Promise<(ModelRouting & { registry: ProviderRegistry }) | null> {
   try {
-    const { data, error } = await admin.from("workspace_config_overrides").select("published")
-      .eq("scope_type", FAIR_USE_SCOPE.scopeType).eq("scope_ref", FAIR_USE_SCOPE.scopeRef).eq("config_path", MODEL_ROUTING_PATH).maybeSingle();
-    return error ? null : resolveModelRouting(data?.published ?? null);
+    const read = (path: string) => admin.from("workspace_config_overrides").select("published")
+      .eq("scope_type", FAIR_USE_SCOPE.scopeType).eq("scope_ref", FAIR_USE_SCOPE.scopeRef).eq("config_path", path).maybeSingle();
+    const [r, g] = await Promise.all([read(MODEL_ROUTING_PATH), read(PROVIDER_REGISTRY_PATH)]);
+    if (r.error || g.error) return null;
+    return { ...resolveModelRouting(r.data?.published ?? null), registry: resolveRegistry(g.data?.published ?? null) };
   } catch { return null; }
 }
+
+/** Every provider a request may be sent to now: built-in with a key, and registered ones that are active and keyed. */
+const availableNow = (registry: ProviderRegistry) => [...aiStatus().available, ...Object.values(registry).filter(p => registeredAvailable(p)).map(p => p.id)];
 
 /** The legacy route: this deployment's primary provider and its model for the tier, when it can generate. */
 const legacyRoute = (tier: AiTier): Route | null => {
@@ -228,8 +234,8 @@ const legacyRoute = (tier: AiTier): Route | null => {
 };
 
 /** One request's route: the configured candidates, keyed providers only, and above standard only an eligible one. */
-const pickRoute = (routing: ModelRouting, rows: readonly EligibilityRow[] | null, product: AiProduct, activity: string, tier: AiTier, risk: RiskTier) =>
-  selectRoute(routeCandidates(routing, legacyRoute(tier), { product, activity, tier }), aiStatus().available, clinicalGate(rows, activity, risk));
+const pickRoute = (routing: ModelRouting & { registry: ProviderRegistry }, rows: readonly EligibilityRow[] | null, product: AiProduct, activity: string, tier: AiTier, risk: RiskTier) =>
+  selectRoute(routeCandidates(routing, legacyRoute(tier), { product, activity, tier }, routing.registry), availableNow(routing.registry), clinicalGate(rows, activity, risk));
 
 /** A balance that never limits: with metering off only the policy's routing and eligibility apply, not an allowance. */
 const UNMETERED_BALANCE = { includedCau: 1, reserveCau: 0, usedCau: 0, reservedCau: 0, reserveUsedCau: 0, reserveReservedCau: 0 };
@@ -335,7 +341,7 @@ async function meter(admin: any, m: MeterArgs): Promise<MeterOutcome> {
   if (!routing || rows === null) return { refused: "unreadable" };
   const route = pickRoute(routing, rows, m.product, m.activity, m.tier, m.risk.tier);
   if (!route) {
-    const anyKeyed = !!selectRoute(routeCandidates(routing, legacyRoute(m.tier), { product: m.product, activity: m.activity, tier: m.tier }), aiStatus().available, () => true);
+    const anyKeyed = !!selectRoute(routeCandidates(routing, legacyRoute(m.tier), { product: m.product, activity: m.activity, tier: m.tier }, routing.registry), availableNow(routing.registry), () => true);
     return { refused: anyKeyed && riskRank(m.risk.tier) > 0 ? "not_eligible" : "not_configured" };
   }
   const status = { provider: route.provider };

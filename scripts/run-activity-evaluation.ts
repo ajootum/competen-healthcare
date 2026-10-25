@@ -12,7 +12,7 @@
  */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
-import { evaluationCandidates, pinnedCall } from "./ai-eval-candidates";
+import { evaluationCandidates, pinnedCall, registeredCandidates } from "./ai-eval-candidates";
 import { readFileSync, writeFileSync } from "node:fs";
 import { judgeTarget } from "./production-guard";
 import { runCase, runCaseBlueprint, runCaseReasoning, runEvaluate, runQuestions, type AiRun, type Passage } from "../src/lib/individual/scholar/generation";
@@ -93,6 +93,9 @@ async function runItem(item: ActivityItem, run: AiRun): Promise<{ output: any; c
 }
 
 async function run(out: string) {
+  // Registered providers (no-code, provider-registry.ts) that are active here join the same run. --only narrows them too.
+  const only = arg("only");
+  for (const c of await registeredCandidates(admin)) if (!only || only.split(",").includes(c.provider)) CANDIDATES.push(c);
   if (!CANDIDATES.length) { console.error(`Nothing can be evaluated here: ${NOT_EVALUATED.map(n => n.why).join("; ")}.`); process.exit(1); }
   if (NOT_EVALUATED.length) console.log(`  not evaluated: ${NOT_EVALUATED.map(n => `${n.provider} (${n.why})`).join(", ")}`);
   const rows: Row[] = [];
