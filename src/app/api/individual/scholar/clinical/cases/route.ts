@@ -79,6 +79,12 @@ export async function POST(req: Request) {
   const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "case_steps");
   if (!standing.available) return NextResponse.json({ error: `${standing.message ?? "New AI help is not available right now."} Your stored ${libraryOn ? "and library cases are" : "cases are"} still yours to play.`, continuity: true }, { status: 409 });
   const pre = await aiPreflight(ctx);
+  // The Individual quota used up (429) is Learning Continuity, as Teach Me treats it: no new case, the stored ones
+  // still playable, said so. Consent and configuration refusals stay what they are.
+  if (pre?.status === 429) {
+    const why = ((await pre.clone().json().catch(() => ({}))) as { error?: string }).error ?? "Your AI allowance is used up for now.";
+    return NextResponse.json({ error: `${why} Your stored ${libraryOn ? "and library cases are" : "cases are"} still yours to play.`, continuity: true }, { status: 429 });
+  }
   if (pre) return pre;
   const passages = (await Promise.all(chunkIds.map(id => getPassage(ctx.admin, ctx.userId, id)))).filter((p): p is NonNullable<typeof p> => !!p);
   if (!passages.length) return NextResponse.json({ error: "Your notes could not be read just now." }, { status: 503 });

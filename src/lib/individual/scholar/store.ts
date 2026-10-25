@@ -737,25 +737,50 @@ export async function createRevisionSession(admin: Admin, userId: string, input:
 }
 
 export type SessionAttempt = { questionId: string; correct: boolean; score: number | null; marking: string; answeredAt: string };
+/** 425: a short answer held, unmarked, until the end of its session (end-of-session feedback and Mock). */
+export type HeldAnswer = { questionId: string; response: { text: string } };
 
-/** A revision session, its questions in order and its answers so far. null when it is not the caller's. */
-export async function getRevisionSession(admin: Admin, userId: string, id: string): Promise<Read<{ session: RevisionSessionRow; questionIds: string[]; attempts: SessionAttempt[] } | null>> {
+/**
+ * A revision session, its questions in order, its answers so far, and (425) the short answers held unmarked until
+ * the end. `holding` is false where 425 is absent: nothing can be held there, and the caller says so. null when it
+ * is not the caller's.
+ */
+export async function getRevisionSession(admin: Admin, userId: string, id: string): Promise<Read<{ session: RevisionSessionRow; questionIds: string[]; attempts: SessionAttempt[]; held: HeldAnswer[]; holding: boolean } | null>> {
   if (!isUuid(id)) return { ok: true, data: null };
   const { data: s, error } = await admin.from("individual_scholar_revision_session").select(REV_SESSION_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
   if (error) return fail(error);
   if (!s) return { ok: true, data: null };
-  const [items, att] = await Promise.all([
-    admin.from("individual_scholar_revision_session_item").select("ordinal, question_id").eq("user_id", userId).eq("session_id", id).order("ordinal"),
+  const itemsOf = (cols: string) => admin.from("individual_scholar_revision_session_item").select(cols).eq("user_id", userId).eq("session_id", id).order("ordinal");
+  const [first, att] = await Promise.all([
+    itemsOf("ordinal, question_id, held_response"),
     admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at").eq("user_id", userId).eq("revision_session_id", id).order("answered_at"),
   ]);
+  let items = first, holding = true;
+  if (first.error && isNotProvisioned(first.error)) { items = await itemsOf("ordinal, question_id"); holding = false; }
   if (items.error || att.error) return fail(items.error ?? att.error);
+  const rows = (items.data ?? []) as any[];
   return {
     ok: true,
     data: {
-      session: toRevSession(s), questionIds: ((items.data ?? []) as any[]).map(r => r.question_id),
+      session: toRevSession(s), questionIds: rows.map(r => r.question_id),
       attempts: ((att.data ?? []) as any[]).map(a => ({ questionId: a.question_id, correct: a.correct, score: a.score === null ? null : Number(a.score), marking: a.marking, answeredAt: a.answered_at })),
+      held: rows.filter(r => typeof r.held_response?.text === "string").map(r => ({ questionId: r.question_id, response: { text: r.held_response.text } })),
+      holding,
     },
   };
+}
+
+/** 425: hold a short answer, unmarked, on its session item until the end. false where it could not be kept (425 absent). Owner-keyed. */
+export async function holdRevisionAnswer(admin: Admin, userId: string, sessionId: string, questionId: string, text: string): Promise<boolean> {
+  const { data, error } = await admin.from("individual_scholar_revision_session_item").update({ held_response: { text } })
+    .eq("user_id", userId).eq("session_id", sessionId).eq("question_id", questionId).select("ordinal");
+  return !error && (data ?? []).length > 0;
+}
+
+/** 425: the held answer has been graded (its attempt now holds it), so it is held no longer. Owner-keyed. */
+export async function clearHeldAnswer(admin: Admin, userId: string, sessionId: string, questionId: string): Promise<void> {
+  await admin.from("individual_scholar_revision_session_item").update({ held_response: null })
+    .eq("user_id", userId).eq("session_id", sessionId).eq("question_id", questionId);
 }
 
 /** Where the student is, and whether they have finished. Owner-keyed. */

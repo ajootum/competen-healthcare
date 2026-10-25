@@ -4,7 +4,7 @@ export const maxDuration = 60;
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { getPassage, getQuestion, getRevisionSession, recordRevisionAttempt, updateRevisionSession, isUuid } from "@/lib/individual/scholar/store";
+import { clearHeldAnswer, getPassage, getQuestion, getRevisionSession, holdRevisionAnswer, recordRevisionAttempt, updateRevisionSession, isUuid } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
@@ -38,13 +38,21 @@ export async function POST(req: Request) {
   if (!q || !keyOf(q)) return NextResponse.json({ error: "That question could not be found." }, { status: 404 });
 
   // ── the session, if any: the question must be in it, and answered once ──
-  let sessionId: string | null = null, feedbackMode: "immediate" | "end" = "immediate", answeredCount = 0;
+  let sessionId: string | null = null, feedbackMode: "immediate" | "end" = "immediate", answeredCount = 0, finished = false, holding = false;
+  let held: { text: string } | null = null;
   if (isUuid(body?.sessionId)) {
     const s = await getRevisionSession(ctx.admin, ctx.userId, body.sessionId);
     if (!s.ok) return NextResponse.json({ error: "Your revision session could not be read just now." }, { status: 503 });
     if (!s.data || !s.data.questionIds.includes(q.id)) return NextResponse.json({ error: "That question is not in this session." }, { status: 404 });
     if (s.data.attempts.some(a => a.questionId === q.id)) return NextResponse.json({ error: "You have already answered this one in this session." }, { status: 409 });
-    sessionId = s.data.session.id; feedbackMode = s.data.session.feedback; answeredCount = s.data.attempts.length;
+    sessionId = s.data.session.id; feedbackMode = s.data.session.feedback; answeredCount = s.data.attempts.length + s.data.held.length;
+    finished = s.data.session.status === "completed"; holding = s.data.holding;
+    held = s.data.held.find(h => h.questionId === q.id)?.response ?? null;
+    // Owner decision (2026-10-25, REVISION-01 R4): a short answer held in an end-of-session or Mock session is
+    // graded by the student only once the session has ended -- and it is the answer they wrote that is graded.
+    if (held && !(finished && typeof body?.selfGrade === "boolean")) return NextResponse.json({ error: "You have already answered this one in this session." }, { status: 409 });
+    if (!held && feedbackMode === "end" && !finished && holding && typeof body?.selfGrade === "boolean")
+      return NextResponse.json({ error: "You mark this yourself at the end of the session." }, { status: 409 });
   }
 
   // ── a flashcard's back, to grade recall against. Not an answer, so nothing is recorded ──
@@ -53,7 +61,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ back: feedbackView(q, { correct: true, score: null, marking: "self_graded" }).answer, source: { quote: q.sourceQuote, citation: citationOf(q), materialId: q.materialId, chunkId: q.chunkId } });
   }
 
-  const r = parseResponse(q, body?.response);
+  const r = held ? { kind: "text" as const, text: held.text } : parseResponse(q, body?.response);
   if (!r) return NextResponse.json({ error: "Answer the question first." }, { status: 400 });
   if (r.kind === "text" && findPatientIdentifiers(r.text).length)
     return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
@@ -88,6 +96,14 @@ export async function POST(req: Request) {
           } else why = refused ? "AI evaluation is not available for this right now, so compare your answer yourself." : "The AI could not judge this answer against your notes, so compare it yourself.";
         }
       }
+      // Feedback at the end, and Mock (owner decision, R4): nothing is revealed before the end -- not the accepted
+      // answer, not the explanation, not the prompt to grade it. The answer is kept, unmarked, on its session item
+      // (425) and graded when the session ends. Where 425 is absent it cannot be kept, so the prompt comes now.
+      if (!evaluator && sessionId && feedbackMode === "end" && !finished && holding) {
+        if (!(await holdRevisionAnswer(ctx.admin, ctx.userId, sessionId, q.id, r.text))) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });
+        await updateRevisionSession(ctx.admin, ctx.userId, sessionId, { position: answeredCount + 1 });
+        return NextResponse.json({ recorded: true, held: true });
+      }
       if (!evaluator) return NextResponse.json({ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL.self_graded });
     }
   }
@@ -101,9 +117,10 @@ export async function POST(req: Request) {
     quality: r.kind === "recall" ? r.quality : null, srs,
   });
   if (!saved.ok) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });
-  if (sessionId) await updateRevisionSession(ctx.admin, ctx.userId, sessionId, { position: answeredCount + 1 });
+  if (held && sessionId) await clearHeldAnswer(ctx.admin, ctx.userId, sessionId, q.id);
+  else if (sessionId) await updateRevisionSession(ctx.admin, ctx.userId, sessionId, { position: answeredCount + 1 });
 
-  if (feedbackMode === "end") return NextResponse.json({ recorded: true, held: true });
+  if (feedbackMode === "end" && !finished) return NextResponse.json({ recorded: true, held: true });
   return NextResponse.json({
     recorded: true,
     feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, evaluation, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
