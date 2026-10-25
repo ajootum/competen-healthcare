@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPeopleDirectory } from "@/lib/enterprise/people";
 import PeopleDirectory from "./PeopleDirectory";
+import InvitePerson from "./InvitePerson";
 import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
@@ -14,9 +15,13 @@ export default async function PeopleModule() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  await requireHqCapability("hq.executive.enterprise.view");
+  const hq = await requireHqCapability("hq.executive.enterprise.view");
 
-  const { rows, summary, positions } = await loadPeopleDirectory(admin);
+  const { rows, summary, positions, facilities } = await loadPeopleDirectory(admin);
+  // Inviting is an owner-only write (POST /api/super-admin/users gates on isOwner). The page shows it only
+  // to an owner; the route refuses anyone else regardless.
+  const canInvite = hq.isOwner;
+  const facilityOptions = facilities.map((f: any) => ({ id: f.id, name: f.name }));
 
   return (
     <div data-wide className="space-y-4">
@@ -28,7 +33,11 @@ export default async function PeopleModule() {
           <h1 className="text-2xl font-bold text-gray-900 mt-0.5">People, Positions &amp; Roles</h1>
           <p className="text-sm text-gray-500">Manage people, positions, roles, reporting lines and workspace access.</p>
         </div>
-        <Link href="/super-admin/import" className="text-sm font-semibold rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 px-3.5 py-2">📥 Bulk Import</Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {canInvite && <Link href="/super-admin/users/appointments" className="text-sm font-semibold rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 px-3.5 py-2">🪪 HQ appointments</Link>}
+          <Link href="/super-admin/import" className="text-sm font-semibold rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 px-3.5 py-2">📥 Bulk Import</Link>
+          {canInvite && <InvitePerson facilities={facilityOptions} />}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

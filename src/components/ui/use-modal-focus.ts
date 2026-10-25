@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
 /**
  * Focus management for anything rendered as `role="dialog" aria-modal="true"`.
@@ -45,6 +45,15 @@ export function useModalFocus(
 ) {
   const { initialIndex = 0, dismissOnEscape = true } = opts;
 
+  // ⚠ onDismiss IS READ THROUGH A REF, NOT LISTED AS A DEPENDENCY. Callers pass inline closures
+  // (`onClose={() => setAddOpen(false)}`), which are new on every render, so with onDismiss in the
+  // dependency list the effect below re-ran on EVERY KEYSTROKE in a form inside the dialog -- and each
+  // re-run moved focus back to the initial element (the close X). Typing a name in /super-admin/users
+  // "Add User" put the cursor on the X after one character (owner report, 25 Oct 2026). The ref keeps
+  // the latest handler without re-running the focus-in step.
+  const dismissRef = useRef(onDismiss);
+  useEffect(() => { dismissRef.current = onDismiss; }, [onDismiss]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -64,7 +73,7 @@ export function useModalFocus(
     (initial ?? panel.current)?.focus();
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && dismissOnEscape) { e.preventDefault(); onDismiss(); return; }
+      if (e.key === "Escape" && dismissOnEscape) { e.preventDefault(); dismissRef.current(); return; }
       if (e.key !== "Tab") return;
       const f = focusables();
       if (!f.length) { e.preventDefault(); return; }
@@ -82,5 +91,5 @@ export function useModalFocus(
       // Guard against restoring to something React has since unmounted.
       if (restore?.isConnected) restore.focus();
     };
-  }, [open, panel, onDismiss, initialIndex, dismissOnEscape]);
+  }, [open, panel, initialIndex, dismissOnEscape]);
 }
