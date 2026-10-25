@@ -122,7 +122,8 @@ async function main() {
     const need = id(await createNeed(admin, me, { title: "Reading 12-lead ECGs with confidence", origin: "self_identified" }));
     const goal = id(await createGoal(admin, me, { title: "ECG Interpretation" }, { createdFrom: "need", needId: need, competencyId: null, offeringId: null, aspirationItemId: null, reflectionId: null }));
     const cpd1 = (await admin.from("individual_professional_cpd").insert({ user_id: me, experience_code: "professional", activity_type: "course", title: "ECG interpretation workshop",
-      provider: "Regional training centre", hours: 3, activity_date: today, document_name: "certificate.pdf", evidence_class: "source_linked", reflection: PRIVATE }).select("id").single()).data.id;
+      provider: "Regional training centre", hours: 3, activity_date: today, reflection: PRIVATE,
+      document_path: `${me}/harness-certificate.pdf`, document_name: "certificate.pdf", document_mime: "application/pdf", document_bytes: 1024 }).select("id").single()).data.id;
     await linkCpdToGoal(admin, me, goal, { cpdId: cpd1 });
     const offered = await loadCatalogueFor(admin, "professional");
     const c = offered?.find(o => /ecg|electrocardio|cardi|rhythm/i.test(o.title)) ?? offered?.[0] ?? null;
@@ -186,7 +187,7 @@ async function main() {
 
     // 11-13
     const cpd2 = (await admin.from("individual_professional_cpd").insert({ user_id: me, experience_code: "professional", activity_type: "reading", title: "ECG rhythm strip practice",
-      hours: 1, activity_date: today, evidence_class: "self_declared" }).select("id").single()).data.id;
+      hours: 1, activity_date: today }).select("id").single()).data.id;
     await linkCpdToGoal(admin, me, goal, { cpdId: cpd2 });
     ok("11. more learning is recorded outside Stage 6 (the CPD log, linked through Stage 3)", !!cpd2);
     const second = await snap(me, { kind: "goal", ref: goal });
@@ -204,7 +205,7 @@ async function main() {
       standIn = true;
       registerVerificationStudio({
         listVerifications: async () => ({ provisioned: true, items: [{ requestId: "00000000-0000-4000-8000-00000000c5c5", status: "decided", method: "Direct observation", requestedAt: today, evidence: [],
-          competency: { frameworkId: c.frameworkId, frameworkCompetencyId: c.competencyId, frameworkVersion: null, title: c.title, learningOutcomes: [] },
+          competency: { frameworkId: c.catalogue.id, frameworkCompetencyId: c.competencyId, frameworkVersion: null, title: c.title, learningOutcomes: [] },
           decisions: [{ outcomeCode: "verified", outcomeLabel: "Verified", level: null, assessorName: "Stand-in assessor", authority: "C5", criteriaVersion: "v1", decidedAt: `${today}T09:00:00Z`, validUntil: null, revokedAt: null, supersededBy: null }] }] }),
         requestVerification: async () => { requested++; return { ok: false, status: 409, error: "stand-in" }; },
       });
@@ -242,14 +243,18 @@ async function main() {
       none?.length === 0 && saved && one?.length === 1 && /formative/i.test(shown) && !shown.includes(NOTE) && !shown.includes(PRIVATE) && one[0].findings.length === 6);
 
     // 18
+    // Before any decision existed (ev1) nothing was verified. Wherever verification reads "supported", a decision backs it.
+    // Only a decision is ever "independently verified", and no text claims competence or its absence.
+    const CLAIM = /verified competen|competence (is )?verified|you are (not )?competent|\bincompetent\b|deficien/i;
     const stored = (await loadEvaluationHistory(admin, me)).evaluations ?? [];
     const everything = [ev1, ev15!, topic!, ev14];
-    const all = JSON.stringify([everything, stored]);
+    const all = JSON.stringify([everything, stored]).replace(/not a finding of incompetence/gi, "");
+    const decidedOnly = (srcs: any[]) => srcs.every(s => s.provenance !== "independent_decision" || s.kind === "verification" || s.kind === "passport_assessment");
+    const backed = (e: { findings: any; sources: any[] }) => e.findings.independent_verification.state !== "supported" || e.sources.some(s => s.kind === "verification" && s.provenance === "independent_decision");
     ok("18. no unsupported claim of verified clinical competence: only a decision is 'independently verified', and no text claims competence or its absence",
-      [ev1, ev15!, topic!].every(e => e.findings.independent_verification.state !== "supported")
-      && everything.every(e => e.sources.every(s => s.provenance !== "independent_decision" || s.kind === "verification" || s.kind === "passport_assessment"))
-      && stored.every(r => r.sources.every((s: any) => s.provenance !== "independent_decision" || s.kind === "verification" || s.kind === "passport_assessment"))
-      && !/verified competen|competence (is )?verified|you are (not )?competent|\bincompetent\b|deficien/i.test(all.replace(/not a finding of incompetence/gi, "")));
+      ev1.findings.independent_verification.state !== "supported" && everything.every(backed) && stored.every(r => backed(r))
+      && everything.every(e => decidedOnly(e.sources)) && stored.every(r => decidedOnly(r.sources)) && !CLAIM.test(all),
+      `ev1 verification ${ev1.findings.independent_verification.state}; claim text ${(all.match(CLAIM) ?? ["none"])[0]}`);
   } finally {
     await restore();
     await cleanup();
