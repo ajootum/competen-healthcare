@@ -1,0 +1,280 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { currentTraceId } from "@/lib/trace";
+
+// ── CFCA COMPETENCY AUTHORING, AS A GOVERNED HQ WORKFLOW ── migration 438, owner CFCA PRODUCTION AUTHORING DIRECTION ──
+//
+// "Production will be the authoritative environment for actual CFCA content and clinical governance." A CFCA
+// Competency Curator (hq.quality.competency.author) creates and refines SHARED frameworks (hospital_id null), their
+// domains and competencies -- every field the 395 clinical content hash covers: name, description, learning outcomes,
+// expected level, risk -- and puts a competency forward for independent clinical review. No SQL for ordinary content.
+//
+//   Draft -> Submit for Review -> Clinical Approval -> Publication
+//   authoring      here: create, edit, import a draft package
+//   review         here: submitForReview (395). The curator becomes the submitter and an author, so the 395 trigger
+//                  refuses any decision they make on it
+//   approval       /super-admin/clinical-review, the Clinical Content Reviewer within their scopes (unchanged)
+//   publication    the governed framework lifecycle (unchanged). Not this module.
+//
+// ⚠ AUTHORSHIP IS RECORDED BEFORE THE WRITE. 395's authorsOf reads audit_log rows whose entity is the competency or its
+// framework. A write whose audit row failed would let its author review it later, so the audit row comes first and a
+// failed one refuses the write (ids are made here so the row can name what does not exist yet).
+//
+// ⚠ A REVISION NEVER OVERWRITES AN APPROVAL. An approved version is an append-only 395 snapshot of the exact content,
+// and a published framework is an append-only framework_versions snapshot. Editing a competency after approval makes
+// it "Changed since its clinical approval" (stale) until a new version is approved -- it is never shown as approved.
+//
+// ⚠ NOT WHILE UNDER GOVERNANCE REVIEW. A framework that is in_review or approved is what its approver is looking at, so
+// content edits are refused until it is published or reverted to draft. Archived frameworks are not edited.
+//
+// ⚠ SHARED ONLY. Hospital frameworks are the estate's (/api/studio/authoring) and are never touched here.
+
+export const LAYERS = ["foundational", "profession", "advanced", "specialty", "context"] as const;
+export const RISKS = ["low", "standard", "high", "critical"] as const;
+export const EDITABLE = new Set(["draft", "published"]);
+
+const CODE = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+){0,4}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isId = (v: unknown): v is string => typeof v === "string" && UUID.test(v);
+const text = (v: unknown) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ") : "");
+
+type Ok<T> = { ok: true; value: T };
+type Bad = { ok: false; error: string };
+
+export type FrameworkInput = { code: string; name: string; description: string | null; layer: (typeof LAYERS)[number]; professionTermId: string | null; specialtyTermId: string | null };
+export type CompetencyInput = { code: string; name: string; description: string | null; learningOutcomes: string[]; expectedLevelId: string | null; riskCategory: (typeof RISKS)[number] };
+
+/** Pure: a shared framework's identity. A profession layer names its profession, any other layer names none. */
+export function parseFramework(b: any): Ok<FrameworkInput> | Bad {
+  const code = text(b?.code).toUpperCase(), name = text(b?.name), description = text(b?.description) || null;
+  if (!CODE.test(code) || code.length > 40) return { ok: false, error: "A framework code is capitals, digits and hyphens, for example CF-FOUND." };
+  if (name.length < 3 || name.length > 200) return { ok: false, error: "A framework name is 3 to 200 characters." };
+  if (description && description.length > 2000) return { ok: false, error: "A framework description is at most 2,000 characters." };
+  if (!(LAYERS as readonly string[]).includes(b?.layer)) return { ok: false, error: "Choose the framework layer." };
+  const professionTermId = isId(b?.professionTermId) ? b.professionTermId : null, specialtyTermId = isId(b?.specialtyTermId) ? b.specialtyTermId : null;
+  if (b.layer === "profession" && !professionTermId) return { ok: false, error: "A profession framework names its profession." };
+  if (b.layer !== "profession" && professionTermId) return { ok: false, error: "Only a profession framework names a profession." };
+  return { ok: true, value: { code, name, description, layer: b.layer, professionTermId, specialtyTermId } };
+}
+
+/** Pure: a competency's material content -- exactly the fields the 395 hash covers that authoring may set. */
+export function parseCompetency(b: any): Ok<CompetencyInput> | Bad {
+  const code = text(b?.code).toUpperCase(), name = text(b?.name), description = text(b?.description) || null;
+  if (!CODE.test(code) || code.length > 40) return { ok: false, error: "A competency code is capitals, digits and hyphens, for example CF-CR-001." };
+  if (name.length < 3 || name.length > 300) return { ok: false, error: "A competency name is 3 to 300 characters." };
+  if (description && description.length > 4000) return { ok: false, error: "A competency description is at most 4,000 characters." };
+  const raw = Array.isArray(b?.learningOutcomes) ? b.learningOutcomes : typeof b?.learningOutcomes === "string" ? b.learningOutcomes.split(/\r?\n/) : [];
+  const learningOutcomes = raw.map(text).filter(Boolean);
+  if (learningOutcomes.length > 20) return { ok: false, error: "At most 20 learning outcomes." };
+  if (learningOutcomes.some((o: string) => o.length < 3 || o.length > 400)) return { ok: false, error: "Each learning outcome is 3 to 400 characters." };
+  const expectedLevelId = b?.expectedLevelId == null || b.expectedLevelId === "" ? null : isId(b.expectedLevelId) ? b.expectedLevelId : undefined;
+  if (expectedLevelId === undefined) return { ok: false, error: "That expected level is not valid." };
+  const riskCategory = (b?.riskCategory ?? "standard") as CompetencyInput["riskCategory"];
+  if (!(RISKS as readonly string[]).includes(riskCategory)) return { ok: false, error: "Choose the risk category." };
+  return { ok: true, value: { code, name, description, learningOutcomes, expectedLevelId, riskCategory } };
+}
+
+export type Actor = { userId: string; name: string | null };
+type Fail = { ok: false; status: number; error: string };
+type Result<T extends object = object> = ({ ok: true } & T) | Fail;
+
+/** The authorship record, FIRST. False = not recorded, so the caller must not write. */
+async function authored(admin: any, actor: Actor, action: string, entityType: "framework" | "framework_competency" | "framework_domain", entityId: string, entityName: string, detail: Record<string, unknown>): Promise<boolean> {
+  const { error } = await admin.from("audit_log").insert({
+    trace_id: await currentTraceId(), actor_id: actor.userId, actor_name: actor.name, action,
+    entity_type: entityType, entity_id: entityId, entity_name: entityName.slice(0, 200), new_value: detail,
+  });
+  return !error;
+}
+const NOT_RECORDED: Fail = { ok: false, status: 503, error: "The authorship record could not be written, so nothing was changed. Try again shortly." };
+
+/** A shared framework the curator may edit now, or why not. */
+export async function editableFramework(admin: any, frameworkId: string): Promise<Result<{ fw: { id: string; name: string; pub_status: string } }>> {
+  if (!isId(frameworkId)) return { ok: false, status: 400, error: "Choose a framework." };
+  const { data: fw, error } = await admin.from("frameworks").select("id, name, pub_status, hospital_id").eq("id", frameworkId).maybeSingle();
+  if (error) return { ok: false, status: 503, error: "The framework could not be read just now. Nothing has changed." };
+  if (!fw || fw.hospital_id !== null) return { ok: false, status: 404, error: "That is not a shared framework." };
+  const status = fw.pub_status ?? "draft";
+  if (!EDITABLE.has(status)) return { ok: false, status: 409, error: status === "archived" ? "This framework is archived and is not edited." : "This framework is under governance review. Its content is what the approver is looking at, so it is not edited until it is published or returned to draft." };
+  return { ok: true, fw: { id: fw.id, name: fw.name, pub_status: status } };
+}
+
+async function frameworkOfDomain(admin: any, domainId: string) {
+  if (!isId(domainId)) return null;
+  const { data } = await admin.from("framework_domains").select("id, framework_id, name").eq("id", domainId).maybeSingle();
+  return data ?? null;
+}
+async function domainOfCompetency(admin: any, competencyId: string) {
+  if (!isId(competencyId)) return null;
+  const { data } = await admin.from("framework_competencies").select("id, domain_id, name, code").eq("id", competencyId).maybeSingle();
+  return data ?? null;
+}
+
+/** A code already used by another competency of a SHARED framework (codes are how content travels). */
+async function competencyCodeTaken(admin: any, code: string, exceptId: string | null): Promise<boolean | null> {
+  const { data, error } = await admin.from("framework_competencies").select("id, framework_domains!inner(frameworks!inner(hospital_id))").eq("code", code).is("framework_domains.frameworks.hospital_id", null).limit(5);
+  if (error) return null;
+  return (data ?? []).some((r: any) => r.id !== exceptId);
+}
+
+export async function createFramework(admin: any, actor: Actor, b: any): Promise<Result<{ id: string }>> {
+  const p = parseFramework(b);
+  if (!p.ok) return { ok: false, status: 422, error: p.error };
+  const { data: same, error } = await admin.from("frameworks").select("id").eq("code", p.value.code).is("hospital_id", null).limit(1);
+  if (error) return { ok: false, status: 503, error: "Frameworks could not be read just now. Nothing has changed." };
+  if (same?.length) return { ok: false, status: 409, error: `A shared framework with the code ${p.value.code} already exists.` };
+  const id = crypto.randomUUID();
+  if (!(await authored(admin, actor, "cfca_framework_created", "framework", id, p.value.name, { code: p.value.code, layer: p.value.layer }))) return NOT_RECORDED;
+  const { error: insErr } = await admin.from("frameworks").insert({
+    id, code: p.value.code, name: p.value.name, description: p.value.description, library: "core", hospital_id: null, scope: "master", is_active: true,
+    pub_status: "draft", competency_layer: p.value.layer, profession_term_id: p.value.professionTermId, specialty_term_id: p.value.specialtyTermId,
+  });
+  return insErr ? { ok: false, status: 422, error: "The framework could not be created." } : { ok: true, id };
+}
+
+export async function updateFramework(admin: any, actor: Actor, b: any): Promise<Result> {
+  const g = await editableFramework(admin, b?.frameworkId);
+  if (!g.ok) return g;
+  const name = text(b?.name), description = text(b?.description) || null;
+  if (name.length < 3 || name.length > 200) return { ok: false, status: 422, error: "A framework name is 3 to 200 characters." };
+  if (description && description.length > 2000) return { ok: false, status: 422, error: "A framework description is at most 2,000 characters." };
+  if (!(await authored(admin, actor, "cfca_framework_updated", "framework", g.fw.id, name, { name, description_set: !!description }))) return NOT_RECORDED;
+  const { error } = await admin.from("frameworks").update({ name, description }).eq("id", g.fw.id).is("hospital_id", null);
+  return error ? { ok: false, status: 422, error: "The framework could not be saved." } : { ok: true };
+}
+
+export async function createDomain(admin: any, actor: Actor, b: any): Promise<Result<{ id: string }>> {
+  const g = await editableFramework(admin, b?.frameworkId);
+  if (!g.ok) return g;
+  const name = text(b?.name);
+  if (name.length < 2 || name.length > 200) return { ok: false, status: 422, error: "A domain name is 2 to 200 characters." };
+  const { data: last } = await admin.from("framework_domains").select("sort_order").eq("framework_id", g.fw.id).order("sort_order", { ascending: false }).limit(1);
+  const id = crypto.randomUUID();
+  // A domain belongs to its framework's content, so its authorship is recorded on the framework.
+  if (!(await authored(admin, actor, "cfca_domain_created", "framework", g.fw.id, g.fw.name, { domain_id: id, name }))) return NOT_RECORDED;
+  const { error } = await admin.from("framework_domains").insert({ id, framework_id: g.fw.id, name, sort_order: (last?.[0]?.sort_order ?? 0) + 1 });
+  return error ? { ok: false, status: 422, error: "The domain could not be created." } : { ok: true, id };
+}
+
+export async function renameDomain(admin: any, actor: Actor, b: any): Promise<Result> {
+  const d = await frameworkOfDomain(admin, b?.domainId);
+  if (!d) return { ok: false, status: 404, error: "That domain does not exist." };
+  const g = await editableFramework(admin, d.framework_id);
+  if (!g.ok) return g;
+  const name = text(b?.name);
+  if (name.length < 2 || name.length > 200) return { ok: false, status: 422, error: "A domain name is 2 to 200 characters." };
+  if (!(await authored(admin, actor, "cfca_domain_renamed", "framework", g.fw.id, g.fw.name, { domain_id: d.id, name }))) return NOT_RECORDED;
+  const { error } = await admin.from("framework_domains").update({ name }).eq("id", d.id);
+  return error ? { ok: false, status: 422, error: "The domain could not be saved." } : { ok: true };
+}
+
+const competencyRow = (v: CompetencyInput) => ({ code: v.code, name: v.name, description: v.description, learning_outcomes: v.learningOutcomes, expected_level_id: v.expectedLevelId, risk_category: v.riskCategory });
+
+export async function createCompetency(admin: any, actor: Actor, b: any): Promise<Result<{ id: string }>> {
+  const d = await frameworkOfDomain(admin, b?.domainId);
+  if (!d) return { ok: false, status: 404, error: "That domain does not exist." };
+  const g = await editableFramework(admin, d.framework_id);
+  if (!g.ok) return g;
+  const p = parseCompetency(b);
+  if (!p.ok) return { ok: false, status: 422, error: p.error };
+  const taken = await competencyCodeTaken(admin, p.value.code, null);
+  if (taken === null) return { ok: false, status: 503, error: "Competency codes could not be checked just now. Nothing has changed." };
+  if (taken) return { ok: false, status: 409, error: `A shared competency with the code ${p.value.code} already exists.` };
+  const { data: last } = await admin.from("framework_competencies").select("sort_order").eq("domain_id", d.id).order("sort_order", { ascending: false }).limit(1);
+  const id = crypto.randomUUID();
+  if (!(await authored(admin, actor, "cfca_competency_created", "framework_competency", id, p.value.name, { code: p.value.code, framework_id: g.fw.id }))) return NOT_RECORDED;
+  const { error } = await admin.from("framework_competencies").insert({ id, domain_id: d.id, sort_order: (last?.[0]?.sort_order ?? 0) + 1, ...competencyRow(p.value) });
+  return error ? { ok: false, status: 422, error: "The competency could not be created." } : { ok: true, id };
+}
+
+/** Edit a competency's material content. After approval this makes it stale (never approved) until re-approved. */
+export async function updateCompetency(admin: any, actor: Actor, b: any): Promise<Result> {
+  const c = await domainOfCompetency(admin, b?.competencyId);
+  if (!c) return { ok: false, status: 404, error: "That competency does not exist." };
+  const d = await frameworkOfDomain(admin, c.domain_id);
+  if (!d) return { ok: false, status: 404, error: "That competency's domain does not exist." };
+  const g = await editableFramework(admin, d.framework_id);
+  if (!g.ok) return g;
+  const p = parseCompetency(b);
+  if (!p.ok) return { ok: false, status: 422, error: p.error };
+  const taken = await competencyCodeTaken(admin, p.value.code, c.id);
+  if (taken === null) return { ok: false, status: 503, error: "Competency codes could not be checked just now. Nothing has changed." };
+  if (taken) return { ok: false, status: 409, error: `A shared competency with the code ${p.value.code} already exists.` };
+  if (!(await authored(admin, actor, "cfca_competency_updated", "framework_competency", c.id, p.value.name, { code: p.value.code, framework_id: g.fw.id }))) return NOT_RECORDED;
+  const { error } = await admin.from("framework_competencies").update(competencyRow(p.value)).eq("id", c.id);
+  return error ? { ok: false, status: 422, error: "The competency could not be saved." } : { ok: true };
+}
+
+// ── A DRAFT PACKAGE: one framework, its domains and competencies, created in one governed act ─────────────────────
+//
+// For bringing existing content (CF-FOUND's eight) into production as a DRAFT, NOT CLINICALLY REVIEWED, without SQL.
+// The expected level travels as (default scale, score), because level ids differ between environments. Provenance
+// (where it came from, its source ids) is recorded in the authorship row, never in the content. Nothing is approved,
+// put forward or published by an import: approvals that do not exist are not imported, and none are implied.
+
+export type DraftPackage = {
+  framework: { code: string; name: string; description: string | null; layer: string; professionTermId?: string | null; specialtyTermId?: string | null };
+  domains: { name: string; competencies: { code: string; name: string; description: string | null; learningOutcomes: string[]; expectedLevel: { score: number } | null; riskCategory: string }[] }[];
+  provenance: Record<string, unknown>;
+};
+
+/** Pure: a package is whole and valid, or the first reason it is not. Nothing is written for a bad package. */
+export function checkPackage(pkg: any): Ok<DraftPackage> | Bad {
+  const f = parseFramework(pkg?.framework);
+  if (!f.ok) return f;
+  const domains = Array.isArray(pkg?.domains) ? pkg.domains : [];
+  if (!domains.length || domains.length > 40) return { ok: false, error: "A package has 1 to 40 domains." };
+  const codes = new Set<string>();
+  for (const d of domains) {
+    if (text(d?.name).length < 2) return { ok: false, error: "Every domain has a name." };
+    const comps = Array.isArray(d?.competencies) ? d.competencies : [];
+    if (comps.length > 200) return { ok: false, error: "At most 200 competencies in one domain." };
+    for (const c of comps) {
+      const p = parseCompetency({ ...c, expectedLevelId: null });
+      if (!p.ok) return { ok: false, error: `${text(c?.code) || "A competency"}: ${p.error}` };
+      if (codes.has(p.value.code)) return { ok: false, error: `The code ${p.value.code} appears twice in the package.` };
+      codes.add(p.value.code);
+      if (c?.expectedLevel != null && !(Number.isInteger(c.expectedLevel.score) && c.expectedLevel.score >= 0 && c.expectedLevel.score <= 10)) return { ok: false, error: `${p.value.code}: the expected level is a score on the default scale.` };
+    }
+  }
+  if (pkg?.provenance != null && (typeof pkg.provenance !== "object" || JSON.stringify(pkg.provenance).length > 8000)) return { ok: false, error: "The provenance is a small object." };
+  return { ok: true, value: pkg as DraftPackage };
+}
+
+export async function importDraftPackage(admin: any, actor: Actor, pkg: any): Promise<Result<{ id: string; competencies: number }>> {
+  const v = checkPackage(pkg);
+  if (!v.ok) return { ok: false, status: 422, error: v.error };
+  const p = v.value;
+  const { data: same, error: sErr } = await admin.from("frameworks").select("id").eq("code", p.framework.code.toUpperCase()).is("hospital_id", null).limit(1);
+  if (sErr) return { ok: false, status: 503, error: "Frameworks could not be read just now. Nothing has changed." };
+  if (same?.length) return { ok: false, status: 409, error: `A shared framework with the code ${p.framework.code.toUpperCase()} already exists. Edit it instead of importing again.` };
+  for (const d of p.domains) for (const c of d.competencies) {
+    const t = await competencyCodeTaken(admin, String(c.code).toUpperCase(), null);
+    if (t !== false) return { ok: false, status: t === null ? 503 : 409, error: t === null ? "Competency codes could not be checked just now. Nothing has changed." : `A shared competency with the code ${String(c.code).toUpperCase()} already exists.` };
+  }
+  // The expected level, by score on THIS environment's default scale.
+  const scores = [...new Set(p.domains.flatMap(d => d.competencies.map(c => c.expectedLevel?.score)).filter((s): s is number => typeof s === "number"))];
+  const levels = new Map<number, string>();
+  if (scores.length) {
+    const { data: lv, error: lErr } = await admin.from("scoring_levels").select("id, score, scoring_scales!inner(is_default)").eq("scoring_scales.is_default", true).in("score", scores);
+    if (lErr) return { ok: false, status: 503, error: "The expected levels could not be read just now. Nothing has changed." };
+    for (const l of lv ?? []) levels.set(l.score, l.id);
+    const missing = scores.filter(s => !levels.has(s));
+    if (missing.length) return { ok: false, status: 422, error: `The default scale has no level with score ${missing.join(", ")}.` };
+  }
+
+  const created = await createFramework(admin, actor, p.framework);
+  if (!created.ok) return created;
+  // The package's provenance, on the framework's authorship trail (never in its content).
+  await authored(admin, actor, "cfca_draft_imported", "framework", created.id, p.framework.name, { provenance: p.provenance ?? null, domains: p.domains.length });
+  let n = 0;
+  for (const d of p.domains) {
+    const dom = await createDomain(admin, actor, { frameworkId: created.id, name: d.name });
+    if (!dom.ok) return { ok: false, status: dom.status, error: `Stopped at domain "${d.name}": ${dom.error} The framework is a draft: finish it on the authoring page.` };
+    for (const c of d.competencies) {
+      const r = await createCompetency(admin, actor, { ...c, domainId: dom.id, expectedLevelId: c.expectedLevel ? levels.get(c.expectedLevel.score) : null });
+      if (!r.ok) return { ok: false, status: r.status, error: `Stopped at ${c.code}: ${r.error} The framework is a draft: finish it on the authoring page.` };
+      n++;
+    }
+  }
+  return { ok: true, id: created.id, competencies: n };
+}
