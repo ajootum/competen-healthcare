@@ -397,6 +397,31 @@ const privateCaseChecked = (src: Src) => {
  * the end the student grades the answer they wrote (the held one, never a new one), recorded as self_graded. A held
  * answer is answered on resume. Immediate feedback is unchanged: the self-grade comes at once.
  */
+/**
+ * K39 (EVALUATION-01, Stage 6): AN EVALUATION INTERPRETS MARKED EVIDENCE, AND IS NEVER COMPETENCE.
+ *  - The interpretation is deterministic: no AI runner, generator or gateway in the evaluation engine, its data
+ *    layer or its routes (written answers keep the marking they were given when answered).
+ *  - Knowledge, application and reasoning count only answers marked by their key; AI-evaluated and self-graded
+ *    answers are kept apart; Teach Me explanations are not read at all.
+ *  - Verified clinical competence is always not_assessed, and the record (426) has no column to say otherwise.
+ *  - A record is kept as it was made: the store never updates one, and 426 refuses an update.
+ *  - The workspace always shows the verified-competence boundary.
+ */
+const EVAL = `${LIB}/evaluation.ts`, EVAL_DATA = `${LIB}/evaluation-data.ts`, EVAL_ROUTE = `${API}/evaluations/route.ts`, EVAL_ID_ROUTE = `${API}/evaluations/[id]/route.ts`;
+const MIG_426 = "supabase/migrations/426-individual-scholar-evaluation.sql";
+const evaluationHonest = (src: Src) => {
+  const engine = src.get(EVAL) ?? "", data = src.get(EVAL_DATA) ?? "", routes = (src.get(EVAL_ROUTE) ?? "") + (src.get(EVAL_ID_ROUTE) ?? ""), store = src.get(STORE) ?? "";
+  const view = src.get(`${PAGES}/_components/evaluation-view.tsx`) ?? "";
+  const mig = existsSync(MIG_426) ? readFileSync(MIG_426, "utf8").replace(/--.*$/gm, "") : "";
+  return engine.length > 2000 && [engine, data, routes].every(s => !/scholarAiRunner|scholarOwnedRunner|runMeteredAi|runOwnedAi|generate\(|@\/lib\/ai\//.test(s))
+    && !/\.from\(/.test(engine) && !/learning_event"\)\.select\("[^"]*"\)\.eq\("user_id", userId\)\.eq\("action", "(teach|explain)/.test(store)
+    && /const det = attempts\.filter\(a => a\.marking === "deterministic"\);/.test(engine)
+    && /const choice = decisions\.filter\(d => !d\.written && d\.marking === "deterministic" && d\.correct !== null\);/.test(engine)
+    && /verified: \{ state: "not_assessed", reason: VERIFIED_NOT_ASSESSED \}/.test(engine) && !/verified: \{ state: "(?!not_assessed)/.test(engine + routes + data)
+    && !/individual_scholar_evaluation"\)\.update\(/.test(store) && /\.eq\("action", "clarify"\)/.test(store)
+    && /Verified clinical competence/.test(view) && /r\.verified\.reason/.test(view)
+    && /create table if not exists individual_scholar_evaluation/.test(mig) && /before update on individual_scholar_evaluation/.test(mig) && !/^\s+verified\w*\s/m.test(mig);
+};
 const REV_ANSWER = `${API}/revision/answer/route.ts`, REV_SESSION = `${API}/revision/sessions/[id]/route.ts`;
 const MIG_425 = "supabase/migrations/425-individual-scholar-revision-held-answer.sql";
 const heldToEnd = (src: Src) => {
@@ -986,6 +1011,8 @@ function main() {
     privateCaseChecked(REAL));
   ok("K36. CLINICAL-REASONING-01: a choice is marked by its key; a written decision is labelled AI evaluation only when AI feedback was given, otherwise the student's own review",
     caseFeedbackHonest(REAL));
+  ok("K39. EVALUATION-01: an evaluation interprets only marked evidence, deterministically, keeps AI and self-graded answers apart, is kept as made, and is never verified competence",
+    evaluationHonest(REAL));
   ok("K38. REVISION-01 R4 (owner decision): at the end of a session and in Mock, an unmarkable short answer is kept unmarked and revealed and self-graded only at the end, as the answer the student wrote; it survives a resume",
     heldToEnd(REAL));
   ok("K37. CLINICAL-REASONING-01: live AI feedback on a library case comes from library.ts's narrow context, is charged to the student's own budget by rule (case.live_with_stored) against the session, checked, and recorded only by the shared delivery",
@@ -1124,6 +1151,13 @@ function main() {
     && !privateCaseChecked(plant(`${LIB}/clinical.ts`, "facts, stages: used, decisionPoints, progression: [],", "facts, stages: used, decisionPoints, progression: list((draft as any).progression),")));
   ok("P54. ⚠ K36 goes red when a written answer without AI feedback is recorded as AI evaluation",
     !caseFeedbackHonest(plant(PLAY, "else { mark = { correct: null, score: null }; marking = \"self_graded\"; }", "else { mark = { correct: false, score: 0 }; marking = \"ai_evaluation\"; }")));
+  ok("P57. ⚠ K39 goes red when the evaluation calls AI, counts self-graded answers as knowledge, reads Teach Me explanations, claims verified competence, rewrites a record, or drops the boundary",
+    !evaluationHonest(plant(EVAL_ROUTE, "import { audit } from \"@/lib/individual/scholar/http\";", "import { audit, scholarAiRunner } from \"@/lib/individual/scholar/http\";"))
+    && !evaluationHonest(plant(EVAL, "const det = attempts.filter(a => a.marking === \"deterministic\");", "const det = attempts.filter(a => a.marking !== \"ai_evaluation\");"))
+    && !evaluationHonest(plant(STORE, ".eq(\"action\", \"clarify\")", ".eq(\"action\", \"teach\")"))
+    && !evaluationHonest(plant(EVAL, "verified: { state: \"not_assessed\", reason: VERIFIED_NOT_ASSESSED }", "verified: { state: \"verified\", reason: VERIFIED_NOT_ASSESSED }"))
+    && !evaluationHonest(plant(STORE, "export async function deleteEvaluation(", "export async function amend(admin: Admin, userId: string, id: string) { await admin.from(\"individual_scholar_evaluation\").update({ confidence: \"strong\" }).eq(\"user_id\", userId).eq(\"id\", id); }\nexport async function deleteEvaluation("))
+    && !evaluationHonest(plant(`${PAGES}/_components/evaluation-view.tsx`, "r.verified.reason", "\"\"")));
   ok("P56. ⚠ K38 goes red when the answer is not held, it can be graded before the end, a different answer is graded, the end view shows the grading early, or resume drops it",
     !heldToEnd(plant(REV_ANSWER, "if (!evaluator && sessionId && feedbackMode === \"end\" && !finished && holding) {", "if (false) {"))
     && !heldToEnd(plant(REV_ANSWER, "if (held && !(finished && typeof body?.selfGrade === \"boolean\"))", "if (held && !(typeof body?.selfGrade === \"boolean\"))"))

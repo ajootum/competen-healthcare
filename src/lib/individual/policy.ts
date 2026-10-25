@@ -45,9 +45,12 @@ export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
   | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides"
   | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns"
-  | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent";
+  | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent"
+  | "scholar_evaluation_min_evidence" | "scholar_evaluation_recency_days" | "scholar_evaluation_min_sources" | "scholar_evaluation_band_strong"
+  | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats" | "scholar_learning_actions"
-  | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions";
+  | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
+  | "scholar_evaluation_methods" | "scholar_evaluation_evidence";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -58,7 +61,7 @@ export type LevelsPolicyKey = "scholar_programme_levels";
 export type ChoicePolicyKey = "scholar_catalogue_min_status"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
-  | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback";
+  | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -471,6 +474,74 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "ai_then_self",
     limitReason: "Choices are always marked by their key first. AI feedback is always labelled.",
   },
+  // ── EVALUATION-01 (Stage 6): how an evaluation reads and interprets evidence. A band describes, it never
+  // certifies: there is no pass mark, and no setting can make an evaluation verified competence. ──
+  {
+    key: "scholar_evaluation_methods", kind: "set", product: "Scholar",
+    label: "Evaluation methods offered",
+    help: "How a student may evaluate their learning: from the evidence they already have, with a fresh knowledge check, or both combined.",
+    options: [{ value: "existing", label: "From existing evidence" }, { value: "fresh", label: "A fresh knowledge check" }, { value: "combined", label: "Existing evidence and a fresh check" }],
+    fallback: ["existing", "fresh", "combined"],
+    limitReason: "The three methods Scholar implements. Default: all.",
+  },
+  {
+    key: "scholar_evaluation_evidence", kind: "set", product: "Scholar",
+    label: "Evidence an evaluation reads",
+    help: "Which learning activity an evaluation interprets. Teach Me checks are always shown as informal and never counted as knowledge; AI explanations are never read.",
+    options: [{ value: "teach_checks", label: "Teach Me checks (informal)" }, { value: "revision", label: "Revision answers" }, { value: "spaced_review", label: "Spaced review recall" }, { value: "clinical_reasoning", label: "Clinical reasoning decisions" }],
+    fallback: ["teach_checks", "revision", "spaced_review", "clinical_reasoning"],
+    limitReason: "The four evidence sources Scholar records. Default: all.",
+  },
+  {
+    key: "scholar_evaluation_min_evidence", kind: "int", product: "Scholar", unit: "pieces of evidence",
+    label: "Evidence needed before a figure is shown",
+    help: "Independent pieces of evidence (one question, or one decision of one case, however often it was answered) a dimension needs before it shows a figure. Below it, the evaluation says there is too little to say.",
+    fallback: 5, min: 1, max: 50,
+    limitReason: "1 to 50. A figure from one or two answers would mislead.",
+  },
+  {
+    key: "scholar_evaluation_min_sources", kind: "int", product: "Scholar", unit: "sections",
+    label: "Breadth needed for more than limited confidence",
+    help: "How many different sections of the notes the evidence must come from before an evaluation is more than limited in confidence.",
+    fallback: 2, min: 1, max: 20,
+    limitReason: "1 to 20.",
+  },
+  {
+    key: "scholar_evaluation_recency_days", kind: "int", product: "Scholar", unit: "days",
+    label: "Evidence counted as recent",
+    help: "Evidence older than this still counts, but confidence says it may not reflect what the student knows now.",
+    fallback: 90, min: 7, max: 730,
+    limitReason: "7 to 730 days.",
+  },
+  {
+    key: "scholar_evaluation_band_strong", kind: "int", product: "Scholar", unit: "percent",
+    label: "Performance band: strong from",
+    help: "The share of independent evidence right at or above which an area is described as a strength. A description of practice, not a pass mark.",
+    fallback: 80, min: 50, max: 100,
+    limitReason: "50 to 100 percent.",
+  },
+  {
+    key: "scholar_evaluation_band_developing", kind: "int", product: "Scholar", unit: "percent",
+    label: "Performance band: developing from",
+    help: "At or above this share an area is developing; below it, a learning gap. Always below the strong band: a higher value is read as one below it.",
+    fallback: 50, min: 10, max: 95,
+    limitReason: "10 to 95 percent.",
+  },
+  {
+    key: "scholar_evaluation_fresh_quantity", kind: "int", product: "Scholar", unit: "questions",
+    label: "Questions in a fresh knowledge check",
+    help: "How many questions a fresh knowledge check asks. Saved questions are reused first; feedback is held to the end.",
+    fallback: 10, min: 3, max: 30,
+    limitReason: "3 to 30.",
+  },
+  {
+    key: "scholar_evaluation_recommendations", kind: "choice", product: "Scholar",
+    label: "Evaluation recommendations",
+    help: "Whether an evaluation suggests next steps (Teach Me, Revision, Spaced Review, a clinical case, a material), each from a finding.",
+    options: [{ value: "on", label: "Suggest next steps from the findings" }, { value: "off", label: "Show findings only" }],
+    fallback: "on",
+    limitReason: "Two choices. Default: on.",
+  },
   {
     key: "professional_catalogues", kind: "catalogues", product: "Professional", max: CATALOGUES_MAX,
     label: "Competency catalogues Professional may offer",
@@ -684,6 +755,16 @@ export type IndividualPolicy = {
   scholarCaseGeneration: "generate" | "stored_only";
   scholarCaseMode: "guided" | "independent";
   scholarCaseReasoningFeedback: "ai_then_self" | "self";
+  /** EVALUATION-01 (Stage 6). */
+  scholarEvaluationMethods: ("existing" | "fresh" | "combined")[];
+  scholarEvaluationEvidence: ("teach_checks" | "revision" | "spaced_review" | "clinical_reasoning")[];
+  scholarEvaluationMinEvidence: number;
+  scholarEvaluationMinSources: number;
+  scholarEvaluationRecencyDays: number;
+  scholarEvaluationBandStrong: number;
+  scholarEvaluationBandDeveloping: number;
+  scholarEvaluationFreshQuantity: number;
+  scholarEvaluationRecommendations: "on" | "off";
   /** JOIN-01: programme codes offered at join, or null for every active programme. */
   scholarOnboardingProgrammes: string[] | null;
   scholarProgrammeLevels: Record<string, ContextOption[]>;
@@ -744,6 +825,15 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarCaseGeneration: clampChoice(policyDef("scholar_case_generation") as ChoicePolicy, published.get(policyPath("scholar_case_generation"))) as "generate" | "stored_only",
     scholarCaseMode: clampChoice(policyDef("scholar_case_mode") as ChoicePolicy, published.get(policyPath("scholar_case_mode"))) as "guided" | "independent",
     scholarCaseReasoningFeedback: clampChoice(policyDef("scholar_case_reasoning_feedback") as ChoicePolicy, published.get(policyPath("scholar_case_reasoning_feedback"))) as "ai_then_self" | "self",
+    scholarEvaluationMethods: clampSet(policyDef("scholar_evaluation_methods") as SetPolicy, published.get(policyPath("scholar_evaluation_methods"))) as ("existing" | "fresh" | "combined")[],
+    scholarEvaluationEvidence: clampSet(policyDef("scholar_evaluation_evidence") as SetPolicy, published.get(policyPath("scholar_evaluation_evidence"))) as ("teach_checks" | "revision" | "spaced_review" | "clinical_reasoning")[],
+    scholarEvaluationMinEvidence: int("scholar_evaluation_min_evidence"),
+    scholarEvaluationMinSources: int("scholar_evaluation_min_sources"),
+    scholarEvaluationRecencyDays: int("scholar_evaluation_recency_days"),
+    scholarEvaluationBandStrong: int("scholar_evaluation_band_strong"),
+    scholarEvaluationBandDeveloping: int("scholar_evaluation_band_developing"),
+    scholarEvaluationFreshQuantity: int("scholar_evaluation_fresh_quantity"),
+    scholarEvaluationRecommendations: clampChoice(policyDef("scholar_evaluation_recommendations") as ChoicePolicy, published.get(policyPath("scholar_evaluation_recommendations"))) as "on" | "off",
     scholarOnboardingProgrammes: clampProgrammes(policyDef("scholar_onboarding_programmes") as ProgrammesPolicy, published.get(policyPath("scholar_onboarding_programmes"))),
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),

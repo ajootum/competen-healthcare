@@ -210,6 +210,20 @@ export const SESSION_MAX_STEPS = 20;
 export const INFORMAL_CHECK_LABEL = "A quick check for your own learning. It is not an assessment and does not count towards any competency.";
 /** Learning activity shown against a competency (Progress) is activity, not evidence. */
 export const NOT_COMPETENCE_LABEL = "Learning activity, not evidence of competence.";
+
+// ── EVALUATION-01 (Stage 6): what an evaluation is called, and how each part of it reads ──
+export const EVALUATION_LABEL = "Formative self-evaluation of your own learning · not an assessment, and never verified clinical competence";
+export const EVALUATION_DIMENSION_LABEL = {
+  knowledge: { title: "Knowledge", what: "How your structured questions went, marked by their key." },
+  retention: { title: "Retention", what: "What you recalled after a gap of a day or more." },
+  application: { title: "Application", what: "Scenario and case-step questions: using what you know in a situation." },
+  reasoning: { title: "Clinical reasoning", what: "Decisions in your clinical cases, by reasoning dimension, with safety points." },
+  coverage: { title: "Coverage", what: "Which sections and learning outcomes you have worked on. Not what you know." },
+  confidence: { title: "Evidence confidence", what: "How far this evidence can be relied on: amount, breadth, recency and how it was marked." },
+} as const;
+export const EVALUATION_BAND_LABEL = { strong: "A strength", developing: "Developing", needs_work: "A learning gap" } as const;
+export const EVALUATION_CONFIDENCE_LABEL = { strong: "Strong evidence", moderate: "Moderate evidence", limited: "Limited evidence", insufficient: "Too little evidence to say" } as const;
+export const EVALUATION_METHOD_LABEL = { existing: "From your existing evidence", fresh: "A fresh knowledge check", combined: "Existing evidence and a fresh check" } as const;
 /** The four kinds of content an answer may hold, said where each appears (owner GO s7). */
 /** Stage 3 acceptance item 3: an AI flag is the AI's, for the student to check -- never clinical review. */
 export const FLAG_HEADING = "Flagged by AI for you to check";

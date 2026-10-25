@@ -10,6 +10,7 @@ import {
   type RevisionFormat, type RevisionMode,
 } from "@/lib/individual/scholar/config";
 import type { RevisionFeedback, RevisionItemView } from "@/lib/individual/scholar/revision-view";
+import { MakeEvaluation } from "./evaluation-client";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
 // Revise -> Answer -> Understand mistakes -> Reinforce -> Revisit -> Improve. Every answer goes to
@@ -215,7 +216,9 @@ type HeldGrade = { response: string; accepted: string[]; rationale: string; sour
 type Answered = { questionId: string; feedback?: RevisionFeedback; held?: boolean; selfGrade?: HeldGrade };
 type Summary = { answered: number; of: number; correct: number; toGrade?: number; byMarking: Record<string, number> };
 
-export function RevisionRunner(props: { session: SessionState | null; items: RevisionItemView[]; answered: Answered[]; label?: string | null }) {
+export function RevisionRunner(props: { session: SessionState | null; items: RevisionItemView[]; answered: Answered[]; label?: string | null;
+  /** EVALUATION-01: this sitting is the knowledge check of an evaluation, made from it when it ends. */
+  evaluation?: { method: "fresh" | "combined"; scope: Record<string, unknown> } | null }) {
   const router = useRouter();
   const [state, setState] = useState<{ session: SessionState | null; items: RevisionItemView[]; answered: Answered[] } | null>({ session: props.session, items: props.items, answered: props.answered });
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -276,6 +279,7 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
               </li>
             ); })}
           </ol>
+          {sid && props.evaluation && <MakeEvaluation sessionId={sid} method={props.evaluation.method} scope={props.evaluation.scope} toGrade={summary.toGrade ?? 0} />}
           {sid && (
             <form onSubmit={saveSet} className="flex flex-wrap items-end gap-2">
               <label className="text-[13px] font-semibold text-gray-800">Save these questions as a set
