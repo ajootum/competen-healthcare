@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
-import { aiEntry, applyAnswer, applyVariation, caseMatches, pickVariation } from "./library";
+import { aiEntry, applyAnswer, applyVariation, caseMatches, feedbackContextFrom, pickVariation } from "./library";
 import { judgeOffer } from "./candidates";
 import { resolveCasePolicy, DEFAULT_CASE_POLICY } from "./policy";
 import type { Blueprint } from "./blueprint";
@@ -74,6 +74,28 @@ describe("case delivery (C4)", () => {
     expect(caseMatches(v, { topic: "sepsis recognition" })).toBe(true);
     expect(caseMatches(v, { topic: "fracture" })).toBe(false);
     expect(caseMatches(v, { level: "advanced" })).toBe(false);
+  });
+});
+
+describe("the AI feedback context for one written answer (server-side only)", () => {
+  const played = { reached_stage_ids: ["s1", "s3"], revealed_fact_ids: ["bp"], feedback: [] as any[],
+    answers: [{ decisionPointId: "d1", chosen: ["wait"], at: "t", safety: 1 }, { decisionPointId: "d3", chosen: [], text: "S: septic. B: day 2. A: BP 84/50. R: review now.", at: "t", safety: 0 }] };
+
+  it("gives the decision, its expected response, the student's text and only the facts the student had seen", () => {
+    const c = feedbackContextFrom(BRANCHING, played, "d3") as any;
+    expect(c.prompt).toBe("Hand over.");
+    expect(c.expectedResponse).toBe("SBAR");
+    expect(c.answer).toMatch(/^S: septic/);
+    expect(c.visibleFacts.map((f: any) => f.label)).toEqual(["Temperature", "BP"]);     // lactate was never asked for
+    expect(c.competencyIds).toEqual([COMP]);
+    const json = JSON.stringify(c);
+    for (const leak of ["Lactate", "4.2", "First?", "Bundle?", "Escalate", "Antibiotics", "correct", "rationale", "\"d1\"", "\"d2\""]) expect(json).not.toContain(leak);
+  });
+
+  it("refuses what it must: a choice decision, an unanswered one, one that already has feedback", () => {
+    expect(feedbackContextFrom(BRANCHING, played, "d1")).toEqual({ error: "not_free_text" });
+    expect(feedbackContextFrom(BRANCHING, played, "d2")).toEqual({ error: "not_answered" });
+    expect(feedbackContextFrom(BRANCHING, { ...played, feedback: [{ decisionPointId: "d3" } as any] }, "d3")).toEqual({ error: "already_has_feedback" });
   });
 });
 

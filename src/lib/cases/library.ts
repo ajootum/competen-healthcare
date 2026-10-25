@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash } from "node:crypto";
 import {
-  answeredView, learnerView, nextStage, resolveOptions, resolveToken, safetyEvents, variationWithinBounds, viewToken,
+  answeredView, blueprintCompetencies, learnerView, nextStage, resolveOptions, resolveToken, safetyEvents, variationWithinBounds, viewToken, visibleFacts,
   type Blueprint, type LearnerView,
 } from "./blueprint";
 import { caseLibraryEnabled, loadCasePolicy } from "./policy";
@@ -160,6 +160,53 @@ export function aiEntry(e: AiEvaluation, at: string): AiEntry | null {
   const provider = t(e?.provider, 1, 40), model = t(e?.model, 1, 120), requestId = t(e?.requestId, 8, 200), text = t(e?.text, 1, 8000);
   if (!provider || !model || !requestId || !text) return null;
   return { kind: "ai_evaluation", provider, model, modelVersion: t(e.modelVersion, 1, 120), policyVersion: t(e.policyVersion, 1, 200), requestId, text, at };
+}
+
+/** What AI feedback on ONE answered written decision needs. SERVER-SIDE ONLY: it carries the expected response. */
+export type FeedbackContext = {
+  versionId: string;
+  prompt: string;
+  expectedResponse: string;
+  rubric: { criterion: string; dimension?: string }[];
+  answer: string;
+  visibleFacts: { label: string; value: string; unit: string | null }[];
+  competencyIds: string[];
+};
+export type FeedbackContextError = { error: "not_answered" | "not_free_text" | "no_session" | "already_has_feedback" };
+
+/**
+ * Pure: the narrow context for evaluating ONE answered free-text decision -- its prompt, expected response and rubric
+ * (for the AI evaluator, after the answer), the student's own text, the facts the student had SEEN, and the
+ * competencies for the risk subject. Never an option key, never another decision, never a fact the student had not
+ * seen.
+ */
+export function feedbackContextFrom(b: Blueprint, s: Pick<SessionRow, "reached_stage_ids" | "revealed_fact_ids" | "answers" | "feedback">, dpId: string)
+  : Omit<FeedbackContext, "versionId"> | FeedbackContextError {
+  const d = b.decisionPoints.find(x => x.id === dpId);
+  const a = s.answers.find(x => x.decisionPointId === dpId);
+  if (!d || !a) return { error: "not_answered" };
+  if (d.kind !== "free_text" || typeof a.text !== "string" || !a.text.trim()) return { error: "not_free_text" };
+  if ((s.feedback ?? []).some(f => f.decisionPointId === dpId)) return { error: "already_has_feedback" };
+  const seen = visibleFacts(b, { reachedStageIds: s.reached_stage_ids, revealedFactIds: s.revealed_fact_ids });
+  return {
+    prompt: d.prompt, expectedResponse: d.expectedResponse ?? "", answer: a.text,
+    rubric: (d.rubric ?? []).map(c => ({ criterion: c.criterion, ...(c.dimension ? { dimension: c.dimension } : {}) })),
+    visibleFacts: b.facts.filter(f => seen.has(f.id)).map(f => ({ label: f.label, value: f.value, unit: f.unit ?? null })),
+    competencyIds: blueprintCompetencies(b),
+  };
+}
+
+/**
+ * The context Scholar's AI evaluator needs for ONE answered written decision of the caller's own library session.
+ * SERVER-SIDE ONLY: never return it to a browser (static K12). The variation the session was delivered with applies.
+ */
+export async function sessionFeedbackContext(admin: any, userId: string, sessionId: string, decisionToken: string): Promise<FeedbackContext | FeedbackContextError> {
+  const x = await sessionFor(admin, userId, sessionId);
+  if (!x) return { error: "no_session" };
+  const dpId = resolveToken(x.b, x.s.view_salt, "decision", decisionToken);
+  if (!dpId) return { error: "not_answered" };
+  const c = feedbackContextFrom(x.b, x.s, dpId);
+  return "error" in c ? c : { versionId: x.s.version_id, ...c };
 }
 
 /**
