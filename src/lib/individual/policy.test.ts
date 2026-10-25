@@ -59,6 +59,18 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       reminderHorizonDays: REMINDER_HORIZON_DAYS, shareLinkMaxDays: SHARE_DAYS_MAX, aiHourlyLimit: 30,
       // Owner (double-counted CPD hours): a CPD entry and a Competen Learning completion within 7 days can be one activity.
       professionalLearningMatchDays: 7,
+      // COMPETEN-PROFESSIONAL-EVALUATION-01: every scope, factor and rule offered; private unless ticked; no AI on reflections.
+      professionalEvaluation: {
+        scopes: ["development", "goal", "competency", "outcome", "topic", "cpd", "learning", "area"],
+        confidenceFactors: ["document_supported", "formative", "independent", "recency", "sufficiency"],
+        rules: ["record_cpd", "plan_activity", "find_learning", "formative_assessment", "reflect_application", "self_assess", "link_evidence",
+          "request_verification", "refresh_evidence", "create_goal", "create_need", "review_goal"],
+        templates: [
+          { code: "looking-back", label: "Looking back: What stands out to me? | What surprised me? | What will I do next?" },
+          { code: "evidence-check", label: "Evidence check: Which evidence do I trust most? | What is missing? | Who could give me feedback?" },
+        ],
+        sufficiency: 2, recencyDays: 1095, periodDays: 0, historyShown: 50, sharing: "offer", ai: "on", aiReflections: "off", corrections: "linked",
+      },
       scholarQuestionsPerRequest: QUESTIONS_PER_REQUEST, scholarMaterialsPerPerson: MAX_MATERIALS_PER_PERSON,
       // Stage 2: PDF and Word only until HQ turns plain text on (it needs migration 405); 10 MB; 300 pages.
       scholarUploadFormats: ["pdf", "docx"], scholarUploadMaxMb: 10, scholarPdfMaxPages: 300, scholarPptxMaxSlides: 150,

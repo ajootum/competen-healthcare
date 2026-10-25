@@ -27,7 +27,7 @@ import { PD_NAV } from "../src/app/super-admin/_components/pd-nav";
 // C1/C2/C3 caught immediately and loudly. That is exactly what those count controls are for, and it is the
 // second time a floor has stopped a silent no-op reading as green. Importing the real tables removes the
 // failure mode altogether: there is no longer a regex that can quietly stop matching.
-import { ALL_NAV_TABLES, OVERVIEW_HREFS as OVERVIEW } from "../src/app/super-admin/_components/nav-tables";
+import { ALL_NAV_TABLES, OVERVIEW_HREFS as OVERVIEW, flatNavItems } from "../src/app/super-admin/_components/nav-tables";
 
 const FILE = "src/app/super-admin/_components/WorkspaceSidebar.tsx";
 // Floors, not exact counts: adding a nav entry is routine and should not turn this red. Reading NOTHING is
@@ -38,7 +38,9 @@ const NAV_FLOOR = 6;
 const src = readFileSync(FILE, "utf8");
 
 const navs: Record<string, string[]> = Object.fromEntries(
-  ALL_NAV_TABLES.map(t => [t.name, t.sections.flatMap(s => s.items.map(i => i.href))]),
+  // HQ-IA-02: one table per workspace, and an item's children are rows too (shown under it while you are
+  // inside it), so they are evaluated with the rest -- a child lighting with its parent is a double row.
+  ALL_NAV_TABLES.map(t => [t.name, t.sections.flatMap(s => flatNavItems(s.items).map(i => i.href))]),
 );
 
 let pass = 0, fail = 0;
@@ -89,7 +91,11 @@ const code = src.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter(l => !l.tri
 // would make highlighting depend on who is looking: a viewer whose children are hidden would see the parent
 // revert to prefix matching and light up while they stand on a hidden child, which observe mode still
 // renders. The parent set must be a property of the nav, not of the viewer.
-ok("C6", /exactHrefs\s*=\s*parentHrefs\(table\.flatMap\(/.test(code) && /exact=\{OVERVIEW_HREFS\.has\(href\) \|\| exactHrefs\.has\(/.test(code),
+// HQ-IA-02: the row helper takes the exact flag as an argument, for items and their children alike, so
+// the union is now asserted where each row is drawn rather than on a JSX attribute.
+ok("C6", /exactHrefs\s*=\s*parentHrefs\(table\.flatMap\(g => g\.items\.flatMap\(i => \[i, \.\.\.\(i\.children \?\? \[\]\)\]\)\)\)/.test(code)
+    && /row\(e, OVERVIEW_HREFS\.has\(e\.href\) \|\| exactHrefs\.has\(/.test(code)
+    && /row\(c, OVERVIEW_HREFS\.has\(c\.href\) \|\| exactHrefs\.has\(/.test(code),
   "the component derives its parent set across the FLATTENED, UNFILTERED table and unions it with the floor list");
 
 // ⚠ ASSERTED DIRECTLY, BECAUSE THE LIVE NAV DOES NOT EXERCISE IT. Removing the `+ "/"` boundary from
