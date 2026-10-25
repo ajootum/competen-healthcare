@@ -1,14 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { individualAppEnabled } from "../gate";
 import { loadIndividualPolicy } from "../policy";
+import { postNotice, type PostResult } from "../notifications";
 import { learningEnabled } from "@/lib/learning/policy";
 import { currentTraceId } from "@/lib/trace";
 import { LEARNING_UNMATCH_ACTION, countedOnce, learningRecordHref, loadProfessionalLearning, matchCpdToLearning, type CpdMatch, type MatchableCpd } from "./learning";
-import { loadReminderPrefs } from "./preferences";
-import { dispatchEmail, type ReminderSender } from "./reminders";
 
 // ── A CPD ENTRY THAT IS ALREADY IN THE RECORD THROUGH COMPETEN LEARNING ── owner: "we don't post this and send a
-// notification to the user" ─────────────────────────────────────────────────────────────────────────────────────
+// notification to the user", then "Use notifications in the user account, not Email" ────────────────────────────
 //
 // Same deterministic match as the read side (learning.ts matchCpdToLearning). Two moments:
 //
@@ -20,16 +19,13 @@ import { dispatchEmail, type ReminderSender } from "./reminders";
 //              read (learning.ts countedOnce), the row untouched, and the person notified by the daily
 //              Professional job (scanLearningDuplicateNotices).
 //
-// ⚠ NOTIFICATION = THE EXISTING INDIVIDUAL CHANNELS, AS reminders.ts USES THEM. In the app, the refusal itself and the
-// "Counted once" mark on the entry (an Individual-only person has no notification inbox, and `notifications` rows
-// are counted on estate consoles). By email, through dispatch(), only to people whose reminder_email is on (374,
-// opt-in, off by default), at most once per learning record per kind -- an ids-only audit_log marker, no migration.
-// A failed send leaves no marker, so it is tried again.
+// ⚠ THE NOTICE IS IN THE PERSON'S ACCOUNT, NEVER EMAIL (src/lib/individual/notifications.ts, migration 466). One notice
+// per course for a refusal and one per entry for the later case, made unrepeatable by 466's unique key. Its text
+// names no course (the link opens the detail behind the person's sign-in). No dispatch(), no estate notifications row.
 //
 // ⚠ NOTHING THE PERSON WROTE IS EVER DELETED OR CHANGED HERE.
 
 export const DIFFERENT_ACTIVITY_FIELD = "differentActivity";
-export const DUPLICATE_NOTICE_ACTION = "individual_professional_cpd_learning_duplicate_notice";
 
 type Candidate = Omit<MatchableCpd, "id">;
 
@@ -54,7 +50,7 @@ export async function duplicateForSave(admin: any, userId: string, entry: Candid
   return already?.recordId === match.recordId ? null : match;
 }
 
-/** Pure: the refusal, in plain words, with the record and the override. */
+/** Pure: the refusal, in plain words, with the record and the override. Shown to the person who is saving. */
 export function refusalBody(m: CpdMatch) {
   return {
     error: `This course is already in your record through Competen Learning: ${m.title}, ${m.completedOn}. It was not saved again, so its hours are not counted twice.`,
@@ -75,53 +71,29 @@ export async function recordDifferentActivity(admin: any, userId: string, cpdId:
 }
 
 export type NoticeKind = "refused" | "counted_once";
+export const NOTICE_KIND: Record<NoticeKind, string> = { refused: "cpd_duplicate_refused", counted_once: "cpd_duplicate_counted_once" };
 
-/** Pure: the email. Its subject names no course -- subjects travel through more systems than bodies. */
-export function noticeMessage(kind: NoticeKind, m: CpdMatch) {
-  return {
-    type: "reminder",
-    title: "A course is already in your Competen Professional record",
-    body: kind === "refused"
-      ? `You tried to add ${m.title} to your CPD log, but it is already in your record through Competen Learning (completed ${m.completedOn}). It was not added again, so its hours are not counted twice. If it was a different activity, add it again and choose "This is a different activity".`
-      : `${m.title}, which you logged in your CPD log, is also in your record through Competen Learning (completed ${m.completedOn}). Its hours are now counted once. Your entry is kept as you wrote it. If it was a different activity, say so on the entry.`,
-    href: kind === "refused" ? learningRecordHref(m.recordId) : "/individual/professional/cpd",
-  };
+/** Pure: the in-account notice. Its text names no course or record: the link opens the detail. */
+export function duplicateNotice(kind: NoticeKind, m: CpdMatch) {
+  return kind === "refused"
+    ? { kind: NOTICE_KIND.refused, dedupeKey: `learning_record:${m.recordId}`, href: learningRecordHref(m.recordId),
+        body: "A course you tried to add to your CPD log is already in your record through Competen Learning, so it was not added again and its hours are not counted twice. If it was a different activity, add it again and choose \"This is a different activity\"." }
+    : { kind: NOTICE_KIND.counted_once, dedupeKey: `cpd:${m.cpdId}:${m.recordId}`, href: "/individual/professional/cpd",
+        body: "A course in your CPD log is also in your record through Competen Learning, so its hours are now counted once. Your entry is kept as you wrote it. If it was a different activity, say so on the entry." };
 }
 
-const markerOf = (kind: NoticeKind, m: CpdMatch) => kind === "refused"
-  ? { entity_type: "learning_record", entity_id: m.recordId, kind }
-  : { entity_type: "individual_professional_cpd", entity_id: m.cpdId, kind };
+/** Post the notice to the person's own account. Never throws: a refusal or a job must not fail because of a notice. */
+export const notifyDuplicate = (admin: any, userId: string, kind: NoticeKind, m: CpdMatch): Promise<PostResult> =>
+  postNotice(admin, userId, duplicateNotice(kind, m));
+
+export type DuplicateScan = { posted: number; already: number; failed: number; disabled?: true };
 
 /**
- * Email the person about a duplicate, if they opted in, once per (kind, record or entry). Never throws: a refusal
- * or a page must not fail because a notice could not go out. Returns what happened, for the caller and the tests.
+ * Daily (the individual_professional_reminders job): people who hold Professional now, with an entry they logged
+ * that a later Learning completion counts once, get one in-account notice per entry. Changes no CPD row.
  */
-export async function notifyDuplicate(admin: any, userId: string, kind: NoticeKind, m: CpdMatch, send: ReminderSender = dispatchEmail): Promise<"sent" | "not_opted_in" | "already" | "failed"> {
-  try {
-    if (!(await loadReminderPrefs(admin, userId)).email) return "not_opted_in";
-    const mk = markerOf(kind, m);
-    const { data, error } = await admin.from("audit_log").select("id, new_value").eq("actor_id", userId).eq("action", DUPLICATE_NOTICE_ACTION)
-      .eq("entity_type", mk.entity_type).eq("entity_id", mk.entity_id).limit(20);
-    if (error) return "failed";
-    if ((data ?? []).some((r: any) => r?.new_value?.kind === kind && (kind === "refused" || r?.new_value?.learning_record_id === m.recordId))) return "already";
-    const result = await send(admin, userId, noticeMessage(kind, m));
-    if (!result.sent) return "failed";
-    await admin.from("audit_log").insert({
-      trace_id: await currentTraceId(), actor_id: userId, actor_name: null, action: DUPLICATE_NOTICE_ACTION,
-      entity_type: mk.entity_type, entity_id: mk.entity_id, new_value: { experience: "professional", kind, learning_record_id: m.recordId },
-    });
-    return "sent";
-  } catch { return "failed"; }
-}
-
-export type DuplicateScan = { sent: number; already: number; failed: number; disabled?: true };
-
-/**
- * Daily (the individual_professional_reminders job): people who hold Professional, opted in to email, with an entry
- * they logged that a later Learning completion now counts once. Reads and notifies; changes no CPD row.
- */
-export async function scanLearningDuplicateNotices(admin: any, send: ReminderSender = dispatchEmail): Promise<DuplicateScan> {
-  const out: DuplicateScan = { sent: 0, already: 0, failed: 0 };
+export async function scanLearningDuplicateNotices(admin: any): Promise<DuplicateScan> {
+  const out: DuplicateScan = { posted: 0, already: 0, failed: 0 };
   if (!(await individualAppEnabled(admin)) || !(await learningEnabled(admin))) return { ...out, disabled: true };
   const windowDays = (await loadIndividualPolicy(admin)).professionalLearningMatchDays;
   const { data: live, error: liveErr } = await admin.from("individual_live_entitlement").select("user_id").eq("experience_code", "professional").limit(20000);
@@ -129,10 +101,7 @@ export async function scanLearningDuplicateNotices(admin: any, send: ReminderSen
   const users = [...new Set(((live ?? []) as any[]).map(r => r.user_id).filter(Boolean))] as string[];
   if (!users.length) return out;
   const { data: members } = await admin.from("individual_membership").select("user_id").in("user_id", users).eq("status", "active");
-  const entitled = ((members ?? []) as any[]).map(m => m.user_id as string);
-  if (!entitled.length) return out;
-  const { data: optedIn, error: optErr } = await admin.from("individual_professional_profile").select("user_id").in("user_id", entitled).eq("reminder_email", true).limit(20000);
-  const active = optErr ? [] : ((optedIn ?? []) as any[]).map(r => r.user_id as string);
+  const active = ((members ?? []) as any[]).map(m => m.user_id as string);
   if (!active.length) return out;
   const { data: rows, error } = await admin.from("individual_professional_cpd").select("id, user_id, title, provider, activity_type, activity_date")
     .in("user_id", active).in("activity_type", ["course", "workshop"]).limit(20000);
@@ -143,9 +112,10 @@ export async function scanLearningDuplicateNotices(admin: any, send: ReminderSen
     const learning = await loadProfessionalLearning(admin, userId);
     const { matches } = countedOnce(cpd, learning, windowDays);
     for (const m of matches.values()) {
-      if (out.sent >= 1000) return out;
-      const r = await notifyDuplicate(admin, userId, "counted_once", m, send);
-      if (r === "sent") out.sent++; else if (r === "already") out.already++; else if (r === "failed") out.failed++;
+      if (out.posted >= 1000) return out;
+      const r = await notifyDuplicate(admin, userId, "counted_once", m);
+      if (r === "posted") out.posted++; else if (r === "already") out.already++; else if (r === "failed") out.failed++;
+      // "unavailable" (466 not applied here): nothing to count, and nothing to retry until it is.
     }
   }
   return out;

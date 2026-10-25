@@ -2,6 +2,7 @@
 import { dispatch } from "@/lib/notifications/dispatch";
 import { loadIndividualPolicy } from "../policy";
 import { individualAppEnabled } from "../gate";
+import { scanLearningDuplicateNotices } from "./cpd-duplicates";
 
 // ── EXPIRY REMINDERS FOR THE PERSON'S OWN CREDENTIALS AND REGISTRATION ── COMPETEN-IND-007 s4 ────────────
 //
@@ -78,13 +79,10 @@ export function reminderMessage(c: ReminderCandidate, today: string) {
 
 /**
  * The job runner's one door into Professional (individual-professional-harness R3) also carries the CPD duplicate
- * notices (cpd-duplicates.ts): a Learning completion that now counts an entry the person logged once. Imported on
- * call, because cpd-duplicates.ts sends through dispatchEmail here.
+ * notices (cpd-duplicates.ts): a Learning completion that now counts an entry the person logged once. They are posted
+ * in the person's own account (migration 466), never emailed.
  */
-export async function scanDuplicateNotices(admin: any) {
-  const { scanLearningDuplicateNotices } = await import("./cpd-duplicates");
-  return scanLearningDuplicateNotices(admin);
-}
+export const scanDuplicateNotices = (admin: any) => scanLearningDuplicateNotices(admin);
 
 export type ScanResult = { sent: number; skipped: number; failed: number; recipients: string[]; failures: { userId: string; error: string }[]; disabled?: true };
 
