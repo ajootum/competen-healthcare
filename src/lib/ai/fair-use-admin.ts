@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { MODEL_ROUTING_PATH, resolveModelRouting, type ModelRouting } from "./model-routing";
+import { activationProblems, allowedHosts, checkEndpoint, credentialEnvName, PROVIDER_ID, PROVIDER_REGISTRY_PATH, redact, registeredKey, resolveRegistry,
+  SUPPORTED_PROTOCOLS, type ProviderRegistry, type RegisteredProvider } from "./provider-registry";
+import { generate } from "./client";
+import { AI_PROVIDERS } from "./config";
 import { publishScope, setOverride, type WceActor } from "@/lib/config/workspace-config-write";
 import { RISK_TIERS } from "./clinical-risk";
 import { BUDGET_CODE, ROUTING_PATH, budgetPath, budgetPeriod, resolveBudgetPolicy, resolveRouting, type BudgetPolicy, type Workflow } from "./consumption";
@@ -46,7 +50,7 @@ const positive = (v: unknown, allowZero = true) => { const n = Number(v); return
 export function checkRate(kind: RateKind, b: any): { ok: true; row: Record<string, unknown>; match: Record<string, unknown> } | { ok: false; error: string } {
   const note = typeof b?.note === "string" && b.note.trim() ? b.note.trim().slice(0, 500) : null;
   if (kind === "price") {
-    if (!["anthropic", "openai", "gemini"].includes(b?.provider)) return { ok: false, error: "Choose a provider." };
+    if (typeof b?.provider !== "string" || !((AI_PROVIDERS as readonly string[]).includes(b.provider) || PROVIDER_ID.test(b.provider))) return { ok: false, error: "Choose a provider." };
     const prefix = typeof b?.modelPrefix === "string" ? b.modelPrefix.trim() : "";
     if (!/^[a-z0-9][a-z0-9._-]{1,79}$/i.test(prefix)) return { ok: false, error: "Give the model id or its prefix." };
     const i = positive(b.inputPerMtokUsd), o = positive(b.outputPerMtokUsd), x = positive(b.extraPerRequestUsd ?? 0);
@@ -80,7 +84,8 @@ export function checkRate(kind: RateKind, b: any): { ok: true; row: Record<strin
   if (!(AI_PRODUCTS as readonly string[]).includes(b?.product)) return { ok: false, error: "Choose a product." };
   const activity = typeof b?.activity === "string" ? b.activity.trim() : "";
   if (!ACTIVITY_CODE.test(activity)) return { ok: false, error: "Give the activity code." };
-  if (!["anthropic", "openai", "gemini"].includes(b?.provider)) return { ok: false, error: "Choose a provider." };
+  // A built-in provider, or a registered one by its id (provider-registry.ts, migration 431).
+  if (typeof b?.provider !== "string" || !((AI_PROVIDERS as readonly string[]).includes(b.provider) || PROVIDER_ID.test(b.provider))) return { ok: false, error: "Choose a provider." };
   const prefix = typeof b?.modelPrefix === "string" ? b.modelPrefix.trim() : "";
   if (!/^[a-z0-9][a-z0-9._-]{1,79}$/i.test(prefix)) return { ok: false, error: "Give the model id or its prefix." };
   const eligible = b?.eligible === true || b?.eligible === "true";
@@ -271,6 +276,120 @@ export const saveRoutingDraft = (admin: any, actor: WceActor, input: any) =>
 const storedRouting = (input: any) => { const { providers, tiers, activities } = resolveModelRouting(input); return { providers, tiers, activities }; };
 export const saveModelRoutingDraft = (admin: any, actor: WceActor, input: any) =>
   setOverride(admin, actor, FAIR_USE_SCOPE, MODEL_ROUTING_PATH, storedRouting(input));
+
+// ── Provider registration (owner NO-CODE AI PROVIDER EXTENSIBILITY, provider-registry.ts) ────────────────────────
+//
+// Four acts, each audited by the route, each writing the DRAFT registry (published with the other AI policies):
+//   save       identity, endpoint, protocol, models, limits. Never status or checks, which a browser cannot set.
+//              Changing the endpoint, protocol or models clears the checks and deactivates: they no longer describe it.
+//   check      connectivity and capability, run by the SERVER with a fixed synthetic prompt (never user content).
+//   attest     privacy (data-processing terms, region, no training) and security, recorded by the administrator.
+//   status     activate (only with every check recorded, the key present and the host permitted) or deactivate.
+
+type Reg = { published: ProviderRegistry; draft: ProviderRegistry | null };
+async function registryRows(admin: any): Promise<Reg | null> {
+  const data = await rows(admin.from("workspace_config_overrides").select("draft, published").eq("scope_type", FAIR_USE_SCOPE.scopeType).eq("scope_ref", FAIR_USE_SCOPE.scopeRef).eq("config_path", PROVIDER_REGISTRY_PATH).limit(1));
+  if (data === null) return null;
+  const r = data[0];
+  return { published: resolveRegistry(r?.published ?? null), draft: r?.draft ? resolveRegistry(r.draft) : null };
+}
+/** The stored form of the registry: what resolveRegistry keeps, with status and checks as the server set them. */
+const storedRegistry = (reg: ProviderRegistry) => Object.fromEntries(Object.values(reg).map(p => [p.id, { ...p }]));
+const writeRegistry = (admin: any, actor: WceActor, reg: ProviderRegistry) => setOverride(admin, actor, FAIR_USE_SCOPE, PROVIDER_REGISTRY_PATH, storedRegistry(reg));
+type RegOutcome = { ok: true } | { ok: false; status: number; error: string };
+
+/** What HQ shows: the registry, whether each key is present (never the key), and the hosts the deployment permits. */
+export async function loadProviderRegistryView(admin: any) {
+  const r = await registryRows(admin);
+  if (!r) return null;
+  const current = r.draft ?? r.published;
+  return { published: r.published, draft: r.draft, keyed: Object.fromEntries(Object.keys(current).map(id => [id, !!registeredKey(id)])),
+    credentialNames: Object.fromEntries(Object.keys(current).map(id => [id, credentialEnvName(id)])), hosts: allowedHosts(),
+    problems: Object.fromEntries(Object.values(current).map(p => [p.id, activationProblems(p)])) };
+}
+
+export async function saveProviderRegistration(admin: any, actor: WceActor, input: any): Promise<RegOutcome> {
+  const id = typeof input?.id === "string" ? input.id.trim() : "";
+  if (!PROVIDER_ID.test(id) || (AI_PROVIDERS as readonly string[]).includes(id)) return { ok: false, status: 400, error: "Give a new provider id: lowercase letters and digits, 2 to 31, not a built-in provider." };
+  if (!(SUPPORTED_PROTOCOLS as readonly string[]).includes(input?.protocol))
+    return { ok: false, status: 422, error: "Only the OpenAI chat-completions protocol can be configured without code. Another protocol needs an adapter written in the gateway (src/lib/ai/client.ts)." };
+  const ep = checkEndpoint(input?.endpoint);
+  if (!ep.ok) return { ok: false, status: 422, error: ep.reason };
+  const r = await registryRows(admin);
+  if (!r) return { ok: false, status: 503, error: "The registry could not be read just now." };
+  const reg = { ...(r.draft ?? r.published) };
+  const prev = reg[id];
+  const next = resolveRegistry({ [id]: { label: input?.label, protocol: input.protocol, endpoint: ep.url, models: input?.models, maxOutputTokens: Number(input?.maxOutputTokens) } })[id];
+  if (!next || !Object.keys(next.models).length) return { ok: false, status: 422, error: "Give at least one model id." };
+  const same = prev && prev.endpoint === next.endpoint && prev.protocol === next.protocol && JSON.stringify(prev.models) === JSON.stringify(next.models);
+  // Status and checks are the server's. A change to what was checked clears them and deactivates.
+  reg[id] = same ? { ...next, status: prev.status, checks: prev.checks } : { ...next, status: "inactive", checks: {} };
+  const w = await writeRegistry(admin, actor, reg);
+  return w.ok ? { ok: true } : { ok: false, status: w.status, error: w.error };
+}
+
+const SYNTHETIC = { system: "You are a connectivity check for an AI gateway. Answer briefly.", user: "Reply with the single word OK." };
+
+/** Connectivity and capability, run by the server against the draft registration with a synthetic prompt. */
+export async function runProviderChecks(admin: any, actor: WceActor & { userId: string }, id: string): Promise<RegOutcome & { detail?: string }> {
+  const r = await registryRows(admin);
+  if (!r) return { ok: false, status: 503, error: "The registry could not be read just now." };
+  const reg = { ...(r.draft ?? r.published) };
+  const p = reg[id];
+  if (!p) return { ok: false, status: 404, error: "No such registered provider." };
+  if (!registeredKey(id)) return { ok: false, status: 409, error: `No key is set for it. The owner sets ${credentialEnvName(id)} in the deployment.` };
+  const model = p.models.cheap ?? p.models.reasoning ?? p.models.heavy!;
+  const out = await generate({ ...SYNTHETIC, maxTokens: 16, tier: "cheap", route: { provider: id, model, endpoint: p.endpoint }, context: { operation: "ai_provider_check", userId: actor.userId } });
+  const at = new Date().toISOString();
+  const key = registeredKey(id);
+  const detail = out.ok ? `model ${out.model}, ${out.usage.input} in / ${out.usage.output} out` : redact(String(("detail" in out && out.detail) || out.error), key);
+  const connectivity = { at, by: actor.userId, ok: out.ok, detail };
+  // Capability: text back, and token usage reported -- the fair-use engine cannot meter a provider that reports none.
+  const capability = { at, by: actor.userId, ok: out.ok && !!out.text.trim() && out.usage.input > 0 && out.usage.output > 0,
+    detail: out.ok ? (out.usage.input > 0 && out.usage.output > 0 ? "text and token usage reported" : "no token usage reported: it cannot be metered") : "not reached" };
+  reg[id] = { ...p, status: connectivity.ok && capability.ok ? p.status : "inactive", checks: { ...p.checks, connectivity, capability } };
+  const w = await writeRegistry(admin, actor, reg);
+  return w.ok ? { ok: true, detail } : { ok: false, status: w.status, error: w.error };
+}
+
+/** Privacy or security, recorded by the administrator, with what they rest on. */
+export async function attestProvider(admin: any, actor: WceActor & { userId: string }, id: string, kind: "privacy" | "security", b: any): Promise<RegOutcome> {
+  const r = await registryRows(admin);
+  if (!r) return { ok: false, status: 503, error: "The registry could not be read just now." };
+  const reg = { ...(r.draft ?? r.published) };
+  const p = reg[id];
+  if (!p) return { ok: false, status: 404, error: "No such registered provider." };
+  const at = new Date().toISOString();
+  if (kind === "privacy") {
+    const termsRef = typeof b?.termsRef === "string" ? b.termsRef.trim().slice(0, 300) : "", region = typeof b?.region === "string" ? b.region.trim().slice(0, 80) : "";
+    if (termsRef.length < 5 || region.length < 2 || b?.noTraining !== true) return { ok: false, status: 422, error: "Record the data-processing terms, the processing region, and that user content is not used for training." };
+    reg[id] = { ...p, checks: { ...p.checks, privacy: { at, by: actor.userId, ok: true, detail: null, termsRef, region, noTraining: true } } };
+  } else {
+    const note = typeof b?.note === "string" ? b.note.trim().slice(0, 300) : "";
+    if (note.length < 10) return { ok: false, status: 422, error: "Say what the security review covered (at least 10 characters)." };
+    reg[id] = { ...p, checks: { ...p.checks, security: { at, by: actor.userId, ok: true, detail: note } } };
+  }
+  const w = await writeRegistry(admin, actor, reg);
+  return w.ok ? { ok: true } : { ok: false, status: w.status, error: w.error };
+}
+
+/** Activate (every check recorded, key present, host permitted) or deactivate. Takes effect when published. */
+export async function setProviderStatus(admin: any, actor: WceActor, id: string, status: "active" | "inactive"): Promise<RegOutcome> {
+  const r = await registryRows(admin);
+  if (!r) return { ok: false, status: 503, error: "The registry could not be read just now." };
+  const reg = { ...(r.draft ?? r.published) };
+  const p: RegisteredProvider | undefined = reg[id];
+  if (!p) return { ok: false, status: 404, error: "No such registered provider." };
+  if (status === "active") {
+    const missing = activationProblems(p);
+    if (!registeredKey(id)) missing.push(`its key (${credentialEnvName(id)}) in the deployment`);
+    if (!checkEndpoint(p.endpoint).ok) missing.push("its host permitted by the deployment");
+    if (missing.length) return { ok: false, status: 409, error: `It cannot be activated yet. It needs: ${missing.join("; ")}.` };
+  }
+  reg[id] = { ...p, status };
+  const w = await writeRegistry(admin, actor, reg);
+  return w.ok ? { ok: true } : { ok: false, status: w.status, error: w.error };
+}
 
 /** The published model routing and any waiting draft. Null: unreadable. */
 export async function loadModelRoutingView(admin: any): Promise<{ published: ModelRouting; draft: ModelRouting | null } | null> {

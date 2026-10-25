@@ -24,7 +24,7 @@ import { scoreAnswer, proposeTier, type EvalScore } from "../src/lib/ai/model-ev
 import { assistantSystemPrompt, assistantUserMessage } from "../src/lib/individual/personal-ai";
 import { EVAL_SET, EVAL_SET_VERSION } from "./ai-eval-set-d5";
 import { PROVISIONAL_ACTIVITIES } from "./ai-provisional-policy";
-import { evaluationCandidates, pinnedCall } from "./ai-eval-candidates";
+import { evaluationCandidates, pinnedCall, registeredCandidates } from "./ai-eval-candidates";
 
 loadEnvConfig(process.cwd());
 const url = process.env.STAGING_SUPABASE_URL ?? "", key = process.env.STAGING_SERVICE_ROLE_KEY ?? "";
@@ -41,6 +41,9 @@ type Row = { itemCode: string; task: string; tier: string; provider: string; mod
   costUsd: number | null; priceId: string | null; latencyMs: number; status: "ok" | "refusal" | "error"; output: string | null; error?: string; score: EvalScore };
 
 async function run(out: string) {
+  // Registered providers (no-code, provider-registry.ts) that are active here join the same run. --only narrows them too.
+  const only = arg("only");
+  for (const c of await registeredCandidates(admin)) if (!only || only.split(",").includes(c.provider)) CANDIDATES.push(c);
   if (!CANDIDATES.length) { console.error(`Nothing can be evaluated here: ${NOT_EVALUATED.map(n => n.why).join("; ")}.`); process.exit(1); }
   const rows: Row[] = [];
   for (const c of CANDIDATES) {

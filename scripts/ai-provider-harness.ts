@@ -106,11 +106,11 @@ function main() {
   // everything downstream provider-independent.
   const afterTable = client.slice(client.indexOf("const ADAPTERS"));
   ok("3b. the dispatcher selects by table rather than branching on the vendor",
-    /ADAPTERS\[provider\]/.test(afterTable)
+    /ADAPTERS\[provider( as AiProvider)?\]/.test(afterTable)
     && !/provider === "anthropic"|provider === "openai"|provider === "gemini"/.test(afterTable));
 
   ok("3c. the result names the provider as well as the model",
-    /provider: AiProvider;/.test(client) && /model: string;/.test(client));
+    /provider: (AiProvider|string);/.test(client) && /model: string;/.test(client));
   ok("3d. and usage telemetry records both",
     /provider,\n\s+model,/.test(client) || /provider,[\s\S]{0,80}model,/.test(client));
 
@@ -176,7 +176,8 @@ function main() {
   ok("6e. ⚠ no credential survives the routing document: only its known fields are kept", ok6.noCredential);
   const clientSrc = strip(read("src/lib/ai/client.ts")), engineSrc = strip(read("src/lib/ai/allowance.ts"));
   ok("6f. a routed call takes its key from the environment, by the routed provider, never from the route",
-    /const provider = route\?\.provider \?\? status\.provider!;\s*const key = providerKey\(provider\);/.test(clientSrc) && /route\?: \{ provider: AiProvider; model: string \};/.test(clientSrc));
+    /const provider = route\?\.provider \?\? status\.provider!;[\s\S]{0,300}?const key = registered \? registeredKey\(provider\) : providerKey\(provider\);/.test(clientSrc)
+    && /route\?: \{ provider: string; model: string; endpoint\?: string \};/.test(clientSrc) && !/route\?: \{[^}]*key/i.test(clientSrc));
   ok("6g. the metered path reserves and generates on the SAME route the routing chose",
     /p_provider: status\.provider, p_model: model/.test(engineSrc) && /const status = \{ provider: route\.provider \};\s*const model = route\.model;/.test(engineSrc) && /generate\(\{ \.\.\.m\.generate, tier: m\.tier, maxTokens: maxOut, route \}\)/.test(engineSrc));
   const walk = (d: string): string[] => fs.readdirSync(path.join(root, d), { withFileTypes: true })
@@ -186,11 +187,36 @@ function main() {
   ok("6h. no new code reaches a vendor SDK directly: only the gateway (and the one named follow-up)",
     sdkUsers.filter(f => f !== "src/lib/ai/client.ts" && f !== "src/app/api/copilot/route.ts" && f !== "scripts/ai-provider-harness.ts").length === 0, sdkUsers.join(", "));
 
+  // ── 7. PROVIDER REGISTRATION (owner NO-CODE AI PROVIDER EXTENSIBILITY) ───────────────────────────────────────────
+  //
+  // One compatible protocol, credentials named by derivation not configuration, approved endpoints re-checked at call
+  // time with redirects refused, and an inactive provider never routed.
+  const reg7 = (regSrc: string, cliSrc: string, engSrc: string) => ({
+    oneProtocol: /export const SUPPORTED_PROTOCOLS = \["openai_chat_completions"\] as const;/.test(regSrc),
+    derivedKey: /export const credentialEnvName = \(id: string\) => `AI_PROVIDER_KEY_\$\{id\.toUpperCase\(\)\}`;/.test(regSrc)
+      && /registeredKey = \(id: string, env[^)]*\) => \(PROVIDER_ID\.test\(id\) \? env\[credentialEnvName\(id\)\]/.test(regSrc),
+    callTime: /if \(registered\) \{\s*const reach = await checkEndpointResolves\(route!\.endpoint!\);\s*if \(!reach\.ok\) return/.test(cliSrc)
+      && cliSrc.indexOf("checkEndpointResolves(route!.endpoint!)") < cliSrc.indexOf("compatibleAdapter(route!.endpoint!, args)"),
+    noRedirect: /async function compatibleAdapter[\s\S]{0,200}?redirect: "error"/.test(cliSrc),
+    inactiveNever: /\.filter\(p => registeredAvailable\(p\)\)\.map\(p => p\.id\)/.test(engSrc),
+  });
+  const regSrc = strip(read("src/lib/ai/provider-registry.ts"));
+  const r7 = reg7(regSrc, clientSrc, engineSrc);
+  ok("7a. one protocol is configurable without code (OpenAI chat completions). Anything else is reported as needing an adapter", r7.oneProtocol);
+  ok("7b. ⚠ a registered provider's key is AI_PROVIDER_KEY_<ID>, derived, so configuration cannot name another secret", r7.derivedKey);
+  ok("7c. ⚠ its endpoint is checked again at call time, after DNS resolution, before anything is sent", r7.callTime);
+  ok("7d. ⚠ and a redirect is refused, so an approved host cannot hand the request on", r7.noRedirect);
+  ok("7e. ⚠ an inactive provider is never routed", r7.inactiveNever);
+
   // Planted failures: each 6 check must go red on one violation.
   const red6 = (label: string, cond: boolean) => ok(`P. ${label} goes RED`, !cond);
   red6("6b/6c with a gate that ignores eligibility", r6((c, a) => c.find(x => a.includes(x.provider)) ?? null, resolveModelRouting).neverIneligible);
   red6("6e with a resolver that keeps every field", r6(selectRoute, (x: unknown) => ({ ...resolveModelRouting(x), extra: x })).noCredential);
   red6("6d with a selector that ignores keys", r6((c, _a, g) => c.find(g) ?? null, resolveModelRouting).keylessSkipped);
+  red6("7b with a configurable credential name", reg7(regSrc.replace("env[credentialEnvName(id)]", "env[cfg.credentialEnv]"), clientSrc, engineSrc).derivedKey);
+  red6("7c with no call-time check", reg7(regSrc, clientSrc.replace("const reach = await checkEndpointResolves(route!.endpoint!);", "const reach = { ok: true };"), engineSrc).callTime);
+  red6("7d with redirects followed", reg7(regSrc, clientSrc.replace('method: "POST", redirect: "error",', 'method: "POST",'), engineSrc).noRedirect);
+  red6("7e with inactive providers routed", reg7(regSrc, clientSrc, engineSrc.replace(".filter(p => registeredAvailable(p)).map(p => p.id)", ".map(p => p.id)")).inactiveNever);
 
   console.log(`\n${fails.length === 0 ? "PASSED" : "FAILED"}  ${pass} passed, ${fails.length} failed`);
   if (fails.length) { for (const f of fails) console.log(`  - ${f}`); process.exit(1); }

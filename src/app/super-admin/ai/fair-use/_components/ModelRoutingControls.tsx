@@ -14,7 +14,7 @@ type Provider = "anthropic" | "openai" | "gemini";
 type Tier = "cheap" | "reasoning" | "heavy";
 type Routing = {
   providers: Record<Provider, { enabled: boolean; models: Partial<Record<Tier, string>> }>;
-  tiers: Record<Tier, Provider[]>;
+  tiers: Record<Tier, string[]>;
   activities: Record<string, { provider: Provider; model: string }[]>;
 };
 const PROVIDERS: { code: Provider; label: string }[] = [{ code: "anthropic", label: "Anthropic (Claude)" }, { code: "openai", label: "OpenAI (GPT)" }, { code: "gemini", label: "Google Gemini" }];
@@ -26,13 +26,13 @@ const parseActivities = (t: string): Routing["activities"] => Object.fromEntries
   return [k, rest.split(",").map(x => x.trim()).filter(Boolean).map(x => { const i = x.indexOf(":"); return { provider: x.slice(0, i) as Provider, model: x.slice(i + 1) }; })];
 }));
 
-export function ModelRoutingEditor({ initial, keyed, primary }: { initial: Routing; keyed: Record<Provider, boolean>; primary: { provider: string | null; models: Record<Tier, string> | null } }) {
+export function ModelRoutingEditor({ initial, keyed, primary, registered = [] }: { initial: Routing; keyed: Record<Provider, boolean>; primary: { provider: string | null; models: Record<Tier, string> | null }; registered?: { id: string; label: string }[] }) {
   const [r, setR] = useState<Routing>(initial);
   const [acts, setActs] = useState(activitiesText(initial.activities));
   const { busy, msg, send } = useSend();
   const setProvider = (p: Provider, f: (x: Routing["providers"][Provider]) => Routing["providers"][Provider]) => setR({ ...r, providers: { ...r.providers, [p]: f(r.providers[p]) } });
   const setOrder = (t: Tier, i: number, p: string) => {
-    const next = [...r.tiers[t]]; if (p) next[i] = p as Provider; else next.splice(i, 1);
+    const next = [...r.tiers[t]]; if (p) next[i] = p; else next.splice(i, 1);
     setR({ ...r, tiers: { ...r.tiers, [t]: [...new Set(next.filter(Boolean))] } });
   };
   return (
@@ -77,6 +77,7 @@ export function ModelRoutingEditor({ initial, keyed, primary }: { initial: Routi
                 <select key={i} aria-label={`${t.label} choice ${i + 1}`} className={input} value={r.tiers[t.code][i] ?? ""} onChange={e => setOrder(t.code, i, e.target.value)}>
                   <option value="">{i === 0 ? "No primary" : "No alternative"}</option>
                   {PROVIDERS.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
+                  {registered.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
               ))}
             </li>

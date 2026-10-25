@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { currentTraceId } from "@/lib/trace";
 import { wceMissing } from "@/lib/config/workspace-config-write";
-import { changeRate, createBudget, publishPolicies, RATE_KINDS, saveBudgetPolicyDraft, saveModelRoutingDraft, savePolicyDraft, saveRoutingDraft, setBudgetStatus, type RateKind } from "@/lib/ai/fair-use-admin";
+import { attestProvider, changeRate, createBudget, publishPolicies, RATE_KINDS, runProviderChecks, saveBudgetPolicyDraft, saveModelRoutingDraft, savePolicyDraft, saveProviderRegistration, saveRoutingDraft, setBudgetStatus, setProviderStatus, type RateKind } from "@/lib/ai/fair-use-admin";
 import { BUDGET_CODE } from "@/lib/ai/consumption";
 import { AI_PRODUCTS, type AiProduct } from "@/lib/ai/fair-use-policy";
 
@@ -14,7 +14,9 @@ export const dynamic = "force-dynamic";
 // Body: { action: "rate", kind: "price" | "fx" | "basis" | "eligibility", ...fields } | { action: "policy", product, settings } |
 //       { action: "publish", note? } | { action: "budget_create", code, ownerType, product, label, institutionRef?, fundingRef? } |
 //       { action: "budget_status", budgetId, status } | { action: "budget_policy", code, settings } | { action: "routing", settings } |
-//       { action: "model_routing", settings }   (providers, models, primary and alternatives: never a credential)
+//       { action: "model_routing", settings }   (providers, models, primary and alternatives: never a credential) |
+//       { action: "provider_save", provider } | { action: "provider_check", id } | { action: "provider_attest", id, kind, ... } |
+//       { action: "provider_status", id, status }   (registration: provider-registry.ts. A key is never sent or returned.)
 //
 // ⚠ GATED BY hqApiGate(["hq.platform.ai.manage"]) (migration 410, the Platform Director). Rates are append-only
 // history (the 410 guard). Policies go through the CONFIG-002 engine, clamped by the same resolvePolicy the engine
@@ -81,6 +83,31 @@ export async function POST(req: Request) {
       if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
       const r = await saveModelRoutingDraft(ctx.admin, actor, body.settings ?? {});
       if (r.ok) await audit("ai_model_routing_draft", { providers: Object.keys(body.settings?.providers ?? {}) });
+      return r.ok ? NextResponse.json({ ok: true }) : refuse(r.status, r.error);
+    }
+    // ── Provider registration (owner NO-CODE AI PROVIDER EXTENSIBILITY). Each act is audited, none carries a key. ──
+    case "provider_save": {
+      if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
+      const r = await saveProviderRegistration(ctx.admin, actor, body.provider ?? {});
+      if (r.ok) await audit("ai_provider_registered", { id: body.provider?.id, endpoint: body.provider?.endpoint, protocol: body.provider?.protocol });
+      return r.ok ? NextResponse.json({ ok: true }) : refuse(r.status, r.error);
+    }
+    case "provider_check": {
+      const r = await runProviderChecks(ctx.admin, { ...actor, userId: ctx.userId }, String(body.id ?? ""));
+      if (r.ok) await audit("ai_provider_checked", { id: body.id, detail: r.detail ?? null });
+      return r.ok ? NextResponse.json({ ok: true, detail: r.detail }) : refuse(r.status, r.error);
+    }
+    case "provider_attest": {
+      const kind = body.kind === "security" ? "security" : body.kind === "privacy" ? "privacy" : null;
+      if (!kind) return refuse(400, "Say which check: privacy or security.");
+      const r = await attestProvider(ctx.admin, { ...actor, userId: ctx.userId }, String(body.id ?? ""), kind, body);
+      if (r.ok) await audit("ai_provider_attested", { id: body.id, kind });
+      return r.ok ? NextResponse.json({ ok: true }) : refuse(r.status, r.error);
+    }
+    case "provider_status": {
+      const status = body.status === "active" ? "active" : "inactive";
+      const r = await setProviderStatus(ctx.admin, actor, String(body.id ?? ""), status);
+      if (r.ok) await audit(status === "active" ? "ai_provider_activated" : "ai_provider_deactivated", { id: body.id });
       return r.ok ? NextResponse.json({ ok: true }) : refuse(r.status, r.error);
     }
     default:
