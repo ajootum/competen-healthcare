@@ -54,7 +54,7 @@ It names no other stage's table. RLS is own-row SELECT only. The append-only fun
 ## Known limits
 
 - **PDF text encoding.** The standard PDF fonts encode Windows-1252 only. A character outside it prints "?" in the PDF; the DOCX keeps it, and the preview warns before export. Follow-up: embed a Unicode font.
-- **Passport launch.** The Studio accepts `origin=passport` (and only the person's own link). At Stage 7's request, the "Create a document" link on the Passport page and pre-selection through `loadPassportSelection` / `loadPassportItems` are added after #130 merges.
+- **Passport launch.** The Passport page's Sharing section links to the Studio (agreed with Stage 7). A draft made from one of the person's own links starts with that link's chosen records, read once through Stage 7's `loadPassportSelection`, and is stored as the Studio's own id-based keys: no Passport item key is stored, and anything that cannot be matched is reported, not guessed (`document-passport.ts`). Record-level picking switches to Stage 7's `loadPassportItems` when its follow-up lands.
 
 ## Merge order
 

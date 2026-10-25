@@ -6,6 +6,7 @@ import { loadDocumentsConfig, templatesFor } from "@/lib/individual/documents-co
 import { emptyDraft, parseDraft } from "@/lib/individual/documents/model";
 import { loadDocumentCatalogue } from "@/lib/individual/professional/document-sources";
 import { createDocument, deleteDocument, documentOf, updateDocument } from "@/lib/individual/professional/document-store";
+import { draftFromPassport } from "@/lib/individual/professional/document-passport";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -52,10 +53,18 @@ export async function POST(req: Request) {
     }
   }
   const title = typeof fields.title === "string" && fields.title.trim() ? fields.title.trim().slice(0, 200) : type.label;
-  const made = await createDocument(ctx.admin, ctx.userId, { docType: type.code, title, templateCode: template.code, templateVersion: template.version, content: emptyDraft(type), origin, passportShareTokenId: token });
+  // From a Passport link (Stage 7): its selected records, read once through loadPassportSelection, become the draft's own
+  // record keys. The link was checked above to be the caller's own.
+  let content = emptyDraft(type), placed = 0, unmatched: string[] = [];
+  if (token) {
+    const catalogue = await loadDocumentCatalogue(ctx.admin, ctx.userId, ctx.profile, todayUtc());
+    const fromLink = await draftFromPassport(ctx.admin, ctx.userId, token, type, catalogue.records, todayUtc());
+    ({ content, placed, unmatched } = fromLink);
+  }
+  const made = await createDocument(ctx.admin, ctx.userId, { docType: type.code, title, templateCode: template.code, templateVersion: template.version, content, origin, passportShareTokenId: token });
   if (!made.ok) return refuse(made.error, made.status);
-  await audit(ctx, "individual_professional_document_create", "individual_professional_document", made.id, { doc_type: type.code, template: template.code, origin });
-  return NextResponse.json({ ok: true, id: made.id }, { status: 201 });
+  await audit(ctx, "individual_professional_document_create", "individual_professional_document", made.id, { doc_type: type.code, template: template.code, origin, from_link: placed, not_placed: unmatched.length });
+  return NextResponse.json({ ok: true, id: made.id, fromLink: token ? { placed, notPlaced: unmatched } : null }, { status: 201 });
 }
 
 export async function PATCH(req: Request) {

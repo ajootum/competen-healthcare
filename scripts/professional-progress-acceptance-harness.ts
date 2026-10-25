@@ -48,6 +48,7 @@ import { pdfSafe, renderPdf } from "../src/lib/individual/documents/pdf";
 import { loadDocumentCatalogue } from "../src/lib/individual/professional/document-sources";
 import { composeDocument } from "../src/lib/individual/professional/document-compose";
 import { createDocument, documentOf, loadDocuments, recordExport, updateDocument } from "../src/lib/individual/professional/document-store";
+import { draftFromPassport } from "../src/lib/individual/professional/document-passport";
 
 loadEnvConfig(process.cwd());
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -186,7 +187,9 @@ async function main() {
     const row = cp.tree.flatMap(n => n.rows).find(r => r.entryId === entryId);
     ok("4. competency development, Domain then CPU then competency", !c || (!!row && cp.tree.some(n => n.rows.includes(row!))), row ? `${cp.tree.find(n => n.rows.includes(row))?.domain} > ${row.name}` : "no catalogue offered");
     let standIn = false;
-    if (c && !p1.input.verification.available) {
+    // The Studio reads decisions only. Making a real C5 decision needs an appointed assessor (not Stage 8's), so this display check
+    // registers an in-process stand-in through Stage 5's adapter, scoped to this person, whether or not C5 is wired here.
+    if (c) {
       standIn = true;
       registerVerificationStudio({
         listVerifications: async (_a: unknown, uid: string) => uid !== me ? { provisioned: true, items: [] } : ({ provisioned: true, items: [{ requestId: "00000000-0000-4000-8000-0000000008c5", status: "decided", method: "Direct observation", requestedAt: today, evidence: [],
@@ -198,7 +201,7 @@ async function main() {
     const p5 = await loadProgressInput(admin, me, today);
     const row5 = competencyProgress(p5.input, p5.extra).tree.flatMap(n => n.rows).find(r => r.entryId === entryId);
     ok("5. self-assessment and independent verification are separate columns", !c || (!!row5 && !!row5.selfAssessed && /self-reported/.test(row5.selfAssessed) && !!row5.independent && row5.selfAssessed === row?.selfAssessed),
-      `${standIn ? "stand-in Studio" : "C5 on staging"}; self ${row5?.selfAssessed ?? "-"}; independent ${row5?.independent ?? "-"}`);
+      `${standIn ? `in-process stand-in Studio (C5 wired here: ${p1.input.verification.available})` : "no catalogue"}; self ${row5?.selfAssessed ?? "-"}; independent ${row5?.independent ?? "-"}`);
     ok("6. Stage 6 evaluation history appears in the timeline", ev3.some(e => e.kind === "evaluation"));
     const step7 = steps.find(s => s.rule === "credential_expiry") ?? steps[0];
     const d7 = await decideStep(admin, me, step7.key, "dismissed", null);
@@ -269,10 +272,17 @@ async function main() {
     ok("25. provenance and status wording stay accurate", regEntry.status === DEFAULT_LABELS.self_declared && cpdEntry.status === DEFAULT_LABELS.document_supported
       && !c18.model.sections.flatMap(s => s.entries).some(e => e.status.includes(DEFAULT_LABELS.independent)), `${regEntry.status}; ${cpdEntry.status}`);
     ok("26. export works with AI off", (await loadIndividualPolicy(admin)).professionalDocuments.ai === "off" && e19.ok && e20.ok);
-    const link = await mintShare(admin, me, parseShare({ scope: "full", days: "7" }), { overview: false, itemIds: [] }, []);
-    const pDoc = link ? await createDocument(admin, me, { docType: "passport-export", title: "Passport export", templateCode: "competen-passport", templateVersion: 1, content: emptyDraft(cfg.types.find(t => t.code === "passport-export")!), origin: "passport", passportShareTokenId: link.id }) : null;
+    // A Stage 7 link carrying ONE chosen CPD record (and not the other): the draft starts with exactly that record.
+    const link = await mintShare(admin, me, parseShare({ scope: "full", days: "7" }), { overview: false, itemIds: [] }, [], [],
+      { purposeCode: null, purposeLabel: "Job application", recipientLabel: null, summary: "Chosen for a cardiac role.", includeInstitution: false, records: [{ kind: "cpd", id: cpd1 }] });
+    const pType = cfg.types.find(t => t.code === "passport-export")!;
+    const fromLink = link ? await draftFromPassport(admin, me, link.id, pType, catalogue.records, today) : null;
+    const pDoc = link && fromLink ? await createDocument(admin, me, { docType: pType.code, title: "Passport export", templateCode: "competen-passport", templateVersion: 1, content: fromLink.content, origin: "passport", passportShareTokenId: link.id }) : null;
+    const placedKeys = fromLink?.content.sections.flatMap(s => s.records.map(r => r.key)) ?? [];
     const theirs = (await admin.from("individual_professional_share").select("share_token_id").eq("share_token_id", link?.id).eq("user_id", other).maybeSingle()).data;
-    ok("27. the same Studio opens from the Passport, on the person's own link only", !!pDoc?.ok && (await documentOf(admin, me, pDoc!.id!))?.origin === "passport" && !theirs);
+    ok("27. the same Studio opens from the Passport: the link's chosen records (read through Stage 7) start the draft, on the person's own link only",
+      !!pDoc?.ok && (await documentOf(admin, me, pDoc!.id!))?.origin === "passport" && placedKeys.includes(`cpd:${cpd1}`) && !placedKeys.includes(`cpd:${cpd2}`)
+      && fromLink!.content.summary === "Chosen for a cardiac role." && !theirs, `placed ${placedKeys.join(" ")}; not placed ${fromLink?.unmatched.join(", ") || "none"}`);
     const otherSees = await documentOf(admin, other, docId);
     const otherExport = await recordExport(admin, other, { documentId: docId, format: "pdf", templateCode: c18.template.code, templateVersion: c18.template.version, contentHash: c18.hash, byteSize: 10, recordCount: 1 });
     const otherCat = await loadDocumentCatalogue(admin, other, { fullName: "Other", email: OTHER }, today);

@@ -8,6 +8,7 @@ import { pdfUnencodable } from "@/lib/individual/documents/pdf";
 import { statusText } from "@/lib/individual/documents/model";
 import { loadDocuments, documentOf } from "@/lib/individual/professional/document-store";
 import { composeDocument } from "@/lib/individual/professional/document-compose";
+import { listShares } from "@/lib/individual/professional/share";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing, primaryBtn, secondaryBtn } from "../../../../../_components/chrome";
 import { ApiButton, ApiForm, Field, inputCls } from "../../../../../_components/professional/forms";
@@ -43,6 +44,8 @@ export default async function DocumentStudioPage({ params, searchParams }: { par
   const docId = one(sp.doc);
   const doc = docId ? await documentOf(ctx.admin, ctx.userId, docId) : null;
   const fromPassport = one(sp.origin) === "passport";
+  // The person's own live links only: the create route checks the chosen one is theirs again.
+  const links = fromPassport ? ((await listShares(ctx.admin, ctx.userId)) ?? []).filter(l => !l.revoked && (!l.expires_at || l.expires_at > new Date().toISOString())) : [];
 
   return (
     <>
@@ -64,7 +67,14 @@ export default async function DocumentStudioPage({ params, searchParams }: { par
         <Section id="new-h" title="Create a document" note={fromPassport ? "Started from your Passport: choose the Competen Passport Export, or any other type." : "Choose a type and a template. You choose every record that goes in."}>
           <ApiForm action="/api/individual/professional/document-drafts" submitLabel="Create draft" accent={x.accent} savedText="Draft created. Open it below.">
             {fromPassport && <input type="hidden" name="origin" value="passport" />}
-            {fromPassport && one(sp.passport) && <input type="hidden" name="passportShareTokenId" value={one(sp.passport)} />}
+            {fromPassport && links.length > 0 && (
+              <Field label="Start from one of your Passport links (optional)" htmlFor="doc-link" hint="Its chosen records are placed in the draft for you. You can change anything before you export.">
+                <select id="doc-link" name="passportShareTokenId" className={inputCls} defaultValue={one(sp.passport) ?? ""}>
+                  <option value="">No link: choose records myself</option>
+                  {links.map(l => <option key={l.id} value={l.id}>{l.label ?? "Passport link"}, made {fmtDate(l.created_at)}</option>)}
+                </select>
+              </Field>
+            )}
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Document type" htmlFor="doc-type">
                 <select id="doc-type" name="docType" required className={inputCls} defaultValue={fromPassport ? "passport-export" : cfg.types[0]?.code}>
