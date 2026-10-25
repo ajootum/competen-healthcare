@@ -78,6 +78,11 @@ const INCLUDED = [
   // nothing un-askable configurable, trigger-only history, guarded handlers, allowlisted suggestions, policy-gated AI
   // grounding, fail-open to the MVP without 450, and part B (451-453: appointed independent verifier, request first, policy reminders, opt-in sharing). 35 planted-failure controls. Reads files only.
   "professional-profile-harness.ts",
+  // COMPETEN-PROFESSIONAL-NEEDS-01 Stage 2 (source and migration 470): own-row RLS, no deficiency or scope column, stage
+  // and status in step, trigger-written append-only history, unlink-once competency links, only the title required,
+  // free stages, private reflections, suggestions only on acceptance, offered competencies only, catalogue-only learning,
+  // MVP path kept. 18 planted-failure controls. Reads files only: no client, no network.
+  "professional-needs-harness.ts",
   // HQ-USERS-A: the /api/super-admin/users handlers are gated by the HQ gate (view) and the owner gate (writes),
   // never by profiles.role, with 8 planted-failure controls. Reads files only: no client, no network, no .env.local.
   "hq-users-authority-harness.ts",

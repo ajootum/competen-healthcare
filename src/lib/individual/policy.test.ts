@@ -8,6 +8,7 @@ import { MAX_MATERIALS_PER_PERSON, QUESTIONS_PER_REQUEST, INSIGHT_MIN_ANSWERS, I
 import { STUDY_ACHIEVEMENT_KINDS } from "./scholar/passport-items";
 import { INDIVIDUAL_APP_FLAG } from "./gate";
 import { COUNTRIES } from "../countries";
+import { DEFAULT_NEED_CATEGORIES, DEFAULT_NEED_MOTIVATIONS, DEFAULT_NEED_PRIORITIES, DEFAULT_REFLECTION_TEMPLATES, NEED_FIELDS, NEED_STAGES, PICKABLE_SOURCES } from "./professional/needs-vocabulary";
 import { DEFAULT_PRACTICE_SETTINGS, DEFAULT_QUALIFICATION_TYPES, DEFAULT_STATUSES, DOCUMENT_KINDS, OPTIONAL_FIELDS, PROFILE_SECTIONS } from "./professional/profile-vocabulary";
 
 // An in-memory stand-in for the three WCE tables, enough for the shared write lifecycle and the reader.
@@ -107,6 +108,13 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
         verificationKinds: ["qualification", "registration", "employment"],
         reminderKinds: ["primary_registration", "credentials", "registration_items", "qualification_items"],
         reminderOffsets: [60], reminderStandings: ["active", "provisional"], shareSections: [...PROFILE_SECTIONS],
+      },
+      // COMPETEN-PROFESSIONAL-NEEDS-01: neutral defaults, every optional field and stage offered, reopening allowed,
+      // competency links from the offered catalogues, suggestions, learning and reflection AI on, review after 90 days.
+      professionalNeeds: {
+        categories: [...DEFAULT_NEED_CATEGORIES], motivations: [...DEFAULT_NEED_MOTIVATIONS], priorities: [...DEFAULT_NEED_PRIORITIES], templates: [...DEFAULT_REFLECTION_TEMPLATES],
+        sources: [...PICKABLE_SOURCES], fields: [...NEED_FIELDS], stages: [...NEED_STAGES], reopen: "on", competencyLinks: "offered",
+        ruleSuggestions: "on", aiSuggestions: "on", learning: "on", reflectionAi: "on", reviewDays: 90,
       },
     });
     expect(DEFAULT_POLICY.professionalProfile.jurisdictions.length).toBe(COUNTRIES.length);
