@@ -42,7 +42,15 @@
 - **Scopes:** all three ended through the Studio route (HTTP 200) and are kept as history.
 - **Gate-1 memberships:** both revoked. No route revokes a membership, so this was a labelled direct update, the reverse of M1.
 - **Sessions:** revoked before the ban. Both identities are banned and kept, and sign-in is refused.
-- **Appointments:** ending one is the owner's control (`/api/hq/appointments` PATCH, owner only). The owner ends both on the board.
+- **Appointments:** ending one is the owner's control (`/api/hq/appointments` PATCH, owner only). Both were ENDED on the staging board through the owner-only "Set status → Ended" control, by the coordinator at the owner's instruction. Both are now `removed`.
+- **Final check, read-only:**
+  - both appointments `removed`;
+  - both memberships `revoked`;
+  - both identities banned to 2126-10-01;
+  - 0 live scopes;
+  - `individual_holds_capability` is false for both rights, for both identities.
+- **Board observation, a follow-up and not acted on:** the board wrote `term_end` = 2026-10-24 21:00 UTC, which is earlier than the appointments' start on 25 Oct. That looks like a date-only end stored as local midnight. The status is what governs, so authority is unaffected.
+- **Staging dev server:** stopped after the run.
 
 ## Rows created (all kept as the record)
 
@@ -50,9 +58,9 @@
 |---|---|
 | profiles / auth.users | 2 (above) |
 | platform_membership | 2, revoked (b537855e, 63105027) |
-| ogs_office_appointments | 2 (45136bde, 836c73f2), ended by the owner |
+| ogs_office_appointments | 2 (45136bde, 836c73f2), ended (`removed`) on the owner's board control |
 | competency_verification_method | 1: `c5_synthetic_ecg_observation` (c0c34dd2) |
-| competency_verification_method_version | 2: v1 e1ff841e retired, v2 d86827b2 published (labelled synthetic, staging only) |
+| competency_verification_method_version | 2: v1 e1ff841e retired, v2 d86827b2 published (labelled synthetic, staging only, left published at the coordinator's instruction unless the owner says otherwise) |
 | competency_assessor_scope | 3 (competency, method, max_level), ended |
 | competency_verification_request | 2. 3c80b70c by the requester: verified at level, then revoked. 52a1c3d9 is the assessor's own self-verification probe: withdrawn. |
 | competency_verification_evidence | 1 (cpd, fa54f2e9) |
