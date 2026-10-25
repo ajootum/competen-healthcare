@@ -5,6 +5,13 @@ import { removeDocument, storeDocument } from "@/lib/individual/professional/doc
 import { ORIGIN } from "@/lib/individual/professional/vocabulary";
 import { audit, readBody, refuse, todayUtc, writeFailed } from "@/lib/individual/professional/api";
 import { DIFFERENT_ACTIVITY_FIELD, duplicateForSave, notifyDuplicate, recordDifferentActivity, refusalBody } from "@/lib/individual/professional/cpd-duplicates";
+import { lcpdSchemaReady, loadLcpdConfig, recordableTypes } from "@/lib/individual/professional/lcpd-config";
+
+/** LCPD-2: the configured types, and with migration 490 only a description and a date required. Before 490, 373's rule. */
+async function cpdRules(admin: unknown) {
+  const [cfg, ready] = await Promise.all([loadLcpdConfig(admin), lcpdSchemaReady(admin)]);
+  return { types: recordableTypes(cfg, ready).map(t => t.code), flexible: ready };
+}
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -28,7 +35,7 @@ export async function POST(req: Request) {
   const ctx = await requireIndividualContext("professional");
   if (isGuardRefusal(ctx)) return ctx;
   const { fields, file } = await readBody(req);
-  const parsed = parseCpd(fields, todayUtc());
+  const parsed = parseCpd(fields, todayUtc(), await cpdRules(ctx.admin));
   if (!parsed.ok) return refuse(parsed.error);
   if (parsed.value.goal_id) {
     const { data: goal } = await ctx.admin.from("individual_professional_goal").select("id").eq("id", parsed.value.goal_id).eq("user_id", ctx.userId).maybeSingle();
@@ -71,7 +78,10 @@ export async function PUT(req: Request) {
   const id = new URL(req.url).searchParams.get("id");
   if (!isUuid(id)) return refuse("Choose a CPD entry.");
   const { fields, file } = await readBody(req);
-  const parsed = parseCpd(fields, todayUtc());
+  const rules = await cpdRules(ctx.admin);
+  // An entry keeps its own type even if the configuration has since stopped offering it.
+  const { data: prior } = await ctx.admin.from("individual_professional_cpd").select("activity_type").eq("id", id).eq("user_id", ctx.userId).maybeSingle();
+  const parsed = parseCpd(fields, todayUtc(), prior?.activity_type ? { ...rules, types: [...rules.types, prior.activity_type] } : rules);
   if (!parsed.ok) return refuse(parsed.error);
   const { data: before } = await ctx.admin.from("individual_professional_cpd").select("id, document_path, title, provider, activity_type, activity_date").eq("id", id).eq("user_id", ctx.userId).maybeSingle();
   if (!before) return refuse("That CPD entry is not on your record.", 404);

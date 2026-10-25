@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { EXPERIENCES } from "@/lib/individual/experiences";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { cpdHoursByYear } from "@/lib/individual/professional/progress";
@@ -9,8 +10,12 @@ import { ApiButton } from "../../../../_components/professional/forms";
 import CpdForm from "../../../../_components/professional/CpdForm";
 import { CpdEdit } from "../../../../_components/professional/edit-forms";
 import CompetencyLinks from "../../../../_components/professional/CompetencyLinks";
+import RequirementPicker from "../../../../_components/professional/RequirementPicker";
 import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
-import { countedOnce, cpdYearsWithLearning, loadProfessionalLearning } from "@/lib/individual/professional/learning";
+import { countedOnce, cpdYearsWithLearning, learningRecordHref, loadProfessionalLearning } from "@/lib/individual/professional/learning";
+import { lcpdSchemaReady, loadLcpdConfig, recordableTypes, REVIEW_LABEL } from "@/lib/individual/professional/lcpd-config";
+import { inEffect, loadCpdHistory, loadCpdSetting, summarise } from "@/lib/individual/professional/cpd-requirements";
+import { myRecords } from "@/lib/learning/record";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import LearningRefs from "../../../../_components/professional/LearningRefs";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
@@ -18,23 +23,23 @@ import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../..
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
 
-// THE PRIVATE CPD LOG -- COMPETEN-IND-007 s4, owner ruling D1.
+// MY LEARNING AND CPD -- COMPETEN-IND-007 s4, owner ruling D1, and COMPETEN-PROFESSIONAL-LCPD-01 LCPD-1 to LCPD-5.
 //
 // ⚠ NOT YOUR EMPLOYER'S CPD LOG. This reads and writes migration 373's individual_professional_cpd, never
 // cpd_logs, which hospital analytics read. The page says so, because a person who also works somewhere on
 // Competen has two logs and must know which one their employer sees.
 //
-// ⚠ HOURS, NOT A TARGET (the src/app/dashboard/cpd header rule). Hours are summed by year. There is no
-// annual target, because no store holds one for an Individual person and their regulator's requirement
-// is not something Competen knows.
+// ⚠ THE ONE RECORD OF WHAT HAPPENED (LCPD-01 shared contract). A CPD entry here is the authoritative record of learning or
+// development that actually happened. A Stage 3 development activity references it and never stores its own hours.
 //
-// ⚠ COMPLETED LEARNING SITS BESIDE, NEVER INSIDE (COMPETEN-LEARNING-01 H1). Courses completed on Competen Learning are
-// read from the learning record by reference (src/lib/individual/professional/learning.ts), counted in the hours as
-// "of which from Competen Learning", and listed read-only. Nothing is copied into this log. Learning off: none of it shows.
-// An entry of the person's own that is the same course is COUNTED ONCE (countedOnce): its hours leave the totals, the
-// entry stays, says so, and offers "This is a different activity". Nothing is deleted.
+// ⚠ LEARNING BY REFERENCE (COMPETEN-LEARNING-01 H1). Courses in progress come from Competen Learning's own myRecords, and
+// completed ones from its loadLearningRecords. Nothing is copied into this log. Learning off: none of it shows, and the page
+// is a complete CPD log without it. An entry of the person's own that is the same course is COUNTED ONCE.
+//
+// ⚠ A REQUIREMENT IS COUNTED AGAINST, NEVER MET. With a configured requirement the person chose (LCPD-5), the page shows
+// what is recorded and what is potentially eligible. Nothing is verified or accepted: Competen has no authorised route.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "CPD log" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Learning & CPD" }); }
 
 export default async function CpdPage({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "cpd");
@@ -42,27 +47,96 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, map, learning, policy] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
+  const [record, map, learning, policy, cfg, ready, setting, history] = await Promise.all([
+    loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId),
+    loadIndividualPolicy(ctx.admin), loadLcpdConfig(ctx.admin), lcpdSchemaReady(ctx.admin), loadCpdSetting(ctx.admin, ctx.userId), loadCpdHistory(ctx.admin, ctx.userId),
+  ]);
+  const inProgress = learning.enabled ? (await myRecords(ctx.admin, ctx.userId))?.filter(r => r.status === "enrolled" || r.status === "in_progress") ?? null : [];
   const cpd = record.cpd;
   const once = cpd ? countedOnce(cpd, learning, policy.professionalLearningMatchDays) : null;
   const years = cpd && once ? cpdYearsWithLearning(cpdHoursByYear(once.counted), learning.refs ?? []) : null;
   const goalTitle = new Map((record.goals ?? []).map(g => [g.id, g.title]));
   const liveGoals = (record.goals ?? []).filter(g => g.status === "planned" || g.status === "in_progress");
+  const options = { types: recordableTypes(cfg, ready), flexible: ready };
+  const labelOf = (code: string) => cfg.activityTypes.find(t => t.code === code)?.label ?? CPD_ACTIVITY_LABEL[code] ?? code.replace(/_/g, " ");
+  const offered = cfg.requirements.filter(r => inEffect(r, today));
+  const chosen = setting?.setting.requirementCode ? cfg.requirements.find(r => r.code === setting.setting.requirementCode) ?? null : null;
+  const summary = chosen && setting?.setting.cycleStart && once ? summarise(chosen, setting.setting.cycleStart, once.counted, learning.refs ?? [], today) : null;
+  const timeline = [
+    ...(cpd ?? []).map(c => ({ key: `c-${c.id}`, date: c.activity_date, title: c.title, kind: labelOf(c.activity_type), source: "Recorded by you" })),
+    ...(learning.refs ?? []).map(r => ({ key: `l-${r.recordId}`, date: r.completedOn, title: r.title, kind: r.outcomeLabel, source: "Competen Learning" })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <>
-      <PageHeader accent={x.accent} eyebrow="Your development" title="CPD log"
-        intro="Your continuing professional development, kept privately by you. This is not an employer's CPD record: no organisation sees it unless you share your Passport." />
+      <PageHeader accent={x.accent} eyebrow="Your development" title="Learning & CPD"
+        intro="Your learning and continuing professional development, kept privately by you, wherever the learning happened. This is not an employer's CPD record: no organisation sees it unless you share your Passport." />
       {!record.provisioned && <NotProvisioned />}
 
-      <Section title="Hours by year" note={`Hours you recorded${learning.enabled ? ", and courses you completed on Competen Learning" : ""}. Competen sets no target. Check your regulator's current requirement yourself.`}>
+      <nav aria-label="On this page" className="mb-5 flex flex-wrap gap-x-4 gap-y-1 text-[13px] font-semibold">
+        {[["#continue-h", "Continue learning"], ["#record-h", "Record CPD"], ["#log-h", "CPD log"], ["#req-h", "CPD requirements"], ["#history-h", "Learning history"]].map(([h, l]) => (
+          <a key={h} href={h} className={`underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>{l}</a>
+        ))}
+        {learning.enabled && <Link href="/individual/learning" className={`underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Explore courses</Link>}
+        <a href="/api/individual/professional/cpd/export" className={`underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Export my CPD (CSV)</a>
+      </nav>
+
+      {learning.enabled && (
+        <Section id="continue-h" title="Continue learning" note="Courses you started on Competen Learning. Your progress stays there.">
+          {inProgress === null ? <Unreadable what="learning in progress" /> : inProgress.length === 0 ? (
+            <Empty>No course in progress. <Link href="/individual/learning" className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Explore courses</Link>, or record learning from anywhere below.</Empty>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {inProgress.map(r => (
+                <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2.5">
+                  <p className="text-[14px] font-semibold text-gray-900">{r.title} <span className="font-normal text-gray-500">· version {r.versionNo} · enrolled {fmtDate(r.enrolledAt)}{!r.accessLive ? " · your access has ended" : ""}</span></p>
+                  <a href={learningRecordHref(r.id)} className={`text-[13px] font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Continue</a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      )}
+
+      <Section id="req-h" title="CPD requirements" note="A requirement is what an administrator recorded from a named source. Competen does not decide what your body accepts.">
+        {setting === null ? <Unreadable what="CPD requirement" /> : !setting.available ? <Empty>CPD requirements are not available on this environment yet.</Empty>
+          : offered.length === 0 && !chosen ? <Empty>No CPD requirement is configured yet. Your CPD log is complete without one.</Empty> : (
+            <>
+              {summary && chosen && (
+                <div className="mb-4 rounded-xl border border-gray-200 p-4">
+                  <p className="text-[14.5px] font-semibold text-gray-900">{chosen.label} <span className="font-normal text-gray-600">· {chosen.body}, {chosen.jurisdiction} · version {chosen.version}</span></p>
+                  <p className="text-[12.5px] text-amber-900">{REVIEW_LABEL[chosen.reviewStatus]}{chosen.reviewedOn ? ` (${fmtDate(chosen.reviewedOn)})` : ""}. Source: {chosen.source.title}{chosen.source.reference ? `, ${chosen.source.reference}` : ""}{chosen.source.url && <> · <a href={chosen.source.url} target="_blank" rel="noopener noreferrer" className={`underline underline-offset-2 ${focusRing}`}>open the source</a></>}</p>
+                  <p className="mt-1 text-[12.5px] text-gray-600">Cycle {fmtDate(summary.cycle.start)} to {fmtDate(summary.cycle.end)}{summary.cycle.current ? "" : " (not the current cycle)"}.</p>
+                  <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-lg bg-gray-50 p-3"><dt className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-500">Recorded</dt>
+                      <dd className="text-[14px] text-gray-900">{summary.recorded.hours} hours{summary.recorded.credits ? `, ${summary.recorded.credits} credits` : ""} in {summary.recorded.entries} {summary.recorded.entries === 1 ? "activity" : "activities"}{summary.recorded.withoutHours ? ` (${summary.recorded.withoutHours} with no hours recorded)` : ""}</dd></div>
+                    <div className="rounded-lg bg-gray-50 p-3"><dt className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-500">Potentially eligible</dt>
+                      <dd className="text-[14px] text-gray-900">{summary.eligible.hours}{summary.requiredHours != null ? ` of ${summary.requiredHours}` : ""} hours{summary.requiredCredits != null ? `, ${summary.eligible.credits} of ${summary.requiredCredits} credits` : ""}</dd></div>
+                    <div className="rounded-lg bg-gray-50 p-3"><dt className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-500">Verified or accepted</dt>
+                      <dd className="text-[13px] text-gray-700">Not verified. {summary.verifiedReason}</dd></div>
+                  </dl>
+                  {summary.mandatory.length > 0 && (
+                    <ul className="mt-3 space-y-0.5 text-[12.5px] text-gray-700">{summary.mandatory.map(m => <li key={m.label}>{m.label}: {m.eligibleHours} of {m.minHours} hours recorded</li>)}</ul>
+                  )}
+                  {chosen.evidence && <p className="mt-2 text-[12.5px] text-gray-600">Evidence this requirement expects: {chosen.evidence}</p>}
+                </div>
+              )}
+              {record.provisioned && (
+                <RequirementPicker today={today} accent={x.accent} current={setting.setting.requirementCode} cycleStart={setting.setting.cycleStart}
+                  options={offered.map(r => ({ code: r.code, label: `${r.label} (${r.body}, ${r.jurisdiction})`, detail: `${REVIEW_LABEL[r.reviewStatus]}. Source: ${r.source.title}. Cycle of ${r.cycleMonths} months${r.requiredHours != null ? `, ${r.requiredHours} hours` : ""}${r.requiredCredits != null ? `, ${r.requiredCredits} credits` : ""}.` }))} />
+              )}
+            </>
+          )}
+      </Section>
+
+      <Section title="Hours by year" note={`Hours you recorded${learning.enabled ? ", and courses you completed on Competen Learning" : ""}. Competen sets no target.`}>
         {years === null ? <Unreadable what="CPD log" /> : years.length === 0 ? <Empty>No CPD recorded yet.</Empty> : (
           <ul className="grid gap-3 sm:grid-cols-3">
             {years.map(y => (
               <li key={y.year} className="rounded-xl border border-gray-200 p-4">
                 <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">{y.year}</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{y.hours} <span className="text-[14px] font-semibold text-gray-600">{y.hours === 1 ? "hour" : "hours"}</span></p>
-                <p className="text-[12.5px] text-gray-600">{y.entries} {y.entries === 1 ? "entry" : "entries"} · {y.withDocument} with a document</p>
+                <p className="text-[12.5px] text-gray-600">{y.entries} {y.entries === 1 ? "entry" : "entries"} · {y.withDocument} with a document{y.withoutHours ? ` · ${y.withoutHours} with no hours recorded` : ""}</p>
                 {y.learningEntries > 0 && (
                   <p className="text-[12.5px] text-gray-600">
                     of which {y.fromLearning} {y.fromLearning === 1 ? "hour" : "hours"} from Competen Learning
@@ -79,59 +153,81 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
       </Section>
 
       {cpd !== null && record.provisioned && (
-        <Section title="Add an activity">
-          <CpdForm accent={x.accent} today={today} goals={liveGoals.map(g => ({ id: g.id, title: g.title }))} />
+        <Section id="record-h" title="Record CPD" note={options.flexible ? "From anywhere: a course, conference, workplace learning, teaching, mentorship, research, quality improvement or study. Only what you did and when are required." : "From anywhere: a course, conference, teaching, research or study."}>
+          <CpdForm accent={x.accent} today={today} goals={liveGoals.map(g => ({ id: g.id, title: g.title }))} options={options} />
         </Section>
       )}
 
-      <Section title="Your activities" note="Each entry says whether a document is attached. Neither kind is verified by anyone.">
+      <Section id="log-h" title="CPD log" note="Each entry says whether a document is attached. Neither kind is verified by anyone. Corrections keep the earlier version.">
         {cpd === null ? <Unreadable what="CPD log" /> : cpd.length === 0 ? <Empty>Your activities will appear here.</Empty> : (
           <ul className="divide-y divide-gray-100">
-            {cpd.map(c => (
-              <li key={c.id} className="py-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[14.5px] font-semibold text-gray-900">{c.title}</p>
-                    <p className="text-[12.5px] text-gray-500">
-                      {CPD_ACTIVITY_LABEL[c.activity_type] ?? c.activity_type} · {fmtDate(c.activity_date)} · {c.hours} {c.hours === 1 ? "hour" : "hours"}
-                      {c.cpd_points !== null ? ` · ${c.cpd_points} points` : ""}{c.provider ? ` · ${c.provider}` : ""}
-                      {c.goal_id && goalTitle.get(c.goal_id) ? ` · goal: ${goalTitle.get(c.goal_id)}` : ""}
-                    </p>
+            {cpd.map(c => {
+              const earlier = history?.get(c.id) ?? [];
+              return (
+                <li key={c.id} className="py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[14.5px] font-semibold text-gray-900">{c.title}</p>
+                      <p className="text-[12.5px] text-gray-500">
+                        {labelOf(c.activity_type)} · {fmtDate(c.activity_date)} · {c.hours == null ? "no hours recorded" : `${c.hours} ${c.hours === 1 ? "hour" : "hours"}`}
+                        {c.cpd_points !== null ? ` · ${c.cpd_points} credits` : ""}{c.provider ? ` · ${c.provider}` : ""}
+                        {c.goal_id && goalTitle.get(c.goal_id) ? ` · goal: ${goalTitle.get(c.goal_id)}` : ""}
+                        {c.created_at && c.created_at.slice(0, 10) !== c.activity_date ? ` · recorded ${fmtDate(c.created_at)}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ClassLabel value={c.evidence_class} />
+                      {c.document_name && (
+                        <a href={`/api/individual/professional/documents?type=cpd&id=${c.id}`} target="_blank" rel="noopener noreferrer"
+                          className={`text-[12.5px] font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>
+                          Open {c.document_name}
+                        </a>
+                      )}
+                      <ApiButton action={`/api/individual/professional/cpd?id=${c.id}`} method="DELETE" label="Remove" confirm="Remove this CPD entry and its document?" />
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <ClassLabel value={c.evidence_class} />
-                    {c.document_name && (
-                      <a href={`/api/individual/professional/documents?type=cpd&id=${c.id}`} target="_blank" rel="noopener noreferrer"
-                        className={`text-[12.5px] font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>
-                        Open {c.document_name}
-                      </a>
-                    )}
-                    <ApiButton action={`/api/individual/professional/cpd?id=${c.id}`} method="DELETE" label="Remove" confirm="Remove this CPD entry and its document?" />
-                  </div>
-                </div>
-                {once?.matches.get(c.id) && (() => { const m = once.matches.get(c.id)!; return (
-                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[12.5px] text-slate-800">
-                    <span><span className="font-semibold">Counted once: matched to your Competen Learning record</span> ({m.title}, {fmtDate(m.completedOn)}). Its hours are counted from that record, not twice. This entry is kept as you wrote it.</span>
-                    <ApiButton action="/api/individual/professional/cpd/learning-match" method="PATCH" body={{ cpdId: c.id, recordId: m.recordId }} label="This is a different activity" />
-                  </div>
-                ); })()}
-                {c.reflection && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-[13.5px] leading-relaxed text-gray-700">{c.reflection}</p>}
-                <CpdEdit c={c} goals={(record.goals ?? []).map(g => ({ id: g.id, title: g.title }))} today={today} accent={x.accent} />
-                {map.mappings === null ? <p className="mt-2 text-[12.5px] text-gray-600">Competency links could not be read just now.</p> : map.provisioned && (
-                  <CompetencyLinks kind="cpd" subjectId={c.id} links={linksFor(map, "cpd", c.id)} offered={map.offered} accent={x.accent} idPrefix={`cpd-${c.id}`} />
-                )}
-              </li>
-            ))}
+                  {once?.matches.get(c.id) && (() => { const m = once.matches.get(c.id)!; return (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[12.5px] text-slate-800">
+                      <span><span className="font-semibold">Counted once: matched to your Competen Learning record</span> ({m.title}, {fmtDate(m.completedOn)}). Its hours are counted from that record, not twice. This entry is kept as you wrote it.</span>
+                      <ApiButton action="/api/individual/professional/cpd/learning-match" method="PATCH" body={{ cpdId: c.id, recordId: m.recordId }} label="This is a different activity" />
+                    </div>
+                  ); })()}
+                  {c.reflection && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-[13.5px] leading-relaxed text-gray-700">{c.reflection}</p>}
+                  {earlier.length > 0 && (
+                    <details className="mt-1"><summary className="cursor-pointer text-[12.5px] text-gray-600">Corrected {earlier.length} {earlier.length === 1 ? "time" : "times"}: earlier versions</summary>
+                      <ul className="mt-1 space-y-0.5 text-[12.5px] text-gray-600">{earlier.map((h, i) => <li key={i}>Until {fmtDate(h.corrected_at)}: {h.title} · {fmtDate(h.activity_date)} · {h.hours == null ? "no hours" : `${h.hours} hours`}</li>)}</ul>
+                    </details>
+                  )}
+                  <CpdEdit c={c} goals={(record.goals ?? []).map(g => ({ id: g.id, title: g.title }))} today={today} accent={x.accent} options={options} />
+                  {map.mappings === null ? <p className="mt-2 text-[12.5px] text-gray-600">Competency links could not be read just now.</p> : map.provisioned && (
+                    <CompetencyLinks kind="cpd" subjectId={c.id} links={linksFor(map, "cpd", c.id)} offered={map.offered} accent={x.accent} idPrefix={`cpd-${c.id}`} />
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Section>
 
       {learning.enabled && (
-        <Section title="From Competen Learning" note="Courses you completed, read from your learning record. They are not copied into this log and cannot be edited here. A course already here is not added to your log again. If you logged one before it arrived here, it is counted once and marked on your entry.">
+        <Section title="Completed on Competen Learning" note="Courses you completed, read from your learning record. They are not copied into this log and cannot be edited here. A course already here is not added to your log again. If you logged one before it arrived here, it is counted once and marked on your entry.">
           {learning.refs === null ? <Unreadable what="learning record" /> : learning.refs.length === 0 ? <Empty>No completed Competen Learning courses. Your own entries above are a complete CPD log without them.</Empty>
-            : <LearningRefs refs={learning.refs} accent={x.accent} />}
+            : <LearningRefs refs={learning.refs} accent={x.accent} competencies certificates />}
         </Section>
       )}
+
+      <Section id="history-h" title="Learning history" note="Everything you learned, newest first, wherever it happened. It stays with you across jobs, professions and countries, and after any course access ends.">
+        {cpd === null ? <Unreadable what="learning history" /> : timeline.length === 0 ? <Empty>Your learning history will appear here.</Empty> : (
+          <ol className="divide-y divide-gray-100">
+            {timeline.slice(0, 200).map(t => (
+              <li key={t.key} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
+                <p className="text-[13.5px] text-gray-900"><span className="font-semibold">{t.title}</span> <span className="text-gray-500">· {t.kind}</span></p>
+                <p className="text-[12.5px] text-gray-600">{fmtDate(t.date)} · {t.source}</p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </Section>
     </>
   );
 }

@@ -32,7 +32,8 @@ export type Goal = {
 
 export type CpdEntry = {
   id: string; goal_id: string | null; activity_type: string; title: string; provider: string | null;
-  hours: number; cpd_points: number | null; activity_date: string; reflection: string | null;
+  /** null: none recorded (490, LCPD-2). Never shown as 0. */
+  hours: number | null; cpd_points: number | null; activity_date: string; reflection: string | null;
   document_name: string | null; evidence_class: string; created_at: string;
 };
 
@@ -82,7 +83,7 @@ export async function loadProfessionalRecord(admin: any, userId: string): Promis
     provisioned,
     profile: profileRows === null ? null : (profileRows[0] ?? undefined),
     needs, goals,
-    cpd: cpd === null ? null : cpd.map(c => ({ ...c, hours: Number(c.hours) })),
+    cpd: cpd === null ? null : cpd.map(c => ({ ...c, hours: c.hours == null ? null : Number(c.hours), cpd_points: c.cpd_points == null ? null : Number(c.cpd_points) })),
     evidence,
   };
 }
