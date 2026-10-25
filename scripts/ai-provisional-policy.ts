@@ -34,11 +34,14 @@ export const PROVISIONAL_ACTIVITIES: Record<"scholar" | "professional", Record<s
     clarify: a("Clarify an existing explanation", "cheap", "cheap", 600, "standard_educational", true),
     tutor_continue: a("Finish an interrupted tutoring session", "reasoning", "cheap", 900, "standard_educational", true),
     map: a("Competency mapping", "reasoning", "cheap", 2000, "standard_educational"),
-    questions: a("Practice questions", "reasoning", "reasoning", 2000, "clinical_educational"),
-    case_steps: a("Clinical cases", "reasoning", "reasoning", 2500, "high_risk_clinical"),
+    // Owner 25 October 2026: "Do not approve Sonnet 4.6 for clinical activities" and Opus for clinical work within its
+    // evaluated eligibility. These three route to heavy (Opus 4.8). They stay OFF until their eligibility is recorded:
+    // ai_reserve refuses a model with no eligibility row for the activity and tier (412), whatever the routing says.
+    questions: a("Practice questions", "heavy", "heavy", 2000, "clinical_educational"),
+    case_steps: a("Clinical cases", "heavy", "heavy", 2500, "high_risk_clinical"),
     // COMPETEN-SCHOLAR-REVISION-01 (Stage 4): AI marking of short answers. Its output is an AI evaluation, labelled as
     // such -- not deterministic marking, never competence. Never below clinical educational, never on the cheapest tier.
-    evaluate: a("AI evaluation of short answers", "reasoning", "reasoning", 800, "clinical_educational"),
+    evaluate: a("AI evaluation of short answers", "heavy", "heavy", 800, "clinical_educational"),
     // COMPETEN-HOLDINGS-AI-CONSUMPTION-01 s8 (C2): an educator drafts a shared case with AI. Platform-funded
     // (case.educator_develop), never a student's allowance. Clinical content, so never below clinical educational,
     // and every draft goes to independent clinical review before any student sees it. PROPOSED: not yet published.
@@ -54,7 +57,10 @@ export const PROVISIONAL_ACTIVITIES: Record<"scholar" | "professional", Record<s
 export const PROVISIONAL_RISK = {
   // The cheapest model each tier may ever run on. Which models may serve a tier at all is the evaluation decision
   // recorded in ai_model_eligibility (owner D5), never this floor.
-  minTier: { standard_educational: "cheap", clinical_educational: "reasoning", high_risk_clinical: "reasoning" },
+  // Owner 25 October 2026: clinical subjects run on Opus (heavy), never Sonnet. This is what routes a teach or ask
+  // request on a clinical subject to the model whose tutoring eligibility is recorded. Anything above clinical educational
+  // stays refused until an eligibility row covers it.
+  minTier: { standard_educational: "cheap", clinical_educational: "heavy", high_risk_clinical: "heavy" },
   rules: [
     { id: "high.medication", label: "Medicines, dosing and administration", tier: "high_risk_clinical",
       all: [["medication*", "medicine*", "drug*", "dose", "doses", "dosing", "dosage*", "prescri*", "insulin", "anticoagula*", "warfarin", "heparin", "opioid*",

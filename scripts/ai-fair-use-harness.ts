@@ -255,6 +255,31 @@ function checkStandingEligibility(raw: Src, apply: typeof withEligibility): R {
   return { ok: bad.length === 0, detail: bad.join("; ") };
 }
 
+// A17 (owner 25 October 2026): the prepared routing. Above standard educational nothing runs on reasoning (Sonnet,
+// ruled out for clinical work): a clinical teach request, questions, evaluate and case_steps resolve to heavy. With only
+// the tutoring eligibility recorded (Opus, teach and ask, up to clinical educational), the three high-risk activities
+// stay OFF -- routing never opens what eligibility has not.
+function checkHeavyRouting(risk: typeof PROVISIONAL_RISK, acts: typeof PROVISIONAL_ACTIVITIES.scholar): R {
+  const bad: string[] = [];
+  const policy = resolvePolicy("scholar", { includedCau: 10, risk, activities: { teach: acts.teach, ask: acts.ask, questions: acts.questions, evaluate: acts.evaluate, case_steps: acts.case_steps } }, "h");
+  const b = { includedCau: 10, reserveCau: 0, usedCau: 0, reservedCau: 0, reserveUsedCau: 0, reserveReservedCau: 0 };
+  if (activityAt(policy, "full", "teach", b, "clinical_educational").tier !== "heavy") bad.push("a clinical teach request does not route to heavy");
+  if (activityAt(policy, "full", "teach", b, "standard_educational").tier === "heavy") bad.push("a standard teach request was moved to heavy");
+  for (const code of ["questions", "evaluate", "case_steps"]) {
+    const floor = acts[code as keyof typeof acts].riskFloor;
+    const d = activityAt(policy, "full", code, b, floor);
+    if (d.tier !== "heavy") bad.push(`${code} does not route to heavy`);
+    if (activityAt(policy, "optimised", code, b, floor).tier === "reasoning") bad.push(`${code} can fall back to reasoning`);
+  }
+  const tutoring = ["teach", "ask"].map(activity => ({ activity, provider: "anthropic", model_prefix: "claude-opus-4-8", eligible: true, max_risk_tier: "clinical_educational" }));
+  const st: AiStanding = { readable: true, metered: true, level: "full", remaining: { band: "plenty", percent: 100 }, resetsAt: null, message: null,
+    activities: Object.fromEntries(["teach", "ask", "questions", "evaluate", "case_steps"].map(c => [c, { label: c, available: true, via: "included" as const, reason: null }])) };
+  const out = withEligibility(st, policy, b, "anthropic", { cheap: "claude-haiku-4-5", reasoning: "claude-sonnet-4-6", heavy: "claude-opus-4-8" }, tutoring);
+  for (const code of ["questions", "evaluate", "case_steps"]) if (out.activities[code].available) bad.push(`${code} is offered on tutoring eligibility alone`);
+  if (!out.activities.teach.available || !out.activities.ask.available) bad.push("tutoring was closed");
+  return { ok: bad.length === 0, detail: bad.join("; ") };
+}
+
 const plant = (k: K, from: string, to: string): Src => {
   const s = RAW.get(F[k]) ?? ""; const n = s.replace(from, to);
   if (n === s) throw new Error(`plant did not apply in ${F[k]}: ${from.slice(0, 70)}`);
@@ -284,6 +309,7 @@ run("A13. who pays follows the workflow: student work on the student, promotion 
 run("A14. (FI) the ledger enforces ownership: a person's account only for that person, a budget only while active, no unfunded institution", checkReserveOwnership(RAW));
 run("A15. the owner is decided on the server: student routes run no platform work, no request input reaches the owner", checkOwnerFromServer(RAW, ALL));
 run("A16. standing reflects model eligibility: no evaluated model, not offered", checkStandingEligibility(RAW, withEligibility));
+run("A17. prepared routing: clinical work on heavy (Opus), never reasoning, and the high-risk three stay OFF on tutoring eligibility", checkHeavyRouting(PROVISIONAL_RISK, PROVISIONAL_ACTIVITIES.scholar));
 console.log("");
 if (HAS_MIG) {
   red("A1 (FI) concurrent overspend: the row lock removed", checkLock(plant("mig421", "  select * into a from ai_allowance_account where id = p_account for update;", "  select * into a from ai_allowance_account where id = p_account;"), ALL));
@@ -318,6 +344,8 @@ red("A11 a reserve default bound in the admin surface", checkNoFigures(plant("ad
 red("A11 a window cap in the engine", checkNoFigures(plant("engine", "export const AI_FAIR_USE_FLAG = \"ai_fair_use\";", "export const AI_FAIR_USE_FLAG = \"ai_fair_use\";\nconst WINDOW = 1000;")));
 red("A16 standing that skips eligibility", checkStandingEligibility(plant("engine", "return withEligibility(standingFrom(policy, a.account),", "return ((x: any) => x)(standingFrom(policy, a.account),"), withEligibility));
 red("A16 an eligibility check that offers everything", checkStandingEligibility(RAW, (st) => st));
+red("A17 clinical subjects left on reasoning (Sonnet)", checkHeavyRouting({ ...PROVISIONAL_RISK, minTier: { ...PROVISIONAL_RISK.minTier, clinical_educational: "reasoning" } }, PROVISIONAL_ACTIVITIES.scholar));
+red("A17 case steps with no clinical floor (offered on tutoring eligibility)", checkHeavyRouting(PROVISIONAL_RISK, { ...PROVISIONAL_ACTIVITIES.scholar, case_steps: { ...PROVISIONAL_ACTIVITIES.scholar.case_steps, riskFloor: "standard_educational" } }));
 red("A13 promotion charged to the student", checkAttribution({ ...ATTRIBUTION, "case.promote": "individual" }));
 red("A13 a student's private case charged to the platform", checkAttribution({ ...ATTRIBUTION, "case.private_generate": "platform" }));
 red("A15 a student route running platform screening", checkOwnerFromServer(RAW, new Map([...ALL, ["src/app/api/individual/scholar/evil/route.ts", `await resolveOwner(admin, "case.candidate_screen", "scholar", { userId: ctx.userId })`]])));
