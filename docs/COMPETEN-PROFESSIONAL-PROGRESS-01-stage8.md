@@ -22,7 +22,7 @@ It names no other stage's table. RLS is own-row SELECT only. The append-only fun
 
 ## Dependencies added
 
-- `pdf-lib@1.17.1` (exact). The repository had no PDF generator. It is pure JavaScript, uses the standard fonts, and has no native or filesystem font loading, so it bundles cleanly on Vercel.
+- `pdf-lib@1.17.1` (exact). The repository had no PDF generator: `unpdf` only extracts text from PDFs, and the existing print pages rely on the browser. It is pure JavaScript, uses the standard fonts, and has no native or filesystem font loading, so it bundles cleanly on Vercel.
 - `docx` moved from devDependencies to dependencies. It was already in the lock file.
 - `audit-gate` PASSED.
 
