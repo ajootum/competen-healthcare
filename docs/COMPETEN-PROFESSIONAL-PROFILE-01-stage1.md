@@ -62,3 +62,52 @@
 | Staging UI walk-through (dev server against staging, test identity, local test terms versions) | Register (step 1 → skip step 2 → review → enter) → workspace. Profile renders 6 sections. Adding a role, then changing it, shows "Earlier versions (1)" and "Self-declared, not verified". At 375 px there is no horizontal scroll |
 
 Acceptance items (GO s10): 1 J1 · 2 J2 (invitation with the Professional email marker) · 3 J3a/b · 4 J4 · 5 J5 · 6 J6 · 7 J7a/b/c · 8 J8 · 9 J9/J9b · 10 J10/J10b · 11 J11 · 12 J12a/b.
+
+## 6. Part B (owner continuation GO, 25 Oct 2026): verification, reminders, selective sharing
+
+**Authority:** owner, "COMPETEN — LEARNING, PROFESSIONAL & CKRI CONTINUATION" part B. It approves:
+- independent credential verification through the existing Holdings authority;
+- configurable registration and licence-expiry reminders;
+- selective, person-controlled Passport sharing of profile sections.
+
+Verification is optional, and no verifier is appointed automatically. Development and staging only.
+
+| Item | Built | Reused, not duplicated |
+|---|---|---|
+| Verification (451) | Capability `hq.individual.professional.verify`, position `individual_professional_verifier` (product line `individual`) and **no appointment**. An append-only history per record VERSION: requested, request withdrawn, verified (with method and optional validity date), declined, revoked, disputed. The guard trigger enforces: an active appointment for verifier events, an actor who is not the subject, person events only by the person, a request first, the current version only. The person asks, withdraws or disputes from the profile. The verifier works from `/super-admin/individual/verification`, where the queue shows open requests only, never the verifier's own records, and the document opens only on an open request and is audited | HQ capability/position/appointment model (264/117) · `hqApiGate`/`requireHqCapability` · intent map · the Passport verified-tier wording (green only for a standing, in-date verification) |
+| Reminders (452) | Policy keys: reminder kinds, offsets (180 to 7 days, default 60), registration standings (default active and provisional). A profile record gets ONE email at the tightest offset reached. Each claim is a row in the 452 ledger, released if the send fails. The new branch fails soft, so the MVP reminders never stop | The existing daily `individual_professional_reminders` job (`/api/cron/jobs`, hourly runner), the notification dispatcher's email channel, the person's 374 opt-in, and the release gate |
+| Sharing (453) | `individual_professional_share.profile_overview` (default false) and `individual_professional_share_item` (record versions chosen per link). The share page offers opt-in ticks, with each record's exact state shown. `/verify` shows them only on a Professional link, and only while current and in a shareable section. It never shows the registration number, document, details, reasons or history. Policy key: shareable sections | `passport_share_tokens` and `/verify`, the 373 companion row, `EVIDENCE_LABEL` |
+
+**Migrations, staging only (LF bytes; apply order 451 → 452 → 453; each depends on 450, and 453 also on 373; independent of 426–449):**
+
+| File | sha256 (LF) | Rollback / verify (LF) |
+|---|---|---|
+| 451 (APPLY WHOLE) | `44c0e307cbf40d93e3958d61fcab53cab8fb113046d12136b915d75facb9a8a9` | `8d207c14…5366a` / `ad713c8d…6f6d` |
+| 452 | `568aeceefc8665cc02f24ddc580e0633417efafda6b9540c1e8f1571f414bb71` | `f7d5774c…366a` / `4c1e9205…f676` |
+| 453 | `24aa8be62fbf53add9401d292d541eb20cebd89daa25fe448075a375a47c16fe` | `c4919f6e…bf27` / `a6a87c63…fc63` |
+
+- **Local rehearsal** (postgres:17):
+  - each file applied twice;
+  - 32 behaviour probes, all as designed;
+  - rolled back to zero, re-applied, VERIFY as expected.
+- **Staging:** present on staging (coordinating session). Its ×2 and rollback record goes here.
+- **Production:** not applied. Each migration needs its own owner GO.
+
+**Checks:**
+- `tsc` and eslint clean · vitest 1153/1153.
+- `professional-profile-harness`: 59/59, with 35 planted reds (16 new: B1–B5).
+- The guard harnesses went red first, on real omissions, and are green after the fixes:
+  - `hq-guard` 51/51 (the capability was missing from the TypeScript catalogue);
+  - `individual-config` 41/41 (an unpinned HQ door, and pinned policy reads that had changed);
+  - `individual-professional` 100/100 (new write pins, and exactly one file allowed to name the verified state).
+- foundation 74/74 · plane-boundary 35/35 · access-doors 39/39.
+- **Staging acceptance** (`professional-profile-b-acceptance-harness`): 14/14. A planted schedule defect turned R1 red, and the run was green again after restoring.
+- **Staging UI walk-through:**
+  - ask to verify → request open (withdraw offered);
+  - share page selection is unticked by default and shows each record's state;
+  - `/verify` shows exactly the ticked overview and record, with its exact state, and leaves the unticked record off.
+
+**Not built (outside this GO):**
+- Appointing a verifier: an owner act on the existing appointment surface.
+- A regulator register lookup.
+- Reminders at multiple offsets for the primary registration and credentials, which keep the MVP single lead time.

@@ -6,6 +6,8 @@ import { WITHDRAW_REASONS, type ItemKind, type RecordState } from "@/lib/individ
 import { Empty, fmtDate } from "./bits";
 import ItemForm, { ChangeItem, WithdrawItem } from "./ItemForm";
 import { AddPanel } from "./forms";
+import VerificationControl from "./VerificationControl";
+import { METHOD_LABEL, NO_VERIFICATION, VERIFICATION_DETAIL, VERIFICATION_LABEL, isIndependentlyVerified, personActions, type ItemVerification } from "@/lib/individual/professional/profile-verification";
 
 // Server-rendered pieces of the Professional profile (COMPETEN-PROFESSIONAL-PROFILE-01 GO s4, s5 and s9).
 //
@@ -40,12 +42,44 @@ export type SectionCtx = {
   titleOptions: Partial<Record<ItemKind, { code: string; label: string }[]>>;
   orgSuggestions: Partial<Record<ItemKind, string[]>>;
   documentKinds: readonly ItemKind[];
+  /** Part B: each version's verification (451), and the kinds a person may submit. null: unreadable. */
+  verifications: Record<string, ItemVerification> | null;
+  verificationKinds: readonly ItemKind[];
 };
+
+/** Green only for a standing, in-date independent verification. Every other state is said in grey words. */
+export function VerificationBadge({ v }: { v: ItemVerification }) {
+  const green = isIndependentlyVerified(v.state);
+  const extra = green ? [v.method && METHOD_LABEL[v.method], v.verifiedAt && `on ${fmtDate(v.verifiedAt)}`, v.validUntil && `valid until ${fmtDate(v.validUntil)}`].filter(Boolean).join(", ") : "";
+  return (
+    <span title={VERIFICATION_DETAIL[v.state]}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11.5px] font-semibold ${green ? "border-green-300 bg-green-50 text-green-900" : "border-gray-300 bg-white text-gray-700"}`}>
+      {green ? "✓ " : ""}{VERIFICATION_LABEL[v.state]}{extra ? ` (${extra})` : ""}
+    </span>
+  );
+}
+
+function VerificationHistory({ v }: { v: ItemVerification }) {
+  if (!v.history.length) return null;
+  const words: Record<string, string> = { requested: "You asked Competen to verify it", request_withdrawn: "You withdrew the request", verified: "Verified by a Competen verifier",
+    declined: "A verifier could not verify it", revoked: "A verifier revoked the verification", disputed: "You disputed the outcome" };
+  return (
+    <details className="mt-1">
+      <summary className="cursor-pointer text-[12px] font-semibold text-gray-600">Verification history ({v.history.length})</summary>
+      <ol className="mt-1 space-y-1 border-l-2 border-gray-200 pl-3 text-[12px] text-gray-600">
+        {v.history.map(h => <li key={h.id}>{fmtDate(h.created_at)}: {words[h.event] ?? h.event}{h.method ? ` (${METHOD_LABEL[h.method] ?? h.method})` : ""}{h.reason ? `. ${h.reason}` : ""}</li>)}
+      </ol>
+    </details>
+  );
+}
 
 function Chain({ chain, kind, sc }: { chain: ItemChain; kind: ItemKind; sc: SectionCtx }) {
   const i = chain.current;
   const state = itemState(i, sc.today);
   const live = !i.withdrawn_at;
+  // Part B: verification is shown for the kinds 451 can verify, from the version's own history only.
+  const verifiable = (["qualification", "registration", "employment"] as ItemKind[]).includes(kind) && sc.verifications !== null;
+  const ver = sc.verifications?.[i.id] ?? NO_VERIFICATION;
   return (
     <li className="py-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -63,7 +97,11 @@ function Chain({ chain, kind, sc }: { chain: ItemChain; kind: ItemKind; sc: Sect
               </a>
             )}
             {i.withdrawn_reason && <span className="text-[12px] text-gray-500">{WITHDRAW_REASONS.find(([k]) => k === i.withdrawn_reason)?.[1]} · {fmtDate(i.withdrawn_at)}</span>}
+            {verifiable && <VerificationBadge v={ver} />}
           </div>
+          {verifiable && <VerificationHistory v={ver} />}
+          {verifiable && live && <VerificationControl itemId={i.id} accent={sc.accent}
+            actions={personActions(ver, true).filter(a => a !== "request" || sc.verificationKinds.includes(kind))} />}
         </div>
         {live && (
           <div className="flex flex-wrap items-center gap-2">

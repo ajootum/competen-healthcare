@@ -4,6 +4,7 @@ import { isUuid } from "@/lib/individual/professional/validate";
 import { mintShare, parseShare, revokeShare } from "@/lib/individual/professional/share";
 import { audit, readBody, refuse } from "@/lib/individual/professional/api";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { checkShareChoice, parseShareProfile } from "@/lib/individual/professional/share-profile";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -22,9 +23,14 @@ export async function POST(req: Request) {
   if (isGuardRefusal(ctx)) return ctx;
   const { fields } = await readBody(req);
   const input = parseShare(fields, (await loadIndividualPolicy(ctx.admin)).shareLinkMaxDays);
-  const link = await mintShare(ctx.admin, ctx.userId, input);
+  const policy = await loadIndividualPolicy(ctx.admin);
+  // COMPETEN-PROFESSIONAL-PROFILE-01 part B: the profile records the person ticked for this link, nothing else.
+  const profile = parseShareProfile(fields);
+  const choiceErr = await checkShareChoice(ctx.admin, ctx.userId, profile, policy.professionalProfile.shareSections);
+  if (choiceErr) return refuse(choiceErr);
+  const link = await mintShare(ctx.admin, ctx.userId, input, profile);
   if (!link) return NextResponse.json({ error: "The link could not be created just now. Try again shortly." }, { status: 500 });
-  await audit(ctx, "create_passport_share", "passport_share_token", link.id, { scope: input.scope, days: input.days, includes_own_records: true });
+  await audit(ctx, "create_passport_share", "passport_share_token", link.id, { scope: input.scope, days: input.days, includes_own_records: true, profile_overview: profile.overview, profile_records: profile.itemIds.length });
   return NextResponse.json({ ok: true, path: `/verify/${link.token}`, link }, { status: 201 });
 }
 
