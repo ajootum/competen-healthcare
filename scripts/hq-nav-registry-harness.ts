@@ -141,7 +141,7 @@ const dupInWs = HQ_WORKSPACES.flatMap(w => {
 ok("X2", dupInWs.length === 0, `no href is drawn twice inside one workspace (two rows would light)${show(dupInWs)}`);
 const keys = [...rows.map(r => r.e.key), ...deep.map(x => x.d.key)];
 const missingKey = rows.filter(r => !r.e.key).map(r => r.e.href);
-const dupKeys = keys.filter((k, i) => k && keys.indexOf(k) !== i);
+const dupKeys = keys.filter((k, i): k is string => !!k && keys.indexOf(k) !== i);
 ok("X3", missingKey.length === 0 && dupKeys.length === 0, `every entry has a stable key, none reused${show([...missingKey, ...dupKeys])}`);
 const labels = HQ_WORKSPACES.map(w => {
   const ls = w.sections.flatMap(s => s.items).filter(isHome).map(i => i.label);
