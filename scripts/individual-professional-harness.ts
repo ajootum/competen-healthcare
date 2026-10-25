@@ -318,6 +318,28 @@ const checkPrefsSchema = (mig: string) => ({
 // A proposal, a rejection or a goal (intent, not evidence) never does -- and nothing says verified.
 const MAP_FILE = "src/lib/individual/professional/mapping-store.ts";
 const MAP_ROUTE = "src/app/api/individual/professional/mappings/route.ts";
+
+// Q1 (owner, 25 October 2026): ONE limit at a time for Professional AI. With metering ON the metered allowance
+// replaces the legacy hourly quota; with it OFF the legacy quota stays. So in every Professional AI route the legacy
+// quota runs only inside the "metering off" guard, the route still meters, and the guard is exactly "not metering".
+const PRO_AI_ROUTES = ["src/app/api/individual/professional/assistant/route.ts", MAP_ROUTE];
+const SHARED_ASSISTANT = "src/app/api/individual/assistant/route.ts";
+const QUOTA_HELPER = "src/lib/individual/professional/ai-quota.ts";
+function checkMeteringReplacesQuota(src: Sources): { ok: boolean; detail: string } {
+  const bad: string[] = [];
+  const guardedQuota = (t: string, guard: RegExp) => {
+    const calls = [...t.matchAll(/individualQuotaRefusal\(/g)].map(m => m.index ?? 0);
+    return calls.length > 0 && calls.every(i => { const g = t.lastIndexOf("if (", i); return g >= 0 && guard.test(t.slice(g, i)); });
+  };
+  for (const f of PRO_AI_ROUTES) {
+    const t = src.get(f) ?? "";
+    if (!guardedQuota(t, /^if \(await professionalLegacyQuotaApplies\(ctx\.admin\)\)/)) bad.push(`${f}: the legacy quota is not limited to metering off`);
+    if (!/runIndividualAssistant\(|runMeteredAi\(/.test(t)) bad.push(`${f}: the route does not meter`);
+  }
+  if (!guardedQuota(src.get(SHARED_ASSISTANT) ?? "", /^if \(experience !== "professional" \|\| \(await professionalLegacyQuotaApplies\(ctx\.admin\)\)\)/)) bad.push(`${SHARED_ASSISTANT}: the Professional legacy quota is not limited to metering off`);
+  if (!/return !\(await aiFairUseEnabled\(admin\)\);/.test(src.get(QUOTA_HELPER) ?? "")) bad.push(`${QUOTA_HELPER}: the legacy quota is not exactly "metering off"`);
+  return { ok: bad.length === 0, detail: bad.join("; ") };
+}
 const MIG393_FILE = "supabase/migrations/393-individual-professional-competency-mapping.sql";
 const MIG393 = existsSync(MIG393_FILE) ? readFileSync(MIG393_FILE, "utf8").replace(/--.*$/gm, "").toLowerCase() : "";
 const MAP_ROWS = [
@@ -442,6 +464,7 @@ function main() {
   run("M3. writes: only offered (allowlisted) competencies, own entries only, AI rows carry provenance; propose keeps the assistant order", checkMappingWrites(ALL));
   run("M4. every state is said in words, never green, and /verify says the links are not verified", checkMappingWords(ALL));
   run("M6. no patient identifier reaches the model: input screened before the call, output screened by the engine, the Holdings screen", checkIdentifierScreen(ALL));
+  run("Q1. one AI limit at a time: with metering ON the allowance replaces the legacy quota, with it OFF the legacy quota stays", checkMeteringReplacesQuota(ALL));
   if (MIG393) run("M5. 393: RLS own-row SELECT only, composite FKs to own rows, exactly one subject, append-only decisions with the cascade path", checkMappingSchema(MIG393));
   else { pend.push("M5"); console.log(`  PEND  M5. ${MIG393_FILE} is not in this checkout`); }
 
@@ -507,6 +530,9 @@ function main() {
   red("M4 on a green chip", checkMappingWords(mapPlant("src/app/individual/_components/professional/CompetencyLinks.tsx", "border-amber-300 bg-amber-50", "border-green-300 bg-green-50")));
   red("M4 when /verify drops not verified", checkMappingWords(mapPlant("src/app/verify/[token]/page.tsx", " (not verified)</span>", "</span>")));
   red("M6 when the input is not screened", checkIdentifierScreen(mapPlant(MAP_FILE, "texted.filter(s => findPatientIdentifiers(s.text).length === 0)", "texted")));
+  red("Q1 on a legacy quota left unconditional", checkMeteringReplacesQuota(mapPlant(MAP_ROUTE, "if (await professionalLegacyQuotaApplies(ctx.admin)) {", "if (true) {")));
+  red("Q1 on a helper that never applies the legacy quota (no limit with metering off)", checkMeteringReplacesQuota(mapPlant(QUOTA_HELPER, "return !(await aiFairUseEnabled(admin));", "return false;")));
+  red("Q1 on a Professional route that stops metering", checkMeteringReplacesQuota(mapPlant("src/app/api/individual/professional/assistant/route.ts", "runIndividualAssistant(", "runUnmeteredAssistant(")));
   red("M6 without the output screen", checkIdentifierScreen(mapPlant(MAP_FILE, ", screen: findPatientIdentifiers, run });", ", run });")));
   if (MIG393) {
     red("M5 on a write policy", checkMappingSchema(MIG393 + "\ncreate policy p on individual_professional_competency_map for insert with check (true)"));

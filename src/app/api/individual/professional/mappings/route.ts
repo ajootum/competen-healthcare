@@ -1,4 +1,5 @@
 // Allow up to 60s for the AI suggestion -- the same ceiling the Professional assistant uses.
+import { professionalLegacyQuotaApplies } from "@/lib/individual/professional/ai-quota";
 export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
@@ -77,11 +78,14 @@ export async function POST(req: Request) {
       ? body.subjects.filter((s: { kind?: unknown; id?: unknown }) => isSubjectKind(s?.kind) && isUuid(s?.id)).slice(0, SUBJECTS_PER_CALL) : [];
     if (!asked.length) return refuse("Choose up to six entries to suggest links for.");
 
-    // The estate limit and the Individual policy limit, whichever is tighter (CONFIG-002).
-    const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
-    // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
-    const refusal = individualQuotaRefusal(quota, "questions");
-    if (refusal) return refuse(refusal.error, refusal.status);
+    // ONE limit at a time (owner, 25 October 2026): with metering ON the metered allowance governs (runMeteredAi
+    // below). With metering OFF, the estate limit and the Individual policy limit, whichever is tighter.
+    if (await professionalLegacyQuotaApplies(ctx.admin)) {
+      const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
+      // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
+      const refusal = individualQuotaRefusal(quota, "questions");
+      if (refusal) return refuse(refusal.error, refusal.status);
+    }
     if (!aiStatus().configured) return refuse("The personal AI is not configured on this environment.", 503);
 
     // Only the person's own entries: the record is read by user id, and an id not in it is skipped.
