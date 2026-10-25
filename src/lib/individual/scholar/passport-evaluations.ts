@@ -16,6 +16,8 @@ import { EVALUATION_BAND_LABEL, EVALUATION_CONFIDENCE_LABEL, EVALUATION_METHOD_L
 export const EDUCATIONAL_EVALUATION_LABEL = "Educational evaluation of own learning: formative, not an assessment of competence, not verified";
 
 export type PassportEvaluation = {
+  /** The Passport choice (427) itself, so a person may put this one evaluation on one Passport link (Stage 7). */
+  itemId?: string;
   evaluationId: string; label: string; scope: string; method: string; madeAt: string; confidence: string;
   dimensions: { name: string; reads: string }[]; limitations: number; includedAt: string;
 };

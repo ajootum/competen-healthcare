@@ -2,7 +2,7 @@
 import { isUuid } from "./validate";
 import { SELF_REPORTED, SHARE_PARTS, SHAREABLE_KINDS, type SharePart } from "./competency-vocabulary";
 import { linkKind, linkSourceId, loadPortfolio, type EvidenceLink } from "./competency-store";
-import { currentDecision, loadVerifications } from "./competency-verification";
+import { currentDecision, loadVerifications, verifiedNow } from "./competency-verification";
 
 // ── COMPETENCIES A PERSON CHOOSES TO SHOW ON ONE PASSPORT LINK ── COMPETEN-PROFESSIONAL-COMPETENCY-01 S11, migration 520 ──
 //
@@ -41,7 +41,7 @@ export type SharedCompetency = {
   title: string; frameworkVersion: string | null; personal: boolean;
   selfAssessment: { level: string; scale: string | null; outcome: string | null; assessedAt: string; label: string } | null;
   evidence: { title: string; classText: string; relation: string; outcome: string | null }[] | null;
-  assessed: { outcome: string; level: string | null; assessor: string; authority: string; decidedAt: string; validUntil: string | null }[] | null;
+  assessed: { outcome: string; verified: boolean; level: string | null; assessor: string; authority: string; decidedAt: string; validUntil: string | null }[] | null;
   assessedUnavailable: boolean;
 };
 
@@ -76,7 +76,7 @@ export async function loadSharedCompetencies(admin: any, tokenId: string, userId
           ? { level: sa.level_label, scale: sa.scale_label, outcome: sa.learning_outcome, assessedAt: sa.assessed_at, label: SELF_REPORTED } : null,
         evidence: r.include_evidence && offeredParts.includes("evidence") ? ev : null,
         assessed: r.include_assessed_outcomes && offeredParts.includes("assessed_outcomes") && vs
-          ? vs.map(d => ({ outcome: d.outcomeLabel, level: d.level, assessor: d.assessorName, authority: d.authority, decidedAt: d.decidedAt, validUntil: d.validUntil })) : null,
+          ? vs.map(d => ({ outcome: d.outcomeLabel, verified: verifiedNow(d, today), level: d.level, assessor: d.assessorName, authority: d.authority, decidedAt: d.decidedAt, validUntil: d.validUntil })) : null,
         assessedUnavailable: !!r.include_assessed_outcomes && (!verifications || !verifications.provisioned || verifications.items === null),
       };
     });

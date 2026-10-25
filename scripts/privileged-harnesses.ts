@@ -324,11 +324,25 @@ const STAGING: Listed[] = [
       + "catalogue, no AI. Own harness-prof02-* identity, deleted after; two policy rows restored exactly. PEND until 470 is applied.",
   },
   {
+    file: "professional-passport-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-PASSPORT-01 Stage 7 (540), owner GO s15: one Individual with Scholar then Professional history; the shared "
+      + "Passport; a view chosen record by record, previewed as a closed draft, activated once, time-limited; unrelated records excluded; "
+      + "provenance, validity and meaning on every record; nothing self-reported shown as verified; revocation refuses the hosted view; "
+      + "sources untouched; no AI needed; an organisation link carries none of the personal Passport. /verify over HTTP with VERIFY_BASE_URL. "
+      + "Items 6 and 7 bounded (530, 510/511 not on main). Own harness-prof07-* identity and Scholar material, deleted after; one policy row restored.",
+  },
+  {
     file: "professional-competency-acceptance-harness.ts",
     note: "COMPETEN-PROFESSIONAL-COMPETENCY-01 Stage 5 (520), owner GO s15 items 1-16: My Competencies, a published competency explored with its "
       + "outcomes and expected proficiency, a self-assessment (self-reported) with confidence and a private reflection, CPD and an observation "
       + "mapped to outcomes without duplication, a need and a goal from the competency, reassessment with history kept, no catalogue, no AI, "
       + "a Passport link carrying chosen parts, nothing private shared. Own harness-prof05-* identity, deleted after; three policy rows restored exactly. PEND until 520 is applied.",
+  },
+  {
+    file: "professional-c5-wiring-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-COMPETENCY-01, the person side of the C5 Studio (#128), over HTTP with BASE_URL: methods offered, "
+      + "a request with the chosen method and linked evidence, further evidence never resent, another person's request refused, "
+      + "withdrawal recorded, a revoked verified decision never current. Own harness-prof05-c5wire identity, deleted after with its requests.",
   },
   {
     file: "professional-plan-acceptance-harness.ts",

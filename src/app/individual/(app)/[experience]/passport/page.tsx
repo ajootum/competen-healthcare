@@ -1,3 +1,6 @@
+import { loadProfessionalProfile } from "@/lib/individual/professional/profile-store";
+import { loadCompetencyWorkspace } from "@/lib/individual/professional/competency-store";
+import { listShares, loadShareHistory } from "@/lib/individual/professional/share";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { EVIDENCE_LABEL, loadIndividualPassport } from "@/lib/individual/passport";
 import { OWN_KIND_LABEL } from "@/lib/individual/professional/passport-records";
@@ -49,6 +52,18 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
   const { data: roleRow } = await ctx.admin.from("profiles").select("role, roles").eq("id", ctx.userId).maybeSingle();
   const holdsEstate = (await admitToEstate(ctx.admin, ctx.userId, estateRolesOf(roleRow ?? null) as AppRole[])).admitted;
 
+  // COMPETEN-PROFESSIONAL-PASSPORT-01 P1: with Professional, the same Passport also shows the person's qualifications and
+  // registrations, their competencies (self-assessed apart from verified) and their shared views, each read from its
+  // owning service. Scholar history stays whatever the person later activates: nothing here is copied or moved.
+  const pro = ctx.live.includes("professional");
+  const [profile, comp, links] = pro
+    ? await Promise.all([loadProfessionalProfile(ctx.admin, ctx.userId), loadCompetencyWorkspace(ctx.admin, ctx.userId), listShares(ctx.admin, ctx.userId)])
+    : [null, null, null];
+  const history = links ? await loadShareHistory(ctx.admin, ctx.userId, links.map(l => l.id)) : new Map();
+  const quals = (profile?.items ?? []).filter(i => (i.section === "qualification" || i.section === "registration") && !i.superseded_at && !i.withdrawn_at);
+  const entries = (comp?.entries ?? []).filter(e => !e.removed_at);
+  const nowIso = new Date().toISOString();
+
   const current = passport.competencies?.filter(c => c.current) ?? [];
   const notCurrent = passport.competencies?.filter(c => !c.current) ?? [];
 
@@ -56,6 +71,17 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
     <>
       <PageHeader accent={x.accent} eyebrow="Your foundation" title="Competen Passport"
         intro="Your lifelong record of what you know and can do. It is the same Passport in Competen Scholar and Competen Professional, and it stays with you between organisations." />
+
+      <Section title="At a glance" note="Private to you. Nothing here is shared unless you choose it, record by record, on a Passport view.">
+        <ul className="grid gap-2 text-[13.5px] text-gray-800 sm:grid-cols-2">
+          <li>Assessed by organisations: <span className="font-semibold">{passport.competencies === null ? "could not be read" : current.length}</span> current</li>
+          <li>Credentials and registrations held with organisations: <span className="font-semibold">{passport.credentials === null ? "could not be read" : passport.credentials.length}</span></li>
+          {pro && <li>Qualifications and registrations you recorded: <span className="font-semibold">{profile?.items === null ? "could not be read" : quals.length}</span></li>}
+          {pro && <li>Competencies you are developing: <span className="font-semibold">{comp?.entries === null ? "could not be read" : entries.length}</span></li>}
+          {passport.learning?.enabled && <li>Competen Learning completed: <span className="font-semibold">{passport.learning.items === null ? "could not be read" : passport.learning.items.length}</span></li>}
+          <li>Scholar study shown: <span className="font-semibold">{passport.study.ok ? passport.study.data.length : "not available"}</span></li>
+        </ul>
+      </Section>
 
       <Section title="Assessed competencies" note={`${EVIDENCE_LABEL.institution_issued}. Each one is the latest decision an organisation recorded for you.`}>
         {passport.competencies === null ? <Unreadable what="assessed competencies" />
@@ -187,7 +213,7 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
       </Section>
 
       {passport.learning?.enabled && (
-        <Section title="Competen Learning" note="Courses you completed, read from your Competen Learning record. Each says what it is. A course completion or assessed knowledge is not an accreditation or a verification of clinical competence. Not included in a shared Passport link.">
+        <Section title="Competen Learning" note="Courses you completed, read from your Competen Learning record. Each says what it is. A course completion or assessed knowledge is not an accreditation or a verification of clinical competence. On a shared view only when you tick it.">
           {passport.learning.items === null ? <Unreadable what="learning record" />
             : passport.learning.items.length === 0 ? <Empty>No completed Competen Learning courses yet.</Empty>
               : (
@@ -211,10 +237,63 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
         </Section>
       )}
 
+      {pro && (
+        <Section title="Qualifications and registrations" note="Recorded by you in your professional profile. Each says whether Competen verified it.">
+          {profile?.items === null ? <Unreadable what="professional profile" /> : quals.length === 0 ? <Empty>None recorded yet.</Empty> : (
+            <ul className="divide-y divide-gray-100">
+              {quals.map(q => (
+                <li key={q.id} className="py-2 text-[14px]">
+                  <span className="font-semibold text-gray-900">{q.title}</span>
+                  <span className="text-[12.5px] text-gray-500">{[q.type_label, q.organisation, q.jurisdiction, q.expires_on ? `expires ${fmt(q.expires_on)}` : null].filter(Boolean).map(t => ` · ${t}`).join("")} · {q.evidence_class === "source_linked" ? EVIDENCE_LABEL.source_linked : EVIDENCE_LABEL.self_declared}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 text-[13px]"><a href={experienceHref("professional", "registration")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Manage your professional profile</a></p>
+        </Section>
+      )}
+
+      {pro && comp?.provisioned && (
+        <Section title="Competencies" note="What you are developing. Your self-assessments are self-reported; supporting evidence is not verification; only an appointed assessor's outcome is independently verified.">
+          {comp.entries === null ? <Unreadable what="competencies" /> : entries.length === 0 ? <Empty>None yet.</Empty> : (
+            <ul className="divide-y divide-gray-100">
+              {entries.slice(0, 30).map(e => {
+                const sa = (comp.assessments ?? []).find(a => a.my_competency_id === e.id);
+                const ev = (comp.links ?? []).filter(l => l.my_competency_id === e.id && !l.unlinked_at).length;
+                return (
+                  <li key={e.id} className="py-2 text-[14px]">
+                    <span className="font-semibold text-gray-900">{e.title}</span>
+                    <span className="text-[12.5px] text-gray-500">{e.framework_version ? ` · ${e.framework_version}` : " · in your own words"}{sa ? ` · self-assessed ${sa.level_label} (self-reported)` : " · not self-assessed"}{` · ${ev} evidence`}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="mt-2 text-[13px]"><a href={experienceHref("professional", "competencies")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Open My competencies</a></p>
+        </Section>
+      )}
+
+      {pro && links !== null && links.length > 0 && (
+        <Section title="Shared views" note="Every view you made, what it was for, whether it is a draft, live, expired or withdrawn, and how often it was opened.">
+          <ul className="divide-y divide-gray-100">
+            {links.slice(0, 20).map(l => {
+              const h = history.get(l.id);
+              const state = l.revoked ? "Withdrawn" : l.expires_at && l.expires_at < nowIso ? "Expired" : h?.draft ? "Draft" : "Live";
+              return (
+                <li key={l.id} className="py-2 text-[14px]">
+                  <span className="font-semibold text-gray-900">{h?.purpose ?? l.label ?? "Passport link"}</span>
+                  <span className="text-[12.5px] text-gray-500">{h?.recipient ? ` · for ${h.recipient}` : ""} · {state} · opened {h ? h.opened : l.view_count}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
+      )}
+
       <Section title="Sharing">
         {ctx.live.includes("professional") ? (
           <p className="text-[14px] text-gray-700">
-            You can share a revocable, time-limited link to this Passport, including the records you added and the study you chose to show, from{" "}
+            You choose exactly what a view shows, record by record, preview it, and only then make it live. Make one from{" "}
             <a href={experienceHref("professional", "share")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Share your Passport</a>.
           </p>
         ) : holdsEstate ? (

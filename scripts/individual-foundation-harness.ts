@@ -138,7 +138,9 @@ function main() {
   // (COMPETEN-IND-002 s4.1), whose only other readers are the owner's
   // own share page and /verify -- no hospital-scoped reader. Each experience's own harness pins its exact list.
   const NAMED_EXCEPTIONS: Record<string, string[]> = {
-    "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "passport_share_tokens.update"],
+    "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "passport_share_tokens.update",
+      // PASSPORT-01 (540): the person's own Passport view tables, pinned exactly in individual-professional-harness.
+      "individual_passport_share_view.insert", "individual_passport_share_view.update", "individual_passport_share_record.insert", "individual_passport_share_access.insert"],
   };
   const experienceOf = (f: string) => /^src\/(?:lib|app\/api)\/individual\/(scholar|professional)\//.exec(f)?.[1] ?? null;
   const badWrites = writes.filter(w => {

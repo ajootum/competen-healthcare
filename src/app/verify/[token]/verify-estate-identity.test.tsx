@@ -80,25 +80,47 @@ describe("/verify for an estate-minted link is unchanged by COMPETEN-IND-007", (
     expect(await render(import("./page"))).toBe(await render(import("../../../test-fixtures/verify-page-d6252ad6")));
   });
 
-  it("a Professional-minted link with the gate ON shows own records by class, and drops the Verified header", async () => {
-    rows = estateData({
-      practice_platform_flags: { enabled: true },
-      individual_professional_share: { share_token_id: SHARE.id },
-      individual_professional_profile: [{ self_declared_profession: "Registered midwife", self_declared_registration_body: "UNMC", self_declared_registration_number: "M-1", self_declared_registration_country: "Uganda", self_declared_registration_expires_on: null, updated_at: null }],
-      individual_professional_need: [], individual_professional_goal: [],
-      individual_professional_cpd: [{ id: "x", goal_id: null, activity_type: "course", title: "NLS course", provider: null, hours: 7, cpd_points: null, activity_date: "2026-09-01", reflection: "PRIVATE REFLECTION", document_name: "c.pdf", evidence_class: "source_linked", created_at: "" }],
-      individual_professional_evidence: [],
+  // COMPETEN-PROFESSIONAL-PASSPORT-01 (Stage 7, coordinator ruling 25 Oct): a Professional link carries the person's own
+  // records ONLY record by record, through a 540 view. There is no "every own record" mode any more.
+  const professionalRows = (extra: Rows = {}) => estateData({
+    practice_platform_flags: { enabled: true },
+    individual_professional_share: { share_token_id: SHARE.id },
+    individual_professional_profile: [{ self_declared_profession: "Registered midwife", self_declared_registration_body: "UNMC", self_declared_registration_number: "M-1", self_declared_registration_country: "Uganda", self_declared_registration_expires_on: null, updated_at: null }],
+    individual_professional_need: [], individual_professional_goal: [],
+    individual_professional_cpd: [
+      { id: "x", goal_id: null, activity_type: "course", title: "NLS course", provider: null, hours: 7, cpd_points: null, activity_date: "2026-09-01", reflection: "PRIVATE REFLECTION", document_name: "c.pdf", evidence_class: "source_linked", created_at: "" },
+      { id: "y", goal_id: null, activity_type: "course", title: "UNCHOSEN course", provider: null, hours: 1, cpd_points: null, activity_date: "2026-09-02", reflection: null, document_name: null, evidence_class: "self_declared", created_at: "" },
+    ],
+    individual_professional_evidence: [],
+    ...extra,
+  });
+
+  it("a Professional-minted link with the gate ON but no record-level view carries nothing, and drops the Verified header", async () => {
+    rows = professionalRows({ individual_passport_share_view: null });
+    const html = await render(import("./page"));
+    expect(html).toContain("carries no records");
+    expect(html).not.toContain("Verified Passport");
+    expect(html).not.toContain("NLS course");
+    expect(html).not.toContain("UNCHOSEN course");
+    expect(html).not.toContain("PRIVATE REFLECTION");
+    expect(html).not.toContain("Registered midwife");
+    expect(html).not.toContain(">nurse<");
+  });
+
+  it("a Professional-minted link with a view shows only the records chosen for it, each by class, and drops the Verified header", async () => {
+    rows = professionalRows({
+      individual_passport_share_view: { share_token_id: SHARE.id, purpose_label: "A job application", recipient_label: null, summary: null, include_institution: false, activated_at: "2026-10-01T00:00:00Z" },
+      individual_passport_share_record: [{ cpd_id: "x", evidence_id: null, study_item_id: null, scholar_evaluation_id: null }],
+      individual_passport_share_access: null,
     });
     const html = await render(import("./page"));
     expect(html).not.toContain("Verified Passport");
-    expect(html).toContain("Records the professional added themselves");
-    expect(html).toContain("Self-declared with a document attached, not verified");
-    expect(html).toContain("Self-declared, not verified");
+    expect(html).toContain("NLS course");
+    expect(html).toContain("Self-declared with a document attached (the document was not checked and is not shared)");
+    expect(html).not.toContain("UNCHOSEN course");
     expect(html).not.toContain("PRIVATE REFLECTION");
-    // The subtitle is the profession the person declared, marked as such -- never the default profiles.role.
-    expect(html).toContain("Registered midwife (self-declared)");
     expect(html).not.toContain(">nurse<");
-    // The institution sections keep their own wording, and the framework-currency caveat path is untouched.
-    expect(html).toContain("Verified credentials");
+    // Nothing from the organisation's sections travels unless the view includes them.
+    expect(html).not.toContain("Verified credentials");
   });
 });
