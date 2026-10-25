@@ -60,6 +60,7 @@ export function ProgressWorkspace({ v, sections, period }: { v: Extract<Progress
           {v.context.programme ? <>{v.context.programme}{v.context.level ? `, ${v.context.level}` : ""} · </> : "No programme chosen: progress is by material and section · "}
           {v.engagement.lastStudied ? `last studied ${new Date(v.engagement.lastStudied).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : "not studied yet"} · {EVALUATION_CONFIDENCE_LABEL[e.confidence.level]}
         </p>
+        <p className="mt-1 text-[12.5px] text-gray-600">Observed practice on your own notes: not verified competence. Verified clinical competence is decided only by an independently governed assessment.</p>
         <h3 className="mt-3 text-[13px] font-bold uppercase tracking-[0.12em] text-gray-500">Recommended next steps</h3>
         {v.next.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Nothing to suggest from your evidence right now. Keep learning, and suggestions appear as your evidence grows.</p> : (
           <ul className="mt-2 space-y-2">{v.next.map((s, i) => (
