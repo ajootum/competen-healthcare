@@ -25,7 +25,7 @@
 | P2 | **Achievements.** Scholar study and evaluations, Professional qualifications, credentials and CPD, Competen Learning completions and 520 competency parts appear with their own class. Scholar history is untouched by Professional activation. |
 | P3 | **Provenance.** Every item carries its source service, issuer, date, version, evidence reference, method and authority where they exist, its trust class, its validity and a fixed meaning sentence. |
 | P4 | **Selective sharing.** A Passport view is chosen record by record, with a purpose, recipient label and summary. It is created as a draft, previewed exactly as the recipient will see it, then activated once. It is time-limited and can be withdrawn. Unchosen records never travel. |
-| P5 | **Trust.** The labels are fixed in `passport-vocabulary.ts`: self-declared, document-supported, educational, assessed, independently verified, and expired, superseded or revoked. Only an organisation's verification or a current assessed outcome reads "independently verified". The legend states that a course completion or formative evaluation is not a verified clinical competence. |
+| P5 | **Trust.** The labels are fixed in `passport-vocabulary.ts`: self-declared, document-supported, educational, assessed, independently verified, and expired, superseded or revoked. Only an organisation's verification or a current assessed outcome reads "independently verified". The legend states that a course completion or formative evaluation is not a verified clinical competence. A C5 decision is independently verified only when current, of class verified and at a level. The per-method outcome code is never read. |
 | P6 | **Continuity.** The owner sees every view with its purpose, state, openings and refusals. The access log (540) records the result only, never recipient data. Export is a print of the same view, which says a printed copy cannot be recalled. |
 | AI | Draft a summary only, gated by `passport_ai`. It returns text the person may paste. It never saves, shares, invents or changes a status. |
 
@@ -83,9 +83,9 @@ VERIFY-540 matched expectation after apply #2 and again after the re-apply.
 | Check | Result |
 |---|---|
 | `tsc`, eslint | clean |
-| vitest `src/lib/individual` | 542 / 542. The new `passport-view.test.ts` pins that a link with no view carries none of the person's CPD, and that a view carries exactly the records ticked for it. A planted removal of the filter turned it red. |
-| `professional-passport-harness` (new, in the CI list) | **24 / 24**, including 15 planted reds |
-| `individual-professional-harness` | 101 / 101. E5, M4, W1/W2 and D1 were moved to the record-level rule, each with a plant. |
+| vitest `src/lib/individual` | 545 / 545. The new `passport-view.test.ts` pins two things. A link with no view carries none of the person's CPD, and a view carries exactly the records ticked for it. It also pins the C5 rule: the class decides, never the configured outcome code. Planted removals of the filter and of the class test each turned it red. |
+| `professional-passport-harness` (new, in the CI list) | **28 / 28**, including 19 planted reds |
+| `individual-professional-harness` | 102 / 102. E5, M4, W1/W2 and D1 were moved to the record-level rule. E6 admits the C5 adapter only while it touches no table. Each change has a plant. |
 | `professional-profile`, `individual-foundation`, `professional-competency` | all green |
 | **Staging journey, GO §15 items 1–20** (`professional-passport-acceptance-harness`, `/verify` over HTTP) | **19 passed, 0 failed, 3 bounded (not faked)**, including cleanup. A planted defect (a link carrying all CPD) turned items 12, 13 and 18 red. The source was restored. |
 | **Staging UI walk** (synthetic identity, deleted after) | See the steps below. |
@@ -102,7 +102,7 @@ VERIFY-540 matched expectation after apply #2 and again after the re-apply.
 ## 6. Bounded follow-ups
 
 - **Item 4, Competen Learning.** Staging has Learning off, or publishes no external course, so the journey reports this item as bounded. The read is the existing 491 loader.
-- **Item 6, Professional evaluations (Stage 6, 530).** Not on main. Once 530 merges, Stage 6 adds `evaluationIds` to `mintShare` and its read joins the view.
-- **Item 7, independently verified competency (C5, 510/511).** Not on main. The read shows only current C5 outcomes once present.
+- **Item 6, Professional evaluations (Stage 6, 530, PR #127).** Not on this branch. Agreed with Stage 6: whichever branch merges second calls `saveShareEvaluations` inside `mintShare`, under its withdraw-on-failure block, and removes the route's post-mint call. `sharedEvaluationsFor` then joins the view as category "evaluation" with trust "educational". It shows no AI text, no notes and no private source names.
+- **Item 7, independently verified competency (C5, 510/511).** The Studio is on main (#128) but not yet registered with the adapter. That is the Stage 5 C5 wiring, a separate branch. Until then the adapter answers "not provisioned". After wiring, only `verifiedNow` (current, class verified, at a level) reads "independently verified". Partial reads "assessed".
 - **Scholar-only users** cannot create a view yet. Sharing is a Professional surface.
 - **Institution records** are included as a whole (`include_institution`), not record by record.
