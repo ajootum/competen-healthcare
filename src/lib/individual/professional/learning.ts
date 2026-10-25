@@ -23,7 +23,7 @@ import type { CpdYear } from "./progress";
 // logged themselves is the same course as a Learning record, its hours are counted ONCE, from the Learning record, and
 // left out of the totals. Removal of the duplicate HOURS, on read: the 373 row is never deleted or changed, and the
 // entry says so on the page. The match is deterministic and conservative -- title equal ignoring case, punctuation and
-// whitespace, a course or workshop, the provider equal where both are recorded, dates within the policy window
+// whitespace, a course or workshop, a provider the person recorded equal to the course, dates within the policy window
 // (professional_learning_match_days, default 7) -- because a false match would hide real hours. No fuzzy or AI match.
 // The person can say "This is a different activity": that decision is an ids-only audit_log row (no migration), and
 // from then on the two count separately. If those decisions cannot be read, NOTHING is de-duplicated.
@@ -83,9 +83,10 @@ export function matchCpdToLearning(cpd: readonly MatchableCpd[], refs: readonly 
     if (!title || cDay === null) continue;
     for (const r of refs) {
       if (r.hours == null || normaliseForMatch(r.title) !== title || unmatched.has(pairKey(c.id, r.recordId))) continue;
-      // Owner: "provider equal where both are recorded". Either side blank is no criterion.
+      // A provider the person recorded must match the course provider. One they left blank is no criterion (confirmed by
+      // the coordinator with the owner, 25 Oct). The stricter of the two readings: it can only produce fewer matches.
       const cp = normaliseForMatch(c.provider), rp = normaliseForMatch(r.provider);
-      if (cp && rp && cp !== rp) continue;
+      if (cp && cp !== rp) continue;
       const rDay = dayNo(r.completedOn);
       if (rDay === null) continue;
       const gap = Math.abs(cDay - rDay);

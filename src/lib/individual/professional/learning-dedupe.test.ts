@@ -41,8 +41,7 @@ describe("a true duplicate is counted once, from the Learning record", () => {
     expect(totals([entry({ activity_type: "workshop", activity_date: "2026-03-17", provider: "competen holdings" })], on([ref()])).once.matches.size).toBe(1);
   });
 
-  it("provider equal where BOTH are recorded: one side blank is no criterion", () => {
-    expect(totals([entry({ provider: "St Elsewhere Trust" })], on([ref({ provider: null })])).once.matches.size).toBe(1);
+  it("a provider the person left blank is no criterion", () => {
     expect(totals([entry({ provider: null })], on([ref()])).once.matches.size).toBe(1);
   });
 
@@ -58,7 +57,8 @@ describe("a non-match is counted twice (a false match must never hide real hours
     ["outside the window", { activity_date: "2026-03-18" }],
     ["window 0 is the same day only", { activity_date: "2026-03-11" }, {}, 0],
     ["a conference is not a course", { activity_type: "conference" }],
-    ["both providers recorded, and they differ", { provider: "St Elsewhere Trust" }],
+    ["the provider the person recorded differs", { provider: "St Elsewhere Trust" }],
+    ["the person recorded a provider the course does not name", { provider: "St Elsewhere Trust" }, { provider: null }],
     ["the course gave no hours, so it cannot absorb the entry's", {}, { hours: null }],
   ];
   for (const [name, over, refOver, window] of cases) {
