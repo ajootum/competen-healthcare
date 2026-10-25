@@ -46,7 +46,7 @@ const MIG = existsSync(MIG_FILE) ? readFileSync(MIG_FILE, "utf8").replace(/--.*$
 const VIEW = "src/lib/individual/passport-view.ts", VOCAB = "src/lib/individual/passport-vocabulary.ts";
 const SHARE = "src/lib/individual/professional/share.ts", FORM = "src/lib/individual/professional/share-passport.ts";
 const VERIFY = "src/app/verify/[token]/page.tsx", RENDER = "src/app/individual/_components/passport/PassportLinkView.tsx";
-const AI = "src/app/api/individual/professional/passport-suggestions/route.ts";
+const AI = "src/app/api/individual/professional/passport-suggestions/route.ts", ROUTE = "src/app/api/individual/professional/share/route.ts";
 const ADAPTER = "src/lib/individual/professional/competency-verification.ts", SHARE_COMP = "src/lib/individual/professional/share-competency.ts";
 const PREVIEW = "src/app/individual/(app)/[experience]/(professional)/share/preview/page.tsx";
 const STAGE7_FILES = [VIEW, VOCAB, FORM, RENDER, AI, PREVIEW];
@@ -123,6 +123,22 @@ const checkTrust = (src: Sources): R => {
 };
 
 // ── P ──
+// ── E (Stage 6 evaluations, 530) ──
+// Agreed with Stage 6: the evaluations a person ticks are saved INSIDE mintShare, under its withdraw-on-failure block,
+// never after it by the route; and the view shows them as formative ("educational"), from Stage 6's own read.
+const checkEvaluations = (src: Sources): R => {
+  const share = src.get(SHARE) ?? "", route = src.get(ROUTE) ?? "", lib = src.get(VIEW) ?? "";
+  const inside = /const evalOk = linkErr \|\| itemErr \|\| learnErr \|\| compErr \|\| viewErr \|\| recErr \? false\n\s*: !evaluationIds\.length \|\| await \(await import\("\.\/share-evaluation"\)\)\.saveShareEvaluations\(admin, userId, share\.id, evaluationIds\);/.test(share)
+    // policy.ts imports share.ts: a static import of Stage 6's writer here closes a cycle that breaks /verify at load.
+    && !/^import [^\n]*"\.\/share-evaluation"/m.test(share)
+    && /if \(linkErr \|\| itemErr \|\| learnErr \|\| compErr \|\| viewErr \|\| recErr \|\| !evalOk\) \{/.test(share);
+  const notAfter = !/saveShareEvaluations/.test(route) && /mintShare\(ctx\.admin, ctx\.userId, input, profile, learningIds, competencies, view\.value, evaluationIds\)/.test(route)
+    && route.indexOf("checkShareEvaluations(") > -1 && route.indexOf("checkShareEvaluations(") < route.indexOf("mintShare(");
+  const formative = /sharedEvaluationsFor\(admin, shareTokenId, userId\)/.test(lib) && /category: "evaluation", sourceService: "Competen Professional evaluation"[\s\S]{0,700}trust: "educational", validity: "not_applicable"/.test(lib)
+    && !/ai_text|notes/.test(lib.slice(lib.indexOf("evaluation:530"), lib.indexOf("evaluation:530") + 900));
+  return { ok: inside && notAfter && formative, detail: `saved inside mintShare under its withdrawal ${inside}, checked before and never saved after by the route ${notAfter}, shown as formative from Stage 6's read ${formative}` };
+};
+
 const checkPrivacy = (src: Sources): R => {
   const form = src.get(FORM) ?? "";
   const kinds = /const RECORD_KINDS: readonly PassportRecordRef\["kind"\]\[\] = \["cpd", "evidence", "study", "scholar_evaluation"\];/.test(form);
@@ -148,6 +164,7 @@ function main() {
   run("R1. record-level only: /verify and the preview use the one read; own records only as chosen for that link; a link with no view carries none", checkRecordLevel(ALL));
   run("D1. a view is minted closed and opens only by activation; /verify finds a link by token alone, serves no document and logs only its answer", checkDraftsAndDisclosure(ALL));
   run("T1. only a verifier's state, a current C5 outcome or a staff-verified credential is independently verified; trust words are not configurable", checkTrust(ALL));
+  run("E1. Stage 6 evaluations are saved inside mintShare under its withdrawal, never after it by the route, and shown as formative", checkEvaluations(ALL));
   run("P1. reflections, plans and AI conversations have no path onto a view; Passport AI is gated and saves and shares nothing", checkPrivacy(ALL));
   run("H1. no profession or country hard-coded in the Stage 7 code", checkNoHardcoding(ALL));
 
@@ -171,6 +188,10 @@ function main() {
   red("T1 on a partial outcome shown as verified", checkTrust(plant(VIEW, 'trust: a.verified ? "independently_verified" : "assessed"', 'trust: "independently_verified"')));
   red("T1 on a decision with no class counted as standing", checkTrust(plant(ADAPTER, '(d.outcomeClass === "verified" || d.outcomeClass === "partial")\n  && ', "")));
   red("T1 on a share that drops the verified test", checkTrust(plant(SHARE_COMP, "verified: verifiedNow(d, today)", "verified: true")));
+  red("E1 on evaluations saved by the route after the mint", checkEvaluations(add(ROUTE, "await saveShareEvaluations(ctx.admin, ctx.userId, link.id, evaluationIds);")));
+  red("E1 on a static import that closes the policy cycle", checkEvaluations(plant(SHARE, 'import { ORIGIN } from "./vocabulary";', 'import { ORIGIN } from "./vocabulary";\nimport { saveShareEvaluations } from "./share-evaluation";')));
+  red("E1 on a link kept when its evaluations failed", checkEvaluations(plant(SHARE, "|| viewErr || recErr || !evalOk) {", "|| viewErr || recErr) {")));
+  red("E1 on an evaluation shown as assessed", checkEvaluations(plant(VIEW, 'authority: null, trust: "educational", validity: "not_applicable",\n    meaning: ev.notices[0]', 'authority: null, trust: "assessed", validity: "not_applicable",\n    meaning: ev.notices[0]')));
   red("P1 on a reflection path onto a view", checkPrivacy(add(VIEW, `admin.from("individual_professional_reflection").select("body");`)));
   red("P1 on Passport AI that shares", checkPrivacy(add(AI, "await activateShare(ctx.admin, ctx.userId, id);")));
   red("H1 on a hard-coded country", checkNoHardcoding(add(VOCAB, `export const COUNTRY = "Uganda";`)));

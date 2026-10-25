@@ -74,6 +74,11 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
         intro="Where your plan stands, from your own record. No targets are invented: hours are shown as hours, and anything with nothing to measure says so." />
       {!record.provisioned && <NotProvisioned />}
 
+      {/* COMPETEN-PROFESSIONAL-EVALUATION-01 (Stage 6): reached from here, so the sidebar is unchanged. */}
+      <Section title="My Professional Evaluation" note="What your records support, in six separate dimensions, where the evidence is thin, and what you might do next. Formative and private: never a score, never verification.">
+        <Link href={href("progress/evaluation")} className={`inline-flex min-h-[44px] items-center text-[14px] font-semibold ${focusRing}`} style={{ color: x.accent }}>Open My Professional Evaluation →</Link>
+      </Section>
+
       <Section title="Learning plan">
         {plan === null ? <Unreadable what="learning plan" /> : plan.completion === null ? (
           <NotMeasured accent={x.accent} href={href("development")} cta="Add a goal"

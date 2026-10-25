@@ -23,7 +23,8 @@ import { canSeeHqLink, type HqViewer } from "./nav-filter";
 /** One destination the launcher may offer. `group` is the sidebar's own heading, kept for context. */
 export type HqDestination = { label: string; href: string; icon: string; group: string };
 
-type Section = { group: string; items: { label: string; href: string; icon: string }[] };
+type Item = { label: string; href: string; icon: string; kind?: string; children?: Item[] };
+type Section = { group: string; items: Item[] };
 
 /**
  * Every destination this viewer may be offered, deduped by href, in table order.
@@ -40,12 +41,19 @@ export function hqSearchCatalogue(
   const out: HqDestination[] = [];
   for (const table of tables) {
     for (const section of table.sections) {
-      for (const item of section.items) {
+      // HQ-IA-02: a child is a destination too, filed under its parent so "Product Health errors" finds it.
+      const rows = section.items.flatMap(i => [
+        { item: i, group: section.group },
+        ...(i.children ?? []).map(c => ({ item: c, group: `${section.group} · ${i.label}` })),
+      ]);
+      for (const { item, group } of rows) {
+        // A cross-link is a second door to a page whose home is another workspace: the home row answers.
+        if (item.kind === "cross") continue;
         if (seen.has(item.href)) continue;
         // The filter, not a re-spelling of it. An unmapped href is hidden by its own default.
         if (!canSeeHqLink(item.href, viewer)) continue;
         seen.add(item.href);
-        out.push({ label: item.label, href: item.href, icon: item.icon, group: section.group });
+        out.push({ label: item.label, href: item.href, icon: item.icon, group });
       }
     }
   }

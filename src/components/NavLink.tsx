@@ -31,7 +31,7 @@ const BADGE_MEANING: Record<string, string> = {
   normal: "new or unread",
 };
 
-export default function NavLink({ href, icon, label, className, activeClassName, exact, badge, severity }: {
+export default function NavLink({ href, icon, label, className, activeClassName, exact, badge, severity, status }: {
   href: string;
   icon: string;
   label: string;
@@ -40,6 +40,8 @@ export default function NavLink({ href, icon, label, className, activeClassName,
   exact?: boolean;          // match only the exact path (for portal roots)
   badge?: number;           // unread-count chip (hidden when 0/undefined)
   severity?: "critical" | "high" | "normal";
+  /** A short state word beside the label (e.g. "Off" for a product switched off). Text, never colour alone. */
+  status?: string;
 }) {
   const pathname = usePathname();
   const search = useSearchParams();
@@ -56,8 +58,13 @@ export default function NavLink({ href, icon, label, className, activeClassName,
 
   return (
     <Link href={href} className={active ? activeClassName : className} aria-current={active ? "page" : undefined} data-sb-item title={label}>
-      <span className="w-5 text-center text-sm leading-none">{icon}</span>
+      {icon && <span className="w-5 text-center text-sm leading-none">{icon}</span>}
       <span className="flex-1" data-sb-label>{label}</span>
+      {status && (
+        <span aria-label={`(${status})`} className="ml-auto rounded border border-slate-500/60 px-1 text-[9px] font-semibold uppercase tracking-wide text-slate-300" data-sb-label>
+          {status}
+        </span>
+      )}
       {!!badge && (
         <span
           // The number alone is not accessible: "4" tells a screen reader nothing about urgency, and the

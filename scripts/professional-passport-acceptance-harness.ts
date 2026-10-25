@@ -7,8 +7,8 @@
  * the real /verify page over HTTP, as an unauthenticated recipient, when VERIFY_BASE_URL points at a staging-backed
  * server (e.g. http://localhost:3150); without it those parts are reported as not run, never as passed.
  *
- * Items whose source capability is not on main are reported as BOUNDED, never faked: 6 (Stage 6 professional
- * evaluations, migration 530) and 7 (C5 verified competencies, migrations 510/511).
+ * Item 6 records a Stage 6 professional evaluation (530) through Stage 6's own functions and ticks it on the view. Item 7
+ * (a C5 verified competency) needs an appointed assessor's decision and is reported as BOUNDED, never faked.
  *
  * ⚠ STAGING ONLY (assertSafeTarget). PEND until 540 is applied. Own harness-prof07-* identity, deleted after, with its
  * Scholar material. Writes one policy row (passport_ai, step 18) and restores it exactly.
@@ -31,6 +31,9 @@ import { parsePassportView } from "../src/lib/individual/professional/share-pass
 import { publishedCatalogue } from "../src/lib/learning/catalogue";
 import { enrol, recordExternalCompletion } from "../src/lib/learning/record";
 import { learningEnabled } from "../src/lib/learning/policy";
+import { evaluate } from "../src/lib/individual/professional/evaluation";
+import { loadEvaluationInput } from "../src/lib/individual/professional/evaluation-sources";
+import { currentConfigVersion, recordEvaluation } from "../src/lib/individual/professional/evaluation-store";
 
 loadEnvConfig(process.cwd());
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -65,6 +68,7 @@ async function cleanup() {
   await admin.from("individual_professional_share").delete().eq("user_id", u.id);
   if (tokens?.length) await admin.from("passport_share_tokens").delete().in("id", tokens.map((t: any) => t.id));
   await admin.from("individual_professional_my_competency").delete().eq("user_id", u.id);
+  // 530's snapshots go by cascade from the person (append-only); their share rows go with the links.
   await admin.from("learning_record").delete().eq("user_id", u.id);
   for (const t of ["individual_scholar_passport_item", "individual_scholar_attempt", "individual_scholar_question", "individual_scholar_chunk", "individual_scholar_material",
     "individual_professional_cpd", "individual_professional_evidence", "individual_professional_profile_item", "individual_professional_profile_context",
@@ -146,8 +150,14 @@ async function main() {
     if (learningId) ok("4. a Competen Learning course achievement is there, read from Learning", (passport.learning?.items ?? []).some((l: any) => l.recordId === learningId));
     else bound("4. Competen Learning course achievement", "staging publishes no external course, or Learning is off; not faked");
     ok("5. external CPD evidence is there", (record.cpd ?? []).length === 2);
-    bound("6. a formative Professional evaluation (Stage 6)", "migration 530 and its share table are not on main; the Scholar formative path is covered by the same read");
-    bound("7. an independently verified competency (C5)", "migrations 510/511 are not on main; the read shows only current C5 outcomes once present (harness T1)");
+    // 6: a Stage 6 evaluation of the person's own ECG record, through Stage 6's functions (deterministic, no AI).
+    const evPolicy = (await loadIndividualPolicy(admin)).professionalEvaluation;
+    const evIn = await loadEvaluationInput(admin, me, today);
+    const evRun = evaluate(evIn.input, { kind: "topic", ref: "ECG" }, evPolicy);
+    const evRec = evRun ? await recordEvaluation(admin, me, evRun, { context: evIn.context, policy: evPolicy, configVersion: await currentConfigVersion(admin), ai: null, supersedes: null }) : null;
+    const evaluationId = evRec && evRec.ok ? evRec.id : null;
+    ok("6. a formative Professional evaluation (Stage 6) is recorded for the person, offered for sharing", !!evaluationId && evPolicy.sharing === "offer", `sharing ${evPolicy.sharing}`);
+    bound("7. an independently verified competency (C5)", "needs a current decision by an appointed assessor (none on staging; the person-side wiring is prof/c5-adapter-wiring); only verifiedNow reads verified (harness T1)");
     ok("19. Scholar history survives Professional activation: the same study achievement, before and after", beforePro.study.ok && beforePro.study.data.some(s => s.itemId === study?.itemId) && !!study);
 
     // 9-11: select records, a draft, preview, then activate a time-limited link.
@@ -155,7 +165,7 @@ async function main() {
     const v = parsePassportView({ purpose: "job-application", recipient: "Ward manager", summary: "Acute care, five years.",
       [`record:cpd:${chosenCpd}`]: "true", [`record:evidence:${chosenEv}`]: "true", [`record:study:${study!.itemId}`]: "true" }, pp);
     if (!v.ok) throw new Error(v.error);
-    const link = await mintShare(admin, me, parseShare({ days: 7 }), { overview: false, itemIds: [qual.id] }, learningId ? [learningId] : [], [], v.value);
+    const link = await mintShare(admin, me, parseShare({ days: 7 }), { overview: false, itemIds: [qual.id] }, learningId ? [learningId] : [], [], v.value, evaluationId ? [evaluationId] : []);
     if (!link) throw new Error("the link could not be minted");
     const tok = (await admin.from("passport_share_tokens").select("consent, expires_at").eq("id", link.id).single()).data;
     ok("9. individual records are selected for one view: one CPD entry, one credential, one study item, a profile record" + (learningId ? ", one course" : ""),
@@ -179,6 +189,9 @@ async function main() {
     const lapsedItem = live.items.find(i => i.title.startsWith("Chosen: lapsed"));
     ok("8. provenance and current status are on every record: source, issuer, date, trust, validity, meaning; the lapsed credential says Expired",
       live.items.every(i => i.sourceService && i.trust && i.validity && i.meaning) && lapsedItem?.validity === "expired" && lapsedItem.issuer === "A training body");
+    const evItem = live.items.find(i => i.key === `evaluation:530:${evaluationId}`);
+    ok("6b. the ticked evaluation is on the view as formative (educational), with its findings and limitations, no AI text",
+      !!evItem && evItem.trust === "educational" && evItem.validity === "not_applicable" && /Limitations|:/.test(evItem.description ?? "") && !/ai_text/.test(JSON.stringify(evItem)));
     ok("17. nothing self-reported is presented as independently verified",
       !live.items.some(i => i.trust === "independently_verified") && live.items.find(i => i.category === "study")?.trust === "educational" && live.items.find(i => i.category === "cpd")?.trust === "self_declared");
 
@@ -186,7 +199,8 @@ async function main() {
     if (BASE) {
       const r = await page(link.token);
       ok("13. an unauthenticated recipient opens the view", r.status === 200 && r.html.includes("Chosen: ECG interpretation workshop") && !r.html.includes("Unrelated: wound care update"));
-      ok("14. authenticity, validity and meaning are on the page", /Meaning:/.test(r.html) && /Self-declared, not verified/.test(r.html) && /Expired/.test(r.html) && /Educational and formative/.test(r.html));
+      ok("14. authenticity, validity and meaning are on the page", /Meaning:/.test(r.html) && /Self-declared, not verified/.test(r.html) && /Expired/.test(r.html) && /Educational and formative/.test(r.html)
+        && /Formative evaluations/.test(r.html));
     } else { bound("13. unauthenticated recipient over HTTP", "VERIFY_BASE_URL not set"); bound("14. displayed authenticity, validity and meaning over HTTP", "VERIFY_BASE_URL not set"); }
     const cpdBefore = (await admin.from("individual_professional_cpd").select("id").eq("user_id", me)).data?.length;
     const revoked = await revokeShare(admin, me, link.id);

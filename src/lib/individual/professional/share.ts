@@ -61,7 +61,9 @@ export async function mintShare(admin: any, userId: string, input: ReturnType<ty
   /** COMPETENCY-01 S11 (migration 520): the competencies, and which parts of each, the person ticked for this link, already checked. */
   competencies: readonly { myCompetencyId: string; parts: readonly ("self_assessment" | "evidence" | "assessed_outcomes")[] }[] = [],
   /** PASSPORT-01 (540): a purpose-specific view. The link is then a DRAFT (consent false) until activateShare. */
-  view: PassportViewInput | null = null): Promise<ShareLink | null> {
+  view: PassportViewInput | null = null,
+  /** PROF-EVALUATION-01 s13 (migration 530): the recorded evaluations the person ticked for this link, already checked. */
+  evaluationIds: readonly string[] = []): Promise<ShareLink | null> {
   const token = randomBytes(24).toString("hex");
   const { data: share, error } = await admin.from("passport_share_tokens").insert({
     token, nurse_id: userId, hospital_id: null, scope: input.scope, label: input.label,
@@ -92,7 +94,11 @@ export async function mintShare(admin: any, userId: string, input: ReturnType<ty
   const { error: recErr } = !linkErr && !itemErr && !learnErr && !compErr && !viewErr && view && view.records.length
     ? await admin.from("individual_passport_share_record").insert(view.records.map(r => ({ share_token_id: share.id, user_id: userId, [RECORD_COLUMN[r.kind]]: r.id })))
     : { error: null };
-  if (linkErr || itemErr || learnErr || compErr || viewErr || recErr) {
+  // Stage 6's writer reads the policy, which reads this module's limits: it is loaded only when a link carries
+  // evaluations, so the two modules never initialise in a cycle.
+  const evalOk = linkErr || itemErr || learnErr || compErr || viewErr || recErr ? false
+    : !evaluationIds.length || await (await import("./share-evaluation")).saveShareEvaluations(admin, userId, share.id, evaluationIds);
+  if (linkErr || itemErr || learnErr || compErr || viewErr || recErr || !evalOk) {
     // Without the companion row the link would show the institution sections only, which is not what the
     // person asked to share. Withdraw it rather than hand out a different link than the one requested.
     await admin.from("passport_share_tokens").update({ revoked: true }).eq("id", share.id).eq("nurse_id", userId);

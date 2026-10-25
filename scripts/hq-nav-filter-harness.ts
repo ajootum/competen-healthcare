@@ -41,8 +41,10 @@ function ok(id: string, cond: boolean, msg: string) {
 function skip(id: string, msg: string) { skips.push(`${id}  ${msg}`); console.log(`  ○ ${id}  SKIPPED - ${msg}`); }
 
 const src = (p: string) => readFileSync(p, "utf8");
-const itemsOf = (sections: { items: { href: string }[] }[]) => sections.flatMap(s => s.items);
-const countItems = (sections: { items: unknown[] }[]) => sections.reduce((n, s) => n + s.items.length, 0);
+// HQ-IA-02: children are drawn rows too, so every count and every "what is drawn" includes them.
+type Row = { href: string; children?: Row[] };
+const itemsOf = (sections: { items: Row[] }[]) => sections.flatMap(s => s.items.flatMap(i => [i, ...(i.children ?? [])]));
+const countItems = (sections: { items: Row[] }[]) => itemsOf(sections).length;
 
 const OWNER = { isOwner: true, capabilities: [] as string[] };
 const NOBODY = { isOwner: false, capabilities: [] as string[] };

@@ -10,6 +10,7 @@ import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 import { audit, readBody, refuse } from "@/lib/individual/professional/api";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { checkShareChoice, parseShareProfile } from "@/lib/individual/professional/share-profile";
+import { checkShareEvaluations, parseShareEvaluations } from "@/lib/individual/professional/share-evaluation";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -46,6 +47,10 @@ export async function POST(req: Request) {
   const competencies = parseShareCompetencies(fields);
   const compErr = await checkShareCompetencies(ctx.admin, ctx.userId, competencies, policy.professionalCompetency.shareParts);
   if (compErr) return refuse(compErr);
+  // COMPETEN-PROFESSIONAL-EVALUATION-01 s13: the recorded evaluations the person ticked, each their own, while sharing is offered.
+  const evaluationIds = parseShareEvaluations(fields);
+  const evalErr = await checkShareEvaluations(ctx.admin, ctx.userId, evaluationIds, policy.professionalEvaluation.sharing);
+  if (evalErr) return refuse(evalErr);
   // PASSPORT-01 P4: the view and its own records, ticked one by one, of kinds the configuration lets a link carry.
   const view = parsePassportView(fields, policy.professionalPassport);
   if (!view.ok) return refuse(view.error);
@@ -60,9 +65,9 @@ export async function POST(req: Request) {
     const recErr = await checkPassportRecords(ctx.admin, ctx.userId, view.value.records, { study: [], evaluations: [] });
     if (recErr) return refuse(recErr);
   }
-  const link = await mintShare(ctx.admin, ctx.userId, input, profile, learningIds, competencies, view.value);
+  const link = await mintShare(ctx.admin, ctx.userId, input, profile, learningIds, competencies, view.value, evaluationIds);
   if (!link) return NextResponse.json({ error: "The link could not be created just now. Try again shortly." }, { status: 500 });
-  await audit(ctx, "create_passport_share", "passport_share_token", link.id, { scope: input.scope, days: input.days, includes_own_records: true, profile_overview: profile.overview, profile_records: profile.itemIds.length, learning_records: learningIds.length, competencies: competencies.length, own_records: view.value.records.length, include_institution: view.value.includeInstitution, draft: true });
+  await audit(ctx, "create_passport_share", "passport_share_token", link.id, { scope: input.scope, days: input.days, includes_own_records: true, profile_overview: profile.overview, profile_records: profile.itemIds.length, learning_records: learningIds.length, competencies: competencies.length, own_records: view.value.records.length, include_institution: view.value.includeInstitution, evaluations: evaluationIds.length, draft: true });
   return NextResponse.json({ ok: true, path: `/verify/${link.token}`, link, draft: true }, { status: 201 });
 }
 

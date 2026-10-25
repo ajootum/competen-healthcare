@@ -83,11 +83,11 @@ VERIFY-540 matched expectation after apply #2 and again after the re-apply.
 | Check | Result |
 |---|---|
 | `tsc`, eslint | clean |
-| vitest `src/lib/individual` | 545 / 545. The new `passport-view.test.ts` pins two things. A link with no view carries none of the person's CPD, and a view carries exactly the records ticked for it. It also pins the C5 rule: the class decides, never the configured outcome code. Planted removals of the filter and of the class test each turned it red. |
-| `professional-passport-harness` (new, in the CI list) | **28 / 28**, including 19 planted reds |
+| vitest `src/lib/individual` + `src/lib/competency` | 641 / 641 after merging main (#127, #128, #129). `passport-view.test.ts` pins two things. A link with no view carries none of the person's CPD, and a view carries exactly the records ticked for it. It also pins the C5 rule: the class decides, never the configured outcome code. Planted removals of the filter and of the class test each turned it red. |
+| `professional-passport-harness` (new, in the CI list) | **33 / 33**, including 23 planted reds (E1, Stage 6 evaluations: 4) |
 | `individual-professional-harness` | 102 / 102. E5, M4, W1/W2 and D1 were moved to the record-level rule. E6 admits the C5 adapter only while it touches no table. Each change has a plant. |
 | `professional-profile`, `individual-foundation`, `professional-competency` | all green |
-| **Staging journey, GO §15 items 1–20** (`professional-passport-acceptance-harness`, `/verify` over HTTP) | **19 passed, 0 failed, 3 bounded (not faked)**, including cleanup. A planted defect (a link carrying all CPD) turned items 12, 13 and 18 red. The source was restored. |
+| **Staging journey, GO §15 items 1–20** (`professional-passport-acceptance-harness`, `/verify` over HTTP) | **21 passed, 0 failed, 2 bounded (not faked)** after the Stage 6 merge, including item 6 with a real Stage 6 evaluation (6b: shown as formative, no AI text). Before the merge it was 19 / 0 / 3. A planted defect (a link carrying all CPD) turned items 12, 13 and 18 red. |
 | **Staging UI walk** (synthetic identity, deleted after) | See the steps below. |
 
 **Staging UI walk steps:**
@@ -102,7 +102,7 @@ VERIFY-540 matched expectation after apply #2 and again after the re-apply.
 ## 6. Bounded follow-ups
 
 - **Item 4, Competen Learning.** Staging has Learning off, or publishes no external course, so the journey reports this item as bounded. The read is the existing 491 loader.
-- **Item 6, Professional evaluations (Stage 6, 530, PR #127).** Not on this branch. Agreed with Stage 6: whichever branch merges second calls `saveShareEvaluations` inside `mintShare`, under its withdraw-on-failure block, and removes the route's post-mint call. `sharedEvaluationsFor` then joins the view as category "evaluation" with trust "educational". It shows no AI text, no notes and no private source names.
-- **Item 7, independently verified competency (C5, 510/511).** The Studio is on main (#128) but not yet registered with the adapter. That is the Stage 5 C5 wiring, a separate branch. Until then the adapter answers "not provisioned". After wiring, only `verifiedNow` (current, class verified, at a level) reads "independently verified". Partial reads "assessed".
+- **Item 6, Professional evaluations (Stage 6, 530).** Wired after #127 merged. `mintShare` saves the ticked evaluations inside its withdraw-on-failure block. It loads Stage 6's writer lazily, because `policy.ts` imports `share.ts` and a static import broke `/verify` at load. The route checks them before the mint and makes no post-mint call. The view shows each one as "educational", using Stage 6's `sharedEvaluationsFor` (no AI text, no notes, private sources counted only). Pinned by harness E1 with 4 plants, and accepted on staging (items 6 and 6b).
+- **Item 7, independently verified competency (C5, 510/511).** The person-side wiring is on `prof/c5-adapter-wiring`, a separate branch. A current verified decision needs an appointed assessor; none is current on staging, and IND-007's synthetic assessors are retired. After wiring, only `verifiedNow` (current, class verified, at a level) reads "independently verified". Partial reads "assessed".
 - **Scholar-only users** cannot create a view yet. Sharing is a Professional surface.
 - **Institution records** are included as a whole (`include_institution`), not record by record.

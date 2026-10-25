@@ -5,6 +5,7 @@ import { loadProfessionalRecord } from "./professional/record";
 import { loadSharedProfile } from "./professional/share-profile";
 import { loadSharedLearning } from "./professional/share-learning";
 import { loadSharedCompetencies } from "./professional/share-competency";
+import { sharedEvaluationsFor } from "./professional/share-evaluation";
 import { METHOD_LABEL, VERIFICATION_LABEL, isIndependentlyVerified } from "./professional/profile-verification";
 import { ITEM_LABEL } from "./professional/profile-vocabulary";
 import type { PassportPolicy, ProfessionalCompetencyPolicy, ProfessionalProfilePolicy } from "./policy";
@@ -67,11 +68,25 @@ export async function loadPassportSelection(admin: any, userId: string, shareTok
   const meta = metaRead === "unreadable" ? null : metaRead;
   if (metaRead === "unreadable") unreadable.push("cpd", "evidence", "study", "evaluation");
 
-  const [profile, learning, competencies] = await Promise.all([
+  const [profile, learning, competencies, evaluations] = await Promise.all([
     loadSharedProfile(admin, shareTokenId, userId, ctx.profile.shareSections, ctx.today),
     loadSharedLearning(admin, shareTokenId, userId, ctx.lcpd),
     loadSharedCompetencies(admin, shareTokenId, userId, ctx.competency.shareParts, ctx.today),
+    sharedEvaluationsFor(admin, shareTokenId, userId),
   ]);
+
+  // Professional development evaluations (530, Stage 6): the ones ticked for this link, re-checked now under the sharing
+  // policy. Formative, never assessed or verified. Finding states, summaries (deterministic, never AI) and limitations;
+  // private sources are counted, never named. No notes and no AI text: Stage 6's read returns neither.
+  if (evaluations === null) unreadable.push("evaluation");
+  for (const ev of evaluations ?? []) items.push({
+    key: `evaluation:530:${ev.id}`, category: "evaluation", sourceService: "Competen Professional evaluation", title: ev.scope,
+    description: ev.findings.map(f => `${f.label}: ${f.state}. ${f.summary}${f.limitations.length ? ` Limitations: ${f.limitations.join("; ")}` : ""}`).join(" · "),
+    issuer: null, date: ev.evaluatedAt, version: ev.frameworkVersions.length ? ev.frameworkVersions.join(", ") : null,
+    evidenceRef: `${ev.sources.length} source ${ev.sources.length === 1 ? "record" : "records"}${ev.privateCount ? `, plus ${ev.privateCount} private, not shown` : ""}`,
+    method: ev.interpretation, authority: null, trust: "educational", validity: "not_applicable",
+    meaning: ev.notices[0] ?? "A formative evaluation of the professional's own development records, not an assessment or a verification",
+  });
 
   // Professional profile (453): each record keeps its own class and verification state.
   if (profile === null) unreadable.push("profile");
