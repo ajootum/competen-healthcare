@@ -92,9 +92,13 @@ async function journey() {
   const requester = process.env.REQUESTER_ID ?? "", cpdId = process.env.REQUESTER_CPD_ID ?? "";
   const aAdm = await activeAppointment(st.admin.id, WHO.admin.position), aAss = await activeAppointment(st.assessor.id, WHO.assessor.position);
   if (!aAdm || !aAss) { console.error(`WAITING: the owner has not appointed both yet (administrator ${aAdm ? "appointed" : "not appointed"}, assessor ${aAss ? "appointed" : "not appointed"}). Nothing done.`); process.exit(2); }
-  const comp = (await admin.from("framework_competencies").select("id, code, name, learning_outcomes, framework_domains!inner(frameworks!inner(code, hospital_id, pub_status))")
-    .eq("framework_domains.frameworks.code", "NUR-RESP").is("framework_domains.frameworks.hospital_id", null).eq("framework_domains.frameworks.pub_status", "published").limit(50)).data
-    ?.find((c: any) => (c.learning_outcomes ?? []).length >= 2);
+  // COMPETENCY_ID: the requester's own competency from the integrated journey (its CPD evidence is linked to outcome 0).
+  // Without it, the first published respiratory competency with two outcomes.
+  const pick = process.env.COMPETENCY_ID ?? "";
+  const comps = (await admin.from("framework_competencies").select("id, code, name, learning_outcomes, framework_domains!inner(frameworks!inner(code, hospital_id, pub_status))")
+    .is("framework_domains.frameworks.hospital_id", null).eq("framework_domains.frameworks.pub_status", "published")
+    .eq(pick ? "id" : "framework_domains.frameworks.code", pick || "NUR-RESP").limit(50)).data ?? [];
+  const comp = comps.find((c: any) => (c.learning_outcomes ?? []).length >= (pick ? 1 : 2));
   const scale = (await admin.from("scoring_scales").select("id, scoring_levels(id, score, label)").limit(1)).data?.[0];
   if (!comp || !scale) { console.error("REFUSING: no published shared respiratory competency with two outcomes, or no scale."); process.exit(1); }
   const levels = [...(scale.scoring_levels ?? [])].sort((a: any, b: any) => a.score - b.score);
@@ -139,7 +143,10 @@ async function journey() {
   const { requestVerification } = await import("../src/lib/competency/verification");
   let requestId: string | null = null;
   if (requester && cpdId) {
-    const r = await requestVerification(admin, requester, { competencyId: comp.id, methodVersionId: versionId, outcomeIndexes: [0, 1], targetLevelId: target.id, evidence: [{ kind: "cpd", id: cpdId, outcomeIndexes: [0] }], note: "SYNTHETIC C5 request" });
+    // The portfolio's hand-over shape: outcome WORDS, the CPD entry linked to the first outcome.
+    const first = String((comp.learning_outcomes ?? [])[0] ?? "");
+    const r = await requestVerification(admin, requester, { competencyId: comp.id, methodVersionId: versionId, learningOutcomes: first ? [first] : undefined, targetLevelId: target.id,
+      evidence: [{ kind: "cpd", sourceId: cpdId, learningOutcome: first || null }], note: "SYNTHETIC C5 request" });
     requestId = r.ok ? r.requestId : null;
     if (!r.ok) console.log(`  request refused: ${r.error}`);
   }
