@@ -30,6 +30,12 @@ export async function transitionFramework(
 
   const oldStatus = framework.pub_status ?? "published";
   const { error: updateErr } = await admin.from("frameworks").update({ pub_status: newStatus }).eq("id", frameworkId);
+  // Migration 466: a shared CFCA framework is published only when every competency it owns is clinically approved (395)
+  // at its current content. The database refuses; this says why, in words.
+  if (updateErr && /cfca publication/i.test(updateErr.message ?? "")) {
+    const m = /(\d+) of (\d+)/.exec(updateErr.message);
+    return { ok: false, code: 409, error: `This framework cannot be published yet: ${m ? `${m[1]} of its ${m[2]} competencies are` : "some of its competencies are"} not clinically approved at their current content. Each needs an independent clinical review of that exact content first.` };
+  }
   if (updateErr) return { ok: false, error: updateErr.message, code: 500 };
 
   let warning: string | undefined;

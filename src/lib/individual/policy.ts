@@ -16,6 +16,10 @@ import {
   REGISTRATION_STANDING, REMINDER_KINDS, REMINDER_OFFSETS, SHAREABLE_SECTIONS, VERIFIABLE_KINDS,
   type ItemKind, type OptionalField, type ProfileSection, type ReminderKind,
 } from "./professional/profile-vocabulary";
+import {
+  DEFAULT_NEED_CATEGORIES, DEFAULT_NEED_MOTIVATIONS, DEFAULT_NEED_PRIORITIES, DEFAULT_REFLECTION_TEMPLATES, NEED_FIELDS, NEED_FIELD_LABEL,
+  NEED_SOURCE_LABEL, NEED_STAGES, NEED_STAGE_LABEL, PICKABLE_SOURCES, type NeedField, type NeedSource, type NeedStage,
+} from "./professional/needs-vocabulary";
 
 // ── COMPETEN INDIVIDUAL POLICY ── COMPETEN-CONFIG-002 items 4-7 ─────────────────────────────────────────
 //
@@ -48,14 +52,15 @@ export const POLICY_PATH_PREFIX = "individual.policy.";
 /** The estate default (src/lib/ai/quota.ts HOURLY_LIMIT without AI_HOURLY_LIMIT set). */
 export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
-export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "professional_learning_match_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
+export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_days" | "share_link_max_days" | "professional_learning_match_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
   | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides"
   | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns"
   | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent"
   | "scholar_evaluation_min_evidence" | "scholar_evaluation_recency_days" | "scholar_evaluation_min_sources" | "scholar_evaluation_band_strong"
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
-  | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections" | "scholar_upload_formats" | "scholar_learning_actions"
+  | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
+  | "professional_need_sources" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
@@ -64,12 +69,15 @@ export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues
 export type ProgrammesPolicyKey = "scholar_onboarding_programmes";
 export type OptionsPolicyKey = "scholar_institutions"
   | "professional_professions" | "professional_titles" | "professional_jurisdictions" | "professional_statuses" | "professional_qualification_types"
-  | "professional_registration_bodies" | "professional_practice_settings" | "professional_specialties" | "professional_career_interests";
+  | "professional_registration_bodies" | "professional_practice_settings" | "professional_specialties" | "professional_career_interests"
+  | "professional_need_categories" | "professional_need_motivations" | "professional_need_priorities" | "professional_reflection_templates";
 /** COMPETEN-PROFESSIONAL-PROFILE-01: an ORDERED choice from a fixed list (form fields, profile sections). */
-export type SequencePolicyKey = "professional_registration_fields" | "professional_profile_sections";
+export type SequencePolicyKey = "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
 export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_profile_ai"
+  | "professional_need_reopen" | "professional_need_competency_links" | "professional_need_ai_suggestions" | "professional_need_rule_suggestions"
+  | "professional_need_learning" | "professional_reflection_ai"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations"
@@ -251,6 +259,102 @@ const PROFESSIONAL_PROFILE_POLICIES: readonly PolicyDef[] = [
     help: "Sharing rule: which parts of the profile a person can choose to carry on a Passport link. Nothing is shared unless the person picks it, record by record, for that link.",
     options: SHAREABLE_SECTIONS.map(v => ({ value: v, label: SECTION_LABEL[v] })), fallback: SHAREABLE_SECTIONS,
     limitReason: "The six profile sections. Registration numbers and documents are never shared.",
+  },
+];
+
+// ── COMPETEN-PROFESSIONAL-NEEDS-01, Professional Stage 2: DEVELOPMENT NEEDS, NO CODE (owner GO s12) ──────────────
+// Categories, sources, motivations, the form's fields and their order, priorities, which stages are offered and in
+// what order, whether an addressed or retired need may be reopened, reflection templates, competency links, AI and
+// rule suggestions, learning discovery, AI on reflections, and how often a need is suggested for review. Same engine,
+// versions and change trail. Nothing names a profession or a country, and no stage sequence is enforced.
+const PROFESSIONAL_NEEDS_POLICIES: readonly PolicyDef[] = [
+  {
+    key: "professional_need_categories", kind: "options", product: "Professional", max: 50, noun: "category",
+    label: "Development need categories", help: "Categories a person may give a development need. Optional on the form.",
+    fallback: DEFAULT_NEED_CATEGORIES, emptyMeans: "Not asked", limitReason: "At most 50, each up to 160 characters.",
+  },
+  {
+    key: "professional_need_sources", kind: "set", product: "Professional",
+    label: "Where a development need can come from",
+    help: "The sources a person may choose when they record a need. Needs made from a reflection, an aspiration or a Passport competency say so on their own.",
+    options: PICKABLE_SOURCES.map(v => ({ value: v, label: NEED_SOURCE_LABEL[v] })), fallback: PICKABLE_SOURCES,
+    limitReason: "Only the sources migration 470 records. Every source makes the same kind of need.",
+  },
+  {
+    key: "professional_need_motivations", kind: "options", product: "Professional", max: 50, noun: "motivation",
+    label: "Motivations", help: "What may motivate a development need. Optional on the form.",
+    fallback: DEFAULT_NEED_MOTIVATIONS, emptyMeans: "Not asked", limitReason: "At most 50, each up to 160 characters.",
+  },
+  {
+    key: "professional_need_fields", kind: "sequence", product: "Professional",
+    label: "Optional development-need fields, in order",
+    help: "Which optional fields the development-need form shows, and in what order. The only required field is always \"What would you like to develop?\".",
+    options: NEED_FIELDS.map(v => ({ value: v, label: NEED_FIELD_LABEL[v] })), fallback: NEED_FIELDS,
+    limitReason: "Only these fields. None can be made required: a need can always be saved with its description alone.",
+  },
+  {
+    key: "professional_need_priorities", kind: "options", product: "Professional", max: 10, noun: "priority",
+    label: "Priorities", help: "The priorities a person may give a development need. Words, not scores.",
+    fallback: DEFAULT_NEED_PRIORITIES, emptyMeans: "Not asked", limitReason: "At most 10, each up to 160 characters. Never a numerical score.",
+  },
+  {
+    key: "professional_need_stages", kind: "sequence", product: "Professional",
+    label: "Development need stages, in order",
+    help: "The stages a person may move a need between, in the order they are listed. Any stage may follow any other: there is no required sequence.",
+    options: NEED_STAGES.map(v => ({ value: v, label: NEED_STAGE_LABEL[v] })), fallback: NEED_STAGES, fixed: ["identified"],
+    limitReason: "The seven stages of migration 470. Identified is always offered. A need in a stage no longer offered keeps it until the person moves it.",
+  },
+  {
+    key: "professional_need_reopen", kind: "choice", product: "Professional",
+    label: "Reopening addressed or retired needs",
+    help: "Lifecycle rule: whether a person may move an addressed or retired need back to an open stage. Its history is kept either way.",
+    options: [{ value: "on", label: "Allowed" }, { value: "off", label: "Not allowed: a closed need stays closed" }], fallback: "on",
+    limitReason: "Two choices. Default: allowed.",
+  },
+  {
+    key: "professional_reflection_templates", kind: "options", product: "Professional", max: 20, noun: "reflection prompt",
+    label: "Reflection templates", help: "Prompts a person may start a private reflection from.",
+    fallback: DEFAULT_REFLECTION_TEMPLATES, emptyMeans: "No prompt: a blank reflection", limitReason: "At most 20, each up to 160 characters.",
+  },
+  {
+    key: "professional_need_competency_links", kind: "choice", product: "Professional",
+    label: "Linking needs to competencies",
+    help: "Whether a person may link a development need to competencies from the catalogues Professional offers (the allowlist above).",
+    options: [{ value: "offered", label: "Allowed, from the offered catalogues" }, { value: "off", label: "Off" }], fallback: "offered",
+    limitReason: "Only catalogues already allowed for Professional. With none allowed, nothing is offered and needs work without one.",
+  },
+  {
+    key: "professional_need_rule_suggestions", kind: "choice", product: "Professional",
+    label: "Suggested needs from the person's own record",
+    help: "Whether Professional suggests needs from the person's own career aspirations and expiring registrations, without AI. Each suggestion says why and needs the person's acceptance.",
+    options: [{ value: "on", label: "On" }, { value: "off", label: "Off" }], fallback: "on",
+    limitReason: "Two choices. A suggestion is never a need until the person accepts it.",
+  },
+  {
+    key: "professional_need_ai_suggestions", kind: "choice", product: "Professional",
+    label: "AI-suggested development needs",
+    help: "Whether a person may ask the personal AI to suggest development needs from their own record. AI fair use and model eligibility apply. Each suggestion says why and needs the person's acceptance.",
+    options: [{ value: "on", label: "On, when the person asks" }, { value: "off", label: "Off" }], fallback: "on",
+    limitReason: "Two choices. Development needs work fully without AI.",
+  },
+  {
+    key: "professional_need_learning", kind: "choice", product: "Professional",
+    label: "Learning opportunities on a need",
+    help: "Whether a need shows learning it may be served by: catalogue learning where Competen Learning is on, and ways to develop that need no course.",
+    options: [{ value: "on", label: "Show" }, { value: "off", label: "Do not show" }], fallback: "on",
+    limitReason: "Two choices. Nothing is ever required: no purchase and no enrolment.",
+  },
+  {
+    key: "professional_reflection_ai", kind: "choice", product: "Professional",
+    label: "AI on private reflections",
+    help: "Privacy rule: whether a person may ask the personal AI to summarise one of their private reflections. Only that reflection is sent, only when they ask, and nothing is stored.",
+    options: [{ value: "on", label: "On, when the person asks" }, { value: "off", label: "Off: reflections never reach AI" }], fallback: "on",
+    limitReason: "Two choices. Reflections are never shared, whatever is chosen.",
+  },
+  {
+    key: "professional_need_review_days", kind: "int", product: "Professional", unit: "days",
+    label: "Suggest reviewing an open need after", help: "Review reminder: an open need not reviewed for this long is marked for review in the person's workspace.",
+    fallback: 90, min: 14, max: 365, limitReason: "From two weeks to a year. In-app only: no email.",
   },
 ];
 
@@ -794,6 +898,7 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Only the three content statuses of migration 394. Default: everything, labelled.",
   },
   ...PROFESSIONAL_PROFILE_POLICIES,
+  ...PROFESSIONAL_NEEDS_POLICIES,
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1034,6 +1139,8 @@ export type IndividualPolicy = {
   scholarCatalogueMinStatus: ContentStatusLevel;
   /** COMPETEN-PROFESSIONAL-PROFILE-01: the registration form and profile, as configured. */
   professionalProfile: ProfessionalProfilePolicy;
+  /** COMPETEN-PROFESSIONAL-NEEDS-01: development needs, as configured. */
+  professionalNeeds: ProfessionalNeedsPolicy;
 };
 
 export type ProfessionalProfilePolicy = {
@@ -1045,6 +1152,14 @@ export type ProfessionalProfilePolicy = {
   ai: "on" | "off";
   /** Part B. Offsets are days before expiry, largest first. */
   verificationKinds: ItemKind[]; reminderKinds: ReminderKind[]; reminderOffsets: number[]; reminderStandings: string[]; shareSections: ProfileSection[];
+};
+
+/** COMPETEN-PROFESSIONAL-NEEDS-01 (Stage 2): development needs, as configured. */
+export type ProfessionalNeedsPolicy = {
+  categories: ContextOption[]; motivations: ContextOption[]; priorities: ContextOption[]; templates: ContextOption[];
+  sources: NeedSource[]; fields: NeedField[]; stages: NeedStage[];
+  reopen: "on" | "off"; competencyLinks: "offered" | "off"; ruleSuggestions: "on" | "off"; aiSuggestions: "on" | "off";
+  learning: "on" | "off"; reflectionAi: "on" | "off"; reviewDays: number;
 };
 
 type Row = { config_path: string; published: any };
@@ -1120,6 +1235,23 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
     scholarCatalogueMinStatus: clampChoice(policyDef("scholar_catalogue_min_status") as ChoicePolicy, published.get(policyPath("scholar_catalogue_min_status"))) as ContentStatusLevel,
     professionalProfile: resolveProfessionalProfile(published),
+    professionalNeeds: resolveProfessionalNeeds(published),
+  };
+}
+
+function resolveProfessionalNeeds(published: Map<string, any>): ProfessionalNeedsPolicy {
+  const opts = (key: OptionsPolicyKey) => clampOptions(policyDef(key) as OptionsPolicy, published.get(policyPath(key)));
+  const seq = (key: SequencePolicyKey) => clampSequence(policyDef(key) as SequencePolicy, published.get(policyPath(key)));
+  const choice = (key: ChoicePolicyKey) => clampChoice(policyDef(key) as ChoicePolicy, published.get(policyPath(key)));
+  return {
+    categories: opts("professional_need_categories"), motivations: opts("professional_need_motivations"),
+    priorities: opts("professional_need_priorities"), templates: opts("professional_reflection_templates"),
+    sources: clampSet(policyDef("professional_need_sources") as SetPolicy, published.get(policyPath("professional_need_sources"))) as NeedSource[],
+    fields: seq("professional_need_fields") as NeedField[], stages: seq("professional_need_stages") as NeedStage[],
+    reopen: choice("professional_need_reopen") as "on" | "off", competencyLinks: choice("professional_need_competency_links") as "offered" | "off",
+    ruleSuggestions: choice("professional_need_rule_suggestions") as "on" | "off", aiSuggestions: choice("professional_need_ai_suggestions") as "on" | "off",
+    learning: choice("professional_need_learning") as "on" | "off", reflectionAi: choice("professional_reflection_ai") as "on" | "off",
+    reviewDays: clampInt(policyDef("professional_need_review_days") as IntPolicy, published.get(policyPath("professional_need_review_days"))),
   };
 }
 

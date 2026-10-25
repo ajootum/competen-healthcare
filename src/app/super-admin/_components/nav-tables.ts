@@ -61,6 +61,7 @@ export const GENERAL_NAV: NavSection[] = [
   ]},
   // Migration 395 (owner decision D2): Holdings clinical-content approval, for every product.
   { group: "CLINICAL CONTENT", items: [
+    { label: "Competency Authoring", href: "/super-admin/competencies/authoring", icon: "✍️" },
     { label: "Clinical Review", href: "/super-admin/clinical-review", icon: "🩺" },
     { label: "Clinical Review Governance", href: "/super-admin/clinical-review/governance", icon: "⚖️" },
     // Migrations 422-423: the shared clinical case library, on the same approval process.
