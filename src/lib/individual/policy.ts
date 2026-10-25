@@ -20,6 +20,11 @@ import {
   DEFAULT_NEED_CATEGORIES, DEFAULT_NEED_MOTIVATIONS, DEFAULT_NEED_PRIORITIES, DEFAULT_REFLECTION_TEMPLATES, NEED_FIELDS, NEED_FIELD_LABEL,
   NEED_SOURCE_LABEL, NEED_STAGES, NEED_STAGE_LABEL, PICKABLE_SOURCES, type NeedField, type NeedSource, type NeedStage,
 } from "./professional/needs-vocabulary";
+import {
+  ACTIVITY_STATUSES, ACTIVITY_STATUS_TEXT, DEFAULT_ACTIVITY_TYPES, DEFAULT_EVIDENCE_KINDS, DEFAULT_GOAL_PRIORITIES, DEFAULT_GOAL_TEMPLATES, DEFAULT_GOAL_TYPES,
+  DEFAULT_MILESTONE_TYPES, GOAL_FIELDS, GOAL_FIELD_LABEL, GOAL_STATUSES, GOAL_STATUS_TEXT, REVIEW_FIELDS, REVIEW_FIELD_LABEL,
+  type ActivityStatus, type GoalField, type GoalStatus as PlanGoalStatus, type ReviewField,
+} from "./professional/plan-vocabulary";
 
 // ── COMPETEN INDIVIDUAL POLICY ── COMPETEN-CONFIG-002 items 4-7 ─────────────────────────────────────────
 //
@@ -52,7 +57,7 @@ export const POLICY_PATH_PREFIX = "individual.policy.";
 /** The estate default (src/lib/ai/quota.ts HOURLY_LIMIT without AI_HOURLY_LIMIT set). */
 export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
-export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_days" | "share_link_max_days" | "professional_learning_match_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
+export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_days" | "professional_goal_review_days" | "professional_plan_reminder_days" | "share_link_max_days" | "professional_learning_match_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
   | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides"
   | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns"
   | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent"
@@ -70,14 +75,18 @@ export type ProgrammesPolicyKey = "scholar_onboarding_programmes";
 export type OptionsPolicyKey = "scholar_institutions"
   | "professional_professions" | "professional_titles" | "professional_jurisdictions" | "professional_statuses" | "professional_qualification_types"
   | "professional_registration_bodies" | "professional_practice_settings" | "professional_specialties" | "professional_career_interests"
-  | "professional_need_categories" | "professional_need_motivations" | "professional_need_priorities" | "professional_reflection_templates";
+  | "professional_need_categories" | "professional_need_motivations" | "professional_need_priorities" | "professional_reflection_templates"
+  | "professional_goal_types" | "professional_goal_priorities" | "professional_activity_types" | "professional_milestone_types"
+  | "professional_goal_templates" | "professional_goal_evidence_kinds";
 /** COMPETEN-PROFESSIONAL-PROFILE-01: an ORDERED choice from a fixed list (form fields, profile sections). */
-export type SequencePolicyKey = "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages";
+export type SequencePolicyKey = "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages"
+  | "professional_goal_fields" | "professional_goal_statuses" | "professional_activity_statuses" | "professional_goal_review_fields";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
 export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_profile_ai"
   | "professional_need_reopen" | "professional_need_competency_links" | "professional_need_ai_suggestions" | "professional_need_rule_suggestions"
   | "professional_need_learning" | "professional_reflection_ai"
+  | "professional_goal_reopen" | "professional_plan_competency_links" | "professional_plan_learning" | "professional_plan_ai" | "professional_plan_ai_reflections"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations"
@@ -355,6 +364,121 @@ const PROFESSIONAL_NEEDS_POLICIES: readonly PolicyDef[] = [
     key: "professional_need_review_days", kind: "int", product: "Professional", unit: "days",
     label: "Suggest reviewing an open need after", help: "Review reminder: an open need not reviewed for this long is marked for review in the person's workspace.",
     fallback: 90, min: 14, max: 365, limitReason: "From two weeks to a year. In-app only: no email.",
+  },
+];
+
+// ── COMPETEN-PROFESSIONAL-PLAN-01, Professional Stage 3: DEVELOPMENT PLANNING, NO CODE (owner GO) ────────────────
+// Goal types, templates, activity and milestone types, statuses, priorities, review questions, reminders, evidence
+// expectations, learning recommendations, competency links, AI and its privacy. Same engine, versions and change
+// trail. Nothing names a profession or a country, no template is compulsory, and no timeline or pathway is enforced.
+const PROFESSIONAL_PLAN_POLICIES: readonly PolicyDef[] = [
+  {
+    key: "professional_goal_types", kind: "options", product: "Professional", max: 30, noun: "goal type",
+    label: "Goal types", help: "Types a person may give a development goal. Optional on the form.",
+    fallback: DEFAULT_GOAL_TYPES, emptyMeans: "Not asked", limitReason: "At most 30, each up to 160 characters.",
+  },
+  {
+    key: "professional_goal_priorities", kind: "options", product: "Professional", max: 10, noun: "priority",
+    label: "Goal priorities", help: "The priorities a person may give a goal. Words, not scores.",
+    fallback: DEFAULT_GOAL_PRIORITIES, emptyMeans: "Not asked", limitReason: "At most 10, each up to 160 characters. Never a numerical score.",
+  },
+  {
+    key: "professional_goal_templates", kind: "options", product: "Professional", max: 10, noun: "planning template",
+    label: "Planning templates",
+    help: "Templates a person may plan a goal with. Write each as \"Name: first prompt | second prompt | ...\". A template is always optional.",
+    fallback: DEFAULT_GOAL_TEMPLATES, emptyMeans: "No templates offered", limitReason: "At most 10, each up to 160 characters, at most 8 prompts. Never compulsory.",
+  },
+  {
+    key: "professional_goal_fields", kind: "sequence", product: "Professional",
+    label: "Optional goal fields, in order",
+    help: "Which optional fields the goal form shows, and in what order. The only required field is always \"What do you want to achieve?\".",
+    options: GOAL_FIELDS.map(v => ({ value: v, label: GOAL_FIELD_LABEL[v] })), fallback: GOAL_FIELDS,
+    limitReason: "Only these fields. None can be made required: a goal can always be saved with its description alone.",
+  },
+  {
+    key: "professional_goal_statuses", kind: "sequence", product: "Professional",
+    label: "Goal statuses, in order",
+    help: "The statuses a person may move a goal between. Any may follow any other. Addressed is the person's own judgement and never verifies competence.",
+    options: GOAL_STATUSES.map(v => ({ value: v, label: GOAL_STATUS_TEXT[v] })), fallback: GOAL_STATUSES, fixed: ["planned"],
+    limitReason: "The five statuses of migration 480. Planned is always offered.",
+  },
+  {
+    key: "professional_goal_reopen", kind: "choice", product: "Professional",
+    label: "Reopening addressed or retired goals",
+    help: "Workflow rule: whether a person may move an addressed or retired goal back to an open status. Its history is kept either way.",
+    options: [{ value: "on", label: "Allowed" }, { value: "off", label: "Not allowed: a closed goal stays closed" }], fallback: "on",
+    limitReason: "Two choices. Default: allowed.",
+  },
+  {
+    key: "professional_activity_types", kind: "options", product: "Professional", max: 50, noun: "activity type",
+    label: "Development activity types",
+    help: "Kinds of development activity a person may plan: courses, workshops, study, mentorship, learning at work, teaching, research and more.",
+    fallback: DEFAULT_ACTIVITY_TYPES, emptyMeans: "Not asked", limitReason: "At most 50, each up to 160 characters.",
+  },
+  {
+    key: "professional_activity_statuses", kind: "sequence", product: "Professional",
+    label: "Activity statuses, in order",
+    help: "The statuses a person may give a planned activity. Completed follows the record of what happened: a CPD entry or a learning record.",
+    options: ACTIVITY_STATUSES.map(v => ({ value: v, label: ACTIVITY_STATUS_TEXT[v] })), fallback: ACTIVITY_STATUSES, fixed: ["planned", "completed"],
+    limitReason: "The five statuses of migration 480. Planned and completed are always offered.",
+  },
+  {
+    key: "professional_milestone_types", kind: "options", product: "Professional", max: 20, noun: "milestone type",
+    label: "Milestone types", help: "Kinds of milestone a person may add to a goal. Milestones are always optional.",
+    fallback: DEFAULT_MILESTONE_TYPES, emptyMeans: "Not asked", limitReason: "At most 20, each up to 160 characters.",
+  },
+  {
+    key: "professional_goal_evidence_kinds", kind: "options", product: "Professional", max: 20, noun: "evidence kind",
+    label: "Evidence a person may expect",
+    help: "Kinds of evidence shown as ideas when a person writes what evidence they expect. Nothing is required, and expecting evidence verifies nothing.",
+    fallback: DEFAULT_EVIDENCE_KINDS, emptyMeans: "No ideas shown", limitReason: "At most 20, each up to 160 characters.",
+  },
+  {
+    key: "professional_goal_review_fields", kind: "sequence", product: "Professional",
+    label: "Goal review questions, in order",
+    help: "The questions a person may answer when they review a goal. Every answer is optional, and a review is private.",
+    options: REVIEW_FIELDS.map(v => ({ value: v, label: REVIEW_FIELD_LABEL[v] })), fallback: REVIEW_FIELDS,
+    limitReason: "The five questions of migration 480's review.",
+  },
+  {
+    key: "professional_goal_review_days", kind: "int", product: "Professional", unit: "days",
+    label: "Suggest reviewing an open goal after",
+    help: "Review reminder: an open goal with no review date, not reviewed for this long, is marked for review in the person's plan.",
+    fallback: 90, min: 14, max: 365, limitReason: "From two weeks to a year. In-app only: no email.",
+  },
+  {
+    key: "professional_plan_reminder_days", kind: "int", product: "Professional", unit: "days",
+    label: "Plan reminder lead time",
+    help: "How many days ahead a target date, review date or milestone is shown as coming up in the person's plan.",
+    fallback: 14, min: 1, max: 90, limitReason: "From one day to 90. In-app only: no email.",
+  },
+  {
+    key: "professional_plan_competency_links", kind: "choice", product: "Professional",
+    label: "Linking goals and activities to competencies",
+    help: "Whether a person may link goals and activities to competencies and outcomes from the catalogues Professional offers. The framework version is kept with each link.",
+    options: [{ value: "offered", label: "Allowed, from the offered catalogues" }, { value: "off", label: "Off" }], fallback: "offered",
+    limitReason: "Only catalogues already allowed for Professional. With none allowed, plans work without one.",
+  },
+  {
+    key: "professional_plan_learning", kind: "choice", product: "Professional",
+    label: "Learning recommendations on a goal",
+    help: "Which Competen Learning a goal suggests where Learning is on: by the competencies linked to it, or also by the words of the goal. Adding a course is always optional and never a purchase.",
+    options: [{ value: "competency", label: "By linked competencies" }, { value: "search", label: "By linked competencies and the goal's words" }, { value: "off", label: "Do not suggest" }],
+    fallback: "competency", limitReason: "Three choices. Manual and external activities work either way.",
+  },
+  {
+    key: "professional_plan_ai", kind: "choice", product: "Professional",
+    label: "AI help with planning",
+    help: "Whether a person may ask the personal AI for goal, activity and milestone ideas, an evidence summary or review questions. AI fair use and model eligibility apply. Nothing is saved unless the person accepts it.",
+    options: [{ value: "on", label: "On, when the person asks" }, { value: "off", label: "Off" }], fallback: "on",
+    limitReason: "Two choices. Planning works fully without AI.",
+  },
+  {
+    key: "professional_plan_ai_reflections", kind: "choice", product: "Professional",
+    label: "Reflections in AI planning help",
+    help: "Privacy rule: planning help never sends a person's private reflections. This cannot be widened here.",
+    options: [{ value: "off", label: "Never sent" }], fallback: "off",
+    limitReason: "One choice. Reflections stay private; AI on a reflection is the separate, per-reflection rule above.",
   },
 ];
 
@@ -899,6 +1023,7 @@ export const POLICIES: readonly PolicyDef[] = [
   },
   ...PROFESSIONAL_PROFILE_POLICIES,
   ...PROFESSIONAL_NEEDS_POLICIES,
+  ...PROFESSIONAL_PLAN_POLICIES,
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1141,6 +1266,17 @@ export type IndividualPolicy = {
   professionalProfile: ProfessionalProfilePolicy;
   /** COMPETEN-PROFESSIONAL-NEEDS-01: development needs, as configured. */
   professionalNeeds: ProfessionalNeedsPolicy;
+  /** COMPETEN-PROFESSIONAL-PLAN-01: development planning, as configured. */
+  professionalPlan: ProfessionalPlanPolicy;
+};
+
+/** COMPETEN-PROFESSIONAL-PLAN-01 (Stage 3): development planning, as configured. */
+export type ProfessionalPlanPolicy = {
+  goalTypes: ContextOption[]; priorities: ContextOption[]; templates: ContextOption[]; activityTypes: ContextOption[];
+  milestoneTypes: ContextOption[]; evidenceKinds: ContextOption[];
+  fields: GoalField[]; goalStatuses: PlanGoalStatus[]; activityStatuses: ActivityStatus[]; reviewFields: ReviewField[];
+  reopen: "on" | "off"; competencyLinks: "offered" | "off"; learning: "competency" | "search" | "off"; ai: "on" | "off"; aiReflections: "off";
+  reviewDays: number; reminderDays: number;
 };
 
 export type ProfessionalProfilePolicy = {
@@ -1236,6 +1372,24 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarCatalogueMinStatus: clampChoice(policyDef("scholar_catalogue_min_status") as ChoicePolicy, published.get(policyPath("scholar_catalogue_min_status"))) as ContentStatusLevel,
     professionalProfile: resolveProfessionalProfile(published),
     professionalNeeds: resolveProfessionalNeeds(published),
+    professionalPlan: resolveProfessionalPlan(published),
+  };
+}
+
+function resolveProfessionalPlan(published: Map<string, any>): ProfessionalPlanPolicy {
+  const opts = (key: OptionsPolicyKey) => clampOptions(policyDef(key) as OptionsPolicy, published.get(policyPath(key)));
+  const seq = (key: SequencePolicyKey) => clampSequence(policyDef(key) as SequencePolicy, published.get(policyPath(key)));
+  const choice = (key: ChoicePolicyKey) => clampChoice(policyDef(key) as ChoicePolicy, published.get(policyPath(key)));
+  const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
+  return {
+    goalTypes: opts("professional_goal_types"), priorities: opts("professional_goal_priorities"), templates: opts("professional_goal_templates"),
+    activityTypes: opts("professional_activity_types"), milestoneTypes: opts("professional_milestone_types"), evidenceKinds: opts("professional_goal_evidence_kinds"),
+    fields: seq("professional_goal_fields") as GoalField[], goalStatuses: seq("professional_goal_statuses") as PlanGoalStatus[],
+    activityStatuses: seq("professional_activity_statuses") as ActivityStatus[], reviewFields: seq("professional_goal_review_fields") as ReviewField[],
+    reopen: choice("professional_goal_reopen") as "on" | "off", competencyLinks: choice("professional_plan_competency_links") as "offered" | "off",
+    learning: choice("professional_plan_learning") as "competency" | "search" | "off", ai: choice("professional_plan_ai") as "on" | "off",
+    aiReflections: "off",
+    reviewDays: int("professional_goal_review_days"), reminderDays: int("professional_plan_reminder_days"),
   };
 }
 

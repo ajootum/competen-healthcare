@@ -324,6 +324,14 @@ const STAGING: Listed[] = [
       + "catalogue, no AI. Own harness-prof02-* identity, deleted after; two policy rows restored exactly. PEND until 470 is applied.",
   },
   {
+    file: "professional-plan-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-PLAN-01 Stage 3 (480), owner GO s15, the ECG Interpretation goal: created from a need and directly, "
+      + "saved with only a description, CFCA outcomes with version, catalogue and external learning added with no enrolment, study and "
+      + "mentorship ordered with a dependency, milestones and review dates with reminders, CPD referenced (completed only with the record, "
+      + "one activity serving two goals), review and evidence, revision with history, addressed without verification, reopen and defer, "
+      + "no catalogue, no AI, nothing shared. Own harness-prof03-* identity, deleted after; three policy rows restored exactly. PEND until 480 is applied.",
+  },
+  {
     file: "account-profile-acceptance-harness.ts",
     note: "My profile (owner GO 2026-10-23, PR D): a real anon-key user session updates its own personal fields and "
       + "is refused every authority column and the email (column grants plus RLS WITH CHECK profile_authority_unchanged), "

@@ -10,7 +10,7 @@ import type { OwnEvidenceClass } from "./vocabulary";
 // ⚠ NOT MEASURED IS A STATE, NOT A ZERO. Every ratio here is null when its denominator is empty, and the
 // page renders null as "Not measured" with the reason. A plan with no goals is not 0% complete.
 
-export type GoalLike = { id: string; need_id: string | null; status: string; target_date: string };
+export type GoalLike = { id: string; need_id: string | null; status: string; target_date: string | null };
 export type NeedLike = { id: string; title: string; status: string };
 export type CpdLike = { id: string; goal_id: string | null; hours: number | string | null; activity_date: string; evidence_class: string };
 export type EvidenceLike = { id: string; need_id: string | null; evidence_class: string };
@@ -28,7 +28,7 @@ export function planProgress(goals: readonly GoalLike[], today: string): PlanPro
   const counted = goals.length - dropped;
   return {
     total: goals.length, planned: n("planned"), inProgress: n("in_progress"), done, dropped,
-    overdue: goals.filter(g => (g.status === "planned" || g.status === "in_progress") && g.target_date < today).length,
+    overdue: goals.filter(g => (g.status === "planned" || g.status === "in_progress") && !!g.target_date && g.target_date < today).length,
     completion: counted > 0 ? done / counted : null,
   };
 }
@@ -88,7 +88,7 @@ export function evidenceCoverage(
 }
 
 export type GoalActivity = {
-  goalId: string; status: string; targetDate: string; overdue: boolean;
+  goalId: string; status: string; targetDate: string | null; overdue: boolean;
   entries: number; hours: number; withDocument: number; lastActivity: string | null;
 };
 
@@ -104,7 +104,7 @@ export function goalActivity(goals: readonly GoalLike[], cpd: readonly CpdLike[]
     const mine = cpd.filter(c => c.goal_id === g.id);
     const hours = Math.round(mine.reduce((s, c) => s + Number(c.hours || 0), 0) * 100) / 100;
     const last = mine.map(c => c.activity_date).sort().at(-1) ?? null;
-    return { goalId: g.id, status: g.status, targetDate: g.target_date, overdue: open(g.status) && g.target_date < today,
+    return { goalId: g.id, status: g.status, targetDate: g.target_date, overdue: open(g.status) && !!g.target_date && g.target_date < today,
       entries: mine.length, hours, withDocument: mine.filter(c => c.evidence_class === "source_linked").length, lastActivity: last };
-  }).sort((a, b) => Number(open(b.status)) - Number(open(a.status)) || a.targetDate.localeCompare(b.targetDate));
+  }).sort((a, b) => Number(open(b.status)) - Number(open(a.status)) || (a.targetDate ?? "9999-12-31").localeCompare(b.targetDate ?? "9999-12-31"));
 }

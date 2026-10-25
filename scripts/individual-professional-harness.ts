@@ -102,6 +102,16 @@ const WRITES: Record<string, string[]> = {
     "individual_professional_goal_need.insert", "individual_professional_goal_need.delete",
     "individual_professional_reflection.update", "individual_professional_reflection.insert",
     "individual_professional_need_suggestion.update", "individual_professional_need_suggestion.insert"],
+  // PROF-PLAN-01 (480): the one writer of Stage 3 goal fields, activities, milestones, plan links and reviews. Goal
+  // and activity history are 480's triggers', never written here. Links are unlinked (update), never deleted; reviews
+  // are insert-only. It writes NO CPD entry and NO learning record: it references them (the Stage 3/4 contract).
+  "src/lib/individual/professional/plan-store.ts": ["individual_professional_goal.insert", "individual_professional_goal.update",
+    "individual_professional_activity.insert", "individual_professional_activity.update", "individual_professional_activity.delete",
+    "individual_professional_activity_goal.insert", "individual_professional_activity_goal.update", "individual_professional_activity_goal.delete",
+    "individual_professional_milestone.insert", "individual_professional_milestone.update", "individual_professional_milestone.delete",
+    "individual_professional_plan_competency.insert", "individual_professional_plan_competency.update",
+    "individual_professional_goal_evidence.insert", "individual_professional_goal_evidence.update",
+    "individual_professional_goal_review.insert"],
   "src/app/api/individual/professional/reminders/route.ts": ["individual_professional_profile.update", "individual_professional_profile.insert"],
   "src/lib/individual/professional/mapping-store.ts": ["individual_professional_competency_map.insert", "individual_professional_competency_decision.insert"],
   // COMPETEN-PROFESSIONAL-PROFILE-01 (migration 450): the one writer of the registration facts and the profile records.
@@ -367,6 +377,8 @@ function checkAddPanelsStayOpen(src: Sources): { ok: boolean; detail: string } {
   const dev = src.get(PRO_PAGES_DIR + "development/page.tsx") ?? "";
   // Each named panel, not a count: PROF-NEEDS-01 added a second need panel, and a count of 2 stopped noticing the goal panel.
   if (!dev.includes('<AddPanel label="Add a goal"') || !dev.includes('<AddPanel label="Add a development need"')) bad.push("development/page.tsx: the need and goal panels are not AddPanel");
+  // PROF-PLAN-01 (Stage 3): the page now has a Stage 3 and an MVP goal panel. EVERY panel of each name must be an AddPanel.
+  if (/<(?!AddPanel\b)[A-Za-z]+ label="Add a (goal|development need)"/.test(dev)) bad.push("development/page.tsx: a need or goal panel is not AddPanel");
   const forms = src.get(FORMS_FILE) ?? "";
   const body = forms.slice(forms.indexOf("export function AddPanel"), forms.indexOf("type Method"));
   if (!/if \(suggestOpen\) setOpen\(true\);/.test(body) || /setOpen\(suggestOpen\)/.test(body)) bad.push("AddPanel: a changed suggestion can close the panel");

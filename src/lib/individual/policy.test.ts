@@ -9,6 +9,10 @@ import { STUDY_ACHIEVEMENT_KINDS } from "./scholar/passport-items";
 import { INDIVIDUAL_APP_FLAG } from "./gate";
 import { COUNTRIES } from "../countries";
 import { DEFAULT_NEED_CATEGORIES, DEFAULT_NEED_MOTIVATIONS, DEFAULT_NEED_PRIORITIES, DEFAULT_REFLECTION_TEMPLATES, NEED_FIELDS, NEED_STAGES, PICKABLE_SOURCES } from "./professional/needs-vocabulary";
+import {
+  ACTIVITY_STATUSES, DEFAULT_ACTIVITY_TYPES, DEFAULT_EVIDENCE_KINDS, DEFAULT_GOAL_PRIORITIES, DEFAULT_GOAL_TEMPLATES, DEFAULT_GOAL_TYPES, DEFAULT_MILESTONE_TYPES,
+  GOAL_FIELDS, GOAL_STATUSES, REVIEW_FIELDS,
+} from "./professional/plan-vocabulary";
 import { DEFAULT_PRACTICE_SETTINGS, DEFAULT_QUALIFICATION_TYPES, DEFAULT_STATUSES, DOCUMENT_KINDS, OPTIONAL_FIELDS, PROFILE_SECTIONS } from "./professional/profile-vocabulary";
 
 // An in-memory stand-in for the three WCE tables, enough for the shared write lifecycle and the reader.
@@ -115,6 +119,12 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
         categories: [...DEFAULT_NEED_CATEGORIES], motivations: [...DEFAULT_NEED_MOTIVATIONS], priorities: [...DEFAULT_NEED_PRIORITIES], templates: [...DEFAULT_REFLECTION_TEMPLATES],
         sources: [...PICKABLE_SOURCES], fields: [...NEED_FIELDS], stages: [...NEED_STAGES], reopen: "on", competencyLinks: "offered",
         ruleSuggestions: "on", aiSuggestions: "on", learning: "on", reflectionAi: "on", reviewDays: 90,
+      },
+      professionalPlan: {
+        goalTypes: [...DEFAULT_GOAL_TYPES], priorities: [...DEFAULT_GOAL_PRIORITIES], templates: [...DEFAULT_GOAL_TEMPLATES], activityTypes: [...DEFAULT_ACTIVITY_TYPES],
+        milestoneTypes: [...DEFAULT_MILESTONE_TYPES], evidenceKinds: [...DEFAULT_EVIDENCE_KINDS], fields: [...GOAL_FIELDS], goalStatuses: [...GOAL_STATUSES],
+        activityStatuses: [...ACTIVITY_STATUSES], reviewFields: [...REVIEW_FIELDS], reopen: "on", competencyLinks: "offered", learning: "competency", ai: "on",
+        aiReflections: "off", reviewDays: 90, reminderDays: 14,
       },
     });
     expect(DEFAULT_POLICY.professionalProfile.jurisdictions.length).toBe(COUNTRIES.length);

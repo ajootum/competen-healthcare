@@ -26,7 +26,7 @@ export type Need = {
 };
 
 export type Goal = {
-  id: string; need_id: string | null; title: string; detail: string | null; target_date: string;
+  id: string; need_id: string | null; title: string; detail: string | null; target_date: string | null;
   status: string; completed_at: string | null; created_at: string;
 };
 
