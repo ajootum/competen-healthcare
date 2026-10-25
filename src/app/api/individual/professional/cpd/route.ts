@@ -7,6 +7,7 @@ import { audit, readBody, refuse, todayUtc, writeFailed } from "@/lib/individual
 import { DIFFERENT_ACTIVITY_FIELD, duplicateForSave, notifyDuplicate, recordDifferentActivity, refusalBody } from "@/lib/individual/professional/cpd-duplicates";
 import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 import { lcpdSchemaReady, recordableTypes } from "@/lib/individual/professional/lcpd-schema";
+import { linkSavedCpd, planReady } from "@/lib/individual/professional/record-goals";
 
 /** LCPD-2: the configured types, and with migration 490 only a description and a date required. Before 490, 373's rule. */
 async function cpdRules(admin: unknown) {
@@ -31,6 +32,10 @@ export const dynamic = "force-dynamic";
 // a notification to the user", src/lib/individual/professional/cpd-duplicates.ts). The save is refused with 409, the
 // course, its date and a link, and the person is notified. "This is a different activity" (differentActivity=yes)
 // saves it: the decision is written FIRST, and without it the row is not written either.
+//
+// ⚠ THE GOAL IT SERVED (LCPD-01 with PLAN-01, migration 480). With 480 present the goal, and the planned activity it
+// completes (activityId), are linked AFTER the entry is saved through Stage 3's writers (record-goals.ts), and 373's
+// goal_id is no longer written: a PUT leaves an earlier one as it was. Without 480, goal_id exactly as before.
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("professional");
@@ -59,14 +64,16 @@ export async function POST(req: Request) {
     if (!stored.ok) return refuse(stored.error);
     doc = stored.doc;
   }
+  const plan = await planReady(ctx.admin);
   const { data, error } = await ctx.admin.from("individual_professional_cpd")
-    .insert({ ...parsed.value, ...doc, id, user_id: ctx.userId, experience_code: ORIGIN }).select("id, evidence_class").single();
+    .insert({ ...parsed.value, ...(plan ? { goal_id: null } : {}), ...doc, id, user_id: ctx.userId, experience_code: ORIGIN }).select("id, evidence_class").single();
   if (error || !data) {
     await removeDocument(ctx.admin, (doc as { document_path?: string }).document_path);
     return writeFailed("CPD entry");
   }
   await audit(ctx, "individual_professional_cpd_create", "individual_professional_cpd", data.id, { evidence_class: data.evidence_class, ...(dup ? { different_activity_from: dup.recordId } : {}) });
-  return NextResponse.json({ ok: true, id: data.id, evidenceClass: data.evidence_class }, { status: 201 });
+  const planNote = plan ? await linkSavedCpd(ctx.admin, ctx.userId, data.id, { goalId: parsed.value.goal_id, activityId: isUuid(fields.activityId) ? fields.activityId : null }) : null;
+  return NextResponse.json({ ok: true, id: data.id, evidenceClass: data.evidence_class, ...(planNote ? { planNote } : {}) }, { status: 201 });
 }
 
 /**
@@ -104,8 +111,11 @@ export async function PUT(req: Request) {
     if (!stored.ok) return refuse(stored.error);
     doc = stored.doc;
   }
+  // With 480 the goal is linked in the plan, so the entry's own goal_id is left as it was (not cleared by its absence).
+  const cols: Partial<typeof parsed.value> = { ...parsed.value };
+  if (await planReady(ctx.admin)) delete cols.goal_id;
   const { data, error } = await ctx.admin.from("individual_professional_cpd")
-    .update({ ...parsed.value, ...doc, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", ctx.userId).select("id, evidence_class").maybeSingle();
+    .update({ ...cols, ...doc, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", ctx.userId).select("id, evidence_class").maybeSingle();
   if (error || !data) {
     await removeDocument(ctx.admin, (doc as { document_path?: string }).document_path);
     return writeFailed("CPD entry");

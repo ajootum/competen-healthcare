@@ -15,8 +15,12 @@ const Disclosure = ({ label, accent, children }: { label: string; accent: string
 );
 const d = (v: string | null | undefined) => (v ? v.slice(0, 10) : "");
 
-/** What the person may record now: the configured types, and whether 490's optional hours and decimal credits apply. */
-export type CpdOptions = { types: { code: string; label: string }[]; flexible: boolean };
+/**
+ * What the person may record now: the configured types, and whether 490's optional hours and decimal credits apply.
+ * `plan` is present with migration 480: goals are then linked in the development plan (Stage 3), and `activities` are
+ * the planned activities a new entry can complete.
+ */
+export type CpdOptions = { types: { code: string; label: string }[]; flexible: boolean; plan?: { activities: { id: string; title: string }[] } | null };
 
 export function CpdEdit({ c, goals, today, accent, options }: {
   c: { id: string; title: string; activity_type: string; activity_date: string; hours: number | null; cpd_points: number | null; provider: string | null; reflection: string | null; goal_id: string | null; document_name: string | null };
@@ -37,9 +41,11 @@ export function CpdEdit({ c, goals, today, accent, options }: {
           <Field label={options.flexible ? "Hours (optional)" : "Hours"} htmlFor={`${p}-hours`}><input id={`${p}-hours`} name="hours" type="number" required={!options.flexible} min={0.1} max={1000} step={0.1} inputMode="decimal" defaultValue={c.hours ?? ""} className={inputCls} /></Field>
           <Field label={options.flexible ? "CPD credits (optional)" : "CPD points (optional)"} htmlFor={`${p}-points`}><input id={`${p}-points`} name="cpdPoints" type="number" min={0} step={options.flexible ? 0.1 : 1} defaultValue={c.cpd_points ?? ""} className={inputCls} /></Field>
           <Field label="Provider (optional)" htmlFor={`${p}-provider`}><input id={`${p}-provider`} name="provider" maxLength={160} defaultValue={c.provider ?? ""} className={inputCls} /></Field>
-          <Field label="Goal it served (optional)" htmlFor={`${p}-goal`}>
-            <select id={`${p}-goal`} name="goalId" defaultValue={c.goal_id ?? ""} className={inputCls}><option value="">None</option>{goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}</select>
-          </Field>
+          {!options.plan && (
+            <Field label="Goal it served (optional)" htmlFor={`${p}-goal`}>
+              <select id={`${p}-goal`} name="goalId" defaultValue={c.goal_id ?? ""} className={inputCls}><option value="">None</option>{goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}</select>
+            </Field>
+          )}
           <Field label={c.document_name ? `Replace ${c.document_name} (optional)` : "Attach a document (optional)"} htmlFor={`${p}-doc`} hint={`PDF or image, up to ${DOCUMENT_MAX_LABEL}. Leave empty to keep what is attached.`}>
             <input id={`${p}-doc`} name="document" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className={`${inputCls} py-2.5`} />
           </Field>
