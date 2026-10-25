@@ -434,6 +434,19 @@ const MIG_425 = "supabase/migrations/425-individual-scholar-revision-held-answer
  */
 const CASE_ANSWER = `${API}/clinical/sessions/[kind]/[id]/answer/route.ts`;
 const POLICY_FILE = "src/lib/individual/policy.ts";
+/**
+ * K42 (owner Stage 7 closure, D5-v2): AI MARKING OF SHORT ANSWERS IS OFF UNLESS IT IS SWITCHED ON. With no published
+ * value the policy says "self"; the answer route calls AI for a short answer only when it says exactly
+ * "ai_then_self". Code marking first and the student's own grading are unchanged.
+ */
+const shortAnswerAiOff = (src: Src, policyText: string) => {
+  const route = src.get(`${API}/revision/answer/route.ts`) ?? "";
+  const at = policyText.indexOf("key: \"scholar_short_answer_marking\"");
+  const block = policyText.slice(at, at + 1400);
+  return at > 0 && /fallback: "self",/.test(block) && !/fallback: "ai_then_self",/.test(block)
+    && /if \(policy\.scholarShortAnswerMarking === "ai_then_self"\) \{/.test(route)
+    && /let mark = markResponse\(q, r\);/.test(route);
+};
 const caseFeedbackOff = (src: Src, policyText: string) => {
   const route = src.get(CASE_ANSWER) ?? "";
   const block = policyText.slice(policyText.indexOf("key: \"scholar_case_reasoning_feedback\""), policyText.indexOf("key: \"scholar_case_reasoning_feedback\"") + 1200);
@@ -1031,6 +1044,8 @@ function main() {
     caseFeedbackHonest(REAL));
   ok("K39. EVALUATION-01: an evaluation interprets only marked evidence, deterministically, keeps AI and self-graded answers apart, is kept as made, and is never verified competence",
     evaluationHonest(REAL));
+  ok("K42. Stage 7 closure: with no published value, AI marking of short answers is off (\"self\"); code marking comes first, and AI is called only on an explicit \"ai_then_self\"",
+    shortAnswerAiOff(REAL, POLICY_REAL) && DEFAULT_POLICY.scholarShortAnswerMarking === "self");
   ok("K40. D5-v2: with no published value, case-reasoning AI feedback is off (\"self\"), and the answer route calls AI for a written case answer only on an explicit \"ai_then_self\"",
     caseFeedbackOff(REAL, POLICY_REAL) && DEFAULT_POLICY.scholarCaseReasoningFeedback === "self");
   ok("K38. REVISION-01 R4 (owner decision): at the end of a session and in Mock, an unmarkable short answer is kept unmarked and revealed and self-graded only at the end, as the answer the student wrote; it survives a resume",
@@ -1178,6 +1193,9 @@ function main() {
     && !evaluationHonest(plant(EVAL, "verified: { state: \"not_assessed\", reason: VERIFIED_NOT_ASSESSED }", "verified: { state: \"verified\", reason: VERIFIED_NOT_ASSESSED }"))
     && !evaluationHonest(plant(STORE, "export async function deleteEvaluation(", "export async function amend(admin: Admin, userId: string, id: string) { await admin.from(\"individual_scholar_evaluation\").update({ confidence: \"strong\" }).eq(\"user_id\", userId).eq(\"id\", id); }\nexport async function deleteEvaluation("))
     && !evaluationHonest(plant(`${PAGES}/_components/evaluation-view.tsx`, "r.verified.reason", "\"\"")));
+  ok("P60. ⚠ K42 goes red when the default turns AI marking of short answers back on, or the route stops requiring an explicit \"ai_then_self\"",
+    !shortAnswerAiOff(REAL, POLICY_REAL.replace(/(key: "scholar_short_answer_marking"[\s\S]*?)fallback: "self",/, "$1fallback: \"ai_then_self\","))
+    && !shortAnswerAiOff(plant(`${API}/revision/answer/route.ts`, "if (policy.scholarShortAnswerMarking === \"ai_then_self\") {", "if (policy.scholarShortAnswerMarking !== \"off\") {"), POLICY_REAL));
   ok("P58. ⚠ K40 goes red when the default turns AI feedback back on, or either path stops requiring an explicit \"ai_then_self\"",
     !caseFeedbackOff(REAL, POLICY_REAL.replace(/(key: "scholar_case_reasoning_feedback"[\s\S]*?)fallback: "self",/, "$1fallback: \"ai_then_self\","))
     && !caseFeedbackOff(plant(CASE_ANSWER, "if (policy.scholarCaseReasoningFeedback !== \"ai_then_self\" || kind !== \"private\") return { kind: \"self\" };", "if (policy.scholarCaseReasoningFeedback === \"self\" || kind !== \"private\") return { kind: \"self\" };"), POLICY_REAL)

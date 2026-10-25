@@ -504,8 +504,11 @@ export const POLICIES: readonly PolicyDef[] = [
     label: "Short-answer marking",
     help: "How a short answer that does not match a stored accepted answer is marked: by AI evaluation where it is available (labelled as such), or by the student comparing with the accepted answers.",
     options: [{ value: "ai_then_self", label: "AI evaluation where available, otherwise the student's own judgement" }, { value: "self", label: "The student's own judgement only" }],
-    fallback: "ai_then_self",
-    limitReason: "A match with an accepted answer is always marked by code first. AI evaluation is always labelled.",
+    // Owner Stage 7 closure (D5-v2): AI marking of short answers is OFF by default, so no unpublished setting can send
+    // a clinical answer to a model. Code marking and the student's own grading are unchanged. Publishing
+    // "ai_then_self" turns it on, and the model-eligibility gate (#99) still decides.
+    fallback: "self",
+    limitReason: "A match with an accepted answer is always marked by code first. AI evaluation is always labelled. Default: the student's own judgement.",
   },
   {
     key: "scholar_revision_recommendations", kind: "choice", product: "Scholar",
