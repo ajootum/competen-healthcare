@@ -28,6 +28,12 @@ insert into ogs_office_appointments (office_id, person_id, role, status) values
 set local session_replication_role = origin;
 
 insert into ckri_purpose (code, permission, label, description, created_by) values ('edu_quality', 'collective_analytics', 'Educational quality', 'Aggregate learning measures for improving educational resources.', '00000000-0000-0000-0000-000000000101');
+-- When 444 is applied, activation needs a recorded lawful basis: supply it.
+do $b$ begin
+  if exists (select 1 from information_schema.columns where table_name = 'ckri_purpose' and column_name = 'lawful_basis') then
+    execute $x$update ckri_purpose set lawful_basis = 'consent', basis_decision_ref = 'TEST-BASIS-1' where status = 'draft'$x$;
+  end if;
+end $b$;
 update ckri_purpose set status = 'active', activated_by = '00000000-0000-0000-0000-000000000102' where code = 'edu_quality';
 insert into ckri_research_project (id, code, title, purpose_code, sponsor, proposed_by, changed_by) values ('00000000-0000-0000-0000-00000000a001', 'gaps-2026', 'Knowledge gaps 2026', 'edu_quality', 'platform', '00000000-0000-0000-0000-000000000103', '00000000-0000-0000-0000-000000000103');
 
@@ -44,6 +50,8 @@ insert into ckri_research_member (id, project_id, person_id, role) values ('0000
 select pg_temp.expect_error($q$update ckri_research_member set status = 'active', appointed_by = '00000000-0000-0000-0000-000000000101' where id = '00000000-0000-0000-0000-00000000b001'$q$, '%before the project is approved%', 'W5 nobody joins before approval');
 update ckri_research_project set status = 'submitted', changed_by = '00000000-0000-0000-0000-000000000103' where code = 'gaps-2026';
 update ckri_research_project set status = 'approved', changed_by = '00000000-0000-0000-0000-000000000101', decided_by = '00000000-0000-0000-0000-000000000101', retain_until = '2031-01-01' where code = 'gaps-2026';
+-- When 444 is applied, data is released only after an ethics record: record one.
+update ckri_research_project set ethics_body = 'Test REC', ethics_ref = 'REC-9', ethics_decided_at = now(), changed_by = '00000000-0000-0000-0000-000000000101' where code = 'gaps-2026';
 select pg_temp.expect_error($q$update ckri_research_member set status = 'active', appointed_by = '00000000-0000-0000-0000-000000000103' where id = '00000000-0000-0000-0000-00000000b001'$q$, '%not authorised%', 'W6 only a governor appoints');
 update ckri_research_member set status = 'active', appointed_by = '00000000-0000-0000-0000-000000000101' where id = '00000000-0000-0000-0000-00000000b001';
 select pg_temp.expect_error($q$insert into ckri_research_member (project_id, person_id, role, external) values ('00000000-0000-0000-0000-00000000a001', '00000000-0000-0000-0000-000000000105', 'external_collaborator', true)$q$, '%ckri_research_member_check%', 'W7 an external member needs an agreement');

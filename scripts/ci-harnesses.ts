@@ -76,7 +76,7 @@ const INCLUDED = [
   // COMPETEN-PROFESSIONAL-PROFILE-01 Stage 1 (source and migration 450): RLS posture, no verified or scope column,
   // append-only history and versioned records with the cascade path, completion in the schema, three required facts,
   // nothing un-askable configurable, trigger-only history, guarded handlers, allowlisted suggestions, policy-gated AI
-  // grounding, and fail-open to the MVP without 450. 19 planted-failure controls. Reads files only: no client, no network.
+  // grounding, fail-open to the MVP without 450, and part B (451-453: appointed independent verifier, request first, policy reminders, opt-in sharing). 35 planted-failure controls. Reads files only.
   "professional-profile-harness.ts",
   // HQ-USERS-A: the /api/super-admin/users handlers are gated by the HQ gate (view) and the owner gate (writes),
   // never by profiles.role, with 8 planted-failure controls. Reads files only: no client, no network, no .env.local.
@@ -100,6 +100,10 @@ const INCLUDED = [
   // COMPETEN-KNOWLEDGE-RESEARCH-01 (migrations 440-443): four separate permissions, aggregate-only research access,
   // in-database suppression, the 422 guard branches unchanged in 442, independence in K4. 20 planted reds. Files only.
   "ckri-harness.ts",
+  // COMPETEN-LEARNING-01 (ADR-017, migrations 460-464): no estate learning table, Learning-only writes, no estate reader of
+  // the personal record, gated learner routes, five distinct HQ authorities, the lrn- webhook branch, no seeded flag or
+  // appointment, no hard-coded price, no answer key to a browser. 7 planted reds. Files only.
+  "learning-harness.ts",
   "mos-gap-matrix-harness.ts",
   "pd-health-harness.ts",
   "pd-nav-harness.ts",

@@ -56,6 +56,8 @@ export const GENERAL_NAV: NavSection[] = [
     { label: "Individual Policy", href: "/super-admin/individual/configuration", icon: "🎓" },
     // P0 controlled catalogues (migration 394): what a catalogue names, and its content status.
     { label: "Controlled Catalogues", href: "/super-admin/individual/catalogues", icon: "📚" },
+    // COMPETEN-PROFESSIONAL-PROFILE-01 part B (migration 451): the verifier's queue, for the appointed verifier only.
+    { label: "Professional Verification", href: "/super-admin/individual/verification", icon: "✅" },
   ]},
   // Migration 395 (owner decision D2): Holdings clinical-content approval, for every product.
   { group: "CLINICAL CONTENT", items: [
@@ -65,6 +67,15 @@ export const GENERAL_NAV: NavSection[] = [
     { label: "Case Studio", href: "/super-admin/cases", icon: "🧪" },
     { label: "Case Publication", href: "/super-admin/cases/publication", icon: "📢" },
     { label: "Case Intelligence", href: "/super-admin/cases/intelligence", icon: "📊" },
+  ]},
+  // Migrations 460-464 (COMPETEN-LEARNING-01): the Holdings Learning catalogue, studio and its separate authorities.
+  { group: "COMPETEN LEARNING", items: [
+    { label: "Learning Studio", href: "/super-admin/learning", icon: "📘" },
+    { label: "Learning Review", href: "/super-admin/learning/review", icon: "🩺" },
+    { label: "Learning Publication", href: "/super-admin/learning/publication", icon: "📢" },
+    { label: "Course Prices", href: "/super-admin/learning/prices", icon: "🏷️" },
+    { label: "Certificates", href: "/super-admin/learning/certificates", icon: "🎓" },
+    { label: "Course Access", href: "/super-admin/learning/access", icon: "🔑" },
   ]},
   { group: "STRATEGY & PRIORITIES", items: [
     { label: "Strategy Manager", href: "/super-admin/priorities", icon: "🎯" },

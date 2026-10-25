@@ -13,7 +13,8 @@ import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind }
 import { COUNTRIES } from "../countries";
 import {
   DEFAULT_PRACTICE_SETTINGS, DEFAULT_QUALIFICATION_TYPES, DEFAULT_STATUSES, DOCUMENT_KINDS, FIELD_LABEL, ITEM_LABEL, OPTIONAL_FIELDS, PROFILE_SECTIONS, SECTION_LABEL,
-  type ItemKind, type OptionalField, type ProfileSection,
+  REGISTRATION_STANDING, REMINDER_KINDS, REMINDER_OFFSETS, SHAREABLE_SECTIONS, VERIFIABLE_KINDS,
+  type ItemKind, type OptionalField, type ProfileSection, type ReminderKind,
 } from "./professional/profile-vocabulary";
 
 // ── COMPETEN INDIVIDUAL POLICY ── COMPETEN-CONFIG-002 items 4-7 ─────────────────────────────────────────
@@ -53,7 +54,8 @@ export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai
   | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent"
   | "scholar_evaluation_min_evidence" | "scholar_evaluation_recency_days" | "scholar_evaluation_min_sources" | "scholar_evaluation_band_strong"
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max";
-export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
+export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
+  | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
@@ -213,6 +215,42 @@ const PROFESSIONAL_PROFILE_POLICIES: readonly PolicyDef[] = [
     options: [{ value: "on", label: "Yes, when the person asks it" }, { value: "off", label: "No: the profile stays out of AI requests" }],
     fallback: "on",
     limitReason: "Two choices. Whatever is chosen, registration and profile editing work without AI.",
+  },
+  // ── Part B (owner continuation GO, 25 Oct 2026): verification, reminders and sharing ──
+  {
+    key: "professional_verification_kinds", kind: "set", product: "Professional",
+    label: "Records a person may ask Competen to verify",
+    help: "Verification policy: which profile records offer the option to ask Competen to verify them. Verification is always optional, and nobody can verify until the owner appoints a Professional Credential Verifier.",
+    options: VERIFIABLE_KINDS.map(v => ({ value: v, label: ITEM_LABEL[v] })), fallback: VERIFIABLE_KINDS,
+    limitReason: "Only qualifications, registrations and employment (migration 451). Turning one off stops new requests. Earlier outcomes keep showing.",
+  },
+  {
+    key: "professional_reminder_kinds", kind: "set", product: "Professional",
+    label: "What expiry reminders are sent about",
+    help: "Reminder eligibility: which kinds of record the daily reminder email covers. Each person still chooses whether to get reminder emails at all.",
+    options: REMINDER_KINDS.map(([value, label]) => ({ value, label })), fallback: REMINDER_KINDS.map(([v]) => v),
+    limitReason: "Only these four. Default: all.",
+  },
+  {
+    key: "professional_reminder_offsets", kind: "set", product: "Professional",
+    label: "Reminder schedule for profile registrations and qualifications",
+    help: "How many days before a profile record expires it is reminded. One email for each point reached, never twice for the same point and date. The primary registration and credentials keep the single lead time above.",
+    options: REMINDER_OFFSETS.map(v => ({ value: v, label: `${v} days before` })), fallback: ["60"],
+    limitReason: "From 180 days to 7. Default: 60 days, the same lead time as the primary registration.",
+  },
+  {
+    key: "professional_reminder_standings", kind: "set", product: "Professional",
+    label: "Registration standings that are reminded",
+    help: "Reminder eligibility: a registration recorded as lapsed, suspended or retired is not reminded unless it is listed here. A registration with no standing recorded is always reminded.",
+    options: REGISTRATION_STANDING.map(o => ({ value: o.code, label: o.label })), fallback: ["active", "provisional"],
+    limitReason: "The five standings of the registration record. Default: active and provisional.",
+  },
+  {
+    key: "professional_share_sections", kind: "set", product: "Professional",
+    label: "Profile sections a person may put on a Passport link",
+    help: "Sharing rule: which parts of the profile a person can choose to carry on a Passport link. Nothing is shared unless the person picks it, record by record, for that link.",
+    options: SHAREABLE_SECTIONS.map(v => ({ value: v, label: SECTION_LABEL[v] })), fallback: SHAREABLE_SECTIONS,
+    limitReason: "The six profile sections. Registration numbers and documents are never shared.",
   },
 ];
 
@@ -995,6 +1033,8 @@ export type ProfessionalProfilePolicy = {
   specialties: ContextOption[]; careerInterests: ContextOption[];
   registrationFields: OptionalField[]; registrationRequired: OptionalField[]; sections: ProfileSection[]; documentKinds: ItemKind[];
   ai: "on" | "off";
+  /** Part B. Offsets are days before expiry, largest first. */
+  verificationKinds: ItemKind[]; reminderKinds: ReminderKind[]; reminderOffsets: number[]; reminderStandings: string[]; shareSections: ProfileSection[];
 };
 
 type Row = { config_path: string; published: any };
@@ -1088,6 +1128,11 @@ function resolveProfessionalProfile(published: Map<string, any>): ProfessionalPr
     sections: seq("professional_profile_sections") as ProfileSection[],
     documentKinds: set("professional_document_kinds") as ItemKind[],
     ai: clampChoice(policyDef("professional_profile_ai") as ChoicePolicy, published.get(policyPath("professional_profile_ai"))) as "on" | "off",
+    verificationKinds: set("professional_verification_kinds") as ItemKind[],
+    reminderKinds: set("professional_reminder_kinds") as ReminderKind[],
+    reminderOffsets: set("professional_reminder_offsets").map(Number).sort((a, b) => b - a),
+    reminderStandings: set("professional_reminder_standings"),
+    shareSections: set("professional_share_sections") as ProfileSection[],
   };
 }
 

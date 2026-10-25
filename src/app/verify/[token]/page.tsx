@@ -6,6 +6,10 @@ import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { individualAppEnabled } from "@/lib/individual/gate";
 import { loadPassportEvaluations, loadStudyAchievements } from "@/lib/individual/scholar/store";
 import { STUDY_ACHIEVEMENT, studyDetail } from "@/lib/individual/scholar/passport-items";
+import { loadSharedProfile } from "@/lib/individual/professional/share-profile";
+import { METHOD_LABEL, VERIFICATION_LABEL, isIndependentlyVerified } from "@/lib/individual/professional/profile-verification";
+import { ITEM_LABEL } from "@/lib/individual/professional/profile-vocabulary";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +81,12 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
   // PROGRESS-01 P5: the educational evaluations the person chose to show (427), read NOW on every view, on the same
   // terms as study: only on a link that carries their own records. Formative, never verified, never a credential.
   const evaluations = carriesOwn ? await loadPassportEvaluations(admin, share.nurse_id) : null;
+  // COMPETEN-PROFESSIONAL-PROFILE-01 part B (migration 453): ONLY on a Professional link, ONLY what the person
+  // ticked for this link, each record with its own evidence class and verification state, never upgraded.
+  const sharedProfile = carriesOwn
+    ? await loadSharedProfile(admin, share.id, share.nurse_id, (await loadIndividualPolicy(admin)).professionalProfile.shareSections, new Date().toISOString().slice(0, 10))
+    : null;
+  const sharedAny = !!sharedProfile && (!!sharedProfile.overview || sharedProfile.records.length > 0);
   // A Professional-minted link names the person's profession as THEY declared it, and says so. It never
   // shows profiles.role, which the new-user trigger fills with a default (migration 335) and which
   // Competen Individual neither sets nor relies on (ADR-016).
@@ -173,6 +183,36 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
                       ))}
                     </div>
                   )}
+            </div>
+          )}
+
+          {carriesOwn && sharedProfile === null && <p className="text-[12px] text-gray-600">The professional profile shared on this link could not be read just now.</p>}
+          {sharedAny && (
+            <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900">From the professional&apos;s profile</h2>
+              <p className="text-[11.5px] text-gray-600 mt-0.5 leading-relaxed">Chosen by the professional for this link. Recorded by them. A record is independently verified only where it says so: a Competen verifier, independent of the professional, checked that exact record. Registration numbers and documents are not shared.</p>
+              {sharedProfile!.overview && (
+                <p className="text-[12.5px] text-gray-800 mt-2">{[sharedProfile!.overview.profession, sharedProfile!.overview.title, sharedProfile!.overview.specialty, sharedProfile!.overview.setting, sharedProfile!.overview.status, sharedProfile!.overview.jurisdiction].filter(Boolean).join(" · ") || "No details recorded"} <span className="text-[10.5px] font-semibold text-amber-900">({EVIDENCE_LABEL.self_declared})</span></p>
+              )}
+              {sharedProfile!.records.length > 0 && (!full ? (
+                <p className="text-[12.5px] text-gray-700 mt-2">{sharedProfile!.records.length} profile {sharedProfile!.records.length === 1 ? "record" : "records"}, {sharedProfile!.records.filter(r => isIndependentlyVerified(r.verification.state)).length} independently verified.</p>
+              ) : (
+                <div className="space-y-1.5 mt-2">
+                  {sharedProfile!.records.map((r, i) => {
+                    const ok = isIndependentlyVerified(r.verification.state);
+                    return (
+                      <div key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] border-b border-gray-100 pb-1.5">
+                        <span className="font-medium text-gray-800 min-w-0">{r.title}</span>
+                        <span className="text-[10.5px] text-gray-500">{ITEM_LABEL[r.section].charAt(0).toUpperCase() + ITEM_LABEL[r.section].slice(1)}{r.typeLabel ? ` · ${r.typeLabel}` : ""}{r.organisation ? ` · ${r.organisation}` : ""}{r.jurisdiction ? ` · ${r.jurisdiction}` : ""}{r.startedOn ? ` · from ${fmt(r.startedOn)}` : ""}{r.endedOn ? ` to ${fmt(r.endedOn)}` : ""}{r.expiresOn ? ` · exp ${fmt(r.expiresOn)}` : ""}{r.targetOn ? ` · by ${fmt(r.targetOn)}` : ""}</span>
+                        <span className="ml-auto text-[10.5px] font-semibold text-amber-900">{EVIDENCE_LABEL[r.evidenceClass === "source_linked" ? "source_linked" : "self_declared"]}</span>
+                        {["qualification", "registration", "employment"].includes(r.section) && (
+                          <span className={`w-full text-[10.5px] font-semibold ${ok ? "text-emerald-700" : "text-gray-600"}`}>{ok ? "✓ " : ""}{VERIFICATION_LABEL[r.verification.state]}{ok && r.verification.method ? ` · ${METHOD_LABEL[r.verification.method]}, ${fmt(r.verification.verifiedAt)}${r.verification.validUntil ? `, valid until ${fmt(r.verification.validUntil)}` : ""}` : ""}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
 
