@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { aiStatus, providerKey, type AiProvider } from "@/lib/ai/config";
+import { AI_PROVIDERS, aiStatus, providerKey, type AiProvider } from "@/lib/ai/config";
 import { recordAiUsage, type AiAttribution } from "@/lib/ai/gateway";
+import { checkEndpointResolves, redact, registeredKey } from "@/lib/ai/provider-registry";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // PROVIDER-NEUTRAL GENERATION (Book IV — Clinical Intelligence Engine)
@@ -24,7 +25,13 @@ export type GenerateArgs = {
   // Usage (tokens/latency/cost/status) is always recorded; context adds who/what. The scope says which
   // kind of id the caller holds -- see AiAttribution for why there is no bare tenantId here.
   context?: { userId?: string | null; operation?: string; attribution?: AiAttribution };
+  /**
+   * The provider and model the Holdings routing chose (model-routing.ts), already gated for eligibility by the engine.
+   * Absent: this deployment's primary provider and its model for `tier`, exactly as before.
+   */
+  route?: { provider: string; model: string; endpoint?: string };
 };
+const isBuiltin = (p: string): p is AiProvider => (AI_PROVIDERS as readonly string[]).includes(p);
 
 export type GenerateFailure = "not_configured" | "refusal" | "failed";
 
@@ -32,8 +39,8 @@ export type GenerateResult =
   | {
       ok: true;
       text: string;
-      /** Which vendor answered. Recorded alongside the model, and shown to practice owners. */
-      provider: AiProvider;
+      /** Which vendor answered: a built-in provider or a registered one's id. Recorded alongside the model. */
+      provider: string;
       model: string;
       usage: { input: number; output: number };
     }
@@ -98,8 +105,12 @@ async function openaiAdapter(a: AdapterArgs): Promise<AdapterResult> {
     }),
   });
   if (!res.ok) return { ok: false, kind: "failed", detail: `openai ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  return chatCompletionsResult(await res.json(), a.model);
+}
 
-  const j = await res.json();
+/** The OpenAI chat-completions response, read once for OpenAI and every registered compatible provider. */
+type ChatCompletion = { model?: string; choices?: { finish_reason?: string; message?: { content?: string | null } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+function chatCompletionsResult(j: ChatCompletion, requested: string): AdapterResult {
   const choice = j.choices?.[0];
   // OpenAI signals a content-policy stop here. Same class as an Anthropic refusal.
   if (choice?.finish_reason === "content_filter") return { ok: false, kind: "refusal", input: Number(j.usage?.prompt_tokens ?? 0), output: Number(j.usage?.completion_tokens ?? 0) };
@@ -107,10 +118,25 @@ async function openaiAdapter(a: AdapterArgs): Promise<AdapterResult> {
   return {
     ok: true,
     text: String(choice?.message?.content ?? ""),
-    model: String(j.model ?? a.model),
+    model: String(j.model ?? requested),
     input: Number(j.usage?.prompt_tokens ?? 0),
     output: Number(j.usage?.completion_tokens ?? 0),
   };
+}
+
+// ── A registered OpenAI-compatible provider (provider-registry.ts) ─────────────────────────────────
+//
+// The same protocol as OpenAI, at the provider's APPROVED endpoint, which provider-registry.ts has already checked at
+// registration and the dispatcher checks again here after DNS resolution. Redirects are refused, so an approved host
+// cannot hand the request on. The key is redacted from anything the provider echoes back.
+async function compatibleAdapter(endpoint: string, a: AdapterArgs): Promise<AdapterResult> {
+  const res = await fetch(`${endpoint}/chat/completions`, {
+    method: "POST", redirect: "error",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${a.key}` },
+    body: JSON.stringify({ model: a.model, max_tokens: a.maxTokens, messages: [{ role: "system", content: a.system }, { role: "user", content: a.user }] }),
+  });
+  if (!res.ok) return { ok: false, kind: "failed", detail: redact(`${new URL(endpoint).hostname} ${res.status}: ${(await res.text()).slice(0, 200)}`, a.key) };
+  return chatCompletionsResult(await res.json(), a.model);
 }
 
 // ── Gemini ──────────────────────────────────────────────────────────────────────────────────────────
@@ -187,18 +213,26 @@ const FAILOVER_ELIGIBLE: ReadonlyArray<"failed"> = ["failed"];
  * Returns the text plus which vendor and model produced it. Never throws.
  */
 export async function generate(
-  { system, user, tier = "reasoning", maxTokens = 1500, context }: GenerateArgs,
+  { system, user, tier = "reasoning", maxTokens = 1500, context, route }: GenerateArgs,
 ): Promise<GenerateResult> {
   const status = aiStatus();
-  if (!status.provider || !status.canGenerate || !status.models) {
+  // A routed request names its provider and model. Its key is still the environment's (never configuration's), and a
+  // provider with no key is not configured -- never quietly served by another.
+  if (!route && (!status.provider || !status.canGenerate || !status.models)) {
     return { ok: false, error: "not_configured" };
   }
 
-  const provider = status.provider;
-  const key = providerKey(provider);
-  if (!key) return { ok: false, error: "not_configured" };
+  const provider = route?.provider ?? status.provider!;
+  const registered = !isBuiltin(provider);
+  // A registered provider: its key from AI_PROVIDER_KEY_<ID> only, and its endpoint re-checked after DNS resolution.
+  const key = registered ? registeredKey(provider) : providerKey(provider);
+  if (!key || (registered && !route?.endpoint)) return { ok: false, error: "not_configured" };
+  if (registered) {
+    const reach = await checkEndpointResolves(route!.endpoint!);
+    if (!reach.ok) return { ok: false, error: "not_configured", detail: reach.reason, billing: "none" };
+  }
 
-  const model = status.models[tier];
+  const model = route?.model ?? status.models![tier];
   const base = {
     operation: context?.operation ?? null,
     tier,
@@ -210,7 +244,8 @@ export async function generate(
 
   const t0 = Date.now();
   try {
-    const result = await ADAPTERS[provider]({ system, user, model, maxTokens, key });
+    const args = { system, user, model, maxTokens, key };
+    const result = registered ? await compatibleAdapter(route!.endpoint!, args) : await ADAPTERS[provider as AiProvider](args);
     const latencyMs = Date.now() - t0;
 
     if (!result.ok) {

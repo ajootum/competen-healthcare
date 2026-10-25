@@ -54,3 +54,29 @@ A rule's "when" pattern matched a question that wasn't the one it was written fo
 - No model other than Anthropic's was evaluated (no keys).
 - Thirteen items are a screen, not a validation. A reviewer should read the outputs in 419 before any eligibility is recorded.
 - Inaccurate source material is not part of D5-v2. Scholar's generators ground strictly in the student's notes, so a wrong handout yields a question keyed to the wrong fact. That's by design, labelled "from your notes" and not clinically approved.
+
+## Correction, 25 October 2026: `questions`, `q.postop`, claude-opus-4-8
+
+**The owner's criterion** ("IND-007 — MULTI-PROVIDER AI CLOSURE"):
+- "If the interval was presented as illustrative or context-dependent and not falsely attributed to a source, classify the flag as a false positive."
+- "If it was presented as a mandatory clinical requirement without support, or falsely attributed to the source, retain the failure."
+- "Do not infer clinical validity merely because the interval sounds plausible."
+
+**The determination** was made by the main session against the record. It is recorded in full in `D5v2-questions-key-rules-for-owner.md`.
+- The stored output keys "Within 30 minutes".
+- Its `sourceQuote` is "Reassess the observations within 30 minutes.", which is word for word the eval passage (`scripts/ai-eval-set-d5v2.ts`, postop).
+- It is supported and correctly attributed.
+- What tripped was the A-to-E key rule: its `when` "assess" matched "re**assess**ed".
+- **Rule false positive. No clinical validity is inferred.**
+
+| | |
+|---|---|
+| This record | The Opus `q.postop` flag is a **rule false positive**, so Opus 4.8 is **3/3 on `questions`**. |
+| The stored evidence (staging, 419) | **Unchanged**. Results are append-only. Run `6c2c8067` still holds the flag, scored under D5-v2. This correction stands beside it. |
+| The rule | **D5-v2.1** changes this one rule and nothing else. The A-to-E rule's `when` reads `\bassess`, so "reassess" no longer triggers it. A question about the first assessment is still judged, and "structured" is unchanged (items 1–3 are not determined). |
+| Re-scoring the stored answers under D5-v2.1 (offline, no model called) | The only `questions` result that changes is Opus `q.postop`, to passed. Haiku and Sonnet are unchanged. Pinned by `src/lib/ai/d5v2-rules.test.ts`, which turns red if the D5-v2 rule is put back. |
+| Items 1–3 | Haiku `q.rate`, Sonnet `q.oxygen` and Sonnet `q.postop`: **not determined**. They bear on no model in use. |
+
+**What it supports:**
+- **Opus 4.8 `questions` eligibility, up to `clinical_educational`, on the D5-v2 evidence.** It is recorded on staging, citing `eval-run:6c2c8067…` (`opus-tutoring-eligibility.md`).
+- **Not `evaluate`.** It stays unrecorded until case-reasoning AI feedback is off ("self").

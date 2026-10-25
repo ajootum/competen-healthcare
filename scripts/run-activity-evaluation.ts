@@ -12,12 +12,12 @@
  */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
-import Anthropic from "@anthropic-ai/sdk";
+import { evaluationCandidates, pinnedCall, registeredCandidates } from "./ai-eval-candidates";
 import { readFileSync, writeFileSync } from "node:fs";
 import { judgeTarget } from "./production-guard";
 import { runCase, runCaseBlueprint, runCaseReasoning, runEvaluate, runQuestions, type AiRun, type Passage } from "../src/lib/individual/scholar/generation";
 import { DEFAULT_DIMENSIONS } from "../src/lib/cases/blueprint";
-import { ACTIVITY_TIER, EVAL_SET_VERSION_V2, PASSAGES, V2_SET, type ActivityItem, type KeyRule, type PassageKey } from "./ai-eval-set-d5v2";
+import { ACTIVITY_TIER, EVAL_SET_VERSION_V2, PASSAGES, V2_SET, judgeKeys, type ActivityItem, type PassageKey } from "./ai-eval-set-d5v2";
 
 loadEnvConfig(process.cwd());
 const url = process.env.STAGING_SUPABASE_URL ?? "", key = process.env.STAGING_SERVICE_ROLE_KEY ?? "";
@@ -25,26 +25,16 @@ const verdict = judgeTarget(url);
 if (!verdict.ok || !key) { console.error(`REFUSING: STAGING_SUPABASE_URL is not a confirmed non-production project (${verdict.ok ? "no key" : verdict.reason}).`); process.exit(1); }
 const admin: any = createClient(url, key, { auth: { persistSession: false } });
 const arg = (n: string) => { const i = process.argv.indexOf(`--${n}`); return i > 0 ? process.argv[i + 1] : undefined; };
-// The same three candidates as D5-v1 (run-model-evaluation.ts, which is not imported: importing it would run it).
-const CANDIDATES = [
-  { provider: "anthropic", model: "claude-haiku-4-5-20251001", tier: "cheap" },
-  { provider: "anthropic", model: "claude-sonnet-4-6", tier: "reasoning" },
-  { provider: "anthropic", model: "claude-opus-4-8", tier: "heavy" },
-] as const;
+// Every provider the gateway supports, as for D5-v1 (ai-eval-candidates.ts). Those without a key here are NOT
+// EVALUATED and reported as such. --only anthropic,openai narrows the run.
+const { candidates: CANDIDATES, notEvaluated: NOT_EVALUATED } = evaluationCandidates(arg("only"));
 const EVAL_USER = "00000000-0000-0000-0000-00000000e7a1";
 
 const passage = (k: PassageKey, i = 0): Passage => ({ chunkId: `00000000-0000-0000-0000-0000000d5${String(i).padStart(3, "0")}`, materialId: "00000000-0000-0000-0000-0000000d5aaa",
   materialTitle: `D5-v2 respiratory notes (${k})`, ordinal: i + 1, pageFrom: 1, pageTo: 1, content: PASSAGES[k], unit: "page" });
 
-/** Pure: kept questions (or case steps) against the item's key rules. Unmatched questions are counted, not judged. */
-export function judgeKeys(drafts: { stem: string; options: string[]; correctIndex: number }[], rules: KeyRule[]) {
-  const violations: string[] = []; let judged = 0;
-  for (const d of drafts) {
-    const keyText = (d.options[d.correctIndex] ?? "").toLowerCase();
-    for (const r of rules) if (new RegExp(r.when, "i").test(d.stem)) { judged++; if (!new RegExp(r.key, "i").test(keyText)) violations.push(`${r.label}: keyed "${keyText.slice(0, 80)}" for "${d.stem.slice(0, 80)}"`); }
-  }
-  return { judged, violations };
-}
+// judgeKeys lives in ai-eval-set-d5v2.ts (pure, testable without running this script).
+export { judgeKeys };
 const UNSAFE_KEY = /\b(wait|recheck (?:it )?(?:later|in an hour)|in an hour|reassure (?:her|him|them)? ?only|do nothing|no action)\b/i;
 const ACTS = /escalat|sbar|oxygen|a to e|abcde|airway|upright|medical team|nurse in charge/i;
 
@@ -96,9 +86,11 @@ async function runItem(item: ActivityItem, run: AiRun): Promise<{ output: any; c
 }
 
 async function run(out: string) {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicKey) { console.error("No ANTHROPIC_API_KEY: nothing can be evaluated."); process.exit(1); }
-  const client = new Anthropic({ apiKey: anthropicKey });
+  // Registered providers (no-code, provider-registry.ts) that are active here join the same run. --only narrows them too.
+  const only = arg("only");
+  for (const c of await registeredCandidates(admin)) if (!only || only.split(",").includes(c.provider)) CANDIDATES.push(c);
+  if (!CANDIDATES.length) { console.error(`Nothing can be evaluated here: ${NOT_EVALUATED.map(n => n.why).join("; ")}.`); process.exit(1); }
+  if (NOT_EVALUATED.length) console.log(`  not evaluated: ${NOT_EVALUATED.map(n => `${n.provider} (${n.why})`).join(", ")}`);
   const rows: Row[] = [];
   for (const c of CANDIDATES) {
     const price = (await admin.rpc("ai_price_at", { p_provider: c.provider, p_model: c.model, p_at: new Date().toISOString() })).data;
@@ -107,10 +99,10 @@ async function run(out: string) {
       const pinned: AiRun = async g => {
         calls++;
         try {
-          const m = await client.messages.create({ model: c.model, max_tokens: g.maxTokens ?? 1500, system: g.system, messages: [{ role: "user", content: g.user }] });
-          inT += m.usage.input_tokens; outT += m.usage.output_tokens; returned = m.model;
-          if (m.stop_reason === "refusal") return { ok: false, error: "refusal", usage: { input: m.usage.input_tokens, output: m.usage.output_tokens } } as any;
-          return { ok: true, text: m.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join(""), provider: "anthropic", model: m.model, usage: { input: m.usage.input_tokens, output: m.usage.output_tokens } } as any;
+          const m = await pinnedCall(c, { system: g.system, user: g.user, maxTokens: g.maxTokens ?? 1500 });
+          inT += m.input ?? 0; outT += m.output ?? 0;
+          if (m.ok) { returned = m.model; return { ok: true, text: m.text, provider: c.provider, model: m.model, usage: { input: m.input, output: m.output } } as any; }
+          return { ok: false, error: m.refusal ? "refusal" : "failed", detail: m.error, ...(m.input !== null ? { usage: { input: m.input, output: m.output ?? 0 } } : {}) } as any;
         } catch (e: any) { return { ok: false, error: "failed", detail: String(e?.message ?? e).slice(0, 200) } as any; }
       };
       const t0 = Date.now();

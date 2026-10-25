@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
-import { ATTRIBUTION, budgetPeriod, openingCeiling, resolveBudgetPolicy, resolveRouting } from "./consumption";
+import { ATTRIBUTION, budgetPeriod, openingCeiling, resolveBudgetPolicy, resolveOwner, resolveRouting } from "./consumption";
 
 // COMPETEN-HOLDINGS-AI-CONSUMPTION-01: who pays is decided from the workflow, and a budget's policy fails closed.
 
@@ -10,6 +11,17 @@ describe("AI consumption ownership", () => {
     expect(ATTRIBUTION["case.replay_stored"]).toBe("none");
     expect(ATTRIBUTION["case.educator_develop"]).toBe("platform_or_institution");
     expect(ATTRIBUTION["case.institution_commission"]).toBe("institution");
+  });
+
+  it("CKRI (KNOWLEDGE-RESEARCH-01 s9): knowledge development and research analysis are platform or institution work, never a student's", async () => {
+    for (const w of ["knowledge.educator_develop", "research.analysis_assist"] as const) expect(ATTRIBUTION[w]).toBe("platform_or_institution");
+    // With no budget assigned, a student's request is REFUSED, never charged to the student.
+    const admin = { from: () => { const q: any = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: null, error: null }) }; return q; } };
+    for (const w of ["knowledge.educator_develop", "research.analysis_assist"] as const) {
+      const r: any = await resolveOwner(admin, w, "scholar", { userId: "00000000-0000-4000-8000-000000000001" });
+      expect(r.type).not.toBe("individual");
+      expect(r).toMatchObject({ refused: "no_budget" });
+    }
   });
 
   it("an unpublished budget policy funds nothing: zero ceiling, no activities, no automated processing", () => {

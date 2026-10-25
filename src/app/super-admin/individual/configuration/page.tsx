@@ -2,9 +2,9 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import {
-  POLICIES, POLICY_SCOPE, POLICY_PATH_PREFIX, clampInt, clampSet, clampCatalogues, clampChoice, clampProgrammes, clampOptions, clampLevels, policyPath, type PolicyDef,
+  POLICIES, POLICY_SCOPE, POLICY_PATH_PREFIX, clampInt, clampSet, clampCatalogues, clampChoice, clampProgrammes, clampOptions, clampLevels, clampSequence, policyPath, type PolicyDef,
 } from "@/lib/individual/policy";
-import { ChoiceDraft, IntDraft, LevelsDraft, OptionsDraft, PublishBar, RollbackButton, SetDraft } from "./_components/PolicyControls";
+import { ChoiceDraft, IntDraft, LevelsDraft, OptionsDraft, PublishBar, RollbackButton, SequenceDraft, SetDraft } from "./_components/PolicyControls";
 
 // /super-admin/individual/configuration -- COMPETEN-CONFIG-002 item 6.
 //
@@ -36,13 +36,16 @@ function describe(def: PolicyDef, settings: any, names: Map<string, string> = ne
   }
   if (def.kind === "options") {
     const list = clampOptions(def, settings);
-    return list.length ? list.map(o => o.label).join(", ") : "None (no institution is asked)";
+    // A long list (every country, by default) is summarised, not printed whole.
+    const shown = list.length > 12 ? `${list.slice(0, 12).map(o => o.label).join(", ")} and ${list.length - 12} more` : list.map(o => o.label).join(", ");
+    return list.length ? shown : `None (${def.emptyMeans ?? "no institution is asked"})`;
   }
   if (def.kind === "levels") {
     const by = Object.entries(clampLevels(def, settings));
     return by.length ? by.map(([c, l]) => `${names.get(c) ?? c}: ${l.map(x => x.label).join(", ")}`).join(". ") : "None (no level is asked)";
   }
   if (def.kind === "choice") { const v = clampChoice(def, settings); return def.options.find(o => o.value === v)?.label ?? v; }
+  if (def.kind === "sequence") return clampSequence(def, settings).map((v, i) => `${i + 1}. ${def.options.find(o => o.value === v)?.label ?? v}`).join("  ");
   const on = clampSet(def, settings);
   return on.length ? def.options.filter(o => on.includes(o.value)).map(o => o.label).join(", ") : "None offered";
 }
@@ -133,7 +136,7 @@ export default async function IndividualPolicyPage() {
                 <div><dt className="text-[12px] font-semibold text-gray-500">Effective now</dt><dd className="font-semibold text-gray-900">{effective}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Source</dt><dd className="text-gray-800">{source}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Effective since</dt><dd className="text-gray-800">{published == null ? "Not applicable: the default has always applied" : at ? fmt(at) : "Not recorded in the recent versions"}</dd></div>
-                <div><dt className="text-[12px] font-semibold text-gray-500">Fixed limit</dt><dd className="text-gray-800">{def.kind === "int" ? `${def.min} to ${def.max} ${def.unit}. Default ${def.fallback}.` : def.kind === "catalogues" ? `Shared, active, published catalogues only, at most ${def.max}. Default: ${def.emptyMeans ?? "none"}.` : def.kind === "choice" ? `One of: ${def.options.map(o => o.label).join("; ")}. Default: ${def.options.find(o => o.value === def.fallback)?.label ?? def.fallback}.` : def.kind === "set" ? `Only: ${def.options.map(o => o.label).join(", ")}. Default: all.` : ""} <span className="text-gray-500">{def.limitReason}</span></dd></div>
+                <div><dt className="text-[12px] font-semibold text-gray-500">Fixed limit</dt><dd className="text-gray-800">{def.kind === "int" ? `${def.min} to ${def.max} ${def.unit}. Default ${def.fallback}.` : def.kind === "catalogues" ? `Shared, active, published catalogues only, at most ${def.max}. Default: ${def.emptyMeans ?? "none"}.` : def.kind === "choice" ? `One of: ${def.options.map(o => o.label).join("; ")}. Default: ${def.options.find(o => o.value === def.fallback)?.label ?? def.fallback}.` : def.kind === "set" ? `Only: ${def.options.map(o => o.label).join(", ")}. Default: ${def.fallback.length === def.options.length ? "all" : def.fallback.length ? def.options.filter(o => def.fallback.includes(o.value)).map(o => o.label).join(", ") : "none"}.` : def.kind === "sequence" ? `Only: ${def.options.map(o => o.label).join(", ")}, in any order. Default: all, in that order.` : def.kind === "options" ? `At most ${def.max}. Default: ${def.fallback ? `${def.fallback.length} listed` : def.emptyMeans ?? "none"}.` : ""} <span className="text-gray-500">{def.limitReason}</span></dd></div>
               </dl>
               {draftDiffers && (
                 <p className="mt-3 rounded-lg bg-[var(--cmp-surface-information)] px-3 py-1.5 text-[13px] text-blue-900">
@@ -151,10 +154,12 @@ export default async function IndividualPolicyPage() {
                       ? <SetDraft policyKey={def.key} legend="Draft: programmes offered" emptyText="No active Scholar programme exists yet." options={programmeOptions}
                           draft={clampProgrammes(def, r?.draft ?? published) ?? programmeOptions.map(o => o.value)} hasOverride={!!r} />
                       : def.kind === "options"
-                        ? <OptionsDraft policyKey={def.key} label="Draft: one institution per line" max={def.max} draft={clampOptions(def, r?.draft ?? published).map(o => o.label)} hasOverride={!!r} />
+                        ? <OptionsDraft policyKey={def.key} label={`Draft: one ${def.noun ?? "institution"} per line`} max={def.max} draft={clampOptions(def, r?.draft ?? published).map(o => o.label)} hasOverride={!!r} />
                         : def.kind === "levels"
                           ? <LevelsDraft policyKey={def.key} programmes={programmeOptions} max={def.maxPerProgramme} draft={clampLevels(def, r?.draft ?? published)} hasOverride={!!r} />
-                          : <SetDraft policyKey={def.key} options={[...def.options]} draft={clampSet(def, r?.draft ?? published)} hasOverride={!!r} />}
+                          : def.kind === "sequence"
+                            ? <SequenceDraft policyKey={def.key} options={[...def.options]} fixed={[...(def.fixed ?? [])]} draft={clampSequence(def, r?.draft ?? published)} hasOverride={!!r} />
+                            : <SetDraft policyKey={def.key} options={[...def.options]} draft={clampSet(def, r?.draft ?? published)} hasOverride={!!r} />}
               </div>
             </article>
           );

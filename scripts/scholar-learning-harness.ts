@@ -35,6 +35,7 @@ import { join } from "node:path";
 import { ALLOWED_MIME, MAX_UPLOAD_BYTES, BUCKET, AI_LABEL, SELF_DIRECTED_LABEL, CONSENT_FEATURE, CONSENT_NOTICE, CONSENT_NOTICE_VERSION, UPLOAD_ATTESTATION } from "../src/lib/individual/scholar/config";
 import { consentDocuments, consentStatus } from "../src/lib/individual/scholar/consent-gate";
 import { EXPERIENCES } from "../src/lib/individual/experiences";
+import { DEFAULT_POLICY } from "../src/lib/individual/policy";
 
 let pass = 0; const failures: string[] = [];
 const ok = (name: string, cond: boolean, detail = "") => {
@@ -426,6 +427,21 @@ const evaluationHonest = (src: Src) => {
 };
 const REV_ANSWER = `${API}/revision/answer/route.ts`, REV_SESSION = `${API}/revision/sessions/[id]/route.ts`;
 const MIG_425 = "supabase/migrations/425-individual-scholar-revision-held-answer.sql";
+/**
+ * K40 (owner D5-v2): CASE-REASONING AI FEEDBACK IS OFF UNLESS IT IS SWITCHED ON. With no published value the
+ * Individual policy says "self", and the answer route calls AI for a written case answer -- private or library --
+ * only when the policy says exactly "ai_then_self" (and then the model-eligibility gate still decides).
+ */
+const CASE_ANSWER = `${API}/clinical/sessions/[kind]/[id]/answer/route.ts`;
+const POLICY_FILE = "src/lib/individual/policy.ts";
+const caseFeedbackOff = (src: Src, policyText: string) => {
+  const route = src.get(CASE_ANSWER) ?? "";
+  const block = policyText.slice(policyText.indexOf("key: \"scholar_case_reasoning_feedback\""), policyText.indexOf("key: \"scholar_case_reasoning_feedback\"") + 1200);
+  return /fallback: "self",/.test(block) && !/fallback: "ai_then_self",/.test(block)
+    && /if \(policy\.scholarCaseReasoningFeedback !== "ai_then_self" \|\| kind !== "private"\) return \{ kind: "self" \};/.test(route)
+    && /if \(kind === "library" && text && policy\.scholarCaseReasoningFeedback === "ai_then_self"/.test(route);
+};
+const POLICY_REAL = read(POLICY_FILE);
 const heldToEnd = (src: Src) => {
   const ans = src.get(REV_ANSWER) ?? "", ses = src.get(REV_SESSION) ?? "", page = src.get(`${PAGES}/revise/page.tsx`) ?? "";
   const hold = ans.indexOf("if (!evaluator && sessionId && feedbackMode === \"end\" && !finished && holding) {"), prompt = ans.indexOf("if (!evaluator) return NextResponse.json({ needsSelfGrade: true");
@@ -1015,6 +1031,8 @@ function main() {
     caseFeedbackHonest(REAL));
   ok("K39. EVALUATION-01: an evaluation interprets only marked evidence, deterministically, keeps AI and self-graded answers apart, is kept as made, and is never verified competence",
     evaluationHonest(REAL));
+  ok("K40. D5-v2: with no published value, case-reasoning AI feedback is off (\"self\"), and the answer route calls AI for a written case answer only on an explicit \"ai_then_self\"",
+    caseFeedbackOff(REAL, POLICY_REAL) && DEFAULT_POLICY.scholarCaseReasoningFeedback === "self");
   ok("K38. REVISION-01 R4 (owner decision): at the end of a session and in Mock, an unmarkable short answer is kept unmarked and revealed and self-graded only at the end, as the answer the student wrote; it survives a resume",
     heldToEnd(REAL));
   ok("K37. CLINICAL-REASONING-01: live AI feedback on a library case comes from library.ts's narrow context, is charged to the student's own budget by rule (case.live_with_stored) against the session, checked, and recorded only by the shared delivery",
@@ -1160,6 +1178,10 @@ function main() {
     && !evaluationHonest(plant(EVAL, "verified: { state: \"not_assessed\", reason: VERIFIED_NOT_ASSESSED }", "verified: { state: \"verified\", reason: VERIFIED_NOT_ASSESSED }"))
     && !evaluationHonest(plant(STORE, "export async function deleteEvaluation(", "export async function amend(admin: Admin, userId: string, id: string) { await admin.from(\"individual_scholar_evaluation\").update({ confidence: \"strong\" }).eq(\"user_id\", userId).eq(\"id\", id); }\nexport async function deleteEvaluation("))
     && !evaluationHonest(plant(`${PAGES}/_components/evaluation-view.tsx`, "r.verified.reason", "\"\"")));
+  ok("P58. ⚠ K40 goes red when the default turns AI feedback back on, or either path stops requiring an explicit \"ai_then_self\"",
+    !caseFeedbackOff(REAL, POLICY_REAL.replace(/(key: "scholar_case_reasoning_feedback"[\s\S]*?)fallback: "self",/, "$1fallback: \"ai_then_self\","))
+    && !caseFeedbackOff(plant(CASE_ANSWER, "if (policy.scholarCaseReasoningFeedback !== \"ai_then_self\" || kind !== \"private\") return { kind: \"self\" };", "if (policy.scholarCaseReasoningFeedback === \"self\" || kind !== \"private\") return { kind: \"self\" };"), POLICY_REAL)
+    && !caseFeedbackOff(plant(CASE_ANSWER, "if (kind === \"library\" && text && policy.scholarCaseReasoningFeedback === \"ai_then_self\"", "if (kind === \"library\" && text && policy.scholarCaseReasoningFeedback !== \"self\""), POLICY_REAL));
   ok("P56. ⚠ K38 goes red when the answer is not held, it can be graded before the end, a different answer is graded, the end view shows the grading early, or resume drops it",
     !heldToEnd(plant(REV_ANSWER, "if (!evaluator && sessionId && feedbackMode === \"end\" && !finished && holding) {", "if (false) {"))
     && !heldToEnd(plant(REV_ANSWER, "if (held && !(finished && typeof body?.selfGrade === \"boolean\"))", "if (held && !(typeof body?.selfGrade === \"boolean\"))"))

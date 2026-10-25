@@ -38,6 +38,11 @@ export const ATTRIBUTION = {
   "case.educator_develop": "platform_or_institution", // an educator develops shared cases with AI
   "case.reviewer_assist": "platform_or_institution",  // a clinical reviewer asks for AI assistance
   "case.institution_commission": "institution",       // an institution commissions cases
+  // COMPETEN-KNOWLEDGE-RESEARCH-01 s9 (CKRI): "Platform-funded research and educational-content development must consume
+  // authorised Platform budgets. Institution-funded research activities must use appropriately authorised Institutional
+  // budgets. Do not charge individual students." Neither can ever resolve to a person's allowance.
+  "knowledge.educator_develop": "platform_or_institution", // an educator develops knowledge or educational content with AI
+  "research.analysis_assist": "platform_or_institution",   // research analysis assisted by AI
 } as const satisfies Record<string, OwnerRule>;
 export type Workflow = keyof typeof ATTRIBUTION;
 

@@ -14,6 +14,8 @@ const WORKFLOWS: { code: string; label: string; owner: string }[] = [
   { code: "case.shared_variation", label: "Generate shared case variations", owner: "platform" },
   { code: "case.educator_develop", label: "Educator develops shared cases", owner: "platform or institution" },
   { code: "case.reviewer_assist", label: "Clinical reviewer AI assistance", owner: "platform or institution" },
+  { code: "knowledge.educator_develop", label: "Educator develops knowledge or educational content", owner: "platform or institution" },
+  { code: "research.analysis_assist", label: "Research analysis assistance", owner: "platform or institution" },
 ];
 
 export function BudgetCreate() {

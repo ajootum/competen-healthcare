@@ -105,6 +105,16 @@ export function primaryProvider(): AiProvider | null {
   return isProvider(named) ? named : null;
 }
 
+/**
+ * The models a provider serves per tier when routing names none: the environment's AI_MODEL_* for the PRIMARY
+ * provider (they always meant the primary's models), the built-in defaults for any other.
+ */
+export function providerModels(p: AiProvider): { cheap: string; reasoning: string; heavy: string } {
+  const d = DEFAULT_MODELS[p];
+  if (p !== primaryProvider()) return { cheap: d.cheap, reasoning: d.reasoning, heavy: d.heavy };
+  return { cheap: process.env.AI_MODEL_CHEAP ?? d.cheap, reasoning: process.env.AI_MODEL_REASONING ?? d.reasoning, heavy: process.env.AI_MODEL_HEAVY ?? d.heavy };
+}
+
 /** Which providers hold a key. Availability, and nothing else. */
 export function availableProviders(): AiProvider[] {
   return AI_PROVIDERS.filter(p => !!process.env[KEY_ENV[p]]);

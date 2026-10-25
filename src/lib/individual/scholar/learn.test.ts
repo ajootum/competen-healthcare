@@ -90,10 +90,15 @@ describe("AI-FAIR-USE-01 s8 and s7: saved artefacts and continuity", () => {
     expect(["teach", "explain", "simplify", "deeper", "examples", "summary"].every(isArtefactAction)).toBe(true);
     expect(["ask", "check", "clarify"].some(isArtefactAction)).toBe(false);
   });
-  it("metering off is today: every activity available, even with no published Scholar policy", () => {
+  it("metering off: what the standing lists counts (25 October 2026: eligibility gates clinical risk with metering off too)", () => {
+    // Before: every activity available with metering off, even with no published policy. Now (allowance.ts
+    // unmeteredGate): an activity the published policy does not define has no known risk floor, so it is refused, and
+    // a clinical one with no eligible model is not available. A listed, available activity is.
     const off: AiStanding = { readable: true, metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null, activities: {}, message: null };
-    expect(activityState(off, "teach")).toEqual({ available: true, message: null, insufficient: false });
-    expect(activityState(off, "check")).toEqual({ available: true, message: null, insufficient: false });
+    expect(activityState(off, "teach").available).toBe(false);
+    const listed: AiStanding = { ...off, activities: { teach: { label: "Teach me", available: true, via: "included", reason: null }, check: { label: "Check", available: false, via: null, reason: "not eligible" } } };
+    expect(activityState(listed, "teach")).toEqual({ available: true, message: null, insufficient: false });
+    expect(activityState(listed, "check").available).toBe(false);
     expect(typeof getScholarAiStanding).toBe("function");
   });
   it("metering on: a limited standing says so plainly, and never quietly downgrades", () => {
