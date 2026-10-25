@@ -4,7 +4,10 @@ import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { currentTraceId } from "@/lib/trace";
 import { publishScope, setOverride } from "@/lib/config/workspace-config-write";
 import { CKRI_OFF, CKRI_POLICY_PATH, CKRI_SCOPE, ckriEnabled, resolveCkriPolicy } from "@/lib/knowledge/governance";
-import { activatePurpose, createPurpose, moveProject, proposeProject, recordEthics, retirePurpose, type ProjectMove } from "@/lib/knowledge/research-governance";
+import {
+  activatePurpose, authoriseAgreement, createPurpose, expireAgreements, moveProject, proposeProject, recordAgreement, recordEthics, recordExemption, retirePurpose,
+  setPurposeBasis, terminateAgreement, type ProjectMove,
+} from "@/lib/knowledge/research-governance";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -16,12 +19,15 @@ export const dynamic = "force-dynamic";
 //   hq.quality.research.govern   (Research Governance Officer,   purpose_create, purpose_activate, purpose_retire,
 //                                 Quality Council Member)        approve, reject, ethics, recruit, close,
 //                                                               policy_draft, policy_publish
+//                                                               (444) purpose_basis, exemption, agreement_record,
+//                                                               agreement_authorise, agreement_terminate, agreement_sweep
 // The 440 triggers check the same authority again, and independence (a purpose author cannot activate it, a proposer
 // cannot decide their own project), so this route is not the only thing standing between a request and a record.
 // ⚠ NOTHING THE BROWSER SENDS PICKS AN ACTOR, A DECIDER, A TIME OR A DATA-ACCESS LEVEL. Every action is audited.
 
 const PROPOSE = ["propose", "submit", "return", "withdraw"] as const;
-const GOVERN = ["purpose_create", "purpose_activate", "purpose_retire", "approve", "reject", "ethics", "recruit", "close", "policy_draft", "policy_publish"] as const;
+const GOVERN = ["purpose_create", "purpose_activate", "purpose_retire", "approve", "reject", "ethics", "recruit", "close", "policy_draft", "policy_publish",
+  "purpose_basis", "exemption", "agreement_record", "agreement_authorise", "agreement_terminate", "agreement_sweep"] as const;
 const refuse = (status: number, error: string) => NextResponse.json({ error }, { status });
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -32,8 +38,9 @@ export async function POST(req: Request) {
   if (!capability) return refuse(400, "Unknown action.");
   const ctx = await hqApiGate([capability]);
   if (isHqRefusal(ctx)) return ctx;
-  // The gate: off (unwritten, unreadable, or off) refuses every governance action. Nothing here is a privacy right.
-  if (!(await ckriEnabled(ctx.admin))) return refuse(409, CKRI_OFF);
+  // The gate: off (unwritten, unreadable, or off) refuses every governance action, except ending a partner agreement
+  // and the expiry sweep: removing access never waits for a launch.
+  if (action !== "agreement_terminate" && action !== "agreement_sweep" && !(await ckriEnabled(ctx.admin))) return refuse(409, CKRI_OFF);
   const me = ctx.userId;
   const trace = await currentTraceId();
   const audit = (entityType: string, entityId: string | null, value: Record<string, unknown>) => ctx.admin.from("audit_log").insert({
@@ -43,8 +50,19 @@ export async function POST(req: Request) {
   let r: any;
   const projectId = str(body.projectId, 40);
   switch (action) {
-    case "purpose_create": r = await createPurpose(ctx.admin, me, { code: str(body.code, 61), permission: str(body.permission, 40), label: str(body.label), description: str(body.description, 2000), requiresEthics: body.requiresEthics !== false });
+    case "purpose_create": r = await createPurpose(ctx.admin, me, { code: str(body.code, 61), permission: str(body.permission, 40), label: str(body.label), description: str(body.description, 2000), requiresEthics: body.requiresEthics !== false,
+        lawfulBasis: str(body.lawfulBasis, 40) || null, basisDecisionRef: str(body.basisDecisionRef, 300) || null });
       if (r.ok) await audit("ckri_purpose", r.id, { code: str(body.code, 61), permission: str(body.permission, 40) }); break;
+    case "purpose_basis": r = await setPurposeBasis(ctx.admin, str(body.code, 61), { lawfulBasis: str(body.lawfulBasis, 40), basisDecisionRef: str(body.basisDecisionRef, 300) });
+      if (r.ok) await audit("ckri_purpose", null, { code: str(body.code, 61), lawful_basis: str(body.lawfulBasis, 40) }); break;
+    case "exemption": r = await recordExemption(ctx.admin, me, projectId, { ref: str(body.exemptionRef, 120), basis: str(body.exemptionBasis, 2000) });
+      if (r.ok) await audit("ckri_research_project", projectId, { exemption_ref: str(body.exemptionRef, 120) }); break;
+    case "agreement_record": r = await recordAgreement(ctx.admin, me, { code: str(body.code, 81), partnerName: str(body.partnerName, 300), partnerKind: str(body.partnerKind, 30),
+        institutionRef: str(body.institutionRef, 40) || null, projectId: projectId || null, terms: body, documentRef: str(body.documentRef, 500), signedOn: str(body.signedOn, 10) || null, expiresOn: str(body.expiresOn, 10) || null });
+      if (r.ok) await audit("ckri_partner_agreement", r.id, { code: str(body.code, 81) }); break;
+    case "agreement_authorise": r = await authoriseAgreement(ctx.admin, me, str(body.code, 81)); if (r.ok) await audit("ckri_partner_agreement", null, { code: str(body.code, 81) }); break;
+    case "agreement_terminate": r = await terminateAgreement(ctx.admin, str(body.code, 81), str(body.note, 2000)); if (r.ok) await audit("ckri_partner_agreement", null, { code: str(body.code, 81) }); break;
+    case "agreement_sweep": r = await expireAgreements(ctx.admin); if (r.ok) await audit("ckri_partner_agreement", null, { expired: r.expired }); break;
     case "purpose_activate": r = await activatePurpose(ctx.admin, me, str(body.code, 61)); if (r.ok) await audit("ckri_purpose", null, { code: str(body.code, 61) }); break;
     case "purpose_retire": r = await retirePurpose(ctx.admin, str(body.code, 61)); if (r.ok) await audit("ckri_purpose", null, { code: str(body.code, 61) }); break;
     case "propose": r = await proposeProject(ctx.admin, me, { code: str(body.code, 61), title: str(body.title, 300), purposeCode: str(body.purposeCode, 61), sponsor: str(body.sponsor, 20),
