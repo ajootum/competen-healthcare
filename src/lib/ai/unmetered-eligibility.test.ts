@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const generate = vi.fn(async (a: any) => { return ({ ok: true, text: "x", model: `model-for-${a?.tier}`, provider: "anthropic", usage: { input: 1, output: 1 } }); });
 vi.mock("./client", () => ({ generate: (a: unknown) => generate(a) }));
-vi.mock("./config", () => ({ aiStatus: () => ({ provider: "anthropic", canGenerate: true, models: { cheap: "claude-haiku-4-5", reasoning: "claude-sonnet-4-6", heavy: "claude-opus-4-8", embedding: "e" } }) }));
+vi.mock("./config", () => ({ AI_PROVIDERS: ["anthropic", "openai", "gemini"], aiStatus: () => ({ provider: "anthropic", canGenerate: true, available: ["anthropic"], models: { cheap: "claude-haiku-4-5", reasoning: "claude-sonnet-4-6", heavy: "claude-opus-4-8", embedding: "e" } }) }));
 
 import { getAiStanding, NOT_ELIGIBLE_REASON, runMeteredAi, unmeteredGate } from "./allowance";
 import { activityState } from "../individual/scholar/ai-standing";
@@ -23,12 +23,14 @@ const POLICY = {
 };
 const OPUS = (activity: string, tier: string) => ({ activity, provider: "anthropic", model_prefix: "claude-opus-4-8", eligible: true, max_risk_tier: tier });
 
-function admin(opts: { meteringOn?: boolean; policy?: any; policyError?: boolean; rows?: any[] | null }) {
+function admin(opts: { meteringOn?: boolean; policy?: any; policyError?: boolean; rows?: any[] | null; routing?: any }) {
   return {
     from(table: string) {
       const q: any = {
-        select: () => q, eq: () => q, lte: () => q, or: () => q, limit: () => q,
+        path: "",
+        select: () => q, eq: (c: string, v: any) => { if (c === "config_path") q.path = v; return q; }, lte: () => q, or: () => q, limit: () => q,
         maybeSingle: async () => table === "practice_platform_flags" ? { data: { enabled: !!opts.meteringOn }, error: null }
+          : table === "workspace_config_overrides" && q.path === "ai.model_routing" ? { data: opts.routing === undefined ? null : { published: opts.routing }, error: null }
           : table === "workspace_config_overrides" ? (opts.policyError ? { data: null, error: { message: "down" } } : { data: opts.policy === undefined ? { published: POLICY, updated_at: "t" } : opts.policy, error: null })
           : { data: null, error: null },
         then: (ok: any, bad: any) => Promise.resolve(table === "ai_model_eligibility" ? (opts.rows === null ? { data: null, error: { message: "down" } } : { data: opts.rows ?? [], error: null }) : { data: [], error: null }).then(ok, bad),
@@ -91,7 +93,7 @@ describe("metering OFF: eligibility still gates clinical-risk activities", () =>
   });
 
   it("the gate on its own: standard is unchanged (no tier), clinical needs the row", async () => {
-    expect(await unmeteredGate(admin({ rows: [] }), "scholar", "teach")).toEqual({ ok: true, tier: null });
-    expect(await unmeteredGate(admin({ rows: [OPUS("case_steps", "high_risk_clinical")] }), "scholar", "case_steps")).toEqual({ ok: true, tier: "heavy" });
+    expect(await unmeteredGate(admin({ rows: [] }), "scholar", "teach")).toEqual({ ok: true, tier: null, route: null });
+    expect(await unmeteredGate(admin({ rows: [OPUS("case_steps", "high_risk_clinical")] }), "scholar", "case_steps")).toEqual({ ok: true, tier: "heavy", route: { provider: "anthropic", model: "claude-opus-4-8" } });
   });
 });

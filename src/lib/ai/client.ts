@@ -24,6 +24,11 @@ export type GenerateArgs = {
   // Usage (tokens/latency/cost/status) is always recorded; context adds who/what. The scope says which
   // kind of id the caller holds -- see AiAttribution for why there is no bare tenantId here.
   context?: { userId?: string | null; operation?: string; attribution?: AiAttribution };
+  /**
+   * The provider and model the Holdings routing chose (model-routing.ts), already gated for eligibility by the engine.
+   * Absent: this deployment's primary provider and its model for `tier`, exactly as before.
+   */
+  route?: { provider: AiProvider; model: string };
 };
 
 export type GenerateFailure = "not_configured" | "refusal" | "failed";
@@ -187,18 +192,20 @@ const FAILOVER_ELIGIBLE: ReadonlyArray<"failed"> = ["failed"];
  * Returns the text plus which vendor and model produced it. Never throws.
  */
 export async function generate(
-  { system, user, tier = "reasoning", maxTokens = 1500, context }: GenerateArgs,
+  { system, user, tier = "reasoning", maxTokens = 1500, context, route }: GenerateArgs,
 ): Promise<GenerateResult> {
   const status = aiStatus();
-  if (!status.provider || !status.canGenerate || !status.models) {
+  // A routed request names its provider and model. Its key is still the environment's (never configuration's), and a
+  // provider with no key is not configured -- never quietly served by another.
+  if (!route && (!status.provider || !status.canGenerate || !status.models)) {
     return { ok: false, error: "not_configured" };
   }
 
-  const provider = status.provider;
+  const provider = route?.provider ?? status.provider!;
   const key = providerKey(provider);
   if (!key) return { ok: false, error: "not_configured" };
 
-  const model = status.models[tier];
+  const model = route?.model ?? status.models![tier];
   const base = {
     operation: context?.operation ?? null,
     tier,

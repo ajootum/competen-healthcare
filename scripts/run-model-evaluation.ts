@@ -18,13 +18,13 @@
  */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
-import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync, writeFileSync } from "node:fs";
 import { judgeTarget } from "./production-guard";
 import { scoreAnswer, proposeTier, type EvalScore } from "../src/lib/ai/model-evaluation";
 import { assistantSystemPrompt, assistantUserMessage } from "../src/lib/individual/personal-ai";
 import { EVAL_SET, EVAL_SET_VERSION } from "./ai-eval-set-d5";
 import { PROVISIONAL_ACTIVITIES } from "./ai-provisional-policy";
+import { evaluationCandidates, pinnedCall } from "./ai-eval-candidates";
 
 loadEnvConfig(process.cwd());
 const url = process.env.STAGING_SUPABASE_URL ?? "", key = process.env.STAGING_SERVICE_ROLE_KEY ?? "";
@@ -33,23 +33,15 @@ if (!verdict.ok || !key) { console.error(`REFUSING: STAGING_SUPABASE_URL is not 
 const admin: any = createClient(url, key, { auth: { persistSession: false } });
 const arg = (n: string) => { const i = process.argv.indexOf(`--${n}`); return i > 0 ? process.argv[i + 1] : undefined; };
 
-export const CANDIDATES = [
-  { provider: "anthropic", model: "claude-haiku-4-5-20251001", tier: "cheap" },
-  { provider: "anthropic", model: "claude-sonnet-4-6", tier: "reasoning" },
-  { provider: "anthropic", model: "claude-opus-4-8", tier: "heavy" },
-] as const;
-const NOT_EVALUATED = [
-  { provider: "openai", why: "no OPENAI_API_KEY on staging" },
-  { provider: "gemini", why: "no GEMINI_API_KEY on staging" },
-];
+// Every provider the gateway supports. Those without a key here are reported NOT EVALUATED (ai-eval-candidates.ts).
+// --only anthropic,openai narrows the run.
+const { candidates: CANDIDATES, notEvaluated: NOT_EVALUATED } = evaluationCandidates(arg("only"));
 
 type Row = { itemCode: string; task: string; tier: string; provider: string; modelRequested: string; modelReturned: string | null; inputTokens: number | null; outputTokens: number | null;
   costUsd: number | null; priceId: string | null; latencyMs: number; status: "ok" | "refusal" | "error"; output: string | null; error?: string; score: EvalScore };
 
 async function run(out: string) {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicKey) { console.error("No ANTHROPIC_API_KEY: nothing can be evaluated."); process.exit(1); }
-  const client = new Anthropic({ apiKey: anthropicKey });
+  if (!CANDIDATES.length) { console.error(`Nothing can be evaluated here: ${NOT_EVALUATED.map(n => n.why).join("; ")}.`); process.exit(1); }
   const rows: Row[] = [];
   for (const c of CANDIDATES) {
     const price = (await admin.rpc("ai_price_at", { p_provider: c.provider, p_model: c.model, p_at: new Date().toISOString() })).data;
@@ -60,12 +52,13 @@ async function run(out: string) {
       const t0 = Date.now();
       let row: Row;
       try {
-        const m = await client.messages.create({ model: c.model, max_tokens: 1500, system, messages: [{ role: "user", content: user }] });
-        const text = m.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
-        const cost = price?.id ? +((m.usage.input_tokens * +price.input_per_mtok_usd + m.usage.output_tokens * +price.output_per_mtok_usd) / 1e6 + +price.extra_per_request_usd).toFixed(6) : null;
-        const status = m.stop_reason === "refusal" ? "refusal" : "ok";
-        row = { itemCode: item.code, task: item.task, tier: item.tier, provider: c.provider, modelRequested: c.model, modelReturned: m.model, inputTokens: m.usage.input_tokens, outputTokens: m.usage.output_tokens,
-          costUsd: cost, priceId: price?.id ?? null, latencyMs: Date.now() - t0, status, output: text, score: scoreAnswer(item, status === "ok" ? text : null) };
+        const m = await pinnedCall(c, { system, user, maxTokens: 1500 });
+        const inT = m.input ?? null, outT = m.output ?? null;
+        const cost = price?.id && inT !== null && outT !== null ? +((inT * +price.input_per_mtok_usd + outT * +price.output_per_mtok_usd) / 1e6 + +price.extra_per_request_usd).toFixed(6) : null;
+        const status: Row["status"] = m.ok ? "ok" : m.refusal ? "refusal" : "error";
+        const text = m.ok ? m.text : null;
+        row = { itemCode: item.code, task: item.task, tier: item.tier, provider: c.provider, modelRequested: c.model, modelReturned: m.ok ? m.model : null, inputTokens: inT, outputTokens: outT,
+          costUsd: cost, priceId: price?.id ?? null, latencyMs: Date.now() - t0, status, output: text, ...(m.ok ? {} : { error: m.error }), score: scoreAnswer(item, status === "ok" ? text : null) };
       } catch (e: any) {
         row = { itemCode: item.code, task: item.task, tier: item.tier, provider: c.provider, modelRequested: c.model, modelReturned: null, inputTokens: null, outputTokens: null,
           costUsd: null, priceId: price?.id ?? null, latencyMs: Date.now() - t0, status: "error", output: null, error: String(e?.message ?? e).slice(0, 300), score: scoreAnswer(item, null) };
