@@ -40,8 +40,8 @@ export default function ReminderSettings({ accent, inApp, email, horizonDays }: 
       <label className="flex items-start gap-3 pointer-coarse:min-h-[var(--cmp-touch-min)]">
         <input type="checkbox" checked={e} onChange={ev => setE(ev.target.checked)} className={box} style={{ accentColor: accent }} />
         <span>
-          <span className="block text-[14px] font-semibold text-gray-900">Also email me reminders</span>
-          <span className="block text-[12.5px] text-gray-600">One email per expiry date, {horizonDays} days ahead, to your account email. Sent only where email is set up on Competen. Off unless you turn it on.</span>
+          <span className="block text-[14px] font-semibold text-gray-900">Also email me reminders and notices</span>
+          <span className="block text-[12.5px] text-gray-600">One email per expiry date, {horizonDays} days ahead, and a notice when a CPD entry repeats a course already in your record through Competen Learning, to your account email. Sent only where email is set up on Competen. Off unless you turn it on.</span>
         </span>
       </label>
       <div className="flex flex-wrap items-center gap-3">

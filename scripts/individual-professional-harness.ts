@@ -78,6 +78,9 @@ const WRITES: Record<string, string[]> = {
   // Owner (double-counted CPD hours): "This is a different activity" is the person's own decision, one ids-only audit row.
   // It changes no CPD entry and no learning record (src/lib/individual/professional/learning-dedupe.test.ts).
   "src/app/api/individual/professional/cpd/learning-match/route.ts": ["audit_log.insert"],
+  // Owner (CPD duplicates, "we don't post this and send a notification"): the person's override decision, written
+  // before the entry, and the once-only notice marker. Ids only. No CPD row is written here.
+  "src/lib/individual/professional/cpd-duplicates.ts": ["audit_log.insert"],
   "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "individual_professional_share.insert", "passport_share_tokens.update"],
   "src/lib/individual/professional/reminders.ts": ["individual_professional_evidence.update", "individual_professional_profile.update"],
   "src/app/api/individual/professional/reminders/route.ts": ["individual_professional_profile.update", "individual_professional_profile.insert"],

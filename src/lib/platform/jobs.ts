@@ -11,7 +11,7 @@ import { loadKnowledgeIntelligence } from "@/lib/super-admin/ckp-intelligence";
 import { runTaskAutomation } from "@/lib/operations/task-automation";
 import { runOrchestration } from "@/lib/delivery/orchestrator";
 import { scanReminders } from "@/lib/delivery/reminders";
-import { scanProfessionalReminders } from "@/lib/individual/professional/reminders";
+import { scanDuplicateNotices, scanProfessionalReminders } from "@/lib/individual/professional/reminders";
 import { processEvents } from "@/lib/delivery/consumer";
 
 export type JobDef = { key: string; name: string; description: string; category: string; schedule: string; runnable: boolean };
@@ -27,7 +27,7 @@ export const JOB_REGISTRY: JobDef[] = [
   { key: "task_automation", name: "Task Automation", description: "Fire recurring & event-triggered tasks from active task templates across all tenants.", category: "operations", schedule: "0 * * * *", runnable: true },
   { key: "delivery_orchestration", name: "Competency Delivery Orchestration", description: "Evaluate active assignment rules and materialise pending competency deliveries across all tenants (CDP-001).", category: "competency", schedule: "0 4 * * *", runnable: true },
   { key: "learning_reminders", name: "Learning Reminders", description: "Proactively remind learners of expiring credentials and competencies, once per due milestone (CDP-011).", category: "competency", schedule: "0 6 * * *", runnable: true },
-  { key: "individual_professional_reminders", name: "Competen Professional Reminders", description: "Email people who hold Competen Professional about credentials and registrations they recorded that expire within 60 days, once per expiry date (COMPETEN-IND-007).", category: "individual", schedule: "0 6 * * *", runnable: true },
+  { key: "individual_professional_reminders", name: "Competen Professional Reminders", description: "Email people who hold Competen Professional about credentials and registrations they recorded that expire within 60 days, once per expiry date, and about a CPD entry they logged that a Competen Learning completion now counts once (COMPETEN-IND-007).", category: "individual", schedule: "0 6 * * *", runnable: true },
   { key: "delivery_event_consumer", name: "Delivery Event Consumer", description: "Drain delivery-relevant domain events; auto-remediate failed assessments (CDP-015).", category: "competency", schedule: "0 * * * *", runnable: true },
 ];
 
@@ -85,10 +85,13 @@ const HANDLERS: Record<string, (admin: any) => Promise<string>> = {
   // Counts only in the platform event: who was reminded about what stays on the person's own row.
   individual_professional_reminders: async (admin) => {
     const r = await scanProfessionalReminders(admin);
+    // Owner (CPD duplicates): a Learning completion that now counts an entry the person logged once -- tell them.
+    const d = await scanDuplicateNotices(admin);
+    if (d.sent || d.failed) await emitPlatformEvent(admin, { event_type: "individual.professional_duplicate_notices", severity: d.failed ? "warning" : "info", payload: { sent: d.sent, failed: d.failed } });
     if (r.sent) await emitPlatformEvent(admin, { event_type: "individual.professional_reminders_sent", severity: "info", payload: { sent: r.sent } });
     // A failed send is released for the next run, and counted here so it stays visible (counts only).
     if (r.failed) await emitPlatformEvent(admin, { event_type: "individual.professional_reminders_failed", severity: "warning", payload: { failed: r.failed } });
-    return `${r.sent} reminder(s) sent${r.skipped ? ` · ${r.skipped} already sent` : ""}${r.failed ? ` · ${r.failed} not delivered, retried next run` : ""}`;
+    return `${r.sent} reminder(s) sent${r.skipped ? ` · ${r.skipped} already sent` : ""}${r.failed ? ` · ${r.failed} not delivered, retried next run` : ""}${d.sent || d.failed ? ` · ${d.sent} duplicate notice(s) sent${d.failed ? `, ${d.failed} retried next run` : ""}` : ""}`;
   },
   delivery_event_consumer: async (admin) => {
     const r = await processEvents(admin);

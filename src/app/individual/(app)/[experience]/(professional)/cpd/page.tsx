@@ -127,7 +127,7 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
       </Section>
 
       {learning.enabled && (
-        <Section title="From Competen Learning" note="Courses you completed, read from your learning record. They are not copied into this log and cannot be edited here. If you also logged one of them yourself, it is counted once automatically and marked on your entry.">
+        <Section title="From Competen Learning" note="Courses you completed, read from your learning record. They are not copied into this log and cannot be edited here. A course already here is not added to your log again. If you logged one before it arrived here, it is counted once and marked on your entry.">
           {learning.refs === null ? <Unreadable what="learning record" /> : learning.refs.length === 0 ? <Empty>No completed Competen Learning courses. Your own entries above are a complete CPD log without them.</Empty>
             : <LearningRefs refs={learning.refs} accent={x.accent} />}
         </Section>

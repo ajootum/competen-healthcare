@@ -63,6 +63,16 @@ export function reminderMessage(c: ReminderCandidate, today: string) {
   };
 }
 
+/**
+ * The job runner's one door into Professional (individual-professional-harness R3) also carries the CPD duplicate
+ * notices (cpd-duplicates.ts): a Learning completion that now counts an entry the person logged once. Imported on
+ * call, because cpd-duplicates.ts sends through dispatchEmail here.
+ */
+export async function scanDuplicateNotices(admin: any) {
+  const { scanLearningDuplicateNotices } = await import("./cpd-duplicates");
+  return scanLearningDuplicateNotices(admin);
+}
+
 export type ScanResult = { sent: number; skipped: number; failed: number; recipients: string[]; failures: { userId: string; error: string }[]; disabled?: true };
 
 const EMPTY = (): ScanResult => ({ sent: 0, skipped: 0, failed: 0, recipients: [], failures: [] });

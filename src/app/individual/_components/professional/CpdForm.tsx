@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CPD_ACTIVITY, DOCUMENT_MAX_LABEL } from "@/lib/individual/professional/vocabulary";
 import { focusRing, primaryBtn } from "../chrome";
-import { Field, inputCls } from "./forms";
+import { Field, RefusalNote, inputCls, refusalMsg, type RefusalMsg } from "./forms";
 import { experienceHref } from "@/lib/individual/experiences";
 import { aiNotice } from "./ai-refusal";
 
@@ -22,6 +22,8 @@ export default function CpdForm({ accent, today, goals }: { accent: string; toda
   const [reflection, setReflection] = useState("");
   const [drafted, setDrafted] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; continuity?: boolean } | null>(null);
+  // A refused save (a course already in the record through Competen Learning), with its link and override.
+  const [refused, setRefused] = useState<RefusalMsg | null>(null);
 
   async function draft() {
     const f = ref.current; if (!f) return;
@@ -39,13 +41,16 @@ export default function CpdForm({ accent, today, goals }: { accent: string; toda
     } catch { setMsg({ ok: false, text: "The assistant could not be reached." }); } finally { setDrafting(false); }
   }
 
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setBusy(true); setMsg(null);
+  async function submit(e: React.FormEvent<HTMLFormElement> | null, overrideField?: string) {
+    e?.preventDefault();
+    const form = ref.current; if (!form) return;
+    setBusy(true); setMsg(null); setRefused(null);
+    const fd = new FormData(form);
+    if (overrideField) fd.set(overrideField, "yes");
     try {
-      const res = await fetch("/api/individual/professional/cpd", { method: "POST", body: new FormData(e.currentTarget) });
+      const res = await fetch("/api/individual/professional/cpd", { method: "POST", body: fd });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) { setMsg({ ok: false, text: j?.error ?? "That could not be saved." }); return; }
+      if (!res.ok) { if (j?.override) setRefused(refusalMsg(j, "That could not be saved.")); else setMsg({ ok: false, text: j?.error ?? "That could not be saved." }); return; }
       ref.current?.reset(); setReflection(""); setDrafted(false);
       setMsg({ ok: true, text: j.evidenceClass === "source_linked" ? "Added, with your document attached." : "Added." });
       router.refresh();
@@ -86,6 +91,7 @@ export default function CpdForm({ accent, today, goals }: { accent: string; toda
           className={`inline-flex min-h-[44px] items-center rounded-xl border border-gray-300 bg-white px-4 text-[14px] font-semibold hover:bg-gray-50 disabled:opacity-50 ${focusRing}`} style={{ color: accent }}>
           {drafting ? "Drafting…" : "✦ Draft the reflection with AI"}
         </button>
+        {refused && <RefusalNote msg={refused} busy={busy} onOverride={f => void submit(null, f)} />}
         {msg && <p role={msg.ok ? "status" : "alert"} className={`text-[13.5px] font-medium ${msg.ok ? "text-green-800" : "text-red-700"}`}>{msg.text}{msg.continuity && <> <a href={experienceHref("professional", "ai-allowance")} className="font-semibold underline underline-offset-2">See your AI allowance</a></>}</p>}
       </div>
     </form>
