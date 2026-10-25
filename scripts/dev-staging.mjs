@@ -25,6 +25,7 @@ import nextEnv from "@next/env";
 import { spawn } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { productionRef } from "./production-ref.mjs";
 
 const { loadEnvConfig } = nextEnv;
 
@@ -58,7 +59,9 @@ if (missing.length) {
   process.exit(1);
 }
 
-const prodRef = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
+// The production ref is the constant in production-guard.ts (production-ref.mjs), NOT whatever .env.local names:
+// since 23 October that is staging itself, which made this refuse staging as "production".
+const prodRef = productionRef();
 const stagingRef = url.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
 if (!stagingRef) {
   console.error(`\n⛔ STAGING_SUPABASE_URL is not a project URL: ${url}\n   want: https://<ref>.supabase.co\n`);
