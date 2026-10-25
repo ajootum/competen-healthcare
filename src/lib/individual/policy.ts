@@ -468,8 +468,11 @@ export const POLICIES: readonly PolicyDef[] = [
     label: "Feedback on written reasoning",
     help: "How a written answer in a case gets feedback: AI reasoning feedback where it is available (labelled), or the student compares it with what a good answer contains.",
     options: [{ value: "ai_then_self", label: "AI feedback where available, otherwise the student's own review" }, { value: "self", label: "The student's own review only" }],
-    fallback: "ai_then_self",
-    limitReason: "Choices are always marked by their key first. AI feedback is always labelled.",
+    // Owner D5-v2: case-reasoning AI feedback is DISABLED until a recorded model eligibility covers it. Off by
+    // default, so nothing depends on someone publishing "self". Publishing "ai_then_self" turns it on, and even
+    // then the model-eligibility gate decides.
+    fallback: "self",
+    limitReason: "Choices are always marked by their key first. AI feedback is always labelled. Default: the student's own review.",
   },
   {
     key: "professional_catalogues", kind: "catalogues", product: "Professional", max: CATALOGUES_MAX,
