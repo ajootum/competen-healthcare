@@ -183,8 +183,13 @@ const closed = (policy: ProductAiPolicy, readable: boolean, reason: string): AiS
 export async function getAiStanding(admin: any, args: { userId: string; product: AiProduct }): Promise<AiStanding> {
   const { policy, readable } = await loadProductPolicy(admin, args.product);
   if (!(await aiFairUseEnabled(admin))) {
-    return { readable: true, metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null,
+    if (!readable) return closed(policy, false, "AI help could not be checked just now.");
+    const unmetered: AiStanding = { readable: true, metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null,
       activities: Object.fromEntries(Object.entries(policy.activities).map(([c, a]) => [c, { label: a.label, available: true, via: "included", reason: null }])), message: null };
+    // Eligibility gates clinical-risk activities whether or not metering is on (owner: Sonnet 4.6 is not approved for
+    // clinical activities, nothing is silently downgraded). The standing says so, so nothing is offered then refused.
+    const status = aiStatus();
+    return withEligibility(unmetered, policy, UNMETERED_BALANCE, status.provider ?? null, status.models as Record<string, string> | undefined, await loadEligibility(admin, args.product));
   }
   if (!readable) return closed(policy, false, "AI help could not be checked just now.");
   try {
@@ -201,13 +206,55 @@ const REQ = /^[A-Za-z0-9-]{8,80}$/;
 export const requestIdFor = (userId: string, clientId: string | null | undefined) =>
   `${userId}:${clientId && REQ.test(clientId) ? clientId : crypto.randomUUID()}`;
 
+/** A balance that never limits: with metering off only the policy's routing and eligibility apply, not an allowance. */
+const UNMETERED_BALANCE = { includedCau: 1, reserveCau: 0, usedCau: 0, reservedCau: 0, reserveUsedCau: 0, reserveReservedCau: 0 };
+
+/**
+ * WITH METERING OFF, a clinical-risk activity still runs only on an eligible model. The owner's rulings ("Sonnet
+ * 4.6 is NOT approved for clinical activities", "do not silently downgrade", disable what lacks evidence) hold on
+ * the path production uses at activation, where metering stays off until its own GO.
+ *
+ * - An activity whose risk floor is standard educational is unchanged: the caller's request runs as it did.
+ * - An activity above it runs only on the model its published routing resolves to, at that floor, and only when an
+ *   ai_model_eligibility row covers that activity, provider and model at that tier. This is the same predicate as
+ *   withEligibility and ai_reserve. With no such row it is refused not_eligible, never sent to another model.
+ * - An activity the published policy does not define has no known floor, and an unreadable policy or eligibility
+ *   proves nothing, so both are refused (fail closed).
+ *
+ * Subject-level risk (a standard activity on a clinical subject) is classified on the metered path only. Applying
+ * it here too is an owner decision (it would refuse most unrecognised subjects as high-risk, D1).
+ */
+export async function unmeteredGate(admin: any, product: AiProduct, activity: string): Promise<{ ok: true; tier: AiTier | null } | MeteredRefusal> {
+  const { policy, readable } = await loadProductPolicy(admin, product);
+  if (!readable) return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
+  const a = Object.prototype.hasOwnProperty.call(policy.activities, activity) ? policy.activities[activity] : undefined;
+  if (!a) return { ok: false, error: "unknown_activity", standing: closed(policy, true, "This AI activity is not offered here yet.") };
+  const floor = a.riskFloor as RiskTier;
+  if (riskRank(floor) <= 0) return { ok: true, tier: null };
+  const d = activityAt(policy, "full", activity, UNMETERED_BALANCE, floor);
+  const status = aiStatus();
+  const model = d.tier ? status.models?.[d.tier] : undefined;
+  const rows = await loadEligibility(admin, product);
+  const standing = (message: string): AiStanding => ({ readable: rows !== null, metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null,
+    activities: { [activity]: { label: a.label, available: false, via: null, reason: message } }, message });
+  if (rows === null) return { ok: false, error: "unreadable", standing: standing(ELIGIBILITY_UNREADABLE) };
+  const covered = d.available && !!d.tier && !!status.provider && !!model && rows.some(r => r.activity === activity && r.provider === status.provider && r.eligible
+    && model.startsWith(r.model_prefix) && riskRank((r.max_risk_tier ?? "clinical_educational") as RiskTier) >= riskRank(floor));
+  if (!covered) return { ok: false, error: "not_eligible", standing: standing(NOT_ELIGIBLE_REASON) };
+  return { ok: true, tier: d.tier };
+}
+
 /**
  * Run one AI request through the allowance. The caller has already applied its guard and its existing quota.
- * With metering off this is generate() unchanged.
+ * With metering off: unmeteredGate, then generate() (on the policy's tier for a clinical-risk activity).
  */
 export async function runMeteredAi(admin: any, args: { userId: string; product: AiProduct; activity: string; requestId: string; generate: GenerateArgs; risk?: RiskContext; record?: { type: string; ref: string } | null })
   : Promise<GenerateResult | MeteredRefusal> {
-  if (!(await aiFairUseEnabled(admin))) return generate(args.generate);
+  if (!(await aiFairUseEnabled(admin))) {
+    const g = await unmeteredGate(admin, args.product, args.activity);
+    if (!g.ok) return g;
+    return generate(g.tier ? { ...args.generate, tier: g.tier } : args.generate);
+  }
   const { policy, readable } = await loadProductPolicy(admin, args.product);
   if (!readable) return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
   const a = await currentAccount(admin, args.userId, args.product, policy);
@@ -306,7 +353,11 @@ export async function runOwnedAi(admin: any, args: {
 }): Promise<GenerateResult | MeteredRefusal | BudgetRefusal> {
   const o = args.owner;
   if (o.type === "individual") return runMeteredAi(admin, { userId: o.userId, product: args.product, activity: args.activity, requestId: args.requestId, generate: args.generate, risk: args.risk, record: args.record ?? null });
-  if (!(await aiFairUseEnabled(admin))) return generate(args.generate);
+  if (!(await aiFairUseEnabled(admin))) {
+    const g = await unmeteredGate(admin, args.product, args.activity);
+    if (!g.ok) return { ok: false, error: g.error === "not_eligible" ? "not_eligible" : g.error === "unknown_activity" ? "unknown_activity" : "unreadable", budget: o.budget.code, message: g.standing.message ?? "This AI activity is not available just now." };
+    return generate(g.tier ? { ...args.generate, tier: g.tier } : args.generate);
+  }
   const refuse = (error: BudgetError, message: string, risk?: RiskDecision): BudgetRefusal => ({ ok: false, error, budget: o.budget.code, message, risk });
   const [{ policy, readable }, bp] = await Promise.all([loadProductPolicy(admin, args.product), loadBudgetPolicy(admin, o.budget.code)]);
   if (!readable) return refuse("unreadable", "The AI policy could not be read just now, so nothing was sent.");
