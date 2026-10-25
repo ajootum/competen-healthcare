@@ -4,6 +4,7 @@ import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { cpdHoursByYear, evidenceCoverage, goalActivity, planProgress } from "@/lib/individual/professional/progress";
 import { loadMappingView, professionalProgress } from "@/lib/individual/professional/mapping-store";
+import { cpdYearsWithLearning, loadProfessionalLearning } from "@/lib/individual/professional/learning";
 import { GOAL_STATUS_LABEL, NEED_STATUS_LABEL } from "@/lib/individual/professional/vocabulary";
 import type { Metadata } from "next";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
@@ -18,6 +19,10 @@ export const dynamic = "force-dynamic";
 // ⚠ EVERY FIGURE IS A COUNT OF THE PERSON'S OWN ROWS (src/lib/individual/professional/progress.ts). There
 // is no target, no score, no readiness percentage and no comparison with anyone. A ratio with nothing to
 // count is "Not measured", with the reason, never 0%.
+//
+// ⚠ LEARNING COUNTS IN HOURS ONLY (COMPETEN-LEARNING-01 H1). Completed Competen Learning courses, read by reference,
+// add to CPD hours by year, shown "of which from Competen Learning". They are NOT counted as evidence behind a
+// development need: nothing here marks a need met because a course shares a competency with it.
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Progress" }); }
 
@@ -49,10 +54,11 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, map] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId)]);
+  const [record, map, learning] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId)]);
   const { needs, goals, cpd, evidence } = record;
   const plan = goals ? planProgress(goals, today) : null;
-  const years = cpd ? cpdHoursByYear(cpd) : null;
+  const years = cpd ? cpdYearsWithLearning(cpdHoursByYear(cpd), learning.refs ?? []) : null;
+  const withLearning = learning.enabled && (years ?? []).some(y => y.learningEntries > 0);
   const coverage = needs && goals && cpd && evidence ? evidenceCoverage(needs, goals, cpd, evidence) : null;
   const prog = professionalProgress(map, record);
   const activity = goals && cpd ? goalActivity(goals, cpd, today) : null;
@@ -100,7 +106,7 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
         )}
       </Section>
 
-      <Section title="CPD hours by year" note="Hours you recorded. Competen sets no target.">
+      <Section title="CPD hours by year" note={`Hours you recorded${learning.enabled ? ", and courses you completed on Competen Learning" : ""}. Competen sets no target.`}>
         {years === null ? <Unreadable what="CPD log" /> : years.length === 0 ? (
           <NotMeasured accent={x.accent} href={href("cpd")} cta="Record CPD" why="No CPD recorded yet." />
         ) : (
@@ -109,17 +115,20 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
             <thead><tr className="border-b border-gray-200 text-[12px] uppercase tracking-[0.1em] text-gray-500">
               <th scope="col" className="py-2 font-bold">Year</th><th scope="col" className="py-2 font-bold">Hours</th>
               <th scope="col" className="py-2 font-bold">Entries</th><th scope="col" className="py-2 font-bold">With a document</th>
+              {withLearning && <th scope="col" className="py-2 font-bold">Of which from Competen Learning</th>}
             </tr></thead>
             <tbody>
               {years.map(y => (
                 <tr key={y.year} className="border-b border-gray-100 tabular-nums">
                   <th scope="row" className="py-2 font-semibold text-gray-900">{y.year}</th>
                   <td className="py-2">{y.hours}</td><td className="py-2">{y.entries}</td><td className="py-2">{y.withDocument}</td>
+                  {withLearning && <td className="py-2">{y.learningEntries ? `${y.fromLearning} h, ${y.learningEntries} ${y.learningEntries === 1 ? "course" : "courses"}${y.learningWithoutHours ? ` (${y.learningWithoutHours} gave no hours)` : ""}` : "None"}</td>}
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        {learning.enabled && learning.refs === null && <p className="mt-2 text-[12.5px] text-gray-600">Your Competen Learning record could not be read just now, so courses from it are not included.</p>}
       </Section>
 
       <Section title="Evidence coverage" note="For each development need, the CPD (through a linked goal) and evidence you recorded against it.">

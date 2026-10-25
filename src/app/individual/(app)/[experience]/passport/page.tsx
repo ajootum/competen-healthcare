@@ -2,6 +2,7 @@ import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { EVIDENCE_LABEL, loadIndividualPassport } from "@/lib/individual/passport";
 import { OWN_KIND_LABEL } from "@/lib/individual/professional/passport-records";
 import { STUDY_ACHIEVEMENT, studyDetail } from "@/lib/individual/scholar/passport-items";
+import { learningCertificateHref, learningRecordHref } from "@/lib/individual/professional/learning";
 import { admitToEstate } from "@/lib/platform-membership";
 import { estateRolesOf, type AppRole } from "@/lib/roles";
 import { experiencePage, gatedMetadata } from "../../../_components/shell-context";
@@ -23,6 +24,9 @@ export const dynamic = "force-dynamic";
 // by provenance, and nothing in it ever says verified. "Self-directed study" -- Competen Scholar
 // achievements -- shows only what the person chose to show, one at a time, labelled self-directed: never
 // their notes, answers or AI interactions (migration 375, src/lib/individual/scholar/passport-items.ts).
+// "Competen Learning" -- completed courses, read by reference from the Holdings learning record -- says exactly what
+// each one is ("Course completion, issued by Competen Holdings", or self-declared), never verified. It is shown
+// only while Learning is on, and it is NOT part of a shared /verify link: sharing it outward is a separate decision.
 //
 // ⚠ SHARING STAYS ON THE EXISTING SURFACE. /dashboard/passport/share mints the revocable /verify links,
 // and it sits behind gate 1. A person who also holds gate 1 is pointed there. A person who does not is
@@ -154,6 +158,31 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
             </ul>
           )}
       </Section>
+
+      {passport.learning?.enabled && (
+        <Section title="Competen Learning" note="Courses you completed, read from your Competen Learning record. Each says what it is. A course completion or assessed knowledge is not an accreditation or a verification of clinical competence. Not included in a shared Passport link.">
+          {passport.learning.items === null ? <Unreadable what="learning record" />
+            : passport.learning.items.length === 0 ? <Empty>No completed Competen Learning courses yet.</Empty>
+              : (
+                <ul className="divide-y divide-gray-100">
+                  {passport.learning.items.map(l => (
+                    <li key={l.recordId} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
+                      <div className="min-w-0">
+                        <p className="text-[14.5px] font-semibold text-gray-900"><a href={learningRecordHref(l.recordId)} className={`underline-offset-2 hover:underline ${focusRing}`}>{l.title}</a></p>
+                        <p className="text-[12.5px] text-gray-500">{[l.detail, l.date ? fmt(l.date) : null].filter(Boolean).join(" · ")}</p>
+                        {l.certificateNos.length > 0 && (
+                          <p className="text-[12.5px]">{l.certificateNos.map(no => (
+                            <a key={no} href={learningCertificateHref(no)} className={`mr-3 font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Certificate {no}</a>
+                          ))}</p>
+                        )}
+                      </div>
+                      <p className={`text-[12.5px] font-semibold ${l.evidence === "platform_recorded" ? "text-slate-800" : "text-amber-800"}`}>{l.label}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+        </Section>
+      )}
 
       <Section title="Sharing">
         {ctx.live.includes("professional") ? (

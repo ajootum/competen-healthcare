@@ -10,6 +10,8 @@ import CpdForm from "../../../../_components/professional/CpdForm";
 import { CpdEdit } from "../../../../_components/professional/edit-forms";
 import CompetencyLinks from "../../../../_components/professional/CompetencyLinks";
 import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
+import { cpdYearsWithLearning, loadProfessionalLearning } from "@/lib/individual/professional/learning";
+import LearningRefs from "../../../../_components/professional/LearningRefs";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
@@ -24,6 +26,10 @@ export const dynamic = "force-dynamic";
 // ⚠ HOURS, NOT A TARGET (the src/app/dashboard/cpd header rule). Hours are summed by year. There is no
 // annual target, because no store holds one for an Individual person and their regulator's requirement
 // is not something Competen knows.
+//
+// ⚠ COMPLETED LEARNING SITS BESIDE, NEVER INSIDE (COMPETEN-LEARNING-01 H1). Courses completed on Competen Learning are
+// read from the learning record by reference (src/lib/individual/professional/learning.ts), counted in the hours as
+// "of which from Competen Learning", and listed read-only. Nothing is copied into this log. Learning off: none of it shows.
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "CPD log" }); }
 
@@ -33,9 +39,9 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, map] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId)]);
+  const [record, map, learning] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId)]);
   const cpd = record.cpd;
-  const years = cpd ? cpdHoursByYear(cpd) : null;
+  const years = cpd ? cpdYearsWithLearning(cpdHoursByYear(cpd), learning.refs ?? []) : null;
   const goalTitle = new Map((record.goals ?? []).map(g => [g.id, g.title]));
   const liveGoals = (record.goals ?? []).filter(g => g.status === "planned" || g.status === "in_progress");
 
@@ -45,7 +51,7 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
         intro="Your continuing professional development, kept privately by you. This is not an employer's CPD record: no organisation sees it unless you share your Passport." />
       {!record.provisioned && <NotProvisioned />}
 
-      <Section title="Hours by year" note="Hours you recorded. Competen sets no target. Check your regulator's current requirement yourself.">
+      <Section title="Hours by year" note={`Hours you recorded${learning.enabled ? ", and courses you completed on Competen Learning" : ""}. Competen sets no target. Check your regulator's current requirement yourself.`}>
         {years === null ? <Unreadable what="CPD log" /> : years.length === 0 ? <Empty>No CPD recorded yet.</Empty> : (
           <ul className="grid gap-3 sm:grid-cols-3">
             {years.map(y => (
@@ -53,10 +59,17 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
                 <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">{y.year}</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{y.hours} <span className="text-[14px] font-semibold text-gray-600">{y.hours === 1 ? "hour" : "hours"}</span></p>
                 <p className="text-[12.5px] text-gray-600">{y.entries} {y.entries === 1 ? "entry" : "entries"} · {y.withDocument} with a document</p>
+                {y.learningEntries > 0 && (
+                  <p className="text-[12.5px] text-gray-600">
+                    of which {y.fromLearning} {y.fromLearning === 1 ? "hour" : "hours"} from Competen Learning
+                    {y.learningWithoutHours ? ` (${y.learningWithoutHours} ${y.learningWithoutHours === 1 ? "course" : "courses"} gave no hours)` : ""}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
         )}
+        {learning.enabled && learning.refs === null && <p className="mt-2 text-[12.5px] text-gray-600">Your Competen Learning record could not be read just now, so courses from it are not included.</p>}
       </Section>
 
       {cpd !== null && record.provisioned && (
@@ -100,6 +113,13 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
           </ul>
         )}
       </Section>
+
+      {learning.enabled && (
+        <Section title="From Competen Learning" note="Courses you completed, read from your learning record. They are not copied into this log and cannot be edited here. If you also logged one of them in your own activities, remove one so its hours are not counted twice.">
+          {learning.refs === null ? <Unreadable what="learning record" /> : learning.refs.length === 0 ? <Empty>No completed Competen Learning courses. Your own entries above are a complete CPD log without them.</Empty>
+            : <LearningRefs refs={learning.refs} accent={x.accent} />}
+        </Section>
+      )}
     </>
   );
 }
