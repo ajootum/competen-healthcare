@@ -5,6 +5,10 @@ import { checkSharedReference } from "@/lib/individual/professional/frameworks";
 import { removeDocument, storeDocument } from "@/lib/individual/professional/documents";
 import { ORIGIN } from "@/lib/individual/professional/vocabulary";
 import { audit, readBody, refuse, todayUtc, writeFailed } from "@/lib/individual/professional/api";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { parseEvidenceType } from "@/lib/individual/professional/competency-form";
+import { isNotProvisioned } from "@/lib/individual/access";
+import type { IndividualContext } from "@/lib/individual/guard";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -16,6 +20,19 @@ export const dynamic = "force-dynamic";
 //
 // ⚠ SELF-DECLARED OR SOURCE-LINKED, AND NOTHING ELSE. The class is 373's generated column. A credential
 // added here is never "verified" -- there is no regulator lookup and no verifier, so the page says so.
+//
+// COMPETEN-PROFESSIONAL-COMPETENCY-01 C3 (migration 520): an evidence item may say what KIND of evidence it is (an
+// observation, mentor feedback, teaching, research, quality improvement, an assessment...) and who it is from. That is
+// written to the SAME record, after it, and only where 520 is applied: without 520 the item is saved exactly as before.
+
+/** 520's type fields, written after the 373 row. A database without 520 ignores them: nothing else changes. */
+async function writeType(ctx: Pick<IndividualContext, "admin" | "userId">, id: string, fields: Record<string, unknown>): Promise<string | null> {
+  if (fields.evidenceType === undefined && fields.author === undefined) return null;
+  const t = parseEvidenceType(fields, (await loadIndividualPolicy(ctx.admin)).professionalCompetency);
+  if (!t.ok) return t.error;
+  const { error } = await ctx.admin.from("individual_professional_evidence").update(t.value).eq("id", id).eq("user_id", ctx.userId);
+  return error && !isNotProvisioned(error) ? "The kind of evidence could not be saved just now." : null;
+}
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("professional");
@@ -42,7 +59,9 @@ export async function POST(req: Request) {
     await removeDocument(ctx.admin, (doc as { document_path?: string }).document_path);
     return writeFailed("evidence");
   }
+  const typeErr = await writeType(ctx, data.id, fields);
   await audit(ctx, "individual_professional_evidence_create", "individual_professional_evidence", data.id, { kind: parsed.value.kind, evidence_class: data.evidence_class });
+  if (typeErr) return NextResponse.json({ ok: true, id: data.id, evidenceClass: data.evidence_class, warning: `Saved, but: ${typeErr}` }, { status: 201 });
   return NextResponse.json({ ok: true, id: data.id, evidenceClass: data.evidence_class }, { status: 201 });
 }
 
@@ -76,6 +95,8 @@ export async function PUT(req: Request) {
     return writeFailed("evidence");
   }
   if (file) await removeDocument(ctx.admin, before.document_path);
+  const typeErr = await writeType(ctx, id, fields);
+  if (typeErr) return refuse(`Saved, but: ${typeErr}`);
   await audit(ctx, "individual_professional_evidence_update", "individual_professional_evidence", id, { kind: parsed.value.kind, evidence_class: data.evidence_class, document_replaced: !!file });
   return NextResponse.json({ ok: true, id, evidenceClass: data.evidence_class });
 }
