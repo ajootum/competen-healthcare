@@ -171,3 +171,40 @@ describe("AI grounding", () => {
     expect(profileContext({ provisioned: false, pointer: undefined, history: [], items: [] })).toBeNull();
   });
 });
+
+describe("part B: verification, reminders, sharing", async () => {
+  const { deriveVerification, personActions, isIndependentlyVerified } = await import("./profile-verification");
+  const { dueOffset, itemEligible } = await import("./reminders");
+  const { parseShareProfile } = await import("./share-profile");
+  const r = (event: string, n: number, extra: Record<string, unknown> = {}) => ({ id: `r${n}`, item_id: "i", event, method: null, valid_until: null, reason: null, created_at: `2026-10-0${n}T00:00:00Z`, ...extra }) as never;
+  it("only a verifier's verified row is independently verified, and only while in date", () => {
+    expect(isIndependentlyVerified(deriveVerification([r("requested", 1), r("verified", 2, { method: "register_check" })], "2026-10-25").state)).toBe(true);
+    expect(deriveVerification([r("requested", 1)], "2026-10-25").state).toBe("requested");
+    expect(deriveVerification([r("requested", 1), r("verified", 2, { method: "register_check", valid_until: "2026-10-01" })], "2026-10-25").state).toBe("expired");
+    expect(deriveVerification([r("requested", 1), r("verified", 2, { method: "x" }), r("revoked", 3, { reason: "lapsed" })], "2026-10-25")).toMatchObject({ state: "revoked", reason: "lapsed", method: null });
+    expect(deriveVerification([], "2026-10-25").state).toBe("none");
+  });
+  it("the person may request, withdraw an open request, or dispute an outcome -- never verify", () => {
+    expect(personActions(deriveVerification([], "2026-10-25"), true)).toEqual(["request"]);
+    expect(personActions(deriveVerification([r("requested", 1)], "2026-10-25"), true)).toEqual(["withdraw"]);
+    expect(personActions(deriveVerification([r("requested", 1), r("declined", 2, { reason: "x" })], "2026-10-25"), true)).toEqual(["request", "dispute"]);
+    expect(personActions(deriveVerification([r("requested", 1), r("verified", 2, { method: "x" })], "2026-10-25"), true)).toEqual(["dispute"]);
+    expect(personActions(deriveVerification([], "2026-10-25"), false)).toEqual([]);
+  });
+  it("reminders: one email at the tightest offset reached; lapsed registrations not reminded by default", () => {
+    expect(dueOffset("2026-11-14", "2026-10-25", [60, 30])).toBe(30);
+    expect(dueOffset("2026-12-20", "2026-10-25", [60, 30])).toBe(60);
+    expect(dueOffset("2027-06-01", "2026-10-25", [60, 30])).toBeNull();
+    expect(dueOffset("2026-10-01", "2026-10-25", [60])).toBe(60);
+    expect(itemEligible({ section: "registration", type_code: "lapsed" }, pp)).toBe(false);
+    expect(itemEligible({ section: "registration", type_code: null }, pp)).toBe(true);
+    expect(itemEligible({ section: "employment", type_code: null }, pp)).toBe(false);
+    expect(itemEligible({ section: "qualification", type_code: null }, { ...pp, reminderKinds: ["credentials"] })).toBe(false);
+  });
+  it("sharing: nothing by default; only ticked overview and well-formed record ids", () => {
+    expect(parseShareProfile({ scope: "full" })).toEqual({ overview: false, itemIds: [] });
+    const id = "aaaaaaaa-0000-4000-8000-000000000001";
+    expect(parseShareProfile({ profileOverview: "true", [`item:${id}`]: "true", "item:nope": "true", [`item:${id.replace("1", "2")}`]: "false" }))
+      .toEqual({ overview: true, itemIds: [id] });
+  });
+});

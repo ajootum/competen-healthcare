@@ -11,6 +11,7 @@ import { loadSuggestions } from "@/lib/individual/professional/suggestions";
 import { loadIndividualPassport } from "@/lib/individual/passport";
 import { loadProfessionalProfile } from "@/lib/individual/professional/profile-store";
 import { loadCatalogueSuggestions } from "@/lib/individual/professional/catalogue-suggestions";
+import { loadVerifications } from "@/lib/individual/professional/profile-verification";
 import { chainsOf } from "@/lib/individual/professional/profile-records";
 import { itemTitleOptions, itemTypeOptions, registrationSteps } from "@/lib/individual/professional/profile-form";
 import { FIELD_LABEL, ITEM_KINDS, OPTIONAL_FIELDS, RECORD_STATES, REQUIRED_FIELDS, SECTION_LABEL, type ItemKind, type ProfileSection } from "@/lib/individual/professional/profile-vocabulary";
@@ -99,10 +100,13 @@ export default async function RegistrationPage({ params }: { params: Promise<{ e
   const unreadable = view.items === null;
   const specialties = [ptr?.self_declared_primary_specialty, ...chainsOf(view.items, "specialty").live.map(c => c.current.title), ...chainsOf(view.items, "interest").live.map(c => c.current.title)]
     .filter((v): v is string => !!v);
-  const catalogues = await loadCatalogueSuggestions(ctx.admin, { profession: ptr?.self_declared_profession ?? null, specialties });
+  const [catalogues, verifications] = await Promise.all([
+    loadCatalogueSuggestions(ctx.admin, { profession: ptr?.self_declared_profession ?? null, specialties }),
+    loadVerifications(ctx.admin, ctx.userId, today),
+  ]);
 
   const sc: SectionCtx = {
-    accent: x.accent, today, documentKinds: pp.documentKinds,
+    accent: x.accent, today, documentKinds: pp.documentKinds, verifications, verificationKinds: pp.verificationKinds,
     typeOptions: Object.fromEntries(ITEM_KINDS.map(k => [k, [...itemTypeOptions(pp, k)]])) as SectionCtx["typeOptions"],
     titleOptions: Object.fromEntries(ITEM_KINDS.map(k => [k, [...itemTitleOptions(pp, k)]])) as SectionCtx["titleOptions"],
     orgSuggestions: { registration: [...pp.registrationBodies.map(o => o.label), ...suggestions.registrationBody] },
@@ -224,9 +228,10 @@ function VerificationNote() {
     <Section title="How your records are labelled">
       <ul className="flex flex-wrap gap-2">{RECORD_STATES.map(s => <li key={s}><StateBadge state={s} /></li>)}</ul>
       <p className="mt-3 text-[14px] text-gray-700">
-        Competen does not yet check registrations or qualifications with any regulator or institution, so everything you add is shown, everywhere,
-        as recorded by you. Records an organisation issued or verified come from your Passport and are labelled as such. Verification never stops you
-        using Competen Professional.
+        Everything you add is shown as recorded by you, and attaching a document does not verify it. You can ask Competen to verify a qualification,
+        registration or role: a Competen verifier, independent of you, checks that version and records the outcome, and only then is it shown as
+        independently verified. If you change the record later, the new version starts unverified. Records an organisation issued or verified come
+        from your Passport and are labelled as such. Verification is optional and never stops you using Competen Professional.
       </p>
     </Section>
   );

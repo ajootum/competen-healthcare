@@ -64,6 +64,22 @@
 2. Publish each signed version at its permanent URL (`/legal/holdings/…`, `/legal/scholar/…`, LEGAL-001 §4), as a new entry. The interim version stays at its own URL.
 3. Set the published versions and URLs in configuration (`INDIVIDUAL_LEGAL_*`), or in the LEGAL-002 register once it is built. Only then do the legal gates open.
 
+## CKRI research drafts (not part of the pilot set)
+
+Owner, "COMPETEN — LEARNING, PROFESSIONAL & CKRI CONTINUATION", part C: *"Prepare the research participation notice
+and governance policies for appropriate legal and ethics review."*
+
+Each is a **draft for counsel and ethics review, not approved**.
+
+| # | Draft | For |
+|---|---|---|
+| 10 | `10-ckri-research-participation-notice.md` | counsel, ethics |
+| 11 | `11-ckri-lawful-basis-register.md` | counsel |
+| 12 | `12-ckri-research-governance-policy.md` | counsel, ethics, owner |
+
+**Research collection stays closed.** No research choice can be made in any environment until a notice version and
+URL are configured (`CKRI_PARTICIPATION_NOTICE_*`). Production research collection stays OFF.
+
 ## One product setting these documents depend on
 
 The Scholar documents (03, 04) describe AI feedback on clinical-reasoning answers as **off** for the pilot (owner, 25 October 2026). Today that holds only where the Individual policy `scholar_case_reasoning_feedback` is set to "the student's own review only".

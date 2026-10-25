@@ -184,7 +184,10 @@ const checkKnownDoors = (routes: string[]): R => {
   const extra = routes.filter(f => !/^src\/app\/api\/hq\/individual\/(grants|invitations)\//.test(f)
     && f !== "src/app/api/hq/individual/plans/route.ts"
     // programmes/ (JOIN-01) is pinned by individual-foundation-harness 14g: this same right, every save audited.
-    && f !== "src/app/api/hq/individual/programmes/route.ts" && f !== FILES.route && f !== FILES.catRoute);
+    && f !== "src/app/api/hq/individual/programmes/route.ts" && f !== FILES.route && f !== FILES.catRoute
+    // verification/ (PROF-PROFILE-01 part B, migration 451) is pinned by professional-profile-harness B3: its own
+    // capability, hq.individual.professional.verify, on both handlers, and 451's trigger re-checks every write.
+    && f !== "src/app/api/hq/individual/verification/route.ts");
   return { ok: routes.includes(FILES.route) && extra.length === 0, detail: `unpinned: ${extra.join(", ")}` };
 };
 

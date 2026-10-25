@@ -28,8 +28,21 @@ import { individualAppEnabled } from "../gate";
 // ⚠ ONLY PEOPLE WHO HOLD PROFESSIONAL NOW. Liveness comes from individual_live_entitlement (the database
 // clock, migration 370). A person whose Professional period ended keeps their record and gets no mail.
 
+// ⚠ PART B (COMPETEN-PROFESSIONAL-PROFILE-01, owner continuation GO): CONFIGURABLE SCHEDULE AND ELIGIBILITY.
+// The Individual policy (WCE) decides what is reminded (professional_reminder_kinds), which registration
+// standings count (professional_reminder_standings), and, for profile records (migration 450), at which
+// offsets before expiry (professional_reminder_offsets). A profile record gets ONE email for the tightest
+// offset it has reached and not yet been reminded at: added 20 days before expiry with offsets 60 and 30, it
+// is reminded once (at 30), not twice. The once-only claim for profile records is a row in migration 452's
+// ledger, keyed on record, expiry date and offset. The primary registration and credentials keep the MVP's
+// single lead time and their own marks, unchanged.
+
 export type ReminderCandidate = {
-  table: "individual_professional_evidence" | "individual_professional_profile";
+  table: "individual_professional_evidence" | "individual_professional_profile" | "individual_professional_profile_item";
+  /** Profile records only: the offset this reminder is for (452's key). */
+  offsetDays?: number;
+  /** Where the email sends the person to update the record. */
+  href?: string;
   id: string;
   userId: string;
   expiresOn: string;
@@ -59,7 +72,7 @@ export function reminderMessage(c: ReminderCandidate, today: string) {
     type: "reminder",
     title: past ? "A credential on your Competen Professional record has expired" : "A credential on your Competen Professional record expires soon",
     body: `${c.title} ${past ? "expired" : "expires"} on ${c.expiresOn}, according to the date you recorded. Competen has not checked this with the issuing body. Update the record in Competen Professional once you have renewed it.`,
-    href: "/individual/professional/evidence",
+    href: c.href ?? "/individual/professional/evidence",
   };
 }
 
@@ -84,6 +97,9 @@ export async function scanProfessionalReminders(admin: any, now = new Date(), se
   const today = now.toISOString().slice(0, 10);
   // The lead time is Individual policy (COMPETEN-CONFIG-002), clamped to its fixed range, 60 days by default.
   const horizonDays = (await loadIndividualPolicy(admin)).reminderHorizonDays;
+  // Part B: what is reminded, and on what schedule, comes from the same policy.
+  const policy = await loadIndividualPolicy(admin);
+  const kinds = new Set(policy.professionalProfile.reminderKinds);
   const horizon = new Date(now.getTime() + horizonDays * 864e5).toISOString().slice(0, 10);
 
   const { data: live, error: liveErr } = await admin.from("individual_live_entitlement").select("user_id").eq("experience_code", "professional").limit(20000);
@@ -101,7 +117,7 @@ export async function scanProfessionalReminders(admin: any, now = new Date(), se
   if (!active.size) return EMPTY();
 
   const candidates: ReminderCandidate[] = [];
-  const { data: creds, error: credErr } = await admin.from("individual_professional_evidence")
+  const { data: creds, error: credErr } = !kinds.has("credentials") ? { data: [], error: null } : await admin.from("individual_professional_evidence")
     .select("id, user_id, title, expires_on, expiry_reminded_for").eq("kind", "credential")
     .not("expires_on", "is", null).lte("expires_on", horizon).in("user_id", [...active]).limit(5000);
   if (credErr) throw new Error(`individual_professional_evidence: ${credErr.message}`);
@@ -109,7 +125,7 @@ export async function scanProfessionalReminders(admin: any, now = new Date(), se
     if (c.expiry_reminded_for === c.expires_on) continue;
     candidates.push({ table: "individual_professional_evidence", id: c.id, userId: c.user_id, expiresOn: c.expires_on, title: c.title, prior: c.expiry_reminded_for ?? null });
   }
-  const { data: regs, error: regErr } = await admin.from("individual_professional_profile")
+  const { data: regs, error: regErr } = !kinds.has("primary_registration") ? { data: [], error: null } : await admin.from("individual_professional_profile")
     .select("id, user_id, self_declared_registration_body, self_declared_registration_expires_on, registration_reminded_for")
     .not("self_declared_registration_expires_on", "is", null).lte("self_declared_registration_expires_on", horizon).in("user_id", [...active]).limit(5000);
   if (regErr) throw new Error(`individual_professional_profile: ${regErr.message}`);
@@ -121,12 +137,16 @@ export async function scanProfessionalReminders(admin: any, now = new Date(), se
     });
   }
 
+  candidates.push(...await profileItemCandidates(admin, [...active], today, policy.professionalProfile));
+
   const out = EMPTY();
   const recipients = new Set<string>();
   for (const c of candidates.slice(0, 1000)) {
     // CLAIM first, conditionally on the date still being the one we are reminding about: the update is the
     // once-only gate, so two overlapping runs cannot both send.
-    const mark = c.table === "individual_professional_evidence"
+    const mark = c.table === "individual_professional_profile_item"
+      ? await admin.from("individual_professional_reminder_log").insert({ user_id: c.userId, item_id: c.id, expires_on: c.expiresOn, offset_days: c.offsetDays }).select("id")
+      : c.table === "individual_professional_evidence"
       ? await admin.from("individual_professional_evidence").update({ expiry_reminded_for: c.expiresOn })
         .eq("id", c.id).eq("expires_on", c.expiresOn).or(`expiry_reminded_for.is.null,expiry_reminded_for.neq.${c.expiresOn}`).select("id")
       : await admin.from("individual_professional_profile").update({ registration_reminded_for: c.expiresOn })
@@ -140,7 +160,9 @@ export async function scanProfessionalReminders(admin: any, now = new Date(), se
     // error, the failure is logged here, and the job run reports the failed count.
     const result = await send(admin, c.userId, reminderMessage(c, today));
     if (result.sent) { recipients.add(c.userId); out.sent++; continue; }
-    const release = c.table === "individual_professional_evidence"
+    const release = c.table === "individual_professional_profile_item"
+      ? await admin.from("individual_professional_reminder_log").delete().eq("item_id", c.id).eq("expires_on", c.expiresOn).eq("offset_days", c.offsetDays).select("id")
+      : c.table === "individual_professional_evidence"
       ? await admin.from("individual_professional_evidence").update({ expiry_reminded_for: c.prior })
         .eq("id", c.id).eq("expiry_reminded_for", c.expiresOn).select("id")
       : await admin.from("individual_professional_profile").update({ registration_reminded_for: c.prior })
@@ -152,4 +174,47 @@ export async function scanProfessionalReminders(admin: any, now = new Date(), se
   }
   out.recipients = [...recipients];
   return out;
+}
+
+/** Pure: the offset a profile record is due at today -- the tightest one reached -- or null when none is. */
+export function dueOffset(expiresOn: string, today: string, offsets: readonly number[]): number | null {
+  const daysLeft = Math.round((Date.parse(`${expiresOn}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 864e5);
+  const due = offsets.filter(o => daysLeft <= o);
+  return due.length ? Math.min(...due) : null;
+}
+
+/** Pure: whether a profile record is eligible under the policy (kind and, for a registration, its standing). */
+export function itemEligible(i: { section: string; type_code: string | null }, p: { reminderKinds: readonly string[]; reminderStandings: readonly string[] }): boolean {
+  if (i.section === "registration") return p.reminderKinds.includes("registration_items") && (i.type_code === null || p.reminderStandings.includes(i.type_code));
+  if (i.section === "qualification") return p.reminderKinds.includes("qualification_items");
+  return false;
+}
+
+/**
+ * Profile records due a reminder now (migration 450 records, 452 ledger). FAIL-SOFT: before 450/452 are applied,
+ * or on any error, it returns none -- the MVP reminders above must never stop because of this branch.
+ */
+async function profileItemCandidates(admin: any, users: string[], today: string,
+  p: { reminderKinds: readonly string[]; reminderStandings: readonly string[]; reminderOffsets: readonly number[] }): Promise<ReminderCandidate[]> {
+  try { return await itemCandidates(admin, users, today, p); } catch { return []; }
+}
+
+async function itemCandidates(admin: any, users: string[], today: string,
+  p: { reminderKinds: readonly string[]; reminderStandings: readonly string[]; reminderOffsets: readonly number[] }): Promise<ReminderCandidate[]> {
+  if (!users.length || !p.reminderOffsets.length || !(p.reminderKinds.includes("registration_items") || p.reminderKinds.includes("qualification_items"))) return [];
+  const horizon = new Date(Date.parse(`${today}T00:00:00Z`) + Math.max(...p.reminderOffsets) * 864e5).toISOString().slice(0, 10);
+  const { data: items, error } = await admin.from("individual_professional_profile_item")
+    .select("id, user_id, section, title, type_code, expires_on").in("section", ["registration", "qualification"]).in("user_id", users)
+    .is("superseded_at", null).is("withdrawn_at", null).not("expires_on", "is", null).lte("expires_on", horizon).limit(5000);
+  if (error) return [];
+  const due = ((items ?? []) as any[]).filter(i => itemEligible(i, p)).map(i => ({ i, offset: dueOffset(i.expires_on, today, p.reminderOffsets) })).filter(x => x.offset !== null);
+  if (!due.length) return [];
+  const { data: sent, error: logErr } = await admin.from("individual_professional_reminder_log").select("item_id, expires_on, offset_days").in("item_id", due.map(d => d.i.id));
+  if (logErr) return [];
+  const done = new Set(((sent ?? []) as any[]).map(r => `${r.item_id}|${r.expires_on}|${r.offset_days}`));
+  return due.filter(d => !done.has(`${d.i.id}|${d.i.expires_on}|${d.offset}`)).map(d => ({
+    table: "individual_professional_profile_item" as const, id: d.i.id, userId: d.i.user_id, expiresOn: d.i.expires_on, prior: null, offsetDays: d.offset!,
+    title: d.i.section === "registration" ? `Your registration "${d.i.title}"` : `Your qualification "${d.i.title}"`,
+    href: "/individual/professional/registration",
+  }));
 }

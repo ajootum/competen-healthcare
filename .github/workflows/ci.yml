@@ -236,6 +236,11 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Build (staging environment is inlined here)
+        # The type-check phase of `next build` ran out of the default ~4 GB V8 heap twice on 25 Oct 2026
+        # (#105, #110: "Reached heap limit ... Failed to type check"). The separate Typecheck job passes, so
+        # this is size, not a type error. 6 GB fits the 7 GB ubuntu-latest runner.
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: npm run build
       - name: Authenticated journeys
         # Only the credential-gated journeys. The credential-free ones keep their own job against a

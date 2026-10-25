@@ -56,6 +56,8 @@ export const GENERAL_NAV: NavSection[] = [
     { label: "Individual Policy", href: "/super-admin/individual/configuration", icon: "🎓" },
     // P0 controlled catalogues (migration 394): what a catalogue names, and its content status.
     { label: "Controlled Catalogues", href: "/super-admin/individual/catalogues", icon: "📚" },
+    // COMPETEN-PROFESSIONAL-PROFILE-01 part B (migration 451): the verifier's queue, for the appointed verifier only.
+    { label: "Professional Verification", href: "/super-admin/individual/verification", icon: "✅" },
   ]},
   // Migration 395 (owner decision D2): Holdings clinical-content approval, for every product.
   { group: "CLINICAL CONTENT", items: [

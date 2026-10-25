@@ -160,3 +160,23 @@ export const RECORD_STATE_DETAIL: Record<RecordState, string> = {
   superseded: "You changed this record. The earlier version is kept as it was.",
   withdrawn: "You withdrew this record. It is kept in your history and no longer shown as current.",
 };
+
+// ── PART B (owner continuation GO): VERIFICATION, REMINDERS AND SHARING, AS CONFIGURATION ─────────────────
+
+/** Records a person may ask Competen to verify (451's trigger allows exactly these). */
+export const VERIFIABLE_KINDS: readonly ItemKind[] = ["qualification", "registration", "employment"];
+
+/** What the daily reminder job may remind about. The first two are the MVP's own (373), kept as they were. */
+export const REMINDER_KINDS = [
+  ["primary_registration", "Primary registration renewal"],
+  ["credentials", "Credentials under Credentials & evidence"],
+  ["registration_items", "Other registrations and licences in the profile"],
+  ["qualification_items", "Qualifications with an expiry date in the profile"],
+] as const;
+export type ReminderKind = (typeof REMINDER_KINDS)[number][0];
+
+/** The offsets a profile record may be reminded at, in days before expiry. One email per offset reached. */
+export const REMINDER_OFFSETS = ["180", "90", "60", "30", "14", "7"] as const;
+
+/** The sections a link may carry. Each record is still chosen one by one by the person. */
+export const SHAREABLE_SECTIONS: readonly ProfileSection[] = ["overview", "qualifications", "registrations", "employment", "specialties", "aspirations"];

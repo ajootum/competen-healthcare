@@ -67,6 +67,10 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // COMPETEN-CONFIG-002 (migration 376): set the Competen Individual policy within its fixed hard limits, on
   // /super-admin/individual/configuration. Same position. Not super-admin, not the release gate.
   { code: "hq.individual.config.manage",      space: "platform"  },
+  // COMPETEN-PROFESSIONAL-PROFILE-01 part B (migration 451): record independent verification outcomes on the
+  // Professional profile records a person submitted, on /super-admin/individual/verification. Held only by the
+  // Professional Credential Verifier position, which nobody holds until the owner appoints someone.
+  { code: "hq.individual.professional.verify", space: "platform" },
   // P1 Commercial (migration 400): create, price, activate and retire the Competen Individual plans, through
   // /api/hq/individual/plans. Granted to NO position -- the platform owners only, until a separate owner GO.
   { code: "hq.individual.commercial.manage",  space: "platform"  },
@@ -250,6 +254,9 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/individual/programmes", capability: "hq.individual.config.manage" },
   // P0 controlled catalogues (migration 394): the same administrator curates what a catalogue names.
   { prefix: "/super-admin/individual/catalogues", capability: "hq.individual.config.manage" },
+  // COMPETEN-PROFESSIONAL-PROFILE-01 part B (migration 451): the Professional Credential Verifier's queue. Its own
+  // right, held by no position but the verifier one, and by nobody until the owner appoints someone.
+  { prefix: "/super-admin/individual/verification", capability: "hq.individual.professional.verify" },
   // COMPETEN-IND-ACCESS-001 s4: the Competen Individual pilot access screen. The capability already existed
   // (migration 370, D9) with no page; this declares the page it opens, so the intent map stays the whole truth.
   // EXACT: the screen has no sub-routes, and a sibling Individual HQ page (IND-007 configuration) must not

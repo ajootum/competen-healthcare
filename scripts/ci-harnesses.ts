@@ -76,7 +76,7 @@ const INCLUDED = [
   // COMPETEN-PROFESSIONAL-PROFILE-01 Stage 1 (source and migration 450): RLS posture, no verified or scope column,
   // append-only history and versioned records with the cascade path, completion in the schema, three required facts,
   // nothing un-askable configurable, trigger-only history, guarded handlers, allowlisted suggestions, policy-gated AI
-  // grounding, and fail-open to the MVP without 450. 19 planted-failure controls. Reads files only: no client, no network.
+  // grounding, fail-open to the MVP without 450, and part B (451-453: appointed independent verifier, request first, policy reminders, opt-in sharing). 35 planted-failure controls. Reads files only.
   "professional-profile-harness.ts",
   // HQ-USERS-A: the /api/super-admin/users handlers are gated by the HQ gate (view) and the owner gate (writes),
   // never by profiles.role, with 8 planted-failure controls. Reads files only: no client, no network, no .env.local.

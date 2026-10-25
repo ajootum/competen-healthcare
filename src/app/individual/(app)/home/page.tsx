@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { decideLanding } from "@/lib/individual/access";
 import { individualShell, gatedMetadata } from "../../_components/shell-context";
 import type { Metadata } from "next";
-import { StatePanel, IndividualMark, secondaryBtn } from "../../_components/chrome";
+import { StatePanel, IndividualMark, primaryBtn, secondaryBtn } from "../../_components/chrome";
+import { learningEnabled } from "@/lib/learning/policy";
 import { SignOutButton } from "../../_components/ShellNav";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -27,11 +28,22 @@ export default async function IndividualHome() {
   const landing = decideLanding(shell.ctx.membership, shell.ctx.live);
   if (landing.kind === "welcome") redirect("/individual/welcome");
   if (landing.kind === "experience") redirect(`/individual/${landing.experience}`);
+  // COMPETEN-LEARNING-01 (ADR-017, owner D2): a course-only member holds no experience and is served by Competen
+  // Learning, which needs none. Offered only while learning_app is on. No experience is granted or implied.
+  const learning = await learningEnabled(shell.ctx.admin);
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 sm:py-16">
       <div className="mx-auto max-w-xl">
         <div className="mb-6"><IndividualMark /></div>
+        {learning && (
+          <div className="mb-4">
+            <StatePanel title="Competen Learning"
+              actions={<Link href="/individual/learning" className={`${primaryBtn} bg-teal-700`}>Open Competen Learning</Link>}>
+              <p>Your courses, your learning record and any certificates are in Competen Learning. You do not need Competen Scholar or Competen Professional to use it.</p>
+            </StatePanel>
+          </div>
+        )}
         <StatePanel title="No experience is active on your account right now"
           actions={<><Link href="/individual" className={secondaryBtn}>About Competen Individual</Link><SignOutButton /></>}>
           <p>Your Competen Individual membership is in place, but neither Competen Scholar nor Competen Professional is currently active. An access period may have ended or been paused.</p>
