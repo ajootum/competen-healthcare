@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { isUuid } from "@/lib/individual/professional/validate";
 import { mintShare, parseShare, revokeShare } from "@/lib/individual/professional/share";
+import { checkShareLearning, parseShareLearning } from "@/lib/individual/professional/share-learning";
+import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 import { audit, readBody, refuse } from "@/lib/individual/professional/api";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { checkShareChoice, parseShareProfile } from "@/lib/individual/professional/share-profile";
@@ -28,9 +30,13 @@ export async function POST(req: Request) {
   const profile = parseShareProfile(fields);
   const choiceErr = await checkShareChoice(ctx.admin, ctx.userId, profile, policy.professionalProfile.shareSections);
   if (choiceErr) return refuse(choiceErr);
-  const link = await mintShare(ctx.admin, ctx.userId, input, profile);
+  // LCPD-01 LCPD-6: the completed learning the person ticked, each their own, completed and of a shareable kind.
+  const learningIds = parseShareLearning(fields);
+  const learnErr = await checkShareLearning(ctx.admin, ctx.userId, learningIds, await loadLcpdConfig(ctx.admin));
+  if (learnErr) return refuse(learnErr);
+  const link = await mintShare(ctx.admin, ctx.userId, input, profile, learningIds);
   if (!link) return NextResponse.json({ error: "The link could not be created just now. Try again shortly." }, { status: 500 });
-  await audit(ctx, "create_passport_share", "passport_share_token", link.id, { scope: input.scope, days: input.days, includes_own_records: true, profile_overview: profile.overview, profile_records: profile.itemIds.length });
+  await audit(ctx, "create_passport_share", "passport_share_token", link.id, { scope: input.scope, days: input.days, includes_own_records: true, profile_overview: profile.overview, profile_records: profile.itemIds.length, learning_records: learningIds.length });
   return NextResponse.json({ ok: true, path: `/verify/${link.token}`, link }, { status: 201 });
 }
 

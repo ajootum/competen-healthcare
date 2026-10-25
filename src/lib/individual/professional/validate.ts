@@ -124,22 +124,32 @@ export function parseGoalStatus(v: unknown): GoalStatus | null {
 // ── CPD ─────────────────────────────────────────────────────────────────────────────────────────────
 
 export type CpdInput = {
-  activity_type: CpdActivity; title: string; provider: string | null; hours: number; cpd_points: number | null;
+  /** Any configured activity code once 490 is applied; one of 373's nine before. */
+  activity_type: CpdActivity | string; title: string; provider: string | null; hours: number | null; cpd_points: number | null;
   activity_date: string; reflection: string | null; goal_id: string | null;
 };
 
-export function parseCpd(b: Record<string, unknown>, today: string): Parsed<CpdInput> {
-  const type = oneOf(CPD_ACTIVITY, b.activityType);
+/**
+ * A CPD entry. Without `opts` it is exactly 373's rule: the nine types, hours required, whole points. With migration 490
+ * (`opts.flexible`, LCPD-2) only a meaningful description and the date are required: hours are optional, credits take one
+ * decimal, and the activity type is any one the configuration offers (`opts.types`).
+ */
+export function parseCpd(b: Record<string, unknown>, today: string, opts: { types?: readonly string[]; flexible?: boolean } = {}): Parsed<CpdInput> {
+  const allowed: readonly string[] = opts.types ?? CPD_ACTIVITY.map(([c]) => c);
+  const type = typeof b.activityType === "string" && allowed.includes(b.activityType) ? b.activityType : null;
   if (!type) return { ok: false, error: "Choose the kind of activity." };
   const t = title(b.title);
-  if (!t) return { ok: false, error: "Name the activity in 3 to 200 characters." };
+  if (!t) return { ok: false, error: "Describe the activity in 3 to 200 characters." };
   const provider = text(b.provider, 160);
   if (provider === undefined) return { ok: false, error: "The provider can be up to 160 characters." };
-  const hours = Number(b.hours);
-  if (!Number.isFinite(hours) || hours <= 0 || hours > 1000) return { ok: false, error: "Enter the hours as a number above 0 and up to 1,000." };
+  const blankHours = b.hours === null || b.hours === undefined || b.hours === "";
+  const hours = blankHours ? null : Number(b.hours);
+  if (hours === null && !opts.flexible) return { ok: false, error: "Enter the hours as a number above 0 and up to 1,000." };
+  if (hours !== null && (!Number.isFinite(hours) || hours <= 0 || hours > 1000)) return { ok: false, error: "Enter the hours as a number above 0 and up to 1,000, or leave them blank." };
   const rawPoints = b.cpdPoints;
   const points = rawPoints === null || rawPoints === undefined || rawPoints === "" ? null : Number(rawPoints);
-  if (points !== null && (!Number.isInteger(points) || points < 0 || points > 1000)) return { ok: false, error: "CPD points must be a whole number up to 1,000, or left blank." };
+  if (points !== null && opts.flexible && (!Number.isFinite(points) || points < 0 || points > 1000 || Math.round(points * 10) !== points * 10)) return { ok: false, error: "CPD credits are a number up to 1,000 with at most one decimal, or left blank." };
+  if (points !== null && !opts.flexible && (!Number.isInteger(points) || points < 0 || points > 1000)) return { ok: false, error: "CPD points must be a whole number up to 1,000, or left blank." };
   const date = isoDate(b.activityDate);
   if (!date) return { ok: false, error: "Enter the date of the activity." };
   if (date > today) return { ok: false, error: "A CPD activity is recorded once it has happened. The date cannot be in the future." };
@@ -149,7 +159,7 @@ export function parseCpd(b: Record<string, unknown>, today: string): Parsed<CpdI
   if (goal === undefined) return { ok: false, error: "That goal reference is not valid." };
   return {
     ok: true, value: {
-      activity_type: type, title: t, provider, hours: Math.round(hours * 10) / 10, cpd_points: points,
+      activity_type: type, title: t, provider, hours: hours === null ? null : Math.round(hours * 10) / 10, cpd_points: points,
       activity_date: date, reflection, goal_id: goal,
     },
   };

@@ -90,7 +90,7 @@ export function ownRecordsFrom(record: ProfessionalRecord, links: ReadonlyMap<st
     out.push({
       kind: "cpd",
       title: c.title,
-      detail: `${CPD_ACTIVITY_LABEL[c.activity_type] ?? "Activity"} · ${c.hours} ${c.hours === 1 ? "hour" : "hours"}`,
+      detail: `${CPD_ACTIVITY_LABEL[c.activity_type] ?? "Activity"} · ${c.hours == null ? "no hours recorded" : `${c.hours} ${Number(c.hours) === 1 ? "hour" : "hours"}`}`,
       date: c.activity_date,
       expires: null,
       evidence: c.evidence_class,

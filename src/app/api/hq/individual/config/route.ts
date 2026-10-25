@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { publishScope, resetOverride, rollbackVersion, setOverride, wceMissing } from "@/lib/config/workspace-config-write";
 import { POLICY_SCOPE, policyDef, policyPath, validateDraft } from "@/lib/individual/policy";
+import { checkLcpdDraft, LCPD_PATH } from "@/lib/individual/lcpd-config";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -11,7 +12,11 @@ export const dynamic = "force-dynamic";
 // The Competen Individual policy, written through the EXISTING Workspace Configuration Engine lifecycle
 // (src/lib/config/workspace-config-write.ts, migration 076): draft, publish as a version, roll back to a
 // version, each audited in workspace_config_audit. Body: { action: "set", key, value } | { action:
-// "reset", key } | { action: "publish", note? } | { action: "rollback", versionId }.
+// "reset", key } | { action: "publish", note? } | { action: "rollback", versionId } | { action: "lcpd", settings }.
+//
+// "lcpd" (COMPETEN-PROFESSIONAL-LCPD-01 s11) is the one other path this door writes: the Professional Learning and CPD
+// document (src/lib/individual/professional/lcpd-config.ts) -- activity types, reflection templates, CPD requirements
+// with their source and review status, Passport eligibility. Validated whole, drafted, and published with the rest.
 //
 // ⚠ GATED BY hqApiGate(["hq.individual.config.manage"]) (migration 376) -- the right the Individual Product
 // Administrator appointment holds. Not super-admin, not landlord authority: this door can write only the
@@ -59,6 +64,12 @@ export async function POST(req: Request) {
         }
       }
       const r = await setOverride(ctx.admin, actor, SCOPE, policyPath(v.def.key), v.settings);
+      return r.ok ? NextResponse.json({ ok: true }) : refuse(500, "The draft could not be saved. Nothing has changed.");
+    }
+    case "lcpd": {
+      const v = checkLcpdDraft(body.settings);
+      if (!v.ok) return refuse(422, v.error);
+      const r = await setOverride(ctx.admin, actor, SCOPE, LCPD_PATH, v.settings);
       return r.ok ? NextResponse.json({ ok: true }) : refuse(500, "The draft could not be saved. Nothing has changed.");
     }
     case "reset": {

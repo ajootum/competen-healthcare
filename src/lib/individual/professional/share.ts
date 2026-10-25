@@ -42,7 +42,9 @@ export function parseShare(b: Record<string, unknown>, maxDays: number = SHARE_D
  * the companion row is written exactly as before 453, so a link still works where 453 is not applied.
  */
 export async function mintShare(admin: any, userId: string, input: ReturnType<typeof parseShare>,
-  profile: { overview: boolean; itemIds: readonly string[] } = { overview: false, itemIds: [] }): Promise<ShareLink | null> {
+  profile: { overview: boolean; itemIds: readonly string[] } = { overview: false, itemIds: [] },
+  /** LCPD-01 LCPD-6 (migration 491): the completed learning records the person ticked for this link, already checked. */
+  learningRecordIds: readonly string[] = []): Promise<ShareLink | null> {
   const token = randomBytes(24).toString("hex");
   const { data: share, error } = await admin.from("passport_share_tokens").insert({
     token, nurse_id: userId, hospital_id: null, scope: input.scope, label: input.label,
@@ -55,7 +57,10 @@ export async function mintShare(admin: any, userId: string, input: ReturnType<ty
   const { error: itemErr } = !linkErr && profile.itemIds.length
     ? await admin.from("individual_professional_share_item").insert(profile.itemIds.map(item_id => ({ share_token_id: share.id, user_id: userId, item_id })))
     : { error: null };
-  if (linkErr || itemErr) {
+  const { error: learnErr } = !linkErr && !itemErr && learningRecordIds.length
+    ? await admin.from("individual_professional_share_learning").insert(learningRecordIds.map(learning_record_id => ({ share_token_id: share.id, user_id: userId, learning_record_id })))
+    : { error: null };
+  if (linkErr || itemErr || learnErr) {
     // Without the companion row the link would show the institution sections only, which is not what the
     // person asked to share. Withdraw it rather than hand out a different link than the one requested.
     await admin.from("passport_share_tokens").update({ revoked: true }).eq("id", share.id).eq("nurse_id", userId);
