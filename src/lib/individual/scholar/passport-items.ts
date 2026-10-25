@@ -49,6 +49,8 @@ export function parseLabel(raw: unknown): string | null {
 
 /** One chosen achievement, as the Passport and /verify show it. */
 export type StudyAchievement = {
+  /** The Passport choice (375) itself, so a person may reference it as evidence elsewhere (Professional Stage 5). */
+  itemId?: string;
   materialId: string;
   achievement: StudyAchievementKind;
   label: string;
@@ -68,7 +70,7 @@ export type EligibleAchievement = {
   chosenLabel: string | null;
 };
 
-export type ChoiceRow = { materialId: string; achievement: StudyAchievementKind; label: string; includedAt: string };
+export type ChoiceRow = { itemId?: string; materialId: string; achievement: StudyAchievementKind; label: string; includedAt: string };
 type QuestionRef = { id: string; materialId: string; kind: QuestionKind };
 type AttemptRef = { questionId: string; answeredAt: string };
 /** One revision review (migration 391): which material, and when. Never the grade. */

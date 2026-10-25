@@ -25,6 +25,9 @@ import {
   DEFAULT_MILESTONE_TYPES, GOAL_FIELDS, GOAL_FIELD_LABEL, GOAL_STATUSES, GOAL_STATUS_TEXT, REVIEW_FIELDS, REVIEW_FIELD_LABEL,
   type ActivityStatus, type GoalField, type GoalStatus as PlanGoalStatus, type ReviewField,
 } from "./professional/plan-vocabulary";
+import {
+  DEFAULT_COMPETENCY_CATEGORIES, DEFAULT_CONFIDENCE, DEFAULT_EVIDENCE_TYPES, DEFAULT_RELATIONS, SHARE_PARTS, SHARE_PART_LABEL, type SharePart,
+} from "./professional/competency-vocabulary";
 
 // ── COMPETEN INDIVIDUAL POLICY ── COMPETEN-CONFIG-002 items 4-7 ─────────────────────────────────────────
 //
@@ -57,7 +60,7 @@ export const POLICY_PATH_PREFIX = "individual.policy.";
 /** The estate default (src/lib/ai/quota.ts HOURLY_LIMIT without AI_HOURLY_LIMIT set). */
 export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
-export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_days" | "professional_goal_review_days" | "professional_plan_reminder_days" | "share_link_max_days" | "professional_learning_match_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
+export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_days" | "professional_goal_review_days" | "professional_plan_reminder_days" | "professional_competency_reassess_days" | "share_link_max_days" | "professional_learning_match_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
   | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides"
   | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns"
   | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent"
@@ -65,7 +68,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
-  | "professional_need_sources" | "scholar_upload_formats" | "scholar_learning_actions"
+  | "professional_need_sources" | "professional_competency_share_parts" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
@@ -77,16 +80,19 @@ export type OptionsPolicyKey = "scholar_institutions"
   | "professional_registration_bodies" | "professional_practice_settings" | "professional_specialties" | "professional_career_interests"
   | "professional_need_categories" | "professional_need_motivations" | "professional_need_priorities" | "professional_reflection_templates"
   | "professional_goal_types" | "professional_goal_priorities" | "professional_activity_types" | "professional_milestone_types"
-  | "professional_goal_templates" | "professional_goal_evidence_kinds";
+  | "professional_goal_templates" | "professional_goal_evidence_kinds"
+  | "professional_competency_categories" | "professional_self_assessment_confidence" | "professional_evidence_types" | "professional_evidence_relations";
 /** COMPETEN-PROFESSIONAL-PROFILE-01: an ORDERED choice from a fixed list (form fields, profile sections). */
 export type SequencePolicyKey = "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages"
-  | "professional_goal_fields" | "professional_goal_statuses" | "professional_activity_statuses" | "professional_goal_review_fields";
+  | "professional_goal_fields" | "professional_goal_statuses" | "professional_activity_statuses" | "professional_goal_review_fields"
+  | "professional_self_assessment_fields";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
 export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_profile_ai"
   | "professional_need_reopen" | "professional_need_competency_links" | "professional_need_ai_suggestions" | "professional_need_rule_suggestions"
   | "professional_need_learning" | "professional_reflection_ai"
   | "professional_goal_reopen" | "professional_plan_competency_links" | "professional_plan_learning" | "professional_plan_ai" | "professional_plan_ai_reflections"
+  | "professional_competency_personal" | "professional_competency_ai"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations"
@@ -479,6 +485,74 @@ const PROFESSIONAL_PLAN_POLICIES: readonly PolicyDef[] = [
     help: "Privacy rule: planning help never sends a person's private reflections. This cannot be widened here.",
     options: [{ value: "off", label: "Never sent" }], fallback: "off",
     limitReason: "One choice. Reflections stay private; AI on a reflection is the separate, per-reflection rule above.",
+  },
+];
+
+// ── COMPETEN-PROFESSIONAL-COMPETENCY-01, Professional Stage 5: COMPETENCIES, SELF-ASSESSMENT, EVIDENCE, NO CODE ─────────
+// Competency presentation groups, the self-assessment template, confidence, evidence classifications, mapping
+// relationships, the Passport parts that may be shared, AI help and the reassessment reminder. Proficiency scales are
+// the CFCA scoring scales themselves. Verification methods, rubrics, assessor scopes, workflows and outcomes are the
+// Verification Studio's (C5). Nothing names a profession, a country, a method or a scale.
+const SELF_ASSESSMENT_FIELDS = ["outcome", "confidence", "reflection", "interest"] as const;
+export type SelfAssessmentField = (typeof SELF_ASSESSMENT_FIELDS)[number];
+const SELF_ASSESSMENT_FIELD_LABEL: Record<SelfAssessmentField, string> = {
+  outcome: "A specific learning outcome", confidence: "Confidence in the assessment", reflection: "An optional private reflection", interest: "Mark as a development interest",
+};
+const PROFESSIONAL_COMPETENCY_POLICIES: readonly PolicyDef[] = [
+  {
+    key: "professional_competency_categories", kind: "options", product: "Professional", max: 30, noun: "competency group",
+    label: "Competency groups", help: "How My Competencies groups personal entries. Catalogue entries keep their catalogue layer.",
+    fallback: DEFAULT_COMPETENCY_CATEGORIES, emptyMeans: "Not grouped", limitReason: "At most 30, each up to 160 characters.",
+  },
+  {
+    key: "professional_competency_personal", kind: "choice", product: "Professional",
+    label: "Personal competencies in the person's own words",
+    help: "Whether a person may add a competency in their own words, to self-assess and organise evidence when no approved catalogue is offered. A personal entry is never verified.",
+    options: [{ value: "on", label: "Allowed" }, { value: "off", label: "Catalogue competencies only" }], fallback: "on",
+    limitReason: "Two choices. Default: allowed, so the portfolio works without a catalogue.",
+  },
+  {
+    key: "professional_self_assessment_fields", kind: "sequence", product: "Professional",
+    label: "Self-assessment template, in order",
+    help: "What the self-assessment asks beyond the level, which always comes from the CFCA proficiency scale. Every part is optional to answer.",
+    options: SELF_ASSESSMENT_FIELDS.map(v => ({ value: v, label: SELF_ASSESSMENT_FIELD_LABEL[v] })), fallback: SELF_ASSESSMENT_FIELDS,
+    limitReason: "Only these parts. A self-assessment is always labelled self-reported.",
+  },
+  {
+    key: "professional_self_assessment_confidence", kind: "options", product: "Professional", max: 10, noun: "confidence word",
+    label: "Confidence in a self-assessment", help: "How sure a person may say they are. Words, never a score.",
+    fallback: DEFAULT_CONFIDENCE, emptyMeans: "Not asked", limitReason: "At most 10, each up to 160 characters.",
+  },
+  {
+    key: "professional_competency_reassess_days", kind: "int", product: "Professional", unit: "days",
+    label: "Suggest reassessing after", help: "In-app only: a competency not self-assessed for this long is suggested for reassessment. Earlier assessments are always kept.",
+    fallback: 180, min: 30, max: 730, limitReason: "From a month to two years. In-app only: no email.",
+  },
+  {
+    key: "professional_evidence_types", kind: "options", product: "Professional", max: 30, noun: "evidence type",
+    label: "Evidence classifications",
+    help: "Kinds of additional supporting evidence a person may record: observations, feedback, teaching, research, quality improvement and more. Recorded in the existing evidence record.",
+    fallback: DEFAULT_EVIDENCE_TYPES, emptyMeans: "Not asked", limitReason: "At most 30, each up to 160 characters.",
+  },
+  {
+    key: "professional_evidence_relations", kind: "options", product: "Professional", max: 10, noun: "mapping relationship",
+    label: "Evidence mapping relationships",
+    help: "What a piece of evidence may be said to support for a learning outcome: knowledge, application, practical performance, experience, independent verification.",
+    fallback: DEFAULT_RELATIONS, limitReason: "At most 10, each up to 160 characters. Supporting evidence is never verification.",
+  },
+  {
+    key: "professional_competency_share_parts", kind: "set", product: "Professional",
+    label: "What of a competency may be shared on a Passport link",
+    help: "Privacy and sharing: which parts a person may choose to carry on a link. Nothing is shared unless the person ticks it, and private reflections are never shared.",
+    options: SHARE_PARTS.map(v => ({ value: v, label: SHARE_PART_LABEL[v] })), fallback: SHARE_PARTS,
+    limitReason: "Only these parts. Reflections have no path here.",
+  },
+  {
+    key: "professional_competency_ai", kind: "choice", product: "Professional",
+    label: "AI help with competencies",
+    help: "Whether a person may ask the personal AI to explore a competency, reflect on a self-assessment, suggest evidence mappings or summarise evidence. AI fair use and model eligibility apply. Nothing is saved unless the person accepts it, and AI never verifies.",
+    options: [{ value: "on", label: "On, when the person asks" }, { value: "off", label: "Off" }], fallback: "on",
+    limitReason: "Two choices. Competencies and evidence work fully without AI.",
   },
 ];
 
@@ -1024,6 +1098,7 @@ export const POLICIES: readonly PolicyDef[] = [
   ...PROFESSIONAL_PROFILE_POLICIES,
   ...PROFESSIONAL_NEEDS_POLICIES,
   ...PROFESSIONAL_PLAN_POLICIES,
+  ...PROFESSIONAL_COMPETENCY_POLICIES,
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1268,6 +1343,14 @@ export type IndividualPolicy = {
   professionalNeeds: ProfessionalNeedsPolicy;
   /** COMPETEN-PROFESSIONAL-PLAN-01: development planning, as configured. */
   professionalPlan: ProfessionalPlanPolicy;
+  /** COMPETEN-PROFESSIONAL-COMPETENCY-01: competencies, self-assessment and evidence, as configured. */
+  professionalCompetency: ProfessionalCompetencyPolicy;
+};
+
+/** COMPETEN-PROFESSIONAL-COMPETENCY-01 (Stage 5): competencies, self-assessment and evidence, as configured. */
+export type ProfessionalCompetencyPolicy = {
+  categories: ContextOption[]; confidence: ContextOption[]; evidenceTypes: ContextOption[]; relations: ContextOption[];
+  personal: "on" | "off"; fields: SelfAssessmentField[]; shareParts: SharePart[]; ai: "on" | "off"; reassessDays: number;
 };
 
 /** COMPETEN-PROFESSIONAL-PLAN-01 (Stage 3): development planning, as configured. */
@@ -1373,6 +1456,21 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     professionalProfile: resolveProfessionalProfile(published),
     professionalNeeds: resolveProfessionalNeeds(published),
     professionalPlan: resolveProfessionalPlan(published),
+    professionalCompetency: resolveProfessionalCompetency(published),
+  };
+}
+
+function resolveProfessionalCompetency(published: Map<string, any>): ProfessionalCompetencyPolicy {
+  const opts = (key: OptionsPolicyKey) => clampOptions(policyDef(key) as OptionsPolicy, published.get(policyPath(key)));
+  const choice = (key: ChoicePolicyKey) => clampChoice(policyDef(key) as ChoicePolicy, published.get(policyPath(key)));
+  return {
+    categories: opts("professional_competency_categories"), confidence: opts("professional_self_assessment_confidence"),
+    evidenceTypes: opts("professional_evidence_types"), relations: opts("professional_evidence_relations"),
+    personal: choice("professional_competency_personal") as "on" | "off",
+    fields: clampSequence(policyDef("professional_self_assessment_fields") as SequencePolicy, published.get(policyPath("professional_self_assessment_fields"))) as SelfAssessmentField[],
+    shareParts: clampSet(policyDef("professional_competency_share_parts") as SetPolicy, published.get(policyPath("professional_competency_share_parts"))) as SharePart[],
+    ai: choice("professional_competency_ai") as "on" | "off",
+    reassessDays: clampInt(policyDef("professional_competency_reassess_days") as IntPolicy, published.get(policyPath("professional_competency_reassess_days"))),
   };
 }
 

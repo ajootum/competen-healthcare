@@ -324,6 +324,13 @@ const STAGING: Listed[] = [
       + "catalogue, no AI. Own harness-prof02-* identity, deleted after; two policy rows restored exactly. PEND until 470 is applied.",
   },
   {
+    file: "professional-competency-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-COMPETENCY-01 Stage 5 (520), owner GO s15 items 1-16: My Competencies, a published competency explored with its "
+      + "outcomes and expected proficiency, a self-assessment (self-reported) with confidence and a private reflection, CPD and an observation "
+      + "mapped to outcomes without duplication, a need and a goal from the competency, reassessment with history kept, no catalogue, no AI, "
+      + "a Passport link carrying chosen parts, nothing private shared. Own harness-prof05-* identity, deleted after; three policy rows restored exactly. PEND until 520 is applied.",
+  },
+  {
     file: "professional-plan-acceptance-harness.ts",
     note: "COMPETEN-PROFESSIONAL-PLAN-01 Stage 3 (480), owner GO s15, the ECG Interpretation goal: created from a need and directly, "
       + "saved with only a description, CFCA outcomes with version, catalogue and external learning added with no enrolment, study and "
