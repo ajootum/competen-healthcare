@@ -69,6 +69,11 @@ export const GENERAL_NAV: NavSection[] = [
     { label: "Case Publication", href: "/super-admin/cases/publication", icon: "📢" },
     { label: "Case Intelligence", href: "/super-admin/cases/intelligence", icon: "📊" },
   ]},
+  // Migration 510 (COMPETENCY-01 C5): Holdings competency verification. Two separate authorities, two doors.
+  { group: "COMPETENCY VERIFICATION", items: [
+    { label: "Verification Studio", href: "/super-admin/verification-studio", icon: "🧭" },
+    { label: "Competency Assessment", href: "/super-admin/competency-assessment", icon: "📝" },
+  ]},
   // Migrations 460-464 (COMPETEN-LEARNING-01): the Holdings Learning catalogue, studio and its separate authorities.
   { group: "COMPETEN LEARNING", items: [
     { label: "Learning Studio", href: "/super-admin/learning", icon: "📘" },

@@ -7,18 +7,34 @@ import {
 import { HQ_CAPABILITY_CODES } from "./spaces";
 import { readFail, readOk } from "./appointments";
 
-const SQL = readFileSync("supabase/migrations/500-hq-position-administration.sql", "utf8");
-const body = (fn: string) => {
-  const at = SQL.indexOf(`create or replace function ${fn}(`);
-  return SQL.slice(at, SQL.indexOf("$$;", at));
+// The LATEST migration that defines each function is the one the database runs: 500 first, 511 (COMPETENCY-01 C5) after.
+const SQL = readFileSync("supabase/migrations/511-competency-assessor-separation-of-duties.sql", "utf8");
+const SQL_500 = readFileSync("supabase/migrations/500-hq-position-administration.sql", "utf8");
+const bodyOf = (sql: string, fn: string) => {
+  const at = sql.indexOf(`create or replace function ${fn}(`);
+  return sql.slice(at, sql.indexOf("$$;", at));
 };
+const body = (fn: string) => bodyOf(SQL, fn);
+const pairsOf = (fn: string) => [...fn.matchAll(/\('(hq\.[^']+)', '(hq\.[^']+)', '([^']+)'\)/g)].map(m => ({ a: m[1], b: m[2], reason: m[3] }));
 
-describe("migration 500 and positions.ts agree", () => {
+describe("the latest migration (511) and positions.ts agree", () => {
   it("the excluded pairs are the same set, in the same order", () => {
-    const pairs = [...body("hq_capability_exclusions").matchAll(/\('(hq\.[^']+)', '(hq\.[^']+)', '([^']+)'\)/g)]
-      .map(m => ({ a: m[1], b: m[2], reason: m[3] }));
-    expect(pairs.length).toBe(10);
+    const pairs = pairsOf(body("hq_capability_exclusions"));
+    expect(pairs.length).toBe(14);
     expect(pairs).toEqual(HQ_CAPABILITY_EXCLUSIONS);
+  });
+
+  it("511 keeps every pair of 500, in order, and only adds", () => {
+    const before = pairsOf(bodyOf(SQL_500, "hq_capability_exclusions"));
+    expect(before.length).toBe(10);
+    expect(pairsOf(body("hq_capability_exclusions")).slice(0, before.length)).toEqual(before);
+  });
+
+  it("the Competency Assessor sits with none of content approval, reviewer governance, authoring or the Studio", () => {
+    for (const b of ["hq.quality.clinical.approve", "hq.quality.clinical.govern", "hq.quality.competency.author", "hq.competency.verification.manage"])
+      expect(exclusionConflict("hq.competency.verification.assess", [b])?.with).toBe(b);
+    expect(exclusionConflict("hq.competency.verification.manage", ["hq.quality.clinical.approve"])).toBeNull();
+    expect(sensitiveClassOf("hq.competency.verification.assess")).toBe("clinical");
   });
 
   it("the sensitive classes are the same sets", () => {

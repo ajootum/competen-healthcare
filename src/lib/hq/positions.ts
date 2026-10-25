@@ -23,9 +23,9 @@ type Admin = ReturnType<typeof createAdminClient>;
 
 export type HqSensitiveClass = "clinical" | "financial" | "platform";
 
-/** Mirrors hq_capability_sensitive_class() in migration 500. A grant of one needs an explicit acknowledgement. */
+/** Mirrors hq_capability_sensitive_class() as migration 511 last defined it. A grant of one needs an explicit acknowledgement. */
 export const HQ_SENSITIVE_CAPABILITIES: Record<HqSensitiveClass, readonly string[]> = {
-  clinical: ["hq.quality.clinical.approve", "hq.quality.clinical.govern"],
+  clinical: ["hq.quality.clinical.approve", "hq.quality.clinical.govern", "hq.competency.verification.manage", "hq.competency.verification.assess"],
   financial: ["hq.practice.commercial.manage", "hq.individual.commercial.manage", "hq.learning.price.approve", "hq.platform.ai.manage"],
   platform: [
     "hq.platform.users.view", "hq.platform.users.reset", "hq.platform.system.view", "hq.platform.settings.view",
@@ -49,7 +49,7 @@ export function sensitiveClassOf(code: string): HqSensitiveClass | null {
   return null;
 }
 
-/** Mirrors hq_capability_exclusions() in migration 500: no single position may hold both live. */
+/** Mirrors hq_capability_exclusions() as migration 511 last defined it: no single position may hold both live. */
 export const HQ_CAPABILITY_EXCLUSIONS: readonly { a: string; b: string; reason: string }[] = [
   { a: "hq.quality.clinical.approve", b: "hq.quality.competency.author", reason: "a competency author cannot hold clinical approval" },
   { a: "hq.quality.clinical.approve", b: "hq.quality.case.author", reason: "a case author cannot hold clinical approval" },
@@ -61,6 +61,11 @@ export const HQ_CAPABILITY_EXCLUSIONS: readonly { a: string; b: string; reason: 
   { a: "hq.learning.ckri.educator", b: "hq.quality.knowledge.publish", reason: "a knowledge educator cannot publish knowledge resources" },
   { a: "hq.quality.research.propose", b: "hq.quality.research.review", reason: "a research proposer cannot review research" },
   { a: "hq.quality.research.propose", b: "hq.quality.research.govern", reason: "a research proposer cannot govern research" },
+  // Migration 511, COMPETENCY-01 C5: the Competency Assessor is a separate authority from content approval and the Studio.
+  { a: "hq.competency.verification.assess", b: "hq.quality.clinical.approve", reason: "a competency assessor cannot hold clinical content approval" },
+  { a: "hq.competency.verification.assess", b: "hq.quality.clinical.govern", reason: "a competency assessor cannot govern clinical reviewer scopes" },
+  { a: "hq.competency.verification.assess", b: "hq.quality.competency.author", reason: "a competency assessor cannot author competency content" },
+  { a: "hq.competency.verification.assess", b: "hq.competency.verification.manage", reason: "a competency assessor cannot set assessment criteria, scopes or assignments" },
 ];
 
 /** The first live capability on the position that `code` may not sit beside, or null. */
