@@ -3,11 +3,12 @@
 **Owner GO:** COMPETEN-PROFESSIONAL-LCPD-01, Stage 4 (LCPD-3, LCPD-4, LCPD-6). Development, integration and staging are authorised. Production needs a separate owner GO.
 
 **State:**
-- **Authored.** Proven locally on PG17.
-- **Next:** staging ×2 by the coordinator.
+- **APPLIED and verified on staging** (ezhvpgtcqcdsgylrxgdb), ×2 with the rollback rehearsed: see `491-staging-record.md`. Committed byte-identical.
+- **Staging fingerprint:** PRE empty/0, F1 = F2 = 5849f02e/12, rollback = PRE (490 and 470 unchanged), re-apply = F1.
+- **Production:** not applied. It needs its own owner GO.
 
 **Depends on:**
-- 470 (`individual_professional_reflection`), which is on staging and main, but **not yet in production**. 491 goes after it.
+- 470 (`individual_professional_reflection`), now on staging, main and production (the owner applied it on 25 Oct).
 - 373 and 393 (CPD and its `(id, user_id)` key), 453 (`individual_professional_share`) and 462 (`learning_record` and its key).
 
 **Independent of 490.**
