@@ -99,10 +99,10 @@ export function CreateOffering({ types, providers }: { types: string[]; provider
 
 export function ProposePrice({ offeringId }: { offeringId: string }) {
   const { busy, msg, send } = useLearningSend();
-  const [f, setF] = useState({ currency: "UGX", amountMajor: "", accessDays: "365", note: "" });
+  const [f, setF] = useState({ currency: "", amountMajor: "", accessDays: "365", note: "" });
   return (
     <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); send({ action: "propose_price", offeringId, currency: f.currency, amountMajor: Number(f.amountMajor), accessDays: f.accessDays === "" ? null : Number(f.accessDays), note: f.note }, "Proposed. A Learning Price Approver must approve it before anyone can buy at this price."); }}>
-      <label className="text-[12.5px] text-gray-700">Currency<input className={`${input} ml-1 w-20`} value={f.currency} onChange={e => setF({ ...f, currency: e.target.value.toUpperCase() })} maxLength={3} required /></label>
+      <label className="text-[12.5px] text-gray-700">Currency<input className={`${input} ml-1 w-20`} value={f.currency} onChange={e => setF({ ...f, currency: e.target.value.toUpperCase() })} maxLength={3} required placeholder="ISO" aria-describedby="cur-hint" /><span id="cur-hint" className="sr-only">Three-letter ISO currency code</span></label>
       <label className="text-[12.5px] text-gray-700">Price<input className={`${input} ml-1 w-32`} inputMode="decimal" value={f.amountMajor} onChange={e => setF({ ...f, amountMajor: e.target.value })} required /></label>
       <label className="text-[12.5px] text-gray-700">Access days (blank: as long as the terms allow)<input className={`${input} ml-1 w-24`} inputMode="numeric" value={f.accessDays} onChange={e => setF({ ...f, accessDays: e.target.value })} /></label>
       <label className="text-[12.5px] text-gray-700">Note<input className={`${input} ml-1 w-56`} value={f.note} onChange={e => setF({ ...f, note: e.target.value })} /></label>
