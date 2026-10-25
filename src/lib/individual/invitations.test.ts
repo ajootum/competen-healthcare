@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi } from "vitest";
 import {
-  validateInvitation, inviteDeliveryMode, isRefusal, createIndividualInvitation, acceptIndividualInvitation, revokeIndividualInvitation,
+  validateInvitation, inviteDeliveryMode, isRefusal, createIndividualInvitation, acceptIndividualInvitation, revokeIndividualInvitation, inviteMetadata,
   INVITE_DEFAULT_DAYS,
 } from "./invitations";
 
@@ -48,6 +48,34 @@ describe("inviteDeliveryMode -- the test link mode is fenced three ways", () => 
     expect(inviteDeliveryMode({ INDIVIDUAL_INVITE_TEST_DELIVERY: "link", NODE_ENV: "development", NEXT_PUBLIC_SUPABASE_URL: "https://rnnqhlrcgvsauigxwszl.supabase.co" })).toBe("email");
     expect(inviteDeliveryMode({ INDIVIDUAL_INVITE_TEST_DELIVERY: "link", NODE_ENV: "development" })).toBe("email");
     expect(inviteDeliveryMode({ NODE_ENV: "development", NEXT_PUBLIC_SUPABASE_URL: STAGING })).toBe("email");
+  });
+});
+
+describe("inviteMetadata -- the marker the shared Invite template branches on (owner D2)", () => {
+  it("only a Professional-only invitation carries it, and it is a plain true", () => {
+    expect(inviteMetadata({ name: "Ada", experiences: ["professional"] })).toEqual({ full_name: "Ada", competen_invite_professional: true });
+  });
+  it("control: Scholar, both, and a nameless invitation get exactly what they got before (no marker key at all)", () => {
+    expect(inviteMetadata({ name: "Ada", experiences: ["scholar"] })).toEqual({ full_name: "Ada" });
+    expect(inviteMetadata({ name: null, experiences: ["scholar", "professional"] })).toEqual({ full_name: null });
+    expect(Object.keys(inviteMetadata({ name: null, experiences: ["professional", "scholar"] }))).toEqual(["full_name"]);
+  });
+  it("the identity is created with it: inviteUserByEmail receives the marker for a Professional-only invitation", async () => {
+    const seen: any[] = [];
+    const { admin } = stub({ individual_invitation: { data: { id: "inv", expires_at: "2026-11-06T00:00:00Z" }, error: null }, profiles: { data: [], error: null } },
+      { inviteUserByEmail: async (_e: string, o: any) => { seen.push(o); return { data: { user: { id: "new" } }, error: null }; } });
+    const req = validateInvitation({ email: "a@example.org", name: "Ada", experiences: ["professional"] }) as any;
+    await createIndividualInvitation(admin, req, { id: "inviter" }, { origin: "https://staging.example", delivery: "email" });
+    expect(seen[0].data).toEqual({ full_name: "Ada", competen_invite_professional: true });
+  });
+  it("nothing reads the marker to decide anything: it appears only where an identity is created", async () => {
+    const { readFileSync, readdirSync, statSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const files: string[] = [];
+    const walk = (d: string) => { for (const n of readdirSync(d)) { const p = join(d, n); if (statSync(p).isDirectory()) walk(p); else if (/\.(ts|tsx)$/.test(n) && !/\.test\./.test(n)) files.push(p); } };
+    walk("src");
+    const users = files.filter(f => readFileSync(f, "utf8").includes("competen_invite_professional")).map(f => f.replace(/\\/g, "/"));
+    expect(users).toEqual(["src/lib/individual/invitations.ts"]);
   });
 });
 
