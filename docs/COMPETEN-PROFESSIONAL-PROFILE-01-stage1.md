@@ -90,7 +90,22 @@ Verification is optional, and no verifier is appointed automatically. Developmen
   - each file applied twice;
   - 32 behaviour probes, all as designed;
   - rolled back to zero, re-applied, VERIFY as expected.
-- **Staging:** present on staging (coordinating session). Its ×2 and rollback record goes here.
+- **Staging (coordinating session, guarded runner, files whole, LF bytes as listed above):**
+  - Order: 451 ×2, 452 ×2, 453 ×2 → VERIFY ×3 → rollback 453, 452, 451 → re-apply 451, 452, 453. **Final state: APPLIED on staging** (ezhvpgtcqcdsgylrxgdb).
+  - Fingerprint covers: the `individual_professional%` columns, constraints, indexes, policies, triggers and functions; the `hq.individual.professional*` capabilities; the `individual_professional*` positions, with product line and grants; and the md5s of `individual_holds_capability` and the verification functions.
+
+    | Step | Fingerprint | Items |
+    |---|---|---|
+    | PRE (= 450 after apply) | `7546da1b5e80852b9061a80795c0f9c4` | 281 |
+    | after 451–453 ×2 | `575f3537974555ca1d11bfbf42058c73` | 336 |
+    | rollback 453 → 451 | `7546da1b…` (= PRE) | 281 |
+    | re-apply ×1 | `575f3537…` (= after ×2, idempotent) | 336 |
+
+  - VERIFY, all as expected:
+    - **451:** capability 1, position 1; grants verify and home.view; **verifier appointments 0**; RLS t\|1\|1; 2 triggers; holds function 1; scope columns 0; rows 0.
+    - **452:** RLS t\|1\|1; FULL unique index on (item_id, expires_on, offset_days), with no WHERE; scope columns 0; rows 0.
+    - **453:** `profile_overview` boolean, NOT NULL, default false; links sharing the overview 0; RLS t\|1\|1; both composite FKs; rows 0.
+- **Application order for production:** after 450. Each migration needs its own owner GO.
 - **Production:** not applied. Each migration needs its own owner GO.
 
 **Checks:**
