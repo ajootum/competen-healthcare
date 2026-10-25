@@ -11,6 +11,8 @@ import { METHOD_LABEL, VERIFICATION_LABEL, isIndependentlyVerified } from "@/lib
 import { ITEM_LABEL } from "@/lib/individual/professional/profile-vocabulary";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadSharedLearning } from "@/lib/individual/professional/share-learning";
+import { loadSharedEvaluations } from "@/lib/individual/professional/share-evaluation";
+import { PROVENANCE_LABEL, SOURCE_KIND_LABEL } from "@/lib/individual/professional/evaluation-vocabulary";
 import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 
 export const dynamic = "force-dynamic";
@@ -91,6 +93,9 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
   const sharedAny = !!sharedProfile && (!!sharedProfile.overview || sharedProfile.records.length > 0);
   // LCPD-01 LCPD-6: completed learning the person ticked for this link, re-checked now. Never their reflections on it.
   const sharedLearning = carriesOwn ? await loadSharedLearning(admin, share.id, share.nurse_id, await loadLcpdConfig(admin)) : null;
+  // COMPETEN-PROFESSIONAL-EVALUATION-01 s13 (migration 530): recorded evaluations the person ticked for this link, while
+  // the policy offers sharing. Formative, with sources and limitations. Never notes, AI text or private reflections.
+  const sharedEvaluations = carriesOwn ? await loadSharedEvaluations(admin, share.id, share.nurse_id, (await loadIndividualPolicy(admin)).professionalEvaluation.sharing) : null;
   // A Professional-minted link names the person's profession as THEY declared it, and says so. It never
   // shows profiles.role, which the new-user trigger fills with a default (migration 335) and which
   // Competen Individual neither sets nor relies on (ADR-016).
@@ -236,6 +241,34 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
             </div>
           )}
           {sharedLearning === null && carriesOwn && <p className="text-[12px] text-gray-600">The learning on this link could not be read just now.</p>}
+
+          {sharedEvaluations !== null && sharedEvaluations.length > 0 && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900">Professional development evaluations the professional chose to show</h2>
+              <p className="text-[11.5px] text-indigo-950 mt-0.5 leading-relaxed">Formative evaluations of their own development records, in separate dimensions. Not a score, not an assessment and not verification of clinical competence. Missing evidence is not evidence of a gap.</p>
+              {sharedEvaluations.map(ev => (
+                <div key={ev.id} className="mt-3 border-t border-indigo-100 pt-2">
+                  <p className="text-[12.5px] font-semibold text-gray-900">{ev.scope} <span className="font-normal text-gray-500">· evaluated {fmt(ev.evaluatedAt)} · {ev.interpretation}{ev.frameworkVersions.length ? ` · framework ${ev.frameworkVersions.join(", ")}` : ""}</span></p>
+                  <ul className="mt-1 space-y-1">
+                    {ev.findings.map(f => (
+                      <li key={f.dimension} className="text-[12px] text-gray-800"><span className="font-semibold">{f.label}:</span> {f.state}. {f.summary}{f.limitations.length ? <span className="text-amber-900"> Limitations: {f.limitations.join(" ")}</span> : null}</li>
+                    ))}
+                  </ul>
+                  {ev.sources.length > 0 && (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-[11.5px] font-semibold text-indigo-900">Source records ({ev.sources.length}{ev.privateCount ? `, plus ${ev.privateCount} private, not shown` : ""})</summary>
+                      <ul className="mt-1 space-y-0.5">
+                        {ev.sources.map((s, i) => (
+                          <li key={i} className="text-[11.5px] text-gray-700">{SOURCE_KIND_LABEL[s.kind] ?? s.kind}: {s.title} · {PROVENANCE_LABEL[s.provenance]} · {fmt(s.date)}{s.method ? ` · ${s.method}` : ""}{s.frameworkVersion ? ` · ${s.frameworkVersion}` : ""}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {sharedEvaluations === null && carriesOwn && <p className="text-[12px] text-gray-600">The evaluations on this link could not be read just now.</p>}
 
           {study && (!study.ok ? !study.notProvisioned : study.data.length > 0) && (
             <div className="rounded-xl border border-sky-200 bg-sky-50/60 px-4 py-3">

@@ -112,6 +112,13 @@ const WRITES: Record<string, string[]> = {
     "individual_professional_plan_competency.insert", "individual_professional_plan_competency.update",
     "individual_professional_goal_evidence.insert", "individual_professional_goal_evidence.update",
     "individual_professional_goal_review.insert"],
+  // PROF-EVALUATION-01 (530): the ONLY Stage 6 writes -- an immutable snapshot, a private note, a decision on a
+  // recommendation (all insert-only; 530's trigger refuses update and delete). A need, goal or activity an acceptance
+  // creates is written by needs-store / plan-store above, never here.
+  "src/lib/individual/professional/evaluation-store.ts": ["individual_professional_evaluation.insert", "individual_professional_evaluation_annotation.insert",
+    "individual_professional_evaluation_decision.insert"],
+  // PROF-EVALUATION-01 s13 (530): the recorded evaluations the person ticked for a link. Nothing by default.
+  "src/lib/individual/professional/share-evaluation.ts": ["individual_professional_share_evaluation.insert"],
   "src/app/api/individual/professional/reminders/route.ts": ["individual_professional_profile.update", "individual_professional_profile.insert"],
   "src/lib/individual/professional/mapping-store.ts": ["individual_professional_competency_map.insert", "individual_professional_competency_decision.insert"],
   // COMPETEN-PROFESSIONAL-PROFILE-01 (migration 450): the one writer of the registration facts and the profile records.
@@ -263,7 +270,8 @@ const checkDirectEntry = (src: Sources) => {
   // experience lists it -- and only Professional lists these segments, so the Scholar URL is not a page.
   const scholarSegs = new Set(EXPERIENCES.scholar.modules.map(m => m.segment));
   for (const [f, s] of pages) {
-    const seg = /\(professional\)\/([a-z-]+)\/page\.tsx$/.exec(f)?.[1] ?? "";
+    // A page nested under a module (PROF-EVALUATION-01: progress/evaluation) is that module's page: it names the module.
+    const seg = /\(professional\)\/([a-z-]+)\/(?:[a-z-]+\/)*page\.tsx$/.exec(f)?.[1] ?? "";
     const listed = EXPERIENCES.professional.modules.some(m => m.segment === seg);
     if (!s.includes(`await experienceModulePage((await params).experience, "${seg}")`) || !listed || scholarSegs.has(seg) || /\bscholar\b/i.test(s)) bad.push(f);
   }

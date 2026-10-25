@@ -16,6 +16,7 @@ import { ITEM_KINDS, ITEM_SECTION, SECTION_LABEL } from "@/lib/individual/profes
 import { learningProvenance, loadProfessionalLearning } from "@/lib/individual/professional/learning";
 import { eligibleLearning } from "@/lib/individual/professional/share-learning";
 import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
+import { loadEvaluationHistory } from "@/lib/individual/professional/evaluation-store";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -38,6 +39,8 @@ export default async function SharePage({ params }: { params: Promise<{ experien
     loadProfessionalProfile(ctx.admin, ctx.userId), loadVerifications(ctx.admin, ctx.userId, today), loadProfessionalLearning(ctx.admin, ctx.userId), loadLcpdConfig(ctx.admin)]);
   // LCPD-01 LCPD-6: completed learning of a kind the configuration lets a person share. Nothing ticked by default.
   const shareableLearning = learning.enabled && learning.refs ? eligibleLearning(learning.refs, lcpd) : [];
+  // COMPETEN-PROFESSIONAL-EVALUATION-01 s13: recorded evaluations, offered only while the policy allows it. Nothing ticked by default.
+  const shareableEvaluations = policy.professionalEvaluation.sharing === "offer" ? (await loadEvaluationHistory(ctx.admin, ctx.userId, 50)).evaluations ?? [] : [];
   const maxDays = policy.shareLinkMaxDays;
   const now = new Date().toISOString();
   // COMPETEN-PROFESSIONAL-PROFILE-01 part B: the current profile records the person may choose to put on a link,
@@ -59,6 +62,7 @@ export default async function SharePage({ params }: { params: Promise<{ experien
           <li><span className="font-semibold">Full:</span> also lists them by name. Each record you added says it is self-declared, with or without a document, and not verified.</li>
           <li><span className="font-semibold">Your professional profile:</span> only what you tick below for that link, each record labelled exactly as it is, including whether Competen verified it. If you later change or withdraw a record, the link stops showing it.</li>
           <li><span className="font-semibold">Completed learning:</span> only the courses you tick below for that link, each labelled exactly as it is. Never your reflections on it.</li>
+          {policy.professionalEvaluation.sharing === "offer" && <li><span className="font-semibold">Professional evaluations:</span> only the recorded evaluations you tick below, shown as formative with their sources and limitations. Never your notes on them.</li>}
           <li>Never shown: your reflections, development needs, plan, notes, documents or anything you have not recorded as evidence.</li>
         </ul>
         <p className="mt-3 text-[13.5px] text-gray-600">
@@ -112,6 +116,18 @@ export default async function SharePage({ params }: { params: Promise<{ experien
                 <label key={r.recordId} className="mt-1 flex items-start gap-2 text-[14px] text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]">
                   <input type="checkbox" name={`learning:${r.recordId}`} value="true" className="mt-1 h-4 w-4 rounded border-gray-400" />
                   <span>{r.title} <span className="text-[12.5px] text-gray-500">· {learningProvenance(r)} · {fmtDate(r.completedOn)}</span></span>
+                </label>
+              ))}
+            </fieldset>
+          )}
+          {shareableEvaluations.length > 0 && (
+            <fieldset className="rounded-xl border border-gray-200 p-4">
+              <legend className="px-1 text-[13.5px] font-semibold text-gray-800">Professional evaluations (optional)</legend>
+              <p className="text-[12.5px] text-gray-500">Nothing is included unless you tick it, for this link only. Each is shown as a formative evaluation with its sources, method, date and limitations, never as verified competence. Your notes, AI text and private reflections are never shared.</p>
+              {shareableEvaluations.map(e => (
+                <label key={e.id} className="mt-1 flex items-start gap-2 text-[14px] text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]">
+                  <input type="checkbox" name={`evaluation:${e.id}`} value="true" className="mt-1 h-4 w-4 rounded border-gray-400" />
+                  <span>{e.scope_label} <span className="text-[12.5px] text-gray-500">· formative evaluation · {fmtDate(e.evaluated_at)}</span></span>
                 </label>
               ))}
             </fieldset>
