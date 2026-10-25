@@ -6,6 +6,9 @@ import { loadIndividualPassport } from "./passport";
 import { loadProfessionalRecord } from "./professional/record";
 import { professionalContext, taskInstruction, type ActivityNotes } from "./professional/assistant";
 import { CPD_ACTIVITY_LABEL } from "./professional/vocabulary";
+import { loadIndividualPolicy } from "./policy";
+import { loadProfessionalProfile } from "./professional/profile-store";
+import { profileContext } from "./professional/profile-ai";
 
 // ── THE PERSONAL AI IN SCHOLAR AND PROFESSIONAL ── COMPETEN IND-007 owner decision D3 ─────────────────────────
 //
@@ -70,6 +73,11 @@ export async function runIndividualAssistant(admin: any, r: {
       const grounding: string[] = [];
       if (scopes.includes("passport")) grounding.push(recordContext({ name: r.fullName, experience: r.experience, live: r.live, passport: await loadIndividualPassport(admin, r.userId, today) }));
       if (scopes.includes("professional_record")) grounding.push(professionalContext(await loadProfessionalRecord(admin, r.userId), today));
+      // COMPETEN-PROFESSIONAL-PROFILE-01: the person's own profile (migration 450), when the privacy policy allows it.
+      if (scopes.includes("professional_record") && (await loadIndividualPolicy(admin)).professionalProfile.ai === "on") {
+        const profile = profileContext(await loadProfessionalProfile(admin, r.userId));
+        if (profile) grounding.push(profile);
+      }
       const study = studyFor(scopes);
       if (study?.text) grounding.push(`Study material (from the person's own Scholar workspace):\n${study.text.slice(0, 6000)}`);
       return { system: assistantSystemPrompt(r.experience, mode), user: assistantUserMessage(mode, grounding, r) };

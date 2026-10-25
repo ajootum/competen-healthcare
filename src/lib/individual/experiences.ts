@@ -152,8 +152,9 @@ export const PROFESSIONAL: ExperienceConfig = {
   operatingEntity: "competen_holdings",
   // COMPETEN-IND-007. Pages under (app)/[experience]/(professional)/<segment>, each via experienceModulePage.
   modules: [
-    { key: "registration", segment: "registration", label: "Profession & registration", short: "Registration", icon: "◈",
-      summary: "Your profession, registration body and number, and country." },
+    // COMPETEN-PROFESSIONAL-PROFILE-01: the MVP's "Profession & registration", grown into the six-section profile.
+    { key: "registration", segment: "registration", label: "Professional profile", short: "Profile", icon: "◈",
+      summary: "Your professional identity: qualifications, registrations, roles, specialties and aspirations, with every earlier version kept." },
     { key: "development", segment: "development", label: "Needs & plan", short: "Plan", icon: "◎", bottom: true,
       summary: "Your development needs and the learning goals you set against them." },
     { key: "cpd", segment: "cpd", label: "CPD log", short: "CPD", icon: "✎", bottom: true,
@@ -172,7 +173,7 @@ export const PROFESSIONAL: ExperienceConfig = {
     {
       key: "career", label: "Career & Opportunities",
       summary: "Plan your next role, speciality or leadership pathway.",
-      reason: "Career planning has no store yet.",
+      reason: "You can record career aspirations in your Professional profile. Pathway planning and opportunities are not built yet.",
     },
     {
       key: "verification", label: "Independent verification",

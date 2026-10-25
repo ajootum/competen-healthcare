@@ -290,6 +290,14 @@ const STAGING: Listed[] = [
       + "harness-ind007-* identities. Refuses production via assertSafeTarget, and reports PEND until migration 373 is applied.",
   },
   {
+    file: "professional-profile-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-PROFILE-01 Stage 1, owner GO s10: an existing Scholar user adds Professional on one identity, "
+      + "a new invited Professional-only user registers (required facts, optional skipped, enter), the profile enriched later, "
+      + "versioned records and context history kept, verification states, Scholar history and Passport unchanged, no catalogue, "
+      + "configuration controls the form, own-row RLS and no cross-person writes. Writes the two registration policy rows and "
+      + "restores them exactly. Own harness-prof01-* identities, deleted after. Never writes individual_app. PEND until 450 is applied.",
+  },
+  {
     file: "account-profile-acceptance-harness.ts",
     note: "My profile (owner GO 2026-10-23, PR D): a real anon-key user session updates its own personal fields and "
       + "is refused every authority column and the email (column grants plus RLS WITH CHECK profile_authority_unchanged), "

@@ -10,6 +10,11 @@ import {
   type ExplanationDepth, type LearnAction, type RevisionDifficulty, type RevisionFormat, type RevisionMode, type UploadFormat,
 } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
+import { COUNTRIES } from "../countries";
+import {
+  DEFAULT_PRACTICE_SETTINGS, DEFAULT_QUALIFICATION_TYPES, DEFAULT_STATUSES, DOCUMENT_KINDS, FIELD_LABEL, ITEM_LABEL, OPTIONAL_FIELDS, PROFILE_SECTIONS, SECTION_LABEL,
+  type ItemKind, type OptionalField, type ProfileSection,
+} from "./professional/profile-vocabulary";
 
 // ── COMPETEN INDIVIDUAL POLICY ── COMPETEN-CONFIG-002 items 4-7 ─────────────────────────────────────────
 //
@@ -46,20 +51,24 @@ export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai
   | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides"
   | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns"
   | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent";
-export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "scholar_upload_formats" | "scholar_learning_actions"
+export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
 export type ProgrammesPolicyKey = "scholar_onboarding_programmes";
-export type OptionsPolicyKey = "scholar_institutions";
+export type OptionsPolicyKey = "scholar_institutions"
+  | "professional_professions" | "professional_titles" | "professional_jurisdictions" | "professional_statuses" | "professional_qualification_types"
+  | "professional_registration_bodies" | "professional_practice_settings" | "professional_specialties" | "professional_career_interests";
+/** COMPETEN-PROFESSIONAL-PROFILE-01: an ORDERED choice from a fixed list (form fields, profile sections). */
+export type SequencePolicyKey = "professional_registration_fields" | "professional_profile_sections";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
-export type ChoicePolicyKey = "scholar_catalogue_min_status"
+export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_profile_ai"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback";
-export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey;
+export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
 export type IntPolicy = Common & { key: IntPolicyKey; kind: "int"; unit: string; fallback: number; min: number; max: number };
@@ -70,11 +79,15 @@ export type CataloguePolicy = Common & { key: CataloguePolicyKey; kind: "catalog
 /** Programme codes (rows of individual_scholar_programme, migration 387). The route checks each is an active row. */
 export type ProgrammesPolicy = Common & { key: ProgrammesPolicyKey; kind: "programmes"; max: number };
 /** A governed list of options, each a code and the label shown. The code is derived from the label once. */
-export type OptionsPolicy = Common & { key: OptionsPolicyKey; kind: "options"; max: number };
+/** `noun`: one entry, for the administrator's form. `fallback`: the list in force while nothing is published (a
+ *  published empty list means none). `emptyMeans`: what an empty list does for the person. */
+export type OptionsPolicy = Common & { key: OptionsPolicyKey; kind: "options"; max: number; noun?: string; fallback?: readonly ContextOption[]; emptyMeans?: string };
+/** Members chosen from `options`, in the administrator's order. `fixed` members can never be left out. */
+export type SequencePolicy = Common & { key: SequencePolicyKey; kind: "sequence"; options: readonly { value: string; label: string }[]; fallback: readonly string[]; fixed?: readonly string[] };
 /** Per programme, its own list of levels. */
 export type LevelsPolicy = Common & { key: LevelsPolicyKey; kind: "levels"; maxPerProgramme: number };
 export type ChoicePolicy = Common & { key: ChoicePolicyKey; kind: "choice"; options: readonly { value: string; label: string }[]; fallback: string };
-export type PolicyDef = IntPolicy | SetPolicy | CataloguePolicy | ChoicePolicy | ProgrammesPolicy | OptionsPolicy | LevelsPolicy;
+export type PolicyDef = IntPolicy | SetPolicy | CataloguePolicy | ChoicePolicy | ProgrammesPolicy | OptionsPolicy | LevelsPolicy | SequencePolicy;
 /** Content statuses from least to most reviewed (migration 394). "At least draft" offers draft and approved. */
 export const CONTENT_STATUS_ORDER = ["unreviewed", "draft", "approved"] as const;
 export type ContentStatusLevel = (typeof CONTENT_STATUS_ORDER)[number];
@@ -90,6 +103,114 @@ const OPTION_CODE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const PROGRAMME_CODE = /^[a-z0-9][a-z0-9-]{1,62}$/;
 /** Pure: the code an option label is stored under -- lower case, dashes, at most 63 characters. */
 export const optionCode = (label: string) => label.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 63).replace(/-+$/g, "");
+
+// ── COMPETEN-PROFESSIONAL-PROFILE-01 Stage 1: REGISTRATION AND PROFILE, NO CODE (owner GO s8) ──────────────────
+// The same engine, versions and change trail as every policy here. Nothing names a country or a profession: the
+// jurisdiction default is the full country list, and professions, titles, specialties, bodies and interests default
+// to free text. A published list replaces the default, and the label is COPIED onto the person's record when they
+// choose it (migration 450), so renaming or retiring an option never rewrites what they recorded.
+const asOptions = (labels: readonly string[]): ContextOption[] => labels.map(label => ({ code: optionCode(label), label })).filter(o => OPTION_CODE.test(o.code));
+const PROFESSIONAL_PROFILE_POLICIES: readonly PolicyDef[] = [
+  {
+    key: "professional_professions", kind: "options", product: "Professional", max: 300, noun: "profession",
+    label: "Professions",
+    help: "The professions a person may choose when they register for Competen Professional or change profession. With none listed, they type it, and the shared profession vocabulary is offered as suggestions.",
+    emptyMeans: "Typed by the person, with the shared vocabulary as suggestions",
+    limitReason: "At most 300, each up to 160 characters. A person may always choose Other and type their own.",
+  },
+  {
+    key: "professional_titles", kind: "options", product: "Professional", max: 200, noun: "title",
+    label: "Professional titles",
+    help: "Titles a person may choose, such as a grade or designation.",
+    emptyMeans: "Typed by the person",
+    limitReason: "At most 200, each up to 160 characters. A person may always choose Other.",
+  },
+  {
+    key: "professional_jurisdictions", kind: "options", product: "Professional", max: 400, noun: "country or jurisdiction",
+    label: "Countries and jurisdictions of practice",
+    help: "Where a person may say they practise. Add a state, province or other jurisdiction where registration is not national.",
+    fallback: asOptions(COUNTRIES), emptyMeans: "Typed by the person",
+    limitReason: "At most 400, each up to 160 characters. Default: every country.",
+  },
+  {
+    key: "professional_statuses", kind: "options", product: "Professional", max: 30, noun: "status",
+    label: "Professional-status options",
+    help: "How a person describes their current professional status. Always asked at registration.",
+    fallback: DEFAULT_STATUSES, emptyMeans: "Typed by the person",
+    limitReason: "At most 30, each up to 160 characters. Default: practising, part time, newly qualified, awaiting registration, career break, not practising, retired.",
+  },
+  {
+    key: "professional_qualification_types", kind: "options", product: "Professional", max: 50, noun: "qualification type",
+    label: "Qualification types",
+    help: "The kinds of qualification a person may record under Qualifications and education.",
+    fallback: DEFAULT_QUALIFICATION_TYPES, emptyMeans: "Not asked",
+    limitReason: "At most 50, each up to 160 characters.",
+  },
+  {
+    key: "professional_registration_bodies", kind: "options", product: "Professional", max: 300, noun: "registration body",
+    label: "Registration bodies",
+    help: "Councils, boards and regulators a person may choose for a registration or licence.",
+    emptyMeans: "Typed by the person, with the shared vocabulary as suggestions",
+    limitReason: "At most 300, each up to 160 characters. A person may always choose Other.",
+  },
+  {
+    key: "professional_practice_settings", kind: "options", product: "Professional", max: 50, noun: "practice setting",
+    label: "Practice settings",
+    help: "Where a person practises, for registration and for each role in their employment history.",
+    fallback: DEFAULT_PRACTICE_SETTINGS, emptyMeans: "Typed by the person",
+    limitReason: "At most 50, each up to 160 characters.",
+  },
+  {
+    key: "professional_specialties", kind: "options", product: "Professional", max: 400, noun: "specialty",
+    label: "Specialties and practice areas",
+    help: "Specialties a person may choose as their primary specialty and in their profile. Also used to suggest competency catalogues.",
+    emptyMeans: "Typed by the person",
+    limitReason: "At most 400, each up to 160 characters. A person may always choose Other.",
+  },
+  {
+    key: "professional_career_interests", kind: "options", product: "Professional", max: 200, noun: "career interest",
+    label: "Career and professional interests",
+    help: "Interests a person may add to their profile, such as leadership, education or research.",
+    emptyMeans: "Typed by the person",
+    limitReason: "At most 200, each up to 160 characters.",
+  },
+  {
+    key: "professional_registration_fields", kind: "sequence", product: "Professional",
+    label: "Optional questions at registration, in order",
+    help: "Which optional questions the registration form asks after the three required ones, and in what order. A question not asked here can still be answered later in the profile.",
+    options: OPTIONAL_FIELDS.map(v => ({ value: v, label: FIELD_LABEL[v] })), fallback: OPTIONAL_FIELDS,
+    limitReason: "Profession, jurisdiction and status are always asked and always required. A registration number, licence, employment record or document can never be asked at registration.",
+  },
+  {
+    key: "professional_registration_required", kind: "set", product: "Professional",
+    label: "Optional questions made required",
+    help: "Which of the optional questions a person must answer to finish registration. Only questions asked above count. Default: none, so every optional question can be skipped.",
+    options: OPTIONAL_FIELDS.map(v => ({ value: v, label: FIELD_LABEL[v] })), fallback: [],
+    limitReason: "Only the optional questions above. The product contract asks for minimal initial fields.",
+  },
+  {
+    key: "professional_profile_sections", kind: "sequence", product: "Professional",
+    label: "Profile sections, in order",
+    help: "Which sections the Professional profile shows, and in what order. Records in a hidden section are kept, and show again if the section is shown again.",
+    options: PROFILE_SECTIONS.map(v => ({ value: v, label: SECTION_LABEL[v] })), fallback: PROFILE_SECTIONS, fixed: ["overview"],
+    limitReason: "The six sections of the profile. The overview is always shown.",
+  },
+  {
+    key: "professional_document_kinds", kind: "set", product: "Professional",
+    label: "Records a supporting document may be attached to",
+    help: "Verification policy: where a person may attach a certificate or letter. A document makes a record document-supported. It never makes it verified.",
+    options: DOCUMENT_KINDS.map(v => ({ value: v, label: ITEM_LABEL[v] })), fallback: DOCUMENT_KINDS,
+    limitReason: "Only qualifications, registrations and employment (migration 450). A document is never required.",
+  },
+  {
+    key: "professional_profile_ai", kind: "choice", product: "Professional",
+    label: "Personal AI may read the professional profile",
+    help: "Privacy rule: whether the person's own personal AI may use their profile (overview, qualifications, roles, specialties, aspirations) when they ask it for a summary or development suggestions.",
+    options: [{ value: "on", label: "Yes, when the person asks it" }, { value: "off", label: "No: the profile stays out of AI requests" }],
+    fallback: "on",
+    limitReason: "Two choices. Whatever is chosen, registration and profile editing work without AI.",
+  },
+];
 
 export const POLICIES: readonly PolicyDef[] = [
   {
@@ -492,6 +613,7 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "unreviewed",
     limitReason: "Only the three content statuses of migration 394. Default: everything, labelled.",
   },
+  ...PROFESSIONAL_PROFILE_POLICIES,
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -539,7 +661,17 @@ const cleanOptions = (raw: unknown, max: number, labelMax: number): ContextOptio
 
 /** Pure: a governed option list from a stored settings object. Well-formed, deduplicated by code, capped. */
 export function clampOptions(p: OptionsPolicy, settings: any): ContextOption[] {
+  if (settings == null && p.fallback) return [...p.fallback];
   return cleanOptions(settings?.options, p.max, 160);
+}
+
+/** Pure: a sequence policy's members in the administrator's order. Known options only, once each, fixed ones always. */
+export function clampSequence(p: SequencePolicy, settings: any): string[] {
+  if (settings == null || !Array.isArray(settings.order)) return [...p.fallback];
+  const known = new Set(p.options.map(o => o.value));
+  const out = [...new Set(settings.order.filter((v: unknown): v is string => typeof v === "string" && known.has(v)))] as string[];
+  for (const f of [...(p.fixed ?? [])].reverse()) if (!out.includes(f)) out.unshift(f);
+  return out;
 }
 
 /** Pure: each programme's levels from a stored settings object. */
@@ -624,6 +756,16 @@ export function validateDraft(key: unknown, raw: unknown): { ok: true; def: Poli
     if (typeof raw !== "string" || !def.options.some(o => o.value === raw)) return { ok: false, error: `${def.label}: choose one of ${def.options.map(o => o.label).join("; ")}.` };
     return { ok: true, def, settings: { value: raw } };
   }
+  if (def.kind === "sequence") {
+    if (!Array.isArray(raw) || raw.some(v => typeof v !== "string")) return { ok: false, error: `${def.label}: send the list in order.` };
+    const known = new Set(def.options.map(o => o.value));
+    const unknown = raw.filter(v => !known.has(v));
+    if (unknown.length) return { ok: false, error: `${def.label}: ${unknown.join(", ")} is not one of the options.` };
+    if (new Set(raw).size !== raw.length) return { ok: false, error: `${def.label}: each option may appear once.` };
+    const missing = (def.fixed ?? []).filter(f => !raw.includes(f));
+    if (missing.length) return { ok: false, error: `${def.label}: ${missing.map(m => def.options.find(o => o.value === m)?.label ?? m).join(", ")} is always included. That limit is fixed.` };
+    return { ok: true, def, settings: { order: raw } };
+  }
   if (!Array.isArray(raw) || raw.some(v => typeof v !== "string")) return { ok: false, error: `${def.label}: send the list of kinds to allow.` };
   const known = new Set(def.options.map(o => o.value));
   const unknown = raw.filter(v => !known.has(v));
@@ -691,6 +833,17 @@ export type IndividualPolicy = {
   scholarOnboardingFields: ("level" | "institution")[];
   /** P0: the least-reviewed content status Scholar offers. Default "unreviewed": everything, labelled. */
   scholarCatalogueMinStatus: ContentStatusLevel;
+  /** COMPETEN-PROFESSIONAL-PROFILE-01: the registration form and profile, as configured. */
+  professionalProfile: ProfessionalProfilePolicy;
+};
+
+export type ProfessionalProfilePolicy = {
+  /** Option lists. Empty means the person types the value (free text). */
+  professions: ContextOption[]; titles: ContextOption[]; jurisdictions: ContextOption[]; statuses: ContextOption[];
+  qualificationTypes: ContextOption[]; registrationBodies: ContextOption[]; practiceSettings: ContextOption[];
+  specialties: ContextOption[]; careerInterests: ContextOption[];
+  registrationFields: OptionalField[]; registrationRequired: OptionalField[]; sections: ProfileSection[]; documentKinds: ItemKind[];
+  ai: "on" | "off";
 };
 
 type Row = { config_path: string; published: any };
@@ -749,6 +902,26 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
     scholarCatalogueMinStatus: clampChoice(policyDef("scholar_catalogue_min_status") as ChoicePolicy, published.get(policyPath("scholar_catalogue_min_status"))) as ContentStatusLevel,
+    professionalProfile: resolveProfessionalProfile(published),
+  };
+}
+
+function resolveProfessionalProfile(published: Map<string, any>): ProfessionalProfilePolicy {
+  const opts = (key: OptionsPolicyKey) => clampOptions(policyDef(key) as OptionsPolicy, published.get(policyPath(key)));
+  const seq = (key: SequencePolicyKey) => clampSequence(policyDef(key) as SequencePolicy, published.get(policyPath(key)));
+  const set = (key: SetPolicyKey) => clampSet(policyDef(key) as SetPolicy, published.get(policyPath(key)));
+  const fields = seq("professional_registration_fields") as OptionalField[];
+  return {
+    professions: opts("professional_professions"), titles: opts("professional_titles"), jurisdictions: opts("professional_jurisdictions"),
+    statuses: opts("professional_statuses"), qualificationTypes: opts("professional_qualification_types"),
+    registrationBodies: opts("professional_registration_bodies"), practiceSettings: opts("professional_practice_settings"),
+    specialties: opts("professional_specialties"), careerInterests: opts("professional_career_interests"),
+    registrationFields: fields,
+    // Required counts only for a question that is asked.
+    registrationRequired: (set("professional_registration_required") as OptionalField[]).filter(f => fields.includes(f)),
+    sections: seq("professional_profile_sections") as ProfileSection[],
+    documentKinds: set("professional_document_kinds") as ItemKind[],
+    ai: clampChoice(policyDef("professional_profile_ai") as ChoicePolicy, published.get(policyPath("professional_profile_ai"))) as "on" | "off",
   };
 }
 
