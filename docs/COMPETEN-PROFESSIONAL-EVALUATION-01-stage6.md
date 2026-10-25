@@ -44,7 +44,17 @@ dimension, a copied source body, AI text without model/policy, or a correction w
 - Works with no catalogue (goal, topic, CPD, course and need scopes) and with no AI.
 - Private by default; a Passport link carries only ticked evaluations, formative, without notes, AI text or private sources.
 
-## Merge order
+## Merge order and dependencies
 
-After Stage 5 (520, `prof/competency-01-stage5`) and C5 (510-519). `evaluation-stage5.ts` imports Stage 5's
-`competency-store`; until that merges this branch does not compile on its own.
+Merged after Stage 5 (#126): `evaluation-stage5.ts` imports Stage 5's `competency-store` and its C5 read adapter
+`competency-verification` (`loadVerifications`, `currentDecision`). C5 (510-519) is read only through that adapter, so
+Stage 6 shows "not available here" until the Studio registers with it, and needs no change when it does.
+
+## Staging evidence (25 Oct 2026, ezhvpgtcqcdsgylrxgdb)
+
+- 530 applied x2 with a rollback rehearsal by the coordinator (record in `docs/evidence/COMPETEN-PROFESSIONAL-EVALUATION-01/`).
+- Focused ECG journey, `scripts/professional-evaluation-acceptance-harness.ts`: **20/20** (items 1-18, 3b, cleanup). C5 code is
+  not on staging, so item 14 used an in-process stand-in Studio registered through Stage 5's adapter; C5 tables stayed at 0 rows
+  and `requestVerification` was never called. A planted defect (self-assessment classed as independently verified) turned item 18
+  red; restored, green.
+- Not done: a browser walk on a staging-pointed dev server (port 3100 was held by a sibling session).
