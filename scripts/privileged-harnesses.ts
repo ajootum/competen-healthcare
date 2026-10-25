@@ -260,6 +260,17 @@ const STAGING: Listed[] = [
       + "One retired fixture case (CASE-HARNESS-<stamp>) stays as the record by design. PEND until 423.",
   },
   {
+    file: "learning-acceptance-harness.ts",
+    note: "COMPETEN-LEARNING-01, migrations 460-464, the two s21 journeys at library level: a hosted ECG course built and CFCA-mapped in "
+      + "the studio, approved by an independent scoped reviewer and published by someone else; certificate issuance and price approval "
+      + "refused to the author; paid access refused until a verified course purchase (LEARNING_SETTLEMENT.onPaid, no provider call) "
+      + "opens ONE course entitlement, idempotently, with no experience granted; lessons and a deterministic check complete the record; "
+      + "Professional and the Passport read it by reference with nothing copied; certificates verify; history outlives the entitlement; "
+      + "an external listing approved on the listing route only, completed self-declared and source-linked, never verified; no AI call. "
+      + "Turns learning_app ON for its run and restores it; never writes learning_commerce. Creates and removes seven throwaway "
+      + "accounts and their HQ appointments. Fixture providers and offerings (LRN-HARNESS-*) stay retired by design. PEND until 464.",
+  },
+  {
     file: "hq-users-directory-acceptance-harness.ts",
     note: "HQ-USERS-C: the directory loader against real staging rows (platform membership, Individual membership and a "
       + "live Professional entitlement, an HQ appointment), every source readable, a stranger with nothing; and over HTTP "

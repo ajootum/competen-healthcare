@@ -100,6 +100,10 @@ const INCLUDED = [
   // COMPETEN-KNOWLEDGE-RESEARCH-01 (migrations 440-443): four separate permissions, aggregate-only research access,
   // in-database suppression, the 422 guard branches unchanged in 442, independence in K4. 20 planted reds. Files only.
   "ckri-harness.ts",
+  // COMPETEN-LEARNING-01 (ADR-017, migrations 460-464): no estate learning table, Learning-only writes, no estate reader of
+  // the personal record, gated learner routes, five distinct HQ authorities, the lrn- webhook branch, no seeded flag or
+  // appointment, no hard-coded price, no answer key to a browser. 7 planted reds. Files only.
+  "learning-harness.ts",
   "mos-gap-matrix-harness.ts",
   "pd-health-harness.ts",
   "pd-nav-harness.ts",
