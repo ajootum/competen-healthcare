@@ -88,6 +88,13 @@ const WRITES: Record<string, string[]> = {
     "individual_professional_reminder_log.insert", "individual_professional_reminder_log.delete"],
   // PROF-PROFILE-01 part B (451): the verification history, append-only. The trigger decides who may write what.
   "src/lib/individual/professional/profile-verification.ts": ["individual_professional_item_verification.insert"],
+  // PROF-NEEDS-01 (470): the one writer of Stage 2 needs, reflections, links and suggestions. The need history is the
+  // 470 trigger's, never written here. A competency link is unlinked (update), never deleted.
+  "src/lib/individual/professional/needs-store.ts": ["individual_professional_need.insert", "individual_professional_need.update",
+    "individual_professional_need_competency.insert", "individual_professional_need_competency.update",
+    "individual_professional_goal_need.insert", "individual_professional_goal_need.delete",
+    "individual_professional_reflection.update", "individual_professional_reflection.insert",
+    "individual_professional_need_suggestion.update", "individual_professional_need_suggestion.insert"],
   "src/app/api/individual/professional/reminders/route.ts": ["individual_professional_profile.update", "individual_professional_profile.insert"],
   "src/lib/individual/professional/mapping-store.ts": ["individual_professional_competency_map.insert", "individual_professional_competency_decision.insert"],
   // COMPETEN-PROFESSIONAL-PROFILE-01 (migration 450): the one writer of the registration facts and the profile records.
@@ -351,7 +358,8 @@ function checkAddPanelsStayOpen(src: Sources): { ok: boolean; detail: string } {
   const bad: string[] = [];
   for (const [f, t] of src) if ((f.startsWith(PRO_PAGES_DIR) || f.startsWith("src/app/individual/_components/professional/")) && /<details\b[^>]*\bopen=\{/.test(t) && f !== FORMS_FILE) bad.push(`${f}: a server-decided <details open>`);
   const dev = src.get(PRO_PAGES_DIR + "development/page.tsx") ?? "";
-  if ((dev.match(/<AddPanel\b/g) ?? []).length < 2) bad.push("development/page.tsx: the need and goal panels are not AddPanel");
+  // Each named panel, not a count: PROF-NEEDS-01 added a second need panel, and a count of 2 stopped noticing the goal panel.
+  if (!dev.includes('<AddPanel label="Add a goal"') || !dev.includes('<AddPanel label="Add a development need"')) bad.push("development/page.tsx: the need and goal panels are not AddPanel");
   const forms = src.get(FORMS_FILE) ?? "";
   const body = forms.slice(forms.indexOf("export function AddPanel"), forms.indexOf("type Method"));
   if (!/if \(suggestOpen\) setOpen\(true\);/.test(body) || /setOpen\(suggestOpen\)/.test(body)) bad.push("AddPanel: a changed suggestion can close the panel");
@@ -362,7 +370,8 @@ function checkAddPanelsStayOpen(src: Sources): { ok: boolean; detail: string } {
 // Q1 (owner, 25 October 2026): ONE limit at a time for Professional AI. With metering ON the metered allowance
 // replaces the legacy hourly quota; with it OFF the legacy quota stays. So in every Professional AI route the legacy
 // quota runs only inside the "metering off" guard, the route still meters, and the guard is exactly "not metering".
-const PRO_AI_ROUTES = ["src/app/api/individual/professional/assistant/route.ts", MAP_ROUTE];
+// PROF-NEEDS-01 (Stage 2): the development-needs AI helper (suggestions, reflection summaries) keeps the same one-limit rule.
+const PRO_AI_ROUTES = ["src/app/api/individual/professional/assistant/route.ts", MAP_ROUTE, "src/lib/individual/professional/needs-ai.ts"];
 const SHARED_ASSISTANT = "src/app/api/individual/assistant/route.ts";
 const QUOTA_HELPER = "src/lib/individual/professional/ai-quota.ts";
 function checkMeteringReplacesQuota(src: Sources): { ok: boolean; detail: string } {

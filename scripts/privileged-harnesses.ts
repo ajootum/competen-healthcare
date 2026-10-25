@@ -317,6 +317,13 @@ const STAGING: Listed[] = [
       + "individual_app restored exactly; no real email (injected sender). PEND until 451-453 are applied.",
   },
   {
+    file: "professional-needs-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-NEEDS-01 Stage 2 (470), owner GO s14 for an illustrative paediatric nurse: a need saved with only its "
+      + "description, a private reflection and a need from it, CFCA links with version, learning discovery, suggestions accepted, "
+      + "dismissed and deferred, priority and free stages, goals many to many, history kept, the reflection never shared, no "
+      + "catalogue, no AI. Own harness-prof02-* identity, deleted after; two policy rows restored exactly. PEND until 470 is applied.",
+  },
+  {
     file: "account-profile-acceptance-harness.ts",
     note: "My profile (owner GO 2026-10-23, PR D): a real anon-key user session updates its own personal fields and "
       + "is refused every authority column and the email (column grants plus RLS WITH CHECK profile_authority_unchanged), "

@@ -17,6 +17,12 @@ import { Empty, NotProvisioned, Section, fmtDate } from "../../../../_components
 import { loadProfessionalLearning } from "@/lib/individual/professional/learning";
 import { learningForCompetencies } from "@/lib/learning/products";
 import { LearningServes } from "../../../../_components/professional/LearningRefs";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { loadNeedsWorkspace, ruleSuggestions, type NeedCompetencyLink } from "@/lib/individual/professional/needs-store";
+import { evidenceByCompetency } from "@/lib/individual/professional/mapping-store";
+import { loadProfessionalProfile } from "@/lib/individual/professional/profile-store";
+import { publishedCatalogue, type CatalogueItem } from "@/lib/learning/catalogue";
+import { NeedDetail, NeedFields, NeedRow, NeedsOverview, Reflections, Suggestions, VIEWS, inView, type CompetencyView, type View } from "../../../../_components/professional/needs-workspace";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -34,18 +40,21 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Needs & plan" }); }
 
-export default async function DevelopmentPage({ params }: { params: Promise<{ experience: string }> }) {
+export default async function DevelopmentPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await experienceModulePage((await params).experience, "development");
   if (!page) return null;
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, passport, frameworks, map, learning] = await Promise.all([
+  const [record, passport, frameworks, map, learning, ws, policy, profile] = await Promise.all([
     loadProfessionalRecord(ctx.admin, ctx.userId),
     loadIndividualPassport(ctx.admin, ctx.userId, today),
     loadSharedFrameworks(ctx.admin),
     loadMappingView(ctx.admin, ctx.userId),
     loadProfessionalLearning(ctx.admin, ctx.userId),
+    loadNeedsWorkspace(ctx.admin, ctx.userId),
+    loadIndividualPolicy(ctx.admin),
+    loadProfessionalProfile(ctx.admin, ctx.userId),
   ]);
   // Learning on and readable: the serving list. Off or unreadable: nothing extra renders.
   const serves = (competencies: { id: string; name: string }[]) => learning.enabled && learning.refs !== null && competencies.length > 0
@@ -63,13 +72,91 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
   const plan = goals ? planProgress(goals, today) : null;
   const needTitle = new Map((needs ?? []).map(n => [n.id, n.title]));
 
+  // COMPETEN-PROFESSIONAL-NEEDS-01 (Stage 2): with migration 470 applied, the needs section is the workspace below.
+  // Before it, the MVP section renders exactly as it did.
+  const sp = await searchParams;
+  const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as string | undefined;
+  const view = (VIEWS.some(([v]) => v === one(sp.view)) ? one(sp.view) : "all") as View;
+  const np = policy.professionalNeeds;
+  const stage2 = ws.provisioned && ws.needs !== null;
+  const open = stage2 ? ws.needs!.find(n => n.id === one(sp.need)) ?? null : null;
+  const linksOf = (needId: string) => (ws.competencies ?? []).filter(l => l.need_id === needId);
+  const goalIdsOf = (needId: string) => new Set([...(goals ?? []).filter(g => g.need_id === needId).map(g => g.id), ...(ws.goalLinks ?? []).filter(l => l.need_id === needId).map(l => l.goal_id)]);
+  const evidence = map.mappings ? evidenceByCompetency(map.mappings, record) : new Map<string, { evidence: number; positive: number }>();
+  const competencyView = (l: NeedCompetencyLink): CompetencyView => {
+    const c = map.catalogue?.find(cc => cc.competencyId === l.framework_competency_id);
+    const decided = passport.competencies?.find(pc => pc.competencyId === l.framework_competency_id && pc.current);
+    const ev = evidence.get(l.framework_competency_id)?.evidence ?? 0;
+    const learned = learning.enabled && learning.refs ? learningForCompetencies(learning.refs, [l.framework_competency_id]).length : 0;
+    const parts = [ev ? `${ev} evidence or CPD ${ev === 1 ? "record" : "records"}` : null, learned ? `${learned} completed learning` : null].filter(Boolean);
+    return {
+      link: l, name: c?.title ?? map.names.get(l.framework_competency_id) ?? "A competency no longer offered",
+      expected: c?.expectedLevel?.label ?? null,
+      observed: parts.length ? parts.join(", ") : "Nothing recorded",
+      verified: decided ? `Assessed competent${decided.issuer ? ` by ${decided.issuer}` : ""}` : null,
+    };
+  };
+  let learningItems: CatalogueItem[] | null = [];
+  if (open && np.learning === "on" && learning.enabled) {
+    const ids = linksOf(open.id).filter(l => !l.unlinked_at).map(l => l.framework_competency_id).slice(0, 3);
+    const found = ids.length ? await Promise.all(ids.map(id => publishedCatalogue(ctx.admin, { competencyId: id }))) : [];
+    learningItems = found.some(f => f === null) ? null : [...new Map(found.flat().filter((i): i is CatalogueItem => !!i).map(i => [i.offeringId, i])).values()];
+  }
+  const rules = stage2 && np.ruleSuggestions === "on"
+    ? ruleSuggestions({ items: profile.items ?? [], needs: ws.needs!, decided: (ws.suggestions ?? []).filter(sg => sg.source === "rule"), today, windowDays: np.reviewDays })
+    : [];
+  const aiOpen = (ws.suggestions ?? []).filter(sg => sg.source === "ai" && sg.status === "suggested");
+
   return (
     <>
       <PageHeader accent={x.accent} eyebrow="Your development" title="Needs & plan"
         intro="Name what you want to develop, then plan how. Your needs and goals are private to you." />
       {!record.provisioned && <NotProvisioned />}
 
-      <Section id="needs-h" title="Development needs" note="What you want to develop. Each one is recorded by you.">
+      {stage2 && (
+        <>
+          {open && (
+            <NeedDetail n={open} policy={np} accent={x.accent} today={today}
+              history={(ws.history ?? []).filter(h => h.need_id === open.id)}
+              competencies={linksOf(open.id).filter(l => !l.unlinked_at).map(competencyView)}
+              formerCompetencies={linksOf(open.id).filter(l => l.unlinked_at).map(competencyView)}
+              offered={map.catalogue}
+              goals={(goals ?? []).filter(g => goalIdsOf(open.id).has(g.id)).map(g => ({ id: g.id, title: g.title, status: g.status, viaJoin: g.need_id !== open.id }))}
+              otherGoals={(goals ?? []).filter(g => !goalIdsOf(open.id).has(g.id)).map(g => ({ id: g.id, title: g.title }))}
+              reflection={open.reflection_id ? (ws.reflections ?? []).find(r => r.id === open.reflection_id) ?? null : null}
+              learning={{ enabled: learning.enabled, items: learningItems }} />
+          )}
+          <Section id="needs-h" title="My development needs" note="What you want to develop, in your own words. A need is never a judgement about your competence, and it is private to you.">
+            <NeedsOverview needs={ws.needs!} view={view} today={today} policy={np} accent={x.accent} />
+            {ws.needs!.filter(n => inView(n, view, today, np.reviewDays)).length === 0
+              ? <Empty>{ws.needs!.length === 0 ? "No development needs yet. Add your first one below: a short description is enough." : "Nothing in this view."}</Empty>
+              : (
+                <ul className="divide-y divide-gray-100">
+                  {ws.needs!.filter(n => inView(n, view, today, np.reviewDays)).map(n => (
+                    <NeedRow key={n.id} n={n} today={today} policy={np} accent={x.accent} competencies={linksOf(n.id).filter(l => !l.unlinked_at).length} goals={goalIdsOf(n.id).size} />
+                  ))}
+                </ul>
+              )}
+            <AddPanel label="Add a development need" accent={x.accent} suggestOpen={ws.needs!.length === 0}>
+              <ApiForm action="/api/individual/professional/needs" submitLabel="Save need" accent={x.accent} savedText="Saved. Add more detail whenever you like.">
+                <NeedFields policy={np} idPrefix="new-need" />
+              </ApiForm>
+            </AddPanel>
+          </Section>
+          {(np.ruleSuggestions === "on" || np.aiSuggestions === "on") && (
+            <Section title="Suggested development needs" note="From your own profile and record. You decide.">
+              <Suggestions rules={rules} ai={aiOpen} policy={np} accent={x.accent} />
+            </Section>
+          )}
+          {np.fields.includes("reflection") && (
+            <Section title="Private reflections" note="Think something through, then turn it into a need if you want to.">
+              <Reflections reflections={ws.reflections} policy={np} accent={x.accent} />
+            </Section>
+          )}
+        </>
+      )}
+
+      {!stage2 && <Section id="needs-h" title="Development needs" note="What you want to develop. Each one is recorded by you.">
         {needs === null ? <Unreadable what="development needs" /> : needs.length === 0 ? <Empty>No development needs yet. Add your first one below.</Empty> : (
           <ul className="divide-y divide-gray-100">
             {needs.map(n => (
@@ -106,7 +193,7 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
             </ApiForm>
           </AddPanel>
         )}
-      </Section>
+      </Section>}
 
       {passport.competencies !== null && gaps.length > 0 && needs !== null && record.provisioned && (
         <Section title="From your Passport" note="Assessed competencies an organisation recorded for you that are not current. Add any you want to work on.">
@@ -141,7 +228,11 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
                       <p className="text-[12.5px] text-gray-500">
                         {GOAL_STATUS_LABEL[g.status] ?? g.status} · target {fmtDate(g.target_date)}
                         {overdue && <span className="font-semibold text-amber-800"> · past target date</span>}
-                        {g.need_id && needTitle.get(g.need_id) ? ` · for: ${needTitle.get(g.need_id)}` : ""}
+                        {(() => {
+                          const ids = [...new Set([g.need_id, ...(ws.goalLinks ?? []).filter(l => l.goal_id === g.id).map(l => l.need_id)].filter(Boolean))] as string[];
+                          const t = ids.map(i => needTitle.get(i)).filter(Boolean);
+                          return t.length ? ` · for: ${t.join("; ")}` : "";
+                        })()}
                       </p>
                       {g.detail && <p className="mt-1 text-[13.5px] text-gray-700">{g.detail}</p>}
                       <GoalEdit g={g} needs={(needs ?? []).map(n => ({ id: n.id, title: n.title }))} accent={x.accent} />
