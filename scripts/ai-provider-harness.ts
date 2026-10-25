@@ -21,6 +21,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { AI_PROVIDERS, aiStatus, availableProviders, primaryProvider } from "../src/lib/ai/config";
+import { clinicalGate, resolveModelRouting, routeCandidates, selectRoute, type Route } from "../src/lib/ai/model-routing";
 
 let pass = 0;
 const fails: string[] = [];
@@ -145,6 +146,51 @@ function main() {
     !/anthropic|openai|gemini/i.test(phrasing) && !/anthropic|openai|gemini/i.test(strip(read("src/lib/ai/grounding.ts"))));
   ok("5b. and it still runs on whatever the model returned, after generation",
     /verifyGrounded\(result\.text/.test(phrasing));
+
+  // ── 6. NO-CODE MODEL ROUTING (owner MULTI-PROVIDER AI DIRECTION, 25 October 2026) ──────────────────────────────
+  //
+  // Anthropic, OpenAI and Gemini are first-class providers of one gateway. Routing is configuration, credentials are
+  // not. And a clinical request never falls back to a model that is not eligible.
+  const r6 = (sel: typeof selectRoute, resolve: typeof resolveModelRouting) => {
+    const OPUS: Route = { provider: "anthropic", model: "claude-opus-4-8" }, SONNET: Route = { provider: "anthropic", model: "claude-sonnet-4-6" };
+    const doc = resolve({
+      providers: { anthropic: { enabled: true, models: { heavy: "claude-opus-4-8", reasoning: "claude-sonnet-4-6" } }, openai: { enabled: true, models: { heavy: "gpt-4o", reasoning: "gpt-4o" }, key: "not-a-real-credential" }, gemini: { enabled: false, models: { heavy: "gemini-2.0-pro" } } },
+      tiers: { cheap: [], reasoning: ["openai", "anthropic"], heavy: ["gemini", "openai", "anthropic"] }, apiKey: "not-a-real-credential",
+    });
+    const heavy = routeCandidates(doc, SONNET, { product: "scholar", activity: "explain", tier: "heavy" });
+    const eligibleOpus = [{ activity: "explain", provider: "anthropic", model_prefix: "claude-opus-4-8", eligible: true, max_risk_tier: "clinical_educational" }];
+    return {
+      legacy: JSON.stringify(routeCandidates(resolve(null), SONNET, { product: "scholar", activity: "x", tier: "reasoning" })) === JSON.stringify([SONNET]),
+      eligibleAlt: JSON.stringify(sel(heavy, ["anthropic", "openai"], clinicalGate(eligibleOpus, "explain", "clinical_educational"))) === JSON.stringify(OPUS),
+      neverIneligible: sel(heavy, ["openai"], clinicalGate(eligibleOpus, "explain", "clinical_educational")) === null && sel(heavy, ["anthropic", "openai"], clinicalGate([], "explain", "clinical_educational")) === null,
+      keylessSkipped: JSON.stringify(sel(routeCandidates(doc, SONNET, { product: "scholar", activity: "teach", tier: "reasoning" }), ["anthropic"], () => true)) === JSON.stringify(SONNET),
+      disabledNever: !heavy.some(c => c.provider === "gemini"),
+      noCredential: !/not-a-real-credential|"key"|apiKey/.test(JSON.stringify(doc)),
+    };
+  };
+  const ok6 = r6(selectRoute, resolveModelRouting);
+  ok("6a. unpublished routing is exactly today: the primary provider and its tier model", ok6.legacy);
+  ok("6b. ⚠ a clinical request takes an ALTERNATIVE only when it is itself eligible", ok6.eligibleAlt);
+  ok("6c. ⚠ and never a non-eligible model, whatever else is keyed", ok6.neverIneligible);
+  ok("6d. a provider with no key is skipped at selection, not an error, and a disabled one is never used", ok6.keylessSkipped && ok6.disabledNever);
+  ok("6e. ⚠ no credential survives the routing document: only its known fields are kept", ok6.noCredential);
+  const clientSrc = strip(read("src/lib/ai/client.ts")), engineSrc = strip(read("src/lib/ai/allowance.ts"));
+  ok("6f. a routed call takes its key from the environment, by the routed provider, never from the route",
+    /const provider = route\?\.provider \?\? status\.provider!;\s*const key = providerKey\(provider\);/.test(clientSrc) && /route\?: \{ provider: AiProvider; model: string \};/.test(clientSrc));
+  ok("6g. the metered path reserves and generates on the SAME route the routing chose",
+    /p_provider: status\.provider, p_model: model/.test(engineSrc) && /const status = \{ provider: route\.provider \};\s*const model = route\.model;/.test(engineSrc) && /generate\(\{ \.\.\.m\.generate, tier: m\.tier, maxTokens: maxOut, route \}\)/.test(engineSrc));
+  const walk = (d: string): string[] => fs.readdirSync(path.join(root, d), { withFileTypes: true })
+    .flatMap(e => e.isDirectory() ? (e.name === "node_modules" ? [] : walk(path.join(d, e.name))) : /\.(ts|tsx)$/.test(e.name) ? [path.join(d, e.name).split(path.sep).join("/")] : []);
+  const sdkUsers = ["scripts", "src"].flatMap(d => walk(d)).filter(f => /from "@anthropic-ai\/sdk"|from "openai"|from "@google\/(genai|generative-ai)"/.test(read(f)));
+  // src/app/api/copilot/route.ts is a known, pre-existing direct use (Enterprise), named as a follow-up, not widened.
+  ok("6h. no new code reaches a vendor SDK directly: only the gateway (and the one named follow-up)",
+    sdkUsers.filter(f => f !== "src/lib/ai/client.ts" && f !== "src/app/api/copilot/route.ts" && f !== "scripts/ai-provider-harness.ts").length === 0, sdkUsers.join(", "));
+
+  // Planted failures: each 6 check must go red on one violation.
+  const red6 = (label: string, cond: boolean) => ok(`P. ${label} goes RED`, !cond);
+  red6("6b/6c with a gate that ignores eligibility", r6((c, a) => c.find(x => a.includes(x.provider)) ?? null, resolveModelRouting).neverIneligible);
+  red6("6e with a resolver that keeps every field", r6(selectRoute, (x: unknown) => ({ ...resolveModelRouting(x), extra: x })).noCredential);
+  red6("6d with a selector that ignores keys", r6((c, _a, g) => c.find(g) ?? null, resolveModelRouting).keylessSkipped);
 
   console.log(`\n${fails.length === 0 ? "PASSED" : "FAILED"}  ${pass} passed, ${fails.length} failed`);
   if (fails.length) { for (const f of fails) console.log(`  - ${f}`); process.exit(1); }

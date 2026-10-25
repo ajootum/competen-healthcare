@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { aiStatus } from "./config";
+import { clinicalGate, MODEL_ROUTING_PATH, resolveModelRouting, routeCandidates, selectRoute, type ModelRouting, type Route } from "./model-routing";
 import { generate, type GenerateArgs, type GenerateResult } from "./client";
 import { classifyRisk, riskRank, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision, type RiskTier } from "./clinical-risk";
 import {
@@ -147,7 +148,7 @@ const ELIGIBILITY_UNREADABLE = "Whether a model is approved for this could not b
  * own subject may still raise its risk above the floor: the reservation remains the control.
  */
 export function withEligibility(standing: AiStanding, policy: ProductAiPolicy, b: Balance, provider: string | null, models: Record<string, string> | null | undefined,
-  rows: readonly EligibilityRow[] | null): AiStanding {
+  rows: readonly EligibilityRow[] | null, routed?: (activity: string, tier: AiTier, floor: RiskTier) => Route | null): AiStanding {
   const activities = { ...standing.activities };
   for (const [code, a] of Object.entries(policy.activities)) {
     const st = activities[code];
@@ -157,8 +158,10 @@ export function withEligibility(standing: AiStanding, policy: ProductAiPolicy, b
     if (rows === null) { activities[code] = { ...st, available: false, via: null, reason: ELIGIBILITY_UNREADABLE }; continue; }
     const d = activityAt(policy, standing.level, code, b, floor);
     const model = d.tier ? models?.[d.tier] : undefined;
-    const covered = !!provider && !!model && rows.some(r => r.activity === code && r.provider === provider && r.eligible && model.startsWith(r.model_prefix)
-      && riskRank((r.max_risk_tier ?? "clinical_educational") as RiskTier) >= riskRank(floor));
+    // With Holdings model routing (model-routing.ts): covered when some configured candidate is eligible.
+    const covered = routed ? !!d.tier && !!routed(code, d.tier, floor)
+      : !!provider && !!model && rows.some(r => r.activity === code && r.provider === provider && r.eligible && model.startsWith(r.model_prefix)
+        && riskRank((r.max_risk_tier ?? "clinical_educational") as RiskTier) >= riskRank(floor));
     if (!covered) activities[code] = { ...st, available: false, via: null, reason: NOT_ELIGIBLE_REASON };
   }
   return { ...standing, activities };
@@ -189,7 +192,10 @@ export async function getAiStanding(admin: any, args: { userId: string; product:
     // Eligibility gates clinical-risk activities whether or not metering is on (owner: Sonnet 4.6 is not approved for
     // clinical activities, nothing is silently downgraded). The standing says so, so nothing is offered then refused.
     const status = aiStatus();
-    return withEligibility(unmetered, policy, UNMETERED_BALANCE, status.provider ?? null, status.models as Record<string, string> | undefined, await loadEligibility(admin, args.product));
+    const [rows, routing] = await Promise.all([loadEligibility(admin, args.product), loadModelRouting(admin)]);
+    if (!routing) return closed(policy, false, "AI help could not be checked just now.");
+    return withEligibility(unmetered, policy, UNMETERED_BALANCE, status.provider ?? null, status.models as Record<string, string> | undefined, rows,
+      (code, tier, floor) => pickRoute(routing, rows, args.product, code, tier, floor));
   }
   if (!readable) return closed(policy, false, "AI help could not be checked just now.");
   try {
@@ -205,6 +211,25 @@ const REQ = /^[A-Za-z0-9-]{8,80}$/;
 /** A request id for one person's request: theirs if they sent a well-formed one (an idempotent retry), else new. */
 export const requestIdFor = (userId: string, clientId: string | null | undefined) =>
   `${userId}:${clientId && REQ.test(clientId) ? clientId : crypto.randomUUID()}`;
+
+/** The published Holdings model routing (model-routing.ts). null = unreadable: nothing is sent on a guess. */
+export async function loadModelRouting(admin: any): Promise<ModelRouting | null> {
+  try {
+    const { data, error } = await admin.from("workspace_config_overrides").select("published")
+      .eq("scope_type", FAIR_USE_SCOPE.scopeType).eq("scope_ref", FAIR_USE_SCOPE.scopeRef).eq("config_path", MODEL_ROUTING_PATH).maybeSingle();
+    return error ? null : resolveModelRouting(data?.published ?? null);
+  } catch { return null; }
+}
+
+/** The legacy route: this deployment's primary provider and its model for the tier, when it can generate. */
+const legacyRoute = (tier: AiTier): Route | null => {
+  const s = aiStatus();
+  return s.provider && s.canGenerate && s.models ? { provider: s.provider, model: s.models[tier] } : null;
+};
+
+/** One request's route: the configured candidates, keyed providers only, and above standard only an eligible one. */
+const pickRoute = (routing: ModelRouting, rows: readonly EligibilityRow[] | null, product: AiProduct, activity: string, tier: AiTier, risk: RiskTier) =>
+  selectRoute(routeCandidates(routing, legacyRoute(tier), { product, activity, tier }), aiStatus().available, clinicalGate(rows, activity, risk));
 
 /** A balance that never limits: with metering off only the policy's routing and eligibility apply, not an allowance. */
 const UNMETERED_BALANCE = { includedCau: 1, reserveCau: 0, usedCau: 0, reservedCau: 0, reserveUsedCau: 0, reserveReservedCau: 0 };
@@ -224,24 +249,29 @@ const UNMETERED_BALANCE = { includedCau: 1, reserveCau: 0, usedCau: 0, reservedC
  * Subject-level risk (a standard activity on a clinical subject) is classified on the metered path only. Applying
  * it here too is an owner decision (it would refuse most unrecognised subjects as high-risk, D1).
  */
-export async function unmeteredGate(admin: any, product: AiProduct, activity: string): Promise<{ ok: true; tier: AiTier | null } | MeteredRefusal> {
+export async function unmeteredGate(admin: any, product: AiProduct, activity: string, callerTier: AiTier = "reasoning")
+  : Promise<{ ok: true; tier: AiTier | null; route: Route | null } | MeteredRefusal> {
   const { policy, readable } = await loadProductPolicy(admin, product);
   if (!readable) return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
   const a = Object.prototype.hasOwnProperty.call(policy.activities, activity) ? policy.activities[activity] : undefined;
   if (!a) return { ok: false, error: "unknown_activity", standing: closed(policy, true, "This AI activity is not offered here yet.") };
+  const routing = await loadModelRouting(admin);
+  if (!routing) return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
   const floor = a.riskFloor as RiskTier;
-  if (riskRank(floor) <= 0) return { ok: true, tier: null };
+  if (riskRank(floor) <= 0) {
+    // Standard educational: the caller's tier as before. Published routing picks its provider and model.
+    if (!routing.published) return { ok: true, tier: null, route: null };
+    const r = pickRoute(routing, null, product, activity, callerTier, "standard_educational");
+    return r ? { ok: true, tier: null, route: r } : { ok: false, error: "unreadable", standing: closed(policy, true, "No AI provider is available for this just now.") };
+  }
   const d = activityAt(policy, "full", activity, UNMETERED_BALANCE, floor);
-  const status = aiStatus();
-  const model = d.tier ? status.models?.[d.tier] : undefined;
   const rows = await loadEligibility(admin, product);
   const standing = (message: string): AiStanding => ({ readable: rows !== null, metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null,
     activities: { [activity]: { label: a.label, available: false, via: null, reason: message } }, message });
   if (rows === null) return { ok: false, error: "unreadable", standing: standing(ELIGIBILITY_UNREADABLE) };
-  const covered = d.available && !!d.tier && !!status.provider && !!model && rows.some(r => r.activity === activity && r.provider === status.provider && r.eligible
-    && model.startsWith(r.model_prefix) && riskRank((r.max_risk_tier ?? "clinical_educational") as RiskTier) >= riskRank(floor));
-  if (!covered) return { ok: false, error: "not_eligible", standing: standing(NOT_ELIGIBLE_REASON) };
-  return { ok: true, tier: d.tier };
+  const r = d.available && d.tier ? pickRoute(routing, rows, product, activity, d.tier, floor) : null;
+  if (!r) return { ok: false, error: "not_eligible", standing: standing(NOT_ELIGIBLE_REASON) };
+  return { ok: true, tier: d.tier, route: r };
 }
 
 /**
@@ -251,9 +281,9 @@ export async function unmeteredGate(admin: any, product: AiProduct, activity: st
 export async function runMeteredAi(admin: any, args: { userId: string; product: AiProduct; activity: string; requestId: string; generate: GenerateArgs; risk?: RiskContext; record?: { type: string; ref: string } | null })
   : Promise<GenerateResult | MeteredRefusal> {
   if (!(await aiFairUseEnabled(admin))) {
-    const g = await unmeteredGate(admin, args.product, args.activity);
+    const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning");
     if (!g.ok) return g;
-    return generate(g.tier ? { ...args.generate, tier: g.tier } : args.generate);
+    return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
   }
   const { policy, readable } = await loadProductPolicy(admin, args.product);
   if (!readable) return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
@@ -272,7 +302,7 @@ export async function runMeteredAi(admin: any, args: { userId: string; product: 
   }
 
   const m = await meter(admin, {
-    accountId: a.account.id, policy, activity: args.activity, tier: decision.tier, pool: decision.via, risk: risk!,
+    accountId: a.account.id, product: args.product, policy, activity: args.activity, tier: decision.tier, pool: decision.via, risk: risk!,
     capPerPeriod: policy.activities[args.activity].capPerPeriod, unreconciledCap: policy.maxUnreconciledCau,
     windowMinutes: policy.windowMinutes, windowCapCau: policy.windowCapCau,
     actor: args.userId, service: null, record: args.record ?? null, requestId: args.requestId, generate: args.generate,
@@ -287,7 +317,7 @@ export async function runMeteredAi(admin: any, args: { userId: string; product: 
 }
 
 type MeterArgs = {
-  accountId: string; policy: ProductAiPolicy; activity: string; tier: AiTier; pool: "included" | "reserve"; risk: RiskDecision;
+  accountId: string; product: AiProduct; policy: ProductAiPolicy; activity: string; tier: AiTier; pool: "included" | "reserve"; risk: RiskDecision;
   capPerPeriod: number | null; unreconciledCap: number; windowMinutes: number | null; windowCapCau: number | null;
   actor: string | null; service: string | null; record: { type: string; ref: string } | null; requestId: string; generate: GenerateArgs;
 };
@@ -299,9 +329,17 @@ type MeterOutcome = { result: GenerateResult } | { refused: "unreadable" | "not_
  * usage, release when nothing was billed, or unreconciled when the charge is unknown.
  */
 async function meter(admin: any, m: MeterArgs): Promise<MeterOutcome> {
-  const status = aiStatus();
-  const model = status.models?.[m.tier];
-  if (!status.provider || !status.canGenerate || !model) return { refused: "not_configured" };
+  // The route (model-routing.ts): configured candidates, keyed providers, and above standard only an eligible one.
+  // ai_reserve then checks the same eligibility for the request's classified risk, and prices this provider's model.
+  const [routing, rows] = await Promise.all([loadModelRouting(admin), riskRank(m.risk.tier) > 0 ? loadEligibility(admin, m.product) : Promise.resolve([] as EligibilityRow[])]);
+  if (!routing || rows === null) return { refused: "unreadable" };
+  const route = pickRoute(routing, rows, m.product, m.activity, m.tier, m.risk.tier);
+  if (!route) {
+    const anyKeyed = !!selectRoute(routeCandidates(routing, legacyRoute(m.tier), { product: m.product, activity: m.activity, tier: m.tier }), aiStatus().available, () => true);
+    return { refused: anyKeyed && riskRank(m.risk.tier) > 0 ? "not_eligible" : "not_configured" };
+  }
+  const status = { provider: route.provider };
+  const model = route.model;
   const activity = m.policy.activities[m.activity];
   const maxOut = Math.min(activity.maxOutputTokens, m.generate.maxTokens ?? activity.maxOutputTokens);
   // Everything the reservation is priced and limited by comes from the published policy and the database. The
@@ -319,7 +357,7 @@ async function meter(admin: any, m: MeterArgs): Promise<MeterOutcome> {
   if (typeof r?.reason === "string" && r.reason.startsWith("retry")) return { refused: "duplicate" };
   if (!r?.granted) return { refused: r?.reason === "not_eligible" || r?.reason === "unreconciled_ceiling" || r?.reason === "owner_mismatch" || r?.reason === "budget_suspended" ? r.reason : "exhausted" };
 
-  const out = await generate({ ...m.generate, tier: m.tier, maxTokens: maxOut });
+  const out = await generate({ ...m.generate, tier: m.tier, maxTokens: maxOut, route });
   if (out.usage) {
     const s = await settle(admin, m.requestId, out.ok ? out.model : model, out.usage.input, out.usage.output, out.ok ? "ok" : out.error === "refusal" ? "refusal" : "error");
     if (!s) console.error(`[ai-fair-use] settlement of ${m.requestId} failed: left reserved for reconciliation`);
@@ -354,9 +392,9 @@ export async function runOwnedAi(admin: any, args: {
   const o = args.owner;
   if (o.type === "individual") return runMeteredAi(admin, { userId: o.userId, product: args.product, activity: args.activity, requestId: args.requestId, generate: args.generate, risk: args.risk, record: args.record ?? null });
   if (!(await aiFairUseEnabled(admin))) {
-    const g = await unmeteredGate(admin, args.product, args.activity);
+    const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning");
     if (!g.ok) return { ok: false, error: g.error === "not_eligible" ? "not_eligible" : g.error === "unknown_activity" ? "unknown_activity" : "unreadable", budget: o.budget.code, message: g.standing.message ?? "This AI activity is not available just now." };
-    return generate(g.tier ? { ...args.generate, tier: g.tier } : args.generate);
+    return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
   }
   const refuse = (error: BudgetError, message: string, risk?: RiskDecision): BudgetRefusal => ({ ok: false, error, budget: o.budget.code, message, risk });
   const [{ policy, readable }, bp] = await Promise.all([loadProductPolicy(admin, args.product), loadBudgetPolicy(admin, o.budget.code)]);
@@ -376,7 +414,7 @@ export async function runOwnedAi(admin: any, args: {
   const decision = activityAt(policy, "full", args.activity, big, risk.tier);
   if (!decision.available || !decision.tier) return refuse("unknown_activity", decision.reason ?? "This AI activity is not offered.", risk);
   const m = await meter(admin, {
-    accountId: acc.account.id, policy, activity: args.activity, tier: decision.tier, pool: "included", risk,
+    accountId: acc.account.id, product: args.product, policy, activity: args.activity, tier: decision.tier, pool: "included", risk,
     capPerPeriod: bp.activities[args.activity].capPerPeriod, unreconciledCap: bp.unreconciledCapCau, windowMinutes: null, windowCapCau: null,
     actor: o.actorUserId, service: o.service, record: args.record ?? null, requestId: args.requestId, generate: args.generate,
   });

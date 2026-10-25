@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { MODEL_ROUTING_PATH, resolveModelRouting, type ModelRouting } from "./model-routing";
 import { publishScope, setOverride, type WceActor } from "@/lib/config/workspace-config-write";
 import { RISK_TIERS } from "./clinical-risk";
 import { BUDGET_CODE, ROUTING_PATH, budgetPath, budgetPeriod, resolveBudgetPolicy, resolveRouting, type BudgetPolicy, type Workflow } from "./consumption";
@@ -263,3 +264,18 @@ export const saveBudgetPolicyDraft = (admin: any, actor: WceActor, code: string,
   setOverride(admin, actor, FAIR_USE_SCOPE, budgetPath(code), resolveBudgetPolicy(input));
 export const saveRoutingDraft = (admin: any, actor: WceActor, input: any) =>
   setOverride(admin, actor, FAIR_USE_SCOPE, ROUTING_PATH, { workflows: resolveRouting(input) });
+
+// ── Model routing (owner MULTI-PROVIDER AI DIRECTION, model-routing.ts): no-code, versioned with the other AI policies ──
+
+/** The stored form: only the resolved fields. Whatever else was sent -- a pasted key included -- is never stored. */
+const storedRouting = (input: any) => { const { providers, tiers, activities } = resolveModelRouting(input); return { providers, tiers, activities }; };
+export const saveModelRoutingDraft = (admin: any, actor: WceActor, input: any) =>
+  setOverride(admin, actor, FAIR_USE_SCOPE, MODEL_ROUTING_PATH, storedRouting(input));
+
+/** The published model routing and any waiting draft. Null: unreadable. */
+export async function loadModelRoutingView(admin: any): Promise<{ published: ModelRouting; draft: ModelRouting | null } | null> {
+  const data = await rows(admin.from("workspace_config_overrides").select("draft, published").eq("scope_type", FAIR_USE_SCOPE.scopeType).eq("scope_ref", FAIR_USE_SCOPE.scopeRef).eq("config_path", MODEL_ROUTING_PATH).limit(1));
+  if (data === null) return null;
+  const r = data[0];
+  return { published: resolveModelRouting(r?.published ?? null), draft: r?.draft && JSON.stringify(r.draft) !== JSON.stringify(r.published ?? null) ? resolveModelRouting(r.draft) : null };
+}

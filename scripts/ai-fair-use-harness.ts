@@ -140,7 +140,7 @@ const checkFailClosed = (src: Src): R => {
   const e = code(src, "engine");
   // Both entry points -- a person's allowance and a budget -- are dark when the flag is off: no reservation, no ledger.
   // Since 25 October 2026 (A18) "dark" is unmeteredGate then generate(): eligibility still gates clinical risk.
-  const dark = (e.match(/if \(!\(await aiFairUseEnabled\(admin\)\)\) \{\n    const g = await unmeteredGate\(admin, args\.product, args\.activity\);\n[^]*?return generate\(g\.tier \? \{ \.\.\.args\.generate, tier: g\.tier \} : args\.generate\);\n  \}/g) ?? []).length === 2;
+  const dark = (e.match(/if \(!\(await aiFairUseEnabled\(admin\)\)\) \{\n    const g = await unmeteredGate\(admin, args\.product, args\.activity, args\.generate\.tier \?\? "reasoning"\);\n[^]*?return generate\(\{ \.\.\.args\.generate, \.\.\.\(g\.tier \? \{ tier: g\.tier \} : \{\}\), \.\.\.\(g\.route \? \{ route: g\.route \} : \{\}\) \}\);\n  \}/g) ?? []).length === 2;
   const unreadable = e.indexOf(`if (!readable) return { ok: false, error: "unreadable"`) > -1 && e.indexOf(`if (!readable) return { ok: false, error: "unreadable"`) < e.indexOf("const out = await generate(");
   const d = defaultPolicy("scholar");
   const nothing = d.includedCau === 0 && d.reserveCau === 0 && d.maxUnreconciledCau === 0 && Object.keys(d.activities).length === 0
@@ -270,13 +270,13 @@ function checkUnmeteredGate(src: Src, allSrc: Src): R {
     if (off < 0) { bad.push(`${fn}: no unmetered branch found`); continue; }
     const branch = body.slice(off, body.indexOf("\n  }\n", off) + 4);
     if (/return generate\(args\.generate\);/.test(body.slice(off, off + 80))) bad.push(`${fn}: metering off calls generate() with no eligibility gate`);
-    else if (!/unmeteredGate\(admin, args\.product, args\.activity\)/.test(branch) || branch.indexOf("unmeteredGate(") > branch.indexOf("generate(")) bad.push(`${fn}: the unmetered generate() is not behind unmeteredGate`);
+    else if (!/unmeteredGate\(admin, args\.product, args\.activity, args\.generate\.tier \?\? "reasoning"\)/.test(branch) || branch.indexOf("unmeteredGate(") > branch.indexOf("generate(")) bad.push(`${fn}: the unmetered generate() is not behind unmeteredGate`);
   }
   const standing = bodyOf("getAiStanding");
   const off = standing.indexOf("if (!(await aiFairUseEnabled(admin)))");
   if (off < 0 || !/return withEligibility\(unmetered,/.test(standing.slice(off, off + 1200))) bad.push("getAiStanding: the unmetered standing does not apply eligibility");
   const gate = bodyOf("unmeteredGate");
-  if (!/riskRank\(floor\) <= 0\) return \{ ok: true, tier: null \}/.test(gate)) bad.push("unmeteredGate: standard-educational activities are not left unchanged");
+  if (!/if \(riskRank\(floor\) <= 0\) \{[^]{0,200}?if \(!routing\.published\) return \{ ok: true, tier: null, route: null \};/.test(gate)) bad.push("unmeteredGate: standard-educational activities are not left unchanged");
   if (!/if \(!a\) return \{ ok: false, error: "unknown_activity"/.test(gate)) bad.push("unmeteredGate: an undefined activity is not refused");
   if (!/if \(rows === null\) return \{ ok: false, error: "unreadable"/.test(gate)) bad.push("unmeteredGate: unreadable eligibility does not fail closed");
   if (/!standing\.metered && standing\.readable\) return \{ available: true/.test(allSrc.get(STANDING_FILE) ?? "")) bad.push("activityState: not metered still means available");
@@ -363,9 +363,9 @@ red("A5 (FI) settled on the estimate", checkNoEstimate(plant("engine", `    cons
   `    const { error } = { error: !(await settle(admin, m.requestId, model, maxInputTokens(m.generate.system, m.generate.user), maxOut, "timeout")) };`)));
 red("A5 (FI) an unknown charge released as free", checkNoEstimate(plant("engine", `  } else if (!out.ok && (out.error === "not_configured" || out.billing === "none")) {`, `  } else if (!out.ok) {`)));
 red("A6 metering on with no flag check", checkFailClosed(plant("engine", `  if (!(await aiFairUseEnabled(admin))) {
-    const g = await unmeteredGate(admin, args.product, args.activity);
+    const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning");
     if (!g.ok) return g;
-    return generate(g.tier ? { ...args.generate, tier: g.tier } : args.generate);
+    return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
   }
   const { policy, readable }`, "  const { policy, readable }")));
 red("A7 Teach Me on medication safety classified as standard (by activity name)", checkRisk(RAW, (pol, sub, floor) => sub.text.toLowerCase().startsWith("teach me") ? { tier: "standard_educational", rule: "activity:teach", reason: "" } : classifyRisk(pol, sub, floor), activityAt));
@@ -379,9 +379,9 @@ red("A11 a window cap in the engine", checkNoFigures(plant("engine", "export con
 red("A16 standing that skips eligibility", checkStandingEligibility(plant("engine", "return withEligibility(standingFrom(policy, a.account),", "return ((x: any) => x)(standingFrom(policy, a.account),"), withEligibility));
 red("A16 an eligibility check that offers everything", checkStandingEligibility(RAW, (st) => st));
 red("A18 the old unmetered path (generate with no gate)", checkUnmeteredGate(plant("engine", `  if (!(await aiFairUseEnabled(admin))) {
-    const g = await unmeteredGate(admin, args.product, args.activity);
+    const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning");
     if (!g.ok) return g;
-    return generate(g.tier ? { ...args.generate, tier: g.tier } : args.generate);
+    return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
   }`, "  if (!(await aiFairUseEnabled(admin))) return generate(args.generate);"), ALL));
 red("A18 an unmetered standing that offers everything", checkUnmeteredGate(plant("engine", "return withEligibility(unmetered,", "return (unmetered) || withEligibility(unmetered,"), ALL));
 red("A18 Scholar treating not metered as available", checkUnmeteredGate(RAW, new Map([...ALL, [STANDING_FILE, (ALL.get(STANDING_FILE) ?? "") + "\nif (!standing.metered && standing.readable) return { available: true, message: null, insufficient: false };\n"]])));

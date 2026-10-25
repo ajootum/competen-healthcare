@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { currentTraceId } from "@/lib/trace";
 import { wceMissing } from "@/lib/config/workspace-config-write";
-import { changeRate, createBudget, publishPolicies, RATE_KINDS, saveBudgetPolicyDraft, savePolicyDraft, saveRoutingDraft, setBudgetStatus, type RateKind } from "@/lib/ai/fair-use-admin";
+import { changeRate, createBudget, publishPolicies, RATE_KINDS, saveBudgetPolicyDraft, saveModelRoutingDraft, savePolicyDraft, saveRoutingDraft, setBudgetStatus, type RateKind } from "@/lib/ai/fair-use-admin";
 import { BUDGET_CODE } from "@/lib/ai/consumption";
 import { AI_PRODUCTS, type AiProduct } from "@/lib/ai/fair-use-policy";
 
@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
 //
 // Body: { action: "rate", kind: "price" | "fx" | "basis" | "eligibility", ...fields } | { action: "policy", product, settings } |
 //       { action: "publish", note? } | { action: "budget_create", code, ownerType, product, label, institutionRef?, fundingRef? } |
-//       { action: "budget_status", budgetId, status } | { action: "budget_policy", code, settings } | { action: "routing", settings }
+//       { action: "budget_status", budgetId, status } | { action: "budget_policy", code, settings } | { action: "routing", settings } |
+//       { action: "model_routing", settings }   (providers, models, primary and alternatives: never a credential)
 //
 // ⚠ GATED BY hqApiGate(["hq.platform.ai.manage"]) (migration 410, the Platform Director). Rates are append-only
 // history (the 410 guard). Policies go through the CONFIG-002 engine, clamped by the same resolvePolicy the engine
@@ -73,6 +74,13 @@ export async function POST(req: Request) {
     case "routing": {
       if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
       const r = await saveRoutingDraft(ctx.admin, actor, body.settings ?? {});
+      return r.ok ? NextResponse.json({ ok: true }) : refuse(r.status, r.error);
+    }
+    // ── Model routing (owner MULTI-PROVIDER AI DIRECTION). A CONFIG-002 draft; publishes with the other AI policies. ──
+    case "model_routing": {
+      if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
+      const r = await saveModelRoutingDraft(ctx.admin, actor, body.settings ?? {});
+      if (r.ok) await audit("ai_model_routing_draft", { providers: Object.keys(body.settings?.providers ?? {}) });
       return r.ok ? NextResponse.json({ ok: true }) : refuse(r.status, r.error);
     }
     default:
