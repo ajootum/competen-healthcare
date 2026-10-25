@@ -1740,13 +1740,13 @@ export async function competencyProgressRows(admin: Admin, userId: string): Prom
 // a question, the option chosen or whether it was right.
 
 export async function listPassportChoices(admin: Admin, userId: string): Promise<Read<ChoiceRow[]>> {
-  const { data, error } = await admin.from("individual_scholar_passport_item").select("material_id, achievement, label, included_at")
+  const { data, error } = await admin.from("individual_scholar_passport_item").select("id, material_id, achievement, label, included_at")
     .eq("user_id", userId).order("included_at", { ascending: false }).limit(200);
   if (error) return fail(error);
   return {
     ok: true,
     data: ((data ?? []) as any[]).filter(r => isStudyAchievementKind(r.achievement))
-      .map(r => ({ materialId: r.material_id, achievement: r.achievement, label: r.label, includedAt: r.included_at })),
+      .map(r => ({ itemId: r.id, materialId: r.material_id, achievement: r.achievement, label: r.label, includedAt: r.included_at })),
   };
 }
 

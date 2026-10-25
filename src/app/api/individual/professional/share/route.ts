@@ -3,6 +3,7 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { isUuid } from "@/lib/individual/professional/validate";
 import { mintShare, parseShare, revokeShare } from "@/lib/individual/professional/share";
 import { checkShareLearning, parseShareLearning } from "@/lib/individual/professional/share-learning";
+import { checkShareCompetencies, parseShareCompetencies } from "@/lib/individual/professional/share-competency";
 import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 import { audit, readBody, refuse } from "@/lib/individual/professional/api";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -34,9 +35,13 @@ export async function POST(req: Request) {
   const learningIds = parseShareLearning(fields);
   const learnErr = await checkShareLearning(ctx.admin, ctx.userId, learningIds, await loadLcpdConfig(ctx.admin));
   if (learnErr) return refuse(learnErr);
-  const link = await mintShare(ctx.admin, ctx.userId, input, profile, learningIds);
+  // COMPETENCY-01 S11: the competencies and parts the person ticked, each their own and current, parts the policy offers.
+  const competencies = parseShareCompetencies(fields);
+  const compErr = await checkShareCompetencies(ctx.admin, ctx.userId, competencies, policy.professionalCompetency.shareParts);
+  if (compErr) return refuse(compErr);
+  const link = await mintShare(ctx.admin, ctx.userId, input, profile, learningIds, competencies);
   if (!link) return NextResponse.json({ error: "The link could not be created just now. Try again shortly." }, { status: 500 });
-  await audit(ctx, "create_passport_share", "passport_share_token", link.id, { scope: input.scope, days: input.days, includes_own_records: true, profile_overview: profile.overview, profile_records: profile.itemIds.length, learning_records: learningIds.length });
+  await audit(ctx, "create_passport_share", "passport_share_token", link.id, { scope: input.scope, days: input.days, includes_own_records: true, profile_overview: profile.overview, profile_records: profile.itemIds.length, learning_records: learningIds.length, competencies: competencies.length });
   return NextResponse.json({ ok: true, path: `/verify/${link.token}`, link }, { status: 201 });
 }
 
