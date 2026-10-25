@@ -25,6 +25,9 @@ import { DEFAULT_POLICY, POLICIES } from "../src/lib/individual/policy";
 import { NEVER_AT_ONBOARDING, PROFILE_TABLES, RECORD_STATES, REQUIRED_FIELDS } from "../src/lib/individual/professional/profile-vocabulary";
 import { itemState } from "../src/lib/individual/professional/profile-records";
 import { profileContext } from "../src/lib/individual/professional/profile-ai";
+import { deriveVerification } from "../src/lib/individual/professional/profile-verification";
+import { dueOffset, itemEligible } from "../src/lib/individual/professional/reminders";
+import { parseShareProfile } from "../src/lib/individual/professional/share-profile";
 
 let pass = 0; const failures: string[] = [];
 const ok = (name: string, cond: boolean, detail = "") => {
@@ -54,7 +57,7 @@ const SUGGEST = "src/lib/individual/professional/catalogue-suggestions.ts";
 const REG = "src/app/individual/_components/professional/registration.tsx";
 const AI = "src/lib/individual/professional/profile-ai.ts";
 const PAGE = "src/app/individual/(app)/[experience]/(professional)/registration/page.tsx";
-const ROUTES = ["src/app/api/individual/professional/context/route.ts", "src/app/api/individual/professional/profile-items/route.ts"];
+const ROUTES = ["src/app/api/individual/professional/context/route.ts", "src/app/api/individual/professional/profile-items/route.ts", "src/app/api/individual/professional/verification/route.ts"];
 
 // ── S. SCHEMA ──────────────────────────────────────────────────────────────────────────────────────────
 const tableBlocks = (mig: string) => [...mig.matchAll(/create table if not exists (individual_professional_[a-z_]+) \(([\s\S]*?)\n\);/g)].map(m => ({ name: m[1], body: m[2] }));
@@ -171,6 +174,91 @@ const checkFailOpen = (src: Sources): R => {
   return { ok: home && prov && mvp, detail: `home form only when incomplete ${home}, 450 absent is not provisioned ${prov}, MVP page kept ${mvp}` };
 };
 
+// ── B. PART B (owner continuation GO): VERIFICATION, REMINDERS, SELECTIVE SHARING ──────────────────────────
+const mig = (n: string) => { const f = readdirSync("supabase/migrations").find(x => x.startsWith(`${n}-`)); return f ? readFileSync(`supabase/migrations/${f}`, "utf8").replace(/--.*$/gm, "").toLowerCase().replace(/\r\n/g, "\n") : ""; };
+const M451 = mig("451"), M452 = mig("452"), M453 = mig("453");
+const VER = "src/lib/individual/professional/profile-verification.ts";
+const HQ_ROUTE = "src/app/api/hq/individual/verification/route.ts";
+const HQ_PAGE = "src/app/super-admin/individual/verification/page.tsx";
+const REMIND = "src/lib/individual/professional/reminders.ts";
+const SHARE = "src/lib/individual/professional/share.ts";
+const SHARE_PROFILE = "src/lib/individual/professional/share-profile.ts";
+const VERIFY_PAGE = "src/app/verify/[token]/page.tsx";
+const PROF_HARNESS = existsSync("scripts/individual-professional-harness.ts") ? readFileSync("scripts/individual-professional-harness.ts", "utf8") : "";
+
+const ownRowOnly = (m: string, tables: string[]): boolean => tables.every(t => m.includes(`alter table ${t} enable row level security`)
+  && new RegExp(`create policy ${t}_read_own on ${t}\\s+for select using \\(auth\\.uid\\(\\) = user_id\\)`).test(m))
+  && !/create policy [a-z_]+ on [a-z_]+\s+for (insert|update|delete|all)/.test(m);
+
+const checkVerifierAuthority = (m: string): R => {
+  const rls = ownRowOnly(m, ["individual_professional_item_verification"]);
+  const holds = /if not public\.individual_holds_capability\(new\.actor_id, 'hq\.individual\.professional\.verify'\) then\s+raise exception/.test(m)
+    && /a\.status = 'active'/.test(m);
+  const independent = /if new\.actor_id is null or new\.actor_id = new\.user_id then\s+raise exception/.test(m);
+  const personOnly = /if new\.actor_id is distinct from new\.user_id then\s+raise exception/.test(m);
+  const consent = /if v_last not in \('requested', 'disputed'\) or v_last is null then\s+raise exception/.test(m);
+  const appendOnly = /before update or delete on individual_professional_item_verification/.test(m) && /if pg_trigger_depth\(\) > 1 then/.test(m);
+  const noAppointment = !/insert into ogs_office_appointments/.test(m);
+  const onlyPosition = /from \(values \('individual_professional_verifier'\)\) as p\(code\)/.test(m) && (m.match(/insert into hq_position_capability/g) ?? []).length === 1;
+  return { ok: rls && holds && independent && personOnly && consent && appendOnly && noAppointment && onlyPosition,
+    detail: `rls ${rls}, appointment ${holds}, independence ${independent}, person events ${personOnly}, request first ${consent}, append-only ${appendOnly}, no appointment ${noAppointment}, one position ${onlyPosition}` };
+};
+type Derive = typeof import("../src/lib/individual/professional/profile-verification").deriveVerification;
+const checkDerivation = (derive: Derive, src: Sources, harness: string): R => {
+  const row = (event: string, extra: Record<string, unknown> = {}, n = 0) => ({ id: `r${n}`, item_id: "i", event, method: null, valid_until: null, reason: null, created_at: `2026-10-0${n + 1}T00:00:00Z`, ...extra }) as never;
+  const today = "2026-10-25";
+  const s = (rows: never[]) => derive(rows, today).state;
+  const cases = [
+    s([row("requested")]) === "requested",
+    s([row("requested", {}, 0), row("verified", { method: "register_check" }, 1)]) === "verified",
+    s([row("requested", {}, 0), row("verified", { method: "register_check", valid_until: "2026-01-01" }, 1)]) === "expired",
+    s([row("requested", {}, 0), row("verified", { method: "register_check" }, 1), row("revoked", { reason: "x" }, 2)]) === "revoked",
+    s([row("requested", {}, 0), row("request_withdrawn", {}, 1)]) === "none",
+    s([row("requested", {}, 0), row("declined", { reason: "x" }, 1)]) === "declined",
+  ];
+  const oneFile = /const VERIFIED_STATE_FILES = new Set\(\["src\/lib\/individual\/professional\/profile-verification\.ts"\]\);/.test(harness);
+  const page = src.get(VERIFY_PAGE) ?? "";
+  const viaHelper = /isIndependentlyVerified\(r\.verification\.state\)/.test(page) && !/state === "verified"/.test(page);
+  return { ok: cases.every(Boolean) && oneFile && viaHelper, detail: `cases ${cases.map(c => (c ? 1 : 0)).join("")}, one exempt file ${oneFile}, /verify through the helper ${viaHelper}` };
+};
+const checkHqGate = (src: Sources): R => {
+  const route = src.get(HQ_ROUTE) ?? "";
+  const handlers = [...route.matchAll(/export async function (GET|POST)\b/g)].length;
+  const gates = [...route.matchAll(/await hqApiGate\(\["hq\.individual\.professional\.verify"\]\)/g)].length;
+  const page = /await requireHqCapability\("hq\.individual\.professional\.verify"\)/.test(src.get(HQ_PAGE) ?? "");
+  // Read raw: spaces.ts holds route globs whose "/*" the comment strip would take for a comment opener.
+  const map = /prefix: "\/super-admin\/individual\/verification", capability: "hq\.individual\.professional\.verify"/.test(readFileSync("src/lib/hq/spaces.ts", "utf8"));
+  const queue = /\(v\.state === "requested" \|\| v\.state === "disputed"\) && owner\.get\(id\) !== verifierId/.test(src.get(VER) ?? "");
+  const docOnOpen = /const open = await hasOpenRequest\(/.test(route) && /if \(open\.userId === ctx\.userId\) return refuse\(403/.test(route);
+  return { ok: handlers === 2 && gates === 2 && page && map && queue && docOnOpen, detail: `handlers ${handlers}, gates ${gates}, page ${page}, map ${map}, queue requested-only and not own ${queue}, document only on an open request ${docOnOpen}` };
+};
+type Due = typeof import("../src/lib/individual/professional/reminders").dueOffset;
+type Elig = typeof import("../src/lib/individual/professional/reminders").itemEligible;
+const checkReminders = (src: Sources, due: Due, eligible: Elig, m: string): R => {
+  const s = src.get(REMIND) ?? "";
+  const policy = /const kinds = new Set\(policy\.professionalProfile\.reminderKinds\);/.test(s) && /profileItemCandidates\(admin, \[\.\.\.active\], today, policy\.professionalProfile\)/.test(s);
+  const claim = /from\("individual_professional_reminder_log"\)\.insert\(/.test(s) && /from\("individual_professional_reminder_log"\)\.delete\(\)/.test(s);
+  const once = due("2026-11-14", "2026-10-25", [60, 30]) === 30 && due("2026-12-20", "2026-10-25", [60, 30]) === 60 && due("2027-06-01", "2026-10-25", [60, 30]) === null;
+  const p = DEFAULT_POLICY.professionalProfile;
+  const elig = eligible({ section: "registration", type_code: "active" }, p) && !eligible({ section: "registration", type_code: "lapsed" }, p) && eligible({ section: "qualification", type_code: null }, p);
+  const ledger = ownRowOnly(m, ["individual_professional_reminder_log"]) && /create unique index if not exists ux_individual_professional_reminder_log_once\s+on individual_professional_reminder_log\(item_id, expires_on, offset_days\);/.test(m);
+  return { ok: policy && claim && once && elig && ledger, detail: `policy-driven ${policy}, claim/release ${claim}, tightest once ${once}, eligibility ${elig}, ledger ${ledger}` };
+};
+type ParseShare = typeof import("../src/lib/individual/professional/share-profile").parseShareProfile;
+const checkSharing = (src: Sources, parse: ParseShare, m: string): R => {
+  const page = src.get(VERIFY_PAGE) ?? "";
+  const lib = src.get(SHARE_PROFILE) ?? "";
+  const gated = /const sharedProfile = carriesOwn\s*\?\s*await loadSharedProfile\(/.test(page);
+  const current = /\.is\("superseded_at", null\)\.is\("withdrawn_at", null\)\.order\("created_at"\)/.test(lib) && /sections\.includes\(ITEM_SECTION\[i\.section as ItemKind\]\)/.test(lib);
+  const private_ = /verification: \{ \.\.\.\(byItem\[i\.id\] \?\? NO_VERIFICATION\), reason: null, history: \[\] \}/.test(lib) && !/self_declared_identifier|document_path|document_name|detail/.test(lib.replace(/\/\/.*$/gm, ""));
+  const offByDefault = JSON.stringify(parse({})) === JSON.stringify({ overview: false, itemIds: [] })
+    && /\.\.\.\(profile\.overview \? \{ profile_overview: true \} : \{\}\)/.test(src.get(SHARE) ?? "");
+  const schema = ownRowOnly(m, ["individual_professional_share_item"]) && /add column if not exists profile_overview boolean not null default false/.test(m)
+    && /foreign key \(share_token_id, user_id\) references individual_professional_share\(share_token_id, user_id\)/.test(m)
+    && /foreign key \(item_id, user_id\) references individual_professional_profile_item\(id, user_id\)/.test(m);
+  return { ok: gated && current && private_ && offByDefault && schema, detail: `Professional links only ${gated}, current chosen versions in allowed sections ${current}, no number/document/details/reasons ${private_}, off by default ${offByDefault}, schema ${schema}` };
+};
+
 function main() {
   console.log("PROFESSIONAL PROFILE HARNESS (COMPETEN-PROFESSIONAL-PROFILE-01 Stage 1)\n");
   const run = (name: string, r: R) => ok(name, r.ok, r.detail);
@@ -194,6 +282,11 @@ function main() {
   run("C1. catalogue suggestions: shared, active, published and allowlisted only, nothing from an empty allowlist", checkSuggestions(ALL));
   run("A1. AI grounding: policy-gated, the no-invention rule, never a registration number or document name", checkAi(ALL, profileContext));
   run("O1. fails open to the MVP while 450 is absent: no form on the home, the MVP profile page", checkFailOpen(ALL));
+  run("B1. 451: verifier events need the capability through an ACTIVE appointment, an actor who is not the person, and an open request; person events only by the person; append-only; no appointment made", checkVerifierAuthority(M451));
+  run("B2. the verified state comes only from verifier rows (6 histories), only one Professional file may name it, and /verify asks the helper", checkDerivation(deriveVerification, ALL, PROF_HARNESS));
+  run("B3. the verifier console and both its handlers are gated by hq.individual.professional.verify; the queue holds only open requests, never the verifier's own; documents only on an open request", checkHqGate(ALL));
+  run("B4. reminders: kinds, standings and offsets from the policy; one email for the tightest offset reached; claim before send, released on failure; 452 own-row with a full unique key", checkReminders(ALL, dueOffset, itemEligible, M452));
+  run("B5. sharing: only on Professional links, only chosen current versions in allowed sections, never numbers, documents, details or reasons, off by default; 453 composite keys", checkSharing(ALL, parseShareProfile, M453));
 
   // ── P. PLANTED FAILURES -- each check must go red on a copy with one violation in it ──────────────────
   console.log("\n  planted-failure controls (in memory, nothing on disk changes):");
@@ -219,6 +312,22 @@ function main() {
   red("C1 on a suggestion without the allowlist", checkSuggestions(plant(SUGGEST, `.in("id", allowed)`, "")));
   red("A1 on grounding that leaks the registration number", checkAi(add(AI, "const n = i.self_declared_identifier;"), profileContext));
   red("O1 on a home form shown whatever the state", checkFailOpen(plant(REG, `if (registrationState(view) !== "incomplete") return null;`, "")));
+  red("B1 without the appointment check", checkVerifierAuthority(M451.replace("if not public.individual_holds_capability(new.actor_id, 'hq.individual.professional.verify') then", "if false then")));
+  red("B1 without independence", checkVerifierAuthority(M451.replace("if new.actor_id is null or new.actor_id = new.user_id then", "if new.actor_id is null then")));
+  red("B1 on an automatic appointment", checkVerifierAuthority(M451 + "\ninsert into ogs_office_appointments (role) values ('individual_professional_verifier')"));
+  red("B1 on a write policy", checkVerifierAuthority(M451 + "\ncreate policy p on individual_professional_item_verification for insert with check (true)"));
+  red("B2 on a second file allowed to say verified", checkDerivation(deriveVerification, ALL, PROF_HARNESS.replace(`new Set(["src/lib/individual/professional/profile-verification.ts"])`, `new Set(["src/lib/individual/professional/profile-verification.ts", "src/lib/individual/professional/share-profile.ts"])`)));
+  red("B2 on /verify comparing the state itself", checkDerivation(deriveVerification, plant(VERIFY_PAGE, "isIndependentlyVerified(r.verification.state)", `r.verification.state === "verified"`), PROF_HARNESS));
+  red("B2 on a derivation that trusts a request", checkDerivation(((rows: never[], t: string) => ({ ...deriveVerification(rows, t), state: "verified" })) as Derive, ALL, PROF_HARNESS));
+  red("B3 on an ungated document handler", checkHqGate(plant(HQ_ROUTE, `export async function GET(req: Request) {\n  const ctx = await hqApiGate(["hq.individual.professional.verify"]);`, `export async function GET(req: Request) {\n  const ctx = await hqApiGate(["hq.platform.home.view"]);`)));
+  red("B3 on a queue that includes the verifier's own records", checkHqGate(plant(VER, ` && owner.get(id) !== verifierId).map(([id]) => id);\n    if (!open.length)`, `).map(([id]) => id);\n    if (!open.length)`)));
+  red("B4 on reminders that ignore the kinds policy", checkReminders(plant(REMIND, "const kinds = new Set(policy.professionalProfile.reminderKinds);", "const kinds = new Set(['credentials', 'primary_registration']);"), dueOffset, itemEligible, M452));
+  red("B4 on a schedule that sends every offset", checkReminders(ALL, ((e: string, t: string, o: readonly number[]) => (o.length ? Math.max(...o) : null)) as Due, itemEligible, M452));
+  red("B4 on a partial claim key", checkReminders(ALL, dueOffset, itemEligible, M452.replace("(item_id, expires_on, offset_days);", "(item_id, expires_on, offset_days) where offset_days > 0;")));
+  red("B5 on /verify showing the profile on every link", checkSharing(plant(VERIFY_PAGE, "const sharedProfile = carriesOwn", "const sharedProfile = true"), parseShareProfile, M453));
+  red("B5 on a shared record that carries the verifier's reasons", checkSharing(plant(SHARE_PROFILE, ", reason: null, history: [] },", " },"), parseShareProfile, M453));
+  red("B5 on sharing that leaks the registration number", checkSharing(add(SHARE_PROFILE, "const n = i.self_declared_identifier;"), parseShareProfile, M453));
+  red("B5 on the overview shared by default", checkSharing(ALL, ((b: Record<string, unknown>) => ({ ...parseShareProfile(b), overview: true })) as ParseShare, M453));
 
   console.log(`\n${failures.length ? "RED" : "ALL GREEN"} -- ${pass} passed, ${failures.length} failed`);
   if (failures.length) { failures.forEach(f => console.log(`  FAILED: ${f}`)); process.exit(1); }

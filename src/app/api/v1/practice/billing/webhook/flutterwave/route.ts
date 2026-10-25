@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { gatewayConfig, verifHashMatches } from "@/lib/practice/subscription-gateway";
 import { applyWebhook } from "@/lib/practice/subscription";
 import { applyIndividualWebhook, individualCommerceEnabled, isIndividualTxRef } from "@/lib/individual/commerce";
+import { applyLearningWebhook, isLearningTxRef } from "@/lib/learning/commerce";
+import { learningCommerceEnabled } from "@/lib/learning/policy";
 
 // POST /api/v1/practice/billing/webhook/flutterwave
 //
@@ -58,11 +60,14 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient();
   const ev = { providerEventId, providerTxId, txRef };
   const individual = isIndividualTxRef(txRef) && (await individualCommerceEnabled(admin));
-  const result = individual ? await applyIndividualWebhook(admin, cfg, ev) : await applyWebhook(admin, cfg, ev);
+  // COMPETEN-LEARNING-01 S3: a course checkout (`lrn-`) settles through the Learning adapter of the same engine, on
+  // the same individual_checkout table and event log -- only while learning_commerce is on.
+  const learning = !individual && isLearningTxRef(txRef) && (await learningCommerceEnabled(admin));
+  const result = learning ? await applyLearningWebhook(admin, cfg, ev) : individual ? await applyIndividualWebhook(admin, cfg, ev) : await applyWebhook(admin, cfg, ev);
 
   // Logged, not returned in detail: the response goes to the gateway, and a verdict is internal.
   if (result.verdict !== "applied" && result.verdict !== "duplicate") {
-    console.error(`[${individual ? "individual" : "practice"}] flutterwave webhook ${result.verdict}: ${result.detail ?? ""}`);
+    console.error(`[${individual ? "individual" : learning ? "learning" : "practice"}] flutterwave webhook ${result.verdict}: ${result.detail ?? ""}`);
   }
   return NextResponse.json({ received: true, verdict: result.verdict }, { status: 200 });
 }

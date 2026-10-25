@@ -93,6 +93,11 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
         qualificationTypes: [...DEFAULT_QUALIFICATION_TYPES], registrationBodies: [], practiceSettings: [...DEFAULT_PRACTICE_SETTINGS],
         specialties: [], careerInterests: [], registrationFields: [...OPTIONAL_FIELDS], registrationRequired: [],
         sections: [...PROFILE_SECTIONS], documentKinds: [...DOCUMENT_KINDS], ai: "on",
+        // Part B: each verifiable kind on request, every reminder kind, one reminder at 60 days for active and
+        // provisional registrations, and every section shareable (each record still chosen by the person).
+        verificationKinds: ["qualification", "registration", "employment"],
+        reminderKinds: ["primary_registration", "credentials", "registration_items", "qualification_items"],
+        reminderOffsets: [60], reminderStandings: ["active", "provisional"], shareSections: [...PROFILE_SECTIONS],
       },
     });
     expect(DEFAULT_POLICY.professionalProfile.jurisdictions.length).toBe(COUNTRIES.length);

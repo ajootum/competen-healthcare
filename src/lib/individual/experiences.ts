@@ -176,9 +176,9 @@ export const PROFESSIONAL: ExperienceConfig = {
       reason: "You can record career aspirations in your Professional profile. Pathway planning and opportunities are not built yet.",
     },
     {
-      key: "verification", label: "Independent verification",
-      summary: "Have a registration or credential confirmed by someone with the authority to confirm it.",
-      reason: "No regulator lookup or verification service is connected. Everything you add is shown as recorded by you.",
+      key: "verification", label: "Automatic register checks",
+      summary: "Have a registration confirmed directly against a regulator's register, without waiting for a person.",
+      reason: "No regulator lookup is connected. You can already ask a Competen verifier to check a record in your Professional profile.",
     },
   ],
 };

@@ -36,7 +36,13 @@ export function parseShare(b: Record<string, unknown>, maxDays: number = SHARE_D
   return { scope, label, days };
 }
 
-export async function mintShare(admin: any, userId: string, input: ReturnType<typeof parseShare>): Promise<ShareLink | null> {
+/**
+ * COMPETEN-PROFESSIONAL-PROFILE-01 part B (migration 453): `profile` is what of the professional profile the
+ * person chose for THIS link -- the overview and/or record versions. Nothing by default. With nothing chosen
+ * the companion row is written exactly as before 453, so a link still works where 453 is not applied.
+ */
+export async function mintShare(admin: any, userId: string, input: ReturnType<typeof parseShare>,
+  profile: { overview: boolean; itemIds: readonly string[] } = { overview: false, itemIds: [] }): Promise<ShareLink | null> {
   const token = randomBytes(24).toString("hex");
   const { data: share, error } = await admin.from("passport_share_tokens").insert({
     token, nurse_id: userId, hospital_id: null, scope: input.scope, label: input.label,
@@ -44,9 +50,12 @@ export async function mintShare(admin: any, userId: string, input: ReturnType<ty
   }).select("id, token, scope, label, expires_at, revoked, view_count, created_at").single();
   if (error || !share) return null;
   const { error: linkErr } = await admin.from("individual_professional_share").insert({
-    share_token_id: share.id, user_id: userId, experience_code: ORIGIN,
+    share_token_id: share.id, user_id: userId, experience_code: ORIGIN, ...(profile.overview ? { profile_overview: true } : {}),
   });
-  if (linkErr) {
+  const { error: itemErr } = !linkErr && profile.itemIds.length
+    ? await admin.from("individual_professional_share_item").insert(profile.itemIds.map(item_id => ({ share_token_id: share.id, user_id: userId, item_id })))
+    : { error: null };
+  if (linkErr || itemErr) {
     // Without the companion row the link would show the institution sections only, which is not what the
     // person asked to share. Withdraw it rather than hand out a different link than the one requested.
     await admin.from("passport_share_tokens").update({ revoked: true }).eq("id", share.id).eq("nurse_id", userId);
