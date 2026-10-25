@@ -41,6 +41,7 @@ import { activityAt, defaultPolicy, resolvePolicy, serviceLevel } from "../src/l
 import { classifyRisk, resolveRiskPolicy } from "../src/lib/ai/clinical-risk";
 import { PROVISIONAL_ACTIVITIES, PROVISIONAL_RISK } from "./ai-provisional-policy";
 import { ATTRIBUTION } from "../src/lib/ai/consumption";
+import { withEligibility, type AiStanding } from "../src/lib/ai/allowance";
 
 const F = {
   mig410: "supabase/migrations/410-ai-usage-ledger-and-allowances.sql",
@@ -237,6 +238,23 @@ const checkOwnerFromServer = (src: Src, all: Src): R => {
   return { ok: student.length === 0 && fromBody.length === 0 && fromWorkflow, detail: `student routes running platform work: ${student.join(", ")}; request input into the owner: ${fromBody.join(", ")}; owner from the workflow ${fromWorkflow}` };
 };
 
+// A16: standing says what ai_reserve will do -- an activity above standard educational with no evaluated model is not
+// offered (IND-004's defect: questions and evaluate "available", then refused not_eligible on every call).
+function checkStandingEligibility(raw: Src, apply: typeof withEligibility): R {
+  const engine = raw.get(F.engine) ?? "";
+  const i = engine.indexOf("export async function getAiStanding"), body = i < 0 ? "" : engine.slice(i, engine.indexOf("\n}\n", i));
+  const bad: string[] = [];
+  if (!/withEligibility\(standingFrom\(policy, a\.account\)/.test(body) || !/loadEligibility\(admin, args\.product\)/.test(body)) bad.push("getAiStanding does not apply model eligibility on the metered path");
+  const policy = resolvePolicy("scholar", { includedCau: 10, risk: PROVISIONAL_RISK, activities: { teach: PROVISIONAL_ACTIVITIES.scholar.teach, questions: PROVISIONAL_ACTIVITIES.scholar.questions } }, "h");
+  const st: AiStanding = { readable: true, metered: true, level: "full", remaining: { band: "plenty", percent: 100 }, resetsAt: null, message: null,
+    activities: { teach: { label: "t", available: true, via: "included", reason: null }, questions: { label: "q", available: true, via: "included", reason: null } } };
+  const b = { includedCau: 10, reserveCau: 0, usedCau: 0, reservedCau: 0, reserveUsedCau: 0, reserveReservedCau: 0 };
+  const out = apply(st, policy, b, "anthropic", { cheap: "h", reasoning: "s", heavy: "o" }, []);
+  if (out.activities.questions.available) bad.push("a clinical activity with no eligible model is still offered");
+  if (!out.activities.teach.available) bad.push("a standard activity was closed");
+  return { ok: bad.length === 0, detail: bad.join("; ") };
+}
+
 const plant = (k: K, from: string, to: string): Src => {
   const s = RAW.get(F[k]) ?? ""; const n = s.replace(from, to);
   if (n === s) throw new Error(`plant did not apply in ${F[k]}: ${from.slice(0, 70)}`);
@@ -265,6 +283,7 @@ run("A12. activities are policy data: an undefined activity is refused before an
 run("A13. who pays follows the workflow: student work on the student, promotion and screening on the platform", checkAttribution(ATTRIBUTION));
 run("A14. (FI) the ledger enforces ownership: a person's account only for that person, a budget only while active, no unfunded institution", checkReserveOwnership(RAW));
 run("A15. the owner is decided on the server: student routes run no platform work, no request input reaches the owner", checkOwnerFromServer(RAW, ALL));
+run("A16. standing reflects model eligibility: no evaluated model, not offered", checkStandingEligibility(RAW, withEligibility));
 console.log("");
 if (HAS_MIG) {
   red("A1 (FI) concurrent overspend: the row lock removed", checkLock(plant("mig421", "  select * into a from ai_allowance_account where id = p_account for update;", "  select * into a from ai_allowance_account where id = p_account;"), ALL));
@@ -297,6 +316,8 @@ red("A8 an admin door that activates metering", checkAdminDoor(plant("adminRoute
 red("A11 an allowance hard-coded in the engine", checkNoFigures(plant("policy", "export const CAU_MAX = 1_000_000;", "export const CAU_MAX = 1_000_000;\nconst PILOT_INCLUDED = 4000;")));
 red("A11 a reserve default bound in the admin surface", checkNoFigures(plant("adminControls", `{field("Essential reserve (CAU), hard cap", p.reserveCau, v => setP({ ...p, reserveCau: v ?? 0 }))}`, `{field("Essential reserve (CAU), hard cap", p.reserveCau, v => setP({ ...p, reserveCau: v ?? 500 }))}`)));
 red("A11 a window cap in the engine", checkNoFigures(plant("engine", "export const AI_FAIR_USE_FLAG = \"ai_fair_use\";", "export const AI_FAIR_USE_FLAG = \"ai_fair_use\";\nconst WINDOW = 1000;")));
+red("A16 standing that skips eligibility", checkStandingEligibility(plant("engine", "return withEligibility(standingFrom(policy, a.account),", "return ((x: any) => x)(standingFrom(policy, a.account),"), withEligibility));
+red("A16 an eligibility check that offers everything", checkStandingEligibility(RAW, (st) => st));
 red("A13 promotion charged to the student", checkAttribution({ ...ATTRIBUTION, "case.promote": "individual" }));
 red("A13 a student's private case charged to the platform", checkAttribution({ ...ATTRIBUTION, "case.private_generate": "platform" }));
 red("A15 a student route running platform screening", checkOwnerFromServer(RAW, new Map([...ALL, ["src/app/api/individual/scholar/evil/route.ts", `await resolveOwner(admin, "case.candidate_screen", "scholar", { userId: ctx.userId })`]])));
