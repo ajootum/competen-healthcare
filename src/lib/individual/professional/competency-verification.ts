@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { CompetencyRef, EvidenceRef } from "./competency-store";
+import * as c5 from "@/lib/competency/verification";
+import { NOT_A_DECLARATION, STANDING_LABEL, STATE_LABEL, type RequestState } from "@/lib/competency/verification-config";
 
 // ── THE C5 BOUNDARY, READ SIDE ── COMPETEN-PROFESSIONAL-COMPETENCY-01 C5 (Verification Studio, COMPETEN-IND-007) ─────
 //
@@ -9,12 +11,16 @@ import type { CompetencyRef, EvidenceRef } from "./competency-store";
 // own exported functions. Until the Studio is present this adapter answers "not provisioned", and every page says
 // verification is not available yet, rather than showing an empty list that reads like "never verified".
 
+/** The kind of outcome, fixed by C5. The CODE is per-method configuration ("verified_at_level"), so no rule reads it. */
+export type OutcomeClass = "verified" | "partial" | "further_evidence" | "not_demonstrated" | "unable_to_determine";
+export type Standing = "current" | "expired" | "revoked" | "superseded" | "not_a_verification";
+
 export type VerificationDecision = {
-  outcomeCode: string; outcomeLabel: string; level: string | null; assessorName: string; authority: string; criteriaVersion: string | null;
+  outcomeCode: string; outcomeClass: OutcomeClass | null; standing?: Standing; outcomeLabel: string; level: string | null; assessorName: string; authority: string; criteriaVersion: string | null;
   decidedAt: string; validUntil: string | null; revokedAt: string | null; supersededBy: string | null;
 };
 export type VerificationSummary = {
-  requestId: string; status: string; competency: CompetencyRef; method: string | null; requestedAt: string; evidence: EvidenceRef[]; decisions: VerificationDecision[];
+  requestId: string; status: string; statusLabel?: string; competency: CompetencyRef; method: string | null; requestedAt: string; evidence: EvidenceRef[]; decisions: VerificationDecision[];
 };
 export type VerificationRead = { provisioned: false } | { provisioned: true; items: VerificationSummary[] | null };
 
@@ -23,12 +29,19 @@ type Studio = {
   requestVerification: (admin: any, userId: string, r: { competency: CompetencyRef; evidence: EvidenceRef[]; methodCode?: string; note?: string }) => Promise<{ ok: true; requestId: string } | { ok: false; status: number; error: string }>;
 };
 
-/** The Studio, once present. Registered by its own module (see registerVerificationStudio), never imported here. */
-let studio: Studio | null = null;
+/** The Studio (COMPETEN-IND-007), adapted at the foot of this file. Its own readiness check answers "not provisioned"
+ *  where 510/511 are absent. registerVerificationStudio replaces it in tests. */
+let studio: Studio | null = c5Studio();
 export function registerVerificationStudio(s: Studio) { studio = s; }
 
-/** A decision that counts now: not revoked, not superseded, not expired. */
-export const currentDecision = (d: VerificationDecision, today: string) => !d.revokedAt && !d.supersededBy && (!d.validUntil || d.validUntil >= today);
+/** A decision that stands now as a verification outcome (verified or partial): C5's own standing when it gives one, else
+ *  not revoked, superseded or expired. A decision without a class never stands. */
+export const currentDecision = (d: VerificationDecision, today: string) =>
+  (d.outcomeClass === "verified" || d.outcomeClass === "partial")
+  && (d.standing ? d.standing === "current" : !d.revokedAt && !d.supersededBy && (!d.validUntil || d.validUntil >= today));
+
+/** THE rule for "independently verified" (agreed with C5): current, of class verified, at a level. Never the outcome code. */
+export const verifiedNow = (d: VerificationDecision, today: string) => currentDecision(d, today) && d.outcomeClass === "verified" && !!d.level;
 
 export async function loadVerifications(admin: any, userId: string, frameworkCompetencyId?: string): Promise<VerificationRead> {
   if (!studio) return { provisioned: false };
@@ -38,4 +51,67 @@ export async function loadVerifications(admin: any, userId: string, frameworkCom
 export async function requestVerification(admin: any, userId: string, r: { competency: CompetencyRef; evidence: EvidenceRef[]; methodCode?: string; note?: string }) {
   if (!studio) return { ok: false as const, status: 409, error: "Independent verification is not available yet." };
   return studio.requestVerification(admin, userId, r);
+}
+
+// ── THE STUDIO, ADAPTED ── through src/lib/competency/verification.ts only (its labels from its pure config) ─────────
+//
+// Professional reads what C5 decided and hands it requests, further evidence and withdrawals. C5's database guards do
+// the rest: who may decide, independence, the method, expiry and revocation. A withdrawal or further evidence names a
+// request by (id, person) -- 510's composite keys -- so nobody can act on another person's request.
+
+const OUTCOME_CLASS_SET: readonly string[] = ["verified", "partial", "further_evidence", "not_demonstrated", "unable_to_determine"];
+
+/** What a decision's standing means, and the sentence C5 requires beside every outcome. */
+export const DECISION_STANDING_LABEL: Record<Standing, string> = STANDING_LABEL;
+export const ONE_ASSESSMENT = NOT_A_DECLARATION;
+
+const toRef = (e: EvidenceRef) => ({ kind: e.kind, sourceId: e.sourceId, linkId: e.linkId || undefined, learningOutcome: e.learningOutcome });
+
+function toSummary(i: c5.VerificationItem): VerificationSummary {
+  return {
+    requestId: i.requestId, status: i.status, statusLabel: STATE_LABEL[i.status as RequestState] ?? i.status,
+    competency: { frameworkId: i.competency.frameworkId ?? "", frameworkCompetencyId: i.competency.frameworkCompetencyId, frameworkVersion: i.competency.frameworkVersion,
+      title: i.competency.title, learningOutcomes: i.competency.learningOutcomes },
+    method: i.method.name, requestedAt: i.requestedAt,
+    // C5 keeps its own snapshot of each piece and returns the portfolio link, not the source record's id.
+    evidence: i.evidence.map(e => ({ linkId: e.linkId ?? "", kind: e.kind, sourceId: "", title: e.title, evidenceClass: e.evidenceClass ?? "", issuer: e.issuer,
+      occurredOn: e.occurredOn, learningOutcome: e.learningOutcomes[0] ?? null, relation: "", frameworkVersion: null })),
+    decisions: i.decisions.map(d => ({
+      outcomeCode: d.outcomeCode, outcomeClass: OUTCOME_CLASS_SET.includes(d.outcomeClass ?? "") ? d.outcomeClass as OutcomeClass : null, standing: d.standing,
+      outcomeLabel: d.outcomeLabel, level: d.level?.label ?? null, assessorName: d.assessorName ?? "An appointed assessor", authority: d.authority,
+      criteriaVersion: d.criteriaVersion.versionNo === null ? null : `version ${d.criteriaVersion.versionNo}`,
+      decidedAt: d.decidedAt, validUntil: d.validUntil, revokedAt: d.revokedAt, supersededBy: d.supersededBy,
+    })),
+  };
+}
+
+function c5Studio(): Studio {
+  return {
+    async listVerifications(admin, userId, f) {
+      const r = await c5.listVerifications(admin, userId, { frameworkCompetencyId: f.frameworkCompetencyId });
+      if (r === null) return { provisioned: true, items: null };
+      return r.provisioned ? { provisioned: true, items: r.items.map(toSummary) } : { provisioned: false };
+    },
+    requestVerification: (admin, userId, r) => c5.requestVerification(admin, userId, { competency: r.competency, methodCode: r.methodCode, note: r.note, evidence: r.evidence.map(toRef) }),
+  };
+}
+
+/** The methods C5 offers for one catalogue competency: name and kind only. A person chooses one when there are several. */
+export async function verificationMethods(admin: any, frameworkCompetencyId: string): Promise<{ provisioned: false } | { provisioned: true; methods: { code: string; name: string }[] } | null> {
+  try {
+    const r = await c5.verificationMethodsFor(admin, frameworkCompetencyId);
+    if (r === null || !r.provisioned) return r;
+    return { provisioned: true, methods: r.methods.map(m => ({ code: m.code, name: m.name })) };
+  } catch { return null; }
+}
+
+/** Further evidence on the person's own open request, or where the assessor asked for more. Never a reflection unticked. */
+export async function addVerificationEvidence(admin: any, userId: string, requestId: string, evidence: EvidenceRef[]) {
+  return c5.addRequestEvidence(admin, userId, requestId, evidence.map(toRef));
+}
+
+/** The person withdraws their own request. C5 records it as an event; nothing is deleted. */
+export async function withdrawVerification(admin: any, userId: string, requestId: string, reason?: string) {
+  if (!(await c5.verificationReady(admin))) return c5.NOT_PROVISIONED;
+  return c5.withdrawRequest(admin, userId, requestId, reason);
 }

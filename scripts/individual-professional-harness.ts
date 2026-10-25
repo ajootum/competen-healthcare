@@ -254,8 +254,12 @@ const checkVerifyPage = (src: Sources) => {
 // which derives it from 451 history rows whose actor the database proved is an appointed, independent verifier.
 // professional-profile-harness.ts pins that derivation. Every other Professional file still may not.
 const VERIFIED_STATE_FILES = new Set(["src/lib/individual/professional/profile-verification.ts"]);
+// The C5 read boundary names C5's outcome CLASS ("verified") to read it -- PASSPORT-01, agreed with IND-007 -- and may
+// do so only while it touches no table at all: it reads the Studio's own exported functions, so it can never set one.
+const C5_ADAPTER = "src/lib/individual/professional/competency-verification.ts";
 const checkNoVerifiedClassInProfessional = (src: Sources) => {
-  const bad = [...src].filter(([f, s]) => isProfessional(f) && !VERIFIED_STATE_FILES.has(f) && /institution_verified|independently_verified|verified:\s*true|"verified"/.test(s)).map(([f]) => f);
+  const exempt = (f: string, s: string) => VERIFIED_STATE_FILES.has(f) || (f === C5_ADAPTER && !/\.from\(|\.rpc\(/.test(s));
+  const bad = [...src].filter(([f, s]) => isProfessional(f) && !exempt(f, s) && /institution_verified|independently_verified|verified:\s*true|"verified"/.test(s)).map(([f]) => f);
   return { ok: bad.length === 0, detail: bad.join(", ") };
 };
 
@@ -586,6 +590,7 @@ function main() {
   red("T1 on a profession restricted to the list", checkFreeTextSuggestions(new Map([...ALL].map(([f, s]) => [f, f === regFile ? s.replace(`<input id="pr-prof" name="profession"`, `<input id="pr-prof" pattern="(Nursing|Medicine)" name="profession"`) : s]))));
   red("T1 on a suggestion reader that writes", checkFreeTextSuggestions(plant("src/lib/individual/professional/suggestions.ts", `admin.from("taxonomy_terms").insert({})`)));
   red("E6 on a verified flag", checkNoVerifiedClassInProfessional(plant("src/app/api/individual/professional/evidence/route.ts", `const row = { verified: true };`)));
+  red("E6 on a C5 adapter that writes", checkNoVerifiedClassInProfessional(plant(C5_ADAPTER, `await admin.from("verification_decision").insert({ outcome_class: "verified" });`)));
   const fwFile = "src/lib/individual/professional/frameworks.ts";
   red("F1 when the list offers drafts", checkPublishedFrameworks(new Map([...ALL].map(([f, s]) => [f, f === fwFile ? s.replace(`.eq("is_active", true).eq("pub_status", PUBLISHED).in("id", allowed).order(`, `.eq("is_active", true).in("id", allowed).order(`) : s]))));
   red("F2 when the list ignores the allowlist", checkAllowlist(new Map([...ALL].map(([f, s]) => [f, f === fwFile ? s.replace("if (!allowed.length) return [];", "") : s]))));

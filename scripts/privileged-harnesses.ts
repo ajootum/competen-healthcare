@@ -324,6 +324,12 @@ const STAGING: Listed[] = [
       + "catalogue, no AI. Own harness-prof02-* identity, deleted after; two policy rows restored exactly. PEND until 470 is applied.",
   },
   {
+    file: "professional-c5-wiring-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-COMPETENCY-01, the person side of the C5 Studio (#128), over HTTP with BASE_URL: methods offered, "
+      + "a request with the chosen method and linked evidence, further evidence never resent, another person's request refused, "
+      + "withdrawal recorded, a revoked verified decision never current. Own harness-prof05-c5wire identity, deleted after with its requests.",
+  },
+  {
     file: "professional-competency-acceptance-harness.ts",
     note: "COMPETEN-PROFESSIONAL-COMPETENCY-01 Stage 5 (520), owner GO s15 items 1-16: My Competencies, a published competency explored with its "
       + "outcomes and expected proficiency, a self-assessment (self-reported) with confidence and a private reflection, CPD and an observation "

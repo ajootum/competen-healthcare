@@ -5,7 +5,7 @@ import { findLearningHref } from "@/lib/individual/professional/learning";
 import { reassessDue, suggestEvidence, type ScaleLevel } from "@/lib/individual/professional/competency-form";
 import { ASPECT_TEXT, PORTFOLIO_KIND_LABEL, SELF_REPORTED, SHAREABLE_KINDS } from "@/lib/individual/professional/competency-vocabulary";
 import { linkKind, linkSourceId, type CompetencyEntry, type EntryHistoryRow, type EvidenceLink, type PortfolioItem, type SelfAssessment } from "@/lib/individual/professional/competency-store";
-import { currentDecision, type VerificationRead } from "@/lib/individual/professional/competency-verification";
+import { DECISION_STANDING_LABEL, ONE_ASSESSMENT, currentDecision, type VerificationRead } from "@/lib/individual/professional/competency-verification";
 import { Empty, fmtDate } from "./bits";
 import { AddPanel, ApiButton, ApiForm, Field, inputCls } from "./forms";
 import CompetencyAssist from "./CompetencyAssist";
@@ -156,6 +156,8 @@ export function EntryDetail(p: {
   e: CompetencyEntry; c: CatalogueCompetency | null; policy: ProfessionalCompetencyPolicy; accent: string; today: string;
   levels: ScaleLevel[] | null; assessments: SelfAssessment[]; links: EvidenceLink[]; history: EntryHistoryRow[];
   portfolio: PortfolioItem[]; verifications: VerificationRead;
+  /** The methods C5 offers for this competency; null when they could not be read. */
+  methods?: { code: string; name: string }[] | null;
 }) {
   const { e, c, policy, accent } = p;
   const outcomes = c?.outcomes ?? [];
@@ -323,16 +325,37 @@ export function EntryDetail(p: {
               {decisions.length === 0 ? <p className="text-[13px] text-gray-700">Nothing recorded by an assessor.</p> : (
                 <ul className="mt-1 space-y-1 text-[13px] text-gray-800">
                   {decisions.map(v => (
-                    <li key={v.requestId}>Request of {fmtDate(v.requestedAt)} · {v.status}{v.method ? ` · ${v.method}` : ""}
-                      {v.decisions.map((d, i) => <p key={i} className={currentDecision(d, p.today) ? "font-semibold text-violet-900" : "text-gray-500 line-through"}>{d.outcomeLabel}{d.level ? ` at ${d.level}` : ""} · {d.assessorName} ({d.authority}){d.criteriaVersion ? ` · criteria ${d.criteriaVersion}` : ""} · {fmtDate(d.decidedAt)}{d.validUntil ? ` · valid until ${fmtDate(d.validUntil)}` : ""}</p>)}
+                    <li key={v.requestId}>Request of {fmtDate(v.requestedAt)} · {v.statusLabel ?? v.status}{v.method ? ` · ${v.method}` : ""}
+                      {v.decisions.map((d, i) => <p key={i} className={currentDecision(d, p.today) ? "font-semibold text-violet-900" : "text-gray-600"}>{d.outcomeLabel}{d.level ? ` at ${d.level}` : ""} · {d.assessorName} ({d.authority}){d.criteriaVersion ? ` · criteria ${d.criteriaVersion}` : ""} · {fmtDate(d.decidedAt)}{d.validUntil ? ` · valid until ${fmtDate(d.validUntil)}` : ""}{d.standing ? ` · ${DECISION_STANDING_LABEL[d.standing]}` : ""}</p>)}
+                      {!e.removed_at && ["open", "assigned", "awaiting_evidence"].includes(v.status) && (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {open.some(l => SHAREABLE_KINDS.includes(linkKind(l)) && !v.evidence.some(x => x.linkId === l.id)) && (
+                            <ApiButton action="/api/individual/professional/competency-verification" method="PATCH" body={{ requestId: v.requestId, action: "add_evidence", entryId: e.id }} label="Send newly linked evidence" />
+                          )}
+                          <ApiButton action="/api/individual/professional/competency-verification" method="PATCH" body={{ requestId: v.requestId, action: "withdraw" }} label="Withdraw this request" confirm="Withdraw this request? The assessor stops, and nothing is decided. You can ask again later." />
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
               )}
-              {!e.removed_at && (
+              {decisions.some(v => v.decisions.length > 0) && <p className="mt-1 text-[12px] text-gray-600">{ONE_ASSESSMENT}</p>}
+              {!e.removed_at && p.methods !== undefined && (p.methods === null || p.methods.length === 0) && (
+                <p className="mt-2 text-[13px] text-gray-700">{p.methods === null ? "The assessment methods could not be read just now." : "No assessment method is offered for this competency yet."}</p>
+              )}
+              {!e.removed_at && (p.methods === undefined || (p.methods?.length ?? 0) > 0) && (
                 <div className="mt-2">
                   <ApiForm action="/api/individual/professional/competency-verification" submitLabel="Request independent verification" accent={accent} savedText="Requested. An appointed assessor will review it.">
                     <input type="hidden" name="entryId" value={e.id} />
+                    {p.methods && p.methods.length > 1 && (
+                      <Field label="How it is to be assessed" htmlFor={`ver-m-${e.id}`}>
+                        <select id={`ver-m-${e.id}`} name="method" required defaultValue="" className={inputCls}>
+                          <option value="" disabled>Choose a method</option>
+                          {p.methods.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
+                        </select>
+                      </Field>
+                    )}
+                    {p.methods && p.methods.length === 1 && <p className="text-[12.5px] text-gray-600">Method: {p.methods[0].name}</p>}
                     <p className="text-[12.5px] text-gray-600">Sends this competency and the evidence linked to it ({open.filter(l => SHAREABLE_KINDS.includes(linkKind(l))).length} {open.length === 1 ? "record" : "records"}) to the Verification Studio. Your private reflections stay private unless you tick one below.</p>
                     {open.filter(l => linkKind(l) === "reflection").map(l => (
                       <label key={l.id} className="flex items-start gap-2 text-[12.5px] text-gray-700">

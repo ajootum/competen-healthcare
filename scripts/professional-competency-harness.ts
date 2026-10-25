@@ -8,7 +8,8 @@
  *   F  the four never merge: a self-assessment never reads evidence; the page shows expected, self-assessed, evidence and
  *      verified as four separate panels; "self-reported" travels with every self-assessment.
  *   V  the C5 boundary: no Stage 5 file writes a verification, assessor or decision table; what C5 is handed never
- *      carries a reflection or a personal entry.
+ *      carries a reflection or a personal entry. V2: C5 is reached only through the adapter, the adapter uses only the
+ *      Studio's person-side functions (read, request, further evidence, withdraw), and further evidence is never resent.
  *   P  privacy: reflections are never shareable, never on a Passport link, never sent to AI or for verification.
  *   A  AI: policy-gated through the one Professional helper; saves nothing; a link from AI exists only after the person's
  *      click and records its model and prompt.
@@ -111,6 +112,22 @@ const checkFourPanels = (src: Sources): R => {
 };
 
 // ── V ──
+// V2 -- the wiring to the Studio (#128). Its person-side functions only: never an assessor's, a decision's or a scope's.
+const C5_PERSON_SIDE = new Set(["listVerifications", "requestVerification", "verificationMethodsFor", "addRequestEvidence", "withdrawRequest", "verificationReady", "NOT_PROVISIONED", "VerificationItem"]);
+const checkC5Wiring = (src: Sources): R => {
+  const adapter = src.get(VERIF) ?? "";
+  const used = [...adapter.matchAll(/\bc5\.(\w+)/g)].map(m => m[1]);
+  const personSide = used.length > 0 && used.every(u => C5_PERSON_SIDE.has(u));
+  const viaAdapter = /import \* as c5 from "@\/lib\/competency\/verification";/.test(adapter)
+    && /import \{ NOT_A_DECLARATION, STANDING_LABEL, STATE_LABEL, type RequestState \} from "@\/lib\/competency\/verification-config";/.test(adapter)
+    && STAGE5_FILES.filter(f => f !== VERIF).every(f => !/@\/lib\/competency\/|\.\.\/competency\//.test(src.get(f) ?? ""));
+  const route = src.get(R_VER) ?? "";
+  const noResend = /const fresh = h\.handed\.evidence\.filter\(e => !request\.evidence\.some\(x => x\.linkId === e\.linkId\)\);/.test(route)
+    && /addVerificationEvidence\(ctx\.admin, ctx\.userId, fields\.requestId, fresh\)/.test(route);
+  const ownOnly = /const request = read\.items\.find\(i => i\.requestId === fields\.requestId\);\n\s*if \(!request\) return refuse/.test(route);
+  return { ok: personSide && viaAdapter && noResend && ownOnly, detail: `person-side only ${personSide} (${[...new Set(used)].join(",")}), C5 only via the adapter ${viaAdapter}, further evidence never resent ${noResend}, only the person's own request ${ownOnly}` };
+};
+
 const checkC5Boundary = (src: Sources): R => {
   const writes = STAGE5_FILES.concat(LIB + "share.ts").flatMap(f => [...(src.get(f) ?? "").matchAll(/from\(\s*"([a-z_]+)"\s*\)\s*\.(insert|update|upsert|delete)\(/g)].map(m => `${f}: ${m[1]}`))
     .filter(w => /verif|assess(or|ment)_|decision|appointment|request/.test(w.split(": ")[1]));
@@ -187,6 +204,7 @@ function main() {
   run("F1. a self-assessment is never judged by its evidence: neither the parser nor the route reads evidence", checkSelfNeverJudged(ALL, parseSelfAssessment));
   run("F2. expected, self-assessed, evidence and verified are four separate panels; self-reported travels with every self-assessment", checkFourPanels(ALL));
   run("V1. no Stage 5 file writes a verification, assessor or decision; C5 is handed catalogue entries, and a reflection only when the person ticked it", checkC5Boundary(ALL));
+  run("V2. C5 is reached only through the adapter, with the Studio's person-side functions, and further evidence is never resent", checkC5Wiring(ALL));
   run("P1. reflections are never on a Passport link and never sent to AI", checkPrivacy(ALL));
   run("A1. AI is gated through the one Professional helper, saves nothing, and a link from it needs the person's click and keeps its provenance", checkAi(ALL));
   run("L1. only offered competencies; content not clinically approved is labelled wherever it is shown", checkCatalogues(ALL, parseEntry));
@@ -208,6 +226,10 @@ function main() {
   red("F2 on a merged panel", checkFourPanels(plant(WORKSPACE, "ASPECT_TEXT.verified", "ASPECT_TEXT.evidence")));
   red("V1 on Professional writing a decision", checkC5Boundary(add(STORE, `admin.from("competency_verification_decision").insert({})`)));
   red("V1 on a reflection handed to C5 without being ticked", checkC5Boundary(plant(STORE, " && !(kind === \"reflection\" && explicitReflectionLinkIds.includes(l.id))", " && kind !== \"reflection\"")));
+  red("V2 on the adapter recording a decision", checkC5Wiring(add(VERIF, "export const x = (admin: any) => c5.recordDecision(admin, \"a\", \"b\", {});")));
+  red("V2 on the route reaching C5 directly", checkC5Wiring(add(R_VER, "import { withdrawRequest } from \"@/lib/competency/verification\";")));
+  red("V2 on further evidence resent whole", checkC5Wiring(plant(R_VER, "addVerificationEvidence(ctx.admin, ctx.userId, fields.requestId, fresh)", "addVerificationEvidence(ctx.admin, ctx.userId, fields.requestId, h.handed.evidence)")));
+  red("V2 on evidence added to a request not checked as the person's", checkC5Wiring(plant(R_VER, "if (!request) return refuse", "if (false) return refuse")));
   red("V1 on reflections handed by default", checkC5Boundary(plant(STORE, "explicitReflectionLinkIds: readonly string[] = []", "explicitReflectionLinkIds: readonly string[] = [\"all\"]")));
   red("P1 on a shared self-assessment carrying its reflection", checkPrivacy(plant(SHARE, `.select("my_competency_id, learning_outcome, scale_label, level_label, assessed_at")`, `.select("my_competency_id, learning_outcome, scale_label, level_label, reflection, assessed_at")`)));
   red("P1 on AI seeing every record", checkPrivacy(plant(R_AI, ".items.filter(i => i.shareable)", ".items")));
