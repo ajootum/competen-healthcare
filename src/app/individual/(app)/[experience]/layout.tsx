@@ -11,6 +11,7 @@ import { publishedVersions } from "@/lib/individual/legal";
 import { experienceOfPath, forQuery, isIndividualNext, signInHref } from "@/lib/individual/entry";
 import { headers } from "next/headers";
 import { JOIN_START, selfRegistrationEnabled } from "@/lib/individual/join";
+import { learningEnabled } from "@/lib/learning/policy";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -141,6 +142,8 @@ export default async function ExperienceLayout({ children, params }: {
   }
 
   const initials = (profile.fullName ?? profile.email ?? "?").split(/\s+/).map(s => s.charAt(0)).join("").slice(0, 2).toUpperCase();
+  // COMPETEN-LEARNING-01: one link to the member-only Learning area, only while learning_app is on (ADR-017).
+  const learning = await learningEnabled(shell.ctx.admin);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -150,6 +153,7 @@ export default async function ExperienceLayout({ children, params }: {
             <ExperienceMark wordmark={x.wordmark} accent={x.accent} size="sm" />
           </Link>
           <div className="ml-auto md:ml-6"><ExperienceSwitcher current={experience} live={live} /></div>
+          {learning && <Link href="/individual/learning" className={`inline-flex min-h-[36px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center rounded-lg px-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 ${focusRing}`}>Learning</Link>}
           <div className="hidden md:flex md:ml-auto items-center gap-3">
             <Link href={experienceHref(experience, "settings")} className={`flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-gray-50 ${focusRing}`}>
               <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-bold text-white" style={{ background: x.accent }}>{initials}</span>
@@ -166,7 +170,7 @@ export default async function ExperienceLayout({ children, params }: {
 
       <div className="flex">
         <aside className="hidden md:flex sticky top-14 h-[calc(100vh-3.5rem)] w-60 shrink-0 flex-col border-r border-gray-200 bg-white">
-          <SidebarNav experience={experience} />
+          <SidebarNav experience={experience} learning={learning} />
           <div className="mt-auto border-t border-gray-100 px-4 py-3">
             <p className="text-[11.5px] font-semibold text-gray-800">Competen Individual</p>
             <p className="text-[11px] leading-snug text-gray-500">One account, one Passport, across {live.length > 1 ? "both your experiences" : "every experience you add"}.</p>

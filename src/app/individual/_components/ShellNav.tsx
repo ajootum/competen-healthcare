@@ -18,7 +18,13 @@ function isActive(pathname: string, href: string, isHome: boolean) {
   return isHome ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function SidebarNav({ experience }: { experience: ExperienceKey }) {
+/**
+ * `learning`: COMPETEN-LEARNING-01 (ADR-017). Competen Learning belongs to the Individual identity, not to an
+ * experience, so it is one absolute link after the registry's items -- shown only while learning_app is on -- and
+ * never an experience module. The bottom bar is not touched (CPR-MOB-001, at most five tabs): on small screens the
+ * shell header carries the same link.
+ */
+export function SidebarNav({ experience, learning = false }: { experience: ExperienceKey; learning?: boolean }) {
   const pathname = usePathname() ?? "";
   const x = EXPERIENCES[experience];
   return (
@@ -35,6 +41,12 @@ export function SidebarNav({ experience }: { experience: ExperienceKey }) {
           </Link>
         );
       })}
+      {learning && (
+        <Link href="/individual/learning" className={`mt-2 flex items-center gap-3 rounded-lg border-t border-gray-100 px-3 py-2 pt-3 text-[14px] font-medium text-gray-700 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+          <span aria-hidden className="w-5 text-center text-[15px]">▤</span>
+          Competen Learning
+        </Link>
+      )}
     </nav>
   );
 }
