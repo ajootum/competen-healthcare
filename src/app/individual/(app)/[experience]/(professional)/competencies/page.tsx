@@ -7,7 +7,7 @@ import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadCatalogueFor } from "@/lib/individual/catalogue";
 import { learningEnabled } from "@/lib/learning/policy";
 import { loadCompetencyWorkspace, loadPortfolio, loadScaleLevels } from "@/lib/individual/professional/competency-store";
-import { loadVerifications } from "@/lib/individual/professional/competency-verification";
+import { loadVerifications, verificationMethods } from "@/lib/individual/professional/competency-verification";
 import { DEFAULT_COMPETENCY_CATEGORIES } from "@/lib/individual/professional/competency-vocabulary";
 import { AddEntry, EntryDetail, EntryRow, ExploreDetail, ExploreList, Portfolio } from "../../../../_components/professional/competency-workspace";
 
@@ -44,10 +44,13 @@ export default async function CompetenciesPage({ params, searchParams }: { param
   const open = entries.find(e => e.id === one(sp.c)) ?? null;
   const exploring = !open && one(sp.explore) ? catalogueOf(one(sp.explore)!) : null;
   const openCat = open ? catalogueOf(open.framework_competency_id) : null;
-  const [levels, verifications] = open ? await Promise.all([
+  const [levels, verifications, offeredMethods] = open ? await Promise.all([
     loadScaleLevels(ctx.admin, openCat?.expectedLevel?.id ?? null),
     open.kind === "catalogue" ? loadVerifications(ctx.admin, ctx.userId, open.framework_competency_id ?? undefined) : Promise.resolve({ provisioned: false } as const),
-  ]) : [null, { provisioned: false } as const];
+    open.kind === "catalogue" && open.framework_competency_id ? verificationMethods(ctx.admin, open.framework_competency_id) : Promise.resolve({ provisioned: false } as const),
+  ]) : [null, { provisioned: false } as const, null];
+  // The methods C5 offers: undefined while verification is not provisioned (the panel says so), null when unreadable.
+  const methods = offeredMethods === null ? null : offeredMethods.provisioned ? offeredMethods.methods : undefined;
   const groups = [...new Set(current.map(e => e.category_label ?? "Not grouped"))]
     .sort((a, b) => [...cp.categories, ...DEFAULT_COMPETENCY_CATEGORIES].findIndex(c => c.label === a) - [...cp.categories, ...DEFAULT_COMPETENCY_CATEGORIES].findIndex(c => c.label === b));
 
@@ -60,7 +63,7 @@ export default async function CompetenciesPage({ params, searchParams }: { param
       {ws.provisioned && open && (
         <EntryDetail e={open} c={openCat} policy={cp} accent={x.accent} today={today} levels={levels}
           assessments={(ws.assessments ?? []).filter(a => a.my_competency_id === open.id)} links={(ws.links ?? []).filter(l => l.my_competency_id === open.id)}
-          history={(ws.history ?? []).filter(h => h.my_competency_id === open.id)} portfolio={portfolio.items} verifications={verifications} />
+          history={(ws.history ?? []).filter(h => h.my_competency_id === open.id)} portfolio={portfolio.items} verifications={verifications} methods={methods} />
       )}
       {ws.provisioned && exploring && <ExploreDetail c={exploring} accent={x.accent} learningOn={learningOn} />}
 

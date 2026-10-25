@@ -331,6 +331,12 @@ const STAGING: Listed[] = [
       + "a Passport link carrying chosen parts, nothing private shared. Own harness-prof05-* identity, deleted after; three policy rows restored exactly. PEND until 520 is applied.",
   },
   {
+    file: "professional-c5-wiring-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-COMPETENCY-01, the person side of the C5 Studio (#128), over HTTP with BASE_URL: methods offered, "
+      + "a request with the chosen method and linked evidence, further evidence never resent, another person's request refused, "
+      + "withdrawal recorded, a revoked verified decision never current. Own harness-prof05-c5wire identity, deleted after with its requests.",
+  },
+  {
     file: "professional-plan-acceptance-harness.ts",
     note: "COMPETEN-PROFESSIONAL-PLAN-01 Stage 3 (480), owner GO s15, the ECG Interpretation goal: created from a need and directly, "
       + "saved with only a description, CFCA outcomes with version, catalogue and external learning added with no enrolment, study and "

@@ -117,6 +117,45 @@ Proficiency scales are the CFCA scales themselves. Verification methods, rubrics
 
 ## 7. Bounded follow-ups
 
-- **C5 wiring.** The Studio must call `registerVerificationStudio` with its `requestVerification` and `listVerifications`. Until it does, the verification panel and the assessed outcomes on a link read "not available yet". Items 17–22 and the integrated journey run with IND-007.
+- **C5 wiring.** Done, see section 8.
 - **393 versus 520.** Competency-level links (393) on goals, CPD and evidence remain. The Progress page still counts them. Folding them into outcome-level links would be a separate decision.
 - **Study evidence.** Study evidence exists only for achievements the student put on their Passport. Other Scholar records need a governed consent read and are not built.
+
+## 8. C5 wiring (after the Studio, #128)
+
+**Branch:** `prof/c5-adapter-wiring`, cut from `origin/main` 20ace7a1. No migration.
+
+**What changed:**
+- **The adapter** (`competency-verification.ts`) now reaches the Studio through `src/lib/competency/verification.ts`. It takes its labels from the Studio's pure config. It uses the person-side functions only: list, request, methods, further evidence and withdraw.
+- **Decisions** carry `outcomeClass` and `standing`. "Independently verified" is `verifiedNow`: current, of class verified, at a level. The per-method outcome code is never read.
+- **A request** carries the method the person chose from those C5 offers, or the only one when one is offered. Before this, the Studio refused every request, because none named a method.
+- **Further evidence** sends only the links the request does not already hold. C5 adds whatever it is handed. It is accepted only on the person's own request.
+- **Withdrawal** is recorded by C5 as an event. Nothing is deleted.
+- **The competency page** shows:
+  - the method choice;
+  - the request state;
+  - each decision's standing;
+  - the one-assessment sentence;
+  - Withdraw, and "Send newly linked evidence".
+
+**Verification:**
+
+| Check | Result |
+|---|---|
+| `professional-competency-harness` | V2 added, with 4 planted reds |
+| `individual-professional-harness` | E6 admits the adapter only while it touches no table, with a plant |
+| vitest | the mapping is pinned; a plant turned it red |
+| **Staging journey** (`professional-c5-wiring-acceptance-harness`, over HTTP) | **8 / 8** |
+
+The staging journey checks:
+- methods offered;
+- the request, read back;
+- the page;
+- further evidence sent once;
+- another person's request refused;
+- withdrawal;
+- a revoked verified decision never current.
+
+A planted resend turned W3 red. The synthetic identity was deleted with its requests.
+
+Items 17–22 themselves were accepted by IND-007 (`c5-staging-acceptance-record.md`). A new assessor decision needs fresh owner appointments and is not repeated here.
