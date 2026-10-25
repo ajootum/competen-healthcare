@@ -399,6 +399,26 @@ const privateCaseChecked = (src: Src) => {
  * answer is answered on resume. Immediate feedback is unchanged: the self-grade comes at once.
  */
 /**
+ * K41 (PROGRESS-01, Progress, Stage 8 of 8): PROGRESS IS EVIDENCE, OVER TIME, AND NEVER COMPETENCE.
+ *  - No AI anywhere in Progress (history, next steps, data, the workspace, the explore page, the Passport tier).
+ *  - Knowledge over time counts only FIRST answers to questions new in a period; answering again is exposure.
+ *  - Engagement is labelled activity, not understanding; coverage is labelled not what you know.
+ *  - An evaluation in the Passport is labelled educational and not verified, and shows no percentage.
+ *  - A share link shows chosen evaluations only on a link that carries the person's own records.
+ */
+const PROGRESS_FILES = [`${LIB}/progress-history.ts`, `${LIB}/progress-next.ts`, `${LIB}/progress-data.ts`, `${LIB}/passport-evaluations.ts`, `${PAGES}/_components/progress-view.tsx`, `${PAGES}/progress/explore/page.tsx`];
+const progressHonest = (src: Src, outside: Src) => {
+  const hist = src.get(`${LIB}/progress-history.ts`) ?? "", view = src.get(`${PAGES}/_components/progress-view.tsx`) ?? "", pe = src.get(`${LIB}/passport-evaluations.ts`) ?? "";
+  const verify = outside.get(VERIFY) ?? "", passport = outside.get("src/lib/individual/passport.ts") ?? "";
+  const derive = pe.slice(pe.indexOf("export function passportEvaluationOf"));
+  return PROGRESS_FILES.every(f => (src.get(f) ?? "").length > 200 && !/scholarAiRunner|scholarOwnedRunner|runMeteredAi|runOwnedAi|generate\(|@\/lib\/ai\//.test(src.get(f) ?? ""))
+    && /const fresh = inP\.filter\(a => firstSeen\.get\(a\.questionId\) === a\.answeredAt\);/.test(hist) && /knowledge: figure\(fresh\.length, fresh\.filter\(a => a\.correct\)\.length/.test(hist)
+    && /Activity, not understanding\./.test(view) && /Not what you know\./.test(view)
+    && /educational_evaluation: "Educational evaluation of own learning: formative, not verified"/.test(passport)
+    && derive.length > 200 && !/percent/.test(derive)
+    && /const evaluations = carriesOwn \? await loadPassportEvaluations\(admin, share\.nurse_id\) : null;/.test(verify);
+};
+/**
  * K39 (EVALUATION-01, Stage 6): AN EVALUATION INTERPRETS MARKED EVIDENCE, AND IS NEVER COMPETENCE.
  *  - The interpretation is deterministic: no AI runner, generator or gateway in the evaluation engine, its data
  *    layer or its routes (written answers keep the marking they were given when answered).
@@ -1042,6 +1062,8 @@ function main() {
     privateCaseChecked(REAL));
   ok("K36. CLINICAL-REASONING-01: a choice is marked by its key; a written decision is labelled AI evaluation only when AI feedback was given, otherwise the student's own review",
     caseFeedbackHonest(REAL));
+  ok("K41. PROGRESS-01: Progress uses no AI, counts only new evidence as knowledge over time, never presents engagement or coverage as understanding, and shows evaluations in the Passport as educational, never verified, only when chosen",
+    progressHonest(REAL, OUTSIDE));
   ok("K39. EVALUATION-01: an evaluation interprets only marked evidence, deterministically, keeps AI and self-graded answers apart, is kept as made, and is never verified competence",
     evaluationHonest(REAL));
   ok("K42. Stage 7 closure: with no published value, AI marking of short answers is off (\"self\"); code marking comes first, and AI is called only on an explicit \"ai_then_self\"",
@@ -1186,6 +1208,12 @@ function main() {
     && !privateCaseChecked(plant(`${LIB}/clinical.ts`, "facts, stages: used, decisionPoints, progression: [],", "facts, stages: used, decisionPoints, progression: list((draft as any).progression),")));
   ok("P54. ⚠ K36 goes red when a written answer without AI feedback is recorded as AI evaluation",
     !caseFeedbackHonest(plant(PLAY, "else { mark = { correct: null, score: null }; marking = \"self_graded\"; }", "else { mark = { correct: false, score: 0 }; marking = \"ai_evaluation\"; }")));
+  ok("P59. ⚠ K41 goes red when Progress calls AI, counts repeats as knowledge, drops the engagement label, shows a Passport percentage, or a share link reads evaluations unconditionally",
+    !progressHonest(plant(`${LIB}/progress-data.ts`, "import type { IndividualPolicy } from \"../policy\";", "import type { IndividualPolicy } from \"../policy\";\nimport { runMeteredAi } from \"@/lib/ai/allowance\";"), OUTSIDE)
+    && !progressHonest(plant(`${LIB}/progress-history.ts`, "knowledge: figure(fresh.length, fresh.filter(a => a.correct).length", "knowledge: figure(inP.length, inP.filter(a => a.correct).length"), OUTSIDE)
+    && !progressHonest(plant(`${PAGES}/_components/progress-view.tsx`, "Activity, not understanding.", "Your activity."), OUTSIDE)
+    && !progressHonest(plant(`${LIB}/passport-evaluations.ts`, "limitations: (k.limitations ?? []).length, includedAt: choice.includedAt,", "limitations: (k.limitations ?? []).length, includedAt: choice.includedAt, percent: r.knowledge?.percent,"), OUTSIDE)
+    && !progressHonest(REAL, (() => { const c = new Map(OUTSIDE); c.set(VERIFY, (c.get(VERIFY) ?? "").replace("const evaluations = carriesOwn ? await loadPassportEvaluations(admin, share.nurse_id) : null;", "const evaluations = await loadPassportEvaluations(admin, share.nurse_id);")); return c; })()));
   ok("P57. ⚠ K39 goes red when the evaluation calls AI, counts self-graded answers as knowledge, reads Teach Me explanations, claims verified competence, rewrites a record, or drops the boundary",
     !evaluationHonest(plant(EVAL_ROUTE, "import { audit } from \"@/lib/individual/scholar/http\";", "import { audit, scholarAiRunner } from \"@/lib/individual/scholar/http\";"))
     && !evaluationHonest(plant(EVAL, "const det = attempts.filter(a => a.marking === \"deterministic\");", "const det = attempts.filter(a => a.marking !== \"ai_evaluation\");"))

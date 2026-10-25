@@ -45,21 +45,24 @@ export type ScopeOption = { kind: "library" } | { kind: "document"; materialId: 
 export function RevisionStart(props: {
   modes: RevisionMode[]; formats: RevisionFormat[]; quantity: number; difficulty: string; feedback: "immediate" | "end";
   materials: { id: string; title: string }[]; competencies: { id: string; title: string }[]; aiNote: string | null;
+  /** PROGRESS-01 P4: a next step opens Revision on its material (and difficulty), with "choose" open. */
+  preset?: { materialId?: string | null; difficulty?: string | null } | null;
 }) {
   const router = useRouter();
+  const presetMaterial = props.preset?.materialId && props.materials.some(m => m.id === props.preset!.materialId) ? props.preset.materialId : null;
   const [busy, setBusy] = useState<string>("");
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   // Learning Continuity: new questions are not available, which is a state to explain, not an error.
   const [continuity, setContinuity] = useState("");
-  const [open, setOpen] = useState(false);
-  const [scopeKind, setScopeKind] = useState<"library" | "documents" | "topic" | "competency">("library");
-  const [chosen, setChosen] = useState<string[]>([]);
+  const [open, setOpen] = useState(!!presetMaterial);
+  const [scopeKind, setScopeKind] = useState<"library" | "documents" | "topic" | "competency">(presetMaterial ? "documents" : "library");
+  const [chosen, setChosen] = useState<string[]>(presetMaterial ? [presetMaterial] : []);
   const [topic, setTopic] = useState("");
   const [competency, setCompetency] = useState("");
   const [formats, setFormats] = useState<RevisionFormat[]>(props.formats);
   const [quantity, setQuantity] = useState(props.quantity);
-  const [difficulty, setDifficulty] = useState(props.difficulty);
+  const [difficulty, setDifficulty] = useState(props.preset?.difficulty && ["any", "easy", "standard", "harder"].includes(props.preset.difficulty) ? props.preset.difficulty : props.difficulty);
   const [feedback, setFeedback] = useState(props.feedback);
   const [mode, setMode] = useState<RevisionMode>(props.modes.includes("quick") ? "quick" : props.modes[0] ?? "today");
   const [unsaved, setUnsaved] = useState<{ items: RevisionItemView[]; label: string | null } | null>(null);

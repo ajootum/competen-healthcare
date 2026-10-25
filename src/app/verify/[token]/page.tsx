@@ -4,7 +4,7 @@ import { loadOwnRecords, summariseOwn, OWN_KIND_LABEL, PROFESSION_NOT_RECORDED }
 import { shareCarriesOwnRecords } from "@/lib/individual/professional/share";
 import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { individualAppEnabled } from "@/lib/individual/gate";
-import { loadStudyAchievements } from "@/lib/individual/scholar/store";
+import { loadPassportEvaluations, loadStudyAchievements } from "@/lib/individual/scholar/store";
 import { STUDY_ACHIEVEMENT, studyDetail } from "@/lib/individual/scholar/passport-items";
 import { loadSharedProfile } from "@/lib/individual/professional/share-profile";
 import { METHOD_LABEL, VERIFICATION_LABEL, isIndependentlyVerified } from "@/lib/individual/professional/profile-verification";
@@ -78,6 +78,9 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
   // taking one off the Passport takes it off this link too, however long ago the link was shared. Only on
   // a link that carries the person's own records -- an organisation-minted link shows none of them.
   const study = carriesOwn ? await loadStudyAchievements(admin, share.nurse_id) : null;
+  // PROGRESS-01 P5: the educational evaluations the person chose to show (427), read NOW on every view, on the same
+  // terms as study: only on a link that carries their own records. Formative, never verified, never a credential.
+  const evaluations = carriesOwn ? await loadPassportEvaluations(admin, share.nurse_id) : null;
   // COMPETEN-PROFESSIONAL-PROFILE-01 part B (migration 453): ONLY on a Professional link, ONLY what the person
   // ticked for this link, each record with its own evidence class and verification state, never upgraded.
   const sharedProfile = carriesOwn
@@ -227,6 +230,30 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
                         <span className="font-medium text-gray-800 min-w-0">{a.label}</span>
                         <span className="text-[10.5px] text-gray-500">{STUDY_ACHIEVEMENT[a.achievement].name} · {studyDetail(a)}{a.lastStudied ? ` · last studied ${fmt(a.lastStudied)}` : ""}</span>
                         <span className="ml-auto text-[10.5px] font-semibold text-sky-900">{EVIDENCE_LABEL.self_directed}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
+          )}
+
+          {evaluations && (!evaluations.ok ? !evaluations.notProvisioned : evaluations.data.length > 0) && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900">Educational evaluations the professional chose to show</h2>
+              <p className="text-[11.5px] text-indigo-950 mt-0.5 leading-relaxed">{EVIDENCE_LABEL.educational_evaluation}. A formative evaluation of their own learning in Competen Scholar, from their own practice. It is not an assessment of competence, it was not made by Competen or any organisation, and their notes and answers are not shared here.</p>
+              {!evaluations.ok ? <p className="text-[12px] text-gray-600 mt-2">These could not be read just now.</p>
+                : !full ? (
+                  <p className="text-[12.5px] text-gray-700 mt-2">{evaluations.data.length} educational {evaluations.data.length === 1 ? "evaluation" : "evaluations"}.</p>
+                ) : (
+                  <div className="space-y-1.5 mt-2">
+                    {evaluations.data.map(ev => (
+                      <div key={ev.evaluationId} className="text-[12.5px] border-b border-indigo-100 pb-1.5">
+                        <div className="flex flex-wrap items-baseline gap-x-2">
+                          <span className="font-medium text-gray-800 min-w-0">{ev.label}</span>
+                          <span className="text-[10.5px] text-gray-500">{ev.scope} · {ev.method} · {fmt(ev.madeAt)} · {ev.confidence} · {ev.limitations} limitation{ev.limitations === 1 ? "" : "s"} stated</span>
+                          <span className="ml-auto text-[10.5px] font-semibold text-indigo-900">{EVIDENCE_LABEL.educational_evaluation}</span>
+                        </div>
+                        <p className="text-[11px] text-gray-600">{ev.dimensions.map(d => `${d.name}: ${d.reads}`).join(" · ")}</p>
                       </div>
                     ))}
                   </div>

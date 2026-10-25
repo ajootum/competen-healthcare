@@ -84,6 +84,13 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarEvaluationBandDeveloping: 50,
       scholarEvaluationFreshQuantity: 10,
       scholarEvaluationRecommendations: "on",
+      // PROGRESS-01 (Stage 8): every section, by week over 8 periods, every next-step rule, 5 steps, evaluations offered to the Passport.
+      scholarProgressSections: ["coverage", "understanding", "retention", "application", "engagement", "confidence", "history", "competencies"],
+      scholarProgressPeriod: "week",
+      scholarProgressPeriods: 8,
+      scholarProgressNextRules: ["teach", "spaced", "case", "evaluate", "classify", "advance"],
+      scholarProgressNextMax: 5,
+      scholarPassportEvaluations: "offer",
       // JOIN-01: every active programme is offered, no level or institution is asked, both fields may be.
       scholarOnboardingProgrammes: null, scholarProgrammeLevels: {}, scholarInstitutions: [], scholarOnboardingFields: ["level", "institution"],
       // P0: label, do not hide -- everything of a chosen catalogue is offered, labelled, by default.

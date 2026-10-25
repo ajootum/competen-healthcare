@@ -53,11 +53,11 @@ export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "pr
   | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns"
   | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent"
   | "scholar_evaluation_min_evidence" | "scholar_evaluation_recency_days" | "scholar_evaluation_min_sources" | "scholar_evaluation_band_strong"
-  | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity";
+  | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
-  | "scholar_evaluation_methods" | "scholar_evaluation_evidence";
+  | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -72,7 +72,8 @@ export type LevelsPolicyKey = "scholar_programme_levels";
 export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_profile_ai"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
-  | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations";
+  | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations"
+  | "scholar_progress_period" | "scholar_passport_evaluations";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -715,6 +716,62 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "on",
     limitReason: "Two choices. Default: on.",
   },
+  // ── PROGRESS-01 (Progress, Stage 8 of 8): what the Progress workspace shows, over what periods, and what it suggests.
+  // Engagement and coverage are never shown as understanding, and nothing here can make progress verified competence. ──
+  {
+    key: "scholar_progress_sections", kind: "set", product: "Scholar",
+    label: "Progress workspace sections",
+    help: "Which parts of the Progress workspace a student sees. Each dimension stays on its own: none is ever summed into one figure.",
+    options: [
+      { value: "coverage", label: "Knowledge coverage" }, { value: "understanding", label: "Understanding" }, { value: "retention", label: "Retention" },
+      { value: "application", label: "Application and clinical reasoning" }, { value: "engagement", label: "Learning engagement" }, { value: "confidence", label: "Evidence confidence" },
+      { value: "history", label: "Development over time" }, { value: "competencies", label: "By competency framework" },
+    ],
+    fallback: ["coverage", "understanding", "retention", "application", "engagement", "confidence", "history", "competencies"],
+    limitReason: "The sections Scholar implements. Recommended next steps are always shown. Default: all.",
+  },
+  {
+    key: "scholar_progress_period", kind: "choice", product: "Scholar",
+    label: "Default period for development over time",
+    help: "How Progress groups a student's development over time by default. A student can switch.",
+    options: [{ value: "week", label: "By week" }, { value: "month", label: "By month" }, { value: "programme", label: "By educational context (programme and level)" }],
+    fallback: "week",
+    limitReason: "Three choices. Default: by week.",
+  },
+  {
+    key: "scholar_progress_periods", kind: "int", product: "Scholar", unit: "periods",
+    label: "Periods shown over time",
+    help: "How many weeks or months the history shows, ending now.",
+    fallback: 8, min: 4, max: 26,
+    limitReason: "4 to 26.",
+  },
+  {
+    key: "scholar_progress_next_rules", kind: "set", product: "Scholar",
+    label: "Next-step rules",
+    help: "Which deterministic rules may suggest a next step. Each step comes from a recorded finding and opens the Scholar activity it names.",
+    options: [
+      { value: "teach", label: "A learning gap: Teach Me, then Revision" }, { value: "spaced", label: "Recall that did not hold: spaced review" },
+      { value: "case", label: "Weaker clinical reasoning: a clinical case" }, { value: "evaluate", label: "Too little evidence: a fresh knowledge check" },
+      { value: "classify", label: "A material not classified yet: review its topics" }, { value: "advance", label: "Strong, repeated performance: harder questions" },
+    ],
+    fallback: ["teach", "spaced", "case", "evaluate", "classify", "advance"],
+    limitReason: "The six rules Scholar implements. Default: all.",
+  },
+  {
+    key: "scholar_progress_next_max", kind: "int", product: "Scholar", unit: "steps",
+    label: "Next steps shown",
+    help: "At most this many recommended next steps, the best-supported first.",
+    fallback: 5, min: 1, max: 10,
+    limitReason: "1 to 10.",
+  },
+  {
+    key: "scholar_passport_evaluations", kind: "choice", product: "Scholar",
+    label: "Educational evaluations in the Passport",
+    help: "Whether a student may choose to show a kept evaluation in their Competen Passport, labelled educational and formative, never verified. Nothing is shown unless the student chooses it.",
+    options: [{ value: "offer", label: "Students may choose to show them" }, { value: "off", label: "Not offered" }],
+    fallback: "offer",
+    limitReason: "Two choices. Default: offered. Never shown without the student choosing it.",
+  },
   {
     key: "professional_catalogues", kind: "catalogues", product: "Professional", max: CATALOGUES_MAX,
     label: "Competency catalogues Professional may offer",
@@ -961,6 +1018,13 @@ export type IndividualPolicy = {
   scholarEvaluationBandDeveloping: number;
   scholarEvaluationFreshQuantity: number;
   scholarEvaluationRecommendations: "on" | "off";
+  /** PROGRESS-01 (Progress, Stage 8 of 8). */
+  scholarProgressSections: string[];
+  scholarProgressPeriod: "week" | "month" | "programme";
+  scholarProgressPeriods: number;
+  scholarProgressNextRules: string[];
+  scholarProgressNextMax: number;
+  scholarPassportEvaluations: "offer" | "off";
   /** JOIN-01: programme codes offered at join, or null for every active programme. */
   scholarOnboardingProgrammes: string[] | null;
   scholarProgrammeLevels: Record<string, ContextOption[]>;
@@ -1044,6 +1108,12 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarEvaluationBandDeveloping: int("scholar_evaluation_band_developing"),
     scholarEvaluationFreshQuantity: int("scholar_evaluation_fresh_quantity"),
     scholarEvaluationRecommendations: clampChoice(policyDef("scholar_evaluation_recommendations") as ChoicePolicy, published.get(policyPath("scholar_evaluation_recommendations"))) as "on" | "off",
+    scholarProgressSections: clampSet(policyDef("scholar_progress_sections") as SetPolicy, published.get(policyPath("scholar_progress_sections"))),
+    scholarProgressPeriod: clampChoice(policyDef("scholar_progress_period") as ChoicePolicy, published.get(policyPath("scholar_progress_period"))) as "week" | "month" | "programme",
+    scholarProgressPeriods: int("scholar_progress_periods"),
+    scholarProgressNextRules: clampSet(policyDef("scholar_progress_next_rules") as SetPolicy, published.get(policyPath("scholar_progress_next_rules"))),
+    scholarProgressNextMax: int("scholar_progress_next_max"),
+    scholarPassportEvaluations: clampChoice(policyDef("scholar_passport_evaluations") as ChoicePolicy, published.get(policyPath("scholar_passport_evaluations"))) as "offer" | "off",
     scholarOnboardingProgrammes: clampProgrammes(policyDef("scholar_onboarding_programmes") as ProgrammesPolicy, published.get(policyPath("scholar_onboarding_programmes"))),
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),

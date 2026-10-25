@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadOwnRecords, type OwnRecord } from "./professional/passport-records";
-import { loadStudyAchievements, type Read } from "./scholar/store";
+import { loadPassportEvaluations, loadStudyAchievements, type Read } from "./scholar/store";
+import type { PassportEvaluation } from "./scholar/passport-evaluations";
 import type { StudyAchievement } from "./scholar/passport-items";
 import { learningProvenance, loadProfessionalLearning } from "./professional/learning";
 import { learningPassportItems } from "@/lib/learning/products";
@@ -51,7 +52,7 @@ import { learningPassportItems } from "@/lib/learning/products";
 // its outcome is `competent` and it has not passed its expiry date -- the rule src/app/verify/[token]
 // applies, so the Passport cannot show a person something the verification page would not.
 
-export type EvidenceClass = "institution_issued" | "institution_verified" | "self_declared" | "source_linked" | "self_directed" | "platform_recorded";
+export type EvidenceClass = "institution_issued" | "institution_verified" | "self_declared" | "source_linked" | "self_directed" | "educational_evaluation" | "platform_recorded";
 
 export const EVIDENCE_LABEL: Record<EvidenceClass, string> = {
   institution_issued: "Issued by an organisation",
@@ -59,6 +60,8 @@ export const EVIDENCE_LABEL: Record<EvidenceClass, string> = {
   self_declared: "Self-declared, not verified",
   source_linked: "Self-declared with a document attached, not verified",
   self_directed: "Self-directed study, not a verified competency",
+  // PROGRESS-01 P5: an evaluation of the person's own learning (426) they chose to show (427). Formative, never verified.
+  educational_evaluation: "Educational evaluation of own learning: formative, not verified",
   platform_recorded: "Issued by Competen Holdings through Competen Learning",
 };
 
@@ -100,6 +103,8 @@ export type IndividualPassport = {
   own: OwnRecord[] | null;
   /** The Competen Scholar study achievements the person chose to show, labelled self-directed. */
   study: Read<StudyAchievement[]>;
+  /** PROGRESS-01 P5: the educational evaluations the person chose to show, labelled formative, never verified. */
+  evaluations: Read<PassportEvaluation[]>;
   /** Completed Competen Learning, by reference. enabled false = Learning is off here, and the section is not shown.
    *  Optional only so fixtures from before Learning still type: loadIndividualPassport always sets it. */
   learning?: { enabled: boolean; items: PassportLearning[] | null };
@@ -134,7 +139,7 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
   const settle = async (p: PromiseLike<any>) => {
     try { const r = await p; return r?.error ? null : (r?.data ?? []); } catch { return null; }
   };
-  const [decRows, credRows, empRows, own, study, learning] = await Promise.all([
+  const [decRows, credRows, empRows, own, study, evaluations, learning] = await Promise.all([
     settle(admin.from("competency_decisions")
       .select("competency_id, outcome, expiry_date, created_at, hospital_id, organisation_id, framework_competencies(name)")
       .eq("nurse_id", userId).order("created_at", { ascending: false }).limit(3000)),
@@ -146,6 +151,7 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
       .eq("nurse_id", userId).order("start_date", { ascending: false }).limit(50)),
     loadOwnRecords(admin, userId).catch(() => null),
     loadStudyAchievements(admin, userId).catch((): Read<StudyAchievement[]> => ({ ok: false, notProvisioned: false })),
+    loadPassportEvaluations(admin, userId).catch((): Read<PassportEvaluation[]> => ({ ok: false, notProvisioned: false })),
     loadProfessionalLearning(admin, userId).catch(() => ({ enabled: true, refs: null })),
   ]);
 
@@ -184,6 +190,7 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
     })),
     own,
     study,
+    evaluations,
     learning: {
       enabled: learning.enabled,
       items: learning.refs === null ? null

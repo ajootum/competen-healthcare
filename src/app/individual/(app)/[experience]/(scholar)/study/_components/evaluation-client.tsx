@@ -225,3 +225,36 @@ export function MakeEvaluation({ sessionId, method, scope, toGrade }: { sessionI
     </div>
   );
 }
+
+/** PROGRESS-01 P5: show this evaluation in the Passport, with the student's label -- or take it off. Never shown unless chosen. */
+export function PassportEvaluationChoice({ evaluationId, shown, suggested }: { evaluationId: string; shown: boolean; suggested: string }) {
+  const router = useRouter();
+  const [label, setLabel] = useState(suggested.slice(0, 120));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function send(method: "POST" | "DELETE") {
+    setBusy(true); setError("");
+    const r = await call("/api/individual/scholar/passport-evaluations", method === "POST" ? { evaluationId, label } : { evaluationId }, method);
+    setBusy(false);
+    if (!r.ok) { setError(r.json.error ?? "It could not be changed just now."); return; }
+    router.refresh();
+  }
+  return (
+    <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3">
+      <p className="text-[13px] font-semibold text-gray-900">Your Passport</p>
+      {shown ? (
+        <p className="mt-1 text-[13px] text-gray-700">Shown in your Passport as an educational evaluation: formative, never verified.{" "}
+          <button type="button" className={`underline ${focusRing}`} disabled={busy} onClick={() => send("DELETE")}>{busy ? "Taking it off…" : "Take it off"}</button></p>
+      ) : (
+        <form onSubmit={e => { e.preventDefault(); send("POST"); }} className="mt-1 flex flex-wrap items-end gap-2">
+          <label className="text-[12.5px] text-gray-700">Show it in your Passport as
+            <input value={label} onChange={e => setLabel(e.target.value)} maxLength={120} className={`${field} mt-1 block w-72 max-w-full`} />
+          </label>
+          <button type="submit" className={ghost} disabled={busy || !label.trim()}>{busy ? "Adding…" : "Show in my Passport"}</button>
+          <p className="w-full text-[12px] text-gray-600">It appears as an educational evaluation, with its confidence and how many limitations it states. Not your notes or answers, and never a credential.</p>
+        </form>
+      )}
+      {error && <p role="alert" className="mt-1 text-[13px] font-semibold text-red-800">{error}</p>}
+    </div>
+  );
+}

@@ -159,6 +159,33 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
           )}
       </Section>
 
+      {/* PROGRESS-01 P5: the middle tier -- educational evaluation, apart from study activity and from verified competence. */}
+      <Section title="Educational evaluations" note={`${EVIDENCE_LABEL.educational_evaluation}. Only the Competen Scholar evaluations you chose to show: how each was made and how far it can be relied on, never your notes or answers, and never a credential.`}>
+        {!passport.evaluations.ok ? (passport.evaluations.notProvisioned
+          ? <Empty>Showing evaluations is not available on this environment yet.</Empty>
+          : <Unreadable what="educational evaluations" />)
+          : passport.evaluations.data.length === 0 ? (
+            <Empty>
+              {ctx.live.includes("scholar")
+                ? <>Nothing shown. You can choose an evaluation to show from <a href={experienceHref("scholar", "study/evaluate")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.scholar.accent }}>Evaluate in My Learning</a>.</>
+                : "Nothing shown. Nothing from Competen Scholar appears here unless you choose it."}
+            </Empty>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {passport.evaluations.data.map(ev => (
+                <li key={ev.evaluationId} className="py-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <p className="text-[14.5px] font-semibold text-gray-900">{ev.label}</p>
+                    <p className="text-[12.5px] font-semibold text-indigo-800">{EVIDENCE_LABEL.educational_evaluation}</p>
+                  </div>
+                  <p className="text-[12.5px] text-gray-500">{[ev.scope, ev.method, `made ${fmt(ev.madeAt)}`, ev.confidence, `${ev.limitations} limitation${ev.limitations === 1 ? "" : "s"} stated`].join(" · ")}</p>
+                  <p className="mt-1 text-[12.5px] text-gray-700">{ev.dimensions.map(d => `${d.name}: ${d.reads}`).join(" · ")}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+      </Section>
+
       {passport.learning?.enabled && (
         <Section title="Competen Learning" note="Courses you completed, read from your Competen Learning record. Each says what it is. A course completion or assessed knowledge is not an accreditation or a verification of clinical competence. Not included in a shared Passport link.">
           {passport.learning.items === null ? <Unreadable what="learning record" />
