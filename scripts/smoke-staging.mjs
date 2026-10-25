@@ -20,6 +20,7 @@
 import nextEnv from "@next/env";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
+import { productionRef } from "./production-ref.mjs";
 
 const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd());
@@ -41,7 +42,8 @@ if (missing.length) {
   process.exit(1);
 }
 
-const prodRef = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
+// The production ref is the constant in production-guard.ts (production-ref.mjs), NOT whatever .env.local names.
+const prodRef = productionRef();
 const stagingRef = url.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
 if (!stagingRef) { console.error(`\n⛔ STAGING_SUPABASE_URL is not a project URL: ${url}\n`); process.exit(1); }
 if (prodRef && stagingRef === prodRef) {
