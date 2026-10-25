@@ -41,7 +41,7 @@ export function CaseStart(props: {
   preset?: { chunkId?: string; from?: "teach" | "revision" } | null;
 }) {
   const router = useRouter();
-  const [entry, setEntry] = useState<CaseEntry | "teach" | "revision">(props.preset?.chunkId ? (props.preset.from ?? "teach") : props.entries[0] ?? "notes");
+  const [entry, setEntry] = useState<CaseEntry | "teach" | "revision">(props.preset?.chunkId ? (props.preset.from ?? "teach") : props.entries.find(e => e !== "library" || props.libraryOn) ?? "notes");
   const [material, setMaterial] = useState(props.materials[0]?.id ?? "");
   const [competency, setCompetency] = useState(props.competencies[0]?.id ?? "");
   const [context, setContext] = useState<CaseContext>(props.contexts[0] ?? "general");
