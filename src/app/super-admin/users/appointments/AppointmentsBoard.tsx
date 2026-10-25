@@ -330,6 +330,9 @@ export default function AppointmentsBoard({ board, people, canAppoint, viewerId,
           product that can do that: the office screen under Office Governance stores one of eight committee
           roles instead, none of which is an HQ position, so an appointment made there grants nothing here.
         </p>
+        <p className="text-sm mt-2">
+          <a href="/super-admin/users/positions" className="text-teal-700 font-medium hover:underline">Create positions and change what they grant →</a>
+        </p>
       </header>
 
       {msg && (
