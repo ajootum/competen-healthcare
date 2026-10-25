@@ -11,6 +11,7 @@ import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/pro
 import FrameworkPicker from "../../../../_components/professional/FrameworkPicker";
 import AssistPanel from "../../../../_components/professional/AssistPanel";
 import CompetencyLinks from "../../../../_components/professional/CompetencyLinks";
+import { GoalEdit, NeedEdit } from "../../../../_components/professional/edit-forms";
 import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
 import { Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
@@ -70,6 +71,7 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
                     {n.framework_id && names.get(n.framework_id) ? ` (${names.get(n.framework_id)})` : ""}
                   </p>
                   {n.detail && <p className="mt-1 text-[13.5px] text-gray-700">{n.detail}</p>}
+                  <NeedEdit n={n} accent={x.accent} />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {n.status === "open"
@@ -133,6 +135,7 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
                         {g.need_id && needTitle.get(g.need_id) ? ` · for: ${needTitle.get(g.need_id)}` : ""}
                       </p>
                       {g.detail && <p className="mt-1 text-[13.5px] text-gray-700">{g.detail}</p>}
+                      <GoalEdit g={g} needs={(needs ?? []).map(n => ({ id: n.id, title: n.title }))} accent={x.accent} />
                       {map.mappings === null ? <p className="mt-2 text-[12.5px] text-gray-600">Competency links could not be read just now.</p> : map.provisioned && (
                         <CompetencyLinks kind="goal" subjectId={g.id} links={linksFor(map, "goal", g.id)} offered={map.offered} accent={x.accent} idPrefix={`goal-${g.id}`} />
                       )}

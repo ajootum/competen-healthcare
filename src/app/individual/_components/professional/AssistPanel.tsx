@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { secondaryBtn } from "../chrome";
+import { AiNoticeText, aiNotice, type AiNotice } from "./ai-refusal";
 
 // "Suggest a CPD plan" -- the personal AI, grounded on the person's own needs, goals and CPD
 // (POST /api/individual/professional/assistant, task cpd_plan). Advisory: the suggestion is shown here and
@@ -10,7 +11,7 @@ import { secondaryBtn } from "../chrome";
 export default function AssistPanel({ accent }: { accent: string }) {
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<AiNotice | null>(null);
 
   async function ask() {
     setBusy(true); setErr(null); setAnswer(null);
@@ -19,9 +20,9 @@ export default function AssistPanel({ accent }: { accent: string }) {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: "cpd_plan" }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) setErr(j?.error ?? "The assistant could not answer just now.");
+      if (!res.ok) setErr(aiNotice(j, "The assistant could not answer just now."));
       else setAnswer(j.answer ?? "");
-    } catch { setErr("The assistant could not be reached. Check your connection."); } finally { setBusy(false); }
+    } catch { setErr({ text: "The assistant could not be reached. Check your connection.", continuity: false }); } finally { setBusy(false); }
   }
 
   return (
@@ -29,7 +30,7 @@ export default function AssistPanel({ accent }: { accent: string }) {
       <button type="button" onClick={ask} disabled={busy} className={secondaryBtn} style={{ color: accent }}>
         {busy ? "Thinking…" : "✦ Suggest a CPD plan from my needs"}
       </button>
-      {err && <p role="alert" className="mt-3 text-[13.5px] text-red-700">{err}</p>}
+      {err && <AiNoticeText notice={err} className="mt-3" />}
       {answer !== null && (
         <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4" aria-live="polite">
           <p className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-gray-500">AI suggestion · advisory · not saved</p>

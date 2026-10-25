@@ -7,6 +7,7 @@ import { experienceModulePage, gatedMetadata } from "../../../../_components/she
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { ApiButton } from "../../../../_components/professional/forms";
 import CpdForm from "../../../../_components/professional/CpdForm";
+import { CpdEdit } from "../../../../_components/professional/edit-forms";
 import CompetencyLinks from "../../../../_components/professional/CompetencyLinks";
 import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
@@ -90,6 +91,7 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
                   </div>
                 </div>
                 {c.reflection && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-[13.5px] leading-relaxed text-gray-700">{c.reflection}</p>}
+                <CpdEdit c={c} goals={(record.goals ?? []).map(g => ({ id: g.id, title: g.title }))} today={today} accent={x.accent} />
                 {map.mappings === null ? <p className="mt-2 text-[12.5px] text-gray-600">Competency links could not be read just now.</p> : map.provisioned && (
                   <CompetencyLinks kind="cpd" subjectId={c.id} links={linksFor(map, "cpd", c.id)} offered={map.offered} accent={x.accent} idPrefix={`cpd-${c.id}`} />
                 )}

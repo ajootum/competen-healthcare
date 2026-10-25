@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { CPD_ACTIVITY, DOCUMENT_MAX_LABEL } from "@/lib/individual/professional/vocabulary";
 import { focusRing, primaryBtn } from "../chrome";
 import { Field, inputCls } from "./forms";
+import { experienceHref } from "@/lib/individual/experiences";
+import { aiNotice } from "./ai-refusal";
 
 // The CPD entry form, with reflection drafting (COMPETEN-IND-007 s4 and s7).
 //
@@ -19,7 +21,7 @@ export default function CpdForm({ accent, today, goals }: { accent: string; toda
   const [drafting, setDrafting] = useState(false);
   const [reflection, setReflection] = useState("");
   const [drafted, setDrafted] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string; continuity?: boolean } | null>(null);
 
   async function draft() {
     const f = ref.current; if (!f) return;
@@ -32,7 +34,7 @@ export default function CpdForm({ accent, today, goals }: { accent: string; toda
         body: JSON.stringify({ task: "reflection", title, activityType, notes: reflection }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) setMsg({ ok: false, text: j?.error ?? "The assistant could not draft a reflection just now." });
+      if (!res.ok) setMsg({ ok: false, ...aiNotice(j, "The assistant could not draft a reflection just now. You can write it yourself.") });
       else { setReflection(j.answer ?? ""); setDrafted(true); }
     } catch { setMsg({ ok: false, text: "The assistant could not be reached." }); } finally { setDrafting(false); }
   }
@@ -84,7 +86,7 @@ export default function CpdForm({ accent, today, goals }: { accent: string; toda
           className={`inline-flex min-h-[44px] items-center rounded-xl border border-gray-300 bg-white px-4 text-[14px] font-semibold hover:bg-gray-50 disabled:opacity-50 ${focusRing}`} style={{ color: accent }}>
           {drafting ? "Drafting…" : "✦ Draft the reflection with AI"}
         </button>
-        {msg && <p role={msg.ok ? "status" : "alert"} className={`text-[13.5px] font-medium ${msg.ok ? "text-green-800" : "text-red-700"}`}>{msg.text}</p>}
+        {msg && <p role={msg.ok ? "status" : "alert"} className={`text-[13.5px] font-medium ${msg.ok ? "text-green-800" : "text-red-700"}`}>{msg.text}{msg.continuity && <> <a href={experienceHref("professional", "ai-allowance")} className="font-semibold underline underline-offset-2">See your AI allowance</a></>}</p>}
       </div>
     </form>
   );
