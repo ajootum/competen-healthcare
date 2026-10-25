@@ -172,6 +172,31 @@ Scripts are in `ops/backup/` and installed at `C:\Users\elish\CompetenBackup\bin
 | Gate | Nothing for people changes until a Clinical Content Reviewer is appointed and scoped: every competency reads "Not clinically reviewed". The Individual release gate, publication and catalogues are untouched. |
 | Rollback | `docs/evidence/CLINICAL/ROLLBACK-395-production.sql`: the same statements as the rehearsed `ROLLBACK-395.sql` (b8503d33); only the header comments differ. Not used. |
 
+### 11d. Production infrastructure catch-up, 26 migrations and a deploy (production, 2026-10-25, owner GO)
+
+Owner GO: "COMPETEN — PRODUCTION INFRASTRUCTURE CATCH-UP". This was an infrastructure and application catch-up only, **not a product activation.** The full runbook and record is in `RELEASE-2026-10-25/RUNBOOK.md`, outside the repository, with its `CHECKSUMS.txt` and the function-body comparisons.
+
+| Step | Detail |
+|---|---|
+| Release commit | `main` @ **931c9222** (#77 merged). Every migration file was taken from that commit. |
+| Recovery reference | `competen-production-20261025-0719.dump.gpg`, sha256 `5ab0485fa13be82ae589ae5001bda9db2a0feddcc2bf0cacde833d621b90d492`. Isolated restore **PASS**: 743 tables, 0 mismatches, schema fingerprint `705bbf11…` matches live. The archives of 23 and 24 October are kept. |
+| Pre-check (read-only) | 0 scholar materials, 0 duplicates, and 0 questions or attempts of another shape. PostgreSQL 17.6. The quality_council_member position has **0 holders**. **No feature-flag rows** (everything OFF). |
+| Files | 26 migrations. Each checksum (`CHECKSUMS.txt`) equals the file applied ×2 and rehearsed on staging. Applied by the owner, by hand, in the production SQL editor, each file whole, in five batches. |
+| Batch 1: catalogue, commercial foundations (off), join | 394, 399, 400, 402, 403 |
+| Batch 2: Scholar upload | 405, 406, 407, 408, 409, 413. The upload size limit was confirmed at 25 MB or more in Storage settings before 413. |
+| Batch 3: Learn and Revision | 414, 415, 416, 417 |
+| Batch 4: AI fair use, one unit in one sitting | 410, 411, 412, 420, 421, 419. 420 followed 412 in the same sitting. |
+| Batch 5: cases and clinical reasoning (all features OFF) | 422, 423, 424, 435, 436. 436 followed 435. |
+| Grants (capability to position only; nobody appointed) | 400 `hq.individual.commercial.manage` (inert while commerce is off). 410 `hq.platform.ai.manage` to platform_director (metering stays OFF). 421 budget authority (no budget seeded). 422 `hq.quality.case.author` to the new clinical_case_educator position (no holders), and `hq.quality.case.publish` to quality_council_member (0 holders). No clinical-approval authority is granted to anyone, and the 395 reviewer position still has no holder. |
+| Verified (read-only, after each batch) | `release-postcheck-5.sql` (pg_catalog based). The first post-check, using information_schema and to_regclass, misled under the read-only role and was replaced. Every table, column, index, function and capability marker is present. 436 removed the library column. The balances of 420 are numeric(16,6). **Function bodies:** all 46 functions in the release set have CR-stripped md5s **identical to staging** (`staging-function-bodies.json` against `production-function-bodies.txt`). |
+| Deploy | `main` @ 931c9222, deployed from the competen-deploy worktree with `vercel deploy --prod`. Deployment **`dpl_3aASxjtujMuvsVarPrzNAhbt4UrN`**: Ready, target production, aliased to www, practice, staff, platform, enterprise, individual and recruitment. |
+| Post-deployment | Site `/`, `/login`, `/legal/terms` and the practice host 200. `/practice/sign-in` 200, and `/practice/home` 307 to sign-in. Individual OFF: `/individual/scholar` and `/individual/access` 404. Self-registration OFF: `/individual/join` 404, `POST /api/individual/join/register` 404. Feature flags: **no rows**, so individual_app, individual_self_registration, case_library, ai_fair_use and individual_commerce are all OFF. The individual host shows the existing public marketing page. |
+| Case studio (re-probed, production, anonymous) | The first probe requested `/super-admin/clinical-cases`, which is not a route, so it was repeated on the real one. `/super-admin/cases` returned 307 to `/login?next=…`. `POST /api/hq/cases {"action":"create"}` returned 401. An unknown action returns 400 before the gate, as written: the action name is checked first, and nothing is read or done. |
+| Gate | Nothing for people changed: every flag has no row, and no position created or granted here has a holder. |
+| Rollback | Each migration has a rehearsed rollback in `docs/evidence/…` on `main`. A full recovery uses the archive above. Not used. |
+
+**Not in this release:** 430, the portable clinical content hash (`docs/evidence/CLINICAL/430-staging-record.md`). It needs its own GO. Production has had 395 and 422 since this release, so before 430 is applied, re-read production's `clinical_content_version` and `clinical_review_decision` counts read-only. Both were 0 before this release, and any approval present then would go stale.
+
 ## 12. Outstanding recovery requirements
 
 | # | Requirement | Status |
