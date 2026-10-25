@@ -156,6 +156,12 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.quality.knowledge.publish",     space: "quality"   },
   // Migration 443, K4: independent scientific review of research outputs (Research Scientific Reviewer).
   { code: "hq.quality.research.review",       space: "quality"   },
+  // Migration 464, COMPETEN-LEARNING-01 D8: four separate Learning authorities, each its own new position. Clinical
+  // approval of hosted learning stays hq.quality.clinical.approve with its 395 scopes.
+  { code: "hq.learning.course.author",        space: "learning"  },
+  { code: "hq.learning.course.publish",       space: "learning"  },
+  { code: "hq.learning.price.approve",        space: "learning"  },
+  { code: "hq.learning.certificate.issue",    space: "learning"  },
 ];
 
 export const HQ_CAPABILITY_CODES = HQ_CAPABILITIES.map(c => c.code);
@@ -227,6 +233,14 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/research/oversight",    capability: "hq.quality.research.govern" },
   { prefix: "/super-admin/research/scientific-review", capability: "hq.quality.research.review" },
   { prefix: "/super-admin/research",              capability: "hq.quality.research.propose" },
+  // Migrations 460-464 (COMPETEN-LEARNING-01). The narrower authorities first: the first matching prefix wins, and none
+  // of them may inherit author. The Learning review page is the clinical reviewer's, as /super-admin/clinical-review is.
+  { prefix: "/super-admin/learning/review",       capability: "hq.quality.clinical.approve" },
+  { prefix: "/super-admin/learning/publication",  capability: "hq.learning.course.publish" },
+  { prefix: "/super-admin/learning/prices",       capability: "hq.learning.price.approve" },
+  { prefix: "/super-admin/learning/certificates", capability: "hq.learning.certificate.issue" },
+  { prefix: "/super-admin/learning/access",       capability: "hq.individual.pilot.grant" },
+  { prefix: "/super-admin/learning",              capability: "hq.learning.course.author" },
   { prefix: "/super-admin/governance",            capability: "hq.quality.governance.view" },
   { prefix: "/super-admin/cgr",                   capability: "hq.quality.regulation.view" },
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },

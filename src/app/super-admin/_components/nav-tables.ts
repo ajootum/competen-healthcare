@@ -66,6 +66,15 @@ export const GENERAL_NAV: NavSection[] = [
     { label: "Case Publication", href: "/super-admin/cases/publication", icon: "📢" },
     { label: "Case Intelligence", href: "/super-admin/cases/intelligence", icon: "📊" },
   ]},
+  // Migrations 460-464 (COMPETEN-LEARNING-01): the Holdings Learning catalogue, studio and its separate authorities.
+  { group: "COMPETEN LEARNING", items: [
+    { label: "Learning Studio", href: "/super-admin/learning", icon: "📘" },
+    { label: "Learning Review", href: "/super-admin/learning/review", icon: "🩺" },
+    { label: "Learning Publication", href: "/super-admin/learning/publication", icon: "📢" },
+    { label: "Course Prices", href: "/super-admin/learning/prices", icon: "🏷️" },
+    { label: "Certificates", href: "/super-admin/learning/certificates", icon: "🎓" },
+    { label: "Course Access", href: "/super-admin/learning/access", icon: "🔑" },
+  ]},
   { group: "STRATEGY & PRIORITIES", items: [
     { label: "Strategy Manager", href: "/super-admin/priorities", icon: "🎯" },
     { label: "Priority Distribution", href: "/super-admin/priorities/distribution", icon: "🌊" },
