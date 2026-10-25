@@ -37,7 +37,7 @@ if (!/^http:\/\/localhost:\d+$/.test(BASE)) { console.error("REFUSING: BASE_URL 
 const STATE = process.env.C5_STATE ?? "";
 if (!STATE || resolve(STATE).toLowerCase().startsWith(resolve(process.cwd(), "..").toLowerCase())) { console.error("REFUSING: C5_STATE must be a file outside the repositories (it holds passwords)."); process.exit(1); }
 const admin: any = createClient(url, key, { auth: { persistSession: false } });
-const MODE = process.argv.includes("--setup") ? "setup" : process.argv.includes("--retire") ? "retire" : "journey";
+const MODE = process.argv.includes("--setup") ? "setup" : process.argv.includes("--retire") ? "retire" : process.argv.includes("--doors") ? "doors" : "journey";
 
 const WHO = {
   admin: { email: "c5-studio-admin@staging.competen.invalid", name: "SYNTHETIC C5 studio administrator (IND-007, staging, retire after)", position: "competency_verification_administrator" },
@@ -68,6 +68,10 @@ const call = async (cookie: string, method: string, path: string, body?: any) =>
   const text = await res.text(); let json: any = null; try { json = JSON.parse(text); } catch { /* page */ }
   return { status: res.status, text, json, location: res.headers.get("location") };
 };
+// A page's door, read from its CONTENT. A redirect() thrown after streaming starts answers HTTP 200 with the redirect in
+// the body, so a status alone cannot say whether the page opened (the first journey run, 25 Oct, was misled by it).
+const STUDIO_TEXT = "Configure how competence is independently assessed", QUEUE_TEXT = "Requests assigned to you, within the scope of your appointment";
+const opens = (r: { text: string }, marker: string) => r.text.includes(marker) && !/NEXT_REDIRECT/.test(r.text);
 const activeAppointment = async (personId: string, role: string) =>
   (await admin.from("ogs_office_appointments").select("id").eq("person_id", personId).eq("role", role).eq("status", "active").limit(1)).data?.[0]?.id ?? null;
 
@@ -125,7 +129,7 @@ async function journey() {
   const published = versionId ? await call(A.cookie, "POST", "/api/hq/competency-verification", { action: "publish", versionId }) : { status: 0, text: "" } as any;
   const v1 = versionId ? (await admin.from("competency_verification_method_version").select("state, content_hash").eq("id", versionId).maybeSingle()).data : null;
   ok("17. a method is configured and published through the no-code Studio, its criteria fixed by hash; the assessor cannot open the Studio",
-    studioPage.status === 200 && notForAssessor.status !== 200 && made.status === 201 && saved.status === 200 && published.status === 200 && v1?.state === "published" && !!v1.content_hash,
+    opens(studioPage, STUDIO_TEXT) && !opens(notForAssessor, STUDIO_TEXT) && made.status === 201 && saved.status === 200 && published.status === 200 && v1?.state === "published" && !!v1.content_hash,
     JSON.stringify({ studio: studioPage.status, assessorStudio: notForAssessor.status, made: made.status, saved: [saved.status, saved.text?.slice(0, 120)], published: [published.status, published.text?.slice(0, 120)] }));
 
   // 18. Appoint (owner, done) and scope a narrowly scoped synthetic assessor through the authorised controls
@@ -202,30 +206,77 @@ async function journey() {
   process.exitCode = f.length ? 1 : 0;
 }
 
-async function retire() {
+/** The two doors, read from content: each identity opens its own page and not the other's. Read-only. */
+async function doors() {
   const st = JSON.parse(readFileSync(STATE, "utf8"));
-  const A = await session(WHO.admin.email, st.admin.password).catch(() => null);
-  const aAss = await activeAppointment(st.assessor.id, WHO.assessor.position);
-  if (A && aAss) {
-    for (const s of (await admin.from("competency_assessor_scope").select("id").eq("appointment_id", aAss).is("ended_at", null)).data ?? [])
-      await call(A.cookie, "POST", "/api/hq/competency-verification", { action: "end_scope", scopeId: s.id, reason: "SYNTHETIC C5 retired after the staging acceptance" });
-  }
-  for (const [k, w] of Object.entries(WHO)) {
-    const id = st[k].id;
-    // Ended, kept as the record -- the same retirement the CF-FOUND curator had.
-    await admin.from("ogs_office_appointments").update({ status: "removed", term_end: new Date().toISOString() }).eq("person_id", id).eq("role", w.position).eq("status", "active");
-    const s = await session(w.email, st[k].password).catch(() => null);
-    if (s) await admin.auth.admin.signOut(s.token, "global");
-    await admin.auth.admin.updateUserById(id, { ban_duration: "876000h", user_metadata: { full_name: w.name, synthetic: true, purpose: PURPOSE, retired: new Date().toISOString() } });
-    const again = await createClient(url, anon, { auth: { persistSession: false } }).auth.signInWithPassword({ email: w.email, password: st[k].password });
-    console.log(`retired ${w.email}: appointment removed, sessions revoked, banned (kept); sign-in ${again.error ? "refused" : "ALLOWED -- NOT RETIRED"}`);
-  }
-  console.log("\nROWS:");
-  for (const [k] of Object.entries(WHO)) {
-    const id = st[k].id;
-    const count = async (t: string, c: string) => { const r = await admin.from(t).select("id", { count: "exact", head: true }).eq(c, id); return r.error ? `unreadable (${r.error.message})` : r.count; };
-    console.log(`  ${k} ${id}: appointments ${await count("ogs_office_appointments", "person_id")}, methods created ${await count("competency_verification_method", "created_by")}, versions authored ${await count("competency_verification_method_version", "authored_by")}, scopes granted ${await count("competency_assessor_scope", "granted_by")}, assignments made ${await count("competency_verification_event", "actor_id")}, decisions ${await count("competency_verification_decision", "assessor_id")}, own requests ${await count("competency_verification_request", "user_id")}, audit ${await count("audit_log", "actor_id")}`);
-  }
+  const A = await session(WHO.admin.email, st.admin.password), S = await session(WHO.assessor.email, st.assessor.password);
+  const [aStudio, aQueue, sStudio, sQueue] = await Promise.all([
+    call(A.cookie, "GET", "/super-admin/verification-studio"), call(A.cookie, "GET", "/super-admin/competency-assessment"),
+    call(S.cookie, "GET", "/super-admin/verification-studio"), call(S.cookie, "GET", "/super-admin/competency-assessment")]);
+  const where = (r: { text: string }) => /NEXT_REDIRECT;[a-z]+;([^;"]+)/.exec(r.text)?.[1] ?? null;
+  ok("17b. the Studio Administrator opens the Studio and NOT the assessor queue", opens(aStudio, STUDIO_TEXT) && !opens(aQueue, QUEUE_TEXT), JSON.stringify({ studio: aStudio.status, queueRedirect: where(aQueue) }));
+  ok("17c. the Competency Assessor opens the assessor queue and NOT the Studio", opens(sQueue, QUEUE_TEXT) && !opens(sStudio, STUDIO_TEXT), JSON.stringify({ queue: sQueue.status, studioRedirect: where(sStudio) }));
+  console.log(`  (refused pages answer HTTP 200 with a streamed redirect: assessor -> ${where(sStudio)}, administrator -> ${where(aQueue)})`);
+  const fails = results.filter(r => !r.ok);
+  console.log(`\n${fails.length ? "RED" : "GREEN"} -- ${results.length - fails.length} passed, ${fails.length} failed`);
+  process.exitCode = fails.length ? 1 : 0;
 }
 
-(MODE === "setup" ? setup() : MODE === "retire" ? retire() : journey()).catch(e => { console.error(e); process.exitCode = 1; });
+async function retire() {
+  const st = JSON.parse(readFileSync(STATE, "utf8"));
+  const ids = [st.admin.id, st.assessor.id];
+  // 1. Scopes end through the Studio route, as the Studio Administrator -- the real control.
+  const A = await session(WHO.admin.email, st.admin.password).catch(() => null);
+  const assessorAppts = ((await admin.from("ogs_office_appointments").select("id").eq("person_id", st.assessor.id).eq("role", WHO.assessor.position)).data ?? []).map((a: any) => a.id);
+  const live = assessorAppts.length ? (await admin.from("competency_assessor_scope").select("id").in("appointment_id", assessorAppts).is("ended_at", null)).data ?? [] : [];
+  for (const sc of live) {
+    const r = A ? await call(A.cookie, "POST", "/api/hq/competency-verification", { action: "end_scope", scopeId: sc.id, reason: "SYNTHETIC C5 retired after the staging acceptance" }) : { status: 0, text: "no admin session" };
+    console.log(`scope ${sc.id}: end_scope HTTP ${r.status}`);
+  }
+  // 2. Appointments: ending one is the OWNER's control (/api/hq/appointments PATCH, owner only). Not written here.
+  const appts = (await admin.from("ogs_office_appointments").select("id, person_id, role, status, term_start, term_end").in("person_id", ids)).data ?? [];
+  for (const a of appts) console.log(`appointment ${a.id} (${a.role}): ${a.status}${a.status === "active" ? "  <- the OWNER ends this on the board" : ""}`);
+  // 3. Gate-1 membership: no route revokes one, so it is revoked here, labelled -- the reverse of owner decision M1.
+  for (const id of ids) {
+    const r = await admin.from("platform_membership").update({ status: "revoked", revoked_at: new Date().toISOString(), revoked_by: null,
+      note: "SYNTHETIC C5 staging identity (IND-007). Granted under owner decision M1, 25 Oct 2026, and revoked at retirement after the s15 items 17-22 run.", updated_at: new Date().toISOString() })
+      .eq("user_id", id).select("id, status").maybeSingle();
+    console.log(`platform_membership for ${id}: ${r.error ? `FAILED ${r.error.message}` : JSON.stringify(r.data)}`);
+  }
+  // 4. Sessions revoked BEFORE the ban (a banned user's sign-out is refused), then banned and kept.
+  for (const [k, w] of Object.entries(WHO)) {
+    const sess = await session(w.email, st[k].password).catch(() => null);
+    if (sess) await admin.auth.admin.signOut(sess.token, "global");
+    await admin.auth.admin.updateUserById(st[k].id, { ban_duration: "876000h", user_metadata: { full_name: w.name, synthetic: true, purpose: PURPOSE, retired: new Date().toISOString() } });
+    const again = await createClient(url, anon, { auth: { persistSession: false } }).auth.signInWithPassword({ email: w.email, password: st[k].password });
+    ok(`R. ${k} retired: sign-in refused, kept`, !!again.error, again.error ? "" : "SIGN-IN STILL ALLOWED");
+  }
+  // 5. Every row these identities have, by table, with ids.
+  console.log("\nROWS (all kept as the record):");
+  const list = async (label: string, t: string, cols: string, col: string, vals: string[]) => {
+    const r = await admin.from(t).select(cols).in(col, vals);
+    console.log(`  ${label}: ${r.error ? `unreadable (${r.error.message})` : `${(r.data ?? []).length}${(r.data ?? []).length ? " " + JSON.stringify(r.data) : ""}`}`);
+    return r.data ?? [];
+  };
+  await list("profiles", "profiles", "id, email, full_name", "id", ids);
+  await list("platform_membership", "platform_membership", "id, user_id, status, source", "user_id", ids);
+  await list("ogs_office_appointments", "ogs_office_appointments", "id, person_id, role, status", "person_id", ids);
+  const methods = await list("competency_verification_method", "competency_verification_method", "id, code", "created_by", ids);
+  await list("competency_verification_method_version", "competency_verification_method_version", "id, method_id, version_no, state, content_hash", "authored_by", ids);
+  await list("competency_assessor_scope (granted)", "competency_assessor_scope", "id, appointment_id, scope_kind, ended_at", "granted_by", ids);
+  await list("competency_verification_request (the assessor's own probe)", "competency_verification_request", "id, user_id", "user_id", ids);
+  await list("competency_verification_event (by them)", "competency_verification_event", "id, request_id, event", "actor_id", ids);
+  await list("competency_verification_decision (by the assessor)", "competency_verification_decision", "id, request_id, outcome_code, outcome_class", "assessor_id", ids);
+  const reqs = methods.length ? (await admin.from("competency_verification_request").select("id, user_id, method_version_id, competency_verification_method_version!inner(method_id)")
+    .in("competency_verification_method_version.method_id", methods.map((m: any) => m.id))).data ?? [] : [];
+  console.log(`  competency_verification_request under the synthetic method(s): ${reqs.length} ${JSON.stringify(reqs.map((r: any) => ({ id: r.id, user_id: r.user_id })))}`);
+  if (reqs.length) await list("competency_verification_evidence on those requests", "competency_verification_evidence", "id, request_id, kind", "request_id", reqs.map((r: any) => r.id));
+  const audit = await admin.from("audit_log").select("action").in("actor_id", ids);
+  const byAction: Record<string, number> = {}; for (const a of audit.data ?? []) byAction[a.action] = (byAction[a.action] ?? 0) + 1;
+  console.log(`  audit_log by them: ${(audit.data ?? []).length} ${JSON.stringify(byAction)}`);
+  const fails = results.filter(r => !r.ok);
+  console.log(`\n${fails.length ? "RED" : "GREEN"} -- ${results.length - fails.length} passed, ${fails.length} failed`);
+  process.exitCode = fails.length ? 1 : 0;
+}
+
+(MODE === "setup" ? setup() : MODE === "retire" ? retire() : MODE === "doors" ? doors() : journey()).catch(e => { console.error(e); process.exitCode = 1; });
