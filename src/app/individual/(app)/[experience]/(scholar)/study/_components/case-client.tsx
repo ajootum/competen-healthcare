@@ -49,9 +49,11 @@ export function CaseStart(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [offers, setOffers] = useState<{ list: Offer[]; note: string } | null>(null);
+  // Learning Continuity: a new case is not available, which is a state to explain, not an error.
+  const [continuity, setContinuity] = useState("");
 
   async function begin(generateAnyway = false) {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setContinuity("");
     if (entry === "library") {
       const r = await call(`/api/individual/scholar/clinical/library${competency ? `?competency=${competency}` : ""}`, undefined, "GET");
       setBusy(false);
@@ -64,6 +66,7 @@ export function CaseStart(props: {
     const r = await call("/api/individual/scholar/clinical/cases", { entry, scope, context, mode, generateAnyway });
     setBusy(false);
     if (r.ok && r.json.offers) { setOffers({ list: r.json.offers, note: r.json.note }); return; }
+    if (!r.ok && r.json.continuity) { setContinuity(r.json.error ?? "A new case cannot be written right now."); return; }
     if (!r.ok) { setError(r.json.error ?? "A case could not be started."); return; }
     router.push(caseHref("private", r.json.play.sessionId));
   }
@@ -125,6 +128,12 @@ export function CaseStart(props: {
             ))}
           </ul>
           {entry !== "library" && <button type="button" className={`${ghost} mt-3`} disabled={busy} onClick={() => begin(true)}>Write me a case from my notes instead</button>}
+        </div>
+      )}
+      {continuity && (
+        <div role="status" className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+          <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-sky-900">No new case right now</p>
+          <p className="mt-1 text-[14px] text-gray-800">{continuity}</p>
         </div>
       )}
       {error && <p role="alert" className="mt-3 text-[13.5px] font-semibold text-red-800">{error}</p>}
