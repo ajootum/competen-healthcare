@@ -1553,14 +1553,25 @@ export async function listArtefacts(admin: Admin, userId: string, opts: { materi
   return { ok: true, data: ((data ?? []) as any[]).map(r => toArtefact(r, src.get(r.id) ?? [])) };
 }
 
-/** After a material is deleted: sessions with no step left have nothing to teach, and go too. */
+/**
+ * After a material is deleted, what it emptied goes too:
+ * - a Learn session with no step left has nothing to teach (414 cascades its steps);
+ * - REVISION-01: a saved set or revision session whose questions all went with the material has nothing to replay
+ *   (417 cascades its items). Its attempts stay, unlinked (417 sets that one column null).
+ * An unreadable child list is not an empty one: nothing is pruned on a failed read.
+ */
 async function pruneEmptySessions(admin: Admin, userId: string): Promise<void> {
-  const { data: sessions, error } = await admin.from("individual_scholar_learning_session").select("id").eq("user_id", userId).limit(1000);
-  if (error || !sessions?.length) return;
-  const { data: steps } = await admin.from("individual_scholar_learning_step").select("session_id").eq("user_id", userId).limit(20000);
-  const live = new Set(((steps ?? []) as any[]).map(r => r.session_id));
-  const empty = (sessions as any[]).map(r => r.id).filter(id => !live.has(id));
-  if (empty.length) await admin.from("individual_scholar_learning_session").delete().eq("user_id", userId).in("id", empty);
+  for (const [parent, items, key] of [["individual_scholar_learning_session", "individual_scholar_learning_step", "session_id"],
+    ["individual_scholar_revision_set", "individual_scholar_revision_set_item", "set_id"],
+    ["individual_scholar_revision_session", "individual_scholar_revision_session_item", "session_id"]] as const) {
+    const { data: rows, error: rErr } = await admin.from(parent).select("id").eq("user_id", userId).limit(1000);
+    if (rErr || !rows?.length) continue;
+    const { data: kept, error: kErr } = await admin.from(items).select(key).eq("user_id", userId).limit(20000);
+    if (kErr) continue;
+    const held = new Set(((kept ?? []) as any[]).map(r => r[key]));
+    const gone = (rows as any[]).map(r => r.id).filter(id => !held.has(id));
+    if (gone.length) await admin.from(parent).delete().eq("user_id", userId).in("id", gone);
+  }
 }
 
 /** Save the person's own topics for one of their sections. "not_provisioned" where 408 is absent. */

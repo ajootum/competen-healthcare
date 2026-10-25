@@ -67,16 +67,17 @@ export async function POST(req: Request) {
   const competencyIds = [...new Set([...(scope.kind === "competency" ? [scope.competencyId] : []), ...links.map(l => l.competencyId)])].slice(0, 8);
 
   // ── CI6: a governed library case first, with no AI and no charge ──
-  if (body?.generateAnyway !== true && (await caseLibraryEnabled(ctx.admin)) && (await loadCasePolicy(ctx.admin)).reuseFirst) {
+  const libraryOn = await caseLibraryEnabled(ctx.admin);
+  if (body?.generateAnyway !== true && libraryOn && (await loadCasePolicy(ctx.admin)).reuseFirst) {
     const offers = await findLibraryCases(ctx.admin, { competencyIds: competencyIds.length ? competencyIds : undefined, topic: resolved.topic ?? undefined });
     if (offers?.length) return NextResponse.json({ offers, note: "Clinically approved cases from the case library fit what you asked for. Playing one uses no AI. You can still have one written from your notes." });
   }
 
   // ── a private case from the notes ──
   if (policy.scholarCaseGeneration === "stored_only")
-    return NextResponse.json({ error: "New cases are not written here. Play one of your stored cases or a library case." }, { status: 403 });
+    return NextResponse.json({ error: `New cases are not written here. Play one of your stored cases${libraryOn ? " or a library case" : ""}.` }, { status: 403 });
   const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "case_steps");
-  if (!standing.available) return NextResponse.json({ error: `${standing.message ?? "New AI help is not available right now."} Your stored and library cases are still yours to play.`, continuity: true }, { status: 409 });
+  if (!standing.available) return NextResponse.json({ error: `${standing.message ?? "New AI help is not available right now."} Your stored ${libraryOn ? "and library cases are" : "cases are"} still yours to play.`, continuity: true }, { status: 409 });
   const pre = await aiPreflight(ctx);
   if (pre) return pre;
   const passages = (await Promise.all(chunkIds.map(id => getPassage(ctx.admin, ctx.userId, id)))).filter((p): p is NonNullable<typeof p> => !!p);

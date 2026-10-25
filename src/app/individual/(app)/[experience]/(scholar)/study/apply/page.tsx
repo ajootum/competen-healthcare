@@ -50,9 +50,11 @@ export default async function Apply({ params, searchParams }: { params: Promise<
   ]);
   const consentOn = consent.ok && consentStatus(consent.data, consentDocuments().published) === "on";
   const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "case_steps");
-  const aiNote = policy.scholarCaseGeneration === "stored_only" ? "New cases are not written here: play your stored cases or a library case."
-    : !consentOn ? "AI help is off, so new cases are not written. Your stored cases and library cases are still playable."
-      : !standing.available ? `${standing.message ?? "New AI help is limited right now."} Your stored cases and library cases are still playable.` : null;
+  // Where the case library is OFF nothing here names it: the student's own stored cases are what stays playable.
+  const stored = libraryOn ? "Your stored cases and library cases are still playable." : "Your stored cases are still playable.";
+  const aiNote = policy.scholarCaseGeneration === "stored_only" ? `New cases are not written here: play your stored cases${libraryOn ? " or a library case" : ""}.`
+    : !consentOn ? `AI help is off, so new cases are not written. ${stored}`
+      : !standing.available ? `${standing.message ?? "New AI help is limited right now."} ${stored}` : null;
   const [candidacy, offers, casePolicy] = libraryOn ? await Promise.all([candidacyStatus(ctx.admin, ctx.userId), myCaseOffers(ctx.admin, ctx.userId), loadCasePolicy(ctx.admin)]) : [null, null, null];
   // A library play's title from the student's own learner-facing view (library.ts caseSessionView), never the blueprint.
   const libTitles = new Map<string, string>();
