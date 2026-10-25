@@ -1,4 +1,9 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "main": false
+    }
+  },
   "crons": [
     { "path": "/api/cron/reports", "schedule": "0 6 * * *" },
     { "path": "/api/cron/jobs", "schedule": "0 * * * *" }
