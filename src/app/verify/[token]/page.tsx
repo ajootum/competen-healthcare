@@ -1,20 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { loadFrameworkCurrency, assessCurrency, summariseCurrency } from "@/lib/competency/framework-currency";
-import { loadOwnRecords, summariseOwn, OWN_KIND_LABEL, PROFESSION_NOT_RECORDED } from "@/lib/individual/professional/passport-records";
-import { shareCarriesOwnRecords } from "@/lib/individual/professional/share";
-import { EVIDENCE_LABEL } from "@/lib/individual/passport";
+import { logShareAccess, shareCarriesOwnRecords } from "@/lib/individual/professional/share";
 import { individualAppEnabled } from "@/lib/individual/gate";
-import { loadPassportEvaluations, loadStudyAchievements } from "@/lib/individual/scholar/store";
-import { STUDY_ACHIEVEMENT, studyDetail } from "@/lib/individual/scholar/passport-items";
-import { loadSharedProfile } from "@/lib/individual/professional/share-profile";
-import { METHOD_LABEL, VERIFICATION_LABEL, isIndependentlyVerified } from "@/lib/individual/professional/profile-verification";
-import { ITEM_LABEL } from "@/lib/individual/professional/profile-vocabulary";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { loadSharedLearning } from "@/lib/individual/professional/share-learning";
-import { loadSharedEvaluations } from "@/lib/individual/professional/share-evaluation";
-import { PROVENANCE_LABEL, SOURCE_KIND_LABEL } from "@/lib/individual/professional/evaluation-vocabulary";
-import { loadSharedCompetencies } from "@/lib/individual/professional/share-competency";
 import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
+import { loadPassportSelection, loadViewMeta } from "@/lib/individual/passport-view";
+import PassportLinkView from "@/app/individual/_components/passport/PassportLinkView";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +13,14 @@ export const dynamic = "force-dynamic";
 // Renders ONLY a consented subset of the professional's OWN passport (verified/current achievements — never
 // gaps, notes, patient data or anyone else's record), and only while the token is valid (not revoked/expired).
 //
-// COMPETEN-IND-007 s5. A link minted from Competen Professional ALSO carries the records the person added
-// themselves -- and only such a link: its companion row in individual_professional_share (migration 373)
-// is the consent. Those records are labelled with their evidence class and are never called verified, and
-// the page stops calling itself a "Verified Passport" when it shows them. Every other link renders exactly
-// as before.
+// COMPETEN-PROFESSIONAL-PASSPORT-01 (Stage 7, migration 540). A link minted from Competen Professional shows EXACTLY
+// the records the person chose for it, one by one, through the same read their in-app preview uses
+// (src/lib/individual/passport-view.ts): its purpose, each record's source, issuer, date, version, trust, validity and
+// meaning. RECORD-LEVEL ONLY: such a link with no 540 view (made before record-level sharing) carries no records, and
+// a draft view is refused until its owner activates it. Every opening is logged for the owner, with nothing about the
+// recipient. Minimum disclosure: this page is reachable only by token and lists nobody else.
+//
+// An organisation-minted link (no Professional companion row) renders exactly as before.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const nameOf = (row: any) => { const fc = row?.framework_competencies; return (Array.isArray(fc) ? fc[0]?.name : fc?.name) ?? null; };
@@ -46,16 +40,58 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
 
   const { data: share, error } = await admin.from("passport_share_tokens").select("id, nurse_id, scope, label, expires_at, consent, revoked, created_at, view_count").eq("token", token).maybeSingle();
   if (error || !share) return <Invalid reason="This verification link is invalid. Ask the professional to share a current link." />;
-  if (share.revoked) return <Invalid reason="This verification link has been revoked by the professional." />;
-  if (share.expires_at && new Date(share.expires_at) < new Date()) return <Invalid reason="This verification link has expired. Ask the professional for a new one." />;
-  if (share.consent === false) return <Invalid reason="This verification link is no longer active." />;
+  // While the Individual release gate is off (src/lib/individual/gate.ts) Individual does not exist, so no link
+  // shows its records -- every link renders as the estate one.
+  const carriesOwn = (await individualAppEnabled(admin)) && await shareCarriesOwnRecords(admin, share.id, share.nurse_id);
+  if (share.revoked) {
+    if (carriesOwn) await logShareAccess(admin, share.id, share.nurse_id, "refused_revoked");
+    return <Invalid reason="This verification link has been revoked by the professional." />;
+  }
+  if (share.expires_at && new Date(share.expires_at) < new Date()) {
+    if (carriesOwn) await logShareAccess(admin, share.id, share.nurse_id, "refused_expired");
+    return <Invalid reason="This verification link has expired. Ask the professional for a new one." />;
+  }
+  if (share.consent === false) {
+    if (carriesOwn) await logShareAccess(admin, share.id, share.nurse_id, "refused_draft");
+    return <Invalid reason={carriesOwn ? "This link has not been activated by the professional yet." : "This verification link is no longer active."} />;
+  }
 
   // Increment the view counter (fire-and-forget).
   admin.from("passport_share_tokens").update({ view_count: (share.view_count ?? 0) + 1 }).eq("id", share.id).then((r: any) => r, () => {});
 
-  // ── Consented subset only ──
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, specialization, hospital_id").eq("id", share.nurse_id).maybeSingle();
   const today = new Date().toISOString().slice(0, 10);
+
+  // ── A Professional link: exactly what was chosen for it, record by record ──
+  if (carriesOwn) {
+    const meta = await loadViewMeta(admin, share.id, share.nurse_id);
+    if (meta === "unreadable") return <Invalid reason="This Passport could not be read just now. Try again shortly." />;
+    if (meta === null) return <Invalid reason="This link was made before record-level sharing and carries no records. Ask the professional for a new link." />;
+    const policy = await loadIndividualPolicy(admin);
+    const selection = await loadPassportSelection(admin, share.nurse_id, share.id, { today, profile: policy.professionalProfile, competency: policy.professionalCompetency, lcpd: await loadLcpdConfig(admin), passport: policy.professionalPassport });
+    await logShareAccess(admin, share.id, share.nurse_id, "shown");
+    return (
+      <Shell>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-teal-700 to-teal-600 px-6 py-4 text-white">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] uppercase tracking-widest text-teal-100/80 font-semibold">Competen · Passport</span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] bg-white/15 rounded-full px-2.5 py-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />Link valid</span>
+            </div>
+          </div>
+          <div className="p-6">
+            <PassportLinkView selection={selection} order={policy.professionalPassport.sections} name={profile?.full_name ?? null} detailed={policy.professionalPassport.presentation === "detailed"} />
+            <div className="mt-5 border-t border-gray-100 pt-4 text-[11px] text-gray-500 space-y-0.5">
+              <p>Shared {fmt(share.created_at)} · valid until {fmt(share.expires_at)}. Checked now: each record&apos;s status is read from its source on every view.</p>
+              <p>A consented, time-limited link chosen record by record by the professional, revocable at any time. It is not a directory, and it shows nothing they did not choose.</p>
+            </div>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ── An organisation-minted link: unchanged ──
   const { data: decRows } = await admin.from("competency_decisions").select("competency_id, outcome, expiry_date, created_at, framework_id, framework_version, framework_competencies(name)").eq("nurse_id", share.nurse_id).order("created_at", { ascending: false }).limit(3000);
   const latest = new Map<string, any>();
   (decRows ?? []).forEach((d: any) => { if (d.competency_id && !latest.has(d.competency_id)) latest.set(d.competency_id, d); });
@@ -74,54 +110,19 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
   const full = share.scope === "full";
   const competencyNames = current.map(nameOf).filter(Boolean) as string[];
 
-  // While the Individual release gate is off (src/lib/individual/gate.ts) Individual does not exist, so no
-  // link shows its records -- every link renders as the estate one.
-  const carriesOwn = (await individualAppEnabled(admin)) && await shareCarriesOwnRecords(admin, share.id, share.nurse_id);
-  const own = carriesOwn ? await loadOwnRecords(admin, share.nurse_id) : null;
-  const ownSummary = own ? summariseOwn(own) : null;
-  // The Competen Scholar achievements the person chose to show (migration 375), read NOW, on every view:
-  // taking one off the Passport takes it off this link too, however long ago the link was shared. Only on
-  // a link that carries the person's own records -- an organisation-minted link shows none of them.
-  const study = carriesOwn ? await loadStudyAchievements(admin, share.nurse_id) : null;
-  // PROGRESS-01 P5: the educational evaluations the person chose to show (427), read NOW on every view, on the same
-  // terms as study: only on a link that carries their own records. Formative, never verified, never a credential.
-  const evaluations = carriesOwn ? await loadPassportEvaluations(admin, share.nurse_id) : null;
-  // COMPETEN-PROFESSIONAL-PROFILE-01 part B (migration 453): ONLY on a Professional link, ONLY what the person
-  // ticked for this link, each record with its own evidence class and verification state, never upgraded.
-  const sharedProfile = carriesOwn
-    ? await loadSharedProfile(admin, share.id, share.nurse_id, (await loadIndividualPolicy(admin)).professionalProfile.shareSections, new Date().toISOString().slice(0, 10))
-    : null;
-  const sharedAny = !!sharedProfile && (!!sharedProfile.overview || sharedProfile.records.length > 0);
-  // LCPD-01 LCPD-6: completed learning the person ticked for this link, re-checked now. Never their reflections on it.
-  const sharedLearning = carriesOwn ? await loadSharedLearning(admin, share.id, share.nurse_id, await loadLcpdConfig(admin)) : null;
-  // COMPETEN-PROFESSIONAL-EVALUATION-01 s13 (migration 530): recorded evaluations the person ticked for this link, while
-  // the policy offers sharing. Formative, with sources and limitations. Never notes, AI text or private reflections.
-  const sharedEvaluations = carriesOwn ? await loadSharedEvaluations(admin, share.id, share.nurse_id, (await loadIndividualPolicy(admin)).professionalEvaluation.sharing) : null;
-  // COMPETENCY-01 S11: the competencies the person ticked for this link, part by part, re-checked now. Self-assessment,
-  // evidence and verification are shown apart and labelled; reflections never.
-  const sharedCompetencies = carriesOwn
-    ? await loadSharedCompetencies(admin, share.id, share.nurse_id, (await loadIndividualPolicy(admin)).professionalCompetency.shareParts, new Date().toISOString().slice(0, 10))
-    : null;
-  // A Professional-minted link names the person's profession as THEY declared it, and says so. It never
-  // shows profiles.role, which the new-user trigger fills with a default (migration 335) and which
-  // Competen Individual neither sets nor relies on (ADR-016).
-  const registration = own?.find(o => o.kind === "registration");
-  const declaredProfession = registration && registration.title !== PROFESSION_NOT_RECORDED ? registration.title : null;
-  const ownSubtitle = declaredProfession ? `${declaredProfession} (self-declared)` : null;
-
   return (
     <Shell>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="bg-gradient-to-r from-teal-700 to-teal-600 px-6 py-5 text-white">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] uppercase tracking-widest text-teal-100/80 font-semibold">{carriesOwn ? "Competen · Passport" : "Competen · Verified Passport"}</span>
+            <span className="text-[11px] uppercase tracking-widest text-teal-100/80 font-semibold">Competen · Verified Passport</span>
             <span className="inline-flex items-center gap-1.5 text-[11px] bg-white/15 rounded-full px-2.5 py-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />Valid</span>
           </div>
           <div className="flex items-center gap-4 mt-3">
             <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-2xl font-bold shrink-0">{profile?.full_name?.[0] ?? "?"}</div>
             <div className="min-w-0">
               <h1 className="text-xl font-bold truncate">{profile?.full_name ?? "Professional"}</h1>
-              <p className="text-teal-50 text-sm capitalize">{carriesOwn ? ownSubtitle : <>{roleLabel}{profile?.specialization ? ` · ${profile.specialization}` : ""}</>}</p>
+              <p className="text-teal-50 text-sm capitalize">{roleLabel}{profile?.specialization ? ` · ${profile.specialization}` : ""}</p>
             </div>
           </div>
         </div>
@@ -178,178 +179,12 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
             </div>
           )}
 
-          {carriesOwn && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">Records the professional added themselves</h2>
-              <p className="text-[11.5px] text-amber-900 mt-0.5 leading-relaxed">Recorded by the professional in Competen Professional. They are not verified by Competen or by any organisation. Where it says a document is attached, the document was not checked and is not shared here.</p>
-              {own === null ? <p className="text-[12px] text-gray-600 mt-2">These records could not be read just now.</p>
-                : own.length === 0 ? <p className="text-[12px] text-gray-600 mt-2">None recorded.</p>
-                  : !full ? (
-                    <p className="text-[12.5px] text-gray-700 mt-2">{ownSummary!.total} {ownSummary!.total === 1 ? "record" : "records"}: {ownSummary!.byClass.self_declared} {EVIDENCE_LABEL.self_declared.toLowerCase()}, {ownSummary!.byClass.source_linked} {EVIDENCE_LABEL.source_linked.toLowerCase()}.</p>
-                  ) : (
-                    <div className="space-y-1.5 mt-2">
-                      {own.slice(0, 60).map((o, i) => (
-                        <div key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] border-b border-amber-100 pb-1.5">
-                          <span className="font-medium text-gray-800 min-w-0">{o.title}</span>
-                          <span className="text-[10.5px] text-gray-500">{OWN_KIND_LABEL[o.kind]}{o.detail ? ` · ${o.detail}` : ""}{o.date ? ` · ${fmt(o.date)}` : ""}{o.expires ? ` · exp ${fmt(o.expires)}` : ""}</span>
-                          <span className="ml-auto text-[10.5px] font-semibold text-amber-900">{EVIDENCE_LABEL[o.evidence]}</span>
-                          {o.competencies.length > 0 && <span className="w-full text-[10.5px] text-gray-600">Linked by the holder to: {o.competencies.join(", ")} (not verified)</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-            </div>
-          )}
-
-          {carriesOwn && sharedProfile === null && <p className="text-[12px] text-gray-600">The professional profile shared on this link could not be read just now.</p>}
-          {sharedAny && (
-            <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">From the professional&apos;s profile</h2>
-              <p className="text-[11.5px] text-gray-600 mt-0.5 leading-relaxed">Chosen by the professional for this link. Recorded by them. A record is independently verified only where it says so: a Competen verifier, independent of the professional, checked that exact record. Registration numbers and documents are not shared.</p>
-              {sharedProfile!.overview && (
-                <p className="text-[12.5px] text-gray-800 mt-2">{[sharedProfile!.overview.profession, sharedProfile!.overview.title, sharedProfile!.overview.specialty, sharedProfile!.overview.setting, sharedProfile!.overview.status, sharedProfile!.overview.jurisdiction].filter(Boolean).join(" · ") || "No details recorded"} <span className="text-[10.5px] font-semibold text-amber-900">({EVIDENCE_LABEL.self_declared})</span></p>
-              )}
-              {sharedProfile!.records.length > 0 && (!full ? (
-                <p className="text-[12.5px] text-gray-700 mt-2">{sharedProfile!.records.length} profile {sharedProfile!.records.length === 1 ? "record" : "records"}, {sharedProfile!.records.filter(r => isIndependentlyVerified(r.verification.state)).length} independently verified.</p>
-              ) : (
-                <div className="space-y-1.5 mt-2">
-                  {sharedProfile!.records.map((r, i) => {
-                    const ok = isIndependentlyVerified(r.verification.state);
-                    return (
-                      <div key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] border-b border-gray-100 pb-1.5">
-                        <span className="font-medium text-gray-800 min-w-0">{r.title}</span>
-                        <span className="text-[10.5px] text-gray-500">{ITEM_LABEL[r.section].charAt(0).toUpperCase() + ITEM_LABEL[r.section].slice(1)}{r.typeLabel ? ` · ${r.typeLabel}` : ""}{r.organisation ? ` · ${r.organisation}` : ""}{r.jurisdiction ? ` · ${r.jurisdiction}` : ""}{r.startedOn ? ` · from ${fmt(r.startedOn)}` : ""}{r.endedOn ? ` to ${fmt(r.endedOn)}` : ""}{r.expiresOn ? ` · exp ${fmt(r.expiresOn)}` : ""}{r.targetOn ? ` · by ${fmt(r.targetOn)}` : ""}</span>
-                        <span className="ml-auto text-[10.5px] font-semibold text-amber-900">{EVIDENCE_LABEL[r.evidenceClass === "source_linked" ? "source_linked" : "self_declared"]}</span>
-                        {["qualification", "registration", "employment"].includes(r.section) && (
-                          <span className={`w-full text-[10.5px] font-semibold ${ok ? "text-emerald-700" : "text-gray-600"}`}>{ok ? "✓ " : ""}{VERIFICATION_LABEL[r.verification.state]}{ok && r.verification.method ? ` · ${METHOD_LABEL[r.verification.method]}, ${fmt(r.verification.verifiedAt)}${r.verification.validUntil ? `, valid until ${fmt(r.verification.validUntil)}` : ""}` : ""}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {sharedLearning !== null && sharedLearning.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">Completed learning the professional chose to show</h2>
-              <p className="text-[11.5px] text-slate-800 mt-0.5 leading-relaxed">Each course says exactly what it is. A course completion or assessed knowledge is not an accreditation, a regulatory approval or a verification of clinical competence.</p>
-              <ul className="mt-2 space-y-1.5">
-                {sharedLearning.map(l => (
-                  <li key={l.recordId} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] text-gray-800">
-                    <span className="font-semibold">{l.title}</span>
-                    <span className="text-[10.5px] text-gray-500">{l.provider ? `${l.provider} · ` : ""}version {l.versionNo} · {fmt(l.completedOn)}{l.certificateNos.length ? ` · certificate ${l.certificateNos.join(", ")}` : ""}</span>
-                    <span className="ml-auto text-[10.5px] font-semibold text-slate-800">{l.provenance}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {sharedLearning === null && carriesOwn && <p className="text-[12px] text-gray-600">The learning on this link could not be read just now.</p>}
-
-          {sharedEvaluations !== null && sharedEvaluations.length > 0 && (
-            <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">Professional development evaluations the professional chose to show</h2>
-              <p className="text-[11.5px] text-indigo-950 mt-0.5 leading-relaxed">Formative evaluations of their own development records, in separate dimensions. Not a score, not an assessment and not verification of clinical competence. Missing evidence is not evidence of a gap.</p>
-              {sharedEvaluations.map(ev => (
-                <div key={ev.id} className="mt-3 border-t border-indigo-100 pt-2">
-                  <p className="text-[12.5px] font-semibold text-gray-900">{ev.scope} <span className="font-normal text-gray-500">· evaluated {fmt(ev.evaluatedAt)} · {ev.interpretation}{ev.frameworkVersions.length ? ` · framework ${ev.frameworkVersions.join(", ")}` : ""}</span></p>
-                  <ul className="mt-1 space-y-1">
-                    {ev.findings.map(f => (
-                      <li key={f.dimension} className="text-[12px] text-gray-800"><span className="font-semibold">{f.label}:</span> {f.state}. {f.summary}{f.limitations.length ? <span className="text-amber-900"> Limitations: {f.limitations.join(" ")}</span> : null}</li>
-                    ))}
-                  </ul>
-                  {ev.sources.length > 0 && (
-                    <details className="mt-1">
-                      <summary className="cursor-pointer text-[11.5px] font-semibold text-indigo-900">Source records ({ev.sources.length}{ev.privateCount ? `, plus ${ev.privateCount} private, not shown` : ""})</summary>
-                      <ul className="mt-1 space-y-0.5">
-                        {ev.sources.map((s, i) => (
-                          <li key={i} className="text-[11.5px] text-gray-700">{SOURCE_KIND_LABEL[s.kind] ?? s.kind}: {s.title} · {PROVENANCE_LABEL[s.provenance]} · {fmt(s.date)}{s.method ? ` · ${s.method}` : ""}{s.frameworkVersion ? ` · ${s.frameworkVersion}` : ""}</li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {sharedEvaluations === null && carriesOwn && <p className="text-[12px] text-gray-600">The evaluations on this link could not be read just now.</p>}
-          {sharedCompetencies !== null && sharedCompetencies.length > 0 && (
-            <div className="rounded-xl border border-violet-200 bg-violet-50/50 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">Competencies the professional chose to show</h2>
-              <p className="text-[11.5px] text-slate-800 mt-0.5 leading-relaxed">Four different things, kept apart: a self-assessment is the professional&apos;s own view (self-reported); evidence keeps the class of its own record and is not verification; only an outcome recorded by an appointed assessor is independent verification.</p>
-              <ul className="mt-2 space-y-3">
-                {sharedCompetencies.map((c, i) => (
-                  <li key={i} className="text-[12.5px] text-gray-800">
-                    <p className="font-semibold">{c.title}{c.frameworkVersion ? <span className="text-[10.5px] font-normal text-gray-500"> · framework {c.frameworkVersion}</span> : null}{c.personal ? <span className="text-[10.5px] font-normal text-gray-500"> · in the professional&apos;s own words</span> : null}</p>
-                    {c.selfAssessment && <p className="text-[11.5px]">Self-assessment: {c.selfAssessment.level}{c.selfAssessment.scale ? ` (${c.selfAssessment.scale})` : ""}{c.selfAssessment.outcome ? ` for "${c.selfAssessment.outcome}"` : ""} · {fmt(c.selfAssessment.assessedAt)} · <span className="font-semibold">{c.selfAssessment.label}</span></p>}
-                    {c.evidence && (c.evidence.length === 0 ? <p className="text-[11.5px] text-gray-600">No evidence linked.</p> : (
-                      <ul className="mt-0.5 list-disc pl-5 text-[11.5px]">{c.evidence.map((e, j) => <li key={j}>{e.title} · {e.relation}{e.outcome ? ` · "${e.outcome}"` : ""} · <span className="text-gray-600">{e.classText}, not verification</span></li>)}</ul>
-                    ))}
-                    {c.assessed && c.assessed.length > 0 && <ul className="mt-0.5 text-[11.5px]">{c.assessed.map((a, j) => <li key={j} className="font-semibold text-violet-900">Independently verified: {a.outcome}{a.level ? ` at ${a.level}` : ""} · assessor {a.assessor} ({a.authority}) · {fmt(a.decidedAt)}{a.validUntil ? ` · valid until ${fmt(a.validUntil)}` : ""}</li>)}</ul>}
-                    {c.assessed && c.assessed.length === 0 && <p className="text-[11.5px] text-gray-600">No current independent verification.</p>}
-                    {c.assessedUnavailable && <p className="text-[11.5px] text-gray-600">Independent verification could not be shown just now.</p>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {sharedCompetencies === null && carriesOwn && <p className="text-[12px] text-gray-600">The competencies on this link could not be read just now.</p>}
-
-          {study && (!study.ok ? !study.notProvisioned : study.data.length > 0) && (
-            <div className="rounded-xl border border-sky-200 bg-sky-50/60 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">Self-directed study the professional chose to show</h2>
-              <p className="text-[11.5px] text-sky-900 mt-0.5 leading-relaxed">{EVIDENCE_LABEL.self_directed}. Practice the professional did on their own study notes in Competen Scholar. It was not assessed by Competen or by any organisation, and their notes, answers and results are not shared here.</p>
-              {!study.ok ? <p className="text-[12px] text-gray-600 mt-2">These could not be read just now.</p>
-                : !full ? (
-                  <p className="text-[12.5px] text-gray-700 mt-2">{study.data.length} self-directed study {study.data.length === 1 ? "achievement" : "achievements"}.</p>
-                ) : (
-                  <div className="space-y-1.5 mt-2">
-                    {study.data.map(a => (
-                      <div key={`${a.materialId}-${a.achievement}`} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] border-b border-sky-100 pb-1.5">
-                        <span className="font-medium text-gray-800 min-w-0">{a.label}</span>
-                        <span className="text-[10.5px] text-gray-500">{STUDY_ACHIEVEMENT[a.achievement].name} · {studyDetail(a)}{a.lastStudied ? ` · last studied ${fmt(a.lastStudied)}` : ""}</span>
-                        <span className="ml-auto text-[10.5px] font-semibold text-sky-900">{EVIDENCE_LABEL.self_directed}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-            </div>
-          )}
-
-          {evaluations && (!evaluations.ok ? !evaluations.notProvisioned : evaluations.data.length > 0) && (
-            <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">Educational evaluations the professional chose to show</h2>
-              <p className="text-[11.5px] text-indigo-950 mt-0.5 leading-relaxed">{EVIDENCE_LABEL.educational_evaluation}. A formative evaluation of their own learning in Competen Scholar, from their own practice. It is not an assessment of competence, it was not made by Competen or any organisation, and their notes and answers are not shared here.</p>
-              {!evaluations.ok ? <p className="text-[12px] text-gray-600 mt-2">These could not be read just now.</p>
-                : !full ? (
-                  <p className="text-[12.5px] text-gray-700 mt-2">{evaluations.data.length} educational {evaluations.data.length === 1 ? "evaluation" : "evaluations"}.</p>
-                ) : (
-                  <div className="space-y-1.5 mt-2">
-                    {evaluations.data.map(ev => (
-                      <div key={ev.evaluationId} className="text-[12.5px] border-b border-indigo-100 pb-1.5">
-                        <div className="flex flex-wrap items-baseline gap-x-2">
-                          <span className="font-medium text-gray-800 min-w-0">{ev.label}</span>
-                          <span className="text-[10.5px] text-gray-500">{ev.scope} · {ev.method} · {fmt(ev.madeAt)} · {ev.confidence} · {ev.limitations} limitation{ev.limitations === 1 ? "" : "s"} stated</span>
-                          <span className="ml-auto text-[10.5px] font-semibold text-indigo-900">{EVIDENCE_LABEL.educational_evaluation}</span>
-                        </div>
-                        <p className="text-[11px] text-gray-600">{ev.dimensions.map(d => `${d.name}: ${d.reads}`).join(" · ")}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-            </div>
-          )}
-
           {!full && <p className="text-[12px] text-gray-500">This is a summary verification. The professional can share a detailed link that lists their current competencies and verified credentials.</p>}
 
           <div className="border-t border-gray-100 pt-4 text-[11px] text-gray-400 space-y-0.5">
             {share.label && <p className="text-gray-500">Purpose: {share.label}</p>}
             <p>Shared {fmt(share.created_at)} · valid until {fmt(share.expires_at)}.</p>
-            {carriesOwn
-              ? <p>A consented, time-limited link shared by the professional, revocable at any time. Competencies and credentials above the self-recorded section were issued or verified by an organisation. The self-recorded section is the professional&apos;s own account.</p>
-              : <p>A consented, time-limited verification shared by the professional. It shows only verified, current achievements and can be revoked at any time. Verified by the Competen Competency Passport.</p>}
+            <p>A consented, time-limited verification shared by the professional. It shows only verified, current achievements and can be revoked at any time. Verified by the Competen Competency Passport.</p>
           </div>
         </div>
       </div>

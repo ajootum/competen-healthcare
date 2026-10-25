@@ -91,7 +91,9 @@ const WRITES: Record<string, string[]> = {
     // LCPD-01 LCPD-6 (491): the completed learning records the person ticked for this link.
     "individual_professional_share_learning.insert",
     // COMPETENCY-01 S11 (520): the competencies, and which parts of each, the person ticked for this link.
-    "individual_professional_share_competency.insert"],
+    "individual_professional_share_competency.insert",
+    // PASSPORT-01 (540): the view (a draft, activated once), its record-level selection, and the access log /verify writes.
+    "individual_passport_share_view.insert", "individual_passport_share_view.update", "individual_passport_share_record.insert", "individual_passport_share_access.insert"],
   // PROF-PROFILE-01 part B (452): the once-only claim for profile-record reminders, released on a failed send.
   "src/lib/individual/professional/reminders.ts": ["individual_professional_evidence.update", "individual_professional_profile.update",
     "individual_professional_reminder_log.insert", "individual_professional_reminder_log.delete"],
@@ -156,6 +158,8 @@ const checkNoEstateWrite = (src: Sources) => {
     const [f, op] = w.split(": ");
     if (op.startsWith("passport_share_tokens.")) return f !== "src/lib/individual/professional/share.ts";
     if (op === "audit_log.insert") return false;
+    // PASSPORT-01 (540): the Passport view tables are the person's own, written only by share.ts.
+    if (op.startsWith("individual_passport_share_")) return f !== "src/lib/individual/professional/share.ts";
     return ESTATE_NAMED.test(op) || !op.startsWith("individual_professional_");
   });
   return { ok: bad.length === 0, detail: bad.join("; ") };
@@ -246,16 +250,19 @@ const checkRenderedLabel = (render: (v: string) => string) => {
   const sl = render("source_linked"), sd = render("self_declared"), bad = render("institution_verified");
   return { ok: /not verified/.test(sl) && /document attached/.test(sl) && /not verified/.test(sd) && bad === "", detail: `${sl} | ${sd} | ${bad}` };
 };
+// PASSPORT-01 (Stage 7, coordinator ruling 25 Oct): a Professional link shows the person's records ONLY record by
+// record, through the one read the owner previews (passport-view.ts). Never every own record: loadOwnRecords is gone
+// from /verify. Still gated on the release gate AND the companion row; a link with no 540 view carries nothing; the
+// "Verified Passport" header stays on organisation-minted links only.
 const checkVerifyPage = (src: Sources) => {
   const s = src.get("src/app/verify/[token]/page.tsx") ?? "";
-  return {
-    ok: /\(await individualAppEnabled\(admin\)\) && await shareCarriesOwnRecords\(admin, share\.id, share\.nurse_id\)/.test(s)
-      && /carriesOwn \? await loadOwnRecords\(admin, share\.nurse_id\) : null/.test(s)
-      && /EVIDENCE_LABEL\[o\.evidence\]/.test(s)
-      && /carriesOwn \? "Competen · Passport" : "Competen · Verified Passport"/.test(s)
-      && /not verified by Competen or by any organisation/.test(s),
-    detail: "the own-records section must be gated on the release gate AND the companion row, labelled by class, and unhook the Verified header",
-  };
+  const gate = /\(await individualAppEnabled\(admin\)\) && await shareCarriesOwnRecords\(admin, share\.id, share\.nurse_id\)/.test(s);
+  const recordLevel = /if \(carriesOwn\) \{\s+const meta = await loadViewMeta\(admin, share\.id, share\.nurse_id\);/.test(s)
+    && /if \(meta === null\) return <Invalid reason="This link was made before record-level sharing and carries no records\./.test(s)
+    && /await loadPassportSelection\(admin, share\.nurse_id, share\.id,/.test(s);
+  const neverAll = !/loadOwnRecords|loadStudyAchievements|loadPassportEvaluations/.test(s);
+  const header = /Competen · Passport<\/span>/.test(s) && (s.match(/Competen · Verified Passport/g) ?? []).length === 1 && s.indexOf("Competen · Verified Passport") > s.indexOf("An organisation-minted link: unchanged");
+  return { ok: gate && recordLevel && neverAll && header, detail: `release gate and companion ${gate}, record-level read only ${recordLevel}, never every own record ${neverAll}, Verified header on organisation links only ${header}` };
 };
 // PROF-PROFILE-01 part B: exactly ONE Professional file may name the verified state -- the verification module,
 // which derives it from 451 history rows whose actor the database proved is an appointed, independent verifier.
@@ -288,7 +295,7 @@ const checkDirectEntry = (src: Sources) => {
   // experience lists it -- and only Professional lists these segments, so the Scholar URL is not a page.
   const scholarSegs = new Set(EXPERIENCES.scholar.modules.map(m => m.segment));
   for (const [f, s] of pages) {
-    // A page nested under a module (PROF-EVALUATION-01: progress/evaluation) is that module's page: it names the module.
+    // A page nested under a module (PROF-EVALUATION-01: progress/evaluation, PASSPORT-01: share/preview) is that module's page: it names the module.
     const seg = /\(professional\)\/([a-z-]+)\/(?:[a-z-]+\/)*page\.tsx$/.exec(f)?.[1] ?? "";
     const listed = EXPERIENCES.professional.modules.some(m => m.segment === seg);
     if (!s.includes(`await experienceModulePage((await params).experience, "${seg}")`) || !listed || scholarSegs.has(seg) || /\bscholar\b/i.test(s)) bad.push(f);
@@ -480,9 +487,14 @@ const checkMappingWrites = (src: Sources) => {
 };
 const checkMappingWords = (src: Sources) => {
   const ui = src.get("src/app/individual/_components/professional/CompetencyLinks.tsx") ?? "";
-  const v = src.get("src/app/verify/[token]/page.tsx") ?? "";
+  // PASSPORT-01 (Stage 7): /verify renders a Professional link through passport-view.ts and PassportLinkView, which say
+  // in words that a person's own records and links are not verification.
+  const v = src.get("src/lib/individual/passport-view.ts") ?? "";
+  const r = src.get("src/app/individual/_components/passport/PassportLinkView.tsx") ?? "";
   const words = ui.includes("suggested by AI, not accepted") && ui.includes("linked by you") && !/bg-green|text-green-[0-9]+[^"]*">\{l\./.test(ui);
-  return { ok: words && /Linked by the holder to: \{o\.competencies\.join\(", "\)\} \(not verified\)/.test(v), detail: `ui words ${words}` };
+  const verifyWords = /"Supporting evidence linked by the professional, not verification"/.test(v) && /"A credential recorded by the professional, not verified"/.test(v)
+    && /A course completion or a formative evaluation is not a verified clinical competence\./.test(r);
+  return { ok: words && verifyWords, detail: `ui words ${words}, /verify says not verified ${verifyWords}` };
 };
 // The Holdings patient-identifier screen, on the way in and the way out, before anything reaches the model.
 const checkIdentifierScreen = (src: Sources) => {
@@ -587,6 +599,7 @@ function main() {
   red("E3 when a foreign class passes through", checkPassportItems(r => (ownRecordsFrom(r) ?? []).concat([{ kind: "credential", title: "Forged", detail: null, date: null, expires: null, evidence: "independently_verified" as never, competencies: [] }])));
   red("E3 when private text leaks", checkPassportItems(r => (ownRecordsFrom(r) ?? []).map(i => i.kind === "credential" ? { ...i, detail: "private detail" } : i)));
   red("E4 when a foreign class renders", checkRenderedLabel(v => v === "institution_verified" ? "<span>Verified</span>" : renderToStaticMarkup(createElement(ClassLabel, { value: v }))));
+  red("E5 on a Professional link showing every own record", checkVerifyPage(new Map([...ALL].map(([f, s]) => [f, f === "src/app/verify/[token]/page.tsx" ? s + "\nconst all = await loadOwnRecords(admin, share.nurse_id);" : s]))));
   red("E5 without the release gate", checkVerifyPage(new Map([...ALL].map(([f, s]) => [f, f === "src/app/verify/[token]/page.tsx" ? s.replace("(await individualAppEnabled(admin)) && await shareCarriesOwnRecords(admin, share.id, share.nurse_id)", "await shareCarriesOwnRecords(admin, share.id, share.nurse_id)") : s]))));
   red("N1 on a write to notifications", checkNoEstateNotifications(plant("src/lib/individual/professional/reminders.ts", `admin.from("notifications").insert({})`)));
   red("N1 on reading notification_preferences", checkNoEstateNotifications(plant("src/lib/individual/professional/preferences.ts", `admin.from("notification_preferences").select("email")`)));
@@ -624,7 +637,7 @@ function main() {
   red("M3 when a proposal outside the catalogue is stored", checkMappingWrites(mapPlant(MAP_FILE, "if (!offered(catalogue, p.competencyId) || existing.has(", "if (existing.has(")));
   red("M3 when the AI is called before the quota", checkMappingWrites(mapPlant(MAP_ROUTE, "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId))", "{ ok: true, limit: 0 }")));
   red("M4 on a green chip", checkMappingWords(mapPlant("src/app/individual/_components/professional/CompetencyLinks.tsx", "border-amber-300 bg-amber-50", "border-green-300 bg-green-50")));
-  red("M4 when /verify drops not verified", checkMappingWords(mapPlant("src/app/verify/[token]/page.tsx", " (not verified)</span>", "</span>")));
+  red("M4 when /verify drops not verified", checkMappingWords(mapPlant("src/lib/individual/passport-view.ts", "Supporting evidence linked by the professional, not verification", "Supporting evidence linked by the professional")));
   red("M6 when the input is not screened", checkIdentifierScreen(mapPlant(MAP_FILE, "texted.filter(s => findPatientIdentifiers(s.text).length === 0)", "texted")));
   red("U1 on a server-decided details open", checkAddPanelsStayOpen(mapPlant(PRO_PAGES_DIR + "development/page.tsx", '<AddPanel label="Add a goal"', '<details open={goals.length === 0}></details><AddPanel label="Add a goal"')));
   red("U1 on an AddPanel that follows the suggestion closed", checkAddPanelsStayOpen(mapPlant(FORMS_FILE, "if (suggestOpen) setOpen(true);", "setOpen(suggestOpen);")));

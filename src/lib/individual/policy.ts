@@ -30,6 +30,7 @@ import {
 import {
   DEFAULT_COMPETENCY_CATEGORIES, DEFAULT_CONFIDENCE, DEFAULT_EVIDENCE_TYPES, DEFAULT_RELATIONS, SHARE_PARTS, SHARE_PART_LABEL, type SharePart,
 } from "./professional/competency-vocabulary";
+import { CATEGORY_LABEL as PASSPORT_CATEGORY_LABEL, DEFAULT_PURPOSES, PASSPORT_CATEGORIES, type PassportCategory } from "./passport-vocabulary";
 
 // ── COMPETEN INDIVIDUAL POLICY ── COMPETEN-CONFIG-002 items 4-7 ─────────────────────────────────────────
 //
@@ -71,7 +72,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
-  | "professional_need_sources" | "professional_competency_share_parts" | "scholar_upload_formats" | "scholar_learning_actions"
+  | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
   | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules";
@@ -85,11 +86,12 @@ export type OptionsPolicyKey = "scholar_institutions" | "professional_evaluation
   | "professional_need_categories" | "professional_need_motivations" | "professional_need_priorities" | "professional_reflection_templates"
   | "professional_goal_types" | "professional_goal_priorities" | "professional_activity_types" | "professional_milestone_types"
   | "professional_goal_templates" | "professional_goal_evidence_kinds"
-  | "professional_competency_categories" | "professional_self_assessment_confidence" | "professional_evidence_types" | "professional_evidence_relations";
+  | "professional_competency_categories" | "professional_self_assessment_confidence" | "professional_evidence_types" | "professional_evidence_relations"
+  | "passport_purposes";
 /** COMPETEN-PROFESSIONAL-PROFILE-01: an ORDERED choice from a fixed list (form fields, profile sections). */
 export type SequencePolicyKey = "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages"
   | "professional_goal_fields" | "professional_goal_statuses" | "professional_activity_statuses" | "professional_goal_review_fields"
-  | "professional_self_assessment_fields";
+  | "professional_self_assessment_fields" | "passport_sections";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
 export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_profile_ai"
@@ -97,6 +99,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "professional_need_learning" | "professional_reflection_ai"
   | "professional_goal_reopen" | "professional_plan_competency_links" | "professional_plan_learning" | "professional_plan_ai" | "professional_plan_ai_reflections"
   | "professional_competency_personal" | "professional_competency_ai"
+  | "passport_recipient_label" | "passport_presentation" | "passport_validity_display" | "passport_export" | "passport_ai"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations"
@@ -558,6 +561,66 @@ const PROFESSIONAL_COMPETENCY_POLICIES: readonly PolicyDef[] = [
     help: "Whether a person may ask the personal AI to explore a competency, reflect on a self-assessment, suggest evidence mappings or summarise evidence. AI fair use and model eligibility apply. Nothing is saved unless the person accepts it, and AI never verifies.",
     options: [{ value: "on", label: "On, when the person asks" }, { value: "off", label: "Off" }], fallback: "on",
     limitReason: "Two choices. Competencies and evidence work fully without AI.",
+  },
+];
+
+// ── COMPETEN-PROFESSIONAL-PASSPORT-01, Professional Stage 7: THE LIFELONG PASSPORT, NO CODE ─────────────────────────
+// Sections and their order, which kinds of record may be shared, purposes, whether a recipient must be named, how much
+// provenance a recipient sees, how lapsed records are shown, exports and AI. Link lifetimes are share_link_max_days.
+// Trust classes and their words are NOT configurable: a recipient relies on them. Record-level selection, revocation,
+// minimum disclosure and the draft-then-activate rule are enforced beneath configuration (540 and /verify).
+const PASSPORT_POLICIES: readonly PolicyDef[] = [
+  {
+    key: "passport_sections", kind: "sequence", product: "Professional",
+    label: "Passport sections, in order",
+    help: "The order in which a Passport and a shared view group their records. A section left out is shown last, never hidden.",
+    options: PASSPORT_CATEGORIES.map(v => ({ value: v, label: PASSPORT_CATEGORY_LABEL[v] })), fallback: PASSPORT_CATEGORIES,
+    limitReason: "Only these sections. Order only: nothing a person chose to share is ever dropped.",
+  },
+  {
+    key: "passport_shareable_kinds", kind: "set", product: "Professional",
+    label: "Kinds of record a person may put on a Passport link",
+    help: "Eligible source records and sensitive exclusions. A kind left out is never offered on a link. Private reflections, AI conversations and plans are never shareable, whatever is chosen.",
+    options: PASSPORT_CATEGORIES.map(v => ({ value: v, label: PASSPORT_CATEGORY_LABEL[v] })), fallback: PASSPORT_CATEGORIES,
+    limitReason: "Only these kinds, each chosen record by record by the person.",
+  },
+  {
+    key: "passport_purposes", kind: "options", product: "Professional", max: 20, noun: "purpose",
+    label: "Passport view purposes", help: "What a person may say a shared view is for. Shown to the recipient.",
+    fallback: DEFAULT_PURPOSES, emptyMeans: "No purpose asked", limitReason: "At most 20, each up to 160 characters.",
+  },
+  {
+    key: "passport_recipient_label", kind: "choice", product: "Professional",
+    label: "Naming the recipient", help: "Recipient restriction: whether a person must say who a view is for. It is a label for them and the recipient, never an account or an address.",
+    options: [{ value: "optional", label: "Optional" }, { value: "required", label: "Required" }], fallback: "optional",
+    limitReason: "Two choices.",
+  },
+  {
+    key: "passport_presentation", kind: "choice", product: "Professional",
+    label: "Verification presentation", help: "How much provenance a recipient sees for each record: source, issuer, date, version, method and authority, or just its trust, validity and meaning.",
+    options: [{ value: "detailed", label: "Full provenance" }, { value: "plain", label: "Trust, validity and meaning only" }], fallback: "detailed",
+    limitReason: "Two choices. Trust, validity and meaning are always shown.",
+  },
+  {
+    key: "passport_validity_display", kind: "choice", product: "Professional",
+    label: "Expired, superseded or revoked records on a link",
+    help: "Validity display: show such a record labelled as it is, or leave it off the link. It is never shown as current.",
+    options: [{ value: "show", label: "Show, labelled" }, { value: "hide", label: "Leave off the link" }], fallback: "show",
+    limitReason: "Two choices.",
+  },
+  {
+    key: "passport_export", kind: "choice", product: "Professional",
+    label: "Printable export of a shared view",
+    help: "Export template: whether a person may print or save a shared view. It carries its issue date and the link to check current status, and says that a saved copy cannot be recalled.",
+    options: [{ value: "on", label: "Allowed" }, { value: "off", label: "Off" }], fallback: "on",
+    limitReason: "Two choices.",
+  },
+  {
+    key: "passport_ai", kind: "choice", product: "Professional",
+    label: "AI help with the Passport",
+    help: "Whether a person may ask the personal AI to draft a view's summary or explain credential categories. AI fair use applies. It never shares, never creates or changes a record, an issuer or a status, and nothing is used unless the person keeps it.",
+    options: [{ value: "on", label: "On, when the person asks" }, { value: "off", label: "Off" }], fallback: "on",
+    limitReason: "Two choices. The Passport, sharing and verification work fully without AI.",
   },
 ];
 
@@ -1105,6 +1168,7 @@ export const POLICIES: readonly PolicyDef[] = [
   ...PROFESSIONAL_NEEDS_POLICIES,
   ...PROFESSIONAL_PLAN_POLICIES,
   ...PROFESSIONAL_COMPETENCY_POLICIES,
+  ...PASSPORT_POLICIES,
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1353,6 +1417,14 @@ export type IndividualPolicy = {
   professionalPlan: ProfessionalPlanPolicy;
   /** COMPETEN-PROFESSIONAL-COMPETENCY-01: competencies, self-assessment and evidence, as configured. */
   professionalCompetency: ProfessionalCompetencyPolicy;
+  /** COMPETEN-PROFESSIONAL-PASSPORT-01: the lifelong Passport and its shared views, as configured. */
+  professionalPassport: PassportPolicy;
+};
+
+/** COMPETEN-PROFESSIONAL-PASSPORT-01 (Stage 7): the Passport and its shared views, as configured. */
+export type PassportPolicy = {
+  sections: PassportCategory[]; shareable: PassportCategory[]; purposes: ContextOption[]; recipient: "optional" | "required";
+  presentation: "detailed" | "plain"; validity: "show" | "hide"; exportOn: "on" | "off"; ai: "on" | "off";
 };
 
 /** COMPETEN-PROFESSIONAL-COMPETENCY-01 (Stage 5): competencies, self-assessment and evidence, as configured. */
@@ -1466,6 +1538,18 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     professionalNeeds: resolveProfessionalNeeds(published),
     professionalPlan: resolveProfessionalPlan(published),
     professionalCompetency: resolveProfessionalCompetency(published),
+    professionalPassport: resolvePassport(published),
+  };
+}
+
+function resolvePassport(published: Map<string, any>): PassportPolicy {
+  const choice = (key: ChoicePolicyKey) => clampChoice(policyDef(key) as ChoicePolicy, published.get(policyPath(key)));
+  return {
+    sections: clampSequence(policyDef("passport_sections") as SequencePolicy, published.get(policyPath("passport_sections"))) as PassportCategory[],
+    shareable: clampSet(policyDef("passport_shareable_kinds") as SetPolicy, published.get(policyPath("passport_shareable_kinds"))) as PassportCategory[],
+    purposes: clampOptions(policyDef("passport_purposes") as OptionsPolicy, published.get(policyPath("passport_purposes"))),
+    recipient: choice("passport_recipient_label") as "optional" | "required", presentation: choice("passport_presentation") as "detailed" | "plain",
+    validity: choice("passport_validity_display") as "show" | "hide", exportOn: choice("passport_export") as "on" | "off", ai: choice("passport_ai") as "on" | "off",
   };
 }
 

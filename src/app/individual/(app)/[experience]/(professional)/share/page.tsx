@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
-import { listShares, suggestedShareDays } from "@/lib/individual/professional/share";
+import { listShares, loadShareHistory, suggestedShareDays } from "@/lib/individual/professional/share";
+import { loadProfessionalRecord } from "@/lib/individual/professional/record";
+import { loadIndividualPassport } from "@/lib/individual/passport";
+import { CATEGORY_LABEL as PASSPORT_CATEGORY_LABEL } from "@/lib/individual/passport-vocabulary";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import type { Metadata } from "next";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
@@ -9,6 +12,7 @@ import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/pro
 import { Empty, Section, fmtDate } from "../../../../_components/professional/bits";
 import CopyLink from "../../../../_components/professional/CopyLink";
 import { SITE_URL } from "@/lib/marketing/site";
+import DraftSummary from "../../../../_components/passport/DraftSummary";
 import { loadProfessionalProfile } from "@/lib/individual/professional/profile-store";
 import { chainsOf, evidenceState, stateLabel } from "@/lib/individual/professional/profile-records";
 import { NO_VERIFICATION, VERIFICATION_LABEL, loadVerifications } from "@/lib/individual/professional/profile-verification";
@@ -40,7 +44,15 @@ export default async function SharePage({ params }: { params: Promise<{ experien
   const [links, policy, view, verifications, learning, lcpd] = await Promise.all([listShares(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin),
     loadProfessionalProfile(ctx.admin, ctx.userId), loadVerifications(ctx.admin, ctx.userId, today), loadProfessionalLearning(ctx.admin, ctx.userId), loadLcpdConfig(ctx.admin)]);
   // COMPETENCY-01 S11: the person's current competencies, and the parts the configuration lets them share. Nothing ticked by default.
-  const comp = await loadCompetencyWorkspace(ctx.admin, ctx.userId);
+  const [comp, record, passport] = await Promise.all([loadCompetencyWorkspace(ctx.admin, ctx.userId), loadProfessionalRecord(ctx.admin, ctx.userId), loadIndividualPassport(ctx.admin, ctx.userId, today)]);
+  // PASSPORT-01 (540): the person's own records, offered one by one, only in kinds the configuration lets a link carry.
+  const pp = policy.professionalPassport;
+  const offer = (k: Parameters<typeof pp.shareable.includes>[0]) => pp.shareable.includes(k);
+  const ownCpd = offer("cpd") ? record.cpd ?? [] : [];
+  const ownEvidence = offer("evidence") ? record.evidence ?? [] : [];
+  const ownStudy = offer("study") && passport.study.ok ? passport.study.data.filter(s => s.itemId) : [];
+  const ownEvaluations = offer("evaluation") && passport.evaluations.ok ? passport.evaluations.data.filter(v => v.itemId) : [];
+  const history = await loadShareHistory(ctx.admin, ctx.userId, (links ?? []).map(l => l.id));
   const shareableCompetencies = comp.provisioned ? (comp.entries ?? []).filter(e => !e.removed_at) : [];
   // LCPD-01 LCPD-6: completed learning of a kind the configuration lets a person share. Nothing ticked by default.
   const shareableLearning = learning.enabled && learning.refs ? eligibleLearning(learning.refs, lcpd) : [];
@@ -63,8 +75,8 @@ export default async function SharePage({ params }: { params: Promise<{ experien
 
       <Section title="What a link shows">
         <ul className="list-disc space-y-1 pl-5 text-[14px] text-gray-700">
-          <li><span className="font-semibold">Summary:</span> counts only. How many current assessed competencies and verified credentials organisations recorded for you, and how many records you added yourself.</li>
-          <li><span className="font-semibold">Full:</span> also lists them by name. Each record you added says it is self-declared, with or without a document, and not verified.</li>
+          <li><span className="font-semibold">Record by record:</span> a link shows only what you tick for it, each record with where it came from, who issued it, whether it is current, and what it means. Nothing else of yours travels with it.</li>
+          <li><span className="font-semibold">A draft first:</span> a new link opens for nobody until you have previewed it and activated it.</li>
           <li><span className="font-semibold">Your professional profile:</span> only what you tick below for that link, each record labelled exactly as it is, including whether Competen verified it. If you later change or withdraw a record, the link stops showing it.</li>
           <li><span className="font-semibold">Completed learning:</span> only the courses you tick below for that link, each labelled exactly as it is. Never your reflections on it.</li>
           {policy.professionalEvaluation.sharing === "offer" && <li><span className="font-semibold">Professional evaluations:</span> only the recorded evaluations you tick below, shown as formative with their sources and limitations. Never your notes on them.</li>}
@@ -76,18 +88,43 @@ export default async function SharePage({ params }: { params: Promise<{ experien
         </p>
       </Section>
 
-      <Section title="Create a link">
-        <ApiForm action="/api/individual/professional/share" submitLabel="Create link" accent={x.accent} savedText="Link created. It is listed below.">
+      <Section title="Create a Passport view">
+        <ApiForm action="/api/individual/professional/share" submitLabel="Create draft" accent={x.accent} savedText="Draft created. Preview it below, then activate it when it is right.">
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="What it shows" htmlFor="sh-scope">
-              <select id="sh-scope" name="scope" className={inputCls} defaultValue="summary">
-                <option value="summary">Summary</option>
-                <option value="full">Full</option>
-              </select>
+            {pp.purposes.length > 0 && (
+              <Field label="What it is for (optional)" htmlFor="sh-purpose">
+                <select id="sh-purpose" name="purpose" className={inputCls} defaultValue=""><option value="">Not stated</option>{pp.purposes.map(o => <option key={o.code} value={o.code}>{o.label}</option>)}</select>
+              </Field>
+            )}
+            <Field label={pp.recipient === "required" ? "Who it is for" : "Who it is for (optional)"} htmlFor="sh-recipient" hint="A label for you and them. No account or address is created.">
+              <input id="sh-recipient" name="recipient" maxLength={160} required={pp.recipient === "required"} className={inputCls} />
             </Field>
             <Field label="Valid for (days)" htmlFor="sh-days" hint={`Up to ${maxDays} days.`}><input id="sh-days" name="days" type="number" min={1} max={maxDays} defaultValue={suggestedShareDays(maxDays)} className={inputCls} /></Field>
-            <Field label="Purpose (optional)" htmlFor="sh-label" hint="Shown on the link, e.g. a job application."><input id="sh-label" name="label" maxLength={120} className={inputCls} /></Field>
           </div>
+          <Field label="A short summary in your own words (optional)" htmlFor="sh-summary"><textarea id="sh-summary" name="summary" rows={3} maxLength={2000} className={inputCls} /></Field>
+          {pp.ai === "on" && <DraftSummary targetId="sh-summary" purposeId="sh-purpose" accent={x.accent} />}
+          {offer("institution") && (
+            <label className="flex items-start gap-2 text-[14px] text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]">
+              <input type="checkbox" name="includeInstitution" value="true" className="mt-1 h-4 w-4 rounded border-gray-400" />
+              <span>Include records organisations issued or verified for you (current assessed competencies and verified credentials)</span>
+            </label>
+          )}
+          {([["cpd", ownCpd.map(c => ({ id: c.id, title: c.title, note: fmtDate(c.activity_date) }))],
+             ["evidence", ownEvidence.map(e => ({ id: e.id, title: e.title, note: e.kind === "credential" ? "credential" : "supporting evidence" }))],
+             ["study", ownStudy.map(s => ({ id: s.itemId!, title: s.label, note: PASSPORT_CATEGORY_LABEL.study }))],
+             ["scholar_evaluation", ownEvaluations.map(v => ({ id: v.itemId!, title: v.label, note: `${PASSPORT_CATEGORY_LABEL.evaluation} (educational)` }))]] as const)
+            .filter(([, list]) => list.length > 0).map(([kind, list]) => (
+            <fieldset key={kind} className="rounded-xl border border-gray-200 p-4">
+              <legend className="px-1 text-[13.5px] font-semibold text-gray-800">{PASSPORT_CATEGORY_LABEL[kind === "scholar_evaluation" ? "evaluation" : kind]} (optional)</legend>
+              <p className="text-[12.5px] text-gray-500">Nothing is included unless you tick it, for this view only.</p>
+              {list.slice(0, 200).map(r => (
+                <label key={r.id} className="mt-1 flex items-start gap-2 text-[14px] text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]">
+                  <input type="checkbox" name={`record:${kind}:${r.id}`} value="true" className="mt-1 h-4 w-4 rounded border-gray-400" />
+                  <span>{r.title} <span className="text-[12.5px] text-gray-500">· {r.note}</span></span>
+                </label>
+              ))}
+            </fieldset>
+          ))}
           {(canShareOverview || shareable.length > 0) && (
             <fieldset className="rounded-xl border border-gray-200 p-4">
               <legend className="px-1 text-[13.5px] font-semibold text-gray-800">From your professional profile (optional)</legend>
@@ -165,15 +202,21 @@ export default async function SharePage({ params }: { params: Promise<{ experien
           <ul className="divide-y divide-gray-100">
             {links.map(l => {
               const expired = !!l.expires_at && l.expires_at < now;
-              const state = l.revoked ? "Withdrawn" : expired ? "Expired" : "Active";
+              const h = history.get(l.id);
+              const state = l.revoked ? "Withdrawn" : expired ? "Expired" : h?.draft ? "Draft" : "Active";
+              const preview = `${experienceHref("professional", "share/preview")}?link=${l.id}`;
               return (
                 <li key={l.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
                   <div className="min-w-0">
-                    <p className="text-[14px] font-semibold text-gray-900">{l.label ?? "Passport link"} <span className="font-normal text-gray-500">· {l.scope === "full" ? "Full" : "Summary"} · {state}</span></p>
-                    <p className="text-[12.5px] text-gray-500">Created {fmtDate(l.created_at)} · until {fmtDate(l.expires_at)} · opened {l.view_count} {l.view_count === 1 ? "time" : "times"}</p>
+                    <p className="text-[14px] font-semibold text-gray-900">{h?.purpose ?? l.label ?? "Passport link"}{h?.recipient ? <span className="font-normal"> · for {h.recipient}</span> : null} <span className="font-normal text-gray-500">· {state}</span></p>
+                    <p className="text-[12.5px] text-gray-500">Created {fmtDate(l.created_at)} · until {fmtDate(l.expires_at)} · opened {h ? h.opened : l.view_count} {(h ? h.opened : l.view_count) === 1 ? "time" : "times"}{h?.lastOpened ? `, last ${fmtDate(h.lastOpened)}` : ""}{h?.refused ? ` · ${h.refused} refused while it was closed` : ""}</p>
                     {state === "Active" && <CopyLink url={`${SITE_URL}/verify/${l.token}`} accent={x.accent} />}
+                    {h && <Link href={preview} className="text-[12.5px] font-semibold underline" style={{ color: x.accent }}>{state === "Draft" ? "Preview what they will see" : "See what they see"}</Link>}
                   </div>
-                  {state === "Active" && <ApiButton action={`/api/individual/professional/share?id=${l.id}`} method="PATCH" label="Withdraw" confirm="Withdraw this link? Anyone holding it will no longer be able to open it." />}
+                  <div className="flex flex-wrap gap-2">
+                    {state === "Draft" && <ApiButton action={`/api/individual/professional/share?id=${l.id}`} method="PATCH" body={{ action: "activate" }} label="Activate" confirm="Activate this view? Anyone with the link can then open it until it expires or you withdraw it." />}
+                    {(state === "Active" || state === "Draft") && <ApiButton action={`/api/individual/professional/share?id=${l.id}`} method="PATCH" label={state === "Draft" ? "Discard" : "Withdraw"} confirm={state === "Draft" ? "Discard this draft?" : "Withdraw this link? Anyone holding it will no longer be able to open it."} />}
+                  </div>
                 </li>
               );
             })}
