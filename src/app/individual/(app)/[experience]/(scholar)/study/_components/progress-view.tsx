@@ -184,6 +184,15 @@ export function ProgressWorkspace({ v, sections, period }: { v: Extract<Progress
               ))}</ul>
             </>
           )}
+          {/* Topics: the classification of the notes, each opening its evidence -- with or without a catalogue. */}
+          {v.topics.length > 0 && (
+            <nav aria-labelledby="pg-topics-h" className="mt-4">
+              <h3 id="pg-topics-h" className="text-[13px] font-bold text-gray-800">Explore by topic</h3>
+              <ul className="mt-1 flex flex-wrap gap-2">{v.topics.map(t => (
+                <li key={t}><Link href={exploreHref("topic", t)} className={`inline-flex min-h-[36px] items-center rounded-full border border-gray-300 bg-white px-3 text-[13px] text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[44px] ${focusRing}`}>{t}</Link></li>
+              ))}</ul>
+            </nav>
+          )}
         </section>
       )}
     </div>

@@ -18,6 +18,8 @@ export type Engagement = { windowDays: number; studyDays: number; answers: numbe
 export type ProgressView = {
   ok: true; evaluation: Evaluation; engagement: Engagement; history: History; next: NextStep[];
   materials: { id: string; title: string; classified: boolean }[];
+  /** The topics the student's notes cover most often (classification), each a way into its evidence. */
+  topics: string[];
   context: { programme: string | null; level: string | null };
   kept: { id: string; createdAt: string; confidence: string; label: string; method: string; kind: string }[];
 } | { ok: false; error: string };
@@ -64,6 +66,10 @@ export async function loadProgress(admin: any, userId: string, policy: Individua
   }).filter(m => m.ok);
 
   const contexts = ctx.ok ? ctx.periods.map(p => ({ programme: p.programmeCode, level: p.levelLabel, from: p.effectiveFrom, to: p.effectiveTo })) : [];
+  // Topics: the classification's own words, most frequent first, at most twelve.
+  const topicCount = new Map<string, number>();
+  for (const lists of topics?.values() ?? []) for (const list of lists) for (const t of list) { const k = t.trim(); if (k.length >= 2) topicCount.set(k, (topicCount.get(k) ?? 0) + 1); }
+  const topTopics = [...topicCount.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).slice(0, 12).map(([t]) => t);
   const keptRows = kept.ok ? kept.data : [];
   const history = learningHistory({
     questions: d.questions, attempts: d.attempts, reviews: d.reviews, decisions: d.decisions, checks: d.checks, contexts,
@@ -71,7 +77,7 @@ export async function loadProgress(admin: any, userId: string, policy: Individua
   }, { kind: opts.period ?? policy.scholarProgressPeriod, now, count: policy.scholarProgressPeriods, minPerPeriod: Math.max(2, Math.floor(policy.scholarEvaluationMinEvidence / 2)) });
 
   return {
-    ok: true, evaluation: e, engagement, history, materials, context: live.context,
+    ok: true, evaluation: e, engagement, history, materials, topics: topTopics, context: live.context,
     next: nextSteps(e, { unclassified: materials.filter(m => !m.classified), strongMaterials, rules: policy.scholarProgressNextRules as NextRule[], max: policy.scholarProgressNextMax }),
     kept: keptRows.map(k => ({ id: k.id, createdAt: k.createdAt, confidence: k.confidence, label: k.scope?.label ?? "An evaluation", method: k.method, kind: k.kind })),
   };
