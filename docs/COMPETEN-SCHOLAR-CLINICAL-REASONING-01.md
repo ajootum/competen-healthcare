@@ -111,10 +111,12 @@ Composite (id, user_id) foreign keys throughout. RLS on, own-row read only. A st
   - **Withdrawal:** withdraw and revoke are never gated. Deleting a material, or erase-all, withdraws the cases written from it first (C-e).
 - **Existing S4 practice cases** are offered through the same path, converted to the minimal blueprint (`s4CaseBlueprint`).
 - **Library plays** go only through `library.ts` (`startCaseSession`, `revealInSession`, `answerInSession`). Scholar writes no library session (coordinator decision; K33).
-- **Live AI feedback on a library case's written decision: NOT YET.** What it needs (the decision's expected answer) is inside the full blueprint, which never leaves `src/lib/cases` (case-intelligence K7). It waits for a server-side feedback context from `library.ts` (IND-007).
-  - **When it lands, who pays:** the owner is resolved by rule for `case.live_with_stored`, the student's Individual budget, never the browser. The call is `runOwnedAi` via `scholarOwnedRunner` (http.ts, ready), counted against `caseSessionRecord(sessionId)`.
-  - **When it lands, where it is kept:** it is recorded through `recordSessionFeedback` (424).
-  - **Until then:** a library written answer shows its deterministic answered view.
+- **Live AI feedback on a library case's written decision** (`clinical-library-feedback.ts`, server only). It is given where policy is `ai_then_self`, the student's AI allows `evaluate` and the AI preflight passes.
+  - **What it reads:** only the narrow context `library.ts` gives for one answered written decision (`sessionFeedbackContext`, #76): its prompt, expected answer and rubric, the student's text, the findings they had seen, the competencies. Never the full blueprint (case-intelligence K7). Only this server file names it (K12, K37).
+  - **Who pays:** the owner is resolved by rule for `case.live_with_stored`, the student's Individual budget, never the browser. The call is `runOwnedAi` via `scholarOwnedRunner` (activity `evaluate`), with its risk (prompt, answer, competencies), counted against `caseSessionRecord(sessionId)`.
+  - **How it is checked:** like every evaluation, through `runCaseReasoning` and `parseEvaluation`. Feedback that fails its check is withheld, not recorded.
+  - **Where it is kept:** recorded through `recordSessionFeedback` (424), and labelled AI evaluation wherever it is shown. Every attempt is audited with its outcome.
+  - **Where it is not given:** the student sees the deterministic answered view and reviews their answer themselves.
 - **Off by default:** everything library-facing sits behind `case_library` (default OFF).
 
 ## 5. Reused Holdings engines
@@ -144,7 +146,7 @@ Composite (id, user_id) foreign keys throughout. RLS on, own-row read only. A st
 |---|---|---|
 | Drafting a private case (`case_steps`) | Individual | `runMeteredAi` via `scholarAiRunner`, with its risk |
 | AI feedback on written reasoning, private case (`evaluate`) | Individual | `runMeteredAi`, with its risk |
-| AI feedback on written reasoning, library case (`evaluate`, `case.live_with_stored`) | Individual, by rule | **pending** the `library.ts` feedback context; then `resolveOwner` → `runOwnedAi`, `record = caseSessionRecord` |
+| AI feedback on written reasoning, library case (`evaluate`, `case.live_with_stored`) | Individual, by rule | `sessionFeedbackContext` → `resolveOwner` → `runOwnedAi`, with its risk, `record = caseSessionRecord(sessionId)` → `recordSessionFeedback` |
 | Replaying a stored or library case (`case.replay_stored`) | none | no AI |
 | Offering a case | none | no AI (`candidates.ts`) |
 | Platform screening and shared case development | Platform | IND-007 (not Scholar) |
@@ -189,15 +191,16 @@ Run `scripts/scholar-clinical01-harness.ts`:
   - **K34:** the learner view only reaches the browser;
   - **K35:** a private case is stored only after its checks, private formative and linear;
   - **K36:** feedback is labelled honestly;
+  - **K37** (follow-up PR, 148/148): live AI feedback on a library case comes from `library.ts`'s narrow context, is charged by rule against the session, is checked, and is recorded only by the shared delivery. Plant P55 goes red when any of those breaks, or when a route names the context;
   - **S1 narrowed and S1b added** for the one governed contribution path;
   - **planted controls:** P51–P54, which go red when the rule is broken.
-- `case-intelligence-harness` (IND-007's): K7 and K11 pass. Scholar never loads the full blueprint and never writes a library session.
+- `case-intelligence-harness` (IND-007's): K7, K11 and K12 pass, with their plants. Scholar never loads the full blueprint, never writes a library session, and the feedback context never reaches a browser.
 - `individual-config-harness` 41/41.
 - `next build`: exit 0.
 
 ## 9. Genuine remaining gaps
 
-- **AI feedback on a library case's written decision.** It needs a server-side feedback context from `library.ts` (IND-007's), because the full blueprint never leaves `src/lib/cases` (case-intelligence K7). Scholar's owned runner is ready for it.
+- **AI feedback on a library case's written decision:** built (follow-up PR, on `sessionFeedbackContext`). Its live run needs `case_library` ON, metering ON and a deliverable library case, the same as steps 9, 14 and 15 below.
 
 - **Steps 9, 14 and 15 (mine, pending):** they need `case_library` ON (the owner's), a published, approved library case (IND-007's steps 9–13), and metering ON. The harness runs them when those hold.
 - **Clinical context and the library:** the context shapes a private case. Matching library cases by context needs the library's specialty taxonomy terms, which the context codes do not yet map to. Library search by competency and topic works.

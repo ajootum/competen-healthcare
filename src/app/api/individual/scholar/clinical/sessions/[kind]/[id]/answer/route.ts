@@ -6,7 +6,9 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { getPassage, getPrivateCase, getPrivateCaseSession } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
-import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
+import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRequestId, scholarRisk } from "@/lib/individual/scholar/http";
+import { libraryReasoningFeedback } from "@/lib/individual/scholar/clinical-library-feedback";
+import { MARKING_LABEL } from "@/lib/individual/scholar/config";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runCaseReasoning } from "@/lib/individual/scholar/generation";
 import { answerPlay, isPlayKind } from "@/lib/individual/scholar/clinical-routes";
@@ -56,8 +58,14 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
 
   const r = await answerPlay(ctx.admin, ctx.userId, kind, id, { decisionToken: body.decisionToken, optionTokens, text }, judge, body?.hints === true);
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: (r as { status?: number }).status ?? 400 });
-  // A written decision in a LIBRARY case gets no AI feedback yet: what it needs (the decision's expected answer) is
-  // inside the full blueprint, which never leaves src/lib/cases (case-intelligence K7). It waits for a server-side
-  // feedback context from library.ts (IND-007). Its deterministic answered view is shown as for every decision.
+  // A written decision in a LIBRARY case: live AI feedback on the student's own budget (case.live_with_stored), from the
+  // narrow server-side context library.ts gives (never the blueprint), recorded by the shared delivery (424). Where it
+  // is not given, the student reviews their answer themselves.
+  if (kind === "library" && text && policy.scholarCaseReasoningFeedback === "ai_then_self"
+    && activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate").available && !(await aiPreflight(ctx))) {
+    const f = await libraryReasoningFeedback(ctx.admin, { userId: ctx.userId, sessionId: id, decisionToken: body.decisionToken, requestId: `${scholarRequestId(ctx, req)}:feedback` });
+    await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reasoning", id, { kind, outcome: f.ok ? "recorded" : f.reason, model: f.ok ? f.model : null });
+    if (f.ok) return NextResponse.json({ ...r, feedback: { ...r.feedback, marking: "ai_evaluation", markingLabel: MARKING_LABEL.ai_evaluation, aiFeedback: f.text } });
+  }
   return NextResponse.json(r);
 }
