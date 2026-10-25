@@ -14,7 +14,9 @@ import { resolveHqPositions } from "@/lib/hq/context";
 import { rememberStaffWorkspace } from "@/lib/staff/workspace-preference";
 import { hqSearchCatalogue } from "@/lib/hq/search-catalogue";
 import HqSearchLauncher from "./_components/HqSearchLauncher";
-import { ALL_NAV_TABLES } from "./_components/nav-tables";
+import { HQ_SEARCH_TABLES } from "./_components/nav-tables";
+import HqMobileNav from "./_components/HqMobileNav";
+import { offNavSwitches } from "@/lib/hq/nav-switches";
 import SessionIdentityNotice, { RememberSessionIdentity } from "@/components/SessionIdentityNotice";
 import { resolveMissionProfile } from "@/lib/hq/mission-profile";
 import ProductDirectorSidebar from "./_components/ProductDirectorSidebar";
@@ -259,7 +261,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
             />
           }
           search={
-            <HqSearchLauncher destinations={hqSearchCatalogue(ALL_NAV_TABLES, { isOwner, capabilities: hqCapabilities })} />
+            <HqSearchLauncher destinations={hqSearchCatalogue(HQ_SEARCH_TABLES, { isOwner, capabilities: hqCapabilities })} />
           }
         >
           {children}
@@ -268,9 +270,18 @@ export default async function SuperAdminLayout({ children }: { children: React.R
     );
   }
 
+  // HQ-IA-02: the launch flags that are off, for the sidebar's status badges only (null when unreadable).
+  const offSwitches = await offNavSwitches(admin);
+  const sidebar = (
+    <WorkspaceSidebar profileName={profile?.full_name ?? null} roles={userRoles} activeRole={activeRole} workspaces={workspaces}
+      isOwner={isOwner} hqCapabilities={hqCapabilities} positionNames={hqPositions.positionNames} offSwitches={offSwitches} />
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
+      {/* HQ-IA-02: the same sidebar, in a drawer, below md -- HQ had no navigation on a phone at all. */}
+      <HqMobileNav title={isOwner ? "Platform Super Admin" : "Competen HQ"}>{sidebar}</HqMobileNav>
       {/* Records who opened this tab. Writes once; see the module header for why first-write-wins. */}
       <RememberSessionIdentity userId={user.id} displayName={profile?.full_name ?? null} />
       <div className="hidden md:block md:ml-56">
@@ -294,8 +305,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
           {/* CP-HQ-NAV-001. ⚠ isOwner IS PASSED SEPARATELY AND THAT IS LOAD-BEARING: hqCapabilities is []
               for an owner, because the resolution above short-circuits before reading any HQ table. The
               filter must not infer ownership from the list, or every owner gets an empty sidebar. */}
-          <WorkspaceSidebar profileName={profile?.full_name ?? null} roles={userRoles} activeRole={activeRole} workspaces={workspaces}
-            isOwner={isOwner} hqCapabilities={hqCapabilities} positionNames={hqPositions.positionNames} />
+          {sidebar}
         </aside>
 
         {/* Pages stay readable at max-w-6xl; a workspace page opts out of the
@@ -306,7 +316,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
               the launcher itself holds no permission logic to read around. It grants nothing: every
               destination re-authorises on arrival. */}
           <div className="mb-4 flex justify-end">
-            <HqSearchLauncher destinations={hqSearchCatalogue(ALL_NAV_TABLES, { isOwner, capabilities: hqCapabilities })} />
+            <HqSearchLauncher destinations={hqSearchCatalogue(HQ_SEARCH_TABLES, { isOwner, capabilities: hqCapabilities })} />
           </div>
           {children}
         </main>

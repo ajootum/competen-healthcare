@@ -1,30 +1,34 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
-import NavGroup from "@/components/NavGroup";
+import { NavGroupOrPlain } from "@/components/NavGroup";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import type { AppRole } from "@/lib/roles";
-import { parentHrefs } from "@/lib/nav/active";
+import { parentHrefs, pathMatches } from "@/lib/nav/active";
 import { filterHqNav } from "@/lib/hq/nav-filter";
-import { GENERAL_NAV, CKP_NAV, STUDIO_NAV, AI_NAV, GOV_NAV, SYS_NAV, OVERVIEW_HREFS } from "./nav-tables";
+import { HQ_WORKSPACES, OVERVIEW_HREFS, hqWorkspaceForPath, type HqSection, type NavEntry } from "./nav-tables";
 
-// Super-admin sidebar with dedicated workspace shells. Inside /super-admin/ckp/*
-// it renders the Clinical Knowledge Platform nav, and inside /super-admin/ai/*
-// the AI & Intelligence Platform nav (each with NAVIGATION + QUICK ACCESS),
-// matching their mockups; elsewhere it renders the full Mission Control nav.
-// Branches on the pathname so the swap is instant on client navigation.
+// Competen HQ sidebar (COMPETEN-HQ-IA-02): seven workspaces, always listed, and the one you are in
+// expanded into its contextual sections. Which workspace is "in" is the registry's answer for the
+// pathname (hqWorkspaceForPath), so the swap is instant on client navigation and needs no state.
 //
-// The tables themselves live in ./nav-tables so the CP-HQ-NAV-001 capability filter can be asserted
-// against the real data rather than a fixture.
+// The registry lives in ./nav-tables so the CP-HQ-NAV-001 capability filter can be asserted against the
+// real data rather than a fixture.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+const ROW = "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors";
+const ROW_ACTIVE = "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs bg-rose-900/50 text-white font-medium";
+const CHILD = "flex items-center gap-2 pl-9 pr-3 py-1 rounded-lg text-[11px] text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors";
+const CHILD_ACTIVE = "flex items-center gap-2 pl-9 pr-3 py-1 rounded-lg text-[11px] bg-rose-900/50 text-white font-medium";
 
 // activeRole is NULLABLE as of CP-SPLIT-002. highestRole() returns null for an identity that holds no
 // estate role at all, and RoleSwitcher indexes ROLE_CONFIG[activeRole] -- so passing a fabricated role
 // to keep the type happy would print a badge the person does not hold, which is the exact defect this
 // arc removes. No role, no switcher.
-export default function WorkspaceSidebar({ profileName, roles, activeRole, workspaces, isOwner, hqCapabilities, positionNames = [] }: {
+export default function WorkspaceSidebar({ profileName, roles, activeRole, workspaces, isOwner, hqCapabilities, positionNames = [], offSwitches = null }: {
   profileName: string | null;
   roles: AppRole[];
   activeRole: AppRole | null;
@@ -37,64 +41,104 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
   /** CPR-PD-001 s6: the names of the live appointments this person is here by, for the identity line. */
   positionNames?: string[];
   hqCapabilities: string[];
+  /**
+   * The launch flags that are OFF, read on the server. Null when they could not be read: then no badge is
+   * shown at all, because "Off" printed on a failed read is a claim nobody measured.
+   * ⚠ A STATUS, NEVER A VISIBILITY INPUT. The link stays, because the page stays reachable to the people
+   * who configure the product before anybody switches it on.
+   */
+  offSwitches?: string[] | null;
 }) {
   const pathname = usePathname();
-  const inCkp = pathname.startsWith("/super-admin/ckp");
-  const inStudio = pathname.startsWith("/super-admin/studio") || pathname.startsWith("/super-admin/content") || pathname.startsWith("/super-admin/assessment-methods");
-  const inAi = pathname === "/super-admin/ai" || pathname.startsWith("/super-admin/ai/");
-  const inGov = pathname === "/super-admin/governance" || pathname.startsWith("/super-admin/governance/");
-  const inSys = pathname === "/super-admin/system" || pathname.startsWith("/super-admin/system/");
-  const inWorkspace = inCkp || inStudio || inAi || inGov || inSys;
-  const table = inCkp ? CKP_NAV : inStudio ? STUDIO_NAV : inAi ? AI_NAV : inGov ? GOV_NAV : inSys ? SYS_NAV : GENERAL_NAV;
-  // CP-HQ-NAV-001. Owners get `table` back unchanged.
-  const nav = filterHqNav(table, { isOwner, capabilities: hqCapabilities });
-  // ⚠ FLATTENED ACROSS GROUPS, NOT COMPUTED PER GROUP. /super-admin sits alone in MISSION CONTROL and is a
-  // prefix of every other entry in the sidebar, so a per-group scan would never see it as a parent at all.
-  //
-  // ⚠ AND DERIVED FROM THE UNFILTERED TABLE. If a viewer cannot see a child, the parent would stop looking
-  // like a parent and revert to prefix matching -- so in observe mode, where a would_deny still renders the
-  // page, an appointee standing on a hidden child would light up its parent. Highlighting must not depend on
-  // who is looking.
-  const exactHrefs = parentHrefs(table.flatMap(g => g.items));
-  const home = inCkp ? "/super-admin/ckp" : inStudio ? "/super-admin/studio" : inAi ? "/super-admin/ai" : inGov ? "/super-admin/governance" : inSys ? "/super-admin/system" : "/super-admin";
-  const subtitle = inCkp ? "Clinical Knowledge Platform" : inStudio ? "Competency Studio" : inAi ? "AI & Intelligence" : inGov ? "Governance & Compliance" : inSys ? "System & Security" : "Mission Control";
+  const activeKey = hqWorkspaceForPath(pathname);
+  // A deep page (a Practice child, a CGR module) can sit well below the fold of its workspace: bring the
+  // lit row into view when the page changes. DOM only, no state.
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    navRef.current?.querySelector("a[aria-current=\"page\"]")?.scrollIntoView({ block: "nearest" });
+  }, [pathname]);
+  const inWorkspace = activeKey !== "mission";
+
+  // CP-HQ-NAV-001, per workspace. Owners get each table back unchanged; a workspace with nothing visible
+  // is not drawn (the same rule that drops an empty group, one level up).
+  const visible = HQ_WORKSPACES.map(w => {
+    const table = w.sections;
+    const nav = filterHqNav(table, { isOwner, capabilities: hqCapabilities });
+    // ⚠ DERIVED FROM THE UNFILTERED TABLE, children included. If a viewer cannot see a child, the parent
+    // would stop looking like a parent and revert to prefix matching -- so in observe mode an appointee
+    // standing on a hidden child would light up its parent. Highlighting must not depend on who is looking.
+    const exactHrefs = parentHrefs(table.flatMap(g => g.items.flatMap(i => [i, ...(i.children ?? [])])));
+    // The label goes to the first destination this viewer can open, in registry order: no landing page
+    // was built for a workspace, and clicking a label must still have a predictable destination.
+    const home = nav.flatMap(s => s.items).find(i => i.kind !== "cross" && i.kind !== "external")?.href
+      ?? nav[0]?.items[0]?.href;
+    return { w, nav, exactHrefs, home };
+  }).filter(v => v.nav.length > 0 && v.home);
+
   // ⚠ THE NAME OF THIS PLACE, AS TOLD TO THE PERSON STANDING IN IT. "Super Admin" is a role, and an HQ
   // appointee does not hold it -- Elisha holds a POSITION (Practice Product Director) that opens three
   // pages. Labelling their console "Super Admin" would tell them something untrue about their own
   // authority, in the one product whose entire point is that a position is not a role.
   const spaceLabel = isOwner ? "Super Admin" : "Competen HQ";
+  const off = new Set(offSwitches ?? []);
+
+  const row = (e: NavEntry, exact: boolean, child = false) => (
+    <NavLink key={e.key ?? e.href} href={e.href} icon={child ? "" : e.icon}
+      label={e.kind === "cross" ? `${e.label} ↗` : e.label}
+      exact={exact}
+      status={offSwitches && e.flag && off.has(e.flag) ? "Off" : undefined}
+      className={child ? CHILD : ROW}
+      activeClassName={child ? CHILD_ACTIVE : ROW_ACTIVE} />
+  );
 
   return (
     <>
-      <Link href={home} className="flex items-center gap-2 mb-6 px-2" data-sb-item>
+      <Link href="/super-admin" className="flex items-center gap-2 mb-6 px-2" data-sb-item>
         <div className="w-7 h-7 rounded bg-[var(--cmp-color-error)] flex items-center justify-center text-white font-bold text-sm">C</div>
         <div className="flex flex-col leading-none" data-sb-label>
           <span className="text-white font-semibold text-sm">Competen</span>
-          <span className="text-rose-300/70 text-[10px] font-medium">{subtitle}</span>
+          <span className="text-rose-300/70 text-[10px] font-medium">{HQ_WORKSPACES.find(w => w.key === activeKey)?.label ?? "Mission Control"}</span>
         </div>
       </Link>
 
-      {inWorkspace ? (
-        <Link href="/super-admin" className="flex items-center gap-2 px-3 mb-3 text-[10px] font-semibold text-slate-400 hover:text-white transition-colors" data-sb-label>
-          ← {spaceLabel}
-        </Link>
-      ) : (
-        <div className="px-3 mb-4" data-sb-label>
-          <span className="text-[10px] font-bold text-rose-300 uppercase tracking-widest">{spaceLabel} Workspace</span>
-        </div>
-      )}
+      <div className="px-3 mb-4" data-sb-label>
+        <span className="text-[10px] font-bold text-rose-300 uppercase tracking-widest">{spaceLabel} Workspace</span>
+      </div>
 
-      <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-        {nav.map(({ group, items }) => (
-          <NavGroup key={group} title={group} hrefs={items.map(i => i.href)} headerClass="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-            {items.map(({ label, href, icon }) => (
-              <NavLink key={label} href={href} icon={icon} label={label}
-                exact={OVERVIEW_HREFS.has(href) || exactHrefs.has(href.split("?")[0])}
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors"
-                activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs bg-rose-900/50 text-white font-medium" />
-            ))}
-          </NavGroup>
-        ))}
+      <nav ref={navRef} aria-label="Competen HQ" className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
+        {visible.map(({ w, nav, exactHrefs, home }) => {
+          const open = w.key === activeKey;
+          return (
+            <div key={w.key} data-hq-workspace={w.key} className={open ? "mb-2" : undefined}>
+              {/* The workspace row. Open, it wears the SECTION tone, never the page fill: exactly one row
+                  -- the page you are on -- carries the full treatment. */}
+              <Link href={home!} data-sb-item title={w.label}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-colors ${open ? "bg-white/5 text-white font-semibold" : "text-slate-300 hover:bg-rose-900/30 hover:text-white"}`}>
+                <span className="w-5 text-center text-sm leading-none" aria-hidden>{w.icon}</span>
+                <span className="flex-1" data-sb-label>{w.label}</span>
+                <span className={`text-[8px] text-slate-500 transition-transform ${open ? "rotate-90" : ""}`} aria-hidden data-sb-label>▶</span>
+              </Link>
+              {open && nav.map(section => {
+                const s = section as HqSection; // filterHqNav spreads the section, so its key and plain survive
+                return (
+                  <NavGroupOrPlain key={s.key} heading={s.plain ? null : section.group} hrefs={flat(section.items).map(i => i.href)}
+                    headerClass="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                    {section.items.map(e => {
+                      const kids = e.children ?? [];
+                      const showKids = kids.length > 0 && (pathMatches(e.href, pathname, false) || kids.some(c => pathMatches(c.href, pathname, false)));
+                      return (
+                        <div key={e.key ?? e.href} className="flex flex-col gap-0.5">
+                          {row(e, OVERVIEW_HREFS.has(e.href) || exactHrefs.has(e.href.split("?")[0]))}
+                          {showKids && kids.map(c => row(c, OVERVIEW_HREFS.has(c.href) || exactHrefs.has(c.href.split("?")[0]), true))}
+                        </div>
+                      );
+                    })}
+                  </NavGroupOrPlain>
+                );
+              })}
+            </div>
+          );
+        })}
       </nav>
 
       <div className="pt-4 border-t border-slate-800/60">
@@ -106,17 +150,12 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
                 "Platform Owner"/"Super Admin" for everybody, which was safe while super_admin was the only
                 way in and became false the moment an appointment could open this door.
                 ⚠ AND "HQ Appointee" IS SUPERSEDED (CPR-PD-001 s6, 2026-08-17, the owner reading it on
-                screen). That generic label was a deliberate reticence -- "what somebody holds is not the
-                sidebar's to disclose" -- and the spec withdraws it by name: the identity area "should
-                display the user's current effective role (for example, Practice Product Director) rather
-                than the generic 'HQ Appointee' label while operating in this workspace". Newest document
-                governs. The reticence was also answering a question nobody asked: the name of your own
-                appointment is not a disclosure TO YOU, and this line is only ever read by its subject.
+                screen). The identity area "should display the user's current effective role (for example,
+                Practice Product Director) rather than the generic 'HQ Appointee' label". Newest document
+                governs. "HQ Appointee" survives only as the honest fallback when no name resolves.
                 ⚠ PLURAL IS NOT GUESSED AT. With more than one live appointment the effective one is
-                whichever the governance cookie selects, and resolving that here would cost the office
-                and appointment reads on all 205 HQ pages. The count is true without pretending, and the
-                "Acting as" switcher on the page is the authority -- it names the active one and can
-                change it. */}
+                whichever the governance cookie selects, and the "Acting as" switcher on the page is the
+                authority -- it names the active one and can change it. */}
             <p className="text-rose-300 text-[10px]">
               {isOwner
                 ? (inWorkspace ? "Platform Owner" : "Super Admin")
@@ -136,3 +175,5 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
     </>
   );
 }
+
+const flat = (items: NavEntry[]) => items.flatMap(i => [i, ...(i.children ?? [])]);

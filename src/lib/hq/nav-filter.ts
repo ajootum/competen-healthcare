@@ -60,7 +60,7 @@ export type HqNavSection<T> = { group: string; items: T[] };
  * ⚠ EMPTY GROUPS ARE DROPPED. A group header with nothing under it reads as "this section is broken",
  * which is worse than the section simply not being there for someone who cannot enter it.
  */
-export function filterHqNav<T extends { href: string }>(
+export function filterHqNav<T extends { href: string; children?: T[] }>(
   sections: HqNavSection<T>[],
   viewer: HqViewer,
 ): HqNavSection<T>[] {
@@ -70,7 +70,13 @@ export function filterHqNav<T extends { href: string }>(
   // depth on the one failure that locks out the accounts able to fix it, so both stay. It also means A1 is
   // green for two independent reasons: do not read a green A1 as proof that either branch is present.
   if (viewer.isOwner) return sections;
+  // HQ-IA-02: an item's children are filtered by the same rule. The registry harness holds every child to
+  // its parent's capability, so a hidden parent never strands a child the viewer could have opened.
+  const visible = (i: T): T | null => {
+    if (!canSeeHqLink(i.href, viewer)) return null;
+    return i.children ? { ...i, children: i.children.filter(c => canSeeHqLink(c.href, viewer)) } : i;
+  };
   return sections
-    .map(s => ({ ...s, items: s.items.filter(i => canSeeHqLink(i.href, viewer)) }))
+    .map(s => ({ ...s, items: s.items.map(visible).filter((i): i is T => i !== null) }))
     .filter(s => s.items.length > 0);
 }
