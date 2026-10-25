@@ -66,11 +66,22 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // S1: no catalogue reaches a person until HQ chooses one.
       scholarCatalogues: [], professionalCatalogues: [], scholarReferenceCollections: [],
       scholarRevisionFormats: ["mcq", "mrq", "short", "flashcard", "match", "sequence"], scholarRevisionModes: ["today", "quick", "spaced", "weak", "mock", "flashcards", "custom"],
-      scholarRevisionQuantity: 10, scholarRevisionDifficulty: "any", scholarRevisionFeedback: "immediate", scholarRevisionGeneration: "generate", scholarShortAnswerMarking: "ai_then_self",
+      scholarRevisionQuantity: 10, scholarRevisionDifficulty: "any", scholarRevisionFeedback: "immediate", scholarRevisionGeneration: "generate", scholarShortAnswerMarking: "self",
       scholarRevisionRecommendations: "on", scholarSrsMasteryReps: 5, scholarSrsMasteryDays: 60, scholarSrsMaxIntervalDays: 3650, scholarSrsHarderIntervalPercent: 100,
       scholarCaseContexts: ["general", "medical", "surgical", "paediatric", "maternal", "emergency", "critical_care"], scholarCaseEntries: ["notes", "competency", "library", "surprise"],
       scholarCaseDimensions: ["recognition", "interpretation", "prioritisation", "decision", "reassessment", "escalation"], scholarCaseGeneration: "generate", scholarCaseMode: "guided",
       scholarCaseReasoningFeedback: "self",
+      // EVALUATION-01 (Stage 6): every method and evidence source, five pieces of evidence, two sections, 90 days,
+      // strong from 80 and developing from 50 -- descriptions, never a pass mark -- ten fresh questions, suggestions on.
+      scholarEvaluationMethods: ["existing", "fresh", "combined"],
+      scholarEvaluationEvidence: ["teach_checks", "revision", "spaced_review", "clinical_reasoning"],
+      scholarEvaluationMinEvidence: 5,
+      scholarEvaluationMinSources: 2,
+      scholarEvaluationRecencyDays: 90,
+      scholarEvaluationBandStrong: 80,
+      scholarEvaluationBandDeveloping: 50,
+      scholarEvaluationFreshQuantity: 10,
+      scholarEvaluationRecommendations: "on",
       // JOIN-01: every active programme is offered, no level or institution is asked, both fields may be.
       scholarOnboardingProgrammes: null, scholarProgrammeLevels: {}, scholarInstitutions: [], scholarOnboardingFields: ["level", "institution"],
       // P0: label, do not hide -- everything of a chosen catalogue is offered, labelled, by default.

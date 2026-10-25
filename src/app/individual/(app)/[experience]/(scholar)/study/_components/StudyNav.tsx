@@ -5,15 +5,17 @@ import { usePathname } from "next/navigation";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 
 // My Learning's own sub-navigation. Upload, Understand and Assess happen on a material, so "Materials"
-// is where they start; Revise, Apply and Progress each have a page. Scrolls sideways on a narrow screen
+// is where they start; Revise, Apply, Evaluate and Progress each have a page. Scrolls sideways on a narrow screen
 // rather than wrapping, and every tab is a real link to a real page.
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 
 const TABS = [
-  { segment: "study", label: "Materials", exact: false, excludes: ["study/revise", "study/apply", "study/progress"] },
+  { segment: "study", label: "Materials", exact: false, excludes: ["study/revise", "study/apply", "study/evaluate", "study/progress"] },
   { segment: "study/revise", label: "Revise", exact: false, excludes: [] },
   { segment: "study/apply", label: "Apply", exact: false, excludes: [] },
+  // EVALUATION-01 (Stage 6): what the evidence says, kept apart from Progress over time.
+  { segment: "study/evaluate", label: "Evaluate", exact: false, excludes: [] },
   { segment: "study/progress", label: "Progress", exact: false, excludes: [] },
 ];
 

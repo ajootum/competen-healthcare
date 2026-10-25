@@ -36,7 +36,16 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Revise" });
 }
 
-export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string }> }) {
+/** EVALUATION-01: a sitting started as an evaluation knowledge check carries its method and scope back here. */
+function evaluationIntent(q: { evaluate?: string; evscope?: string }): { method: "fresh" | "combined"; scope: Record<string, unknown> } | null {
+  if (q.evaluate !== "fresh" && q.evaluate !== "combined") return null;
+  try {
+    const scope = JSON.parse(q.evscope ?? "");
+    return scope && typeof scope === "object" && typeof scope.kind === "string" ? { method: q.evaluate, scope } : null;
+  } catch { return null; }
+}
+
+export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
@@ -68,7 +77,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
       <>
         {header}
         <RevisionRunner session={{ id: s.data.session.id, mode: s.data.session.mode, feedback: s.data.session.feedback, status: s.data.session.status, total: questions.length, position: s.data.session.position }}
-          items={questions.map(revisionItemView)} answered={answered} />
+          items={questions.map(revisionItemView)} answered={answered} evaluation={evaluationIntent(q)} />
       </>
     );
   }

@@ -388,6 +388,17 @@ const STAGING: Listed[] = [
       + "and 435/436. Reads shared config only. Creates and deletes its own harness-clinical01-* identities.",
   },
   {
+    file: "scholar-evaluation01-harness.ts",
+    note: "COMPETEN-SCHOLAR-EVALUATION-01 (Stage 6) over HTTP, the owner's first acceptance journey (steps 1-15) on the "
+      + "respiratory materials: learning, revision and a clinical case -> existing evidence retrieved and interpreted "
+      + "continuously (no AI) -> a Respiratory Assessment evaluation kept as a record -> six dimensions apart -> a fresh "
+      + "knowledge check (Mock), deterministic marking without AI, free text by an eligible model or held -> confidence "
+      + "and limitations -> CFCA outcomes where linked -> recommendations to Teach Me, Revision, Clinical Reasoning -> "
+      + "history preserved (supersedes; a rewrite refused) -> available with the quota used up (synthetic rows, fixture "
+      + "only) -> no catalogue -> never verified competence -> isolation -> erase-all. Real AI. Needs 426 (PEND without) "
+      + "and BASE_URL naming a STAGING-pointed dev server. Own harness-eval01-* identities.",
+  },
+  {
     file: "scholar-revision-hold-harness.ts",
     note: "COMPETEN-SCHOLAR-REVISION-01 R4 owner decision (hold self-grading until the end), the focused live check of "
       + "that change over HTTP: in Mock and end-of-session feedback an unmarkable short answer is held unmarked (425) "

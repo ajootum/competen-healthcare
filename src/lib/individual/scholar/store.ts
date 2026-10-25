@@ -244,8 +244,10 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   // shells. Absent tables: nothing to do.
   const { error: rsErr } = await admin.from("individual_scholar_revision_session").delete().eq("user_id", userId);
   const { error: rtErr } = await admin.from("individual_scholar_revision_set").delete().eq("user_id", userId);
+  // EVALUATION-01 (426): the evaluations go too. Absent table: nothing to do.
+  const { error: evErr } = await admin.from("individual_scholar_evaluation").delete().eq("user_id", userId);
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr), erased: rows.length };
+  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
@@ -1828,4 +1830,116 @@ export async function loadStudyAchievements(admin: Admin, userId: string): Promi
 
 export function isUuid(v: unknown): v is string {
   return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+}
+
+// ── EVALUATION-01 (Stage 6): THE EVIDENCE AN EVALUATION READS, AND THE EVALUATION RECORD (426) ──────────────────
+//
+// E2: the evidence is READ where it is, never copied: revision answers (372, 416) with the session they came in
+// (417), spaced reviews (391) by the question their card is for, Teach Me checks (414 clarify verdicts) with the
+// sections their step used, and clinical-case decisions (435) with their case's sections, competencies, context
+// and each decision's reasoning dimension. Every read is the caller's own rows. Teach Me explanations are not read.
+
+export type EvaluationEvidenceRows = {
+  questions: { id: string; chunkId: string; materialId: string; kind: string; difficulty: number | null; competencyId: string | null; caseId: string | null }[];
+  attempts: { id: string; questionId: string; correct: boolean; marking: "deterministic" | "ai_evaluation" | "self_graded"; answeredAt: string; sessionId: string | null; evaluatorModel: string | null }[];
+  reviews: { id: string; questionId: string; quality: number; intervalDays: number; reviewedAt: string }[];
+  checks: { id: string; chunkIds: string[]; verdict: "understood" | "partly" | "not_yet"; createdAt: string }[];
+  decisions: { id: string; caseId: string; decisionPointId: string; dimension: string | null; written: boolean; marking: "deterministic" | "ai_evaluation" | "self_graded";
+    correct: boolean | null; safetyMissed: number; createdAt: string; chunkIds: string[]; competencyIds: string[]; context: string }[];
+};
+
+/** All of the caller's learning evidence, read in place. A source whose migration is absent reads as none. */
+export async function evaluationEvidence(admin: Admin, userId: string): Promise<Read<EvaluationEvidenceRows>> {
+  const soft = async (q: PromiseLike<{ data: unknown; error: any }>) => { const r = await q; return r.error && isNotProvisioned(r.error) ? { data: [], error: null } : r; };
+  const [q, a, cards, rv, ev, steps, cs, ca] = await Promise.all([
+    admin.from("individual_scholar_question").select("id, chunk_id, material_id, kind, difficulty, competency_id, case_id").eq("user_id", userId).limit(5000),
+    admin.from("individual_scholar_attempt").select("id, question_id, correct, marking, answered_at, revision_session_id, evaluator_model").eq("user_id", userId).order("answered_at").limit(20000),
+    soft(admin.from("individual_scholar_card").select("id, question_id").eq("user_id", userId).limit(5000)),
+    soft(admin.from("individual_scholar_review").select("id, card_id, quality, interval_days, reviewed_at").eq("user_id", userId).limit(20000)),
+    soft(admin.from("individual_scholar_learning_event").select("id, session_id, step, verdict, created_at").eq("user_id", userId).eq("action", "clarify").not("verdict", "is", null).limit(5000)),
+    soft(admin.from("individual_scholar_learning_step").select("session_id, step, chunk_id").eq("user_id", userId).limit(20000)),
+    soft(admin.from("individual_scholar_case_session").select("id, private_case_id").eq("user_id", userId).limit(2000)),
+    soft(admin.from("individual_scholar_case_answer").select("id, session_id, decision_point_id, chosen_option_ids, marking, correct, safety_criterion_ids, created_at").eq("user_id", userId).limit(20000)),
+  ]);
+  const err = [q, a, cards, rv, ev, steps, cs, ca].find(r => r.error)?.error;
+  if (err) return fail(err);
+  const sessions = (cs.data ?? []) as any[];
+  const caseIds = [...new Set(sessions.map(s => s.private_case_id).filter(Boolean))];
+  const [cases, srcs, comps] = caseIds.length ? await Promise.all([
+    soft(admin.from("individual_scholar_case").select("id, context, blueprint").eq("user_id", userId).in("id", caseIds)),
+    soft(admin.from("individual_scholar_case_source").select("case_id, chunk_id").eq("user_id", userId).in("case_id", caseIds)),
+    soft(admin.from("individual_scholar_case_competency").select("case_id, competency_id").eq("user_id", userId).in("case_id", caseIds)),
+  ]) : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
+  const cErr = [cases, srcs, comps].find(r => r.error)?.error;
+  if (cErr) return fail(cErr);
+  const cardQ = new Map(((cards.data ?? []) as any[]).map(c => [c.id, c.question_id]));
+  const stepChunks = new Map<string, string[]>();
+  for (const s of (steps.data ?? []) as any[]) { const k = `${s.session_id}:${s.step}`; stepChunks.set(k, [...(stepChunks.get(k) ?? []), s.chunk_id]); }
+  const caseOf = new Map(sessions.map(s => [s.id, s.private_case_id]));
+  const caseRow = new Map(((cases.data ?? []) as any[]).map(c => [c.id, c]));
+  const caseChunks = new Map<string, string[]>(), caseComps = new Map<string, string[]>();
+  for (const s of (srcs.data ?? []) as any[]) caseChunks.set(s.case_id, [...(caseChunks.get(s.case_id) ?? []), s.chunk_id]);
+  for (const c of (comps.data ?? []) as any[]) caseComps.set(c.case_id, [...(caseComps.get(c.case_id) ?? []), c.competency_id]);
+  return {
+    ok: true,
+    data: {
+      questions: ((q.data ?? []) as any[]).map(r => ({ id: r.id, chunkId: r.chunk_id, materialId: r.material_id, kind: r.kind, difficulty: r.difficulty ?? null, competencyId: r.competency_id ?? null, caseId: r.case_id ?? null })),
+      attempts: ((a.data ?? []) as any[]).map(r => ({ id: r.id, questionId: r.question_id, correct: r.correct, marking: r.marking ?? "deterministic", answeredAt: r.answered_at, sessionId: r.revision_session_id ?? null, evaluatorModel: r.evaluator_model ?? null })),
+      reviews: ((rv.data ?? []) as any[]).filter(r => cardQ.has(r.card_id)).map(r => ({ id: r.id, questionId: cardQ.get(r.card_id)!, quality: r.quality, intervalDays: r.interval_days, reviewedAt: r.reviewed_at })),
+      checks: ((ev.data ?? []) as any[]).map(r => ({ id: r.id, chunkIds: stepChunks.get(`${r.session_id}:${r.step}`) ?? [], verdict: r.verdict, createdAt: r.created_at })),
+      decisions: ((ca.data ?? []) as any[]).flatMap(r => {
+        const caseId = caseOf.get(r.session_id); const c = caseId ? caseRow.get(caseId) : null;
+        if (!caseId || !c) return [];
+        const dp = ((c.blueprint?.decisionPoints ?? []) as any[]).find(d => d.id === r.decision_point_id);
+        return [{ id: r.id, caseId, decisionPointId: r.decision_point_id, dimension: dp?.dimension ?? null, written: r.chosen_option_ids === null, marking: r.marking,
+          correct: r.correct ?? null, safetyMissed: Array.isArray(r.safety_criterion_ids) ? r.safety_criterion_ids.length : 0, createdAt: r.created_at,
+          chunkIds: caseChunks.get(caseId) ?? [], competencyIds: caseComps.get(caseId) ?? [], context: c.context ?? "general" }];
+      }),
+    },
+  };
+}
+
+export type EvaluationRecord = {
+  id: string; kind: "continuous" | "student"; method: "existing" | "fresh" | "combined"; scope: any; context: any;
+  freshSessionId: string | null; configVersion: string; criteria: any; results: any; confidence: string; limitations: string[];
+  evidenceRefs: any; cfca: any; aiProvenance: any; supersedesId: string | null; createdAt: string;
+};
+const EVAL_COLS = "id, kind, method, scope, context, fresh_session_id, config_version, criteria, results, confidence, limitations, evidence_refs, cfca, ai_provenance, supersedes_id, created_at";
+const toEvaluation = (r: any): EvaluationRecord => ({
+  id: r.id, kind: r.kind, method: r.method, scope: r.scope, context: r.context, freshSessionId: r.fresh_session_id, configVersion: r.config_version,
+  criteria: r.criteria, results: r.results, confidence: r.confidence, limitations: r.limitations ?? [], evidenceRefs: r.evidence_refs, cfca: r.cfca,
+  aiProvenance: r.ai_provenance ?? {}, supersedesId: r.supersedes_id, createdAt: r.created_at,
+});
+
+/** E5: keep one evaluation, as it was made (426 refuses any later change). "not_provisioned" where 426 is absent. */
+export async function insertEvaluation(admin: Admin, userId: string, e: Omit<EvaluationRecord, "id" | "createdAt">): Promise<{ ok: true; id: string } | { ok: false; notProvisioned: boolean }> {
+  const { data, error } = await admin.from("individual_scholar_evaluation").insert({
+    user_id: userId, kind: e.kind, method: e.method, scope: e.scope, context: e.context, fresh_session_id: e.freshSessionId, config_version: e.configVersion,
+    criteria: e.criteria, results: e.results, confidence: e.confidence, limitations: e.limitations, evidence_refs: e.evidenceRefs, cfca: e.cfca,
+    ai_provenance: e.aiProvenance, supersedes_id: e.supersedesId,
+  }).select("id").single();
+  if (error || !data) return { ok: false, notProvisioned: !!error && isNotProvisioned(error) };
+  return { ok: true, id: data.id };
+}
+
+/** The caller's evaluations, newest first. */
+export async function listEvaluations(admin: Admin, userId: string, limit = 30): Promise<Read<EvaluationRecord[]>> {
+  const { data, error } = await admin.from("individual_scholar_evaluation").select(EVAL_COLS).eq("user_id", userId).order("created_at", { ascending: false }).limit(limit);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(toEvaluation) };
+}
+
+/** One of the caller's evaluations. null when it is not theirs. */
+export async function getEvaluation(admin: Admin, userId: string, id: string): Promise<Read<EvaluationRecord | null>> {
+  if (!isUuid(id)) return { ok: true, data: null };
+  const { data, error } = await admin.from("individual_scholar_evaluation").select(EVAL_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  if (error) return fail(error);
+  return { ok: true, data: data ? toEvaluation(data) : null };
+}
+
+/** The student removes one of their evaluations: a privacy right, not an edit. A later one that superseded it keeps its own record. */
+export async function deleteEvaluation(admin: Admin, userId: string, id: string): Promise<boolean> {
+  if (!isUuid(id)) return false;
+  const { data, error } = await admin.from("individual_scholar_evaluation").delete().eq("user_id", userId).eq("id", id).select("id");
+  return !error && (data ?? []).length > 0;
 }
