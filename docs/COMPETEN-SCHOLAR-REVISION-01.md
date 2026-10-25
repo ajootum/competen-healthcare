@@ -105,7 +105,7 @@ When new chargeable AI is not available, whether the Individual quota is used up
 - **Saved sets** replay with no AI.
 - **Records:** cards, history, progress, saved learning and the materials all stay open.
 - **What is restricted:** only new generation and AI evaluation.
-- **Evidence:** R13 in the staging journey. The metering-ON variant R13m runs once the owner switches metering on.
+- **Evidence:** R13 in the staging journey (PASS). The metering-ON variant R13m ran on 2026-10-25 (§7): with no eligible model recorded, every new question was refused `not_eligible`, nothing was sent, and the pages stayed open. A student with nothing saved yet is told so plainly, not "this session uses your saved questions" (fixed, bb7e0418).
 
 ## 6. No-code configuration (the existing engine, HQ Individual policy page)
 
@@ -145,7 +145,7 @@ Run `scripts/scholar-revision01-harness.ts`:
 | M1 Mock practice holds its feedback to the end | PASS |
 | S1 A short answer that matches nothing: AI evaluation (labelled) or self-graded, never wrong by default | PASS |
 | R13 With the allowance used up (synthetic quota rows for the fixture only): revision carries on | PASS |
-| R13m The same with metering ON | PEND: the owner's switch |
+| R13m The same with metering ON | **NOT DEMONSTRABLE on staging** (2026-10-25, see below) |
 | R14 No competency catalogue: revision end to end; competency activity said not measured | PASS |
 | I1 Isolation: another student reaches no session, question, set or session page | PASS |
 | E1 Erase-all leaves no revision set, session or question | PASS |
@@ -155,6 +155,12 @@ Run `scripts/scholar-revision01-harness.ts`:
 - **multiple-response and short answer:** "ungrounded", because the rationale added words not in the notes.
 - **Fix:** prompt v2 (answers and rationale in the passage's own words; `[]` when a kind does not fit; matching only with three pairs), up to three items asked per call (extras saved for reuse), and a second round within eight calls.
 - **Final run:** four calls kept 10. The drop reasons are now counted in the generation audit, as counts only and never text.
+
+**R13m, metering ON (2026-10-25).** The owner switched metering on; the harness ran alone with `METERED=1` on main 5a9962b plus the #77 branch. **RED, 9 passed, 15 failed; 0 fixtures left.**
+- **Why:** staging's `ai_model_eligibility` holds no eligible row for any Scholar activity (every row is `gpt-` or `gemini-`, `eligible = false`; no Anthropic row). Under metering, every clinical-tier call is therefore `not_eligible` from the first question, so the fresh fixture never stores a question. R3, R4 and R14 are refused with the continuity message, and the rest follow from having nothing stored.
+- **What held:** nothing was sent to a provider; the pages opened (200 ×4); the refusal named the reason.
+- **What it cannot show until a model is eligible:** "carries on from what is stored" under metering. The same continuity path with stored questions is R13 (PASS, allowance used up). The D5 eligibility decision is a production dependency (§9).
+- **Found by it:** the AI standing reported `questions` and `evaluate` as available ("via included") while every call was refused `not_eligible`. That is the Holdings standing (`src/lib/ai`), reported to the coordinator.
 
 **Tests:**
 - Unit: `revision.test.ts` (16); Individual suite 356/356.
@@ -169,9 +175,9 @@ Run `scripts/scholar-revision01-harness.ts`:
 
 ## 8. Genuine remaining gaps
 
-- **R13 with metering ON.** The owner switches metering on for the run with `npx.cmd tsx scripts/staging-ai-fair-use-switch.ts --on`, then runs this harness with `METERED=1`, then switches it off with `--off`. Under D5 today, `questions` and `evaluate` are expected `not_eligible`, which is the continuity path itself.
+- **R13 with metering ON:** run 2026-10-25, not demonstrable without an eligible model (§7). It re-runs, unchanged, once D5 records one.
 - **End-of-session feedback and short answers.** In end-of-session mode, a short answer the code cannot mark and AI cannot evaluate asks the student to self-grade at once. That shows the accepted answers for that one question before the end. This was chosen over leaving it unmarked; the owner may prefer otherwise.
-- **Revision sessions and sets after a single material is deleted.** They keep their remaining items. One left with none still lists, as an empty shell, until erase-all removes it. Pruning empty ones on deletion, as Learn does, is a small follow-up.
+- **Revision sessions and sets after a single material is deleted:** done (bb7e0418). They keep their remaining items, and one left with none is removed with the material, as Learn does. Nothing is pruned on a failed read (`prune.test.ts`, planted red twice).
 - **Matching items** are written only where a passage states three or more pairs. On short notes there may be none; that is correct, not a fault.
 - **Passport.** It stays as it is: the existing `revision_reviews` achievement is a count only. Revision scores never reach it.
 
@@ -182,3 +188,21 @@ Run `scripts/scholar-revision01-harness.ts`:
 - **The legal documents:** published, for AI consent.
 - **Production AI metering:** `ai_fair_use` stays off.
 - **D5 eligibility:** a reviewer decision before `questions` and `evaluate` can run with metering on.
+
+## 10. Final acceptance report (2026-10-25)
+
+In the owner's REVISION-01 §13 format. It uses the existing evidence above plus today's R13m run. No completed test was repeated.
+
+| §13 item | Status | Evidence |
+|---|---|---|
+| **Completed R1–R5 functionality** | **Complete** | §3. All five areas built and exercised end to end (§7: R1–R12, M1, S1, R14 PASS). |
+| **Reused Holdings engines** | **Complete** | §4. No second bank, scheduler or review history: 372/388/391 extended by 416/417, the shared SM-2, the gateway and Fair-Use Engine, the grounding verifier and identifier screen, the WCE policy. |
+| **End-to-end staging evidence** | **Accepted, metering OFF: 24/0.** Metering ON: not demonstrable | §7. The metering-OFF journey is ALL GREEN. R13m ran (RED 9/15) because no model is eligible on staging, not because of a revision defect. |
+| **Learning Continuity behaviour** | **Complete** | §5. R13 PASS: with the allowance used up, saved questions, code marking, self-graded short answers, saved sets, history, progress and materials all stay open. Under metering, a refused generation sends nothing and says why. |
+| **No-code configuration** | **Complete** | §6. Twelve revision keys on the existing HQ Individual policy page, versioned and audited. |
+| **Genuine remaining gaps** | One owner choice | §8. The end-of-session short-answer self-grade shows that one answer early (the owner may prefer otherwise). Matching items only where notes state three pairs is by design, not a gap. |
+| **Production activation dependencies** | None authorised | §9. 416→417 with OPS-001 safeguards; `individual_app` and `ai_fair_use` OFF; legal documents; **the D5 eligibility decision**, without which metered revision writes no new questions. |
+
+**Fixed since §7, pilot path (bb7e0418):** emptied revision sets and sessions are pruned with their material; a latent "failed read deletes every Learn session" path is closed; the no-saved-questions continuity message is honest.
+
+**Verdict:** Stage 4 is complete for development and staging. Its one open live check (R13m) waits only on a recorded model eligibility, and re-runs unchanged once there is one.

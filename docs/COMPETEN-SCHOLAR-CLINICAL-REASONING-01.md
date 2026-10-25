@@ -168,9 +168,9 @@ Run `scripts/scholar-clinical01-harness.ts`:
 | 6 Structured reasoning feedback | C6: key and rationale per decision, how it was marked; the debrief by dimension | PASS |
 | 7 Saved and resumable | C7: leave and come back to the same place; decisions append-only (a rewrite is refused) | PASS |
 | 8 Back to Teach Me or Revision | C8: links on the case page; Teach Me opens on the section; Teach Me starts a case | PASS |
-| 9 Candidate enters the review queue (Scholar side) | C9: explicit offer, source-free snapshot | PEND: `case_library` OFF |
-| 14 Another student reuses without generation | C14 | PEND: `case_library` OFF, and no deliverable case yet (IND-007's steps 9–13) |
-| 15 Live AI on the Individual budget | C15 | PEND: metering OFF (the owner's switch) |
+| 9 Candidate enters the review queue (Scholar side) | C9: explicit offer, source-free snapshot | **Not run for the pilot** (library OFF, owner directive 2026-10-25) |
+| 14 Another student reuses without generation | C14 | **Not run for the pilot** (library OFF; the kept case was retired) |
+| 15 Live AI on the Individual budget | C15 | **Not demonstrable on staging**: no eligible model (see REVISION-01 §7, R13m) |
 | 17 Privacy | C17: another student reaches no session, answer, case or page | PASS |
 | 18 Stored cases after allowance exhaustion | C18: replayable and key-marked; only a NEW case is refused, saying so | PASS |
 | 19 No mandatory catalogue | C19: a case written and played for a student with no programme | PASS |
@@ -200,9 +200,9 @@ Run `scripts/scholar-clinical01-harness.ts`:
 
 ## 9. Genuine remaining gaps
 
-- **AI feedback on a library case's written decision:** built (follow-up PR, on `sessionFeedbackContext`). Its live run needs `case_library` ON, metering ON and a deliverable library case, the same as steps 9, 14 and 15 below.
-
-- **Steps 9, 14 and 15 (mine, pending):** they need `case_library` ON (the owner's), a published, approved library case (IND-007's steps 9–13), and metering ON. The harness runs them when those hold.
+- **AI feedback on a library case's written decision:** built (#77, on `sessionFeedbackContext`). Not run live: the library is OFF for the pilot.
+- **Steps 9, 14 and 15:** the harness is ready (C14 takes `CASE_VERSION_ID` and plays to a written decision; C15 checks the ledger owner, record and the kept feedback). They run when the library is switched on with a deliverable case, metering is ON and a model is eligible.
+- **Contribution is not separately switchable.** One platform flag, `case_library`, gates library play, library-first offers, the candidacy grant and offering a case alike. Turning on library play alone, with student contribution still off, needs a second switch: server-side in `candidates.ts` (IND-007's), with Scholar's offer panel following it. Not needed for the pilot, where both are OFF.
 - **Clinical context and the library:** the context shapes a private case. Matching library cases by context needs the library's specialty taxonomy terms, which the context codes do not yet map to. Library search by competency and topic works.
 - **A library case's end-of-case AI debrief** (`recordSessionDebrief`) is not called: a library session's debrief is its deterministic answered views. Calling it is a small follow-up if the owner wants an AI summary on the student's budget.
 - **Private cases are linear by design.** A branching consequence would need a fact the notes do not state; branching cases come from the governed library.
@@ -214,3 +214,30 @@ Run `scripts/scholar-clinical01-harness.ts`:
 - **Flags:** `individual_app`, `case_library` and `ai_fair_use` all stay off in production.
 - **Legal:** the case attestation text (`case-attest/1`, a staging draft pending legal review) and the published legal documents for AI consent.
 - **D5 eligibility:** a reviewer decision before `case_steps` and `evaluate` can run with metering on.
+
+## 11. Final acceptance report, 5A and Scholar 5B (2026-10-25)
+
+Existing evidence above, plus today's live check. No completed test was repeated.
+
+**Pilot posture (owner directive, 2026-10-25):** private formative clinical reasoning goes ahead; the case library and student case contribution stay OFF.
+
+| Switchable, and its state for the pilot | Gates |
+|---|---|
+| `case_library` platform flag (owner-held; unwritten or unreadable = OFF) — **OFF** | "Choose an existing case", library-first offers, playing a library case, the candidacy grant, "Offer this case". Revoking, withdrawing and seeing one's own offers are never gated. |
+| `scholar_case_entries` (Individual policy) | Which entries Apply offers. With the flag OFF, "library" is never offered even if listed. |
+| `scholar_case_generation`, `scholar_case_reasoning_feedback`, `scholar_case_mode`, `scholar_case_contexts` (Individual policy) | New private cases, AI feedback or self-review, guided or independent play, contexts. |
+
+With `case_library` OFF, no library control or promise shows. The Apply page keeps the governed "Clinically approved cases — not available yet" state (B3), and the AI notes and case-start errors no longer mention library cases (ab310232).
+
+| Item | Status | Evidence |
+|---|---|---|
+| **5A CR1–CR5** | **Complete** | §3. 14/0 on staging (§8), metering OFF, real AI. |
+| **5B, Scholar side** | **Built, OFF for the pilot** | §4: offer this case, library first, library plays through `library.ts`, library written-answer feedback (#77). Not run live (library OFF). |
+| **Reused Holdings engines** | **Complete** | §5. One case engine for private and library cases. |
+| **No-code configuration** | **Complete** | §6 and the switch table above. |
+| **AI cost attribution** | **Built** | §7. Live metered attribution (C15) waits on a recorded model eligibility, as R13m does. |
+| **End-to-end staging evidence** | **Accepted for the pilot path** | §8: C1–C8, C17–C19 and E1 PASS. C9 and C14 not run (library OFF); C15 not demonstrable (no eligible model). |
+| **Genuine remaining gaps** | §9 | Contribution has no switch of its own (IND-007's side, not pilot-critical); library context matching; library AI debrief not called. |
+| **Production activation dependencies** | None authorised | §10, plus: the D5 eligibility decision before `case_steps` and `evaluate` run metered. |
+
+**Verdict:** Stage 5A is complete for development and staging, and is the pilot's clinical reasoning. The Scholar side of 5B is built and stays switched OFF.
