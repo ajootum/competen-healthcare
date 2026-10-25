@@ -298,6 +298,14 @@ const STAGING: Listed[] = [
       + "restores them exactly. Own harness-prof01-* identities, deleted after. Never writes individual_app. PEND until 450 is applied.",
   },
   {
+    file: "professional-profile-b-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-PROFILE-01 part B (451-453): verification needs an appointed, independent verifier and a request "
+      + "first, enforced by the database; history append-only; a new version starts unverified; configurable reminders send once at "
+      + "the tightest offset and release failed claims; selective sharing carries only ticked current versions with their exact "
+      + "states. Fixtures: harness-prof01b-* identities and one staging verifier appointment, deleted after; three policy rows and "
+      + "individual_app restored exactly; no real email (injected sender). PEND until 451-453 are applied.",
+  },
+  {
     file: "account-profile-acceptance-harness.ts",
     note: "My profile (owner GO 2026-10-23, PR D): a real anon-key user session updates its own personal fields and "
       + "is refused every authority column and the email (column grants plus RLS WITH CHECK profile_authority_unchanged), "

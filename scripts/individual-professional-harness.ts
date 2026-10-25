@@ -75,8 +75,13 @@ const WRITES: Record<string, string[]> = {
   "src/app/api/individual/professional/evidence/route.ts": ["individual_professional_evidence.insert", "individual_professional_evidence.update", "individual_professional_evidence.delete"],
   "src/app/api/individual/professional/assistant/route.ts": ["audit_log.insert"],
   "src/lib/individual/professional/api.ts": ["audit_log.insert"],
-  "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "individual_professional_share.insert", "passport_share_tokens.update"],
-  "src/lib/individual/professional/reminders.ts": ["individual_professional_evidence.update", "individual_professional_profile.update"],
+  // PROF-PROFILE-01 part B (453): the profile records the person chose for a link.
+  "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "individual_professional_share.insert", "passport_share_tokens.update", "individual_professional_share_item.insert"],
+  // PROF-PROFILE-01 part B (452): the once-only claim for profile-record reminders, released on a failed send.
+  "src/lib/individual/professional/reminders.ts": ["individual_professional_evidence.update", "individual_professional_profile.update",
+    "individual_professional_reminder_log.insert", "individual_professional_reminder_log.delete"],
+  // PROF-PROFILE-01 part B (451): the verification history, append-only. The trigger decides who may write what.
+  "src/lib/individual/professional/profile-verification.ts": ["individual_professional_item_verification.insert"],
   "src/app/api/individual/professional/reminders/route.ts": ["individual_professional_profile.update", "individual_professional_profile.insert"],
   "src/lib/individual/professional/mapping-store.ts": ["individual_professional_competency_map.insert", "individual_professional_competency_decision.insert"],
   // COMPETEN-PROFESSIONAL-PROFILE-01 (migration 450): the one writer of the registration facts and the profile records.
@@ -130,6 +135,10 @@ const checkTablesReadOnlyByProfessional = (src: Sources) => {
 };
 // Who may import Professional data code. Each entry is a reason, as in plane-boundary.ts.
 const IMPORTERS_ALLOWED: { re: RegExp; why: string }[] = [
+  // PROF-PROFILE-01 part B (owner continuation GO, 25 Oct 2026): the appointed verifier's queue and its route. It
+  // reads ONLY record versions a person asked to have verified (an open request or dispute), never the verifier's own,
+  // and every write is re-checked by migration 451's trigger (appointment, independence, order).
+  { re: /^src\/(app\/super-admin\/individual\/verification\/page\.tsx|app\/api\/hq\/individual\/verification\/route\.ts)$/, why: "the Professional Credential Verifier, on records a person submitted (451)" },
   { re: /^src\/(lib\/individual|app\/individual|app\/api\/individual)\//, why: "the Individual product itself (gate 3)" },
   { re: /^src\/app\/verify\/\[token\]\/page\.tsx$/, why: "the person's consented, revocable share link (passport_share_tokens + individual_professional_share)" },
   { re: /^src\/lib\/platform\/jobs\.ts$/, why: "the daily reminder job, which emails the person about their own record and reports counts only" },
@@ -200,8 +209,12 @@ const checkVerifyPage = (src: Sources) => {
     detail: "the own-records section must be gated on the release gate AND the companion row, labelled by class, and unhook the Verified header",
   };
 };
+// PROF-PROFILE-01 part B: exactly ONE Professional file may name the verified state -- the verification module,
+// which derives it from 451 history rows whose actor the database proved is an appointed, independent verifier.
+// professional-profile-harness.ts pins that derivation. Every other Professional file still may not.
+const VERIFIED_STATE_FILES = new Set(["src/lib/individual/professional/profile-verification.ts"]);
 const checkNoVerifiedClassInProfessional = (src: Sources) => {
-  const bad = [...src].filter(([f, s]) => isProfessional(f) && /institution_verified|independently_verified|verified:\s*true|"verified"/.test(s)).map(([f]) => f);
+  const bad = [...src].filter(([f, s]) => isProfessional(f) && !VERIFIED_STATE_FILES.has(f) && /institution_verified|independently_verified|verified:\s*true|"verified"/.test(s)).map(([f]) => f);
   return { ok: bad.length === 0, detail: bad.join(", ") };
 };
 
