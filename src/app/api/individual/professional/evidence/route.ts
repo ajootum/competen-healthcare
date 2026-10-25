@@ -46,6 +46,40 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true, id: data.id, evidenceClass: data.evidence_class }, { status: 201 });
 }
 
+/** PUT ?id= -- edit an item: the same checks as adding one. A new document replaces the old; none attached keeps it. */
+export async function PUT(req: Request) {
+  const ctx = await requireIndividualContext("professional");
+  if (isGuardRefusal(ctx)) return ctx;
+  const id = new URL(req.url).searchParams.get("id");
+  if (!isUuid(id)) return refuse("Choose an evidence item.");
+  const { fields, file } = await readBody(req);
+  const parsed = parseEvidence(fields, todayUtc());
+  if (!parsed.ok) return refuse(parsed.error);
+  const { data: before } = await ctx.admin.from("individual_professional_evidence").select("id, document_path").eq("id", id).eq("user_id", ctx.userId).maybeSingle();
+  if (!before) return refuse("That evidence is not on your record.", 404);
+  const refErr = await checkSharedReference(ctx.admin, parsed.value.framework_id, parsed.value.framework_competency_id);
+  if (refErr) return refuse(refErr);
+  if (parsed.value.need_id) {
+    const { data: need } = await ctx.admin.from("individual_professional_need").select("id").eq("id", parsed.value.need_id).eq("user_id", ctx.userId).maybeSingle();
+    if (!need) return refuse("That need is not on your record.");
+  }
+  let doc = {};
+  if (file) {
+    const stored = await storeDocument(ctx.admin, ctx.userId, file);
+    if (!stored.ok) return refuse(stored.error);
+    doc = stored.doc;
+  }
+  const { data, error } = await ctx.admin.from("individual_professional_evidence")
+    .update({ ...parsed.value, ...doc, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", ctx.userId).select("id, evidence_class").maybeSingle();
+  if (error || !data) {
+    await removeDocument(ctx.admin, (doc as { document_path?: string }).document_path);
+    return writeFailed("evidence");
+  }
+  if (file) await removeDocument(ctx.admin, before.document_path);
+  await audit(ctx, "individual_professional_evidence_update", "individual_professional_evidence", id, { kind: parsed.value.kind, evidence_class: data.evidence_class, document_replaced: !!file });
+  return NextResponse.json({ ok: true, id, evidenceClass: data.evidence_class });
+}
+
 export async function DELETE(req: Request) {
   const ctx = await requireIndividualContext("professional");
   if (isGuardRefusal(ctx)) return ctx;

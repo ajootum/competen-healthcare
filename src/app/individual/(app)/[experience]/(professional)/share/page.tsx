@@ -7,6 +7,8 @@ import { experienceModulePage, gatedMetadata } from "../../../../_components/she
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import { Empty, Section, fmtDate } from "../../../../_components/professional/bits";
+import CopyLink from "../../../../_components/professional/CopyLink";
+import { SITE_URL } from "@/lib/marketing/site";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -70,7 +72,7 @@ export default async function SharePage({ params }: { params: Promise<{ experien
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-gray-900">{l.label ?? "Passport link"} <span className="font-normal text-gray-500">· {l.scope === "full" ? "Full" : "Summary"} · {state}</span></p>
                     <p className="text-[12.5px] text-gray-500">Created {fmtDate(l.created_at)} · until {fmtDate(l.expires_at)} · opened {l.view_count} {l.view_count === 1 ? "time" : "times"}</p>
-                    {state === "Active" && <p className="mt-1 break-all font-mono text-[12.5px] text-gray-700">/verify/{l.token}</p>}
+                    {state === "Active" && <CopyLink url={`${SITE_URL}/verify/${l.token}`} accent={x.accent} />}
                   </div>
                   {state === "Active" && <ApiButton action={`/api/individual/professional/share?id=${l.id}`} method="PATCH" label="Withdraw" confirm="Withdraw this link? Anyone holding it will no longer be able to open it." />}
                 </li>

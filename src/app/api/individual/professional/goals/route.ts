@@ -46,6 +46,27 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ ok: true });
 }
 
+/** PUT ?id= -- edit a goal's title, detail, target date and need: the same checks as adding one. Status is PATCH. */
+export async function PUT(req: Request) {
+  const ctx = await requireIndividualContext("professional");
+  if (isGuardRefusal(ctx)) return ctx;
+  const id = new URL(req.url).searchParams.get("id");
+  if (!isUuid(id)) return refuse("Choose a goal.");
+  const { fields } = await readBody(req);
+  const parsed = parseGoal(fields);
+  if (!parsed.ok) return refuse(parsed.error);
+  if (parsed.value.need_id) {
+    const { data: need } = await ctx.admin.from("individual_professional_need").select("id").eq("id", parsed.value.need_id).eq("user_id", ctx.userId).maybeSingle();
+    if (!need) return refuse("That need is not on your record.");
+  }
+  const { data, error } = await ctx.admin.from("individual_professional_goal")
+    .update({ ...parsed.value, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", ctx.userId).select("id").maybeSingle();
+  if (error) return writeFailed("goal");
+  if (!data) return refuse("That goal is not on your record.", 404);
+  await audit(ctx, "individual_professional_goal_update", "individual_professional_goal", id);
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(req: Request) {
   const ctx = await requireIndividualContext("professional");
   if (isGuardRefusal(ctx)) return ctx;

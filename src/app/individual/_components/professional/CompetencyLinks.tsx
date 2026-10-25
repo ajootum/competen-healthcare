@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { experienceHref } from "@/lib/individual/experiences";
+import { aiNotice } from "./ai-refusal";
 import { useRouter } from "next/navigation";
 import { focusRing } from "../chrome";
 import { inputCls } from "./forms";
@@ -25,7 +27,7 @@ export default function CompetencyLinks({ kind, subjectId, links, offered, accen
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string; continuity?: boolean } | null>(null);
   const [pick, setPick] = useState("");
 
   async function post(body: Record<string, unknown>, done: string) {
@@ -33,7 +35,7 @@ export default function CompetencyLinks({ kind, subjectId, links, offered, accen
     try {
       const res = await fetch("/api/individual/professional/mappings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) { setMsg({ ok: false, text: j?.error ?? "That did not work. Try again." }); return; }
+      if (!res.ok) { setMsg(body.action === "propose" ? { ok: false, ...aiNotice(j, "Suggestions could not be made just now. You can link competencies yourself.") } : { ok: false, text: j?.error ?? "That did not work. Try again." }); return; }
       setMsg({ ok: true, text: typeof j?.proposed === "number" ? (j.proposed ? `${j.proposed} suggestion${j.proposed === 1 ? "" : "s"} added below. Accept only the ones that fit.` : "No suggestions fitted this entry.") : done });
       setPick("");
       router.refresh();
@@ -87,7 +89,7 @@ export default function CompetencyLinks({ kind, subjectId, links, offered, accen
             onClick={() => post({ action: "propose", subjects: [{ kind, id: subjectId }] }, "Done.")}>Suggest with AI</button>
         </div>
       )}
-      {msg && <p role={msg.ok ? "status" : "alert"} className={`mt-1 text-[12.5px] font-medium ${msg.ok ? "text-green-800" : "text-red-700"}`}>{msg.text}</p>}
+      {msg && <p role={msg.ok ? "status" : "alert"} className={`mt-1 text-[12.5px] font-medium ${msg.ok ? "text-green-800" : "text-red-700"}`}>{msg.text}{msg.continuity && <> <a href={experienceHref("professional", "ai-allowance")} className="font-semibold underline underline-offset-2">See your AI allowance</a></>}</p>}
     </div>
   );
 }

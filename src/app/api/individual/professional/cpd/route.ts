@@ -45,6 +45,41 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true, id: data.id, evidenceClass: data.evidence_class }, { status: 201 });
 }
 
+/**
+ * PUT ?id= -- edit an entry: the same checks as adding one. A newly attached document replaces the old one (removed
+ * only after the update succeeds); with none attached, the entry keeps its document, so a typo never costs it.
+ */
+export async function PUT(req: Request) {
+  const ctx = await requireIndividualContext("professional");
+  if (isGuardRefusal(ctx)) return ctx;
+  const id = new URL(req.url).searchParams.get("id");
+  if (!isUuid(id)) return refuse("Choose a CPD entry.");
+  const { fields, file } = await readBody(req);
+  const parsed = parseCpd(fields, todayUtc());
+  if (!parsed.ok) return refuse(parsed.error);
+  const { data: before } = await ctx.admin.from("individual_professional_cpd").select("id, document_path").eq("id", id).eq("user_id", ctx.userId).maybeSingle();
+  if (!before) return refuse("That CPD entry is not on your record.", 404);
+  if (parsed.value.goal_id) {
+    const { data: goal } = await ctx.admin.from("individual_professional_goal").select("id").eq("id", parsed.value.goal_id).eq("user_id", ctx.userId).maybeSingle();
+    if (!goal) return refuse("That goal is not on your record.");
+  }
+  let doc = {};
+  if (file) {
+    const stored = await storeDocument(ctx.admin, ctx.userId, file);
+    if (!stored.ok) return refuse(stored.error);
+    doc = stored.doc;
+  }
+  const { data, error } = await ctx.admin.from("individual_professional_cpd")
+    .update({ ...parsed.value, ...doc, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", ctx.userId).select("id, evidence_class").maybeSingle();
+  if (error || !data) {
+    await removeDocument(ctx.admin, (doc as { document_path?: string }).document_path);
+    return writeFailed("CPD entry");
+  }
+  if (file) await removeDocument(ctx.admin, before.document_path);
+  await audit(ctx, "individual_professional_cpd_update", "individual_professional_cpd", id, { evidence_class: data.evidence_class, document_replaced: !!file });
+  return NextResponse.json({ ok: true, id, evidenceClass: data.evidence_class });
+}
+
 export async function DELETE(req: Request) {
   const ctx = await requireIndividualContext("professional");
   if (isGuardRefusal(ctx)) return ctx;

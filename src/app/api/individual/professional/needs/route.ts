@@ -49,6 +49,28 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ ok: true });
 }
 
+/**
+ * PUT ?id= -- edit a need's title and detail. Where it came from and what it links to stay as recorded: the same
+ * parser checks the whole need, but only the words are written.
+ */
+export async function PUT(req: Request) {
+  const ctx = await requireIndividualContext("professional");
+  if (isGuardRefusal(ctx)) return ctx;
+  const id = new URL(req.url).searchParams.get("id");
+  if (!isUuid(id)) return refuse("Choose a need.");
+  const { fields } = await readBody(req);
+  const { data: before } = await ctx.admin.from("individual_professional_need").select("id, origin, framework_id, framework_competency_id").eq("id", id).eq("user_id", ctx.userId).maybeSingle();
+  if (!before) return refuse("That need is not on your record.", 404);
+  const parsed = parseNeed({ ...fields, origin: before.origin, frameworkId: before.framework_id ?? "", frameworkCompetencyId: before.framework_competency_id ?? "" });
+  if (!parsed.ok) return refuse(parsed.error);
+  const { data, error } = await ctx.admin.from("individual_professional_need")
+    .update({ title: parsed.value.title, detail: parsed.value.detail, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", ctx.userId).select("id").maybeSingle();
+  if (error) return writeFailed("development need");
+  if (!data) return refuse("That need is not on your record.", 404);
+  await audit(ctx, "individual_professional_need_update", "individual_professional_need", id);
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(req: Request) {
   const ctx = await requireIndividualContext("professional");
   if (isGuardRefusal(ctx)) return ctx;

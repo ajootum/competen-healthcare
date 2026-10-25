@@ -14,6 +14,7 @@ import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrom
 import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import FrameworkPicker from "../../../../_components/professional/FrameworkPicker";
 import CompetencyLinks from "../../../../_components/professional/CompetencyLinks";
+import { EvidenceEdit } from "../../../../_components/professional/edit-forms";
 import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
@@ -79,6 +80,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
                             e.need_id && needTitle.get(e.need_id) ? `for: ${needTitle.get(e.need_id)}` : null].filter(Boolean).join(" · ")}
                         </p>
                         {e.detail && <p className="mt-1 whitespace-pre-wrap text-[13.5px] text-gray-700">{e.detail}</p>}
+                        <EvidenceEdit e={e} needs={(record.needs ?? []).map(n => ({ id: n.id, title: n.title }))} today={today} accent={x.accent} />
                         {map.mappings === null ? <p className="mt-2 text-[12.5px] text-gray-600">Competency links could not be read just now.</p> : map.provisioned && (
                           <CompetencyLinks kind="evidence" subjectId={e.id} links={linksFor(map, "evidence", e.id)} offered={map.offered} accent={x.accent} idPrefix={`ev-${e.id}`} />
                         )}

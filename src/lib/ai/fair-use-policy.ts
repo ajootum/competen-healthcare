@@ -79,7 +79,7 @@ export const MAX_OUTPUT_TOKENS = 8000;
 export const DEFAULT_OUTPUT_TOKENS = 800;
 
 const MESSAGES = {
-  full: "Your AI study help is available.",
+  full: "Your AI help is available.",
   optimised: "Your AI help is running in an efficient mode to make your allowance last.",
   essential: "Your AI allowance is nearly used. Essential help, like clarifying an explanation, is still available.",
   continuity: "Your AI allowance for this period is used. Everything you have saved stays available, and new AI help returns when your allowance renews.",
