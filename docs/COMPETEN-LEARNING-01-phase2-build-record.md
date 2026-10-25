@@ -29,7 +29,7 @@
 - Course grants use the existing `hq.individual.pilot.grant`.
 - Nothing is granted to an existing position, and nobody is appointed.
 
-## 2. Migrations 460–464 (state 1: authored, not committed)
+## 2. Migrations 460–464 (state 2: staging-verified, committed byte-identical)
 
 The package is in the shared notes folder `LEARNING-01-460-464/`: the five files, ROLLBACK-460..464, VERIFY-460-464, LOCAL-TEST-460-464, SHA256SUMS and a README.
 
@@ -41,7 +41,8 @@ The package is in the shared notes folder `LEARNING-01-460-464/`: the five files
 | 463 | learning-course-commerce | 252afd6c…f614 | Medium (widens `individual_checkout`) |
 | 464 | learning-capabilities | a0b44736…837e | Low |
 
-- The coordinator applies them on staging ×2 with a rollback rehearsal. They are then committed byte-identical. Never production.
+- **Staging PASS** (coordinator, 25 Oct): applied ×2, corrected rollback 464→460 to F2 = PRE (buckets excepted), the current files re-applied ×2 to F1 01e0dc07, and VERIFY all as expected. Record: . Never production.
+- ⚠ After any rollback, the empty `learning-content` and `learning-evidence` buckets are removed by a person through the Storage API or dashboard. A bucket holding files is never deleted automatically.
 - 461 carries 422's and 442's guard branches byte-identical. 442 on main (#108) is identical to the copy used.
 
 ## 3. Proof so far
@@ -65,16 +66,17 @@ The package is in the shared notes folder `LEARNING-01-460-464/`: the five files
   - `pd-screen-doctrine-harness` (5);
   - `pui-tokens-harness` (globals.css drift);
   - `professional-profile-harness` (P W3).
-- **Not yet run:** `scripts/learning-acceptance-harness.ts` on staging, which needs 460–464 there; the browser walkthrough; and the Flutterwave TEST purchase (§5).
+- **Staging acceptance:** `learning-acceptance-harness` **ALL GREEN, 22/22** on ezhvpgtcqcdsgylrxgdb, 25 Oct. Afterwards learning_app was back off, no harness account remained, the fixtures were retired and no Learning appointment was active.
+- **Not yet run:** the browser walkthrough with the five synthetic identities, and the Flutterwave TEST purchase. Both are owner actions: .
 
 ## 4. PD §21 acceptance, item by item
 
 | §21 | Where proven | State |
 |---|---|---|
-| 1 Studio course | acceptance A1, A1b | staging pending |
+| 1 Studio course | acceptance A1, A1b | staging PASS |
 | 2 CFCA outcomes | A2; local S1/M1 | local PASS |
 | 3 Review and publication | A3a/c; local R0–R2, U1–U2 | local PASS |
-| 4 Discovery | A4 | staging pending |
+| 4 Discovery | A4 | staging PASS |
 | 5 Free or paid access enforced | A5b; local E1 | local PASS |
 | 6 Verified purchase grants course entitlement | A6a/b; local K1–K4, N1–N3 | local PASS (DB). Real TEST payment pending (§5) |
 | 7 Lessons and assessments | A7a/b; unit tests | unit PASS |
@@ -86,7 +88,7 @@ The package is in the shared notes folder `LEARNING-01-460-464/`: the five files
 | 13 Not falsely verified | B3; unit "never says verified" | unit PASS |
 | 14 Scholar and Enterprise by entitlement | the member-only area serves any member. Enterprise deferred (D4) | Individual and Scholar: built. **Scholar nav link is hand-off H3** |
 | 15 History outlives access | A15; local H1–H4 | local PASS |
-| 16 AI to the correct budget | X1: Learning makes **no** AI call (465 deferred) | staging pending |
+| 16 AI to the correct budget | X1: Learning makes **no** AI call (465 deferred) | staging PASS |
 | 17 No unnecessary AI | stored lessons and deterministic checks only | built |
 
 ## 5. Staging steps (coordinator or owner)
