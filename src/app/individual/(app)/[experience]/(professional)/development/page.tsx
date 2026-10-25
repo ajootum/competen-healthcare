@@ -7,7 +7,7 @@ import { planProgress } from "@/lib/individual/professional/progress";
 import type { Metadata } from "next";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable } from "../../../../_components/chrome";
-import { ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
+import { AddPanel, ApiButton, ApiForm, Field, inputCls } from "../../../../_components/professional/forms";
 import FrameworkPicker from "../../../../_components/professional/FrameworkPicker";
 import AssistPanel from "../../../../_components/professional/AssistPanel";
 import CompetencyLinks from "../../../../_components/professional/CompetencyLinks";
@@ -86,16 +86,13 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
         )}
 
         {needs !== null && record.provisioned && (
-          <details className="mt-4 rounded-xl border border-gray-200 p-4" open={needs.length === 0}>
-            <summary className="cursor-pointer text-[14px] font-semibold" style={{ color: x.accent }}>Add a development need</summary>
-            <div className="mt-4">
-              <ApiForm action="/api/individual/professional/needs" submitLabel="Add need" accent={x.accent} savedText="Need added.">
-                <Field label="What do you want to develop?" htmlFor="need-title"><input id="need-title" name="title" required minLength={3} maxLength={200} className={inputCls} placeholder="e.g. Confidence leading a resuscitation" /></Field>
-                <Field label="Why, or what good looks like (optional)" htmlFor="need-detail"><textarea id="need-detail" name="detail" rows={3} maxLength={2000} className={inputCls} /></Field>
-                <FrameworkPicker idPrefix="need" frameworks={frameworks?.map(f => ({ id: f.id, name: f.name })) ?? null} />
-              </ApiForm>
-            </div>
-          </details>
+          <AddPanel label="Add a development need" accent={x.accent} suggestOpen={needs.length === 0}>
+            <ApiForm action="/api/individual/professional/needs" submitLabel="Add need" accent={x.accent} savedText="Need added.">
+              <Field label="What do you want to develop?" htmlFor="need-title"><input id="need-title" name="title" required minLength={3} maxLength={200} className={inputCls} placeholder="e.g. Confidence leading a resuscitation" /></Field>
+              <Field label="Why, or what good looks like (optional)" htmlFor="need-detail"><textarea id="need-detail" name="detail" rows={3} maxLength={2000} className={inputCls} /></Field>
+              <FrameworkPicker idPrefix="need" frameworks={frameworks?.map(f => ({ id: f.id, name: f.name })) ?? null} />
+            </ApiForm>
+          </AddPanel>
         )}
       </Section>
 
@@ -154,9 +151,7 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
         )}
 
         {goals !== null && record.provisioned && (
-          <details className="mt-4 rounded-xl border border-gray-200 p-4" open={goals.length === 0 && (needs?.length ?? 0) > 0}>
-            <summary className="cursor-pointer text-[14px] font-semibold" style={{ color: x.accent }}>Add a goal</summary>
-            <div className="mt-4">
+          <AddPanel label="Add a goal" accent={x.accent} suggestOpen={goals.length === 0 && (needs?.length ?? 0) > 0}>
               <ApiForm action="/api/individual/professional/goals" submitLabel="Add goal" accent={x.accent} savedText="Goal added.">
                 <Field label="Goal" htmlFor="goal-title"><input id="goal-title" name="title" required minLength={3} maxLength={200} className={inputCls} placeholder="e.g. Complete an ALS course" /></Field>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -170,8 +165,7 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
                 </div>
                 <Field label="How you will do it (optional)" htmlFor="goal-detail"><textarea id="goal-detail" name="detail" rows={3} maxLength={2000} className={inputCls} /></Field>
               </ApiForm>
-            </div>
-          </details>
+          </AddPanel>
         )}
       </Section>
 

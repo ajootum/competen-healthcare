@@ -318,6 +318,23 @@ const checkPrefsSchema = (mig: string) => ({
 // A proposal, a rejection or a goal (intent, not evidence) never does -- and nothing says verified.
 const MAP_FILE = "src/lib/individual/professional/mapping-store.ts";
 const MAP_ROUTE = "src/app/api/individual/professional/mappings/route.ts";
+
+// U1 (IND-007 s7, PARTIAL "the confirmation is hidden when the panel closes on refresh"): no Professional page decides
+// on the server whether a disclosure is open, because the refresh after a save would close it on the confirmation.
+// Add panels are AddPanel, and AddPanel only ever OPENS on a changed suggestion, never closes.
+const PRO_PAGES_DIR = "src/app/individual/(app)/[experience]/(professional)/";
+const FORMS_FILE = "src/app/individual/_components/professional/forms.tsx";
+function checkAddPanelsStayOpen(src: Sources): { ok: boolean; detail: string } {
+  const bad: string[] = [];
+  for (const [f, t] of src) if ((f.startsWith(PRO_PAGES_DIR) || f.startsWith("src/app/individual/_components/professional/")) && /<details\b[^>]*\bopen=\{/.test(t) && f !== FORMS_FILE) bad.push(`${f}: a server-decided <details open>`);
+  const dev = src.get(PRO_PAGES_DIR + "development/page.tsx") ?? "";
+  if ((dev.match(/<AddPanel\b/g) ?? []).length < 2) bad.push("development/page.tsx: the need and goal panels are not AddPanel");
+  const forms = src.get(FORMS_FILE) ?? "";
+  const body = forms.slice(forms.indexOf("export function AddPanel"), forms.indexOf("type Method"));
+  if (!/if \(suggestOpen\) setOpen\(true\);/.test(body) || /setOpen\(suggestOpen\)/.test(body)) bad.push("AddPanel: a changed suggestion can close the panel");
+  if (!/open=\{open\} onToggle=\{e => setOpen\(e\.currentTarget\.open\)\}/.test(body)) bad.push("AddPanel: the person's own open or close is not kept");
+  return { ok: bad.length === 0, detail: bad.join("; ") };
+}
 const MIG393_FILE = "supabase/migrations/393-individual-professional-competency-mapping.sql";
 const MIG393 = existsSync(MIG393_FILE) ? readFileSync(MIG393_FILE, "utf8").replace(/--.*$/gm, "").toLowerCase() : "";
 const MAP_ROWS = [
@@ -442,6 +459,7 @@ function main() {
   run("M3. writes: only offered (allowlisted) competencies, own entries only, AI rows carry provenance; propose keeps the assistant order", checkMappingWrites(ALL));
   run("M4. every state is said in words, never green, and /verify says the links are not verified", checkMappingWords(ALL));
   run("M6. no patient identifier reaches the model: input screened before the call, output screened by the engine, the Holdings screen", checkIdentifierScreen(ALL));
+  run("U1. an Add panel stays open after a save, so its confirmation stays in sight", checkAddPanelsStayOpen(ALL));
   if (MIG393) run("M5. 393: RLS own-row SELECT only, composite FKs to own rows, exactly one subject, append-only decisions with the cascade path", checkMappingSchema(MIG393));
   else { pend.push("M5"); console.log(`  PEND  M5. ${MIG393_FILE} is not in this checkout`); }
 
@@ -507,6 +525,9 @@ function main() {
   red("M4 on a green chip", checkMappingWords(mapPlant("src/app/individual/_components/professional/CompetencyLinks.tsx", "border-amber-300 bg-amber-50", "border-green-300 bg-green-50")));
   red("M4 when /verify drops not verified", checkMappingWords(mapPlant("src/app/verify/[token]/page.tsx", " (not verified)</span>", "</span>")));
   red("M6 when the input is not screened", checkIdentifierScreen(mapPlant(MAP_FILE, "texted.filter(s => findPatientIdentifiers(s.text).length === 0)", "texted")));
+  red("U1 on a server-decided details open", checkAddPanelsStayOpen(mapPlant(PRO_PAGES_DIR + "development/page.tsx", '<AddPanel label="Add a goal"', '<details open={goals.length === 0}></details><AddPanel label="Add a goal"')));
+  red("U1 on an AddPanel that follows the suggestion closed", checkAddPanelsStayOpen(mapPlant(FORMS_FILE, "if (suggestOpen) setOpen(true);", "setOpen(suggestOpen);")));
+  red("U1 when a panel goes back to a plain details", checkAddPanelsStayOpen(mapPlant(PRO_PAGES_DIR + "development/page.tsx", '<AddPanel label="Add a goal"', '<Plain label="Add a goal"')));
   red("M6 without the output screen", checkIdentifierScreen(mapPlant(MAP_FILE, ", screen: findPatientIdentifiers, run });", ", run });")));
   if (MIG393) {
     red("M5 on a write policy", checkMappingSchema(MIG393 + "\ncreate policy p on individual_professional_competency_map for insert with check (true)"));
