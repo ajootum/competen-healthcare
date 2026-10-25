@@ -12,7 +12,20 @@ import { Problems, useCaseSend } from "./CaseControls";
 // returns -- so what you see is what will be refused. (blueprint.ts holds the server-side view tokens, so it is never
 // bundled for a browser.) Ids are made here, never typed.
 
-type Comp = { id: string; label: string };
+type Comp = { id: string; label: string; outcomes?: string[] };
+type Opt = { id: string; label: string };
+/** The catalogue a case is classified by (studio.ts classificationOptions). Null when it could not be read. */
+export type ClassOpts = { professions: Opt[]; specialties: Opt[]; cfcaDomains: Opt[]; cpus: Opt[]; proficiency: Opt[] } | null;
+
+// CLASSIFICATION (owner, Stage 5B case classification decision): references to the existing catalogue records, several
+// of each, all OPTIONAL while drafting. Completeness is the case policy's and is checked at submission only.
+const CLASS_FIELDS = [
+  { key: "professions", field: "professionTermIds", legend: "Professions", none: "The catalogue holds no profession terms yet." },
+  { key: "specialties", field: "specialtyTermIds", legend: "Clinical specialties or practice contexts", none: "The catalogue holds no specialty terms yet." },
+  { key: "cfcaDomains", field: "cfcaDomainIds", legend: "CFCA domains", none: "No shared framework has domains yet." },
+  { key: "cpus", field: "cpuIds", legend: "Competency Practice Units (CPUs)", none: "No CPU sits under a shared framework yet." },
+  { key: "proficiency", field: "proficiencyLevelIds", legend: "Proficiency levels", none: "No proficiency scale is set up yet." },
+] as const;
 const KINDS = ["history", "observation", "examination", "result", "context"] as const;
 const lbl = "block text-[12.5px] text-gray-700";
 const box = "rounded-xl border border-gray-200 bg-white p-4";
@@ -21,7 +34,7 @@ const small = "text-[12px] text-gray-500";
 const nextId = (prefix: string, used: string[]) => { let n = 1; while (used.includes(`${prefix}${n}`)) n++; return `${prefix}${n}`; };
 const lines = (s: string) => s.split("\n").map(x => x.trim()).filter(Boolean);
 
-export function CaseEditor({ versionId, initial, competencies, dimensions, initialProblems }: { versionId: string; initial: any; competencies: Comp[]; dimensions: string[]; initialProblems: string[] }) {
+export function CaseEditor({ versionId, initial, competencies, dimensions, initialProblems, classification }: { versionId: string; initial: any; competencies: Comp[]; dimensions: string[]; initialProblems: string[]; classification: ClassOpts }) {
   const [b, setB] = useState<any>(() => JSON.parse(JSON.stringify(initial)));
   const [structural, setStructural] = useState<string[]>(initialProblems);
   const [dirty, setDirty] = useState(false);
@@ -33,6 +46,12 @@ export function CaseEditor({ versionId, initial, competencies, dimensions, initi
   const factLabel = (id: string) => b.facts.find((f: any) => f.id === id)?.label || id;
   const optionsOfStage = (sid: string) => b.decisionPoints.filter((d: any) => d.stageId === sid).flatMap((d: any) => d.options.map((o: any) => o));
   const toggle = (arr: string[], id: string, on: boolean) => (on ? [...new Set([...arr, id])] : arr.filter(x => x !== id));
+  // The single legacy profession field folds into the list the editor shows, and stays its first (studio.ts saveDraft).
+  const listOf = (field: string): string[] => field === "professionTermIds"
+    ? [...new Set([...(b.metadata.professionTermIds ?? []), ...(b.metadata.professionTermId ? [b.metadata.professionTermId] : [])])]
+    : (b.metadata[field] ?? []);
+  const setList = (field: string, ids: string[]) => up(x => { x.metadata[field] = ids; if (field === "professionTermIds") x.metadata.professionTermId = ids[0] ?? null; });
+  const compById = new Map(competencies.map(c => [c.id, c]));
 
   return (
     <div className="space-y-4">
@@ -53,6 +72,30 @@ export function CaseEditor({ versionId, initial, competencies, dimensions, initi
           <label className={`${lbl} sm:col-span-2`}>Summary, for educators and the catalogue (never shown to a learner)<textarea rows={2} className={`${input} mt-1 block w-full`} value={b.summary ?? ""} onChange={e => up(x => { x.summary = e.target.value; })} /></label>
           <label className={`${lbl} sm:col-span-2`}>Learner opening (no spoilers)<textarea rows={2} className={`${input} mt-1 block w-full`} value={b.learnerIntro ?? ""} onChange={e => up(x => { x.learnerIntro = e.target.value; })} /></label>
         </div>
+      </section>
+
+      <section className={box} aria-labelledby="ed-class">
+        <h2 id="ed-class" className={h2}>Classification</h2>
+        <p className={small}>From the existing catalogue. Choose as many as apply. Optional while you draft: the case policy says what a case needs before it can be submitted.</p>
+        {classification === null ? (
+          <p role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">The catalogue could not be read just now, so classification cannot be changed. What the case already carries is kept when you save.</p>
+        ) : (
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            {CLASS_FIELDS.map(f => {
+              const opts = classification[f.key];
+              const chosen = listOf(f.field);
+              const orphans = chosen.filter(id => !opts.some(o => o.id === id));
+              return (
+                <fieldset key={f.key} className="max-h-44 overflow-y-auto rounded-lg border border-gray-100 p-2">
+                  <legend className="text-[12.5px] font-semibold text-gray-800">{f.legend}{chosen.length ? ` (${chosen.length})` : ""}</legend>
+                  {opts.length === 0 && <p className={small}>{f.none}</p>}
+                  {opts.map(o => <label key={o.id} className="block text-[12.5px] pointer-coarse:py-1"><input type="checkbox" className="mr-1" checked={chosen.includes(o.id)} onChange={e => setList(f.field, toggle(chosen, o.id, e.target.checked))} />{o.label}</label>)}
+                  {orphans.length > 0 && <p className="mt-1 text-[12px] text-amber-900">{orphans.length} chosen {orphans.length === 1 ? "entry is" : "entries are"} no longer in the catalogue. <button type="button" className="underline" onClick={() => setList(f.field, chosen.filter(id => !orphans.includes(id)))}>Remove</button></p>}
+                </fieldset>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <section className={box} aria-labelledby="ed-patient">
@@ -170,8 +213,24 @@ export function CaseEditor({ versionId, initial, competencies, dimensions, initi
               <label className={lbl}>Objective<input className={`${input} mt-1 block w-full`} value={l.text} onChange={e => up(x => { x.learningObjectives[li].text = e.target.value; })} /></label>
               <label className={`${lbl} mt-1`}>Measurable outcomes, one per line<textarea rows={2} className={`${input} mt-1 block w-full`} value={(l.outcomes ?? []).join("\n")} onChange={e => up(x => { x.learningObjectives[li].outcomes = lines(e.target.value); })} /></label>
               <fieldset className="mt-1 max-h-36 overflow-y-auto"><legend className={small}>CFCA competencies it serves (the original identifiers)</legend>
-                {competencies.map(c => <label key={c.id} className="block text-[12.5px]"><input type="checkbox" className="mr-1" checked={l.competencyIds.includes(c.id)} onChange={e => up(x => { x.learningObjectives[li].competencyIds = toggle(x.learningObjectives[li].competencyIds, c.id, e.target.checked); })} />{c.label}</label>)}
+                {competencies.map(c => <label key={c.id} className="block text-[12.5px]"><input type="checkbox" className="mr-1" checked={l.competencyIds.includes(c.id)} onChange={e => up(x => {
+                  const o = x.learningObjectives[li];
+                  o.competencyIds = toggle(o.competencyIds, c.id, e.target.checked);
+                  if (!e.target.checked) o.outcomeRefs = (o.outcomeRefs ?? []).filter((r: any) => r.competencyId !== c.id);
+                })} />{c.label}</label>)}
               </fieldset>
+              {l.competencyIds.some((id: string) => (compById.get(id)?.outcomes ?? []).some(t => t.trim())) && (
+                <fieldset className="mt-1"><legend className={small}>The competencies&apos; recorded learning outcomes this objective addresses</legend>
+                  {l.competencyIds.flatMap((id: string) => (compById.get(id)?.outcomes ?? []).map((t, index) => ({ id, t, index }))).filter((o: any) => o.t.trim()).map((o: any) => {
+                    const on = (l.outcomeRefs ?? []).some((r: any) => r.competencyId === o.id && r.index === o.index);
+                    return <label key={`${o.id}-${o.index}`} className="block text-[12.5px] pointer-coarse:py-1"><input type="checkbox" className="mr-1" checked={on} onChange={e => up(x => {
+                      const lo = x.learningObjectives[li];
+                      const rest = (lo.outcomeRefs ?? []).filter((r: any) => !(r.competencyId === o.id && r.index === o.index));
+                      lo.outcomeRefs = e.target.checked ? [...rest, { competencyId: o.id, index: o.index }] : rest;
+                    })} />{o.t}</label>;
+                  })}
+                </fieldset>
+              )}
               <button type="button" className={`${ghost} mt-1`} onClick={() => up(x => { x.learningObjectives.splice(li, 1); })}>Remove objective</button>
             </div>
           ))}

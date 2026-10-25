@@ -150,6 +150,30 @@ There is no second approval engine.
   - **D-a:** a superseded or retired version is returned, labelled "no longer current", only when that student already has a session on that exact version.
 - **D-c:** live AI with a stored case uses `resolveOwner(admin, "case.live_with_stored", "scholar", { userId })` and `runOwnedAi`, with the same request-id derivation (`:verify`, `:retry`) and the same `risk` subject on every call of one action. Replay is `case.replay_stored`: no AI, no charge.
 
+## Classification, additive (owner, Stage 5B case classification decision, 25 October 2026)
+
+Every new field is OPTIONAL, so every existing blueprint, private or library, stays valid with no change. Scholar's
+private cases are not affected, and no existing field changes meaning.
+
+| Field | Shape | References (existing records only) |
+|---|---|---|
+| `metadata.professionTermIds` | uuid[] | `taxonomy_terms` of kind profession (013). A case may be for several. `professionTermId` stays, and the studio keeps it the first of the list, so every reader of the single field (423's candidate queue, Scholar) is unchanged. |
+| `metadata.specialtyTermIds`, `cfcaDomainIds`, `cpuIds` | uuid[] (existing) | `taxonomy_terms` of kind specialty; the `framework_domains` of shared frameworks; the `clinical_practice_units` under them (011). Now editable in the studio. |
+| `metadata.proficiencyLevelIds` | uuid[] | `scoring_levels` of the scales the shared frameworks use, or the default scale (007). Beside the coarse `level`, which is unchanged. |
+| `learningObjectives[].outcomeRefs` | `{ competencyId, index }[]` | A recorded learning outcome of a competency the objective names (`framework_competencies.learning_outcomes`, 384), by position. A reference, never a copy. |
+| `metadata.competencyVersions` | `{ competencyId, contentHash }[]` | **Server-written at submission only.** It holds 395's `competency_content_hash` of each competency the case teaches, so the version a reviewer approves (422's exact hash) records the competency content it was approved against. An editor's value is discarded, and a new draft drops its parent's record. |
+
+**Rules**
+- **While drafting, classification is optional.** A draft always saves. An unknown reference is reported as a problem, not refused.
+- **At submission**, every reference must name an existing catalogue record of the right kind, and every `outcomeRefs` index must be one its competency records.
+- The case policy's `classificationRequired` says what a case must carry to be submitted. Competencies are always required, by 422. Everything else defaults to not required.
+- Clinical approval and exact-version publication are unchanged (395, 422).
+- No new taxonomy, no copied competency and no migration.
+
+**Code:** `blueprint.ts` (the types, `professionsOf`, `classificationProblems`, shape checks in `validateBlueprint`), `studio.ts` (`classificationOptions`, `classificationReferenceProblems`, `saveDraft`, `submitCase`), `policy.ts`, `library.ts` (`caseMatches` uses every profession), and the studio's `CaseEditor` and policy editor.
+
+**Tests:** `classification.test.ts`. Four plants each go red (the policy ignored at submission, an editor writing the record, the record not written, and drafts not reporting references).
+
 ## Production dependencies (not authorised)
 
 - Migrations 410–412, 420, 421 and 422 onward, under their own GO.
