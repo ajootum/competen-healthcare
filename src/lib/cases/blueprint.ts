@@ -58,6 +58,10 @@ export type DecisionPoint = {
 export type Stage = { id: string; title: string; reveals: string[]; decisionPointIds: string[]; narrativeHint?: string | null };
 export type Transition = { from: string; onOptions?: string[]; isDefault?: boolean; to: string; consequenceFactIds: string[] };
 export type SafetyCriterion = { id: string; text: string; decisionPointId: string; mustSelect?: string[]; mustNotSelect?: string[] };
+/** A recorded learning outcome of a competency (framework_competencies.learning_outcomes, by position), never a copy of it. */
+export type OutcomeRef = { competencyId: string; index: number };
+/** A competency as it was when the case went for review: 395's competency_content_hash (covers its outcomes and level). */
+export type CompetencyVersion = { competencyId: string; contentHash: string };
 
 export type Blueprint = {
   schema: typeof BLUEPRINT_SCHEMA;
@@ -69,7 +73,7 @@ export type Blueprint = {
   stages: Stage[];
   decisionPoints: DecisionPoint[];
   progression: Transition[];               // empty: the stages run in order
-  learningObjectives: { id: string; text: string; competencyIds: string[]; outcomes?: string[] }[];   // N4
+  learningObjectives: { id: string; text: string; competencyIds: string[]; outcomes?: string[]; outcomeRefs?: OutcomeRef[] }[];   // N4
   safetyCriteria: SafetyCriterion[];
   feedback?: { debrief: string; onSafetyEvent: string } | null;
   assessment?: { rubric: RubricCriterion[]; passMark?: number | null } | null;
@@ -80,6 +84,12 @@ export type Blueprint = {
     level: Level; complexity: 1 | 2 | 3 | 4 | 5; risk: Risk;
     professionTermId: string | null; specialtyTermIds: string[];
     cfcaDomainIds: string[]; cpuIds: string[];
+    /** Classification (owner, Stage 5B case classification decision). Every profession the case is for; professionTermId stays its first. */
+    professionTermIds?: string[];
+    /** The proficiency levels (scoring_levels) the case is pitched at, beside the coarse `level`. */
+    proficiencyLevelIds?: string[];
+    /** Written by the server at submission, never by an editor: the exact content of each competency the case teaches. */
+    competencyVersions?: CompetencyVersion[];
     provenance: { kind: "private" | "candidate" | "educator" | "variation" | "revision"; candidateId?: string | null; parentVersionId?: string | null;
       rights: "student_private" | "educator_original" | "own_notes" | "licensed_to_share"; attestationVersion?: string | null; note?: string | null };
   };
@@ -199,6 +209,14 @@ export function validateBlueprint(b: any, profile: Profile, dimensions: readonly
   if (!["foundation", "intermediate", "advanced"].includes(m.level) || ![1, 2, 3, 4, 5].includes(m.complexity) || !["standard", "high"].includes(m.risk)) p.push("metadata: level, complexity 1-5 and risk");
   if (!["private", "candidate", "educator", "variation", "revision"].includes(m.provenance?.kind)) p.push("metadata: provenance kind");
   if (!["student_private", "educator_original", "own_notes", "licensed_to_share"].includes(m.provenance?.rights)) p.push("metadata: the rights the content rests on");
+  // Classification is OPTIONAL in a draft (owner). What is present must be well formed: references, never copies.
+  for (const k of ["professionTermIds", "specialtyTermIds", "cfcaDomainIds", "cpuIds", "proficiencyLevelIds"] as const)
+    if (m[k] !== undefined && (!Array.isArray(m[k]) || m[k].length > 50 || !m[k].every((x: any) => UUID.test(x)))) p.push(`metadata: ${k} must be catalogue identifiers`);
+  if (m.professionTermId != null && !UUID.test(m.professionTermId)) p.push("metadata: professionTermId must be a catalogue identifier");
+  for (const l of arr(b.learningObjectives)) for (const r of arr(l?.outcomeRefs))
+    if (!arr(l?.competencyIds).includes(r?.competencyId) || !Number.isInteger(r?.index) || r.index < 0 || r.index > 199) p.push(`objective ${l?.id}: a learning outcome must belong to a competency the objective names`);
+  if (m.competencyVersions !== undefined && !(Array.isArray(m.competencyVersions) && m.competencyVersions.every((v: any) => UUID.test(v?.competencyId) && /^[0-9a-f]{32}$/.test(v?.contentHash ?? ""))))
+    p.push("metadata: competencyVersions is the server's record of competency content");
   if (profile === "library") {
     if (!str(b.summary, 2000)) p.push("library: a summary (for educators and the catalogue, never shown to a learner)");
     if (!b.patient || !str(b.patient.ageBand, 40) || !str(b.patient.setting, 120) || !str(b.patient.presentingComplaint, 500)) p.push("library: the patient's age band, setting and presenting complaint");
@@ -208,6 +226,34 @@ export function validateBlueprint(b: any, profile: Profile, dimensions: readonly
     if (m.provenance?.kind === "private" || m.provenance?.rights === "student_private") p.push("library: a private case cannot be a library case until it is offered, screened and promoted");
   }
   return p;
+}
+
+/** Pure: every profession a case is for. The list, with the single legacy field folded in, de-duplicated. */
+export const professionsOf = (md: any): string[] =>
+  [...new Set([...arr(md?.professionTermIds), md?.professionTermId].filter((x): x is string => typeof x === "string" && UUID.test(x)))];
+
+/** The classification a case may carry, and the words for each when it is missing (owner, Stage 5B classification). */
+export const CLASSIFICATION = ["professions", "specialties", "cfcaDomains", "cpus", "competencies", "learningOutcomes", "proficiency"] as const;
+export type ClassificationKey = typeof CLASSIFICATION[number];
+export const CLASSIFICATION_LABEL: Record<ClassificationKey, string> = {
+  professions: "at least one profession", specialties: "at least one clinical specialty or practice context", cfcaDomains: "at least one CFCA domain",
+  cpus: "at least one Competency Practice Unit (CPU)", competencies: "at least one competency", learningOutcomes: "at least one recorded learning outcome",
+  proficiency: "at least one proficiency level",
+};
+
+/**
+ * Pure: what a case lacks of the classification the published case policy requires. Applied at SUBMISSION only, never
+ * on saving a draft (owner: incomplete cases may be saved and returned to). Empty when nothing is required.
+ */
+export function classificationProblems(b: any, required: Partial<Record<ClassificationKey, boolean>>): string[] {
+  const m = b?.metadata ?? {};
+  const los = arr(b?.learningObjectives);
+  const has: Record<ClassificationKey, boolean> = {
+    professions: professionsOf(m).length > 0, specialties: arr(m.specialtyTermIds).length > 0, cfcaDomains: arr(m.cfcaDomainIds).length > 0,
+    cpus: arr(m.cpuIds).length > 0, competencies: los.some(l => arr(l?.competencyIds).length > 0),
+    learningOutcomes: los.some(l => arr(l?.outcomeRefs).length > 0), proficiency: arr(m.proficiencyLevelIds).length > 0,
+  };
+  return CLASSIFICATION.filter(k => required[k] && !has[k]).map(k => `classification: ${CLASSIFICATION_LABEL[k]} (required by the case policy)`);
 }
 
 /** Pure: the competencies a blueprint teaches: what its version links to, and what a reviewer's scope must cover. */

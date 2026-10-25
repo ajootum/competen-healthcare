@@ -160,7 +160,7 @@ export function RetireCase({ caseId }: { caseId: string }) {
 }
 
 /** The case policy (s13): drafted, then published as a version through the configuration engine. */
-export function CasePolicyEditor({ initial }: { initial: any }) {
+export function CasePolicyEditor({ initial, requirements }: { initial: any; requirements: { key: string; label: string; fixed: boolean }[] }) {
   const { busy, msg, send } = useCaseSend();
   const [p, setP] = useState(initial);
   const set = (k: string, v: unknown) => setP((x: any) => ({ ...x, [k]: v }));
@@ -174,6 +174,17 @@ export function CasePolicyEditor({ initial }: { initial: any }) {
         <label className="text-[12.5px] text-gray-700"><input type="checkbox" className="mr-2" checked={p.reuseFirst} onChange={e => set("reuseFirst", e.target.checked)} />Offer a library case before generating a private one</label>
         <label className="text-[12.5px] text-gray-700"><input type="checkbox" className="mr-2" checked={p.variationsEnabled} onChange={e => set("variationsEnabled", e.target.checked)} />Deliver approved variations</label>
       </div>
+      <fieldset className="rounded-lg border border-gray-100 p-2">
+        <legend className="text-[12.5px] font-semibold text-gray-800">Before a case can be submitted for clinical review, it must carry</legend>
+        <p className="text-[12px] text-gray-500">Checked at submission only. Drafts can always be saved incomplete.</p>
+        {requirements.map(r => (
+          <label key={r.key} className="block text-[12.5px] text-gray-700 pointer-coarse:py-1">
+            <input type="checkbox" className="mr-2" disabled={r.fixed} checked={r.fixed || p.classificationRequired?.[r.key] === true}
+              onChange={e => set("classificationRequired", { ...(p.classificationRequired ?? {}), [r.key]: e.target.checked })} />
+            {r.label}{r.fixed ? " (always: the database requires it)" : ""}
+          </label>
+        ))}
+      </fieldset>
       <div className="flex flex-wrap gap-2">
         <button type="button" className={ghost} disabled={busy} onClick={() => send({ action: "policy_draft", policy: p }, "Draft saved. Nothing changes until it is published.")}>Save draft</button>
         <button type="button" className={primary} disabled={busy} onClick={() => send({ action: "policy_publish" }, "Published as a new configuration version.")}>Publish</button>

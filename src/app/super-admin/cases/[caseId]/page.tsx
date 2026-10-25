@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { requireHqCapability } from "@/lib/hq/context";
 import { DEFAULT_DIMENSIONS, validateBlueprint } from "@/lib/cases/blueprint";
 import { CASE_LIBRARY_OFF, caseLibraryEnabled } from "@/lib/cases/policy";
-import { caseDetail, competencyOptions, type ClinicalCaseState } from "@/lib/cases/studio";
+import { caseDetail, classificationOptions, competencyOptions, type ClinicalCaseState } from "@/lib/cases/studio";
 import { CaseContent } from "@/app/super-admin/clinical-review/_components/CaseContent";
 import { CaseEditor } from "../_components/CaseEditor";
 import { VersionActions } from "../_components/CaseControls";
@@ -28,7 +28,7 @@ export default async function CasePage({ params }: { params: Promise<{ caseId: s
   const ctx = await requireHqCapability("hq.quality.case.author");
   if (!(await caseLibraryEnabled(ctx.admin))) return <div className="max-w-3xl"><h1 className="text-xl font-bold text-gray-900">Case</h1><p role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">{CASE_LIBRARY_OFF} It opens when the platform flag case_library is switched on, after migrations 422 and 423 are applied here.</p></div>;
   const { caseId } = await params;
-  const [d, comps] = await Promise.all([caseDetail(ctx.admin, caseId), competencyOptions(ctx.admin)]);
+  const [d, comps, classes] = await Promise.all([caseDetail(ctx.admin, caseId), competencyOptions(ctx.admin), classificationOptions(ctx.admin)]);
   if (!d) notFound();
   const draft = d.versions.find(v => v.state === "draft");
   return (
@@ -61,7 +61,7 @@ export default async function CasePage({ params }: { params: Promise<{ caseId: s
         <section aria-labelledby="ed-h">
           <h2 id="ed-h" className="text-[15px] font-bold text-gray-900">Edit the draft (version {draft.versionNo})</h2>
           <p className="text-[12.5px] text-gray-600">Saving makes you one of this draft&apos;s authors, so you will not be able to approve it.</p>
-          <div className="mt-2"><CaseEditor versionId={draft.id} initial={d.contentOf[draft.id]} competencies={comps} dimensions={[...DEFAULT_DIMENSIONS]} initialProblems={validateBlueprint(d.contentOf[draft.id], "library")} /></div>
+          <div className="mt-2"><CaseEditor versionId={draft.id} initial={d.contentOf[draft.id]} competencies={comps} dimensions={[...DEFAULT_DIMENSIONS]} initialProblems={validateBlueprint(d.contentOf[draft.id], "library")} classification={classes} /></div>
         </section>
       )}
 
