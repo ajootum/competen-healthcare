@@ -3,8 +3,8 @@
 **Owner GO:** COMPETEN-PROFESSIONAL-LCPD-01, Stage 4 Learning & CPD (LCPD-2 and LCPD-5). Development, integration and staging are authorised. Production needs a separate owner GO.
 
 **State:**
-- **Authored.** Proven locally on PG17 against a 373-shaped CPD table.
-- **Next:** staging ×2 by the coordinator.
+- **APPLIED and verified on staging** (ezhvpgtcqcdsgylrxgdb), ×2 with the rollback rehearsed: see `490-staging-record.md`. Committed byte-identical.
+- **Staging fingerprint:** PRE 49a769cc, F1 = F2 = 61fc23a3 (19 new columns, hours nullable), rollback = PRE, re-apply = F1.
 - **Production:** not applied.
 
 **Numbers:** 490–499 belong to Stage 4.
