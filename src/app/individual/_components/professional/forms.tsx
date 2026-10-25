@@ -58,18 +58,20 @@ export function ApiForm({ action, method = "POST", multipart, submitLabel, accen
   const router = useRouter();
   const ref = useRef<HTMLFormElement>(null);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msg, setMsg] = useState<RefusalMsg | null>(null);
 
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
+  async function submit(e: React.FormEvent<HTMLFormElement>, overrideField?: string) {
     e.preventDefault();
+    if (!ref.current) return;
     setBusy(true); setMsg(null);
-    const fd = new FormData(e.currentTarget);
+    const fd = new FormData(ref.current);
+    if (overrideField) fd.set(overrideField, "yes");
     try {
       const res = await fetch(action, multipart
         ? { method, body: fd }
         : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === "string"))) });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) { setMsg({ ok: false, text: json?.error ?? "That could not be saved. Try again shortly." }); return; }
+      if (!res.ok) { setMsg(refusalMsg(json, "That could not be saved. Try again shortly.")); return; }
       setMsg({ ok: true, text: savedText });
       if (reset) ref.current?.reset();
       router.refresh();
@@ -83,9 +85,38 @@ export function ApiForm({ action, method = "POST", multipart, submitLabel, accen
       {children}
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" disabled={busy} className={primaryBtn} style={{ background: accent }}>{busy ? "Saving…" : submitLabel}</button>
-        {msg && <p role={msg.ok ? "status" : "alert"} className={`text-[13.5px] font-medium ${msg.ok ? "text-green-800" : "text-red-700"}`}>{msg.text}</p>}
+        {msg && <RefusalNote msg={msg} busy={busy} onOverride={f => void submit({ preventDefault() {} } as React.FormEvent<HTMLFormElement>, f)} />}
       </div>
     </form>
+  );
+}
+
+/** A save's outcome. A refusal can carry a link to read and an override the person may choose (never automatic). */
+export type RefusalMsg = { ok: boolean; text: string; link?: { href: string; label: string }; override?: { field: string; label: string } };
+
+type RefusalJson = { error?: unknown; link?: { href?: unknown; label?: unknown }; override?: { field?: unknown; label?: unknown } } | null | undefined;
+
+/** Pure: a refusal body as the form shows it. Only a same-site link is followed. */
+export function refusalMsg(json: RefusalJson, fallback: string): RefusalMsg {
+  const l = json?.link, o = json?.override;
+  return {
+    ok: false, text: typeof json?.error === "string" ? json.error : fallback,
+    link: typeof l?.href === "string" && l.href.startsWith("/") && !l.href.startsWith("//") && typeof l.label === "string" ? { href: l.href, label: l.label } : undefined,
+    override: typeof o?.field === "string" && typeof o.label === "string" ? { field: o.field, label: o.label } : undefined,
+  };
+}
+
+export function RefusalNote({ msg, busy, onOverride }: { msg: RefusalMsg; busy: boolean; onOverride: (field: string) => void }) {
+  return (
+    <div role={msg.ok ? "status" : "alert"} className={`text-[13.5px] font-medium ${msg.ok ? "text-green-800" : "text-red-700"}`}>
+      <p>{msg.text}{msg.link && <> <a href={msg.link.href} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{msg.link.label}</a></>}</p>
+      {msg.override && (
+        <button type="button" disabled={busy} onClick={() => onOverride(msg.override!.field)}
+          className={`mt-1.5 inline-flex min-h-[36px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center rounded-lg border border-gray-300 bg-white px-3 text-[12.5px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${focusRing}`}>
+          {msg.override.label}
+        </button>
+      )}
+    </div>
   );
 }
 

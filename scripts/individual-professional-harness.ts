@@ -75,6 +75,12 @@ const WRITES: Record<string, string[]> = {
   "src/app/api/individual/professional/evidence/route.ts": ["individual_professional_evidence.insert", "individual_professional_evidence.update", "individual_professional_evidence.delete"],
   "src/app/api/individual/professional/assistant/route.ts": ["audit_log.insert"],
   "src/lib/individual/professional/api.ts": ["audit_log.insert"],
+  // Owner (double-counted CPD hours): "This is a different activity" is the person's own decision, one ids-only audit row.
+  // It changes no CPD entry and no learning record (src/lib/individual/professional/learning-dedupe.test.ts).
+  "src/app/api/individual/professional/cpd/learning-match/route.ts": ["audit_log.insert"],
+  // Owner (CPD duplicates, "we don't post this and send a notification"): the person's override decision, written
+  // before the entry, and the once-only notice marker. Ids only. No CPD row is written here.
+  "src/lib/individual/professional/cpd-duplicates.ts": ["audit_log.insert"],
   // PROF-PROFILE-01 part B (453): the profile records the person chose for a link.
   "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "individual_professional_share.insert", "passport_share_tokens.update", "individual_professional_share_item.insert"],
   // PROF-PROFILE-01 part B (452): the once-only claim for profile-record reminders, released on a failed send.

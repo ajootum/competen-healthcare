@@ -4,6 +4,7 @@ import { isUuid, parseCpd } from "@/lib/individual/professional/validate";
 import { removeDocument, storeDocument } from "@/lib/individual/professional/documents";
 import { ORIGIN } from "@/lib/individual/professional/vocabulary";
 import { audit, readBody, refuse, todayUtc, writeFailed } from "@/lib/individual/professional/api";
+import { DIFFERENT_ACTIVITY_FIELD, duplicateForSave, notifyDuplicate, recordDifferentActivity, refusalBody } from "@/lib/individual/professional/cpd-duplicates";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -17,6 +18,11 @@ export const dynamic = "force-dynamic";
 // ⚠ THE CLASS IS NOT SENT, IT IS COMPUTED. A certificate attached here makes the entry `source_linked`
 // through 373's generated column. Nothing in the body can make it anything else, and nothing makes it
 // verified.
+//
+// ⚠ A COURSE ALREADY IN THE RECORD THROUGH COMPETEN LEARNING IS NOT POSTED AGAIN (owner: "we don't post this and send
+// a notification to the user", src/lib/individual/professional/cpd-duplicates.ts). The save is refused with 409, the
+// course, its date and a link, and the person is notified. "This is a different activity" (differentActivity=yes)
+// saves it: the decision is written FIRST, and without it the row is not written either.
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("professional");
@@ -29,6 +35,16 @@ export async function POST(req: Request) {
     if (!goal) return refuse("That goal is not on your record.");
   }
 
+  const id = crypto.randomUUID();
+  const dup = await duplicateForSave(ctx.admin, ctx.userId, parsed.value, null);
+  if (dup) {
+    if (fields[DIFFERENT_ACTIVITY_FIELD] !== "yes") {
+      await notifyDuplicate(ctx.admin, ctx.userId, "refused", { ...dup, cpdId: id });
+      return NextResponse.json(refusalBody(dup), { status: 409 });
+    }
+    if (!(await recordDifferentActivity(ctx.admin, ctx.userId, id, dup.recordId))) return writeFailed("CPD entry");
+  }
+
   let doc = {};
   if (file) {
     const stored = await storeDocument(ctx.admin, ctx.userId, file);
@@ -36,12 +52,12 @@ export async function POST(req: Request) {
     doc = stored.doc;
   }
   const { data, error } = await ctx.admin.from("individual_professional_cpd")
-    .insert({ ...parsed.value, ...doc, user_id: ctx.userId, experience_code: ORIGIN }).select("id, evidence_class").single();
+    .insert({ ...parsed.value, ...doc, id, user_id: ctx.userId, experience_code: ORIGIN }).select("id, evidence_class").single();
   if (error || !data) {
     await removeDocument(ctx.admin, (doc as { document_path?: string }).document_path);
     return writeFailed("CPD entry");
   }
-  await audit(ctx, "individual_professional_cpd_create", "individual_professional_cpd", data.id, { evidence_class: data.evidence_class });
+  await audit(ctx, "individual_professional_cpd_create", "individual_professional_cpd", data.id, { evidence_class: data.evidence_class, ...(dup ? { different_activity_from: dup.recordId } : {}) });
   return NextResponse.json({ ok: true, id: data.id, evidenceClass: data.evidence_class }, { status: 201 });
 }
 
@@ -57,11 +73,19 @@ export async function PUT(req: Request) {
   const { fields, file } = await readBody(req);
   const parsed = parseCpd(fields, todayUtc());
   if (!parsed.ok) return refuse(parsed.error);
-  const { data: before } = await ctx.admin.from("individual_professional_cpd").select("id, document_path").eq("id", id).eq("user_id", ctx.userId).maybeSingle();
+  const { data: before } = await ctx.admin.from("individual_professional_cpd").select("id, document_path, title, provider, activity_type, activity_date").eq("id", id).eq("user_id", ctx.userId).maybeSingle();
   if (!before) return refuse("That CPD entry is not on your record.", 404);
   if (parsed.value.goal_id) {
     const { data: goal } = await ctx.admin.from("individual_professional_goal").select("id").eq("id", parsed.value.goal_id).eq("user_id", ctx.userId).maybeSingle();
     if (!goal) return refuse("That goal is not on your record.");
+  }
+  const dup = await duplicateForSave(ctx.admin, ctx.userId, parsed.value, before);
+  if (dup) {
+    if (fields[DIFFERENT_ACTIVITY_FIELD] !== "yes") {
+      await notifyDuplicate(ctx.admin, ctx.userId, "refused", { ...dup, cpdId: id });
+      return NextResponse.json(refusalBody(dup), { status: 409 });
+    }
+    if (!(await recordDifferentActivity(ctx.admin, ctx.userId, id, dup.recordId))) return writeFailed("CPD entry");
   }
   let doc = {};
   if (file) {

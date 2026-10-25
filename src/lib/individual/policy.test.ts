@@ -51,6 +51,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
   it("falls back to today's constants, so an empty store changes nothing", () => {
     expect(DEFAULT_POLICY).toEqual({
       reminderHorizonDays: REMINDER_HORIZON_DAYS, shareLinkMaxDays: SHARE_DAYS_MAX, aiHourlyLimit: 30,
+      // Owner (double-counted CPD hours): a CPD entry and a Competen Learning completion within 7 days can be one activity.
+      professionalLearningMatchDays: 7,
       scholarQuestionsPerRequest: QUESTIONS_PER_REQUEST, scholarMaterialsPerPerson: MAX_MATERIALS_PER_PERSON,
       // Stage 2: PDF and Word only until HQ turns plain text on (it needs migration 405); 10 MB; 300 pages.
       scholarUploadFormats: ["pdf", "docx"], scholarUploadMaxMb: 10, scholarPdfMaxPages: 300, scholarPptxMaxSlides: 150,

@@ -48,7 +48,7 @@ export const POLICY_PATH_PREFIX = "individual.policy.";
 /** The estate default (src/lib/ai/quota.ts HOURLY_LIMIT without AI_HOURLY_LIMIT set). */
 export const INDIVIDUAL_AI_HOURLY_DEFAULT = 30;
 
-export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
+export type IntPolicyKey = "reminder_horizon_days" | "share_link_max_days" | "professional_learning_match_days" | "ai_hourly_limit" | "scholar_questions_per_request" | "scholar_materials_per_person"
   | "scholar_insight_min_answers" | "scholar_insight_window_days" | "scholar_upload_max_mb" | "scholar_pdf_max_pages" | "scholar_pptx_max_slides"
   | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns"
   | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent"
@@ -260,6 +260,14 @@ export const POLICIES: readonly PolicyDef[] = [
     help: "How many days before a recorded credential or registration expires that the person is reminded, in the app and (if they opted in) by email.",
     fallback: REMINDER_HORIZON_DAYS, min: 7, max: 180,
     limitReason: "Under a week leaves no time to renew. Over six months reminds about something not yet actionable.",
+  },
+  {
+    // Owner (double-counted CPD hours): "automatic removal is best" -- of the duplicate HOURS, never the entry.
+    key: "professional_learning_match_days", kind: "int", product: "Professional", unit: "days",
+    label: "CPD and Competen Learning match window",
+    help: "A CPD entry the person logged is counted once with a Competen Learning course they completed when the titles are the same, it is a course or workshop, any recorded providers agree, and its date is within this many days of the completion. The person can always say it is a different activity.",
+    fallback: 7, min: 0, max: 30,
+    limitReason: "0 means the same day only. Over a month risks treating a repeat of a course as the same activity, which would hide real hours.",
   },
   {
     key: "share_link_max_days", kind: "int", product: "Professional", unit: "days",
@@ -890,6 +898,8 @@ export function validateDraft(key: unknown, raw: unknown): { ok: true; def: Poli
 
 export type IndividualPolicy = {
   reminderHorizonDays: number;
+  /** Owner (double-counted CPD hours): days between a CPD entry and a Learning completion for them to be one activity. */
+  professionalLearningMatchDays: number;
   shareLinkMaxDays: number;
   aiHourlyLimit: number;
   scholarQuestionsPerRequest: number;
@@ -981,6 +991,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
   const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
   return {
     reminderHorizonDays: int("reminder_horizon_days"),
+    professionalLearningMatchDays: int("professional_learning_match_days"),
     shareLinkMaxDays: int("share_link_max_days"),
     aiHourlyLimit: int("ai_hourly_limit"),
     scholarQuestionsPerRequest: int("scholar_questions_per_request"),
