@@ -39,7 +39,7 @@ const F = {
   gov: "src/lib/knowledge/governance.ts",
   rgov: "src/lib/knowledge/research-governance.ts",
   contracts: "src/lib/knowledge/data-contracts.ts",
-  choices: "src/app/api/individual/scholar/research/route.ts",
+  choices: "src/app/api/individual/research/route.ts",
   hqGov: "src/app/api/hq/knowledge/governance/route.ts",
   spaces: "src/lib/hq/spaces.ts",
 } as const;

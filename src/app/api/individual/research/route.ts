@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { audit } from "@/lib/individual/scholar/http";
+import { currentTraceId } from "@/lib/trace";
 import { CKRI_OFF, NOTICE_MISSING, PERMISSIONS, ckriEnabled, participationNotice, readMyChoices, setParticipation } from "@/lib/knowledge/governance";
 
 // Request-time only: it reads the session and the gate, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
 
-// /api/individual/scholar/research -- COMPETEN-KNOWLEDGE-RESEARCH-01 s3 (K1), migration 440.
+// /api/individual/research -- COMPETEN-KNOWLEDGE-RESEARCH-01 s3 (K1), migration 440.
+//
+// ⚠ A HOLDINGS PERMISSION, NOT SCHOLAR CODE. Participation in collective analytics or a study is a person's choice at
+// the Individual level, so this route lives outside the Scholar tree and Scholar's own privacy pin (scholar-learning
+// harness S1: no Scholar code shares, contributes or publishes) keeps meaning exactly what it says.
 //
 // GET   the person's FOUR choices, each from its own record, with the notice and whether CKRI is on here.
 // POST  { permission: "collective_analytics" | "research_study", projectId?, grant: boolean }
@@ -17,7 +21,7 @@ export const dynamic = "force-dynamic";
 // ⚠ NOTHING HERE TOUCHES SCHOLAR ACCESS. Declining or withdrawing removes no learning.
 
 export async function GET() {
-  const ctx = await requireIndividualContext("scholar");
+  const ctx = await requireIndividualContext();
   if (isGuardRefusal(ctx)) return ctx;
   const r = await readMyChoices(ctx.admin, ctx.userId);
   if (!r.ok) return NextResponse.json({ error: "Your choices could not be read just now." }, { status: 503 });
@@ -26,7 +30,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const ctx = await requireIndividualContext("scholar");
+  const ctx = await requireIndividualContext();
   if (isGuardRefusal(ctx)) return ctx;
   const body = await req.json().catch(() => ({}));
   const permission = body?.permission;
@@ -43,7 +47,10 @@ export async function POST(req: Request) {
   }
   const r = await setParticipation(ctx.admin, ctx.userId, permission, projectId, body.grant, noticeVersion);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 409 });
-  if (r.changed) await audit(ctx, body.grant ? "ckri_participation_granted" : "ckri_participation_withdrawn", "ckri_participation", projectId,
-    { permission, notice_version: noticeVersion });
+  // One audit row. The choice only -- never anything about the person's learning.
+  if (r.changed) await ctx.admin.from("audit_log").insert({
+    trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.profile.fullName, action: body.grant ? "ckri_participation_granted" : "ckri_participation_withdrawn",
+    entity_type: "ckri_participation", entity_id: projectId, new_value: { permission, notice_version: noticeVersion },
+  }).then((x: unknown) => x, () => {});
   return NextResponse.json({ ok: true, granted: body.grant, changed: r.changed });
 }
