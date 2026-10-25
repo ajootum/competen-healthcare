@@ -9,8 +9,10 @@ import type { Trust, Validity } from "../documents-config";
 
 export function trustOfClass(evidenceClass: string | null | undefined): Trust {
   switch (evidenceClass) {
-    case "institution_issued":
-    case "institution_verified": return "institution";
+    // Aligned with the Stage 7 Passport (passport-view.ts): an organisation that VERIFIED a credential is an independent
+    // decision; one that only issued it is the organisation's record, worded as such.
+    case "institution_verified": return "independent";
+    case "institution_issued": return "institution";
     case "source_linked": return "document_supported";
     case "platform_recorded": return "platform_recorded";
     case "self_directed":

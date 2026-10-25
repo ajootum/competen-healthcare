@@ -43,7 +43,7 @@ export type Validity = (typeof VALIDITY_CODES)[number];
 export type Labels = Record<Trust | Exclude<Validity, "current" | "not_applicable">, string>;
 export const DEFAULT_LABELS: Labels = {
   self_declared: "Self-declared", document_supported: "Self-declared, document attached", platform_recorded: "Recorded by Competen Learning",
-  formative: "Formative, not verification", institution: "Issued or verified by an organisation", independent: "Independently verified",
+  formative: "Formative, not verification", institution: "Issued by an organisation", independent: "Independently verified",
   expired: "Expired", superseded: "Superseded", revoked: "Revoked",
 };
 
