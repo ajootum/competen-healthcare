@@ -283,9 +283,11 @@ async function main() {
   const caseSrc = made.json?.caseId ? ((await admin.from("individual_scholar_case_source").select("chunk_id").eq("user_id", a).eq("case_id", made.json.caseId)).data ?? []) as any[] : [];
   for (const x of ((await admin.from("audit_log").select("new_value").eq("actor_id", a).eq("entity_type", "individual_scholar_case_blueprint").order("created_at")).data ?? []) as any[])
     note(`case draft: ${x.new_value.outcome} ${JSON.stringify(x.new_value.problems ?? [])}`);
+  // The label is the case page view (viewPlay), which is what the student sees -- not the start response.
+  const opened = play?.sessionId ? await send("GET", `/api/individual/scholar/clinical/sessions/private/${play.sessionId}`, undefined, sa.jar) : null;
   ok("J5. from the same answer, a private clinical case is written from the student's own notes -- that section, or (when the checks withhold a one-section case) the same material -- and starts, labelled practice",
-    made.status === 200 && !!play?.sessionId && caseSrc.length > 0 && caseSrc.every(r => fromSection ? r.chunk_id === section : oxygenChunks.has(r.chunk_id)) && /not a clinically reviewed case/.test(play?.label ?? ""),
-    `${fromSection ? "from the section" : "from the material"} · ${made.status} ${made.json?.error ?? ""} · sources ${caseSrc.length} ${caseSrc.every(r => oxygenChunks.has(r.chunk_id)) ? "(all this material)" : "(OTHER)"}`);
+    made.status === 200 && !!play?.sessionId && caseSrc.length > 0 && caseSrc.every(r => fromSection ? r.chunk_id === section : oxygenChunks.has(r.chunk_id)) && /not a clinically reviewed case/.test(opened?.json?.play?.label ?? ""),
+    `${fromSection ? "from the section" : "from the material"} · ${made.status} ${made.json?.error ?? ""} · label ${opened?.json?.play?.label ? "shown" : "MISSING"} · sources ${caseSrc.length} ${caseSrc.every(r => oxygenChunks.has(r.chunk_id)) ? "(all this material)" : "(OTHER)"}`);
   if (!play) return;
 
   // ── J6: the case to the end, with feedback ──
