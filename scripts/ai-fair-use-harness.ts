@@ -219,7 +219,9 @@ const checkAttribution = (attr: Attribution): R => {
   const platform = ["case.candidate_screen", "case.dedupe", "case.promote", "case.shared_variation"].every(w => attr[w] === "platform");
   const replay = attr["case.replay_stored"] === "none";
   const institution = attr["case.institution_commission"] === "institution";
-  return { ok: student && platform && replay && institution, detail: `student work on the student ${student}, promotion and screening on the platform ${platform}, replay needs no AI ${replay}, institution commissions on the institution ${institution}` };
+  // CKRI (KNOWLEDGE-RESEARCH-01 s9): research and knowledge development are never charged to a student.
+  const research = ["knowledge.educator_develop", "research.analysis_assist"].every(w => attr[w] === "platform_or_institution");
+  return { ok: student && platform && replay && institution && research, detail: `student work on the student ${student}, promotion and screening on the platform ${platform}, replay needs no AI ${replay}, institution commissions on the institution ${institution}, research and knowledge development never on a student ${research}` };
 };
 const checkReserveOwnership = (src: Src): R => {
   const m = mig(src), r = fn(m, "ai_reserve");
@@ -389,6 +391,8 @@ red("A17 clinical subjects left on reasoning (Sonnet)", checkHeavyRouting({ ...P
 red("A17 case steps with no clinical floor (offered on tutoring eligibility)", checkHeavyRouting(PROVISIONAL_RISK, { ...PROVISIONAL_ACTIVITIES.scholar, case_steps: { ...PROVISIONAL_ACTIVITIES.scholar.case_steps, riskFloor: "standard_educational" } }));
 red("A13 promotion charged to the student", checkAttribution({ ...ATTRIBUTION, "case.promote": "individual" }));
 red("A13 a student's private case charged to the platform", checkAttribution({ ...ATTRIBUTION, "case.private_generate": "platform" }));
+red("A13 research analysis charged to the student", checkAttribution({ ...ATTRIBUTION, "research.analysis_assist": "individual" }));
+red("A13 knowledge development charged to the student", checkAttribution({ ...ATTRIBUTION, "knowledge.educator_develop": "individual" }));
 red("A15 a student route running platform screening", checkOwnerFromServer(RAW, new Map([...ALL, ["src/app/api/individual/scholar/evil/route.ts", `await resolveOwner(admin, "case.candidate_screen", "scholar", { userId: ctx.userId })`]])));
 red("A15 a browser-sent owner", checkOwnerFromServer(RAW, new Map([...ALL, ["src/app/api/hq/evil/route.ts", `await resolveOwner(admin, body.workflow, "scholar", { userId: ctx.userId, institutionBudgetCode: body.budget })`]])));
 if (HAS_MIG) {
