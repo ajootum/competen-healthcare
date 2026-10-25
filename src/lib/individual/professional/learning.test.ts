@@ -86,7 +86,7 @@ describe("CPD hours: learning counted in, shown separately, nothing invented", (
 describe("by reference only, behind Learning's own flag", () => {
   it("Learning off: not read at all, and nothing to render", async () => {
     const { admin, calls } = fakeAdmin(RECORD_ROWS, false);
-    expect(await loadProfessionalLearning(admin, USER)).toEqual({ enabled: false, refs: [] });
+    expect(await loadProfessionalLearning(admin, USER)).toEqual({ enabled: false, refs: [], unmatched: new Set() });
     expect(calls.some(c => c.table.startsWith("learning_"))).toBe(false);
   });
 

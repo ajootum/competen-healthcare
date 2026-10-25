@@ -4,7 +4,8 @@ import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { cpdHoursByYear, evidenceCoverage, goalActivity, planProgress } from "@/lib/individual/professional/progress";
 import { loadMappingView, professionalProgress } from "@/lib/individual/professional/mapping-store";
-import { cpdYearsWithLearning, loadProfessionalLearning } from "@/lib/individual/professional/learning";
+import { countedOnce, cpdYearsWithLearning, loadProfessionalLearning } from "@/lib/individual/professional/learning";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { GOAL_STATUS_LABEL, NEED_STATUS_LABEL } from "@/lib/individual/professional/vocabulary";
 import type { Metadata } from "next";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
@@ -22,7 +23,8 @@ export const dynamic = "force-dynamic";
 //
 // ⚠ LEARNING COUNTS IN HOURS ONLY (COMPETEN-LEARNING-01 H1). Completed Competen Learning courses, read by reference,
 // add to CPD hours by year, shown "of which from Competen Learning". They are NOT counted as evidence behind a
-// development need: nothing here marks a need met because a course shares a competency with it.
+// development need: nothing here marks a need met because a course shares a competency with it. An entry of the
+// person's own that is the same course is counted ONCE in these hours (countedOnce), the same figure the CPD log shows.
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Progress" }); }
 
@@ -54,10 +56,11 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, map, learning] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId)]);
+  const [record, map, learning, policy] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
   const { needs, goals, cpd, evidence } = record;
   const plan = goals ? planProgress(goals, today) : null;
-  const years = cpd ? cpdYearsWithLearning(cpdHoursByYear(cpd), learning.refs ?? []) : null;
+  const once = cpd ? countedOnce(cpd, learning, policy.professionalLearningMatchDays) : null;
+  const years = cpd && once ? cpdYearsWithLearning(cpdHoursByYear(once.counted), learning.refs ?? []) : null;
   const withLearning = learning.enabled && (years ?? []).some(y => y.learningEntries > 0);
   const coverage = needs && goals && cpd && evidence ? evidenceCoverage(needs, goals, cpd, evidence) : null;
   const prog = professionalProgress(map, record);
@@ -129,6 +132,8 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
           </table>
         )}
         {learning.enabled && learning.refs === null && <p className="mt-2 text-[12.5px] text-gray-600">Your Competen Learning record could not be read just now, so courses from it are not included.</p>}
+        {once && once.matches.size > 0 && <p className="mt-2 text-[12.5px] text-gray-600">{once.matches.size} of your own CPD {once.matches.size === 1 ? "entry is" : "entries are"} the same course as a Competen Learning record and counted once. See your CPD log.</p>}
+        {once?.checkUnavailable && <p className="mt-2 text-[12.5px] font-semibold text-amber-900">The check for courses you logged twice could not run just now, so a course may be counted twice.</p>}
       </Section>
 
       <Section title="Evidence coverage" note="For each development need, the CPD (through a linked goal) and evidence you recorded against it.">

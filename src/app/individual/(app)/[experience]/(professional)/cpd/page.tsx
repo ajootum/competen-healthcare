@@ -10,7 +10,8 @@ import CpdForm from "../../../../_components/professional/CpdForm";
 import { CpdEdit } from "../../../../_components/professional/edit-forms";
 import CompetencyLinks from "../../../../_components/professional/CompetencyLinks";
 import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
-import { cpdYearsWithLearning, loadProfessionalLearning } from "@/lib/individual/professional/learning";
+import { countedOnce, cpdYearsWithLearning, loadProfessionalLearning } from "@/lib/individual/professional/learning";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 import LearningRefs from "../../../../_components/professional/LearningRefs";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
@@ -30,6 +31,8 @@ export const dynamic = "force-dynamic";
 // ⚠ COMPLETED LEARNING SITS BESIDE, NEVER INSIDE (COMPETEN-LEARNING-01 H1). Courses completed on Competen Learning are
 // read from the learning record by reference (src/lib/individual/professional/learning.ts), counted in the hours as
 // "of which from Competen Learning", and listed read-only. Nothing is copied into this log. Learning off: none of it shows.
+// An entry of the person's own that is the same course is COUNTED ONCE (countedOnce): its hours leave the totals, the
+// entry stays, says so, and offers "This is a different activity". Nothing is deleted.
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "CPD log" }); }
 
@@ -39,9 +42,10 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, map, learning] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId)]);
+  const [record, map, learning, policy] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
   const cpd = record.cpd;
-  const years = cpd ? cpdYearsWithLearning(cpdHoursByYear(cpd), learning.refs ?? []) : null;
+  const once = cpd ? countedOnce(cpd, learning, policy.professionalLearningMatchDays) : null;
+  const years = cpd && once ? cpdYearsWithLearning(cpdHoursByYear(once.counted), learning.refs ?? []) : null;
   const goalTitle = new Map((record.goals ?? []).map(g => [g.id, g.title]));
   const liveGoals = (record.goals ?? []).filter(g => g.status === "planned" || g.status === "in_progress");
 
@@ -70,6 +74,8 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
           </ul>
         )}
         {learning.enabled && learning.refs === null && <p className="mt-2 text-[12.5px] text-gray-600">Your Competen Learning record could not be read just now, so courses from it are not included.</p>}
+        {once && once.matches.size > 0 && <p className="mt-2 text-[12.5px] text-gray-600">{once.matches.size} of your own {once.matches.size === 1 ? "entry is" : "entries are"} the same course as a Competen Learning record, so {once.matches.size === 1 ? "it is" : "they are"} counted once, from the learning record. Each one is marked below.</p>}
+        {once?.checkUnavailable && <p className="mt-2 text-[12.5px] font-semibold text-amber-900">The check for courses you logged twice could not run just now, so an entry you also completed on Competen Learning may be counted twice.</p>}
       </Section>
 
       {cpd !== null && record.provisioned && (
@@ -103,6 +109,12 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
                     <ApiButton action={`/api/individual/professional/cpd?id=${c.id}`} method="DELETE" label="Remove" confirm="Remove this CPD entry and its document?" />
                   </div>
                 </div>
+                {once?.matches.get(c.id) && (() => { const m = once.matches.get(c.id)!; return (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[12.5px] text-slate-800">
+                    <span><span className="font-semibold">Counted once: matched to your Competen Learning record</span> ({m.title}, {fmtDate(m.completedOn)}). Its hours are counted from that record, not twice. This entry is kept as you wrote it.</span>
+                    <ApiButton action="/api/individual/professional/cpd/learning-match" method="PATCH" body={{ cpdId: c.id, recordId: m.recordId }} label="This is a different activity" />
+                  </div>
+                ); })()}
                 {c.reflection && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-[13.5px] leading-relaxed text-gray-700">{c.reflection}</p>}
                 <CpdEdit c={c} goals={(record.goals ?? []).map(g => ({ id: g.id, title: g.title }))} today={today} accent={x.accent} />
                 {map.mappings === null ? <p className="mt-2 text-[12.5px] text-gray-600">Competency links could not be read just now.</p> : map.provisioned && (
@@ -115,7 +127,7 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
       </Section>
 
       {learning.enabled && (
-        <Section title="From Competen Learning" note="Courses you completed, read from your learning record. They are not copied into this log and cannot be edited here. If you also logged one of them in your own activities, remove one so its hours are not counted twice.">
+        <Section title="From Competen Learning" note="Courses you completed, read from your learning record. They are not copied into this log and cannot be edited here. If you also logged one of them yourself, it is counted once automatically and marked on your entry.">
           {learning.refs === null ? <Unreadable what="learning record" /> : learning.refs.length === 0 ? <Empty>No completed Competen Learning courses. Your own entries above are a complete CPD log without them.</Empty>
             : <LearningRefs refs={learning.refs} accent={x.accent} />}
         </Section>

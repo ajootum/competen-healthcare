@@ -75,6 +75,9 @@ const WRITES: Record<string, string[]> = {
   "src/app/api/individual/professional/evidence/route.ts": ["individual_professional_evidence.insert", "individual_professional_evidence.update", "individual_professional_evidence.delete"],
   "src/app/api/individual/professional/assistant/route.ts": ["audit_log.insert"],
   "src/lib/individual/professional/api.ts": ["audit_log.insert"],
+  // Owner (double-counted CPD hours): "This is a different activity" is the person's own decision, one ids-only audit row.
+  // It changes no CPD entry and no learning record (src/lib/individual/professional/learning-dedupe.test.ts).
+  "src/app/api/individual/professional/cpd/learning-match/route.ts": ["audit_log.insert"],
   "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "individual_professional_share.insert", "passport_share_tokens.update"],
   "src/lib/individual/professional/reminders.ts": ["individual_professional_evidence.update", "individual_professional_profile.update"],
   "src/app/api/individual/professional/reminders/route.ts": ["individual_professional_profile.update", "individual_professional_profile.insert"],
