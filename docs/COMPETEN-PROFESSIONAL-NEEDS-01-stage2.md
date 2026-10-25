@@ -73,8 +73,27 @@ The defaults are neutral: no profession or country is named.
   - rollback restores the 12 MVP columns and the 373 origin set;
   - re-apply and VERIFY OK;
   - fingerprint stable.
-- **Staging:** applied by the coordinating session. Its record goes here.
-- **Production:** not applied.
+- **Staging** (coordinating session, guarded runner, file whole, LF bytes as above):
+  - Applied twice, then rolled back and re-applied. **Final state: APPLIED on staging** (ezhvpgtcqcdsgylrxgdb).
+  - Full record: `docs/evidence/COMPETEN-PROFESSIONAL-NEEDS-01/470-staging-record.md`.
+  - Pre-application: `individual_professional_need` had 0 rows, so the backfill touched nothing.
+
+    | Step | FINGERPRINT-470 | Items |
+    |---|---|---|
+    | PRE | `b46ab0fa1b8a2ae2131aa2da2250cd85` | 332 |
+    | Apply #1 = apply #2 (idempotent) | `a0812a5017bfcfb6f49a0d2142d07b55` | 443 |
+    | Rollback | = PRE | 332 |
+    | Re-apply | = apply #1 | 443 |
+
+  - VERIFY-470, after apply #2 and again after re-apply:
+    - §1: 15 columns.
+    - §2: 5 tables, each RLS t\|1\|1.
+    - §3: 4 triggers.
+    - §4: 0\|0\|0.
+    - §5: 0.
+    - §6: 0.
+    - §7: the origin CHECK lists 9 origins.
+- **Production:** not applied. Production only on separate owner GO, after 450.
 
 ## 6. Verification
 
