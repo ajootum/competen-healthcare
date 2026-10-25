@@ -138,14 +138,15 @@ const checkNoEstimate = (src: Src): R => {
 };
 const checkFailClosed = (src: Src): R => {
   const e = code(src, "engine");
-  // Both entry points -- a person's allowance and a budget -- are dark when the flag is off.
-  const dark = (e.match(/if \(!\(await aiFairUseEnabled\(admin\)\)\) return generate\(args\.generate\);/g) ?? []).length === 2;
+  // Both entry points -- a person's allowance and a budget -- are dark when the flag is off: no reservation, no ledger.
+  // Since 25 October 2026 (A18) "dark" is unmeteredGate then generate(): eligibility still gates clinical risk.
+  const dark = (e.match(/if \(!\(await aiFairUseEnabled\(admin\)\)\) \{\n    const g = await unmeteredGate\(admin, args\.product, args\.activity, args\.generate\.tier \?\? "reasoning"\);\n[^]*?return generate\(\{ \.\.\.args\.generate, \.\.\.\(g\.tier \? \{ tier: g\.tier \} : \{\}\), \.\.\.\(g\.route \? \{ route: g\.route \} : \{\}\) \}\);\n  \}/g) ?? []).length === 2;
   const unreadable = e.indexOf(`if (!readable) return { ok: false, error: "unreadable"`) > -1 && e.indexOf(`if (!readable) return { ok: false, error: "unreadable"`) < e.indexOf("const out = await generate(");
   const d = defaultPolicy("scholar");
   const nothing = d.includedCau === 0 && d.reserveCau === 0 && d.maxUnreconciledCau === 0 && Object.keys(d.activities).length === 0
     && serviceLevel(d, { includedCau: 0, reserveCau: 0, usedCau: 0, reservedCau: 0, reserveUsedCau: 0, reserveReservedCau: 0 }) === "continuity";
   const noCeiling = !HAS_MIG || /if p_unreconciled_cap_cau is null or v_open \+ v_max > p_unreconciled_cap_cau then/.test(fn(mig(src), "ai_reserve"));
-  return { ok: dark && unreadable && nothing && noCeiling, detail: `off = generate unchanged ${dark}, unreadable sends nothing ${unreadable}, default allows nothing ${nothing}, no ceiling refuses ${noCeiling}` };
+  return { ok: dark && unreadable && nothing && noCeiling, detail: `off = no metering (gate, then generate) ${dark}, unreadable sends nothing ${unreadable}, default allows nothing ${nothing}, no ceiling refuses ${noCeiling}` };
 };
 type Classify = typeof classifyRisk;
 const checkRisk = (src: Src, classify: Classify, at: typeof activityAt): R => {
@@ -218,7 +219,9 @@ const checkAttribution = (attr: Attribution): R => {
   const platform = ["case.candidate_screen", "case.dedupe", "case.promote", "case.shared_variation"].every(w => attr[w] === "platform");
   const replay = attr["case.replay_stored"] === "none";
   const institution = attr["case.institution_commission"] === "institution";
-  return { ok: student && platform && replay && institution, detail: `student work on the student ${student}, promotion and screening on the platform ${platform}, replay needs no AI ${replay}, institution commissions on the institution ${institution}` };
+  // CKRI (KNOWLEDGE-RESEARCH-01 s9): research and knowledge development are never charged to a student.
+  const research = ["knowledge.educator_develop", "research.analysis_assist"].every(w => attr[w] === "platform_or_institution");
+  return { ok: student && platform && replay && institution && research, detail: `student work on the student ${student}, promotion and screening on the platform ${platform}, replay needs no AI ${replay}, institution commissions on the institution ${institution}, research and knowledge development never on a student ${research}` };
 };
 const checkReserveOwnership = (src: Src): R => {
   const m = mig(src), r = fn(m, "ai_reserve");
@@ -252,6 +255,33 @@ function checkStandingEligibility(raw: Src, apply: typeof withEligibility): R {
   const out = apply(st, policy, b, "anthropic", { cheap: "h", reasoning: "s", heavy: "o" }, []);
   if (out.activities.questions.available) bad.push("a clinical activity with no eligible model is still offered");
   if (!out.activities.teach.available) bad.push("a standard activity was closed");
+  return { ok: bad.length === 0, detail: bad.join("; ") };
+}
+
+// A18 (main session, 25 October 2026): eligibility gates clinical-risk activities with metering OFF too, the path
+// production uses at activation. Every unmetered generate() in the engine sits behind unmeteredGate, the unmetered
+// standing applies withEligibility, and Scholar's activityState no longer treats "not metered" as "available".
+const STANDING_FILE = "src/lib/individual/scholar/ai-standing.ts";
+function checkUnmeteredGate(src: Src, allSrc: Src): R {
+  const e = src.get(F.engine) ?? "";
+  const bad: string[] = [];
+  const bodyOf = (name: string) => { const i = e.indexOf(`export async function ${name}`); return i < 0 ? "" : e.slice(i, e.indexOf("\n}\n", i)); };
+  for (const fn of ["runMeteredAi", "runOwnedAi"]) {
+    const body = bodyOf(fn);
+    const off = body.indexOf("if (!(await aiFairUseEnabled(admin)))");
+    if (off < 0) { bad.push(`${fn}: no unmetered branch found`); continue; }
+    const branch = body.slice(off, body.indexOf("\n  }\n", off) + 4);
+    if (/return generate\(args\.generate\);/.test(body.slice(off, off + 80))) bad.push(`${fn}: metering off calls generate() with no eligibility gate`);
+    else if (!/unmeteredGate\(admin, args\.product, args\.activity, args\.generate\.tier \?\? "reasoning"\)/.test(branch) || branch.indexOf("unmeteredGate(") > branch.indexOf("generate(")) bad.push(`${fn}: the unmetered generate() is not behind unmeteredGate`);
+  }
+  const standing = bodyOf("getAiStanding");
+  const off = standing.indexOf("if (!(await aiFairUseEnabled(admin)))");
+  if (off < 0 || !/return withEligibility\(unmetered,/.test(standing.slice(off, off + 1200))) bad.push("getAiStanding: the unmetered standing does not apply eligibility");
+  const gate = bodyOf("unmeteredGate");
+  if (!/if \(riskRank\(floor\) <= 0\) \{[^]{0,200}?if \(!routing\.published\) return \{ ok: true, tier: null, route: null \};/.test(gate)) bad.push("unmeteredGate: standard-educational activities are not left unchanged");
+  if (!/if \(!a\) return \{ ok: false, error: "unknown_activity"/.test(gate)) bad.push("unmeteredGate: an undefined activity is not refused");
+  if (!/if \(rows === null\) return \{ ok: false, error: "unreadable"/.test(gate)) bad.push("unmeteredGate: unreadable eligibility does not fail closed");
+  if (/!standing\.metered && standing\.readable\) return \{ available: true/.test(allSrc.get(STANDING_FILE) ?? "")) bad.push("activityState: not metered still means available");
   return { ok: bad.length === 0, detail: bad.join("; ") };
 }
 
@@ -300,7 +330,7 @@ if (HAS_MIG) {
 } else console.log(`  PEND  A1-A3, A9, A10. ${F.mig410}, ${F.mig411} and ${F.mig412} are not all in this checkout`);
 run("A4. (FI) a client cannot send an allowance: routes meter by session, standing is read-only, only the engine calls the money functions", checkNoClientAllowance(RAW, ALL));
 run("A5. (FI) an unknown charge is never settled on the estimate: settle reported usage, release only when unbilled, otherwise wait", checkNoEstimate(RAW));
-run("A6. fail closed and dark: off is generate() unchanged, unreadable sends nothing, the default allows nothing", checkFailClosed(RAW));
+run("A6. fail closed and dark: off is the eligibility gate then generate(), no metering, unreadable sends nothing, the default allows nothing", checkFailClosed(RAW));
 run("A7. clinical risk (D1): subject decides, unknown is high, no downgrade below the tier floor, tier enforced in ai_reserve", checkRisk(RAW, classifyRisk, activityAt));
 run("A8. the admin door: gated first, POST only, no credential, no activation", checkAdminDoor(RAW));
 run("A11. no allowance figure in code", checkNoFigures(RAW));
@@ -309,6 +339,7 @@ run("A13. who pays follows the workflow: student work on the student, promotion 
 run("A14. (FI) the ledger enforces ownership: a person's account only for that person, a budget only while active, no unfunded institution", checkReserveOwnership(RAW));
 run("A15. the owner is decided on the server: student routes run no platform work, no request input reaches the owner", checkOwnerFromServer(RAW, ALL));
 run("A16. standing reflects model eligibility: no evaluated model, not offered", checkStandingEligibility(RAW, withEligibility));
+run("A18. metering OFF: clinical-risk activities still need an eligible model (gate, standing, Scholar availability)", checkUnmeteredGate(RAW, ALL));
 run("A17. prepared routing: clinical work on heavy (Opus), never reasoning, and the high-risk three stay OFF on tutoring eligibility", checkHeavyRouting(PROVISIONAL_RISK, PROVISIONAL_ACTIVITIES.scholar));
 console.log("");
 if (HAS_MIG) {
@@ -333,7 +364,12 @@ red("A4 (FI) a route calling the money functions itself", checkNoClientAllowance
 red("A5 (FI) settled on the estimate", checkNoEstimate(plant("engine", `    const { error } = await admin.rpc("ai_mark_unreconciled", { p_request_id: m.requestId, p_outcome: "timeout" });`,
   `    const { error } = { error: !(await settle(admin, m.requestId, model, maxInputTokens(m.generate.system, m.generate.user), maxOut, "timeout")) };`)));
 red("A5 (FI) an unknown charge released as free", checkNoEstimate(plant("engine", `  } else if (!out.ok && (out.error === "not_configured" || out.billing === "none")) {`, `  } else if (!out.ok) {`)));
-red("A6 metering on with no flag check", checkFailClosed(plant("engine", "  if (!(await aiFairUseEnabled(admin))) return generate(args.generate);\n  const { policy, readable }", "  const { policy, readable }")));
+red("A6 metering on with no flag check", checkFailClosed(plant("engine", `  if (!(await aiFairUseEnabled(admin))) {
+    const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning");
+    if (!g.ok) return g;
+    return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
+  }
+  const { policy, readable }`, "  const { policy, readable }")));
 red("A7 Teach Me on medication safety classified as standard (by activity name)", checkRisk(RAW, (pol, sub, floor) => sub.text.toLowerCase().startsWith("teach me") ? { tier: "standard_educational", rule: "activity:teach", reason: "" } : classifyRisk(pol, sub, floor), activityAt));
 red("A7 an unknown subject treated as standard", checkRisk(RAW, (pol, sub, floor) => { const d = classifyRisk(pol, sub, floor); return d.rule.startsWith("unknown:") ? { ...d, tier: "standard_educational" } : d; }, activityAt));
 red("A7 a downgrade below the risk tier's model floor", checkRisk(RAW, classifyRisk, (p, l, c, b) => activityAt(p, l, c, b)));
@@ -344,10 +380,19 @@ red("A11 a reserve default bound in the admin surface", checkNoFigures(plant("ad
 red("A11 a window cap in the engine", checkNoFigures(plant("engine", "export const AI_FAIR_USE_FLAG = \"ai_fair_use\";", "export const AI_FAIR_USE_FLAG = \"ai_fair_use\";\nconst WINDOW = 1000;")));
 red("A16 standing that skips eligibility", checkStandingEligibility(plant("engine", "return withEligibility(standingFrom(policy, a.account),", "return ((x: any) => x)(standingFrom(policy, a.account),"), withEligibility));
 red("A16 an eligibility check that offers everything", checkStandingEligibility(RAW, (st) => st));
+red("A18 the old unmetered path (generate with no gate)", checkUnmeteredGate(plant("engine", `  if (!(await aiFairUseEnabled(admin))) {
+    const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning");
+    if (!g.ok) return g;
+    return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
+  }`, "  if (!(await aiFairUseEnabled(admin))) return generate(args.generate);"), ALL));
+red("A18 an unmetered standing that offers everything", checkUnmeteredGate(plant("engine", "return withEligibility(unmetered,", "return (unmetered) || withEligibility(unmetered,"), ALL));
+red("A18 Scholar treating not metered as available", checkUnmeteredGate(RAW, new Map([...ALL, [STANDING_FILE, (ALL.get(STANDING_FILE) ?? "") + "\nif (!standing.metered && standing.readable) return { available: true, message: null, insufficient: false };\n"]])));
 red("A17 clinical subjects left on reasoning (Sonnet)", checkHeavyRouting({ ...PROVISIONAL_RISK, minTier: { ...PROVISIONAL_RISK.minTier, clinical_educational: "reasoning" } }, PROVISIONAL_ACTIVITIES.scholar));
 red("A17 case steps with no clinical floor (offered on tutoring eligibility)", checkHeavyRouting(PROVISIONAL_RISK, { ...PROVISIONAL_ACTIVITIES.scholar, case_steps: { ...PROVISIONAL_ACTIVITIES.scholar.case_steps, riskFloor: "standard_educational" } }));
 red("A13 promotion charged to the student", checkAttribution({ ...ATTRIBUTION, "case.promote": "individual" }));
 red("A13 a student's private case charged to the platform", checkAttribution({ ...ATTRIBUTION, "case.private_generate": "platform" }));
+red("A13 research analysis charged to the student", checkAttribution({ ...ATTRIBUTION, "research.analysis_assist": "individual" }));
+red("A13 knowledge development charged to the student", checkAttribution({ ...ATTRIBUTION, "knowledge.educator_develop": "individual" }));
 red("A15 a student route running platform screening", checkOwnerFromServer(RAW, new Map([...ALL, ["src/app/api/individual/scholar/evil/route.ts", `await resolveOwner(admin, "case.candidate_screen", "scholar", { userId: ctx.userId })`]])));
 red("A15 a browser-sent owner", checkOwnerFromServer(RAW, new Map([...ALL, ["src/app/api/hq/evil/route.ts", `await resolveOwner(admin, body.workflow, "scholar", { userId: ctx.userId, institutionBudgetCode: body.budget })`]])));
 if (HAS_MIG) {

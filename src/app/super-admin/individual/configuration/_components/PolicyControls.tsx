@@ -132,6 +132,43 @@ export function LevelsDraft({ policyKey, programmes, max, draft, hasOverride }: 
   );
 }
 
+/**
+ * COMPETEN-PROFESSIONAL-PROFILE-01: members of a fixed list IN ORDER (registration questions, profile sections).
+ * Ticked rows are included, top to bottom. `fixed` rows cannot be unticked; the route refuses a list without them.
+ */
+export function SequenceDraft({ policyKey, options, draft, fixed = [], hasOverride }: {
+  policyKey: string; options: { value: string; label: string }[]; draft: string[]; fixed?: string[]; hasOverride: boolean;
+}) {
+  const [order, setOrder] = useState<string[]>([...draft, ...options.map(o => o.value).filter(v => !draft.includes(v))]);
+  const [on, setOn] = useState<Set<string>>(new Set(draft));
+  const { busy, msg, send } = useSend();
+  const label = (v: string) => options.find(o => o.value === v)?.label ?? v;
+  const move = (i: number, by: number) => setOrder(o => { const n = [...o]; const j = i + by; if (j < 0 || j >= n.length) return o; [n[i], n[j]] = [n[j], n[i]]; return n; });
+  const toggle = (v: string) => setOn(s => { const n = new Set(s); if (n.has(v)) n.delete(v); else n.add(v); return n; });
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="text-[12.5px] font-semibold text-gray-700">Draft: ticked items, in this order</legend>
+      <ol className="space-y-1">
+        {order.map((v, i) => (
+          <li key={v} className="flex flex-wrap items-center gap-2 text-[14px] text-gray-800">
+            <label className="flex flex-1 items-center gap-2 pointer-coarse:min-h-[var(--cmp-touch-min)]">
+              <input type="checkbox" checked={on.has(v) || fixed.includes(v)} disabled={fixed.includes(v)} onChange={() => toggle(v)} className="h-4 w-4 rounded border-gray-400" />
+              {label(v)}{fixed.includes(v) && <span className="text-[12px] text-gray-500">(always shown)</span>}
+            </label>
+            <button type="button" className={ghost} disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${label(v)} up`}>↑</button>
+            <button type="button" className={ghost} disabled={i === order.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${label(v)} down`}>↓</button>
+          </li>
+        ))}
+      </ol>
+      <div className="flex flex-wrap gap-2 pt-1">
+        <button type="button" className={primary} disabled={busy} onClick={() => send({ action: "set", key: policyKey, value: order.filter(v => on.has(v) || fixed.includes(v)) }, "Draft saved. Publish to make it effective.")}>Save draft</button>
+        {hasOverride && <button type="button" className={ghost} disabled={busy} onClick={() => send({ action: "reset", key: policyKey }, "Removed. The default applies now, and the change is in the history.")}>Use default now</button>}
+      </div>
+      <Message msg={msg} />
+    </fieldset>
+  );
+}
+
 /** One value from a fixed list (radio). The route refuses anything not listed. */
 export function ChoiceDraft({ policyKey, options, draft, hasOverride, legend = "Draft" }: {
   policyKey: string; options: { value: string; label: string }[]; draft: string; hasOverride: boolean; legend?: string;

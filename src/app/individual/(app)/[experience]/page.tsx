@@ -4,6 +4,7 @@ import { loadIndividualPassport } from "@/lib/individual/passport";
 import { experiencePage } from "../../_components/shell-context";
 import { PageHeader, focusRing } from "../../_components/chrome";
 import HomeReminders from "../../_components/professional/HomeReminders";
+import { loadRegistration, RegistrationScreen } from "../../_components/professional/registration";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -21,8 +22,19 @@ export default async function ExperienceHome({ params }: { params: Promise<{ exp
   if (!page) return null;
   const { ctx, experience } = page;
   const x = EXPERIENCES[experience];
-  const passport = await loadIndividualPassport(ctx.admin, ctx.userId, new Date().toISOString().slice(0, 10));
   const firstName = ctx.profile.fullName?.split(" ")[0] ?? null;
+  // COMPETEN-PROFESSIONAL-PROFILE-01: until professional identity is established, the Professional home is the
+  // registration form. null (registered, migration 450 absent, or unreadable) shows the workspace unchanged.
+  const registration = experience === "professional" ? await loadRegistration(ctx.admin, ctx.userId) : null;
+  if (registration)
+    return (
+      <>
+        <PageHeader accent={x.accent} eyebrow={x.tagline} title={firstName ? `Welcome to ${x.name}, ${firstName}` : `Welcome to ${x.name}`}
+          intro="Before your workspace opens, tell us about your practice. It takes a minute, and only three answers are needed." />
+        <RegistrationScreen model={registration} accent={x.accent} />
+      </>
+    );
+  const passport = await loadIndividualPassport(ctx.admin, ctx.userId, new Date().toISOString().slice(0, 10));
   const other = ctx.live.find(k => k !== experience);
 
   const currentCount = passport.competencies?.filter(c => c.current).length ?? null;

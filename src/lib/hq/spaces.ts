@@ -146,6 +146,16 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // position, publish is the Quality Council Member. Case review uses hq.quality.clinical.approve and its scopes.
   { code: "hq.quality.case.author",           space: "quality"   },
   { code: "hq.quality.case.publish",          space: "quality"   },
+  // Migration 440, COMPETEN-KNOWLEDGE-RESEARCH-01 K1: CKRI research governance. Govern is the Research Governance
+  // Officer and the Quality Council Member, propose is the Research Lead. Both re-checked by the 440 triggers.
+  { code: "hq.quality.research.govern",       space: "quality"   },
+  { code: "hq.quality.research.propose",      space: "quality"   },
+  // Migration 442, K3: educator knowledge improvement (Knowledge Educator) and resource publication (Quality Council
+  // Member). Clinical approval of a resource is hq.quality.clinical.approve, the 395 reviewer right, unchanged.
+  { code: "hq.learning.ckri.educator",        space: "learning"  },
+  { code: "hq.quality.knowledge.publish",     space: "quality"   },
+  // Migration 443, K4: independent scientific review of research outputs (Research Scientific Reviewer).
+  { code: "hq.quality.research.review",       space: "quality"   },
 ];
 
 export const HQ_CAPABILITY_CODES = HQ_CAPABILITIES.map(c => c.code);
@@ -206,6 +216,17 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/cases/publication",     capability: "hq.quality.case.publish" },
   { prefix: "/super-admin/cases/intelligence",    capability: "hq.quality.case.publish" },
   { prefix: "/super-admin/cases",                 capability: "hq.quality.case.author" },
+  // Migration 440 (COMPETEN-KNOWLEDGE-RESEARCH-01 K1). Governance first: it must not inherit the workspace's propose.
+  { prefix: "/super-admin/research/governance",   capability: "hq.quality.research.govern" },
+  { prefix: "/super-admin/research/intelligence", capability: "hq.quality.research.govern" },
+  // Migration 442 (K3). Each its own right: educators, the 395 reviewer, the publisher.
+  { prefix: "/super-admin/research/educator",     capability: "hq.learning.ckri.educator" },
+  { prefix: "/super-admin/research/knowledge-review", capability: "hq.quality.clinical.approve" },
+  { prefix: "/super-admin/research/knowledge-publication", capability: "hq.quality.knowledge.publish" },
+  // Migration 443 (K4). Oversight and review before the workspace: the first matching prefix wins.
+  { prefix: "/super-admin/research/oversight",    capability: "hq.quality.research.govern" },
+  { prefix: "/super-admin/research/scientific-review", capability: "hq.quality.research.review" },
+  { prefix: "/super-admin/research",              capability: "hq.quality.research.propose" },
   { prefix: "/super-admin/governance",            capability: "hq.quality.governance.view" },
   { prefix: "/super-admin/cgr",                   capability: "hq.quality.regulation.view" },
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },

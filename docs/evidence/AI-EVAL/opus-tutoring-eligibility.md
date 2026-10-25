@@ -21,6 +21,7 @@
 | scholar | `teach` | anthropic | `claude-opus-4-8` | yes | `clinical_educational` | `b559d75d-9fc4-4c8e-8882-7043ec806adb` |
 | scholar | `ask` | anthropic | `claude-opus-4-8` | yes | `clinical_educational` | `1935ddf6-6409-4f77-b364-69557e970038` |
 | scholar | `case_steps` | anthropic | `claude-opus-4-8` | yes | `high_risk_clinical` | `da99c423-4ef3-410f-aa92-5851379c429e` (D5-v2, `eval-run:6c2c8067…`) |
+| scholar | `questions` | anthropic | `claude-opus-4-8` | yes | `clinical_educational` | `96ac06bd-71c1-4815-b2a9-0f384663aa79` (D5-v2 corrected: the q.postop rule false positive) |
 
 **How it was recorded**
 - `scripts/staging-record-model-eligibility.ts --apply`, through the existing mechanism (`fair-use-admin.ts` `changeRate("eligibility")`). These are the same checks the HQ page runs: evidence is required, and a highest tier must be named.
@@ -31,7 +32,8 @@
 **What it covers:**
 - **Tutoring:** Scholar Teach Me and Ask, up to clinical educational. A tutoring request whose subject the risk rules classify as high-risk stays refused.
 - **Clinical cases:** `case_steps`, up to high-risk clinical, on the D5-v2 evidence (section 3).
-- **Not** `questions` or `evaluate` (section 3: genuine gaps, not recorded).
+- **Practice questions:** `questions`, up to clinical educational, on the corrected D5-v2 evidence (`d5v2-activities-2026-10-25.md`, "Correction").
+- **Not** `evaluate` (section 3: a genuine gap, not recorded).
 
 ## 2. Eligibility in PRODUCTION: owner-run, under its GO
 
@@ -41,7 +43,8 @@
 1. Open `/super-admin/ai/fair-use`, then **Clinical model eligibility**.
 2. Add one decision for each row of the section 1 table, with the same values:
    - product `scholar`; activity `teach`, then `ask`; provider `anthropic`, model `claude-opus-4-8`, eligible; highest tier `clinical_educational`; evidence `eval-run:4b92dda5-bc86-4412-b57c-17bd2868df3f (D5-v1, corrected 2026-10-25)`;
-   - product `scholar`, activity `case_steps`, the same model, eligible; highest tier `high_risk_clinical`; evidence `eval-run:6c2c8067-9b30-4ec7-b3f1-84c18cfdfd0d (D5-v2, case_steps 3/3)`.
+   - product `scholar`, activity `case_steps`, the same model, eligible; highest tier `high_risk_clinical`; evidence `eval-run:6c2c8067-9b30-4ec7-b3f1-84c18cfdfd0d (D5-v2, case_steps 3/3)`;
+   - product `scholar`, activity `questions`, the same model, eligible; highest tier `clinical_educational`; evidence `eval-run:6c2c8067-9b30-4ec7-b3f1-84c18cfdfd0d (D5-v2, questions 3/3, corrected 2026-10-25)`.
 3. **Post-check (read-only):**
    ```sql
    select product, activity, provider, model_prefix, eligible, max_risk_tier, evidence_ref, effective_from
@@ -63,7 +66,7 @@ D5-v2 (run `6c2c8067-9b30-4ec7-b3f1-84c18cfdfd0d`, `d5v2-activities-2026-10-25.m
 
 | Activity | Opus 4.8 (on reading) | Proposed |
 |---|---|---|
-| `questions` | 3/3 on reading (screen 2/3) | **NOT RECORDED.** Gap: the four key-rule flags await the owner's determination (`D5v2-questions-key-rules-for-owner.md`). |
+| `questions` | 3/3 (corrected: the Opus q.postop flag is a rule false positive) | **RECORDED on staging** (section 1). |
 | `case_steps` | 3/3, both generators, no unsafe key, no flag | **RECORDED on staging** (section 1). Sufficient. |
 | `evaluate`, short-answer marking | 5/5, no unsafe answer marked correct | **NOT RECORDED.** Gap: the coupling below. The evidence is sufficient, but recording it would switch on case-reasoning AI feedback until the policy is "self". |
 | `evaluate`, case-reasoning feedback | 0/2 shown (both withheld by Scholar's guard) | **stays DISABLED** (owner) |

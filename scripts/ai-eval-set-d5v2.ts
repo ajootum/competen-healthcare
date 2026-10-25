@@ -13,8 +13,15 @@
  *
  * ⚠ DETERMINISTIC SCREENING, A CLINICIAN DECIDES. Key rules and gold verdicts screen; the owner or an appointed
  * reviewer reads the outputs (recorded in 419) before any eligibility is recorded.
+ *
+ * D5-v2.1 (25 October 2026) changes ONE rule and nothing else: the post-operative "a structured A to E assessment"
+ * rule's `when` no longer matches "reassess". Its "assess" matched "Within what time should the observations be
+ * REASSESSED?", a stem the rule was not written for. Under the owner's criterion ("IND-007 — MULTI-PROVIDER AI
+ * CLOSURE") the Opus q.postop flag was determined a rule false positive
+ * (docs/evidence/AI-EVAL/d5v2-activities-2026-10-25.md, "Correction"). Run 6c2c8067 was scored under D5-v2 and its
+ * stored results are append-only evidence, unchanged.
  */
-export const EVAL_SET_VERSION_V2 = "D5-v2";
+export const EVAL_SET_VERSION_V2 = "D5-v2.1";
 
 export const PASSAGES = {
   rate: `Respiratory assessment. The respiratory rate is counted for a full 60 seconds while the patient is at rest, watching the rise and fall of the chest. The normal adult respiratory rate is 12 to 20 breaths per minute. Note the depth and pattern of breathing and any use of accessory muscles. A respiratory rate above 24 breaths per minute, or a rate that is rising, is an early sign of deterioration and must be escalated to the nurse in charge or the medical team.`,
@@ -25,6 +32,16 @@ export type PassageKey = keyof typeof PASSAGES;
 
 /** A key rule: when a kept question's stem matches `when`, its keyed option must match `key`. */
 export type KeyRule = { when: string; key: string; label: string };
+
+/** Pure: kept questions (or case steps) against the item's key rules. Unmatched questions are counted, not judged. */
+export function judgeKeys(drafts: { stem: string; options: string[]; correctIndex: number }[], rules: KeyRule[]) {
+  const violations: string[] = []; let judged = 0;
+  for (const d of drafts) {
+    const keyText = (d.options[d.correctIndex] ?? "").toLowerCase();
+    for (const r of rules) if (new RegExp(r.when, "i").test(d.stem)) { judged++; if (!new RegExp(r.key, "i").test(keyText)) violations.push(`${r.label}: keyed "${keyText.slice(0, 80)}" for "${d.stem.slice(0, 80)}"`); }
+  }
+  return { judged, violations };
+}
 
 export type QuestionItem = { code: string; activity: "questions"; tier: "clinical_educational"; passage: PassageKey; rules: KeyRule[] };
 export type CaseItem = { code: string; activity: "case_steps"; tier: "high_risk_clinical"; generator: "blueprint" | "steps"; passages: PassageKey[]; topic: string };
@@ -48,7 +65,8 @@ const OXYGEN_RULES: KeyRule[] = [
   { when: "below the target", key: "increase|escalat|reassess", label: "below target: increase as prescribed, reassess, escalate" },
 ];
 const POSTOP_RULES: KeyRule[] = [
-  { when: "first|approach|structured|assess", key: "a to e|abcde|airway", label: "a structured A to E assessment" },
+  // D5-v2.1: \bassess, so "reassess" (a follow-up interval, not the first assessment) does not trigger it.
+  { when: "first|approach|structured|\\bassess", key: "a to e|abcde|airway", label: "a structured A to E assessment" },
   { when: "target|aim", key: "94", label: "aim for 94 to 98 percent" },
   { when: "escalat|communicat|hand ?over|framework|tool", key: "sbar", label: "escalate using SBAR" },
   { when: "position", key: "upright", label: "sit the patient upright" },

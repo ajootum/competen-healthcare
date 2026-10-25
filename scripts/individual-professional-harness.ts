@@ -79,6 +79,10 @@ const WRITES: Record<string, string[]> = {
   "src/lib/individual/professional/reminders.ts": ["individual_professional_evidence.update", "individual_professional_profile.update"],
   "src/app/api/individual/professional/reminders/route.ts": ["individual_professional_profile.update", "individual_professional_profile.insert"],
   "src/lib/individual/professional/mapping-store.ts": ["individual_professional_competency_map.insert", "individual_professional_competency_decision.insert"],
+  // COMPETEN-PROFESSIONAL-PROFILE-01 (migration 450): the one writer of the registration facts and the profile records.
+  // No .delete: a record is withdrawn, never removed, and the history table is written only by 450's trigger.
+  "src/lib/individual/professional/profile-store.ts": ["individual_professional_profile.update", "individual_professional_profile.insert",
+    "individual_professional_profile_item.insert", "individual_professional_profile_item.update"],
 };
 const ESTATE_NAMED = /^(cpd_logs|professional_credentials|evidence|cdp_reminders|notifications|competency_decisions|employment_records|profiles)\./;
 

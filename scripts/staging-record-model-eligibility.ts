@@ -18,8 +18,9 @@
  * WHAT IS RECORDED, AND WHAT IS NOT:
  *   teach, ask       Opus 4.8 up to clinical_educational: D5-v1 corrected 14/14, accepted.
  *   case_steps       Opus 4.8 up to high_risk_clinical: D5-v2 3/3, both generators, no unsafe key, no flag. Sufficient.
- *   questions        NOT recorded: its 3/3 rests on four key-rule flags the owner has not yet determined
- *                    (D5v2-questions-key-rules-for-owner.md).
+ *   questions        Opus 4.8 up to clinical_educational: D5-v2 3/3 once the Opus q.postop key-rule flag was
+ *                    determined a rule false positive under the owner's criterion ("IND-007 — MULTI-PROVIDER AI
+ *                    CLOSURE"). The correction is in d5v2-activities-2026-10-25.md, and the rule is D5-v2.1.
  *   evaluate         NOT recorded: case-reasoning AI feedback shares the activity code, and the owner keeps it disabled.
  *                    Recording evaluate would switch it on until scholar_case_reasoning_feedback is "self".
  * Nothing else is touched: no policy, flag, price or other model.
@@ -47,6 +48,11 @@ const OPUS_TUTORING = ["teach", "ask"].map(activity => ({
 }));
 
 const OPUS_D5V2 = [{
+  kind: "eligibility" as const, product: "scholar", activity: "questions", provider: "anthropic", modelPrefix: "claude-opus-4-8", eligible: true,
+  maxRiskTier: "clinical_educational",
+  evidenceRef: "eval-run:6c2c8067-9b30-4ec7-b3f1-84c18cfdfd0d (D5-v2, questions 3/3 corrected 2026-10-25: d5v2-activities-2026-10-25.md)",
+  note: "Owner 2026-10-25 (MULTI-PROVIDER AI CLOSURE): Opus q.postop flag a rule false positive. Use D5-v2 where sufficient. Recorded on staging by IND-007.",
+}, {
   kind: "eligibility" as const, product: "scholar", activity: "case_steps", provider: "anthropic", modelPrefix: "claude-opus-4-8", eligible: true,
   maxRiskTier: "high_risk_clinical",
   evidenceRef: "eval-run:6c2c8067-9b30-4ec7-b3f1-84c18cfdfd0d (D5-v2: case_steps 3/3, docs/evidence/AI-EVAL/d5v2-activities-2026-10-25.md)",
