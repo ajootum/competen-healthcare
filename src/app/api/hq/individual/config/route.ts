@@ -3,6 +3,7 @@ import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { publishScope, resetOverride, rollbackVersion, setOverride, wceMissing } from "@/lib/config/workspace-config-write";
 import { POLICY_SCOPE, policyDef, policyPath, validateDraft } from "@/lib/individual/policy";
 import { checkLcpdDraft, LCPD_PATH } from "@/lib/individual/lcpd-config";
+import { checkDocumentsDraft, DOCUMENTS_PATH, loadDocumentsConfig } from "@/lib/individual/documents-config";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -13,6 +14,10 @@ export const dynamic = "force-dynamic";
 // (src/lib/config/workspace-config-write.ts, migration 076): draft, publish as a version, roll back to a
 // version, each audited in workspace_config_audit. Body: { action: "set", key, value } | { action:
 // "reset", key } | { action: "publish", note? } | { action: "rollback", versionId } | { action: "lcpd", settings }.
+//
+// "documents" (COMPETEN-PROFESSIONAL-PROGRESS-01 PR7 s10.3) is the Document Studio's types and templates
+// (src/lib/individual/documents-config.ts), validated whole against its hard limits, with each changed template given the next
+// version against what is published now. It takes effect when the Individual policy is published, as one audited version.
 //
 // "lcpd" (COMPETEN-PROFESSIONAL-LCPD-01 s11) is the one other path this door writes: the Professional Learning and CPD
 // document (src/lib/individual/professional/lcpd-config.ts) -- activity types, reflection templates, CPD requirements
@@ -71,6 +76,12 @@ export async function POST(req: Request) {
       if (!v.ok) return refuse(422, v.error);
       const r = await setOverride(ctx.admin, actor, SCOPE, LCPD_PATH, v.settings);
       return r.ok ? NextResponse.json({ ok: true }) : refuse(500, "The draft could not be saved. Nothing has changed.");
+    }
+    case "documents": {
+      const v = checkDocumentsDraft(body.settings, await loadDocumentsConfig(ctx.admin));
+      if (!v.ok) return refuse(422, v.error);
+      const r = await setOverride(ctx.admin, actor, SCOPE, DOCUMENTS_PATH, v.settings);
+      return r.ok ? NextResponse.json({ ok: true, settings: v.settings }) : refuse(500, "The draft could not be saved. Nothing has changed.");
     }
     case "reset": {
       const def = typeof body.key === "string" ? policyDef(body.key) : undefined;

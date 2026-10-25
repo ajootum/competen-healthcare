@@ -121,6 +121,14 @@ const WRITES: Record<string, string[]> = {
   // creates is written by needs-store / plan-store above, never here.
   "src/lib/individual/professional/evaluation-store.ts": ["individual_professional_evaluation.insert", "individual_professional_evaluation_annotation.insert",
     "individual_professional_evaluation_decision.insert"],
+  // PROF-PROGRESS-01 PR7 (550): the Document Studio's drafts (presentation choices and record keys, never copies; the person
+  // edits and deletes their own) and append-only export metadata (the file is never stored). No source record is written.
+  // PROF-PROGRESS-01 s3 (550): what My Professional Progress stores -- the person's own preference (upsert), saved views (they
+  // rename and delete them), append-only decisions on next steps and requested snapshots (keys and counts only).
+  "src/lib/individual/professional/progress-store.ts": ["individual_professional_progress_decision.insert", "individual_professional_progress_preference.upsert",
+    "individual_professional_progress_view.insert", "individual_professional_progress_view.delete", "individual_professional_progress_snapshot.insert"],
+  "src/lib/individual/professional/document-store.ts": ["individual_professional_document.insert", "individual_professional_document.update",
+    "individual_professional_document.delete", "individual_professional_document_export.insert"],
   // PROF-EVALUATION-01 s13 (530): the recorded evaluations the person ticked for a link. Nothing by default.
   "src/lib/individual/professional/share-evaluation.ts": ["individual_professional_share_evaluation.insert"],
   // COMPETENCY-01 (520): the one writer of My Competencies, self-assessments (insert only) and evidence links (unlinked by

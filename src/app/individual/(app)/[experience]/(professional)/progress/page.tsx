@@ -11,10 +11,21 @@ import type { Metadata } from "next";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader, Unreadable, focusRing } from "../../../../_components/chrome";
 import { NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
+import { CareerView, CompetencyView, EventList, LearningStats, NextSteps, SaveView, TimeView } from "../../../../_components/professional/progress-views";
+import { buckets, careerJourney, competencyProgress, learningProgress, nextSteps, overview, timeline } from "@/lib/individual/professional/progress-intel";
+import { loadProgressInput } from "@/lib/individual/professional/progress-sources";
+import { PERIODS, PROGRESS_VIEWS, type PeriodKind, type ProgressView } from "@/lib/individual/professional/progress-policy";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
 
+// MY PROFESSIONAL PROGRESS -- COMPETEN-PROFESSIONAL-PROGRESS-01 Stage 8 (PR1-PR6), grown from COMPETEN-IND-007 s6.
+// In-page views (?view=), so the sidebar is unchanged: Overview (next actions first), Development over time (periods,
+// professional phases), Competency progress (Domain, CPU, competency, outcome: five columns never combined), Learning &
+// CPD, Career & professional journey, and links to My Professional Evaluation (Stage 6) and the Document Studio (PR7).
+// The interpretation is src/lib/individual/professional/progress-intel.ts: pure, no score, nothing stored but the
+// person's own preferences, views, decisions and requested snapshots (migration 550).
+//
 // PROGRESS -- COMPETEN-IND-007 s6. Plan progress, CPD hours by year and evidence coverage.
 //
 // ⚠ EVERY FIGURE IS A COUNT OF THE PERSON'S OWN ROWS (src/lib/individual/professional/progress.ts). There
@@ -50,7 +61,7 @@ function NotMeasured({ why, href, cta, accent }: { why: string; href: string; ct
   );
 }
 
-export default async function ProgressPage({ params }: { params: Promise<{ experience: string }> }) {
+export default async function ProgressPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await experienceModulePage((await params).experience, "progress");
   if (!page) return null;
   const { ctx } = page;
@@ -68,12 +79,73 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
   const goalTitle = new Map((goals ?? []).map(g => [g.id, g.title]));
   const href = (s: string) => experienceHref("professional", s);
 
+  // Stage 8: the views, the period, and what the owners hold now.
+  const sp = await searchParams;
+  const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as string | undefined;
+  const pp = policy.professionalProgress;
+  const { input, extra, state } = await loadProgressInput(ctx.admin, ctx.userId, today);
+  const views = PROGRESS_VIEWS.filter(([v]) => pp.views.includes(v));
+  const view = (views.some(([v]) => v === one(sp.view)) ? one(sp.view) : views.some(([v]) => v === state.preference?.default_view) ? state.preference!.default_view : "overview") as ProgressView;
+  const periods = PERIODS.filter(([p]) => pp.periods.includes(p));
+  const period = (periods.some(([p]) => p === one(sp.period)) ? one(sp.period) : periods.some(([p]) => p === state.preference?.default_period) ? state.preference!.default_period : pp.defaultPeriod) as PeriodKind;
+  const events = timeline(input, extra, pp);
+  const steps = nextSteps(input, extra, pp, { profile: href("registration"), competencies: href("competencies"), learning: "/individual/learning" }, policy.professionalPlan.reviewDays);
+  const ov = overview(input, events, pp);
+
   return (
     <>
-      <PageHeader accent={x.accent} eyebrow="Your development" title="Progress"
-        intro="Where your plan stands, from your own record. No targets are invented: hours are shown as hours, and anything with nothing to measure says so." />
+      <PageHeader accent={x.accent} eyebrow="Your development" title="My Professional Progress"
+        intro="Your development over time, from your own records: what to do next, what you have done, and what it supports. No score, no invented targets, and anything with nothing to measure says so." />
       {!record.provisioned && <NotProvisioned />}
+      <nav aria-label="Progress views" className="mb-5 flex flex-wrap gap-2">
+        {views.map(([v, label]) => {
+          const to = v === "evaluation" ? href("progress/evaluation") : v === "documents" ? href("progress/documents") : `?view=${v}`;
+          return <Link key={v} href={to} aria-current={view === v ? "page" : undefined}
+            className={`inline-flex min-h-[40px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center rounded-full border px-4 text-[13.5px] font-semibold ${focusRing} ${view === v ? "text-white" : "border-gray-300 bg-white text-gray-800"}`}
+            style={view === v ? { background: x.accent, borderColor: x.accent } : undefined}>{label}</Link>;
+        })}
+      </nav>
 
+      {view === "overview" && (
+        <>
+          <Section id="next-h" title={ov.newProfessional ? "Useful first steps" : "Next steps"} note="Each says the finding behind it and opens the module that owns the work. Nothing is created for you.">
+            <NextSteps steps={steps} accent={x.accent} />
+          </Section>
+          <Section title="Active goals">
+            {ov.activeGoals.length === 0 ? <p className="text-[13.5px] text-gray-600">No active goals. <Link href={href("development")} className="font-semibold underline" style={{ color: x.accent }}>Set one</Link> when you are ready.</p> : (
+              <ul className="divide-y divide-gray-100">{ov.activeGoals.map(g => <li key={g.id} className="py-2 text-[14px]"><Link href={input.hrefs.goal(g.id)} className={`font-semibold text-gray-900 underline-offset-2 hover:underline ${focusRing}`}>{g.title}</Link> <span className="text-[12.5px] text-gray-500">· {GOAL_STATUS_LABEL[g.status] ?? g.status}{g.target_date ? ` · target ${fmtDate(g.target_date)}` : ""}</span></li>)}</ul>
+            )}
+          </Section>
+          <Section title="Recent learning and achievements" note={`From the last ${pp.recentDays} days. Volume is activity, not verified competence.`}>
+            {ov.achievements.length === 0 ? <p className="text-[13.5px] text-gray-600">Nothing recent.</p> : <EventList events={ov.achievements} />}
+            <p className="mt-2 text-[12.5px] text-gray-600">{ov.competenciesWithEvidence} {ov.competenciesWithEvidence === 1 ? "competency has" : "competencies have"} supporting evidence linked. See Competency progress.</p>
+          </Section>
+          {ov.milestones.length > 0 && <Section title="Recent professional milestones"><EventList events={ov.milestones} /></Section>}
+        </>
+      )}
+      {view === "time" && (
+        <Section id="time-h" title="Development over time" note="Grouped by the period you choose. Original dates, recording dates, sources and versions are kept, and repeated practice is marked, never merged.">
+          <TimeView buckets={buckets(events, period, extra.context)} periods={periods} period={period} accent={x.accent} />
+        </Section>
+      )}
+      {view === "competencies" && (
+        <Section id="comp-h" title="Competency progress" note="Domain, clinical practice unit, competency and outcome. Expected, self-assessed, evidence, formative evaluation and independent decision are separate columns, never averaged.">
+          <CompetencyView {...competencyProgress(input, extra)} href={href("competencies")} />
+        </Section>
+      )}
+      {view === "learning" && <Section id="learn-h" title="Learning & CPD progress"><LearningStats p={learningProgress(input, extra)} /></Section>}
+      {view === "career" && (
+        <Section id="career-h" title="Career & professional journey" note="Education, registration, practice, specialty, qualifications, teaching, research and quality improvement, transitions and aspirations, from your own profile.">
+          <CareerView groups={careerJourney(input, extra, pp).groups} accent={x.accent} profileHref={href("registration")} />
+        </Section>
+      )}
+      {(view === "overview" || view === "time") && state.provisioned && (
+        <Section title="Keep this view"><SaveView view={view} period={period} accent={x.accent} />
+          {(state.views ?? []).length > 0 && <p className="mt-2 text-[13px] text-gray-700">Saved views: {(state.views ?? []).map(v => <Link key={v.id} href={`?view=${v.view_code}&period=${v.period_code}`} className="mr-3 font-semibold underline" style={{ color: x.accent }}>{v.name}</Link>)}</p>}
+        </Section>
+      )}
+
+      {view === "overview" && (<>
       {/* COMPETEN-PROFESSIONAL-EVALUATION-01 (Stage 6): reached from here, so the sidebar is unchanged. */}
       <Section title="My Professional Evaluation" note="What your records support, in six separate dimensions, where the evidence is thin, and what you might do next. Formative and private: never a score, never verification.">
         <Link href={href("progress/evaluation")} className={`inline-flex min-h-[44px] items-center text-[14px] font-semibold ${focusRing}`} style={{ color: x.accent }}>Open My Professional Evaluation →</Link>
@@ -113,7 +185,9 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
           </ul>
         )}
       </Section>
+      </>)}
 
+      {view === "learning" && (<>
       <Section title="CPD hours by year" note={`Hours you recorded${learning.enabled ? ", and courses you completed on Competen Learning" : ""}. Competen sets no target.`}>
         {years === null ? <Unreadable what="CPD log" /> : years.length === 0 ? (
           <NotMeasured accent={x.accent} href={href("cpd")} cta="Record CPD" why="No CPD recorded yet." />
@@ -166,7 +240,9 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
           </>
         )}
       </Section>
+      </>)}
 
+      {view === "competencies" && (<>
       <Section title="Competency coverage" note="The competencies Competen Professional offers, and which of them your CPD and evidence are linked to.">
         {prog.coverage.state !== "measured" ? (
           <NotMeasured accent={x.accent} href={href("cpd")} cta="Link CPD to competencies" why={prog.coverage.reason} />
@@ -217,6 +293,7 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
           </ul>
         )}
       </Section>
+      </>)}
     </>
   );
 }

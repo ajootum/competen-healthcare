@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
+import { DEFAULT_CAREER_CATEGORIES, DEFAULT_MILESTONE_CATEGORIES } from "./professional/progress-policy";
 import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, individualQuotaRefusal, loadIndividualPolicy, meetsMinStatus, policyDef, policyPath, resolvePolicy, validateDraft, type IntPolicy } from "./policy";
 import { publishScope, rollbackVersion, setOverride } from "@/lib/config/workspace-config-write";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
@@ -72,6 +73,14 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
         ],
         sufficiency: 2, recencyDays: 1095, periodDays: 0, historyShown: 50, sharing: "offer", ai: "on", aiReflections: "off", corrections: "linked",
       },
+      // COMPETEN-PROFESSIONAL-PROGRESS-01: every view, period and rule offered; years by default; document AI on request.
+      professionalProgress: {
+        views: ["overview", "time", "competencies", "learning", "career", "evaluation", "documents"],
+        periods: ["week", "month", "quarter", "year", "phase"], defaultPeriod: "year",
+        rules: ["first_steps", "review_goal_after_learning", "reflect_on_training", "organise_evidence", "consider_practical_assessment", "credential_expiry", "explore_aspiration_learning", "review_stale_goal"],
+        recentDays: 180, milestoneCategories: DEFAULT_MILESTONE_CATEGORIES, careerCategories: DEFAULT_CAREER_CATEGORIES,
+      },
+      professionalDocuments: { ai: "on" },
       scholarQuestionsPerRequest: QUESTIONS_PER_REQUEST, scholarMaterialsPerPerson: MAX_MATERIALS_PER_PERSON,
       // Stage 2: PDF and Word only until HQ turns plain text on (it needs migration 405); 10 MB; 300 pages.
       scholarUploadFormats: ["pdf", "docx"], scholarUploadMaxMb: 10, scholarPdfMaxPages: 300, scholarPptxMaxSlides: 150,

@@ -295,6 +295,8 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
           <p className="text-[14px] text-gray-700">
             You choose exactly what a view shows, record by record, preview it, and only then make it live. Make one from{" "}
             <a href={experienceHref("professional", "share")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Share your Passport</a>.
+            {/* COMPETEN-PROFESSIONAL-PROGRESS-01 PR7: the Document Studio, opened from the Passport (agreed with Stage 7). */}
+            {" "}Or <a href={`${experienceHref("professional", "progress/documents")}?origin=passport`} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>create a document</a> (a CV, Passport export or portfolio) from records you choose.
           </p>
         ) : holdsEstate ? (
           <p className="text-[14px] text-gray-700">
