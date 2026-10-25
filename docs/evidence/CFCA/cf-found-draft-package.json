@@ -1,0 +1,166 @@
+{
+  "framework": {
+    "code": "CF-FOUND",
+    "name": "Competen Foundational",
+    "description": "Cross-professional foundational competencies.",
+    "layer": "foundational"
+  },
+  "domains": [
+    {
+      "name": "Clinical reasoning",
+      "competencies": [
+        {
+          "code": "CF-CR-001",
+          "name": "Gathers and interprets clinical information systematically",
+          "description": "Uses a structured approach to collect, prioritise and interpret information about a person's condition.",
+          "learningOutcomes": [
+            "Applies a structured assessment approach (for example A to E)",
+            "Distinguishes normal from abnormal findings and explains their significance",
+            "Prioritises problems by clinical urgency"
+          ],
+          "expectedLevel": {
+            "score": 3
+          },
+          "riskCategory": "standard"
+        },
+        {
+          "code": "CF-CR-002",
+          "name": "Recognises and responds to deterioration",
+          "description": "Identifies early warning signs and acts within scope and escalation policy.",
+          "learningOutcomes": [
+            "Explains early warning signs and their thresholds",
+            "Escalates using a structured handover (for example SBAR)",
+            "Re-evaluates after intervention"
+          ],
+          "expectedLevel": {
+            "score": 3
+          },
+          "riskCategory": "standard"
+        }
+      ]
+    },
+    {
+      "name": "Patient safety",
+      "competencies": [
+        {
+          "code": "CF-PS-001",
+          "name": "Verifies identity and consent before care",
+          "description": "Confirms the right person, procedure and consent before any intervention.",
+          "learningOutcomes": [
+            "Uses two identifiers before every intervention",
+            "Explains when and how consent is obtained and documented"
+          ],
+          "expectedLevel": {
+            "score": 3
+          },
+          "riskCategory": "standard"
+        },
+        {
+          "code": "CF-PS-002",
+          "name": "Recognises, reports and learns from incidents",
+          "description": "Applies a just-culture approach to error and near miss.",
+          "learningOutcomes": [
+            "Reports an incident through the local system",
+            "Describes how learning is shared after an incident"
+          ],
+          "expectedLevel": {
+            "score": 3
+          },
+          "riskCategory": "standard"
+        }
+      ]
+    },
+    {
+      "name": "Communication",
+      "competencies": [
+        {
+          "code": "CF-CM-001",
+          "name": "Communicates clearly with people and families",
+          "description": "Adapts information to the person's needs, language and health literacy.",
+          "learningOutcomes": [
+            "Checks understanding (for example teach-back)",
+            "Uses an interpreter when needed"
+          ],
+          "expectedLevel": {
+            "score": 3
+          },
+          "riskCategory": "standard"
+        },
+        {
+          "code": "CF-CM-002",
+          "name": "Hands over care safely",
+          "description": "Gives and receives structured handover between people and teams.",
+          "learningOutcomes": [
+            "Uses a structured handover format",
+            "Confirms actions and responsibilities at handover"
+          ],
+          "expectedLevel": {
+            "score": 3
+          },
+          "riskCategory": "standard"
+        }
+      ]
+    },
+    {
+      "name": "Infection prevention basics",
+      "competencies": [
+        {
+          "code": "CF-IP-001",
+          "name": "Performs hand hygiene at the right moments",
+          "description": "Applies the five moments of hand hygiene.",
+          "learningOutcomes": [
+            "Names and applies the five moments",
+            "Performs hand hygiene to the recommended technique"
+          ],
+          "expectedLevel": {
+            "score": 3
+          },
+          "riskCategory": "standard"
+        },
+        {
+          "code": "CF-IP-002",
+          "name": "Uses personal protective equipment correctly",
+          "description": "Selects, dons and doffs PPE for the precautions required.",
+          "learningOutcomes": [
+            "Selects PPE for standard and transmission-based precautions",
+            "Dons and doffs in the correct sequence"
+          ],
+          "expectedLevel": {
+            "score": 3
+          },
+          "riskCategory": "standard"
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "source": "staging ezhvpgtcqcdsgylrxgdb, COMPETEN-SCHOLAR-01 S1 staging seed (scripts/seed-staging-competency-foundation.ts)",
+    "read_on": "2026-10-25",
+    "staging_framework_id": "d5944ae0-a6eb-499f-92dd-99fd3b74aaf2",
+    "staging_expected_level": {
+      "scale": "Benner 0-6 Scale",
+      "score": 3
+    },
+    "staging_competency_ids": {
+      "CF-CR-001": "aced295d-5d77-4f67-8fb6-b346d80fb289",
+      "CF-CR-002": "b7833511-d963-40b7-b80c-b9ebf006a181",
+      "CF-PS-001": "d66573f2-16b5-493e-97c0-081283df29a9",
+      "CF-PS-002": "065fd936-bc29-4fe0-9cb8-04a2c5021364",
+      "CF-CM-001": "759eb4fc-aefc-4e53-9bff-8d44eb1774a5",
+      "CF-CM-002": "373bfb65-c058-45c3-b55f-080995b20ce3",
+      "CF-IP-001": "01a761ef-7f20-434d-bd3b-dd64ea3ec976",
+      "CF-IP-002": "7e166153-60cb-447b-8431-35816c56fa62"
+    },
+    "staging_content_hash_md5": {
+      "CF-CR-001": "eefaafd64517e3c38ac878e5eded8d05",
+      "CF-CR-002": "cad09fe4ad6157bba0e8c6f8e8f2a16d",
+      "CF-PS-001": "041576193920fbba6c20cab0c6310929",
+      "CF-PS-002": "68edfa46f3a48fd5c5fca85144ad5d49",
+      "CF-CM-001": "dbc5e10e63372d39500ecc222cd7b01c",
+      "CF-CM-002": "41951f315d031a9d4c714a0ec55c8d1e",
+      "CF-IP-001": "6a594fa4943978a422caee5c7652848c",
+      "CF-IP-002": "e046936c34b989b0ac3dbdea3905569e"
+    },
+    "note": "Draft, not clinically reviewed. No clinical approval exists for this content on staging (8 versions put forward, 0 decisions) and none is imported. Staging framework publication is not carried. The staging hash is not portable (395 hashes ids), recorded for reference only."
+  }
+}
