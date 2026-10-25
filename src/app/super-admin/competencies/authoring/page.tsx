@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadAuthoringView } from "@/lib/competency/authoring-view";
 import { CLINICAL_STATE_LABEL, clinicalNote } from "@/lib/competency/clinical-review";
-import { CompetencyEditor, DomainName, FrameworkMeta, ImportDraft, NewDomain, NewFramework, SubmitReview } from "./_components/AuthoringControls";
+import { CompetencyEditor, DomainName, FrameworkIdentity, FrameworkMeta, ImportDraft, NewCpu, NewDomain, NewFramework, NewPractice, SubmitReview } from "./_components/AuthoringControls";
 
-// /super-admin/competencies/authoring -- CFCA authoring in production (migration 438, owner CFCA PRODUCTION AUTHORING).
+// /super-admin/competencies/authoring -- CFCA authoring in production (migration 465, owner CFCA PRODUCTION AUTHORING).
 //
-// Guarded by hq.quality.competency.author (the CFCA Competency Curator). Shared CFCA frameworks, their domains and
+// Guarded by hq.quality.competency.author (the Competency Author). Shared CFCA frameworks, their domains and
 // competencies, edited as governed content: Draft -> Submit for Review (here) -> Clinical Approval (/clinical-review,
 // an independent reviewer) -> Publication (the governed framework lifecycle). Every competency shows its clinical state
 // in words, and nothing here says approved unless 395 proves it.
@@ -19,6 +19,7 @@ const STATUS_LABEL: Record<string, string> = { draft: "Draft", in_review: "In go
 export default async function CompetencyAuthoringPage() {
   const ctx = await requireHqCapability("hq.quality.competency.author");
   const v = await loadAuthoringView(ctx.admin);
+  const fwOpts = (v?.frameworks ?? []).map(f => ({ id: f.id, name: f.name, code: f.code }));
   return (
     <div className="max-w-5xl space-y-6">
       <header>
@@ -40,7 +41,7 @@ export default async function CompetencyAuthoringPage() {
 
           <section aria-labelledby="new-h" className="rounded-2xl border border-gray-200 bg-white p-4">
             <h2 id="new-h" className="text-[15px] font-bold text-gray-900">New shared framework</h2>
-            <div className="mt-2"><NewFramework professions={v.professions} /></div>
+            <div className="mt-2"><NewFramework professions={v.professions} specialties={v.specialties} frameworks={fwOpts} /></div>
             <details className="mt-3">
               <summary className="cursor-pointer text-[13px] font-semibold text-gray-800">Import an existing framework as a draft</summary>
               <p className="mt-1 text-[12.5px] text-gray-600">Creates the framework, its domains and competencies as a DRAFT, not clinically reviewed. No approval is imported or implied.</p>
@@ -57,10 +58,28 @@ export default async function CompetencyAuthoringPage() {
               {(f.pubStatus === "draft" || f.pubStatus === "published") ? (
                 <>
                   <details className="mt-2"><summary className="cursor-pointer text-[13px] font-semibold text-gray-800">Framework name and description</summary><div className="mt-2"><FrameworkMeta id={f.id} name={f.name} description={f.description} /></div></details>
+                  {f.pubStatus === "draft" && (
+                    <details className="mt-1"><summary className="cursor-pointer text-[13px] font-semibold text-gray-800">Identity: code, layer, profession, specialty, extends</summary>
+                      <div className="mt-2"><FrameworkIdentity frameworkId={f.id} professions={v.professions} specialties={v.specialties} frameworks={fwOpts}
+                        initial={{ code: f.code ?? "", layer: f.layer ?? "foundational", professionTermId: f.professionTermId ?? "", specialtyTermId: f.specialtyTermId ?? "", parentFrameworkId: f.parentFrameworkId ?? "" }} /></div>
+                    </details>
+                  )}
                   {f.domains.map(d => (
                     <div key={d.id} className="mt-4 rounded-xl border border-gray-100 p-3">
                       <h3 className="text-[14.5px] font-bold text-gray-900">{d.name}</h3>
-                      <details><summary className="cursor-pointer text-[12.5px] text-gray-700">Rename</summary><DomainName domainId={d.id} name={d.name} /></details>
+                      <details><summary className="cursor-pointer text-[12.5px] text-gray-700">Name and code</summary><DomainName domainId={d.id} name={d.name} code={d.code} /></details>
+                      <details className="mt-1"><summary className="cursor-pointer text-[12.5px] text-gray-700">Practices and clinical practice units ({d.practices.reduce((n, p) => n + p.cpus.length, 0)} CPU)</summary>
+                        <ul className="mt-1 space-y-2">
+                          {d.practices.map(p => (
+                            <li key={p.id} className="rounded-lg bg-gray-50 p-2 text-[13px]">
+                              <p className="font-semibold text-gray-900"><span className="font-mono text-[12px] text-gray-600">{p.code ?? "no code"}</span> {p.name}</p>
+                              <ul className="ml-3 list-disc text-[12.5px] text-gray-700">{p.cpus.map(u => <li key={u.id}><span className="font-mono">{u.code ?? "no code"}</span> {u.name} · {u.riskCategory} risk · complexity {u.complexity}</li>)}</ul>
+                              <details className="mt-1"><summary className="cursor-pointer text-[12.5px] text-gray-700">Add a CPU</summary><NewCpu practiceId={p.id} /></details>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="mt-2"><NewPractice domainId={d.id} /></div>
+                      </details>
                       <ul className="mt-2 divide-y divide-gray-100">
                         {d.competencies.map(c => (
                           <li key={c.id} className="py-2.5">
@@ -71,13 +90,13 @@ export default async function CompetencyAuthoringPage() {
                               </p>
                             </div>
                             <details className="mt-1"><summary className="cursor-pointer text-[12.5px] text-gray-700">Edit content</summary>
-                              <div className="mt-2"><CompetencyEditor c={c} levels={v.levels} approved={c.clinical?.state === "approved"} /></div>
+                              <div className="mt-2"><CompetencyEditor c={c} levels={v.levels} approved={c.clinical?.state === "approved"} cpus={d.practices.flatMap(p => p.cpus.map(u => ({ id: u.id, label: `${u.code ?? ""} ${u.name} (${p.name})` })))} /></div>
                             </details>
                             {c.clinical && (c.clinical.state === "unreviewed" || c.clinical.state === "stale" || c.clinical.state === "changes_requested") && <div className="mt-1.5"><SubmitReview competencyId={c.id} /></div>}
                           </li>
                         ))}
                       </ul>
-                      <details className="mt-2"><summary className="cursor-pointer text-[13px] font-semibold text-gray-800">Add a competency</summary><div className="mt-2"><CompetencyEditor domainId={d.id} levels={v.levels} /></div></details>
+                      <details className="mt-2"><summary className="cursor-pointer text-[13px] font-semibold text-gray-800">Add a competency</summary><div className="mt-2"><CompetencyEditor domainId={d.id} levels={v.levels} cpus={d.practices.flatMap(p => p.cpus.map(u => ({ id: u.id, label: `${u.code ?? ""} ${u.name} (${p.name})` })))} /></div></details>
                     </div>
                   ))}
                   <div className="mt-3"><NewDomain frameworkId={f.id} /></div>

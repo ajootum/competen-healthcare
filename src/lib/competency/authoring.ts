@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { currentTraceId } from "@/lib/trace";
 
-// ── CFCA COMPETENCY AUTHORING, AS A GOVERNED HQ WORKFLOW ── migration 438, owner CFCA PRODUCTION AUTHORING DIRECTION ──
+// ── CFCA COMPETENCY AUTHORING, AS A GOVERNED HQ WORKFLOW ── migration 465, owner CFCA PRODUCTION AUTHORING DIRECTION ──
 //
 // "Production will be the authoritative environment for actual CFCA content and clinical governance." A CFCA
-// Competency Curator (hq.quality.competency.author) creates and refines SHARED frameworks (hospital_id null), their
+// Competency Author (hq.quality.competency.author) creates and refines SHARED frameworks (hospital_id null), their
 // domains and competencies -- every field the 395 clinical content hash covers: name, description, learning outcomes,
 // expected level, risk -- and puts a competency forward for independent clinical review. No SQL for ordinary content.
 //
@@ -40,7 +40,7 @@ const text = (v: unknown) => (typeof v === "string" ? v.trim().replace(/\s+/g, "
 type Ok<T> = { ok: true; value: T };
 type Bad = { ok: false; error: string };
 
-export type FrameworkInput = { code: string; name: string; description: string | null; layer: (typeof LAYERS)[number]; professionTermId: string | null; specialtyTermId: string | null };
+export type FrameworkInput = { code: string; name: string; description: string | null; layer: (typeof LAYERS)[number]; professionTermId: string | null; specialtyTermId: string | null; parentFrameworkId: string | null };
 export type CompetencyInput = { code: string; name: string; description: string | null; learningOutcomes: string[]; expectedLevelId: string | null; riskCategory: (typeof RISKS)[number] };
 
 /** Pure: a shared framework's identity. A profession layer names its profession, any other layer names none. */
@@ -51,9 +51,11 @@ export function parseFramework(b: any): Ok<FrameworkInput> | Bad {
   if (description && description.length > 2000) return { ok: false, error: "A framework description is at most 2,000 characters." };
   if (!(LAYERS as readonly string[]).includes(b?.layer)) return { ok: false, error: "Choose the framework layer." };
   const professionTermId = isId(b?.professionTermId) ? b.professionTermId : null, specialtyTermId = isId(b?.specialtyTermId) ? b.specialtyTermId : null;
+  const parentFrameworkId = isId(b?.parentFrameworkId) ? b.parentFrameworkId : null;
   if (b.layer === "profession" && !professionTermId) return { ok: false, error: "A profession framework names its profession." };
   if (b.layer !== "profession" && professionTermId) return { ok: false, error: "Only a profession framework names a profession." };
-  return { ok: true, value: { code, name, description, layer: b.layer, professionTermId, specialtyTermId } };
+  if (b.layer === "specialty" && !specialtyTermId) return { ok: false, error: "A specialty framework names its specialty." };
+  return { ok: true, value: { code, name, description, layer: b.layer, professionTermId, specialtyTermId, parentFrameworkId } };
 }
 
 /** Pure: a competency's material content -- exactly the fields the 395 hash covers that authoring may set. */
@@ -122,11 +124,13 @@ export async function createFramework(admin: any, actor: Actor, b: any): Promise
   const { data: same, error } = await admin.from("frameworks").select("id").eq("code", p.value.code).is("hospital_id", null).limit(1);
   if (error) return { ok: false, status: 503, error: "Frameworks could not be read just now. Nothing has changed." };
   if (same?.length) return { ok: false, status: 409, error: `A shared framework with the code ${p.value.code} already exists.` };
+  if (p.value.parentFrameworkId && !(await sharedFramework(admin, p.value.parentFrameworkId))) return { ok: false, status: 422, error: "The framework it extends must be a shared framework." };
   const id = crypto.randomUUID();
   if (!(await authored(admin, actor, "cfca_framework_created", "framework", id, p.value.name, { code: p.value.code, layer: p.value.layer }))) return NOT_RECORDED;
   const { error: insErr } = await admin.from("frameworks").insert({
     id, code: p.value.code, name: p.value.name, description: p.value.description, library: "core", hospital_id: null, scope: "master", is_active: true,
     pub_status: "draft", competency_layer: p.value.layer, profession_term_id: p.value.professionTermId, specialty_term_id: p.value.specialtyTermId,
+    parent_framework_id: p.value.parentFrameworkId,
   });
   return insErr ? { ok: false, status: 422, error: "The framework could not be created." } : { ok: true, id };
 }
@@ -142,6 +146,39 @@ export async function updateFramework(admin: any, actor: Actor, b: any): Promise
   return error ? { ok: false, status: 422, error: "The framework could not be saved." } : { ok: true };
 }
 
+async function sharedFramework(admin: any, id: string): Promise<boolean> {
+  const { data } = await admin.from("frameworks").select("id, hospital_id").eq("id", id).maybeSingle();
+  return !!data && data.hospital_id === null;
+}
+
+/**
+ * The catalogue's IDENTITY -- code, layer, profession, specialty, the framework it extends -- set by configuration, and
+ * only while it is a draft: once published, what it is was what its approvers saw.
+ */
+export async function setFrameworkIdentity(admin: any, actor: Actor, b: any): Promise<Result> {
+  const g = await editableFramework(admin, b?.frameworkId);
+  if (!g.ok) return g;
+  if (g.fw.pub_status !== "draft") return { ok: false, status: 409, error: "A framework's code, layer, profession, specialty and parent are changed only while it is a draft." };
+  const p = parseFramework({ ...b, name: g.fw.name });
+  if (!p.ok) return { ok: false, status: 422, error: p.error };
+  if (p.value.parentFrameworkId === g.fw.id) return { ok: false, status: 422, error: "A framework cannot extend itself." };
+  const { data: same, error } = await admin.from("frameworks").select("id").eq("code", p.value.code).is("hospital_id", null).limit(5);
+  if (error) return { ok: false, status: 503, error: "Frameworks could not be read just now. Nothing has changed." };
+  if ((same ?? []).some((r: any) => r.id !== g.fw.id)) return { ok: false, status: 409, error: `A shared framework with the code ${p.value.code} already exists.` };
+  if (p.value.parentFrameworkId && !(await sharedFramework(admin, p.value.parentFrameworkId))) return { ok: false, status: 422, error: "The framework it extends must be a shared framework." };
+  if (!(await authored(admin, actor, "cfca_framework_identity_set", "framework", g.fw.id, g.fw.name, { code: p.value.code, layer: p.value.layer }))) return NOT_RECORDED;
+  const { error: uErr } = await admin.from("frameworks").update({
+    code: p.value.code, competency_layer: p.value.layer, profession_term_id: p.value.professionTermId, specialty_term_id: p.value.specialtyTermId, parent_framework_id: p.value.parentFrameworkId,
+  }).eq("id", g.fw.id).is("hospital_id", null);
+  return uErr ? { ok: false, status: 422, error: "The framework identity could not be saved." } : { ok: true };
+}
+
+const optCode = (v: unknown): string | null | undefined => {
+  const c = text(v).toUpperCase();
+  if (!c) return null;
+  return CODE.test(c) && c.length <= 40 ? c : undefined;
+};
+
 export async function createDomain(admin: any, actor: Actor, b: any): Promise<Result<{ id: string }>> {
   const g = await editableFramework(admin, b?.frameworkId);
   if (!g.ok) return g;
@@ -150,8 +187,10 @@ export async function createDomain(admin: any, actor: Actor, b: any): Promise<Re
   const { data: last } = await admin.from("framework_domains").select("sort_order").eq("framework_id", g.fw.id).order("sort_order", { ascending: false }).limit(1);
   const id = crypto.randomUUID();
   // A domain belongs to its framework's content, so its authorship is recorded on the framework.
-  if (!(await authored(admin, actor, "cfca_domain_created", "framework", g.fw.id, g.fw.name, { domain_id: id, name }))) return NOT_RECORDED;
-  const { error } = await admin.from("framework_domains").insert({ id, framework_id: g.fw.id, name, sort_order: (last?.[0]?.sort_order ?? 0) + 1 });
+  const code = optCode(b?.code);
+  if (code === undefined) return { ok: false, status: 422, error: "A domain code is capitals, digits and hyphens." };
+  if (!(await authored(admin, actor, "cfca_domain_created", "framework", g.fw.id, g.fw.name, { domain_id: id, name, code }))) return NOT_RECORDED;
+  const { error } = await admin.from("framework_domains").insert({ id, framework_id: g.fw.id, name, code, sort_order: (last?.[0]?.sort_order ?? 0) + 1 });
   return error ? { ok: false, status: 422, error: "The domain could not be created." } : { ok: true, id };
 }
 
@@ -162,9 +201,63 @@ export async function renameDomain(admin: any, actor: Actor, b: any): Promise<Re
   if (!g.ok) return g;
   const name = text(b?.name);
   if (name.length < 2 || name.length > 200) return { ok: false, status: 422, error: "A domain name is 2 to 200 characters." };
-  if (!(await authored(admin, actor, "cfca_domain_renamed", "framework", g.fw.id, g.fw.name, { domain_id: d.id, name }))) return NOT_RECORDED;
-  const { error } = await admin.from("framework_domains").update({ name }).eq("id", d.id);
+  const code = optCode(b?.code);
+  if (code === undefined) return { ok: false, status: 422, error: "A domain code is capitals, digits and hyphens." };
+  if (!(await authored(admin, actor, "cfca_domain_renamed", "framework", g.fw.id, g.fw.name, { domain_id: d.id, name, code }))) return NOT_RECORDED;
+  const { error } = await admin.from("framework_domains").update({ name, code }).eq("id", d.id);
   return error ? { ok: false, status: 422, error: "The domain could not be saved." } : { ok: true };
+}
+
+// ── PRACTICES AND CLINICAL PRACTICE UNITS (migration 011) ── a practice belongs to a domain, a CPU to a practice ──
+// A competency names its CPU (and through it its practice): both are in the 395 hash by id, so linking or unlinking one
+// is a material change. A CPU's own risk raises the number of independent approvals its competencies need (395).
+
+export async function createPractice(admin: any, actor: Actor, b: any): Promise<Result<{ id: string }>> {
+  const d = await frameworkOfDomain(admin, b?.domainId);
+  if (!d) return { ok: false, status: 404, error: "That domain does not exist." };
+  const g = await editableFramework(admin, d.framework_id);
+  if (!g.ok) return g;
+  const name = text(b?.name), description = text(b?.description) || null, code = optCode(b?.code);
+  if (name.length < 2 || name.length > 200) return { ok: false, status: 422, error: "A practice name is 2 to 200 characters." };
+  if (code === undefined || !code) return { ok: false, status: 422, error: "A practice has a code of capitals, digits and hyphens, for example PRA-OXY-001." };
+  const id = crypto.randomUUID();
+  if (!(await authored(admin, actor, "cfca_practice_created", "framework", g.fw.id, g.fw.name, { practice_id: id, code, domain_id: d.id }))) return NOT_RECORDED;
+  const { error } = await admin.from("practices").insert({ id, domain_id: d.id, name, description, code, sort_order: 1 });
+  return error ? { ok: false, status: 422, error: "The practice could not be created." } : { ok: true, id };
+}
+
+async function practiceInFramework(admin: any, practiceId: string): Promise<{ id: string; domain_id: string; framework_id: string } | null> {
+  if (!isId(practiceId)) return null;
+  const { data } = await admin.from("practices").select("id, domain_id, framework_domains!inner(framework_id)").eq("id", practiceId).maybeSingle();
+  return data ? { id: data.id, domain_id: data.domain_id, framework_id: data.framework_domains.framework_id } : null;
+}
+
+export async function createCpu(admin: any, actor: Actor, b: any): Promise<Result<{ id: string }>> {
+  const pr = await practiceInFramework(admin, b?.practiceId);
+  if (!pr) return { ok: false, status: 404, error: "That practice does not exist." };
+  const g = await editableFramework(admin, pr.framework_id);
+  if (!g.ok) return g;
+  const name = text(b?.name), description = text(b?.description) || null, code = optCode(b?.code);
+  const risk = (b?.riskCategory ?? "standard") as string, complexity = Number(b?.complexity ?? 2), months = Number(b?.reassessmentMonths ?? 12);
+  if (name.length < 3 || name.length > 200) return { ok: false, status: 422, error: "A CPU name is 3 to 200 characters." };
+  if (code === undefined || !code) return { ok: false, status: 422, error: "A CPU has a code of capitals, digits and hyphens, for example CPU-OXYSAFE-001." };
+  if (!(RISKS as readonly string[]).includes(risk)) return { ok: false, status: 422, error: "Choose the CPU risk category." };
+  if (!Number.isInteger(complexity) || complexity < 1 || complexity > 5) return { ok: false, status: 422, error: "CPU complexity is 1 to 5." };
+  if (!Number.isInteger(months) || months < 1 || months > 120) return { ok: false, status: 422, error: "Reassessment is 1 to 120 months." };
+  const id = crypto.randomUUID();
+  if (!(await authored(admin, actor, "cfca_cpu_created", "framework", g.fw.id, g.fw.name, { cpu_id: id, code, practice_id: pr.id }))) return NOT_RECORDED;
+  const { error } = await admin.from("clinical_practice_units").insert({ id, practice_id: pr.id, name, description, code, risk_category: risk, complexity, reassessment_months: months, pub_status: "draft", sort_order: 1 });
+  return error ? { ok: false, status: 422, error: "The CPU could not be created." } : { ok: true, id };
+}
+
+/** The CPU a competency may name: a CPU of a practice in the SAME framework. Returns its practice, or why not. */
+async function cpuFor(admin: any, frameworkId: string, cpuId: unknown): Promise<{ ok: true; practiceId: string | null; cpuId: string | null } | { ok: false; error: string }> {
+  if (cpuId == null || cpuId === "") return { ok: true, practiceId: null, cpuId: null };
+  if (!isId(cpuId)) return { ok: false, error: "That CPU is not valid." };
+  const { data } = await admin.from("clinical_practice_units").select("id, practice_id").eq("id", cpuId).maybeSingle();
+  const pr = data ? await practiceInFramework(admin, data.practice_id) : null;
+  if (!data || !pr || pr.framework_id !== frameworkId) return { ok: false, error: "A competency names a CPU of its own framework." };
+  return { ok: true, practiceId: pr.id, cpuId: data.id };
 }
 
 const competencyRow = (v: CompetencyInput) => ({ code: v.code, name: v.name, description: v.description, learning_outcomes: v.learningOutcomes, expected_level_id: v.expectedLevelId, risk_category: v.riskCategory });
@@ -179,10 +272,12 @@ export async function createCompetency(admin: any, actor: Actor, b: any): Promis
   const taken = await competencyCodeTaken(admin, p.value.code, null);
   if (taken === null) return { ok: false, status: 503, error: "Competency codes could not be checked just now. Nothing has changed." };
   if (taken) return { ok: false, status: 409, error: `A shared competency with the code ${p.value.code} already exists.` };
+  const cpu = await cpuFor(admin, g.fw.id, b?.cpuId);
+  if (!cpu.ok) return { ok: false, status: 422, error: cpu.error };
   const { data: last } = await admin.from("framework_competencies").select("sort_order").eq("domain_id", d.id).order("sort_order", { ascending: false }).limit(1);
   const id = crypto.randomUUID();
   if (!(await authored(admin, actor, "cfca_competency_created", "framework_competency", id, p.value.name, { code: p.value.code, framework_id: g.fw.id }))) return NOT_RECORDED;
-  const { error } = await admin.from("framework_competencies").insert({ id, domain_id: d.id, sort_order: (last?.[0]?.sort_order ?? 0) + 1, ...competencyRow(p.value) });
+  const { error } = await admin.from("framework_competencies").insert({ id, domain_id: d.id, sort_order: (last?.[0]?.sort_order ?? 0) + 1, ...competencyRow(p.value), practice_id: cpu.practiceId, cpu_id: cpu.cpuId });
   return error ? { ok: false, status: 422, error: "The competency could not be created." } : { ok: true, id };
 }
 
@@ -199,8 +294,11 @@ export async function updateCompetency(admin: any, actor: Actor, b: any): Promis
   const taken = await competencyCodeTaken(admin, p.value.code, c.id);
   if (taken === null) return { ok: false, status: 503, error: "Competency codes could not be checked just now. Nothing has changed." };
   if (taken) return { ok: false, status: 409, error: `A shared competency with the code ${p.value.code} already exists.` };
+  // The CPU only changes when the request names one (or null to unlink it): absent keeps what is there.
+  const cpu = b && "cpuId" in b ? await cpuFor(admin, g.fw.id, b.cpuId) : null;
+  if (cpu && !cpu.ok) return { ok: false, status: 422, error: cpu.error };
   if (!(await authored(admin, actor, "cfca_competency_updated", "framework_competency", c.id, p.value.name, { code: p.value.code, framework_id: g.fw.id }))) return NOT_RECORDED;
-  const { error } = await admin.from("framework_competencies").update(competencyRow(p.value)).eq("id", c.id);
+  const { error } = await admin.from("framework_competencies").update({ ...competencyRow(p.value), ...(cpu && cpu.ok ? { practice_id: cpu.practiceId, cpu_id: cpu.cpuId } : {}) }).eq("id", c.id);
   return error ? { ok: false, status: 422, error: "The competency could not be saved." } : { ok: true };
 }
 

@@ -5,7 +5,7 @@ import { authorsOf } from "./clinical-review";
 import { checkPackage, createCompetency, createFramework, importDraftPackage, parseCompetency, parseFramework, updateCompetency } from "./authoring";
 
 // Owner, COMPETEN CFCA -- PRODUCTION AUTHORING AND GOVERNANCE DIRECTION: curators author shared CFCA content in
-// production through a governed workflow (migration 438), with no SQL. Authorship is recorded before every write (so 395
+// production through a governed workflow (migration 465), with no SQL. Authorship is recorded before every write (so 395
 // can bar an author from reviewing), only shared frameworks are touched, nothing is edited under governance review, and
 // an import is a DRAFT, not clinically reviewed: nothing is approved, put forward or published by it.
 
@@ -169,5 +169,50 @@ describe("the route", () => {
     expect(src).toMatch(/await hqApiGate\(\["hq\.quality\.competency\.author"\]\)/);
     expect(src).not.toMatch(/case "(publish|approve|decide)/);
     expect(src).not.toMatch(/transitionFramework|decideReview|clinical_review_decision/);
+  });
+});
+
+describe("Competency Studio: identity, CPU and publication (owner COMPLETE PRODUCTION AUTHORING CAPABILITY)", () => {
+  const OTHER_FW = "00000000-0000-4000-8000-0000000000f2", PRA = "00000000-0000-4000-8000-0000000000b1", CPU = "00000000-0000-4000-8000-0000000000b2", FOREIGN_CPU = "00000000-0000-4000-8000-0000000000b3";
+
+  it("identity (code, layer, profession, specialty, parent) is configuration, set only while a draft", async () => {
+    const { setFrameworkIdentity } = await import("./authoring");
+    expect(await setFrameworkIdentity(fake(), ME, { frameworkId: FW, code: "CF-FOUND-2", layer: "foundational" })).toMatchObject({ ok: true });
+    expect(S.rows.frameworks[0]).toMatchObject({ code: "CF-FOUND-2", competency_layer: "foundational" });
+    S.rows.frameworks[0].pub_status = "published"; S.calls = [];
+    expect(await setFrameworkIdentity(fake(), ME, { frameworkId: FW, code: "CF-X", layer: "foundational" })).toMatchObject({ ok: false, status: 409 });
+    expect(writes()).toEqual([]);
+    expect(parseFramework({ code: "SP-1", name: "Specialty", layer: "specialty" })).toMatchObject({ ok: false });
+  });
+
+  it("a CPU is created in a practice of the framework; a competency links only a CPU of its own framework", async () => {
+    const { createCpu } = await import("./authoring");
+    S.rows.practices = [{ id: PRA, domain_id: DOM, code: "PRA-1", framework_domains: { framework_id: FW } }];
+    expect(await createCpu(fake(), ME, { practiceId: PRA, code: "CPU-X-001", name: "A practice unit", riskCategory: "high", complexity: 3 })).toMatchObject({ ok: true });
+    expect(order()).toEqual(["audit_log", "clinical_practice_units"]);
+    S.rows.clinical_practice_units = [{ id: CPU, practice_id: PRA }, { id: FOREIGN_CPU, practice_id: "00000000-0000-4000-8000-0000000000b9" }];
+    S.rows.practices.push({ id: "00000000-0000-4000-8000-0000000000b9", domain_id: "x", framework_domains: { framework_id: OTHER_FW } });
+    expect(await createCompetency(fake(), ME, comp({ cpuId: CPU }))).toMatchObject({ ok: true });
+    expect(S.rows.framework_competencies.at(-1)).toMatchObject({ cpu_id: CPU, practice_id: PRA });
+    expect(await createCompetency(fake(), ME, comp({ code: "CF-CR-009", cpuId: FOREIGN_CPU }))).toMatchObject({ ok: false, status: 422 });
+  });
+
+  it("465 grants the new capability to the new position only: no existing position gains authoring", () => {
+    const sql = readFileSync("supabase/migrations/465-competency-author-capability.sql", "utf8").replace(/^--.*$/gm, "");
+    const grants = [...sql.matchAll(/from \(values (.*?)\) as p\(code\)/g)].map(m => m[1]);
+    expect(grants).toEqual(["('competency_author')"]);
+    expect(sql).not.toMatch(/hq\.quality\.clinical\.(approve|govern)/);
+  });
+
+  it("a refused publication (466) is explained in words, never as a raw database error", async () => {
+    const { transitionFramework } = await import("./framework-lifecycle");
+    const admin: any = { from: () => {
+      const q: any = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: { id: FW, name: "F", pub_status: "approved", version_num: 0 }, error: null }) };
+      q.update = () => ({ eq: async () => ({ error: { message: "cfca publication: 3 of 8 competencies are not clinically approved at their current content" } }) });
+      return q;
+    } };
+    const r = await transitionFramework(admin, FW, "publish", { id: ME.userId, name: null });
+    expect(r, JSON.stringify(r)).toMatchObject({ ok: false, code: 409 });
+    expect(r.error).toMatch(/3 of its 8 competencies are not clinically approved/);
   });
 });

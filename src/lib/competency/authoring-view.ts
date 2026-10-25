@@ -1,17 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadClinicalReviews, type ClinicalReview } from "./clinical-review";
 
-// What the CFCA authoring page shows (migration 438): the SHARED layered frameworks (hospital_id null, a CFCA layer or
+// What the CFCA authoring page shows (migration 465): the SHARED layered frameworks (hospital_id null, a CFCA layer or
 // code), their domains and competencies with the content the 395 hash covers, each competency's clinical state in
 // words, and the option lists. Read only. null = could not be read (the page says so rather than show a partial list).
 
 export type AuthoringCompetency = {
   id: string; code: string | null; name: string; description: string | null; learningOutcomes: string[];
-  expectedLevelId: string | null; riskCategory: string; sortOrder: number; clinical: ClinicalReview | null;
+  expectedLevelId: string | null; riskCategory: string; sortOrder: number; cpuId: string | null; clinical: ClinicalReview | null;
 };
+export type AuthoringPractice = { id: string; code: string | null; name: string; cpus: { id: string; code: string | null; name: string; riskCategory: string; complexity: number }[] };
 export type AuthoringFramework = {
   id: string; code: string | null; name: string; description: string | null; layer: string | null; pubStatus: string; versionNum: number;
-  domains: { id: string; name: string; sortOrder: number; competencies: AuthoringCompetency[] }[];
+  professionTermId: string | null; specialtyTermId: string | null; parentFrameworkId: string | null;
+  domains: { id: string; code: string | null; name: string; sortOrder: number; practices: AuthoringPractice[]; competencies: AuthoringCompetency[] }[];
 };
 export type AuthoringView = {
   frameworks: AuthoringFramework[];
@@ -31,7 +33,7 @@ async function terms(admin: any, kind: string): Promise<{ id: string; value: str
 export async function loadAuthoringView(admin: any): Promise<AuthoringView | null> {
   try {
     const { data: fws, error } = await admin.from("frameworks")
-      .select("id, code, name, description, competency_layer, pub_status, version_num, framework_domains(id, name, sort_order, framework_competencies(id, code, name, description, learning_outcomes, expected_level_id, risk_category, sort_order))")
+      .select("id, code, name, description, competency_layer, pub_status, version_num, profession_term_id, specialty_term_id, parent_framework_id, framework_domains(id, code, name, sort_order, practices(id, code, name, clinical_practice_units(id, code, name, risk_category, complexity)), framework_competencies(id, code, name, description, learning_outcomes, expected_level_id, risk_category, sort_order, cpu_id))")
       .is("hospital_id", null).or("competency_layer.not.is.null,code.not.is.null").order("name").limit(200);
     if (error) return null;
     const ids = (fws ?? []).flatMap((f: any) => (f.framework_domains ?? []).flatMap((d: any) => (d.framework_competencies ?? []).map((c: any) => c.id)));
@@ -42,12 +44,15 @@ export async function loadAuthoringView(admin: any): Promise<AuthoringView | nul
     ]);
     const frameworks: AuthoringFramework[] = (fws ?? []).map((f: any) => ({
       id: f.id, code: f.code ?? null, name: f.name, description: f.description ?? null, layer: f.competency_layer ?? null, pubStatus: f.pub_status ?? "draft", versionNum: f.version_num ?? 0,
+      professionTermId: f.profession_term_id ?? null, specialtyTermId: f.specialty_term_id ?? null, parentFrameworkId: f.parent_framework_id ?? null,
       domains: [...(f.framework_domains ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order).map((d: any) => ({
-        id: d.id, name: d.name, sortOrder: d.sort_order,
+        id: d.id, code: d.code ?? null, name: d.name, sortOrder: d.sort_order,
+        practices: (d.practices ?? []).map((p: any) => ({ id: p.id, code: p.code ?? null, name: p.name,
+          cpus: (p.clinical_practice_units ?? []).map((u: any) => ({ id: u.id, code: u.code ?? null, name: u.name, riskCategory: u.risk_category ?? "standard", complexity: u.complexity ?? 2 })) })),
         competencies: [...(d.framework_competencies ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order).map((c: any) => ({
           id: c.id, code: c.code ?? null, name: c.name, description: c.description ?? null,
           learningOutcomes: Array.isArray(c.learning_outcomes) ? c.learning_outcomes.map(String) : [],
-          expectedLevelId: c.expected_level_id ?? null, riskCategory: c.risk_category ?? "standard", sortOrder: c.sort_order,
+          expectedLevelId: c.expected_level_id ?? null, riskCategory: c.risk_category ?? "standard", sortOrder: c.sort_order, cpuId: c.cpu_id ?? null,
           clinical: reviews ? reviews.get(c.id) ?? null : null,
         })),
       })),

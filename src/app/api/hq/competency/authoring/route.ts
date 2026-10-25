@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
-import { createCompetency, createDomain, createFramework, importDraftPackage, isId, renameDomain, updateCompetency, updateFramework } from "@/lib/competency/authoring";
+import { createCompetency, createCpu, createDomain, createFramework, createPractice, importDraftPackage, isId, renameDomain, setFrameworkIdentity, updateCompetency, updateFramework } from "@/lib/competency/authoring";
 import { submitForReview } from "@/lib/competency/clinical-review";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
 
-// POST /api/hq/competency/authoring -- CFCA authoring in production (migration 438, owner CFCA PRODUCTION AUTHORING).
+// POST /api/hq/competency/authoring -- CFCA authoring in production (migration 465, owner CFCA PRODUCTION AUTHORING).
 //
-// Body: { action: "create_framework" | "update_framework" | "create_domain" | "rename_domain" | "create_competency" |
-//         "update_competency" | "import_draft" | "submit_review", ... }
+// Body: { action: "create_framework" | "update_framework" | "set_identity" | "create_domain" | "rename_domain" |
+//         "create_practice" | "create_cpu" | "create_competency" | "update_competency" | "import_draft" | "submit_review", ... }
 //
-// ⚠ GATED BY hqApiGate(["hq.quality.competency.author"]) -- the CFCA Competency Curator. It authors shared content and
+// ⚠ GATED BY hqApiGate(["hq.quality.competency.author"]) -- the Competency Author. It authors shared content and
 // puts it forward for clinical review. It approves nothing (395, the Clinical Content Reviewer) and publishes nothing
 // (the governed framework lifecycle). Every write is preceded by its authorship row (src/lib/competency/authoring.ts).
 
@@ -25,6 +25,9 @@ export async function POST(req: Request) {
   switch (body?.action) {
     case "create_framework": { const r = await createFramework(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
     case "update_framework": { const r = await updateFramework(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "set_identity": { const r = await setFrameworkIdentity(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "create_practice": { const r = await createPractice(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
+    case "create_cpu": { const r = await createCpu(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
     case "create_domain": { const r = await createDomain(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
     case "rename_domain": { const r = await renameDomain(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
     case "create_competency": { const r = await createCompetency(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
