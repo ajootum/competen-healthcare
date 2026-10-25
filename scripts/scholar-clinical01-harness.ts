@@ -8,8 +8,11 @@
  *   C5  findings interpreted and decisions made   C6  structured reasoning feedback and the debrief
  *   C7  saved and resumable, decisions append-only   C8  back to Teach Me or Revision
  *   C14 another student reuses a governed library case with no new generation (needs case_library ON and a
- *       deliverable case: IND-007's steps 9-13), else PEND
- *   C15 live AI on the Individual budget -- needs metering ON, PEND
+ *       deliverable case: IND-007's steps 9-13), else PEND. CASE_VERSION_ID picks the case. It is played to its
+ *       first written decision through the shared delivery.
+ *   C15 live AI on the Individual budget -- needs metering ON and METERED=1, else PEND: the private case's drafting,
+ *       and the live AI feedback on the library case's written decision (charged by rule against the library
+ *       session in ai_usage_ledger, recorded by the shared delivery, shown again on return, audited)
  *   C18 stored cases playable after the AI allowance is exhausted (synthetic quota rows for THIS fixture only)
  *   C19 no mandatory programme competency catalogue
  *   C9  (Scholar side) a case offered by the student's explicit action, as a source-free snapshot -- needs the flag
@@ -269,20 +272,59 @@ async function main() {
     `${pageC.status} · learn ${learn.status} · apply ${apply.status}`);
 
   // ── C14: library reuse without generation (needs the case_library flag and a deliverable case) ──
+  let libWritten: { sessionId: string; token: string; feedback: any } | null = null;
   if (!libFlag) pend("C14", "the case_library flag is OFF on this environment (the owner's), so the library entry and reuse are not offered");
   else {
     const lib = await send("GET", "/api/individual/scholar/clinical/library", undefined, sb.jar);
-    const offer = (lib.json?.offers ?? [])[0];
-    if (!offer) pend("C14", "no published, approved library case on this environment yet (IND-007's steps 9-13)");
+    // CASE_VERSION_ID (optional) names the published case to play, where the run was given one.
+    const offers = (lib.json?.offers ?? []) as any[];
+    const offer = offers.find(o => o.versionId === process.env.CASE_VERSION_ID) ?? (process.env.CASE_VERSION_ID ? null : offers[0]);
+    if (!offer) pend("C14", process.env.CASE_VERSION_ID ? `version ${process.env.CASE_VERSION_ID} is not offered here (offers: ${offers.map(o => o.versionId).join(",") || "none"})` : "no published, approved library case on this environment yet (IND-007's steps 9-13)");
     else {
       const aiB0 = (await admin.from("plat_ai_requests").select("id", { count: "exact" }).eq("actor_id", b).limit(1)).count ?? 0;
       const st = await send("POST", "/api/individual/scholar/clinical/sessions", { versionId: offer.versionId }, sb.jar);
       const aiB1 = (await admin.from("plat_ai_requests").select("id", { count: "exact" }).eq("actor_id", b).limit(1)).count ?? 0;
       ok("C14. another student plays a governed library case with no new generation: through the shared delivery, labelled approved for its exact version, no AI call",
         st.status === 200 && st.json?.kind === "library" && /clinically approved for this exact version/.test(st.json?.play?.label ?? "") && aiB1 === aiB0, `${st.status} ${st.json?.error ?? ""} · ai ${aiB0}->${aiB1}`);
+      // Played to its first WRITTEN decision through the shared delivery (choices: the first option, not the key --
+      // the harness never reads the blueprint either). That written answer is where the live AI feedback is given.
+      let lp = st.json?.play;
+      for (let step = 0; lp && lp.status === "active" && step < 12 && !libWritten; step++) {
+        const dp = lp.view.stages[lp.view.stages.length - 1].decisionPoints.find((d: any) => !lp.answered.includes(d.token));
+        if (!dp) break;
+        const body = dp.kind === "free_text" ? { decisionToken: dp.token, text: "I would reassess the airway, breathing and oxygen saturation, give oxygen to the target range, and escalate if it does not improve." }
+          : { decisionToken: dp.token, optionTokens: [dp.options[0].token] };
+        const r = await send("POST", `/api/individual/scholar/clinical/sessions/library/${lp.sessionId}/answer`, body, sb.jar);
+        if (r.status !== 200) { note(`library answer ${r.status} ${r.json?.error ?? ""}`); break; }
+        if (dp.kind === "free_text") libWritten = { sessionId: lp.sessionId, token: dp.token, feedback: r.json.feedback };
+        lp = r.json.play;
+      }
+      note(`library case ${offer.versionId}: ${libWritten ? "a written decision answered" : "no written decision reached"} · status ${lp?.status}`);
     }
   }
-  pend("C15", "the Individual budget attribution of live case AI needs metering switched on for the run (the owner's switch), then METERED=1");
+
+  // ── C15: live case AI on the Individual budget (metering ON, the owner's switch, then METERED=1) ──
+  if (process.env.METERED !== "1") pend("C15", "the Individual budget attribution of live case AI needs metering switched on for the run (the owner's switch), then METERED=1");
+  else {
+    const ledger = async (user: string, activity: string) => ((await admin.from("ai_usage_ledger").select("owner_type, product, activity, status, record_type, record_ref")
+      .eq("user_id", user).eq("activity", activity).order("created_at", { ascending: false })).data ?? []) as any[];
+    const drafts = await ledger(a, "case_steps");
+    ok("C15. live AI on the Individual budget: drafting a private case is reserved and settled on the student's own Individual account, product scholar",
+      drafts.length > 0 && drafts.every(r => r.owner_type === "individual" && r.product === "scholar") && drafts.some(r => r.status === "settled"),
+      `case_steps rows ${drafts.length} · ${[...new Set(drafts.map(r => `${r.owner_type}/${r.status}`))].join(",")}`);
+    if (!libFlag || !libWritten) pend("C15-library", !libFlag ? "the case_library flag is OFF" : "the library case played has no written decision reached (or none was offered)");
+    else {
+      const evals = (await ledger(b, "evaluate")).filter(r => r.record_ref === libWritten!.sessionId);
+      const again = await send("GET", `/api/individual/scholar/clinical/sessions/library/${libWritten.sessionId}`, undefined, sb.jar);
+      const kept = (again.json?.play?.feedback ?? []).find((f: any) => f.token === libWritten!.token);
+      const audited = ((await admin.from("audit_log").select("new_value").eq("actor_id", b).eq("entity_type", "individual_scholar_case_reasoning").eq("entity_id", libWritten.sessionId)).data ?? []) as any[];
+      ok("C15. live AI feedback on a library case's written decision: labelled AI evaluation, charged to the student's Individual budget by rule against the library session, recorded by the shared delivery and shown again on return",
+        libWritten.feedback?.marking === "ai_evaluation" && typeof libWritten.feedback?.aiFeedback === "string" && libWritten.feedback.aiFeedback.length > 0
+          && evals.length > 0 && evals.every(r => r.owner_type === "individual" && r.product === "scholar" && r.record_type === "case_library_session") && evals.some(r => r.status === "settled")
+          && again.status === 200 && kept?.aiFeedback === libWritten.feedback.aiFeedback && audited.some(x => x.new_value?.outcome === "recorded"),
+        `marking ${libWritten.feedback?.marking} · ledger ${evals.length} ${[...new Set(evals.map(r => `${r.owner_type}/${r.record_type}/${r.status}`))].join(",")} · kept ${!!kept} · audit ${audited.map(x => x.new_value?.outcome).join(",")}`);
+    }
+  }
 
   // ── C18: stored cases stay playable with the AI allowance used up (the Individual quota, THIS fixture only) ──
   const usage = Array.from({ length: 200 }, () => ({ actor_id: a, actor_name: "harness", action: "ai_assistant_query", entity_type: "harness_clinical01_continuity", new_value: { synthetic: true } }));
