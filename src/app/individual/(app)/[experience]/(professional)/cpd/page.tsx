@@ -23,6 +23,9 @@ import LearningReflectionList from "../../../../_components/professional/Learnin
 import ReflectOnLearning from "../../../../_components/professional/ReflectOnLearning";
 import { loadLearningReflections } from "@/lib/individual/professional/learning-reflections";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
+import RecordGoalLink from "../../../../_components/professional/RecordGoalLink";
+import { loadPlanWorkspace } from "@/lib/individual/professional/plan-store";
+import { goalsByRecord, openActivities, type RecordGoal } from "@/lib/individual/professional/record-goals";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -42,6 +45,10 @@ export const dynamic = "force-dynamic";
 //
 // ⚠ A REQUIREMENT IS COUNTED AGAINST, NEVER MET. With a configured requirement the person chose (LCPD-5), the page shows
 // what is recorded and what is potentially eligible. Nothing is verified or accepted: Competen has no authorised route.
+//
+// ⚠ THE GOALS IT SERVED (PLAN-01, migration 480). With 480 a CPD entry or a learning record serves goals through the
+// Stage 3 activity that references it, read once from the plan and linked through Stage 3's route. Before 480, the
+// entry's own 373 goal, as before. An earlier 373 goal stays shown either way.
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Learning & CPD" }); }
 
@@ -51,11 +58,14 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, map, learning, policy, cfg, ready, setting, history, reflections] = await Promise.all([
+  const [record, map, learning, policy, cfg, ready, setting, history, reflections, plan] = await Promise.all([
     loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId),
     loadIndividualPolicy(ctx.admin), loadLcpdConfig(ctx.admin), lcpdSchemaReady(ctx.admin), loadCpdSetting(ctx.admin, ctx.userId), loadCpdHistory(ctx.admin, ctx.userId),
-    loadLearningReflections(ctx.admin, ctx.userId),
+    loadLearningReflections(ctx.admin, ctx.userId), loadPlanWorkspace(ctx.admin, ctx.userId),
   ]);
+  // 480: goal links live in the plan. Readable: shown and linkable. Unreadable: said so, and nothing offered.
+  const planLinks = plan.provisioned && plan.activities !== null && plan.activityGoals !== null && plan.goals !== null;
+  const servedBy = planLinks ? goalsByRecord(plan) : new Map<string, RecordGoal[]>();
   // LCPD-3: reflections on learning, once 491 is here. Unreadable or absent: no reflection controls, nothing implied.
   const canReflect = !!reflections?.available && record.provisioned;
   const reflectionsOf = (key: string) => reflections?.bySubject.get(key) ?? [];
@@ -65,7 +75,8 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
   const years = cpd && once ? cpdYearsWithLearning(cpdHoursByYear(once.counted), learning.refs ?? []) : null;
   const goalTitle = new Map((record.goals ?? []).map(g => [g.id, g.title]));
   const liveGoals = (record.goals ?? []).filter(g => g.status === "planned" || g.status === "in_progress");
-  const options = { types: recordableTypes(cfg, ready), flexible: ready };
+  const options = { types: recordableTypes(cfg, ready), flexible: ready, plan: plan.provisioned ? { activities: openActivities(plan) } : null };
+  const goalChoices = liveGoals.map(g => ({ id: g.id, title: g.title }));
   const labelOf = (code: string) => cfg.activityTypes.find(t => t.code === code)?.label ?? CPD_ACTIVITY_LABEL[code] ?? code.replace(/_/g, " ");
   const offered = cfg.requirements.filter(r => inEffect(r, today));
   const chosen = setting?.setting.requirementCode ? cfg.requirements.find(r => r.code === setting.setting.requirementCode) ?? null : null;
@@ -161,6 +172,7 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
       </Section>
 
       {reflections === null && <p role="alert" className="mb-4 text-[13px] text-amber-900">Your reflections on learning could not be read just now.</p>}
+      {plan.provisioned && !planLinks && <p role="alert" className="mb-4 text-[13px] text-amber-900">The goals your learning served could not be read from your development plan just now.</p>}
 
       {cpd !== null && record.provisioned && (
         <Section id="record-h" title="Record CPD" note={options.flexible ? "From anywhere: a course, conference, workplace learning, teaching, mentorship, research, quality improvement or study. Only what you did and when are required." : "From anywhere: a course, conference, teaching, research or study."}>
@@ -181,7 +193,7 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
                       <p className="text-[12.5px] text-gray-500">
                         {labelOf(c.activity_type)} · {fmtDate(c.activity_date)} · {c.hours == null ? "no hours recorded" : `${c.hours} ${c.hours === 1 ? "hour" : "hours"}`}
                         {c.cpd_points !== null ? ` · ${c.cpd_points} credits` : ""}{c.provider ? ` · ${c.provider}` : ""}
-                        {c.goal_id && goalTitle.get(c.goal_id) ? ` · goal: ${goalTitle.get(c.goal_id)}` : ""}
+                        {c.goal_id && goalTitle.get(c.goal_id) && !(servedBy.get(`cpd:${c.id}`) ?? []).some(s => s.goalId === c.goal_id) ? ` · goal: ${goalTitle.get(c.goal_id)}` : ""}
                         {c.created_at && c.created_at.slice(0, 10) !== c.activity_date ? ` · recorded ${fmtDate(c.created_at)}` : ""}
                       </p>
                     </div>
@@ -210,6 +222,7 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
                       <ul className="mt-1 space-y-0.5 text-[12.5px] text-gray-600">{earlier.map((h, i) => <li key={i}>Until {fmtDate(h.corrected_at)}: {h.title} · {fmtDate(h.activity_date)} · {h.hours == null ? "no hours" : `${h.hours} hours`}</li>)}</ul>
                     </details>
                   )}
+                  {planLinks && <RecordGoalLink subject={{ cpdId: c.id }} served={servedBy.get(`cpd:${c.id}`) ?? []} goals={goalChoices} accent={x.accent} idPrefix={`cpd-${c.id}-g`} />}
                   <CpdEdit c={c} goals={(record.goals ?? []).map(g => ({ id: g.id, title: g.title }))} today={today} accent={x.accent} options={options} />
                   {map.mappings === null ? <p className="mt-2 text-[12.5px] text-gray-600">Competency links could not be read just now.</p> : map.provisioned && (
                     <CompetencyLinks kind="cpd" subjectId={c.id} links={linksFor(map, "cpd", c.id)} offered={map.offered} accent={x.accent} idPrefix={`cpd-${c.id}`} />
@@ -226,6 +239,7 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
           {learning.refs === null ? <Unreadable what="learning record" /> : learning.refs.length === 0 ? <Empty>No completed Competen Learning courses. Your own entries above are a complete CPD log without them.</Empty>
             : <LearningRefs refs={learning.refs} accent={x.accent} competencies certificates below={r => (
               <>
+                {planLinks && <RecordGoalLink subject={{ learningRecordId: r.recordId }} served={servedBy.get(`rec:${r.recordId}`) ?? []} goals={goalChoices} accent={x.accent} idPrefix={`rec-${r.recordId}-g`} />}
                 <LearningReflectionList items={reflectionsOf(`rec:${r.recordId}`)} />
                 {canReflect && <ReflectOnLearning subject={{ learningRecordId: r.recordId }} templates={cfg.reflectionTemplates} accent={x.accent} />}
               </>

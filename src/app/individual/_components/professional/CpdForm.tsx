@@ -53,7 +53,9 @@ export default function CpdForm({ accent, today, goals, options }: { accent: str
       const j = await res.json().catch(() => ({}));
       if (!res.ok) { if (j?.override) setRefused(refusalMsg(j, "That could not be saved.")); else setMsg({ ok: false, text: j?.error ?? "That could not be saved." }); return; }
       ref.current?.reset(); setReflection(""); setDrafted(false);
-      setMsg({ ok: true, text: j.evidenceClass === "source_linked" ? "Added, with your document attached." : "Added." });
+      // A link to the plan that failed after the entry was saved: the entry stays, and the person is told.
+      if (typeof j.planNote === "string") setMsg({ ok: false, text: j.planNote });
+      else setMsg({ ok: true, text: j.evidenceClass === "source_linked" ? "Added, with your document attached." : "Added." });
       router.refresh();
     } catch { setMsg({ ok: false, text: "That could not be saved. Check your connection." }); } finally { setBusy(false); }
   }
@@ -71,12 +73,20 @@ export default function CpdForm({ accent, today, goals, options }: { accent: str
         <Field label={options.flexible ? "Hours (optional)" : "Hours"} htmlFor="cpd-hours"><input id="cpd-hours" name="hours" type="number" required={!options.flexible} min={0.1} max={1000} step={0.1} inputMode="decimal" className={inputCls} /></Field>
         <Field label={options.flexible ? "CPD credits (optional)" : "CPD points (optional)"} htmlFor="cpd-points" hint="Only if the provider awarded them."><input id="cpd-points" name="cpdPoints" type="number" min={0} max={1000} step={options.flexible ? 0.1 : 1} inputMode="decimal" className={inputCls} /></Field>
         <Field label="Provider (optional)" htmlFor="cpd-provider"><input id="cpd-provider" name="provider" maxLength={160} className={inputCls} /></Field>
-        <Field label="Goal in your plan (optional)" htmlFor="cpd-goal">
+        <Field label="Goal in your plan (optional)" htmlFor="cpd-goal" hint={options.plan ? "Linked in your development plan. You can add more goals from the entry." : undefined}>
           <select id="cpd-goal" name="goalId" className={inputCls} defaultValue="">
             <option value="">Not linked to a goal</option>
             {goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
           </select>
         </Field>
+        {options.plan && options.plan.activities.length > 0 && (
+          <Field label="Planned activity it completes (optional)" htmlFor="cpd-activity" hint="Marks that activity in your plan as done, pointing at this entry.">
+            <select id="cpd-activity" name="activityId" className={inputCls} defaultValue="">
+              <option value="">None</option>
+              {options.plan.activities.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
+            </select>
+          </Field>
+        )}
         <Field label="Certificate (optional)" htmlFor="cpd-doc" hint={`PDF or image, up to ${DOCUMENT_MAX_LABEL}. Attaching it does not verify the entry.`}>
           <input id="cpd-doc" name="document" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className={`${inputCls} py-2.5`} />
         </Field>
