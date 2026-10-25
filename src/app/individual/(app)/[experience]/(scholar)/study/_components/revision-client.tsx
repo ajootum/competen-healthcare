@@ -440,6 +440,11 @@ function FeedbackPanel({ f, sessionId, compact = false }: { f: RevisionFeedback;
       <p className="mt-2 text-[13.5px] text-gray-900"><span className="font-semibold">Your notes:</span> {f.answer}</p>
       {!compact && <p className="mt-1 text-[13.5px] leading-relaxed text-gray-800">{f.rationale}</p>}
       <blockquote className="mt-2 border-l-4 pl-3 text-[13px] italic text-gray-700" style={{ borderColor: accent }}>“{f.source.quote}”</blockquote>
+      {f.practises && (
+        <p className="mt-2 text-[12.5px] text-gray-700">
+          <span className="font-semibold">Practises:</span> {f.practises.competency}{f.practises.outcome ? <> · <span className="font-semibold">outcome:</span> {f.practises.outcome}</> : null}. <span className="text-gray-600">{f.practises.label}</span>
+        </p>
+      )}
       {f.card === "created" && <p className="mt-2 text-[12.5px] font-semibold text-gray-800">Added to your review cards: it comes back today.</p>}
       {f.card === "reset" && <p className="mt-2 text-[12.5px] font-semibold text-gray-800">Its review card has gone back to the start of its schedule.</p>}
       {f.card === "reviewed" && f.nextReviewAt && <p className="mt-2 text-[12.5px] font-semibold text-gray-800">Reviewed: it comes back {new Date(`${f.nextReviewAt}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}.</p>}

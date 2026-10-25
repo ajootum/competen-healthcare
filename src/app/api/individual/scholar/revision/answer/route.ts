@@ -11,6 +11,7 @@ import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai
 import { runEvaluate } from "@/lib/individual/scholar/generation";
 import { keyOf, markResponse, parseResponse, storedResponse } from "@/lib/individual/scholar/revision";
 import { citationOf, feedbackView } from "@/lib/individual/scholar/revision-view";
+import { questionLinks } from "@/lib/individual/scholar/revision-links";
 import { MARKING_LABEL } from "@/lib/individual/scholar/config";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -105,6 +106,6 @@ export async function POST(req: Request) {
   if (feedbackMode === "end") return NextResponse.json({ recorded: true, held: true });
   return NextResponse.json({
     recorded: true,
-    feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, evaluation, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null }),
+    feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, evaluation, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
   });
 }

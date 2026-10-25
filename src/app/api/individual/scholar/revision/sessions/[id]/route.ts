@@ -4,6 +4,7 @@ import { getRevisionSession, revisionPool, updateRevisionSession, type QuestionR
 import { audit } from "@/lib/individual/scholar/http";
 import { REVISION_FORMATS, type Marking } from "@/lib/individual/scholar/config";
 import { feedbackView, revisionItemView } from "@/lib/individual/scholar/revision-view";
+import { questionLinks, type QuestionLink } from "@/lib/individual/scholar/revision-links";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -28,14 +29,14 @@ async function load(ctx: { admin: unknown; userId: string }, id: string) {
   return { s: s.data, questions };
 }
 
-function view(s: NonNullable<Awaited<ReturnType<typeof load>>["s"]>, questions: QuestionRow[], showFeedback: boolean) {
+function view(s: NonNullable<Awaited<ReturnType<typeof load>>["s"]>, questions: QuestionRow[], showFeedback: boolean, links: Map<string, QuestionLink> = new Map()) {
   const answered = new Map(s.attempts.map(a => [a.questionId, a]));
   return {
     session: { id: s.session.id, mode: s.session.mode, feedback: s.session.feedback, status: s.session.status, total: questions.length, position: Math.min(s.session.position, questions.length) },
     items: questions.map(revisionItemView),
     answered: questions.filter(q => answered.has(q.id)).map(q => {
       const a = answered.get(q.id)!;
-      return { questionId: q.id, ...(showFeedback ? { feedback: feedbackView(q, { correct: a.correct, score: a.score, marking: a.marking as Marking }) } : {}) };
+      return { questionId: q.id, ...(showFeedback ? { feedback: feedbackView(q, { correct: a.correct, score: a.score, marking: a.marking as Marking, link: links.get(q.id) ?? null }) } : {}) };
     }),
   };
 }
@@ -46,7 +47,9 @@ export async function GET(_req: Request, ctx2: { params: Promise<{ id: string }>
   const l = await load(ctx, (await ctx2.params).id);
   if ("error" in l) return l.error;
   await updateRevisionSession(ctx.admin, ctx.userId, l.s.session.id, {});
-  return NextResponse.json(view(l.s, l.questions, l.s.session.feedback === "immediate" || l.s.session.status === "completed"));
+  const show = l.s.session.feedback === "immediate" || l.s.session.status === "completed";
+  const answeredIds = new Set(l.s.attempts.map(a => a.questionId));
+  return NextResponse.json(view(l.s, l.questions, show, show ? await questionLinks(ctx.admin, ctx.userId, l.questions.filter(q => answeredIds.has(q.id))) : new Map()));
 }
 
 export async function PATCH(req: Request, ctx2: { params: Promise<{ id: string }> }) {
@@ -62,7 +65,8 @@ export async function PATCH(req: Request, ctx2: { params: Promise<{ id: string }
       answered: l.s.attempts.length, of: l.questions.length, correct: l.s.attempts.filter(a => a.correct).length,
     });
   }
-  const done = view({ ...l.s, session: { ...l.s.session, status: "completed" } }, l.questions, true);
+  const answeredIds = new Set(l.s.attempts.map(a => a.questionId));
+  const done = view({ ...l.s, session: { ...l.s.session, status: "completed" } }, l.questions, true, await questionLinks(ctx.admin, ctx.userId, l.questions.filter(q => answeredIds.has(q.id))));
   const marked = l.s.attempts;
   return NextResponse.json({
     ...done,
