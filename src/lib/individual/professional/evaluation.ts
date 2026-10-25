@@ -75,7 +75,7 @@ export type EvaluationInput = {
 };
 
 export type EvaluationHrefs = {
-  cpd: string; development: string; goal: (id: string) => string; need: (id: string) => string; competencies: string;
+  cpd: string; development: string; goal: (id: string) => string; need: (id: string) => string; competencies: string; competency: (entryId: string) => string;
   learning: (competencyId: string | null) => string; learningRecord: (id: string) => string; verification: string | null;
 };
 
@@ -396,7 +396,7 @@ export function evaluate(input: EvaluationInput, scope: Scope, policy: Professio
     push({ kind: "self_assessment", id: a.id, title: `Self-assessment: ${entryName(a.my_competency_id) ?? "a competency"}`, date: day(a.assessed_at), provenance: "self_reported",
       classText: `Self-reported${a.scale_label ? ` on ${a.scale_label}` : ""}: ${a.level_label}${a.confidence_label ? `, confidence ${a.confidence_label}` : ""}`,
       dimensions: ["competency_evidence"], method: "Self-assessment", competency: entryName(a.my_competency_id), outcome: a.learning_outcome,
-      frameworkVersion: a.framework_version, href: input.hrefs.competencies });
+      frameworkVersion: a.framework_version, href: input.hrefs.competency(a.my_competency_id) });
   }
   for (const m of (input.mappings ?? []).filter(m => m.state === "accepted" && s.competencies.has(m.competencyId) && ((m.kind === "cpd" && s.cpd.has(m.subjectId)) || (m.kind === "evidence" && s.evidence.has(m.subjectId))))) {
     const key = `${m.kind}:${m.subjectId}`;
@@ -601,10 +601,10 @@ function recommend(input: EvaluationInput, scope: Scope, label: string, s: InSco
       creates: null, basis: "Offered because you recorded development activity but little about applying it in practice." });
   if (input.stage5.available) {
     for (const e of liveEntries.filter(e => !(input.stage5.assessments ?? []).some(a => a.my_competency_id === e.id)).slice(0, 3))
-      add({ rule: "self_assess", extra: e.id, title: `Self-assess ${e.title}`, dimension: "competency_evidence", sourceKeys: [], href: input.hrefs.competencies, hrefLabel: "Open My Competencies", creates: null,
+      add({ rule: "self_assess", extra: e.id, title: `Self-assess ${e.title}`, dimension: "competency_evidence", sourceKeys: [], href: input.hrefs.competency(e.id), hrefLabel: "Open this competency", creates: null,
         basis: "Offered because this competency has no self-assessment yet. A self-assessment is your own judgement and stays self-reported." });
     for (const e of liveEntries.filter(e => !(input.stage5.links ?? []).some(l => l.my_competency_id === e.id && !l.unlinked_at)).slice(0, 3))
-      add({ rule: "link_evidence", extra: e.id, title: `Link evidence to ${e.title}`, dimension: "competency_evidence", sourceKeys: [], href: input.hrefs.competencies, hrefLabel: "Open My Competencies", creates: null,
+      add({ rule: "link_evidence", extra: e.id, title: `Link evidence to ${e.title}`, dimension: "competency_evidence", sourceKeys: [], href: input.hrefs.competency(e.id), hrefLabel: "Open this competency", creates: null,
         basis: "Offered because no evidence is linked to this competency yet." });
   }
   if (input.verification.available && input.hrefs.verification) {
@@ -612,7 +612,7 @@ function recommend(input: EvaluationInput, scope: Scope, label: string, s: InSco
       const linked = (input.stage5.links ?? []).filter(l => l.my_competency_id === e.id && !l.unlinked_at && l.kind !== "reflection").length;
       const decided = (input.verification.decisions ?? []).some(d => d.verified && (d.myCompetencyId === e.id || d.frameworkCompetencyId === e.framework_competency_id));
       if (linked >= policy.sufficiency && !decided)
-        add({ rule: "request_verification", extra: e.id, title: `Consider independent verification of ${e.title}`, dimension: "independent_verification", sourceKeys: [], href: input.hrefs.verification, hrefLabel: "Open Competen verification",
+        add({ rule: "request_verification", extra: e.id, title: `Consider independent verification of ${e.title}`, dimension: "independent_verification", sourceKeys: [], href: input.hrefs.competency(e.id), hrefLabel: "Open this competency to request verification",
           creates: null, basis: `Offered because ${plural(linked, "evidence record")} ${linked === 1 ? "is" : "are"} linked and no current independent decision exists. Optional. Only a verifier can verify, through Competen verification.` });
     }
   }

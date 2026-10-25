@@ -19,7 +19,7 @@ const CPD = "00000000-0000-4000-8000-0000000000c1", CPD2 = "00000000-0000-4000-8
 const COMP = "00000000-0000-4000-8000-0000000000f1", ENTRY = "00000000-0000-4000-8000-0000000000d1", ACT = "00000000-0000-4000-8000-0000000000a9";
 const TODAY = "2026-10-25";
 
-const hrefs = { cpd: "/cpd", development: "/dev", goal: (id: string) => `/dev?goal=${id}`, need: (id: string) => `/dev?need=${id}`, competencies: "/ev",
+const hrefs = { cpd: "/cpd", development: "/dev", goal: (id: string) => `/dev?goal=${id}`, need: (id: string) => `/dev?need=${id}`, competencies: "/ev", competency: (id: string) => `/ev?c=${id}`,
   learning: (c: string | null) => `/learn?c=${c}`, learningRecord: (id: string) => `/rec/${id}`, verification: "/verify-me" };
 
 function empty(): EvaluationInput {
@@ -163,7 +163,7 @@ describe("E4: recommendations, deterministic, each with its basis and its owning
   it("verification is suggested only as an option, through C5, never made", () => {
     const ev = evaluate(ecg(), { kind: "goal", ref: GOAL }, P)!;
     const v = ev.recommendations.find(r => r.rule === "request_verification")!;
-    expect(v.href).toBe("/verify-me");
+    expect(v.href).toBe(`/ev?c=${ENTRY}`);
     expect(v.creates).toBeNull();
     expect(v.basis).toMatch(/Only a verifier can verify/);
   });
@@ -297,5 +297,28 @@ describe("s13: private unless the person ticks it, and then formative with sourc
     expect(JSON.stringify(v)).not.toContain("AI SAYS");
     expect(v.notices[0]).toMatch(/not an assessment or verification of clinical competence/);
     expect(v.findings).toHaveLength(6);
+  });
+});
+
+describe("C5 read: only a current decision of outcome CLASS verified, with a level, is independently verified", () => {
+  it("reads the class, never the configurable code, and a decision without its class is never verified", async () => {
+    const { registerVerificationStudio } = await import("./competency-verification");
+    const { loadVerification } = await import("./evaluation-stage5");
+    const base = { outcomeLabel: "x", assessorName: "A", authority: "C5", criteriaVersion: "v1", decidedAt: "2026-10-20T09:00:00Z", validUntil: null, revokedAt: null, supersededBy: null };
+    let requested = 0;
+    registerVerificationStudio({
+      listVerifications: async () => ({ provisioned: true, items: [{ requestId: "r1", status: "decided", method: "Observation", requestedAt: TODAY, evidence: [],
+        competency: { frameworkId: "fw", frameworkCompetencyId: COMP, frameworkVersion: "v1", title: "ECG", learningOutcomes: [] },
+        decisions: [
+          { ...base, outcomeCode: "verified_at_level", outcomeClass: "verified", level: "Proficient" },
+          { ...base, outcomeCode: "verified", outcomeClass: "partial", level: "Proficient", decidedAt: "2026-10-21T09:00:00Z" },
+          { ...base, outcomeCode: "verified", level: "Proficient", decidedAt: "2026-10-22T09:00:00Z" },
+          { ...base, outcomeCode: "verified_at_level", outcomeClass: "verified", level: "Proficient", revokedAt: "2026-10-23T00:00:00Z", decidedAt: "2026-10-23T09:00:00Z" },
+        ] as any }] }),
+      requestVerification: async () => { requested++; return { ok: false, status: 409, error: "no" }; },
+    });
+    const v = await loadVerification({} as any, USER, TODAY, "/c");
+    expect(v.decisions!.map(d => d.verified)).toEqual([true, false, false, false]);
+    expect(requested).toBe(0);
   });
 });

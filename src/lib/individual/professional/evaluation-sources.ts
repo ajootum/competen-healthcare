@@ -28,7 +28,7 @@ export function evaluationHrefs(): EvaluationHrefs {
   return {
     cpd: p("cpd"), development: p("development"),
     goal: id => `${p("development")}?goal=${encodeURIComponent(id)}#plan-h`, need: id => `${p("development")}?need=${encodeURIComponent(id)}#needs-h`,
-    competencies: p("competencies"),
+    competencies: p("competencies"), competency: id => `${p("competencies")}?c=${encodeURIComponent(id)}#competency`,
     learning: cid => (cid ? findLearningHref(cid) : "/individual/learning"), learningRecord: learningRecordHref,
     verification: p("competencies"),
   };

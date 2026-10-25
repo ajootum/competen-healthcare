@@ -206,7 +206,7 @@ async function main() {
       registerVerificationStudio({
         listVerifications: async () => ({ provisioned: true, items: [{ requestId: "00000000-0000-4000-8000-00000000c5c5", status: "decided", method: "Direct observation", requestedAt: today, evidence: [],
           competency: { frameworkId: c.catalogue.id, frameworkCompetencyId: c.competencyId, frameworkVersion: null, title: c.title, learningOutcomes: [] },
-          decisions: [{ outcomeCode: "verified", outcomeLabel: "Verified", level: null, assessorName: "Stand-in assessor", authority: "C5", criteriaVersion: "v1", decidedAt: `${today}T09:00:00Z`, validUntil: null, revokedAt: null, supersededBy: null }] }] }),
+          decisions: [{ outcomeCode: "verified_at_level", outcomeClass: "verified", outcomeLabel: "Verified at level", level: "Proficient", assessorName: "Stand-in assessor", authority: "C5", criteriaVersion: "v1", decidedAt: `${today}T09:00:00Z`, validUntil: null, revokedAt: null, supersededBy: null } as any] }] }),
         requestVerification: async () => { requested++; return { ok: false, status: 409, error: "stand-in" }; },
       });
     }

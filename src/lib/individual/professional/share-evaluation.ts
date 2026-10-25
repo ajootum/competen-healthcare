@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { isUuid } from "./validate";
+import { loadIndividualPolicy } from "../policy";
 import { DIMENSIONS, FORMATIVE_NOTICE, MISSING_NOTICE, type Dimension } from "./evaluation-vocabulary";
 import { FINDING_STATE_LABEL, type Finding, type SourceRef } from "./evaluation";
 
@@ -73,4 +74,12 @@ export async function loadSharedEvaluations(admin: any, tokenId: string, userId:
     if (e2) return null;
     return (rows ?? []).sort((a: any, b: any) => String(b.evaluated_at).localeCompare(String(a.evaluated_at))).map(sharedView);
   } catch { return null; }
+}
+
+/**
+ * For the Lifelong Passport (Stage 7) and any other composed Passport view: the evaluations a link carries, re-checked
+ * now under the current sharing policy. null = could not be read, [] = none. Each stays formative: never relabel it.
+ */
+export async function sharedEvaluationsFor(admin: any, tokenId: string, userId: string): Promise<SharedEvaluation[] | null> {
+  return loadSharedEvaluations(admin, tokenId, userId, (await loadIndividualPolicy(admin)).professionalEvaluation.sharing);
 }

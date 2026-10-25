@@ -37,9 +37,13 @@ export async function loadVerification(admin: any, userId: string, today: string
     if (read.items === null) return { available: true, decisions: null };
     const decisions: VerificationDecision[] = read.items.flatMap(it => it.decisions.map(d => {
       const current = currentDecision(d, today);
+      // C5 (IND-007): the outcome CLASS is the fixed meaning (510 CHECK, set by the decision trigger from the published method
+      // version); outcome CODES are per-method configuration. Verified = current AND class verified AND a level (510 requires one).
+      // A decision read without its class is never called verified.
+      const outcomeClass = (d as { outcomeClass?: unknown }).outcomeClass;
       return {
         id: `${it.requestId}.${d.decidedAt.slice(0, 19).replace(/[^0-9]/g, "")}`, myCompetencyId: null, frameworkCompetencyId: it.competency.frameworkCompetencyId,
-        title: it.competency.title, outcomeLabel: d.outcomeLabel, current, verified: current && d.outcomeCode === "verified",
+        title: it.competency.title, outcomeLabel: d.outcomeLabel, current, verified: current && outcomeClass === "verified" && !!d.level,
         state: d.revokedAt ? "revoked" : d.supersededBy ? "superseded" : d.validUntil && d.validUntil < today ? "expired" : d.outcomeLabel,
         decidedOn: d.decidedAt.slice(0, 10), assessor: d.assessorName, method: it.method, frameworkVersion: d.criteriaVersion ?? it.competency.frameworkVersion,
         learningOutcomes: it.competency.learningOutcomes, href: competenciesHref,
