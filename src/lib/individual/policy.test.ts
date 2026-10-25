@@ -13,6 +13,7 @@ import {
   ACTIVITY_STATUSES, DEFAULT_ACTIVITY_TYPES, DEFAULT_EVIDENCE_KINDS, DEFAULT_GOAL_PRIORITIES, DEFAULT_GOAL_TEMPLATES, DEFAULT_GOAL_TYPES, DEFAULT_MILESTONE_TYPES,
   GOAL_FIELDS, GOAL_STATUSES, REVIEW_FIELDS,
 } from "./professional/plan-vocabulary";
+import { DEFAULT_COMPETENCY_CATEGORIES, DEFAULT_CONFIDENCE, DEFAULT_EVIDENCE_TYPES, DEFAULT_RELATIONS, SHARE_PARTS } from "./professional/competency-vocabulary";
 import { DEFAULT_PRACTICE_SETTINGS, DEFAULT_QUALIFICATION_TYPES, DEFAULT_STATUSES, DOCUMENT_KINDS, OPTIONAL_FIELDS, PROFILE_SECTIONS } from "./professional/profile-vocabulary";
 
 // An in-memory stand-in for the three WCE tables, enough for the shared write lifecycle and the reader.
@@ -137,6 +138,10 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
         milestoneTypes: [...DEFAULT_MILESTONE_TYPES], evidenceKinds: [...DEFAULT_EVIDENCE_KINDS], fields: [...GOAL_FIELDS], goalStatuses: [...GOAL_STATUSES],
         activityStatuses: [...ACTIVITY_STATUSES], reviewFields: [...REVIEW_FIELDS], reopen: "on", competencyLinks: "offered", learning: "competency", ai: "on",
         aiReflections: "off", reviewDays: 90, reminderDays: 14,
+      },
+      professionalCompetency: {
+        categories: [...DEFAULT_COMPETENCY_CATEGORIES], confidence: [...DEFAULT_CONFIDENCE], evidenceTypes: [...DEFAULT_EVIDENCE_TYPES], relations: [...DEFAULT_RELATIONS],
+        personal: "on", fields: ["outcome", "confidence", "reflection", "interest"], shareParts: [...SHARE_PARTS], ai: "on", reassessDays: 180,
       },
     });
     expect(DEFAULT_POLICY.professionalProfile.jurisdictions.length).toBe(COUNTRIES.length);

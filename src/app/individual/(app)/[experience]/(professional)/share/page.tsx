@@ -17,6 +17,8 @@ import { learningProvenance, loadProfessionalLearning } from "@/lib/individual/p
 import { eligibleLearning } from "@/lib/individual/professional/share-learning";
 import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 import { loadEvaluationHistory } from "@/lib/individual/professional/evaluation-store";
+import { loadCompetencyWorkspace } from "@/lib/individual/professional/competency-store";
+import { SHARE_PART_LABEL } from "@/lib/individual/professional/competency-vocabulary";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -37,6 +39,9 @@ export default async function SharePage({ params }: { params: Promise<{ experien
   const today = new Date().toISOString().slice(0, 10);
   const [links, policy, view, verifications, learning, lcpd] = await Promise.all([listShares(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin),
     loadProfessionalProfile(ctx.admin, ctx.userId), loadVerifications(ctx.admin, ctx.userId, today), loadProfessionalLearning(ctx.admin, ctx.userId), loadLcpdConfig(ctx.admin)]);
+  // COMPETENCY-01 S11: the person's current competencies, and the parts the configuration lets them share. Nothing ticked by default.
+  const comp = await loadCompetencyWorkspace(ctx.admin, ctx.userId);
+  const shareableCompetencies = comp.provisioned ? (comp.entries ?? []).filter(e => !e.removed_at) : [];
   // LCPD-01 LCPD-6: completed learning of a kind the configuration lets a person share. Nothing ticked by default.
   const shareableLearning = learning.enabled && learning.refs ? eligibleLearning(learning.refs, lcpd) : [];
   // COMPETEN-PROFESSIONAL-EVALUATION-01 s13: recorded evaluations, offered only while the policy allows it. Nothing ticked by default.
@@ -63,6 +68,7 @@ export default async function SharePage({ params }: { params: Promise<{ experien
           <li><span className="font-semibold">Your professional profile:</span> only what you tick below for that link, each record labelled exactly as it is, including whether Competen verified it. If you later change or withdraw a record, the link stops showing it.</li>
           <li><span className="font-semibold">Completed learning:</span> only the courses you tick below for that link, each labelled exactly as it is. Never your reflections on it.</li>
           {policy.professionalEvaluation.sharing === "offer" && <li><span className="font-semibold">Professional evaluations:</span> only the recorded evaluations you tick below, shown as formative with their sources and limitations. Never your notes on them.</li>}
+          <li><span className="font-semibold">Competencies:</span> only the parts you tick below for that link: a self-assessment (labelled self-reported), the evidence you linked, or independent verification outcomes. Never a reflection.</li>
           <li>Never shown: your reflections, development needs, plan, notes, documents or anything you have not recorded as evidence.</li>
         </ul>
         <p className="mt-3 text-[13.5px] text-gray-600">
@@ -129,6 +135,25 @@ export default async function SharePage({ params }: { params: Promise<{ experien
                   <input type="checkbox" name={`evaluation:${e.id}`} value="true" className="mt-1 h-4 w-4 rounded border-gray-400" />
                   <span>{e.scope_label} <span className="text-[12.5px] text-gray-500">· formative evaluation · {fmtDate(e.evaluated_at)}</span></span>
                 </label>
+              ))}
+            </fieldset>
+          )}
+          {shareableCompetencies.length > 0 && policy.professionalCompetency.shareParts.length > 0 && (
+            <fieldset className="rounded-xl border border-gray-200 p-4">
+              <legend className="px-1 text-[13.5px] font-semibold text-gray-800">Competencies (optional)</legend>
+              <p className="text-[12.5px] text-gray-500">Nothing is included unless you tick it, for this link only. A self-assessment is shown as self-reported, evidence as evidence, and only an appointed assessor&apos;s outcome as verification. Reflections are never shared.</p>
+              {shareableCompetencies.map(e => (
+                <div key={e.id} className="mt-2">
+                  <p className="text-[14px] font-semibold text-gray-800">{e.title}</p>
+                  <div className="flex flex-wrap gap-x-4">
+                    {policy.professionalCompetency.shareParts.filter(part => part !== "assessed_outcomes" || e.kind === "catalogue").map(part => (
+                      <label key={part} className="mt-1 flex items-start gap-2 text-[13px] text-gray-700 pointer-coarse:min-h-[var(--cmp-touch-min)]">
+                        <input type="checkbox" name={`competency:${e.id}:${part}`} value="true" className="mt-0.5 h-4 w-4 rounded border-gray-400" />
+                        <span>{SHARE_PART_LABEL[part]}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               ))}
             </fieldset>
           )}

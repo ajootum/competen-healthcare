@@ -13,6 +13,7 @@ import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadSharedLearning } from "@/lib/individual/professional/share-learning";
 import { loadSharedEvaluations } from "@/lib/individual/professional/share-evaluation";
 import { PROVENANCE_LABEL, SOURCE_KIND_LABEL } from "@/lib/individual/professional/evaluation-vocabulary";
+import { loadSharedCompetencies } from "@/lib/individual/professional/share-competency";
 import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 
 export const dynamic = "force-dynamic";
@@ -96,6 +97,11 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
   // COMPETEN-PROFESSIONAL-EVALUATION-01 s13 (migration 530): recorded evaluations the person ticked for this link, while
   // the policy offers sharing. Formative, with sources and limitations. Never notes, AI text or private reflections.
   const sharedEvaluations = carriesOwn ? await loadSharedEvaluations(admin, share.id, share.nurse_id, (await loadIndividualPolicy(admin)).professionalEvaluation.sharing) : null;
+  // COMPETENCY-01 S11: the competencies the person ticked for this link, part by part, re-checked now. Self-assessment,
+  // evidence and verification are shown apart and labelled; reflections never.
+  const sharedCompetencies = carriesOwn
+    ? await loadSharedCompetencies(admin, share.id, share.nurse_id, (await loadIndividualPolicy(admin)).professionalCompetency.shareParts, new Date().toISOString().slice(0, 10))
+    : null;
   // A Professional-minted link names the person's profession as THEY declared it, and says so. It never
   // shows profiles.role, which the new-user trigger fills with a default (migration 335) and which
   // Competen Individual neither sets nor relies on (ADR-016).
@@ -269,6 +275,27 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
             </div>
           )}
           {sharedEvaluations === null && carriesOwn && <p className="text-[12px] text-gray-600">The evaluations on this link could not be read just now.</p>}
+          {sharedCompetencies !== null && sharedCompetencies.length > 0 && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50/50 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900">Competencies the professional chose to show</h2>
+              <p className="text-[11.5px] text-slate-800 mt-0.5 leading-relaxed">Four different things, kept apart: a self-assessment is the professional&apos;s own view (self-reported); evidence keeps the class of its own record and is not verification; only an outcome recorded by an appointed assessor is independent verification.</p>
+              <ul className="mt-2 space-y-3">
+                {sharedCompetencies.map((c, i) => (
+                  <li key={i} className="text-[12.5px] text-gray-800">
+                    <p className="font-semibold">{c.title}{c.frameworkVersion ? <span className="text-[10.5px] font-normal text-gray-500"> · framework {c.frameworkVersion}</span> : null}{c.personal ? <span className="text-[10.5px] font-normal text-gray-500"> · in the professional&apos;s own words</span> : null}</p>
+                    {c.selfAssessment && <p className="text-[11.5px]">Self-assessment: {c.selfAssessment.level}{c.selfAssessment.scale ? ` (${c.selfAssessment.scale})` : ""}{c.selfAssessment.outcome ? ` for "${c.selfAssessment.outcome}"` : ""} · {fmt(c.selfAssessment.assessedAt)} · <span className="font-semibold">{c.selfAssessment.label}</span></p>}
+                    {c.evidence && (c.evidence.length === 0 ? <p className="text-[11.5px] text-gray-600">No evidence linked.</p> : (
+                      <ul className="mt-0.5 list-disc pl-5 text-[11.5px]">{c.evidence.map((e, j) => <li key={j}>{e.title} · {e.relation}{e.outcome ? ` · "${e.outcome}"` : ""} · <span className="text-gray-600">{e.classText}, not verification</span></li>)}</ul>
+                    ))}
+                    {c.assessed && c.assessed.length > 0 && <ul className="mt-0.5 text-[11.5px]">{c.assessed.map((a, j) => <li key={j} className="font-semibold text-violet-900">Independently verified: {a.outcome}{a.level ? ` at ${a.level}` : ""} · assessor {a.assessor} ({a.authority}) · {fmt(a.decidedAt)}{a.validUntil ? ` · valid until ${fmt(a.validUntil)}` : ""}</li>)}</ul>}
+                    {c.assessed && c.assessed.length === 0 && <p className="text-[11.5px] text-gray-600">No current independent verification.</p>}
+                    {c.assessedUnavailable && <p className="text-[11.5px] text-gray-600">Independent verification could not be shown just now.</p>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {sharedCompetencies === null && carriesOwn && <p className="text-[12px] text-gray-600">The competencies on this link could not be read just now.</p>}
 
           {study && (!study.ok ? !study.notProvisioned : study.data.length > 0) && (
             <div className="rounded-xl border border-sky-200 bg-sky-50/60 px-4 py-3">

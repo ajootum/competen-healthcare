@@ -161,6 +161,9 @@ export const PROFESSIONAL: ExperienceConfig = {
       summary: "Your learning from anywhere, your CPD log and reflections, and the CPD requirement you follow." },
     { key: "evidence", segment: "evidence", label: "Credentials & evidence", short: "Evidence", icon: "❖",
       summary: "Credentials, renewal dates and the evidence you keep of your competence." },
+    // COMPETEN-PROFESSIONAL-COMPETENCY-01 (Stage 5): the competency workspace and evidence portfolio.
+    { key: "competencies", segment: "competencies", label: "My competencies", short: "Competencies", icon: "◇",
+      summary: "The competencies you choose to develop: expected levels, your self-assessments, your evidence and any independent verification, kept apart." },
     { key: "progress", segment: "progress", label: "Progress", short: "Progress", icon: "↗",
       summary: "Plan progress, CPD hours by year, and how much of your plan has evidence behind it." },
     // Reached from the Passport, not the navigation: experienceModulePage needs it listed, and

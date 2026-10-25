@@ -89,7 +89,9 @@ const WRITES: Record<string, string[]> = {
   // PROF-PROFILE-01 part B (453): the profile records the person chose for a link.
   "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "individual_professional_share.insert", "passport_share_tokens.update", "individual_professional_share_item.insert",
     // LCPD-01 LCPD-6 (491): the completed learning records the person ticked for this link.
-    "individual_professional_share_learning.insert"],
+    "individual_professional_share_learning.insert",
+    // COMPETENCY-01 S11 (520): the competencies, and which parts of each, the person ticked for this link.
+    "individual_professional_share_competency.insert"],
   // PROF-PROFILE-01 part B (452): the once-only claim for profile-record reminders, released on a failed send.
   "src/lib/individual/professional/reminders.ts": ["individual_professional_evidence.update", "individual_professional_profile.update",
     "individual_professional_reminder_log.insert", "individual_professional_reminder_log.delete"],
@@ -119,6 +121,11 @@ const WRITES: Record<string, string[]> = {
     "individual_professional_evaluation_decision.insert"],
   // PROF-EVALUATION-01 s13 (530): the recorded evaluations the person ticked for a link. Nothing by default.
   "src/lib/individual/professional/share-evaluation.ts": ["individual_professional_share_evaluation.insert"],
+  // COMPETENCY-01 (520): the one writer of My Competencies, self-assessments (insert only) and evidence links (unlinked by
+  // update, never deleted). Its history is 520's trigger's. It writes no CPD, learning record, evidence item, reflection,
+  // verification request or decision: it references records and hands C5 references.
+  "src/lib/individual/professional/competency-store.ts": ["individual_professional_my_competency.insert", "individual_professional_my_competency.update",
+    "individual_professional_self_assessment.insert", "individual_professional_competency_evidence.insert", "individual_professional_competency_evidence.update"],
   "src/app/api/individual/professional/reminders/route.ts": ["individual_professional_profile.update", "individual_professional_profile.insert"],
   "src/lib/individual/professional/mapping-store.ts": ["individual_professional_competency_map.insert", "individual_professional_competency_decision.insert"],
   // COMPETEN-PROFESSIONAL-PROFILE-01 (migration 450): the one writer of the registration facts and the profile records.
