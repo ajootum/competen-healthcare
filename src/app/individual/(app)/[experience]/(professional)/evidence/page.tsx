@@ -16,6 +16,8 @@ import FrameworkPicker from "../../../../_components/professional/FrameworkPicke
 import CompetencyLinks from "../../../../_components/professional/CompetencyLinks";
 import { EvidenceEdit } from "../../../../_components/professional/edit-forms";
 import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
+import { loadProfessionalLearning } from "@/lib/individual/professional/learning";
+import LearningRefs from "../../../../_components/professional/LearningRefs";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
@@ -31,6 +33,10 @@ export const dynamic = "force-dynamic";
 //
 // Expiry uses the shared competency engine's date rules (src/lib/engines/competency.ts) over the
 // reminder horizon, so this page and the emailed reminder agree on what "expires soon" means.
+//
+// ⚠ COMPLETED LEARNING IS READ, NOT KEPT HERE (COMPETEN-LEARNING-01 H1). Courses completed on Competen Learning are
+// listed read-only from the learning record, with the CFCA competencies the course states and its certificates. They
+// are not evidence items, are not copied into 373, and say what they are: never verified, never proof of competence.
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Credentials & evidence" }); }
 
@@ -40,7 +46,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, frameworks, prefs, policy, map] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadSharedFrameworks(ctx.admin), loadReminderPrefs(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin), loadMappingView(ctx.admin, ctx.userId)]);
+  const [record, frameworks, prefs, policy, map, learning] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadSharedFrameworks(ctx.admin), loadReminderPrefs(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId)]);
   const horizonDays = policy.reminderHorizonDays;
   const evidence = record.evidence;
   const names = evidence ? await referenceNames(ctx.admin,
@@ -130,6 +136,13 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
               <input id="ev-doc" name="document" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className={`${inputCls} py-2.5`} />
             </Field>
           </ApiForm>
+        </Section>
+      )}
+
+      {learning.enabled && (
+        <Section title="From Competen Learning" note="Courses you completed, read from your learning record, with the competencies each course states it serves. A course completion or assessed knowledge is not a verification of your competence.">
+          {learning.refs === null ? <Unreadable what="learning record" /> : learning.refs.length === 0 ? <Empty>No completed Competen Learning courses. Your own evidence above stands without them.</Empty>
+            : <LearningRefs refs={learning.refs} accent={x.accent} competencies certificates />}
         </Section>
       )}
 

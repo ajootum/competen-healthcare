@@ -14,6 +14,9 @@ import CompetencyLinks from "../../../../_components/professional/CompetencyLink
 import { GoalEdit, NeedEdit } from "../../../../_components/professional/edit-forms";
 import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
 import { Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
+import { loadProfessionalLearning } from "@/lib/individual/professional/learning";
+import { learningForCompetencies } from "@/lib/learning/products";
+import { LearningServes } from "../../../../_components/professional/LearningRefs";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -24,6 +27,10 @@ export const dynamic = "force-dynamic";
 // assessed competencies in their Passport that are not current (expired, or not yet competent) as needs
 // they may choose to record -- the person decides; nothing is added for them. Goals have target dates and
 // may serve a need. The personal AI can suggest a plan; it saves nothing.
+//
+// ⚠ LEARNING THAT SERVES A NEED IS SHOWN, NEVER APPLIED (COMPETEN-LEARNING-01 H1). Under a need with a framework
+// competency, or a goal with accepted competency links (393), completed Competen Learning that shares one is listed, with
+// "Find learning". Computed on read, nothing linked or stored, and a need is never marked met by it.
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Needs & plan" }); }
 
@@ -33,12 +40,16 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, passport, frameworks, map] = await Promise.all([
+  const [record, passport, frameworks, map, learning] = await Promise.all([
     loadProfessionalRecord(ctx.admin, ctx.userId),
     loadIndividualPassport(ctx.admin, ctx.userId, today),
     loadSharedFrameworks(ctx.admin),
     loadMappingView(ctx.admin, ctx.userId),
+    loadProfessionalLearning(ctx.admin, ctx.userId),
   ]);
+  // Learning on and readable: the serving list. Off or unreadable: nothing extra renders.
+  const serves = (competencies: { id: string; name: string }[]) => learning.enabled && learning.refs !== null && competencies.length > 0
+    ? <LearningServes matches={learningForCompetencies(learning.refs, competencies.map(c => c.id))} competencies={competencies} accent={x.accent} /> : null;
   const needs = record.needs;
   const goals = record.goals;
   const names = needs ? await referenceNames(ctx.admin,
@@ -71,6 +82,7 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
                     {n.framework_id && names.get(n.framework_id) ? ` (${names.get(n.framework_id)})` : ""}
                   </p>
                   {n.detail && <p className="mt-1 text-[13.5px] text-gray-700">{n.detail}</p>}
+                  {n.framework_competency_id && serves([{ id: n.framework_competency_id, name: names.get(n.framework_competency_id) ?? "this competency" }])}
                   <NeedEdit n={n} accent={x.accent} />
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -136,6 +148,7 @@ export default async function DevelopmentPage({ params }: { params: Promise<{ ex
                       {map.mappings === null ? <p className="mt-2 text-[12.5px] text-gray-600">Competency links could not be read just now.</p> : map.provisioned && (
                         <CompetencyLinks kind="goal" subjectId={g.id} links={linksFor(map, "goal", g.id)} offered={map.offered} accent={x.accent} idPrefix={`goal-${g.id}`} />
                       )}
+                      {serves(linksFor(map, "goal", g.id).filter(l => l.state === "accepted").map(l => ({ id: l.competencyId, name: l.title })))}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {GOAL_STATUS.filter(([s]) => s !== g.status).map(([s, label]) => (

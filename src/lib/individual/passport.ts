@@ -3,6 +3,8 @@ import { loadOwnRecords, type OwnRecord } from "./professional/passport-records"
 import { loadPassportEvaluations, loadStudyAchievements, type Read } from "./scholar/store";
 import type { PassportEvaluation } from "./scholar/passport-evaluations";
 import type { StudyAchievement } from "./scholar/passport-items";
+import { learningProvenance, loadProfessionalLearning } from "./professional/learning";
+import { learningPassportItems } from "@/lib/learning/products";
 
 // ── THE COMPETEN PASSPORT, AS COMPETEN INDIVIDUAL SHOWS IT ── COMPETEN-IND-003 s2(5), ADR-016 ──────────
 //
@@ -24,6 +26,9 @@ import type { StudyAchievement } from "./scholar/passport-items";
 //                       Still not verified -- attaching a document checks nothing (COMPETEN-IND-002 s4.2)
 //   self_directed       a Competen Scholar study achievement the person CHOSE to show (migration 375):
 //                       practice they did on their own notes. Not an assessment, and never verified.
+//   platform_recorded   a Competen Learning course the person completed on the platform: "Course completion,
+//                       issued by Competen Holdings" or "Assessed knowledge, issued by Competen Holdings"
+//                       (COMPETEN-LEARNING-01 H2). What the course recorded, never a verified competence.
 //
 // ⚠ TWO CLASSES OF RECORD, LABELLED TWO WAYS (COMPETEN-IND-007 s5, owner ruling D3). The sections read
 // here are what organisations issued, labelled by ISSUER. `own` is what the person recorded themselves
@@ -31,6 +36,9 @@ import type { StudyAchievement } from "./scholar/passport-items";
 // belongs to the person, not to an experience, so it is read whichever experience shows the Passport.
 // `study` is the same idea for Competen Scholar: only the achievements the person chose, one at a time
 // (src/lib/individual/scholar/passport-items.ts), never their notes, answers or AI interactions.
+// `learning` is the person's completed Competen Learning, read BY REFERENCE from the one Holdings learning record
+// (src/lib/learning/products.ts): nothing is copied, and only while Learning is on. An external completion there keeps
+// its own class -- self-declared, or with a document attached.
 //
 // ⚠ PROVISIONAL RULING D3 (COMPETEN-IND-002 s7). Showing institution-issued records to their subject,
 // read-only, is the working assumption, not an owner ruling. Disclosure OUTWARD is never automatic --
@@ -44,7 +52,7 @@ import type { StudyAchievement } from "./scholar/passport-items";
 // its outcome is `competent` and it has not passed its expiry date -- the rule src/app/verify/[token]
 // applies, so the Passport cannot show a person something the verification page would not.
 
-export type EvidenceClass = "institution_issued" | "institution_verified" | "self_declared" | "source_linked" | "self_directed" | "educational_evaluation";
+export type EvidenceClass = "institution_issued" | "institution_verified" | "self_declared" | "source_linked" | "self_directed" | "educational_evaluation" | "platform_recorded";
 
 export const EVIDENCE_LABEL: Record<EvidenceClass, string> = {
   institution_issued: "Issued by an organisation",
@@ -54,6 +62,7 @@ export const EVIDENCE_LABEL: Record<EvidenceClass, string> = {
   self_directed: "Self-directed study, not a verified competency",
   // PROGRESS-01 P5: an evaluation of the person's own learning (426) they chose to show (427). Formative, never verified.
   educational_evaluation: "Educational evaluation of own learning: formative, not verified",
+  platform_recorded: "Issued by Competen Holdings through Competen Learning",
 };
 
 export type PassportCompetency = {
@@ -84,6 +93,8 @@ export type PassportEmployment = {
   endDate: string | null;
 };
 
+export type PassportLearning = ReturnType<typeof learningPassportItems>[number] & { recordId: string; label: string };
+
 export type IndividualPassport = {
   competencies: PassportCompetency[] | null;
   credentials: PassportCredential[] | null;
@@ -94,6 +105,9 @@ export type IndividualPassport = {
   study: Read<StudyAchievement[]>;
   /** PROGRESS-01 P5: the educational evaluations the person chose to show, labelled formative, never verified. */
   evaluations: Read<PassportEvaluation[]>;
+  /** Completed Competen Learning, by reference. enabled false = Learning is off here, and the section is not shown.
+   *  Optional only so fixtures from before Learning still type: loadIndividualPassport always sets it. */
+  learning?: { enabled: boolean; items: PassportLearning[] | null };
 };
 
 const nameOf = (row: any): string => {
@@ -125,7 +139,7 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
   const settle = async (p: PromiseLike<any>) => {
     try { const r = await p; return r?.error ? null : (r?.data ?? []); } catch { return null; }
   };
-  const [decRows, credRows, empRows, own, study, evaluations] = await Promise.all([
+  const [decRows, credRows, empRows, own, study, evaluations, learning] = await Promise.all([
     settle(admin.from("competency_decisions")
       .select("competency_id, outcome, expiry_date, created_at, hospital_id, organisation_id, framework_competencies(name)")
       .eq("nurse_id", userId).order("created_at", { ascending: false }).limit(3000)),
@@ -138,6 +152,7 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
     loadOwnRecords(admin, userId).catch(() => null),
     loadStudyAchievements(admin, userId).catch((): Read<StudyAchievement[]> => ({ ok: false, notProvisioned: false })),
     loadPassportEvaluations(admin, userId).catch((): Read<PassportEvaluation[]> => ({ ok: false, notProvisioned: false })),
+    loadProfessionalLearning(admin, userId).catch(() => ({ enabled: true, refs: null })),
   ]);
 
   // Issuer names: the organisations and facilities stamped on this person's own rows, and no others.
@@ -176,5 +191,10 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
     own,
     study,
     evaluations,
+    learning: {
+      enabled: learning.enabled,
+      items: learning.refs === null ? null
+        : learningPassportItems(learning.refs).map((p, i) => ({ ...p, recordId: learning.refs![i].recordId, label: learningProvenance(learning.refs![i]) })),
+    },
   };
 }
