@@ -1,4 +1,5 @@
 // Allow up to 60s for AI generation -- the same ceiling /api/individual/assistant uses.
+import { professionalLegacyQuotaApplies } from "@/lib/individual/professional/ai-quota";
 export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
@@ -38,11 +39,14 @@ export async function POST(req: Request) {
   const activity = task === "reflection" ? cleanActivity(body ?? {}) : null;
   if (task === "reflection" && !activity) return NextResponse.json({ error: "Name the activity (3 to 200 characters) and keep your notes under 2,000 characters." }, { status: 400 });
 
-  // The estate limit (quota.ts, unchanged) and the Individual policy limit, whichever is tighter (CONFIG-002).
-  const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
-  // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
-  const refusal = individualQuotaRefusal(quota, "questions");
-  if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
+  // ONE limit at a time (owner, 25 October 2026): with metering ON the metered allowance governs, inside
+  // runIndividualAssistant. With metering OFF, the estate limit and the Individual policy limit, whichever is tighter.
+  if (await professionalLegacyQuotaApplies(ctx.admin)) {
+    const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
+    // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
+    const refusal = individualQuotaRefusal(quota, "questions");
+    if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
+  }
   if (!aiStatus().configured) return NextResponse.json({ error: "The personal AI is not configured on this environment." }, { status: 503 });
 
   // The Holdings Personal AI (owner D3): the same engine as the shared assistant, in Professional's CPD modes.
