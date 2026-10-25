@@ -34,9 +34,9 @@
 - **No streaming, tools, vision or embeddings** for registered providers: text generation only. These would be capability flags plus code.
 - **No runtime failover** (owner: deferred until reservation and settlement per attempt are designed).
 - **Privacy and security are attestations.** Competen cannot verify a provider's terms. The record says who attested what, and when.
-- **Migration 431 is not applied anywhere** (below). Until it is, a registered provider cannot be priced (metered requests refuse, failing closed), evaluated or made eligible. Standard-educational requests can route to it only with metering OFF, and only once it is active.
+- **Migration 431 is applied on staging only** (below). Until it reaches production (its own GO), a registered provider there cannot be priced (metered requests refuse, failing closed), evaluated or made eligible.
 
-## Migration 431 (drafted, locally proven, for staging ×2 by the main session)
+## Migration 431: APPLIED ON STAGING (×2, rollback rehearsed, re-applied). See `431-staging-record.md`
 
 **What it changes:** it widens one clause in four CHECKs (`ai_price`, `ai_model_eligibility`, `ai_model_evaluation_result`, `ai_model_evaluation_proposal`), from the fixed three names to the provider-id shape `^[a-z][a-z0-9]{1,30}$`. Every other clause is restated byte for byte. Each table is one atomic `alter table` statement (drop and add), so a refusal or a statement-splitting runner never leaves a table without its constraint.
 
@@ -47,7 +47,7 @@
 | House rules | ALL CLEAR (both files) |
 | Local proof (Postgres 17, stubs plus 410, 411, 412, 419) | Before 431, a registered price is refused (T0). PRE `31251439…`. F1 and F2 both `2d5eff49…` (idempotent). After 431: a registered provider is priced and decided (T1), built-in rows are untouched (T2), malformed names are still refused (T3), and eligibility still needs evidence (T4). Rollback with no registered rows gives RB = PRE exactly. Rollback with registered rows present refuses for those tables, and all 4 constraints remain. |
 | ⚠ Rollback after use | `ai_price` and `ai_model_eligibility` rows are history and cannot be deleted (the 411 guard). Once a registered provider is priced or decided, the rollback cannot run, so fix forward. |
-| Where | The two files are in the shared notes folder, outside the repository. They are committed with their staging record once applied ×2, as the migration lifecycle requires. |
+| Where | Committed byte-identical, with the staging record `431-staging-record.md`. |
 | Production | Not authorised. It needs its own GO. |
 
 ## Checks
