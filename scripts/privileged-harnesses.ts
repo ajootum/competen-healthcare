@@ -361,6 +361,16 @@ const STAGING: Listed[] = [
       + "and 435/436. Reads shared config only. Creates and deletes its own harness-clinical01-* identities.",
   },
   {
+    file: "scholar-revision-hold-harness.ts",
+    note: "COMPETEN-SCHOLAR-REVISION-01 R4 owner decision (hold self-grading until the end), the focused live check of "
+      + "that change over HTTP: in Mock and end-of-session feedback an unmarkable short answer is held unmarked (425) "
+      + "and reveals nothing, cannot be graded or re-answered early, survives a resume, is offered for self-grading "
+      + "at the end with the accepted answers, explanation and source, and is graded as the answer written "
+      + "(self_graded, once); immediate feedback unchanged; erase-all. The Individual quota is used up for the "
+      + "fixture only (synthetic rows) so AI evaluation is not available. Real AI writes the questions. Needs 425 "
+      + "(PEND without) and BASE_URL naming a STAGING-pointed dev server. Own harness-revhold-* identities.",
+  },
+  {
     file: "scholar-journey-harness.ts",
     note: "Scholar Stages 4 and 5 final acceptance, the ONE integrated journey (owner GO 2026-10-25): one student "
       + "Upload -> Teach Me -> Revision -> Clinical Case -> Feedback -> Learning History, connecting what learn01, "

@@ -73,6 +73,31 @@ Triggers were unchanged throughout (`118a7170`).
   - without 417, saved sets and resumable sessions are not offered.
 - **Production:** none applied. Production needs a separate owner GO with the OPS-001 safeguards.
 
+### 425: a short answer held until the end (owner decision, 2026-10-25)
+
+The owner's "STAGE 4 REVISION DECISION: hold self-grading until the end" needs one place to keep an unmarked answer: an attempt cannot hold one (`correct` is NOT NULL, `marking` is constrained, and attempts are never rewritten), and the 417 session has no slot for it.
+
+| File | sha256 (LF) | Tier | State |
+|---|---|---|---|
+| `425-individual-scholar-revision-held-answer.sql` | `6890358fa63a369020d3841d4bc6f2f1db03cac77d4862c96a8d143eeda5624d` | Low | **Applied ×2 on staging**, rolled back and re-applied. Frozen. **Not on production.** |
+| `docs/evidence/COMPETEN-SCHOLAR-REVISION-01/ROLLBACK-425.sql` | `444561d254327446a3744828371d44231f451caa5b750767488af5a013add982` | — | — |
+| `docs/evidence/COMPETEN-SCHOLAR-REVISION-01/VERIFY-425.sql` | `efddbee0516c97d0b542d3d4c875ec4a2b7e9d118b44029176066863c020ffe2` | read-only | — |
+
+- **What it adds:** one nullable column, `individual_scholar_revision_session_item.held_response` (jsonb, an object of at most 8000 bytes, checked). No function, no trigger, no existing row changed. RLS is unchanged.
+- **Staging run record** (coordinating session, 2026-10-25, guarded runner, target `ezhvpgtcqcdsgylrxgdb`):
+
+| Step | Fingerprint (`individual_scholar%`, 33 tables) |
+|---|---|
+| PRE | `e87579ca0163` (columns `8176afc5`, constraints `d3fdd4b7`) |
+| 425, run 1 (F1) | `386b3546223b` (columns `dba5fc60`, constraints `d8649312`) |
+| 425, run 2 | `386b3546223b` (idempotent) |
+| ROLLBACK-425 | `e87579ca0163` = PRE |
+| Re-apply | `386b3546223b` = F1 |
+
+  Tables, indexes, policies and triggers were unchanged throughout. VERIFY-425 after both runs: `held_response` jsonb nullable; the check present; RLS on; 0 rows outside the check. The bytes applied are the files above.
+- **Application order:** after 417. **Dependencies:** 417. Production follows 416 → 417 → 425, each with its own owner GO.
+- **Fail-closed without it:** nothing can be held, so an unmarkable short answer asks for the self-grade at once (the earlier behaviour).
+
 ## 3. Completed functionality (R1–R5)
 
 | Area | Built |
@@ -176,7 +201,7 @@ Run `scripts/scholar-revision01-harness.ts`:
 ## 8. Genuine remaining gaps
 
 - **R13 with metering ON:** run 2026-10-25, not demonstrable without an eligible model (§7). It re-runs, unchanged, once D5 records one.
-- **End-of-session feedback and short answers.** In end-of-session mode, a short answer the code cannot mark and AI cannot evaluate asks the student to self-grade at once. That shows the accepted answers for that one question before the end. This was chosen over leaving it unmarked; the owner may prefer otherwise.
+- **End-of-session feedback and short answers: decided and done** (owner decision 2026-10-25, "hold self-grading until the end"). In end-of-session feedback and in Mock Practice, a short answer the code cannot mark and no AI evaluation judged is kept unmarked (425) and reveals nothing until the end. At the end the student grades the answer they wrote, beside the accepted answers, the explanation and the source; it is recorded as self-graded, apart from code and AI marking. It survives leaving and resuming. Immediate feedback keeps the self-grade at once. Evidence: `scholar-revision-hold-harness` (H1–H7, E), `scholar-learning` K38 with plant P56.
 - **Revision sessions and sets after a single material is deleted:** done (bb7e0418). They keep their remaining items, and one left with none is removed with the material, as Learn does. Nothing is pruned on a failed read (`prune.test.ts`, planted red twice).
 - **Matching items** are written only where a passage states three or more pairs. On short notes there may be none; that is correct, not a fault.
 - **Passport.** It stays as it is: the existing `revision_reviews` achievement is a count only. Revision scores never reach it.
@@ -200,7 +225,7 @@ In the owner's REVISION-01 §13 format. It uses the existing evidence above plus
 | **End-to-end staging evidence** | **Accepted, metering OFF: 24/0.** Metering ON: not demonstrable | §7. The metering-OFF journey is ALL GREEN. R13m ran (RED 9/15) because no model is eligible on staging, not because of a revision defect. |
 | **Learning Continuity behaviour** | **Complete** | §5. R13 PASS: with the allowance used up, saved questions, code marking, self-graded short answers, saved sets, history, progress and materials all stay open. Under metering, a refused generation sends nothing and says why. |
 | **No-code configuration** | **Complete** | §6. Twelve revision keys on the existing HQ Individual policy page, versioned and audited. |
-| **Genuine remaining gaps** | One owner choice | §8. The end-of-session short-answer self-grade shows that one answer early (the owner may prefer otherwise). Matching items only where notes state three pairs is by design, not a gap. |
+| **Genuine remaining gaps** | None open | §8. The end-of-session short-answer self-grade is decided (hold until the end) and built (425). Matching items only where notes state three pairs is by design, not a gap. |
 | **Production activation dependencies** | None authorised | §9. 416→417 with OPS-001 safeguards; `individual_app` and `ai_fair_use` OFF; legal documents; **the D5 eligibility decision**, without which metered revision writes no new questions. |
 
 **Fixed since §7, pilot path (bb7e0418):** emptied revision sets and sessions are pruned with their material; a latent "failed read deletes every Learn session" path is closed; the no-saved-questions continuity message is honest.
