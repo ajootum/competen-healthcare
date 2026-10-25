@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { aiStatus } from "./config";
 import { generate, type GenerateArgs, type GenerateResult } from "./client";
-import { classifyRisk, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision } from "./clinical-risk";
+import { classifyRisk, riskRank, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision, type RiskTier } from "./clinical-risk";
 import {
   activityAt, allowancePeriod, defaultPolicy, fairUsePath, FAIR_USE_SCOPE, maxInputTokens, remainingBand, resolvePolicy, serviceLevel,
   type AiProduct, type AiServiceLevel, type AiTier, type Balance, type ProductAiPolicy,
@@ -134,6 +134,46 @@ function standingFrom(policy: ProductAiPolicy, acc: any): AiStanding {
   return { readable: true, metered: true, level, remaining: remainingBand(b), resetsAt: acc.period_end, activities, message: policy.messages[level] };
 }
 
+/** An eligibility decision as ai_reserve reads it (411, 412): only the effective rows. */
+export type EligibilityRow = { activity: string; provider: string; model_prefix: string; eligible: boolean; max_risk_tier: string | null };
+export const NOT_ELIGIBLE_REASON = "This needs an AI model approved for clinical content, and none is approved for it yet.";
+const ELIGIBILITY_UNREADABLE = "Whether a model is approved for this could not be checked just now.";
+
+/**
+ * Pure: standing that says what ai_reserve will do. An activity whose risk floor is above standard educational runs
+ * only on a model an evaluation decision made eligible for that activity at that tier (411, 412) -- the model its
+ * tier resolves to, at the activity's floor. Without one it is NOT available, with the reason, instead of being
+ * offered and then refused on every call. Unreadable eligibility closes those activities (fail closed). A request's
+ * own subject may still raise its risk above the floor: the reservation remains the control.
+ */
+export function withEligibility(standing: AiStanding, policy: ProductAiPolicy, b: Balance, provider: string | null, models: Record<string, string> | null | undefined,
+  rows: readonly EligibilityRow[] | null): AiStanding {
+  const activities = { ...standing.activities };
+  for (const [code, a] of Object.entries(policy.activities)) {
+    const st = activities[code];
+    if (!st?.available) continue;
+    const floor = a.riskFloor as RiskTier;
+    if (riskRank(floor) <= 0) continue;
+    if (rows === null) { activities[code] = { ...st, available: false, via: null, reason: ELIGIBILITY_UNREADABLE }; continue; }
+    const d = activityAt(policy, standing.level, code, b, floor);
+    const model = d.tier ? models?.[d.tier] : undefined;
+    const covered = !!provider && !!model && rows.some(r => r.activity === code && r.provider === provider && r.eligible && model.startsWith(r.model_prefix)
+      && riskRank((r.max_risk_tier ?? "clinical_educational") as RiskTier) >= riskRank(floor));
+    if (!covered) activities[code] = { ...st, available: false, via: null, reason: NOT_ELIGIBLE_REASON };
+  }
+  return { ...standing, activities };
+}
+
+/** The eligibility decisions in force for one product. null = could not be read. */
+async function loadEligibility(admin: any, product: AiProduct): Promise<EligibilityRow[] | null> {
+  try {
+    const now = new Date().toISOString();
+    const { data, error } = await admin.from("ai_model_eligibility").select("activity, provider, model_prefix, eligible, max_risk_tier")
+      .eq("product", product).lte("effective_from", now).or(`effective_to.is.null,effective_to.gt.${now}`);
+    return error ? null : (data ?? []);
+  } catch { return null; }
+}
+
 const closed = (policy: ProductAiPolicy, readable: boolean, reason: string): AiStanding => ({
   readable, metered: true, level: "continuity", remaining: { band: "none", percent: null }, resetsAt: null,
   activities: Object.fromEntries(Object.entries(policy.activities).map(([c, a]) => [c, { label: a.label, available: false, via: null, reason }])), message: policy.messages.continuity,
@@ -151,7 +191,8 @@ export async function getAiStanding(admin: any, args: { userId: string; product:
     const a = await currentAccount(admin, args.userId, args.product, policy);
     if (a.state === "unreadable") return closed(policy, false, "AI help could not be checked just now.");
     if (a.state === "not_entitled") return closed(policy, true, "This needs an active subscription.");
-    return standingFrom(policy, a.account);
+    const status = aiStatus();
+    return withEligibility(standingFrom(policy, a.account), policy, toBalance(a.account), status.provider ?? null, status.models as Record<string, string> | undefined, await loadEligibility(admin, args.product));
   } catch { return closed(policy, false, "AI help could not be checked just now."); }
 }
 
