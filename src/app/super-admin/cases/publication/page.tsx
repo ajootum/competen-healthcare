@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireHqCapability } from "@/lib/hq/context";
 import { CASE_LIBRARY_OFF, caseLibraryEnabled, loadCasePolicy } from "@/lib/cases/policy";
 import { caseDetail, listCases } from "@/lib/cases/studio";
+import { CLASSIFICATION, CLASSIFICATION_LABEL } from "@/lib/cases/blueprint";
 import { CasePolicyEditor, RetireCase, VersionActions } from "../_components/CaseControls";
 
 // /super-admin/cases/publication -- C3 publication, a separate governed act (s9), and the case policy (s13).
@@ -49,7 +50,7 @@ export default async function CasePublicationPage() {
       <section aria-labelledby="pol-h" className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 id="pol-h" className="text-[15px] font-bold text-gray-900">Case policy</h2>
         <p className="mb-3 text-[12.5px] text-gray-600">Versioned and audited. It tunes the queue, retention and delivery. It cannot open any boundary: the permission, the identifier screen and clinical approval are enforced by the database. Approval counts are set in clinical review governance.</p>
-        <CasePolicyEditor initial={policy} />
+        <CasePolicyEditor initial={policy} requirements={CLASSIFICATION.map(k => ({ key: k, label: CLASSIFICATION_LABEL[k], fixed: k === "competencies" }))} />
       </section>
     </div>
   );

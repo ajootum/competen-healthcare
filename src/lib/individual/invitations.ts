@@ -87,6 +87,26 @@ export function inviteDeliveryMode(env: Record<string, string | undefined> = pro
   return "link";
 }
 
+/**
+ * The user metadata an invitation's identity is created with. The name, and a marker the Supabase "Invite user"
+ * template branches on, so a Professional-only invitee gets the owner's approved Competen Professional wording
+ * (owner D2, 25 October 2026) while every other invite through the same shared template (staff, Scholar, both)
+ * gets the text it gets today. The template is the owner's, in the Supabase dashboard. Nothing in the auth flow
+ * changes.
+ *
+ * ⚠ A HINT FOR AN EMAIL, NEVER AN AUTHORITY. User metadata is the person's own to change, so nothing may read
+ * this marker to decide access. Access is the invitation row and the grant engine (accept, below). It is the same
+ * convention as competen_join (join.ts).
+ *
+ * ⚠ A TRUTHY KEY, NOT A VALUE TO COMPARE. It is present only when true, so the template needs only
+ * {{ if .Data.competen_invite_professional }}. An `eq` on a key that is missing for staff invitees would be a
+ * template error on the shared email.
+ */
+export function inviteMetadata(req: Pick<InvitationRequest, "name" | "experiences">): Record<string, unknown> {
+  const professionalOnly = req.experiences.length === 1 && req.experiences[0] === "professional";
+  return { full_name: req.name, ...(professionalOnly ? { competen_invite_professional: true } : {}) };
+}
+
 /** Where the invite link lands: the shared password page, then the one sign-in, then Individual. */
 export const inviteRedirect = (origin: string) => `${origin}/reset-password?next=${encodeURIComponent(INDIVIDUAL_HOME)}`;
 
@@ -178,7 +198,7 @@ export async function createIndividualInvitation(
   if (opts.delivery === "link") {
     const { data, error } = await admin.auth.admin.generateLink({
       type: reuse ? "recovery" : "invite", email: req.email,
-      options: { redirectTo, ...(reuse ? {} : { data: { full_name: req.name } }) },
+      options: { redirectTo, ...(reuse ? {} : { data: inviteMetadata(req) }) },
     });
     if (error || !data?.user) return { ok: false, status: 502, code: "IDENTITY_FAILED", message: "The invitation could not be created." };
     authUserId = data.user.id; testLink = data.properties?.action_link;
@@ -187,7 +207,7 @@ export async function createIndividualInvitation(
     if (error) return { ok: false, status: 502, code: "DELIVERY_FAILED", message: "The invitation email could not be sent." };
     authUserId = reuse;
   } else {
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(req.email, { redirectTo, data: { full_name: req.name } });
+    const { data, error } = await admin.auth.admin.inviteUserByEmail(req.email, { redirectTo, data: inviteMetadata(req) });
     if (error || !data?.user) {
       // GoTrue refuses an address it already holds -- an identity profiles did not show (a race, or a
       // half-created account). That is an existing account, not a new one.

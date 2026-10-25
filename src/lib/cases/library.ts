@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash } from "node:crypto";
 import {
-  answeredView, blueprintCompetencies, learnerView, nextStage, resolveOptions, resolveToken, safetyEvents, variationWithinBounds, viewToken, visibleFacts,
+  answeredView, blueprintCompetencies, learnerView, nextStage, professionsOf, resolveOptions, resolveToken, safetyEvents, variationWithinBounds, viewToken, visibleFacts,
   type Blueprint, type LearnerView,
 } from "./blueprint";
 import { caseLibraryEnabled, loadCasePolicy } from "./policy";
@@ -41,7 +41,8 @@ export function caseMatches(v: { content: any; level: string; competencyIds: str
   if (q.level && v.level !== q.level) return false;
   if (q.competencyIds?.length && !q.competencyIds.some(c => v.competencyIds.includes(c))) return false;
   const md = v.content?.metadata ?? {};
-  if (q.context?.professionTermId && md.professionTermId && md.professionTermId !== q.context.professionTermId) return false;
+  const professions = professionsOf(md);   // a case may be for several professions (owner, Stage 5B classification)
+  if (q.context?.professionTermId && professions.length && !professions.includes(q.context.professionTermId)) return false;
   if (q.context?.specialtyTermIds?.length && Array.isArray(md.specialtyTermIds) && md.specialtyTermIds.length && !q.context.specialtyTermIds.some(s => md.specialtyTermIds.includes(s))) return false;
   if (q.topic?.trim()) {
     const words = q.topic.toLowerCase().split(/\W+/).filter(w => w.length > 2);

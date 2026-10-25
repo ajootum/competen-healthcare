@@ -5,7 +5,7 @@
 // student, or by AI evaluation, each labelled. Nothing here calls a model.
 
 import { citeChunk } from "./extract";
-import { MARKING_LABEL, REVISION_LABEL, type Marking } from "./config";
+import { MARKING_LABEL, NOT_COMPETENCE_LABEL, REVISION_LABEL, type Marking } from "./config";
 import { answerText, keyOf, learnerItem, type LearnerItem } from "./revision";
 import type { QuestionRow } from "./store";
 
@@ -27,10 +27,12 @@ export type RevisionFeedback = {
   /** AI evaluation of a short answer: its feedback, labelled. */
   evaluation?: { feedback: string; label: string } | null;
   card?: "created" | "reset" | "reviewed" | null; nextReviewAt?: string | null;
+  /** R2: the CFCA competency and learning outcome the question practises, where its section is still linked. */
+  practises?: { competency: string; outcome: string | null; label: string } | null;
 };
 
 /** Pure. What a student sees after answering one question. */
-export function feedbackView(q: QuestionRow, m: { correct: boolean; score: number | null; marking: Marking; evaluation?: string | null; card?: RevisionFeedback["card"]; nextReviewAt?: string | null }): RevisionFeedback {
+export function feedbackView(q: QuestionRow, m: { correct: boolean; score: number | null; marking: Marking; evaluation?: string | null; card?: RevisionFeedback["card"]; nextReviewAt?: string | null; link?: { competency: string; outcome: string | null } | null }): RevisionFeedback {
   const k = keyOf(q);
   return {
     questionId: q.id, correct: m.correct, score: m.score, marking: m.marking, markingLabel: MARKING_LABEL[m.marking],
@@ -39,5 +41,6 @@ export function feedbackView(q: QuestionRow, m: { correct: boolean; score: numbe
     key: !k ? null : k.kind === "choice" ? { index: k.index } : k.kind === "set" ? { indexes: k.indexes } : k.kind === "order" ? { order: k.order } : k.kind === "matches" ? { matches: k.matches } : null,
     evaluation: m.evaluation ? { feedback: m.evaluation, label: MARKING_LABEL.ai_evaluation } : null,
     card: m.card ?? null, nextReviewAt: m.nextReviewAt ?? null,
+    practises: m.link ? { ...m.link, label: NOT_COMPETENCE_LABEL } : null,
   };
 }

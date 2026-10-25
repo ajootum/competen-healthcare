@@ -72,8 +72,17 @@ const NUMBER_WORDS: Record<string, string> = {
 
 const normalise = (s: string) => s.toLowerCase().replace(/[‐-―]/g, "-");
 
+/**
+ * Named clinical terms whose digit is part of the NAME, not a quantity: SpO2 is oxygen saturation, not "2".
+ * Read as numbers, "check the SpO2" or "give O2" were refused as an invented 2 whenever the source spelled them
+ * out (IND-004, staging, 25 October 2026). The list is closed and exact on purpose. A general rule ("a digit
+ * after a letter is not a number") would also stop seeing an invented frequency: q6h when the source says q4h.
+ * The quantity next to a named term is still checked: "O2 2 L/min" still needs its 2 in the source.
+ */
+const NAMED_TERMS = /\b(?:spo2|sao2|sto2|pao2|po2|paco2|pco2|fio2|etco2|o2|co2)\b/g;
+
 const numbersIn = (s: string): string[] =>
-  (normalise(s).match(/\d+(?:\.\d+)?/g) ?? []).map(n => n.replace(/^0+(?=\d)/, ""));
+  (normalise(s).replace(NAMED_TERMS, " ").match(/\d+(?:\.\d+)?/g) ?? []).map(n => n.replace(/^0+(?=\d)/, ""));
 
 /** The longest word of a label, which is the token a rephrasing is least likely to drop. */
 const anchorOf = (label: string): string | null => {

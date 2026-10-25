@@ -3,8 +3,9 @@ import { createHash } from "node:crypto";
 import { runOwnedAi, isBudgetRefusal } from "@/lib/ai/allowance";
 import { resolveOwner } from "@/lib/ai/consumption";
 import { loadRequiredApprovals } from "@/lib/competency/clinical-review";
-import { BLUEPRINT_SCHEMA, blueprintCompetencies, validateBlueprint, type Blueprint } from "./blueprint";
+import { BLUEPRINT_SCHEMA, blueprintCompetencies, classificationProblems, professionsOf, validateBlueprint, type Blueprint, type CompetencyVersion } from "./blueprint";
 import { screenBlueprint, SCREEN_LABEL } from "./screen";
+import { loadCasePolicy } from "./policy";
 
 // ── C2: THE EDUCATOR CASE REVIEW STUDIO, AND C3 ON THE HQ SIDE ── COMPETEN-HOLDINGS-AI-CONSUMPTION-01 s8-s9 ──────────
 //
@@ -177,7 +178,7 @@ export function caseTemplate(title: string): Blueprint {
     progression: [], learningObjectives: [], safetyCriteria: [], feedback: { debrief: "", onSafetyEvent: "" }, assessment: null, references: [],
     variation: { rules: [] }, aiBoundary: { patientVoice: false, phraseReveals: false, explain: true },
     metadata: { level: "intermediate", complexity: 2, risk: "standard", professionTermId: null, specialtyTermIds: [], cfcaDomainIds: [], cpuIds: [],
-      provenance: { kind: "educator", rights: "educator_original" } },
+      professionTermIds: [], proficiencyLevelIds: [], provenance: { kind: "educator", rights: "educator_original" } },
   };
 }
 
@@ -204,7 +205,10 @@ export async function newDraft(admin: any, educatorId: string, caseId: string, k
   if (error || !vs?.length) return { ok: false, error: "The case could not be read just now." };
   if (vs.some((v: any) => v.state === "draft")) return { ok: false, error: "This case already has a draft. Finish or delete it first." };
   const base = vs[0];
-  const content = { ...base.content, metadata: { ...base.content?.metadata, provenance: { ...(base.content?.metadata?.provenance ?? {}), kind, parentVersionId: base.id } } };
+  // The parent's record of competency content is the parent's: the new draft is recorded afresh when it is submitted.
+  const { competencyVersions: _parentRecord, ...parentMd } = base.content?.metadata ?? {};
+  void _parentRecord;
+  const content = { ...base.content, metadata: { ...parentMd, provenance: { ...(base.content?.metadata?.provenance ?? {}), kind, parentVersionId: base.id } } };
   // The parent's authors wrote most of this draft, so they stay its authors: none of them may approve it (395).
   const authors = [...new Set([...(base.authored_by ?? []), educatorId])];
   const { data: v, error: vErr } = await admin.from("case_library_version").insert({
@@ -250,12 +254,99 @@ export async function saveDraft(admin: any, educatorId: string, versionId: strin
   const c = content as any;
   // Provenance and rights are the record's, not the editor's: a promoted case keeps the rights the student attested.
   const kept = v.content?.metadata?.provenance ?? c.metadata?.provenance ?? {};
-  c.metadata = { ...(c.metadata ?? {}), provenance: { ...kept, note: typeof c.metadata?.provenance?.note === "string" ? c.metadata.provenance.note.slice(0, 300) : kept.note ?? null } };
+  // The competency-content record is written at submission only, never by an editor. professionTermId stays the first
+  // of the professions, so every reader of the single field (the candidate queue, Scholar) still sees one.
+  const { competencyVersions: _editorRecord, ...md } = c.metadata ?? {};
+  void _editorRecord;
+  const professions = professionsOf(md);
+  c.metadata = { ...md, professionTermIds: professions, professionTermId: professions[0] ?? null,
+    provenance: { ...kept, note: typeof c.metadata?.provenance?.note === "string" ? c.metadata.provenance.note.slice(0, 300) : kept.note ?? null } };
   const authors = [...new Set([...(v.authored_by ?? []), educatorId])];
   const { error: uErr } = await admin.from("case_library_version").update({ content: c, authored_by: authors, level: levelOf(c), risk: riskOf(c) }).eq("id", versionId).eq("state", "draft");
   if (uErr) return { ok: false, error: "The draft could not be saved just now." };
   await syncLinks(admin, versionId, c);
-  return { ok: true, problems: validateBlueprint(c, "library"), screen: screenBlueprint(c).map(k => SCREEN_LABEL[k]) };
+  // Classification is optional while drafting: an unknown reference is REPORTED here and refused only at submission.
+  const refs = await classificationReferenceProblems(admin, c);
+  return { ok: true, problems: [...validateBlueprint(c, "library"), ...refs], screen: screenBlueprint(c).map(k => SCREEN_LABEL[k]) };
+}
+
+// ── Classification: references to the existing catalogue, never a parallel taxonomy (owner, Stage 5B) ────────────
+
+export type ClassOption = { id: string; label: string };
+export type ClassificationOptions = Record<"professions" | "specialties" | "cfcaDomains" | "cpus" | "proficiency", ClassOption[]>;
+
+/**
+ * What a case may be classified by, read from the records that already exist: profession and specialty terms
+ * (taxonomy_terms, migration 013), the domains of the SHARED frameworks, the Competency Practice Units under those
+ * domains (011), and the proficiency levels of the scales those frameworks use (007). Null when it cannot be read.
+ */
+export async function classificationOptions(admin: any): Promise<ClassificationOptions | null> {
+  const { data: tax, error: tErr } = await admin.from("taxonomies").select("id, kind").in("kind", ["profession", "specialty"]);
+  if (tErr) return null;
+  const kindOf = new Map<string, string>((tax ?? []).map((t: any) => [t.id, t.kind]));
+  const terms = kindOf.size ? await admin.from("taxonomy_terms").select("id, taxonomy_id, value, code").in("taxonomy_id", [...kindOf.keys()]).order("sort_order").order("value").limit(3000) : { data: [], error: null };
+  const fws = await admin.from("frameworks").select("id, code, name").is("hospital_id", null).order("code").limit(200);
+  if (terms.error || fws.error) return null;
+  const fwIds = (fws.data ?? []).map((f: any) => f.id);
+  const fwOf = new Map<string, any>((fws.data ?? []).map((f: any) => [f.id, f]));
+  const doms = fwIds.length ? await admin.from("framework_domains").select("id, framework_id, code, name").in("framework_id", fwIds).order("sort_order").limit(3000) : { data: [], error: null };
+  if (doms.error) return null;
+  const domOf = new Map<string, any>((doms.data ?? []).map((d: any) => [d.id, d]));
+  const pracs = domOf.size ? await admin.from("practices").select("id, domain_id").in("domain_id", [...domOf.keys()]).limit(5000) : { data: [], error: null };
+  if (pracs.error) return null;
+  const pracDom = new Map<string, string>((pracs.data ?? []).map((p: any) => [p.id, p.domain_id]));
+  const cpus = pracDom.size ? await admin.from("clinical_practice_units").select("id, practice_id, code, name").in("practice_id", [...pracDom.keys()]).order("code").limit(5000) : { data: [], error: null };
+  const scoring = fwIds.length ? await admin.from("framework_scoring").select("scale_id").in("framework_id", fwIds) : { data: [], error: null };
+  const def = await admin.from("scoring_scales").select("id, name").eq("is_default", true);
+  if (cpus.error || scoring.error || def.error) return null;
+  const scaleIds = [...new Set([...(scoring.data ?? []).map((s: any) => s.scale_id), ...(def.data ?? []).map((s: any) => s.id)])];
+  const scales = scaleIds.length ? await admin.from("scoring_scales").select("id, name").in("id", scaleIds) : { data: [], error: null };
+  const levels = scaleIds.length ? await admin.from("scoring_levels").select("id, scale_id, score, label").in("scale_id", scaleIds).order("score") : { data: [], error: null };
+  if (scales.error || levels.error) return null;
+  const scaleName = new Map<string, string>((scales.data ?? []).map((s: any) => [s.id, s.name]));
+  const term = (kind: string) => (terms.data ?? []).filter((t: any) => kindOf.get(t.taxonomy_id) === kind).map((t: any) => ({ id: t.id, label: t.code ? `${t.value} (${t.code})` : t.value }));
+  return {
+    professions: term("profession"), specialties: term("specialty"),
+    cfcaDomains: (doms.data ?? []).map((d: any) => ({ id: d.id, label: `${fwOf.get(d.framework_id)?.code ?? "?"} · ${[d.code, d.name].filter(Boolean).join(" ")}` })),
+    cpus: (cpus.data ?? []).map((u: any) => ({ id: u.id, label: `${fwOf.get(domOf.get(pracDom.get(u.practice_id) ?? "")?.framework_id)?.code ?? "?"} · ${[u.code, u.name].filter(Boolean).join(" ")}` })),
+    proficiency: (levels.data ?? []).map((l: any) => ({ id: l.id, label: `${scaleName.get(l.scale_id) ?? "Scale"} · ${l.score} ${l.label}` })),
+  };
+}
+
+/**
+ * Every classification reference must name an existing record of the right kind, and every learning outcome a
+ * recorded outcome of its competency. Problems in words. An unreadable catalogue is itself a problem (fails closed).
+ */
+export async function classificationReferenceProblems(admin: any, c: any): Promise<string[]> {
+  const m = c?.metadata ?? {};
+  const los: any[] = Array.isArray(c?.learningObjectives) ? c.learningObjectives : [];
+  const asked = { professions: professionsOf(m), specialties: arrOf(m.specialtyTermIds), cfcaDomains: arrOf(m.cfcaDomainIds), cpus: arrOf(m.cpuIds), proficiency: arrOf(m.proficiencyLevelIds) };
+  const refs = los.flatMap(l => (Array.isArray(l?.outcomeRefs) ? l.outcomeRefs : []).map((r: any) => ({ lo: l?.id, ...r })));
+  if (!Object.values(asked).some(a => a.length) && !refs.length) return [];
+  const opts = await classificationOptions(admin);
+  if (!opts) return ["classification: the catalogue could not be read just now, so the classification was not checked"];
+  const p: string[] = [];
+  for (const k of Object.keys(asked) as (keyof typeof asked)[]) {
+    const known = new Set(opts[k].map(o => o.id));
+    const unknown = asked[k].filter(id => !known.has(id));
+    if (unknown.length) p.push(`classification: ${unknown.length} ${k} reference${unknown.length === 1 ? " is" : "s are"} not in the catalogue`);
+  }
+  if (refs.length) {
+    const { data, error } = await admin.from("framework_competencies").select("id, learning_outcomes").in("id", [...new Set(refs.map(r => r.competencyId))]);
+    if (error) return [...p, "classification: the competencies' learning outcomes could not be read just now"];
+    const count = new Map<string, number>((data ?? []).map((x: any) => [x.id, Array.isArray(x.learning_outcomes) ? x.learning_outcomes.length : 0]));
+    for (const r of refs) if (!(r.index < (count.get(r.competencyId) ?? 0))) p.push(`objective ${r.lo}: a learning outcome its competency does not record`);
+  }
+  return p;
+}
+const arrOf = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+/** The exact content of each competency a case teaches, as 395 hashes it (its outcomes and expected level included). */
+async function competencyVersionsOf(admin: any, ids: string[]): Promise<CompetencyVersion[] | null> {
+  if (!ids.length) return [];
+  const { data, error } = await admin.rpc("competency_content_hashes", { p_ids: ids });
+  if (error || (data ?? []).length !== ids.length) return null;
+  return (data as any[]).map(r => ({ competencyId: r.competency_id, contentHash: r.content_hash })).sort((a, b) => a.competencyId.localeCompare(b.competencyId));
 }
 
 /** Submit a draft for independent clinical review: complete, screened clean, and put forward by one of its authors. */
@@ -265,9 +356,18 @@ export async function submitCase(admin: any, educatorId: string, versionId: stri
   if (error || !v) return { ok: false, error: "The draft could not be read just now." };
   if (v.state !== "draft") return { ok: false, error: "This version is already submitted." };
   if (!(v.authored_by ?? []).includes(educatorId)) return { ok: false, error: "Only one of the draft's authors can submit it. Save a change to it first." };
-  const problems = validateBlueprint(v.content, "library");
+  // Completeness is the published case policy's, applied HERE and not while drafting (owner, Stage 5B classification).
+  const policy = await loadCasePolicy(admin);
+  const problems = [...validateBlueprint(v.content, "library"), ...classificationProblems(v.content, policy.classificationRequired), ...(await classificationReferenceProblems(admin, v.content))];
   const screen = screenBlueprint(v.content).map(k => `It contains ${SCREEN_LABEL[k]}.`);
   if (problems.length || screen.length) return { ok: false, error: "The case is not ready for clinical review.", problems: [...screen, ...problems] };
+  // The competencies as they are NOW become part of the version the reviewer approves (its exact hash, 422), so a later
+  // edit to a competency never silently changes what an approved case was approved against.
+  const versions = await competencyVersionsOf(admin, blueprintCompetencies(v.content as Blueprint).filter(id => UUID.test(id)));
+  if (!versions) return { ok: false, error: "The case's competencies could not be recorded, so nothing was submitted." };
+  v.content = { ...v.content, metadata: { ...v.content.metadata, competencyVersions: versions } };
+  const { error: rErr } = await admin.from("case_library_version").update({ content: v.content }).eq("id", versionId).eq("state", "draft");
+  if (rErr) return { ok: false, error: "The case's competencies could not be recorded, so nothing was submitted." };
   const linked = await syncLinks(admin, versionId, v.content);
   if (!linked) return { ok: false, error: "The case's competencies could not be recorded, so nothing was submitted." };
   const required = (await loadRequiredApprovals(admin))[v.risk === "high" ? "high" : "standard"];
@@ -385,18 +485,19 @@ export async function draftCaseWithAi(admin: any, educatorId: string, args: { br
   if (!r.ok) return { ok: false, error: "error" in r && (r as any).error === "not_configured" ? "AI is not configured on this environment." : "The AI draft could not be made just now." };
   const o = extractJson((r as any).text ?? "");
   if (!o) return { ok: false, error: "The AI did not return a case. Nothing was charged beyond the request itself." };
-  const content = { ...o, schema: BLUEPRINT_SCHEMA, metadata: { ...(o.metadata ?? {}), professionTermId: o.metadata?.professionTermId ?? null, specialtyTermIds: [], cfcaDomainIds: [], cpuIds: [],
+  const content = { ...o, schema: BLUEPRINT_SCHEMA, metadata: { ...(o.metadata ?? {}), professionTermId: null, professionTermIds: [], specialtyTermIds: [], cfcaDomainIds: [], cpuIds: [], proficiencyLevelIds: [],
     provenance: { kind: "educator", rights: "educator_original", note: "AI draft (case.educator_develop), not yet checked by an educator" } } } as Blueprint;
   return { ok: true, content, problems: validateBlueprint(content, "library"), screen: screenBlueprint(content).map(k => SCREEN_LABEL[k]) };
 }
 
-/** The CFCA competencies of the shared frameworks, for linking a case to the outcomes it serves. */
-export async function competencyOptions(admin: any): Promise<{ id: string; label: string }[]> {
+/** The CFCA competencies of the shared frameworks, for linking a case to the outcomes it serves, with each one's recorded learning outcomes. */
+export async function competencyOptions(admin: any): Promise<{ id: string; label: string; outcomes: string[] }[]> {
   const { data: fws } = await admin.from("frameworks").select("id, code, name").is("hospital_id", null).order("code").limit(200);
   if (!fws?.length) return [];
   const { data: doms } = await admin.from("framework_domains").select("id, framework_id").in("framework_id", fws.map((f: any) => f.id)).limit(3000);
   if (!doms?.length) return [];
-  const { data: comps } = await admin.from("framework_competencies").select("id, code, name, domain_id").in("domain_id", doms.map((d: any) => d.id)).order("code").limit(3000);
+  const { data: comps } = await admin.from("framework_competencies").select("id, code, name, domain_id, learning_outcomes").in("domain_id", doms.map((d: any) => d.id)).order("code").limit(3000);
   const fwOf = new Map<string, any>(doms.map((d: any) => [d.id, fws.find((f: any) => f.id === d.framework_id)]));
-  return (comps ?? []).map((c: any) => ({ id: c.id, label: `${fwOf.get(c.domain_id)?.code ?? "?"} · ${c.code ?? ""} ${c.name ?? ""}`.trim() }));
+  return (comps ?? []).map((c: any) => ({ id: c.id, label: `${fwOf.get(c.domain_id)?.code ?? "?"} · ${c.code ?? ""} ${c.name ?? ""}`.trim(),
+    outcomes: Array.isArray(c.learning_outcomes) ? c.learning_outcomes.map((o: unknown) => (typeof o === "string" ? o : "")) : [] }));
 }

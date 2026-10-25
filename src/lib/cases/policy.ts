@@ -10,7 +10,9 @@
 // screen, independence, scope, approval-before-publication and delivery-only-when-deliverable are 423, 422 and 395.
 // Clinical approval counts stay where 395 keeps them (holdings.clinical.required_approvals).
 
-export const CASE_SCOPE = { scopeType: "platform", scopeRef: "holdings_cases" } as const;
+import { CLASSIFICATION, type ClassificationKey } from "./blueprint";
+
+export const CASE_SCOPE ={ scopeType: "platform", scopeRef: "holdings_cases" } as const;
 export const CASE_POLICY_PATH = "holdings.cases.policy";
 
 export type QueueWindow = "24h" | "7d" | "30d";
@@ -27,10 +29,18 @@ export type CasePolicy = {
   offerLimit: number;
   /** Whether a delivered case may pick values inside its approved variation rules. */
   variationsEnabled: boolean;
+  /**
+   * The classification a case must carry to be SUBMITTED for clinical review (owner, Stage 5B classification decision).
+   * Never applied to saving a draft. Competencies are always required: 422 refuses a case that names none.
+   */
+  classificationRequired: Record<ClassificationKey, boolean>;
 };
+
+const NONE_REQUIRED = Object.fromEntries(CLASSIFICATION.map(k => [k, k === "competencies"])) as Record<ClassificationKey, boolean>;
 
 export const DEFAULT_CASE_POLICY: CasePolicy = {
   attestationVersion: "case-attest/1", candidateRetentionDays: 180, queueWindow: "7d", reuseFirst: true, offerLimit: 5, variationsEnabled: true,
+  classificationRequired: NONE_REQUIRED,
 };
 
 const int = (v: unknown, lo: number, hi: number, fb: number) => { const n = Number(v); return Number.isInteger(n) ? Math.min(hi, Math.max(lo, n)) : fb; };
@@ -45,6 +55,7 @@ export function resolveCasePolicy(s: any): CasePolicy {
     reuseFirst: typeof s?.reuseFirst === "boolean" ? s.reuseFirst : d.reuseFirst,
     offerLimit: int(s?.offerLimit, 1, 20, d.offerLimit),
     variationsEnabled: typeof s?.variationsEnabled === "boolean" ? s.variationsEnabled : d.variationsEnabled,
+    classificationRequired: Object.fromEntries(CLASSIFICATION.map(k => [k, k === "competencies" || s?.classificationRequired?.[k] === true])) as Record<ClassificationKey, boolean>,
   };
 }
 

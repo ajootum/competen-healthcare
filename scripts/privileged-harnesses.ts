@@ -371,6 +371,16 @@ const STAGING: Listed[] = [
       + "(PEND without) and BASE_URL naming a STAGING-pointed dev server. Own harness-revhold-* identities.",
   },
   {
+    file: "scholar-journey-harness.ts",
+    note: "Scholar Stages 4 and 5 final acceptance, the ONE integrated journey (owner GO 2026-10-25): one student "
+      + "Upload -> Teach Me -> Revision -> Clinical Case -> Feedback -> Learning History, connecting what learn01, "
+      + "revision01 and clinical01 prove apart: source references intact, work and progress kept, CFCA where linked, "
+      + "no-catalogue learning, the Individual quota enforced (synthetic rows for the fixture only) with stored "
+      + "learning carrying on without AI, private isolation, and the library/publication boundary with case_library "
+      + "OFF. Metering OFF (PEND when ON). Real AI. Needs BASE_URL naming a STAGING-pointed dev server with the legal "
+      + "versions and URLs and an AI provider. Reads shared config only. Creates and deletes its own harness-journey-* identities.",
+  },
+  {
     file: "scholar-revision01-harness.ts",
     note: "COMPETEN-SCHOLAR-REVISION-01 over HTTP, the owner's first Stage 4 journey on the respiratory materials: open "
       + "Revision -> the respiratory materials -> ten questions in several formats (reuse first, the shortfall written, "
