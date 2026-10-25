@@ -26,7 +26,7 @@
 
 import { PD_NAV, PD_HOME, PD_EXTERNAL_HREFS } from "./pd-nav";
 
-export const HQ_NAV_REGISTRY_VERSION = "1.0.0";
+export const HQ_NAV_REGISTRY_VERSION = "1.1.0";
 
 /**
  * page: drawn, its home is here. action: drawn, a create/quick action whose home is here.
@@ -182,6 +182,12 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       // Migration 465: shared competency authoring (the Competency Author). Approval is Clinical Content Approval.
       { key: "frameworks.authoring", label: "Competency Authoring", href: "/super-admin/competencies/authoring", icon: "✍️" },
       { key: "frameworks.library", label: "Global Competency Library", href: "/super-admin/competencies", icon: "📖" },
+    ]},
+    // Migration 510 (COMPETENCY-01 C5): Holdings competency verification. Two separate authorities, two doors --
+    // the Studio administrator (verification.manage) and the assessor queue (verification.assess).
+    { key: "frameworks.verification", group: "Competency Verification", items: [
+      { key: "frameworks.verification.studio", label: "Verification Studio", href: "/super-admin/verification-studio", icon: "🧭" },
+      { key: "frameworks.verification.assessment", label: "Competency Assessment", href: "/super-admin/competency-assessment", icon: "📝" },
     ]},
     { key: "frameworks.studio", group: "Competency Studio", items: [
       { key: "frameworks.studio.home", label: "Competency Studio Home", href: "/super-admin/studio", icon: "🎨" },

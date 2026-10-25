@@ -169,6 +169,11 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.learning.course.publish",       space: "learning"  },
   { code: "hq.learning.price.approve",        space: "learning"  },
   { code: "hq.learning.certificate.issue",    space: "learning"  },
+  // Migration 510, COMPETEN-PROFESSIONAL-COMPETENCY-01 C5: the Holdings Competency Verification Studio. Manage is the
+  // Verification Studio Administrator (methods, criteria, assessor scopes, assignment), assess the Competency Assessor.
+  // Neither is granted to any existing position, and 511 keeps assess apart from content approval and the Studio.
+  { code: "hq.competency.verification.manage", space: "quality"  },
+  { code: "hq.competency.verification.assess", space: "quality"  },
 ];
 
 export const HQ_CAPABILITY_CODES = HQ_CAPABILITIES.map(c => c.code);
@@ -244,6 +249,9 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/research",              capability: "hq.quality.research.propose" },
   // Migrations 460-464 (COMPETEN-LEARNING-01). The narrower authorities first: the first matching prefix wins, and none
   // of them may inherit author. The Learning review page is the clinical reviewer's, as /super-admin/clinical-review is.
+  // Migration 510 (COMPETENCY-01 C5). Two separate doors: the assessor queue must not inherit the Studio, nor the reverse.
+  { prefix: "/super-admin/competency-assessment", capability: "hq.competency.verification.assess" },
+  { prefix: "/super-admin/verification-studio", capability: "hq.competency.verification.manage" },
   { prefix: "/super-admin/learning/review",       capability: "hq.quality.clinical.approve" },
   { prefix: "/super-admin/learning/publication",  capability: "hq.learning.course.publish" },
   { prefix: "/super-admin/learning/prices",       capability: "hq.learning.price.approve" },
