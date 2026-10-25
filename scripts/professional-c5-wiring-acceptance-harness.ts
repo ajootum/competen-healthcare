@@ -15,7 +15,10 @@
  * ⚠ STAGING ONLY (assertSafeTarget), BASE_URL a local staging-pointed dev server. PEND until 510 and 520 are applied.
  * Own harness-prof05-c5wire identity, deleted after with its requests (510 cascades from the person).
  *
- *   BASE_URL=http://localhost:3150 npx tsx scripts/privileged-harnesses.ts --staging --only professional-c5-wiring-acceptance
+ * The person accepts the terms the server publishes, through /api/individual/terms, as on the page: pass the versions the
+ * staging-pointed server was started with (never hard-coded here).
+ *
+ *   BASE_URL=http://localhost:3160 INDIVIDUAL_LEGAL_COMPETEN_HOLDINGS_TERMS_VERSION=<v> INDIVIDUAL_LEGAL_COMPETEN_HOLDINGS_PRIVACY_VERSION=<v> \n *     npx tsx scripts/privileged-harnesses.ts --staging --only professional-c5-wiring-acceptance
  */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
@@ -68,6 +71,10 @@ async function session(email: string, password: string) {
   if (s.error || !s.data.session) throw new Error(`sign-in: ${s.error?.message}`);
   return `sb-${ref}-auth-token=base64-${Buffer.from(JSON.stringify(s.data.session)).toString("base64")}`;
 }
+const TERMS = { terms: process.env.INDIVIDUAL_LEGAL_COMPETEN_HOLDINGS_TERMS_VERSION ?? "", privacy: process.env.INDIVIDUAL_LEGAL_COMPETEN_HOLDINGS_PRIVACY_VERSION ?? "" };
+if (!TERMS.terms || !TERMS.privacy) { console.error("REFUSING: pass the terms versions the staging server publishes."); process.exit(1); }
+const acceptTerms = async (cookie: string) => (await fetch(`${BASE}/api/individual/terms`, { method: "POST", headers: { Cookie: cookie, Origin: BASE, "Content-Type": "application/json" },
+  body: JSON.stringify({ experience: "professional", foundation: TERMS, experienceDocs: TERMS }), redirect: "manual" })).status;
 const call = async (cookie: string, method: string, body: any) => {
   const res = await fetch(`${BASE}/api/individual/professional/competency-verification`, { method, headers: { Cookie: cookie, Origin: BASE, "Content-Type": "application/json" }, body: JSON.stringify(body), redirect: "manual" });
   return { status: res.status, json: await res.json().catch(() => null) as any };
@@ -111,6 +118,12 @@ async function main() {
     const link = async (cpdId: string) => linkEvidence(admin, me, entryRow, must(parseEvidenceLink({ kind: "cpd", sourceId: cpdId, relation: policy.relations[0]?.code ?? "" }, { outcomes: c!.outcomes, policy })));
     const l1 = await link(cpd[0].id);
     const cookie = await session(EMAIL, password);
+    // The welcome step, as the page does it: Professional as primary, onboarding complete.
+    const welcomed = (await fetch(`${BASE}/api/individual/preferences`, { method: "POST", headers: { Cookie: cookie, Origin: BASE, "Content-Type": "application/json" },
+      body: JSON.stringify({ primaryExperience: "professional", completeOnboarding: true }), redirect: "manual" })).status;
+    if (welcomed >= 300) throw new Error(`welcome answered ${welcomed}`);
+    const accepted = await acceptTerms(cookie);
+    if (accepted >= 300) throw new Error(`terms acceptance answered ${accepted}`);
 
     // W2
     const asked = await call(cookie, "POST", { entryId: entry.id, ...(methods.length > 1 ? { method: methods[0].code } : {}) });
@@ -122,6 +135,10 @@ async function main() {
       asked.status === 201 && !!mine && mine.method === methods[0].name && mine.evidence.length === 1 && l1.ok && mine.evidence[0].linkId === l1.id && reqRow?.user_id === me
       && mine.statusLabel === "Waiting for an assessor", `status ${asked.status} ${JSON.stringify(asked.json)?.slice(0, 160)}`);
     if (!requestId) throw new Error("no request");
+    const pageRes = await fetch(`${BASE}/individual/professional/competencies?c=${entry.id}`, { headers: { Cookie: cookie }, redirect: "manual" });
+    const html = await pageRes.text();
+    ok("W2b. the competency page shows the method, the request state and the Withdraw action", pageRes.status === 200 && html.includes(methods[0].name)
+      && html.includes("Waiting for an assessor") && html.includes("Withdraw this request"), `status ${pageRes.status}`);
 
     // W3
     const nothingNew = await call(cookie, "PATCH", { requestId, action: "add_evidence", entryId: entry.id });
