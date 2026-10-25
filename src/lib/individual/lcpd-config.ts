@@ -75,6 +75,9 @@ export const DEFAULT_LCPD: LcpdConfig = {
 };
 
 const CODE = /^[a-z][a-z0-9_]{1,40}$/, REQ_CODE = /^[a-z][a-z0-9_]{1,60}$/, DAY = /^\d{4}-\d{2}-\d{2}$/;
+// A reflection template code is stored on 470 individual_professional_reflection.template_code, whose CHECK allows
+// lower-case letters, digits and hyphens: the same rule here, so a configured template can always be saved.
+const TEMPLATE_CODE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, max) : "");
 const num = (v: unknown, min: number, max: number): number | null => { const n = Number(v); return v === null || v === undefined || v === "" || !Number.isFinite(n) || n < min || n > max ? null : Math.round(n * 10) / 10; };
 const day = (v: unknown): string | null => (typeof v === "string" && DAY.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) ? v : null);
@@ -124,7 +127,7 @@ export function resolveLcpd(doc: any): LcpdConfig {
   const codes = new Set(types.map(t => t.code));
   const rt = Array.isArray(doc?.reflectionTemplates) ? doc.reflectionTemplates : null;
   const reflectionTemplates: ReflectionTemplate[] = rt ? rt.map((t: any) => ({ code: str(t?.code, 41), label: str(t?.label, 80), prompts: (Array.isArray(t?.prompts) ? t.prompts : []).map((p: unknown) => str(p, 300)).filter(Boolean).slice(0, 10) }))
-    .filter((t: ReflectionTemplate) => CODE.test(t.code) && t.label && t.prompts.length).slice(0, 10) : [];
+    .filter((t: ReflectionTemplate) => TEMPLATE_CODE.test(t.code) && t.label && t.prompts.length).slice(0, 10) : [];
   const requirements = (Array.isArray(doc?.requirements) ? doc.requirements : []).slice(0, 100).map((r: any) => checkRequirement(r, codes)).filter((r: any) => r.ok).map((r: any) => r.value as CpdRequirement);
   const rq = new Set<string>();
   const ps = Array.isArray(doc?.passportShareable) ? doc.passportShareable.filter((c: unknown) => c === "platform_recorded" || c === "source_linked" || c === "self_declared") : null;

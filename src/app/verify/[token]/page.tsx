@@ -10,6 +10,8 @@ import { loadSharedProfile } from "@/lib/individual/professional/share-profile";
 import { METHOD_LABEL, VERIFICATION_LABEL, isIndependentlyVerified } from "@/lib/individual/professional/profile-verification";
 import { ITEM_LABEL } from "@/lib/individual/professional/profile-vocabulary";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { loadSharedLearning } from "@/lib/individual/professional/share-learning";
+import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +89,8 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
     ? await loadSharedProfile(admin, share.id, share.nurse_id, (await loadIndividualPolicy(admin)).professionalProfile.shareSections, new Date().toISOString().slice(0, 10))
     : null;
   const sharedAny = !!sharedProfile && (!!sharedProfile.overview || sharedProfile.records.length > 0);
+  // LCPD-01 LCPD-6: completed learning the person ticked for this link, re-checked now. Never their reflections on it.
+  const sharedLearning = carriesOwn ? await loadSharedLearning(admin, share.id, share.nurse_id, await loadLcpdConfig(admin)) : null;
   // A Professional-minted link names the person's profession as THEY declared it, and says so. It never
   // shows profiles.role, which the new-user trigger fills with a default (migration 335) and which
   // Competen Individual neither sets nor relies on (ADR-016).
@@ -215,6 +219,23 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
               ))}
             </div>
           )}
+
+          {sharedLearning !== null && sharedLearning.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900">Completed learning the professional chose to show</h2>
+              <p className="text-[11.5px] text-slate-800 mt-0.5 leading-relaxed">Each course says exactly what it is. A course completion or assessed knowledge is not an accreditation, a regulatory approval or a verification of clinical competence.</p>
+              <ul className="mt-2 space-y-1.5">
+                {sharedLearning.map(l => (
+                  <li key={l.recordId} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] text-gray-800">
+                    <span className="font-semibold">{l.title}</span>
+                    <span className="text-[10.5px] text-gray-500">{l.provider ? `${l.provider} · ` : ""}version {l.versionNo} · {fmt(l.completedOn)}{l.certificateNos.length ? ` · certificate ${l.certificateNos.join(", ")}` : ""}</span>
+                    <span className="ml-auto text-[10.5px] font-semibold text-slate-800">{l.provenance}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {sharedLearning === null && carriesOwn && <p className="text-[12px] text-gray-600">The learning on this link could not be read just now.</p>}
 
           {study && (!study.ok ? !study.notProvisioned : study.data.length > 0) && (
             <div className="rounded-xl border border-sky-200 bg-sky-50/60 px-4 py-3">

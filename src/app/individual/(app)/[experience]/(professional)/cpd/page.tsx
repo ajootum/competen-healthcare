@@ -19,6 +19,9 @@ import { inEffect, loadCpdHistory, loadCpdSetting, summarise } from "@/lib/indiv
 import { myRecords } from "@/lib/learning/record";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import LearningRefs from "../../../../_components/professional/LearningRefs";
+import LearningReflectionList from "../../../../_components/professional/LearningReflectionList";
+import ReflectOnLearning from "../../../../_components/professional/ReflectOnLearning";
+import { loadLearningReflections } from "@/lib/individual/professional/learning-reflections";
 import { ClassLabel, Empty, NotProvisioned, Section, fmtDate } from "../../../../_components/professional/bits";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
@@ -48,10 +51,14 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
   const { ctx } = page;
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
-  const [record, map, learning, policy, cfg, ready, setting, history] = await Promise.all([
+  const [record, map, learning, policy, cfg, ready, setting, history, reflections] = await Promise.all([
     loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId),
     loadIndividualPolicy(ctx.admin), loadLcpdConfig(ctx.admin), lcpdSchemaReady(ctx.admin), loadCpdSetting(ctx.admin, ctx.userId), loadCpdHistory(ctx.admin, ctx.userId),
+    loadLearningReflections(ctx.admin, ctx.userId),
   ]);
+  // LCPD-3: reflections on learning, once 491 is here. Unreadable or absent: no reflection controls, nothing implied.
+  const canReflect = !!reflections?.available && record.provisioned;
+  const reflectionsOf = (key: string) => reflections?.bySubject.get(key) ?? [];
   const inProgress = learning.enabled ? (await myRecords(ctx.admin, ctx.userId))?.filter(r => r.status === "enrolled" || r.status === "in_progress") ?? null : [];
   const cpd = record.cpd;
   const once = cpd ? countedOnce(cpd, learning, policy.professionalLearningMatchDays) : null;
@@ -153,6 +160,8 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
         {once?.checkUnavailable && <p className="mt-2 text-[12.5px] font-semibold text-amber-900">The check for courses you logged twice could not run just now, so an entry you also completed on Competen Learning may be counted twice.</p>}
       </Section>
 
+      {reflections === null && <p role="alert" className="mb-4 text-[13px] text-amber-900">Your reflections on learning could not be read just now.</p>}
+
       {cpd !== null && record.provisioned && (
         <Section id="record-h" title="Record CPD" note={options.flexible ? "From anywhere: a course, conference, workplace learning, teaching, mentorship, research, quality improvement or study. Only what you did and when are required." : "From anywhere: a course, conference, teaching, research or study."}>
           <CpdForm accent={x.accent} today={today} goals={liveGoals.map(g => ({ id: g.id, title: g.title }))} options={options} />
@@ -194,6 +203,8 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
                     </div>
                   ); })()}
                   {c.reflection && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-[13.5px] leading-relaxed text-gray-700">{c.reflection}</p>}
+                  <LearningReflectionList items={reflectionsOf(`cpd:${c.id}`)} />
+                  {canReflect && <ReflectOnLearning subject={{ cpdId: c.id }} templates={cfg.reflectionTemplates} accent={x.accent} />}
                   {earlier.length > 0 && (
                     <details className="mt-1"><summary className="cursor-pointer text-[12.5px] text-gray-600">Corrected {earlier.length} {earlier.length === 1 ? "time" : "times"}: earlier versions</summary>
                       <ul className="mt-1 space-y-0.5 text-[12.5px] text-gray-600">{earlier.map((h, i) => <li key={i}>Until {fmtDate(h.corrected_at)}: {h.title} · {fmtDate(h.activity_date)} · {h.hours == null ? "no hours" : `${h.hours} hours`}</li>)}</ul>
@@ -213,7 +224,12 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
       {learning.enabled && (
         <Section title="Completed on Competen Learning" note="Courses you completed, read from your learning record. They are not copied into this log and cannot be edited here. A course already here is not added to your log again. If you logged one before it arrived here, it is counted once and marked on your entry.">
           {learning.refs === null ? <Unreadable what="learning record" /> : learning.refs.length === 0 ? <Empty>No completed Competen Learning courses. Your own entries above are a complete CPD log without them.</Empty>
-            : <LearningRefs refs={learning.refs} accent={x.accent} competencies certificates />}
+            : <LearningRefs refs={learning.refs} accent={x.accent} competencies certificates below={r => (
+              <>
+                <LearningReflectionList items={reflectionsOf(`rec:${r.recordId}`)} />
+                {canReflect && <ReflectOnLearning subject={{ learningRecordId: r.recordId }} templates={cfg.reflectionTemplates} accent={x.accent} />}
+              </>
+            )} />}
         </Section>
       )}
 
