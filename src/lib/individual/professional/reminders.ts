@@ -80,7 +80,7 @@ export function reminderMessage(c: ReminderCandidate, today: string) {
 /**
  * The job runner's one door into Professional (individual-professional-harness R3) also carries the CPD duplicate
  * notices (cpd-duplicates.ts): a Learning completion that now counts an entry the person logged once. They are posted
- * in the person's own account (migration 466), never emailed.
+ * in the person's own account (migration 437), never emailed.
  */
 export const scanDuplicateNotices = (admin: any) => scanLearningDuplicateNotices(admin);
 

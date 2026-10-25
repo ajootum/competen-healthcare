@@ -3,9 +3,9 @@ import { loadNotices } from "@/lib/individual/notifications";
 import { ApiButton } from "./professional/forms";
 import { focusRing } from "./chrome";
 
-// Notices in the person's own account (migration 466, owner: "Use notifications in the user account, not Email").
+// Notices in the person's own account (migration 437, owner: "Use notifications in the user account, not Email").
 // Reusable by any Individual notice: rendered on the experience home for every experience, because a notice belongs
-// to the person. Nothing renders when there is nothing to show, or while 466 is absent. Unread first, newest first.
+// to the person. Nothing renders when there is nothing to show, or while 437 is absent. Unread first, newest first.
 // Text in words, the unread state in words too (never colour alone).
 
 export default async function HomeNotices({ admin, userId, accent }: { admin: any; userId: string; accent: string }) {

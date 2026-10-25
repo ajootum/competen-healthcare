@@ -86,7 +86,7 @@ const HANDLERS: Record<string, (admin: any) => Promise<string>> = {
   individual_professional_reminders: async (admin) => {
     const r = await scanProfessionalReminders(admin);
     // Owner (CPD duplicates): a Learning completion that now counts an entry the person logged once -- a notice in
-    // their own account (migration 466), never an email.
+    // their own account (migration 437), never an email.
     const d = await scanDuplicateNotices(admin);
     if (d.posted || d.failed) await emitPlatformEvent(admin, { event_type: "individual.professional_duplicate_notices", severity: d.failed ? "warning" : "info", payload: { posted: d.posted, failed: d.failed } });
     if (r.sent) await emitPlatformEvent(admin, { event_type: "individual.professional_reminders_sent", severity: "info", payload: { sent: r.sent } });

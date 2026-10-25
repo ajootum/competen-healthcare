@@ -43,7 +43,7 @@ function fake() {
         (S.rows.audit_log ??= []).push(row);
       }
       if (table === NOTIFICATION_TABLE) {
-        // 466: a missing table, or its unique (user_id, kind, dedupe_key).
+        // 437: a missing table, or its unique (user_id, kind, dedupe_key).
         if (S.noticeTableMissing) return Promise.resolve({ data: null, error: { message: 'relation "individual_notification" does not exist' } });
         const rows = (S.rows[NOTIFICATION_TABLE] ??= []);
         if (rows.some(r => r.user_id === row.user_id && r.kind === row.kind && r.dedupe_key === row.dedupe_key)) return Promise.resolve({ data: null, error: { code: "23505", message: "duplicate key" } });
@@ -118,7 +118,7 @@ describe("at entry: a course already in the record through Competen Learning is 
     expect(notices()).toHaveLength(1);
   });
 
-  it("466 absent: the save is still refused, and nothing fails", async () => {
+  it("437 absent: the save is still refused, and nothing fails", async () => {
     S.noticeTableMissing = true;
     expect((await post(form())).status).toBe(409);
     neverEmailNorEstate();

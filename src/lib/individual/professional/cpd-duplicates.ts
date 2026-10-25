@@ -19,8 +19,8 @@ import { LEARNING_UNMATCH_ACTION, countedOnce, learningRecordHref, loadProfessio
 //              read (learning.ts countedOnce), the row untouched, and the person notified by the daily
 //              Professional job (scanLearningDuplicateNotices).
 //
-// ⚠ THE NOTICE IS IN THE PERSON'S ACCOUNT, NEVER EMAIL (src/lib/individual/notifications.ts, migration 466). One notice
-// per course for a refusal and one per entry for the later case, made unrepeatable by 466's unique key. Its text
+// ⚠ THE NOTICE IS IN THE PERSON'S ACCOUNT, NEVER EMAIL (src/lib/individual/notifications.ts, migration 437). One notice
+// per course for a refusal and one per entry for the later case, made unrepeatable by 437's unique key. Its text
 // names no course (the link opens the detail behind the person's sign-in). No dispatch(), no estate notifications row.
 //
 // ⚠ NOTHING THE PERSON WROTE IS EVER DELETED OR CHANGED HERE.
@@ -115,7 +115,7 @@ export async function scanLearningDuplicateNotices(admin: any): Promise<Duplicat
       if (out.posted >= 1000) return out;
       const r = await notifyDuplicate(admin, userId, "counted_once", m);
       if (r === "posted") out.posted++; else if (r === "already") out.already++; else if (r === "failed") out.failed++;
-      // "unavailable" (466 not applied here): nothing to count, and nothing to retry until it is.
+      // "unavailable" (437 not applied here): nothing to count, and nothing to retry until it is.
     }
   }
   return out;

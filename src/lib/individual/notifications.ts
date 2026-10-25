@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// ── NOTICES IN THE PERSON'S OWN ACCOUNT ── migration 466, owner: "Use notifications in the user account, not Email" ──
+// ── NOTICES IN THE PERSON'S OWN ACCOUNT ── migration 437, owner: "Use notifications in the user account, not Email" ──
 //
 // One store for every Individual notice, read on the person's home (HomeNotices) and marked read there. Reusable: a
 // notice is a kind, a short text, an optional same-site link and a dedupe key.
@@ -12,10 +12,10 @@
 // ⚠ THE TEXT NAMES NO COURSE OR RECORD. A notice body is safe to show anywhere, including any email-like surface that
 // may read it later. The link carries the person to the detail, which is behind their own sign-in.
 //
-// ⚠ ONCE, BY CONSTRUCTION. 466's unique index on (user_id, kind, dedupe_key) makes a second notice for the same thing
+// ⚠ ONCE, BY CONSTRUCTION. 437's unique index on (user_id, kind, dedupe_key) makes a second notice for the same thing
 // impossible, so a retry or an overlapping job run is harmless: the conflict reads as "already".
 //
-// ⚠ ABSENT IS TOLERATED. Until 466 is applied, posting returns "unavailable" and the panel shows nothing. Every caller
+// ⚠ ABSENT IS TOLERATED. Until 437 is applied, posting returns "unavailable" and the panel shows nothing. Every caller
 // is already behind its own gate (the CPD duplicate rule is behind Learning's learning_app flag, off by default).
 
 export const NOTIFICATION_TABLE = "individual_notification";
@@ -39,7 +39,7 @@ export async function postNotice(admin: any, userId: string, n: { kind: string; 
   } catch { return "failed"; }
 }
 
-/** The person's own notices, newest first. null = could not be read. `available` false = 466 is not on this environment. */
+/** The person's own notices, newest first. null = could not be read. `available` false = 437 is not on this environment. */
 export async function loadNotices(admin: any, userId: string, limit = 20): Promise<{ available: boolean; items: IndividualNotice[] } | null> {
   try {
     const { data, error } = await admin.from(NOTIFICATION_TABLE).select("id, kind, body, href, created_at, read_at")

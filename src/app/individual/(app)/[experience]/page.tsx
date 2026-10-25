@@ -54,7 +54,7 @@ export default async function ExperienceHome({ params }: { params: Promise<{ exp
   return (
     <>
       <PageHeader accent={x.accent} eyebrow={x.tagline} title={firstName ? `Hello, ${firstName}` : x.name} intro={x.homeIntro} />
-      {/* Notices in the person's own account (migration 466), for every experience. Nothing while there are none. */}
+      {/* Notices in the person's own account (migration 437), for every experience. Nothing while there are none. */}
       <HomeNotices admin={ctx.admin} userId={ctx.userId} accent={x.accent} />
       {/* Competen Professional: renewals due, while the person's in-app reminder switch is on (migration 374). */}
       {experience === "professional" && <HomeReminders admin={ctx.admin} userId={ctx.userId} />}
