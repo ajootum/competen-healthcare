@@ -115,6 +115,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       { key: "products.individual.access", label: "Individual Pilot Access", href: "/super-admin/individual", icon: "🎓", flag: "individual" },
       { key: "products.individual.policy", label: "Individual Policy", href: "/super-admin/individual/configuration", icon: "🎚️", flag: "individual", children: [
         { key: "products.individual.programmes", label: "Scholar Programmes", href: "/super-admin/individual/programmes", icon: "·" },
+        { key: "products.individual.documents", label: "Document Templates", href: "/super-admin/individual/documents", icon: "·" },
       ]},
       { key: "products.individual.catalogues", label: "Controlled Catalogues", href: "/super-admin/individual/catalogues", icon: "📚", flag: "individual" },
       { key: "products.individual.verification", label: "Professional Verification", href: "/super-admin/individual/verification", icon: "✅", flag: "individual" },

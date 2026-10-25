@@ -339,6 +339,14 @@ const STAGING: Listed[] = [
       + "no catalogue, no AI, nothing shared. Own harness-prof03-* identity, deleted after; three policy rows restored exactly. PEND until 480 is applied.",
   },
   {
+    file: "professional-progress-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-PROGRESS-01 Stage 8 (550), owner GO s13, one Individual with Scholar and Professional history: Progress "
+      + "(next steps from findings, history by period without rewriting, competency columns kept apart, career journey, no CFCA, no AI, "
+      + "private kept private, no score) and the Document Studio (CV with a published template version, record-level selection, "
+      + "reorder and edit, complete preview, DOCX and PDF with the same lines, drafts change no source, provenance labels, from the "
+      + "Passport, isolation). Own harness-prof08-* identities, deleted after; three policy rows restored exactly. PEND until 550 is applied.",
+  },
+  {
     file: "professional-evaluation-acceptance-harness.ts",
     note: "COMPETEN-PROFESSIONAL-EVALUATION-01 Stage 6 (530), owner GO s14, the ECG Interpretation goal: six separate findings with cited, "
       + "provenanced sources, strengths and limitations, recommendations followed to their owning module (an activity through Stage 3), "

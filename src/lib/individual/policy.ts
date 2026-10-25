@@ -12,6 +12,7 @@ import {
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
 import { COUNTRIES } from "../countries";
 import { PROFESSIONAL_EVALUATION_POLICIES } from "./professional/evaluation-policy";
+import { PROFESSIONAL_PROGRESS_POLICIES, type PeriodKind, type ProgressRule, type ProgressView } from "./professional/progress-policy";
 import type { ConfidenceFactor, RecommendationRule, ScopeKind } from "./professional/evaluation-vocabulary";
 import {
   DEFAULT_PRACTICE_SETTINGS, DEFAULT_QUALIFICATION_TYPES, DEFAULT_STATUSES, DOCUMENT_KINDS, FIELD_LABEL, ITEM_LABEL, OPTIONAL_FIELDS, PROFILE_SECTIONS, SECTION_LABEL,
@@ -68,18 +69,20 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent"
   | "scholar_evaluation_min_evidence" | "scholar_evaluation_recency_days" | "scholar_evaluation_min_sources" | "scholar_evaluation_band_strong"
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max"
-  | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown";
+  | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown"
+  | "professional_progress_recent_days";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
-  | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules";
+  | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules"
+  | "professional_progress_periods" | "professional_progress_recommendation_rules";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
 export type ProgrammesPolicyKey = "scholar_onboarding_programmes";
-export type OptionsPolicyKey = "scholar_institutions" | "professional_evaluation_templates"
+export type OptionsPolicyKey = "scholar_institutions" | "professional_evaluation_templates" | "professional_milestone_categories" | "professional_career_categories"
   | "professional_professions" | "professional_titles" | "professional_jurisdictions" | "professional_statuses" | "professional_qualification_types"
   | "professional_registration_bodies" | "professional_practice_settings" | "professional_specialties" | "professional_career_interests"
   | "professional_need_categories" | "professional_need_motivations" | "professional_need_priorities" | "professional_reflection_templates"
@@ -87,7 +90,7 @@ export type OptionsPolicyKey = "scholar_institutions" | "professional_evaluation
   | "professional_goal_templates" | "professional_goal_evidence_kinds"
   | "professional_competency_categories" | "professional_self_assessment_confidence" | "professional_evidence_types" | "professional_evidence_relations";
 /** COMPETEN-PROFESSIONAL-PROFILE-01: an ORDERED choice from a fixed list (form fields, profile sections). */
-export type SequencePolicyKey = "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages"
+export type SequencePolicyKey = "professional_progress_views" | "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages"
   | "professional_goal_fields" | "professional_goal_statuses" | "professional_activity_statuses" | "professional_goal_review_fields"
   | "professional_self_assessment_fields";
 export type LevelsPolicyKey = "scholar_programme_levels";
@@ -101,7 +104,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations"
   | "scholar_progress_period" | "scholar_passport_evaluations"
-  | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections";
+  | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
+  | "professional_progress_default_period" | "professional_documents_ai";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1101,6 +1105,7 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Only the three content statuses of migration 394. Default: everything, labelled.",
   },
   ...PROFESSIONAL_EVALUATION_POLICIES,
+  ...PROFESSIONAL_PROGRESS_POLICIES,
   ...PROFESSIONAL_PROFILE_POLICIES,
   ...PROFESSIONAL_NEEDS_POLICIES,
   ...PROFESSIONAL_PLAN_POLICIES,
@@ -1270,6 +1275,9 @@ export type IndividualPolicy = {
   professionalLearningMatchDays: number;
   /** COMPETEN-PROFESSIONAL-EVALUATION-01: My Professional Evaluation, as configured. */
   professionalEvaluation: ProfessionalEvaluationPolicy;
+  /** COMPETEN-PROFESSIONAL-PROGRESS-01: My Professional Progress and the Document Studio, as configured. */
+  professionalProgress: ProfessionalProgressPolicy;
+  professionalDocuments: { ai: "on" | "off" };
   shareLinkMaxDays: number;
   aiHourlyLimit: number;
   scholarQuestionsPerRequest: number;
@@ -1462,6 +1470,8 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
     scholarCatalogueMinStatus: clampChoice(policyDef("scholar_catalogue_min_status") as ChoicePolicy, published.get(policyPath("scholar_catalogue_min_status"))) as ContentStatusLevel,
     professionalEvaluation: resolveProfessionalEvaluation(published),
+    professionalProgress: resolveProfessionalProgress(published),
+    professionalDocuments: { ai: clampChoice(policyDef("professional_documents_ai") as ChoicePolicy, published.get(policyPath("professional_documents_ai"))) as "on" | "off" },
     professionalProfile: resolveProfessionalProfile(published),
     professionalNeeds: resolveProfessionalNeeds(published),
     professionalPlan: resolveProfessionalPlan(published),
@@ -1541,6 +1551,26 @@ function resolveProfessionalProfile(published: Map<string, any>): ProfessionalPr
 }
 
 /** COMPETEN-PROFESSIONAL-EVALUATION-01 (Stage 6): My Professional Evaluation, as configured. */
+/** COMPETEN-PROFESSIONAL-PROGRESS-01 (Stage 8): My Professional Progress, as configured. */
+export type ProfessionalProgressPolicy = {
+  views: ProgressView[]; periods: PeriodKind[]; defaultPeriod: PeriodKind; rules: ProgressRule[]; recentDays: number;
+  milestoneCategories: ContextOption[]; careerCategories: ContextOption[];
+};
+
+function resolveProfessionalProgress(published: Map<string, any>): ProfessionalProgressPolicy {
+  const periods = clampSet(policyDef("professional_progress_periods") as SetPolicy, published.get(policyPath("professional_progress_periods"))) as PeriodKind[];
+  const withYears = periods.includes("year") ? periods : [...periods, "year" as const];
+  const def = clampChoice(policyDef("professional_progress_default_period") as ChoicePolicy, published.get(policyPath("professional_progress_default_period"))) as PeriodKind;
+  return {
+    views: clampSequence(policyDef("professional_progress_views") as SequencePolicy, published.get(policyPath("professional_progress_views"))) as ProgressView[],
+    periods: withYears, defaultPeriod: withYears.includes(def) ? def : "year",
+    rules: clampSet(policyDef("professional_progress_recommendation_rules") as SetPolicy, published.get(policyPath("professional_progress_recommendation_rules"))) as ProgressRule[],
+    recentDays: clampInt(policyDef("professional_progress_recent_days") as IntPolicy, published.get(policyPath("professional_progress_recent_days"))),
+    milestoneCategories: clampOptions(policyDef("professional_milestone_categories") as OptionsPolicy, published.get(policyPath("professional_milestone_categories"))),
+    careerCategories: clampOptions(policyDef("professional_career_categories") as OptionsPolicy, published.get(policyPath("professional_career_categories"))),
+  };
+}
+
 export type ProfessionalEvaluationPolicy = {
   scopes: ScopeKind[]; confidenceFactors: ConfidenceFactor[]; rules: RecommendationRule[]; templates: ContextOption[];
   sufficiency: number; recencyDays: number; periodDays: number; historyShown: number;

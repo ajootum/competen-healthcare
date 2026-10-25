@@ -114,11 +114,14 @@ const checkPolicyPathsOnly = (src: Src): R => {
   const r = code(src, "route");
   const count = (re: RegExp) => (r.match(re) ?? []).length;
   // Two writes, each to a fixed kind of path: a policy catalogue path, and (LCPD-01 s11) the one Professional Learning and
-  // CPD document, LCPD_PATH, only after checkLcpdDraft has refused anything invalid with 422.
-  return { ok: count(/\bsetOverride\(/g) === 2 && count(/\bresetOverride\(/g) === 1
+  // CPD document, LCPD_PATH, only after checkLcpdDraft has refused anything invalid with 422, and (PROGRESS-01 PR7 s10.3)
+  // the one Document Studio document, DOCUMENTS_PATH, only after checkDocumentsDraft has refused anything invalid with 422.
+  return { ok: count(/\bsetOverride\(/g) === 3 && count(/\bresetOverride\(/g) === 1
       && r.includes("setOverride(ctx.admin, actor, SCOPE, policyPath(v.def.key), v.settings)")
       && r.includes("setOverride(ctx.admin, actor, SCOPE, LCPD_PATH, v.settings)")
       && /const v = checkLcpdDraft\(body\.settings\);\s*if \(!v\.ok\) return refuse\(422/.test(r)
+      && r.includes("setOverride(ctx.admin, actor, SCOPE, DOCUMENTS_PATH, v.settings)")
+      && /const v = checkDocumentsDraft\(body\.settings, await loadDocumentsConfig\(ctx\.admin\)\);\s*if \(!v\.ok\) return refuse\(422/.test(r)
       && r.includes("resetOverride(ctx.admin, actor, SCOPE, policyPath(def.key))")
       && /const v = validateDraft\(body\.key, body\.value\);\s*if \(!v\.ok\) return refuse\(422/.test(r),
     detail: "the route may write only catalogue paths, after validateDraft refuses out-of-range" };
@@ -245,6 +248,8 @@ function main() {
   red("W2 on an unscoped rollback", checkPartitions(plant("route", "{ scope: SCOPE, prune: true }", "{ prune: true }")));
   red("W2 on a caller-chosen scope", checkPartitions(plant("route", "const SCOPE = { scopeType: POLICY_SCOPE.scopeType, scopeRef: POLICY_SCOPE.scopeRef };", "const SCOPE = { scopeType: POLICY_SCOPE.scopeType, scopeRef: POLICY_SCOPE.scopeRef };\nconst S2 = { scopeType: \"platform\", scopeRef: body.scope_ref };")));
   red("W3 on a raw config path", checkPolicyPathsOnly(plant("route", "setOverride(ctx.admin, actor, SCOPE, policyPath(v.def.key), v.settings)", "setOverride(ctx.admin, actor, SCOPE, String(body.path), v.settings)")));
+  red("W3 on a raw path through the documents write", checkPolicyPathsOnly(plant("route", "setOverride(ctx.admin, actor, SCOPE, DOCUMENTS_PATH, v.settings)", "setOverride(ctx.admin, actor, SCOPE, String(body.path), v.settings)")));
+  red("W3 on an unvalidated documents write", checkPolicyPathsOnly(plant("route", "const v = checkDocumentsDraft(body.settings, await loadDocumentsConfig(ctx.admin));", "const v = { ok: true as const, settings: body.settings };")));
   red("W3 on a raw path through the LCPD write", checkPolicyPathsOnly(plant("route", "setOverride(ctx.admin, actor, SCOPE, LCPD_PATH, v.settings)", "setOverride(ctx.admin, actor, SCOPE, String(body.path), v.settings)")));
   red("W3 on the LCPD write without its check", checkPolicyPathsOnly(plant("route", "const v = checkLcpdDraft(body.settings);", "const v = { ok: true as const, settings: body.settings, error: \"\" };")));
   red("R1 on the reminder scan using the constant", checkConsumers(plant("reminders", "const horizonDays = (await loadIndividualPolicy(admin)).reminderHorizonDays;", "const horizonDays = REMINDER_HORIZON_DAYS;")));
