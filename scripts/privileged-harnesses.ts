@@ -324,6 +324,14 @@ const STAGING: Listed[] = [
       + "catalogue, no AI. Own harness-prof02-* identity, deleted after; two policy rows restored exactly. PEND until 470 is applied.",
   },
   {
+    file: "professional-passport-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-PASSPORT-01 Stage 7 (540), owner GO s15: one Individual with Scholar then Professional history; the shared "
+      + "Passport; a view chosen record by record, previewed as a closed draft, activated once, time-limited; unrelated records excluded; "
+      + "provenance, validity and meaning on every record; nothing self-reported shown as verified; revocation refuses the hosted view; "
+      + "sources untouched; no AI needed; an organisation link carries none of the personal Passport. /verify over HTTP with VERIFY_BASE_URL. "
+      + "Items 6 and 7 bounded (530, 510/511 not on main). Own harness-prof07-* identity and Scholar material, deleted after; one policy row restored.",
+  },
+  {
     file: "professional-competency-acceptance-harness.ts",
     note: "COMPETEN-PROFESSIONAL-COMPETENCY-01 Stage 5 (520), owner GO s15 items 1-16: My Competencies, a published competency explored with its "
       + "outcomes and expected proficiency, a self-assessment (self-reported) with confidence and a private reflection, CPD and an observation "

@@ -1952,7 +1952,7 @@ export async function deleteEvaluation(admin: Admin, userId: string, id: string)
 
 /** The caller's chosen evaluations, derived as the Passport shows them. */
 export async function loadPassportEvaluations(admin: Admin, userId: string): Promise<Read<PassportEvaluation[]>> {
-  const { data, error } = await admin.from("individual_scholar_passport_evaluation").select("evaluation_id, label, included_at").eq("user_id", userId).order("included_at", { ascending: false }).limit(50);
+  const { data, error } = await admin.from("individual_scholar_passport_evaluation").select("id, evaluation_id, label, included_at").eq("user_id", userId).order("included_at", { ascending: false }).limit(50);
   if (error) return fail(error);
   const rows = (data ?? []) as any[];
   if (!rows.length) return { ok: true, data: [] };
@@ -1962,7 +1962,7 @@ export async function loadPassportEvaluations(admin: Admin, userId: string): Pro
   const byId = new Map(((ev ?? []) as any[]).map(e => [e.id, e]));
   return { ok: true, data: rows.filter(r => byId.has(r.evaluation_id)).map(r => {
     const e = byId.get(r.evaluation_id);
-    return passportEvaluationOf({ id: e.id, scope: e.scope, method: e.method, kind: e.kind, createdAt: e.created_at, confidence: e.confidence, results: e.results, limitations: e.limitations ?? [] }, { label: r.label, includedAt: r.included_at });
+    return { ...passportEvaluationOf({ id: e.id, scope: e.scope, method: e.method, kind: e.kind, createdAt: e.created_at, confidence: e.confidence, results: e.results, limitations: e.limitations ?? [] }, { label: r.label, includedAt: r.included_at }), itemId: r.id };
   }) };
 }
 

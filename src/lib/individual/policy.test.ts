@@ -13,6 +13,7 @@ import {
   ACTIVITY_STATUSES, DEFAULT_ACTIVITY_TYPES, DEFAULT_EVIDENCE_KINDS, DEFAULT_GOAL_PRIORITIES, DEFAULT_GOAL_TEMPLATES, DEFAULT_GOAL_TYPES, DEFAULT_MILESTONE_TYPES,
   GOAL_FIELDS, GOAL_STATUSES, REVIEW_FIELDS,
 } from "./professional/plan-vocabulary";
+import { DEFAULT_PURPOSES, PASSPORT_CATEGORIES } from "./passport-vocabulary";
 import { DEFAULT_COMPETENCY_CATEGORIES, DEFAULT_CONFIDENCE, DEFAULT_EVIDENCE_TYPES, DEFAULT_RELATIONS, SHARE_PARTS } from "./professional/competency-vocabulary";
 import { DEFAULT_PRACTICE_SETTINGS, DEFAULT_QUALIFICATION_TYPES, DEFAULT_STATUSES, DOCUMENT_KINDS, OPTIONAL_FIELDS, PROFILE_SECTIONS } from "./professional/profile-vocabulary";
 
@@ -130,6 +131,10 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       professionalCompetency: {
         categories: [...DEFAULT_COMPETENCY_CATEGORIES], confidence: [...DEFAULT_CONFIDENCE], evidenceTypes: [...DEFAULT_EVIDENCE_TYPES], relations: [...DEFAULT_RELATIONS],
         personal: "on", fields: ["outcome", "confidence", "reflection", "interest"], shareParts: [...SHARE_PARTS], ai: "on", reassessDays: 180,
+      },
+      professionalPassport: {
+        sections: [...PASSPORT_CATEGORIES], shareable: [...PASSPORT_CATEGORIES], purposes: [...DEFAULT_PURPOSES], recipient: "optional",
+        presentation: "detailed", validity: "show", exportOn: "on", ai: "on",
       },
     });
     expect(DEFAULT_POLICY.professionalProfile.jurisdictions.length).toBe(COUNTRIES.length);

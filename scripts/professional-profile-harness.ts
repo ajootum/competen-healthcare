@@ -184,6 +184,8 @@ const REMIND = "src/lib/individual/professional/reminders.ts";
 const SHARE = "src/lib/individual/professional/share.ts";
 const SHARE_PROFILE = "src/lib/individual/professional/share-profile.ts";
 const VERIFY_PAGE = "src/app/verify/[token]/page.tsx";
+// PASSPORT-01 (Stage 7): /verify renders a Professional link through the one Passport read, which asks the helper.
+const PASSPORT_VIEW = "src/lib/individual/passport-view.ts";
 const PROF_HARNESS = existsSync("scripts/individual-professional-harness.ts") ? readFileSync("scripts/individual-professional-harness.ts", "utf8") : "";
 
 const ownRowOnly = (m: string, tables: string[]): boolean => tables.every(t => m.includes(`alter table ${t} enable row level security`)
@@ -217,8 +219,8 @@ const checkDerivation = (derive: Derive, src: Sources, harness: string): R => {
     s([row("requested", {}, 0), row("declined", { reason: "x" }, 1)]) === "declined",
   ];
   const oneFile = /const VERIFIED_STATE_FILES = new Set\(\["src\/lib\/individual\/professional\/profile-verification\.ts"\]\);/.test(harness);
-  const page = src.get(VERIFY_PAGE) ?? "";
-  const viaHelper = /isIndependentlyVerified\(r\.verification\.state\)/.test(page) && !/state === "verified"/.test(page);
+  const page = src.get(PASSPORT_VIEW) ?? "";
+  const viaHelper = /isIndependentlyVerified\(r\.verification\.state\)/.test(page) && !/state === "verified"/.test(page) && !/state === "verified"/.test(src.get(VERIFY_PAGE) ?? "");
   return { ok: cases.every(Boolean) && oneFile && viaHelper, detail: `cases ${cases.map(c => (c ? 1 : 0)).join("")}, one exempt file ${oneFile}, /verify through the helper ${viaHelper}` };
 };
 const checkHqGate = (src: Sources): R => {
@@ -248,7 +250,8 @@ type ParseShare = typeof import("../src/lib/individual/professional/share-profil
 const checkSharing = (src: Sources, parse: ParseShare, m: string): R => {
   const page = src.get(VERIFY_PAGE) ?? "";
   const lib = src.get(SHARE_PROFILE) ?? "";
-  const gated = /const sharedProfile = carriesOwn\s*\?\s*await loadSharedProfile\(/.test(page);
+  const gated = /if \(carriesOwn\) \{\s+const meta = await loadViewMeta\(/.test(page) && /loadSharedProfile\(admin, shareTokenId, userId, ctx\.profile\.shareSections, ctx\.today\)/.test(src.get(PASSPORT_VIEW) ?? "")
+    && !/loadSharedProfile\(/.test(page);
   const current = /\.is\("superseded_at", null\)\.is\("withdrawn_at", null\)\.order\("created_at"\)/.test(lib) && /sections\.includes\(ITEM_SECTION\[i\.section as ItemKind\]\)/.test(lib);
   const private_ = /verification: \{ \.\.\.\(byItem\[i\.id\] \?\? NO_VERIFICATION\), reason: null, history: \[\] \}/.test(lib) && !/self_declared_identifier|document_path|document_name|detail/.test(lib.replace(/\/\/.*$/gm, ""));
   const offByDefault = JSON.stringify(parse({})) === JSON.stringify({ overview: false, itemIds: [] })
@@ -317,14 +320,14 @@ function main() {
   red("B1 on an automatic appointment", checkVerifierAuthority(M451 + "\ninsert into ogs_office_appointments (role) values ('individual_professional_verifier')"));
   red("B1 on a write policy", checkVerifierAuthority(M451 + "\ncreate policy p on individual_professional_item_verification for insert with check (true)"));
   red("B2 on a second file allowed to say verified", checkDerivation(deriveVerification, ALL, PROF_HARNESS.replace(`new Set(["src/lib/individual/professional/profile-verification.ts"])`, `new Set(["src/lib/individual/professional/profile-verification.ts", "src/lib/individual/professional/share-profile.ts"])`)));
-  red("B2 on /verify comparing the state itself", checkDerivation(deriveVerification, plant(VERIFY_PAGE, "isIndependentlyVerified(r.verification.state)", `r.verification.state === "verified"`), PROF_HARNESS));
+  red("B2 on /verify comparing the state itself", checkDerivation(deriveVerification, plant(PASSPORT_VIEW, "isIndependentlyVerified(r.verification.state)", `r.verification.state === "verified"`), PROF_HARNESS));
   red("B2 on a derivation that trusts a request", checkDerivation(((rows: never[], t: string) => ({ ...deriveVerification(rows, t), state: "verified" })) as Derive, ALL, PROF_HARNESS));
   red("B3 on an ungated document handler", checkHqGate(plant(HQ_ROUTE, `export async function GET(req: Request) {\n  const ctx = await hqApiGate(["hq.individual.professional.verify"]);`, `export async function GET(req: Request) {\n  const ctx = await hqApiGate(["hq.platform.home.view"]);`)));
   red("B3 on a queue that includes the verifier's own records", checkHqGate(plant(VER, ` && owner.get(id) !== verifierId).map(([id]) => id);\n    if (!open.length)`, `).map(([id]) => id);\n    if (!open.length)`)));
   red("B4 on reminders that ignore the kinds policy", checkReminders(plant(REMIND, "const kinds = new Set(policy.professionalProfile.reminderKinds);", "const kinds = new Set(['credentials', 'primary_registration']);"), dueOffset, itemEligible, M452));
   red("B4 on a schedule that sends every offset", checkReminders(ALL, ((e: string, t: string, o: readonly number[]) => (o.length ? Math.max(...o) : null)) as Due, itemEligible, M452));
   red("B4 on a partial claim key", checkReminders(ALL, dueOffset, itemEligible, M452.replace("(item_id, expires_on, offset_days);", "(item_id, expires_on, offset_days) where offset_days > 0;")));
-  red("B5 on /verify showing the profile on every link", checkSharing(plant(VERIFY_PAGE, "const sharedProfile = carriesOwn", "const sharedProfile = true"), parseShareProfile, M453));
+  red("B5 on /verify showing the profile on every link", checkSharing(plant(VERIFY_PAGE, "  if (carriesOwn) {\n    const meta = await loadViewMeta(", "  if (true) {\n    const meta = await loadViewMeta("), parseShareProfile, M453));
   red("B5 on a shared record that carries the verifier's reasons", checkSharing(plant(SHARE_PROFILE, ", reason: null, history: [] },", " },"), parseShareProfile, M453));
   red("B5 on sharing that leaks the registration number", checkSharing(add(SHARE_PROFILE, "const n = i.self_declared_identifier;"), parseShareProfile, M453));
   red("B5 on the overview shared by default", checkSharing(ALL, ((b: Record<string, unknown>) => ({ ...parseShareProfile(b), overview: true })) as ParseShare, M453));

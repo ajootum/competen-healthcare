@@ -94,6 +94,11 @@ const INCLUDED = [
   // the four aspects never merged, no Stage 5 write to C5 tables, reflections never shared or sent to AI, AI saves
   // nothing, offered and labelled catalogues only, production-safe without 520. 19 planted-failure controls. Files only.
   "professional-competency-harness.ts",
+  // COMPETEN-PROFESSIONAL-PASSPORT-01 Stage 7 (source and migration 540): own-row RLS, draft-then-activate views fixed once
+  // live, live links narrow never widen, append-only access log naming nobody, composite keys, record-level sharing only
+  // through the one read the owner previews, /verify by token alone with no documents, trust never upgraded, no private
+  // path onto a view, AI saves and shares nothing. 15 planted-failure controls. Reads files only.
+  "professional-passport-harness.ts",
   // HQ-USERS-A: the /api/super-admin/users handlers are gated by the HQ gate (view) and the owner gate (writes),
   // never by profiles.role, with 8 planted-failure controls. Reads files only: no client, no network, no .env.local.
   "hq-users-authority-harness.ts",
