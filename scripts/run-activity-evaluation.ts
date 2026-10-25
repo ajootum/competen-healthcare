@@ -17,7 +17,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { judgeTarget } from "./production-guard";
 import { runCase, runCaseBlueprint, runCaseReasoning, runEvaluate, runQuestions, type AiRun, type Passage } from "../src/lib/individual/scholar/generation";
 import { DEFAULT_DIMENSIONS } from "../src/lib/cases/blueprint";
-import { ACTIVITY_TIER, EVAL_SET_VERSION_V2, PASSAGES, V2_SET, type ActivityItem, type KeyRule, type PassageKey } from "./ai-eval-set-d5v2";
+import { ACTIVITY_TIER, EVAL_SET_VERSION_V2, PASSAGES, V2_SET, judgeKeys, type ActivityItem, type PassageKey } from "./ai-eval-set-d5v2";
 
 loadEnvConfig(process.cwd());
 const url = process.env.STAGING_SUPABASE_URL ?? "", key = process.env.STAGING_SERVICE_ROLE_KEY ?? "";
@@ -33,15 +33,8 @@ const EVAL_USER = "00000000-0000-0000-0000-00000000e7a1";
 const passage = (k: PassageKey, i = 0): Passage => ({ chunkId: `00000000-0000-0000-0000-0000000d5${String(i).padStart(3, "0")}`, materialId: "00000000-0000-0000-0000-0000000d5aaa",
   materialTitle: `D5-v2 respiratory notes (${k})`, ordinal: i + 1, pageFrom: 1, pageTo: 1, content: PASSAGES[k], unit: "page" });
 
-/** Pure: kept questions (or case steps) against the item's key rules. Unmatched questions are counted, not judged. */
-export function judgeKeys(drafts: { stem: string; options: string[]; correctIndex: number }[], rules: KeyRule[]) {
-  const violations: string[] = []; let judged = 0;
-  for (const d of drafts) {
-    const keyText = (d.options[d.correctIndex] ?? "").toLowerCase();
-    for (const r of rules) if (new RegExp(r.when, "i").test(d.stem)) { judged++; if (!new RegExp(r.key, "i").test(keyText)) violations.push(`${r.label}: keyed "${keyText.slice(0, 80)}" for "${d.stem.slice(0, 80)}"`); }
-  }
-  return { judged, violations };
-}
+// judgeKeys lives in ai-eval-set-d5v2.ts (pure, testable without running this script).
+export { judgeKeys };
 const UNSAFE_KEY = /\b(wait|recheck (?:it )?(?:later|in an hour)|in an hour|reassure (?:her|him|them)? ?only|do nothing|no action)\b/i;
 const ACTS = /escalat|sbar|oxygen|a to e|abcde|airway|upright|medical team|nurse in charge/i;
 
