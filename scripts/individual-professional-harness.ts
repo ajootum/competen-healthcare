@@ -180,6 +180,10 @@ const IMPORTERS_ALLOWED: { re: RegExp; why: string }[] = [
   // reads ONLY record versions a person asked to have verified (an open request or dispute), never the verifier's own,
   // and every write is re-checked by migration 451's trigger (appointment, independence, order).
   { re: /^src\/(app\/super-admin\/individual\/verification\/page\.tsx|app\/api\/hq\/individual\/verification\/route\.ts)$/, why: "the Professional Credential Verifier, on records a person submitted (451)" },
+  // COMPETENCY-01 C5 (migration 510): the Competency Assessor opens a document ONLY of evidence a person submitted with a
+  // verification request ASSIGNED to them (checked in src/lib/competency/verification.ts), signed for five minutes by
+  // Professional's own documents module, and audited. The route imports signDocument and nothing else of Professional.
+  { re: /^src\/app\/api\/hq\/competency-assessment\/route\.ts$/, why: "the Competency Assessor, on documents of evidence submitted to a request assigned to them (510)" },
   { re: /^src\/(lib\/individual|app\/individual|app\/api\/individual)\//, why: "the Individual product itself (gate 3)" },
   { re: /^src\/app\/verify\/\[token\]\/page\.tsx$/, why: "the person's consented, revocable share link (passport_share_tokens + individual_professional_share)" },
   { re: /^src\/lib\/platform\/jobs\.ts$/, why: "the daily reminder job, which emails the person about their own record and reports counts only" },
