@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { isNotProvisioned } from "./access";
-import { loadIndividualPassport } from "./passport";
+import { EVIDENCE_LABEL, loadIndividualPassport } from "./passport";
 import { loadProfessionalRecord } from "./professional/record";
 import { loadSharedProfile } from "./professional/share-profile";
 import { loadSharedLearning } from "./professional/share-learning";
@@ -173,7 +173,7 @@ export async function loadPassportSelection(admin: any, userId: string, shareTok
       for (const s of passport.study.ok ? passport.study.data.filter(s => s.itemId && studyIds.has(s.itemId)) : []) items.push({
         key: `study:${s.itemId}`, category: "study", sourceService: "Competen Scholar", title: s.label, description: `${s.answered} answered`,
         issuer: "Competen Scholar", date: s.lastStudied, version: null, evidenceRef: null, method: "Self-directed practice", authority: null,
-        trust: "educational", validity: "not_applicable", meaning: "Self-directed study on the student's own notes: not an assessment and not a verified competency",
+        trust: "educational", validity: "not_applicable", meaning: EVIDENCE_LABEL.self_directed,
       });
     }
     if (passport && evalIds.size) {
@@ -181,7 +181,7 @@ export async function loadPassportSelection(admin: any, userId: string, shareTok
       for (const v of passport.evaluations.ok ? passport.evaluations.data.filter(v => v.itemId && evalIds.has(v.itemId)) : []) items.push({
         key: `evaluation:${v.itemId}`, category: "evaluation", sourceService: "Competen Scholar", title: v.label,
         description: v.dimensions.map(d => `${d.name}: ${d.reads}`).join(" · "), issuer: "Competen Scholar", date: v.madeAt, version: null, evidenceRef: null,
-        method: v.method, authority: null, trust: "educational", validity: "not_applicable", meaning: `Educational evaluation, formative (confidence: ${v.confidence}); never a credential`,
+        method: v.method, authority: null, trust: "educational", validity: "not_applicable", meaning: `${EVIDENCE_LABEL.educational_evaluation} (confidence: ${v.confidence}); never a credential`,
       });
     }
     if (passport && meta.includeInstitution) {

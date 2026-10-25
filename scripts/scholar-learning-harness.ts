@@ -74,7 +74,9 @@ const MIG375_FILE = "supabase/migrations/375-individual-scholar-passport-selecti
 const MIG375 = existsSync(MIG375_FILE) ? read(MIG375_FILE).replace(/--.*$/gm, "").toLowerCase() : "";
 const VERIFY = "src/app/verify/[token]/page.tsx";
 const PASSPORT_PAGE = "src/app/individual/(app)/[experience]/passport/page.tsx";
-const OUTSIDE: Src = new Map([VERIFY, PASSPORT_PAGE, "src/lib/individual/passport.ts"].map(f => [f, strip(read(f))]));
+// PASSPORT-01 (Stage 7): /verify shows the person's own records only through the one Passport read, record by record.
+const PASSPORT_VIEW = "src/lib/individual/passport-view.ts";
+const OUTSIDE: Src = new Map([VERIFY, PASSPORT_PAGE, "src/lib/individual/passport.ts", PASSPORT_VIEW].map(f => [f, strip(read(f))]));
 
 const STORE = `${LIB}/store.ts`;
 const GEN = `${LIB}/generation.ts`;
@@ -255,9 +257,13 @@ const studyReadsContent = (src: Src) => {
   return body.length < 100 || selects.length < 4 || selects.some(c => /content|stem|options|chosen|correct|rationale|source_quote|model|prompt|title/.test(c));
 };
 const verifyReadsLive = (out: Src) => {
-  const v = out.get(VERIFY) ?? "";
-  return /const study = carriesOwn \? await loadStudyAchievements\(admin, share\.nurse_id\) : null;/.test(v)
-    && !/unstable_cache|"use cache"|revalidate\s*=/.test(v);
+  const v = out.get(VERIFY) ?? "", view = out.get(PASSPORT_VIEW) ?? "";
+  // Stage 7: on every view, /verify reads the link's selection, which reads the Passport now and keeps only the study
+  // items chosen for this link AND still on the Passport -- so taking one off reaches live links.
+  return /const selection = await loadPassportSelection\(admin, share\.nurse_id, share\.id,/.test(v)
+    && /needPassport \? loadIndividualPassport\(admin, userId, ctx\.today\)/.test(view)
+    && /passport\.study\.data\.filter\(s => s\.itemId && studyIds\.has\(s\.itemId\)\)/.test(view)
+    && ![v, view].some(x => /unstable_cache|"use cache"|revalidate\s*=/.test(x));
 };
 const includeChecksEarned = (src: Src) => {
   const s = src.get(STORE) ?? "";
@@ -416,7 +422,10 @@ const progressHonest = (src: Src, outside: Src) => {
     && /Activity, not understanding\./.test(view) && /Not what you know\./.test(view)
     && /educational_evaluation: "Educational evaluation of own learning: formative, not verified"/.test(passport)
     && derive.length > 200 && !/percent/.test(derive)
-    && /const evaluations = carriesOwn \? await loadPassportEvaluations\(admin, share\.nurse_id\) : null;/.test(verify);
+    // Stage 7: a link shows a Scholar evaluation only when chosen for THAT link (540) and still on the Passport.
+    && /passport\.evaluations\.data\.filter\(v => v\.itemId && evalIds\.has\(v\.itemId\)\)/.test(outside.get(PASSPORT_VIEW) ?? "")
+    && /trust: "educational", validity: "not_applicable", meaning: `\$\{EVIDENCE_LABEL\.educational_evaluation\}/.test(outside.get(PASSPORT_VIEW) ?? "")
+    && /loadPassportSelection\(/.test(verify);
 };
 /**
  * K39 (EVALUATION-01, Stage 6): AN EVALUATION INTERPRETS MARKED EVIDENCE, AND IS NEVER COMPETENCE.
@@ -1005,7 +1014,9 @@ function main() {
   ok("V3. a choice is stored only after the store counted an answer of that kind (opt-in to an earned achievement)", includeChecksEarned(REAL));
   ok("V4. self-directed study is labelled as such on the Passport page and on /verify, from one label",
     /self_directed: "Self-directed study, not a verified competency"/.test(OUTSIDE.get("src/lib/individual/passport.ts") ?? "")
-    && /EVIDENCE_LABEL\.self_directed/.test(OUTSIDE.get(PASSPORT_PAGE) ?? "") && /EVIDENCE_LABEL\.self_directed/.test(OUTSIDE.get(VERIFY) ?? ""));
+    && /EVIDENCE_LABEL\.self_directed/.test(OUTSIDE.get(PASSPORT_PAGE) ?? "")
+    && /trust: "educational", validity: "not_applicable", meaning: EVIDENCE_LABEL\.self_directed,/.test(OUTSIDE.get(PASSPORT_VIEW) ?? "")
+    && /loadPassportSelection\(/.test(OUTSIDE.get(VERIFY) ?? ""));
   if (!MIG375) console.log(`  NOTE  ${MIG375_FILE} is not in this checkout -- schema check V5 and P19 NOT RUN`);
   if (MIG375) ok("V5. 375: RLS with own-row select only, no write policy, the composite key to the owner's material with cascade, two achievement kinds, a checked label, no function",
     /alter table individual_scholar_passport_item enable row level security/.test(MIG375)
@@ -1135,7 +1146,8 @@ function main() {
   ok("P17. ⚠ V1 goes red when the Passport read starts selecting a question's text",
     studyReadsContent(plant(STORE, '.select("id, material_id, kind")\n    .eq("user_id", userId).in("material_id", materialIds)', '.select("id, material_id, kind, stem")\n    .eq("user_id", userId).in("material_id", materialIds)')));
   ok("P18. ⚠ V2 goes red when /verify stops reading the choices at render time",
-    (() => { const copy = new Map(OUTSIDE); copy.set(VERIFY, (copy.get(VERIFY) ?? "").replace("carriesOwn ? await loadStudyAchievements(admin, share.nurse_id) : null", "null")); return !verifyReadsLive(copy); })());
+    (() => { const copy = new Map(OUTSIDE); copy.set(PASSPORT_VIEW, (copy.get(PASSPORT_VIEW) ?? "").replace("passport.study.data.filter(s => s.itemId && studyIds.has(s.itemId))", "passport.study.data")); return !verifyReadsLive(copy); })()
+    && (() => { const copy = new Map(OUTSIDE); copy.set(VERIFY, (copy.get(VERIFY) ?? "") + "\nexport const revalidate = 3600;"); return !verifyReadsLive(copy); })());
   ok("P20. ⚠ V3 goes red when a choice is stored before the answers are counted",
     !includeChecksEarned(plant(STORE, 'if (answered < 1) return "not_eligible";', "")));
   if (MIG375) ok("P19. ⚠ V5 goes red on an added write policy",
@@ -1213,7 +1225,7 @@ function main() {
     && !progressHonest(plant(`${LIB}/progress-history.ts`, "knowledge: figure(fresh.length, fresh.filter(a => a.correct).length", "knowledge: figure(inP.length, inP.filter(a => a.correct).length"), OUTSIDE)
     && !progressHonest(plant(`${PAGES}/_components/progress-view.tsx`, "Activity, not understanding.", "Your activity."), OUTSIDE)
     && !progressHonest(plant(`${LIB}/passport-evaluations.ts`, "limitations: (k.limitations ?? []).length, includedAt: choice.includedAt,", "limitations: (k.limitations ?? []).length, includedAt: choice.includedAt, percent: r.knowledge?.percent,"), OUTSIDE)
-    && !progressHonest(REAL, (() => { const c = new Map(OUTSIDE); c.set(VERIFY, (c.get(VERIFY) ?? "").replace("const evaluations = carriesOwn ? await loadPassportEvaluations(admin, share.nurse_id) : null;", "const evaluations = await loadPassportEvaluations(admin, share.nurse_id);")); return c; })()));
+    && !progressHonest(REAL, (() => { const c = new Map(OUTSIDE); c.set(PASSPORT_VIEW, (c.get(PASSPORT_VIEW) ?? "").replace("passport.evaluations.data.filter(v => v.itemId && evalIds.has(v.itemId))", "passport.evaluations.data")); return c; })()));
   ok("P57. ⚠ K39 goes red when the evaluation calls AI, counts self-graded answers as knowledge, reads Teach Me explanations, claims verified competence, rewrites a record, or drops the boundary",
     !evaluationHonest(plant(EVAL_ROUTE, "import { audit } from \"@/lib/individual/scholar/http\";", "import { audit, scholarAiRunner } from \"@/lib/individual/scholar/http\";"))
     && !evaluationHonest(plant(EVAL, "const det = attempts.filter(a => a.marking === \"deterministic\");", "const det = attempts.filter(a => a.marking !== \"ai_evaluation\");"))
