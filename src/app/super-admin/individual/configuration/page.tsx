@@ -5,6 +5,8 @@ import {
   POLICIES, POLICY_SCOPE, POLICY_PATH_PREFIX, clampInt, clampSet, clampCatalogues, clampChoice, clampProgrammes, clampOptions, clampLevels, clampSequence, policyPath, type PolicyDef,
 } from "@/lib/individual/policy";
 import { ChoiceDraft, IntDraft, LevelsDraft, OptionsDraft, PublishBar, RollbackButton, SequenceDraft, SetDraft } from "./_components/PolicyControls";
+import LcpdEditor from "./_components/LcpdEditor";
+import { LCPD_PATH, REVIEW_LABEL, resolveLcpd } from "@/lib/individual/lcpd-config";
 
 // /super-admin/individual/configuration -- COMPETEN-CONFIG-002 item 6.
 //
@@ -55,7 +57,7 @@ export default async function IndividualPolicyPage() {
   const admin = ctx.admin;
   const scope = (q: any) => q.eq("scope_type", POLICY_SCOPE.scopeType).eq("scope_ref", POLICY_SCOPE.scopeRef);
 
-  const [ovr, ver, aud, cats, progs] = await Promise.all([
+  const [ovr, ver, aud, cats, progs, lcpdRow] = await Promise.all([
     scope(admin.from("workspace_config_overrides").select("config_path, draft, published, updated_by_name, updated_at")).like("config_path", `${POLICY_PATH_PREFIX}%`),
     scope(admin.from("workspace_config_versions").select("id, note, status, published_by_name, created_at, snapshot")).order("created_at", { ascending: false }).limit(25),
     scope(admin.from("workspace_config_audit").select("action, config_path, actor_name, created_at, new_value")).order("created_at", { ascending: false }).limit(40),
@@ -63,7 +65,12 @@ export default async function IndividualPolicyPage() {
     admin.from("frameworks").select("id, name, competency_layer").is("hospital_id", null).eq("is_active", true).eq("pub_status", "published").order("name"),
     // JOIN-01: the active Scholar programmes (migration 387) that the join may offer and give levels to.
     admin.from("individual_scholar_programme").select("code, label").eq("is_active", true).order("label"),
+    // LCPD-01 s11: the Professional Learning and CPD document, one more path in the same scope.
+    scope(admin.from("workspace_config_overrides").select("draft, published, updated_by_name")).eq("config_path", LCPD_PATH).maybeSingle(),
   ]);
+  const lcpdPublished = resolveLcpd(lcpdRow.data?.published ?? null);
+  const lcpdDraft = lcpdRow.data?.draft ? resolveLcpd(lcpdRow.data.draft) : null;
+  const lcpdPending = !!lcpdRow.data && !same(lcpdRow.data.draft, lcpdRow.data.published);
   const catalogueOptions = ((cats.data ?? []) as any[]).map(f => ({ value: String(f.id).toLowerCase(), label: f.competency_layer ? `${f.name} (${f.competency_layer})` : `${f.name} (layer not set)` }));
   const programmeOptions = ((progs.data ?? []) as any[]).map(p => ({ value: String(p.code), label: String(p.label) }));
   // One lookup for both: catalogue ids are uuids and programme codes are not, so they cannot collide.
@@ -71,7 +78,7 @@ export default async function IndividualPolicyPage() {
   const unreadable = !!(ovr.error || ver.error || aud.error);
   const rows = new Map<string, any>((ovr.data ?? []).map((r: any) => [r.config_path, r]));
   const versions: any[] = ver.data ?? [];
-  const pending = POLICIES.filter(p => { const r = rows.get(policyPath(p.key)); return r && !same(r.draft, r.published); }).length;
+  const pending = POLICIES.filter(p => { const r = rows.get(policyPath(p.key)); return r && !same(r.draft, r.published); }).length + (lcpdPending ? 1 : 0);
 
   // Effective since: the oldest version in the unbroken run (newest first) that published the current value.
   const since = (path: string, published: any): string | null => {
@@ -164,6 +171,18 @@ export default async function IndividualPolicyPage() {
             </article>
           );
         })}
+      </section>
+
+      <section aria-labelledby="lcpd-h" className="rounded-xl border border-gray-200 bg-white p-4">
+        <h2 id="lcpd-h" className="text-[15px] font-bold text-gray-900">Professional Learning & CPD</h2>
+        <p className="mt-1 text-[13px] text-gray-600">
+          Activity types, reflection templates, which learning can be shared on a Passport, and CPD requirements. In effect now:
+          {" "}{lcpdPublished.activityTypes.length} activity types, {lcpdPublished.reflectionTemplates.length} reflection templates, {lcpdPublished.requirements.length} CPD {lcpdPublished.requirements.length === 1 ? "requirement" : "requirements"}
+          {lcpdPublished.requirements.length ? ` (${lcpdPublished.requirements.map(r => `${r.label}: ${REVIEW_LABEL[r.reviewStatus].toLowerCase()}`).join("; ")})` : ""}.
+          {lcpdPending ? ` An unpublished draft is saved${lcpdRow.data?.updated_by_name ? ` by ${lcpdRow.data.updated_by_name}` : ""}.` : ""}
+        </p>
+        {lcpdRow.error && <p role="alert" className="mt-2 text-[13px] text-red-700">The Learning & CPD configuration could not be read just now. Nothing is shown rather than a guess.</p>}
+        {!lcpdRow.error && <div className="mt-3"><LcpdEditor initial={lcpdDraft ?? lcpdPublished} /></div>}
       </section>
 
       <section aria-labelledby="pub-h" className="rounded-xl border border-gray-200 bg-white p-4">

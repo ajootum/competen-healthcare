@@ -12,7 +12,7 @@ import type { OwnEvidenceClass } from "./vocabulary";
 
 export type GoalLike = { id: string; need_id: string | null; status: string; target_date: string | null };
 export type NeedLike = { id: string; title: string; status: string };
-export type CpdLike = { id: string; goal_id: string | null; hours: number | string; activity_date: string; evidence_class: string };
+export type CpdLike = { id: string; goal_id: string | null; hours: number | string | null; activity_date: string; evidence_class: string };
 export type EvidenceLike = { id: string; need_id: string | null; evidence_class: string };
 
 export type PlanProgress = {
@@ -33,7 +33,8 @@ export function planProgress(goals: readonly GoalLike[], today: string): PlanPro
   };
 }
 
-export type CpdYear = { year: number; hours: number; entries: number; withDocument: number };
+/** withoutHours: entries that recorded no hours (490, LCPD-2), counted as entries and never as 0 hours. */
+export type CpdYear = { year: number; hours: number; entries: number; withDocument: number; withoutHours?: number };
 
 /** Hours by calendar year, newest first. Only years with at least one entry appear. */
 export function cpdHoursByYear(entries: readonly CpdLike[]): CpdYear[] {
@@ -42,7 +43,8 @@ export function cpdHoursByYear(entries: readonly CpdLike[]): CpdYear[] {
     const year = Number(String(e.activity_date).slice(0, 4));
     if (!Number.isInteger(year)) continue;
     const y = by.get(year) ?? { year, hours: 0, entries: 0, withDocument: 0 };
-    y.hours = Math.round((y.hours + Number(e.hours || 0)) * 10) / 10;
+    if (e.hours == null || e.hours === "") y.withoutHours = (y.withoutHours ?? 0) + 1;
+    else y.hours = Math.round((y.hours + Number(e.hours)) * 10) / 10;
     y.entries++;
     if (e.evidence_class === "source_linked") y.withDocument++;
     by.set(year, y);

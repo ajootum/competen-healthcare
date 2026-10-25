@@ -81,8 +81,15 @@ const WRITES: Record<string, string[]> = {
   // Owner (CPD duplicates, "we don't post this and send a notification"): the person's override decision, written
   // before the entry, and the once-only notice marker. Ids only. No CPD row is written here.
   "src/lib/individual/professional/cpd-duplicates.ts": ["audit_log.insert"],
+  // LCPD-01 LCPD-5 (migration 490): the CPD requirement a person chooses to follow, on their own row. Nothing else.
+  "src/app/api/individual/professional/cpd/requirement/route.ts": ["individual_professional_cpd_setting.upsert"],
+  // LCPD-01 LCPD-3 (migration 491): the link from a private reflection (470, written by needs-store) to one CPD entry or
+  // learning record, and the impact the person reports. Never the reflection text, never the course record.
+  "src/lib/individual/professional/learning-reflections.ts": ["individual_professional_learning_reflection.insert", "individual_professional_learning_reflection.update"],
   // PROF-PROFILE-01 part B (453): the profile records the person chose for a link.
-  "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "individual_professional_share.insert", "passport_share_tokens.update", "individual_professional_share_item.insert"],
+  "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "individual_professional_share.insert", "passport_share_tokens.update", "individual_professional_share_item.insert",
+    // LCPD-01 LCPD-6 (491): the completed learning records the person ticked for this link.
+    "individual_professional_share_learning.insert"],
   // PROF-PROFILE-01 part B (452): the once-only claim for profile-record reminders, released on a failed send.
   "src/lib/individual/professional/reminders.ts": ["individual_professional_evidence.update", "individual_professional_profile.update",
     "individual_professional_reminder_log.insert", "individual_professional_reminder_log.delete"],

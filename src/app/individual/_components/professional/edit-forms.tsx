@@ -1,4 +1,4 @@
-import { CPD_ACTIVITY, DOCUMENT_MAX_LABEL, EVIDENCE_KIND } from "@/lib/individual/professional/vocabulary";
+import { DOCUMENT_MAX_LABEL, EVIDENCE_KIND } from "@/lib/individual/professional/vocabulary";
 import { ApiForm, Field, inputCls } from "./forms";
 
 // EDITING what the person already recorded -- a CPD entry, an evidence item, a goal, a need -- instead of deleting and
@@ -15,10 +15,15 @@ const Disclosure = ({ label, accent, children }: { label: string; accent: string
 );
 const d = (v: string | null | undefined) => (v ? v.slice(0, 10) : "");
 
-export function CpdEdit({ c, goals, today, accent }: {
-  c: { id: string; title: string; activity_type: string; activity_date: string; hours: number; cpd_points: number | null; provider: string | null; reflection: string | null; goal_id: string | null; document_name: string | null };
-  goals: { id: string; title: string }[]; today: string; accent: string;
+/** What the person may record now: the configured types, and whether 490's optional hours and decimal credits apply. */
+export type CpdOptions = { types: { code: string; label: string }[]; flexible: boolean };
+
+export function CpdEdit({ c, goals, today, accent, options }: {
+  c: { id: string; title: string; activity_type: string; activity_date: string; hours: number | null; cpd_points: number | null; provider: string | null; reflection: string | null; goal_id: string | null; document_name: string | null };
+  goals: { id: string; title: string }[]; today: string; accent: string; options: CpdOptions;
 }) {
+  // A type the configuration no longer offers is kept on an entry that already has it.
+  const types = options.types.some(t => t.code === c.activity_type) ? options.types : [...options.types, { code: c.activity_type, label: c.activity_type.replace(/_/g, " ") }];
   const p = `cpd-${c.id}-e`;
   return (
     <Disclosure label="Edit" accent={accent}>
@@ -26,11 +31,11 @@ export function CpdEdit({ c, goals, today, accent }: {
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Activity" htmlFor={`${p}-title`}><input id={`${p}-title`} name="title" required minLength={3} maxLength={200} defaultValue={c.title} className={inputCls} /></Field>
           <Field label="Kind of activity" htmlFor={`${p}-type`}>
-            <select id={`${p}-type`} name="activityType" required defaultValue={c.activity_type} className={inputCls}>{CPD_ACTIVITY.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+            <select id={`${p}-type`} name="activityType" required defaultValue={c.activity_type} className={inputCls}>{types.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}</select>
           </Field>
           <Field label="Date" htmlFor={`${p}-date`}><input id={`${p}-date`} name="activityDate" type="date" required max={today} defaultValue={d(c.activity_date)} className={inputCls} /></Field>
-          <Field label="Hours" htmlFor={`${p}-hours`}><input id={`${p}-hours`} name="hours" type="number" required min={0.1} max={1000} step={0.1} inputMode="decimal" defaultValue={c.hours} className={inputCls} /></Field>
-          <Field label="CPD points (optional)" htmlFor={`${p}-points`}><input id={`${p}-points`} name="cpdPoints" type="number" min={0} step={0.5} defaultValue={c.cpd_points ?? ""} className={inputCls} /></Field>
+          <Field label={options.flexible ? "Hours (optional)" : "Hours"} htmlFor={`${p}-hours`}><input id={`${p}-hours`} name="hours" type="number" required={!options.flexible} min={0.1} max={1000} step={0.1} inputMode="decimal" defaultValue={c.hours ?? ""} className={inputCls} /></Field>
+          <Field label={options.flexible ? "CPD credits (optional)" : "CPD points (optional)"} htmlFor={`${p}-points`}><input id={`${p}-points`} name="cpdPoints" type="number" min={0} step={options.flexible ? 0.1 : 1} defaultValue={c.cpd_points ?? ""} className={inputCls} /></Field>
           <Field label="Provider (optional)" htmlFor={`${p}-provider`}><input id={`${p}-provider`} name="provider" maxLength={160} defaultValue={c.provider ?? ""} className={inputCls} /></Field>
           <Field label="Goal it served (optional)" htmlFor={`${p}-goal`}>
             <select id={`${p}-goal`} name="goalId" defaultValue={c.goal_id ?? ""} className={inputCls}><option value="">None</option>{goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}</select>

@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CPD_ACTIVITY, DOCUMENT_MAX_LABEL } from "@/lib/individual/professional/vocabulary";
+import { DOCUMENT_MAX_LABEL } from "@/lib/individual/professional/vocabulary";
+import type { CpdOptions } from "./edit-forms";
 import { focusRing, primaryBtn } from "../chrome";
 import { Field, RefusalNote, inputCls, refusalMsg, type RefusalMsg } from "./forms";
 import { experienceHref } from "@/lib/individual/experiences";
@@ -14,7 +15,7 @@ import { aiNotice } from "./ai-refusal";
 // to the Professional assistant, and puts the draft INTO THE BOX for them to edit. It is saved only if they
 // press "Add to my CPD log" -- the AI writes nothing, and an unedited draft is labelled as one until then.
 
-export default function CpdForm({ accent, today, goals }: { accent: string; today: string; goals: { id: string; title: string }[] }) {
+export default function CpdForm({ accent, today, goals, options }: { accent: string; today: string; goals: { id: string; title: string }[]; options: CpdOptions }) {
   const router = useRouter();
   const ref = useRef<HTMLFormElement>(null);
   const [busy, setBusy] = useState(false);
@@ -60,15 +61,15 @@ export default function CpdForm({ accent, today, goals }: { accent: string; toda
   return (
     <form ref={ref} onSubmit={submit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Activity" htmlFor="cpd-title"><input id="cpd-title" name="title" required minLength={3} maxLength={200} className={inputCls} placeholder="e.g. Sepsis recognition workshop" /></Field>
+        <Field label="What did you do?" htmlFor="cpd-title"><input id="cpd-title" name="title" required minLength={3} maxLength={200} className={inputCls} placeholder="e.g. Sepsis recognition workshop" /></Field>
         <Field label="Kind of activity" htmlFor="cpd-type">
-          <select id="cpd-type" name="activityType" required className={inputCls} defaultValue="course">
-            {CPD_ACTIVITY.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          <select id="cpd-type" name="activityType" required className={inputCls} defaultValue={options.types.some(t => t.code === "course") ? "course" : options.types[0]?.code}>
+            {options.types.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
           </select>
         </Field>
-        <Field label="Date" htmlFor="cpd-date"><input id="cpd-date" name="activityDate" type="date" required max={today} defaultValue={today} className={inputCls} /></Field>
-        <Field label="Hours" htmlFor="cpd-hours"><input id="cpd-hours" name="hours" type="number" required min={0.1} max={1000} step={0.1} inputMode="decimal" className={inputCls} /></Field>
-        <Field label="CPD points (optional)" htmlFor="cpd-points" hint="Only if the provider awarded points."><input id="cpd-points" name="cpdPoints" type="number" min={0} max={1000} step={1} inputMode="numeric" className={inputCls} /></Field>
+        <Field label="When did it happen?" htmlFor="cpd-date" hint="The date of the activity. You can record it any time after."><input id="cpd-date" name="activityDate" type="date" required max={today} defaultValue={today} className={inputCls} /></Field>
+        <Field label={options.flexible ? "Hours (optional)" : "Hours"} htmlFor="cpd-hours"><input id="cpd-hours" name="hours" type="number" required={!options.flexible} min={0.1} max={1000} step={0.1} inputMode="decimal" className={inputCls} /></Field>
+        <Field label={options.flexible ? "CPD credits (optional)" : "CPD points (optional)"} htmlFor="cpd-points" hint="Only if the provider awarded them."><input id="cpd-points" name="cpdPoints" type="number" min={0} max={1000} step={options.flexible ? 0.1 : 1} inputMode="decimal" className={inputCls} /></Field>
         <Field label="Provider (optional)" htmlFor="cpd-provider"><input id="cpd-provider" name="provider" maxLength={160} className={inputCls} /></Field>
         <Field label="Goal in your plan (optional)" htmlFor="cpd-goal">
           <select id="cpd-goal" name="goalId" className={inputCls} defaultValue="">

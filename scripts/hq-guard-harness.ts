@@ -86,10 +86,16 @@ const MIGRATION = "supabase/migrations/264-hq-positions-and-spaces.sql";
 // A migration is a seed migration if it touches ANY of the three seed tables. hq_position_capability is
 // matched before hq_position so the longer name wins, though `includes` makes that moot here.
 const SEED_TABLES = ["insert into hq_capability", "insert into hq_position_capability", "insert into hq_position"];
+// ⚠ A FUNCTION BODY IS NOT A SEED -- 2026-10-25, migration 500. Its hq_position_admin_* functions INSERT into
+// all three seed tables, but only when an owner calls them from the HQ positions screen. Applying 500 writes
+// no row at all, so parsing those bodies made D1-D6 red against a catalogue the migration does not change.
+// Dollar-quoted bodies are cut out before either the filter or the parser sees a file. S0 still proves the
+// list is not empty, and it lists the same seed migrations it did before 500.
+const stripFunctionBodies = (s: string) => s.replace(/\$\$[\s\S]*?\$\$/g, "$$$$ $$$$");
 const SEED_MIGRATIONS = readdirSync("supabase/migrations")
   .filter(f => f.endsWith(".sql"))
   .map(f => `supabase/migrations/${f}`)
-  .filter(f => { const s = readFileSync(f, "utf8"); return SEED_TABLES.some(t => s.includes(t)); })
+  .filter(f => { const s = stripFunctionBodies(readFileSync(f, "utf8")); return SEED_TABLES.some(t => s.includes(t)); })
   .sort();
 const APP_ROOT = "src/app/super-admin";
 
@@ -123,7 +129,7 @@ const stripSqlComments = (s: string) =>
     .map(l => { const at = l.indexOf("--"); return at >= 0 && ((l.slice(0, at).match(/'/g) ?? []).length) % 2 === 0 ? l.slice(0, at) : l; })
     .join("\n");
 
-const sql = stripSqlComments(SEED_MIGRATIONS.map(f => readFileSync(f, "utf8")).join("\n"));
+const sql = stripSqlComments(SEED_MIGRATIONS.map(f => stripFunctionBodies(readFileSync(f, "utf8"))).join("\n"));
 
 // Anything the parser meets and does not understand lands here, and P1 below turns it red. A parser that
 // shrugs at a form it cannot read is the failure this whole block is a correction for.

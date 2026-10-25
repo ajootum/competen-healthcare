@@ -561,7 +561,7 @@ export default function UsersWorkspace({
       {addOpen && (
         /* One dialog, two states -- the form, then the credentials it produced. The title has to follow the
            state or the accessible name would still say "Add User" while the dialog shows a password. */
-        <Modal open title={createdCreds ? "Account created" : "Add User"} onClose={() => setAddOpen(false)}>
+        <Modal open title={createdCreds ? "Account created" : "Add User"} onClose={() => setAddOpen(false)} initialIndex={createdCreds ? 0 : 1}>
             {createdCreds ? (
               <>
                 <p className="text-xs text-gray-500 mb-4">Share these credentials securely — the password is shown only once.</p>

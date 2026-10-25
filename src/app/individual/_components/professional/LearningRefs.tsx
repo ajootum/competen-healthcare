@@ -16,8 +16,10 @@ export function LearningProvenance({ r }: { r: LearningReference }) {
   );
 }
 
-export default function LearningRefs({ refs, accent, competencies = false, certificates = false }: {
+export default function LearningRefs({ refs, accent, competencies = false, certificates = false, below }: {
   refs: readonly LearningReference[]; accent: string; competencies?: boolean; certificates?: boolean;
+  /** Anything the page shows under one record, for example the person's own reflections on it (LCPD-3). */
+  below?: (r: LearningReference) => React.ReactNode;
 }) {
   return (
     <ul className="divide-y divide-gray-100">
@@ -50,6 +52,7 @@ export default function LearningRefs({ refs, accent, competencies = false, certi
                 : <a key={c.no} href={learningCertificateHref(c.no)} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: accent }}>Certificate {c.no}</a>)}
             </p>
           )}
+          {below?.(r)}
         </li>
       ))}
     </ul>
