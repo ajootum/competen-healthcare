@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { CpdRequirement, LcpdConfig, ShareableClass } from "@/lib/individual/professional/lcpd-config";
+import type { CpdRequirement, LcpdConfig, ShareableClass } from "@/lib/individual/lcpd-config";
 
 // The Professional Learning and CPD configuration (COMPETEN-PROFESSIONAL-LCPD-01 s11), as a draft. Saved to
 // /api/hq/individual/config {action: "lcpd"}, which re-checks hq.individual.config.manage and validates the whole draft.

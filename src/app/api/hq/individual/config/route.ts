@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { publishScope, resetOverride, rollbackVersion, setOverride, wceMissing } from "@/lib/config/workspace-config-write";
 import { POLICY_SCOPE, policyDef, policyPath, validateDraft } from "@/lib/individual/policy";
-import { checkLcpdDraft, LCPD_PATH } from "@/lib/individual/professional/lcpd-config";
+import { checkLcpdDraft, LCPD_PATH } from "@/lib/individual/lcpd-config";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";

@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { CPD_ACTIVITY } from "./vocabulary";
 
 // ── PROFESSIONAL LEARNING AND CPD CONFIGURATION ── COMPETEN-PROFESSIONAL-LCPD-01 s11 ─────────────────────────────────
 //
@@ -43,14 +42,22 @@ export const REVIEW_LABEL: Record<ReviewStatus, string> = {
   reviewed: "Reviewed against its source",
 };
 
+/**
+ * 373's nine types, as its CHECK listed them. Mirrored here so this Individual-scope module imports nothing of Professional
+ * (individual-professional-harness R2). lcpd.test pins it equal to professional/vocabulary CPD_ACTIVITY.
+ */
+export const LEGACY_ACTIVITY: readonly [string, string][] = [
+  ["course", "Formal course"], ["workshop", "Workshop"], ["conference", "Conference"], ["self_study", "Self-directed learning"], ["simulation", "Simulation"],
+  ["osce", "OSCE practice"], ["teaching", "Teaching"], ["research", "Research"], ["other", "Other"],
+];
 /** The owner's new types (LCPD-2), beside 373's. Independent study is 373's self_study. */
 export const NEW_ACTIVITY: readonly [string, string][] = [
   ["workplace_learning", "Workplace learning"], ["mentorship", "Mentorship"], ["quality_improvement", "Quality improvement"], ["reflective_practice", "Reflective practice"],
 ];
-const LEGACY_CODES = new Set<string>(CPD_ACTIVITY.map(([c]) => c));
+export const LEGACY_CODES: ReadonlySet<string> = new Set<string>(LEGACY_ACTIVITY.map(([c]) => c));
 
 export const DEFAULT_LCPD: LcpdConfig = {
-  activityTypes: [...CPD_ACTIVITY.filter(([c]) => c !== "other"), ...NEW_ACTIVITY, ["other", "Other"]].map(([code, label]) => ({ code, label })),
+  activityTypes: [...LEGACY_ACTIVITY.filter(([c]) => c !== "other"), ...NEW_ACTIVITY, ["other", "Other"]].map(([code, label]) => ({ code, label })),
   reflectionTemplates: [
     { code: "quick", label: "Quick reflection", prompts: ["What did you learn?"] },
     { code: "guided", label: "Guided reflection", prompts: [
@@ -148,14 +155,3 @@ export async function loadLcpdConfig(admin: any): Promise<LcpdConfig> {
     return error ? DEFAULT_LCPD : resolveLcpd(data?.published ?? null);
   } catch { return DEFAULT_LCPD; }
 }
-
-/**
- * Server gate: migration 490 is on this environment. Until it is, the 373 rules stand (the nine types, hours required,
- * whole points), because the schema would refuse anything else. Probed with a zero-row read of 490's own table.
- */
-export async function lcpdSchemaReady(admin: any): Promise<boolean> {
-  try { const { error } = await admin.from("individual_professional_cpd_setting").select("user_id").limit(0); return !error; } catch { return false; }
-}
-
-/** Pure: the activity types a person may record now. Without 490, only the nine the 373 schema accepts. */
-export const recordableTypes = (cfg: LcpdConfig, ready: boolean): ActivityType[] => (ready ? cfg.activityTypes : cfg.activityTypes.filter(t => LEGACY_CODES.has(t.code)));

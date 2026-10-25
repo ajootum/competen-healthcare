@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
-import { loadLcpdConfig } from "@/lib/individual/professional/lcpd-config";
+import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 import { cpdCsv } from "@/lib/individual/professional/cpd-requirements";
 import { CPD_ACTIVITY_LABEL } from "@/lib/individual/professional/vocabulary";
 

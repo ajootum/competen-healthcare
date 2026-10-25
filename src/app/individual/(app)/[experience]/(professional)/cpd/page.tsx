@@ -13,7 +13,8 @@ import CompetencyLinks from "../../../../_components/professional/CompetencyLink
 import RequirementPicker from "../../../../_components/professional/RequirementPicker";
 import { linksFor, loadMappingView } from "@/lib/individual/professional/mapping-store";
 import { countedOnce, cpdYearsWithLearning, learningRecordHref, loadProfessionalLearning } from "@/lib/individual/professional/learning";
-import { lcpdSchemaReady, loadLcpdConfig, recordableTypes, REVIEW_LABEL } from "@/lib/individual/professional/lcpd-config";
+import { loadLcpdConfig, REVIEW_LABEL } from "@/lib/individual/lcpd-config";
+import { lcpdSchemaReady, recordableTypes } from "@/lib/individual/professional/lcpd-schema";
 import { inEffect, loadCpdHistory, loadCpdSetting, summarise } from "@/lib/individual/professional/cpd-requirements";
 import { myRecords } from "@/lib/learning/record";
 import { loadIndividualPolicy } from "@/lib/individual/policy";

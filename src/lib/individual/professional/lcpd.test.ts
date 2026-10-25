@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
-import { checkLcpdDraft, checkRequirement, DEFAULT_LCPD, recordableTypes, resolveLcpd } from "./lcpd-config";
+import { checkLcpdDraft, checkRequirement, DEFAULT_LCPD, resolveLcpd } from "../lcpd-config";
+import { recordableTypes } from "./lcpd-schema";
 import { cpdCsv, inEffect, NOT_VERIFIED, parseSetting, summarise } from "./cpd-requirements";
 import { parseCpd } from "./validate";
 import { cpdHoursByYear } from "./progress";
@@ -108,5 +109,13 @@ describe("export", () => {
     const csv = cpdCsv([{ activity_date: "2026-03-01", created_at: "2026-03-05T10:00:00Z", title: "=HYPERLINK(\"x\")", activity_type: "course", provider: null, hours: null, cpd_points: null, evidence_class: "self_declared" }], c => c.toUpperCase());
     expect(csv.split("\r\n")[1]).toBe(`"2026-03-01","2026-03-05","'=HYPERLINK(""x"")","COURSE","","","","Self-declared"`);
     expect(csv).not.toMatch(/verified/i);
+  });
+});
+
+describe("the 373 types are mirrored, not forked", () => {
+  it("LEGACY_ACTIVITY in the Individual-scope config equals Professional's CPD_ACTIVITY exactly", async () => {
+    const { LEGACY_ACTIVITY } = await import("../lcpd-config");
+    const { CPD_ACTIVITY } = await import("./vocabulary");
+    expect(LEGACY_ACTIVITY.map(([c, l]) => [c, l])).toEqual(CPD_ACTIVITY.map(([c, l]) => [c, l]));
   });
 });

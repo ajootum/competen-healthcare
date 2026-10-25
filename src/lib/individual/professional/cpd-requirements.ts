@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { LearningReference } from "@/lib/learning/products";
-import type { CpdRequirement } from "./lcpd-config";
+import type { CpdRequirement } from "../lcpd-config";
 
 // ── CPD REQUIREMENTS: THE PERSON'S CHOICE, AND WHAT THEIR RECORD SHOWS AGAINST IT ── LCPD-01 LCPD-5, migration 490 ──
 //

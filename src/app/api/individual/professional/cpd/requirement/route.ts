@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { audit, refuse, todayUtc, writeFailed } from "@/lib/individual/professional/api";
-import { loadLcpdConfig } from "@/lib/individual/professional/lcpd-config";
+import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 import { parseSetting } from "@/lib/individual/professional/cpd-requirements";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).

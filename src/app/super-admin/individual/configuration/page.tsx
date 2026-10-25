@@ -6,7 +6,7 @@ import {
 } from "@/lib/individual/policy";
 import { ChoiceDraft, IntDraft, LevelsDraft, OptionsDraft, PublishBar, RollbackButton, SequenceDraft, SetDraft } from "./_components/PolicyControls";
 import LcpdEditor from "./_components/LcpdEditor";
-import { LCPD_PATH, REVIEW_LABEL, resolveLcpd } from "@/lib/individual/professional/lcpd-config";
+import { LCPD_PATH, REVIEW_LABEL, resolveLcpd } from "@/lib/individual/lcpd-config";
 
 // /super-admin/individual/configuration -- COMPETEN-CONFIG-002 item 6.
 //

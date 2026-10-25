@@ -5,7 +5,8 @@ import { removeDocument, storeDocument } from "@/lib/individual/professional/doc
 import { ORIGIN } from "@/lib/individual/professional/vocabulary";
 import { audit, readBody, refuse, todayUtc, writeFailed } from "@/lib/individual/professional/api";
 import { DIFFERENT_ACTIVITY_FIELD, duplicateForSave, notifyDuplicate, recordDifferentActivity, refusalBody } from "@/lib/individual/professional/cpd-duplicates";
-import { lcpdSchemaReady, loadLcpdConfig, recordableTypes } from "@/lib/individual/professional/lcpd-config";
+import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
+import { lcpdSchemaReady, recordableTypes } from "@/lib/individual/professional/lcpd-schema";
 
 /** LCPD-2: the configured types, and with migration 490 only a description and a date required. Before 490, 373's rule. */
 async function cpdRules(admin: unknown) {
