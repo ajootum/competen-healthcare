@@ -45,7 +45,7 @@ function evaluationIntent(q: { evaluate?: string; evscope?: string }): { method:
   } catch { return null; }
 }
 
-export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string }> }) {
+export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string; material?: string; difficulty?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
@@ -113,7 +113,8 @@ export default async function Revise({ params, searchParams }: { params: Promise
         <div className="space-y-5">
           <RevisionStart modes={policy.scholarRevisionModes} formats={policy.scholarRevisionFormats} quantity={policy.scholarRevisionQuantity}
             difficulty={policy.scholarRevisionDifficulty} feedback={policy.scholarRevisionFeedback} materials={mats}
-            competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote} />
+            competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote}
+            preset={q.material ? { materialId: q.material, difficulty: q.difficulty ?? null } : null} />
 
           {active.length > 0 && (
             <section aria-labelledby="resume-h" className="rounded-2xl border border-gray-200 bg-white p-5">

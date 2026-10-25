@@ -48,7 +48,9 @@ export async function configVersion(admin: any): Promise<string> {
   return v ? `individual-policy@${v.id}` : "individual-policy@defaults";
 }
 
-export type ScopedEvaluation = { ok: true; scope: ScopeView; evaluation: Evaluation; rules: EvaluationRules; context: { programme: string | null; level: string | null } }
+export type ScopedEvaluation = { ok: true; scope: ScopeView; evaluation: Evaluation; rules: EvaluationRules; context: { programme: string | null; level: string | null };
+  /** The sections the scope resolved to (PROGRESS-01 P3 shows them as the supporting material). */
+  sections: EvidenceSet["sections"] }
   | { ok: false; status: number; error: string };
 
 /**
@@ -109,5 +111,5 @@ export async function evaluateScope(admin: any, userId: string, policy: Individu
     catalogue, freshSessionId: fresh,
   };
   const rules = evaluationRules(policy);
-  return { ok: true, scope: view, rules, evaluation: evaluate(set, rules, opts.now), context: { programme: learner.programme?.label ?? null, level: learner.programme?.level ?? null } };
+  return { ok: true, scope: view, rules, sections: set.sections, evaluation: evaluate(set, rules, opts.now), context: { programme: learner.programme?.label ?? null, level: learner.programme?.level ?? null } };
 }

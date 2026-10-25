@@ -13,6 +13,7 @@ import { mappingStates, type LiveMapping, type MappingDecision, type MappingStat
 
 export type MapSource = "ai" | "student" | "reviewer";
 import { STUDY_ACHIEVEMENT, isStudyAchievementKind, studyAchievementsFrom, type ChoiceRow, type StudyAchievement, type StudyAchievementKind } from "./passport-items";
+import { passportEvaluationOf, type PassportEvaluation } from "./passport-evaluations";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -1942,4 +1943,42 @@ export async function deleteEvaluation(admin: Admin, userId: string, id: string)
   if (!isUuid(id)) return false;
   const { data, error } = await admin.from("individual_scholar_evaluation").delete().eq("user_id", userId).eq("id", id).select("id");
   return !error && (data ?? []).length > 0;
+}
+
+// ── PROGRESS-01 P5 (427): EDUCATIONAL EVALUATIONS THE STUDENT CHOSE TO SHOW IN THEIR PASSPORT ──────────────────
+//
+// The row is the choice; what is shown is derived from the evaluation each time (passport-evaluations.ts).
+// "not_provisioned" where 427 is absent: nothing can be shown there, and the Passport says so.
+
+/** The caller's chosen evaluations, derived as the Passport shows them. */
+export async function loadPassportEvaluations(admin: Admin, userId: string): Promise<Read<PassportEvaluation[]>> {
+  const { data, error } = await admin.from("individual_scholar_passport_evaluation").select("evaluation_id, label, included_at").eq("user_id", userId).order("included_at", { ascending: false }).limit(50);
+  if (error) return fail(error);
+  const rows = (data ?? []) as any[];
+  if (!rows.length) return { ok: true, data: [] };
+  const { data: ev, error: eErr } = await admin.from("individual_scholar_evaluation").select("id, scope, method, kind, created_at, confidence, results, limitations")
+    .eq("user_id", userId).in("id", rows.map(r => r.evaluation_id));
+  if (eErr) return fail(eErr);
+  const byId = new Map(((ev ?? []) as any[]).map(e => [e.id, e]));
+  return { ok: true, data: rows.filter(r => byId.has(r.evaluation_id)).map(r => {
+    const e = byId.get(r.evaluation_id);
+    return passportEvaluationOf({ id: e.id, scope: e.scope, method: e.method, kind: e.kind, createdAt: e.created_at, confidence: e.confidence, results: e.results, limitations: e.limitations ?? [] }, { label: r.label, includedAt: r.included_at });
+  }) };
+}
+
+/** Show one of the caller's evaluations in their Passport, with their label. */
+export async function addPassportEvaluation(admin: Admin, userId: string, evaluationId: string, label: string): Promise<{ ok: true } | { ok: false; notProvisioned: boolean; notFound?: boolean }> {
+  if (!isUuid(evaluationId)) return { ok: false, notProvisioned: false, notFound: true };
+  const { data: own, error: oErr } = await admin.from("individual_scholar_evaluation").select("id").eq("user_id", userId).eq("id", evaluationId).maybeSingle();
+  if (oErr) return { ok: false, notProvisioned: isNotProvisioned(oErr) };
+  if (!own) return { ok: false, notProvisioned: false, notFound: true };
+  const { error } = await admin.from("individual_scholar_passport_evaluation").upsert({ user_id: userId, evaluation_id: evaluationId, label }, { onConflict: "user_id,evaluation_id" });
+  return error ? { ok: false, notProvisioned: isNotProvisioned(error) } : { ok: true };
+}
+
+/** Take one off the Passport: only the choice goes; the evaluation stays. */
+export async function removePassportEvaluation(admin: Admin, userId: string, evaluationId: string): Promise<boolean> {
+  if (!isUuid(evaluationId)) return false;
+  const { error } = await admin.from("individual_scholar_passport_evaluation").delete().eq("user_id", userId).eq("evaluation_id", evaluationId);
+  return !error;
 }

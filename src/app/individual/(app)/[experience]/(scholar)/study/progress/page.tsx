@@ -14,6 +14,9 @@ import { buildProgress } from "@/lib/individual/scholar/progress";
 import { SELF_DIRECTED_LABEL } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
+import { ProgressWorkspace } from "../_components/progress-view";
+import { loadProgress } from "@/lib/individual/scholar/progress-data";
+import type { PeriodKind } from "@/lib/individual/scholar/progress-history";
 import { competencyProgressRows } from "@/lib/individual/scholar/store";
 import { loadLearnerCatalogue, type LearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { buildCompetencyProgress, type CompetencyProgress, type CompetencyProgressRow } from "@/lib/individual/scholar/competency-progress";
@@ -146,7 +149,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const fmtWeek = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
-export default async function ProgressPage({ params }: { params: Promise<{ experience: string }> }) {
+export default async function ProgressPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ period?: string }> }) {
+  const sp = await searchParams;
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
@@ -179,6 +183,9 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
   const cUnreadable = !!learner?.programme && (learner.competencies === null || (cRows !== null && !cRows.ok));
   // LEARN-01 L4: learning activity per competency, read from the structured history (null where 414 is absent).
   const activity = cp ? await learningActivityByCompetency(ctx.admin, ctx.userId) : null;
+  // PROGRESS-01 (Stage 8): one read of the evidence for the workspace. No AI.
+  const period: PeriodKind = sp.period === "week" || sp.period === "month" || sp.period === "programme" ? sp.period : policy.scholarProgressPeriod;
+  const pv = rows.ok && p && p.materials.length > 0 ? await loadProgress(ctx.admin, ctx.userId, policy, new Date().toISOString(), { period }) : null;
 
   return (
     <>
@@ -198,6 +205,9 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
           </StatePanel>
         ) : p && (
           <>
+            {/* PROGRESS-01 (Stage 8 of 8): the learning command centre, above the detail by material. */}
+            {pv?.ok ? <ProgressWorkspace v={pv} sections={policy.scholarProgressSections} period={period} />
+              : pv ? <StatePanel title="Your learning progress could not be read just now"><p>{pv.error} The detail below is still shown.</p></StatePanel> : null}
             <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
                 { k: "Questions answered", v: `${p.totals.answered} of ${p.totals.questions}` },

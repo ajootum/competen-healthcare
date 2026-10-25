@@ -361,6 +361,17 @@ const STAGING: Listed[] = [
       + "and 435/436. Reads shared config only. Creates and deletes its own harness-clinical01-* identities.",
   },
   {
+    file: "scholar-progress01-harness.ts",
+    note: "COMPETEN-SCHOLAR-PROGRESS-01 (Progress, Stage 8 of 8) over HTTP, the owner's first acceptance journey (steps "
+      + "1-15) on the respiratory materials: upload and classify -> Teach Me, Revision, a clinical case -> an evaluation -> "
+      + "Progress, next steps first -> separate indicators (engagement and coverage labelled, never understanding) -> the "
+      + "evidence behind them -> CFCA exploration -> a reinforcement step followed with its context -> development over "
+      + "time (new evidence apart from practice) -> three Passport tiers (427) -> history across a context change -> no "
+      + "catalogue -> available with the quota used up (synthetic rows, fixture only) -> never verified competence -> "
+      + "isolation -> erase-all. Real AI. Needs 426 (PEND without; step 11 needs 427) and BASE_URL naming a STAGING-pointed "
+      + "dev server. Own harness-prog01-* identities.",
+  },
+  {
     file: "scholar-evaluation01-harness.ts",
     note: "COMPETEN-SCHOLAR-EVALUATION-01 (Stage 6) over HTTP, the owner's first acceptance journey (steps 1-15) on the "
       + "respiratory materials: learning, revision and a clinical case -> existing evidence retrieved and interpreted "

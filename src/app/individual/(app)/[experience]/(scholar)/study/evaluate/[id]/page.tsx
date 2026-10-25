@@ -4,10 +4,11 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../../_components/chrome";
 import StudyNav from "../../_components/StudyNav";
-import { countDue, getEvaluation } from "@/lib/individual/scholar/store";
+import { countDue, getEvaluation, loadPassportEvaluations } from "@/lib/individual/scholar/store";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { EVALUATION_CONFIDENCE_LABEL, EVALUATION_LABEL, EVALUATION_METHOD_LABEL } from "@/lib/individual/scholar/config";
 import { EvaluationView } from "../../_components/evaluation-view";
-import { EvaluationActions } from "../../_components/evaluation-client";
+import { EvaluationActions, PassportEvaluationChoice } from "../../_components/evaluation-client";
 import { evaluationHref, studyHref } from "../../_components/question-view";
 
 // Request-time only: it reads the release gate and the record, and must never be prerendered at build.
@@ -28,7 +29,7 @@ export default async function EvaluationRecordPage({ params }: { params: Promise
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
-  const [due, r] = await Promise.all([countDue(ctx.admin, ctx.userId), getEvaluation(ctx.admin, ctx.userId, p.id)]);
+  const [due, r, policy, inPassport] = await Promise.all([countDue(ctx.admin, ctx.userId), getEvaluation(ctx.admin, ctx.userId, p.id), loadIndividualPolicy(ctx.admin), loadPassportEvaluations(ctx.admin, ctx.userId)]);
   const header = (
     <>
       <PageHeader accent={x.accent} eyebrow="Evaluate" title={r.ok && r.data ? r.data.scope?.label ?? "Evaluation" : "Evaluation"} intro={EVALUATION_LABEL} />
@@ -51,6 +52,10 @@ export default async function EvaluationRecordPage({ params }: { params: Promise
         </p>
         <EvaluationActions id={e.id} scope={e.scope ?? { kind: "all" }} />
       </div>
+      {/* PROGRESS-01 P5: the student chooses whether this evaluation appears in their Passport. Fail-closed without 427. */}
+      {policy.scholarPassportEvaluations === "offer" && inPassport.ok && (
+        <div className="mb-5"><PassportEvaluationChoice evaluationId={e.id} shown={inPassport.data.some(x => x.evaluationId === e.id)} suggested={`Evaluation: ${e.scope?.label ?? "my learning"}`} /></div>
+      )}
       <EvaluationView r={res} confidence={res.confidenceDetail} limitations={e.limitations} cfca={e.cfca?.tree ?? null} />
       <section aria-labelledby="ev-prov-h" className="mt-5 rounded-2xl border border-gray-200 bg-white p-4">
         <h2 id="ev-prov-h" className="text-[14px] font-bold text-gray-900">How this evaluation was made</h2>
