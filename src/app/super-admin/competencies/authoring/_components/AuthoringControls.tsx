@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-// The write half of /super-admin/competencies/authoring (migration 438). Every control posts to
+// The write half of /super-admin/competencies/authoring (migration 465). Every control posts to
 // /api/hq/competency/authoring, which re-checks hq.quality.competency.author and records authorship before writing.
 // Nothing here approves or publishes anything.
 
