@@ -226,16 +226,6 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
           <p className="text-[14px] text-gray-700">Sharing your Passport from Competen Individual is not available yet. Nothing is shared with anyone unless you choose to share it.</p>
         )}
       </Section>
-
-      {/* COMPETEN-PROFESSIONAL-PROGRESS-01 PR7: the same Document Studio, opened from the Passport. */}
-      {ctx.live.includes("professional") && (
-        <Section title="Make a document">
-          <p className="text-[14px] text-gray-700">
-            Create a Competen Passport export, CV or portfolio from records you choose, previewed in full before you export it as DOCX or PDF, in the{" "}
-            <a href={`${experienceHref("professional", "progress/documents")}?origin=passport`} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Document Studio</a>.
-          </p>
-        </Section>
-      )}
     </>
   );
 }
