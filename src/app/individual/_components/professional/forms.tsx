@@ -22,6 +22,29 @@ export function Field({ label, hint, htmlFor, children }: { label: string; hint?
   );
 }
 
+/**
+ * An "Add ..." panel. The page may suggest it open (nothing recorded yet), but once it is showing it stays
+ * showing until the person closes it. A server-decided <details open={...}> closed itself on the refresh
+ * after the first item was added, and took the confirmation inside it out of sight (IND-007 s7, PARTIAL).
+ * A suggestion that turns ON (the first need makes "Add a goal" the next step) still opens it.
+ */
+export function AddPanel({ label, accent, suggestOpen, children }: {
+  label: string; accent: string; suggestOpen: boolean; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(suggestOpen);
+  const [suggested, setSuggested] = useState(suggestOpen);
+  if (suggestOpen !== suggested) {
+    setSuggested(suggestOpen);
+    if (suggestOpen) setOpen(true);
+  }
+  return (
+    <details className="mt-4 rounded-xl border border-gray-200 p-4" open={open} onToggle={e => setOpen(e.currentTarget.open)}>
+      <summary className="cursor-pointer text-[14px] font-semibold" style={{ color: accent }}>{label}</summary>
+      <div className="mt-4">{children}</div>
+    </details>
+  );
+}
+
 type Method = "POST" | "PUT" | "PATCH";
 
 /**
