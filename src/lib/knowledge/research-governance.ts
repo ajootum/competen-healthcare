@@ -13,14 +13,26 @@ const CODE = /^[a-z][a-z0-9_]{2,60}$/;
 const PROJECT_CODE = /^[a-z][a-z0-9_-]{2,60}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function createPurpose(admin: any, me: string, p: { code: string; permission: string; label: string; description: string; requiresEthics: boolean }): Promise<R<{ id: string }>> {
+/** The recognised lawful bases (444 CHECK). Which one applies to a purpose is counsel's decision, recorded by reference. */
+export const LAWFUL_BASES = ["consent", "contract", "legal_obligation", "public_task", "legitimate_interests", "vital_interests"] as const;
+
+export async function createPurpose(admin: any, me: string, p: { code: string; permission: string; label: string; description: string; requiresEthics: boolean; lawfulBasis?: string | null; basisDecisionRef?: string | null }): Promise<R<{ id: string }>> {
   if (!CODE.test(p.code)) return { ok: false, error: "A purpose code is lowercase letters, digits and underscores." };
   if (p.permission !== "collective_analytics" && p.permission !== "research_study") return { ok: false, error: "A purpose rests on collective analytics or a research study." };
   const { data, error } = await admin.from("ckri_purpose").insert({
     code: p.code, permission: p.permission, label: p.label, description: p.description,
     requires_ethics: p.permission === "research_study" ? true : p.requiresEthics, created_by: me,
+    lawful_basis: p.lawfulBasis || null, basis_decision_ref: p.basisDecisionRef || null,
   }).select("id").single();
   return error ? { ok: false, error: dbRefusal(error, "The purpose could not be saved.") } : { ok: true, id: data.id };
+}
+
+/** Record the lawful basis of a DRAFT purpose and the decision behind it (444: required before activation, frozen after). */
+export async function setPurposeBasis(admin: any, code: string, b: { lawfulBasis: string; basisDecisionRef: string }): Promise<R> {
+  if (!(LAWFUL_BASES as readonly string[]).includes(b.lawfulBasis)) return { ok: false, error: "Choose a recognised lawful basis." };
+  const { data, error } = await admin.from("ckri_purpose").update({ lawful_basis: b.lawfulBasis, basis_decision_ref: b.basisDecisionRef }).eq("code", code).eq("status", "draft").select("id");
+  if (error) return { ok: false, error: dbRefusal(error, "The lawful basis could not be recorded.") };
+  return data?.length ? { ok: true } : { ok: false, error: "No draft purpose has that code." };
 }
 
 export async function activatePurpose(admin: any, me: string, code: string): Promise<R> {
@@ -77,13 +89,60 @@ export async function recordEthics(admin: any, me: string, projectId: string, e:
   return data?.length ? { ok: true } : { ok: false, error: "Unknown project." };
 }
 
+/** Record a documented ethics exemption (444): governors only, never for a purpose that requires ethics review. */
+export async function recordExemption(admin: any, me: string, projectId: string, e: { ref: string; basis: string }): Promise<R> {
+  if (!UUID.test(projectId)) return { ok: false, error: "Unknown project." };
+  const { data, error } = await admin.from("ckri_research_project")
+    .update({ ethics_exemption_ref: e.ref, ethics_exemption_basis: e.basis, ethics_exemption_by: me, ethics_exemption_at: new Date().toISOString(), changed_by: me }).eq("id", projectId).select("id");
+  if (error) return { ok: false, error: dbRefusal(error, "The exemption could not be recorded.") };
+  return data?.length ? { ok: true } : { ok: false, error: "Unknown project." };
+}
+
+// ── Partner agreements (444). The agreement itself is signed outside Competen. This is its record, which external
+// access and institution sponsorship must point at. Nothing here creates an account or shares anything. ──────────────
+export const AGREEMENT_TERMS = ["scientific_leadership", "data_responsibilities", "intellectual_property", "authorship", "publication_rights"] as const;
+export const PARTNER_KINDS = ["university", "nursing_school", "hospital", "professional_body", "research_institution", "other"] as const;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function recordAgreement(admin: any, me: string, a: { code: string; partnerName: string; partnerKind: string; institutionRef: string | null; projectId: string | null;
+  terms: Record<string, unknown>; documentRef: string; signedOn: string | null; expiresOn: string | null }): Promise<R<{ id: string }>> {
+  const day = (v: string | null) => (v && DAY.test(v) ? v : null);
+  const terms = Object.fromEntries(AGREEMENT_TERMS.map(k => [k, typeof a.terms[k] === "string" ? (a.terms[k] as string).trim().slice(0, 2000) : ""]).filter(([, v]) => v));
+  const { data, error } = await admin.from("ckri_partner_agreement").insert({
+    code: a.code, partner_name: a.partnerName, partner_kind: a.partnerKind, institution_ref: a.institutionRef && UUID.test(a.institutionRef) ? a.institutionRef : null,
+    project_id: a.projectId && UUID.test(a.projectId) ? a.projectId : null, terms, document_ref: a.documentRef, signed_on: day(a.signedOn), expires_on: day(a.expiresOn), recorded_by: me,
+  }).select("id").single();
+  return error ? { ok: false, error: dbRefusal(error, "The agreement could not be recorded.") } : { ok: true, id: data.id };
+}
+
+/** Put a recorded agreement in force. 444 needs all five terms, both dates and a governor who did not record it. */
+export async function authoriseAgreement(admin: any, me: string, code: string): Promise<R> {
+  const { data, error } = await admin.from("ckri_partner_agreement").update({ status: "active", authorised_by: me }).eq("code", code).eq("status", "draft").select("id");
+  if (error) return { ok: false, error: dbRefusal(error, "The agreement could not be authorised. It needs all five terms and both dates.") };
+  return data?.length ? { ok: true } : { ok: false, error: "No draft agreement has that code." };
+}
+
+/** Terminate an agreement in force. 444 ends every external appointment made under it. */
+export async function terminateAgreement(admin: any, code: string, reason: string): Promise<R> {
+  const { data, error } = await admin.from("ckri_partner_agreement").update({ status: "terminated", end_reason: reason }).eq("code", code).eq("status", "active").select("id");
+  if (error) return { ok: false, error: dbRefusal(error, "The agreement could not be terminated. Say why.") };
+  return data?.length ? { ok: true } : { ok: false, error: "No agreement in force has that code." };
+}
+
+export async function expireAgreements(admin: any): Promise<R<{ expired: number }>> {
+  const { data, error } = await admin.rpc("ckri_expire_agreements");
+  return error ? { ok: false, error: "Expired agreements could not be swept." } : { ok: true, expired: Number(data ?? 0) };
+}
+
 export async function governanceOverview(admin: any) {
   const [purposes, projects, part] = await Promise.all([
-    admin.from("ckri_purpose").select("code, permission, label, description, requires_ethics, status, activated_at, retired_at").order("created_at"),
-    admin.from("ckri_research_project").select("id, code, title, purpose_code, sponsor, status, min_cohort, ethics_ref, ethics_body, decided_at, opened_at, retain_until, updated_at").order("updated_at", { ascending: false }).limit(100),
+    admin.from("ckri_purpose").select("code, permission, label, description, requires_ethics, status, activated_at, retired_at, lawful_basis, basis_decision_ref").order("created_at"),
+    admin.from("ckri_research_project").select("id, code, title, purpose_code, sponsor, status, min_cohort, ethics_ref, ethics_body, ethics_exemption_ref, decided_at, opened_at, retain_until, updated_at").order("updated_at", { ascending: false }).limit(100),
     admin.from("ckri_participation").select("permission, scope_key, status"),
   ]);
   if (purposes.error || projects.error || part.error) return null;
+  // Absent before 444: the page says so rather than failing.
+  const agreements = await admin.from("ckri_partner_agreement").select("code, partner_name, partner_kind, project_id, status, signed_on, expires_on, document_ref").order("created_at", { ascending: false }).limit(100);
   // Counts only. Who chose what is never listed to anyone but the person themselves.
   const counts: Record<string, { granted: number; withdrawn: number }> = {};
   for (const r of part.data ?? []) {
@@ -91,5 +150,5 @@ export async function governanceOverview(admin: any) {
     counts[k] ??= { granted: 0, withdrawn: 0 };
     counts[k][r.status === "granted" ? "granted" : "withdrawn"]++;
   }
-  return { purposes: purposes.data ?? [], projects: projects.data ?? [], counts };
+  return { purposes: purposes.data ?? [], projects: projects.data ?? [], counts, agreements: agreements.error ? null : (agreements.data ?? []) };
 }

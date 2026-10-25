@@ -21,6 +21,7 @@
  *   K2-1..4  441: no forbidden column, catalogue sources only, population/floor/no person column/revoked, policy-set disclosure
  *   K3-1..4  442: 422 guard branches unchanged, three facts kept apart, no student reference, needs from reported cells
  *   K4-1..4  443: aggregate-only access, independence, integrity fields, datasets are snapshots
+ *   K5-1..4  444: AI consent never research consent, lawful basis, ethics or exemption, partner agreements
  */
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -32,6 +33,7 @@ const F = {
   m442: "supabase/migrations/442-ckri-educator-knowledge.sql",
   m422: "supabase/migrations/422-clinical-cases-on-clinical-approval.sql",
   m443: "supabase/migrations/443-ckri-research-workspace.sql",
+  m444: "supabase/migrations/444-ckri-governance-enforcement.sql",
   workspace: "src/lib/knowledge/workspace.ts",
   researchRoute: "src/app/api/hq/knowledge/research/route.ts",
   intelRoute: "src/app/api/hq/knowledge/intelligence/route.ts",
@@ -115,7 +117,7 @@ CHECKS.push({ id: "K1-6 HQ governance route: capability fixed, then gate, before
   const ok = order.every(x => x >= 0) && order.every((x, k) => k === 0 || x > order[k - 1]);
   const noBrowserActor = !/body\.(decidedBy|actor|changedBy|proposedBy|dataAccess)/.test(c);
   return r(ok && noBrowserActor, `order=${order.join(",")} noBrowserActor=${noBrowserActor}`);
-}, plant: plantIn(F.hqGov, "  if (!(await ckriEnabled(ctx.admin))) return refuse(409, CKRI_OFF);\n", "") });
+}, plant: plantIn(F.hqGov, /\n  if \(action !== "agreement_terminate"[^\n]*return refuse\(409, CKRI_OFF\);\n/, "\n") });
 
 CHECKS.push({ id: "K1-7 CKRI library names no raw Scholar table but the person's own consent", check: s => {
   const hits: string[] = [];
@@ -241,6 +243,46 @@ CHECKS.push({ id: "K4-4 a dataset is a snapshot, never rows, and the workspace r
   const noRows = !/individual_scholar_|case_library_session/.test(w + rt);
   return r(snap && noRows, `datasetIsSnapshot=${snap} noLearnerReads=${noRows}`);
 }, plant: plantIn(F.workspace, "export async function approveDataset(", "export async function rowsFor(admin: any) { return admin.from(\"individual_scholar_attempt\").select(\"correct\"); }\nexport async function approveDataset(") });
+
+// ── K5 (migration 444, owner continuation part C) ─────────────────────────────────────────────────────────────
+CHECKS.push({ id: "K5-1 personal AI consent is never read as research consent", check: s => {
+  const sql = [get(s, "m440"), get(s, "m441"), get(s, "m442"), get(s, "m443"), get(s, "m444")].join("\n");
+  const noConsentInSql = sql.length > 5000 && !/individual_scholar_consent/.test(sql);
+  const pop = /create temporary table ckri_pop on commit drop as\s+select p\.user_id from ckri_participation p\s+where p\.permission = 'collective_analytics'/.test(get(s, "m441"));
+  const libs = KNOWLEDGE_LIB.filter(f => f !== F.gov && /individual_scholar_consent/.test(tsCode(s.get(f) ?? "")));
+  const g = get(s, "gov");
+  // The one read of the Scholar consent is inside readMyChoices, which shows the person their four choices.
+  const reads = [...g.matchAll(/from\(\s*"individual_scholar_consent"\s*\)/g)].map(x => x.index ?? -1);
+  const choices = g.indexOf("export async function readMyChoices"), next = g.indexOf("export async function", choices + 10);
+  const readOnlyInChoices = reads.length === 1 && reads[0] > choices && reads[0] < next;
+  return r(noConsentInSql && pop && libs.length === 0 && readOnlyInChoices, `sqlNeverReadsConsent=${noConsentInSql} populationFromParticipation=${pop} otherLibs=${libs.join(",") || "none"} consentShownOnlyInChoices=${readOnlyInChoices}`);
+}, plant: plantIn(F.m441, "     where p.permission = 'collective_analytics' and p.scope_key = 'all' and p.status = 'granted';",
+  "     where p.permission = 'collective_analytics' and p.scope_key = 'all' and p.status = 'granted'\n    union select c.user_id from individual_scholar_consent c where c.status = 'granted';") });
+
+CHECKS.push({ id: "K5-2 a purpose is in force only with its lawful basis and decision recorded, then frozen", check: s => {
+  const m = get(s, "m444");
+  const req = /if old\.status = 'draft' and new\.status = 'active' and \(new\.lawful_basis is null or new\.basis_decision_ref is null\) then/.test(m);
+  const frozen = /if old\.status <> 'draft' and \(new\.lawful_basis is distinct from old\.lawful_basis/.test(m);
+  return r(req && frozen, `requiredToActivate=${req} frozen=${frozen}`);
+}, plant: plantIn(F.m444, "if old.status = 'draft' and new.status = 'active' and (new.lawful_basis is null or new.basis_decision_ref is null) then", "if false then") });
+
+CHECKS.push({ id: "K5-3 ethics approval or documented exemption before recruitment and before any data release, never exempting a study", check: s => {
+  const m = get(s, "m444");
+  const recruit = /if new\.ethics_ref is null and new\.ethics_exemption_ref is null then\s+raise exception 'ckri_research_project: research begins only/.test(m);
+  const release = /p\.ethics_ref is not null or p\.ethics_exemption_ref is not null/.test(m) && /before insert on ckri_research_dataset/.test(m);
+  const noStudyExempt = /if v_requires then\s+raise exception 'ckri_research_project: this purpose requires ethics review, so it cannot be exempted'/.test(m);
+  return r(recruit && release && noStudyExempt, `recruitment=${recruit} dataRelease=${release} studiesNeverExempt=${noStudyExempt}`);
+}, plant: plantIn(F.m444, "      if v_requires then", "      if false then") });
+
+CHECKS.push({ id: "K5-4 external access only under an authorised agreement in force, ended with it, and ending never waits for the gate", check: s => {
+  const m = get(s, "m444"), rt = get(s, "hqGov");
+  const appoint = /and not ckri_agreement_covers\(new\.agreement_ref, new\.project_id\) then/.test(m);
+  const covers = /a\.status = 'active' and a\.expires_on >= current_date and a\.signed_on <= current_date/.test(m);
+  const ends = /update ckri_research_member set status = 'ended'\s+where external and status = 'active' and agreement_ref = new\.code/.test(m);
+  const authorise = /new\.authorised_by = new\.recorded_by/.test(m);
+  const ungatedEnd = /if \(action !== "agreement_terminate" && action !== "agreement_sweep" && !\(await ckriEnabled\(ctx\.admin\)\)\)/.test(rt);
+  return r(appoint && covers && ends && authorise && ungatedEnd, `appointment=${appoint} inForce=${covers} endsWithAgreement=${ends} independentAuthorisation=${authorise} endingUngated=${ungatedEnd}`);
+}, plant: plantIn(F.m444, "     and not ckri_agreement_covers(new.agreement_ref, new.project_id) then", "     and false then") });
 
 let pass = 0; const fails: string[] = [];
 for (const c of CHECKS) {

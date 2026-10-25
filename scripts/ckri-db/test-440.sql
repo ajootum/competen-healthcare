@@ -33,6 +33,12 @@ select pg_temp.expect(not ckri_holds_capability('00000000-0000-0000-0000-0000000
 insert into ckri_purpose (code, permission, label, description, created_by) values
   ('edu_quality', 'collective_analytics', 'Educational quality', 'Aggregate learning measures for improving educational resources.', '00000000-0000-0000-0000-00000000000a'),
   ('reasoning_study', 'research_study', 'Clinical reasoning study', 'An identified study of clinical reasoning difficulty patterns.', '00000000-0000-0000-0000-00000000000a');
+-- When 444 is applied, activation needs a recorded lawful basis: supply it.
+do $b$ begin
+  if exists (select 1 from information_schema.columns where table_name = 'ckri_purpose' and column_name = 'lawful_basis') then
+    execute $x$update ckri_purpose set lawful_basis = 'consent', basis_decision_ref = 'TEST-BASIS-1' where status = 'draft'$x$;
+  end if;
+end $b$;
 select pg_temp.expect_error($q$insert into ckri_purpose (code, permission, label, description, created_by) values ('content_x', 'content_contribution', 'X content', 'Content contribution is not a CKRI permission.', '00000000-0000-0000-0000-00000000000a')$q$, '%ckri_purpose_check%', 'P1 content contribution unrepresentable');
 select pg_temp.expect_error($q$insert into ckri_purpose (code, permission, label, description, created_by, requires_ethics) values ('study_noethics', 'research_study', 'No ethics', 'A study purpose without an ethics requirement.', '00000000-0000-0000-0000-00000000000a', false)$q$, '%ckri_purpose_check%', 'P2 research study always needs ethics');
 select pg_temp.expect_error($q$update ckri_purpose set status = 'active', activated_by = '00000000-0000-0000-0000-00000000000a' where code = 'edu_quality'$q$, '%not independent%', 'P3 author cannot activate');
