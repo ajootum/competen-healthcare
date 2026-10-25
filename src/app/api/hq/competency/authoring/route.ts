@@ -6,12 +6,12 @@ import { submitForReview } from "@/lib/competency/clinical-review";
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
 
-// POST /api/hq/competency/authoring -- CFCA authoring in production (migration 465, owner CFCA PRODUCTION AUTHORING).
+// POST /api/hq/competency/authoring -- CFCA authoring in production (migration 438, owner CFCA PRODUCTION AUTHORING).
 //
 // Body: { action: "create_framework" | "update_framework" | "set_identity" | "create_domain" | "rename_domain" |
 //         "create_practice" | "create_cpu" | "create_competency" | "update_competency" | "import_draft" | "submit_review", ... }
 //
-// ⚠ GATED BY hqApiGate(["hq.quality.competency.author"]) -- the Competency Author. It authors shared content and
+// ⚠ GATED BY hqApiGate(["hq.quality.competency.author"]) -- the CFCA Competency Curator. It authors shared content and
 // puts it forward for clinical review. It approves nothing (395, the Clinical Content Reviewer) and publishes nothing
 // (the governed framework lifecycle). Every write is preceded by its authorship row (src/lib/competency/authoring.ts).
 

@@ -5,7 +5,7 @@ import { authorsOf } from "./clinical-review";
 import { checkPackage, createCompetency, createFramework, importDraftPackage, parseCompetency, parseFramework, updateCompetency } from "./authoring";
 
 // Owner, COMPETEN CFCA -- PRODUCTION AUTHORING AND GOVERNANCE DIRECTION: curators author shared CFCA content in
-// production through a governed workflow (migration 465), with no SQL. Authorship is recorded before every write (so 395
+// production through a governed workflow (migration 438), with no SQL. Authorship is recorded before every write (so 395
 // can bar an author from reviewing), only shared frameworks are touched, nothing is edited under governance review, and
 // an import is a DRAFT, not clinically reviewed: nothing is approved, put forward or published by it.
 
@@ -197,10 +197,10 @@ describe("Competency Studio: identity, CPU and publication (owner COMPLETE PRODU
     expect(await createCompetency(fake(), ME, comp({ code: "CF-CR-009", cpuId: FOREIGN_CPU }))).toMatchObject({ ok: false, status: 422 });
   });
 
-  it("465 grants the new capability to the new position only: no existing position gains authoring", () => {
-    const sql = readFileSync("supabase/migrations/465-competency-author-capability.sql", "utf8").replace(/^--.*$/gm, "");
+  it("438 grants the new capability to the new position only: no existing position gains authoring", () => {
+    const sql = readFileSync("supabase/migrations/438-competency-author-capability.sql", "utf8").replace(/^--.*$/gm, "");
     const grants = [...sql.matchAll(/from \(values (.*?)\) as p\(code\)/g)].map(m => m[1]);
-    expect(grants).toEqual(["('competency_author')"]);
+    expect(grants).toEqual(["('competency_curator')"]);
     expect(sql).not.toMatch(/hq\.quality\.clinical\.(approve|govern)/);
   });
 

@@ -4,9 +4,9 @@ import { loadAuthoringView } from "@/lib/competency/authoring-view";
 import { CLINICAL_STATE_LABEL, clinicalNote } from "@/lib/competency/clinical-review";
 import { CompetencyEditor, DomainName, FrameworkIdentity, FrameworkMeta, ImportDraft, NewCpu, NewDomain, NewFramework, NewPractice, SubmitReview } from "./_components/AuthoringControls";
 
-// /super-admin/competencies/authoring -- CFCA authoring in production (migration 465, owner CFCA PRODUCTION AUTHORING).
+// /super-admin/competencies/authoring -- CFCA authoring in production (migration 438, owner CFCA PRODUCTION AUTHORING).
 //
-// Guarded by hq.quality.competency.author (the Competency Author). Shared CFCA frameworks, their domains and
+// Guarded by hq.quality.competency.author (the CFCA Competency Curator). Shared CFCA frameworks, their domains and
 // competencies, edited as governed content: Draft -> Submit for Review (here) -> Clinical Approval (/clinical-review,
 // an independent reviewer) -> Publication (the governed framework lifecycle). Every competency shows its clinical state
 // in words, and nothing here says approved unless 395 proves it.

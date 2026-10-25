@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { currentTraceId } from "@/lib/trace";
 
-// ── CFCA COMPETENCY AUTHORING, AS A GOVERNED HQ WORKFLOW ── migration 465, owner CFCA PRODUCTION AUTHORING DIRECTION ──
+// ── CFCA COMPETENCY AUTHORING, AS A GOVERNED HQ WORKFLOW ── migration 438, owner CFCA PRODUCTION AUTHORING DIRECTION ──
 //
 // "Production will be the authoritative environment for actual CFCA content and clinical governance." A CFCA
-// Competency Author (hq.quality.competency.author) creates and refines SHARED frameworks (hospital_id null), their
+// CFCA Competency Curator (hq.quality.competency.author) creates and refines SHARED frameworks (hospital_id null), their
 // domains and competencies -- every field the 395 clinical content hash covers: name, description, learning outcomes,
 // expected level, risk -- and puts a competency forward for independent clinical review. No SQL for ordinary content.
 //

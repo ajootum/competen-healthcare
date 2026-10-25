@@ -150,7 +150,7 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // position, publish is the Quality Council Member. Case review uses hq.quality.clinical.approve and its scopes.
   { code: "hq.quality.case.author",           space: "quality"   },
   { code: "hq.quality.case.publish",          space: "quality"   },
-  // Migration 465, owner CFCA PRODUCTION AUTHORING: shared competency authoring (the Competency Author). Approval
+  // Migration 438, owner CFCA PRODUCTION AUTHORING: shared competency authoring (the CFCA Competency Curator). Approval
   // stays hq.quality.clinical.approve with its 395 scopes, publication the governed framework lifecycle.
   { code: "hq.quality.competency.author",     space: "quality"   },
   // Migration 440, COMPETEN-KNOWLEDGE-RESEARCH-01 K1: CKRI research governance. Govern is the Research Governance
@@ -209,7 +209,7 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/workflows",             capability: "hq.platform.workflows.view" },
   { prefix: "/super-admin/metadata",              capability: "hq.platform.metadata.view" },
   { prefix: "/super-admin/audit",                 capability: "hq.platform.audit.view" },
-  // Migration 465. Authoring first: the first matching prefix wins, and it must not inherit the library view.
+  // Migration 438. Authoring first: the first matching prefix wins, and it must not inherit the library view.
   { prefix: "/super-admin/competencies/authoring", capability: "hq.quality.competency.author" },
   { prefix: "/super-admin/competencies",          capability: "hq.learning.competencies.view" },
   { prefix: "/super-admin/content",               capability: "hq.learning.content.view" },

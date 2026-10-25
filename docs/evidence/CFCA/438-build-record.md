@@ -1,10 +1,10 @@
-# Competency Studio: migrations 465 and 466 (build record)
+# Competency Studio: migration 438 and the publication guard (build record)
 
 **Owner direction:** "COMPETEN CFCA — COMPLETE PRODUCTION AUTHORING CAPABILITY" (25 October 2026), following "PRODUCTION AUTHORING AND GOVERNANCE DIRECTION". Production is the authoritative CFCA content environment:
 
 Draft → Submit for Review → Clinical Approval → Publication.
 
-**Numbers:** the coordinator reserved 465–469 for the Competency Studio (430 is held, 470–479 belong to Professional Stage 2). 465 was first authored as 438, then renumbered before any application.
+**Numbers:** 438 is the capability, applied ×2 on staging by the coordinator at sha 5f8325ad (kept, not renumbered). The publication guard was authored as 466: its final number is pending from the coordinator.
 
 **State:**
 - **Authored.** Proven locally on PG17.
@@ -16,27 +16,27 @@ Draft → Submit for Review → Clinical Approval → Publication.
 | # | Requirement | Where |
 |---|---|---|
 | 1 | Reuse the existing CFCA, catalogue, authority and clinical-approval infrastructure | Shared frameworks, domains, competencies (011, 384), catalogues (394), HQ positions (264), 395 approval: all unchanged and reused |
-| 2 | A dedicated Competency Author capability, assignable through position governance | **465:** `hq.quality.competency.author` on a new position `competency_author`. Appointments use the existing HQ screen. |
+| 2 | A dedicated Competency Author capability, assignable through position governance | **438:** `hq.quality.competency.author` on a new position `competency_curator`. Appointments use the existing HQ screen. |
 | 3 | No-code authoring of catalogue identity, code, layer, domain, CPU, competencies, outcomes, expected levels | `/super-admin/competencies/authoring` and `/api/hq/competency/authoring` |
 | 4 | Draft creation, editing, revision, historical version preservation | Drafts are created and edited here. Approved content is an append-only 395 snapshot. Published frameworks are append-only `framework_versions`. |
 | 5 | Author without clinical approval, but require the independent clinical review before governed publication | Authoring needs no approval. **466** refuses publication unless every owned competency is approved at its current content. |
 | 6 | Preserve exact-version approval, and authors never approve their own content | 395 unchanged. Authorship is audited before every write, so `authorsOf` always names the author. |
 | 7 | Foundational, profession-specific and specialty through configuration | Layer, profession term, specialty term and parent framework are set as identity (draft only). |
 | 8 | No staging-to-production imports for routine development | Authoring happens in production. The draft-package import is for bringing existing content in once (CF-FOUND), not a process. |
-| 9 | No authority granted automatically to existing positions | 465 grants only to the new position, and appoints nobody (VERIFY-465). |
+| 9 | No authority granted automatically to existing positions | 438 grants only to the new position, and appoints nobody (VERIFY-438). |
 | 10 | Keep 430 held | Held: nothing here needs a portable hash. |
 
-## 465: the Competency Author capability
+## 438: the Competency Author capability
 
 **What it adds:**
 - capability `hq.quality.competency.author`;
-- position `competency_author` ("Competency Author"), holding that capability and `hq.platform.home.view`.
+- position `competency_curator` ("CFCA Competency Curator"), holding that capability and `hq.platform.home.view`.
 
 **Properties:**
 - No other grant. It appoints nobody.
 - Additive, no plpgsql, re-runnable.
 
-**Files:** rollback `ROLLBACK-465.sql`, verify `VERIFY-465.sql` (read-only).
+**Files:** rollback `ROLLBACK-438.sql`, verify `VERIFY-438.sql` (read-only).
 
 ## 466: publication requires exact-version independent clinical approval
 
@@ -57,9 +57,9 @@ Draft → Submit for Review → Clinical Approval → Publication.
 - verify `VERIFY-466.sql`: part A read-only, part B behaviour in a transaction that ends in ROLLBACK.
 
 **Order and dependencies:**
-- 465 and 466 are independent of each other.
+- 438 and the guard are independent of each other.
 - 466 depends on 395, 422 and 384, which are all in production.
-- Fingerprints: `FINGERPRINT-465-466.sql`, run at PRE, after each apply, after rollback, and after re-apply.
+- Fingerprints: `FINGERPRINT-466.sql (the guard only)`, run at PRE, after each apply, after rollback, and after re-apply.
 
 ## What changed in the code
 
@@ -83,7 +83,7 @@ Draft → Submit for Review → Clinical Approval → Publication.
 
 | Claim | Proof |
 |---|---|
-| The new capability is granted to no existing position | VERIFY-465 (local: all true). Unit test on the 465 grants. Plant S3 is red. |
+| The new capability is granted to no existing position | VERIFY-438 (local: all true). Unit test on the 438 grants. Plant S3 is red. |
 | An author cannot approve their own version | 395 unchanged (existing evidence). Authorship is recorded first, and the unit test shows `authorsOf` naming the author. Plants A1, A2 and S5 are red. |
 | Authoring needs no approval | Unit tests create and edit with no review rows. VERIFY-466 B1. |
 | Publication requires the exact-version independent approval | **Local, against the real 395 hash function:** submitted-not-approved is refused; one approval of the exact content allows publication; an approval with a rejection does not count. VERIFY-466 B2 (refused), B4–B5 (catalogue and unlayered unaffected). |
@@ -95,7 +95,7 @@ Draft → Submit for Review → Clinical Approval → Publication.
 - src/lib competency, hq, individual and cases: 613/613.
 - Harnesses: plane-boundary 35/35, sidebar-active 15/15, individual-foundation 74/74, individual-config 41/41, competency-foundation 33/33.
 - tsc and eslint clean.
-- hq-guard B1 (applied capability catalogue = code) is red on an environment until 465 is applied there.
+- hq-guard B1 (applied capability catalogue = code) is red on an environment until 438 is applied there.
 
 ## CF-FOUND
 
