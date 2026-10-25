@@ -10,9 +10,19 @@
  * clinical educational tutoring within its evaluated eligibility." Its evidence is D5-v1, run 4b92dda5, corrected for
  * one rubric false positive under the owner's own criterion (docs/evidence/AI-EVAL/d5-evaluation-2026-10-24.md).
  *
- * ⚠ TUTORING ONLY: Scholar teach and ask, claude-opus-4-8, up to clinical_educational. Not questions, case steps or
- * evaluation (D5-v2, not yet accepted), and not high-risk clinical. Nothing else is touched: no policy, flag, price or
- * other model.
+ * OWNER ACCEPTANCE ("DEPLOYMENT ACCEPTANCE AND PILOT PREPARATION", 25 October 2026): "Accept the corrected Opus 4.8
+ * tutoring result of 14/14 for the evaluated clinical-educational tasks ... Record the correction and applicable
+ * tutoring eligibility. Use existing D5-v2 evidence for questions, case steps and short-answer evaluation where
+ * sufficient."
+ *
+ * WHAT IS RECORDED, AND WHAT IS NOT:
+ *   teach, ask       Opus 4.8 up to clinical_educational: D5-v1 corrected 14/14, accepted.
+ *   case_steps       Opus 4.8 up to high_risk_clinical: D5-v2 3/3, both generators, no unsafe key, no flag. Sufficient.
+ *   questions        NOT recorded: its 3/3 rests on four key-rule flags the owner has not yet determined
+ *                    (D5v2-questions-key-rules-for-owner.md).
+ *   evaluate         NOT recorded: case-reasoning AI feedback shares the activity code, and the owner keeps it disabled.
+ *                    Recording evaluate would switch it on until scholar_case_reasoning_feedback is "self".
+ * Nothing else is touched: no policy, flag, price or other model.
  *
  * ⚠ IT REFUSES ANYTHING NOT JUDGED NON-PRODUCTION (production-guard judgeTarget). The production step is the owner's,
  * by hand, on the HQ page: docs/evidence/AI-EVAL/opus-tutoring-eligibility.md.
@@ -36,9 +46,16 @@ const OPUS_TUTORING = ["teach", "ask"].map(activity => ({
   note: "Owner 2026-10-25 (APPLICATION DEPLOYMENT AND PILOT PREPARATION s5): Opus for clinical educational tutoring within its evaluated eligibility. Tutoring only. Recorded on staging by IND-007.",
 }));
 
+const OPUS_D5V2 = [{
+  kind: "eligibility" as const, product: "scholar", activity: "case_steps", provider: "anthropic", modelPrefix: "claude-opus-4-8", eligible: true,
+  maxRiskTier: "high_risk_clinical",
+  evidenceRef: "eval-run:6c2c8067-9b30-4ec7-b3f1-84c18cfdfd0d (D5-v2: case_steps 3/3, docs/evidence/AI-EVAL/d5v2-activities-2026-10-25.md)",
+  note: "Owner 2026-10-25 (DEPLOYMENT ACCEPTANCE AND PILOT PREPARATION): use existing D5-v2 evidence where sufficient. case_steps sufficient (3/3, no flag). Recorded on staging by IND-007.",
+}];
+
 (async () => {
   console.log(`Model eligibility -- ${apply ? "APPLY" : "dry run"} -- target ${(verdict as any).ref}`);
-  for (const d of OPUS_TUTORING) {
+  for (const d of [...OPUS_TUTORING, ...OPUS_D5V2]) {
     const v = checkRate("eligibility", d);
     if (!v.ok) { console.error(`  REFUSED by the mechanism's own checks: ${v.error}`); process.exit(1); }
     const { data: cur, error } = await admin.from("ai_model_eligibility").select("id, eligible, max_risk_tier, evidence_ref, effective_from")

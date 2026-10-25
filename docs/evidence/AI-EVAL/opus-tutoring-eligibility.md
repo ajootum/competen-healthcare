@@ -1,8 +1,12 @@
-# Opus 4.8: tutoring eligibility (recorded on staging), and the routing prepared for the high-risk three (25 October 2026)
+# Opus 4.8: eligibility recorded on staging (tutoring, case steps), and the routing prepared for the high-risk three (25 October 2026)
 
 **Authority:** owner, "COMPETEN — APPLICATION DEPLOYMENT AND PILOT PREPARATION", §5:
 
 > "Use Opus for clinical educational tutoring within its evaluated eligibility. For questions, case steps and short-answer evaluation, perform only the targeted checks needed to establish eligibility before enabling those high-risk activities. Do not initiate another broad model comparison."
+
+**Owner acceptance** ("DEPLOYMENT ACCEPTANCE AND PILOT PREPARATION", 25 October 2026):
+
+> "Accept the corrected Opus 4.8 tutoring result of 14/14 for the evaluated clinical-educational tasks. The mg-per-5-mL finding is a rubric false positive, not an invented dose. Record the correction and applicable tutoring eligibility. Use existing D5-v2 evidence for questions, case steps and short-answer evaluation where sufficient. Do not repeat broad evaluations."
 
 **Evidence:** D5-v1, run `eval-run:4b92dda5-bc86-4412-b57c-17bd2868df3f`.
 - It was corrected for one rubric false positive under the owner's own criterion (`d5-evaluation-2026-10-24.md`, "Correction").
@@ -10,12 +14,13 @@
 
 **No model was called for this record.**
 
-## 1. Tutoring eligibility: RECORDED ON STAGING
+## 1. Eligibility RECORDED ON STAGING
 
 | Product | Activity | Provider | Model | Eligible | Highest tier | Staging row |
 |---|---|---|---|---|---|---|
 | scholar | `teach` | anthropic | `claude-opus-4-8` | yes | `clinical_educational` | `b559d75d-9fc4-4c8e-8882-7043ec806adb` |
 | scholar | `ask` | anthropic | `claude-opus-4-8` | yes | `clinical_educational` | `1935ddf6-6409-4f77-b364-69557e970038` |
+| scholar | `case_steps` | anthropic | `claude-opus-4-8` | yes | `high_risk_clinical` | `da99c423-4ef3-410f-aa92-5851379c429e` (D5-v2, `eval-run:6c2c8067…`) |
 
 **How it was recorded**
 - `scripts/staging-record-model-eligibility.ts --apply`, through the existing mechanism (`fair-use-admin.ts` `changeRate("eligibility")`). These are the same checks the HQ page runs: evidence is required, and a highest tier must be named.
@@ -24,31 +29,29 @@
 - **Nothing else was written:** no policy, flag, price or other model.
 
 **What it covers:**
-- **Tutoring only:** Scholar Teach Me and Ask, up to clinical educational.
-- **Not high-risk clinical.** A tutoring request whose subject the risk rules classify as high-risk stays refused.
-- **Not** questions, case steps or evaluation (section 3).
+- **Tutoring:** Scholar Teach Me and Ask, up to clinical educational. A tutoring request whose subject the risk rules classify as high-risk stays refused.
+- **Clinical cases:** `case_steps`, up to high-risk clinical, on the D5-v2 evidence (section 3).
+- **Not** `questions` or `evaluate` (section 3: genuine gaps, not recorded).
 
-## 2. Tutoring eligibility in PRODUCTION: owner-run, under its GO
+## 2. Eligibility in PRODUCTION: owner-run, under its GO
 
 **It is a database row, not configuration:** `ai_model_eligibility` (migrations 411 and 412). It is in production since the 25 October catch-up, and holds no rows today.
 
 **Steps (owner, or an appointed Platform Director, `hq.platform.ai.manage`):**
 1. Open `/super-admin/ai/fair-use`, then **Clinical model eligibility**.
 2. Add one decision for each row of the section 1 table, with the same values:
-   - product `scholar`; activity `teach`, then `ask`;
-   - provider `anthropic`, model `claude-opus-4-8`, eligible;
-   - highest tier `clinical_educational`;
-   - evidence `eval-run:4b92dda5-bc86-4412-b57c-17bd2868df3f (D5-v1, corrected 2026-10-25)`.
+   - product `scholar`; activity `teach`, then `ask`; provider `anthropic`, model `claude-opus-4-8`, eligible; highest tier `clinical_educational`; evidence `eval-run:4b92dda5-bc86-4412-b57c-17bd2868df3f (D5-v1, corrected 2026-10-25)`;
+   - product `scholar`, activity `case_steps`, the same model, eligible; highest tier `high_risk_clinical`; evidence `eval-run:6c2c8067-9b30-4ec7-b3f1-84c18cfdfd0d (D5-v2, case_steps 3/3)`.
 3. **Post-check (read-only):**
    ```sql
    select product, activity, provider, model_prefix, eligible, max_risk_tier, evidence_ref, effective_from
      from ai_model_eligibility where effective_to is null and model_prefix = 'claude-opus-4-8' order by activity;
    ```
 
-**Production effect today: none.**
-- Metering is OFF and Individual is inactive.
-- With metering OFF, Scholar AI is not metered, so `ai_reserve` (which reads this row) is not called.
-- The row matters only once `ai_fair_use` is switched on, under its own GO, together with the policy, prices, CAU basis and rate (pilot package §4b).
+**Production effect today: none.** Individual is inactive.
+- **With `holdings/eligibility-unmetered`** (eligibility gates clinical-risk activities with metering OFF too), these rows decide what runs at activation, metered or not.
+- **The routing must also be published** (section 3). Without it, a clinical request routes to Sonnet and these Opus rows cover nothing.
+- **Under metering**, the rows are also what `ai_reserve` reads.
 
 ## 3. Questions, case steps and evaluation
 
@@ -60,14 +63,14 @@ D5-v2 (run `6c2c8067-9b30-4ec7-b3f1-84c18cfdfd0d`, `d5v2-activities-2026-10-25.m
 
 | Activity | Opus 4.8 (on reading) | Proposed |
 |---|---|---|
-| `questions` | 3/3, every key correct | eligible up to `clinical_educational` |
-| `case_steps` | 3/3, both generators | eligible up to `high_risk_clinical` |
-| `evaluate`, short-answer marking | 5/5, no unsafe answer marked correct | eligible up to `clinical_educational` |
+| `questions` | 3/3 on reading (screen 2/3) | **NOT RECORDED.** Gap: the four key-rule flags await the owner's determination (`D5v2-questions-key-rules-for-owner.md`). |
+| `case_steps` | 3/3, both generators, no unsafe key, no flag | **RECORDED on staging** (section 1). Sufficient. |
+| `evaluate`, short-answer marking | 5/5, no unsafe answer marked correct | **NOT RECORDED.** Gap: the coupling below. The evidence is sufficient, but recording it would switch on case-reasoning AI feedback until the policy is "self". |
 | `evaluate`, case-reasoning feedback | 0/2 shown (both withheld by Scholar's guard) | **stays DISABLED** (owner) |
 
-**What remains is a human acceptance, not a check:**
-1. **The `questions` screen.** It scored 2/3. The 3/3 rests on reading four key-rule "safety" flags as false positives in the rules: in each one, the keyed option is the passage's correct answer. This needs the same kind of determination the owner made for the mg-per-5-mL rule. That is a reading of answers already recorded in 419, not a new run.
-2. **Recording the decisions.** Once accepted, the owner or a reviewer records each activity on the HQ page, as in section 2, citing `eval-run:6c2c8067-…`.
+**The two genuine gaps, and what closes each (no new model run):**
+1. **`questions`:** the owner determines the four key-rule flags (`D5v2-questions-key-rules-for-owner.md`, prepared with each prompt, answer and the rule that tripped). Only item 4 bears on Opus. If it is confirmed, the row is recorded as in section 2.
+2. **`evaluate`:** the owner sets `scholar_case_reasoning_feedback` to "self" (below), staging then production. Then the short-answer row can be recorded, and case-reasoning feedback stays off.
 
 ### ⚠ Case-reasoning AI feedback is ON today wherever metering is OFF. Switch it off now.
 
