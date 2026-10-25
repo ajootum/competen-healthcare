@@ -7,6 +7,8 @@ import { SHARE_DAYS_MAX, parseShare } from "./professional/share";
 import { MAX_MATERIALS_PER_PERSON, QUESTIONS_PER_REQUEST, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS } from "./scholar/config";
 import { STUDY_ACHIEVEMENT_KINDS } from "./scholar/passport-items";
 import { INDIVIDUAL_APP_FLAG } from "./gate";
+import { COUNTRIES } from "../countries";
+import { DEFAULT_PRACTICE_SETTINGS, DEFAULT_QUALIFICATION_TYPES, DEFAULT_STATUSES, DOCUMENT_KINDS, OPTIONAL_FIELDS, PROFILE_SECTIONS } from "./professional/profile-vocabulary";
 
 // An in-memory stand-in for the three WCE tables, enough for the shared write lifecycle and the reader.
 function memoryAdmin() {
@@ -73,7 +75,16 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarOnboardingProgrammes: null, scholarProgrammeLevels: {}, scholarInstitutions: [], scholarOnboardingFields: ["level", "institution"],
       // P0: label, do not hide -- everything of a chosen catalogue is offered, labelled, by default.
       scholarCatalogueMinStatus: "unreviewed",
+      // COMPETEN-PROFESSIONAL-PROFILE-01: free text where nothing is configured, every country, the default statuses,
+      // settings and qualification types, every optional question asked and none required, all six sections, AI on.
+      professionalProfile: {
+        professions: [], titles: [], jurisdictions: DEFAULT_POLICY.professionalProfile.jurisdictions, statuses: [...DEFAULT_STATUSES],
+        qualificationTypes: [...DEFAULT_QUALIFICATION_TYPES], registrationBodies: [], practiceSettings: [...DEFAULT_PRACTICE_SETTINGS],
+        specialties: [], careerInterests: [], registrationFields: [...OPTIONAL_FIELDS], registrationRequired: [],
+        sections: [...PROFILE_SECTIONS], documentKinds: [...DOCUMENT_KINDS], ai: "on",
+      },
     });
+    expect(DEFAULT_POLICY.professionalProfile.jurisdictions.length).toBe(COUNTRIES.length);
   });
 
   it("P0: the content-status minimum is one listed value, defaults to everything, and filters only when raised", () => {

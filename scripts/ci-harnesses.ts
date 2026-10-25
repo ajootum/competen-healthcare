@@ -73,6 +73,11 @@ const INCLUDED = [
   // reads src/** and the migration and renders one component with react-dom/server; no client, no network,
   // no .env.local. Screened 2026-10-23: 47/47 twice in a scrubbed environment, identical results.
   "individual-professional-harness.ts",
+  // COMPETEN-PROFESSIONAL-PROFILE-01 Stage 1 (source and migration 450): RLS posture, no verified or scope column,
+  // append-only history and versioned records with the cascade path, completion in the schema, three required facts,
+  // nothing un-askable configurable, trigger-only history, guarded handlers, allowlisted suggestions, policy-gated AI
+  // grounding, and fail-open to the MVP without 450. 19 planted-failure controls. Reads files only: no client, no network.
+  "professional-profile-harness.ts",
   // HQ-USERS-A: the /api/super-admin/users handlers are gated by the HQ gate (view) and the owner gate (writes),
   // never by profiles.role, with 8 planted-failure controls. Reads files only: no client, no network, no .env.local.
   "hq-users-authority-harness.ts",
