@@ -25,7 +25,8 @@ export function getScholarAiStanding(admin: unknown, userId: string): Promise<Ai
 
 /** Pure. Whether new AI may be used for this activity now, and if not the student-facing reason. */
 export function activityState(standing: AiStanding, activity: ScholarAiActivity): { available: boolean; message: string | null; insufficient: boolean } {
-  if (!standing.metered && standing.readable) return { available: true, message: null, insufficient: false };
+  // Metered or not, what the standing lists is what counts: with metering off a clinical-risk activity with no eligible
+  // model is not available (allowance.ts unmeteredGate), and an activity it does not list is refused, so not offered.
   const a = standing.activities[activity];
   if (standing.readable && a?.available) return { available: true, message: null, insufficient: false };
   const insufficient = a?.reason === "level_insufficient";
