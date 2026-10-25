@@ -45,6 +45,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Every Node process in every job gets a 6 GB V8 heap. The default ~4 GB ran out in the type checker twice in
+# one day (25 Oct 2026): `next build` in smoke-authenticated (#105, #110) and plain `tsc --noEmit` in Typecheck
+# (#114). Size, not a type error. 6 GB fits the 7 GB ubuntu-latest runner. The step-level setting on the
+# smoke-authenticated build (#111) stays as the same value.
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   quality:
     name: Typecheck + lint
