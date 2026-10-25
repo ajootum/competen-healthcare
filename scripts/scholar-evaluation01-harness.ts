@@ -299,6 +299,7 @@ async function main() {
     `${fresh.status} ${fresh.json?.error ?? ""} · items ${fItems.map(x => x.kind).join(",")}`);
   ok("7. deterministic questions are marked without AI: every structured answer recorded and marked by its key, no AI call",
     detOk > 0 && fAi1 === fAi0 && fAttempts.filter(x => x.question_id !== short?.id).every(x => x.marking === "deterministic"), `${detOk} marked · ai ${fAi0}->${fAi1}`);
+  note(`step 8 path: ${!short ? "no short answer" : shortMark ? `${shortMark.marking} ${shortMark.evaluator_model ?? ""}` : heldShort ? "held for self-grading (no eligible evaluate model)" : "neither"}`);
   if (!short) pend("8", "no short-answer question in this knowledge check");
   else ok("8. free text uses an eligible AI model where available -- else it is held, unmarked, for the student's own grading at the end, never marked wrong by code",
     sAns?.status === 200 && ((shortMark?.marking === "ai_evaluation" && !!shortMark.evaluator_model) || (!shortMark && !!heldShort)),
@@ -318,6 +319,7 @@ async function main() {
   else ok("10. results connect to CFCA learning outcomes where available: outcomes covered, and the domain › practice unit › competency › outcome view",
     !!cr && (cr.results.coverage.outcomes !== null || !!cr.cfca) && [...cr.results.strengths, ...cr.results.gaps, ...cr.results.insufficientAreas].some((x: any) => x.kind === "outcome" || x.kind === "competency"),
     cr ? `outcomes ${JSON.stringify(cr.results.coverage.outcomes)} · cfca ${cr.cfca ? "yes" : "no"}` : "");
+  note(`step 10: programme ${programme?.code ?? "none"} · links ${linked} · outcomes ${JSON.stringify(cr?.results?.coverage?.outcomes ?? null)} · cfca ${cr?.cfca ? "tree" : "none"} · confidence ${cr?.confidence}`);
   const hrefs = ["study/learn?section=", "study/revise", "study/apply"];
   ok("11. recommendations link to Teach Me, Revision and Clinical Reasoning, each from a finding",
     !!cr && (cr.results.recommendations ?? []).length > 0 && hrefs.every(h => recPage.text.includes(h)),
@@ -357,9 +359,13 @@ async function main() {
 
   // ── 15: never verified competence; private ──
   const all = [rec?.json?.evaluation, cr, bRec].filter(Boolean);
+  // What the evaluation itself asserts: its results with the catalogue's own words (area labels, contexts, expected
+  // levels -- a learning outcome may say "competent") taken out. A claim would be in what is left.
+  const asserted = (x: any) => JSON.stringify(x.results, (k, v) => (["label", "context", "expected"].includes(k) ? undefined : v));
+  const claim = all.map(asserted).find(s => /\b(competent|certified|passed|verified competence)\b/i.test(s.replace(/not assessed/gi, "")));
   ok("15. no result is represented as verified clinical competence: every record says not assessed, and the pages say so",
-    all.length === 3 && all.every((x: any) => x.results.verified?.state === "not_assessed") && recPage.text.includes("Verified clinical competence") && recPage.text.includes("Not assessed here")
-      && !all.some((x: any) => /\b(competent|certified|passed)\b/i.test(JSON.stringify(x.results))));
+    all.length === 3 && all.every((x: any) => x.results.verified?.state === "not_assessed") && recPage.text.includes("Verified clinical competence") && recPage.text.includes("Not assessed here") && !claim,
+    `records ${all.length} · verified ${all.map((x: any) => x.results.verified?.state).join(",")} · page ${recPage.text.includes("Not assessed here")} · claim ${claim ? claim.match(/.{0,60}\b(competent|certified|passed|verified competence)\b.{0,30}/i)?.[0] : "none"}`);
   const iGet = resp.json?.id ? await send("GET", `/api/individual/scholar/evaluations/${resp.json.id}`, undefined, sb.jar) : { status: 404 };
   const iDel = resp.json?.id ? await send("DELETE", `/api/individual/scholar/evaluations/${resp.json.id}`, undefined, sb.jar) : { status: 404 };
   const iPage = resp.json?.id ? await get(`${EVALUATE}/${resp.json.id}`, sb.jar) : { status: 200, text: "could not be found" };

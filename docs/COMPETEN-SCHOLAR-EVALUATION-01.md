@@ -111,11 +111,51 @@ competence; records kept as made.
 
 ## 8. Focused staging acceptance
 
-`scripts/scholar-evaluation01-harness.ts`, the owner's journey steps 1–15, plus isolation and erase-all. **Pending:** 426 on staging.
+`scripts/scholar-evaluation01-harness.ts`, the owner's journey steps 1–15, plus isolation and erase-all. It ran alone over
+HTTP against staging `ezhvpgtcqcdsgylrxgdb` on 2026-10-25, with 426 applied, metering OFF and real AI. **ALL GREEN, 19
+passed, 0 failed; 0 fixtures left.**
+
+| Owner step | Result |
+|---|---|
+| 1 Learning (Teach Me and a check), revision and a clinical case on the respiratory materials | PASS |
+| 2 Existing evidence retrieved (questions, case decisions, Teach Me checks counted on Evaluate) | PASS |
+| 3 Continuous evaluation interprets it: six dimensions, no exam, no AI call | PASS |
+| 4 A Respiratory Assessment evaluation, kept as a record | PASS |
+| 5 Coverage, knowledge, retention and reasoning, each its own measure state | PASS |
+| 6 A fresh knowledge check (Mock, feedback at the end) | PASS |
+| 7 Structured questions marked by their key, no AI call | PASS |
+| 8 Free text: AI evaluation where available, else held for self-grading | PASS. **Run 4: `ai_evaluation` by `claude-sonnet-4-6`.** See §9(a). |
+| 9 Evidence confidence (class and reasons) and limitations shown | PASS |
+| 10 CFCA learning outcomes: nursing-ug-diploma, 9 linked outcomes, 8 worked on; the domain › unit › competency › outcome tree; confidence moderate | PASS |
+| 11 Recommendations open Teach Me, Revision and Clinical Reasoning | PASS |
+| 12 History preserved: a later evaluation supersedes; the earlier one is unchanged, and a direct UPDATE is refused by 426 | PASS |
+| 13 With the allowance used up (synthetic rows, fixture only): existing evaluations open, a new one is made, no AI | PASS |
+| 14 No catalogue: by section of the notes, saying so | PASS |
+| 15 Never verified competence: every record says not assessed, and the page says so | PASS |
+| I Another student can neither read, remove nor open an evaluation | PASS |
+| E Erase-all removes them | PASS |
+
+**How it got there:**
+- **Run 1 (15/4):** the Evaluate pages returned 500 once a student had evaluations, because a server page called a helper defined in the `"use client"` module. Fixed by moving `evaluationHref` to `question-view.ts`. K39 now pins it.
+- **Run 2 (18/1):** step 15's scan for words such as "competent" also read the catalogue's own outcome wording. It was narrowed to what the evaluation asserts (its results, minus catalogue labels).
+- **Runs 3 and 4:** 19/0. Run 4 prints the step 8 and step 10 paths.
+
+**Tests:**
+- Unit: `evaluation.test.ts` (13); policy defaults pinned.
+- `scholar-learning-harness` 152/152: K39 with plant P57 (six ways red).
+- `individual-config-harness` 41/41; `next build` exit 0.
 
 ## 9. Genuine remaining gaps
 
-To be completed with the acceptance run.
+- **(a) Clinical-safety, found by this run.** With metering OFF, a Revision short answer was AI-evaluated by `claude-sonnet-4-6`. The owner ruled Sonnet out for clinical activities, and `evaluate` has no eligible model (D5-v2).
+  - **Cause:** eligibility does not gate unmetered calls. IND-007's `holdings/eligibility-unmetered` closes that, and is not yet merged.
+  - **Fix offered:** `scholar_short_answer_marking` defaulting to "self", as was done for case reasoning. Raised with the coordinator.
+  - **Effect on Stage 7:** none on its code. Answers keep the marking they were given, and the AI model is recorded in the evaluation's AI provenance.
+- **(b) Evidence weighting** (E3) is not configurable. Every independent piece of evidence weighs the same. Weighting by difficulty or conditions is a bounded follow-up.
+- **(c) Retention:** records are kept until the student removes them or erases everything. A time-based retention setting would need a scheduled job.
+- **(d) A clinical-context scope** reads the cases of that context and the sections they came from. Revision answers carry no clinical context.
+- **(e) Library-case decisions** are not read, because the library is OFF for the pilot. Reading them would be one more evidence source.
+- **(f) AI synthesis or explanation of gaps** is not used. The deterministic findings were sufficient, and the contract allows AI only where justified.
 
 ## 10. Production dependencies (none authorised by this build)
 

@@ -10,8 +10,8 @@ import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { evaluateScope } from "@/lib/individual/scholar/evaluation-data";
 import { CASE_CONTEXT_LABEL, EVALUATION_CONFIDENCE_LABEL, EVALUATION_LABEL, EVALUATION_METHOD_LABEL } from "@/lib/individual/scholar/config";
 import { EvaluationView } from "../_components/evaluation-view";
-import { EvaluationStart, KeepContinuous, evaluationHref } from "../_components/evaluation-client";
-import { studyHref } from "../_components/question-view";
+import { EvaluationStart, KeepContinuous } from "../_components/evaluation-client";
+import { evaluationHref, studyHref } from "../_components/question-view";
 
 // Request-time only: it reads the release gate and the evidence, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).

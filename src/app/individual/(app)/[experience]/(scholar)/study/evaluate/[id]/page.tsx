@@ -7,8 +7,8 @@ import StudyNav from "../../_components/StudyNav";
 import { countDue, getEvaluation } from "@/lib/individual/scholar/store";
 import { EVALUATION_CONFIDENCE_LABEL, EVALUATION_LABEL, EVALUATION_METHOD_LABEL } from "@/lib/individual/scholar/config";
 import { EvaluationView } from "../../_components/evaluation-view";
-import { EvaluationActions, evaluationHref } from "../../_components/evaluation-client";
-import { studyHref } from "../../_components/question-view";
+import { EvaluationActions } from "../../_components/evaluation-client";
+import { evaluationHref, studyHref } from "../../_components/question-view";
 
 // Request-time only: it reads the release gate and the record, and must never be prerendered at build.
 export const dynamic = "force-dynamic";

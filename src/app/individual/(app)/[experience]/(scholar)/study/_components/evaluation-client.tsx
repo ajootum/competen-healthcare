@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { EVALUATION_METHOD_LABEL } from "@/lib/individual/scholar/config";
-import { studyHref } from "./question-view";
+import { evaluationHref, studyHref } from "./question-view";
 
 // EVALUATION-01 (Stage 6) E1: choosing what to evaluate and how, without knowing the CFCA underneath. "From your
 // existing evidence" keeps an evaluation at once. "A fresh knowledge check" and "Existing evidence and a fresh
@@ -25,7 +25,6 @@ async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok:
     return { ok: false, status: 0, json: { error: "Competen could not be reached. Check your connection and try again." } };
   }
 }
-export const evaluationHref = (id?: string) => (id ? studyHref(`evaluate/${id}`) : studyHref("evaluate"));
 
 type Method = "existing" | "fresh" | "combined";
 type ScopeKind = "all" | "topic" | "document" | "documents" | "competency" | "outcome" | "context";

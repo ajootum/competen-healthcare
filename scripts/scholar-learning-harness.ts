@@ -420,6 +420,8 @@ const evaluationHonest = (src: Src) => {
     && /verified: \{ state: "not_assessed", reason: VERIFIED_NOT_ASSESSED \}/.test(engine) && !/verified: \{ state: "(?!not_assessed)/.test(engine + routes + data)
     && !/individual_scholar_evaluation"\)\.update\(/.test(store) && /\.eq\("action", "clarify"\)/.test(store)
     && /Verified clinical competence/.test(view) && /r\.verified\.reason/.test(view)
+    // A server page may not call a function from the "use client" module (it 500s): the href helper is shared.
+    && ![src.get(`${PAGES}/evaluate/page.tsx`) ?? "", src.get(`${PAGES}/evaluate/[id]/page.tsx`) ?? ""].some(s => /evaluationHref[^;]*from "[./]*_components\/evaluation-client"/.test(s))
     && /create table if not exists individual_scholar_evaluation/.test(mig) && /before update on individual_scholar_evaluation/.test(mig) && !/^\s+verified\w*\s/m.test(mig);
 };
 const REV_ANSWER = `${API}/revision/answer/route.ts`, REV_SESSION = `${API}/revision/sessions/[id]/route.ts`;
