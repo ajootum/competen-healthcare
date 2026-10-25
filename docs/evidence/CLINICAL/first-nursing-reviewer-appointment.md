@@ -61,9 +61,12 @@ They are decidable by an appointed reviewer holding the CF-FOUND framework scope
 
 The submitter, and the only author, of all eight is the retired synthetic curator `324636db`. Independence therefore bars nobody real, but the nominee must not be anyone who edits these competencies before deciding. An edit makes the version stale, and the edited content needs a new version.
 
-## 3b. If migration 422 is applied: clinical cases (staging only, not on main, not in production)
+## 3b. If migration 422 is applied: clinical cases (on main and staging, not in production)
 
-Migration 422 (COMPETEN-SCHOLAR-CLINICAL-REASONING-01, case interface approval s3) extends this same approval process to clinical case versions. There is no second approval engine. It is applied on staging only, and its PR is not merged.
+The case educator and the case-library publisher are prepared in `case-library-appointments.md`. Shared case publication stays disabled (owner, 25 October 2026).
+
+
+Migration 422 (COMPETEN-SCHOLAR-CLINICAL-REASONING-01, case interface approval s3) extends this same approval process to clinical case versions. There is no second approval engine. It is on main (#72) and applied on staging. It is not applied in production.
 
 Where 422 is applied, **the same appointment and the same scopes** also decide case versions:
 
