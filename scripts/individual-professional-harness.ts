@@ -256,7 +256,10 @@ const checkVerifyPage = (src: Sources) => {
 // PROF-PROFILE-01 part B: exactly ONE Professional file may name the verified state -- the verification module,
 // which derives it from 451 history rows whose actor the database proved is an appointed, independent verifier.
 // professional-profile-harness.ts pins that derivation. Every other Professional file still may not.
-const VERIFIED_STATE_FILES = new Set(["src/lib/individual/professional/profile-verification.ts"]);
+// PROF-EVALUATION-01: the Stage 6 reader of C5 decisions READS the outcome class a Studio decision carries (fixed by 510's
+// CHECK, decided only by an appointed assessor, enforced by 510's triggers) to tell a current verified outcome from any other.
+// It sets nothing: Stage 6 writes no C5 row (evaluation.test.ts pins that).
+const VERIFIED_STATE_FILES = new Set(["src/lib/individual/professional/profile-verification.ts", "src/lib/individual/professional/evaluation-stage5.ts"]);
 const checkNoVerifiedClassInProfessional = (src: Sources) => {
   const bad = [...src].filter(([f, s]) => isProfessional(f) && !VERIFIED_STATE_FILES.has(f) && /institution_verified|independently_verified|verified:\s*true|"verified"/.test(s)).map(([f]) => f);
   return { ok: bad.length === 0, detail: bad.join(", ") };
