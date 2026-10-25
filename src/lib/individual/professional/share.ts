@@ -44,7 +44,9 @@ export function parseShare(b: Record<string, unknown>, maxDays: number = SHARE_D
 export async function mintShare(admin: any, userId: string, input: ReturnType<typeof parseShare>,
   profile: { overview: boolean; itemIds: readonly string[] } = { overview: false, itemIds: [] },
   /** LCPD-01 LCPD-6 (migration 491): the completed learning records the person ticked for this link, already checked. */
-  learningRecordIds: readonly string[] = []): Promise<ShareLink | null> {
+  learningRecordIds: readonly string[] = [],
+  /** COMPETENCY-01 S11 (migration 520): the competencies, and which parts of each, the person ticked for this link, already checked. */
+  competencies: readonly { myCompetencyId: string; parts: readonly ("self_assessment" | "evidence" | "assessed_outcomes")[] }[] = []): Promise<ShareLink | null> {
   const token = randomBytes(24).toString("hex");
   const { data: share, error } = await admin.from("passport_share_tokens").insert({
     token, nurse_id: userId, hospital_id: null, scope: input.scope, label: input.label,
@@ -60,7 +62,13 @@ export async function mintShare(admin: any, userId: string, input: ReturnType<ty
   const { error: learnErr } = !linkErr && !itemErr && learningRecordIds.length
     ? await admin.from("individual_professional_share_learning").insert(learningRecordIds.map(learning_record_id => ({ share_token_id: share.id, user_id: userId, learning_record_id })))
     : { error: null };
-  if (linkErr || itemErr || learnErr) {
+  const { error: compErr } = !linkErr && !itemErr && !learnErr && competencies.length
+    ? await admin.from("individual_professional_share_competency").insert(competencies.map(c => ({
+        share_token_id: share.id, user_id: userId, my_competency_id: c.myCompetencyId,
+        include_self_assessment: c.parts.includes("self_assessment"), include_evidence: c.parts.includes("evidence"), include_assessed_outcomes: c.parts.includes("assessed_outcomes"),
+      })))
+    : { error: null };
+  if (linkErr || itemErr || learnErr || compErr) {
     // Without the companion row the link would show the institution sections only, which is not what the
     // person asked to share. Withdraw it rather than hand out a different link than the one requested.
     await admin.from("passport_share_tokens").update({ revoked: true }).eq("id", share.id).eq("nurse_id", userId);
