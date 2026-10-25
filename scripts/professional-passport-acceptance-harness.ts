@@ -82,7 +82,7 @@ async function restore() {
   }
 }
 const grant = async (me: string, exp: "scholar" | "professional") => {
-  const g = validateGrant({ targetUserId: me, experiences: [exp], note: "PASSPORT-01 acceptance" });
+  const g = validateGrant({ targetUserId: me, experiences: [exp], adultConfirmed: exp === "scholar", note: "PASSPORT-01 acceptance" });
   if (isGrantRefusal(g)) throw new Error(g.message);
   await grantIndividualAccess(admin, g, me);
 };

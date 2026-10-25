@@ -75,7 +75,7 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
       <Section title="At a glance" note="Private to you. Nothing here is shared unless you choose it, record by record, on a Passport view.">
         <ul className="grid gap-2 text-[13.5px] text-gray-800 sm:grid-cols-2">
           <li>Assessed by organisations: <span className="font-semibold">{passport.competencies === null ? "could not be read" : current.length}</span> current</li>
-          <li>Credentials on your record: <span className="font-semibold">{passport.credentials === null ? "could not be read" : passport.credentials.length}</span></li>
+          <li>Credentials and registrations held with organisations: <span className="font-semibold">{passport.credentials === null ? "could not be read" : passport.credentials.length}</span></li>
           {pro && <li>Qualifications and registrations you recorded: <span className="font-semibold">{profile?.items === null ? "could not be read" : quals.length}</span></li>}
           {pro && <li>Competencies you are developing: <span className="font-semibold">{comp?.entries === null ? "could not be read" : entries.length}</span></li>}
           {passport.learning?.enabled && <li>Competen Learning completed: <span className="font-semibold">{passport.learning.items === null ? "could not be read" : passport.learning.items.length}</span></li>}

@@ -46,7 +46,8 @@ const MIG = existsSync(MIG_FILE) ? readFileSync(MIG_FILE, "utf8").replace(/--.*$
 const VIEW = "src/lib/individual/passport-view.ts", VOCAB = "src/lib/individual/passport-vocabulary.ts";
 const SHARE = "src/lib/individual/professional/share.ts", FORM = "src/lib/individual/professional/share-passport.ts";
 const VERIFY = "src/app/verify/[token]/page.tsx", RENDER = "src/app/individual/_components/passport/PassportLinkView.tsx";
-const AI = "src/app/api/individual/professional/passport-suggestions/route.ts", ROUTE = "src/app/api/individual/professional/share/route.ts";
+const AI = "src/app/api/individual/professional/passport-suggestions/route.ts";
+const ADAPTER = "src/lib/individual/professional/competency-verification.ts", SHARE_COMP = "src/lib/individual/professional/share-competency.ts";
 const PREVIEW = "src/app/individual/(app)/[experience]/(professional)/share/preview/page.tsx";
 const STAGE7_FILES = [VIEW, VOCAB, FORM, RENDER, AI, PREVIEW];
 const TABLES = ["individual_passport_share_view", "individual_passport_share_record", "individual_passport_share_access"];
@@ -109,10 +110,16 @@ const checkDraftsAndDisclosure = (src: Sources): R => {
 const checkTrust = (src: Sources): R => {
   const lib = src.get(VIEW) ?? "";
   const verifiedAt = [...lib.matchAll(/independently_verified/g)].length;
-  const sources = /trust: verified \? "independently_verified"/.test(lib) && /trust: "independently_verified", validity: expiryValidity\(a\.validUntil/.test(lib)
+  const sources = /trust: verified \? "independently_verified"/.test(lib) && /trust: a\.verified \? "independently_verified" : "assessed", validity: expiryValidity\(a\.validUntil/.test(lib)
     && /trust: c\.evidence === "institution_verified" \? "independently_verified" : "assessed"/.test(lib);
+  // C5: "verified" is current AND of class verified AND at a level -- the class, never the per-method outcome code.
+  const adapter = src.get(ADAPTER) ?? "";
+  const byClass = /export const verifiedNow = \(d: VerificationDecision, today: string\) => currentDecision\(d, today\) && d\.outcomeClass === "verified" && !!d\.level;/.test(adapter)
+    && /\(d\.outcomeClass === "verified" \|\| d\.outcomeClass === "partial"\)\n  && \(d\.standing \? d\.standing === "current"/.test(adapter)
+    && !/outcomeCode\s*(===|!==|==)/.test(adapter + (src.get(SHARE_COMP) ?? "") + lib)
+    && /verified: verifiedNow\(d, today\)/.test(src.get(SHARE_COMP) ?? "");
   const notConfigurable = !POLICIES.some(p => /trust/.test(p.key)) && /independently_verified: "Independently verified"/.test(src.get(VOCAB) ?? "");
-  return { ok: sources && verifiedAt === 3 && notConfigurable, detail: `only verifier, C5 and staff-verified ${sources}, mentions ${verifiedAt}/3, trust words fixed ${notConfigurable}` };
+  return { ok: sources && byClass && verifiedAt === 3 && notConfigurable, detail: `only verifier, C5 and staff-verified ${sources}, C5 verified by class at a level ${byClass}, mentions ${verifiedAt}/3, trust words fixed ${notConfigurable}` };
 };
 
 // ── P ──
@@ -160,6 +167,10 @@ function main() {
   red("D1 on /verify looking people up", checkDraftsAndDisclosure(add(VERIFY, `await admin.from("passport_share_tokens").select("token").eq("nurse_id", x);`)));
   red("D1 on a log that records more than the answer", checkDraftsAndDisclosure(plant(SHARE, "insert({ share_token_id: tokenId, user_id: userId, result })", "insert({ share_token_id: tokenId, user_id: userId, result, agent: ua })")));
   red("T1 on CPD shown as verified", checkTrust(plant(VIEW, `trust: c.evidence_class === "source_linked" ? "document_supported" : "self_declared", validity: "not_applicable", meaning: "A development activity`, `trust: "independently_verified", validity: "not_applicable", meaning: "A development activity`)));
+  red("T1 on a C5 rule that reads the outcome code", checkTrust(plant(ADAPTER, '&& d.outcomeClass === "verified" && !!d.level;', '&& d.outcomeCode === "verified" && !!d.level;')));
+  red("T1 on a partial outcome shown as verified", checkTrust(plant(VIEW, 'trust: a.verified ? "independently_verified" : "assessed"', 'trust: "independently_verified"')));
+  red("T1 on a decision with no class counted as standing", checkTrust(plant(ADAPTER, '(d.outcomeClass === "verified" || d.outcomeClass === "partial")\n  && ', "")));
+  red("T1 on a share that drops the verified test", checkTrust(plant(SHARE_COMP, "verified: verifiedNow(d, today)", "verified: true")));
   red("P1 on a reflection path onto a view", checkPrivacy(add(VIEW, `admin.from("individual_professional_reflection").select("body");`)));
   red("P1 on Passport AI that shares", checkPrivacy(add(AI, "await activateShare(ctx.admin, ctx.userId, id);")));
   red("H1 on a hard-coded country", checkNoHardcoding(add(VOCAB, `export const COUNTRY = "Uganda";`)));

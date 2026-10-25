@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { resolvePolicy } from "./policy";
 import { loadPassportSelection, orderItems, presentable, type PassportItem } from "./passport-view";
 import { parsePassportView } from "./professional/share-passport";
+import { currentDecision, verifiedNow, type VerificationDecision } from "./professional/competency-verification";
 
 // COMPETEN-PROFESSIONAL-PASSPORT-01 (Stage 7): record-level sharing, pinned.
 
@@ -76,5 +77,29 @@ describe("presentation (P3, P5)", () => {
     expect(presentable(items, { shareable: ["evidence", "study"], validity: "show" }).length).toBe(3);
     expect(presentable(items, { shareable: ["evidence", "study"], validity: "hide" }).map(i => i.validity)).toEqual(["current", "current"]);
     expect(presentable(items, { shareable: ["evidence"], validity: "show" }).some(i => i.category === "study")).toBe(false);
+  });
+});
+
+describe("C5 outcomes on the Passport: the class decides, never the code", () => {
+  const d = (over: Partial<VerificationDecision>): VerificationDecision => ({
+    outcomeCode: "verified_at_level", outcomeClass: "verified", standing: "current", outcomeLabel: "Verified at level", level: "Proficient", assessorName: "A",
+    authority: "Competency Assessor", criteriaVersion: null, decidedAt: "2026-10-20", validUntil: null, revokedAt: null, supersededBy: null, ...over,
+  });
+  it("a current verified decision at a level is verified, whatever its configured code", () => {
+    expect(verifiedNow(d({}), today)).toBe(true);
+    expect(verifiedNow(d({ outcomeCode: "anything_the_method_calls_it" }), today)).toBe(true);
+  });
+  it("partial stands but is not verified; no level, no class, or another class is never verified", () => {
+    expect(currentDecision(d({ outcomeClass: "partial" }), today)).toBe(true);
+    expect(verifiedNow(d({ outcomeClass: "partial" }), today)).toBe(false);
+    expect(verifiedNow(d({ level: null }), today)).toBe(false);
+    expect(currentDecision(d({ outcomeClass: null, outcomeCode: "verified" }), today)).toBe(false);
+    expect(currentDecision(d({ outcomeClass: "not_demonstrated" }), today)).toBe(false);
+  });
+  it("C5's standing wins over dates; without one, revoked, superseded and expired do not stand", () => {
+    expect(verifiedNow(d({ standing: "superseded" }), today)).toBe(false);
+    expect(verifiedNow(d({ standing: undefined, validUntil: "2026-01-01" }), today)).toBe(false);
+    expect(verifiedNow(d({ standing: undefined, revokedAt: "2026-10-21" }), today)).toBe(false);
+    expect(verifiedNow(d({ standing: undefined }), today)).toBe(true);
   });
 });

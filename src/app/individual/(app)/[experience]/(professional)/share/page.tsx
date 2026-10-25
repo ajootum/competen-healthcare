@@ -193,7 +193,7 @@ export default async function SharePage({ params }: { params: Promise<{ experien
                 <li key={l.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-gray-900">{h?.purpose ?? l.label ?? "Passport link"}{h?.recipient ? <span className="font-normal"> · for {h.recipient}</span> : null} <span className="font-normal text-gray-500">· {state}</span></p>
-                    <p className="text-[12.5px] text-gray-500">Created {fmtDate(l.created_at)} · until {fmtDate(l.expires_at)} · opened {h ? h.opened : l.view_count} {(h ? h.opened : l.view_count) === 1 ? "time" : "times"}{h?.lastOpened ? `, last ${fmtDate(h.lastOpened)}` : ""}{h?.refused ? ` · ${h.refused} refused after it closed` : ""}</p>
+                    <p className="text-[12.5px] text-gray-500">Created {fmtDate(l.created_at)} · until {fmtDate(l.expires_at)} · opened {h ? h.opened : l.view_count} {(h ? h.opened : l.view_count) === 1 ? "time" : "times"}{h?.lastOpened ? `, last ${fmtDate(h.lastOpened)}` : ""}{h?.refused ? ` · ${h.refused} refused while it was closed` : ""}</p>
                     {state === "Active" && <CopyLink url={`${SITE_URL}/verify/${l.token}`} accent={x.accent} />}
                     {h && <Link href={preview} className="text-[12.5px] font-semibold underline" style={{ color: x.accent }}>{state === "Draft" ? "Preview what they will see" : "See what they see"}</Link>}
                   </div>

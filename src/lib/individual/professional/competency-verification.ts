@@ -9,8 +9,12 @@ import type { CompetencyRef, EvidenceRef } from "./competency-store";
 // own exported functions. Until the Studio is present this adapter answers "not provisioned", and every page says
 // verification is not available yet, rather than showing an empty list that reads like "never verified".
 
+/** The kind of outcome, fixed by C5. The CODE is per-method configuration ("verified_at_level"), so no rule reads it. */
+export type OutcomeClass = "verified" | "partial" | "further_evidence" | "not_demonstrated" | "unable_to_determine";
+export type Standing = "current" | "expired" | "revoked" | "superseded" | "not_a_verification";
+
 export type VerificationDecision = {
-  outcomeCode: string; outcomeLabel: string; level: string | null; assessorName: string; authority: string; criteriaVersion: string | null;
+  outcomeCode: string; outcomeClass: OutcomeClass | null; standing?: Standing; outcomeLabel: string; level: string | null; assessorName: string; authority: string; criteriaVersion: string | null;
   decidedAt: string; validUntil: string | null; revokedAt: string | null; supersededBy: string | null;
 };
 export type VerificationSummary = {
@@ -27,8 +31,14 @@ type Studio = {
 let studio: Studio | null = null;
 export function registerVerificationStudio(s: Studio) { studio = s; }
 
-/** A decision that counts now: not revoked, not superseded, not expired. */
-export const currentDecision = (d: VerificationDecision, today: string) => !d.revokedAt && !d.supersededBy && (!d.validUntil || d.validUntil >= today);
+/** A decision that stands now as a verification outcome (verified or partial): C5's own standing when it gives one, else
+ *  not revoked, superseded or expired. A decision without a class never stands. */
+export const currentDecision = (d: VerificationDecision, today: string) =>
+  (d.outcomeClass === "verified" || d.outcomeClass === "partial")
+  && (d.standing ? d.standing === "current" : !d.revokedAt && !d.supersededBy && (!d.validUntil || d.validUntil >= today));
+
+/** THE rule for "independently verified" (agreed with C5): current, of class verified, at a level. Never the outcome code. */
+export const verifiedNow = (d: VerificationDecision, today: string) => currentDecision(d, today) && d.outcomeClass === "verified" && !!d.level;
 
 export async function loadVerifications(admin: any, userId: string, frameworkCompetencyId?: string): Promise<VerificationRead> {
   if (!studio) return { provisioned: false };

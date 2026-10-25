@@ -122,8 +122,8 @@ export async function loadPassportSelection(admin: any, userId: string, shareTok
     for (const [j, a] of (c.assessed ?? []).entries()) items.push({
       key: `competency:${i}:verified:${j}`, category: "competency", sourceService: "Competen Verification Studio", title: c.title,
       description: `${a.outcome}${a.level ? ` at ${a.level}` : ""}`, issuer: a.assessor, date: a.decidedAt, version: c.frameworkVersion, evidenceRef: null,
-      method: null, authority: a.authority, trust: "independently_verified", validity: expiryValidity(a.validUntil, ctx.today) === "expired" ? "expired" : "current",
-      meaning: "An outcome recorded by an appointed assessor, independent of the professional",
+      method: null, authority: a.authority, trust: a.verified ? "independently_verified" : "assessed", validity: expiryValidity(a.validUntil, ctx.today) === "expired" ? "expired" : "current",
+      meaning: a.verified ? "Verified at this level by an appointed assessor, independent of the professional" : "An outcome recorded by an appointed assessor that is not a full verification",
     });
   }
 
