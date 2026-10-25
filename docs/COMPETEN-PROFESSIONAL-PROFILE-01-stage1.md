@@ -39,12 +39,14 @@
 | | |
 |---|---|
 | File | `supabase/migrations/450-individual-professional-profile-and-history.sql` (APPLY WHOLE: plpgsql) |
-| sha256 | LF (git blob) `118f1e4461b4cdfdcdd355bddaf97d69b153ab5d282f3db661f45aacb9b27b02` · CRLF (applied) `5a16bb2a62f50d3f9cb6a031a638a0ed02fd3e9bfd38da670831770220bc16ff` |
-| Depends on | 373 only. Application order: after 373 (independent of 374–436) |
+| sha256 (LF, applied on staging = committed blob) | `118f1e4461b4cdfdcdd355bddaf97d69b153ab5d282f3db661f45aacb9b27b02` |
+| Depends on, and application order | **373 only.** Numerically ahead of 426–449, which are other workstreams' and unrelated. It may be applied at any point after 373, independent of 374–449 |
 | House rules | ALL CLEAR (463 lines, 92 statements, 12 constraints). A planted comment semicolon goes RED |
-| Rollback / verify | `ROLLBACK-450.sql` (`475317bc…1d78`), `VERIFY-450.sql` (`2a0358e2…c0c4`), with the coordinating session (notes folder `PROF-PROFILE-01-450/`) |
+| Rollback / verify (LF) | `docs/evidence/COMPETEN-PROFESSIONAL-PROFILE-01/ROLLBACK-450.sql` `ac25fb029859f1f99c3ad090874bb49b7824148b502e692e383fc33710f2aaf1` · `VERIFY-450.sql` (read-only) `311cfd1dff91ac3ed12d7de4a062256bd3dd207a25123d6ff608a8e77bba0eb2` |
 | Local rehearsal | postgres:17. Apply ×2 OK. 17 behaviour probes OK. Rollback back to 11 columns. Re-apply OK |
-| Staging | Present on staging, applied by the coordinating session. Its ×2 and rollback-rehearsal record goes here. VERIFY-450 read-only on staging: 16 columns · 2 tables, RLS, 1 select policy each · 4 triggers · 9 constraints · 0 forbidden columns · profiles = open periods (0 = 0) |
+| Pre-application (staging) | `individual_professional_profile`: 0 rows |
+| Staging application (coordinating session, guarded runner, file whole, LF bytes) | Fingerprint over the `individual_professional%` columns, constraints, indexes, policies and triggers, plus the `individual_professional_profile*` function md5s, CR-stripped. **PRE** `eeb41896dfdb5fe4d911fa9b30c4aeb6` (185 items) → **apply #1** `7546da1b5e80852b9061a80795c0f9c4` (281) → **apply #2** `7546da1b…` (idempotent) → **rollback** `eeb41896…` (= PRE) → **re-apply** `7546da1b…` (= apply #1). **Final state: APPLIED on staging** (ezhvpgtcqcdsgylrxgdb) |
+| VERIFY-450 on staging (after both applies, and re-run read-only by this session) | §1 16 columns · §2 both tables, RLS on, 1 policy, 1 select · §3 four triggers · §4 3 pointer + 6 item constraints · §5 0 forbidden columns · §6 profiles 0 = open periods 0 · §7 0 rows, unchanged |
 | Production | **Not applied.** Needs a separate owner GO and the OPS-001 safeguards |
 
 ## 5. Verification
