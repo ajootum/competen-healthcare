@@ -83,6 +83,12 @@ const INCLUDED = [
   // free stages, private reflections, suggestions only on acceptance, offered competencies only, catalogue-only learning,
   // MVP path kept. 18 planted-failure controls. Reads files only: no client, no network.
   "professional-needs-harness.ts",
+  // COMPETEN-PROFESSIONAL-PLAN-01 Stage 3 (source and migration 480): own-row RLS, no score or scope column, the Stage 3/4
+  // contract (no completion, hours or evidence on an activity; completed only with a CPD entry or learning record; one
+  // activity per record), trigger-written append-only history, composite keys, unlink-once links, only the description
+  // required, free statuses, addressed verifies nothing, catalogue-only learning, private plans, plan AI saves nothing,
+  // MVP path kept. 26 planted-failure controls. Reads files only: no client, no network.
+  "professional-plan-harness.ts",
   // HQ-USERS-A: the /api/super-admin/users handlers are gated by the HQ gate (view) and the owner gate (writes),
   // never by profiles.role, with 8 planted-failure controls. Reads files only: no client, no network, no .env.local.
   "hq-users-authority-harness.ts",

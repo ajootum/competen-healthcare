@@ -76,7 +76,7 @@ export function EvidenceEdit({ e, needs, today, accent }: {
   );
 }
 
-export function GoalEdit({ g, needs, accent }: { g: { id: string; title: string; detail: string | null; target_date: string; need_id: string | null }; needs: { id: string; title: string }[]; accent: string }) {
+export function GoalEdit({ g, needs, accent }: { g: { id: string; title: string; detail: string | null; target_date: string | null; need_id: string | null }; needs: { id: string; title: string }[]; accent: string }) {
   const p = `goal-${g.id}-e`;
   return (
     <Disclosure label="Edit" accent={accent}>

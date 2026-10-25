@@ -95,7 +95,7 @@ export default async function ProgressPage({ params }: { params: Promise<{ exper
             {activity.map(a => (
               <li key={a.goalId} className="flex flex-wrap items-baseline justify-between gap-2 py-2.5">
                 <p className="text-[14px] font-semibold text-gray-900">{goalTitle.get(a.goalId) ?? "Goal"}{" "}
-                  <span className="font-normal text-gray-500">· {GOAL_STATUS_LABEL[a.status] ?? a.status} · target {fmtDate(a.targetDate)}</span>
+                  <span className="font-normal text-gray-500">· {GOAL_STATUS_LABEL[a.status] ?? a.status} · {a.targetDate ? `target ${fmtDate(a.targetDate)}` : "no target date"}</span>
                   {a.overdue && <span className="font-semibold text-amber-800"> · past target date</span>}
                 </p>
                 <p className={`text-[12.5px] ${a.entries ? "text-gray-700" : "font-semibold text-amber-800"}`}>

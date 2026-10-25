@@ -60,7 +60,7 @@ export function professionalContext(record: ProfessionalRecord, today: string): 
   else if (!record.goals.length) lines.push("Learning plan goals: none recorded.");
   else {
     const needTitle = new Map((record.needs ?? []).map(n => [n.id, n.title]));
-    lines.push(`Learning plan goals: ${record.goals.slice(0, 12).map(g => `${g.title}, target ${g.target_date}, ${GOAL_STATUS_LABEL[g.status] ?? g.status}${g.need_id && needTitle.get(g.need_id) ? `, for need: ${needTitle.get(g.need_id)}` : ""}`).join("; ")}.`);
+    lines.push(`Learning plan goals: ${record.goals.slice(0, 12).map(g => `${g.title}${g.target_date ? `, target ${g.target_date}` : ", no target date"}, ${GOAL_STATUS_LABEL[g.status] ?? g.status}${g.need_id && needTitle.get(g.need_id) ? `, for need: ${needTitle.get(g.need_id)}` : ""}`).join("; ")}.`);
   }
 
   if (record.cpd === null) lines.push("CPD log: could not be read just now.");

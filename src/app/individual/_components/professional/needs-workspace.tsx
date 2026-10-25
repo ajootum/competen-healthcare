@@ -124,6 +124,8 @@ export function NeedDetail(p: {
   history: NeedHistoryRow[]; competencies: CompetencyView[]; formerCompetencies: CompetencyView[];
   offered: CatalogueCompetency[] | null; goals: { id: string; title: string; status: string; viaJoin: boolean }[]; otherGoals: { id: string; title: string }[];
   reflection: Reflection | null; learning: { enabled: boolean; items: CatalogueItem[] | null };
+  /** Migration 480 applied: a goal made here uses the Stage 3 form (no target date required). */
+  stage3?: boolean;
 }) {
   const { n, policy, accent } = p;
   const closed = STAGE_GROUP[n.stage_code] === "closed";
@@ -227,12 +229,12 @@ export function NeedDetail(p: {
 
       <div className="mt-5">
         <h3 className="text-[14px] font-bold text-gray-900">Goals for this need</h3>
-        <p className="text-[12.5px] text-gray-500">A need can have several goals, and a goal can serve several needs. Planning the detail comes later.</p>
+        <p className="text-[12.5px] text-gray-500">A need can have several goals, and a goal can serve several needs.{p.stage3 ? " Plan each one under My development plan." : " Planning the detail comes later."}</p>
         {p.goals.length === 0 ? <Empty>No goals linked yet. You can start developing without one.</Empty> : (
           <ul className="mt-2 divide-y divide-gray-100">
             {p.goals.map(g => (
               <li key={g.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-[13.5px]">
-                <span>{g.title} <span className="text-[12px] text-gray-500">· {g.status.replace("_", " ")}</span></span>
+                <span>{p.stage3 ? <Link href={`?goal=${g.id}#goal-detail`} className="underline-offset-2 hover:underline">{g.title}</Link> : g.title} <span className="text-[12px] text-gray-500">· {g.status.replace("_", " ")}</span></span>
                 {g.viaJoin && <ApiButton action="/api/individual/professional/need-links" method="PATCH" body={{ kind: "goal", goalId: g.id, needId: n.id }} label="Unlink" />}
               </li>
             ))}
@@ -253,8 +255,9 @@ export function NeedDetail(p: {
           )}
           <ApiForm action="/api/individual/professional/goals" submitLabel="Add goal for this need" accent={accent} savedText="Goal added and linked.">
             <input type="hidden" name="needId" value={n.id} />
+            {p.stage3 && <input type="hidden" name="stage3" value="true" />}
             <Field label="A new goal" htmlFor={`newgoal-${n.id}`}><input id={`newgoal-${n.id}`} name="title" required minLength={3} maxLength={200} className={inputCls} /></Field>
-            <Field label="Target date" htmlFor={`newgoal-date-${n.id}`}><input id={`newgoal-date-${n.id}`} name="targetDate" type="date" required className={inputCls} /></Field>
+            <Field label={p.stage3 ? "Target date (optional)" : "Target date"} htmlFor={`newgoal-date-${n.id}`}><input id={`newgoal-date-${n.id}`} name="targetDate" type="date" required={!p.stage3} className={inputCls} /></Field>
           </ApiForm>
         </div>
       </div>
