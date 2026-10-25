@@ -61,7 +61,9 @@ export default async function Revise({ params, searchParams }: { params: Promise
     const show = s.data.session.feedback === "immediate" || s.data.session.status === "completed";
     const answered = s.data.attempts.filter(a => byId.has(a.questionId)).map(a => ({
       questionId: a.questionId, ...(show ? { feedback: feedbackView(byId.get(a.questionId)!, { correct: a.correct, score: a.score, marking: a.marking as Marking }) } : {}),
-    }));
+    // 425, owner decision R4: a short answer held unmarked until the end is answered, and kept on resume. Its grading
+    // comes with the end of the session (PATCH complete), never before.
+    })).concat(s.data.held.filter(h => byId.has(h.questionId)).map(h => ({ questionId: h.questionId, held: true })));
     return (
       <>
         {header}

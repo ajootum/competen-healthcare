@@ -390,6 +390,27 @@ const privateCaseChecked = (src: Src) => {
  * (caseSessionRecord), the feedback is checked (runCaseReasoning -> parseEvaluation), and it is recorded only through
  * library.ts recordSessionFeedback. Only this server lib file names the context; no route or page does.
  */
+/**
+ * K38 (REVISION-01 R4, owner decision 2026-10-25 "hold self-grading until the end"): in an end-of-session or Mock
+ * session, a short answer code cannot mark and no AI evaluation judged is KEPT, unmarked (425), and nothing about it
+ * -- not the accepted answer, the explanation, nor the prompt to grade it -- reaches the student before the end. At
+ * the end the student grades the answer they wrote (the held one, never a new one), recorded as self_graded. A held
+ * answer is answered on resume. Immediate feedback is unchanged: the self-grade comes at once.
+ */
+const REV_ANSWER = `${API}/revision/answer/route.ts`, REV_SESSION = `${API}/revision/sessions/[id]/route.ts`;
+const MIG_425 = "supabase/migrations/425-individual-scholar-revision-held-answer.sql";
+const heldToEnd = (src: Src) => {
+  const ans = src.get(REV_ANSWER) ?? "", ses = src.get(REV_SESSION) ?? "", page = src.get(`${PAGES}/revise/page.tsx`) ?? "";
+  const hold = ans.indexOf("if (!evaluator && sessionId && feedbackMode === \"end\" && !finished && holding) {"), prompt = ans.indexOf("if (!evaluator) return NextResponse.json({ needsSelfGrade: true");
+  return hold > 0 && prompt > hold && /await holdRevisionAnswer\(ctx\.admin, ctx\.userId, sessionId, q\.id, r\.text\)/.test(ans.slice(hold, prompt))
+    && /if \(held && !\(finished && typeof body\?\.selfGrade === "boolean"\)\) return NextResponse\.json\(\{ error: "You have already answered this one in this session\." \}, \{ status: 409 \}\);/.test(ans)
+    && /if \(!held && feedbackMode === "end" && !finished && holding && typeof body\?\.selfGrade === "boolean"\)/.test(ans)
+    && /const r = held \? \{ kind: "text" as const, text: held\.text \} : parseResponse\(q, body\?\.response\);/.test(ans)
+    && /if \(feedbackMode === "end" && !finished\) return NextResponse\.json\(\{ recorded: true, held: true \}\);/.test(ans)
+    && /\.\.\.\(showFeedback \? \{ selfGrade: \{/.test(ses) && !/selfGrade: \{[^}]*\}[^?]*\}\s*\)\s*:\s*\{\s*selfGrade/.test(ses)
+    && /s\.data\.held\.filter\(h => byId\.has\(h\.questionId\)\)\.map\(h => \(\{ questionId: h\.questionId, held: true \}\)\)/.test(page)
+    && existsSync(MIG_425) && /held_response is null or \(jsonb_typeof\(held_response\) = 'object' and octet_length\(held_response::text\) <= 8000\)/.test(readFileSync(MIG_425, "utf8"));
+};
 const LIB_FB = `${LIB}/clinical-library-feedback.ts`;
 const libraryFeedbackOwned = (src: Src) => {
   const f = src.get(LIB_FB) ?? "", http = src.get(`${LIB}/http.ts`) ?? "";
@@ -965,6 +986,8 @@ function main() {
     privateCaseChecked(REAL));
   ok("K36. CLINICAL-REASONING-01: a choice is marked by its key; a written decision is labelled AI evaluation only when AI feedback was given, otherwise the student's own review",
     caseFeedbackHonest(REAL));
+  ok("K38. REVISION-01 R4 (owner decision): at the end of a session and in Mock, an unmarkable short answer is kept unmarked and revealed and self-graded only at the end, as the answer the student wrote; it survives a resume",
+    heldToEnd(REAL));
   ok("K37. CLINICAL-REASONING-01: live AI feedback on a library case comes from library.ts's narrow context, is charged to the student's own budget by rule (case.live_with_stored) against the session, checked, and recorded only by the shared delivery",
     libraryFeedbackOwned(REAL));
   ok("K24. LEARN-01: history holds no conversation, the act route keeps to policy, screens input, records only what was shown, stores no practice question, and the student's context is never grounding",
@@ -1101,6 +1124,12 @@ function main() {
     && !privateCaseChecked(plant(`${LIB}/clinical.ts`, "facts, stages: used, decisionPoints, progression: [],", "facts, stages: used, decisionPoints, progression: list((draft as any).progression),")));
   ok("P54. ⚠ K36 goes red when a written answer without AI feedback is recorded as AI evaluation",
     !caseFeedbackHonest(plant(PLAY, "else { mark = { correct: null, score: null }; marking = \"self_graded\"; }", "else { mark = { correct: false, score: 0 }; marking = \"ai_evaluation\"; }")));
+  ok("P56. ⚠ K38 goes red when the answer is not held, it can be graded before the end, a different answer is graded, the end view shows the grading early, or resume drops it",
+    !heldToEnd(plant(REV_ANSWER, "if (!evaluator && sessionId && feedbackMode === \"end\" && !finished && holding) {", "if (false) {"))
+    && !heldToEnd(plant(REV_ANSWER, "if (held && !(finished && typeof body?.selfGrade === \"boolean\"))", "if (held && !(typeof body?.selfGrade === \"boolean\"))"))
+    && !heldToEnd(plant(REV_ANSWER, "const r = held ? { kind: \"text\" as const, text: held.text } : parseResponse(q, body?.response);", "const r = parseResponse(q, body?.response);"))
+    && !heldToEnd(plant(REV_SESSION, "...(showFeedback ? { selfGrade: {", "...(true ? { selfGrade: {"))
+    && !heldToEnd(plant(`${PAGES}/revise/page.tsx`, ".concat(s.data.held.filter(h => byId.has(h.questionId)).map(h => ({ questionId: h.questionId, held: true })))", "")));
   ok("P55. ⚠ K37 goes red when the owner is not resolved by rule, the spend is not counted against the session, unchecked feedback is recorded, or a route names the context",
     !libraryFeedbackOwned(plant(LIB_FB, "await resolveOwner(admin, \"case.live_with_stored\", \"scholar\", { userId: args.userId });", "({ type: \"platform\" } as any);"))
     && !libraryFeedbackOwned(plant(LIB_FB, "record: caseSessionRecord(args.sessionId),", "record: null as any,"))

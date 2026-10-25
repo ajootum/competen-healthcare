@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { getRevisionSession, revisionPool, updateRevisionSession, type QuestionRow } from "@/lib/individual/scholar/store";
 import { audit } from "@/lib/individual/scholar/http";
-import { REVISION_FORMATS, type Marking } from "@/lib/individual/scholar/config";
+import { MARKING_LABEL, REVISION_FORMATS, type Marking } from "@/lib/individual/scholar/config";
 import { feedbackView, revisionItemView } from "@/lib/individual/scholar/revision-view";
+import { keyOf } from "@/lib/individual/scholar/revision";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -30,12 +31,20 @@ async function load(ctx: { admin: unknown; userId: string }, id: string) {
 
 function view(s: NonNullable<Awaited<ReturnType<typeof load>>["s"]>, questions: QuestionRow[], showFeedback: boolean) {
   const answered = new Map(s.attempts.map(a => [a.questionId, a]));
+  const held = new Map(s.held.map(h => [h.questionId, h.response.text]));
   return {
     session: { id: s.session.id, mode: s.session.mode, feedback: s.session.feedback, status: s.session.status, total: questions.length, position: Math.min(s.session.position, questions.length) },
     items: questions.map(revisionItemView),
-    answered: questions.filter(q => answered.has(q.id)).map(q => {
-      const a = answered.get(q.id)!;
-      return { questionId: q.id, ...(showFeedback ? { feedback: feedbackView(q, { correct: a.correct, score: a.score, marking: a.marking as Marking }) } : {}) };
+    answered: questions.filter(q => answered.has(q.id) || held.has(q.id)).map(q => {
+      const a = answered.get(q.id);
+      if (a) return { questionId: q.id, ...(showFeedback ? { feedback: feedbackView(q, { correct: a.correct, score: a.score, marking: a.marking as Marking }) } : {}) };
+      // 425, owner decision R4: a short answer held unmarked. Before the end, only that it is kept. At the end, the
+      // student's own answer beside the accepted answers, the explanation and the source, to grade it themselves.
+      const { answer: keyText, rationale, source } = feedbackView(q, { correct: false, score: null, marking: "self_graded" });
+      const k = keyOf(q);
+      return { questionId: q.id, held: true, ...(showFeedback ? { selfGrade: {
+        response: held.get(q.id)!, accepted: k?.kind === "accepted" ? k.answers : [keyText], rationale, source, label: MARKING_LABEL.self_graded,
+      } } : {}) };
     }),
   };
 }
@@ -67,7 +76,7 @@ export async function PATCH(req: Request, ctx2: { params: Promise<{ id: string }
   return NextResponse.json({
     ...done,
     summary: {
-      answered: marked.length, of: l.questions.length, correct: marked.filter(a => a.correct).length,
+      answered: marked.length, of: l.questions.length, correct: marked.filter(a => a.correct).length, toGrade: l.s.held.length,
       byMarking: { deterministic: marked.filter(a => a.marking === "deterministic").length, self_graded: marked.filter(a => a.marking === "self_graded").length, ai_evaluation: marked.filter(a => a.marking === "ai_evaluation").length },
     },
   });

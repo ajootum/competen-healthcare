@@ -210,12 +210,15 @@ export function SavedSets({ sets }: { sets: { id: string; title: string; questio
 // ── ONE SESSION: answer, understand, reinforce, return ──
 
 type SessionState = { id: string | null; mode: string; feedback: "immediate" | "end"; status?: string; total: number; position: number };
-type Answered = { questionId: string; feedback?: RevisionFeedback };
+/** 425, owner decision R4: a short answer held until the end, then graded by the student against its notes. */
+type HeldGrade = { response: string; accepted: string[]; rationale: string; source: RevisionFeedback["source"]; label: string };
+type Answered = { questionId: string; feedback?: RevisionFeedback; held?: boolean; selfGrade?: HeldGrade };
+type Summary = { answered: number; of: number; correct: number; toGrade?: number; byMarking: Record<string, number> };
 
 export function RevisionRunner(props: { session: SessionState | null; items: RevisionItemView[]; answered: Answered[]; label?: string | null }) {
   const router = useRouter();
   const [state, setState] = useState<{ session: SessionState | null; items: RevisionItemView[]; answered: Answered[] } | null>({ session: props.session, items: props.items, answered: props.answered });
-  const [summary, setSummary] = useState<{ answered: number; of: number; correct: number; byMarking: Record<string, number> } | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [setTitle, setSetTitle] = useState("");
   const [saved, setSaved] = useState("");
   const answeredIds = useMemo(() => new Set(state?.answered.map(a => a.questionId) ?? []), [state]);
@@ -226,6 +229,12 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
   const item = items[Math.min(at, items.length - 1)];
   const sid = state.session?.id ?? null;
   const record = (a: Answered) => setState(s => (s ? { ...s, answered: [...s.answered.filter(x => x.questionId !== a.questionId), a] } : s));
+  // A held answer graded at the end: it becomes a self-graded answer, and the summary counts it.
+  const graded = (a: Answered) => {
+    record(a);
+    setSummary(m => (m ? { ...m, answered: m.answered + 1, correct: m.correct + (a.feedback?.correct ? 1 : 0), toGrade: Math.max(0, (m.toGrade ?? 1) - 1),
+      byMarking: { ...m.byMarking, self_graded: (m.byMarking.self_graded ?? 0) + 1 } } : m));
+  };
 
   async function finish() {
     if (!sid) { setSummary({ answered: state!.answered.length, of: items.length, correct: state!.answered.filter(a => a.feedback?.correct).length, byMarking: {} }); return; }
@@ -253,6 +262,7 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
       {summary ? (
         <div className="mt-4 space-y-4">
           <p className="text-[15px] font-semibold text-gray-900">Session finished: {summary.correct} of {summary.of} matched your notes.</p>
+          {(summary.toGrade ?? 0) > 0 && <p className="text-[13px] text-gray-700">{summary.toGrade} short answer{summary.toGrade === 1 ? "" : "s"} could not be marked automatically. Compare {summary.toGrade === 1 ? "it" : "each"} with your notes below and mark it yourself.</p>}
           {Object.keys(summary.byMarking).length > 0 && (
             <p className="text-[12.5px] text-gray-600">Marked by code: {summary.byMarking.deterministic ?? 0} · by you: {summary.byMarking.self_graded ?? 0} · by AI evaluation: {summary.byMarking.ai_evaluation ?? 0}</p>
           )}
@@ -260,7 +270,9 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
             {items.map((i, n) => { const a = state.answered.find(x => x.questionId === i.id); return (
               <li key={i.id} className="rounded-xl border border-gray-200 p-3">
                 <p className="text-[14px] font-semibold text-gray-900">{n + 1}. {i.stem}</p>
-                {a?.feedback ? <FeedbackPanel f={a.feedback} sessionId={sid} compact /> : <p className="text-[13px] text-gray-500">Not answered.</p>}
+                {a?.feedback ? <FeedbackPanel f={a.feedback} sessionId={sid} compact />
+                  : a?.selfGrade && sid ? <GradeAtEnd questionId={i.id} sessionId={sid} g={a.selfGrade} onGraded={graded} />
+                    : <p className="text-[13px] text-gray-500">Not answered.</p>}
               </li>
             ); })}
           </ol>
@@ -424,6 +436,34 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
 }
 
 /** After an answer: right or not against the notes, how it was marked, the source, and what to do about a mistake. */
+/** At the end of the session: a held short answer beside what the notes accept, the explanation and the source, graded by the student. */
+function GradeAtEnd({ questionId, sessionId, g, onGraded }: { questionId: string; sessionId: string; g: HeldGrade; onGraded: (a: Answered) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function grade(selfGrade: boolean) {
+    setBusy(true); setError("");
+    const r = await call("/api/individual/scholar/revision/answer", { questionId, sessionId, response: { text: g.response }, selfGrade });
+    setBusy(false);
+    if (!r.ok) { setError(r.json.error ?? "Your mark could not be saved."); return; }
+    onGraded({ questionId, feedback: r.json.feedback });
+  }
+  return (
+    <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+      <p className="text-[13px] text-gray-800">Your answer: <span className="font-semibold">{g.response}</span></p>
+      <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-gray-500">The answers your notes support</p>
+      <ul className="mt-1 list-disc pl-5 text-[14px] text-gray-900">{g.accepted.map(x => <li key={x}>{x}</li>)}</ul>
+      <p className="mt-2 text-[13px] leading-relaxed text-gray-800">{g.rationale}</p>
+      <blockquote className="mt-2 border-l-4 pl-3 text-[13px] italic text-gray-700" style={{ borderColor: accent }}>“{g.source.quote}”</blockquote>
+      <p className="mt-1 text-[12px] text-gray-500">{g.label}. <Link href={sourceHref(g.source.materialId, g.source.chunkId)} className={`underline ${focusRing}`}>{g.source.citation}</Link></p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" className={ghost} disabled={busy} onClick={() => grade(true)}>It says the same</button>
+        <button type="button" className={ghost} disabled={busy} onClick={() => grade(false)}>It does not</button>
+      </div>
+      {error && <p role="alert" className="mt-2 text-[13px] font-semibold text-red-800">{error}</p>}
+    </div>
+  );
+}
+
 function FeedbackPanel({ f, sessionId, compact = false }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean }) {
   return (
     <div aria-live="polite" className={`mt-3 rounded-xl border p-4 ${f.correct ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
