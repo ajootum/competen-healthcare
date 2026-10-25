@@ -11,6 +11,7 @@
  *   H5  graded: the answer the student WROTE is recorded once, self_graded, and the hold is cleared
  *   H6  cannot be graded twice
  *   H7  immediate feedback is unchanged (the self-grade at once)
+ *   H8  with no quota block, a short answer is never AI-evaluated by an ineligible model (D5-v2, #99): self-graded
  *   E   erase-all removes held answers with their sessions
  *
  * Real AI writes the short-answer questions. Metering OFF. Reads shared configuration only.
@@ -161,6 +162,42 @@ async function heldPath(label: string, jar: Jar, userId: string, sessionId: stri
   ok(`H6 ${label}. it cannot be graded twice`, twice.status === 409, `${twice.status}`);
 }
 
+/**
+ * H8: with NO quota block, only model eligibility (and the short-answer policy) stands between a short answer and the
+ * AI. evaluate has no eligible model (D5-v2), so it is never AI-evaluated -- by Sonnet or anything else: the student
+ * grades it, and no AI request is made (owner Stage 7 closure, step 2: confirm #99 refuses it). Where no model may
+ * write questions either, one short question is SEEDED for this fixture (the columns the store writes, quoting the
+ * fixture's own section), so the evaluate path is still exercised.
+ */
+async function eligibilityCheck(jar: Jar, userId: string, doc: string | null) {
+  await admin.from("audit_log").delete().eq("actor_id", userId).eq("entity_type", "harness_revhold_quota");
+  let seeded = false;
+  const have = ((await admin.from("individual_scholar_question").select("id").eq("user_id", userId).eq("kind", "short").limit(1)).data ?? []) as any[];
+  if (!have.length && doc) {
+    const chunk = ((await admin.from("individual_scholar_chunk").select("id, material_id, content").eq("user_id", userId).eq("material_id", doc).order("ordinal").limit(1)).data ?? [])[0] as any;
+    if (chunk) {
+      const quote = String(chunk.content).split(/(?<=\.)\s/)[0].slice(0, 300);
+      const ins = await admin.from("individual_scholar_question").insert({
+        user_id: userId, material_id: chunk.material_id, chunk_id: chunk.id, kind: "short", stem: "What does this section of your notes say?", options: [], correct_index: null,
+        answer: { accepted: [quote] }, difficulty: 2, review_status: "private_formative", rationale: quote, source_quote: quote, model: "harness-seed", provider: "harness", prompt_version: "seed/1",
+      });
+      seeded = !ins.error;
+      if (ins.error) note(`H8 seed refused: ${ins.error.message}`);
+    }
+  }
+  const elig = await startRevision(jar, { mode: "quick", scope: { kind: "documents", materialIds: [doc] }, formats: ["short"], quantity: 1, feedback: "immediate" });
+  const eShort = (elig.json?.items ?? []).find((i: any) => i.kind === "short");
+  const before = (await admin.from("plat_ai_requests").select("id", { count: "exact" }).eq("actor_id", userId).limit(1)).count ?? 0;
+  const eAns = eShort ? await send("POST", "/api/individual/scholar/revision/answer", { questionId: eShort.id, sessionId: elig.json.session?.id, response: { text: UNMATCHED } }, jar) : null;
+  const after = (await admin.from("plat_ai_requests").select("id", { count: "exact" }).eq("actor_id", userId).limit(1)).count ?? 0;
+  const aiMarked = ((await admin.from("individual_scholar_attempt").select("marking, evaluator_model").eq("user_id", userId).eq("marking", "ai_evaluation")).data ?? []) as any[];
+  note(`H8${seeded ? " (seeded question)" : ""}: ${eAns?.json?.needsSelfGrade ? `self-grade (${eAns.json.reason ?? ""})` : JSON.stringify(eAns?.json ?? null).slice(0, 100)} · ai requests ${before}->${after} · ai-marked attempts ${aiMarked.map(x => x.evaluator_model).join(",") || "none"}`);
+  if (!eShort) pend("H8", `no short-answer question to answer (${elig.status} ${elig.json?.error ?? ""})`);
+  else ok("H8. with no quota block, an unmarkable short answer is never AI-evaluated by an ineligible model: the student grades it, and no AI request is made",
+    eAns?.status === 200 && eAns.json?.needsSelfGrade === true && after === before && aiMarked.length === 0,
+    `${eAns?.status} · ai ${before}->${after} · ai-marked ${aiMarked.length}`);
+}
+
 async function main() {
   console.log(`SCHOLAR REVISION HOLD-TO-END -- target ${ref}, server ${BASE}\n`);
   const live = await fetch(BASE + "/individual/welcome", { redirect: "manual" }).catch(() => null);
@@ -193,7 +230,11 @@ async function main() {
   const mock = await startRevision(sa.jar, { mode: "mock", scope: { kind: "documents", materialIds: [doc] }, formats: ["short"], quantity: 2 });
   const mockShort = (mock.json?.items ?? []).find((i: any) => i.kind === "short");
   note(`mock: ${mock.status} ${mock.json?.error ?? ""} · items ${(mock.json?.items ?? []).map((i: any) => i.kind).join(",")} · generated ${mock.json?.generated}`);
-  if (!mockShort) { pend("H1-H7", "no short-answer question could be written from these notes in this run"); return; }
+  if (!mockShort) {
+    pend("H1-H7", `no short-answer question could be written from these notes in this run (${mock.json?.error ?? mock.status})`);
+    await eligibilityCheck(sa.jar, a, doc);
+    return;
+  }
   // AI evaluation would judge the answer (a marking, not a self-grade): the Individual quota is used up for THIS fixture
   // only, so the unmarkable answer takes the self-grade path, as it does whenever AI evaluation is not available.
   await admin.from("audit_log").insert(Array.from({ length: 200 }, () => ({ actor_id: a, actor_name: "harness", action: "ai_assistant_query", entity_type: "harness_revhold_quota", new_value: { synthetic: true } })));
@@ -211,6 +252,8 @@ async function main() {
   ok("H7. immediate feedback is unchanged: the accepted answers and the self-grade come at once", immAns?.json?.needsSelfGrade === true && (immAns.json.accepted ?? []).length > 0,
     `${imm.status} · ${immAns?.status} ${immAns?.json?.needsSelfGrade ? "self-grade now" : JSON.stringify(immAns?.json ?? null).slice(0, 80)}`);
   await admin.from("audit_log").delete().eq("actor_id", a).eq("entity_type", "harness_revhold_quota");
+
+  await eligibilityCheck(sa.jar, a, doc);
 
   // ── E: erase-all removes the held answers with their sessions ──
   const erase = await send("POST", "/api/individual/scholar/erase", { confirm: "ERASE" }, sa.jar);
