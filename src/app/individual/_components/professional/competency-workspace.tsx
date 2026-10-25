@@ -333,7 +333,13 @@ export function EntryDetail(p: {
                 <div className="mt-2">
                   <ApiForm action="/api/individual/professional/competency-verification" submitLabel="Request independent verification" accent={accent} savedText="Requested. An appointed assessor will review it.">
                     <input type="hidden" name="entryId" value={e.id} />
-                    <p className="text-[12.5px] text-gray-600">Sends this competency and the evidence linked to it ({open.filter(l => SHAREABLE_KINDS.includes(linkKind(l))).length} {open.length === 1 ? "record" : "records"}; never a reflection) to the Verification Studio.</p>
+                    <p className="text-[12.5px] text-gray-600">Sends this competency and the evidence linked to it ({open.filter(l => SHAREABLE_KINDS.includes(linkKind(l))).length} {open.length === 1 ? "record" : "records"}) to the Verification Studio. Your private reflections stay private unless you tick one below.</p>
+                    {open.filter(l => linkKind(l) === "reflection").map(l => (
+                      <label key={l.id} className="flex items-start gap-2 text-[12.5px] text-gray-700">
+                        <input type="checkbox" name={`reflection:${l.id}`} value="true" className="mt-0.5 h-4 w-4" />
+                        <span>Also show &quot;{srcOf(l)?.title ?? "a reflection"}&quot; to the assessor, for this request only</span>
+                      </label>
+                    ))}
                   </ApiForm>
                 </div>
               )}

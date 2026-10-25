@@ -19,7 +19,9 @@ import { ORIGIN } from "./vocabulary";
 // each with the class its own record holds. Nothing is copied into 520: a link names the record by composite key.
 //
 // ⚠ C5 BOUNDARY. Verification belongs to the Verification Studio (COMPETEN-IND-007, migrations 510-519). Nothing here
-// writes a request, a decision or an assessor. evidenceForVerification is what C5 is handed, never a reflection.
+// writes a request, a decision or an assessor. evidenceForVerification is what C5 is handed. THE AGREED REFLECTION RULE
+// (owner: "private reflections remain private unless deliberately shared"): a reflection is handed over ONLY when the
+// person ticked that reflection for that request. Never by default, never automatically. C5 snapshots provenance.
 //
 // ⚠ NOT PROVISIONED IS NOT UNREADABLE. Before 520 is applied, `provisioned` is false and the page says so.
 
@@ -196,16 +198,17 @@ export async function unlinkEvidence(admin: any, userId: string, linkId: string)
 
 export type CompetencyRef = { frameworkId: string; frameworkCompetencyId: string; frameworkVersion: string | null; title: string; learningOutcomes: string[] };
 export type EvidenceRef = {
-  linkId: string; kind: Exclude<PortfolioKind, "reflection">; sourceId: string; title: string; evidenceClass: string; issuer: string | null;
+  linkId: string; kind: PortfolioKind; sourceId: string; title: string; evidenceClass: string; issuer: string | null;
   occurredOn: string | null; learningOutcome: string | null; relation: string; frameworkVersion: string | null;
 };
 
 /**
  * What a verification request is handed: a CATALOGUE entry of the person and its current evidence links, each resolved
- * to its source record with that record's own class. Private reflections are never included. A personal entry, a
- * removed entry or another person's entry gives null.
+ * to its source record with that record's own class. A private reflection is included only when its link is in
+ * `explicitReflectionLinkIds` (the person ticked it for this request). A personal entry, a removed entry or another
+ * person's entry gives null.
  */
-export async function evidenceForVerification(admin: any, userId: string, entryId: string, linkIds?: readonly string[], outcomes: readonly string[] = [], today = new Date().toISOString().slice(0, 10)): Promise<{ competency: CompetencyRef; evidence: EvidenceRef[] } | null> {
+export async function evidenceForVerification(admin: any, userId: string, entryId: string, linkIds?: readonly string[], outcomes: readonly string[] = [], today = new Date().toISOString().slice(0, 10), explicitReflectionLinkIds: readonly string[] = []): Promise<{ competency: CompetencyRef; evidence: EvidenceRef[] } | null> {
   const { data: e } = await admin.from("individual_professional_my_competency").select(ENTRY_COLUMNS).eq("id", entryId).eq("user_id", userId).maybeSingle();
   if (!e || e.kind !== "catalogue" || e.removed_at) return null;
   const { data: links } = await admin.from("individual_professional_competency_evidence").select(LINK_COLUMNS).eq("my_competency_id", entryId).eq("user_id", userId).is("unlinked_at", null);
@@ -214,7 +217,7 @@ export async function evidenceForVerification(admin: any, userId: string, entryI
   for (const l of (links ?? []) as EvidenceLink[]) {
     if (linkIds && !linkIds.includes(l.id)) continue;
     const kind = linkKind(l);
-    if (!SHAREABLE_KINDS.includes(kind)) continue;
+    if (!SHAREABLE_KINDS.includes(kind) && !(kind === "reflection" && explicitReflectionLinkIds.includes(l.id))) continue;
     const src = portfolio.find(p => p.kind === kind && p.id === linkSourceId(l));
     if (!src) continue;
     evidence.push({ linkId: l.id, kind: kind as EvidenceRef["kind"], sourceId: src.id, title: src.title, evidenceClass: src.classText, issuer: src.issuer,

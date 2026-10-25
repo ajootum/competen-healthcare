@@ -116,9 +116,11 @@ const checkC5Boundary = (src: Sources): R => {
     .filter(w => /verif|assess(or|ment)_|decision|appointment|request/.test(w.split(": ")[1]));
   const store = src.get(STORE) ?? "";
   const fn = store.slice(store.indexOf("export async function evidenceForVerification"));
-  const noReflection = /if \(!SHAREABLE_KINDS\.includes\(kind\)\) continue;/.test(fn) && !SHAREABLE_KINDS.includes("reflection" as never);
+  // Agreed with C5: a reflection goes ONLY when the person ticked it for that request -- never by default.
+  const noReflection = /if \(!SHAREABLE_KINDS\.includes\(kind\) && !\(kind === "reflection" && explicitReflectionLinkIds\.includes\(l\.id\)\)\) continue;/.test(fn)
+    && !SHAREABLE_KINDS.includes("reflection" as never) && /explicitReflectionLinkIds: readonly string\[\] = \[\]/.test(fn);
   const catalogueOnly = /if \(!e \|\| e\.kind !== "catalogue" \|\| e\.removed_at\) return null;/.test(fn);
-  return { ok: writes.length === 0 && noReflection && catalogueOnly, detail: `verification writes ${writes.join(";")}, never a reflection ${noReflection}, catalogue entries only ${catalogueOnly}` };
+  return { ok: writes.length === 0 && noReflection && catalogueOnly, detail: `verification writes ${writes.join(";")}, a reflection only when ticked ${noReflection}, catalogue entries only ${catalogueOnly}` };
 };
 
 // ── P ──
@@ -184,7 +186,7 @@ function main() {
   run("S5. an entry is catalogue-backed or personal, never both; its history is the trigger's alone", checkEntries(MIG, ALL));
   run("F1. a self-assessment is never judged by its evidence: neither the parser nor the route reads evidence", checkSelfNeverJudged(ALL, parseSelfAssessment));
   run("F2. expected, self-assessed, evidence and verified are four separate panels; self-reported travels with every self-assessment", checkFourPanels(ALL));
-  run("V1. no Stage 5 file writes a verification, assessor or decision; C5 is handed catalogue entries and never a reflection", checkC5Boundary(ALL));
+  run("V1. no Stage 5 file writes a verification, assessor or decision; C5 is handed catalogue entries, and a reflection only when the person ticked it", checkC5Boundary(ALL));
   run("P1. reflections are never on a Passport link and never sent to AI", checkPrivacy(ALL));
   run("A1. AI is gated through the one Professional helper, saves nothing, and a link from it needs the person's click and keeps its provenance", checkAi(ALL));
   run("L1. only offered competencies; content not clinically approved is labelled wherever it is shown", checkCatalogues(ALL, parseEntry));
@@ -205,7 +207,8 @@ function main() {
   red("F1 on a route that reads evidence before saving", checkSelfNeverJudged(add(R_SELF, `await ctx.admin.from("individual_professional_competency_evidence").select("id");`), parseSelfAssessment));
   red("F2 on a merged panel", checkFourPanels(plant(WORKSPACE, "ASPECT_TEXT.verified", "ASPECT_TEXT.evidence")));
   red("V1 on Professional writing a decision", checkC5Boundary(add(STORE, `admin.from("competency_verification_decision").insert({})`)));
-  red("V1 on a reflection handed to C5", checkC5Boundary(plant(STORE, "    if (!SHAREABLE_KINDS.includes(kind)) continue;\n", "")));
+  red("V1 on a reflection handed to C5 without being ticked", checkC5Boundary(plant(STORE, " && !(kind === \"reflection\" && explicitReflectionLinkIds.includes(l.id))", " && kind !== \"reflection\"")));
+  red("V1 on reflections handed by default", checkC5Boundary(plant(STORE, "explicitReflectionLinkIds: readonly string[] = []", "explicitReflectionLinkIds: readonly string[] = [\"all\"]")));
   red("P1 on a shared self-assessment carrying its reflection", checkPrivacy(plant(SHARE, `.select("my_competency_id, learning_outcome, scale_label, level_label, assessed_at")`, `.select("my_competency_id, learning_outcome, scale_label, level_label, reflection, assessed_at")`)));
   red("P1 on AI seeing every record", checkPrivacy(plant(R_AI, ".items.filter(i => i.shareable)", ".items")));
   red("A1 on an ungated AI route", checkAi(plant(R_AI, `if (policy.ai !== "on") return refuse(`, `if (policy.ai === "never") return refuse(`)));
