@@ -49,6 +49,8 @@ export function RevisionStart(props: {
   const [busy, setBusy] = useState<string>("");
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  // Learning Continuity: new questions are not available, which is a state to explain, not an error.
+  const [continuity, setContinuity] = useState("");
   const [open, setOpen] = useState(false);
   const [scopeKind, setScopeKind] = useState<"library" | "documents" | "topic" | "competency">("library");
   const [chosen, setChosen] = useState<string[]>([]);
@@ -62,12 +64,13 @@ export function RevisionStart(props: {
   const [unsaved, setUnsaved] = useState<{ items: RevisionItemView[]; label: string | null } | null>(null);
 
   const start = useCallback(async (m: RevisionMode, custom: boolean) => {
-    setBusy(m); setError(""); setNote("");
+    setBusy(m); setError(""); setNote(""); setContinuity("");
     const scope = !custom || scopeKind === "library" ? { kind: "library" }
       : scopeKind === "documents" ? { kind: "documents", materialIds: chosen }
         : scopeKind === "topic" ? { kind: "topic", topic } : { kind: "competency", competencyId: competency };
     const r = await call("/api/individual/scholar/revision/sessions", { mode: m, scope, ...(custom ? { formats, quantity, difficulty, feedback } : {}) });
     setBusy("");
+    if (!r.ok && r.json.continuity) { setContinuity(r.json.error ?? "New questions are not available right now."); return; }
     if (!r.ok) { setError(r.json.error ?? "Revision could not start just now."); return; }
     if (r.json.session?.id) router.push(revisionHref(r.json.session.id));
     // A session this environment could not keep (417 absent): run here, for this sitting only.
@@ -154,6 +157,12 @@ export function RevisionStart(props: {
         </form>
       )}
       {note && <p role="status" className="mt-3 text-[13px] text-gray-700">{note}</p>}
+      {continuity && (
+        <div role="status" className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+          <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-sky-900">No new questions right now</p>
+          <p className="mt-1 text-[14px] text-gray-800">{continuity}</p>
+        </div>
+      )}
       {error && <p role="alert" className="mt-3 text-[13.5px] font-semibold text-red-800">{error}</p>}
     </section>
   );

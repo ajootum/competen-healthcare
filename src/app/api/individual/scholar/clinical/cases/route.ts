@@ -87,7 +87,7 @@ export async function POST(req: Request) {
   const ai = scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { text: resolved.topic, passages, competencyIds }));
   const r = await runCaseBlueprint(ctx.userId, { passages, competencies: comps, context: CASE_CONTEXT_LABEL[context], dimensions: policy.scholarCaseDimensions, asked: resolved.topic }, ai.run);
   const refusal = ai.refusal();
-  if (refusal) return NextResponse.json({ error: `${refusalWords(refusal).message} Your stored and library cases are still yours to play.`, continuity: true }, { status: 409 });
+  if (refusal) return NextResponse.json({ error: `${refusalWords(refusal).message} Your stored ${libraryOn ? "and library cases are" : "cases are"} still yours to play.`, continuity: true }, { status: 409 });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_blueprint", null, {
     // Why a draft was refused, by the check's own words (kinds and the token or rule, never the case text).
     entry, context, chunk_ids: chunkIds, outcome: !r.ok ? `error:${r.error}` : r.blueprint ? "stored" : "withheld", problems: r.ok ? [...new Set(r.problems)].slice(0, 12) : [],
