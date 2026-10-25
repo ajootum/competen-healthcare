@@ -114,6 +114,13 @@ const WRITES: Record<string, string[]> = {
     "individual_professional_plan_competency.insert", "individual_professional_plan_competency.update",
     "individual_professional_goal_evidence.insert", "individual_professional_goal_evidence.update",
     "individual_professional_goal_review.insert"],
+  // PROF-EVALUATION-01 (530): the ONLY Stage 6 writes -- an immutable snapshot, a private note, a decision on a
+  // recommendation (all insert-only; 530's trigger refuses update and delete). A need, goal or activity an acceptance
+  // creates is written by needs-store / plan-store above, never here.
+  "src/lib/individual/professional/evaluation-store.ts": ["individual_professional_evaluation.insert", "individual_professional_evaluation_annotation.insert",
+    "individual_professional_evaluation_decision.insert"],
+  // PROF-EVALUATION-01 s13 (530): the recorded evaluations the person ticked for a link. Nothing by default.
+  "src/lib/individual/professional/share-evaluation.ts": ["individual_professional_share_evaluation.insert"],
   // COMPETENCY-01 (520): the one writer of My Competencies, self-assessments (insert only) and evidence links (unlinked by
   // update, never deleted). Its history is 520's trigger's. It writes no CPD, learning record, evidence item, reflection,
   // verification request or decision: it references records and hands C5 references.
@@ -253,7 +260,10 @@ const checkVerifyPage = (src: Sources) => {
 // PROF-PROFILE-01 part B: exactly ONE Professional file may name the verified state -- the verification module,
 // which derives it from 451 history rows whose actor the database proved is an appointed, independent verifier.
 // professional-profile-harness.ts pins that derivation. Every other Professional file still may not.
-const VERIFIED_STATE_FILES = new Set(["src/lib/individual/professional/profile-verification.ts"]);
+// PROF-EVALUATION-01: the Stage 6 reader of C5 decisions READS the outcome class a Studio decision carries (fixed by 510's
+// CHECK, decided only by an appointed assessor, enforced by 510's triggers) to tell a current verified outcome from any other.
+// It sets nothing: Stage 6 writes no C5 row (evaluation.test.ts pins that).
+const VERIFIED_STATE_FILES = new Set(["src/lib/individual/professional/profile-verification.ts", "src/lib/individual/professional/evaluation-stage5.ts"]);
 const checkNoVerifiedClassInProfessional = (src: Sources) => {
   const bad = [...src].filter(([f, s]) => isProfessional(f) && !VERIFIED_STATE_FILES.has(f) && /institution_verified|independently_verified|verified:\s*true|"verified"/.test(s)).map(([f]) => f);
   return { ok: bad.length === 0, detail: bad.join(", ") };
@@ -274,7 +284,8 @@ const checkDirectEntry = (src: Sources) => {
   // experience lists it -- and only Professional lists these segments, so the Scholar URL is not a page.
   const scholarSegs = new Set(EXPERIENCES.scholar.modules.map(m => m.segment));
   for (const [f, s] of pages) {
-    const seg = /\(professional\)\/([a-z-]+)\/page\.tsx$/.exec(f)?.[1] ?? "";
+    // A page nested under a module (PROF-EVALUATION-01: progress/evaluation) is that module's page: it names the module.
+    const seg = /\(professional\)\/([a-z-]+)\/(?:[a-z-]+\/)*page\.tsx$/.exec(f)?.[1] ?? "";
     const listed = EXPERIENCES.professional.modules.some(m => m.segment === seg);
     if (!s.includes(`await experienceModulePage((await params).experience, "${seg}")`) || !listed || scholarSegs.has(seg) || /\bscholar\b/i.test(s)) bad.push(f);
   }

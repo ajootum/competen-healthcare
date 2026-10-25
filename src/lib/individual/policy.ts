@@ -11,6 +11,8 @@ import {
 } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
 import { COUNTRIES } from "../countries";
+import { PROFESSIONAL_EVALUATION_POLICIES } from "./professional/evaluation-policy";
+import type { ConfidenceFactor, RecommendationRule, ScopeKind } from "./professional/evaluation-vocabulary";
 import {
   DEFAULT_PRACTICE_SETTINGS, DEFAULT_QUALIFICATION_TYPES, DEFAULT_STATUSES, DOCUMENT_KINDS, FIELD_LABEL, ITEM_LABEL, OPTIONAL_FIELDS, PROFILE_SECTIONS, SECTION_LABEL,
   REGISTRATION_STANDING, REMINDER_KINDS, REMINDER_OFFSETS, SHAREABLE_SECTIONS, VERIFIABLE_KINDS,
@@ -65,17 +67,19 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_upload_session_files" | "scholar_upload_session_mb" | "scholar_session_max_steps" | "scholar_tutor_turns"
   | "scholar_revision_quantity" | "scholar_srs_mastery_reps" | "scholar_srs_mastery_days" | "scholar_srs_max_interval_days" | "scholar_srs_harder_interval_percent"
   | "scholar_evaluation_min_evidence" | "scholar_evaluation_recency_days" | "scholar_evaluation_min_sources" | "scholar_evaluation_band_strong"
-  | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max";
+  | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max"
+  | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
-  | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules";
+  | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
+  | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
 export type ProgrammesPolicyKey = "scholar_onboarding_programmes";
-export type OptionsPolicyKey = "scholar_institutions"
+export type OptionsPolicyKey = "scholar_institutions" | "professional_evaluation_templates"
   | "professional_professions" | "professional_titles" | "professional_jurisdictions" | "professional_statuses" | "professional_qualification_types"
   | "professional_registration_bodies" | "professional_practice_settings" | "professional_specialties" | "professional_career_interests"
   | "professional_need_categories" | "professional_need_motivations" | "professional_need_priorities" | "professional_reflection_templates"
@@ -96,7 +100,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations"
-  | "scholar_progress_period" | "scholar_passport_evaluations";
+  | "scholar_progress_period" | "scholar_passport_evaluations"
+  | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1095,6 +1100,7 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "unreviewed",
     limitReason: "Only the three content statuses of migration 394. Default: everything, labelled.",
   },
+  ...PROFESSIONAL_EVALUATION_POLICIES,
   ...PROFESSIONAL_PROFILE_POLICIES,
   ...PROFESSIONAL_NEEDS_POLICIES,
   ...PROFESSIONAL_PLAN_POLICIES,
@@ -1262,6 +1268,8 @@ export type IndividualPolicy = {
   reminderHorizonDays: number;
   /** Owner (double-counted CPD hours): days between a CPD entry and a Learning completion for them to be one activity. */
   professionalLearningMatchDays: number;
+  /** COMPETEN-PROFESSIONAL-EVALUATION-01: My Professional Evaluation, as configured. */
+  professionalEvaluation: ProfessionalEvaluationPolicy;
   shareLinkMaxDays: number;
   aiHourlyLimit: number;
   scholarQuestionsPerRequest: number;
@@ -1453,6 +1461,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
     scholarCatalogueMinStatus: clampChoice(policyDef("scholar_catalogue_min_status") as ChoicePolicy, published.get(policyPath("scholar_catalogue_min_status"))) as ContentStatusLevel,
+    professionalEvaluation: resolveProfessionalEvaluation(published),
     professionalProfile: resolveProfessionalProfile(published),
     professionalNeeds: resolveProfessionalNeeds(published),
     professionalPlan: resolveProfessionalPlan(published),
@@ -1528,6 +1537,31 @@ function resolveProfessionalProfile(published: Map<string, any>): ProfessionalPr
     reminderOffsets: set("professional_reminder_offsets").map(Number).sort((a, b) => b - a),
     reminderStandings: set("professional_reminder_standings"),
     shareSections: set("professional_share_sections") as ProfileSection[],
+  };
+}
+
+/** COMPETEN-PROFESSIONAL-EVALUATION-01 (Stage 6): My Professional Evaluation, as configured. */
+export type ProfessionalEvaluationPolicy = {
+  scopes: ScopeKind[]; confidenceFactors: ConfidenceFactor[]; rules: RecommendationRule[]; templates: ContextOption[];
+  sufficiency: number; recencyDays: number; periodDays: number; historyShown: number;
+  sharing: "offer" | "off"; ai: "on" | "off"; aiReflections: "off"; corrections: "linked" | "off";
+};
+
+function resolveProfessionalEvaluation(published: Map<string, any>): ProfessionalEvaluationPolicy {
+  const set = (key: SetPolicyKey) => clampSet(policyDef(key) as SetPolicy, published.get(policyPath(key)));
+  const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
+  const choice = (key: ChoicePolicyKey) => clampChoice(policyDef(key) as ChoicePolicy, published.get(policyPath(key)));
+  const scopes = set("professional_evaluation_scopes") as ScopeKind[];
+  return {
+    // "My development as a whole" is always offered: the workspace must stay useful with every other scope off.
+    scopes: scopes.includes("development") ? scopes : ["development", ...scopes],
+    confidenceFactors: set("professional_evaluation_confidence_factors") as ConfidenceFactor[],
+    rules: set("professional_evaluation_recommendation_rules") as RecommendationRule[],
+    templates: clampOptions(policyDef("professional_evaluation_templates") as OptionsPolicy, published.get(policyPath("professional_evaluation_templates"))),
+    sufficiency: int("professional_evaluation_sufficiency"), recencyDays: int("professional_evaluation_recency_days"),
+    periodDays: int("professional_evaluation_period_days"), historyShown: int("professional_evaluation_history_shown"),
+    sharing: choice("professional_evaluation_sharing") as "offer" | "off", ai: choice("professional_evaluation_ai") as "on" | "off",
+    aiReflections: "off", corrections: choice("professional_evaluation_corrections") as "linked" | "off",
   };
 }
 

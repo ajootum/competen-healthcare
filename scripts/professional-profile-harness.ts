@@ -216,7 +216,10 @@ const checkDerivation = (derive: Derive, src: Sources, harness: string): R => {
     s([row("requested", {}, 0), row("request_withdrawn", {}, 1)]) === "none",
     s([row("requested", {}, 0), row("declined", { reason: "x" }, 1)]) === "declined",
   ];
-  const oneFile = /const VERIFIED_STATE_FILES = new Set\(\["src\/lib\/individual\/professional\/profile-verification\.ts"\]\);/.test(harness);
+  // The exempt list stays EXACT. PROF-EVALUATION-01 added one reviewed entry: evaluation-stage5.ts READS a C5 decision's
+  // outcome class (510-fixed, assessor-decided) and sets no verified state. Profile (451) verification is still derived only
+  // in profile-verification.ts (the cases above), and any third file turns this red.
+  const oneFile = /const VERIFIED_STATE_FILES = new Set\(\["src\/lib\/individual\/professional\/profile-verification\.ts", "src\/lib\/individual\/professional\/evaluation-stage5\.ts"\]\);/.test(harness);
   const page = src.get(VERIFY_PAGE) ?? "";
   const viaHelper = /isIndependentlyVerified\(r\.verification\.state\)/.test(page) && !/state === "verified"/.test(page);
   return { ok: cases.every(Boolean) && oneFile && viaHelper, detail: `cases ${cases.map(c => (c ? 1 : 0)).join("")}, one exempt file ${oneFile}, /verify through the helper ${viaHelper}` };
@@ -316,7 +319,8 @@ function main() {
   red("B1 without independence", checkVerifierAuthority(M451.replace("if new.actor_id is null or new.actor_id = new.user_id then", "if new.actor_id is null then")));
   red("B1 on an automatic appointment", checkVerifierAuthority(M451 + "\ninsert into ogs_office_appointments (role) values ('individual_professional_verifier')"));
   red("B1 on a write policy", checkVerifierAuthority(M451 + "\ncreate policy p on individual_professional_item_verification for insert with check (true)"));
-  red("B2 on a second file allowed to say verified", checkDerivation(deriveVerification, ALL, PROF_HARNESS.replace(`new Set(["src/lib/individual/professional/profile-verification.ts"])`, `new Set(["src/lib/individual/professional/profile-verification.ts", "src/lib/individual/professional/share-profile.ts"])`)));
+  red("B2 on a second file allowed to say verified", checkDerivation(deriveVerification, ALL, PROF_HARNESS.replace(`"src/lib/individual/professional/evaluation-stage5.ts"])`, `"src/lib/individual/professional/evaluation-stage5.ts", "src/lib/individual/professional/share-profile.ts"])`)));
+  red("B2 on the Stage 6 C5 reader swapped for an unreviewed file", checkDerivation(deriveVerification, ALL, PROF_HARNESS.replace(`"src/lib/individual/professional/evaluation-stage5.ts"])`, `"src/lib/individual/professional/share-profile.ts"])`)));
   red("B2 on /verify comparing the state itself", checkDerivation(deriveVerification, plant(VERIFY_PAGE, "isIndependentlyVerified(r.verification.state)", `r.verification.state === "verified"`), PROF_HARNESS));
   red("B2 on a derivation that trusts a request", checkDerivation(((rows: never[], t: string) => ({ ...deriveVerification(rows, t), state: "verified" })) as Derive, ALL, PROF_HARNESS));
   red("B3 on an ungated document handler", checkHqGate(plant(HQ_ROUTE, `export async function GET(req: Request) {\n  const ctx = await hqApiGate(["hq.individual.professional.verify"]);`, `export async function GET(req: Request) {\n  const ctx = await hqApiGate(["hq.platform.home.view"]);`)));

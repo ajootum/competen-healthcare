@@ -339,6 +339,14 @@ const STAGING: Listed[] = [
       + "no catalogue, no AI, nothing shared. Own harness-prof03-* identity, deleted after; three policy rows restored exactly. PEND until 480 is applied.",
   },
   {
+    file: "professional-evaluation-acceptance-harness.ts",
+    note: "COMPETEN-PROFESSIONAL-EVALUATION-01 Stage 6 (530), owner GO s14, the ECG Interpretation goal: six separate findings with cited, "
+      + "provenanced sources, strengths and limitations, recommendations followed to their owning module (an activity through Stage 3), "
+      + "immutable snapshots and notes, a later evaluation leaving the first unchanged, comparison, a C5 decision read never written (an "
+      + "in-process stand-in Studio where C5 is absent), no catalogue, no AI, private unless ticked, no claim of verified competence. "
+      + "Own harness-prof06-* identity, deleted after; two policy rows restored exactly. PEND until 530 is applied.",
+  },
+  {
     file: "account-profile-acceptance-harness.ts",
     note: "My profile (owner GO 2026-10-23, PR D): a real anon-key user session updates its own personal fields and "
       + "is refused every authority column and the email (column grants plus RLS WITH CHECK profile_authority_unchanged), "
