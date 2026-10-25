@@ -49,7 +49,7 @@
   - both identities banned to 2126-10-01;
   - 0 live scopes;
   - `individual_holds_capability` is false for both rights, for both identities.
-- **Board observation, a follow-up and not acted on:** the board wrote `term_end` = 2026-10-24 21:00 UTC, which is earlier than the appointments' start on 25 Oct. That looks like a date-only end stored as local midnight. The status is what governs, so authority is unaffected.
+- **A misreading, corrected:** I first reported that the board wrote `term_end` earlier than the start. It did not. `term_start` and `term_end` are DATE columns, and both appointments hold 2026-10-25 (read raw on staging by the coordinator, server TimeZone UTC). The "2026-10-24 21:00 UTC" came from my read-only script's database driver, which turned the date into a local (UTC+3) midnight timestamp. Nothing is wrong on the board.
 - **Staging dev server:** stopped after the run.
 
 ## Rows created (all kept as the record)
