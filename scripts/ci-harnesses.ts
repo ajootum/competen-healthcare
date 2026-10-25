@@ -97,6 +97,9 @@ const INCLUDED = [
   "clinical-review-harness.ts",
   "ai-fair-use-harness.ts",
   "case-intelligence-harness.ts",
+  // COMPETEN-KNOWLEDGE-RESEARCH-01 (migrations 440-443): four separate permissions, aggregate-only research access,
+  // in-database suppression, the 422 guard branches unchanged in 442, independence in K4. 20 planted reds. Files only.
+  "ckri-harness.ts",
   "mos-gap-matrix-harness.ts",
   "pd-health-harness.ts",
   "pd-nav-harness.ts",
