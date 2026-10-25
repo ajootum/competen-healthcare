@@ -69,13 +69,18 @@ D5-v2 (run `6c2c8067-9b30-4ec7-b3f1-84c18cfdfd0d`, `d5v2-activities-2026-10-25.m
 1. **The `questions` screen.** It scored 2/3. The 3/3 rests on reading four key-rule "safety" flags as false positives in the rules: in each one, the keyed option is the passage's correct answer. This needs the same kind of determination the owner made for the mg-per-5-mL rule. That is a reading of answers already recorded in 419, not a new run.
 2. **Recording the decisions.** Once accepted, the owner or a reviewer records each activity on the HQ page, as in section 2, citing `eval-run:6c2c8067-…`.
 
-### ⚠ Before `evaluate` is made eligible, anywhere: switch case-reasoning feedback off
+### ⚠ Case-reasoning AI feedback is ON today wherever metering is OFF. Switch it off now.
 
-Case-reasoning AI feedback runs under the **same activity code**, `evaluate`, as short-answer marking. Both the private-case and library-case paths in `api/individual/scholar/clinical/sessions/[kind]/[id]/answer/route.ts` use it.
+Case-reasoning AI feedback runs under the **same activity code**, `evaluate`, as short-answer marking. Both the private-case and library-case paths in `api/individual/scholar/clinical/sessions/[kind]/[id]/answer/route.ts` use it, and both run it only while the Individual policy `scholar_case_reasoning_feedback` is `ai_then_self`, which is its default.
 
-**Today it is off only because no model is eligible for `evaluate`.** Once `evaluate` is eligible, it switches on wherever the Individual policy `scholar_case_reasoning_feedback` is at its default, `ai_then_self`.
+**With metering OFF, the pilot's state, model eligibility does not gate it.** `getAiStanding` returns every activity as available when `ai_fair_use` is off. So today the feedback runs wherever the policy is at its default.
+- **Staging (read-only, 25 October 2026):** no published value for `scholar_case_reasoning_feedback`, so the default applies and the feedback is **ON**.
+- **Production:** the same once Individual is activated, unless it is set first.
+- **With metering ON:** it would also switch on the moment `evaluate` is made eligible.
 
-**So, first (owner-run, configuration, staging then production):**
+The owner has decided it stays disabled for the pilot (D5-v2: 0/2 shown on Opus).
+
+**So, now (owner-run, configuration, staging then production, before activation):**
 1. Open `/super-admin/individual/configuration` and find the case reasoning feedback setting.
 2. Choose **"The student's own review only"** (`self`). Save the draft, then publish.
 
