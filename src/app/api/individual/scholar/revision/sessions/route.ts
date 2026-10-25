@@ -175,8 +175,11 @@ export async function POST(req: Request) {
   }
 
   if (!pick.ids.length) {
+    // Continuity with nothing stored: there is no session to "use your saved questions", so say what is true instead.
+    const nothingSaved = note ? `${note.replace(/ This session uses your saved questions( only)?\.$/, "").replace(/: this session uses your saved questions only\.$/, ".")} You have no saved questions for this yet, so there is nothing to revise here until new ones can be written. Your cards, saved sets and history are unaffected.` : null;
     return NextResponse.json({
-      error: mode === "spaced" ? "Nothing is due for review today." : mode === "weak" ? "Nothing to revise here yet: questions you get wrong show up in Weak areas." : note ?? "There are no questions for this yet.",
+      error: mode === "spaced" ? "Nothing is due for review today." : mode === "weak" ? "Nothing to revise here yet: questions you get wrong show up in Weak areas." : nothingSaved ?? "There are no questions for this yet.",
+      continuity: !!nothingSaved,
     }, { status: 404 });
   }
   const byId = new Map(pool.questions.map(q => [q.id, q]));
