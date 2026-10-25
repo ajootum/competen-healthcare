@@ -41,7 +41,7 @@ The package is in the shared notes folder `LEARNING-01-460-464/`: the five files
 | 463 | learning-course-commerce | 252afd6c…f614 | Medium (widens `individual_checkout`) |
 | 464 | learning-capabilities | a0b44736…837e | Low |
 
-- **Staging PASS** (coordinator, 25 Oct): applied ×2, corrected rollback 464→460 to F2 = PRE (buckets excepted), the current files re-applied ×2 to F1 01e0dc07, and VERIFY all as expected. Record: . Never production.
+- **Staging PASS** (coordinator, 25 Oct): applied ×2, corrected rollback 464→460 to F2 = PRE (buckets excepted), the current files re-applied ×2 to F1 01e0dc07, and VERIFY all as expected. Record: `docs/evidence/LEARNING-01/460-464-staging-record.md`. Never production.
 - ⚠ After any rollback, the empty `learning-content` and `learning-evidence` buckets are removed by a person through the Storage API or dashboard. A bucket holding files is never deleted automatically.
 - 461 carries 422's and 442's guard branches byte-identical. 442 on main (#108) is identical to the copy used.
 
@@ -67,7 +67,7 @@ The package is in the shared notes folder `LEARNING-01-460-464/`: the five files
   - `pui-tokens-harness` (globals.css drift);
   - `professional-profile-harness` (P W3).
 - **Staging acceptance:** `learning-acceptance-harness` **ALL GREEN, 22/22** on ezhvpgtcqcdsgylrxgdb, 25 Oct. Afterwards learning_app was back off, no harness account remained, the fixtures were retired and no Learning appointment was active.
-- **Not yet run:** the browser walkthrough with the five synthetic identities, and the Flutterwave TEST purchase. Both are owner actions: .
+- **Not yet run:** the browser walkthrough with the five synthetic identities, and the Flutterwave TEST purchase. Both are owner actions: `docs/evidence/LEARNING-01/staging-acceptance-owner-actions.md`.
 
 ## 4. PD §21 acceptance, item by item
 
