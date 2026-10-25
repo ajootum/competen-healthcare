@@ -50,6 +50,15 @@ select pg_temp.expect_error($q$insert into ckri_research_project (code, title, p
 insert into ckri_research_project (code, title, purpose_code, sponsor, proposed_by, changed_by) values
   ('reasoning-2026', 'Reasoning difficulty 2026', 'reasoning_study', 'platform', '00000000-0000-0000-0000-00000000000c', '00000000-0000-0000-0000-00000000000c');
 select pg_temp.expect_error($q$update ckri_research_project set status = 'approved', changed_by = '00000000-0000-0000-0000-00000000000a', decided_by = '00000000-0000-0000-0000-00000000000a', retain_until = '2030-01-01' where code = 'reasoning-2026'$q$, '%cannot become%', 'R5 draft cannot jump to approved');
+-- When 443 is applied, submission needs a frozen protocol and analysis plan: supply them.
+do $d$ begin
+  if to_regclass('public.ckri_research_document') is not null then
+    insert into ckri_research_document (project_id, kind, version_no, content, authored_by)
+      select id, 'protocol', 1, '{"population": "p p p", "selection_criteria": "s s s", "instruments": "i i i", "scoring": "s s s", "missing_data": "m m m", "statistical_methods": "s s s", "limitations": "l l l", "generalisability": "g g g"}'::jsonb, proposed_by from ckri_research_project where code = 'reasoning-2026'
+      union all select id, 'analysis_plan', 1, '{"plan": "descriptive"}'::jsonb, proposed_by from ckri_research_project where code = 'reasoning-2026';
+    update ckri_research_document set state = 'frozen', frozen_by = '00000000-0000-0000-0000-00000000000c';
+  end if;
+end $d$;
 update ckri_research_project set status = 'submitted', changed_by = '00000000-0000-0000-0000-00000000000c' where code = 'reasoning-2026';
 select pg_temp.expect_error($q$update ckri_research_project set status = 'approved', changed_by = '00000000-0000-0000-0000-00000000000c', decided_by = '00000000-0000-0000-0000-00000000000c', retain_until = '2030-01-01' where code = 'reasoning-2026'$q$, '%not authorised%', 'R6 proposer cannot approve');
 select pg_temp.expect_error($q$update ckri_research_project set title = 'Changed after submission' where code = 'reasoning-2026'$q$, '%frozen%', 'R7 submitted project frozen');
