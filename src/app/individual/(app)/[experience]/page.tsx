@@ -6,6 +6,7 @@ import { PageHeader, focusRing } from "../../_components/chrome";
 import HomeReminders from "../../_components/professional/HomeReminders";
 import HomeNotices from "../../_components/HomeNotices";
 import { loadRegistration, RegistrationScreen } from "../../_components/professional/registration";
+import ScholarHome from "./(scholar)/study/_components/home";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -35,8 +36,10 @@ export default async function ExperienceHome({ params }: { params: Promise<{ exp
         <RegistrationScreen model={registration} accent={x.accent} />
       </>
     );
-  const passport = await loadIndividualPassport(ctx.admin, ctx.userId, new Date().toISOString().slice(0, 10));
   const other = ctx.live.find(k => k !== experience);
+  // Scholar HFE redesign (2026-10-26): the Scholar home is the study space. Its foundation modules are in the sidebar.
+  if (experience === "scholar") return <ScholarHome ctx={ctx} other={other} />;
+  const passport = await loadIndividualPassport(ctx.admin, ctx.userId, new Date().toISOString().slice(0, 10));
 
   const currentCount = passport.competencies?.filter(c => c.current).length ?? null;
   const credCount = passport.credentials?.length ?? null;
@@ -47,7 +50,7 @@ export default async function ExperienceHome({ params }: { params: Promise<{ exp
 
   const cards = [
     { href: experienceHref(experience, "passport"), title: "Competen Passport", body: passportLine },
-    { href: experienceHref(experience, "assistant"), title: "Personal AI", body: experience === "scholar" ? "Ask about a topic, your revision or your record." : "Ask about your development, CPD planning or your record." },
+    { href: experienceHref(experience, "assistant"), title: "Personal AI", body: "Ask about your development, CPD planning or your record." },
     { href: experienceHref(experience, "profile"), title: "Profile & history", body: "Your Competen identity and the history that stays with you." },
   ];
 

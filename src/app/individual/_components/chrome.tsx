@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EXPERIENCES, experienceHref, type ExperienceKey } from "@/lib/individual/experiences";
+import { ShellAction } from "./Dialog";
 
 // The Individual application's shared visual pieces. The shapes are the public site's (COMPETEN-WEB-IND-001,
 // src/components/marketing/IndividualFamily.tsx on web-ind-001): the competen + sub-brand mark, rounded-xl
@@ -88,12 +89,24 @@ export function Unreadable({ what }: { what: string }) {
   );
 }
 
+/**
+ * A page's heading. The control at its right (Scholar: the AI help switch) comes from the experience layout
+ * through ShellAction, so no page loads it itself.
+ */
 export function PageHeader({ eyebrow, title, intro, accent }: { eyebrow?: string; title: string; intro?: string; accent: string }) {
   return (
-    <header className="mb-6">
-      {eyebrow && <p className="text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: accent }}>{eyebrow}</p>}
-      <h1 className="mt-1 text-2xl sm:text-[1.75rem] font-bold tracking-tight text-gray-900 text-balance">{title}</h1>
-      {intro && <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-gray-600">{intro}</p>}
+    <header className="mb-5 flex items-start justify-between gap-4 md:items-center">
+      <div className="min-w-0">
+        {eyebrow && <p className="text-[11px] font-extrabold uppercase tracking-[0.18em]" style={{ color: accent }}>{eyebrow}</p>}
+        <h1 className="mt-1 text-[27px] md:text-[32px] font-bold leading-tight tracking-[-0.03em] text-gray-900 text-balance">{title}</h1>
+        {intro && <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-gray-600">{intro}</p>}
+      </div>
+      <ShellAction />
     </header>
   );
+}
+
+/** A quiet statement of what a surface is and is not (Scholar HFE: formative, private, not verified). */
+export function Notice({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <p className={`mb-5 rounded-[9px] bg-[#edf3f6] px-[17px] py-[13px] text-[13px] leading-relaxed text-[#4f6475] ${className}`}>{children}</p>;
 }

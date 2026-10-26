@@ -652,3 +652,31 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
   /* The bottom navigation bar's content height, EXCLUDING the safe-area inset it pads beneath itself. */
   --cp-bottomnav-h: 60px;
 }
+
+/* ── COMPETEN SCHOLAR: THE AGREED HFE PROTOTYPE'S PALETTE (2026-10-26) ───────────────────────────────
+   Scoped to the Scholar shell only. Re-pointing Tailwind's gray scale here gives every existing Scholar
+   surface the prototype's ink, line and canvas colours without rewriting its components. Text greys keep
+   at least 4.5:1 on white (gray-500 #66778a 4.6:1, gray-600 #637586 4.7:1). */
+@layer base {
+.cmp-scholar {
+  --color-gray-50: #f5f8fa;
+  --color-gray-100: #eff2f5;
+  --color-gray-200: #dce5e9;
+  --color-gray-300: #cbd8df;
+  --color-gray-400: #9aa9b3;
+  --color-gray-500: #66778a;
+  --color-gray-600: #637586;
+  --color-gray-700: #4f6475;
+  --color-gray-800: #2a3d4e;
+  --color-gray-900: #172b3d;
+  --radius-2xl: 14px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #172b3d;
+}
+}
+
+/* Scholar HFE: a panel opened in a dialog sits flat in it, not as a card inside a card. Unlayered on purpose,
+   so it wins over the panel's own border and padding utilities. */
+.cmp-dialog :is(#upload, section[aria-labelledby="consent-h"]) { border-width: 0; padding: 0; }

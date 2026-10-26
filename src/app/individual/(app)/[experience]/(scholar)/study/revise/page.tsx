@@ -13,8 +13,9 @@ import { loadLearnerCatalogue, competencyLabels } from "@/lib/individual/scholar
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { REVISION_FORMATS, REVISION_MODE_LABEL, type Marking, type RevisionMode } from "@/lib/individual/scholar/config";
-import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
+import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
+import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
 import { CardReview, type CardView } from "../_components/client";
 import { sourceHref, studyHref } from "../_components/question-view";
 import { RevisionRunner, RevisionStart, SavedSets } from "../_components/revision-client";
@@ -54,9 +55,9 @@ export default async function Revise({ params, searchParams }: { params: Promise
   const due = await countDue(ctx.admin, ctx.userId);
   const header = (
     <>
-      <PageHeader accent={x.accent} eyebrow="My Learning" title="Revise"
-        intro="Revise from your own notes: answer, see what your notes say, and come back to what you found hard on a spaced schedule." />
+      <PageHeader accent={x.accent} eyebrow={scholarSpace("revise").eyebrow} title="Revise" intro={scholarSpace("revise").intro} />
       <StudyNav dueCount={due} />
+      <Notice>{FORMATIVE_NOTICE}</Notice>
     </>
   );
 
