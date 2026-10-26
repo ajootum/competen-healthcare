@@ -126,6 +126,24 @@ const checkNoItemDelete = (src: Sources): R => {
   const scoped = (store.match(/from\("individual_professional_profile_item"\)\s*\.update\([\s\S]*?\.eq\("user_id", userId\)/g) ?? []).length === 1;
   return { ok: bad.length === 0 && scoped, detail: `${bad.join(", ")} withdraw scoped to owner ${scoped}` };
 };
+// W4 (COMPETEN-INDIVIDUAL-PROFILE-HFE): the SHARED Profile & History route. The experience a record comes from is
+// checked by the guard, never trusted; each experience adds only its own kinds; documents stay Professional's; the
+// route writes nothing itself (450's writes stay in the store, W1).
+const HUB_ROUTE = "src/app/api/individual/profile-items/route.ts";
+const checkHubRoute = (src: Sources): R => {
+  const s = src.get(HUB_ROUTE) ?? "";
+  const post = s.slice(s.indexOf("export async function POST"), s.indexOf("export async function PATCH"));
+  const patch = s.slice(s.indexOf("export async function PATCH"));
+  const guarded = /if \(!isHubExperience\(fields\.experience\)\) return refuse\([^)]*\);\n\s*const experience = fields\.experience;\n\s*const ctx = await requireIndividualContext\(experience\);\n\s*if \(isGuardRefusal\(ctx\)\) return ctx;/.test(post)
+    && /const ctx = await requireIndividualContext\(experience\);\n\s*if \(isGuardRefusal\(ctx\)\) return ctx;/.test(patch);
+  const ownKinds = /if \(!kindAllowed\(experience, fields\.kind\)\) return refuse/.test(post) && post.indexOf("kindAllowed(") < post.indexOf("addItem(");
+  const docs = /const documentsOffered = experience === "professional" && policy\.documentKinds\.includes\(input\.section\);/.test(post)
+    && /if \(file && !documentsOffered\) return refuse/.test(post);
+  const noDirect = !/\.from\(|user_?id\s*[:=]\s*(body|fields)/i.test(s) && /addItem\(ctx\.admin, ctx\.userId, input, doc, experience\)/.test(post)
+    && /withdrawItem\(ctx\.admin, ctx\.userId, id, fields\.withdraw\)/.test(patch);
+  const neverVerified = !/verif(y|ied|ication)\s*[:=(]/i.test(s.replace(/\/\/.*$/gm, ""));
+  return { ok: guarded && ownKinds && docs && noDirect && neverVerified, detail: `experience guarded ${guarded}, own kinds only ${ownKinds}, documents Professional only ${docs}, no direct write or body user id ${noDirect}, nothing verifies ${neverVerified}` };
+};
 const checkGuards = (src: Sources): R => {
   const bad: string[] = [];
   for (const f of ROUTES) {
@@ -284,6 +302,7 @@ function main() {
   run("W1. no code writes the profile history: the 450 trigger does", checkHistoryNotWritten(ALL));
   run("W2. no profile record is deleted or upserted, and the one update (withdraw) is scoped to the owner", checkNoItemDelete(ALL));
   run("W3. every Stage 1 handler is guarded for Professional and never takes a user id from the body", checkGuards(ALL));
+  run("W4. the shared Profile & History route: the experience is guarded, not trusted; own kinds only; documents Professional only; no direct write; nothing verifies", checkHubRoute(ALL));
   run("V1. no record state means verified, and a forged class reads as self-declared", checkNoVerifiedState(RECORD_STATES, itemState));
   run("C1. catalogue suggestions: shared, active, published and allowlisted only, nothing from an empty allowlist", checkSuggestions(ALL));
   run("A1. AI grounding: policy-gated, the no-invention rule, never a registration number or document name", checkAi(ALL, profileContext));
@@ -313,6 +332,10 @@ function main() {
   red("F4 on a hard-coded country", checkNoHardcodedContext(add(STORE, `const HOME = "Uganda";`)));
   red("W1 on a code write to the history", checkHistoryNotWritten(add(STORE, `admin.from("individual_professional_profile_context").insert({})`)));
   red("W2 on a record delete", checkNoItemDelete(add(STORE, `admin.from("individual_professional_profile_item").delete()`)));
+  red("W4 on an experience taken from the body unguarded", checkHubRoute(plant(HUB_ROUTE, "const ctx = await requireIndividualContext(experience);\n  if (isGuardRefusal(ctx)) return ctx;\n  if (!kindAllowed", "const ctx = await requireIndividualContext();\n  if (isGuardRefusal(ctx)) return ctx;\n  if (!kindAllowed")));
+  red("W4 on a Scholar record of any kind", checkHubRoute(plant(HUB_ROUTE, "if (!kindAllowed(experience, fields.kind)) return refuse", "if (false) return refuse")));
+  red("W4 on a document attached to a Scholar record", checkHubRoute(plant(HUB_ROUTE, 'const documentsOffered = experience === "professional" && policy.documentKinds', "const documentsOffered = policy.documentKinds")));
+  red("W4 on the route marking a record verified", checkHubRoute(add(HUB_ROUTE, 'const marked = { verified: true };')));
   red("W3 on an unguarded handler", checkGuards(plant(ROUTES[1], `export async function PATCH(req: Request) {\n  const ctx = await requireIndividualContext("professional");`, `export async function PATCH(req: Request) {\n  const ctx = await requireIndividualContext();`)));
   red("V1 on a verified state", checkNoVerifiedState([...RECORD_STATES, "independently_verified"], itemState));
   red("C1 on a suggestion without the allowlist", checkSuggestions(plant(SUGGEST, `.in("id", allowed)`, "")));
