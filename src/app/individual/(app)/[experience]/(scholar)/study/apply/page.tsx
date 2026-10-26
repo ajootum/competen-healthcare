@@ -104,7 +104,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
           <section className="rounded-2xl border border-gray-200 bg-white p-4">
             <h2 id="case-history-h" className="text-[14px] font-bold text-gray-900">Your cases</h2>
             <p className="text-[12px] text-gray-600">Formative simulation: never an assessment, never evidence of competence. Stored cases replay with no AI.</p>
-            {!history.ok ? <p className="mt-2 text-[13px] text-gray-600">Clinical reasoning history is not available on this environment yet.</p>
+            {!history.ok ? <p className="mt-2 text-[13px] text-gray-600">Clinical reasoning history is not available here yet.</p>
               : history.data.length === 0 ? <p className="mt-2 text-[13px] text-gray-600">None yet.</p> : (
                 <ul className="mt-2 space-y-1.5">{history.data.map(h => (
                   <li key={`${h.kind}${h.id}`} className="text-[13.5px]">
@@ -128,7 +128,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
         <p className="mt-1 text-[13px] text-gray-600">Written by AI from your own notes. They are practice, not clinically reviewed cases, and each one says so.</p>
         <div className="mt-3">
           {!questions.ok ? (questions.notProvisioned
-            ? <StatePanel title="Case practice is not set up on this environment yet"><p>The study store it needs has not been installed here.</p></StatePanel>
+            ? <StatePanel title="Case practice is not set up here yet"><p>The study store it needs has not been installed here.</p></StatePanel>
             : <Unreadable what="case questions" />)
             : questions.data.length === 0 ? (
               <StatePanel title="No case questions yet">
@@ -162,7 +162,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
           ) : (
             <>
               <p className="text-[15px] font-semibold text-gray-900">Not available yet</p>
-              <p className="mt-1 text-[14px] leading-relaxed text-gray-700">The case library is not switched on in this environment. Your own cases are practice, not clinically reviewed, and are labelled as such.</p>
+              <p className="mt-1 text-[14px] leading-relaxed text-gray-700">The case library is not switched on yet. Your own cases are practice, not clinically reviewed, and are labelled as such.</p>
             </>
           )}
         </div>

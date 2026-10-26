@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { secondaryBtn } from "../chrome";
 import { AiNoticeText, aiNotice, type AiNotice } from "./ai-refusal";
+import { AiGate } from "../ai/AiGate";
 
 // AI help with one goal (COMPETEN-PROFESSIONAL-PLAN-01). The Holdings Personal AI, under AI fair use and model
 // eligibility, about the person's own goal. NOTHING IS SAVED until the person accepts a suggestion: "Add" posts it
@@ -65,11 +66,11 @@ export default function PlanAssist({ goalId, accent }: { goalId: string; accent:
   return (
     <div>
       <div className="flex flex-wrap gap-2">
-        {ASK.map(([k, label]) => (
-          <button key={k} type="button" onClick={() => ask(k)} disabled={busy !== null} className={secondaryBtn} style={{ color: accent }}>
+        <AiGate activity="assistant" experience="professional">{g => ASK.map(([k, label]) => (
+          <button key={k} type="button" onClick={() => ask(k)} disabled={busy !== null || g.off} aria-describedby={g.describedBy} className={secondaryBtn} style={{ color: accent }}>
             {busy === k ? "Thinking…" : `✦ ${label}`}
           </button>
-        ))}
+        ))}</AiGate>
       </div>
       {notice && <AiNoticeText notice={notice} className="mt-2" />}
       {out && (

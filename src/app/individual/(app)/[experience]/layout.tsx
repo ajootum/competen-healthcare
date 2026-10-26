@@ -14,6 +14,8 @@ import { JOIN_START, selfRegistrationEnabled } from "@/lib/individual/join";
 import { learningEnabled } from "@/lib/learning/policy";
 import { ShellActionProvider } from "../../_components/Dialog";
 import { AiHelpSwitch, JourneyButton } from "./(scholar)/study/_components/shell-pieces";
+import { getAiStanding } from "@/lib/ai/allowance";
+import { AiAvailabilityProvider } from "../../_components/ai/AiAvailabilityContext";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -152,6 +154,9 @@ export default async function ExperienceLayout({ children, params }: {
   // header, sidebar, bottom bar -- is the same for both experiences, so the two shells still cannot drift.
   const scholar = experience === "scholar";
   const action = scholar ? <AiHelpSwitch admin={shell.ctx.admin} userId={shell.ctx.userId} /> : null;
+  // HFE-01 Wave 1: the product's AI standing once per page, so AI actions show their availability before a click.
+  const ai = await getAiStanding(shell.ctx.admin, { userId: shell.ctx.userId, product: experience });
+  const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
 
   return (
     <div className={`min-h-screen bg-gray-50 ${scholar ? "cmp-scholar" : ""}`}>
@@ -190,6 +195,7 @@ export default async function ExperienceLayout({ children, params }: {
         </aside>
         <main id="main" className="min-w-0 flex-1 pb-24 md:pb-10">
           <ShellActionProvider action={action}>
+          <AiAvailabilityProvider standing={aiSlim}>
             <div className={scholar
               ? "w-full max-w-[1600px] px-4 py-6 md:px-[42px] md:pt-[30px] md:pb-[70px]"
               : "mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8"}>
@@ -201,6 +207,7 @@ export default async function ExperienceLayout({ children, params }: {
                 </footer>
               )}
             </div>
+          </AiAvailabilityProvider>
           </ShellActionProvider>
         </main>
       </div>

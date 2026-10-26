@@ -3,6 +3,7 @@ import { EXPERIENCES } from "@/lib/individual/experiences";
 import { getAiStanding } from "@/lib/ai/allowance";
 import type { AiServiceLevel } from "@/lib/ai/fair-use-policy";
 import { experiencePage, gatedMetadata } from "../../../_components/shell-context";
+import { AiUnavailableNote } from "../../../_components/ai/AiAvailability";
 import { PageHeader } from "../../../_components/chrome";
 
 // Request-time only: it reads the release gate, the session and the allowance, never prerendered.
@@ -41,10 +42,15 @@ export default async function AiAllowancePage({ params }: { params: Promise<{ ex
   return (
     <>
       <PageHeader accent={x.accent} eyebrow="Your foundation" title="AI allowance"
-        intro="Your subscription includes AI help, with fair use. Everything you have already saved stays available whatever your allowance." />
+        intro={standing.metered
+          ? "Your subscription includes AI help, with fair use. Everything you have already saved stays available whatever your allowance."
+          : "AI help comes with fair use. Everything you have already saved stays available whatever happens to AI help."} />
+
+      {/* HFE-01 Wave 1 (F13): an unpublished AI policy is said plainly, in the shared words. */}
+      {standing.policyPublished === false && <AiUnavailableNote reason="policy_unpublished" experience={experience} className="mb-4" />}
 
       {!standing.metered ? (
-        <p className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] text-gray-700">AI help on this environment follows its existing hourly limit. A monthly allowance is not in use here.</p>
+        <p className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] text-gray-700">There is no monthly AI allowance yet. AI help follows a fair-use limit per hour instead.</p>
       ) : !standing.readable ? (
         <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[14px] text-amber-900">
           Your AI allowance could not be checked just now, so new AI help is paused for the moment. Everything you have saved is still here.

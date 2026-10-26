@@ -79,7 +79,7 @@ export default async function EvaluationPage({ params, searchParams }: { params:
       <Tabs view={view === "snapshot" || view === "compare" ? "history" : view} accent={x.accent} />
       {!history.provisioned && (
         <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13.5px] text-amber-900">
-          Recording evaluations is not set up on this environment yet. You can still evaluate your records here; nothing can be saved.
+          Recording evaluations is not set up here yet. You can still evaluate your records here; nothing can be saved.
         </p>
       )}
       {view === "evaluate" && <EvaluateView sp={sp} />}

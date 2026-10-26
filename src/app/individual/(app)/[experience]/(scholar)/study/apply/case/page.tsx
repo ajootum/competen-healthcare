@@ -36,7 +36,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
       <StudyNav dueCount={due} />
       {play ? <CasePlayer initial={play as unknown as Play} hints={hints} /> : (
         <StatePanel title="That case could not be found" actions={<Link href={experienceHref("scholar", "study/apply")} className={focusRing}>Back to Apply</Link>}>
-          <p>It may have been removed with the materials it was written from, or it is not available on this environment.</p>
+          <p>It may have been removed with the materials it was written from, or it is not available here.</p>
         </StatePanel>
       )}
     </>

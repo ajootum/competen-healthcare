@@ -197,7 +197,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
       </Notice>
 
       {!rows.ok ? (rows.notProvisioned
-        ? <StatePanel title="Progress is not set up on this environment yet"><p>The study store it needs has not been installed here.</p></StatePanel>
+        ? <StatePanel title="Progress is not set up here yet"><p>The study store it needs has not been installed here.</p></StatePanel>
         : <Unreadable what="study progress" />)
         : p && p.materials.length === 0 ? (
           <StatePanel title="Nothing to measure yet">
@@ -261,7 +261,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                 It also appears on Passport links you share from Competen Professional, including links already shared. Removing it takes it off them straight away, and your study history stays as it is.
               </p>
               {!choices?.ok ? (choices?.notProvisioned
-                ? <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Showing study achievements in your Passport is not available on this environment yet.</p>
+                ? <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Showing study achievements in your Passport is not available here yet.</p>
                 : <div className="mt-3"><Unreadable what="Passport choices" /></div>)
                 : eligible.length === 0 && allEligible.length > 0 ? (
                   <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Adding study achievements to your Passport is not offered at the moment. Your study history is unchanged.</p>

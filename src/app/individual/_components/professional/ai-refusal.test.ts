@@ -17,3 +17,16 @@ describe("aiNotice", () => {
     expect(aiNotice({ error: "Used.", standing: { level: "continuity" } }, "x").continuity).toBe(true);
   });
 });
+
+describe("HFE-01 Wave 1: the shared reason words", () => {
+  it("an unpublished policy says AI is not switched on yet, never 'not offered'", () => {
+    const n = aiNotice({ error: "AI help is not switched on for Competen Individual yet.", code: "policy_unpublished" }, "x");
+    expect(n.text).toMatch(/not switched on for Competen Individual yet/);
+    expect(n.text).not.toMatch(/not offered/);
+    expect(n.next).toBeNull();
+  });
+  it("an unsupported activity names the product; an unreadable check asks to retry", () => {
+    expect(aiNotice({ error: "This AI activity is not offered.", code: "unknown_activity" }, "x").text).toBe("This kind of AI help is not offered in Competen Professional yet.");
+    expect(aiNotice({ code: "unreadable" }, "x").text).toMatch(/could not be checked just now/);
+  });
+});

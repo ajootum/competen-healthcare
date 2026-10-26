@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { focusRing, primaryBtn, secondaryBtn } from "../chrome";
 import { inputCls } from "./forms";
 import { AiNoticeText, aiNotice, type AiNotice } from "./ai-refusal";
+import { AiGate } from "../ai/AiGate";
 
 // Record an evaluation snapshot (COMPETEN-PROFESSIONAL-EVALUATION-01 E5), optionally with a labelled AI summary.
 // The server RECOMPUTES the evaluation from the person's records: only the scope travels from here. AI text travels
@@ -53,7 +54,7 @@ export default function EvaluationRecord({ scope, accent, aiOn, correcting, aiLa
     <div className="space-y-3">
       {aiOn && (
         <div>
-          <button type="button" onClick={ask} disabled={asking} className={secondaryBtn} style={{ color: accent }}>{asking ? "Thinking…" : "✦ Summarise with the personal AI (optional)"}</button>
+          <AiGate activity="assistant" experience="professional">{g => (<button type="button" onClick={ask} disabled={asking || g.off} aria-describedby={g.describedBy} className={secondaryBtn} style={{ color: accent }}>{asking ? "Thinking…" : "✦ Summarise with the personal AI (optional)"}</button>)}</AiGate>
           {notice && <AiNoticeText notice={notice} className="mt-2" />}
           {ai && (
             <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3" aria-live="polite">

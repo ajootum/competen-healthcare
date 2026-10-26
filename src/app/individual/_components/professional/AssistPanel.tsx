@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { secondaryBtn } from "../chrome";
 import { AiNoticeText, aiNotice, type AiNotice } from "./ai-refusal";
+import { AiGate } from "../ai/AiGate";
 
 // "Suggest a CPD plan" -- the personal AI, grounded on the person's own needs, goals and CPD
 // (POST /api/individual/professional/assistant, task cpd_plan). Advisory: the suggestion is shown here and
@@ -27,9 +28,10 @@ export default function AssistPanel({ accent }: { accent: string }) {
 
   return (
     <div>
-      <button type="button" onClick={ask} disabled={busy} className={secondaryBtn} style={{ color: accent }}>
+      <AiGate activity="assistant" experience="professional">{g => (
+      <button type="button" onClick={ask} disabled={busy || g.off} aria-describedby={g.describedBy} className={secondaryBtn} style={{ color: accent }}>
         {busy ? "Thinking…" : "✦ Suggest a CPD plan from my needs"}
-      </button>
+      </button>)}</AiGate>
       {err && <AiNoticeText notice={err} className="mt-3" />}
       {answer !== null && (
         <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4" aria-live="polite">
