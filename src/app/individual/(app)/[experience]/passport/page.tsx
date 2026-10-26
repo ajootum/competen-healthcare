@@ -83,6 +83,8 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
         </ul>
       </Section>
 
+      <h2 className="mt-8 mb-3 text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Issued or verified by organisations</h2>
+      <p className="-mt-2 mb-3 text-[13px] text-gray-600">Decided or confirmed by an organisation, each labelled by who issued it.</p>
       <Section title="Assessed competencies" note={`${EVIDENCE_LABEL.institution_issued}. Each one is the latest decision an organisation recorded for you.`}>
         {passport.competencies === null ? <Unreadable what="assessed competencies" />
           : passport.competencies.length === 0 ? <Empty>No assessed competencies on your record yet. When an organisation assesses you through Competen, the decision appears here.</Empty>
@@ -139,7 +141,50 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
             )}
       </Section>
 
-      <Section title="Records you added" note="Recorded by you in Competen Professional. Each one says whether a document is attached. None of them is verified.">
+      {passport.learning?.enabled && (
+        <Section title="Competen Learning" note="Courses you completed, read from your Competen Learning record. Each says what it is. A course completion or assessed knowledge is not an accreditation or a verification of clinical competence. On a shared view only when you tick it.">
+          {passport.learning.items === null ? <Unreadable what="learning record" />
+            : passport.learning.items.length === 0 ? <Empty>No completed Competen Learning courses yet.</Empty>
+              : (
+                <ul className="divide-y divide-gray-100">
+                  {passport.learning.items.map(l => (
+                    <li key={l.recordId} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
+                      <div className="min-w-0">
+                        <p className="text-[14.5px] font-semibold text-gray-900"><a href={learningRecordHref(l.recordId)} className={`underline-offset-2 hover:underline ${focusRing}`}>{l.title}</a></p>
+                        <p className="text-[12.5px] text-gray-500">{[l.detail, l.date ? fmt(l.date) : null].filter(Boolean).join(" · ")}</p>
+                        {l.certificateNos.length > 0 && (
+                          <p className="text-[12.5px]">{l.certificateNos.map(no => (
+                            <a key={no} href={learningCertificateHref(no)} className={`mr-3 font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Certificate {no}</a>
+                          ))}</p>
+                        )}
+                      </div>
+                      <p className={`text-[12.5px] font-semibold ${l.evidence === "platform_recorded" ? "text-slate-800" : "text-amber-800"}`}>{l.label}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+        </Section>
+      )}
+
+      <h2 className="mt-8 mb-3 text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Recorded by you</h2>
+      <p className="-mt-2 mb-3 text-[13px] text-gray-600">Self-declared. A document makes a record document-supported, never verified.</p>
+      {pro && (
+        <Section title="Qualifications and registrations" note="Recorded by you in My practice and Profile & history. Each says whether Competen verified it.">
+          {profile?.items === null ? <Unreadable what="professional profile" /> : quals.length === 0 ? <Empty>None recorded yet.</Empty> : (
+            <ul className="divide-y divide-gray-100">
+              {quals.map(q => (
+                <li key={q.id} className="py-2 text-[14px]">
+                  <span className="font-semibold text-gray-900">{q.title}</span>
+                  <span className="text-[12.5px] text-gray-500">{[q.type_label, q.organisation, q.jurisdiction, q.expires_on ? `expires ${fmt(q.expires_on)}` : null].filter(Boolean).map(t => ` · ${t}`).join("")} · {q.evidence_class === "source_linked" ? EVIDENCE_LABEL.source_linked : EVIDENCE_LABEL.self_declared}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 text-[13px]"><a href={experienceHref("professional", "registration")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Manage them in My practice</a></p>
+        </Section>
+      )}
+
+      <Section title="Credentials and evidence you added" note="Recorded by you in Competen Professional. Each one says whether a document is attached. None of them is verified.">
         {passport.own === null ? <Unreadable what="own records" />
           : passport.own.length === 0 ? <Empty>{ctx.live.includes("professional") ? "Nothing yet. Your registration, credentials, competency evidence and CPD from Competen Professional appear here." : "Nothing yet. Records you add in Competen Professional appear here."}</Empty>
             : (
@@ -160,6 +205,28 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
             )}
       </Section>
 
+      {pro && comp?.provisioned && (
+        <Section title="Competencies" note="What you are developing. Your self-assessments are self-reported; supporting evidence is not verification; only an appointed assessor's outcome is independently verified.">
+          {comp.entries === null ? <Unreadable what="competencies" /> : entries.length === 0 ? <Empty>None yet.</Empty> : (
+            <ul className="divide-y divide-gray-100">
+              {entries.slice(0, 30).map(e => {
+                const sa = (comp.assessments ?? []).find(a => a.my_competency_id === e.id);
+                const ev = (comp.links ?? []).filter(l => l.my_competency_id === e.id && !l.unlinked_at).length;
+                return (
+                  <li key={e.id} className="py-2 text-[14px]">
+                    <span className="font-semibold text-gray-900">{e.title}</span>
+                    <span className="text-[12.5px] text-gray-500">{e.framework_version ? ` · ${e.framework_version}` : " · in your own words"}{sa ? ` · self-assessed ${sa.level_label} (self-reported)` : " · not self-assessed"}{` · ${ev} evidence`}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="mt-2 text-[13px]"><a href={experienceHref("professional", "competencies")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Open My competencies</a></p>
+        </Section>
+      )}
+
+      <h2 className="mt-8 mb-3 text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your study in Competen Scholar</h2>
+      <p className="-mt-2 mb-3 text-[13px] text-gray-600">Formative learning you chose to show. Never verified competence.</p>
       <Section title="Self-directed study" note={`${EVIDENCE_LABEL.self_directed}. Only the Competen Scholar achievements you chose to show. Your notes, answers and anything the AI wrote are never shown.`}>
         {!passport.study.ok ? (passport.study.notProvisioned
           ? <Empty>Showing study achievements is not available here yet.</Empty>
@@ -211,67 +278,6 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
             </ul>
           )}
       </Section>
-
-      {passport.learning?.enabled && (
-        <Section title="Competen Learning" note="Courses you completed, read from your Competen Learning record. Each says what it is. A course completion or assessed knowledge is not an accreditation or a verification of clinical competence. On a shared view only when you tick it.">
-          {passport.learning.items === null ? <Unreadable what="learning record" />
-            : passport.learning.items.length === 0 ? <Empty>No completed Competen Learning courses yet.</Empty>
-              : (
-                <ul className="divide-y divide-gray-100">
-                  {passport.learning.items.map(l => (
-                    <li key={l.recordId} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
-                      <div className="min-w-0">
-                        <p className="text-[14.5px] font-semibold text-gray-900"><a href={learningRecordHref(l.recordId)} className={`underline-offset-2 hover:underline ${focusRing}`}>{l.title}</a></p>
-                        <p className="text-[12.5px] text-gray-500">{[l.detail, l.date ? fmt(l.date) : null].filter(Boolean).join(" · ")}</p>
-                        {l.certificateNos.length > 0 && (
-                          <p className="text-[12.5px]">{l.certificateNos.map(no => (
-                            <a key={no} href={learningCertificateHref(no)} className={`mr-3 font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Certificate {no}</a>
-                          ))}</p>
-                        )}
-                      </div>
-                      <p className={`text-[12.5px] font-semibold ${l.evidence === "platform_recorded" ? "text-slate-800" : "text-amber-800"}`}>{l.label}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-        </Section>
-      )}
-
-      {pro && (
-        <Section title="Qualifications and registrations" note="Recorded by you in your professional profile. Each says whether Competen verified it.">
-          {profile?.items === null ? <Unreadable what="professional profile" /> : quals.length === 0 ? <Empty>None recorded yet.</Empty> : (
-            <ul className="divide-y divide-gray-100">
-              {quals.map(q => (
-                <li key={q.id} className="py-2 text-[14px]">
-                  <span className="font-semibold text-gray-900">{q.title}</span>
-                  <span className="text-[12.5px] text-gray-500">{[q.type_label, q.organisation, q.jurisdiction, q.expires_on ? `expires ${fmt(q.expires_on)}` : null].filter(Boolean).map(t => ` · ${t}`).join("")} · {q.evidence_class === "source_linked" ? EVIDENCE_LABEL.source_linked : EVIDENCE_LABEL.self_declared}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="mt-2 text-[13px]"><a href={experienceHref("professional", "registration")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Manage them in My practice</a></p>
-        </Section>
-      )}
-
-      {pro && comp?.provisioned && (
-        <Section title="Competencies" note="What you are developing. Your self-assessments are self-reported; supporting evidence is not verification; only an appointed assessor's outcome is independently verified.">
-          {comp.entries === null ? <Unreadable what="competencies" /> : entries.length === 0 ? <Empty>None yet.</Empty> : (
-            <ul className="divide-y divide-gray-100">
-              {entries.slice(0, 30).map(e => {
-                const sa = (comp.assessments ?? []).find(a => a.my_competency_id === e.id);
-                const ev = (comp.links ?? []).filter(l => l.my_competency_id === e.id && !l.unlinked_at).length;
-                return (
-                  <li key={e.id} className="py-2 text-[14px]">
-                    <span className="font-semibold text-gray-900">{e.title}</span>
-                    <span className="text-[12.5px] text-gray-500">{e.framework_version ? ` · ${e.framework_version}` : " · in your own words"}{sa ? ` · self-assessed ${sa.level_label} (self-reported)` : " · not self-assessed"}{` · ${ev} evidence`}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <p className="mt-2 text-[13px]"><a href={experienceHref("professional", "competencies")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Open My competencies</a></p>
-        </Section>
-      )}
 
       {pro && links !== null && links.length > 0 && (
         <Section title="Shared views" note="Every view you made, what it was for, whether it is a draft, live, expired or withdrawn, and how often it was opened.">

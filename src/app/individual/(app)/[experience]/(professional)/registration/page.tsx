@@ -158,8 +158,10 @@ export default async function RegistrationPage({ params }: { params: Promise<{ e
       </Section>
     ),
     qualifications: (
-      <Section key="qualifications" id="sec-qual" title={SECTION_LABEL.qualifications} note="Add as many as you hold. A document makes a record document-supported, never verified.">
-        {block("qualification", "Add a qualification", "No qualifications recorded yet. Add them whenever you like: nothing in Competen Professional waits on them.")}
+      <Section key="qualifications" id="sec-qual" title={SECTION_LABEL.qualifications} note="Kept once, in Profile &amp; history.">
+        {/* HFE-01 Wave 3 (D2): education and qualifications have one home, Profile & history, shared with Scholar. */}
+        <p className="text-[13.5px] text-gray-700">Your education and qualifications are kept in{" "}
+          <a href={`${experienceHref("professional", "profile")}#sec-qualifications`} className="font-semibold underline underline-offset-2" style={{ color: x.accent }}>Profile &amp; history</a>, one record for every experience. Add, change or ask for verification there.</p>
         <OrganisationRecords title="Credentials on your Passport" rows={credentialRows(passport.credentials)} />
       </Section>
     ),
