@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { focusRing, primaryBtn, secondaryBtn } from "../chrome";
 import { inputCls } from "./forms";
 import { AiNoticeText, aiNotice, type AiNotice } from "./ai-refusal";
+import { AiGate } from "../ai/AiGate";
 
 // The Document Studio draft editor (COMPETEN-PROFESSIONAL-PROGRESS-01 PR7 s10.4-10.5). It edits PRESENTATION only: which
 // sections show and in what order, which of the person's own records go in each (by key) and in what order, which facts
@@ -103,7 +104,7 @@ export default function DocumentEditor({ id, title: title0, templateCode, templa
                       {aiOn && (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <input value={purpose} onChange={e => setPurpose(e.target.value)} maxLength={300} placeholder="Purpose (optional), e.g. a ward manager role" className={`${inputCls} max-w-md`} aria-label="Purpose for the AI draft" />
-                          <button type="button" onClick={askAi} disabled={aiBusy} className={secondaryBtn} style={{ color: accent }}>{aiBusy ? "Thinking…" : "✦ Draft a summary from my chosen records (optional)"}</button>
+                          <AiGate activity="assistant" experience="professional">{g => (<button type="button" onClick={askAi} disabled={aiBusy || g.off} aria-describedby={g.describedBy} className={secondaryBtn} style={{ color: accent }}>{aiBusy ? "Thinking…" : "✦ Draft a summary from my chosen records (optional)"}</button>)}</AiGate>
                         </div>
                       )}
                       {notice && <AiNoticeText notice={notice} className="mt-2" />}

@@ -93,7 +93,7 @@ export default async function EvaluatePage({ params }: { params: Promise<{ exper
 
           <section aria-labelledby="ev-hist-h">
             <h2 id="ev-hist-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Previous evaluations</h2>
-            {!history.ok ? <p className="mt-2 text-[13px] text-gray-600">{history.notProvisioned ? "Evaluations are not kept on this environment yet." : "Your evaluations could not be read just now."}</p>
+            {!history.ok ? <p className="mt-2 text-[13px] text-gray-600">{history.notProvisioned ? "Evaluations are not kept here yet." : "Your evaluations could not be read just now."}</p>
               : history.data.length === 0 ? <p className="mt-2 text-[13px] text-gray-600">None yet. An evaluation you start, or one you keep, is listed here.</p> : (
                 <ul className="mt-2 space-y-1.5">{history.data.map(h => (
                   <li key={h.id} className="text-[13.5px]">

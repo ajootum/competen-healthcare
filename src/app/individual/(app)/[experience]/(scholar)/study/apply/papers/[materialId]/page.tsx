@@ -43,7 +43,7 @@ export default async function PaperPage({ params }: { params: Promise<{ experien
   );
   if (!paper.ok) {
     return <>{header("Examination paper")}{paper.notProvisioned
-      ? <StatePanel title="Studying examination papers is not set up on this environment yet"><p>Nothing on your account has changed.</p></StatePanel>
+      ? <StatePanel title="Studying examination papers is not set up here yet"><p>Nothing on your account has changed.</p></StatePanel>
       : <Unreadable what="examination paper" />}</>;
   }
   if (!material.ok) return <>{header("Examination paper")}<Unreadable what="material" /></>;

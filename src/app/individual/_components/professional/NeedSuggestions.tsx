@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { secondaryBtn } from "../chrome";
 import { inputCls } from "./forms";
 import { AiNoticeText, aiNotice, type AiNotice } from "./ai-refusal";
+import { AiGate } from "../ai/AiGate";
 
 // Development-need suggestions (COMPETEN-PROFESSIONAL-NEEDS-01 N7). A suggestion says why it was made, stays private,
 // and becomes a need only when the person accepts it -- with their own wording if they change it. Dismiss and defer
@@ -61,7 +62,7 @@ export function GenerateSuggestions({ accent }: { accent: string }) {
   }
   return (
     <div>
-      <button type="button" onClick={go} disabled={busy} className={secondaryBtn} style={{ color: accent }}>{busy ? "Thinking…" : "✦ Suggest development needs with AI"}</button>
+      <AiGate activity="assistant" experience="professional">{g => (<button type="button" onClick={go} disabled={busy || g.off} aria-describedby={g.describedBy} className={secondaryBtn} style={{ color: accent }}>{busy ? "Thinking…" : "✦ Suggest development needs with AI"}</button>)}</AiGate>
       {notice && <AiNoticeText notice={notice} className="mt-2" />}
       {ok && <p role="status" className="mt-2 text-[13px] text-green-800">{ok}</p>}
     </div>
@@ -83,7 +84,7 @@ export function SummariseReflection({ id, accent }: { id: string; accent: string
   }
   return (
     <div className="mt-2">
-      <button type="button" onClick={go} disabled={busy} className={small} style={{ color: accent }}>{busy ? "Thinking…" : "✦ Summarise with AI"}</button>
+      <AiGate activity="assistant" experience="professional">{g => (<button type="button" onClick={go} disabled={busy || g.off} aria-describedby={g.describedBy} className={small} style={{ color: accent }}>{busy ? "Thinking…" : "✦ Summarise with AI"}</button>)}</AiGate>
       {notice && <AiNoticeText notice={notice} className="mt-2" />}
       {answer !== null && (
         <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3" aria-live="polite">

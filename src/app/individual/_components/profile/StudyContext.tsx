@@ -33,7 +33,7 @@ export default function StudyContext({ accent, options, current, periods, histor
   const first = useRef<HTMLSelectElement>(null);
   useEffect(() => { if (editing) first.current?.focus(); }, [editing]);
 
-  if (!options) return <p className="text-[13.5px] text-gray-600">Study details are not available on this environment yet.</p>;
+  if (!options) return <p className="text-[13.5px] text-gray-600">Study details are not available here yet.</p>;
   const prog = options.programmes.find(p => p.code === programme) ?? null;
   const label = (list: Opt[], code: string | null) => list.find(o => o.code === code)?.label ?? null;
   const shown: [string, string | null][] = [

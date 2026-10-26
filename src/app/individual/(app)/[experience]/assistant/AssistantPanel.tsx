@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ExperienceKey } from "@/lib/individual/experiences";
 import { QUESTION_MAX } from "@/lib/individual/assistant-limits";
+import { AiRefusalNotice, aiActionProps } from "../../../_components/ai/AiAvailability";
 
 // The personal AI's question box. One question, one answer, held only in this page's state -- the
 // server stores nothing (see src/lib/individual/assistant.ts). Earlier answers in this visit stay on
@@ -15,27 +16,30 @@ const STARTERS: Record<ExperienceKey, string[]> = {
   professional: ["What should I focus on in my CPD this year?", "Summarise what is on my Competen record."],
 };
 
-export default function AssistantPanel({ experience, accent }: { experience: ExperienceKey; accent: string }) {
+// HFE-01 Wave 1: `unavailable` (from the page's standing) disables asking, with the reason the page shows above
+// (#ai-unavailable). A refusal that still comes back is shown in the shared words.
+export default function AssistantPanel({ experience, accent, unavailable = false }: { experience: ExperienceKey; accent: string; unavailable?: boolean }) {
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<{ body: unknown } | null>(null);
+  const off = aiActionProps(unavailable ? { available: false, reason: "unreadable" } : { available: true }, "ai-unavailable");
   const [turns, setTurns] = useState<{ q: string; a: string }[]>([]);
 
   async function ask(q: string) {
     const text = q.trim();
-    if (!text || busy) return;
-    setBusy(true); setError("");
+    if (!text || busy || unavailable) return;
+    setBusy(true); setError(null);
     try {
       const res = await fetch("/api/individual/assistant", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ experience, question: text }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) { setError(json.error ?? "The assistant could not answer just now."); return; }
+      if (!res.ok) { setError({ body: json }); return; }
       setTurns(t => [{ q: text, a: String(json.answer ?? "") }, ...t]);
       setQuestion("");
     } catch {
-      setError("The assistant could not be reached. Check your connection and try again.");
+      setError({ body: { error: "The assistant could not be reached. Check your connection and try again." } });
     } finally {
       setBusy(false);
     }
@@ -49,7 +53,7 @@ export default function AssistantPanel({ experience, accent }: { experience: Exp
           className={`mt-2 w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5 text-[15px] text-gray-900 ${focusRing}`}
           placeholder="Ask anything about your learning or development" />
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button type="submit" disabled={busy || !question.trim()}
+          <button type="submit" disabled={busy || !question.trim() || unavailable} {...off}
             className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-5 py-2.5 text-[14.5px] font-semibold text-white hover:opacity-90 disabled:opacity-50 ${focusRing}`}
             style={{ background: accent }}>
             {busy ? "Thinking…" : "Ask"}
@@ -59,7 +63,7 @@ export default function AssistantPanel({ experience, accent }: { experience: Exp
         {turns.length === 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
             {STARTERS[experience].map(s => (
-              <button key={s} type="button" onClick={() => ask(s)} disabled={busy}
+              <button key={s} type="button" onClick={() => ask(s)} disabled={busy || unavailable} {...off}
                 className={`rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-left text-[12.5px] text-gray-700 hover:bg-gray-100 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
                 {s}
               </button>
@@ -68,7 +72,7 @@ export default function AssistantPanel({ experience, accent }: { experience: Exp
         )}
       </form>
 
-      {error && <p role="alert" className="mt-3 text-[13.5px] font-medium text-red-700">{error}</p>}
+      {error && <AiRefusalNotice body={error.body} fallback="The assistant could not answer just now." experience={experience} className="mt-3" />}
 
       <div aria-live="polite" className="mt-5 space-y-4">
         {turns.map((t, i) => (

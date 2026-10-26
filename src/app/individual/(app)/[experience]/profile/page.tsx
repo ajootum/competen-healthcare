@@ -77,7 +77,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ experi
       options,
       current: ptr.ok && ptr.data ? { programme: ptr.data.programme_code, level: ptr.data.level_code, institution: ptr.data.institution_code } : { programme: null, level: null, institution: null },
       periods: hist.ok ? hist.periods.map(p => ({ programmeLabel: name(p.programmeCode), levelLabel: p.levelLabel, institutionLabel: p.institutionLabel, effectiveFrom: p.effectiveFrom, effectiveTo: p.effectiveTo })) : null,
-      note: hist.ok ? null : hist.notProvisioned ? "Earlier study contexts are not kept on this environment yet." : "Earlier study contexts could not be read just now.",
+      note: hist.ok ? null : hist.notProvisioned ? "Earlier study contexts are not kept here yet." : "Earlier study contexts could not be read just now.",
     };
   }
   const verifications = hub === "professional" && view.provisioned ? await loadVerifications(ctx.admin, ctx.userId, today) : null;
@@ -128,7 +128,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ experi
             </Card>
           ) : (
             <Card key="practice" id={e === hub ? "sec-overview" : "sec-practice"} title="Your practice" note="Self-declared. Your full overview and primary registration are on your Professional profile.">
-              {!view.provisioned ? <p className="text-[13.5px] text-gray-600">The professional profile is not set up on this environment yet.</p>
+              {!view.provisioned ? <p className="text-[13.5px] text-gray-600">The professional profile is not set up here yet.</p>
                 : ptr === null ? <Unreadable what="professional overview" />
                 : ptr === undefined ? (
                   <p className="text-[13.5px] text-gray-700">
@@ -155,7 +155,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ experi
         </div>
       ) : (
         <Card key={s.section} id={`sec-${s.section}`} title={s.title} note={s.note}>
-          {!view.provisioned ? <p className="text-[13.5px] text-gray-600">Profile records are not set up on this environment yet.</p> : s.kinds.map((k, i) => (
+          {!view.provisioned ? <p className="text-[13.5px] text-gray-600">Profile records are not set up here yet.</p> : s.kinds.map((k, i) => (
             <div key={k.kind} className={i ? "mt-6" : ""}>
               {k.heading && <h3 className="mb-1 text-[14px] font-bold text-gray-900">{k.heading}</h3>}
               <ItemBlock items={view.items} kind={k.kind} sc={sc} addLabel={k.add} emptyText={k.empty} unreadable={view.items === null} />

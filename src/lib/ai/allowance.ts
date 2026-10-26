@@ -47,7 +47,13 @@ export type AiStanding = {
   resetsAt: string | null;
   activities: Record<string, AiActivityState>;
   message: string | null;
+  /** HFE-01 Wave 1: false when no policy is published for the product (the default allows nothing), so a page can
+   *  say "not switched on yet" instead of "not offered". Absent on standings built before this field existed. */
+  policyPublished?: boolean;
 };
+
+/** Pure: whether a resolved product policy is a published one (the unpublished default allows nothing). */
+export const isPublishedPolicy = (policy: Pick<ProductAiPolicy, "version">) => policy.version !== "default-nothing-allowed";
 export type MeteredError = "allowance_exhausted" | "not_entitled" | "unreadable" | "duplicate_request" | "unknown_activity" | "level_insufficient"
   | "not_eligible" | "pending_reconciliation";
 /** `risk` is the request's classified clinical risk where it was decided, so the page can say why. Never the text. */
@@ -133,7 +139,7 @@ function standingFrom(policy: ProductAiPolicy, acc: any): AiStanding {
     const d = activityAt(policy, level, code, b);
     activities[code] = { label: policy.activities[code].label, available: d.available, via: d.via, reason: d.reason };
   }
-  return { readable: true, metered: true, level, remaining: remainingBand(b), resetsAt: acc.period_end, activities, message: policy.messages[level] };
+  return { readable: true, metered: true, level, remaining: remainingBand(b), resetsAt: acc.period_end, activities, message: policy.messages[level], policyPublished: isPublishedPolicy(policy) };
 }
 
 /** An eligibility decision as ai_reserve reads it (411, 412): only the effective rows. */
@@ -181,6 +187,7 @@ async function loadEligibility(admin: any, product: AiProduct): Promise<Eligibil
 const closed = (policy: ProductAiPolicy, readable: boolean, reason: string): AiStanding => ({
   readable, metered: true, level: "continuity", remaining: { band: "none", percent: null }, resetsAt: null,
   activities: Object.fromEntries(Object.entries(policy.activities).map(([c, a]) => [c, { label: a.label, available: false, via: null, reason }])), message: policy.messages.continuity,
+  policyPublished: isPublishedPolicy(policy),
 });
 
 /** Where a person stands for one product. Never throws. */
@@ -189,7 +196,8 @@ export async function getAiStanding(admin: any, args: { userId: string; product:
   if (!(await aiFairUseEnabled(admin))) {
     if (!readable) return closed(policy, false, "AI help could not be checked just now.");
     const unmetered: AiStanding = { readable: true, metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null,
-      activities: Object.fromEntries(Object.entries(policy.activities).map(([c, a]) => [c, { label: a.label, available: true, via: "included", reason: null }])), message: null };
+      activities: Object.fromEntries(Object.entries(policy.activities).map(([c, a]) => [c, { label: a.label, available: true, via: "included", reason: null }])), message: null,
+      policyPublished: isPublishedPolicy(policy) };
     // Eligibility gates clinical-risk activities whether or not metering is on (owner: Sonnet 4.6 is not approved for
     // clinical activities, nothing is silently downgraded). The standing says so, so nothing is offered then refused.
     const status = aiStatus();
@@ -273,7 +281,7 @@ export async function unmeteredGate(admin: any, product: AiProduct, activity: st
   const d = activityAt(policy, "full", activity, UNMETERED_BALANCE, floor);
   const rows = await loadEligibility(admin, product);
   const standing = (message: string): AiStanding => ({ readable: rows !== null, metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null,
-    activities: { [activity]: { label: a.label, available: false, via: null, reason: message } }, message });
+    activities: { [activity]: { label: a.label, available: false, via: null, reason: message } }, message, policyPublished: isPublishedPolicy(policy) });
   if (rows === null) return { ok: false, error: "unreadable", standing: standing(ELIGIBILITY_UNREADABLE) };
   const r = d.available && d.tier ? pickRoute(routing, rows, product, activity, d.tier, floor) : null;
   if (!r) return { ok: false, error: "not_eligible", standing: standing(NOT_ELIGIBLE_REASON) };
@@ -452,12 +460,16 @@ export const isMeteredRefusal = (r: GenerateResult | MeteredRefusal): r is Meter
  * Pure: what a route answers for a metered refusal. Never a bare error: the body carries the standing, so the
  * page can show Learning Continuity (what stays available, when the allowance renews) instead of a failure.
  */
-export function meteredRefusalBody(r: MeteredRefusal): { status: number; body: { error: string; continuity: boolean; standing: AiStanding } } {
+export function meteredRefusalBody(r: MeteredRefusal): { status: number; body: { error: string; code: string; continuity: boolean; standing: AiStanding } } {
+  // HFE-01 Wave 1: a machine code beside the words, so every page can say WHY in one consistent way. An unknown
+  // activity under the unpublished default policy is "not switched on yet", not "not offered".
+  const code = r.error === "unknown_activity" && r.standing.policyPublished === false ? "policy_unpublished" : r.error;
   const error = r.error === "duplicate_request" ? "That request was already received."
+    : code === "policy_unpublished" ? "AI help is not switched on for Competen Individual yet."
     : r.error === "unknown_activity" ? "This AI activity is not offered."
     : r.error === "unreadable" ? "AI help could not be checked just now, so nothing was sent. Try again shortly."
     : r.error === "not_entitled" ? "This needs an active subscription."
     : r.standing.message ?? "This AI activity is not available right now.";
   const status = r.error === "unreadable" || r.error === "not_eligible" ? 503 : r.error === "duplicate_request" ? 409 : r.error === "unknown_activity" ? 400 : r.error === "not_entitled" ? 403 : 429;
-  return { status, body: { error, continuity: r.error === "allowance_exhausted" || r.error === "level_insufficient", standing: r.standing } };
+  return { status, body: { error, code, continuity: r.error === "allowance_exhausted" || r.error === "level_insufficient", standing: r.standing } };
 }

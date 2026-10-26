@@ -56,7 +56,7 @@ export default async function DocumentStudioPage({ params, searchParams }: { par
         <Link href={experienceHref("professional", "progress/documents")} className={`font-semibold ${focusRing}`} style={{ color: x.accent }}>All documents</Link>
         <Link href={experienceHref("professional", "passport")} className={`font-semibold ${focusRing}`} style={{ color: x.accent }}>My Competen Passport</Link>
       </nav>
-      {!docs.provisioned && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13.5px] text-amber-900">The Document Studio is not set up on this environment yet, so documents cannot be saved.</p>}
+      {!docs.provisioned && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13.5px] text-amber-900">The Document Studio is not set up here yet, so documents cannot be saved.</p>}
       {doc ? <Editor /> : docId ? <Section title="Not found"><Empty>That document is not yours, or it was deleted.</Empty></Section> : <List />}
     </>
   );

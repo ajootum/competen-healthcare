@@ -162,7 +162,7 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
 
       <Section title="Self-directed study" note={`${EVIDENCE_LABEL.self_directed}. Only the Competen Scholar achievements you chose to show. Your notes, answers and anything the AI wrote are never shown.`}>
         {!passport.study.ok ? (passport.study.notProvisioned
-          ? <Empty>Showing study achievements is not available on this environment yet.</Empty>
+          ? <Empty>Showing study achievements is not available here yet.</Empty>
           : <Unreadable what="study achievements" />)
           : passport.study.data.length === 0 ? (
             <Empty>
@@ -188,7 +188,7 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
       {/* PROGRESS-01 P5: the middle tier -- educational evaluation, apart from study activity and from verified competence. */}
       <Section title="Educational evaluations" note={`${EVIDENCE_LABEL.educational_evaluation}. Only the Competen Scholar evaluations you chose to show: how each was made and how far it can be relied on, never your notes or answers, and never a credential.`}>
         {!passport.evaluations.ok ? (passport.evaluations.notProvisioned
-          ? <Empty>Showing evaluations is not available on this environment yet.</Empty>
+          ? <Empty>Showing evaluations is not available here yet.</Empty>
           : <Unreadable what="educational evaluations" />)
           : passport.evaluations.data.length === 0 ? (
             <Empty>
