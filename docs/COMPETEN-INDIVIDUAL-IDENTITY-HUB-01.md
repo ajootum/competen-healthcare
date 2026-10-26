@@ -92,7 +92,22 @@ An empty card says what to add, with one obvious action. Wide content (personal 
 - `include_photo` is read apart from the rest of the view, so views still work;
 - a link writes `include_photo` only when it is chosen.
 
-**Evidence:** `docs/evidence/COMPETEN-INDIVIDUAL-IDENTITY-HUB-01/`. It contains ROLLBACK, VERIFY, FINGERPRINT and the staging record.
+**Evidence:** `docs/evidence/COMPETEN-INDIVIDUAL-IDENTITY-HUB-01/`. It contains ROLLBACK, VERIFY, FINGERPRINT, the staging record and `rollback-590-storage.ts`.
+
+**Staging** (coordinator, rev 2 package):
+
+| Step | Fingerprint | Items |
+|---|---|---|
+| Applied | `62b0651a` | 28 |
+| SQL rollback | `12f8648b` = PRE | 11 |
+| Storage step | private, 0 objects, then emptied and deleted | |
+| Re-apply ×2 | = applied | |
+
+VERIFY returned exactly the expected values.
+
+**Why revision 2.** Supabase refuses SQL deletes on storage tables. So the SQL rollback leaves the bucket alone, `rollback-590-storage.ts` removes it through the Storage API, and the fingerprint excludes the bucket.
+
+**Production order:** 590 after 450 and 540. Bytes: f618372c.
 
 **Local rehearsal** (postgres:17):
 - Apply #1 equalled apply #2, and rollback returned to PRE.
@@ -107,4 +122,21 @@ An empty card says what to add, with one obvious action. Wide content (personal 
 | vitest | metadata stripper; hub cards and completion; identity field parser; per-link photo, including before 590 |
 | `individual-foundation` | the identity write is pinned (2a) |
 | `professional-profile`, `individual-professional`, `professional-passport`, `account-profile`, `scholar-learning` | green |
-| staging walk | see the PR |
+| staging walk | see the steps below |
+
+**Staging walk.** 590 was applied on staging. The walk used a synthetic Scholar + Professional identity, deleted afterwards along with its photos and links.
+
+- **Photo upload:** a camera JPEG carrying a GPS marker was uploaded.
+  - It was stored without the marker (385 bytes in, 323 bytes out).
+  - It is served only through a signed staging URL.
+  - The public object URL is refused (400).
+  - Unauthenticated photo and identity calls are refused (401).
+- **Header:** "Edit profile" saved inline. Preferred name, headline and location persisted.
+  - A 141-character headline was blocked as you typed: "Too long: 141 of 140", with Save disabled.
+- **Skills:** a skill was added in place (201).
+- **Registration card:** says "Recorded, private". The number appears nowhere in the HTML.
+- **Passport links, fetched as an anonymous recipient:**
+  - the link with the photo ticked shows it, through a signed URL;
+  - the unticked link shows no photo;
+  - neither carries the headline, location, registration number or country.
+- **Phone width (375px):** no horizontal scroll. On a touch pointer, standalone links are 44px.
