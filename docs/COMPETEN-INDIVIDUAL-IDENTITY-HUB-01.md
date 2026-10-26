@@ -92,7 +92,7 @@ An empty card says what to add, with one obvious action. Wide content (personal 
 - `include_photo` is read apart from the rest of the view, so views still work;
 - a link writes `include_photo` only when it is chosen.
 
-**Evidence:** `docs/evidence/COMPETEN-INDIVIDUAL-IDENTITY-HUB-01/`. It contains ROLLBACK, VERIFY, FINGERPRINT, the staging record and `rollback-590-storage.ts`.
+**Evidence:** `docs/evidence/COMPETEN-INDIVIDUAL-IDENTITY-HUB-01/`. It contains ROLLBACK, VERIFY, FINGERPRINT, the staging record and `rollback-590-storage.ts.txt`. The storage step script is kept byte-identical to the one run on staging (e0c97790), as .txt so the build does not type-check a record. To run it, copy it to a .ts file.
 
 **Staging** (coordinator, rev 2 package):
 
