@@ -717,7 +717,8 @@ const upload01Holds = (src: Src) => {
     && /const quality = extractionQuality\(mime, extraction\.pages, chunks\);/.test(mat) && /chunks, quality,/.test(mat)
     && /status: summary\.partial \? "partial" : "ready"/.test(mat)
     && /outcomes: true,/.test(gen)
-    && /const absence = competencyAbsence\(learner\);/.test(mp) && /absence=\{absence\}/.test(mp) && /competencyAbsence\(learner\)/.test(ready)
+    // P6 (2026-10-26): the one rule may also be told how many programmes are offered, so production (none) is not asked to choose.
+    && /const absence = competencyAbsence\(learner(, [^;]+)?\);/.test(mp) && /absence=\{absence\}/.test(mp) && /competencyAbsence\(learner(, [^;]+)?\)/.test(ready)
     && /findPatientIdentifiers\(t\)/.test(topics)
     // LEARN-01 lifted the Stage 3 hold: Start learning now opens Teach Me in the Learn workspace (owner GO s8).
     && /href=\{experienceHref\("scholar", `study\/learn\?material=\$\{m\.id\}`\)\} className=\{primaryBtn\}/.test(ready);
@@ -1278,7 +1279,7 @@ function main() {
   ok("P39. ⚠ K22 goes red when the duplicate check moves after extraction, partial is reported as ready, or the no-catalogue absence goes unsaid",
     !upload01Holds(plant(`${API}/materials/route.ts`, 'status: summary.partial ? "partial" : "ready"', 'status: "ready"'))
     && !upload01Holds(plant(`${API}/materials/route.ts`, "if (sniffed.unsafe) return refuse(422", "if (false) return refuse(422"))
-    && !upload01Holds(plant(`${PAGES}/[materialId]/page.tsx`, "const absence = competencyAbsence(learner);", "const absence = null;"))
+    && !upload01Holds(plant(`${PAGES}/[materialId]/page.tsx`, "const absence = competencyAbsence(learner, stampProgrammes.ok ? stampProgrammes.data.length : null);", "const absence = null;"))
     && !upload01Holds(plant(`${API}/topics/route.ts`, "findPatientIdentifiers(t)", "[]"))
     && !upload01Holds(plant(GEN, "outcomes: true,", "outcomes: false,")));
   ok("P32. ⚠ K15 goes red when the engine reads a table or names a product",

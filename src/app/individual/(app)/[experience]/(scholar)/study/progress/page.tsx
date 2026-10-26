@@ -19,6 +19,8 @@ import { ProgressWorkspace } from "../_components/progress-view";
 import { loadProgress } from "@/lib/individual/scholar/progress-data";
 import type { PeriodKind } from "@/lib/individual/scholar/progress-history";
 import { competencyProgressRows } from "@/lib/individual/scholar/store";
+import { listProgrammes } from "@/lib/individual/scholar/store";
+import { noProgrammeText, topicPractice, type TopicPractice } from "@/lib/individual/scholar/classify-view";
 import { loadLearnerCatalogue, type LearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { buildCompetencyProgress, type CompetencyProgress, type CompetencyProgressRow } from "@/lib/individual/scholar/competency-progress";
 import { LAYER_LABEL } from "@/lib/individual/scholar/catalogue";
@@ -34,14 +36,54 @@ const STATUS_TEXT: Record<CompetencyProgressRow["status"], string> = {
   practising: "Practising",
 };
 
+/**
+ * P6 Option A: practice by TOPIC -- the topics Classify found in the sections, and practice on those sections. It needs
+ * no programme or catalogue, so it reads well where none is configured. Practice, never knowledge or competence.
+ */
+function TopicSection({ topics, unreadable, accent }: { topics: TopicPractice[] | null; unreadable: boolean; accent: string }) {
+  if (!topics && !unreadable) return null;
+  return (
+    <section aria-labelledby="topics-h" className="mt-8">
+      <h2 id="topics-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">By topic</h2>
+      <p className="mt-1 text-[13px] text-gray-600">The topics Scholar found in your notes, and your practice on the sections they appear in. This is practice on your own notes, not a measure of knowledge or competence.</p>
+      <div className="mt-3">
+        {unreadable ? <Unreadable what="practice by topic" />
+          : !topics?.length ? (
+            <StatePanel title="No topics found yet">
+              <p>Topics appear once Scholar has looked at a material, which it does with AI help on. Open a material to see what it found.</p>
+            </StatePanel>
+          ) : (
+            <ul className="divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
+              {topics.map(t => (
+                <li key={t.name} className="flex flex-wrap items-baseline justify-between gap-2 p-4">
+                  <span className="min-w-0">
+                    <span className="block text-[14.5px] font-semibold text-gray-900">{t.name}</span>
+                    <span className="text-[12.5px] text-gray-600">{t.sections} section{t.sections === 1 ? "" : "s"} · {t.questions} practice question{t.questions === 1 ? "" : "s"}</span>
+                  </span>
+                  <span className="flex items-baseline gap-3 text-[13px]">
+                    {t.answered === 0 ? <span className="font-semibold text-gray-500">Not practised yet</span>
+                      : <span className="font-semibold tabular-nums text-gray-900">{t.rightLatest} of {t.answered} right on the latest try</span>}
+                    <Link href={experienceHref("scholar", `study/learn?topic=${encodeURIComponent(t.name)}`)} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: accent }}>Learn</Link>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+      </div>
+    </section>
+  );
+}
+
 /** COMPETEN-SCHOLAR-01 S4. Practice against each competency of the programme -- never a judgement of competence. */
 /**
  * The totals and the measure state come from S5's coverage (li.coverage) -- ONE computation, read by both this
  * section and the Learning Intelligence panel (COMPETEN-SCHOLAR-01 P0). The rows below are this section's own
  * detail from the same accepted links (a unit test pins that each row's figures equal coverage's).
  */
-function CompetencySection({ learner, progress, coverage, unreadable, accent, activity }: {
+function CompetencySection({ learner, progress, coverage, unreadable, accent, activity, offered }: {
   learner: LearnerCatalogue | null; progress: CompetencyProgress | null; coverage: CompetencyCoverage | null; unreadable: boolean; accent: string;
+  /** P6: programmes Competen offers (null: unreadable). None offered: nothing to choose, and the page does not ask. */
+  offered: number | null;
   /** LEARN-01 L4: learning activity on sections linked to each competency. Null: not recorded here (414 absent). */
   activity: Map<string, { actions: number; lastVerdict: string | null; lastAt: string }> | null;
 }) {
@@ -56,9 +98,9 @@ function CompetencySection({ learner, progress, coverage, unreadable, accent, ac
       </p>
       <div className="mt-3">
         {!learner.programme ? (
-          <StatePanel title="No programme chosen">
-            <p>Choose your programme in My Learning to see your study against its competencies.</p>
-            <p><Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`} style={{ color: accent }}>Go to My Learning</Link></p>
+          <StatePanel title={offered === 0 ? "No competency framework is set up for Scholar yet" : "No programme chosen"}>
+            <p>{noProgrammeText(offered)}</p>
+            {offered !== 0 && <p><Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`} style={{ color: accent }}>Go to My Learning</Link></p>}
           </StatePanel>
         ) : unreadable ? <Unreadable what="progress by competency" />
           : progress && progress.totals.competencies === 0 ? (
@@ -173,7 +215,12 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   // COMPETEN-SCHOLAR-01 S4: progress by competency, through the catalogue interface. Absent where 387/388
   // are not applied (fail closed). Unreadable is said, never shown as an empty list.
   const learner = rows.ok ? await loadLearnerCatalogue(ctx.admin, ctx.userId) : null;
-  const cRows = learner?.provisioned && learner.programme && learner.competencies ? await competencyProgressRows(ctx.admin, ctx.userId) : null;
+  // P6: the same rows feed practice by TOPIC, which needs no programme -- so they are read whenever 387/388 exist.
+  const allRows = learner?.provisioned ? await competencyProgressRows(ctx.admin, ctx.userId) : null;
+  const cRows = learner?.provisioned && learner.programme && learner.competencies ? allRows : null;
+  const topics = allRows?.ok ? topicPractice(allRows.data.concepts, allRows.data.questions, allRows.data.attempts) : null;
+  const programmes = learner?.provisioned && !learner.programme ? await listProgrammes(ctx.admin) : null;
+  const programmesOffered = programmes ? (programmes.ok ? programmes.data.length : null) : null;
   const cp = cRows?.ok && learner?.competencies
     ? buildCompetencyProgress({
       competencies: learner.competencies,
@@ -223,7 +270,8 @@ export default async function ProgressPage({ params, searchParams }: { params: P
               ))}
             </dl>
 
-            <CompetencySection learner={learner} progress={cp} coverage={li?.ok ? li.data.coverage : null} unreadable={cUnreadable} accent={x.accent} activity={activity} />
+            <TopicSection topics={topics} unreadable={!!allRows && !allRows.ok} accent={x.accent} />
+            <CompetencySection learner={learner} progress={cp} coverage={li?.ok ? li.data.coverage : null} unreadable={cUnreadable} accent={x.accent} activity={activity} offered={programmesOffered} />
 
             {li?.ok ? <LearningIntelligence li={li.data} accent={x.accent} /> : <div className="mt-8"><Unreadable what="learning intelligence" /></div>}
 

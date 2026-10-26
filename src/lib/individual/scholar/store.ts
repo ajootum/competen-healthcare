@@ -1715,6 +1715,8 @@ export async function acceptedQuestionCompetencies(admin: Admin, userId: string,
 /** The rows competency progress is built from. Ids, competencies and right-or-wrong only. */
 export async function competencyProgressRows(admin: Admin, userId: string): Promise<Read<{
   mappings: MappingRow[]; questions: { id: string; chunkId: string; competencyId: string | null }[]; attempts: ProgressAttempt[];
+  /** P6: the topics found in each section (chunk id → concepts), for practice by topic. */
+  concepts: Map<string, string[]>;
 }>> {
   const maps = await listMappings(admin, userId);
   if (!maps.ok) return maps;
@@ -1728,6 +1730,7 @@ export async function competencyProgressRows(admin: Admin, userId: string): Prom
     ok: true,
     data: {
       mappings: maps.data.mappings,
+      concepts: maps.data.concepts,
       questions: ((q.data ?? []) as any[]).map(r => ({ id: r.id, chunkId: r.chunk_id, competencyId: r.competency_id ?? null })),
       attempts: ((a.data ?? []) as any[]).map(r => ({ questionId: r.question_id, correct: r.correct, answeredAt: r.answered_at })),
     },
