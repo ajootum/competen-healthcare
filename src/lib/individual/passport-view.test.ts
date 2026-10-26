@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { resolvePolicy } from "./policy";
 import { loadPassportSelection, orderItems, presentable, type PassportItem } from "./passport-view";
-import { parsePassportView } from "./professional/share-passport";
+import { parsePassportView, scholarViewRefusal } from "./professional/share-passport";
 import { currentDecision, verifiedNow, type VerificationDecision } from "./professional/competency-verification";
 
 // COMPETEN-PROFESSIONAL-PASSPORT-01 (Stage 7): record-level sharing, pinned.
@@ -101,5 +101,24 @@ describe("C5 outcomes on the Passport: the class decides, never the code", () =>
     expect(verifiedNow(d({ standing: undefined, validUntil: "2026-01-01" }), today)).toBe(false);
     expect(verifiedNow(d({ standing: undefined, revokedAt: "2026-10-21" }), today)).toBe(false);
     expect(verifiedNow(d({ standing: undefined }), today)).toBe(true);
+  });
+});
+
+describe("sharing from Scholar (PRODUCT-EXPERIENCE P4): only formative Scholar records the learner ticked", () => {
+  const pp = policy.professionalPassport;
+  const STUDY = "44444444-4444-4444-8444-444444444444", EVAL = "55555555-5555-4555-8555-555555555555";
+  const view = (b: Record<string, unknown>) => { const r = parsePassportView(b, pp); if (!r.ok) throw new Error(r.error); return r.value; };
+  it("a study achievement or an evaluation, ticked, is a Scholar view", () => {
+    expect(scholarViewRefusal(view({ [`record:study:${STUDY}`]: "true", [`record:scholar_evaluation:${EVAL}`]: "true" }))).toBeNull();
+  });
+  it("nothing ticked, a Professional record, or organisation records are refused", () => {
+    expect(scholarViewRefusal(view({}))).toMatch(/at least one/);
+    expect(scholarViewRefusal(view({ [`record:study:${STUDY}`]: "true", [`record:cpd:${CPD_A}`]: "true" }))).toMatch(/only your study achievements and evaluations/);
+    expect(scholarViewRefusal(view({ [`record:study:${STUDY}`]: "true", includeInstitution: "true" }))).toMatch(/Organisation records/);
+  });
+  it("notes, answers, AI text and reflections have no field to arrive by", () => {
+    const v = view({ [`record:study:${STUDY}`]: "true", notes: "MY NOTES", ai_text: "AI WROTE THIS", [`record:reflection:${STUDY}`]: "true", answer: "B" });
+    expect(JSON.stringify(v)).not.toMatch(/MY NOTES|AI WROTE THIS|reflection|"answer"/);
+    expect(v.records).toEqual([{ kind: "study", id: STUDY }]);
   });
 });

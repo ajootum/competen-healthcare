@@ -63,7 +63,9 @@ export async function mintShare(admin: any, userId: string, input: ReturnType<ty
   /** PASSPORT-01 (540): a purpose-specific view. The link is then a DRAFT (consent false) until activateShare. */
   view: PassportViewInput | null = null,
   /** PROF-EVALUATION-01 s13 (migration 530): the recorded evaluations the person ticked for this link, already checked. */
-  evaluationIds: readonly string[] = []): Promise<ShareLink | null> {
+  evaluationIds: readonly string[] = [],
+  /** PRODUCT-EXPERIENCE P4: where the link was made. A Scholar link (432/540 'scholar') carries only Scholar records. */
+  experience: "scholar" | "professional" = ORIGIN): Promise<ShareLink | null> {
   const token = randomBytes(24).toString("hex");
   const { data: share, error } = await admin.from("passport_share_tokens").insert({
     token, nurse_id: userId, hospital_id: null, scope: input.scope, label: input.label,
@@ -71,7 +73,7 @@ export async function mintShare(admin: any, userId: string, input: ReturnType<ty
   }).select("id, token, scope, label, expires_at, revoked, view_count, created_at").single();
   if (error || !share) return null;
   const { error: linkErr } = await admin.from("individual_professional_share").insert({
-    share_token_id: share.id, user_id: userId, experience_code: ORIGIN, ...(profile.overview ? { profile_overview: true } : {}),
+    share_token_id: share.id, user_id: userId, experience_code: experience, ...(profile.overview ? { profile_overview: true } : {}),
   });
   const { error: itemErr } = !linkErr && profile.itemIds.length
     ? await admin.from("individual_professional_share_item").insert(profile.itemIds.map(item_id => ({ share_token_id: share.id, user_id: userId, item_id })))
@@ -107,10 +109,11 @@ export async function mintShare(admin: any, userId: string, input: ReturnType<ty
   return { ...share, view_count: share.view_count ?? 0 };
 }
 
-/** The person's Professional links, newest first. Estate-minted links are not listed: they are not these. */
-export async function listShares(admin: any, userId: string): Promise<ShareLink[] | null> {
+/** The person's own links, newest first, or only those made in one experience. Estate-minted links are not listed. */
+export async function listShares(admin: any, userId: string, experience?: "scholar" | "professional"): Promise<ShareLink[] | null> {
   try {
-    const { data: rows, error } = await admin.from("individual_professional_share").select("share_token_id").eq("user_id", userId).limit(200);
+    const q = admin.from("individual_professional_share").select("share_token_id").eq("user_id", userId);
+    const { data: rows, error } = await (experience ? q.eq("experience_code", experience) : q).limit(200);
     if (error) return null;
     const ids = (rows ?? []).map((r: any) => r.share_token_id);
     if (!ids.length) return [];

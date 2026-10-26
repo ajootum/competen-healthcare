@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, forbidden, isEducator, assertFrameworkScope } from "@/lib/api-auth";
+import { HOLDINGS_ONLY, isHoldingsGoverned } from "@/lib/competency/framework-lifecycle";
 
 export async function PATCH(req: Request) {
   const c = await getCaller();
@@ -20,6 +21,11 @@ export async function PATCH(req: Request) {
     .single();
   if (!approval) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (approval.status !== "pending") return NextResponse.json({ error: "Already reviewed" }, { status: 400 });
+
+  // Migration 467: a centrally governed framework (shared, with a CFCA layer) is decided only in Holdings, by an
+  // independent hq.quality.competency.publish holder. This estate queue never approves it.
+  const { data: fw } = await admin.from("frameworks").select("hospital_id, competency_layer").eq("id", approval.framework_id).maybeSingle();
+  if (isHoldingsGoverned(fw)) return NextResponse.json({ error: HOLDINGS_ONLY }, { status: 409 });
 
   // Tenant scope: the framework under review must belong to the caller's
   // hospital (super_admin unrestricted). Blocks cross-tenant approvals.

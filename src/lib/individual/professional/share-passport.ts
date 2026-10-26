@@ -36,6 +36,18 @@ export function parsePassportView(b: Record<string, unknown>, policy: PassportPo
   } };
 }
 
+/** PRODUCT-EXPERIENCE P4 (owner Option A): a Scholar link carries ONLY formative Scholar records the learner put on
+ *  their Passport (375 study, 427 evaluations), explicitly ticked. Never a Professional record, never organisation records. */
+export const SCHOLAR_RECORD_KINDS: readonly PassportRecordRef["kind"][] = ["study", "scholar_evaluation"];
+
+/** Pure: why a parsed view cannot be a Scholar link, or null. */
+export function scholarViewRefusal(v: PassportViewInput): string | null {
+  if (!v.records.length) return "Choose at least one study achievement or evaluation to share.";
+  if (v.records.some(r => !SCHOLAR_RECORD_KINDS.includes(r.kind))) return "From Competen Scholar you can share only your study achievements and evaluations.";
+  if (v.includeInstitution) return "Organisation records are not shared from Competen Scholar.";
+  return null;
+}
+
 /** Before minting: every chosen record is the person's own and current. null = fine. */
 export async function checkPassportRecords(admin: any, userId: string, refs: readonly PassportRecordRef[], available: { study: readonly string[]; evaluations: readonly string[] }): Promise<string | null> {
   const ids = (k: PassportRecordRef["kind"]) => refs.filter(r => r.kind === k).map(r => r.id);

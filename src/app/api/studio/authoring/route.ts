@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { currentTraceId } from "@/lib/trace";
 import { estateRolesOf } from "@/lib/roles";
+import { HOLDINGS_ONLY, isHoldingsGoverned } from "@/lib/competency/framework-lifecycle";
 // ── Educator framework authoring ────────────────────────────────────────────
 // Widens framework / domain / competency authoring to the educator role, but
 // ONLY on frameworks that belong to the educator's own hospital. The shared
@@ -46,7 +47,7 @@ async function context(): Promise<Ctx | null> {
   };
 }
 
-type Framework = { id: string; name: string; scope: string | null; hospital_id: string | null; pub_status: string | null; version_num: number | null };
+type Framework = { id: string; name: string; scope: string | null; hospital_id: string | null; pub_status: string | null; version_num: number | null; competency_layer: string | null };
 type Guard = { ok: true; fw: Framework } | { ok: false; status: number; error: string };
 
 // A framework is author-editable by an educator iff it is NOT a master-library
@@ -54,7 +55,7 @@ type Guard = { ok: true; fw: Framework } | { ok: false; status: number; error: s
 async function guardFramework(c: Ctx, frameworkId: string): Promise<Guard> {
   if (!frameworkId) return { ok: false, status: 400, error: "framework_id required" };
   const { data: fw } = await c.admin
-    .from("frameworks").select("id, name, scope, hospital_id, pub_status, version_num")
+    .from("frameworks").select("id, name, scope, hospital_id, pub_status, version_num, competency_layer")
     .eq("id", frameworkId).single<Framework>();
   if (!fw) return { ok: false, status: 404, error: "Framework not found" };
   if (c.isSuper) return { ok: true, fw };
@@ -133,6 +134,8 @@ export async function POST(req: Request) {
       const step = String(body.step ?? "");
       const newStatus = LIFECYCLE[step];
       if (!newStatus) return bad("Invalid lifecycle step");
+      // Migration 467: a centrally governed framework (shared, CFCA layer) moves only through Holdings publication.
+      if (isHoldingsGoverned(g.fw)) return bad(HOLDINGS_ONLY, 409);
       const oldStatus = g.fw.pub_status ?? "draft";
       const { error } = await c.admin.from("frameworks").update({ pub_status: newStatus }).eq("id", g.fw.id);
       if (error) return bad(error.message, 500);
