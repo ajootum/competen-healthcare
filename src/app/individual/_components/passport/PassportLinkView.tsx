@@ -21,7 +21,7 @@ export default function PassportLinkView({ selection, order, name, detailed = tr
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-gray-900">{name ?? "Professional"}</h1>
+        <h1 className="text-xl font-bold text-gray-900">{name ?? "The Passport holder"}</h1>
         {m?.purposeLabel && <p className="text-[13px] text-gray-700">Shared for: <span className="font-semibold">{m.purposeLabel}</span>{m.recipientLabel ? ` · for ${m.recipientLabel}` : ""}</p>}
         {m?.summary && <p className="mt-2 whitespace-pre-wrap text-[13.5px] text-gray-800">{m.summary} <span className="text-[11px] text-gray-500">(in the professional&apos;s own words)</span></p>}
       </div>
