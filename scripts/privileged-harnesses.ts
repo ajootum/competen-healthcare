@@ -429,6 +429,18 @@ const STAGING: Listed[] = [
       + "own harness-upload-* identities.",
   },
   {
+    file: "scholar-exam-papers-harness.ts",
+    note: "COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570) over HTTP: a pasted-text practice paper prepared (the practice-paper "
+      + "attestation required, numbers, sections, options, marks and parts read as printed, a numbering gap flagged, "
+      + "idempotent); isolation (404 for another student's page, answer, follow-up, revision and delete); with AI "
+      + "consent, an attempt then a suggested answer citing the student's own notes and never the paper, exam context "
+      + "apart from current guidance, web research reported OFF; a follow-up; the answer as one flashcard; deleting the "
+      + "answer, then the paper, keeps the material and the card. Needs BASE_URL naming a STAGING-pointed dev server "
+      + "with the legal versions and an AI provider (group A PENDs without published consent documents), and 570 "
+      + "(PEND, nothing created, without it). Reads shared config only (never individual_app, the policy or flags). "
+      + "Creates and deletes its own harness-exam-* identities, their materials and papers.",
+  },
+  {
     file: "scholar-clinical01-harness.ts",
     note: "COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (Stage 5A) over HTTP, IND-004's steps of the owner's 19-step journey: a "
       + "private respiratory case written from the notes and checked (private formative, linear) -> CFCA links -> a "
