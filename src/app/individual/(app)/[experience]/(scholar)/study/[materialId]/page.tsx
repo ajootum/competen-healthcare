@@ -20,6 +20,8 @@ import { getExamPaper } from "@/lib/individual/scholar/exam-store";
 import { EXAM_ATTESTATION, LIVE_EXAM_NOTICE } from "@/lib/individual/scholar/exam-service";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { StudyAsPaper } from "../_components/paper-client";
+import { FoundInMaterial } from "../_components/classify-client";
+import { competenciesFound, topicsOf } from "@/lib/individual/scholar/classify-view";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -94,7 +96,13 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
   }
   const options: CompetencyOption[] = (learner.competencies ?? []).map(c => ({ id: c.id, title: c.title, code: c.code, layer: c.layer, outcomes: c.outcomes.slice(0, 6) }));
   // R1 (Stage 1 close-out, fixed in UPLOAD-01): no programme, or a programme with no usable catalogue, is SAID.
-  const absence = competencyAbsence(learner);
+  // P6: with no programme offered at all (production today) the student is not told to choose one.
+  const absence = competencyAbsence(learner, stampProgrammes.ok ? stampProgrammes.data.length : null);
+  // P6 Option A: what Classify found, summarised on the material itself (no separate Classify screen).
+  const chunkOrder = chunks.ok ? chunks.data.map(ch => ch.id) : [];
+  const foundTopics = mapped.ok ? topicsOf(mapped.data.concepts, chunkOrder).map(t => ({ name: t.name, sections: t.chunkIds.length, firstChunkId: t.chunkIds[0] })) : [];
+  const foundCompetencies = competenciesFound([...mappingsByChunk.entries()].flatMap(([chunkId, list]) => list.map(v => ({ ...v, chunkId }))))
+    .map(f => ({ ...f, sections: f.chunkIds.length, firstChunkId: f.chunkIds.sort((a, b) => chunkOrder.indexOf(a) - chunkOrder.indexOf(b))[0] }));
   const status = consent.ok ? consentStatus(consent.data, consentDocuments().published) : null;
   const consentOn = status === "on";
   const [paper, policy] = await Promise.all([getExamPaper(ctx.admin, ctx.userId, m.id), loadIndividualPolicy(ctx.admin)]);
@@ -163,6 +171,10 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
       </div>
       <div className="lg:order-1">
 
+      {competenciesOn && analysis.ok && (
+        <FoundInMaterial topics={foundTopics} competencies={foundCompetencies} analysed={analysis.data.analysed} sections={analysis.data.sections}
+          absence={absence} consent={consentOn} />
+      )}
       {competenciesOn && analysis.ok && (
         <AnalysePanel materialId={m.id} consent={consentOn} sections={analysis.data.sections} analysed={analysis.data.analysed}
           programmeLabel={learner.programme?.label ?? null} absence={absence} />

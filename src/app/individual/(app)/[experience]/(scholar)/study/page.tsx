@@ -9,6 +9,7 @@ import { uploadRules } from "@/lib/individual/scholar/config";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
 import { competencyLabels, loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { scholarSpace } from "@/lib/individual/scholar/spaces";
+import { noProgrammeText } from "@/lib/individual/scholar/classify-view";
 import { ProgrammeChooser } from "./_components/competency-client";
 import { CollectionsManager } from "./_components/library-client";
 import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
@@ -158,7 +159,13 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
       <Notice>Scholar can suggest concepts and competency links from your material when you analyse it with AI help on. Review them when useful; you can study without a programme.</Notice>
 
       <div className="grid gap-[22px] lg:grid-cols-[1.7fr_1fr]">
-        {programmeOn ? <ProgrammeChooser programmes={programmes.data} current={mine.data?.code ?? null} /> : (
+        {programmeOn && programmes.data.length === 0 && !mine.data ? (
+          // P6: no programme is offered at all (production today) -- said plainly, with nothing to choose.
+          <section aria-labelledby="programme-h" className={card}>
+            <h2 id="programme-h" className="text-[16px] font-bold text-gray-900">Your programme</h2>
+            <p className="mt-1.5 text-[15px] text-gray-600">{noProgrammeText(0)}</p>
+          </section>
+        ) : programmeOn ? <ProgrammeChooser programmes={programmes.data} current={mine.data?.code ?? null} /> : (
           <section aria-labelledby="programme-h" className={card}>
             <h2 id="programme-h" className="text-[16px] font-bold text-gray-900">Your programme</h2>
             {(!programmes.ok && !programmes.notProvisioned) || (!mine.ok && !mine.notProvisioned)
