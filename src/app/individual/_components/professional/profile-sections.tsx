@@ -45,6 +45,8 @@ export type SectionCtx = {
   /** Part B: each version's verification (451), and the kinds a person may submit. null: unreadable. */
   verifications: Record<string, ItemVerification> | null;
   verificationKinds: readonly ItemKind[];
+  /** The shared Profile & History page: where its forms post, and the experience a new record comes from. */
+  endpoint?: string; experience?: string;
 };
 
 /** Green only for a standing, in-date independent verification. Every other state is said in grey words. */
@@ -106,8 +108,8 @@ function Chain({ chain, kind, sc }: { chain: ItemChain; kind: ItemKind; sc: Sect
         {live && (
           <div className="flex flex-wrap items-center gap-2">
             <ChangeItem kind={kind} accent={sc.accent} typeOptions={sc.typeOptions[kind]} titleOptions={sc.titleOptions[kind]} orgSuggestions={sc.orgSuggestions[kind]}
-              allowDocument={sc.documentKinds.includes(kind)} existing={i} />
-            <WithdrawItem id={i.id} reasons={WITHDRAW_REASONS} />
+              allowDocument={sc.documentKinds.includes(kind)} existing={i} endpoint={sc.endpoint} experience={sc.experience} />
+            <WithdrawItem id={i.id} reasons={WITHDRAW_REASONS} endpoint={sc.endpoint} />
           </div>
         )}
       </div>
@@ -141,7 +143,8 @@ export function ItemBlock({ items, kind, sc, addLabel, emptyText, unreadable }: 
     <div>
       {live.length === 0 ? <Empty>{emptyText}</Empty> : <ul className="divide-y divide-gray-100">{live.map(c => <Chain key={c.current.id} chain={c} kind={kind} sc={sc} />)}</ul>}
       <AddPanel label={addLabel} accent={sc.accent} suggestOpen={false}>
-        <ItemForm kind={kind} accent={sc.accent} typeOptions={sc.typeOptions[kind]} titleOptions={sc.titleOptions[kind]} orgSuggestions={sc.orgSuggestions[kind]} allowDocument={sc.documentKinds.includes(kind)} />
+        <ItemForm kind={kind} accent={sc.accent} typeOptions={sc.typeOptions[kind]} titleOptions={sc.titleOptions[kind]} orgSuggestions={sc.orgSuggestions[kind]} allowDocument={sc.documentKinds.includes(kind)}
+          endpoint={sc.endpoint} experience={sc.experience} />
       </AddPanel>
       {withdrawn.length > 0 && (
         <details className="mt-3">

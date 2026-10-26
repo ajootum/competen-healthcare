@@ -115,7 +115,9 @@ export async function saveContext(admin: any, userId: string, policy: Profession
 }
 
 /** A new profile record, or a new version of one (supersedes_id). The 450 trigger closes the old version. */
-export async function addItem(admin: any, userId: string, input: ItemInput, doc: Record<string, unknown> | null): Promise<Write & { evidenceClass?: string }> {
+export async function addItem(admin: any, userId: string, input: ItemInput, doc: Record<string, unknown> | null,
+  /** Where the record was added (450 allows 'scholar' or 'professional'). The shared Profile & History page passes it. */
+  experience: "scholar" | "professional" = ORIGIN): Promise<Write & { evidenceClass?: string }> {
   if (input.supersedes_id) {
     const { data: before, error } = await admin.from("individual_professional_profile_item")
       .select("id, section, superseded_at, withdrawn_at").eq("id", input.supersedes_id).eq("user_id", userId).maybeSingle();
@@ -124,7 +126,7 @@ export async function addItem(admin: any, userId: string, input: ItemInput, doc:
     if (before.superseded_at || before.withdrawn_at) return { ok: false, status: 409, error: "That record has already been changed or withdrawn. Refresh to see the current version." };
   }
   const { data, error } = await admin.from("individual_professional_profile_item")
-    .insert({ ...input, ...(doc ?? {}), user_id: userId, experience_code: ORIGIN }).select("id, evidence_class").single();
+    .insert({ ...input, ...(doc ?? {}), user_id: userId, experience_code: experience }).select("id, evidence_class").single();
   if (error || !data) return isNotProvisioned(error) ? { ok: false, status: 409, error: "The professional profile is not set up on this environment yet." } : failed("record");
   return { ok: true, id: data.id, created: true, evidenceClass: data.evidence_class };
 }
