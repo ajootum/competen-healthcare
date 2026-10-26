@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import { CONTENT_STATUS_LABEL, listCatalogues, loadEntries, loadReference, type EntryView } from "@/lib/competency/catalogue-entries";
 import { AddEntries, EntryStatus, RequestReview } from "./_components/CatalogueControls";
+import { SubmitForPublication } from "../../competencies/publication/_components/PublicationControls";
 import { CLINICAL_STATE_LABEL, clinicalNote } from "@/lib/competency/clinical-review";
 
 // /super-admin/individual/catalogues -- P0 controlled competency catalogues (migration 394).
@@ -10,8 +11,8 @@ import { CLINICAL_STATE_LABEL, clinicalNote } from "@/lib/competency/clinical-re
 // practice and clinical practice unit (CKCM spine) -- and copies none. Each named competency carries a
 // content status: approved, draft or not clinically reviewed. Guarded by hq.individual.config.manage.
 //
-// ⚠ THIS PAGE DOES NOT PUBLISH. Publication is the governed framework lifecycle (submit for review, then an
-// independent approver). Once a catalogue leaves draft its entries are frozen (the 394 trigger), and it
+// ⚠ THIS PAGE DOES NOT PUBLISH. It puts a catalogue forward (migration 580), and an independent publisher decides it
+// on Competency Frameworks, Framework Publication. Once a catalogue leaves draft its entries are frozen (the 394 trigger), and it
 // reaches Scholar or Professional only after it is published AND named in that allowlist on the Individual
 // policy page. Existing frameworks are never offered by being referenced.
 
@@ -109,6 +110,16 @@ export default async function CataloguesPage({ searchParams }: { searchParams: P
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {current && current.layer && current.status === "draft" && (
+        <section aria-labelledby="pub-h" className="rounded-xl border border-gray-200 bg-white p-5">
+          <h2 id="pub-h" className="text-[16px] font-bold text-gray-900">Publication</h2>
+          <p className="mt-1 text-[13px] text-gray-700">
+            An independent publisher decides. Publishing does not offer the catalogue to anybody: it reaches Scholar or Professional only when it is also named in that allowlist.
+          </p>
+          <SubmitForPublication frameworkId={current.id} revision={false} />
         </section>
       )}
 

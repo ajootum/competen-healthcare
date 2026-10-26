@@ -49,7 +49,7 @@ export function sensitiveClassOf(code: string): HqSensitiveClass | null {
   return null;
 }
 
-/** Mirrors hq_capability_exclusions() as migration 511 last defined it: no single position may hold both live. */
+/** Mirrors hq_capability_exclusions() as migration 580 last defined it: no single position may hold both live. */
 export const HQ_CAPABILITY_EXCLUSIONS: readonly { a: string; b: string; reason: string }[] = [
   { a: "hq.quality.clinical.approve", b: "hq.quality.competency.author", reason: "a competency author cannot hold clinical approval" },
   { a: "hq.quality.clinical.approve", b: "hq.quality.case.author", reason: "a case author cannot hold clinical approval" },
@@ -66,6 +66,8 @@ export const HQ_CAPABILITY_EXCLUSIONS: readonly { a: string; b: string; reason: 
   { a: "hq.competency.verification.assess", b: "hq.quality.clinical.govern", reason: "a competency assessor cannot govern clinical reviewer scopes" },
   { a: "hq.competency.verification.assess", b: "hq.quality.competency.author", reason: "a competency assessor cannot author competency content" },
   { a: "hq.competency.verification.assess", b: "hq.competency.verification.manage", reason: "a competency assessor cannot set assessment criteria, scopes or assignments" },
+  // Migration 580 (owner CENTRAL GOVERNANCE): a competency author never publishes competency frameworks.
+  { a: "hq.quality.competency.author", b: "hq.quality.competency.publish", reason: "a competency author cannot publish competency frameworks" },
 ];
 
 /** The first live capability on the position that `code` may not sit beside, or null. */
