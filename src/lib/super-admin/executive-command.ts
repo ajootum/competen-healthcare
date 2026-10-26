@@ -3,8 +3,9 @@ import { estateRolesOf } from "@/lib/roles";
 // situation room. Aggregates a heartbeat, executive-attention items, per-platform
 // health, a decision queue, cross-platform intelligence, growth over a time
 // window and key metrics. Everything is live platform data; capabilities with no
-// backing (security events, AI serving, deploy pipeline, uptime) are surfaced as
-// honest "not monitored/provisioned" states rather than fabricated numbers.
+// backing (security events, deploy pipeline, uptime) are surfaced as honest
+// "not monitored/provisioned" states rather than fabricated numbers. AI serving is
+// read from plat_ai_requests, the AI client's per-call record.
 // Drift-risk / optional tables are probed fail-soft.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -50,17 +51,22 @@ export async function loadExecutiveCommand(admin: any, rangeDays: number) {
   const scores = (scoreRes.data ?? []) as any[];
 
   // Fail-soft signal tables.
-  const [escRes, apprRes, chgRes, cpuRes] = await Promise.all([
+  const [escRes, apprRes, chgRes, cpuRes, aiRes] = await Promise.all([
     admin.from("op_escalations").select("level, severity, status, created_at, resolved_at").neq("status", "resolved").limit(2000),
     admin.from("content_approvals").select("status").eq("status", "pending"),
     admin.from("change_requests").select("status, change_kind").eq("status", "open"),
     admin.from("clinical_practice_units").select("id, pub_status, created_at").limit(4000),
+    // Every model call through the AI client (src/lib/ai/client.ts) is recorded here by recordAiUsage.
+    admin.from("plat_ai_requests").select("status").gte("created_at", new Date(since).toISOString()).limit(50000),
   ]);
   const escalations = escRes.error ? [] : ((escRes.data ?? []) as any[]);
   const escReady = !escRes.error;
   const pendingContent = apprRes.error ? null : (apprRes.data ?? []).length;
   const changeReqs = chgRes.error ? null : (chgRes.data ?? []) as any[];
   const cpus = cpuRes.error ? null : ((cpuRes.data ?? []) as any[]);
+  const aiRequests = aiRes.error ? null : ((aiRes.data ?? []) as any[]);
+  // A failed or unconfigured call is an alert; a refusal is the policy working, not a fault.
+  const aiFailures = aiRequests ? aiRequests.filter(r => r.status === "error" || r.status === "not_configured").length : 0;
 
   const rolesOf = (p: any) => estateRolesOf(p);
   const orgStatus = (o: any) => o.status ?? (o.is_active === false ? "draft" : "active");
@@ -73,7 +79,7 @@ export async function loadExecutiveCommand(admin: any, rangeDays: number) {
   const pendingApprovals = (pendingContent ?? 0) + (openChange ?? 0);
   const govEscalations = changeReqs ? changeReqs.filter(x => x.change_kind === "major").length : null;
   const attention = [
-    { key: "incidents", label: "Critical Incidents", n: criticalIncidents, sub: "Require immediate action", tone: "red", href: "/super-admin/command-centre" },
+    { key: "incidents", label: "Critical Incidents", n: criticalIncidents, sub: "Require immediate action", tone: "red", href: "/super-admin/system/security#incidents" },
     { key: "approvals", label: "Pending Approvals", n: pendingApprovals, sub: "Awaiting your decision", tone: "amber", href: "/super-admin/workflows" },
     { key: "security", label: "Security Events", n: null, sub: "Not monitored", tone: "orange", href: "/super-admin/audit" },
     { key: "gov", label: "Governance Escalations", n: govEscalations, sub: "Escalated to executive", tone: "violet", href: "/super-admin/governance/committees" },
@@ -85,7 +91,7 @@ export async function loadExecutiveCommand(admin: any, rangeDays: number) {
     { name: "Enterprise Administration", desc: "Organisations, tenants & hierarchy", status: orgRes.error ? "degraded" : "healthy", alerts: 0, href: "/super-admin/enterprise" },
     { name: "Platform Operations", desc: "Infrastructure, deployments & services", status: "not_monitored", alerts: 0, href: "/platform/control-plane" },
     { name: "Clinical Knowledge Platform", desc: "Frameworks, CPUs & content lifecycle", status: fwRes.error ? "degraded" : "healthy", alerts: 0, href: "/super-admin/content" },
-    { name: "AI & Intelligence Platform", desc: "AI models, services & automation", status: "not_monitored", alerts: 0, href: "/super-admin/assistant" },
+    { name: "AI & Intelligence Platform", desc: "AI models, services & automation", status: aiRequests == null ? "not_monitored" : aiFailures > 0 ? "warning" : "healthy", alerts: aiFailures, href: "/super-admin/platform-ops/ai-gateway" },
     { name: "Governance & Compliance", desc: "Policies, risks, audits & compliance", status: govAlerts > 0 ? "warning" : "healthy", alerts: govAlerts, href: "/super-admin/workflows" },
     { name: "System & Security", desc: "Security, identity & system resilience", status: "not_monitored", alerts: 0, href: "/super-admin/settings" },
     { name: "Developer Center", desc: "APIs, integrations & sandbox", status: "not_monitored", alerts: 0, href: "/super-admin/enterprise" },
@@ -153,7 +159,7 @@ export async function loadExecutiveCommand(admin: any, rangeDays: number) {
   const metrics = [
     { label: "Competency Completion", value: passRate != null ? `${passRate}%` : "—", real: passRate != null },
     { label: "Assessment Volume", value: asmWin.toLocaleString(), real: true },
-    { label: "AI Requests Processed", value: "—", real: false },
+    { label: "AI Requests Processed", value: aiRequests ? aiRequests.length.toLocaleString() : "—", real: aiRequests != null },
     { label: "Platform Uptime", value: "—", real: false },
     { label: "Deployment Success", value: "—", real: false },
     { label: "Incident Resolution", value: mttrHours != null ? `${mttrHours}h` : "—", real: mttrHours != null },
