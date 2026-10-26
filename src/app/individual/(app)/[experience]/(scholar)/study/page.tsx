@@ -15,7 +15,7 @@ import { CollectionsManager } from "./_components/library-client";
 import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
 import { DialogButton } from "../../../../_components/Dialog";
 import StudyNav from "./_components/StudyNav";
-import { EraseAll, ExplainPanel, UploadPanel } from "./_components/client";
+import { ExplainPanel, UploadPanel } from "./_components/client";
 import { aiOffMessage } from "@/lib/individual/scholar/consent-gate";
 import { headerBtn, linkBtn, readAiHelp } from "./_components/shell-pieces";
 import { LibraryBrowser, type LibraryGroup } from "./_components/library-list";
@@ -196,8 +196,8 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
         </div>
       )}
 
-      {materials.ok && (
-        <div className="mt-8"><EraseAll count={materials.data.length} /></div>
+      {materials.ok && materials.data.length > 0 && (
+        <p className="mt-8 text-[13px] text-gray-600">To erase all your study material, go to <Link href={`${experienceHref("scholar", "settings")}#privacy`} className="font-semibold underline underline-offset-2" style={{ color: x.accent }}>Settings, Privacy &amp; AI</Link>.</p>
       )}
       <p className="mt-6 text-[13px] text-gray-600">
         Your learning sessions are in <Link href={experienceHref("scholar", "study/learn")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Learn</Link>, and everything your study has kept is in <Link href={experienceHref("scholar", "study/saved")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Saved learning</Link>.

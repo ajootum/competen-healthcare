@@ -2,6 +2,8 @@
 import { individualAppEnabled } from "./gate";
 import { individualIdentityProfile } from "../platform-membership";
 import { selfActivateScholar } from "./grants";
+// PRODUCT-EXPERIENCE P5 (prepared, OFF): the self-service Professional addition, gated in professional-add.ts.
+export { addProfessionalFromScholar, type AddOutcome } from "./grants";
 import { setLearnerContext, type ContextChoice } from "./scholar/context";
 
 // ── JOINING COMPETEN SCHOLAR ── COMPETEN-SCHOLAR-JOIN-01 Stage 1, J1-J3 ──────────────────────────────────────

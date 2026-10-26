@@ -24,7 +24,9 @@ export async function ExamPapersSection({ admin, userId, variant }: { admin: unk
     return (
       <section aria-labelledby="papers-h" className={`${card} mb-6`}>
         <h2 id="papers-h" className="text-[16px] font-bold text-gray-900">Past and practice papers</h2>
-        <p className="mt-1 text-[14px] text-gray-600">Attempt each question, then reveal a suggested answer with its evidence. To add a paper, upload it to your library and choose “Study as an examination paper” on its page.</p>
+        <p className="mt-1 text-[14px] text-gray-600">Attempt each question, then reveal a suggested answer with its evidence. After uploading a paper, choose “Study as an examination paper” on its page.</p>
+        {/* HFE-01 Wave 5 (F12): the way in, where people look for it -- the Library upload dialog (#upload). */}
+        <Link href={`${experienceHref("scholar", "study")}#upload`} className={`mt-3 inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Add a paper</Link>
         {papers.data.length === 0 ? <p className="mt-3 text-[14px] text-gray-600">No papers yet.</p> : (
           <ul className="mt-3 divide-y divide-gray-200">
             {papers.data.map(p => {

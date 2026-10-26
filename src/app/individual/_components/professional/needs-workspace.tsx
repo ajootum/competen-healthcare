@@ -85,6 +85,8 @@ export function NeedFields({ policy, n, idPrefix }: { policy: ProfessionalNeedsP
 
 export function NeedsOverview({ needs, view, today, policy, accent }: { needs: StageTwoNeed[]; view: View; today: string; policy: ProfessionalNeedsPolicy; accent: string }) {
   const count = (v: View) => needs.filter(n => inView(n, v, today, policy.reviewDays)).length;
+  // HFE-01 Wave 4 (F10): filters appear once there is something to filter.
+  if (needs.length === 0) return null;
   return (
     <nav aria-label="Filter development needs" className="mb-3 flex flex-wrap gap-2">
       {VIEWS.map(([v, label]) => (

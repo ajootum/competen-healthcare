@@ -49,3 +49,12 @@ describe("AddPanel", () => {
     expect(details().open).toBe(false);
   });
 });
+
+describe("AddPanel Cancel (HFE-01 Wave 5, F19)", () => {
+  it("closes the panel without saving", () => {
+    render(panel(true));
+    expect(details().open).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(details().open).toBe(false);
+  });
+});

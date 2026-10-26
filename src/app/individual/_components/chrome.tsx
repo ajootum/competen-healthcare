@@ -106,6 +106,39 @@ export function PageHeader({ eyebrow, title, intro, accent }: { eyebrow?: string
   );
 }
 
+/**
+ * HFE-01 Wave 4 (F11): the formative / private / not-verified boundary, said once per screen in one compact line,
+ * with the screen's own detail one tap away. The boundary itself is unchanged; it just stops being repeated in
+ * full on every tab, where it stopped being read.
+ */
+export function BoundaryNotice({ notice, detail }: { notice: string; detail?: React.ReactNode }) {
+  return (
+    <div className="mb-5 rounded-[9px] bg-[#edf3f6] px-[17px] py-[11px] text-[13px] leading-relaxed text-[#4f6475]">
+      <p className="font-semibold">{notice}</p>
+      {detail && (
+        <details className="mt-1">
+          <summary className="cursor-pointer text-[12.5px] font-semibold underline underline-offset-2">What this means here</summary>
+          <p className="mt-1">{detail}</p>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/**
+ * HFE-01 Wave 4 (F10): one empty state -- one message and one primary action -- instead of walls of zeros,
+ * empty filters and disabled rows before there is anything to show.
+ */
+export function EmptyState({ title, children, action }: { title: string; children?: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <section className="mb-5 rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center">
+      <h2 className="text-[18px] font-bold tracking-tight text-gray-900">{title}</h2>
+      {children && <div className="mx-auto mt-1.5 max-w-md text-[14.5px] leading-relaxed text-gray-600">{children}</div>}
+      {action && <div className="mt-4 flex justify-center">{action}</div>}
+    </section>
+  );
+}
+
 /** A quiet statement of what a surface is and is not (Scholar HFE: formative, private, not verified). */
 export function Notice({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <p className={`mb-5 rounded-[9px] bg-[#edf3f6] px-[17px] py-[13px] text-[13px] leading-relaxed text-[#4f6475] ${className}`}>{children}</p>;

@@ -93,7 +93,8 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
       {!record.provisioned && <NotProvisioned />}
 
       <nav aria-label="On this page" className="mb-5 flex flex-wrap gap-x-4 gap-y-1 text-[13px] font-semibold">
-        {[["#continue-h", "Continue learning"], ["#record-h", "Record CPD"], ["#log-h", "CPD log"], ["#req-h", "CPD requirements"], ["#history-h", "Learning history"]].map(([h, l]) => (
+        {/* HFE-01 Wave 5 (F7): each jump link only when its section renders (Continue learning needs Competen Learning). */}
+        {[...(learning.enabled ? [["#continue-h", "Continue learning"]] : []), ["#record-h", "Record CPD"], ["#log-h", "CPD log"], ["#req-h", "CPD requirements"], ["#history-h", "Learning history"]].map(([h, l]) => (
           <a key={h} href={h} className={`underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>{l}</a>
         ))}
         {learning.enabled && <Link href="/individual/learning" className={`underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Explore courses</Link>}

@@ -118,7 +118,7 @@ export const SCHOLAR: Experience = {
   eyebrow: "Your AI-powered healthcare learning companion",
   headline: ["Study smarter.", "Think clinically.", "Grow confidently."],
   body:
-    "Turn your notes into explanations, questions, clinical cases and audio learning. " +
+    "Turn your notes into explanations, practice questions and clinical reasoning cases. " +
     "Designed for healthcare students and the journey ahead of them.",
   signatureTitle: "Your notes become active learning.",
   image: "/images/home/path-students.webp",
@@ -138,8 +138,8 @@ export const SCHOLAR: Experience = {
     },
     {
       id: "understand", label: "Understand", title: "Explanations grounded in your sources",
-      body: "Ask about anything you have uploaded and get an explanation that cites the page it came from. Listen to it as audio on the move.",
-      points: ["Answers cite your notes", "Audio explanations"],
+      body: "Ask about anything you have uploaded and get an explanation that cites the page it came from, then ask a follow-up.",
+      points: ["Answers cite your notes", "Follow-up questions"],
       mock: { heading: "Explain", lines: [
         { text: "Why does left-sided heart failure cause breathlessness?" },
         { text: "Pressure backs up into the lungs' circulation, so fluid collects there.", tag: "Your notes · p. 7" },
@@ -165,10 +165,10 @@ export const SCHOLAR: Experience = {
     },
     {
       id: "progress", label: "Progress", title: "See your progress build",
-      body: "Track what you have mastered and what to revisit, topic by topic, across your whole course.",
+      body: "See what you have practised and remembered, and what to revisit, topic by topic, across your whole course.",
       points: ["Topic-by-topic progress", "A record that stays with you"],
       mock: { heading: "Progress", lines: [
-        { text: "Cardiovascular", tag: "Strong" },
+        { text: "Cardiovascular", tag: "Practised" },
         { text: "Respiratory", tag: "Revisit" },
       ] },
     },
@@ -199,8 +199,8 @@ export const PROFESSIONAL: Experience = {
   eyebrow: "Your personal professional operating system",
   headline: ["Your career deserves", "more than a CPD tracker."],
   body:
-    "Build your competencies, maintain your credentials, plan your development and discover " +
-    "opportunities throughout your professional life.",
+    "Build your competencies, maintain your credentials, plan your development and " +
+    "keep your record with you throughout your professional life.",
   signatureTitle: "A professional home that grows with you.",
   image: "/images/home/path-professionals.webp",
   imageAlt: "A smiling doctor in a white coat with a stethoscope",
@@ -228,10 +228,10 @@ export const PROFESSIONAL: Experience = {
     },
     {
       id: "evidence", label: "Competency Evidence", title: "Keep your competency evidence",
-      body: "Hold your competencies with the source of every piece of evidence shown: your own record, an attached certificate or an employer sign-off.",
+      body: "Hold your competencies with the source of every piece of evidence shown: your own record, an attached document, or an independent assessor’s outcome where one exists.",
       points: ["Every item labelled by source", "Assessment evidence that stays with you"],
       mock: { heading: "Competencies", lines: [
-        { text: "Central venous catheter care", tag: "Employer sign-off" },
+        { text: "Central venous catheter care", tag: "Self-assessed" },
         { text: "Medication safety", tag: "Certificate attached" },
       ] },
     },
@@ -245,12 +245,12 @@ export const PROFESSIONAL: Experience = {
       ] },
     },
     {
-      id: "career", label: "Career", title: "Plan your next step",
-      body: "Plan your next role, speciality or leadership pathway, and see the evidence you already hold for it.",
-      points: ["Career pathways", "Opportunities that fit your evidence"],
+      id: "career", label: "Career", title: "Build your CV from your record",
+      body: "Make a CV, resume or portfolio from the records you choose, each one keeping what its source says about it.",
+      points: ["CV, resume and portfolio templates", "You choose every record"],
       mock: { heading: "Career", lines: [
-        { text: "Next role: critical care nurse" },
-        { text: "Evidence for this role", tag: "Review gaps" },
+        { text: "Professional CV", tag: "Draft" },
+        { text: "Preview before you export" },
       ] },
     },
   ],
@@ -312,7 +312,7 @@ export const LIFECYCLE = {
   ],
   promises: [
     { title: "No account migration", body: "The account you studied with is the account you practise with." },
-    { title: "Activate when ready", body: "A guided activation adds Professional whenever you choose. Graduation is a good moment, not a condition." },
+    { title: "Activate when ready", body: "Professional is added to the same account when you are ready. Graduation is a good moment, not a condition." },
     { title: "Use both", body: "Keep Scholar for further study while Professional supports your practice." },
   ],
 };
@@ -325,8 +325,8 @@ export const PASSPORT = {
   title: "One identity. One lifelong Competen Passport.",
   points: [
     { title: "One identity", body: "One Competen account from your first lecture onwards." },
-    { title: "Your personal AI", body: "A learning companion that knows your history." },
+    { title: "Your personal AI", body: "Uses what is on your Competen record when you ask. Your questions are not kept." },
     { title: "Your learning history", body: "Everything you studied and achieved, kept together." },
-    { title: "Your Competen Passport", body: "Verified evidence of what you know and can do." },
+    { title: "Your Competen Passport", body: "What you know and can do, each record labelled self-declared, document-supported or verified." },
   ],
 };

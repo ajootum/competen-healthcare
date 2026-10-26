@@ -94,8 +94,8 @@ export default async function ScholarHome({ ctx, other }: { ctx: IndividualConte
           <p className="mt-1.5 text-[15px] text-gray-600">Move freely between learning, revision and cases. Suggestions help you choose; they never lock your next step.</p>
           <JourneyButton label="See the eight-stage journey" />
           <hr className="my-[18px] border-0 border-t border-gray-200" />
-          <p className="text-[12px] text-gray-600">Join · Onboarding</p>
-          <p className="mt-1 text-[15px] text-gray-600">Your shared Individual identity is ready.</p>
+          <p className="text-[12px] text-gray-600">Your profile</p>
+          <p className="mt-1 text-[15px] text-gray-600">One profile and Passport, shared by every experience on your account.</p>
           <Link href={experienceHref("scholar", "profile")} className={linkBtn} style={{ color: x.accent }}>Review your profile</Link>
         </section>
       </div>
