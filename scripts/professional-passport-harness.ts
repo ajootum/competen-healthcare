@@ -139,6 +139,30 @@ const checkEvaluations = (src: Sources): R => {
   return { ok: inside && notAfter && formative, detail: `saved inside mintShare under its withdrawal ${inside}, checked before and never saved after by the route ${notAfter}, shown as formative from Stage 6's read ${formative}` };
 };
 
+// ── SC (PRODUCT-EXPERIENCE P4, owner Option A): SHARING FROM SCHOLAR ──
+// A Scholar link is the same Passport link, made in Scholar: only formative Scholar records already on the person's
+// Passport, ticked one by one, as a draft; only their own Scholar links are activated or withdrawn; nothing reads a
+// note, a question, an answer, AI output or a reflection on the way.
+const SC_ROUTE = "src/app/api/individual/scholar/passport-share/route.ts";
+const SC_PAGES = ["src/app/individual/(app)/[experience]/passport/share/page.tsx", "src/app/individual/(app)/[experience]/passport/share/preview/page.tsx"];
+const checkScholarShare = (src: Sources): R => {
+  const r = src.get(SC_ROUTE) ?? "", form = src.get(FORM) ?? "";
+  const post = r.slice(r.indexOf("export async function POST"), r.indexOf("export async function PATCH"));
+  const patch = r.slice(r.indexOf("export async function PATCH"));
+  const guarded = [post, patch].every(h => /^export async function (POST|PATCH)\(req: Request\) \{\n\s*const ctx = await requireIndividualContext\("scholar"\);\n\s*if \(isGuardRefusal\(ctx\)\) return ctx;/.test(h));
+  const onlyScholar = /export const SCHOLAR_RECORD_KINDS: readonly PassportRecordRef\["kind"\]\[\] = \["study", "scholar_evaluation"\];/.test(form)
+    && /if \(!v\.records\.length\) return/.test(form) && /if \(v\.records\.some\(r => !SCHOLAR_RECORD_KINDS\.includes\(r\.kind\)\)\) return/.test(form) && /if \(v\.includeInstitution\) return/.test(form)
+    && post.indexOf("scholarViewRefusal(") > -1 && post.indexOf("scholarViewRefusal(") < post.indexOf("mintShare(");
+  const onPassport = /const recErr = await checkPassportRecords\(ctx\.admin, ctx\.userId, view\.value\.records, \{/.test(post) && post.indexOf("checkPassportRecords(") < post.indexOf("mintShare(");
+  const minted = /mintShare\(ctx\.admin, ctx\.userId, input, \{ overview: false, itemIds: \[\] \}, \[\], \[\], view\.value, \[\], "scholar"\)/.test(post);
+  const ownLinks = /const mine = await listShares\(ctx\.admin, ctx\.userId, "scholar"\);/.test(patch) && /if \(!mine\.some\(l => l\.id === id\)\) return refuse/.test(patch)
+    && patch.indexOf("mine.some(") < patch.indexOf("activateShare(") && patch.indexOf("mine.some(") < patch.indexOf("revokeShare(");
+  const blind = [r, ...SC_PAGES.map(f => src.get(f) ?? "")].every(s => s.length > 100
+    && !/individual_scholar_(chunk|question|attempt|material|note|chat|explain)|individual_[a-z_]*reflection|\.reflection\b|ai_text|askProfessionalAssistant|DraftSummary|\.from\(/.test(s));
+  return { ok: guarded && onlyScholar && onPassport && minted && ownLinks && blind,
+    detail: `Scholar-guarded ${guarded}, formative Scholar kinds only ${onlyScholar}, only records on the Passport ${onPassport}, minted as a Scholar draft ${minted}, own Scholar links only ${ownLinks}, reads no note, question, answer, AI or reflection ${blind}` };
+};
+
 const checkPrivacy = (src: Sources): R => {
   const form = src.get(FORM) ?? "";
   const kinds = /const RECORD_KINDS: readonly PassportRecordRef\["kind"\]\[\] = \["cpd", "evidence", "study", "scholar_evaluation"\];/.test(form);
@@ -165,6 +189,7 @@ function main() {
   run("D1. a view is minted closed and opens only by activation; /verify finds a link by token alone, serves no document and logs only its answer", checkDraftsAndDisclosure(ALL));
   run("T1. only a verifier's state, a current C5 outcome or a staff-verified credential is independently verified; trust words are not configurable", checkTrust(ALL));
   run("E1. Stage 6 evaluations are saved inside mintShare under its withdrawal, never after it by the route, and shown as formative", checkEvaluations(ALL));
+  run("SC1. sharing from Scholar: Scholar-guarded, formative Scholar records on the Passport only, a Scholar draft, own links only, no notes, answers, AI or reflections", checkScholarShare(ALL));
   run("P1. reflections, plans and AI conversations have no path onto a view; Passport AI is gated and saves and shares nothing", checkPrivacy(ALL));
   run("H1. no profession or country hard-coded in the Stage 7 code", checkNoHardcoding(ALL));
 
@@ -192,6 +217,12 @@ function main() {
   red("E1 on a static import that closes the policy cycle", checkEvaluations(plant(SHARE, 'import { ORIGIN } from "./vocabulary";', 'import { ORIGIN } from "./vocabulary";\nimport { saveShareEvaluations } from "./share-evaluation";')));
   red("E1 on a link kept when its evaluations failed", checkEvaluations(plant(SHARE, "|| viewErr || recErr || !evalOk) {", "|| viewErr || recErr) {")));
   red("E1 on an evaluation shown as assessed", checkEvaluations(plant(VIEW, 'authority: null, trust: "educational", validity: "not_applicable",\n    meaning: ev.notices[0]', 'authority: null, trust: "assessed", validity: "not_applicable",\n    meaning: ev.notices[0]')));
+  red("SC1 on a Scholar link carrying CPD", checkScholarShare(plant(FORM, 'SCHOLAR_RECORD_KINDS: readonly PassportRecordRef["kind"][] = ["study", "scholar_evaluation"]', 'SCHOLAR_RECORD_KINDS: readonly PassportRecordRef["kind"][] = ["study", "scholar_evaluation", "cpd"]')));
+  red("SC1 on organisation records from Scholar", checkScholarShare(plant(FORM, "if (v.includeInstitution) return", "if (false) return")));
+  red("SC1 on a record not on the Passport", checkScholarShare(plant(SC_ROUTE, "const recErr = await checkPassportRecords(ctx.admin, ctx.userId, view.value.records, {", "const recErr = null && await checkPassportRecords(ctx.admin, ctx.userId, view.value.records, {")));
+  red("SC1 on someone else's link activated", checkScholarShare(plant(SC_ROUTE, "if (!mine.some(l => l.id === id)) return refuse", "if (false) return refuse")));
+  red("SC1 on the share page reading the learner's notes", checkScholarShare(add(SC_PAGES[0], 'await ctx.admin.from("individual_scholar_chunk").select("content");')));
+  red("SC1 on an unguarded Scholar route", checkScholarShare(plant(SC_ROUTE, 'const ctx = await requireIndividualContext("scholar");\n  if (isGuardRefusal(ctx)) return ctx;\n  const { fields } = await readBody(req);', 'const ctx = await requireIndividualContext();\n  if (isGuardRefusal(ctx)) return ctx;\n  const { fields } = await readBody(req);')));
   red("P1 on a reflection path onto a view", checkPrivacy(add(VIEW, `admin.from("individual_professional_reflection").select("body");`)));
   red("P1 on Passport AI that shares", checkPrivacy(add(AI, "await activateShare(ctx.admin, ctx.userId, id);")));
   red("H1 on a hard-coded country", checkNoHardcoding(add(VOCAB, `export const COUNTRY = "Uganda";`)));

@@ -332,6 +332,13 @@ const STAGING: Listed[] = [
       + "Items 6 and 7 bounded (530, 510/511 not on main). Own harness-prof07-* identity and Scholar material, deleted after; one policy row restored.",
   },
   {
+    file: "scholar-passport-share-acceptance-harness.ts",
+    note: "PRODUCT-EXPERIENCE P4 (owner Option A): a Scholar-only learner shares formative records over HTTP: a draft of exactly the study achievement ticked, "
+      + "closed until activated; Professional, off-Passport and organisation records refused; own Scholar links only; the recipient sees it labelled "
+      + "formative and nothing else (no notes, question, answer or AI text); withdrawal closes it; the access log records each. BASE_URL + terms versions. "
+      + "Own harness-scholarshare identity, deleted after.",
+  },
+  {
     file: "professional-competency-acceptance-harness.ts",
     note: "COMPETEN-PROFESSIONAL-COMPETENCY-01 Stage 5 (520), owner GO s15 items 1-16: My Competencies, a published competency explored with its "
       + "outcomes and expected proficiency, a self-assessment (self-reported) with confidence and a private reflection, CPD and an observation "
