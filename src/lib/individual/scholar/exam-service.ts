@@ -3,7 +3,7 @@ import type { IndividualContext } from "../guard";
 import { loadIndividualPolicy, type ExamEvidenceSource, type ExamResearchDepth, type IndividualPolicy } from "../policy";
 import { BUCKET, PDF_MIME } from "./config";
 import { findPatientIdentifiers } from "./extract";
-import { getMaterial, getPassage, insertRevisionQuestions, listChunks, materialExtras, searchCandidates, toPassages } from "./store";
+import { getMaterial, getPassage, insertRevisionQuestions, listChunks, materialExtras, materialOriginal, searchCandidates, toPassages } from "./store";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "./retrieval";
 import { governedReferences, referenceSource } from "./learn";
 import { loadLearnerCatalogue } from "./competency-view";
@@ -53,9 +53,9 @@ const NOT_SET_UP = json(503, { error: "Studying examination papers is not set up
 export async function examPolicy(admin: any): Promise<IndividualPolicy> { return loadIndividualPolicy(admin); }
 
 async function pdfBase64(admin: any, userId: string, materialId: string): Promise<string | null> {
-  const { data } = await admin.from("individual_scholar_material").select("storage_path").eq("user_id", userId).eq("id", materialId).maybeSingle();
-  if (!data?.storage_path) return null;
-  const { data: blob, error } = await admin.storage.from(BUCKET).download(data.storage_path);
+  const original = await materialOriginal(admin, userId, materialId);
+  if (!original?.path) return null;
+  const { data: blob, error } = await admin.storage.from(BUCKET).download(original.path);
   if (error || !blob) return null;
   return Buffer.from(await blob.arrayBuffer()).toString("base64");
 }
@@ -106,8 +106,7 @@ export async function preparePaper(ctx: IndividualContext, req: Request, materia
   let lines = linesFromChunks(chunks.data.map(c => ({ id: c.id, content: c.content, pageFrom: c.pageFrom })));
   let transcribed: number[] = [];
   // A material whose own extractor was AI transcription (a fully scanned paper, at upload) is transcribed throughout.
-  const { data: ext } = await ctx.admin.from("individual_scholar_material").select("extractor").eq("user_id", ctx.userId).eq("id", materialId).maybeSingle();
-  if (String((ext as any)?.extractor ?? "").startsWith("ai-transcription")) transcribed = [...new Set(chunks.data.map(c => c.pageFrom).filter((p): p is number => p !== null))];
+  if ((await materialOriginal(ctx.admin, ctx.userId, materialId))?.extractor.startsWith("ai-transcription")) transcribed = [...new Set(chunks.data.map(c => c.pageFrom).filter((p): p is number => p !== null))];
 
   if (opts.transcribe && empty.length && material.data.mimeType === PDF_MIME && policy.scholarExams.scannedPages === "ai_transcription") {
     const pre = await aiPreflight(ctx);

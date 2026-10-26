@@ -185,7 +185,7 @@ export function SourceNotice({ compact = false }: { compact?: boolean }) {
 // ── UPLOAD ─────────────────────────────────────────────────────────────────────────────────────────
 
 /** What may be uploaded now (config.ts uploadRules, from the Individual policy). Serialisable, from the server page. */
-export type UploadRulesView = { mimes: string[]; maxMb: number; text: boolean; describe: string; sessionFiles: number; sessionMb: number };
+export type UploadRulesView = { mimes: string[]; maxMb: number; text: boolean; describe: string; sessionFiles: number; sessionMb: number; exam?: ExamUploadView };
 /** COMPETEN-SCHOLAR-EXAM-PAPERS-01: offered only where policy offers papers. `attestation`: the practice-paper statement. */
 export type ExamUploadView = { attestation: string; liveNotice: string } | null;
 
@@ -207,8 +207,9 @@ type FileOutcome = { name: string; state: "waiting" | "uploading" | "reading" | 
  * object in the person's private folder, the bytes checked and read on Competen's servers, the patient-identifier
  * screen before anything is kept, and no AI until the person has turned AI help on.
  */
-export function UploadPanel({ rules, exam = null }: { rules: UploadRulesView; exam?: ExamUploadView }) {
+export function UploadPanel({ rules }: { rules: UploadRulesView }) {
   const router = useRouter();
+  const exam = rules.exam ?? null;
   const [examPaper, setExamPaper] = useState(false);
   const [examAttested, setExamAttested] = useState(false);
   const [mode, setMode] = useState<"file" | "paste">("file");

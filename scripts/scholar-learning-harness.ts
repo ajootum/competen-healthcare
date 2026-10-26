@@ -94,6 +94,12 @@ const PAGE_FILES = FILES.filter(f => f.startsWith(PAGES) && f.endsWith("page.tsx
  * frameworks a programme uses, for everyone -- so they are exempt here, and configOnlyRead holds them to reads.
  */
 const CONFIG_TABLES = new Set(["individual_scholar_programme", "individual_scholar_programme_framework"]);
+/**
+ * COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570): tables that hold NO person's data and so carry no user_id -- the public web
+ * research cache (sources only: address, title, publisher, dates, a short excerpt, keyed by a hash). Exempt from A1's
+ * own-user-id rule because there is no owner to key on, and only this table: anything a student wrote stays keyed.
+ */
+const PUBLIC_TABLES = new Set(["individual_scholar_research_cache"]);
 function storeStatements(src: Src): { table: string; at: number; stmt: string }[] {
   const s = src.get(STORE) ?? "";
   const out: { table: string; at: number; stmt: string }[] = [];
@@ -107,7 +113,7 @@ function storeStatements(src: Src): { table: string; at: number; stmt: string }[
   return out;
 }
 function unkeyedStatements(src: Src): string[] {
-  return storeStatements(src).filter(x => !CONFIG_TABLES.has(x.table))
+  return storeStatements(src).filter(x => !CONFIG_TABLES.has(x.table) && !PUBLIC_TABLES.has(x.table))
     .filter(x => !/\.eq\("user_id", userId\)/.test(x.stmt) && !/user_id: userId/.test(x.stmt)).map(x => `${x.table}@${x.at}`);
 }
 /** K1: the configuration tables are only ever read by Scholar code, and only active programmes are offered. */

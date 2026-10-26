@@ -109,8 +109,8 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
   const upload = (
     <DialogButton title="Upload study material" hash="upload" label="+ Upload material"
       className={`${headerBtn} border-transparent text-white hover:opacity-90`} style={{ background: x.accent }}>
-      <UploadPanel rules={{ mimes: [...rules.mimes], maxMb: rules.maxMb, text: rules.text, describe: rules.describe, sessionFiles: rules.sessionFiles, sessionMb: rules.sessionMb }}
-        exam={policy.scholarExams.enabled && papers.ok ? { attestation: EXAM_ATTESTATION.text, liveNotice: LIVE_EXAM_NOTICE } : null} />
+      <UploadPanel rules={{ mimes: [...rules.mimes], maxMb: rules.maxMb, text: rules.text, describe: rules.describe, sessionFiles: rules.sessionFiles, sessionMb: rules.sessionMb,
+        exam: policy.scholarExams.enabled && papers.ok ? { attestation: EXAM_ATTESTATION.text, liveNotice: LIVE_EXAM_NOTICE } : null }} />
     </DialogButton>
   );
   const suggestions = (
