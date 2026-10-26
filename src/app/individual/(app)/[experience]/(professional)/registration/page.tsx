@@ -35,7 +35,7 @@ export const dynamic = "force-dynamic";
 // and nothing that needs 450. The primary registration form stays the same either way, so 373/374's renewal
 // reminders keep working on it.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Professional profile" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "My practice" }); }
 
 export default async function RegistrationPage({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "registration");
@@ -196,7 +196,7 @@ export default async function RegistrationPage({ params }: { params: Promise<{ e
 
   return (
     <>
-      <PageHeader accent={x.accent} eyebrow="Your professional record" title="Professional profile"
+      <PageHeader accent={x.accent} eyebrow="Your professional record" title="My practice"
         intro="Your professional identity, built up over time and in your own words. It stays with you between organisations, keeps every earlier version, and no employer can see it unless you share your Passport." />
       <nav aria-label="Profile sections" className="mb-5 flex flex-wrap gap-2">
         {pp.sections.map(s => <a key={s} href={`#sec-${{ overview: "overview", qualifications: "qual", registrations: "reg", employment: "emp", specialties: "spec", aspirations: "asp" }[s]}`}

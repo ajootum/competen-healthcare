@@ -154,7 +154,7 @@ export const PROFESSIONAL: ExperienceConfig = {
   // COMPETEN-IND-007. Pages under (app)/[experience]/(professional)/<segment>, each via experienceModulePage.
   modules: [
     // COMPETEN-PROFESSIONAL-PROFILE-01: the MVP's "Profession & registration", grown into the six-section profile.
-    { key: "registration", segment: "registration", label: "Professional profile", short: "Profile", icon: "◈",
+    { key: "registration", segment: "registration", label: "My practice", short: "Practice", icon: "◈",
       summary: "Your professional identity: qualifications, registrations, roles, specialties and aspirations, with every earlier version kept." },
     { key: "development", segment: "development", label: "Needs & plan", short: "Plan", icon: "◎", bottom: true,
       summary: "Your development needs and the learning goals you set against them." },
@@ -177,12 +177,12 @@ export const PROFESSIONAL: ExperienceConfig = {
     {
       key: "career", label: "Career & Opportunities",
       summary: "Plan your next role, speciality or leadership pathway.",
-      reason: "You can record career aspirations in your Professional profile. Pathway planning and opportunities are not built yet.",
+      reason: "You can record career aspirations in My practice. Pathway planning and opportunities are not built yet.",
     },
     {
       key: "verification", label: "Automatic register checks",
       summary: "Have a registration confirmed directly against a regulator's register, without waiting for a person.",
-      reason: "No regulator lookup is connected. You can already ask a Competen verifier to check a record in your Professional profile.",
+      reason: "No regulator lookup is connected. You can already ask a Competen verifier to check a record in My practice.",
     },
   ],
 };
@@ -217,6 +217,13 @@ export function bottomNavFor(experience: ExperienceKey): ShellNavItem[] {
   const own = EXPERIENCES[experience].modules.filter(m => m.bottom && m.nav !== false).map(m => ({ key: m.key, segment: m.segment, label: m.label, short: m.short, icon: m.icon }));
   const fill = FOUNDATION_NAV.filter(n => n.module !== "home" && n.module !== "settings").map(asItem);
   return [...home, ...own, ...fill].slice(0, BOTTOM_BAR_MAX);
+}
+
+/** HFE-01 D1 (owner Option A): every sidebar destination that is NOT on the phone's bottom bar, in sidebar order.
+ *  The account menu lists these below md, so no destination is unreachable on a phone while the bar stays at five. */
+export function overflowNavFor(experience: ExperienceKey): ShellNavItem[] {
+  const onBar = new Set(bottomNavFor(experience).map(i => i.key));
+  return navFor(experience).filter(i => !onBar.has(i.key));
 }
 
 /** The href of a foundation module inside an experience. */

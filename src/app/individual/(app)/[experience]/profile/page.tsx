@@ -127,13 +127,13 @@ export default async function ProfilePage({ params }: { params: Promise<{ experi
               {study && <StudyContext accent={x.accent} options={study.options} current={study.current} periods={study.periods} historyNote={study.note} />}
             </Card>
           ) : (
-            <Card key="practice" id={e === hub ? "sec-overview" : "sec-practice"} title="Your practice" note="Self-declared. Your full overview and primary registration are on your Professional profile.">
+            <Card key="practice" id={e === hub ? "sec-overview" : "sec-practice"} title="Your practice" note="Self-declared. Your full overview and primary registration are in My practice.">
               {!view.provisioned ? <p className="text-[13.5px] text-gray-600">The professional profile is not set up here yet.</p>
                 : ptr === null ? <Unreadable what="professional overview" />
                 : ptr === undefined ? (
                   <p className="text-[13.5px] text-gray-700">
                     No professional overview yet.{" "}
-                    <Link href={experienceHref("professional", "registration")} className="font-semibold underline-offset-2 hover:underline" style={{ color: x.accent }}>Add it on your Professional profile</Link>, whenever you like.
+                    <Link href={experienceHref("professional", "registration")} className="font-semibold underline-offset-2 hover:underline" style={{ color: x.accent }}>Add it in My practice</Link>, whenever you like.
                   </p>
                 ) : (
                 <>

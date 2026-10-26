@@ -1,4 +1,4 @@
-import { EXPERIENCES, EXPERIENCE_KEYS } from "@/lib/individual/experiences";
+import { EXPERIENCES, EXPERIENCE_KEYS, experienceHref } from "@/lib/individual/experiences";
 import { effectivePrimary } from "@/lib/individual/access";
 import { experiencePage, gatedMetadata } from "../../../_components/shell-context";
 import type { Metadata } from "next";
@@ -31,7 +31,10 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
 
   return (
     <>
-      <PageHeader accent={x.accent} title="Settings" intro="Your Competen Individual experiences and which one opens first." />
+      <PageHeader accent={x.accent} title="Settings" intro="AI and privacy, reminders, your experiences and your account." />
+
+      {/* HFE-01 Wave 2 (F14): Settings is AI & privacy, Notifications, Experiences, Account -- in that order. The
+          Scholar AI consent below is the one consent home; the header chip and My Learning link here. */}
 
       {/* Scholar HFE redesign: the shell footer's "Privacy & AI controls" lands here. The consent panel is the
           existing one, unchanged: its notice, its version and its one-click withdrawal. */}
@@ -41,6 +44,22 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
           <hr className="my-5 border-0 border-t border-gray-200" />
           <h3 className="text-[16px] font-bold text-gray-900">Private by default</h3>
           <p className="mt-1.5 text-[15px] text-gray-600">Your material, answers and practice history are yours. Adding a learning record to your Passport is a separate choice you make.</p>
+        </section>
+      )}
+
+      {experience === "professional" && (
+        <section id="privacy" className="mb-5 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+          <h2 className="text-[16px] font-bold text-gray-900">AI &amp; privacy</h2>
+          <p className="mt-1.5 text-[14.5px] text-gray-700">Your records are private. Nothing is shared unless you choose it, record by record, on a Passport view. Personal AI answers each question and then forgets it.</p>
+          <p className="mt-2 text-[13.5px]"><a href={experienceHref("professional", "assistant")} className="font-semibold underline underline-offset-2" style={{ color: x.accent }}>What Personal AI can see</a></p>
+        </section>
+      )}
+
+      {ctx.live.includes("professional") && (
+        <section id="notifications" className="mb-5 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+          <h2 className="text-[16px] font-bold text-gray-900">Notifications</h2>
+          <p className="mt-1.5 text-[14.5px] text-gray-700">Renewal reminders for your credentials and registrations: in Competen, and by email if you turn that on.</p>
+          <p className="mt-2 text-[13.5px]"><a href={`${experienceHref("professional", "evidence")}#reminders`} className="font-semibold underline underline-offset-2" style={{ color: EXPERIENCES.professional.accent }}>Choose your reminders</a></p>
         </section>
       )}
 

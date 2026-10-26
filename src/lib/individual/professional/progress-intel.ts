@@ -248,7 +248,7 @@ export function nextSteps(input: EvaluationInput, x: Extra, policy: Professional
   const goals = (input.goals ?? []).filter(g => g.status === "planned" || g.status === "in_progress");
   const cpd = input.cpd ?? [], refs = input.learning.refs ?? [];
   if (!goals.length && !cpd.length && !refs.length) {
-    add({ rule: "first_steps", ref: "profile", title: "Complete your professional profile", finding: "Your profile is the base for documents and history.", href: hrefs.profile, hrefLabel: "Open Professional profile" });
+    add({ rule: "first_steps", ref: "profile", title: "Describe your practice", finding: "Your practice record is the base for documents and history.", href: hrefs.profile, hrefLabel: "Open My practice" });
     add({ rule: "first_steps", ref: "cpd", title: "Record your first learning or CPD", finding: "Nothing is recorded yet. Any learning counts, from anywhere.", href: input.hrefs.cpd, hrefLabel: "Open Learning & CPD" });
     add({ rule: "first_steps", ref: "goal", title: "Set a first development goal", finding: "A goal can be just a sentence.", href: input.hrefs.development, hrefLabel: "Open Needs & plan" });
   }

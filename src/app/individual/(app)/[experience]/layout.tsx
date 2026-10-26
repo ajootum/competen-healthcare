@@ -4,7 +4,8 @@ import type { Metadata } from "next";
 import { EXPERIENCES, experienceHref, isExperienceKey } from "@/lib/individual/experiences";
 import { individualShell, gatedMetadata } from "../../_components/shell-context";
 import { ExperienceMark, ExperienceSwitcher, StatePanel, focusRing, secondaryBtn } from "../../_components/chrome";
-import { SidebarNav, BottomNav, SignOutButton } from "../../_components/ShellNav";
+import { SidebarNav, BottomNav, AccountMenu, SignOutButton } from "../../_components/ShellNav";
+// HFE-01 D1: AccountMenu is the one account menu on phone and desktop (every destination the bottom bar cannot hold).
 import TermsAcceptance, { type ShownDoc } from "../../_components/TermsAcceptance";
 import { contextTermsGate } from "@/lib/individual/guard";
 import { publishedVersions } from "@/lib/individual/legal";
@@ -170,16 +171,8 @@ export default async function ExperienceLayout({ children, params }: {
           {learning && <Link href="/individual/learning" className={`inline-flex min-h-[36px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center rounded-lg px-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 ${focusRing}`}>Learning</Link>}
           <div className="hidden md:flex md:ml-auto items-center gap-2.5 text-[13px]">
             <span className="rounded-full bg-[#eff2f5] px-2.5 py-1 text-[11px] font-semibold text-[#61717e]">Individual account</span>
-            <Link href={experienceHref(experience, "profile")} className={`flex items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-gray-50 ${focusRing}`}>
-              <span aria-hidden className="flex h-9 w-9 items-center justify-center rounded-full text-[13px] font-bold text-white" style={{ background: x.accent }}>{initials}</span>
-              <span className="max-w-[12rem] truncate text-[13px] font-semibold" style={{ color: x.accent }}>{profile.fullName ?? profile.email}</span>
-            </Link>
-            <SignOutButton />
           </div>
-          <Link href={experienceHref(experience, "settings")} aria-label="Account and settings"
-            className={`md:hidden flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${focusRing}`}>
-            <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-bold text-white" style={{ background: x.accent }}>{initials}</span>
-          </Link>
+          <AccountMenu experience={experience} initials={initials} name={profile.fullName ?? profile.email ?? "Your account"} />
         </div>
       </header>
 
