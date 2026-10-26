@@ -3,52 +3,52 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { countDue, learnerProgramme, listCollections, listLearningSessions, listMappings, listMaterials, listProgrammes, materialExtras, readConsent } from "@/lib/individual/scholar/store";
+import { countDue, learnerProgramme, listCollections, listMappings, listMaterials, listProgrammes, materialExtras } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { FORMAT_LABEL, FORMAT_OF, UNIT_OF, uploadRules } from "@/lib/individual/scholar/config";
+import { uploadRules } from "@/lib/individual/scholar/config";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
 import { competencyLabels, loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
-import { qualitySummary } from "@/lib/individual/scholar/extract";
+import { scholarSpace } from "@/lib/individual/scholar/spaces";
 import { ProgrammeChooser } from "./_components/competency-client";
 import { CollectionsManager } from "./_components/library-client";
-import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
+import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
+import { DialogButton } from "../../../../_components/Dialog";
 import StudyNav from "./_components/StudyNav";
-import { ConsentPanel, EraseAll, ExplainPanel, UploadPanel } from "./_components/client";
-import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
+import { EraseAll, ExplainPanel, UploadPanel } from "./_components/client";
+import { aiOffMessage } from "@/lib/individual/scholar/consent-gate";
+import { AiHelpBody, headerBtn, linkBtn, readAiHelp } from "./_components/shell-pieces";
+import { LibraryBrowser, type LibraryGroup } from "./_components/library-list";
+import { libraryRow } from "./_components/library-rows";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
 export const dynamic = "force-dynamic";
 
-// MY LEARNING -- COMPETEN-IND-004, the Scholar learning journey's home: Upload, and the way into
-// Understand, Assess, Revise, Apply and Improve.
+// MY LEARNING · LIBRARY -- COMPETEN-IND-004, the Scholar learning journey's home: Upload, Classify, and the way
+// into Learn, Revise, Apply, Evaluate and Progress (Scholar HFE redesign, 2026-10-26).
 //
 // What it shows is what exists. Migration 372 not applied → a governed "not set up" state, not an empty
 // list. Material unreadable → said so, not "none yet". Consent off → upload and reading still work, and
 // every AI action says it needs consent instead of failing when pressed. The Privacy Notice and Terms of
 // Use unpublished → AI help says it is not available yet, and cannot be turned on (consent-gate.ts).
+//
+// The upload form and the consent panel sit in dialogs, always in the page: a link to #upload opens the form.
 
 // The title only when Individual is live: with the release gate off, a 404 must not name the route.
 export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "My Learning" });
 }
 
-const JOURNEY = [
-  { step: "Upload", text: "Add your notes, slides or guidance." },
-  { step: "Understand", text: "Ask about them. Answers cite your pages." },
-  { step: "Assess", text: "Practice questions written from a section." },
-  { step: "Revise", text: "Anything you miss comes back on a schedule." },
-  { step: "Apply", text: "Case questions built from your material." },
-  { step: "Improve", text: "See your practice accuracy and what is due." },
-];
+const card = "rounded-2xl border border-gray-200 bg-white p-6";
 
 export default async function MyLearning({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
-  const [materials, consent, due, programmes, mine, policy, history] = await Promise.all([
-    listMaterials(ctx.admin, ctx.userId), readConsent(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId),
+  const space = scholarSpace("library");
+  const [materials, help, due, programmes, mine, policy, history] = await Promise.all([
+    listMaterials(ctx.admin, ctx.userId), readAiHelp(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId),
     listProgrammes(ctx.admin), learnerProgramme(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin), contextHistory(ctx.admin, ctx.userId),
   ]);
   // Stage 2: what may be uploaded is Individual policy (formats, size), shown and enforced from one place.
@@ -67,128 +67,119 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
     listMappings(ctx.admin, ctx.userId), loadLearnerCatalogue(ctx.admin, ctx.userId),
   ]);
   const shelves = extras.collectionsOn && collections.ok ? collections.data : null;
-  // LEARN-01 L4: sessions to resume (none where 414 is absent: the section then just offers Learn).
-  const sessions = await listLearningSessions(ctx.admin, ctx.userId, 3);
   const liveIds = linked.ok ? [...new Set(linked.data.mappings.filter(r => r.state !== "rejected").map(r => r.competencyId))] : [];
   const names = linked.ok ? await competencyLabels(ctx.admin, learner.competencies, liveIds, new Map(linked.data.mappings.map(r => [r.competencyId, r.layer]))) : new Map();
   const scopes = {
     materials: list.map(m => ({ id: m.id, title: m.title })),
     competencies: liveIds.map(id => ({ id, title: `${names.get(id)?.code ? `${names.get(id)!.code} ` : ""}${names.get(id)?.title ?? "Competency"}` })).sort((a, b) => a.title.localeCompare(b.title)),
   };
-  const groups = shelves
-    ? [...shelves.map(s => ({ key: s.id, name: s.name, items: list.filter(m => extras.byId.get(m.id)?.collectionId === s.id) })),
-      { key: "none", name: shelves.length ? "Not in a collection" : "", items: list.filter(m => !extras.byId.get(m.id)?.collectionId) }].filter(g => g.items.length)
-    : [{ key: "none", name: "", items: list }];
+  const rowOf = (m: (typeof list)[number]) => libraryRow(m, { quality: extras.qualityOn ? extras.byId.get(m.id)?.quality ?? null : null, stamp: stampOf(m.createdAt) });
+  const groups: LibraryGroup[] = shelves
+    ? [...shelves.map(s => ({ key: s.id, name: s.name, rows: list.filter(m => extras.byId.get(m.id)?.collectionId === s.id).map(rowOf) })),
+      { key: "none", name: shelves.length ? "Not in a collection" : "", rows: list.filter(m => !extras.byId.get(m.id)?.collectionId).map(rowOf) }].filter(g => g.rows.length)
+    : [{ key: "none", name: "", rows: list.map(rowOf) }];
+  // Stage 3 Classify: suggested competency links waiting for the learner's decision, per material (388).
+  const waiting = new Map<string, number>();
+  if (linked.ok) for (const r of linked.data.mappings) if (r.state === "proposed") waiting.set(r.materialId, (waiting.get(r.materialId) ?? 0) + 1);
+  const waitingTotal = [...waiting.values()].reduce((n, v) => n + v, 0);
+
+  const header = (
+    <>
+      <PageHeader accent={x.accent} eyebrow={space.eyebrow} title={space.title} intro={space.intro} />
+      <StudyNav dueCount={due} />
+    </>
+  );
 
   if (!materials.ok && materials.notProvisioned) {
     return (
       <>
-        <PageHeader accent={x.accent} eyebrow={x.name} title="My Learning" />
+        {header}
         <StatePanel title="My Learning is not set up on this environment yet">
           <p>The study store it needs has not been installed here, so nothing can be uploaded or read back yet. Nothing on your account has changed.</p>
         </StatePanel>
       </>
     );
   }
-  const documents = consentDocuments();
-  const status = consent.ok ? consentStatus(consent.data, documents.published) : null;
+  const status = help.status;
+
+  const upload = (
+    <DialogButton title="Upload study material" hash="upload" label="+ Upload material"
+      className={`${headerBtn} border-transparent text-white hover:opacity-90`} style={{ background: x.accent }}>
+      <UploadPanel rules={{ mimes: [...rules.mimes], maxMb: rules.maxMb, text: rules.text, describe: rules.describe, sessionFiles: rules.sessionFiles, sessionMb: rules.sessionMb }} />
+    </DialogButton>
+  );
+  const suggestions = (
+    <DialogButton title="Suggested links" className={headerBtn} label={`Mapping suggestions · ${linked.ok ? waitingTotal : "–"}`}>
+      <h2 className="text-[21px] font-bold tracking-tight text-gray-900">Classify · Suggested links</h2>
+      <p className="mt-1.5 text-[15px] text-gray-600">
+        Concepts and competency links Scholar has suggested from your material. Each is a suggestion until you accept or reject it, and your decision is kept. It does not certify competency.
+      </p>
+      {!linked.ok ? (linked.notProvisioned
+        ? <p className="mt-3 text-[14px] text-gray-700">Suggested links are not set up on this environment yet.</p>
+        : <div className="mt-3"><Unreadable what="suggested links" /></div>)
+        : waitingTotal === 0 ? (
+          <p className="mt-3 text-[14px] text-gray-700">Nothing is waiting for your review. Suggestions appear when you analyse a material, with AI help on.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-gray-200">
+            {list.filter(m => waiting.has(m.id)).map(m => (
+              <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                <span className="min-w-0">
+                  <span className="block truncate text-[15px] font-semibold text-gray-900">{m.title}</span>
+                  <span className="text-[12.5px] text-gray-600">{waiting.get(m.id)} suggested link{waiting.get(m.id) === 1 ? "" : "s"} to review</span>
+                </span>
+                <Link href={experienceHref("scholar", `study/${m.id}`)} className={linkBtn} style={{ color: x.accent }}>Review →</Link>
+              </li>
+            ))}
+          </ul>
+        )}
+    </DialogButton>
+  );
+  const empty = (
+    <section className={`${card} mb-5 text-center`}>
+      <h2 className="text-[21px] font-bold tracking-tight text-gray-900">Start with your material</h2>
+      <p className="mx-auto mt-1.5 max-w-md text-[15px] text-gray-600">Upload {rules.describe}, then choose how you want to study. No programme or competency is needed first.</p>
+    </section>
+  );
 
   return (
     <>
-      <PageHeader accent={x.accent} eyebrow={x.name} title="My Learning"
-        intro="Upload your own study material, have it explained with page citations, practise questions from it and revise what you miss. Everything here is yours alone." />
-      <StudyNav dueCount={due} />
+      {header}
 
-      <ol aria-label="How My Learning works" className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {JOURNEY.map((j, i) => (
-          <li key={j.step} className="rounded-xl border border-gray-200 bg-white p-3">
-            <p className="text-[12px] font-bold tabular-nums" style={{ color: x.accent }}>{i + 1}. {j.step}</p>
-            <p className="mt-0.5 text-[12.5px] leading-snug text-gray-600">{j.step === "Upload" ? `Add your notes, slides or guidance: ${rules.describe}.` : j.text}</p>
-          </li>
-        ))}
-      </ol>
+      {!materials.ok ? <div className="mb-5"><Unreadable what="study materials" /></div> : (
+        <LibraryBrowser groups={groups} actions={<>{suggestions}{upload}</>} empty={empty} />
+      )}
+      {!materials.ok && <div className="mb-5 flex flex-wrap gap-2.5">{upload}</div>}
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <UploadPanel rules={{ mimes: [...rules.mimes], maxMb: rules.maxMb, text: rules.text, describe: rules.describe, sessionFiles: rules.sessionFiles, sessionMb: rules.sessionMb }} />
-        {consent.ok
-          ? <ConsentPanel status={status!} recorded={consent.data.granted} grantedAt={consent.data.grantedAt} revokedAt={consent.data.revokedAt} legal={documents.links} />
-          : <Unreadable what="AI consent setting" />}
+      <Notice>Scholar can suggest concepts and competency links from your material when you analyse it with AI help on. Review them when useful; you can study without a programme.</Notice>
+
+      <div className="grid gap-[22px] lg:grid-cols-[1.7fr_1fr]">
+        {programmeOn ? <ProgrammeChooser programmes={programmes.data} current={mine.data?.code ?? null} /> : (
+          <section aria-labelledby="programme-h" className={card}>
+            <h2 id="programme-h" className="text-[16px] font-bold text-gray-900">Your programme</h2>
+            {(!programmes.ok && !programmes.notProvisioned) || (!mine.ok && !mine.notProvisioned)
+              ? <div className="mt-2"><Unreadable what="your programme" /></div>
+              : <p className="mt-1.5 text-[15px] text-gray-600">Choosing a programme is not available on this environment. Your notes can still be studied without one.</p>}
+          </section>
+        )}
+        <section aria-labelledby="ai-choice-h" className={card}>
+          <h2 id="ai-choice-h" className="text-[16px] font-bold text-gray-900">AI is your choice</h2>
+          <p className="mt-1.5 text-[15px] text-gray-600">
+            {status === "on" ? "AI help is on: explanations, questions and cases can be made from your material."
+              : status === "awaiting_legal" ? "AI help is not available yet. You can upload and read your material, and replay what you have saved."
+                : "AI help is off. You can still read your material and replay what you have saved."}
+          </p>
+          <DialogButton title="AI help with your material" className={linkBtn} style={{ color: x.accent }} label="Manage consent">
+            <AiHelpBody help={help} />
+          </DialogButton>
+        </section>
       </div>
 
-      {programmeOn && (
-        <div className="mt-5"><ProgrammeChooser programmes={programmes.data} current={mine.data?.code ?? null} /></div>
-      )}
-      {!programmeOn && ((!programmes.ok && !programmes.notProvisioned) || (!mine.ok && !mine.notProvisioned)) && (
-        <div className="mt-5"><Unreadable what="your programme" /></div>
+      {shelves && materials.ok && materials.data.length > 0 && (
+        <div className="mt-5"><CollectionsManager collections={shelves.map(s => ({ id: s.id, name: s.name }))} /></div>
       )}
 
       {materials.ok && materials.data.length > 0 && (
-        <section aria-labelledby="learn-h" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 id="learn-h" className="text-[16px] font-bold text-gray-900">Learn</h2>
-            <span className="flex flex-wrap gap-3">
-              <Link href={experienceHref("scholar", "study/saved")} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`}>Saved learning</Link>
-              <Link href={experienceHref("scholar", "study/learn")} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Teach me something →</Link>
-            </span>
-          </div>
-          {sessions.ok && sessions.data.length > 0 ? (
-            <ul className="mt-2 space-y-1">
-              {sessions.data.map(s => (
-                <li key={s.id} className="text-[13.5px] text-gray-800">
-                  <Link href={experienceHref("scholar", `study/learn?session=${s.id}`)} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Continue: {s.title}</Link>
-                  <span className="text-gray-500"> · {s.status === "completed" ? "completed" : `step ${s.currentStep + 1}`}</span>
-                </li>
-              ))}
-            </ul>
-          ) : <p className="mt-1 text-[13.5px] text-gray-600">Scholar teaches you from your notes, step by step, and you can ask anything as you go.</p>}
-        </section>
-      )}
-
-      <section aria-labelledby="materials-h" className="mt-8">
-        <h2 id="materials-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your library</h2>
-        {!materials.ok ? <div className="mt-3"><Unreadable what="study materials" /></div>
-          : materials.data.length === 0 ? (
-            <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">
-              None yet. Upload {rules.describe} above to start.
-            </p>
-          ) : (
-            <div className="mt-3 space-y-4">
-              {groups.map(g => (
-                <div key={g.key}>
-                  {g.name && <h3 className="mb-1.5 text-[14px] font-bold text-gray-900">{g.name}</h3>}
-                  <ul className="divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
-                    {g.items.map(m => {
-                      const unit = UNIT_OF(m.mimeType);
-                      const q = extras.qualityOn ? extras.byId.get(m.id)?.quality ?? null : null;
-                      const partial = q ? qualitySummary(q).partial : false;
-                      return (
-                        <li key={m.id}>
-                          <Link href={experienceHref("scholar", `study/${m.id}`)} className={`flex flex-wrap items-center justify-between gap-2 p-4 hover:bg-gray-50 sm:p-5 ${focusRing}`}>
-                            <span className="min-w-0">
-                              <span className="block truncate text-[15px] font-semibold text-gray-900">{m.title}</span>
-                              <span className="block text-[12.5px] text-gray-500">
-                                {FORMAT_LABEL[FORMAT_OF[m.mimeType]]}{m.pageCount !== null ? ` · ${m.pageCount} ${unit}${m.pageCount === 1 ? "" : "s"}` : ""} · {m.chunkCount} section{m.chunkCount === 1 ? "" : "s"} · added {new Date(m.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                                {stampOf(m.createdAt) ? ` · while studying ${stampOf(m.createdAt)}` : ""}
-                              </span>
-                              {partial && <span className="mt-1 inline-block rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11.5px] font-semibold text-amber-900">Partly read: {q!.emptyUnits.length} {unit}{q!.emptyUnits.length === 1 ? "" : "s"} without readable text</span>}
-                            </span>
-                            <span className="text-[13px] font-semibold" style={{ color: x.accent }}>Open →</span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        {shelves && materials.ok && materials.data.length > 0 && (
-          <div className="mt-4"><CollectionsManager collections={shelves.map(s => ({ id: s.id, name: s.name }))} /></div>
-        )}
-      </section>
-
-      {materials.ok && materials.data.length > 0 && (
-        <div className="mt-8">
+        <div className="mt-5">
           <ExplainPanel consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? undefined : undefined} title="Ask across your library" scopes={scopes}
             hint="Searches your materials and answers only from what it finds, naming each material it used and citing the page, slide or section. Explanations are not saved." />
         </div>
@@ -197,6 +188,9 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
       {materials.ok && (
         <div className="mt-8"><EraseAll count={materials.data.length} /></div>
       )}
+      <p className="mt-6 text-[13px] text-gray-600">
+        Your learning sessions are in <Link href={experienceHref("scholar", "study/learn")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Learn</Link>, and everything your study has kept is in <Link href={experienceHref("scholar", "study/saved")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Saved learning</Link>.
+      </p>
     </>
   );
 }

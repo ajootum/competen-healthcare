@@ -3,38 +3,29 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
+import { SCHOLAR_SPACES, spaceOfPath } from "@/lib/individual/scholar/spaces";
 
-// My Learning's own sub-navigation. Upload, Understand and Assess happen on a material, so "Materials"
-// is where they start; Revise, Apply, Evaluate and Progress each have a page. Scrolls sideways on a narrow screen
-// rather than wrapping, and every tab is a real link to a real page.
+// My Learning's learning spaces: Library, Learn, Revise, Apply, Evaluate and Progress (spaces.ts). Upload,
+// classification and a material's own study start in the Library. Every tab is a real link to a real page,
+// open at any time: the spaces are a guide, never a sequence. Scrolls sideways on a narrow screen.
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 
-const TABS = [
-  { segment: "study", label: "Materials", exact: false, excludes: ["study/revise", "study/apply", "study/evaluate", "study/progress"] },
-  { segment: "study/revise", label: "Revise", exact: false, excludes: [] },
-  { segment: "study/apply", label: "Apply", exact: false, excludes: [] },
-  // EVALUATION-01 (Stage 6): what the evidence says, kept apart from Progress over time.
-  { segment: "study/evaluate", label: "Evaluate", exact: false, excludes: [] },
-  { segment: "study/progress", label: "Progress", exact: false, excludes: [] },
-];
-
 export default function StudyNav({ dueCount }: { dueCount?: number | null }) {
   const pathname = usePathname() ?? "";
+  const current = spaceOfPath(pathname);
   return (
-    <nav aria-label="My Learning" className="sticky top-14 z-20 -mx-4 mb-6 overflow-x-auto bg-gray-50/95 px-4 backdrop-blur md:static md:mx-0 md:bg-transparent md:px-0 md:backdrop-blur-none">
-      <ul className="flex min-w-max gap-1 border-b border-gray-200">
-        {TABS.map(t => {
-          const href = experienceHref("scholar", t.segment);
-          const on = (pathname === href || pathname.startsWith(`${href}/`))
-            && !t.excludes.some(e => pathname.startsWith(experienceHref("scholar", e)));
+    <nav aria-label="Learning spaces" className="sticky top-14 z-20 -mx-4 mb-6 overflow-x-auto bg-gray-50/95 px-4 backdrop-blur md:static md:mx-0 md:mt-[23px] md:bg-transparent md:px-0 md:backdrop-blur-none">
+      <ul className="flex min-w-max gap-[15px] border-b border-gray-200 md:gap-5">
+        {SCHOLAR_SPACES.map(s => {
+          const on = current === s.key;
           return (
-            <li key={t.segment}>
-              <Link href={href} aria-current={on ? "page" : undefined}
-                className={`-mb-px inline-flex min-h-[44px] items-center gap-2 border-b-2 px-3 text-[14px] font-semibold ${focusRing} ${on ? "" : "border-transparent text-gray-600 hover:text-gray-900"}`}
+            <li key={s.key}>
+              <Link href={experienceHref("scholar", s.segment)} aria-current={on ? "page" : undefined}
+                className={`-mb-px inline-flex min-h-[48px] items-center gap-2 border-b-[3px] px-0.5 text-[15px] font-semibold ${focusRing} ${on ? "" : "border-transparent text-gray-600 hover:text-gray-900"}`}
                 style={on ? { borderColor: SCHOLAR.accent, color: SCHOLAR.accent } : undefined}>
-                {t.label}
-                {t.segment === "study/revise" && dueCount ? (
+                {s.tab}
+                {s.key === "revise" && dueCount ? (
                   <span className="rounded-full px-2 py-0.5 text-[11.5px] font-bold text-white tabular-nums" style={{ background: SCHOLAR.accent }}>
                     {dueCount}<span className="sr-only"> cards due</span>
                   </span>

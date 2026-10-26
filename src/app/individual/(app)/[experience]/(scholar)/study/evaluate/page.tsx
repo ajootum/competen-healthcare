@@ -2,8 +2,9 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
-import { PageHeader, StatePanel, focusRing } from "../../../../../_components/chrome";
+import { Notice, PageHeader, StatePanel, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
+import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { countDue, listEvaluations, listMaterials } from "@/lib/individual/scholar/store";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
@@ -45,10 +46,9 @@ export default async function EvaluatePage({ params }: { params: Promise<{ exper
 
   return (
     <>
-      <PageHeader accent={x.accent} eyebrow="My Learning" title="Evaluate"
-        intro="What your learning evidence says: what you know, what you remember, how you reason, and where the gaps are, with how far it can be relied on." />
+      <PageHeader accent={x.accent} eyebrow={scholarSpace("evaluate").eyebrow} title="Evaluate" intro={scholarSpace("evaluate").intro} />
       <StudyNav dueCount={due} />
-      <p className="mb-5 rounded-lg bg-gray-50 px-3 py-2 text-[12.5px] text-gray-700">{EVALUATION_LABEL}</p>
+      <Notice>{FORMATIVE_NOTICE} · {EVALUATION_LABEL}</Notice>
 
       {!mats.length ? (
         <StatePanel title="Nothing to evaluate yet">

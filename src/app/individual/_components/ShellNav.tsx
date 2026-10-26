@@ -28,13 +28,13 @@ export function SidebarNav({ experience, learning = false }: { experience: Exper
   const pathname = usePathname() ?? "";
   const x = EXPERIENCES[experience];
   return (
-    <nav aria-label={`${x.name} navigation`} className="flex flex-col gap-0.5 p-3">
+    <nav aria-label={`${x.name} navigation`} className="flex flex-col gap-[7px] px-4 pt-[26px]">
       {navFor(experience).map(item => {
         const href = experienceHref(experience, item.segment);
         const on = isActive(pathname, href, item.segment === "");
         return (
           <Link key={item.key} href={href} aria-current={on ? "page" : undefined}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-medium pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on ? "font-semibold" : "text-gray-700 hover:bg-gray-50"}`}
+            className={`flex items-center gap-3 rounded-[9px] px-4 py-2.5 text-[15px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on ? "font-bold" : "font-medium text-gray-900 hover:bg-gray-50"}`}
             style={on ? { background: x.accentSoft, color: x.accent } : undefined}>
             <span aria-hidden className="w-5 text-center text-[15px]">{item.icon}</span>
             {item.label}
@@ -42,8 +42,8 @@ export function SidebarNav({ experience, learning = false }: { experience: Exper
         );
       })}
       {learning && (
-        <Link href="/individual/learning" className={`mt-2 flex items-center gap-3 rounded-lg border-t border-gray-100 px-3 py-2 pt-3 text-[14px] font-medium text-gray-700 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
-          <span aria-hidden className="w-5 text-center text-[15px]">▤</span>
+        <Link href="/individual/learning" className={`mt-2 flex items-center gap-3 rounded-[9px] border-t border-gray-100 px-4 py-2.5 pt-3 text-[15px] font-medium text-gray-900 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+          <span aria-hidden className="w-5 text-center text-[15px]">◫</span>
           Competen Learning
         </Link>
       )}

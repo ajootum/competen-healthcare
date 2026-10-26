@@ -10,6 +10,7 @@ import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/
 import { LEARN_ACTION_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
+import { scholarSpace } from "@/lib/individual/scholar/spaces";
 import { LearnWorkspace, type StartScope } from "../_components/learn-client";
 import { getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 
@@ -75,8 +76,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
   const materials = library.ok ? library.data.map(m => ({ id: m.id, title: m.title })) : [];
   return (
     <>
-      <PageHeader accent={x.accent} eyebrow="My Learning" title="Learn"
-        intro="Scholar teaches you from your own notes, one step at a time. Ask anything, at any point. Skip, go back or explore: the steps are a suggestion." />
+      <PageHeader accent={x.accent} eyebrow={scholarSpace("learn").eyebrow} title="Learn" intro={scholarSpace("learn").intro} />
       <StudyNav dueCount={due} />
       {backToRevision && (
         <p className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[13.5px] text-gray-800">

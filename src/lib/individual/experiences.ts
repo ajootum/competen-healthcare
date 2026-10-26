@@ -103,7 +103,7 @@ export const FOUNDATION_NAV: readonly NavItem[] = [
   { module: "home", segment: "", label: "Home", short: "Home", icon: "⌂" },
   { module: "assistant", segment: "assistant", label: "Personal AI", short: "AI", icon: "✦" },
   { module: "passport", segment: "passport", label: "Competen Passport", short: "Passport", icon: "▣" },
-  { module: "profile", segment: "profile", label: "Profile & history", short: "Profile", icon: "☺" },
+  { module: "profile", segment: "profile", label: "Profile & history", short: "Profile", icon: "◉" },
   { module: "settings", segment: "settings", label: "Settings", short: "Settings", icon: "⚙" },
 ];
 
@@ -111,15 +111,16 @@ export const SCHOLAR: ExperienceConfig = {
   key: "scholar",
   name: "Competen Scholar",
   wordmark: "scholar",
-  accent: "#0E7490",
-  accentSoft: "#ECFEFF",
+  // Scholar HFE redesign (2026-10-26): the agreed prototype's teal (4.7:1 on white) and its pale tint.
+  accent: "#087F98",
+  accentSoft: "#E9F7F8",
   tagline: "Learn · Understand · Apply",
   micro: "Healthcare education, revision and clinical reasoning.",
   operatingEntity: "scholar_operator",
   // COMPETEN-IND-004: the whole learning journey (Upload, Understand, Assess, Revise, Apply, Improve) sits
   // under ONE module with its own sub-navigation, so the sidebar and the bottom bar each gain one entry.
   modules: [
-    { key: "study", segment: "study", label: "My Learning", short: "Study", icon: "✎", bottom: true },
+    { key: "study", segment: "study", label: "My Learning", short: "Study", icon: "▤", bottom: true },
   ],
   homeIntro: "Your study space. Open My Learning to upload your notes, have them explained with page citations, practise questions from them and revise what you miss. Your Passport, profile and personal AI are here too.",
   planned: [
