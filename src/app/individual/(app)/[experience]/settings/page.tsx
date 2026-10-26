@@ -8,6 +8,8 @@ import PrimaryChoice from "../../../_components/PrimaryChoice";
 import { DATA_ROLES, entityLegal, type EntityLegal } from "@/lib/individual/legal";
 import OwnProfileCard from "@/components/account/OwnProfileCard";
 import { AiHelpBody, readAiHelp } from "../(scholar)/study/_components/shell-pieces";
+import { EraseAll } from "../(scholar)/study/_components/client";
+import { listMaterials } from "@/lib/individual/scholar/store";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -28,6 +30,8 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
   const { ctx, experience } = page;
   const x = EXPERIENCES[experience];
   const primary = effectivePrimary(ctx.membership.primaryExperience, ctx.live) ?? experience;
+  const study = experience === "scholar" ? await listMaterials(ctx.admin, ctx.userId) : null;
+  const studyCount = study?.ok ? study.data.length : 0;
 
   return (
     <>
@@ -44,6 +48,8 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
           <hr className="my-5 border-0 border-t border-gray-200" />
           <h3 className="text-[16px] font-bold text-gray-900">Private by default</h3>
           <p className="mt-1.5 text-[15px] text-gray-600">Your material, answers and practice history are yours. Adding a learning record to your Passport is a separate choice you make.</p>
+          {/* HFE-01 Wave 4 (F9): the destructive erase lives here, beside the consent, and only when there is material to erase. */}
+          {studyCount > 0 && <div className="mt-5"><EraseAll count={studyCount} /></div>}
         </section>
       )}
 

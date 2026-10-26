@@ -126,7 +126,8 @@ export default async function EvaluationPage({ params, searchParams }: { params:
     const linked = [...new Set([...(input.planCompetencies ?? []), ...(input.needCompetencies ?? [])].filter(l => !l.unlinked_at).map(l => l.framework_competency_id))]
       .filter(id => !entries.some(e => e.framework_competency_id === id) && input.names.has(id));
     const offered = (k: string) => policy.scopes.includes(k as never);
-    const pick = (k: string, label: string, opts: { value: string; label: string }[], hint?: string) => offered(k) && (
+    // HFE-01 Wave 4 (F10): a scope with nothing to choose yet is not shown as a disabled row.
+    const pick = (k: string, label: string, opts: { value: string; label: string }[], hint?: string) => offered(k) && opts.length > 0 && (
       <form method="get" className="rounded-xl border border-gray-200 p-3">
         <input type="hidden" name="scope" value={k} />
         <Field label={label} htmlFor={`pick-${k}`} hint={hint}>

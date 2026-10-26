@@ -128,6 +128,8 @@ export function GoalFields({ policy, g, idPrefix, sources }: {
 // ── The list and reminders (P4) ────────────────────────────────────────────────────────────────────────────
 
 export function PlanOverview({ goals, view, accent }: { goals: PlanGoal[]; view: PlanView; accent: string }) {
+  // HFE-01 Wave 4 (F10): filters appear once there is something to filter.
+  if (goals.length === 0) return null;
   return (
     <nav aria-label="Filter goals" className="mb-3 flex flex-wrap gap-2">
       {PLAN_VIEWS.map(([v, label]) => (

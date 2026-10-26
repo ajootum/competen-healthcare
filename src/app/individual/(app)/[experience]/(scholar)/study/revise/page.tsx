@@ -13,7 +13,7 @@ import { loadLearnerCatalogue, competencyLabels } from "@/lib/individual/scholar
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { REVISION_FORMATS, REVISION_MODE_LABEL, type Marking, type RevisionMode } from "@/lib/individual/scholar/config";
-import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
+import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice, EmptyState } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { ExamPapersSection } from "../_components/papers-section";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
@@ -58,7 +58,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("revise").eyebrow} title="Revise" intro={scholarSpace("revise").intro} />
       <StudyNav dueCount={due} />
-      <Notice>{FORMATIVE_NOTICE}</Notice>
+      <BoundaryNotice notice={FORMATIVE_NOTICE} />
     </>
   );
   const papers = <ExamPapersSection admin={ctx.admin} userId={ctx.userId} variant="revise" />;
@@ -108,6 +108,21 @@ export default async function Revise({ params, searchParams }: { params: Promise
     href: sourceHref(c.question.materialId, c.question.chunkId),
   })) : [];
   const active = sessions.ok ? sessions.data.filter(s => s.status === "active") : [];
+
+  // HFE-01 Wave 4 (F10): before there is anything to revise, one message and one action -- not a dashboard of zeros.
+  const nothingYet = materials.ok && mats.length === 0 && rows.ok && rows.data.attempts.length === 0
+    && cards.ok && cards.data.length === 0 && sets.ok && sets.data.length === 0 && active.length === 0;
+  if (nothingYet) {
+    return (
+      <>
+        {header}
+        {papers}
+        <EmptyState title="Nothing to revise yet" action={<Link href={studyHref("")} className={`inline-flex min-h-[44px] items-center rounded-xl px-5 text-[14.5px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Go to My Learning</Link>}>
+          Revision works from questions on your own material. Upload a material and answer a few questions on it, and your revision appears here.
+        </EmptyState>
+      </>
+    );
+  }
 
   return (
     <>

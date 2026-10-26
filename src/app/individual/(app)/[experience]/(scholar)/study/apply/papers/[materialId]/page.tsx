@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../../_components/shell-context";
-import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../../../_components/chrome";
+import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../../_components/chrome";
 import StudyNav from "../../../_components/StudyNav";
 import { countDue, getMaterial } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -72,7 +72,7 @@ export default async function PaperPage({ params }: { params: Promise<{ experien
   return (
     <>
       {header(material.data.title)}
-      <Notice>{FORMATIVE_NOTICE} · Suggested answers are AI-written study material, not an answer key or a mark. {LIVE_EXAM_NOTICE}</Notice>
+      <BoundaryNotice notice={FORMATIVE_NOTICE} detail={<>Suggested answers are AI-written study material, not an answer key or a mark. {LIVE_EXAM_NOTICE}</>} />
       {!p.enabled && <StatePanel title="Studying examination papers is not offered at the moment"><p>Your paper and saved answers are kept and shown below. New suggested answers are not available.</p></StatePanel>}
 
       {(paper.data.instructions || paper.data.flags.length > 0) && (

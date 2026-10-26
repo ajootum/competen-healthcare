@@ -4,7 +4,7 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
 import { countDue, listQuestions, type QuestionRow } from "@/lib/individual/scholar/store";
-import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
+import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../_components/chrome";
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
 import { ExamPapersSection } from "../_components/papers-section";
@@ -86,7 +86,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("apply").eyebrow} title="Apply" intro={scholarSpace("apply").intro} />
       <StudyNav dueCount={due} />
-      <Notice>{FORMATIVE_NOTICE} · Practice cases are formative simulation, not assessment.</Notice>
+      <BoundaryNotice notice={FORMATIVE_NOTICE} detail="Practice cases are formative simulation, not assessment." />
       <ExamPapersSection admin={ctx.admin} userId={ctx.userId} variant="apply" />
 
       <div className="mb-8 grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

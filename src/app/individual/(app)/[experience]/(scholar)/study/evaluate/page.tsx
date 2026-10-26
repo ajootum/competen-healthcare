@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
-import { Notice, PageHeader, StatePanel, focusRing } from "../../../../../_components/chrome";
+import { PageHeader, StatePanel, focusRing, BoundaryNotice } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { ExamPapersSection } from "../_components/papers-section";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
@@ -49,7 +49,7 @@ export default async function EvaluatePage({ params }: { params: Promise<{ exper
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("evaluate").eyebrow} title="Evaluate" intro={scholarSpace("evaluate").intro} />
       <StudyNav dueCount={due} />
-      <Notice>{FORMATIVE_NOTICE} · {EVALUATION_LABEL}</Notice>
+      <BoundaryNotice notice={FORMATIVE_NOTICE} detail={EVALUATION_LABEL} />
       <ExamPapersSection admin={ctx.admin} userId={ctx.userId} variant="evaluate" />
 
       {!mats.length ? (
