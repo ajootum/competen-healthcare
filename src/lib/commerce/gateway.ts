@@ -86,7 +86,9 @@ export function verifHashMatches(header: string | null | undefined, secretHash: 
 export const newTxRefWith = (prefix: string) => `${prefix}-${randomUUID()}`;
 
 export type VerifiedTx =
-  | { ok: true; providerTxId: string; txRef: string; amountMajor: number; currency: string; channel: string }
+  | { ok: true; providerTxId: string; txRef: string; amountMajor: number; currency: string; channel: string;
+      /** HOLDINGS-FX-01: the gateway fee and the amount settled after it, as Flutterwave reports them. Null = not reported. */
+      feeMajor?: number | null; settledMajor?: number | null }
   | { ok: false; reason: string };
 
 /**
@@ -119,7 +121,22 @@ export async function verifyTransaction(cfg: GatewayConfig, providerTxId: string
     amountMajor: Number(d.amount),
     currency: String(d.currency ?? "").toUpperCase(),
     channel: normaliseChannel(String(d.payment_type ?? "")),
+    ...settlementFigures(d),
   };
+}
+
+/**
+ * HOLDINGS-FX-01: Flutterwave's own fee (app_fee) and the amount settled to the merchant after it
+ * (amount_settled), from a verify payload. A missing, negative or non-numeric figure is null, never zero:
+ * zero would read as "no fee was charged".
+ */
+export function settlementFigures(d: { app_fee?: unknown; amount_settled?: unknown }): { feeMajor: number | null; settledMajor: number | null } {
+  const fig = (v: unknown) => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  return { feeMajor: fig(d?.app_fee), settledMajor: fig(d?.amount_settled) };
 }
 
 /** Flutterwave's payment_type vocabulary mapped onto the practice_checkout.channel CHECK. */
