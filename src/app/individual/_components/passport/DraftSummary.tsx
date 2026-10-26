@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AiNoticeText, aiNotice, type AiNotice } from "../professional/ai-refusal";
+import { AiGate } from "../ai/AiGate";
 
 // AI help drafting a Passport view's summary (COMPETEN-PROFESSIONAL-PASSPORT-01). Advisory text only: "Use this" copies
 // it into the summary field of the form on this page, where the person can change it. Nothing is saved or shared until
@@ -28,7 +29,7 @@ export default function DraftSummary({ targetId, purposeId, accent }: { targetId
   }
   return (
     <div>
-      <button type="button" onClick={ask} disabled={busy} className={small} style={{ color: accent }}>{busy ? "Thinking…" : "✦ Draft a summary with AI"}</button>
+      <AiGate activity="assistant" experience="professional">{g => (<button type="button" onClick={ask} disabled={busy || g.off} aria-describedby={g.describedBy} className={small} style={{ color: accent }}>{busy ? "Thinking…" : "✦ Draft a summary with AI"}</button>)}</AiGate>
       {notice && <AiNoticeText notice={notice} className="mt-2" />}
       {text !== null && (
         <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3" aria-live="polite">

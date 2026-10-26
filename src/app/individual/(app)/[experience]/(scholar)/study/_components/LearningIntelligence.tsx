@@ -79,7 +79,7 @@ export default function LearningIntelligence({ li, accent }: { li: LI; accent: s
               </dl>
               <p className="mt-2 text-[12.5px] text-gray-600">
                 {engagement.lastStudied ? `Last studied ${fmt(engagement.lastStudied)}.` : "No study recorded yet."}{" "}
-                {engagement.reviews === null ? "Revision reviews are not recorded on this environment yet." : engagement.reviewsSince ? `Revision reviews are recorded from ${fmt(engagement.reviewsSince)}.` : "Revision reviews are recorded from your next review."}
+                {engagement.reviews === null ? "Revision reviews are not recorded here yet." : engagement.reviewsSince ? `Revision reviews are recorded from ${fmt(engagement.reviewsSince)}.` : "Revision reviews are recorded from your next review."}
               </p>
             </>
           ) : <Absent m={engagement} />}

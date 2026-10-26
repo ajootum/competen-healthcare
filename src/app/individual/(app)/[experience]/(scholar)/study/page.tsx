@@ -9,6 +9,7 @@ import { uploadRules } from "@/lib/individual/scholar/config";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
 import { competencyLabels, loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { scholarSpace } from "@/lib/individual/scholar/spaces";
+import { noProgrammeText } from "@/lib/individual/scholar/classify-view";
 import { ProgrammeChooser } from "./_components/competency-client";
 import { CollectionsManager } from "./_components/library-client";
 import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../_components/chrome";
@@ -98,7 +99,7 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
     return (
       <>
         {header}
-        <StatePanel title="My Learning is not set up on this environment yet">
+        <StatePanel title="My Learning is not set up here yet">
           <p>The study store it needs has not been installed here, so nothing can be uploaded or read back yet. Nothing on your account has changed.</p>
         </StatePanel>
       </>
@@ -120,7 +121,7 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
         Concepts and competency links Scholar has suggested from your material. Each is a suggestion until you accept or reject it, and your decision is kept. It does not certify competency.
       </p>
       {!linked.ok ? (linked.notProvisioned
-        ? <p className="mt-3 text-[14px] text-gray-700">Suggested links are not set up on this environment yet.</p>
+        ? <p className="mt-3 text-[14px] text-gray-700">Suggested links are not set up here yet.</p>
         : <div className="mt-3"><Unreadable what="suggested links" /></div>)
         : waitingTotal === 0 ? (
           <p className="mt-3 text-[14px] text-gray-700">Nothing is waiting for your review. Suggestions appear when you analyse a material, with AI help on.</p>
@@ -158,12 +159,18 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
       <Notice>Scholar can suggest concepts and competency links from your material when you analyse it with AI help on. Review them when useful; you can study without a programme.</Notice>
 
       <div className="grid gap-[22px] lg:grid-cols-[1.7fr_1fr]">
-        {programmeOn ? <ProgrammeChooser programmes={programmes.data} current={mine.data?.code ?? null} /> : (
+        {programmeOn && programmes.data.length === 0 && !mine.data ? (
+          // P6: no programme is offered at all (production today) -- said plainly, with nothing to choose.
+          <section aria-labelledby="programme-h" className={card}>
+            <h2 id="programme-h" className="text-[16px] font-bold text-gray-900">Your programme</h2>
+            <p className="mt-1.5 text-[15px] text-gray-600">{noProgrammeText(0)}</p>
+          </section>
+        ) : programmeOn ? <ProgrammeChooser programmes={programmes.data} current={mine.data?.code ?? null} /> : (
           <section aria-labelledby="programme-h" className={card}>
             <h2 id="programme-h" className="text-[16px] font-bold text-gray-900">Your programme</h2>
             {(!programmes.ok && !programmes.notProvisioned) || (!mine.ok && !mine.notProvisioned)
               ? <div className="mt-2"><Unreadable what="your programme" /></div>
-              : <p className="mt-1.5 text-[15px] text-gray-600">Choosing a programme is not available on this environment. Your notes can still be studied without one.</p>}
+              : <p className="mt-1.5 text-[15px] text-gray-600">Choosing a programme is not available here. Your notes can still be studied without one.</p>}
           </section>
         )}
         <section aria-labelledby="ai-choice-h" className={card}>

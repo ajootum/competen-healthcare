@@ -118,7 +118,7 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
       )}
 
       <Section id="req-h" title="CPD requirements" note="A requirement is what an administrator recorded from a named source. Competen does not decide what your body accepts.">
-        {setting === null ? <Unreadable what="CPD requirement" /> : !setting.available ? <Empty>CPD requirements are not available on this environment yet.</Empty>
+        {setting === null ? <Unreadable what="CPD requirement" /> : !setting.available ? <Empty>CPD requirements are not available here yet.</Empty>
           : offered.length === 0 && !chosen ? <Empty>No CPD requirement is configured yet. Your CPD log is complete without one.</Empty> : (
             <>
               {summary && chosen && (

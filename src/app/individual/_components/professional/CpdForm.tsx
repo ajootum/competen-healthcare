@@ -8,6 +8,7 @@ import { focusRing, primaryBtn } from "../chrome";
 import { Field, RefusalNote, inputCls, refusalMsg, type RefusalMsg } from "./forms";
 import { experienceHref } from "@/lib/individual/experiences";
 import { aiNotice } from "./ai-refusal";
+import { AiGate } from "../ai/AiGate";
 
 // The CPD entry form, with reflection drafting (COMPETEN-IND-007 s4 and s7).
 //
@@ -98,10 +99,11 @@ export default function CpdForm({ accent, today, goals, options }: { accent: str
       {drafted && <p className="text-[12.5px] font-medium text-gray-600">✦ AI draft from your notes only. Edit it so it is yours. Nothing is saved until you add the entry.</p>}
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" disabled={busy} className={primaryBtn} style={{ background: accent }}>{busy ? "Saving…" : "Add to my CPD log"}</button>
-        <button type="button" onClick={draft} disabled={drafting}
+        <AiGate activity="assistant" experience="professional">{g => (
+        <button type="button" onClick={draft} disabled={drafting || g.off} aria-describedby={g.describedBy}
           className={`inline-flex min-h-[44px] items-center rounded-xl border border-gray-300 bg-white px-4 text-[14px] font-semibold hover:bg-gray-50 disabled:opacity-50 ${focusRing}`} style={{ color: accent }}>
           {drafting ? "Drafting…" : "✦ Draft the reflection with AI"}
-        </button>
+        </button>)}</AiGate>
         {refused && <RefusalNote msg={refused} busy={busy} onOverride={f => void submit(null, f)} />}
         {msg && <p role={msg.ok ? "status" : "alert"} className={`text-[13.5px] font-medium ${msg.ok ? "text-green-800" : "text-red-700"}`}>{msg.text}{msg.continuity && <> <a href={experienceHref("professional", "ai-allowance")} className="font-semibold underline underline-offset-2">See your AI allowance</a></>}</p>}
       </div>

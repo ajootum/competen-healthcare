@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { noProgrammeText } from "./classify-view";
 import { referenceNames } from "../professional/frameworks";
 import { scholarCatalogue, structureLabel, type CatalogueCompetency, type ProgrammeConfig } from "./catalogue";
 import { competencyProgressRows, learnerProgramme } from "./store";
@@ -36,9 +37,10 @@ export async function loadLearnerCatalogue(admin: any, userId: string): Promise<
  * the suggestions would be -- or null when suggestions can be made. Absent is a state with a reason, never a
  * silent blank, and never a block: the notes are studied the same either way.
  */
-export function competencyAbsence(l: Pick<LearnerCatalogue, "provisioned" | "programme" | "competencies" | "belowFloor">): string | null {
+export function competencyAbsence(l: Pick<LearnerCatalogue, "provisioned" | "programme" | "competencies" | "belowFloor">, programmesOffered: number | null = null): string | null {
   if (!l.provisioned) return null;
-  if (!l.programme) return "No programme is chosen, so your notes are not linked to competencies. Choose your programme in My Learning to see which competencies they support. You can study them either way.";
+  // P6: with no programme offered at all (production today) there is nothing to choose, and it is not asked.
+  if (!l.programme) return noProgrammeText(programmesOffered);
   if (l.competencies === null) return null; // unreadable: the page says so on its own
   if (l.competencies.length === 0 && l.belowFloor === 0)
     return `${l.programme.label} has no competency catalogue Scholar can use yet, so no competencies are suggested for your notes. You can still study them: explanations, practice questions and revision work without it.`;

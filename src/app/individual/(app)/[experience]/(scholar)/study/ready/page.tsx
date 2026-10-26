@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { AI_LABEL, FORMAT_LABEL, FORMAT_OF, MAPPING_LABEL, UNIT_OF } from "@/lib/individual/scholar/config";
-import { analysisStatus, getMaterial, isUuid, libraryTopics, listCollections, listMappings, listMaterials, materialExtras, readConsent } from "@/lib/individual/scholar/store";
+import { analysisStatus, getMaterial, isUuid, libraryTopics, listCollections, listMappings, listMaterials, listProgrammes, materialExtras, readConsent } from "@/lib/individual/scholar/store";
 import { competencyAbsence, competencyLabels, loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { qualitySummary } from "@/lib/individual/scholar/extract";
 import { materialTopics, relatedMaterials } from "@/lib/individual/scholar/library";
@@ -67,7 +67,9 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
   }
 
   const extras = await materialExtras(ctx.admin, ctx.userId, materials.map(m => m.id));
-  const absence = competencyAbsence(learner);
+  // P6: with no programme offered at all (production today) the student is not told to choose one.
+  const offered = !learner.programme ? await listProgrammes(ctx.admin) : null;
+  const absence = competencyAbsence(learner, offered ? (offered.ok ? offered.data.length : null) : null);
   const titleOf = new Map((all.ok ? all.data : []).map(m => [m.id, m.title]));
   const topicsOf = (id: string) => materialTopics(library?.get(id) ?? []);
   const others = [...(library?.keys() ?? [])].map(id => ({ materialId: id, title: titleOf.get(id) ?? "Your material", topics: topicsOf(id).map(t => t.topic) }));
@@ -115,7 +117,7 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
               </p>
               <p className={`mt-2 rounded-lg px-3 py-2 text-[13.5px] ${q?.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "bg-gray-50 text-gray-800"}`}>
                 <span className="font-semibold">{q === null ? "Reading: " : q.partial ? "Partly read. " : "Read. "}</span>
-                {q === null ? "How completely this file was read is not recorded on this environment." : q.partial ? q.text.replace(/^Partly read: /, "") : q.text}
+                {q === null ? "How completely this file was read is not recorded here." : q.partial ? q.text.replace(/^Partly read: /, "") : q.text}
               </p>
 
               <div className="mt-4 flex flex-wrap gap-2">

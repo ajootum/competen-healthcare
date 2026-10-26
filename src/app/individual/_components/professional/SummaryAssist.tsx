@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { secondaryBtn } from "../chrome";
 import { AiNoticeText, aiNotice, type AiNotice } from "./ai-refusal";
+import { AiGate } from "../ai/AiGate";
 
 // "Draft my professional summary" (COMPETEN-PROFESSIONAL-PROFILE-01 GO s7). The Holdings Personal AI in its
 // Professional development mode, through the foundation assistant route -- the same gateway, allowance and
@@ -38,9 +39,10 @@ export default function SummaryAssist({ accent, targetId }: { accent: string; ta
 
   return (
     <div>
-      <button type="button" onClick={ask} disabled={busy} className={secondaryBtn} style={{ color: accent }}>
+      <AiGate activity="assistant" experience="professional">{g => (
+      <button type="button" onClick={ask} disabled={busy || g.off} aria-describedby={g.describedBy} className={secondaryBtn} style={{ color: accent }}>
         {busy ? "Thinking…" : "✦ Draft a summary from my profile"}
-      </button>
+      </button>)}</AiGate>
       {err && <AiNoticeText notice={err} className="mt-3" />}
       {answer !== null && (
         <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4" aria-live="polite">
