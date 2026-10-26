@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Directive** | Owner, 2026-10-26: "Scholar exam paper learning and evidence research". Reuse first, build only what is missing, integrate into the eight-stage architecture. |
-| **Migration** | `570-individual-scholar-exam-papers.sql`, sha256 `e0f887f9d950182c8cca878e1359177ab5a310b15c9cfd51be98f88de46999a7`. Applied on staging by the coordinator's guarded runner. **Not on production.** Every read fails closed without it: pages hide the feature or say it is not set up. Rollback: `ROLLBACK-570.sql` (drops the four tables). Depends on 372. |
+| **Migration** | `570-individual-scholar-exam-papers.sql`, sha256 `e0f887f9d950182c8cca878e1359177ab5a310b15c9cfd51be98f88de46999a7`. Applied ×2 on staging by the coordinator's guarded runner: idempotent (fingerprint `2b625aba…`, 84 items), rollback rehearsed back to PRE, re-applied (`docs/evidence/COMPETEN-SCHOLAR-EXAM-PAPERS-01/`). **Not on production.** Every read fails closed without it: pages hide the feature or say it is not set up. Rollback: `ROLLBACK-570.sql` (drops the four tables). Depends on 372. |
 | **Defaults** | Papers offered with **notes and the Competen library** as evidence. **Live web research OFF. AI transcription of scanned pages OFF.** Both are owner decisions (below). |
 
 ## What existed and what was built
