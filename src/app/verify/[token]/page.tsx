@@ -5,6 +5,7 @@ import { individualAppEnabled } from "@/lib/individual/gate";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 import { loadPassportSelection, loadViewMeta } from "@/lib/individual/passport-view";
+import { identityOf, loadIdentity, photoUrl } from "@/lib/individual/identity";
 import PassportLinkView from "@/app/individual/_components/passport/PassportLinkView";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +70,8 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
     if (meta === null) return <Invalid reason="This link was made before record-level sharing and carries no records. Ask the professional for a new link." />;
     const policy = await loadIndividualPolicy(admin);
     const selection = await loadPassportSelection(admin, share.nurse_id, share.id, { today, profile: policy.professionalProfile, competency: policy.professionalCompetency, lcpd: await loadLcpdConfig(admin), passport: policy.professionalPassport });
+    // IDENTITY-HUB-01 (590): the private photo, for five minutes, only on a link the person chose to show it on.
+    const photo = meta.includePhoto ? await photoUrl(admin, identityOf(await loadIdentity(admin, share.nurse_id)).photoPath) : null;
     await logShareAccess(admin, share.id, share.nurse_id, "shown");
     return (
       <Shell>
@@ -80,7 +83,7 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
             </div>
           </div>
           <div className="p-6">
-            <PassportLinkView selection={selection} order={policy.professionalPassport.sections} name={profile?.full_name ?? null} detailed={policy.professionalPassport.presentation === "detailed"} />
+            <PassportLinkView selection={selection} order={policy.professionalPassport.sections} name={profile?.full_name ?? null} detailed={policy.professionalPassport.presentation === "detailed"} photoUrl={photo} />
             <div className="mt-5 border-t border-gray-100 pt-4 text-[11px] text-gray-500 space-y-0.5">
               <p>Shared {fmt(share.created_at)} · valid until {fmt(share.expires_at)}. Checked now: each record&apos;s status is read from its source on every view.</p>
               <p>A consented, time-limited link chosen record by record by the professional, revocable at any time. It is not a directory, and it shows nothing they did not choose.</p>

@@ -141,6 +141,8 @@ function main() {
     "src/lib/individual/professional/share.ts": ["passport_share_tokens.insert", "passport_share_tokens.update",
       // PASSPORT-01 (540): the person's own Passport view tables, pinned exactly in individual-professional-harness.
       "individual_passport_share_view.insert", "individual_passport_share_view.update", "individual_passport_share_record.insert", "individual_passport_share_access.insert"],
+    // IDENTITY-HUB-01 (590): the person's own shared identity row, written only here; pinned in individual-identity-hub-harness.
+    "src/lib/individual/identity.ts": ["individual_identity_profile.upsert"],
   };
   const experienceOf = (f: string) => /^src\/(?:lib|app\/api)\/individual\/(scholar|professional)\//.exec(f)?.[1] ?? null;
   const badWrites = writes.filter(w => {

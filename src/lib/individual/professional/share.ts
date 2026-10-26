@@ -33,6 +33,8 @@ export type PassportRecordRef = { kind: "cpd" | "evidence" | "study" | "scholar_
 export type PassportViewInput = {
   purposeCode: string | null; purposeLabel: string | null; recipientLabel: string | null; summary: string | null;
   includeInstitution: boolean; records: readonly PassportRecordRef[];
+  /** 590: show the person's private profile photo on this link. Written only when chosen (absent before 590). */
+  includePhoto?: boolean;
 };
 const RECORD_COLUMN: Record<PassportRecordRef["kind"], string> = { cpd: "cpd_id", evidence: "evidence_id", study: "study_item_id", scholar_evaluation: "scholar_evaluation_id" };
 
@@ -90,7 +92,7 @@ export async function mintShare(admin: any, userId: string, input: ReturnType<ty
   const { error: viewErr } = !linkErr && !itemErr && !learnErr && !compErr && view
     ? await admin.from("individual_passport_share_view").insert({
         share_token_id: share.id, user_id: userId, purpose_code: view.purposeCode, purpose_label: view.purposeLabel,
-        recipient_label: view.recipientLabel, summary: view.summary, include_institution: view.includeInstitution,
+        recipient_label: view.recipientLabel, summary: view.summary, include_institution: view.includeInstitution, ...(view.includePhoto ? { include_photo: true } : {}),
       })
     : { error: null };
   const { error: recErr } = !linkErr && !itemErr && !learnErr && !compErr && !viewErr && view && view.records.length

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { listShares, loadShareHistory, suggestedShareDays } from "@/lib/individual/professional/share";
+import { identityOf, loadIdentity } from "@/lib/individual/identity";
 import { loadIndividualPassport, EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { CATEGORY_LABEL } from "@/lib/individual/passport-vocabulary";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -46,6 +47,7 @@ export default async function ScholarSharePage({ params }: { params: Promise<{ e
   const pp = policy.professionalPassport;
   const maxDays = policy.shareLinkMaxDays;
   const history = await loadShareHistory(ctx.admin, ctx.userId, (links ?? []).map(l => l.id));
+  const hasPhoto = !!identityOf(await loadIdentity(ctx.admin, ctx.userId)).photoPath;
   const now = new Date().toISOString();
   const study = pp.shareable.includes("study") && passport.study.ok ? passport.study.data.filter(s => s.itemId) : [];
   const evaluations = pp.shareable.includes("evaluation") && passport.evaluations.ok ? passport.evaluations.data.filter(v => v.itemId) : [];
@@ -87,6 +89,13 @@ export default async function ScholarSharePage({ params }: { params: Promise<{ e
               <Field label="Valid for (days)" htmlFor="ssh-days" hint={`Up to ${maxDays} days.`}><input id="ssh-days" name="days" type="number" min={1} max={maxDays} defaultValue={suggestedShareDays(maxDays)} className={inputCls} /></Field>
             </div>
             <Field label="A short note in your own words (optional)" htmlFor="ssh-summary"><textarea id="ssh-summary" name="summary" rows={3} maxLength={2000} className={inputCls} /></Field>
+            {/* IDENTITY-HUB-01 (590): the private photo travels only on a link it is ticked for. Unticked by default. */}
+            {hasPhoto && (
+              <label className="flex items-start gap-2 text-[14px] text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]">
+                <input type="checkbox" name="includePhoto" value="true" className="mt-1 h-4 w-4 rounded border-gray-400" />
+                <span>Show my profile photo on this link</span>
+              </label>
+            )}
             {groups.map(([kind, list]) => (
               <fieldset key={kind} className="rounded-xl border border-gray-200 p-4">
                 <legend className="px-1 text-[13.5px] font-semibold text-gray-800">{CATEGORY_LABEL[kind === "scholar_evaluation" ? "evaluation" : kind]}</legend>

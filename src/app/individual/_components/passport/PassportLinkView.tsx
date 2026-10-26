@@ -14,16 +14,22 @@ const TRUST_TONE: Record<Trust, string> = {
   educational: "bg-indigo-100 text-indigo-900", assessed: "bg-teal-100 text-teal-900", independently_verified: "bg-emerald-100 text-emerald-900",
 };
 
-export default function PassportLinkView({ selection, order, name, detailed = true }: { selection: PassportSelection; order: readonly PassportCategory[]; name: string | null; detailed?: boolean }) {
+export default function PassportLinkView({ selection, order, name, detailed = true, photoUrl = null }: { selection: PassportSelection; order: readonly PassportCategory[]; name: string | null; detailed?: boolean;
+  /** IDENTITY-HUB-01 (590): a short-lived URL, given only when the person chose to show their photo on this link. */
+  photoUrl?: string | null }) {
   const items = orderItems(selection.items, order);
   const categories = [...new Set(items.map(i => i.category))];
   const m = selection.meta;
   return (
     <div className="space-y-4">
-      <div>
+      <div className="flex items-start gap-4">
+        {/* eslint-disable-next-line @next/next/no-img-element -- a short-lived private signed URL: never cached or optimised publicly */}
+        {photoUrl && m?.includePhoto && <img src={photoUrl} alt={name ? `Photo of ${name}` : "Photo of the Passport holder"} className="h-16 w-16 shrink-0 rounded-full object-cover" />}
+        <div className="min-w-0">
         <h1 className="text-xl font-bold text-gray-900">{name ?? "The Passport holder"}</h1>
         {m?.purposeLabel && <p className="text-[13px] text-gray-700">Shared for: <span className="font-semibold">{m.purposeLabel}</span>{m.recipientLabel ? ` · for ${m.recipientLabel}` : ""}</p>}
         {m?.summary && <p className="mt-2 whitespace-pre-wrap text-[13.5px] text-gray-800">{m.summary} <span className="text-[11px] text-gray-500">(in the professional&apos;s own words)</span></p>}
+        </div>
       </div>
       <details className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] text-gray-700">
         <summary className="cursor-pointer font-semibold">How to read this Passport</summary>

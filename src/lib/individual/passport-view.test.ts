@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
 import { resolvePolicy } from "./policy";
-import { loadPassportSelection, orderItems, presentable, type PassportItem } from "./passport-view";
+import { loadPassportSelection, loadViewMeta, orderItems, presentable, type PassportItem } from "./passport-view";
 import { parsePassportView, scholarViewRefusal } from "./professional/share-passport";
 import { currentDecision, verifiedNow, type VerificationDecision } from "./professional/competency-verification";
 
@@ -120,5 +120,29 @@ describe("sharing from Scholar (PRODUCT-EXPERIENCE P4): only formative Scholar r
     const v = view({ [`record:study:${STUDY}`]: "true", notes: "MY NOTES", ai_text: "AI WROTE THIS", [`record:reflection:${STUDY}`]: "true", answer: "B" });
     expect(JSON.stringify(v)).not.toMatch(/MY NOTES|AI WROTE THIS|reflection|"answer"/);
     expect(v.records).toEqual([{ kind: "study", id: STUDY }]);
+  });
+});
+
+describe("the profile photo on a link (IDENTITY-HUB-01, 590)", () => {
+  const viewRow = { share_token_id: LINK, purpose_label: null, recipient_label: null, summary: null, include_institution: false, activated_at: "2026-10-26T00:00:00Z" };
+  it("only where it was ticked", async () => {
+    expect((await loadViewMeta(fakeAdmin({ individual_passport_share_view: [{ ...viewRow, include_photo: true }] }), LINK, ME) as any).includePhoto).toBe(true);
+    expect((await loadViewMeta(fakeAdmin({ individual_passport_share_view: [{ ...viewRow, include_photo: false }] }), LINK, ME) as any).includePhoto).toBe(false);
+    const p = parsePassportView({ [`record:cpd:${CPD_A}`]: "true" }, policy.professionalPassport);
+    expect(p.ok && p.value.includePhoto).toBe(false);
+  });
+  it("before 590 the view still reads, without a photo", async () => {
+    let calls = 0;
+    const admin = { from: () => {
+      const n = ++calls;
+      const b: any = new Proxy({}, { get(_, prop) {
+        if (prop === "maybeSingle") return () => Promise.resolve(n === 1 ? { data: viewRow, error: null } : { data: null, error: { code: "42703", message: "column include_photo does not exist" } });
+        return () => b;
+      } });
+      return b;
+    } };
+    const m = await loadViewMeta(admin, LINK, ME) as any;
+    expect(m.shareTokenId).toBe(LINK);
+    expect(m.includePhoto).toBe(false);
   });
 });

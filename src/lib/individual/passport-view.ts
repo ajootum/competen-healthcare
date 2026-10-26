@@ -39,6 +39,8 @@ export type PassportItem = {
 };
 export type PassportViewMeta = {
   shareTokenId: string; purposeLabel: string | null; recipientLabel: string | null; summary: string | null; includeInstitution: boolean; activatedAt: string | null;
+  /** 590: the person chose to show their profile photo on this link. False wherever it cannot be read. */
+  includePhoto: boolean;
 };
 export type PassportSelection = { meta: PassportViewMeta | null; items: PassportItem[]; unreadable: PassportCategory[] };
 
@@ -48,8 +50,11 @@ export async function loadViewMeta(admin: any, shareTokenId: string, userId: str
     const { data, error } = await admin.from("individual_passport_share_view").select("share_token_id, purpose_label, recipient_label, summary, include_institution, activated_at")
       .eq("share_token_id", shareTokenId).eq("user_id", userId).maybeSingle();
     if (error) return isNotProvisioned(error) ? null : "unreadable";
-    return data ? { shareTokenId: data.share_token_id, purposeLabel: data.purpose_label, recipientLabel: data.recipient_label, summary: data.summary,
-      includeInstitution: !!data.include_institution, activatedAt: data.activated_at } : null;
+    if (!data) return null;
+    // IDENTITY-HUB-01 (590): read apart, so that before 590 (no column) the view is unchanged and carries no photo.
+    const photo = await admin.from("individual_passport_share_view").select("include_photo").eq("share_token_id", shareTokenId).eq("user_id", userId).maybeSingle();
+    return { shareTokenId: data.share_token_id, purposeLabel: data.purpose_label, recipientLabel: data.recipient_label, summary: data.summary,
+      includeInstitution: !!data.include_institution, activatedAt: data.activated_at, includePhoto: !photo.error && photo.data?.include_photo === true };
   } catch { return "unreadable"; }
 }
 

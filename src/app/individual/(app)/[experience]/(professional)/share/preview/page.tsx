@@ -6,6 +6,7 @@ import { PageHeader } from "../../../../../_components/chrome";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadLcpdConfig } from "@/lib/individual/lcpd-config";
 import { loadPassportSelection } from "@/lib/individual/passport-view";
+import { identityOf, loadIdentity, photoUrl } from "@/lib/individual/identity";
 import { shareCarriesOwnRecords } from "@/lib/individual/professional/share";
 import { SITE_URL } from "@/lib/marketing/site";
 import PassportLinkView from "../../../../../_components/passport/PassportLinkView";
@@ -40,6 +41,7 @@ export default async function PreviewPage({ params, searchParams }: { params: Pr
   const today = new Date().toISOString().slice(0, 10);
   const policy = await loadIndividualPolicy(ctx.admin);
   const selection = await loadPassportSelection(ctx.admin, ctx.userId, link.id, { today, profile: policy.professionalProfile, competency: policy.professionalCompetency, lcpd: await loadLcpdConfig(ctx.admin), passport: policy.professionalPassport });
+  const photo = selection.meta?.includePhoto ? await photoUrl(ctx.admin, identityOf(await loadIdentity(ctx.admin, ctx.userId)).photoPath) : null;
   const state = link.revoked ? "withdrawn" : link.expires_at && link.expires_at < new Date().toISOString() ? "expired" : selection.meta && !selection.meta.activatedAt ? "a draft (nobody can open it yet)" : "active";
 
   return (
@@ -51,7 +53,7 @@ export default async function PreviewPage({ params, searchParams }: { params: Pr
       </div>
       <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
         {selection.meta === null ? <p className="text-[13.5px] text-gray-700">This link was made before record-level sharing, so it carries no records. Create a new view to share records.</p>
-          : <PassportLinkView selection={selection} order={policy.professionalPassport.sections} name={ctx.profile.fullName ?? null} detailed={policy.professionalPassport.presentation === "detailed"} />}
+          : <PassportLinkView selection={selection} order={policy.professionalPassport.sections} name={ctx.profile.fullName ?? null} detailed={policy.professionalPassport.presentation === "detailed"} photoUrl={photo} />}
         <div className="mt-5 border-t border-gray-100 pt-3 text-[11.5px] text-gray-600">
           <p>Issued {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} from the professional&apos;s Competen Passport. Link valid until {link.expires_at ? new Date(link.expires_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}.</p>
           <p>Check current status at {SITE_URL}/verify/{link.token} while the link is active. A printed or saved copy cannot be recalled and may be out of date: the link shows each record as it stands now.</p>
