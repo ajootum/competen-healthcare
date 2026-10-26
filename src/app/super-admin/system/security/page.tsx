@@ -73,7 +73,7 @@ export default async function SecurityOperationsCenter() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Active incidents */}
-        <div className={`${card} p-5 lg:col-span-2`}>
+        <div id="incidents" className={`${card} p-5 lg:col-span-2 scroll-mt-4`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Active Incidents</h2>
             <Link href="/super-admin/platform-ops/monitoring" className="text-xs text-teal-700 hover:underline">Monitoring →</Link>
