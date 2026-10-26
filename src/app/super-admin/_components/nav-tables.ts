@@ -26,7 +26,7 @@
 
 import { PD_NAV, PD_HOME, PD_EXTERNAL_HREFS } from "./pd-nav";
 
-export const HQ_NAV_REGISTRY_VERSION = "1.1.0";
+export const HQ_NAV_REGISTRY_VERSION = "1.2.0";
 
 /**
  * page: drawn, its home is here. action: drawn, a create/quick action whose home is here.
@@ -183,6 +183,8 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     { key: "frameworks.home", group: "Competency Frameworks", plain: true, items: [
       // Migration 465: shared competency authoring (the Competency Author). Approval is Clinical Content Approval.
       { key: "frameworks.authoring", label: "Competency Authoring", href: "/super-admin/competencies/authoring", icon: "✍️" },
+      // Migration 580: governed publication of shared frameworks and catalogues, by an independent publisher.
+      { key: "frameworks.publication", label: "Framework Publication", href: "/super-admin/competencies/publication", icon: "🚦" },
       { key: "frameworks.library", label: "Global Competency Library", href: "/super-admin/competencies", icon: "📖" },
     ]},
     // Migration 510 (COMPETENCY-01 C5): Holdings competency verification. Two separate authorities, two doors --

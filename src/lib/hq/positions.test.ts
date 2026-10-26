@@ -7,8 +7,10 @@ import {
 import { HQ_CAPABILITY_CODES } from "./spaces";
 import { readFail, readOk } from "./appointments";
 
-// The LATEST migration that defines each function is the one the database runs: 500 first, 511 (COMPETENCY-01 C5) after.
+// The LATEST migration that defines each function is the one the database runs: 500 first, 511 (COMPETENCY-01 C5) after,
+// then 580 (framework publication) for the exclusions only. The sensitive classes are still 511's.
 const SQL = readFileSync("supabase/migrations/511-competency-assessor-separation-of-duties.sql", "utf8");
+const SQL_580 = readFileSync("supabase/migrations/580-competency-framework-publication-authority.sql", "utf8");
 const SQL_500 = readFileSync("supabase/migrations/500-hq-position-administration.sql", "utf8");
 const bodyOf = (sql: string, fn: string) => {
   const at = sql.indexOf(`create or replace function ${fn}(`);
@@ -17,11 +19,23 @@ const bodyOf = (sql: string, fn: string) => {
 const body = (fn: string) => bodyOf(SQL, fn);
 const pairsOf = (fn: string) => [...fn.matchAll(/\('(hq\.[^']+)', '(hq\.[^']+)', '([^']+)'\)/g)].map(m => ({ a: m[1], b: m[2], reason: m[3] }));
 
-describe("the latest migration (511) and positions.ts agree", () => {
+describe("the latest migrations (511, 580) and positions.ts agree", () => {
   it("the excluded pairs are the same set, in the same order", () => {
-    const pairs = pairsOf(body("hq_capability_exclusions"));
-    expect(pairs.length).toBe(14);
+    const pairs = pairsOf(bodyOf(SQL_580, "hq_capability_exclusions"));
+    expect(pairs.length).toBe(15);
     expect(pairs).toEqual(HQ_CAPABILITY_EXCLUSIONS);
+  });
+
+  it("580 keeps every pair of 511, in order, and only adds the author/publish pair", () => {
+    const before = pairsOf(body("hq_capability_exclusions"));
+    expect(before.length).toBe(14);
+    const after = pairsOf(bodyOf(SQL_580, "hq_capability_exclusions"));
+    expect(after.slice(0, before.length)).toEqual(before);
+    expect(after.slice(before.length)).toEqual([{ a: "hq.quality.competency.author", b: "hq.quality.competency.publish", reason: "a competency author cannot publish competency frameworks" }]);
+    expect(exclusionConflict("hq.quality.competency.publish", ["hq.quality.competency.author"])?.with).toBe("hq.quality.competency.author");
+    // Its rollback restores 511's list exactly.
+    const rollback = readFileSync("docs/evidence/CFCA/ROLLBACK-580.sql", "utf8");
+    expect(pairsOf(bodyOf(rollback, "hq_capability_exclusions"))).toEqual(before);
   });
 
   it("511 keeps every pair of 500, in order, and only adds", () => {
