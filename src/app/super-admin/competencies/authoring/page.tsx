@@ -3,6 +3,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 import { loadAuthoringView } from "@/lib/competency/authoring-view";
 import { CLINICAL_STATE_LABEL, clinicalNote } from "@/lib/competency/clinical-review";
 import { CompetencyEditor, DomainName, FrameworkIdentity, FrameworkMeta, ImportDraft, NewCpu, NewDomain, NewFramework, NewPractice, SubmitReview } from "./_components/AuthoringControls";
+import { SubmitForPublication } from "../publication/_components/PublicationControls";
 
 // /super-admin/competencies/authoring -- CFCA authoring in production (migration 465, owner CFCA PRODUCTION AUTHORING).
 //
@@ -100,6 +101,16 @@ export default async function CompetencyAuthoringPage() {
                     </div>
                   ))}
                   <div className="mt-3"><NewDomain frameworkId={f.id} /></div>
+                  {f.layer && (
+                    <details className="mt-3 border-t border-gray-100 pt-2">
+                      <summary className="cursor-pointer text-[13px] font-semibold text-gray-800">Publication</summary>
+                      <p className="mt-1 text-[12.5px] text-gray-600">
+                        An independent publisher decides. Every competency must be clinically approved at its current content first.
+                        {f.pubStatus === "published" ? " The published version stays in use while a revision is decided." : ""}
+                      </p>
+                      <SubmitForPublication frameworkId={f.id} revision={f.pubStatus === "published"} />
+                    </details>
+                  )}
                 </>
               ) : (
                 <p className="mt-2 text-[13px] text-gray-700">{f.pubStatus === "archived" ? "Archived: not edited." : "Under governance review: its content is what the approver is looking at, so it is not edited until it is published or returned to draft."}</p>

@@ -291,6 +291,13 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
       )}
 
       <Section title="Sharing">
+        {/* PRODUCT-EXPERIENCE P4: in Scholar, share chosen study and evaluations as formative records. */}
+        {experience === "scholar" && (
+          <p className="mb-2 text-[14px] text-gray-700">
+            Share the study achievements and evaluations you choose, labelled formative, with a tutor, a course or an employer:{" "}
+            <a href={experienceHref("scholar", "passport/share")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Share from your Passport</a>.
+          </p>
+        )}
         {ctx.live.includes("professional") ? (
           <p className="text-[14px] text-gray-700">
             You choose exactly what a view shows, record by record, preview it, and only then make it live. Make one from{" "}
@@ -303,6 +310,8 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
             You can share a revocable, time-limited verification link from{" "}
             <a href="/dashboard/passport/share" className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>your Passport sharing page</a>.
           </p>
+        ) : experience === "scholar" ? (
+          <p className="text-[14px] text-gray-700">Nothing is shared with anyone unless you choose it, record by record.</p>
         ) : (
           <p className="text-[14px] text-gray-700">Sharing your Passport from Competen Individual is not available yet. Nothing is shared with anyone unless you choose to share it.</p>
         )}
