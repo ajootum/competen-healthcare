@@ -18,18 +18,19 @@ export const secondaryBtn =
   + "text-[14.5px] font-semibold text-gray-800 hover:bg-gray-50 " + focusRing;
 
 /** competen + SUB-BRAND -- the mark /practice, the coming-soon doors and the public experience pages use. */
-export function ExperienceMark({ wordmark, accent, size = "md" }: { wordmark: string; accent: string; size?: "sm" | "md" }) {
+/** `iconOnly` (HFE-01 F8): just the C mark, for a phone header that already names the experience in its switcher. */
+export function ExperienceMark({ wordmark, accent, size = "md", iconOnly = false }: { wordmark: string; accent: string; size?: "sm" | "md"; iconOnly?: boolean }) {
   const sm = size === "sm";
   return (
     <span className="inline-flex items-center gap-2">
       <span aria-hidden className={`${sm ? "w-7 h-7 text-[13px]" : "w-9 h-9 text-base"} shrink-0 rounded-full flex items-center justify-center text-white font-bold`}
         style={{ background: accent }}>C</span>
-      <span className="leading-none">
+      {!iconOnly && <span className="leading-none">
         <span className={`block ${sm ? "text-[13px]" : "text-[15px]"} font-bold tracking-tight text-gray-900`}>competen</span>
         <span className={`block ${sm ? "text-[9.5px]" : "text-[10.5px]"} mt-0.5 font-bold uppercase tracking-[0.18em]`} style={{ color: accent }}>
           {wordmark}
         </span>
-      </span>
+      </span>}
     </span>
   );
 }
