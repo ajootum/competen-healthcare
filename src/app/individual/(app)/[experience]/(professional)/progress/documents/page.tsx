@@ -83,7 +83,18 @@ export default async function DocumentStudioPage({ params, searchParams }: { par
               </Field>
               <Field label="Title (optional)" htmlFor="doc-title"><input id="doc-title" name="title" maxLength={200} className={inputCls} /></Field>
             </div>
-            <p className="text-[12.5px] text-gray-500">Templates for each type: {cfg.types.map(t => `${t.label}: ${templatesFor(cfg, t).map(tp => `${tp.name} v${tp.version}`).join(", ")}`).join(" · ")}.</p>
+            {/* HFE-01 Wave 5 (F18): the templates per type, scannable, instead of one run-on sentence. */}
+            <details className="text-[13px] text-gray-600">
+              <summary className="cursor-pointer font-semibold text-gray-700">Templates for each type</summary>
+              <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-[max-content_1fr]">
+                {cfg.types.map(t => (
+                  <div key={t.code} className="contents">
+                    <dt className="font-semibold text-gray-800">{t.label}</dt>
+                    <dd>{templatesFor(cfg, t).map(tp => `${tp.name} v${tp.version}`).join(", ")}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
           </ApiForm>
         </Section>
         <Section id="drafts-h" title="My documents" note="Private to you. Exports are made for you only and are not stored.">

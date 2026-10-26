@@ -10,6 +10,8 @@ import OwnProfileCard from "@/components/account/OwnProfileCard";
 import { AiHelpBody, readAiHelp } from "../(scholar)/study/_components/shell-pieces";
 import { EraseAll } from "../(scholar)/study/_components/client";
 import { listMaterials } from "@/lib/individual/scholar/store";
+import { professionalSelfAddEnabled } from "@/lib/individual/professional-add";
+import AddProfessional from "../../../_components/AddProfessional";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -32,6 +34,8 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
   const primary = effectivePrimary(ctx.membership.primaryExperience, ctx.live) ?? experience;
   const study = experience === "scholar" ? await listMaterials(ctx.admin, ctx.userId) : null;
   const studyCount = study?.ok ? study.data.length : 0;
+  // P5 (prepared, OFF): offered only in Scholar, only without Professional, and only while the server gate is on.
+  const canAddProfessional = experience === "scholar" && !ctx.live.includes("professional") && (await professionalSelfAddEnabled(ctx.admin));
 
   return (
     <>
@@ -89,6 +93,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
           })}
         </ul>
         <p className="mt-2 text-[12.5px] text-gray-500">Competen Individual is in pilot. Experiences are added to your account by Competen.</p>
+        {canAddProfessional && <AddProfessional accent={EXPERIENCES.professional.accent} />}
       </section>
 
       {ctx.live.length > 1 && (

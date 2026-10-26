@@ -305,3 +305,43 @@ export async function lookupIndividualPerson(admin: any, email: string): Promise
     },
   };
 }
+
+// ── ADD PROFESSIONAL FROM SCHOLAR ── PRODUCT-EXPERIENCE P5 (prepared, OFF; gate in professional-add.ts) ─────────
+//
+// Here because this file is the one place allowed to write gate-3 records. The route checks the gate first.
+
+export type AddOutcome =
+  | { ok: true; alreadyLive: boolean; next: string }
+  | { ok: false; status: number; code: string; message: string };
+
+/**
+ * Add Professional for a member who holds Scholar. The caller has checked the gate and the session. The
+ * membership must already exist and be active (this is an addition, never a first join); Scholar must be live;
+ * an active Professional is not added twice. Professional's terms are accepted on first use, by the existing
+ * terms gate (D2), exactly as for an HQ grant.
+ */
+export async function addProfessionalFromScholar(admin: any, userId: string): Promise<AddOutcome> {
+  const next = "/individual/professional";
+  const { data: m, error: mErr } = await admin.from("individual_membership").select("status").eq("user_id", userId).maybeSingle();
+  if (mErr) return { ok: false, status: 503, code: "UNAVAILABLE", message: "Your account could not be checked just now. Try again shortly." };
+  if (!m) return { ok: false, status: 409, code: "NOT_A_MEMBER", message: "Competen Professional can be added once you have Competen Scholar." };
+  if (m.status !== "active") return { ok: false, status: 409, code: "MEMBERSHIP_NOT_ACTIVE", message: `Your Competen Individual membership is ${m.status}.` };
+
+  const { data: live, error: lErr } = await admin.from("individual_live_entitlement").select("experience_code").eq("user_id", userId);
+  if (lErr) return { ok: false, status: 503, code: "UNAVAILABLE", message: "Your access could not be checked just now. Try again shortly." };
+  const codes = new Set((live ?? []).map((r: any) => r.experience_code));
+  if (codes.has("professional")) return { ok: true, alreadyLive: true, next };
+  if (!codes.has("scholar")) return { ok: false, status: 409, code: "SCHOLAR_REQUIRED", message: "Competen Professional can be added from Competen Scholar." };
+
+  const ins = await admin.from("individual_entitlement").insert({
+    user_id: userId, experience_code: "professional", status: "active", source: "signup",
+    operating_entity: EXPERIENCES.professional.operatingEntity, note: "Added from Competen Scholar settings",
+  });
+  if (ins.error) return { ok: false, status: 503, code: "WRITE_FAILED", message: "Competen Professional could not be added just now. Nothing on your account has changed." };
+
+  await admin.from("audit_log").insert({
+    actor_id: userId, action: "individual_professional_self_added", entity_type: "individual_entitlement", entity_id: null,
+    new_value: { from: "scholar_settings" },
+  }).then((r: unknown) => r, () => {});
+  return { ok: true, alreadyLive: false, next };
+}

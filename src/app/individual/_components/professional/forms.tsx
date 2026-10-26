@@ -41,6 +41,8 @@ export function AddPanel({ label, accent, suggestOpen, children }: {
     <details className="mt-4 rounded-xl border border-gray-200 p-4" open={open} onToggle={e => setOpen(e.currentTarget.open)}>
       <summary className="cursor-pointer text-[14px] font-semibold" style={{ color: accent }}>{label}</summary>
       <div className="mt-4">{children}</div>
+      {/* HFE-01 Wave 5 (F19): a plain way out without saving. */}
+      <button type="button" onClick={() => setOpen(false)} className="mt-3 inline-flex min-h-[44px] items-center rounded-lg px-2 text-[13.5px] font-semibold text-gray-600 underline-offset-2 hover:underline">Cancel</button>
     </details>
   );
 }
