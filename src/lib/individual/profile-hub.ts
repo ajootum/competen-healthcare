@@ -1,19 +1,24 @@
-// ── PROFILE & HISTORY: THE SHARED PERSONAL PROFILE ── COMPETEN-INDIVIDUAL-PROFILE-HFE (owner directive, 26 Oct) ──
+// ── PROFILE & HISTORY: THE PERSONAL AND PROFESSIONAL IDENTITY HUB ── COMPETEN-INDIVIDUAL-IDENTITY-HUB-01 ─────────
 //
-// One Individual identity (profiles, edited through /api/account/profile) and one set of repeatable profile
-// records (migration 450 individual_professional_profile_item, whose experience_code is 'scholar' or
-// 'professional'), shown on the one Profile & History page in both experiences. Each experience adds its own
-// context: Scholar its studies (387/402), Professional its overview and primary registration (450).
+// One page, shared by Scholar and Professional (owner directive, 26 Oct, "functional redesign"; mock-up: a header
+// with photo, name and headline, then a two-column grid of cards, each edited in place):
+//   personal    the one Competen identity (profiles, via /api/account/profile) -- private
+//   summary     headline and biography (590 individual_identity_profile) and interests (450 records)
+//   education   qualifications and education (450) -- HOME: this page (HFE D2)
+//   registration  shown from My practice (450 registrations + the primary registration) -- HOME: My practice (D2)
+//   work        roles and employment (450)
+//   skills      skills (590 skill kind on 450), specialties, and My competencies summarised (520) -- Professional's
+//               competency EVIDENCE stays in Credentials & evidence (D2)
+//   training    CPD (373, added in place with the CPD form) and Competen Learning completions, read where they live
+//   objectives  career objectives and learning goals (450 aspirations)
+//   portfolio   the Passport: what is on it, by trust, and where to share it or make a document
+//   studies     Scholar's programme, level and institution (387/402)
+// One record has one home: a card that shows another home's records reads them, it never copies them.
 //
-// ⚠ CONFIGURED, NOT HARD-CODED. Which sections appear, and their order, follow the published
-// professional_profile_sections sequence (WCE). An experience shows only the kinds that mean something in it:
-// a Scholar learner has no registrations or specialties to declare, so those stay Professional.
+// ⚠ CONFIGURED, NOT HARD-CODED. Which record cards appear follows the published professional_profile_sections.
+// ⚠ NOTHING HERE VERIFIES ANYTHING. Entries are self-declared or document-supported, exactly as 450 generates them.
 //
-// ⚠ NOTHING HERE VERIFIES ANYTHING. Every record is self-declared (or document-supported), exactly as 450
-// generates it. A record becomes verified only when the person asks and a Competen verifier checks it (451),
-// from the Professional experience.
-//
-// ⚠ THIS MODULE IMPORTS ONLY TYPES AND THE VOCABULARY, so the page, the route and the unit tests share it.
+// THIS MODULE IMPORTS ONLY TYPES, so the page, the route and the unit tests share it.
 
 import type { ExperienceKey } from "./experiences";
 import type { ItemKind, ProfileSection } from "./professional/profile-vocabulary";
@@ -22,72 +27,73 @@ import type { ItemKind, ProfileSection } from "./professional/profile-vocabulary
 export const HUB_EXPERIENCES = ["scholar", "professional"] as const;
 export type HubExperience = (typeof HUB_EXPERIENCES)[number];
 export const isHubExperience = (v: unknown): v is HubExperience => (HUB_EXPERIENCES as readonly unknown[]).includes(v);
+export function toHubExperience(e: ExperienceKey): HubExperience | null { return isHubExperience(e) ? e : null; }
 
-/** The record kinds each experience may add from the hub. */
+/** The record kinds each experience may add from the hub. Registrations are added in My practice (D2). */
 export const HUB_KINDS: Record<HubExperience, readonly ItemKind[]> = {
-  scholar: ["qualification", "employment", "interest", "aspiration"],
-  professional: ["qualification", "registration", "employment", "specialty", "interest", "aspiration"],
+  scholar: ["qualification", "employment", "interest", "aspiration", "skill"],
+  professional: ["qualification", "employment", "specialty", "interest", "aspiration", "skill"],
 };
 export const kindAllowed = (experience: HubExperience, kind: unknown): kind is ItemKind => (HUB_KINDS[experience] as readonly unknown[]).includes(kind);
 
-/** The sections of the configured sequence, and the kinds each shows. "overview" is the experience's own context. */
-const SECTION_KINDS: Record<ProfileSection, readonly ItemKind[]> = {
-  overview: [], qualifications: ["qualification"], registrations: ["registration"], employment: ["employment"],
-  specialties: ["specialty", "interest"], aspirations: ["aspiration"],
+export type HubCard = "personal" | "summary" | "education" | "registration" | "work" | "skills" | "training" | "objectives" | "portfolio" | "studies";
+
+/** The configured section each record card follows. A card with none always shows. */
+const CARD_SECTION: Partial<Record<HubCard, ProfileSection>> = {
+  education: "qualifications", registration: "registrations", work: "employment", skills: "specialties", objectives: "aspirations",
 };
 
-export type HubSection = { section: ProfileSection; title: string; note: string; kinds: { kind: ItemKind; heading: string | null; add: string; empty: string }[] };
-
-const TITLE: Record<HubExperience, Record<ProfileSection, string>> = {
-  scholar: {
-    overview: "Your studies", qualifications: "Education and qualifications", registrations: "Registration and licensing",
-    employment: "Work experience", specialties: "Interests", aspirations: "Learning goals",
-  },
-  professional: {
-    overview: "Your practice", qualifications: "Education and qualifications", registrations: "Registration and licensing",
-    employment: "Practice and employment history", specialties: "Specialties and interests", aspirations: "Learning goals and career aspirations",
-  },
-};
-
-const NOTE: Record<ProfileSection, string> = {
-  overview: "",
-  qualifications: "Add as many as you like, whenever you like. Each says it was recorded by you: a document makes it document-supported, never verified.",
-  registrations: "Self-declared. Competen does not check registrations with any regulator.",
-  employment: "Every role keeps its own period. Ending one or starting another never removes the earlier record.",
-  specialties: "What you care about and want to grow in. Optional.",
-  aspirations: "Where you want to get to, and by when if you know. Private to you unless you share it.",
-};
+export type CardSpec = { card: HubCard; title: string; note: string; kinds: { kind: ItemKind; heading: string | null; add: string; empty: string }[] };
 
 const COPY: Record<ItemKind, { heading: string; add: string; empty: string }> = {
-  qualification: { heading: "Education and qualifications", add: "Add education or a qualification", empty: "Nothing recorded yet. Add your courses, degrees and certificates when you are ready." },
-  registration: { heading: "Other registrations and licences", add: "Add a registration or licence", empty: "None recorded." },
-  employment: { heading: "Roles", add: "Add a role", empty: "No roles recorded yet." },
+  qualification: { heading: "Education and qualifications", add: "Add education or a qualification", empty: "Add your degrees, diplomas, courses and certificates. Each one keeps its own dates." },
+  registration: { heading: "Registrations and licences", add: "Add a registration or licence", empty: "None recorded." },
+  employment: { heading: "Roles", add: "Add a role", empty: "Add the roles you have held, current and past. Ending one never removes it." },
   specialty: { heading: "Specialties and practice areas", add: "Add a specialty", empty: "No specialties recorded." },
-  interest: { heading: "Interests", add: "Add an interest", empty: "No interests recorded yet." },
-  aspiration: { heading: "Goals", add: "Add a goal", empty: "No goals recorded yet." },
+  interest: { heading: "Interests", add: "Add an interest", empty: "What you care about and want to grow in." },
+  aspiration: { heading: "Objectives and goals", add: "Add an objective or goal", empty: "Where you want to get to, and by when if you know." },
+  skill: { heading: "Skills", add: "Add a skill", empty: "Add the skills you bring: clinical, technical, teaching, languages." },
 };
+const kind = (k: ItemKind, heading: boolean) => ({ kind: k, heading: heading ? COPY[k].heading : null, add: COPY[k].add, empty: COPY[k].empty });
 
 /**
- * Pure: the hub's sections, in the configured order, for the experience the person is in. A section with no kind
- * this experience may add is left out, except the overview (the experience's own context), which always shows.
+ * Pure: the cards, in the mock-up's order, for the experience the person is in and the experiences they hold. A
+ * record card the configuration removes is not shown. Registration and training show only for Professional, and
+ * studies only for Scholar.
  */
-export function hubSections(configured: readonly ProfileSection[], experience: HubExperience): HubSection[] {
-  const allowed = HUB_KINDS[experience];
-  const order = configured.includes("overview") ? configured : ["overview" as const, ...configured];
-  return order.flatMap(section => {
-    const kinds = SECTION_KINDS[section].filter(k => allowed.includes(k));
-    if (section !== "overview" && kinds.length === 0) return [];
-    return [{
-      section, title: TITLE[experience][section], note: NOTE[section],
-      kinds: kinds.map(k => ({ kind: k, heading: kinds.length > 1 ? COPY[k].heading : null, add: COPY[k].add, empty: COPY[k].empty })),
-    }];
-  });
+export function hubCards(configured: readonly ProfileSection[], experience: HubExperience, holds: { scholar: boolean; professional: boolean }): CardSpec[] {
+  const pro = holds.professional, allowed = HUB_KINDS[experience];
+  const k = (list: ItemKind[], headings = false) => list.filter(x => allowed.includes(x)).map(x => kind(x, headings));
+  const cards: CardSpec[] = [
+    { card: "personal", title: "Personal details", note: "Private to you. Never on your Passport or a shared link.", kinds: [] },
+    { card: "summary", title: "Professional summary", note: "How you describe yourself. You choose, link by link, whether it is shared.", kinds: k(["interest"]) },
+    { card: "education", title: "Education", note: "Self-declared. A document makes a record document-supported, never verified.", kinds: k(["qualification"]) },
+    ...(pro ? [{ card: "registration" as const, title: "Professional registration", note: "Private by default. Kept and changed in My practice.", kinds: [] }] : []),
+    { card: "work", title: "Work experience", note: "Every role keeps its own period.", kinds: k(["employment"]) },
+    { card: "skills", title: "Skills & competencies", note: "Skills you declare, and the competencies you are developing.", kinds: k(["skill", "specialty"], experience === "professional") },
+    { card: "training", title: "Training & CPD", note: pro ? "Learning and continuing professional development, from where they are kept." : "Courses completed in Competen Learning.", kinds: [] },
+    { card: "objectives", title: "Career objectives", note: "Private to you unless you share it.", kinds: k(["aspiration"]) },
+    { card: "portfolio", title: "Portfolio & Passport", note: "What is on your Passport, and how each record is labelled.", kinds: [] },
+    ...(holds.scholar ? [{ card: "studies" as const, title: "Your studies", note: "Changing it later keeps your earlier study in the context it was done in.", kinds: [] }] : []),
+  ];
+  return cards.filter(c => !CARD_SECTION[c.card] || configured.includes(CARD_SECTION[c.card]!));
 }
 
-/** Pure: progressive completion, for encouragement only. Nothing is required, and nothing is blocked by it. */
-export function completion(sections: readonly HubSection[], counts: Partial<Record<ItemKind, number>>): { started: number; total: number } {
-  const withKinds = sections.filter(s => s.kinds.length);
-  return { started: withKinds.filter(s => s.kinds.some(k => (counts[k.kind] ?? 0) > 0)).length, total: withKinds.length };
-}
+export type CompletionInput = { photo: boolean; headline: boolean; biography: boolean; counts: Partial<Record<ItemKind, number>> };
+export type Prompt = { key: string; text: string; target: string };
 
-export function toHubExperience(e: ExperienceKey): HubExperience | null { return isHubExperience(e) ? e : null; }
+/**
+ * Pure: progressive completion. For encouragement only: nothing is required, and nothing is blocked by it. The
+ * prompts name the next useful thing, in the order a reader of the profile notices it.
+ */
+export function completion(cards: readonly CardSpec[], c: CompletionInput): { done: number; total: number; prompts: Prompt[] } {
+  const steps: (Prompt & { ok: boolean })[] = [
+    { key: "photo", ok: c.photo, text: "Add a photo", target: "profile-header" },
+    { key: "headline", ok: c.headline, text: "Write a headline", target: "card-summary" },
+    { key: "biography", ok: c.biography, text: "Add a short biography", target: "card-summary" },
+    ...cards.filter(x => x.kinds.length && x.card !== "summary").map(x => ({
+      key: x.card, ok: x.kinds.some(k => (c.counts[k.kind] ?? 0) > 0), text: x.kinds[0].add, target: `card-${x.card}`,
+    })),
+  ];
+  return { done: steps.filter(s => s.ok).length, total: steps.length, prompts: steps.filter(s => !s.ok).slice(0, 3).map(({ key, text, target }) => ({ key, text, target })) };
+}

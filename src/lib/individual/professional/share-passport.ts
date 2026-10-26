@@ -29,10 +29,12 @@ export function parsePassportView(b: Record<string, unknown>, policy: PassportPo
   const recipient = text(b.recipient, 160);
   if (policy.recipient === "required" && !recipient) return { ok: false, error: "Say who this view is for." };
   const includeInstitution = ticked(b.includeInstitution);
+  // 590: the photo goes only where it is ticked, link by link.
+  const includePhoto = ticked(b.includePhoto);
   if (includeInstitution && !policy.shareable.includes("institution")) return { ok: false, error: "Organisation records cannot be shared on a view." };
   return { ok: true, value: {
     purposeCode: purpose?.code ?? null, purposeLabel: purpose?.label ?? null, recipientLabel: recipient, summary: text(b.summary, 2000),
-    includeInstitution, records: [...new Map(records.map(r => [`${r.kind}:${r.id}`, r])).values()].slice(0, 300),
+    includeInstitution, includePhoto, records: [...new Map(records.map(r => [`${r.kind}:${r.id}`, r])).values()].slice(0, 300),
   } };
 }
 

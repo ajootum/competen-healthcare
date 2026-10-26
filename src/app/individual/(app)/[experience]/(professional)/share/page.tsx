@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { listShares, loadShareHistory, suggestedShareDays } from "@/lib/individual/professional/share";
+import { identityOf, loadIdentity } from "@/lib/individual/identity";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { loadIndividualPassport } from "@/lib/individual/passport";
 import { CATEGORY_LABEL as PASSPORT_CATEGORY_LABEL } from "@/lib/individual/passport-vocabulary";
@@ -53,6 +54,7 @@ export default async function SharePage({ params }: { params: Promise<{ experien
   const ownStudy = offer("study") && passport.study.ok ? passport.study.data.filter(s => s.itemId) : [];
   const ownEvaluations = offer("evaluation") && passport.evaluations.ok ? passport.evaluations.data.filter(v => v.itemId) : [];
   const history = await loadShareHistory(ctx.admin, ctx.userId, (links ?? []).map(l => l.id));
+  const hasPhoto = !!identityOf(await loadIdentity(ctx.admin, ctx.userId)).photoPath;
   const shareableCompetencies = comp.provisioned ? (comp.entries ?? []).filter(e => !e.removed_at) : [];
   // LCPD-01 LCPD-6: completed learning of a kind the configuration lets a person share. Nothing ticked by default.
   const shareableLearning = learning.enabled && learning.refs ? eligibleLearning(learning.refs, lcpd) : [];
@@ -103,6 +105,13 @@ export default async function SharePage({ params }: { params: Promise<{ experien
           </div>
           <Field label="A short summary in your own words (optional)" htmlFor="sh-summary"><textarea id="sh-summary" name="summary" rows={3} maxLength={2000} className={inputCls} /></Field>
           {pp.ai === "on" && <DraftSummary targetId="sh-summary" purposeId="sh-purpose" accent={x.accent} />}
+          {/* IDENTITY-HUB-01 (590): the private photo travels only on a link it is ticked for. Unticked by default. */}
+          {hasPhoto && (
+            <label className="flex items-start gap-2 text-[14px] text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]">
+              <input type="checkbox" name="includePhoto" value="true" className="mt-1 h-4 w-4 rounded border-gray-400" />
+              <span>Show my profile photo on this link</span>
+            </label>
+          )}
           {offer("institution") && (
             <label className="flex items-start gap-2 text-[14px] text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]">
               <input type="checkbox" name="includeInstitution" value="true" className="mt-1 h-4 w-4 rounded border-gray-400" />

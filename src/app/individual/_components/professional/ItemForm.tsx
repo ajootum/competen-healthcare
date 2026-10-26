@@ -15,7 +15,7 @@ export type ItemValues = {
   self_declared_identifier?: string | null; started_on?: string | null; ended_on?: string | null; expires_on?: string | null;
   target_on?: string | null; detail?: string | null; document_name?: string | null;
 };
-type Kind = "qualification" | "registration" | "employment" | "specialty" | "interest" | "aspiration";
+type Kind = "qualification" | "registration" | "employment" | "specialty" | "interest" | "aspiration" | "skill";
 
 const COPY: Record<Kind, { title: string; titleHint?: string; type?: string; org?: string; started?: string; ended?: string; expires?: string; target?: string; identifier?: string }> = {
   qualification: { title: "Qualification", titleHint: "For example: a degree, diploma or specialist certificate, as it is named on the award.", type: "Type", org: "Awarding institution", started: "Awarded on", expires: "Expires on (if it does)" },
@@ -24,6 +24,7 @@ const COPY: Record<Kind, { title: string; titleHint?: string; type?: string; org
   specialty: { title: "Specialty or practice area", started: "Since" },
   interest: { title: "Professional or career interest" },
   aspiration: { title: "Aspiration", titleHint: "For example: become an educator, specialise, lead a team or move into research.", target: "Hoping to reach it by" },
+  skill: { title: "Skill", titleHint: "For example: ECG interpretation, wound care, teaching, data analysis or a language." },
 };
 const FIELDS: Record<Kind, string[]> = {
   qualification: ["type", "organisation", "jurisdiction", "startedOn", "expiresOn", "detail"],
@@ -32,6 +33,7 @@ const FIELDS: Record<Kind, string[]> = {
   specialty: ["startedOn", "detail"],
   interest: ["detail"],
   aspiration: ["targetOn", "detail"],
+  skill: ["detail"],
 };
 
 const ITEMS_API = "/api/individual/professional/profile-items";

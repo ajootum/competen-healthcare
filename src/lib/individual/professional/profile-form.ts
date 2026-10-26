@@ -174,6 +174,7 @@ export const ITEM_FIELDS: Record<ItemKind, readonly ("type" | "organisation" | "
   specialty: ["startedOn", "detail"],
   interest: ["detail"],
   aspiration: ["targetOn", "detail"],
+  skill: ["detail"],
 };
 
 /** The list a record's type chooses from. A registration's standing is a fixed list. */

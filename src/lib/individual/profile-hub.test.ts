@@ -1,42 +1,55 @@
 import { describe, expect, it } from "vitest";
-import { HUB_KINDS, completion, hubSections, isHubExperience, kindAllowed } from "./profile-hub";
+import { HUB_KINDS, completion, hubCards, isHubExperience, kindAllowed } from "./profile-hub";
+import { parseIdentityPatch } from "./identity";
 
-// COMPETEN-INDIVIDUAL-PROFILE-HFE: the shared Profile & History page.
+// COMPETEN-INDIVIDUAL-IDENTITY-HUB-01: the shared Personal & Professional Identity Hub.
 
 const ALL = ["overview", "qualifications", "registrations", "employment", "specialties", "aspirations"] as const;
+const both = { scholar: true, professional: true }, scholarOnly = { scholar: true, professional: false };
 
-describe("which sections each experience shows", () => {
-  it("follows the configured order, and keeps the experience's own context first when configuration leaves it out", () => {
-    expect(hubSections(["aspirations", "qualifications"], "professional").map(s => s.section)).toEqual(["overview", "aspirations", "qualifications"]);
-    expect(hubSections(ALL, "professional").map(s => s.section)).toEqual([...ALL]);
+describe("the cards", () => {
+  it("follow the mock-up, with registration and CPD only where Professional is held, and studies only for Scholar", () => {
+    expect(hubCards(ALL, "professional", { scholar: false, professional: true }).map(c => c.card))
+      .toEqual(["personal", "summary", "education", "registration", "work", "skills", "training", "objectives", "portfolio"]);
+    expect(hubCards(ALL, "scholar", scholarOnly).map(c => c.card))
+      .toEqual(["personal", "summary", "education", "work", "skills", "training", "objectives", "portfolio", "studies"]);
   });
-  it("a Scholar learner gets studies, education, work, interests and goals, never registrations or specialties", () => {
-    const s = hubSections(ALL, "scholar");
-    expect(s.map(x => x.section)).toEqual(["overview", "qualifications", "employment", "specialties", "aspirations"]);
-    expect(s.flatMap(x => x.kinds.map(k => k.kind))).toEqual(["qualification", "employment", "interest", "aspiration"]);
-    expect(s[0].title).toBe("Your studies");
-    expect(s.find(x => x.section === "aspirations")?.title).toBe("Learning goals");
+  it("a record card the configuration removes is not shown; the rest always are", () => {
+    const c = hubCards(["qualifications"], "professional", both).map(x => x.card);
+    expect(c).toContain("education");
+    expect(c).not.toContain("work");
+    expect(c).not.toContain("registration");
+    expect(c).toContain("personal");
   });
-  it("a section the configuration removes is not shown", () => {
-    expect(hubSections(["overview", "qualifications"], "scholar").map(s => s.section)).toEqual(["overview", "qualifications"]);
-  });
-});
-
-describe("what a request may add", () => {
-  it("only an experience the record may come from, and only that experience's kinds", () => {
-    expect(isHubExperience("scholar") && isHubExperience("professional")).toBe(true);
-    expect(isHubExperience("estate")).toBe(false);
-    expect(kindAllowed("scholar", "registration")).toBe(false);
-    expect(kindAllowed("scholar", "aspiration")).toBe(true);
+  it("registrations are never added here (their home is My practice), and Scholar never adds a specialty", () => {
+    expect(hubCards(ALL, "professional", both).flatMap(c => c.kinds.map(k => k.kind))).not.toContain("registration");
+    expect(kindAllowed("professional", "registration")).toBe(false);
+    expect(kindAllowed("scholar", "specialty")).toBe(false);
+    expect(kindAllowed("scholar", "skill") && kindAllowed("professional", "skill")).toBe(true);
     expect(HUB_KINDS.professional.every(k => kindAllowed("professional", k))).toBe(true);
-    expect(kindAllowed("professional", "verified")).toBe(false);
+    expect(isHubExperience("estate")).toBe(false);
   });
 });
 
 describe("progressive completion", () => {
-  it("counts sections started, never requires any, and leaves the context out of the count", () => {
-    const s = hubSections(ALL, "scholar");
-    expect(completion(s, {})).toEqual({ started: 0, total: 4 });
-    expect(completion(s, { qualification: 2, aspiration: 1 })).toEqual({ started: 2, total: 4 });
+  it("counts what is there, requires nothing, and prompts the next three useful things", () => {
+    const cards = hubCards(ALL, "scholar", scholarOnly);
+    const none = completion(cards, { photo: false, headline: false, biography: false, counts: {} });
+    expect(none.done).toBe(0);
+    expect(none.prompts.map(p => p.key)).toEqual(["photo", "headline", "biography"]);
+    const some = completion(cards, { photo: true, headline: true, biography: true, counts: { qualification: 1 } });
+    expect(some.done).toBe(4);
+    expect(some.prompts[0].key).toBe("work");
+  });
+});
+
+describe("the identity fields", () => {
+  it("accepts only the four fields, cleaned and bounded", () => {
+    const r = parseIdentityPatch({ headline: "  Registered   nurse ", role: "admin", email: "x@y" });
+    expect(r).toEqual({ ok: true, patch: { headline: "Registered nurse" } });
+    expect(parseIdentityPatch({ headline: "x".repeat(141) }).ok).toBe(false);
+    expect(parseIdentityPatch({ biography: "Line one\r\n\r\nLine two" })).toEqual({ ok: true, patch: { biography: "Line one\n\nLine two" } });
+    expect(parseIdentityPatch({ location: "" })).toEqual({ ok: true, patch: { location: null } });
+    expect(parseIdentityPatch({}).ok).toBe(false);
   });
 });

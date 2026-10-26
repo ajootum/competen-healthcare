@@ -64,7 +64,8 @@ export const SECTION_LABEL: Record<ProfileSection, string> = {
 };
 
 /** migration 450 individual_professional_profile_item.section, and which page section shows it. */
-export const ITEM_KINDS = ["qualification", "registration", "employment", "specialty", "interest", "aspiration"] as const;
+// COMPETEN-INDIVIDUAL-IDENTITY-HUB-01 (590) adds skill: a title and an optional detail, shown on the shared profile.
+export const ITEM_KINDS = ["qualification", "registration", "employment", "specialty", "interest", "aspiration", "skill"] as const;
 export type ItemKind = (typeof ITEM_KINDS)[number];
 export const ITEM_SECTION: Record<ItemKind, ProfileSection> = {
   qualification: "qualifications",
@@ -73,6 +74,7 @@ export const ITEM_SECTION: Record<ItemKind, ProfileSection> = {
   specialty: "specialties",
   interest: "specialties",
   aspiration: "aspirations",
+  skill: "specialties",
 };
 export const ITEM_LABEL: Record<ItemKind, string> = {
   qualification: "qualification",
@@ -81,6 +83,7 @@ export const ITEM_LABEL: Record<ItemKind, string> = {
   specialty: "specialty",
   interest: "professional interest",
   aspiration: "career aspiration",
+  skill: "skill",
 };
 
 /** Kinds a supporting document may be attached to (the 450 section_shape CHECK). */

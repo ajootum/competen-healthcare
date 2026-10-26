@@ -99,6 +99,10 @@ const INCLUDED = [
   // through the one read the owner previews, /verify by token alone with no documents, trust never upgraded, no private
   // path onto a view, AI saves and shares nothing. 15 planted-failure controls. Reads files only.
   "professional-passport-harness.ts",
+  // COMPETEN-INDIVIDUAL-IDENTITY-HUB-01 (590): the private photo (own bucket, stripped, per-link only), guarded
+  // identity routes, registration numbers never shown, D2 record homes, nothing breaks before 590. 14 planted-failure
+  // controls. Reads files only.
+  "individual-identity-hub-harness.ts",
   // HQ-USERS-A: the /api/super-admin/users handlers are gated by the HQ gate (view) and the owner gate (writes),
   // never by profiles.role, with 8 planted-failure controls. Reads files only: no client, no network, no .env.local.
   "hq-users-authority-harness.ts",
