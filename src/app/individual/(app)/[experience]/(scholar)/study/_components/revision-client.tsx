@@ -263,7 +263,7 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
         <Link href={revisionHref()} className={`text-[13px] underline ${focusRing}`}>Leave (it is kept)</Link>
       </div>
       {(props.label || state.session?.mode === "mock") && <p className="mt-2 rounded-lg bg-gray-50 px-3 py-1.5 text-[12.5px] text-gray-700">{props.label ?? MOCK_LABEL}</p>}
-      {!sid && <p className="mt-2 text-[12.5px] text-gray-600">This session is not kept on this environment, so it cannot be resumed later.</p>}
+      {!sid && <p className="mt-2 text-[12.5px] text-gray-600">This session is not kept, so it cannot be resumed later.</p>}
 
       {summary ? (
         <div className="mt-4 space-y-4">

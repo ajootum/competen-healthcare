@@ -78,7 +78,7 @@ export function EvaluationStart(props: {
     setBusy(false);
     if (!r.ok && r.json.continuity) { setContinuity(r.json.error ?? "A knowledge check cannot be written right now."); return; }
     if (!r.ok) { setError(r.json.error ?? "The knowledge check could not start just now."); return; }
-    if (!r.json.session?.id) { setError("Knowledge checks are not kept on this environment, so they cannot feed an evaluation."); return; }
+    if (!r.json.session?.id) { setError("Knowledge checks are not kept here, so they cannot feed an evaluation."); return; }
     router.push(`${studyHref("revise")}?session=${r.json.session.id}&evaluate=${method}&evscope=${encodeURIComponent(JSON.stringify(s))}`);
   }
 

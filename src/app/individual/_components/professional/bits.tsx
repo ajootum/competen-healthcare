@@ -34,11 +34,11 @@ export function ClassLabel({ value }: { value: string }) {
   );
 }
 
-/** A note for a store that is not set up on this environment (migration 373 not applied). */
+/** A note for a store that is not set up here (migration 373 not applied). */
 export function NotProvisioned() {
   return (
     <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13.5px] text-amber-900">
-      The Competen Professional record is not set up on this environment yet, so nothing can be saved here. Nothing on your account is affected.
+      The Competen Professional record is not set up here yet, so nothing can be saved here. Nothing on your account is affected.
     </p>
   );
 }

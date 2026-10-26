@@ -115,7 +115,7 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
               </p>
               <p className={`mt-2 rounded-lg px-3 py-2 text-[13.5px] ${q?.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "bg-gray-50 text-gray-800"}`}>
                 <span className="font-semibold">{q === null ? "Reading: " : q.partial ? "Partly read. " : "Read. "}</span>
-                {q === null ? "How completely this file was read is not recorded on this environment." : q.partial ? q.text.replace(/^Partly read: /, "") : q.text}
+                {q === null ? "How completely this file was read is not recorded here." : q.partial ? q.text.replace(/^Partly read: /, "") : q.text}
               </p>
 
               <div className="mt-4 flex flex-wrap gap-2">

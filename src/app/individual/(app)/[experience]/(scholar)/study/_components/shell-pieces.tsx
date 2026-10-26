@@ -39,7 +39,7 @@ export function AiHelpBody({ help }: { help: Awaited<ReturnType<typeof readAiHel
         {consent.ok
           ? <ConsentPanel status={status!} recorded={consent.data.granted} grantedAt={consent.data.grantedAt} revokedAt={consent.data.revokedAt} legal={documents.links} />
           : consent.notProvisioned
-            ? <p className="text-[14px] text-gray-700">AI help is not set up on this environment yet. Nothing on your account has changed.</p>
+            ? <p className="text-[14px] text-gray-700">AI help is not set up here yet. Nothing on your account has changed.</p>
             : <Unreadable what="AI consent setting" />}
       </div>
     </>

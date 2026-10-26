@@ -84,7 +84,7 @@ export default async function ScholarHome({ ctx, other }: { ctx: IndividualConte
             <Link href={experienceHref("scholar", "study")} className={linkBtn} style={{ color: x.accent }}>View all</Link>
           </div>
           {!materials.ok ? (materials.notProvisioned
-            ? <p className="text-[15px] text-gray-600">My Learning is not set up on this environment yet.</p>
+            ? <p className="text-[15px] text-gray-600">My Learning is not set up here yet.</p>
             : <Unreadable what="study materials" />)
             : recent.length === 0 ? <p className="text-[15px] text-gray-600">Nothing yet. Upload your notes to start.</p>
               : <LibraryRows rows={recent} />}

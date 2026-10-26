@@ -74,7 +74,7 @@ export default async function SavedPage({ params }: { params: Promise<{ experien
         <h2 id="explanations-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Saved explanations and summaries</h2>
         <p className="mt-1 text-[13px] text-gray-600">{AI_LABEL}. Private to you and for your own study: never an assessment, never evidence of competence.</p>
         {!artefacts.ok ? (artefacts.notProvisioned
-          ? <div className="mt-3"><StatePanel title="Saving explanations is not available here yet"><p>Explanations are still given in Learn; they are not kept on this environment.</p></StatePanel></div>
+          ? <div className="mt-3"><StatePanel title="Saving explanations is not available here yet"><p>Explanations are still given in Learn; they are not kept here.</p></StatePanel></div>
           : <div className="mt-3"><Unreadable what="saved explanations" /></div>)
           : byMaterial.size === 0 ? <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Nothing saved yet. Explanations you get in Learn are kept here.</p>
             : (

@@ -135,7 +135,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
           <section aria-labelledby="sets-h" className="rounded-2xl border border-gray-200 bg-white p-5">
             <h2 id="sets-h" className="text-[15px] font-bold text-gray-900">Saved revision sets</h2>
             <p className="text-[12.5px] text-gray-600">Revising a saved set again uses its stored questions and answers: no new AI, so it is always available.</p>
-            {!sets.ok ? (sets.notProvisioned ? <p className="mt-2 text-[13px] text-gray-600">Saved sets are not available on this environment yet.</p> : <Unreadable what="saved revision sets" />)
+            {!sets.ok ? (sets.notProvisioned ? <p className="mt-2 text-[13px] text-gray-600">Saved sets are not available here yet.</p> : <Unreadable what="saved revision sets" />)
               : sets.data.length === 0 ? <p className="mt-2 text-[13px] text-gray-600">None yet. After a session, you can save its questions as a set.</p>
                 : <SavedSets sets={sets.data.map(s => ({ id: s.id, title: s.title, questions: s.questionIds.length, lastUsedAt: s.lastUsedAt }))} />}
           </section>
@@ -143,7 +143,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
           <section aria-labelledby="cards-h">
             <h2 id="cards-h" className="mb-2 text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Review cards due</h2>
             {!cards.ok ? (cards.notProvisioned
-              ? <StatePanel title="Revision is not set up on this environment yet"><p>The study store it needs has not been installed here.</p></StatePanel>
+              ? <StatePanel title="Revision is not set up here yet"><p>The study store it needs has not been installed here.</p></StatePanel>
               : <Unreadable what="review cards" />)
               : <CardReview cards={cardViews} />}
           </section>

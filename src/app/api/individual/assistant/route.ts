@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     const refusal = individualQuotaRefusal(quota, "questions");
     if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
   }
-  if (!aiStatus().configured) return NextResponse.json({ error: "The personal AI is not configured on this environment." }, { status: 503 });
+  if (!aiStatus().configured) return NextResponse.json({ error: "Personal AI is not available yet." }, { status: 503 });
 
   const out = await runIndividualAssistant(ctx.admin, {
     userId: ctx.userId, fullName: ctx.profile.fullName, live: ctx.live, experience,

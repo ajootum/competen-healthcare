@@ -149,7 +149,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
       <Section title="Reminders" note="Your choice, for your own records only. Separate from any employer's notifications.">
         {prefs.configurable
           ? <ReminderSettings accent={x.accent} inApp={prefs.inApp} email={prefs.email} horizonDays={horizonDays} />
-          : <Empty>Reminder settings are not available on this environment yet. Renewals due are shown here, and no reminder is emailed.</Empty>}
+          : <Empty>Reminder settings are not available here yet. Renewals due are shown here, and no reminder is emailed.</Empty>}
       </Section>
 
       <Section title="Verified by an organisation">

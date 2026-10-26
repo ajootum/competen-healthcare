@@ -58,7 +58,7 @@ export default async function CompetenciesPage({ params, searchParams }: { param
     <>
       <PageHeader accent={x.accent} eyebrow="Your development" title="My competencies"
         intro="The competencies you choose to develop, how you see your own capability, and the evidence behind it. What a catalogue expects, what you assess yourself at, your evidence and independent verification are always kept apart." />
-      {!ws.provisioned && <p className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[13.5px] text-gray-700">My Competencies is not set up on this environment yet.</p>}
+      {!ws.provisioned && <p className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[13.5px] text-gray-700">My Competencies is not set up here yet.</p>}
 
       {ws.provisioned && open && (
         <EntryDetail e={open} c={openCat} policy={cp} accent={x.accent} today={today} levels={levels}
