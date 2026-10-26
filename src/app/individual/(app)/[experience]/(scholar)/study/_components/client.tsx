@@ -186,6 +186,8 @@ export function SourceNotice({ compact = false }: { compact?: boolean }) {
 
 /** What may be uploaded now (config.ts uploadRules, from the Individual policy). Serialisable, from the server page. */
 export type UploadRulesView = { mimes: string[]; maxMb: number; text: boolean; describe: string; sessionFiles: number; sessionMb: number };
+/** COMPETEN-SCHOLAR-EXAM-PAPERS-01: offered only where policy offers papers. `attestation`: the practice-paper statement. */
+export type ExamUploadView = { attestation: string; liveNotice: string } | null;
 
 const EXT: Record<string, string> = { [PDF_MIME]: ".pdf", [DOCX_MIME]: ".docx", [PPTX_MIME]: ".pptx", [TEXT_MIME]: ".txt" };
 /** The browser's word for a file, checked by extension too (phones often report an empty type). The server sniffs the bytes. */
@@ -205,8 +207,10 @@ type FileOutcome = { name: string; state: "waiting" | "uploading" | "reading" | 
  * object in the person's private folder, the bytes checked and read on Competen's servers, the patient-identifier
  * screen before anything is kept, and no AI until the person has turned AI help on.
  */
-export function UploadPanel({ rules }: { rules: UploadRulesView }) {
+export function UploadPanel({ rules, exam = null }: { rules: UploadRulesView; exam?: ExamUploadView }) {
   const router = useRouter();
+  const [examPaper, setExamPaper] = useState(false);
+  const [examAttested, setExamAttested] = useState(false);
   const [mode, setMode] = useState<"file" | "paste">("file");
   const [files, setFiles] = useState<File[]>([]);
   const [pasteTitle, setPasteTitle] = useState("");
@@ -236,7 +240,7 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
     const { error: upErr } = await createClient().storage.from(slot.json.bucket).uploadToSignedUrl(slot.json.path, slot.json.token, f, { contentType: mime });
     if (upErr) return set({ state: "refused", message: "It could not be uploaded. Check your connection and try again." });
     set({ state: "reading" });
-    const done = await post("/api/individual/scholar/materials", { uploadId: slot.json.uploadId, mime, fileName: f.name, piiAttested: true });
+    const done = await post("/api/individual/scholar/materials", { uploadId: slot.json.uploadId, mime, fileName: f.name, piiAttested: true, ...(examPaper ? { examPaper: true, examAttested } : {}) });
     if (done.json.duplicateOf) return set({ state: "duplicate", message: done.json.error, id: done.json.duplicateOf.id });
     if (!done.ok) return set({ state: "refused", message: `${done.json.error ?? "It could not be read."} Nothing was kept.` });
     set({ state: "done", id: done.json.id, partial: done.json.status === "partial", message: done.json.quality?.summary });
@@ -244,7 +248,7 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
 
   async function upload(e: React.FormEvent) {
     e.preventDefault();
-    if (!chosen.length || !attested || (stage && stage !== "done")) return;
+    if (!chosen.length || !attested || (examPaper && !examAttested) || (stage && stage !== "done")) return;
     // The upload session's limits are Individual policy, said before anything is sent; the server enforces them too.
     if (chosen.length > rules.sessionFiles) { setError(`Choose up to ${rules.sessionFiles} files at once.`); return; }
     if (chosen.reduce((n, f) => n + f.size, 0) > rules.sessionMb * 1024 * 1024) { setError(`Together these files are over ${rules.sessionMb} MB, the most one upload takes. Upload fewer at once.`); return; }
@@ -258,6 +262,11 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
     const kept = list.filter(o => o.state === "done").map(o => o.id!);
     setStage(kept.length ? "done" : "");
     if (!kept.length) { setError(list.length === 1 ? (list[0].message ?? "Your material could not be read.") : "None of the files was kept. Each one says why."); return; }
+    // COMPETEN-SCHOLAR-EXAM-PAPERS-01: one examination paper goes straight to its questions, once its structure is read.
+    if (examPaper && kept.length === 1) {
+      const prepared = await post("/api/individual/scholar/papers", { materialId: kept[0], attested: true, transcribe: false });
+      if (prepared.ok) { router.push(`${studyHref()}/apply/papers/${kept[0]}`); router.refresh(); return; }
+    }
     // UPLOAD-01 U5: every upload ends on "Your notes are ready", the files read and what Scholar found in them.
     router.push(readyHref(kept));
     router.refresh();
@@ -299,12 +308,29 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
           <p className="mt-1 text-[12.5px] text-gray-500">Kept as a text file, exactly as you pasted it, so you can download it again.</p>
         </>
       )}
+      {exam && (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <label className="flex items-start gap-3 text-[14px] font-semibold text-gray-900">
+            <input type="checkbox" checked={examPaper} onChange={e => { setExamPaper(e.target.checked); if (!e.target.checked) setExamAttested(false); }} className="mt-1 h-5 w-5 shrink-0" />
+            <span>This is a past or practice examination paper</span>
+          </label>
+          {examPaper && (
+            <>
+              <label className="mt-2 flex items-start gap-3 text-[13.5px] text-gray-800">
+                <input type="checkbox" checked={examAttested} onChange={e => setExamAttested(e.target.checked)} className="mt-1 h-5 w-5 shrink-0" />
+                <span>{exam.attestation}</span>
+              </label>
+              <p className="mt-1.5 text-[12.5px] text-gray-600">{exam.liveNotice}</p>
+            </>
+          )}
+        </div>
+      )}
       <label className="mt-4 flex items-start gap-3 text-[14px] text-gray-800">
         <input type="checkbox" checked={attested} onChange={e => setAttested(e.target.checked)} className="mt-1 h-5 w-5 shrink-0" />
         <span>{UPLOAD_ATTESTATION}</span>
       </label>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="submit" className={btn} style={{ background: accent }} disabled={!chosen.length || !attested || stage === "uploading" || stage === "reading"}>
+        <button type="submit" className={btn} style={{ background: accent }} disabled={!chosen.length || !attested || (examPaper && !examAttested) || stage === "uploading" || stage === "reading"}>
           {stage === "uploading" ? "Uploading…" : stage === "reading" ? "Reading your notes…" : stage === "done" ? "Opening…" : chosen.length > 1 ? `Upload ${chosen.length} files` : "Upload"}
         </button>
         <span className="text-[13px] text-gray-500" aria-live="polite">

@@ -4,6 +4,7 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { Notice, PageHeader, StatePanel, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
+import { ExamPapersSection } from "../_components/papers-section";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { countDue, listEvaluations, listMaterials } from "@/lib/individual/scholar/store";
@@ -49,6 +50,7 @@ export default async function EvaluatePage({ params }: { params: Promise<{ exper
       <PageHeader accent={x.accent} eyebrow={scholarSpace("evaluate").eyebrow} title="Evaluate" intro={scholarSpace("evaluate").intro} />
       <StudyNav dueCount={due} />
       <Notice>{FORMATIVE_NOTICE} · {EVALUATION_LABEL}</Notice>
+      <ExamPapersSection admin={ctx.admin} userId={ctx.userId} variant="evaluate" />
 
       {!mats.length ? (
         <StatePanel title="Nothing to evaluate yet">

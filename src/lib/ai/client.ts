@@ -30,7 +30,18 @@ export type GenerateArgs = {
    * Absent: this deployment's primary provider and its model for `tier`, exactly as before.
    */
   route?: { provider: string; model: string; endpoint?: string };
+  /**
+   * COMPETEN-SCHOLAR-EXAM-PAPERS-01. Anthropic only: let the provider run its web search tool, at most `maxUses` times and
+   * only on `allowedDomains`. The sources it actually returned come back in `sources` -- never what the model claims.
+   * Any other provider answers not_configured, billed nothing: a capability is never quietly dropped.
+   */
+  webSearch?: { maxUses: number; allowedDomains: readonly string[] };
+  /** COMPETEN-SCHOLAR-EXAM-PAPERS-01. Anthropic only: PDF documents the model reads (transcribing scanned pages). */
+  documents?: readonly { mediaType: "application/pdf"; data: string }[];
 };
+
+/** A web source the provider's search tool actually returned (not one the model wrote). */
+export type WebSource = { url: string; title: string; pageAge: string | null; citedText: string[] };
 const isBuiltin = (p: string): p is AiProvider => (AI_PROVIDERS as readonly string[]).includes(p);
 
 export type GenerateFailure = "not_configured" | "refusal" | "failed";
@@ -43,6 +54,9 @@ export type GenerateResult =
       provider: string;
       model: string;
       usage: { input: number; output: number };
+      /** With webSearch: the sources the search returned, and how many searches ran. */
+      sources?: WebSource[];
+      searches?: number;
     }
   | {
       ok: false; error: GenerateFailure; detail?: string;
@@ -57,10 +71,40 @@ export type GenerateResult =
 
 /** What every adapter returns, before the dispatcher records usage and normalises the result. */
 type AdapterResult =
-  | { ok: true; text: string; model: string; input: number; output: number }
+  | { ok: true; text: string; model: string; input: number; output: number; sources?: WebSource[]; searches?: number }
   | { ok: false; kind: "refusal" | "failed"; detail?: string; input?: number; output?: number };
 
-type AdapterArgs = { system: string; user: string; model: string; maxTokens: number; key: string };
+type AdapterArgs = {
+  system: string; user: string; model: string; maxTokens: number; key: string;
+  webSearch?: GenerateArgs["webSearch"]; documents?: GenerateArgs["documents"];
+};
+
+/** The web search tool version a model supports: the dynamic-filtering one on 4.6 and later, the basic one before. */
+export function webSearchToolType(model: string): "web_search_20260209" | "web_search_20250305" {
+  return /claude-(opus|sonnet)-(4-[6-9]|[5-9])|claude-(fable|mythos|haiku-5)/.test(model) ? "web_search_20260209" : "web_search_20250305";
+}
+
+/** Pure. The sources a response's web search actually returned, with the text the answer cited from each. */
+export function webSourcesOf(content: readonly unknown[]): WebSource[] {
+  const byUrl = new Map<string, WebSource>();
+  for (const raw of content) {
+    const b = raw as { type?: string; content?: unknown; citations?: unknown };
+    if (b?.type === "web_search_tool_result" && Array.isArray(b.content)) {
+      for (const r of b.content as { type?: string; url?: string; title?: string; page_age?: string | null }[])
+        if (r?.type === "web_search_result" && typeof r.url === "string" && !byUrl.has(r.url))
+          byUrl.set(r.url, { url: r.url, title: String(r.title ?? r.url), pageAge: r.page_age ?? null, citedText: [] });
+    }
+    if (b?.type === "text" && Array.isArray(b.citations)) {
+      for (const c of b.citations as { type?: string; url?: string; title?: string; cited_text?: string }[]) {
+        if (c?.type !== "web_search_result_location" || typeof c.url !== "string") continue;
+        const s = byUrl.get(c.url) ?? { url: c.url, title: String(c.title ?? c.url), pageAge: null, citedText: [] };
+        if (c.cited_text && !s.citedText.includes(c.cited_text)) s.citedText.push(c.cited_text);
+        byUrl.set(c.url, s);
+      }
+    }
+  }
+  return [...byUrl.values()];
+}
 
 // ── Anthropic ───────────────────────────────────────────────────────────────────────────────────────
 
@@ -68,11 +112,16 @@ let _anthropic: Anthropic | null = null;
 
 async function anthropicAdapter(a: AdapterArgs): Promise<AdapterResult> {
   if (!_anthropic) _anthropic = new Anthropic({ apiKey: a.key });
+  const content: Anthropic.ContentBlockParam[] = [
+    ...(a.documents ?? []).map(d => ({ type: "document" as const, source: { type: "base64" as const, media_type: d.mediaType, data: d.data } })),
+    { type: "text" as const, text: a.user },
+  ];
   const stream = _anthropic.messages.stream({
     model: a.model,
     max_tokens: a.maxTokens,
     system: [{ type: "text", text: a.system, cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: a.user }],
+    messages: [{ role: "user", content: a.documents?.length ? content : a.user }],
+    ...(a.webSearch ? { tools: [{ type: webSearchToolType(a.model), name: "web_search", max_uses: a.webSearch.maxUses, allowed_domains: [...a.webSearch.allowedDomains] } as Anthropic.ToolUnion] } : {}),
   });
   const message = await stream.finalMessage();
 
@@ -86,6 +135,7 @@ async function anthropicAdapter(a: AdapterArgs): Promise<AdapterResult> {
     model: message.model,
     input: message.usage.input_tokens,
     output: message.usage.output_tokens,
+    ...(a.webSearch ? { sources: webSourcesOf(message.content), searches: message.usage.server_tool_use?.web_search_requests ?? 0 } : {}),
   };
 }
 
@@ -213,7 +263,7 @@ const FAILOVER_ELIGIBLE: ReadonlyArray<"failed"> = ["failed"];
  * Returns the text plus which vendor and model produced it. Never throws.
  */
 export async function generate(
-  { system, user, tier = "reasoning", maxTokens = 1500, context, route }: GenerateArgs,
+  { system, user, tier = "reasoning", maxTokens = 1500, context, route, webSearch, documents }: GenerateArgs,
 ): Promise<GenerateResult> {
   const status = aiStatus();
   // A routed request names its provider and model. Its key is still the environment's (never configuration's), and a
@@ -232,6 +282,9 @@ export async function generate(
     if (!reach.ok) return { ok: false, error: "not_configured", detail: reach.reason, billing: "none" };
   }
 
+  // Web search and document input exist on the Anthropic adapter only. Elsewhere the request is not configured -- never
+  // answered without the capability it asked for.
+  if ((webSearch || documents?.length) && provider !== "anthropic") return { ok: false, error: "not_configured", detail: "capability not supported by this provider", billing: "none" };
   const model = route?.model ?? status.models![tier];
   const base = {
     operation: context?.operation ?? null,
@@ -244,7 +297,7 @@ export async function generate(
 
   const t0 = Date.now();
   try {
-    const args = { system, user, model, maxTokens, key };
+    const args = { system, user, model, maxTokens, key, webSearch, documents };
     const result = registered ? await compatibleAdapter(route!.endpoint!, args) : await ADAPTERS[provider as AiProvider](args);
     const latencyMs = Date.now() - t0;
 
@@ -270,6 +323,7 @@ export async function generate(
       provider,
       model: result.model,
       usage: { input: result.input, output: result.output },
+      ...(result.sources ? { sources: result.sources, searches: result.searches ?? 0 } : {}),
     };
   } catch (e) {
     void recordAiUsage({

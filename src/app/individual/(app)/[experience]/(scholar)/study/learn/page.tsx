@@ -88,7 +88,16 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
           <p>It may have been removed with the materials it used.</p>
         </StatePanel>
       ) : !resume && !start ? (
-        <StartPicker materials={materials} recent={recent.ok ? recent.data.map(s => ({ id: s.id, title: s.title, lastActiveAt: s.lastActiveAt, status: s.status })) : null} />
+        <>
+          <StartPicker materials={materials} recent={recent.ok ? recent.data.map(s => ({ id: s.id, title: s.title, lastActiveAt: s.lastActiveAt, status: s.status })) : null} />
+          {/* COMPETEN-SCHOLAR-EXAM-PAPERS-01: a past paper is learned from in Apply, question by question, with evidence. */}
+          {policy.scholarExams.enabled && (
+            <p className="mt-5 text-[13.5px] text-gray-600">
+              Studying a past or practice paper? Each suggested answer explains itself from your notes and other evidence, and you can ask follow-up questions:{" "}
+              <Link href={experienceHref("scholar", "study/apply")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>open your papers in Apply</Link>.
+            </p>
+          )}
+        </>
       ) : (
         <LearnWorkspace
           initial={resume?.session ?? null} initialProgress={resume?.progress ?? {}} start={start}

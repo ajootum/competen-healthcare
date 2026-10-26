@@ -1,13 +1,15 @@
-// Extraction of a large PDF can take a while on a cold function.
-export const maxDuration = 60;
+// Extraction of a large PDF can take a while on a cold function, and a scanned examination paper may be transcribed
+// here (policy-gated, COMPETEN-SCHOLAR-EXAM-PAPERS-01): up to the revision ceiling.
+export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { createMaterial, discardUpload, findDuplicate, isUuid, readUpload, recentUploads, sha256Hex, uploadPath } from "@/lib/individual/scholar/store";
-import { type MaterialMime, UPLOAD_ATTESTATION_REQUIRED, UPLOAD_SESSION_MINUTES, sessionRefusal, uploadRules } from "@/lib/individual/scholar/config";
+import { type MaterialMime, PDF_MIME, UPLOAD_ATTESTATION_REQUIRED, UPLOAD_SESSION_MINUTES, sessionRefusal, uploadRules } from "@/lib/individual/scholar/config";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { EXTRACTION_MESSAGE, PII_LABEL, chunkPages, extractMaterial, extractionQuality, findPatientIdentifiers, qualitySummary, sniffUpload, titleFromFileName } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
+import { transcribeScannedUpload } from "@/lib/individual/scholar/exam-service";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -69,7 +71,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `This file is already in your library as "${duplicate.title}".`, duplicateOf: duplicate }, { status: 409 });
   }
 
-  const extraction = await extractMaterial(mime, bytes, policy.scholarPdfMaxPages, policy.scholarPptxMaxSlides);
+  let extraction = await extractMaterial(mime, bytes, policy.scholarPdfMaxPages, policy.scholarPptxMaxSlides);
+  // COMPETEN-SCHOLAR-EXAM-PAPERS-01: a fully scanned examination paper, transcribed by AI only where policy turns that
+  // on and the student attested it is a practice paper (exam-service.ts). Otherwise refused exactly as before.
+  const scanned = (!extraction.ok && extraction.reason === "no_text") || (extraction.ok && !chunkPages(extraction.pages).length);
+  if (scanned && mime === PDF_MIME && body?.examPaper === true && body?.examAttested === true) {
+    const t = await transcribeScannedUpload(ctx, req, bytes, policy);
+    if (t && "status" in t) { await discardUpload(ctx.admin, path); return NextResponse.json(t.body, { status: t.status }); }
+    if (t && t.pages.length) extraction = { ok: true, pages: t.pages.map(p => ({ page: p.page, text: p.text })), pageCount: Math.max(...t.pages.map(p => p.page)), extractor: `ai-transcription-v1:${t.model}`.slice(0, 80) };
+  }
   if (!extraction.ok) return refuse(422, EXTRACTION_MESSAGE[extraction.reason], extraction.detail && extraction.reason === "unsafe" ? `unsafe:${extraction.detail}` : extraction.reason);
 
   const allText = extraction.pages.map(p => p.text).join("\n");

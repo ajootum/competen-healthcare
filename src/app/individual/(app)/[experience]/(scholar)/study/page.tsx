@@ -19,6 +19,8 @@ import { aiOffMessage } from "@/lib/individual/scholar/consent-gate";
 import { AiHelpBody, headerBtn, linkBtn, readAiHelp } from "./_components/shell-pieces";
 import { LibraryBrowser, type LibraryGroup } from "./_components/library-list";
 import { libraryRow } from "./_components/library-rows";
+import { listExamPapers } from "@/lib/individual/scholar/exam-store";
+import { EXAM_ATTESTATION, LIVE_EXAM_NOTICE } from "@/lib/individual/scholar/exam-service";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -62,10 +64,12 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
   // the competencies the notes are linked to (for asking "notes linked to a competency"). Each absent migration
   // removes only its own feature.
   const list = materials.ok ? materials.data : [];
-  const [extras, collections, linked, learner] = await Promise.all([
+  const [extras, collections, linked, learner, papers] = await Promise.all([
     materialExtras(ctx.admin, ctx.userId, list.map(m => m.id)), listCollections(ctx.admin, ctx.userId),
-    listMappings(ctx.admin, ctx.userId), loadLearnerCatalogue(ctx.admin, ctx.userId),
+    listMappings(ctx.admin, ctx.userId), loadLearnerCatalogue(ctx.admin, ctx.userId), listExamPapers(ctx.admin, ctx.userId),
   ]);
+  // COMPETEN-SCHOLAR-EXAM-PAPERS-01: a material studied as a paper says so (nothing where 570 is absent).
+  const paperIds = new Set(papers.ok ? papers.data.map(p => p.materialId) : []);
   const shelves = extras.collectionsOn && collections.ok ? collections.data : null;
   const liveIds = linked.ok ? [...new Set(linked.data.mappings.filter(r => r.state !== "rejected").map(r => r.competencyId))] : [];
   const names = linked.ok ? await competencyLabels(ctx.admin, learner.competencies, liveIds, new Map(linked.data.mappings.map(r => [r.competencyId, r.layer]))) : new Map();
@@ -73,7 +77,7 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
     materials: list.map(m => ({ id: m.id, title: m.title })),
     competencies: liveIds.map(id => ({ id, title: `${names.get(id)?.code ? `${names.get(id)!.code} ` : ""}${names.get(id)?.title ?? "Competency"}` })).sort((a, b) => a.title.localeCompare(b.title)),
   };
-  const rowOf = (m: (typeof list)[number]) => libraryRow(m, { quality: extras.qualityOn ? extras.byId.get(m.id)?.quality ?? null : null, stamp: stampOf(m.createdAt) });
+  const rowOf = (m: (typeof list)[number]) => libraryRow(m, { quality: extras.qualityOn ? extras.byId.get(m.id)?.quality ?? null : null, stamp: stampOf(m.createdAt), paper: paperIds.has(m.id) });
   const groups: LibraryGroup[] = shelves
     ? [...shelves.map(s => ({ key: s.id, name: s.name, rows: list.filter(m => extras.byId.get(m.id)?.collectionId === s.id).map(rowOf) })),
       { key: "none", name: shelves.length ? "Not in a collection" : "", rows: list.filter(m => !extras.byId.get(m.id)?.collectionId).map(rowOf) }].filter(g => g.rows.length)
@@ -105,7 +109,8 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
   const upload = (
     <DialogButton title="Upload study material" hash="upload" label="+ Upload material"
       className={`${headerBtn} border-transparent text-white hover:opacity-90`} style={{ background: x.accent }}>
-      <UploadPanel rules={{ mimes: [...rules.mimes], maxMb: rules.maxMb, text: rules.text, describe: rules.describe, sessionFiles: rules.sessionFiles, sessionMb: rules.sessionMb }} />
+      <UploadPanel rules={{ mimes: [...rules.mimes], maxMb: rules.maxMb, text: rules.text, describe: rules.describe, sessionFiles: rules.sessionFiles, sessionMb: rules.sessionMb }}
+        exam={policy.scholarExams.enabled && papers.ok ? { attestation: EXAM_ATTESTATION.text, liveNotice: LIVE_EXAM_NOTICE } : null} />
     </DialogButton>
   );
   const suggestions = (

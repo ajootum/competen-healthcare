@@ -121,6 +121,12 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarPassportEvaluations: "offer",
       // JOIN-01: every active programme is offered, no level or institution is asked, both fields may be.
       scholarOnboardingProgrammes: null, scholarProgrammeLevels: {}, scholarInstitutions: [], scholarOnboardingFields: ["level", "institution"],
+      // COMPETEN-SCHOLAR-EXAM-PAPERS-01: papers offered with notes and the library as evidence; web research and AI transcription OFF.
+      scholarExams: {
+        enabled: true, sources: ["notes", "library"], webProvider: "none", depth: "standard",
+        domains: ["who.int", "health.go.ug", "nice.org.uk", "nhs.uk", "cdc.gov", "nih.gov", "cochranelibrary.com", "resus.org.uk", "sign.ac.uk"],
+        webDailyMax: 10, cacheDays: 30, scannedPages: "off",
+      },
       // P0: label, do not hide -- everything of a chosen catalogue is offered, labelled, by default.
       scholarCatalogueMinStatus: "unreviewed",
       // COMPETEN-PROFESSIONAL-PROFILE-01: free text where nothing is configured, every country, the default statuses,
