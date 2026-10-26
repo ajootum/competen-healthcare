@@ -34,8 +34,12 @@ const FIELDS: Record<Kind, string[]> = {
   aspiration: ["targetOn", "detail"],
 };
 
-export default function ItemForm({ kind, accent, typeOptions = [], titleOptions = [], orgSuggestions = [], allowDocument, existing, onDone }: {
+const ITEMS_API = "/api/individual/professional/profile-items";
+
+export default function ItemForm({ kind, accent, typeOptions = [], titleOptions = [], orgSuggestions = [], allowDocument, existing, onDone, endpoint = ITEMS_API, experience }: {
   kind: Kind; accent: string; typeOptions?: Opt[]; titleOptions?: Opt[]; orgSuggestions?: string[]; allowDocument: boolean; existing?: ItemValues; onDone?: () => void;
+  /** The shared Profile & History page posts to /api/individual/profile-items with the experience it is in. */
+  endpoint?: string; experience?: string;
 }) {
   const router = useRouter();
   const c = COPY[kind]; const has = (f: string) => FIELDS[kind].includes(f);
@@ -54,7 +58,8 @@ export default function ItemForm({ kind, accent, typeOptions = [], titleOptions 
       const file = fd.get("document");
       const multipart = file instanceof File && file.size > 0;
       if (!multipart) fd.delete("document");
-      const res = await fetch("/api/individual/professional/profile-items", multipart
+      if (experience) fd.set("experience", experience);
+      const res = await fetch(endpoint, multipart
         ? { method: "POST", body: fd }
         : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === "string"))) });
       const j = await res.json().catch(() => ({}));
@@ -141,7 +146,7 @@ export function ChangeItem(props: Omit<Parameters<typeof ItemForm>[0], "onDone">
 }
 
 /** Withdraw a current record, saying why. It stays in the history. */
-export function WithdrawItem({ id, reasons }: { id: string; reasons: readonly (readonly [string, string])[] }) {
+export function WithdrawItem({ id, reasons, endpoint = ITEMS_API }: { id: string; reasons: readonly (readonly [string, string])[]; endpoint?: string }) {
   const router = useRouter();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -150,7 +155,7 @@ export function WithdrawItem({ id, reasons }: { id: string; reasons: readonly (r
     if (!reason) { setErr("Choose why."); return; }
     setBusy(true); setErr(null);
     try {
-      const res = await fetch(`/api/individual/professional/profile-items?id=${encodeURIComponent(id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ withdraw: reason }) });
+      const res = await fetch(`${endpoint}?id=${encodeURIComponent(id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ withdraw: reason }) });
       if (!res.ok) { const j = await res.json().catch(() => ({})); setErr(j?.error ?? "That did not work. Try again."); return; }
       router.refresh();
     } catch { setErr("That did not work. Check your connection."); } finally { setBusy(false); }

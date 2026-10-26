@@ -270,6 +270,9 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   // COMPETEN-PROFESSIONAL-PROGRESS-01 PR7 s10.3: the No-Code Document Template Studio -- the same administrator and the same
   // WCE partition, publication and audit as the Individual policy. It previews templates with invented sample records only.
   { prefix: "/super-admin/individual/documents", capability: "hq.individual.config.manage" },
+  // HOLDINGS-FX-01: Scholar unit economics and FX exposure. The owner-only financial right (migration 400),
+  // the same one that governs Individual plan prices.
+  { prefix: "/super-admin/individual/economics",  capability: "hq.individual.commercial.manage" },
   // COMPETEN-PROFESSIONAL-PROFILE-01 part B (migration 451): the Professional Credential Verifier's queue. Its own
   // right, held by no position but the verifier one, and by nobody until the owner appoints someone.
   { prefix: "/super-admin/individual/verification", capability: "hq.individual.professional.verify" },

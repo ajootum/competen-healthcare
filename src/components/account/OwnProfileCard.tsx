@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { OwnAccess, OwnProfile, Read } from "@/lib/account/own-profile";
 
@@ -170,7 +171,7 @@ function EditForm({ p, onDone }: { p: OwnProfile; onDone: (saved: boolean) => vo
   );
 }
 
-function EmailChange({ p, onChanged }: { p: OwnProfile; onChanged: () => void }) {
+export function EmailChange({ p, onChanged }: { p: OwnProfile; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -239,6 +240,136 @@ function AccessBlock({ a }: { a: OwnAccess }) {
           </div>
         ))}
       </dl>
+    </div>
+  );
+}
+
+// ── THE SAME PROFILE, EDITED ONE FIELD AT A TIME ── COMPETEN-INDIVIDUAL-PROFILE-HFE (Individual Profile & History) ──
+//
+// One field at a time: Edit, then Save or Cancel (Escape cancels). It writes through the ONE own-profile endpoint
+// (/api/account/profile, the person's own session, column grants and RLS), so editing a profile can never change
+// access. The limits below mirror parseProfilePatch for immediate feedback; the server checks them again.
+// ⚠ Email is never a field here: it changes only through Supabase's verified flow (EmailChange), and stays the
+// sign-in email until the person confirms.
+
+type Key = "full_name" | "given_name" | "family_name" | "phone" | "country";
+const FIELDS: { key: Key; label: string; max: number; required?: boolean; type?: string; autoComplete: string; hint?: string }[] = [
+  { key: "full_name", label: "Full name", max: 120, required: true, autoComplete: "name", hint: "As you want it to appear on your Passport." },
+  { key: "given_name", label: "Given name", max: 100, autoComplete: "given-name" },
+  { key: "family_name", label: "Family name", max: 100, autoComplete: "family-name" },
+  { key: "phone", label: "Phone", max: 40, type: "tel", autoComplete: "tel" },
+  { key: "country", label: "Country", max: 80, autoComplete: "country-name" },
+];
+
+const inlineInput = `w-full min-h-[44px] rounded-lg border bg-white px-3 py-2 text-[14.5px] text-gray-900 ${focusRing}`;
+const small = `inline-flex min-h-[36px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center justify-center rounded-lg border px-3 text-[13px] font-semibold disabled:opacity-50 ${focusRing}`;
+
+function check(f: (typeof FIELDS)[number], v: string): string | null {
+  const t = v.replace(/\s+/g, " ").trim();
+  if (f.required && !t) return `${f.label} cannot be empty.`;
+  if (t.length > f.max) return `${f.label} must be ${f.max} characters or fewer (now ${t.length}).`;
+  if (f.key === "phone" && t && !/^[+()\d\s.-]{4,}$/.test(t)) return "Use digits, spaces and + ( ) - only.";
+  return null;
+}
+
+function valueOf(p: OwnProfile, k: Key): string | null {
+  if (k === "full_name") return p.fullName;
+  if (k === "phone") return p.phone;
+  if (k === "country") return p.country;
+  if (!p.names.supported) return null;
+  return k === "given_name" ? p.names.given : p.names.family;
+}
+
+function Row({ f, current, accent, onSaved }: { f: (typeof FIELDS)[number]; current: string | null; accent: string; onSaved: (text: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(current ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  const id = `pf-${f.key}`;
+  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+
+  function cancel() { setDraft(current ?? ""); setErr(null); setEditing(false); }
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    const problem = check(f, draft);
+    if (problem) { setErr(problem); ref.current?.focus(); return; }
+    const next = draft.replace(/\s+/g, " ").trim();
+    if (next === (current ?? "")) { setEditing(false); return; }
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch("/api/account/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [f.key]: next || null }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(j?.error ?? "That could not be saved. Nothing was changed."); return; }
+      setEditing(false);
+      onSaved(`${f.label} saved.`);
+    } catch { setErr("Competen could not be reached. Nothing was changed."); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="border-b border-gray-100 py-3 last:border-b-0">
+      {!editing ? (
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">{f.label}</p>
+            <p className="break-words text-[14.5px] text-gray-900">{current ?? <span className="italic text-gray-500">Not recorded</span>}</p>
+          </div>
+          <button type="button" onClick={() => { setDraft(current ?? ""); setEditing(true); }} aria-label={`Edit ${f.label.toLowerCase()}`}
+            className={`${small} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>{current ? "Edit" : "Add"}</button>
+        </div>
+      ) : (
+        <form onSubmit={save} onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); cancel(); } }} noValidate>
+          <label htmlFor={id} className="text-[12px] font-semibold uppercase tracking-wide text-gray-600">{f.label}{f.required ? "" : " (optional)"}</label>
+          <input ref={ref} id={id} type={f.type ?? "text"} value={draft} autoComplete={f.autoComplete} maxLength={f.max + 20}
+            onChange={e => { setDraft(e.target.value); setErr(check(f, e.target.value)); }}
+            aria-invalid={!!err} aria-describedby={`${id}-help${err ? ` ${id}-err` : ""}`}
+            className={`${inlineInput} mt-1 ${err ? "border-red-500" : "border-gray-300"}`} />
+          <p id={`${id}-help`} className="mt-1 text-[12px] text-gray-500">{f.hint ?? (f.required ? "Required." : "Optional. Leave it empty to remove it.")} {draft.trim().length}/{f.max}</p>
+          {err && <p id={`${id}-err`} role="alert" className="mt-1 text-[12.5px] font-semibold text-red-700">{err}</p>}
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="submit" disabled={busy || !!err} className={`${small} border-transparent text-white`} style={{ background: accent }}>{busy ? "Saving…" : "Save"}</button>
+            <button type="button" onClick={cancel} disabled={busy} className={`${small} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>Cancel</button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+async function fetchProfile(): Promise<Read<OwnProfile>> {
+  try {
+    const res = await fetch("/api/account/profile", { cache: "no-store" });
+    const j = await res.json().catch(() => null);
+    return res.ok && j?.profile ? j.profile : { ok: false, error: j?.error ?? `HTTP ${res.status}` };
+  } catch { return { ok: false, error: "Competen could not be reached." }; }
+}
+
+export function OwnProfileInline({ accent }: { accent: string }) {
+  const router = useRouter();
+  const [profile, setProfile] = useState<Read<OwnProfile> | null>(null);
+  const [status, setStatus] = useState("");
+  const load = useCallback(async () => setProfile(await fetchProfile()), []);
+  useEffect(() => {
+    let alive = true;
+    fetchProfile().then(p => { if (alive) setProfile(p); });
+    return () => { alive = false; };
+  }, []);
+
+  if (!profile) return <p className="text-[13.5px] text-gray-500" aria-live="polite">Loading your details…</p>;
+  if (!profile.ok) return (
+    <p className="rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-900"><span className="font-semibold">Your details could not be read.</span> This is not the same as none. ({profile.error})</p>
+  );
+  const p = profile.value;
+  const fields = FIELDS.filter(f => p.names.supported || (f.key !== "given_name" && f.key !== "family_name"));
+  return (
+    <div>
+      <p role="status" aria-live="polite" className="min-h-[1.25rem] text-[13px] font-semibold text-green-800">{status}</p>
+      <div className="grid gap-x-8 md:grid-cols-2">
+        {fields.map(f => <Row key={f.key} f={f} current={valueOf(p, f.key)} accent={accent}
+          onSaved={text => { setStatus(text); load(); router.refresh(); }} />)}
+      </div>
+      <EmailChange p={p} onChanged={load} />
+      <p className="mt-3 text-[12.5px] text-gray-500">These details are your one Competen identity, shared by every experience on your account. Changing them never changes your access, and they are not credentials.</p>
     </div>
   );
 }

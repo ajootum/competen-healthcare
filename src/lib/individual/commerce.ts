@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createHostedCheckout, newTxRefWith, type GatewayConfig } from "@/lib/commerce/gateway";
+import { createHostedCheckout, majorToMinor, newTxRefWith, type GatewayConfig, type VerifiedTx } from "@/lib/commerce/gateway";
 import { settleWebhook, type SettlementAdapter, type WebhookResult } from "@/lib/commerce/settlement";
 import { EXPERIENCES, type ExperienceKey } from "./experiences";
 import { individualAppEnabled } from "./gate";
@@ -139,6 +139,22 @@ export function purchasedPeriod(now: Date, intervalDays: number, livePaidEndsAt:
   return { startsAt: start.toISOString(), endsAt: new Date(start.getTime() + intervalDays * DAY).toISOString() };
 }
 
+/**
+ * HOLDINGS-FX-01: keep the gateway fee and the net amount settled on the paid checkout (migration 560), for
+ * unit economics. It runs after the entitlement is open and NEVER fails the payment: where 560 is not applied,
+ * or the gateway reported no figures, the checkout simply carries none and the page says "not recorded".
+ */
+export async function recordNetSettlement(admin: any, checkoutId: string, v: Extract<VerifiedTx, { ok: true }>, now: Date): Promise<boolean> {
+  const fee = v.feeMajor == null ? null : majorToMinor(v.feeMajor, v.currency);
+  const net = v.settledMajor == null ? null : majorToMinor(v.settledMajor, v.currency);
+  if (fee == null && net == null) return false;
+  const { error } = await admin.from("individual_checkout").update({
+    gateway_fee_minor: fee, net_settled_minor: net, settlement_currency: v.currency, settlement_recorded_at: now.toISOString(),
+  }).eq("id", checkoutId);
+  if (error) { console.warn(`[individual] net settlement not recorded on checkout ${checkoutId}: ${error.message}`); return false; }
+  return true;
+}
+
 export const INDIVIDUAL_SETTLEMENT: SettlementAdapter = {
   eventTable: "individual_checkout_event",
   checkoutTable: "individual_checkout",
@@ -197,6 +213,8 @@ export const INDIVIDUAL_SETTLEMENT: SettlementAdapter = {
     await audit(admin, checkout.user_id, "individual_purchase_paid", checkout.id, {
       txRef: ref, planCode: checkout.plan_code, experience, channel: v.channel, startsAt: period.startsAt, endsAt: period.endsAt,
     });
+
+    await recordNetSettlement(admin, checkout.id, v, now);
   },
 };
 

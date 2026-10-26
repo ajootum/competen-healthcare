@@ -2,9 +2,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   INDIVIDUAL_SETTLEMENT, applyIndividualWebhook, individualCommerceEnabled, individualPlanAiLimit, isIndividualTxRef,
-  planLimitFrom, purchasedPeriod, startIndividualCheckout,
+  planLimitFrom, purchasedPeriod, recordNetSettlement, startIndividualCheckout,
 } from "@/lib/individual/commerce";
 import { INDIVIDUAL_AI_HOURLY_DEFAULT, individualAiQuota, DEFAULT_POLICY } from "@/lib/individual/policy";
+import { settlementFigures } from "@/lib/commerce/gateway";
 
 // P1 Commercial: what an Individual payment MEANS. The three checks themselves are the Holdings engine's,
 // proven by the Practice suite (src/lib/practice/subscription.test.ts) through the same code.
@@ -202,5 +203,36 @@ describe("settlement -- what a proven Individual payment opens", () => {
     expect((await applyIndividualWebhook(right.admin, CFG, { providerEventId: "tx1", providerTxId: "tx1", txRef: "cin-1" })).verdict).toBe("applied");
     expect(entitlementWrites(right.writes)).toHaveLength(1);
     expect(right.writes.some(w => w.table === "individual_checkout" && w.row?.status === "paid")).toBe(true);
+  });
+});
+
+describe("HOLDINGS-FX-01: net settlement on a paid checkout", () => {
+  const v = (o: any = {}) => ({ ok: true as const, providerTxId: "1", txRef: "cin-x", amountMajor: 20000, currency: "UGX", channel: "mobile_money", ...o });
+
+  it("records the gateway fee and the net settled in minor units", async () => {
+    const { admin, writes } = fakeAdmin(() => ({}));
+    expect(await recordNetSettlement(admin, "chk-1", v({ feeMajor: 700, settledMajor: 19300 }), new Date("2026-10-26T00:00:00Z"))).toBe(true);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ table: "individual_checkout", op: "update",
+      row: { gateway_fee_minor: 700, net_settled_minor: 19300, settlement_currency: "UGX", settlement_recorded_at: "2026-10-26T00:00:00.000Z" } });
+    expect(has(writes[0], "id", "chk-1")).toBe(true);
+  });
+
+  it("writes nothing when the gateway reported no figures", async () => {
+    const { admin, writes } = fakeAdmin(() => ({}));
+    expect(await recordNetSettlement(admin, "chk-1", v(), new Date())).toBe(false);
+    expect(writes).toHaveLength(0);
+  });
+
+  it("never fails the payment when the columns are absent (560 not applied)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { admin } = fakeAdmin(() => ({ error: { message: 'column "gateway_fee_minor" does not exist' } }));
+    await expect(recordNetSettlement(admin, "chk-1", v({ feeMajor: 700 }), new Date())).resolves.toBe(false);
+  });
+
+  it("reads app_fee and amount_settled from a verify payload, never inventing zero", () => {
+    expect(settlementFigures({ app_fee: 700, amount_settled: "19300" })).toEqual({ feeMajor: 700, settledMajor: 19300 });
+    expect(settlementFigures({})).toEqual({ feeMajor: null, settledMajor: null });
+    expect(settlementFigures({ app_fee: -1, amount_settled: "n/a" })).toEqual({ feeMajor: null, settledMajor: null });
   });
 });
