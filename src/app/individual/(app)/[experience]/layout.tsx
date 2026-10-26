@@ -146,6 +146,7 @@ export default async function ExperienceLayout({ children, params }: {
     );
   }
 
+  // HFE-01 F8: with the experience switcher showing, the phone header keeps only the C mark, so the row fits 375px.
   const initials = (profile.fullName ?? profile.email ?? "?").split(/\s+/).map(s => s.charAt(0)).join("").slice(0, 2).toUpperCase();
   // COMPETEN-LEARNING-01: one link to the member-only Learning area, only while learning_app is on (ADR-017).
   const learning = await learningEnabled(shell.ctx.admin);
@@ -164,7 +165,7 @@ export default async function ExperienceLayout({ children, params }: {
       <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
         <div className="flex h-14 md:h-[76px] items-center gap-3 px-4 md:gap-7 md:px-7">
           <Link href={experienceHref(experience)} className={`rounded-lg md:w-[200px] ${focusRing}`} aria-label={`${x.name} home`}>
-            <span className="md:hidden"><ExperienceMark wordmark={x.wordmark} accent={x.accent} size="sm" /></span>
+            <span className="md:hidden"><ExperienceMark wordmark={x.wordmark} accent={x.accent} size="sm" iconOnly={live.length > 1} /></span>
             <span className="hidden md:inline"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></span>
           </Link>
           <div className="ml-auto md:ml-0"><ExperienceSwitcher current={experience} live={live} /></div>
