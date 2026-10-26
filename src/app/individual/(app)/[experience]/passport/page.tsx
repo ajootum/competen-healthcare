@@ -249,7 +249,7 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
               ))}
             </ul>
           )}
-          <p className="mt-2 text-[13px]"><a href={experienceHref("professional", "registration")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Manage your professional profile</a></p>
+          <p className="mt-2 text-[13px]"><a href={experienceHref("professional", "registration")} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: EXPERIENCES.professional.accent }}>Manage them in My practice</a></p>
         </Section>
       )}
 

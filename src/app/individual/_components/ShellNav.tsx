@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { EXPERIENCES, experienceHref, navFor, bottomNavFor, type ExperienceKey } from "@/lib/individual/experiences";
+import { useEffect, useId, useRef, useState } from "react";
+import { EXPERIENCES, experienceHref, navFor, bottomNavFor, overflowNavFor, type ExperienceKey, type ShellNavItem } from "@/lib/individual/experiences";
 import { createClient } from "@/lib/supabase/client";
 
 // The Individual navigation, generated from the registry (src/lib/individual/experiences.ts) and nothing
@@ -76,6 +77,63 @@ export function BottomNav({ experience }: { experience: ExperienceKey }) {
         })}
       </ul>
     </nav>
+  );
+}
+
+/**
+ * HFE-01 D1 (owner Option A): the account menu behind the avatar, on phone and desktop. Below md it lists every
+ * destination the five-tab bottom bar cannot hold (overflowNavFor), so nothing is reachable only by deep link; from
+ * md up, where the sidebar shows everything, it holds Profile & history, Settings and Sign out. The bar itself is
+ * unchanged (CPR-MOB-001).
+ */
+export function AccountMenu({ experience, initials, name }: { experience: ExperienceKey; initials: string; name: string }) {
+  const pathname = usePathname() ?? "";
+  const x = EXPERIENCES[experience];
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setOpen(false); btn.current?.focus(); } };
+    document.addEventListener("mousedown", onDown); document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  const desktop = navFor(experience).filter(i => i.segment === "profile" || i.segment === "settings");
+  const item = (i: ShellNavItem, cls: string) => {
+    const href = experienceHref(experience, i.segment);
+    const on = isActive(pathname, href, i.segment === "");
+    return (
+      <li key={`${cls}-${i.key}`} className={cls}>
+        <Link href={href} aria-current={on ? "page" : undefined} onClick={() => setOpen(false)}
+          className={`flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-[14.5px] ${on ? "font-bold" : "font-medium text-gray-900 hover:bg-gray-50"} ${focusRing}`}
+          style={on ? { background: x.accentSoft, color: x.accent } : undefined}>
+          <span aria-hidden className="w-5 text-center">{i.icon}</span>{i.label}
+        </Link>
+      </li>
+    );
+  };
+  return (
+    <div ref={box} className="relative shrink-0">
+      <button ref={btn} type="button" aria-haspopup="true" aria-expanded={open} aria-controls={menuId} aria-label="Account and more"
+        onClick={() => setOpen(o => !o)}
+        className={`flex min-h-[44px] items-center gap-2.5 rounded-lg px-1 hover:bg-gray-50 ${focusRing}`}>
+        <span aria-hidden className="flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-full text-[12px] md:text-[13px] font-bold text-white" style={{ background: x.accent }}>{initials}</span>
+        <span className="hidden md:inline max-w-[12rem] truncate text-[13px] font-semibold" style={{ color: x.accent }}>{name}</span>
+        <span aria-hidden className="hidden md:inline text-[11px] text-gray-500">▾</span>
+      </button>
+      {open && (
+        <div id={menuId} className="absolute right-0 top-full z-40 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-2 shadow-lg">
+          <ul className="space-y-0.5">
+            {overflowNavFor(experience).map(i => item(i, "md:hidden"))}
+            {desktop.map(i => item(i, "hidden md:block"))}
+          </ul>
+          <div className="mt-2 border-t border-gray-100 px-1 pt-2"><SignOutButton /></div>
+        </div>
+      )}
+    </div>
   );
 }
 

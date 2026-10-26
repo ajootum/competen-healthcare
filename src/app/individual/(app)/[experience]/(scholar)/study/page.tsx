@@ -17,7 +17,7 @@ import { DialogButton } from "../../../../_components/Dialog";
 import StudyNav from "./_components/StudyNav";
 import { EraseAll, ExplainPanel, UploadPanel } from "./_components/client";
 import { aiOffMessage } from "@/lib/individual/scholar/consent-gate";
-import { AiHelpBody, headerBtn, linkBtn, readAiHelp } from "./_components/shell-pieces";
+import { headerBtn, linkBtn, readAiHelp } from "./_components/shell-pieces";
 import { LibraryBrowser, type LibraryGroup } from "./_components/library-list";
 import { libraryRow } from "./_components/library-rows";
 import { listExamPapers } from "@/lib/individual/scholar/exam-store";
@@ -152,7 +152,7 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
       {header}
 
       {!materials.ok ? <div className="mb-5"><Unreadable what="study materials" /></div> : (
-        <LibraryBrowser groups={groups} actions={<>{suggestions}{upload}</>} empty={empty} />
+        <LibraryBrowser groups={groups} actions={<><Link href={experienceHref("scholar", "study/saved")} className={headerBtn}>Saved learning</Link>{suggestions}{upload}</>} empty={empty} />
       )}
       {!materials.ok && <div className="mb-5 flex flex-wrap gap-2.5">{upload}</div>}
 
@@ -180,9 +180,8 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
               : status === "awaiting_legal" ? "AI help is not available yet. You can upload and read your material, and replay what you have saved."
                 : "AI help is off. You can still read your material and replay what you have saved."}
           </p>
-          <DialogButton title="AI help with your material" className={linkBtn} style={{ color: x.accent }} label="Manage consent">
-            <AiHelpBody help={help} />
-          </DialogButton>
+          {/* HFE-01 Wave 2 (F14): one consent home -- Settings, Privacy & AI. */}
+          <Link href={`${experienceHref("scholar", "settings")}#privacy`} className={linkBtn} style={{ color: x.accent }}>Manage AI help in Settings</Link>
         </section>
       </div>
 

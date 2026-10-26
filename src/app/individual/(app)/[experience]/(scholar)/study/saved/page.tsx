@@ -6,7 +6,6 @@ import { countDue, listArtefacts, listLearningSessions, listMaterials, listQuest
 import { AI_LABEL, LEARN_ACTION_LABEL, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
-import { scholarSpace } from "@/lib/individual/scholar/spaces";
 import { sourceHref } from "../_components/question-view";
 import { AiFlagList, GovernedReferenceList } from "../_components/learn-kinds";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -50,7 +49,7 @@ export default async function SavedPage({ params }: { params: Promise<{ experien
 
   return (
     <>
-      <PageHeader accent={x.accent} eyebrow={scholarSpace("learn").eyebrow} title="Saved learning"
+      <PageHeader accent={x.accent} eyebrow="Kept for you" title="Saved learning"
         intro="Everything your study has produced, kept for you. Opening it never uses AI, so it is always available." />
       <StudyNav dueCount={due} />
 
