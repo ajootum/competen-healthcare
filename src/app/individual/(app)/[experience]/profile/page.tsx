@@ -43,6 +43,8 @@ export const dynamic = "force-dynamic";
 
 const fmt = (d: string) => new Date(`${d.length === 10 ? `${d}T00:00:00Z` : d}`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const linkCls = "font-semibold underline-offset-2 hover:underline";
+// A standalone link is a touch target on a phone (CPR-MOB-001: pointer-coarse, not width).
+const actionCls = `${linkCls} inline-flex items-center pointer-coarse:min-h-[var(--cmp-touch-min)]`;
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Profile & history" }); }
 
@@ -217,9 +219,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ experi
           <li>Active Passport links: <span className="font-semibold">{links === null ? "could not be read" : activeLinks}</span></li>
         </ul>
         <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
-          <Link href={experienceHref(experience, "passport")} className={linkCls} style={{ color: x.accent }}>Your Passport</Link>
-          <Link href={hub === "scholar" ? experienceHref("scholar", "passport/share") : experienceHref("professional", "share")} className={linkCls} style={{ color: x.accent }}>Share chosen records</Link>
-          {holds.professional && <Link href={`${experienceHref("professional", "progress/documents")}?origin=passport`} className={linkCls} style={{ color: x.accent }}>Create a document</Link>}
+          <Link href={experienceHref(experience, "passport")} className={actionCls} style={{ color: x.accent }}>Your Passport</Link>
+          <Link href={hub === "scholar" ? experienceHref("scholar", "passport/share") : experienceHref("professional", "share")} className={actionCls} style={{ color: x.accent }}>Share chosen records</Link>
+          {holds.professional && <Link href={`${experienceHref("professional", "progress/documents")}?origin=passport`} className={actionCls} style={{ color: x.accent }}>Create a document</Link>}
         </p>
         <p className="mt-3 text-[12.5px] text-gray-500">Nothing here leaves your account unless you choose it, record by record, on a Passport link.</p>
       </Card>
