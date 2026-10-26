@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { loadIndividualPolicy, type ProfessionalProfilePolicy } from "@/lib/individual/policy";
+import { loadIndividualPolicy, optionCode, type ProfessionalProfilePolicy } from "@/lib/individual/policy";
 import { loadSuggestions, type Suggestions } from "@/lib/individual/professional/suggestions";
 import { fieldCode, fieldValue, registrationSteps, resumeStep, type FieldSpec } from "@/lib/individual/professional/profile-form";
 import { loadProfessionalProfile, registrationState, type ProfilePointer } from "@/lib/individual/professional/profile-store";
@@ -16,26 +16,34 @@ import RegistrationWizard, { type WizardStep } from "./RegistrationWizard";
 // ⚠ FAILS OPEN TO THE MVP, NEVER CLOSED ON THE PERSON. Before migration 450 is applied, or when the record
 // cannot be read, there is no form: the workspace shows exactly as it did. Registration is never a lock.
 
-/** Pure: a form question with what is on record, for the client. */
-export function fieldProps(spec: FieldSpec, row: Partial<ProfilePointer> | null | undefined, suggestions: Suggestions): FieldProps {
+/** Pure: a form question with what is on record, for the client. HFE-01 Wave 3 (F6): with nothing on record for
+ *  where the person practises, the country on their shared Competen profile is offered as the starting answer. It is
+ *  only a starting value: nothing is saved until they submit, and they can change it. */
+export function fieldProps(spec: FieldSpec, row: Partial<ProfilePointer> | null | undefined, suggestions: Suggestions, prefill?: { country?: string | null }): FieldProps {
+  let code = fieldCode(row, spec.key), value = fieldValue(row, spec.key);
+  const country = prefill?.country?.trim();
+  if (spec.key === "jurisdiction" && !code && (value === null || value === "") && country) {
+    const c = optionCode(country);
+    if (spec.options?.some(o => o.code === c)) code = c; else value = country;
+  }
   return {
     name: spec.key, label: spec.label, required: spec.required, input: spec.input, options: spec.options,
-    code: fieldCode(row, spec.key), value: fieldValue(row, spec.key),
+    code, value,
     suggestions: spec.key === "profession" ? suggestions.profession : [],
     hint: spec.key === "jurisdiction" ? "Where you practise or mean to practise. It may differ from where you trained." : undefined,
   };
 }
 
-export async function loadRegistration(admin: any, userId: string): Promise<{ steps: WizardStep[]; resumeAt: WizardStep["key"]; review: { label: string; value: string | null; required: boolean }[] } | null> {
+export async function loadRegistration(admin: any, userId: string, prefill?: { country?: string | null }): Promise<{ steps: WizardStep[]; resumeAt: WizardStep["key"]; review: { label: string; value: string | null; required: boolean }[] } | null> {
   const [view, policy, suggestions] = await Promise.all([loadProfessionalProfile(admin, userId), loadIndividualPolicy(admin), loadSuggestions(admin)]);
   if (registrationState(view) !== "incomplete") return null;
-  return registrationModel(view.pointer, policy.professionalProfile, suggestions);
+  return registrationModel(view.pointer, policy.professionalProfile, suggestions, prefill);
 }
 
 /** Pure: the wizard's props from the record and the configuration. */
-export function registrationModel(row: Partial<ProfilePointer> | null | undefined, policy: ProfessionalProfilePolicy, suggestions: Suggestions) {
+export function registrationModel(row: Partial<ProfilePointer> | null | undefined, policy: ProfessionalProfilePolicy, suggestions: Suggestions, prefill?: { country?: string | null }) {
   const specs = registrationSteps(policy);
-  const steps: WizardStep[] = specs.map(s => ({ key: s.key, title: STEP_LABEL[s.key], fields: s.fields.map(f => fieldProps(f, row, suggestions)) }));
+  const steps: WizardStep[] = specs.map(s => ({ key: s.key, title: STEP_LABEL[s.key], fields: s.fields.map(f => fieldProps(f, row, suggestions, prefill)) }));
   const asked = [...REQUIRED_FIELDS, ...policy.registrationFields];
   const review = asked.map(f => {
     const v = fieldValue(row, f);

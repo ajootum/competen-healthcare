@@ -27,7 +27,7 @@ export default async function ExperienceHome({ params }: { params: Promise<{ exp
   const firstName = ctx.profile.fullName?.split(" ")[0] ?? null;
   // COMPETEN-PROFESSIONAL-PROFILE-01: until professional identity is established, the Professional home is the
   // registration form. null (registered, migration 450 absent, or unreadable) shows the workspace unchanged.
-  const registration = experience === "professional" ? await loadRegistration(ctx.admin, ctx.userId) : null;
+  const registration = experience === "professional" ? await loadRegistration(ctx.admin, ctx.userId, { country: ctx.profile.country }) : null;
   if (registration)
     return (
       <>

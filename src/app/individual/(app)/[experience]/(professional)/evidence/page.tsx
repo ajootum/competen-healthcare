@@ -111,18 +111,16 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
       })}
 
       {evidence !== null && record.provisioned && (
-        <Section title="Add a credential or evidence" note="Attach a document if you have one. It is stored privately and only you can open it.">
+        // HFE-01 Wave 3 (D2, owner Option A): competency evidence is added here. Registrations and licences belong to
+        // My practice, qualifications and certificates to Profile & history -- one home each. Credentials already
+        // recorded here stay above, with their reminders.
+        <Section title="Add competency evidence" note="What you have done that shows your competence. Attach a document if you have one: it is stored privately and only you can open it.">
+          <p className="mb-3 text-[13.5px] text-gray-700">Recording a registration or licence? Add it in <a href={experienceHref("professional", "registration")} className="font-semibold underline underline-offset-2" style={{ color: x.accent }}>My practice</a>. A qualification or certificate? Add it in <a href={`${experienceHref("professional", "profile")}#sec-qualifications`} className="font-semibold underline underline-offset-2" style={{ color: x.accent }}>Profile &amp; history</a>. Both keep their expiry reminders.</p>
           <ApiForm action="/api/individual/professional/evidence" multipart submitLabel="Add to my record" accent={x.accent} savedText="Added.">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Type" htmlFor="ev-kind">
-                <select id="ev-kind" name="kind" required className={inputCls} defaultValue="credential">
-                  {EVIDENCE_KIND.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                </select>
-              </Field>
-              <Field label="Title" htmlFor="ev-title"><input id="ev-title" name="title" required minLength={3} maxLength={200} className={inputCls} placeholder="e.g. Basic Life Support certificate" /></Field>
-              <Field label="Issuing body (credentials)" htmlFor="ev-body"><input id="ev-body" name="issuingBody" maxLength={160} className={inputCls} /></Field>
-              <Field label="Date issued or done (optional)" htmlFor="ev-issued"><input id="ev-issued" name="issuedOn" type="date" max={today} className={inputCls} /></Field>
-              <Field label="Expiry date (credentials, optional)" htmlFor="ev-exp" hint={`You are reminded ${horizonDays} days before: in Competen, and by email if you turn that on under Reminders.`}><input id="ev-exp" name="expiresOn" type="date" className={inputCls} /></Field>
+              <input type="hidden" name="kind" value="competency" />
+              <Field label="Title" htmlFor="ev-title"><input id="ev-title" name="title" required minLength={3} maxLength={200} className={inputCls} placeholder="e.g. Led a sepsis-recognition audit on my ward" /></Field>
+              <Field label="Date done (optional)" htmlFor="ev-issued"><input id="ev-issued" name="issuedOn" type="date" max={today} className={inputCls} /></Field>
               <Field label="Development need (optional)" htmlFor="ev-need">
                 <select id="ev-need" name="needId" className={inputCls} defaultValue="">
                   <option value="">Not linked to a need</option>

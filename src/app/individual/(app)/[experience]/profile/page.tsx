@@ -155,7 +155,11 @@ export default async function ProfilePage({ params }: { params: Promise<{ experi
         </div>
       ) : (
         <Card key={s.section} id={`sec-${s.section}`} title={s.title} note={s.note}>
-          {!view.provisioned ? <p className="text-[13.5px] text-gray-600">Profile records are not set up here yet.</p> : s.kinds.map((k, i) => (
+          {!view.provisioned ? <p className="text-[13.5px] text-gray-600">Profile records are not set up here yet.</p> : s.section === "registrations" ? (
+            // HFE-01 Wave 3 (D2): registrations and licences have one home, My practice.
+            <p className="text-[13.5px] text-gray-700">Your registrations and licences are kept in{" "}
+              <Link href={`${experienceHref("professional", "registration")}#sec-reg`} className="font-semibold underline-offset-2 hover:underline" style={{ color: x.accent }}>My practice</Link>. Add, change or ask for verification there.</p>
+          ) : s.kinds.map((k, i) => (
             <div key={k.kind} className={i ? "mt-6" : ""}>
               {k.heading && <h3 className="mb-1 text-[14px] font-bold text-gray-900">{k.heading}</h3>}
               <ItemBlock items={view.items} kind={k.kind} sc={sc} addLabel={k.add} emptyText={k.empty} unreadable={view.items === null} />
