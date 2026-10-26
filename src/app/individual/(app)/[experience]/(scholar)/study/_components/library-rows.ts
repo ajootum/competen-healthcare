@@ -9,7 +9,7 @@ import type { LibraryRow } from "./library-list";
 
 const TILE: Record<string, string> = { pdf: "PDF", docx: "DOCX", pptx: "PPTX", text: "TXT" };
 
-export function libraryRow(m: MaterialRow, opts: { quality?: Parameters<typeof qualitySummary>[0] | null; stamp?: string | null } = {}): LibraryRow {
+export function libraryRow(m: MaterialRow, opts: { quality?: Parameters<typeof qualitySummary>[0] | null; stamp?: string | null; paper?: boolean } = {}): LibraryRow {
   const unit = UNIT_OF(m.mimeType);
   const format = FORMAT_OF[m.mimeType];
   const q = opts.quality ?? null;
@@ -24,6 +24,7 @@ export function libraryRow(m: MaterialRow, opts: { quality?: Parameters<typeof q
   ].filter(Boolean).join(" · ");
   return {
     id: m.id, title: m.title, href: experienceHref("scholar", `study/${m.id}`), tile: TILE[format] ?? "DOC", meta,
+    badge: opts.paper ? "Examination paper" : null,
     warning: partial ? `Partly read: ${q!.emptyUnits.length} ${unit}${q!.emptyUnits.length === 1 ? "" : "s"} without readable text` : null,
   };
 }

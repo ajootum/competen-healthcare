@@ -16,6 +16,8 @@ export type LibraryRow = {
   meta: string;
   /** e.g. "Partly read: 2 pages without readable text". */
   warning: string | null;
+  /** e.g. "Examination paper": what the student is studying it as. */
+  badge?: string | null;
 };
 export type LibraryGroup = { key: string; name: string; rows: LibraryRow[] };
 
@@ -29,6 +31,7 @@ export function LibraryRows({ rows }: { rows: LibraryRow[] }) {
             <div className="min-w-0 flex-1">
               <h3 className="truncate text-[16px] font-bold text-gray-900">{r.title}</h3>
               <p className="text-[12px] text-gray-600">{r.meta}</p>
+              {r.badge && <span className="mr-1.5 mt-1 inline-block rounded-full bg-[#e9f7f8] px-2.5 py-1 text-[11px] font-semibold text-[#086b7b]">{r.badge}</span>}
               {r.warning && <span className="mt-1 inline-block rounded-full bg-[#fff3d9] px-2.5 py-1 text-[11px] font-semibold text-[#805a19]">{r.warning}</span>}
             </div>
             <Link href={r.href} className={`inline-flex min-h-[44px] items-center text-[15px] font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: SCHOLAR.accent }}>

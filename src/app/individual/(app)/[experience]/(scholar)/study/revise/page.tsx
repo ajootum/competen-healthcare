@@ -15,6 +15,7 @@ import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai
 import { REVISION_FORMATS, REVISION_MODE_LABEL, type Marking, type RevisionMode } from "@/lib/individual/scholar/config";
 import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
+import { ExamPapersSection } from "../_components/papers-section";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
 import { CardReview, type CardView } from "../_components/client";
 import { sourceHref, studyHref } from "../_components/question-view";
@@ -60,6 +61,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
       <Notice>{FORMATIVE_NOTICE}</Notice>
     </>
   );
+  const papers = <ExamPapersSection admin={ctx.admin} userId={ctx.userId} variant="revise" />;
 
   // ── one session: run it, or resume it where the student left it ──
   if (q.session) {
@@ -110,6 +112,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
   return (
     <>
       {header}
+      {papers}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">
           <RevisionStart modes={policy.scholarRevisionModes} formats={policy.scholarRevisionFormats} quantity={policy.scholarRevisionQuantity}

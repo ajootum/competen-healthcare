@@ -7,6 +7,7 @@ import { countDue, listQuestions, type QuestionRow } from "@/lib/individual/scho
 import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
+import { ExamPapersSection } from "../_components/papers-section";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
 import { QuestionCard } from "../_components/client";
 import { CasePlayer } from "../_components/competency-client";
@@ -86,6 +87,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
       <PageHeader accent={x.accent} eyebrow={scholarSpace("apply").eyebrow} title="Apply" intro={scholarSpace("apply").intro} />
       <StudyNav dueCount={due} />
       <Notice>{FORMATIVE_NOTICE} · Practice cases are formative simulation, not assessment.</Notice>
+      <ExamPapersSection admin={ctx.admin} userId={ctx.userId} variant="apply" />
 
       <div className="mb-8 grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">

@@ -16,6 +16,10 @@ import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
 import { ChunkActions, DeleteMaterial, ExplainPanel, QuestionCard } from "../_components/client";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
+import { getExamPaper } from "@/lib/individual/scholar/exam-store";
+import { EXAM_ATTESTATION, LIVE_EXAM_NOTICE } from "@/lib/individual/scholar/exam-service";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { StudyAsPaper } from "../_components/paper-client";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -93,6 +97,8 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
   const absence = competencyAbsence(learner);
   const status = consent.ok ? consentStatus(consent.data, consentDocuments().published) : null;
   const consentOn = status === "on";
+  const [paper, policy] = await Promise.all([getExamPaper(ctx.admin, ctx.userId, m.id), loadIndividualPolicy(ctx.admin)]);
+  const paperOn = policy.scholarExams.enabled && paper.ok;
   const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
   const byChunk = new Map<string, ReturnType<typeof questionView>[]>();
   let caseCount = 0;
@@ -120,6 +126,23 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
         <a href={`/api/individual/scholar/materials/${m.id}`} className={secondaryBtn}>Download original</a>
         <DeleteMaterial id={m.id} title={m.title} />
       </div>
+      {/* COMPETEN-SCHOLAR-EXAM-PAPERS-01: a past or practice paper is studied question by question in Apply. Absent
+          where 570 is not applied, or where policy does not offer it. */}
+      {paperOn && (
+        <section aria-labelledby="paper-h" className="mb-6 rounded-2xl border border-gray-200 bg-white p-4">
+          <h2 id="paper-h" className="text-[15px] font-bold text-gray-900">Examination paper</h2>
+          {paper.ok && paper.data ? (
+            <p className="mt-1 text-[14px] text-gray-700">You are studying this as an examination paper ({paper.data.questionCount} question{paper.data.questionCount === 1 ? "" : "s"} found).{" "}
+              <Link href={experienceHref("scholar", `study/apply/papers/${m.id}`)} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Open the paper →</Link></p>
+          ) : (
+            <>
+              <p className="mt-1 text-[14px] text-gray-600">Is this a past or practice paper? Study it question by question: attempt each one, then reveal a suggested answer with its evidence. {LIVE_EXAM_NOTICE}</p>
+              <div className="mt-3"><StudyAsPaper materialId={m.id} attestation={EXAM_ATTESTATION.text}
+                transcribable={policy.scholarExams.scannedPages === "ai_transcription" && m.mimeType === "application/pdf" && !!quality?.partial} /></div>
+            </>
+          )}
+        </section>
+      )}
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4">
         <OrganiseMaterial id={m.id} title={m.title} collectionId={extras.byId.get(m.id)?.collectionId ?? null}
           collections={extras.collectionsOn && collections.ok ? collections.data.map(c => ({ id: c.id, name: c.name })) : null} />

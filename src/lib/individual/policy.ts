@@ -71,14 +71,14 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_evaluation_min_evidence" | "scholar_evaluation_recency_days" | "scholar_evaluation_min_sources" | "scholar_evaluation_band_strong"
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max"
   | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown"
-  | "professional_progress_recent_days";
+  | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
   | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules"
-  | "professional_progress_periods" | "professional_progress_recommendation_rules";
+  | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -90,7 +90,7 @@ export type OptionsPolicyKey = "scholar_institutions" | "professional_evaluation
   | "professional_goal_types" | "professional_goal_priorities" | "professional_activity_types" | "professional_milestone_types"
   | "professional_goal_templates" | "professional_goal_evidence_kinds"
   | "professional_competency_categories" | "professional_self_assessment_confidence" | "professional_evidence_types" | "professional_evidence_relations"
-  | "passport_purposes";
+  | "passport_purposes" | "scholar_exam_web_domains";
 /** COMPETEN-PROFESSIONAL-PROFILE-01: an ORDERED choice from a fixed list (form fields, profile sections). */
 export type SequencePolicyKey = "professional_progress_views" | "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages"
   | "professional_goal_fields" | "professional_goal_statuses" | "professional_activity_statuses" | "professional_goal_review_fields"
@@ -106,6 +106,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations"
+  | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages"
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
   | "professional_progress_default_period" | "professional_documents_ai";
@@ -145,6 +146,21 @@ const PROGRAMME_CODE = /^[a-z0-9][a-z0-9-]{1,62}$/;
 /** Pure: the code an option label is stored under -- lower case, dashes, at most 63 characters. */
 export const optionCode = (label: string) => label.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 63).replace(/-+$/g, "");
 
+/** COMPETEN-SCHOLAR-EXAM-PAPERS-01: the authoritative publishers web research may use until HQ publishes its own list. */
+export const EXAM_WEB_DOMAINS_DEFAULT = ["who.int", "health.go.ug", "nice.org.uk", "nhs.uk", "cdc.gov", "nih.gov", "cochranelibrary.com", "resus.org.uk", "sign.ac.uk"] as const;
+export type ExamEvidenceSource = "notes" | "library" | "web";
+export type ExamResearchDepth = "quick" | "standard" | "deep";
+/** COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570), as configured. */
+export type ScholarExamPolicy = {
+  enabled: boolean;
+  sources: ExamEvidenceSource[];
+  webProvider: "none" | "anthropic_web_search";
+  depth: ExamResearchDepth;
+  domains: string[];
+  webDailyMax: number;
+  cacheDays: number;
+  scannedPages: "off" | "ai_transcription";
+};
 // ── COMPETEN-PROFESSIONAL-PROFILE-01 Stage 1: REGISTRATION AND PROFILE, NO CODE (owner GO s8) ──────────────────
 // The same engine, versions and change trail as every policy here. Nothing names a country or a profession: the
 // jurisdiction default is the full country list, and professions, titles, specialties, bodies and interests default
@@ -1003,6 +1019,70 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "generate",
     limitReason: "Two choices. A written case passes the same checks whatever is chosen.",
   },
+  // COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570): studying uploaded examination papers. Every outward-facing part -- live web
+  // research, AI transcription of scanned pages -- is OFF until the owner publishes it here: each sends data to a
+  // processor, and web research sends query text through a search provider (docs/COMPETEN-SCHOLAR-EXAM-PAPERS-01.md).
+  {
+    key: "scholar_exam_papers", kind: "choice", product: "Scholar",
+    label: "Studying examination papers",
+    help: "Whether a student may study an uploaded past or practice paper question by question: attempt, reveal a suggested answer with its evidence, ask follow-ups and turn answers into revision.",
+    options: [{ value: "on", label: "Offered" }, { value: "off", label: "Not offered" }],
+    fallback: "on",
+    limitReason: "Needs migration 570. Default: offered (with your notes and the Competen library as evidence, no web research).",
+  },
+  {
+    key: "scholar_exam_evidence_sources", kind: "set", product: "Scholar",
+    label: "Evidence a suggested answer may draw on",
+    help: "Your notes: the student's own materials. Competen library: the governed CFCA competencies and outcomes. Live web research: current public sources from the allowed domains, only when a web provider is also chosen.",
+    options: [{ value: "notes", label: "The student's own notes" }, { value: "library", label: "The governed Competen library" }, { value: "web", label: "Live web research" }],
+    fallback: ["notes", "library"],
+    limitReason: "Web research also needs a provider below. Default: notes and the library.",
+  },
+  {
+    key: "scholar_exam_web_provider", kind: "choice", product: "Scholar",
+    label: "Live web research provider",
+    help: "Who runs web searches. Only the examination question is sent as the research request: never the student's notes, answers, name or other uploads. Results are public sources, cached and reused.",
+    options: [{ value: "none", label: "None (no web research)" }, { value: "anthropic_web_search", label: "Anthropic web search (through the existing AI provider)" }],
+    fallback: "none",
+    limitReason: "Off by default: an owner decision (a search processor in the privacy notice, search cost and funding).",
+  },
+  {
+    key: "scholar_exam_research_depth", kind: "choice", product: "Scholar",
+    label: "Default research depth",
+    help: "Quick: one search, a few sources. Standard: up to three searches. Deep: up to five searches and more sources. A student may choose a lighter depth.",
+    options: [{ value: "quick", label: "Quick" }, { value: "standard", label: "Standard" }, { value: "deep", label: "Deep" }],
+    fallback: "standard",
+    limitReason: "Three depths. Default: standard.",
+  },
+  {
+    key: "scholar_exam_web_domains", kind: "options", product: "Scholar", max: 60, noun: "domain",
+    label: "Sources web research may use",
+    help: "The domains web research may search and cite, one per line (for example who.int). Only these are used, so every web source is from a source you chose as authoritative.",
+    fallback: EXAM_WEB_DOMAINS_DEFAULT.map(d => ({ code: optionCode(d), label: d })),
+    limitReason: "At most 60. Default: a short list of international and national guideline and evidence publishers.",
+  },
+  {
+    key: "scholar_exam_web_daily_max", kind: "int", product: "Scholar", unit: "research requests",
+    label: "Web research requests per student per day",
+    help: "How many fresh web research requests one student may make in a day. A cached result does not count.",
+    fallback: 10, min: 0, max: 200,
+    limitReason: "Zero to two hundred. Default: ten.",
+  },
+  {
+    key: "scholar_exam_research_cache_days", kind: "int", product: "Scholar", unit: "days",
+    label: "How long public research results are reused",
+    help: "Web research results (public sources only, never a student's material) are reused for this many days, then researched again. Zero turns reuse off.",
+    fallback: 30, min: 0, max: 365,
+    limitReason: "Zero to a year. Default: thirty days.",
+  },
+  {
+    key: "scholar_exam_scanned_pages", kind: "choice", product: "Scholar",
+    label: "Scanned examination pages",
+    help: "A scanned page has no text to read. Off: it is flagged as unreadable and nothing is guessed. AI transcription: with the student's AI consent, the page is sent to the existing AI provider to transcribe, every transcribed question is labelled, and anything it cannot read is flagged.",
+    options: [{ value: "off", label: "Flag as unreadable" }, { value: "ai_transcription", label: "AI transcription (existing provider)" }],
+    fallback: "off",
+    limitReason: "Off by default: page images are sent to the AI provider, an owner decision.",
+  },
   {
     key: "scholar_case_mode", kind: "choice", product: "Scholar",
     label: "Default way of playing a case",
@@ -1414,6 +1494,8 @@ export type IndividualPolicy = {
   scholarOnboardingProgrammes: string[] | null;
   scholarProgrammeLevels: Record<string, ContextOption[]>;
   scholarInstitutions: ContextOption[];
+  /** COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570). */
+  scholarExams: ScholarExamPolicy;
   scholarOnboardingFields: ("level" | "institution")[];
   /** P0: the least-reviewed content status Scholar offers. Default "unreviewed": everything, labelled. */
   scholarCatalogueMinStatus: ContentStatusLevel;
@@ -1539,6 +1621,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarOnboardingProgrammes: clampProgrammes(policyDef("scholar_onboarding_programmes") as ProgrammesPolicy, published.get(policyPath("scholar_onboarding_programmes"))),
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
+    scholarExams: resolveScholarExams(published),
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
     scholarCatalogueMinStatus: clampChoice(policyDef("scholar_catalogue_min_status") as ChoicePolicy, published.get(policyPath("scholar_catalogue_min_status"))) as ContentStatusLevel,
     professionalEvaluation: resolveProfessionalEvaluation(published),
@@ -1714,4 +1797,23 @@ export function individualQuotaRefusal(quota: { ok: boolean; limit: number; unre
   if (quota.unreadable) return { status: 503, error: "Your AI allowance could not be checked just now, so nothing was sent. Try again shortly." };
   if (!quota.ok) return { status: 429, error: `You have reached the limit of ${quota.limit} ${noun} an hour. Try again later.` };
   return null;
+}
+
+/** COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570). Web research is on only with "web" among the sources AND a provider chosen. */
+function resolveScholarExams(published: Map<string, unknown>): ScholarExamPolicy {
+  const choice = (key: ChoicePolicyKey) => clampChoice(policyDef(key) as ChoicePolicy, published.get(policyPath(key)));
+  const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
+  const domains = clampOptions(policyDef("scholar_exam_web_domains") as OptionsPolicy, published.get(policyPath("scholar_exam_web_domains")))
+    .map(o => o.label.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, ""))
+    .filter(d => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d));
+  return {
+    enabled: choice("scholar_exam_papers") === "on",
+    sources: clampSet(policyDef("scholar_exam_evidence_sources") as SetPolicy, published.get(policyPath("scholar_exam_evidence_sources"))) as ExamEvidenceSource[],
+    webProvider: choice("scholar_exam_web_provider") as "none" | "anthropic_web_search",
+    depth: choice("scholar_exam_research_depth") as ExamResearchDepth,
+    domains: [...new Set(domains)],
+    webDailyMax: int("scholar_exam_web_daily_max"),
+    cacheDays: int("scholar_exam_research_cache_days"),
+    scannedPages: choice("scholar_exam_scanned_pages") as "off" | "ai_transcription",
+  };
 }
