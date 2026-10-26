@@ -12,8 +12,9 @@ import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { PassportChoices } from "../_components/passport-choice";
 import { buildProgress } from "@/lib/individual/scholar/progress";
 import { SELF_DIRECTED_LABEL } from "@/lib/individual/scholar/config";
-import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
+import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
+import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
 import { ProgressWorkspace } from "../_components/progress-view";
 import { loadProgress } from "@/lib/individual/scholar/progress-data";
 import type { PeriodKind } from "@/lib/individual/scholar/progress-history";
@@ -189,11 +190,11 @@ export default async function ProgressPage({ params, searchParams }: { params: P
 
   return (
     <>
-      <PageHeader accent={x.accent} eyebrow="My Learning" title="Progress" intro="How your own study is going, material by material." />
+      <PageHeader accent={x.accent} eyebrow={scholarSpace("progress").eyebrow} title="Progress" intro={scholarSpace("progress").intro} />
       <StudyNav dueCount={p?.totals.cardsDue ?? null} />
-      <p className="mb-6 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">
-        <span className="font-semibold">{SELF_DIRECTED_LABEL}</span> None of it is added to your Passport or shared with anyone unless you choose an achievement below.
-      </p>
+      <Notice>
+        {FORMATIVE_NOTICE} · <span className="font-semibold">{SELF_DIRECTED_LABEL}</span> None of it is added to your Passport or shared with anyone unless you choose an achievement below.
+      </Notice>
 
       {!rows.ok ? (rows.notProvisioned
         ? <StatePanel title="Progress is not set up on this environment yet"><p>The study store it needs has not been installed here.</p></StatePanel>
