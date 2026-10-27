@@ -2,6 +2,7 @@
 export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
+import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { competencyChunks, getPassage, isUuid, searchCandidates, toPassages } from "@/lib/individual/scholar/store";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
@@ -103,7 +104,14 @@ export async function POST(req: Request) {
   const r = await runExplain(ctx.userId, question, passages, mode, history, learnerContext, ai.run);
   const refused = meteredRefusal(ai.refusal());
   if (refused) return refused;
+  // SCHOLAR-AI-OPT-01: the outcome of this one action (shown or withheld, and why), codes only.
+  await recordScholarOutcome(ctx.admin, ai, {
+    operation: "individual_scholar_explain", outputKind: "explanation", promptVersion: r.ok ? r.promptVersion : null, configVersion: `mode:${mode}`,
+    ...(!r.ok ? { outcome: "error" as const, reasons: [`error_${r.error}`] }
+      : r.check.ok ? { outcome: "accepted" as const, accepted: 1 } : { outcome: "rejected" as const, rejected: 1, reasons: [r.check.reason] }),
+  });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_explain", null, {
+    action_id: ai.actionId,
     chunk_ids: passages.map(p => p.chunkId), question_chars: question.length, mode, tutor_turns: history.length, learner_context: learnerContext !== null,
     outcome: r.ok ? (r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,
     supplementary: r.ok && r.supplementary ? (r.supplementary.ok ? "shown" : `withheld:${r.supplementary.reason}`) : null,
@@ -125,6 +133,6 @@ export async function POST(req: Request) {
     : s.ok ? { text: s.text, label: SUPPLEMENTARY_LABEL } : { withheld: SUPPLEMENTARY_WITHHELD[s.reason as Exclude<typeof s.reason, "not_this_mode">] };
   return NextResponse.json({
     answer: r.check.text, label: AI_LABEL, sources: sources.filter((_, i) => r.check.ok && r.check.cited.includes(i + 1)),
-    provenance: { model: r.model, promptVersion: r.promptVersion }, mode, supplementary, passageIds: passages.map(p => p.chunkId),
+    provenance: { model: r.model, promptVersion: r.promptVersion }, mode, supplementary, passageIds: passages.map(p => p.chunkId), actionId: ai.actionId,
   });
 }

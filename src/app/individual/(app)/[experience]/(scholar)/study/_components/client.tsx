@@ -6,6 +6,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { readyHref, sourceHref, studyHref } from "./question-view";
+import { AiFeedback } from "./ai-feedback";
 import { AI_LABEL, CONTENT_STATUS_LABEL, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, PDF_MIME, PPTX_MIME, TEXT_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
 import type { ConsentStatus, LegalLink } from "@/lib/individual/scholar/consent-gate";
 
@@ -367,7 +368,7 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
 
 type Source = { tag: string; chunkId: string; materialId: string; citation: string; excerpt: string };
 type Supplementary = { text?: string; label?: string; withheld?: string } | null;
-type Explained = { q: string; answer?: string; message?: string; sources: Source[]; provenance?: { model: string; promptVersion: string }; supplementary?: Supplementary };
+type Explained = { q: string; answer?: string; message?: string; sources: Source[]; provenance?: { model: string; promptVersion: string }; supplementary?: Supplementary; actionId?: string };
 
 // COMPETEN-SCHOLAR-01 S3: ways of learning from the same passages. "Tutor me" is per section (TutorPanel).
 type Mode = "explain" | "summary" | "simplify" | "deeper";
@@ -522,6 +523,7 @@ function ExplanationView({ item }: { item: Explained }) {
         </div>
       )}
       {item.provenance && <p className="mt-2 text-[11.5px] text-gray-400">Model {item.provenance.model} · prompt {item.provenance.promptVersion}</p>}
+      {item.answer && <AiFeedback kind="explanation" target="action" refId={item.actionId} />}
     </article>
   );
 }
@@ -539,6 +541,8 @@ export function ChunkActions({ chunkId, consent, linked = [] }: { chunkId: strin
   const [busy, setBusy] = useState<"" | "explain" | "mcq" | "case" | "steps">("");
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  // SCHOLAR-AI-OPT-01: what the student may do next when nothing new was written (saved content, a simpler activity).
+  const [next, setNext] = useState<{ label: string; run: () => void }[]>([]);
   const [explained, setExplained] = useState<Explained | null>(null);
   const [mode, setMode] = useState<Mode>("explain");
   const [tutor, setTutor] = useState(false);
@@ -548,22 +552,33 @@ export function ChunkActions({ chunkId, consent, linked = [] }: { chunkId: strin
     const r = await post("/api/individual/scholar/explain", { question: SECTION_PROMPT[mode].q, chunkId, mode });
     setBusy("");
     if (!r.ok) { setError(r.json.error ?? "No explanation could be produced."); return; }
-    setExplained({ q: SECTION_PROMPT[mode].shown, answer: r.json.answer, message: r.json.message, sources: r.json.sources ?? [], provenance: r.json.provenance, supplementary: r.json.supplementary });
+    setExplained({ q: SECTION_PROMPT[mode].shown, answer: r.json.answer, message: r.json.message, sources: r.json.sources ?? [], provenance: r.json.provenance, supplementary: r.json.supplementary, actionId: r.json.actionId });
   }
-  async function stepCase() {
-    setBusy("steps"); setError(""); setNote("");
-    const r = await post("/api/individual/scholar/cases", { chunkId });
+  async function stepCase(opts: { fresh?: boolean; attemptAnyway?: boolean } = {}) {
+    setBusy("steps"); setError(""); setNote(""); setNext([]);
+    const r = await post("/api/individual/scholar/cases", { chunkId, ...opts });
     setBusy("");
+    const why = r.json.sufficiency as { message?: string | null; alternative?: string | null; canAttempt?: boolean } | undefined;
+    if (r.json.reused) { setNote(r.json.message); setNext([{ label: "Write a new step-by-step case", run: () => stepCase({ fresh: true }) }]); return; }
+    if (why && !r.json.created) {
+      setNote(r.json.message ?? why.message ?? "No case could be written from this section.");
+      setNext([
+        ...(why.alternative === "case_question" ? [{ label: "Write a case question instead", run: () => questions("case") }] : []),
+        ...(why.canAttempt ? [{ label: "Try the step-by-step case anyway", run: () => stepCase({ attemptAnyway: true }) }] : []),
+      ]);
+      return;
+    }
     if (!r.ok) { setError(r.json.error ?? "No case could be written."); return; }
     if (!r.json.created) { setNote(r.json.message); return; }
     setNote(`A ${r.json.created}-step practice case was added${r.json.dropped ? ` (${r.json.dropped} draft steps dropped by the quality checks)` : ""}. Play it under Apply.`);
     router.refresh();
   }
-  async function questions(kind: "mcq" | "case") {
-    setBusy(kind); setError(""); setNote("");
-    const r = await post("/api/individual/scholar/questions", { chunkId, kind });
+  async function questions(kind: "mcq" | "case", fresh = false) {
+    setBusy(kind); setError(""); setNote(""); setNext([]);
+    const r = await post("/api/individual/scholar/questions", { chunkId, kind, fresh });
     setBusy("");
     if (!r.ok) { setError(r.json.error ?? "No questions could be written."); return; }
+    if (r.json.reused) { setNote(r.json.message); setNext([{ label: "Write new ones anyway", run: () => questions(kind, true) }]); return; }
     if (!r.json.created) { setNote(r.json.message); return; }
     setNote(`${r.json.created} ${kind === "case" ? "case " : ""}question${r.json.created === 1 ? "" : "s"} added${r.json.dropped ? ` (${r.json.dropped} dropped by the quality checks)` : ""}. ${kind === "case" ? "Find them under Apply." : "Answer them below."}`);
     router.refresh();
@@ -576,10 +591,15 @@ export function ChunkActions({ chunkId, consent, linked = [] }: { chunkId: strin
         <button type="button" className={ghost} disabled={!!busy} aria-expanded={tutor} onClick={() => setTutor(t => !t)}>{tutor ? "Close tutor" : "Tutor me"}</button>
         <button type="button" className={ghost} disabled={!!busy} onClick={() => questions("mcq")}>{busy === "mcq" ? "Writing…" : "Practice questions"}</button>
         <button type="button" className={ghost} disabled={!!busy} onClick={() => questions("case")}>{busy === "case" ? "Writing…" : "Case question"}</button>
-        <button type="button" className={ghost} disabled={!!busy} onClick={stepCase}>{busy === "steps" ? "Writing the case…" : "Step-by-step case"}</button>
+        <button type="button" className={ghost} disabled={!!busy} onClick={() => stepCase()}>{busy === "steps" ? "Writing the case…" : "Step-by-step case"}</button>
       </div>
       <ErrorLine text={error} />
       {note && <p aria-live="polite" className="mt-2 text-[13.5px] text-gray-700">{note}</p>}
+      {next.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {next.map(n => <button key={n.label} type="button" className={ghost} disabled={!!busy} onClick={n.run}>{n.label}</button>)}
+        </div>
+      )}
       {explained && <div className="mt-3"><ExplanationView item={explained} /></div>}
       {tutor && <TutorPanel chunkId={chunkId} linked={linked} />}
     </div>

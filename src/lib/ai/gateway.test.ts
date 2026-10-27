@@ -83,6 +83,37 @@ describe("recordAiUsage attribution columns", () => {
     expect(String(errorSpy.mock.calls[0][0])).toMatch(/NOT recorded: Could not find the 'cost_usd' column/);
   });
 
+  // SCHOLAR-AI-OPT-01: the action id ships before the owner applies migration 600, and must never cost a usage row.
+  it("writes the action id, and before migration 600 lands the row without it, keeping the 371 columns", async () => {
+    insert
+      .mockResolvedValueOnce({ error: { code: "PGRST204", message: "Could not find the 'action_id' column of 'plat_ai_requests' in the schema cache" } })
+      .mockResolvedValueOnce({ error: null });
+    await recordAiUsage({ status: "ok", attribution: { scope: "person" }, actionId: "11111111-1111-4111-8111-111111111111" });
+    expect(insert.mock.calls[0][0]).toMatchObject({ action_id: "11111111-1111-4111-8111-111111111111" });
+    expect(insert).toHaveBeenCalledTimes(2);
+    expect(insert.mock.calls[1][0]).not.toHaveProperty("action_id");
+    expect(insert.mock.calls[1][0]).toMatchObject({ attribution_scope: "person" });
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it("with neither 371 nor 600 applied, drops both in turn and still lands the row", async () => {
+    insert
+      .mockResolvedValueOnce({ error: { code: "PGRST204", message: "Could not find the 'action_id' column of 'plat_ai_requests' in the schema cache" } })
+      .mockResolvedValueOnce({ error: { code: "PGRST204", message: "Could not find the 'attribution_scope' column of 'plat_ai_requests' in the schema cache" } })
+      .mockResolvedValueOnce({ error: null });
+    await recordAiUsage({ status: "ok", attribution: { scope: "person" }, actionId: "11111111-1111-4111-8111-111111111111" });
+    expect(insert).toHaveBeenCalledTimes(3);
+    expect(Object.keys(insert.mock.calls[2][0])).not.toEqual(expect.arrayContaining(["action_id"]));
+    expect(insert.mock.calls[2][0]).not.toHaveProperty("attribution_scope");
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it("a call with no action writes no action_id at all, exactly as before", async () => {
+    insert.mockResolvedValue({ error: null });
+    await recordAiUsage({ status: "ok", operation: "admin_assistant" });
+    expect(insert.mock.calls[0][0]).not.toHaveProperty("action_id");
+  });
+
   it("does not retry a foreign-key refusal either", async () => {
     insert.mockResolvedValue({ error: { code: "23503", message: "violates foreign key constraint \"plat_ai_requests_workspace_id_fkey\"" } });
     await recordAiUsage({ status: "ok", attribution: { scope: "workspace", workspaceId: "gone" } });

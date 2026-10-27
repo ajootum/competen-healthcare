@@ -2,6 +2,7 @@
 export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
+import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import {
@@ -124,7 +125,7 @@ export async function POST(req: Request) {
       sources: src.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) })),
       passageIds: src.map(p => p.chunkId), references: relabelReferences(a.refs, refSource), answer: a.content, cited: src.map((_, i) => i + 1),
       background: a.background ? { text: a.background, label: SUPPLEMENTARY_LABEL } : null, flags: a.flags, verdict: null,
-      saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, ...extra,
+      saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...extra,
     };
   };
   if (key && body?.fresh !== true) {
@@ -163,7 +164,16 @@ export async function POST(req: Request) {
   const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext }, ai.run);
   const refusal = ai.refusal();
   if (refusal) { const w = refusalWords(refusal); return continuity(w.message, w.insufficient); }
+  // SCHOLAR-AI-OPT-01: the outcome of this one action, codes only. A check question is not an explanation.
+  await recordScholarOutcome(ctx.admin, ai, {
+    operation: `individual_scholar_learn:${action}`, outputKind: action === "check" ? "other" : "explanation",
+    promptVersion: r.ok ? r.promptVersion : null, configVersion: `depth:${depth}`,
+    ...(!r.ok ? { outcome: "error" as const, reasons: [`error_${r.error}`] }
+      : action === "check" ? (r.question?.ok ? { outcome: "accepted" as const, accepted: 1 } : { outcome: "rejected" as const, rejected: 1, reasons: [r.question?.reason ?? "malformed"] })
+        : r.check.ok ? { outcome: "accepted" as const, accepted: 1 } : { outcome: "rejected" as const, rejected: 1, reasons: [r.check.reason] }),
+  });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn", sessionId, {
+    action_id: ai.actionId,
     action, step, chunk_ids: passages.map(p => p.chunkId), depth, references: references.length, learner_context: learnerContext !== null, recorded,
     outcome: r.ok ? (action === "check" ? (r.question?.ok ? "shown" : `withheld:${r.question?.reason}`) : r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,
     flags: r.ok ? r.flags.kept.length : 0, verdict: r.ok ? r.verdict : null, model: r.ok ? r.model : null, prompt_version: r.ok ? r.promptVersion : null,
@@ -178,7 +188,7 @@ export async function POST(req: Request) {
   }
 
   const sources = passages.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) }));
-  const base = { action, step, depth, label: AI_LABEL, provenance: { model: r.model, promptVersion: r.promptVersion }, sources, passageIds: passages.map(p => p.chunkId),
+  const base = { action, step, depth, label: AI_LABEL, provenance: { model: r.model, promptVersion: r.promptVersion }, sources, passageIds: passages.map(p => p.chunkId), actionId: ai.actionId,
     references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL };
   if (action === "check") {
     return NextResponse.json(r.question?.ok
