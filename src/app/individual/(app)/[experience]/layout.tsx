@@ -161,7 +161,7 @@ export default async function ExperienceLayout({ children, params }: {
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
 
   return (
-    <div className={`min-h-screen bg-gray-50 ${scholar ? "cmp-scholar" : ""}`}>
+    <div data-cmp-theme={experience} className={`min-h-screen bg-gray-50 ${scholar ? "cmp-scholar" : ""}`}>
       <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
         <div className="flex h-14 md:h-[76px] items-center gap-3 px-4 md:gap-7 md:px-7">
           <Link href={experienceHref(experience)} className={`rounded-lg md:w-[200px] ${focusRing}`} aria-label={`${x.name} home`}>

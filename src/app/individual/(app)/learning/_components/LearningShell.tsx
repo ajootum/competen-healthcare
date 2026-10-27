@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { EXPERIENCES, experienceHref, type ExperienceKey } from "@/lib/individual/experiences";
 import { ExperienceMark, focusRing } from "@/app/individual/_components/chrome";
+import { productTheme } from "@/lib/design/tokens";
 
 // The member-only Learning area's frame (COMPETEN-LEARNING-01, owner D2). It belongs to the Individual identity, not to
 // an experience: a course-only member, who holds neither Scholar nor Professional, sees exactly this. A member who
 // holds an experience gets a link back to it, never a door into one they do not hold.
 
-export const LEARNING_ACCENT = "#0f766e";
+// COMPETEN-DESIGN-SYSTEM-01: Learning sits inside Competen Individual, so it carries the Individual theme.
+export const LEARNING_ACCENT = productTheme.individual.accent;
 
 export function LearningShell({ live, children, current }: { live: readonly ExperienceKey[]; children: React.ReactNode; current: "catalogue" | "mine" | null }) {
   const tab = (href: string, label: string, on: boolean) => (
-    <Link href={href} aria-current={on ? "page" : undefined} className={`inline-flex min-h-[44px] items-center rounded-xl px-3 text-[14px] font-semibold ${focusRing} ${on ? "bg-teal-50 text-teal-900" : "text-gray-700 hover:text-gray-900"}`}>{label}</Link>
+    <Link href={href} aria-current={on ? "page" : undefined} className={`inline-flex min-h-[44px] items-center rounded-xl px-3 text-[14px] font-semibold ${focusRing} ${on ? "bg-[var(--cmp-theme-soft)] text-[var(--cmp-theme-ink)]" : "text-gray-700 hover:text-gray-900"}`}>{label}</Link>
   );
   return (
     <div className="min-h-screen bg-gray-50">

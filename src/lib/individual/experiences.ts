@@ -1,3 +1,4 @@
+import { productTheme } from "@/lib/design/tokens";
 // ── THE COMPETEN INDIVIDUAL EXPERIENCE REGISTRY ── COMPETEN-IND-003 s2-s3, ADR-016 ─────────────────────
 //
 // Competen Individual is ONE product (gate 3) presented as TWO experiences, Competen Scholar and Competen
@@ -112,8 +113,8 @@ export const SCHOLAR: ExperienceConfig = {
   name: "Competen Scholar",
   wordmark: "scholar",
   // Scholar HFE redesign (2026-10-26): the agreed prototype's teal (4.7:1 on white) and its pale tint.
-  accent: "#087F98",
-  accentSoft: "#E9F7F8",
+  accent: productTheme.scholar.accent,
+  accentSoft: productTheme.scholar.soft,
   tagline: "Learn · Understand · Apply",
   micro: "Healthcare education, revision and clinical reasoning.",
   operatingEntity: "scholar_operator",
@@ -146,8 +147,8 @@ export const PROFESSIONAL: ExperienceConfig = {
   key: "professional",
   name: "Competen Professional",
   wordmark: "professional",
-  accent: "#4F46E5",
-  accentSoft: "#EEF2FF",
+  accent: productTheme.professional.accent,
+  accentSoft: productTheme.professional.soft,
   tagline: "Develop · Demonstrate · Advance",
   micro: "Your lifelong professional development, evidence and career.",
   operatingEntity: "competen_holdings",

@@ -1,3 +1,4 @@
+import { productTheme } from "@/lib/design/tokens";
 // ── THE COMPETEN INDIVIDUAL FAMILY, AS PUBLIC CONTENT ── COMPETEN-WEB-IND-001 ──────────────────────────
 //
 // Competen Individual is ONE product (products.ts, one of the four) presented through TWO independently
@@ -110,9 +111,9 @@ export const SCHOLAR: Experience = {
   wordmark: "scholar",
   href: "/scholar",
   legacyHref: "/students",
-  // cyan-700: 5.4:1 against white as text and under white button labels.
-  accent: "#0E7490",
-  accentSoft: "#ECFEFF",
+  // COMPETEN-DESIGN-SYSTEM-01: the approved Scholar theme (teal #087F9C, 4.64:1 on white), from tokens.ts.
+  accent: productTheme.scholar.accent,
+  accentSoft: productTheme.scholar.soft,
   tagline: "Learn · Understand · Apply",
   micro: "AI-powered healthcare education.",
   eyebrow: "Your AI-powered healthcare learning companion",
@@ -191,9 +192,9 @@ export const PROFESSIONAL: Experience = {
   wordmark: "professional",
   href: "/professional",
   legacyHref: "/professionals",
-  // indigo-600: the accent the Professionals pathway already carried; 6.3:1 against white.
-  accent: "#4F46E5",
-  accentSoft: "#EEF2FF",
+  // COMPETEN-DESIGN-SYSTEM-01: the approved Professional theme (indigo #4338CA, 7.90:1 on white), from tokens.ts.
+  accent: productTheme.professional.accent,
+  accentSoft: productTheme.professional.soft,
   tagline: "Develop · Demonstrate · Advance",
   micro: "Your professional operating system.",
   eyebrow: "Your personal professional operating system",
@@ -278,9 +279,9 @@ export const INDIVIDUAL = {
   name: "Competen Individual",
   wordmark: "individual",
   href: "/individual",
-  // teal-700, the Individual accent since 2026-08-02. 5.5:1 against white.
-  accent: "#0F766E",
-  accentSoft: "#F0FDFA",
+  // COMPETEN-DESIGN-SYSTEM-01: the approved Individual theme (indigo #4338CA, 7.90:1 on white), from tokens.ts.
+  accent: productTheme.individual.accent,
+  accentSoft: productTheme.individual.soft,
   tagline: "Your lifelong professional home",
   eyebrow: "One journey · A lifetime of growth",
   headline: ["Your learning.", "Your competence.", "Your career."],

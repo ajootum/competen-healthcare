@@ -221,7 +221,7 @@ function QuestionCard({ q, saved, choice, onSaved }: { q: PaperQuestionView; sav
             <fieldset className="mt-3">
               <legend className="sr-only">Your choice for question {q.number}</legend>
               {q.options.map(o => (
-                <label key={o.label} className={`mt-1.5 flex min-h-[44px] cursor-pointer items-start gap-3 rounded-[9px] border px-3 py-2 text-[14.5px] ${option === o.label ? "border-[#087f98] bg-[#e9f7f8]" : "border-gray-200 hover:bg-gray-50"}`}>
+                <label key={o.label} className={`mt-1.5 flex min-h-[44px] cursor-pointer items-start gap-3 rounded-[9px] border px-3 py-2 text-[14.5px] ${option === o.label ? "border-[var(--cmp-theme-accent)] bg-[var(--cmp-theme-soft)]" : "border-gray-200 hover:bg-gray-50"}`}>
                   <input type="radio" name={`opt-${q.id}`} value={o.label} checked={option === o.label} onChange={() => setOption(o.label)} className="mt-1" />
                   <span><span className="font-bold">{o.label}.</span> {o.text}</span>
                 </label>

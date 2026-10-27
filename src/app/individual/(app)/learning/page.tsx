@@ -49,7 +49,7 @@ export default async function LearningCatalogue({ searchParams }: { searchParams
         <section aria-labelledby="mine-h" className="space-y-4">
           <h1 id="mine-h" className="text-2xl font-bold tracking-tight text-gray-900">My learning</h1>
           <p className="text-[14.5px] text-gray-600">Everything you have enrolled on, completed or recorded. It stays here whatever happens to your access or your subscriptions.</p>
-          {records === null ? <Unreadable what="learning record" /> : records.length === 0 ? <p className="text-[14.5px] text-gray-700">Nothing yet. <Link className="font-semibold text-teal-800 underline" href="/individual/learning">Browse the catalogue</Link>.</p> : (
+          {records === null ? <Unreadable what="learning record" /> : records.length === 0 ? <p className="text-[14.5px] text-gray-700">Nothing yet. <Link className="font-semibold text-[var(--cmp-theme-ink)] underline" href="/individual/learning">Browse the catalogue</Link>.</p> : (
             <ul className="space-y-3">{records.map(r => (
               <li key={r.id} className="rounded-2xl border border-gray-200 bg-white p-5">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -57,7 +57,7 @@ export default async function LearningCatalogue({ searchParams }: { searchParams
                   <span className="text-[13px] font-semibold text-gray-700">{r.status === "completed" ? OUTCOME_LABEL[r.completionKind as keyof typeof OUTCOME_LABEL] ?? "Completed" : r.status === "withdrawn" ? "Withdrawn" : "In progress"}</span>
                 </div>
                 <p className="text-[13.5px] text-gray-600">Version {r.versionNo} · enrolled {day(r.enrolledAt)}{r.completedAt ? ` · completed ${day(r.completedAt)}` : ""} · {EVIDENCE_LABEL[r.evidenceClass as keyof typeof EVIDENCE_LABEL] ?? r.evidenceClass}{r.status !== "completed" && r.accessKind === "entitlement" && !r.accessLive ? " · your access has ended" : ""}</p>
-                {r.certificates.length > 0 && <p className="mt-1 text-[13.5px]">{r.certificates.map(c => <Link key={c.id} href={`/individual/learning/certificate/${c.no}`} className="mr-3 font-semibold text-teal-800 underline">Certificate {c.no}{c.revokedAt ? " (revoked)" : ""}</Link>)}</p>}
+                {r.certificates.length > 0 && <p className="mt-1 text-[13.5px]">{r.certificates.map(c => <Link key={c.id} href={`/individual/learning/certificate/${c.no}`} className="mr-3 font-semibold text-[var(--cmp-theme-ink)] underline">Certificate {c.no}{c.revokedAt ? " (revoked)" : ""}</Link>)}</p>}
               </li>))}</ul>
           )}
         </section>
@@ -84,7 +84,7 @@ export default async function LearningCatalogue({ searchParams }: { searchParams
               const price = i.prices[0];
               return (
                 <li key={i.offeringId} className="flex flex-col rounded-2xl border border-gray-200 bg-white p-5">
-                  <p className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-teal-800">{i.delivery === "external" ? `External · ${i.provider?.name ?? "another provider"}` : i.source === "partner" ? `Partner · ${i.provider?.name ?? ""}` : "Competen"}</p>
+                  <p className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--cmp-theme-ink)]">{i.delivery === "external" ? `External · ${i.provider?.name ?? "another provider"}` : i.source === "partner" ? `Partner · ${i.provider?.name ?? ""}` : "Competen"}</p>
                   <h2 className="mt-1 text-[17px] font-bold text-gray-900"><Link href={`/individual/learning/${i.code}`} className="underline decoration-gray-300">{i.title}</Link></h2>
                   <p className="mt-1 line-clamp-3 text-[14px] text-gray-600">{i.summary}</p>
                   <p className="mt-2 text-[13px] text-gray-600">{[i.level, i.format?.replace(/_/g, " "), i.durationMinutes ? `${i.durationMinutes} min` : null, i.certificateOffered ? "certificate" : null].filter(Boolean).join(" · ")}</p>

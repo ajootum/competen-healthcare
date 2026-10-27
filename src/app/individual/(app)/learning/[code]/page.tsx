@@ -42,7 +42,7 @@ export default async function OfferingPage({ params }: { params: Promise<{ code:
     <LearningShell live={live} current="catalogue">
       <article className="space-y-6">
         <header>
-          <p className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-teal-800">{i.delivery === "external" ? "External course" : i.source === "partner" ? "Partner course" : "Competen course"} · {i.offeringType.replace(/_/g, " ")}</p>
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--cmp-theme-ink)]">{i.delivery === "external" ? "External course" : i.source === "partner" ? "Partner course" : "Competen course"} · {i.offeringType.replace(/_/g, " ")}</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 text-balance">{i.title}</h1>
           <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-gray-700">{i.summary}</p>
           <p className="mt-2 text-[13.5px] text-gray-600">{[i.level, i.format?.replace(/_/g, " "), i.durationMinutes ? `about ${i.durationMinutes} minutes` : null, `version ${i.versionNo}`].filter(Boolean).join(" · ")}</p>
@@ -59,7 +59,7 @@ export default async function OfferingPage({ params }: { params: Promise<{ code:
               <div><dt className="inline font-semibold">CPD: </dt><dd className="inline">{i.delivery === "external" ? (b.external?.cpdInfo || "As the provider states it") : i.cpdHours ? `${i.cpdHours} hours of learning${i.cpdNote ? ` (${i.cpdNote})` : ""}` : "Not stated"}. Competen does not accredit CPD.</dd></div>
             </dl>
             {i.listingApproved && <p className="mt-3 rounded-xl bg-gray-50 px-3 py-2 text-[13px] text-gray-700">Competen lists this course so you can find it and record it. Listing it is not a clinical endorsement, an accreditation or a claim that Competen owns it.</p>}
-            {i.clinicallyApproved && <p className="mt-3 rounded-xl bg-teal-50 px-3 py-2 text-[13px] text-teal-900">This version was independently clinically reviewed before publication.</p>}
+            {i.clinicallyApproved && <p className="mt-3 rounded-xl bg-[var(--cmp-theme-soft)] px-3 py-2 text-[13px] text-[var(--cmp-theme-ink)]">This version was independently clinically reviewed before publication.</p>}
           </div>
           <div className="rounded-2xl border border-gray-200 bg-white p-5 text-[14px] text-gray-700">
             <h2 className="text-[15px] font-bold text-gray-900">What it covers</h2>

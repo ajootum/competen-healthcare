@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { primaryBtn, secondaryBtn } from "@/app/individual/_components/chrome";
+import { productTheme } from "@/lib/design/tokens";
 
 // The learner's controls (COMPETEN-LEARNING-01 S2-S3). Each posts to the person's own Learning API. The server
 // decides everything that matters -- access, scores, completion, certificates -- so these only send and report.
 
-const ACCENT = "#0f766e";
+const ACCENT = productTheme.individual.accent;
 const field = "w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-[14.5px] text-gray-900 focus-visible:outline-2 focus-visible:outline-gray-900";
 
 function Note({ ok, text }: { ok: boolean; text: string }) {
-  return <p role={ok ? "status" : "alert"} className={`rounded-xl border px-3 py-2 text-[13.5px] ${ok ? "border-teal-200 bg-teal-50 text-teal-900" : "border-amber-300 bg-amber-50 text-amber-950"}`}>{text}</p>;
+  return <p role={ok ? "status" : "alert"} className={`rounded-xl border px-3 py-2 text-[13.5px] ${ok ? "border-[var(--cmp-theme-border)] bg-[var(--cmp-theme-soft)] text-[var(--cmp-theme-ink)]" : "border-amber-300 bg-amber-50 text-amber-950"}`}>{text}</p>;
 }
 
 async function post(body: Record<string, unknown>) {
@@ -94,7 +95,7 @@ export function CheckForm({ recordId, activityKey, questions }: { recordId: stri
               <label key={o.id} className="flex min-h-[44px] items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 text-[14.5px] text-gray-800">
                 <input type="checkbox" checked={(ans[q.id] ?? []).includes(o.id)} onChange={() => toggle(q.id, o.id)} disabled={!!res?.passed} /> {o.text}
               </label>))}
-            {fb && <p className={`text-[13.5px] ${fb.correct ? "text-teal-800" : "text-amber-900"}`}>{fb.correct ? "Correct." : "Not correct."}{fb.rationale ? ` ${fb.rationale}` : ""}</p>}
+            {fb && <p className={`text-[13.5px] ${fb.correct ? "text-[var(--cmp-theme-ink)]" : "text-amber-900"}`}>{fb.correct ? "Correct." : "Not correct."}{fb.rationale ? ` ${fb.rationale}` : ""}</p>}
           </fieldset>);
       })}
       {res && <Note ok={res.passed} text={res.passed ? `Passed: ${res.score} of ${res.max}.${res.completed ? " You have completed the course." : ""}` : `${res.score} of ${res.max}. ${res.attemptsLeft ? `You have ${res.attemptsLeft} attempt${res.attemptsLeft === 1 ? "" : "s"} left.` : "No attempts are left."}`} />}

@@ -42,5 +42,6 @@ export default async function IndividualAppLayout({ children }: { children: Reac
   // COMPETEN-IND-ACCESS-001 s3: the guidance names the experience they asked for. It is copy only -- the
   // access page works out the person's state itself and never trusts the URL for it.
   if (shell.state !== "READY") redirect(`/individual/access${forQuery(experienceOfPath(asked))}`);
-  return <>{children}</>;
+  // COMPETEN-DESIGN-SYSTEM-01: the Individual theme for every page under the gate; an experience layout re-points it.
+  return <div data-cmp-theme="individual">{children}</div>;
 }

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { productTheme } from "@/lib/design/tokens";
 import { connection } from "next/server";
 import ProductComingSoon from "@/components/marketing/ProductComingSoon";
 import { pageMetadata } from "@/lib/marketing/site";
@@ -49,7 +50,7 @@ export default async function IndividualSignInPage({ searchParams }: {
     <ProductComingSoon p={{
       wordmark: "individual",
       name: "Competen Individual",
-      accent: "#0F766E",
+      accent: productTheme.individual.accent,
       headline: "We are building this site.",
       body: "Competen Individual — your professional record, learning and competency passport — is on its way. Here is what it will hold for you:",
       points: [
