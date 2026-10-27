@@ -81,7 +81,7 @@ export default async function PaperPage({ params }: { params: Promise<{ experien
           {paper.data.instructions && <p className="mt-2 whitespace-pre-line text-[14px] leading-relaxed text-gray-700">{paper.data.instructions}</p>}
           {paper.data.flags.length > 0 && (
             <ul className="mt-3 space-y-1.5">
-              {paper.data.flags.map((f, i) => <li key={i} className="rounded-lg bg-[#fff3d9] px-3 py-2 text-[13px] text-[#805a19]">{paperFlagText(f)}</li>)}
+              {paper.data.flags.map((f, i) => <li key={i} className="rounded-lg bg-[var(--cmp-role-revision-soft)] px-3 py-2 text-[13px] text-[var(--cmp-role-revision-ink)]">{paperFlagText(f)}</li>)}
             </ul>
           )}
           <p className="mt-3 text-[13px]"><a href={`/api/individual/scholar/materials/${materialId}`} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Open the original paper</a> to check anything flagged, including figures and diagrams.</p>

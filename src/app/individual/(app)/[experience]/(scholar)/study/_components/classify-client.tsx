@@ -23,10 +23,10 @@ export type FoundCompetencyView = {
 };
 
 const STATE: Record<FoundCompetencyView["state"], { text: string; cls: string }> = {
-  proposed: { text: "Suggested", cls: "bg-[#fff3d9] text-[#805a19]" },
-  accepted: { text: "Accepted", cls: "bg-[#e9f7f8] text-[#086b7b]" },
-  mixed: { text: "Accepted in some sections", cls: "bg-[#e9f7f8] text-[#086b7b]" },
-  rejected: { text: "Rejected", cls: "bg-[#eff2f5] text-[#61717e]" },
+  proposed: { text: "Suggested", cls: "bg-[var(--cmp-role-revision-soft)] text-[var(--cmp-role-revision-ink)]" },
+  accepted: { text: "Accepted", cls: "bg-[var(--cmp-theme-soft)] text-[var(--cmp-theme-ink)]" },
+  mixed: { text: "Accepted in some sections", cls: "bg-[var(--cmp-theme-soft)] text-[var(--cmp-theme-ink)]" },
+  rejected: { text: "Rejected", cls: "bg-[var(--cmp-app-bg)] text-[var(--cmp-app-text-secondary)]" },
 };
 const STATUS: Record<string, string> = { approved: "Clinically approved", draft: "Draft content", unreviewed: "Not yet reviewed" };
 
@@ -69,7 +69,7 @@ export function FoundInMaterial({ topics, competencies, analysed, sections, abse
             <ul className="mt-1.5 flex flex-wrap gap-2">
               {topics.slice(0, 16).map(t => (
                 <li key={t.name}>
-                  <a href={`#c-${t.firstChunkId}`} className={`inline-flex items-center gap-1 rounded-md bg-[#f2f6f7] px-2.5 py-1 text-[12.5px] text-gray-900 hover:bg-[#e9f7f8] ${focusRing}`}>
+                  <a href={`#c-${t.firstChunkId}`} className={`inline-flex items-center gap-1 rounded-md bg-[var(--cmp-app-bg)] px-2.5 py-1 text-[12.5px] text-gray-900 hover:bg-[var(--cmp-theme-soft)] ${focusRing}`}>
                     {t.name}{t.sections > 1 && <span className="text-gray-500">· {t.sections}</span>}
                   </a>
                 </li>

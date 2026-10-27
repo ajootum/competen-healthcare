@@ -15,7 +15,7 @@ export function LearningShell({ live, children, current }: { live: readonly Expe
     <Link href={href} aria-current={on ? "page" : undefined} className={`inline-flex min-h-[44px] items-center rounded-xl px-3 text-[14px] font-semibold ${focusRing} ${on ? "bg-[var(--cmp-theme-soft)] text-[var(--cmp-theme-ink)]" : "text-gray-700 hover:text-gray-900"}`}>{label}</Link>
   );
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--cmp-app-bg)]">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <Link href="/individual/learning" className={focusRing}><ExperienceMark wordmark="learning" accent={LEARNING_ACCENT} /></Link>

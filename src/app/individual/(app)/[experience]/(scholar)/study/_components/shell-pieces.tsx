@@ -12,7 +12,7 @@ import { ConsentPanel } from "./client";
 // open hold the existing panels unchanged -- the consent notice, its wording and its withdrawal included.
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
-export const headerBtn = `inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-[9px] border border-gray-200 bg-white px-4 py-2.5 text-[15px] font-semibold text-gray-900 hover:bg-[#e9f7f8] disabled:opacity-50 ${focusRing}`;
+export const headerBtn = `inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-[9px] border border-gray-200 bg-white px-4 py-2.5 text-[15px] font-semibold text-gray-900 hover:bg-[var(--cmp-theme-soft)] disabled:opacity-50 ${focusRing}`;
 export const linkBtn = `inline-flex min-h-[32px] items-center text-left text-[15px] font-semibold underline-offset-2 hover:underline ${focusRing}`;
 
 const LABEL: Record<ConsentStatus, string> = {
@@ -65,7 +65,7 @@ export function JourneyButton({ label = "Your learning journey ↗", className =
       <h2 className="text-[21px] font-bold tracking-tight text-gray-900">Your eight-stage learning journey</h2>
       <p className="mt-1.5 text-[15px] text-gray-600">A flexible model, not an eight-screen wizard.</p>
       <ol className="my-3 flex flex-wrap gap-2" aria-label="The eight stages">
-        {SCHOLAR_STAGES.map(s => <li key={s.name} className="rounded-md bg-[#f2f6f7] px-2.5 py-1 text-[12px] text-gray-900">{s.name}</li>)}
+        {SCHOLAR_STAGES.map(s => <li key={s.name} className="rounded-md bg-[var(--cmp-app-bg)] px-2.5 py-1 text-[12px] text-gray-900">{s.name}</li>)}
       </ol>
       <dl className="space-y-2 text-[14px] leading-relaxed">
         {SCHOLAR_STAGES.map(s => (

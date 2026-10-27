@@ -154,20 +154,46 @@ export type ClinicalStatus = keyof typeof color.clinical;
 //
 // ONE COMPETEN BRAND, FOUR COORDINATED THEMES, not four brands. The master brand (logo, typography, spacing,
 // components, the semantic and clinical colours above) is shared; a theme only re-points the ACCENT family.
-// Owner-approved values (26 Oct 2026): Platform emerald, Individual indigo, Scholar teal, Professional indigo.
+// Owner-approved values (26 Oct 2026; Scholar refined by HFE-COLOR-02, 27 Oct): Platform emerald, Individual indigo,
+// Scholar teal, Professional indigo.
 // Scholar and Professional remain experiences inside Individual: a theme never changes identity, entitlement
 // or routing. Every accent is text-safe on white (>= 4.5:1, asserted by design-system-themes-harness):
-//   platform #064E3B 9.72:1 · individual/professional #4338CA 7.90:1 · scholar #087F9C 4.64:1
+//   platform #064E3B 9.72:1 · individual/professional #4338CA 7.90:1 · scholar #0B7089 5.69:1
 // `strong` is the hover/pressed shade, `soft` the tinted background, `border` the tinted outline, `ink` the
 // accent used as text on its own soft tint.
 export type ProductThemeKey = "platform" | "individual" | "scholar" | "professional";
 export const productTheme: Record<ProductThemeKey, { accent: string; strong: string; soft: string; border: string; ink: string; onAccent: string }> = {
   platform:     { accent: "#064E3B", strong: "#043D2E", soft: "#ECF6F2", border: "#A7D7C5", ink: "#064E3B", onAccent: "#FFFFFF" },
   individual:   { accent: "#4338CA", strong: "#3730A3", soft: "#EEF0FD", border: "#C3C7F4", ink: "#3730A3", onAccent: "#FFFFFF" },
-  scholar:      { accent: "#087F9C", strong: "#06657C", soft: "#E8F5F8", border: "#A6D6E2", ink: "#06657C", onAccent: "#FFFFFF" },
+  scholar:      { accent: "#0B7089", strong: "#07566B", soft: "#E8F6F9", border: "#A6D6E2", ink: "#07566B", onAccent: "#FFFFFF" },
   professional: { accent: "#4338CA", strong: "#3730A3", soft: "#EEF0FD", border: "#C3C7F4", ink: "#3730A3", onAccent: "#FFFFFF" },
 };
 export const PRODUCT_THEME_KEYS = Object.keys(productTheme) as ProductThemeKey[];
+
+// ── Shared app surfaces and accent roles (COMPETEN-HFE-COLOR-02, owner-approved 27 Oct 2026) ───────────────
+//
+// ONE NEUTRAL CANVAS for Platform, Individual, Scholar and Professional: a very light grey page, white headers,
+// sidebars and cards, subtle borders. Colour is purposeful (about 85% neutral, 15% accent): the product accent for
+// action and navigation, and three ROLE accents used selectively -- revision (amber), progress (green), and indigo.
+// ⚠ AMBER IS NOT A TEXT COLOUR. #D97706 is 3.19:1 on white and 2.92:1 on its own tint: decoration, large text and
+// borders only. Words on the amber tint use `ink` (#92400E, 6.49:1); an amber fill behind white uses `strong`
+// (#B45309, 5.02:1). Both are derived shades, recorded in docs/COMPETEN-SCHOLAR-HFE-COLOR-01.md.
+export const appSurface = {
+  bg: "#F7F8FA", surface: "#FFFFFF", border: "#E2E8F0", text: "#142638", textSecondary: "#475569",
+  // #E2E8F0 is 1.23:1 on white: right for card edges and dividers, too faint to identify a form field (WCAG 1.4.11
+  // asks 3:1). A field's edge uses controlBorder, a derived slate (3.51:1 on white, 3.30:1 on the page).
+  controlBorder: "#7A8B99",
+} as const;
+export const accentRole = {
+  revision: { accent: "#D97706", strong: "#B45309", ink: "#92400E", soft: "#FFF4DC" },
+  progress: { accent: "#15803D", strong: "#166534", ink: "#166534", soft: "#ECFDF5" },
+  indigo:   { accent: "#4338CA", strong: "#3730A3", ink: "#3730A3", soft: "#EEF0FD" },
+} as const;
+export type AccentRole = keyof typeof accentRole;
+// Scholar's learning spaces, each an icon tint on a soft chip (an icon, never the only label). Teal is the product
+// accent (core study and action); amber marks revision, green progress, indigo reasoning and evaluation.
+export const activityRole = { library: "scholar", learn: "scholar", revise: "revision", apply: "indigo", evaluate: "indigo", progress: "progress" } as const;
+export type ActivityKey = keyof typeof activityRole;
 
 // ── Consumption helpers ─────────────────────────────────────────────────────────────────────────────────
 export const clinicalColor = (status: string): string =>
@@ -205,6 +231,14 @@ export function cssVariables(): Record<string, string> {
   // is re-pointed by `[data-cmp-theme="<key>"]` (themeCss below). Components read only `--cmp-theme-*`.
   for (const [p, v] of Object.entries(productTheme)) for (const [k, c] of Object.entries(v)) out[cssVar(`product.${p}.${k}`)] = c;
   for (const k of Object.keys(productTheme.platform)) out[cssVar(`theme.${k}`)] = `var(${cssVar(`product.platform.${k}`)})`;
+  // HFE-COLOR-02: the shared canvas (--cmp-app-*), the role accents (--cmp-role-<role>-*) and Scholar's activity cues.
+  for (const [k, c] of Object.entries(appSurface)) out[cssVar(`app.${k}`)] = c;
+  for (const [r, v] of Object.entries(accentRole)) for (const [k, c] of Object.entries(v)) out[cssVar(`role.${r}.${k}`)] = c;
+  for (const [a, r] of Object.entries(activityRole)) {
+    const p = r === "scholar" ? productTheme.scholar : accentRole[r];
+    out[cssVar(`activity.${a}.icon`)] = r === "revision" ? accentRole.revision.strong : p.accent;
+    out[cssVar(`activity.${a}.chip`)] = p.soft;
+  }
   return out;
 }
 
@@ -216,8 +250,8 @@ export function themeCss(): string {
 // PUI-001 s10: "Design tokens ... available as JSON for system use" — served by /api/design/tokens so
 // tenant theming and any external consumer read the same values the app renders with.
 export function tokensJson() {
-  return { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme };
+  return { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme, appSurface, accentRole };
 }
 
-const tokens = { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme, clinicalColor, cssVar, cssVariables, themeCss, tokensJson };
+const tokens = { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme, appSurface, accentRole, clinicalColor, cssVar, cssVariables, themeCss, tokensJson };
 export default tokens;

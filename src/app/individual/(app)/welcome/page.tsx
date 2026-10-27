@@ -45,7 +45,7 @@ export default async function Welcome({ searchParams }: {
   const firstName = profile.fullName?.split(" ")[0] ?? null;
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-10 sm:py-16">
+    <main className="min-h-screen bg-[var(--cmp-app-bg)] px-4 py-10 sm:py-16">
       <div className="mx-auto max-w-2xl">
         <div className="mb-8"><IndividualMark /></div>
         <h1 className="text-[1.75rem] sm:text-[2rem] font-bold tracking-tight text-gray-900 text-balance">

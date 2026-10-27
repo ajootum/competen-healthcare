@@ -12,7 +12,7 @@ import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 const accent = SCHOLAR.accent;
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const btn = `inline-flex min-h-[44px] items-center justify-center rounded-[9px] px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 ${focusRing}`;
-const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-[9px] border border-gray-200 bg-white px-4 py-2 text-[14px] font-semibold text-gray-900 hover:bg-[#e9f7f8] disabled:opacity-50 ${focusRing}`;
+const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-[9px] border border-gray-200 bg-white px-4 py-2 text-[14px] font-semibold text-gray-900 hover:bg-[var(--cmp-theme-soft)] disabled:opacity-50 ${focusRing}`;
 const link = `inline-flex min-h-[36px] items-center text-[14px] font-semibold underline-offset-2 hover:underline ${focusRing}`;
 
 async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok: boolean; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -42,10 +42,10 @@ export type EvidenceChoice = { notes: boolean; library: boolean; web: { on: bool
 
 const KIND_LABEL: Record<EvidenceView["kind"], string> = { notes: "Your notes", library: "Competen library", web: "Web research" };
 const GUIDANCE: Record<AnswerContentView["guidanceStatus"], { text: string; cls: string }> = {
-  agrees: { text: "Current sources agree with the examination answer.", cls: "bg-[#e9f7f8] text-[#086b7b]" },
-  differs: { text: "Current guidance differs from what the examination expects. Know both, and follow current guidance in practice.", cls: "bg-[#fff3d9] text-[#805a19]" },
-  no_current_source: { text: "No current guidance source was found. This answer reflects the examination context only.", cls: "bg-[#eff2f5] text-[#4f6475]" },
-  not_applicable: { text: "Current guidance does not apply to this question.", cls: "bg-[#eff2f5] text-[#4f6475]" },
+  agrees: { text: "Current sources agree with the examination answer.", cls: "bg-[var(--cmp-theme-soft)] text-[var(--cmp-theme-ink)]" },
+  differs: { text: "Current guidance differs from what the examination expects. Know both, and follow current guidance in practice.", cls: "bg-[var(--cmp-role-revision-soft)] text-[var(--cmp-role-revision-ink)]" },
+  no_current_source: { text: "No current guidance source was found. This answer reflects the examination context only.", cls: "bg-[var(--cmp-app-bg)] text-[var(--cmp-app-text-secondary)]" },
+  not_applicable: { text: "Current guidance does not apply to this question.", cls: "bg-[var(--cmp-app-bg)] text-[var(--cmp-app-text-secondary)]" },
 };
 
 /** Citation tags as small labelled links to the evidence below. */
@@ -56,7 +56,7 @@ function Cited({ text, prefix }: { text: string; prefix: string }) {
       {parts.map((p, i) => {
         const m = /^\[([NLW]\d+)\]$/.exec(p);
         return m
-          ? <a key={i} href={`#${prefix}-${m[1]}`} className={`mx-0.5 rounded bg-[#e9f7f8] px-1 text-[11.5px] font-bold no-underline ${focusRing}`} style={{ color: accent }}>{m[1]}</a>
+          ? <a key={i} href={`#${prefix}-${m[1]}`} className={`mx-0.5 rounded bg-[var(--cmp-theme-soft)] px-1 text-[11.5px] font-bold no-underline ${focusRing}`} style={{ color: accent }}>{m[1]}</a>
           : <Fragment key={i}>{p}</Fragment>;
       })}
     </>
@@ -78,7 +78,7 @@ function EvidenceList({ evidence, prefix }: { evidence: EvidenceView[]; prefix: 
               {items.map(e => (
                 <li key={e.tag} id={`${prefix}-${e.tag}`} className="rounded-lg border border-gray-200 bg-white p-3 text-[13px]">
                   <p className="font-semibold text-gray-900">
-                    <span className="mr-1.5 rounded bg-[#e9f7f8] px-1 text-[11.5px] font-bold" style={{ color: accent }}>{e.tag}</span>
+                    <span className="mr-1.5 rounded bg-[var(--cmp-theme-soft)] px-1 text-[11.5px] font-bold" style={{ color: accent }}>{e.tag}</span>
                     {e.url ? <a href={e.url} target="_blank" rel="noopener noreferrer" className={`underline underline-offset-2 ${focusRing}`}>{e.title}</a>
                       : e.materialId ? <Link href={experienceHref("scholar", `study/${e.materialId}`)} className={`underline underline-offset-2 ${focusRing}`}>{e.title}</Link>
                         : e.title}
@@ -113,7 +113,7 @@ function AnswerView({ a, onRevise, onDelete, busy }: { a: SavedAnswerView; onRev
     setReply(r.ok && r.json.text ? { text: r.json.text } : { message: r.json.message ?? r.json.error ?? "No reply could be shown." });
   }
   return (
-    <div className="mt-4 rounded-xl border border-[#cce4e6] bg-[#f7fbfb] p-4">
+    <div className="mt-4 rounded-xl border border-[var(--cmp-theme-border)] bg-[var(--cmp-app-bg)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-semibold text-amber-900"><span aria-hidden>✦</span>Suggested answer, written by AI from the evidence below. Not an answer key or a mark.</p>
         <span className="text-[11.5px] text-gray-500">{new Date(a.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · {a.model}</span>
@@ -214,7 +214,7 @@ function QuestionCard({ q, saved, choice, onSaved }: { q: PaperQuestionView; sav
       </div>
       {q.instructions && <p className="mt-1 text-[13px] italic text-gray-600">{q.instructions}</p>}
       <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-gray-900">{q.stem}</p>
-      {q.flags.length > 0 && <ul className="mt-2 space-y-1">{q.flags.map(f => <li key={f} className="rounded-lg bg-[#fff3d9] px-3 py-1.5 text-[12.5px] text-[#805a19]">{f}</li>)}</ul>}
+      {q.flags.length > 0 && <ul className="mt-2 space-y-1">{q.flags.map(f => <li key={f} className="rounded-lg bg-[var(--cmp-role-revision-soft)] px-3 py-1.5 text-[12.5px] text-[var(--cmp-role-revision-ink)]">{f}</li>)}</ul>}
       {!q.leadIn && (
         <>
           {q.options.length > 0 ? (
@@ -344,7 +344,7 @@ export function PaperActions({ materialId, guides }: { materialId: string; guide
       <button type="button" className={`${ghost} mt-3`} disabled={busy} onClick={guide}>{busy ? "Writing…" : guides.length ? "Write a new guide" : "Write a revision guide"}</button>
       {msg && <p role="alert" className="mt-2 text-[13.5px] font-medium text-red-700">{msg}</p>}
       {guides.slice(0, 1).map(g => (
-        <div key={g.id} className="mt-4 rounded-xl bg-[#f7fbfb] p-4">
+        <div key={g.id} className="mt-4 rounded-xl bg-[var(--cmp-app-bg)] p-4">
           <p className="text-[12px] text-gray-500">Saved {new Date(g.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · AI-written from your saved answers</p>
           <p className="mt-2 whitespace-pre-line text-[14px] leading-relaxed text-gray-800"><Cited text={g.text} prefix={`g-${g.id.slice(0, 8)}`} /></p>
         </div>

@@ -104,11 +104,11 @@
   --cmp-product-individual-border: #C3C7F4;
   --cmp-product-individual-ink: #3730A3;
   --cmp-product-individual-on-accent: #FFFFFF;
-  --cmp-product-scholar-accent: #087F9C;
-  --cmp-product-scholar-strong: #06657C;
-  --cmp-product-scholar-soft: #E8F5F8;
+  --cmp-product-scholar-accent: #0B7089;
+  --cmp-product-scholar-strong: #07566B;
+  --cmp-product-scholar-soft: #E8F6F9;
   --cmp-product-scholar-border: #A6D6E2;
-  --cmp-product-scholar-ink: #06657C;
+  --cmp-product-scholar-ink: #07566B;
   --cmp-product-scholar-on-accent: #FFFFFF;
   --cmp-product-professional-accent: #4338CA;
   --cmp-product-professional-strong: #3730A3;
@@ -122,6 +122,36 @@
   --cmp-theme-border: var(--cmp-product-platform-border);
   --cmp-theme-ink: var(--cmp-product-platform-ink);
   --cmp-theme-on-accent: var(--cmp-product-platform-on-accent);
+  --cmp-app-bg: #F7F8FA;
+  --cmp-app-surface: #FFFFFF;
+  --cmp-app-border: #E2E8F0;
+  --cmp-app-text: #142638;
+  --cmp-app-text-secondary: #475569;
+  --cmp-app-control-border: #7A8B99;
+  --cmp-role-revision-accent: #D97706;
+  --cmp-role-revision-strong: #B45309;
+  --cmp-role-revision-ink: #92400E;
+  --cmp-role-revision-soft: #FFF4DC;
+  --cmp-role-progress-accent: #15803D;
+  --cmp-role-progress-strong: #166534;
+  --cmp-role-progress-ink: #166534;
+  --cmp-role-progress-soft: #ECFDF5;
+  --cmp-role-indigo-accent: #4338CA;
+  --cmp-role-indigo-strong: #3730A3;
+  --cmp-role-indigo-ink: #3730A3;
+  --cmp-role-indigo-soft: #EEF0FD;
+  --cmp-activity-library-icon: #0B7089;
+  --cmp-activity-library-chip: #E8F6F9;
+  --cmp-activity-learn-icon: #0B7089;
+  --cmp-activity-learn-chip: #E8F6F9;
+  --cmp-activity-revise-icon: #B45309;
+  --cmp-activity-revise-chip: #FFF4DC;
+  --cmp-activity-apply-icon: #4338CA;
+  --cmp-activity-apply-chip: #EEF0FD;
+  --cmp-activity-evaluate-icon: #4338CA;
+  --cmp-activity-evaluate-chip: #EEF0FD;
+  --cmp-activity-progress-icon: #15803D;
+  --cmp-activity-progress-chip: #ECFDF5;
   --cmp-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 [data-cmp-theme="platform"] {
@@ -715,28 +745,35 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
   --cp-bottomnav-h: 60px;
 }
 
-/* ── COMPETEN SCHOLAR: THE AGREED HFE PROTOTYPE'S PALETTE (2026-10-26) ───────────────────────────────
+/* ── COMPETEN SCHOLAR: THE AGREED HFE PROTOTYPE'S PALETTE (2026-10-26), REFINED BY HFE-COLOR-02 (2026-10-27) ──────
    Scoped to the Scholar shell only. Re-pointing Tailwind's gray scale here gives every existing Scholar
-   surface the prototype's ink, line and canvas colours without rewriting its components. Text greys keep
-   at least 4.5:1 on white (gray-500 #66778a 4.6:1, gray-600 #637586 4.7:1). */
+   surface the approved canvas, line and text colours without rewriting its components. The page, card line and
+   primary/secondary text now come from the shared app tokens (tokens.ts appSurface): #F7F8FA, #E2E8F0, #142638,
+   #475569. Remaining text greys keep at least 4.5:1 on white and on the page (gray-500 #5f6f80). */
 @layer base {
 .cmp-scholar {
-  --color-gray-50: #f5f8fa;
+  --color-gray-50: var(--cmp-app-bg);
   --color-gray-100: #eff2f5;
-  --color-gray-200: #dce5e9;
+  --color-gray-200: var(--cmp-app-border);
   --color-gray-300: #cbd8df;
   --color-gray-400: #9aa9b3;
-  --color-gray-500: #66778a;
-  --color-gray-600: #637586;
+  --color-gray-500: #5f6f80;
+  --color-gray-600: var(--cmp-app-text-secondary);
   --color-gray-700: #4f6475;
   --color-gray-800: #2a3d4e;
-  --color-gray-900: #172b3d;
+  --color-gray-900: var(--cmp-app-text);
   --radius-2xl: 14px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   font-size: 15px;
   line-height: 1.6;
-  color: #172b3d;
+  color: var(--cmp-app-text);
 }
+}
+
+/* HFE-COLOR-02: a form field's edge must reach 3:1 (WCAG 1.4.11). The card border (#E2E8F0, 1.23:1) does not, so
+   Scholar's fields take controlBorder. Unlayered on purpose, so it wins over each field's own border utility. */
+.cmp-scholar :is(input:not([type="radio"]):not([type="checkbox"]):not([type="range"]), select, textarea) {
+  border-color: var(--cmp-app-control-border);
 }
 
 /* Scholar HFE: a panel opened in a dialog sits flat in it, not as a card inside a card. Unlayered on purpose,

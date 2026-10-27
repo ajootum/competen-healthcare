@@ -111,7 +111,7 @@ export const SCHOLAR: Experience = {
   wordmark: "scholar",
   href: "/scholar",
   legacyHref: "/students",
-  // COMPETEN-DESIGN-SYSTEM-01: the approved Scholar theme (teal #087F9C, 4.64:1 on white), from tokens.ts.
+  // COMPETEN-DESIGN-SYSTEM-01 + HFE-COLOR-02: the approved Scholar theme (teal #0B7089, 5.69:1 on white), from tokens.ts.
   accent: productTheme.scholar.accent,
   accentSoft: productTheme.scholar.soft,
   tagline: "Learn · Understand · Apply",

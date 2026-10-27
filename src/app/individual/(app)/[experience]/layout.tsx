@@ -63,7 +63,7 @@ export default async function ExperienceLayout({ children, params }: {
     const canJoin = experience === "scholar" && (await selfRegistrationEnabled(shell.ctx.admin));
     if (canJoin) {
       return (
-        <main className="min-h-screen bg-gray-50 px-4 py-10 sm:py-16">
+        <main className="min-h-screen bg-[var(--cmp-app-bg)] px-4 py-10 sm:py-16">
           <div className="mx-auto max-w-xl">
             <div className="mb-6"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></div>
             <StatePanel title={`Add ${x.name} to your account`}
@@ -78,7 +78,7 @@ export default async function ExperienceLayout({ children, params }: {
       );
     }
     return (
-      <main className="min-h-screen bg-gray-50 px-4 py-10 sm:py-16">
+      <main className="min-h-screen bg-[var(--cmp-app-bg)] px-4 py-10 sm:py-16">
         <div className="mx-auto max-w-xl">
           <div className="mb-6"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></div>
           <StatePanel title={`${x.name} is not active on your account`}
@@ -122,7 +122,7 @@ export default async function ExperienceLayout({ children, params }: {
     }
     const unpublished = !fCur || !xCur;
     return (
-      <main className="min-h-screen bg-gray-50 px-4 py-10 sm:py-16">
+      <main className="min-h-screen bg-[var(--cmp-app-bg)] px-4 py-10 sm:py-16">
         <div className="mx-auto max-w-xl">
           <div className="mb-6"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></div>
           {unpublished ? (
@@ -160,9 +160,10 @@ export default async function ExperienceLayout({ children, params }: {
   const ai = await getAiStanding(shell.ctx.admin, { userId: shell.ctx.userId, product: experience });
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
 
+  // HFE-COLOR-02: one neutral canvas (#F7F8FA) for every product, white header and sidebar, subtle borders.
   return (
-    <div data-cmp-theme={experience} className={`min-h-screen bg-gray-50 ${scholar ? "cmp-scholar" : ""}`}>
-      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
+    <div data-cmp-theme={experience} className={`min-h-screen bg-[var(--cmp-app-bg)] ${scholar ? "cmp-scholar" : ""}`}>
+      <header className="sticky top-0 z-30 border-b border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
         <div className="flex h-14 md:h-[76px] items-center gap-3 px-4 md:gap-7 md:px-7">
           <Link href={experienceHref(experience)} className={`rounded-lg md:w-[200px] ${focusRing}`} aria-label={`${x.name} home`}>
             <span className="md:hidden"><ExperienceMark wordmark={x.wordmark} accent={x.accent} size="sm" iconOnly={live.length > 1} /></span>
@@ -171,16 +172,16 @@ export default async function ExperienceLayout({ children, params }: {
           <div className="ml-auto md:ml-0"><ExperienceSwitcher current={experience} live={live} /></div>
           {learning && <Link href="/individual/learning" className={`inline-flex min-h-[36px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center rounded-lg px-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 ${focusRing}`}>Learning</Link>}
           <div className="hidden md:flex md:ml-auto items-center gap-2.5 text-[13px]">
-            <span className="rounded-full bg-[#eff2f5] px-2.5 py-1 text-[11px] font-semibold text-[#61717e]">Individual account</span>
+            <span className="rounded-full bg-[var(--cmp-app-bg)] px-2.5 py-1 text-[11px] font-semibold text-[var(--cmp-app-text-secondary)] ring-1 ring-[var(--cmp-app-border)]">Individual account</span>
           </div>
           <AccountMenu experience={experience} initials={initials} name={profile.fullName ?? profile.email ?? "Your account"} />
         </div>
       </header>
 
       <div className="flex">
-        <aside className="hidden md:flex sticky top-[76px] h-[calc(100vh-76px)] w-[236px] shrink-0 flex-col border-r border-gray-200 bg-white">
+        <aside className="hidden md:flex sticky top-[76px] h-[calc(100vh-76px)] w-[236px] shrink-0 flex-col border-r border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
           <SidebarNav experience={experience} learning={learning} />
-          <div className="mx-4 mt-auto border-t border-gray-200 px-2 py-5 text-[12px] leading-relaxed text-gray-600">
+          <div className="mx-4 mt-auto border-t border-[var(--cmp-app-border)] px-2 py-5 text-[12px] leading-relaxed text-gray-600">
             <p><strong className="text-gray-900">Competen Individual</strong></p>
             <p>One account, one Passport.</p>
             <p>Across {live.length > 1 ? "both your experiences" : "every experience you add"}.</p>
@@ -195,7 +196,7 @@ export default async function ExperienceLayout({ children, params }: {
               : "mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8"}>
               {children}
               {scholar && (
-                <footer className="mt-8 text-[12px] text-[#7c8b95]">
+                <footer className="mt-8 text-[12px] text-[var(--cmp-app-text-secondary)]">
                   Competen Scholar · Your learning belongs to you.{" "}
                   <Link href={experienceHref("scholar", "settings")} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>Privacy &amp; AI controls</Link>
                 </footer>
