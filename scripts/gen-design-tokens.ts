@@ -15,6 +15,15 @@ const END = "/* @generated:design-tokens-end */";
 
 export function renderBlock(vars: Record<string, string>, fontFamily: string): string {
   const lines = Object.entries(vars).map(([k, v]) => `  ${k}: ${v};`);
+  // COMPETEN-DESIGN-SYSTEM-01: one `[data-cmp-theme="<product>"]` rule per product palette, derived from the same
+  // variables (--cmp-product-<product>-<part>), so the theme selectors can never drift from the palette.
+  const themes = new Map<string, string[]>();
+  for (const k of Object.keys(vars)) {
+    const m = /^--cmp-product-([a-z]+)-([a-z-]+)$/.exec(k);
+    if (m) themes.set(m[1], [...(themes.get(m[1]) ?? []), m[2]]);
+  }
+  const themeRules = [...themes].map(([p, parts]) =>
+    [`[data-cmp-theme="${p}"] {`, ...parts.map(part => `  --cmp-theme-${part}: var(--cmp-product-${p}-${part});`), "}"].join("\n"));
   return [
     START,
     "/* Platform Design System (PUI-001). Do not edit by hand — edit src/lib/design/tokens.ts. */",
@@ -22,6 +31,7 @@ export function renderBlock(vars: Record<string, string>, fontFamily: string): s
     ...lines,
     `  --cmp-font-sans: ${fontFamily};`,
     "}",
+    ...themeRules,
     END,
   ].join("\n");
 }

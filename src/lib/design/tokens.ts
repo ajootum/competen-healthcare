@@ -150,6 +150,25 @@ export const priority = {
 export type PriorityKey = keyof typeof priority;
 export type ClinicalStatus = keyof typeof color.clinical;
 
+// ── Product themes (COMPETEN-DESIGN-SYSTEM-01) ─────────────────────────────────────────────────────────
+//
+// ONE COMPETEN BRAND, FOUR COORDINATED THEMES, not four brands. The master brand (logo, typography, spacing,
+// components, the semantic and clinical colours above) is shared; a theme only re-points the ACCENT family.
+// Owner-approved values (26 Oct 2026): Platform emerald, Individual indigo, Scholar teal, Professional indigo.
+// Scholar and Professional remain experiences inside Individual: a theme never changes identity, entitlement
+// or routing. Every accent is text-safe on white (>= 4.5:1, asserted by design-system-themes-harness):
+//   platform #064E3B 9.72:1 · individual/professional #4338CA 7.90:1 · scholar #087F9C 4.64:1
+// `strong` is the hover/pressed shade, `soft` the tinted background, `border` the tinted outline, `ink` the
+// accent used as text on its own soft tint.
+export type ProductThemeKey = "platform" | "individual" | "scholar" | "professional";
+export const productTheme: Record<ProductThemeKey, { accent: string; strong: string; soft: string; border: string; ink: string; onAccent: string }> = {
+  platform:     { accent: "#064E3B", strong: "#043D2E", soft: "#ECF6F2", border: "#A7D7C5", ink: "#064E3B", onAccent: "#FFFFFF" },
+  individual:   { accent: "#4338CA", strong: "#3730A3", soft: "#EEF0FD", border: "#C3C7F4", ink: "#3730A3", onAccent: "#FFFFFF" },
+  scholar:      { accent: "#087F9C", strong: "#06657C", soft: "#E8F5F8", border: "#A6D6E2", ink: "#06657C", onAccent: "#FFFFFF" },
+  professional: { accent: "#4338CA", strong: "#3730A3", soft: "#EEF0FD", border: "#C3C7F4", ink: "#3730A3", onAccent: "#FFFFFF" },
+};
+export const PRODUCT_THEME_KEYS = Object.keys(productTheme) as ProductThemeKey[];
+
 // ── Consumption helpers ─────────────────────────────────────────────────────────────────────────────────
 export const clinicalColor = (status: string): string =>
   (color.clinical as Record<string, string>)[status] ?? color.clinical.discharged;
@@ -182,14 +201,23 @@ export function cssVariables(): Record<string, string> {
   out[cssVar("touch.min")] = `${a11y.minTouchTarget}px`;
   out[cssVar("grid.max")] = `${grid.maxWidth}px`;
   out[cssVar("grid.gutter")] = `${grid.gutter}px`;
+  // Product theme palettes, by product, then the ACTIVE theme (`--cmp-theme-*`), which defaults to Platform and
+  // is re-pointed by `[data-cmp-theme="<key>"]` (themeCss below). Components read only `--cmp-theme-*`.
+  for (const [p, v] of Object.entries(productTheme)) for (const [k, c] of Object.entries(v)) out[cssVar(`product.${p}.${k}`)] = c;
+  for (const k of Object.keys(productTheme.platform)) out[cssVar(`theme.${k}`)] = `var(${cssVar(`product.platform.${k}`)})`;
   return out;
+}
+
+/** The `[data-cmp-theme]` selectors, for consumers outside globals.css (the generator derives the same rules from cssVariables). */
+export function themeCss(): string {
+  return PRODUCT_THEME_KEYS.map(p => `[data-cmp-theme="${p}"] {\n${Object.keys(productTheme[p]).map(k => `  ${cssVar(`theme.${k}`)}: var(${cssVar(`product.${p}.${k}`)});`).join("\n")}\n}`).join("\n");
 }
 
 // PUI-001 s10: "Design tokens ... available as JSON for system use" — served by /api/design/tokens so
 // tenant theming and any external consumer read the same values the app renders with.
 export function tokensJson() {
-  return { color, font, space, radius, elevation, grid, breakpoint, a11y, priority };
+  return { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme };
 }
 
-const tokens = { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, clinicalColor, cssVar, cssVariables, tokensJson };
+const tokens = { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme, clinicalColor, cssVar, cssVariables, themeCss, tokensJson };
 export default tokens;

@@ -92,7 +92,69 @@
   --cmp-touch-min: 44px;
   --cmp-grid-max: 1440px;
   --cmp-grid-gutter: 24px;
+  --cmp-product-platform-accent: #064E3B;
+  --cmp-product-platform-strong: #043D2E;
+  --cmp-product-platform-soft: #ECF6F2;
+  --cmp-product-platform-border: #A7D7C5;
+  --cmp-product-platform-ink: #064E3B;
+  --cmp-product-platform-on-accent: #FFFFFF;
+  --cmp-product-individual-accent: #4338CA;
+  --cmp-product-individual-strong: #3730A3;
+  --cmp-product-individual-soft: #EEF0FD;
+  --cmp-product-individual-border: #C3C7F4;
+  --cmp-product-individual-ink: #3730A3;
+  --cmp-product-individual-on-accent: #FFFFFF;
+  --cmp-product-scholar-accent: #087F9C;
+  --cmp-product-scholar-strong: #06657C;
+  --cmp-product-scholar-soft: #E8F5F8;
+  --cmp-product-scholar-border: #A6D6E2;
+  --cmp-product-scholar-ink: #06657C;
+  --cmp-product-scholar-on-accent: #FFFFFF;
+  --cmp-product-professional-accent: #4338CA;
+  --cmp-product-professional-strong: #3730A3;
+  --cmp-product-professional-soft: #EEF0FD;
+  --cmp-product-professional-border: #C3C7F4;
+  --cmp-product-professional-ink: #3730A3;
+  --cmp-product-professional-on-accent: #FFFFFF;
+  --cmp-theme-accent: var(--cmp-product-platform-accent);
+  --cmp-theme-strong: var(--cmp-product-platform-strong);
+  --cmp-theme-soft: var(--cmp-product-platform-soft);
+  --cmp-theme-border: var(--cmp-product-platform-border);
+  --cmp-theme-ink: var(--cmp-product-platform-ink);
+  --cmp-theme-on-accent: var(--cmp-product-platform-on-accent);
   --cmp-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+[data-cmp-theme="platform"] {
+  --cmp-theme-accent: var(--cmp-product-platform-accent);
+  --cmp-theme-strong: var(--cmp-product-platform-strong);
+  --cmp-theme-soft: var(--cmp-product-platform-soft);
+  --cmp-theme-border: var(--cmp-product-platform-border);
+  --cmp-theme-ink: var(--cmp-product-platform-ink);
+  --cmp-theme-on-accent: var(--cmp-product-platform-on-accent);
+}
+[data-cmp-theme="individual"] {
+  --cmp-theme-accent: var(--cmp-product-individual-accent);
+  --cmp-theme-strong: var(--cmp-product-individual-strong);
+  --cmp-theme-soft: var(--cmp-product-individual-soft);
+  --cmp-theme-border: var(--cmp-product-individual-border);
+  --cmp-theme-ink: var(--cmp-product-individual-ink);
+  --cmp-theme-on-accent: var(--cmp-product-individual-on-accent);
+}
+[data-cmp-theme="scholar"] {
+  --cmp-theme-accent: var(--cmp-product-scholar-accent);
+  --cmp-theme-strong: var(--cmp-product-scholar-strong);
+  --cmp-theme-soft: var(--cmp-product-scholar-soft);
+  --cmp-theme-border: var(--cmp-product-scholar-border);
+  --cmp-theme-ink: var(--cmp-product-scholar-ink);
+  --cmp-theme-on-accent: var(--cmp-product-scholar-on-accent);
+}
+[data-cmp-theme="professional"] {
+  --cmp-theme-accent: var(--cmp-product-professional-accent);
+  --cmp-theme-strong: var(--cmp-product-professional-strong);
+  --cmp-theme-soft: var(--cmp-product-professional-soft);
+  --cmp-theme-border: var(--cmp-product-professional-border);
+  --cmp-theme-ink: var(--cmp-product-professional-ink);
+  --cmp-theme-on-accent: var(--cmp-product-professional-on-accent);
 }
 /* @generated:design-tokens-end */
 
