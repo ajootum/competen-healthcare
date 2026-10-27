@@ -113,8 +113,11 @@ export const SCHOLAR: ExperienceConfig = {
   name: "Competen Scholar",
   wordmark: "scholar",
   // Scholar HFE redesign (2026-10-26): the agreed prototype's teal (4.7:1 on white) and its pale tint.
-  accent: productTheme.scholar.accent,
-  accentSoft: productTheme.scholar.soft,
+  // SCHOLAR-HFE-COLOR-01: CSS variables, not hex, so the reviewable Calm Teal variant ([data-cmp-scholar="calm"])
+  // re-points every Scholar accent at once. Outside the variant they resolve to productTheme.scholar exactly.
+  // Every consumer uses them in style/className; a consumer that needs a real hex reads productTheme.scholar.
+  accent: "var(--cmp-product-scholar-accent)",
+  accentSoft: "var(--cmp-product-scholar-soft)",
   tagline: "Learn · Understand · Apply",
   micro: "Healthcare education, revision and clinical reasoning.",
   operatingEntity: "scholar_operator",

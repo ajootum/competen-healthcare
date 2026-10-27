@@ -12,6 +12,10 @@ import { EraseAll } from "../(scholar)/study/_components/client";
 import { listMaterials } from "@/lib/individual/scholar/store";
 import { professionalSelfAddEnabled } from "@/lib/individual/professional-add";
 import AddProfessional from "../../../_components/AddProfessional";
+import ScholarThemeChoice from "../../../_components/ScholarThemeChoice";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { resolveScholarTheme, scholarThemeOffered, SCHOLAR_THEME_COOKIE } from "@/lib/design/scholar-theme";
+import { cookies } from "next/headers";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -36,6 +40,9 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
   const studyCount = study?.ok ? study.data.length : 0;
   // P5 (prepared, OFF): offered only in Scholar, only without Professional, and only while the server gate is on.
   const canAddProfessional = experience === "scholar" && !ctx.live.includes("professional") && (await professionalSelfAddEnabled(ctx.admin));
+  // SCHOLAR-HFE-COLOR-01: the colour choice, offered in Scholar only while HQ's scholar_theme policy allows it.
+  const themePolicy = experience === "scholar" ? (await loadIndividualPolicy(ctx.admin)).scholarTheme : "current";
+  const themeNow = resolveScholarTheme(themePolicy, (await cookies()).get(SCHOLAR_THEME_COOKIE)?.value);
 
   return (
     <>
@@ -95,6 +102,14 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
         <p className="mt-2 text-[12.5px] text-gray-500">Competen Individual is in pilot. Experiences are added to your account by Competen.</p>
         {canAddProfessional && <AddProfessional accent={EXPERIENCES.professional.accent} />}
       </section>
+
+      {scholarThemeOffered(themePolicy) && (
+        <section id="appearance" className="mb-5 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+          <h2 className="text-[16px] font-bold text-gray-900">Scholar colours</h2>
+          <p className="mt-1 text-[13px] text-gray-600">Choose how Scholar looks on this device. It changes colours only, nothing about your learning.</p>
+          <ScholarThemeChoice current={themeNow} />
+        </section>
+      )}
 
       {ctx.live.length > 1 && (
         <section className="mb-5 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">

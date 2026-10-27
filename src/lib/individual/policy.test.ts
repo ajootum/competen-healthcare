@@ -87,7 +87,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // LEARN-01 L5: every action offered, Teach me first, background labelled, standard depth, 8 steps, checks
       // offered, outcomes shown, 6 turns, structured history recorded.
       scholarLearningActions: ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask"], scholarDefaultAction: "teach",
-      scholarBeyondNotes: "labelled", scholarExplanationDepth: "standard", scholarSessionMaxSteps: 8, scholarCheckBehaviour: "offer",
+      scholarBeyondNotes: "labelled", scholarExplanationDepth: "standard", scholarTheme: "current", scholarSessionMaxSteps: 8, scholarCheckBehaviour: "offer",
       scholarLearningObjectives: "outcomes", scholarTutorTurns: 6, scholarLearningHistory: "record",
       // Upload limits (owner GO 2026-10-24): the per-file value stays 10 MB (ceiling 25); a session is 10 files, 100 MB.
       scholarUploadSessionFiles: 10, scholarUploadSessionMb: 100,

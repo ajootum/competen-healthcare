@@ -122,6 +122,36 @@
   --cmp-theme-border: var(--cmp-product-platform-border);
   --cmp-theme-ink: var(--cmp-product-platform-ink);
   --cmp-theme-on-accent: var(--cmp-product-platform-on-accent);
+  --cmp-variant-scholar-calm-accent: #0B7089;
+  --cmp-variant-scholar-calm-strong: #07566B;
+  --cmp-variant-scholar-calm-soft: #E8F6F9;
+  --cmp-variant-scholar-calm-border: #A6D6E2;
+  --cmp-variant-scholar-calm-ink: #07566B;
+  --cmp-variant-scholar-calm-on-accent: #FFFFFF;
+  --cmp-scholar-calm-page: #F8FAF9;
+  --cmp-scholar-calm-card: #FFFFFF;
+  --cmp-scholar-calm-border: #D9E3E8;
+  --cmp-scholar-calm-text: #142638;
+  --cmp-scholar-calm-text-secondary: #475569;
+  --cmp-scholar-calm-control-border: #7A8B99;
+  --cmp-scholar-calm-warm: #D97706;
+  --cmp-scholar-calm-warm-strong: #B45309;
+  --cmp-scholar-calm-warm-ink: #92400E;
+  --cmp-scholar-calm-warm-soft: #FFF4DC;
+  --cmp-scholar-calm-success: #15803D;
+  --cmp-scholar-calm-error: #B91C1C;
+  --cmp-scholar-calm-activity-library-icon: #0B7089;
+  --cmp-scholar-calm-activity-library-chip: #E8F6F9;
+  --cmp-scholar-calm-activity-learn-icon: #0369A1;
+  --cmp-scholar-calm-activity-learn-chip: #E0F2FE;
+  --cmp-scholar-calm-activity-revise-icon: #B45309;
+  --cmp-scholar-calm-activity-revise-chip: #FFF4DC;
+  --cmp-scholar-calm-activity-apply-icon: #6D28D9;
+  --cmp-scholar-calm-activity-apply-chip: #F3E8FF;
+  --cmp-scholar-calm-activity-evaluate-icon: #1D4ED8;
+  --cmp-scholar-calm-activity-evaluate-chip: #E0E7FF;
+  --cmp-scholar-calm-activity-progress-icon: #15803D;
+  --cmp-scholar-calm-activity-progress-chip: #E7F6EC;
   --cmp-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 [data-cmp-theme="platform"] {
@@ -155,6 +185,14 @@
   --cmp-theme-border: var(--cmp-product-professional-border);
   --cmp-theme-ink: var(--cmp-product-professional-ink);
   --cmp-theme-on-accent: var(--cmp-product-professional-on-accent);
+}
+[data-cmp-scholar="calm"] {
+  --cmp-product-scholar-accent: var(--cmp-variant-scholar-calm-accent);
+  --cmp-product-scholar-strong: var(--cmp-variant-scholar-calm-strong);
+  --cmp-product-scholar-soft: var(--cmp-variant-scholar-calm-soft);
+  --cmp-product-scholar-border: var(--cmp-variant-scholar-calm-border);
+  --cmp-product-scholar-ink: var(--cmp-variant-scholar-calm-ink);
+  --cmp-product-scholar-on-accent: var(--cmp-variant-scholar-calm-on-accent);
 }
 /* @generated:design-tokens-end */
 
@@ -737,6 +775,23 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
   line-height: 1.6;
   color: #172b3d;
 }
+/* COMPETEN-SCHOLAR-HFE-COLOR-01, the reviewable Calm Teal variant: only under [data-cmp-scholar="calm"]. The same
+   re-pointing, now to the candidate tokens (tokens.ts scholarVariant.calm): page, card line, primary and secondary
+   text, and the amber tint becomes the warm learning accent. Accents follow --cmp-product-scholar-* (generated). */
+[data-cmp-scholar="calm"] .cmp-scholar {
+  --color-gray-50: var(--cmp-scholar-calm-page);
+  --color-gray-200: var(--cmp-scholar-calm-border);
+  --color-gray-600: var(--cmp-scholar-calm-text-secondary);
+  --color-gray-900: var(--cmp-scholar-calm-text);
+  --color-amber-50: var(--cmp-scholar-calm-warm-soft);
+  color: var(--cmp-scholar-calm-text);
+}
+}
+
+/* SCHOLAR-HFE-COLOR-01: a field's edge must reach 3:1 (WCAG 1.4.11); the candidate card border does not, so fields take
+   controlBorder. Unlayered on purpose, so it wins over each field's own border utility. */
+[data-cmp-scholar="calm"] .cmp-scholar :is(input:not([type="radio"]):not([type="checkbox"]):not([type="range"]), select, textarea) {
+  border-color: var(--cmp-scholar-calm-control-border);
 }
 
 /* Scholar HFE: a panel opened in a dialog sits flat in it, not as a card inside a card. Unlayered on purpose,

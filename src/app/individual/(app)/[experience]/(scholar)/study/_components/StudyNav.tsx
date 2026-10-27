@@ -3,13 +3,33 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
-import { SCHOLAR_SPACES, spaceOfPath } from "@/lib/individual/scholar/spaces";
+import { SCHOLAR_SPACES, spaceOfPath, type ScholarSpaceKey } from "@/lib/individual/scholar/spaces";
 
 // My Learning's learning spaces: Library, Learn, Revise, Apply, Evaluate and Progress (spaces.ts). Upload,
 // classification and a material's own study start in the Library. Every tab is a real link to a real page,
 // open at any time: the spaces are a guide, never a sequence. Scrolls sideways on a narrow screen.
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
+
+// SCHOLAR-HFE-COLOR-01: a small icon on a soft chip per space, the Calm Teal variant's wayfinding cue. Rendered only
+// under [data-cmp-scholar="calm"] (hidden otherwise, so the approved theme is unchanged); the tab text always names
+// the space, so the cue never carries meaning on colour alone. Tints: tokens.ts scholarVariant.calm.activity.
+const ICON: Record<ScholarSpaceKey, React.ReactNode> = {
+  library: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
+  learn: <><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z" /></>,
+  revise: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></>,
+  apply: <><path d="M6 3v6a5 5 0 0 0 10 0V3" /><path d="M11 14v2a4 4 0 0 0 8 0v-1" /><circle cx="19" cy="13" r="2" /></>,
+  evaluate: <path d="M5 20V12M12 20V5M19 20v-9" />,
+  progress: <><path d="M4 20h16" /><path d="M5 15l5-5 4 4 6-6" /></>,
+};
+function ActivityChip({ space }: { space: ScholarSpaceKey }) {
+  return (
+    <span aria-hidden className="hidden h-7 w-7 items-center justify-center rounded-lg in-[[data-cmp-scholar=calm]]:inline-flex"
+      style={{ background: `var(--cmp-scholar-calm-activity-${space}-chip)`, color: `var(--cmp-scholar-calm-activity-${space}-icon)` }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICON[space]}</svg>
+    </span>
+  );
+}
 
 export default function StudyNav({ dueCount }: { dueCount?: number | null }) {
   const pathname = usePathname() ?? "";
@@ -24,9 +44,11 @@ export default function StudyNav({ dueCount }: { dueCount?: number | null }) {
               <Link href={experienceHref("scholar", s.segment)} aria-current={on ? "page" : undefined}
                 className={`-mb-px inline-flex min-h-[48px] items-center gap-2 border-b-[3px] px-0.5 text-[15px] font-semibold ${focusRing} ${on ? "" : "border-transparent text-gray-600 hover:text-gray-900"}`}
                 style={on ? { borderColor: SCHOLAR.accent, color: SCHOLAR.accent } : undefined}>
+                <ActivityChip space={s.key} />
                 {s.tab}
                 {s.key === "revise" && dueCount ? (
-                  <span className="rounded-full px-2 py-0.5 text-[11.5px] font-bold text-white tabular-nums" style={{ background: SCHOLAR.accent }}>
+                  // Cards due is the suggested next step: the warm accent under Calm Teal (warmStrong, 5.02:1 with white).
+                  <span className="rounded-full bg-[var(--cmp-product-scholar-accent)] px-2 py-0.5 text-[11.5px] font-bold text-white tabular-nums in-[[data-cmp-scholar=calm]]:bg-[var(--cmp-scholar-calm-warm-strong)]">
                     {dueCount}<span className="sr-only"> cards due</span>
                   </span>
                 ) : null}

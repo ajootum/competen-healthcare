@@ -6,7 +6,9 @@
  *   2. globals.css has the generated [data-cmp-theme] rule for every product, and each shell sets its theme;
  *   3. product chrome reads the theme instead of raw brand hex or Tailwind teal/blue (semantic colours are elsewhere);
  *   4. the login chooser is presentation over the server's set: no navigation of its own, storage only orders;
- *   5. the governed presentation config cannot reach a name, a colour, Platform or Practice.
+ *   5. the governed presentation config cannot reach a name, a colour, Platform or Practice;
+ *   6. SCHOLAR-HFE-COLOR-01: the Calm Teal variant is reviewable (off by default, a stored choice ignored under
+ *      "current"), meets AA where it carries words or identifies a control, keeps warm off normal text, stays scoped.
  * Every scan is proved able to fail by a planted violation before its result is trusted.
  *
  *   npx --yes tsx scripts/design-system-themes-harness.ts
@@ -14,7 +16,10 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { contrast } from "../src/lib/design/colour-map";
-import tokens, { PRODUCT_THEME_KEYS, productTheme } from "../src/lib/design/tokens";
+import tokens, { PRODUCT_THEME_KEYS, productTheme, scholarVariant } from "../src/lib/design/tokens";
+import { resolveScholarTheme } from "../src/lib/design/scholar-theme";
+import { DEFAULT_POLICY } from "../src/lib/individual/policy";
+import { SCHOLAR, PROFESSIONAL } from "../src/lib/individual/experiences";
 import { checkPresentationDraft, DEFAULT_PRESENTATION } from "../src/lib/design/presentation-config";
 
 let pass = 0, fail = 0;
@@ -105,6 +110,40 @@ function main() {
   ok("5d. a colour cannot be configured", !checkPresentationDraft({ ...DEFAULT_PRESENTATION, scholar: { ...DEFAULT_PRESENTATION.scholar, theme: "platform" } }).ok);
   ok("5e. Platform cannot be configured through this door", !checkPresentationDraft({ ...DEFAULT_PRESENTATION, platform: DEFAULT_PRESENTATION.individual }).ok);
   ok("5f. an icon outside the set is refused", !checkPresentationDraft({ ...DEFAULT_PRESENTATION, individual: { ...DEFAULT_PRESENTATION.individual, icon: "rocket" } }).ok);
+
+  console.log("\n6. Scholar Calm Teal variant (SCHOLAR-HFE-COLOR-01)");
+  const cv = scholarVariant.calm, ct = cv.theme, cs = cv.surface;
+  ok("6a. the candidate palette is the owner's", ct.accent === "#0B7089" && ct.strong === "#07566B" && ct.soft === "#E8F6F9" && cs.page === "#F8FAF9"
+    && cs.card === "#FFFFFF" && cs.border === "#D9E3E8" && cs.text === "#142638" && cs.textSecondary === "#475569" && cs.warm === "#D97706"
+    && cs.warmSoft === "#FFF4DC" && cs.success === "#15803D" && cs.error === "#B91C1C");
+  const textPairs: [string, string, string][] = [["body text", cs.text, cs.card], ["body text on page", cs.text, cs.page],
+    ["secondary text", cs.textSecondary, cs.card], ["secondary text on page", cs.textSecondary, cs.page],
+    ["button label", ct.onAccent, ct.accent], ["button label, hover", ct.onAccent, ct.strong],
+    ["link on card", ct.accent, cs.card], ["link on page", ct.accent, cs.page], ["selected tab on soft teal", ct.accent, ct.soft],
+    ["ink on soft teal", ct.ink, ct.soft], ["warm ink on warm tint", cs.warmInk, cs.warmSoft], ["warm button label", "#FFFFFF", cs.warmStrong],
+    ["success text", cs.success, cs.card], ["error text", cs.error, cs.card]];
+  for (const [n, fg, bg] of textPairs) ok(`6b. ${n} clears 4.5:1`, contrast(fg, bg) >= AA, contrast(fg, bg).toFixed(2));
+  ok("6c. a field edge (controlBorder) clears 3:1 on card and page", contrast(cs.controlBorder, cs.card) >= 3 && contrast(cs.controlBorder, cs.page) >= 3);
+  for (const [k, a] of Object.entries(cv.activity)) ok(`6d. ${k} activity icon clears 3:1 on its chip`, contrast(a.icon, a.chip) >= 3, contrast(a.icon, a.chip).toFixed(2));
+  ok("6e. plant: warm #D97706 as normal text fails 4.5:1 (so it must never be a text colour)", contrast(cs.warm, cs.card) < AA);
+  const individualSrc = walk("src/app/individual").map(f => code(read(f))).join("\n");
+  const WARM_TEXT = /text-\[var\(--cmp-scholar-calm-warm\)\]|color:\s*["'`]?var\(--cmp-scholar-calm-warm\)/;
+  ok("6f. the warm accent is never used as a text colour", !WARM_TEXT.test(individualSrc));
+  ok("6g. plant: a warm text colour is caught", WARM_TEXT.test(`<p className="text-[var(--cmp-scholar-calm-warm)]" />`));
+  const parts = Object.keys(ct).map(k => k.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`));
+  ok("6h. the variant rule re-points every Scholar palette part", css.includes(`[data-cmp-scholar="calm"] {`)
+    && parts.every(p => css.includes(`--cmp-product-scholar-${p}: var(--cmp-variant-scholar-calm-${p});`)));
+  ok("6i. the approved Scholar palette is unchanged", productTheme.scholar.accent === "#087F9C" && vars["--cmp-product-scholar-accent"] === "#087F9C");
+  ok("6j. the policy defaults to the current theme", DEFAULT_POLICY.scholarTheme === "current");
+  ok("6k. under 'current' a stored Calm Teal choice is ignored", resolveScholarTheme("current", "calm") === "current");
+  ok("6l. preview is opt-in, calm is opt-out", resolveScholarTheme("preview", null) === "current" && resolveScholarTheme("preview", "calm") === "calm"
+    && resolveScholarTheme("calm", null) === "calm" && resolveScholarTheme("calm", "current") === "current");
+  ok("6m. Scholar accents read the variable; Professional keeps its own indigo", SCHOLAR.accent === "var(--cmp-product-scholar-accent)" && PROFESSIONAL.accent === "#4338CA");
+  const nav = code(read("src/app/individual/(app)/[experience]/(scholar)/study/_components/StudyNav.tsx"));
+  ok("6n. activity chips: hidden outside the variant, hidden from assistive tech, the tab still named in text",
+    /aria-hidden className="hidden [^"]*in-\[\[data-cmp-scholar=calm\]\]:inline-flex/.test(nav) && nav.includes("{s.tab}"));
+  ok("6o. the variant attribute is set by the Individual app layout from the resolver",
+    /data-cmp-scholar=\{scholarTheme === "calm"/.test(read("src/app/individual/(app)/layout.tsx")));
 
   console.log(`\n${fail ? "FAILED" : "PASSED"}  ${pass} passed, ${fail} failed\n`);
   process.exit(fail ? 1 : 0);

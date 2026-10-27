@@ -169,6 +169,42 @@ export const productTheme: Record<ProductThemeKey, { accent: string; strong: str
 };
 export const PRODUCT_THEME_KEYS = Object.keys(productTheme) as ProductThemeKey[];
 
+// ── Scholar theme variant: Calm Teal + Warm Learning Accents (COMPETEN-SCHOLAR-HFE-COLOR-01) ─────────────
+//
+// A REVIEWABLE VARIANT, not a replacement. The owner's candidate palette (27 Oct 2026), pending usability
+// validation. It applies only under [data-cmp-scholar="calm"] (set by the Individual app layout from the
+// `scholar_theme` policy and a learner's own preview choice); without it Scholar is exactly productTheme.scholar.
+// `theme` re-points --cmp-product-scholar-*; `surface` and `activity` are new semantic tokens.
+//
+// ⚠ WARM IS NOT A TEXT COLOUR. #D97706 is 3.19:1 on white: icons, borders and large text only. Words on the warm
+// tint use warmInk (#92400E, 6.37:1 on #FFF4DC), and a warm button uses warmStrong (#B45309, 5.02:1 with white).
+// Those two are derived shades (Tailwind amber-800/700), recorded as a decision in the build record, as is controlBorder.
+export const scholarVariant = {
+  calm: {
+    theme: { accent: "#0B7089", strong: "#07566B", soft: "#E8F6F9", border: "#A6D6E2", ink: "#07566B", onAccent: "#FFFFFF" },
+    surface: {
+      page: "#F8FAF9", card: "#FFFFFF", border: "#D9E3E8", text: "#142638", textSecondary: "#475569",
+      // #D9E3E8 is 1.30:1 on white: fine for card edges and dividers, too faint to identify a form field (WCAG 1.4.11
+      // asks 3:1). Fields use controlBorder, a derived slate (3.51:1 on white, 3.35:1 on the page).
+      controlBorder: "#7A8B99",
+      warm: "#D97706", warmStrong: "#B45309", warmInk: "#92400E", warmSoft: "#FFF4DC",
+      success: "#15803D", error: "#B91C1C",
+    },
+    // One icon tint on one soft chip per learning space: a subtle wayfinding cue, never a theme. Teal stays the
+    // action colour; Revise carries the warm accent (the suggested step). Graphical contrast >= 3:1 on the chip.
+    activity: {
+      library:  { icon: "#0B7089", chip: "#E8F6F9" },
+      learn:    { icon: "#0369A1", chip: "#E0F2FE" },
+      revise:   { icon: "#B45309", chip: "#FFF4DC" },
+      apply:    { icon: "#6D28D9", chip: "#F3E8FF" },
+      evaluate: { icon: "#1D4ED8", chip: "#E0E7FF" },
+      progress: { icon: "#15803D", chip: "#E7F6EC" },
+    },
+  },
+} as const;
+export type ScholarVariantKey = keyof typeof scholarVariant;
+export const SCHOLAR_VARIANT_KEYS = Object.keys(scholarVariant) as ScholarVariantKey[];
+
 // ── Consumption helpers ─────────────────────────────────────────────────────────────────────────────────
 export const clinicalColor = (status: string): string =>
   (color.clinical as Record<string, string>)[status] ?? color.clinical.discharged;
@@ -205,6 +241,13 @@ export function cssVariables(): Record<string, string> {
   // is re-pointed by `[data-cmp-theme="<key>"]` (themeCss below). Components read only `--cmp-theme-*`.
   for (const [p, v] of Object.entries(productTheme)) for (const [k, c] of Object.entries(v)) out[cssVar(`product.${p}.${k}`)] = c;
   for (const k of Object.keys(productTheme.platform)) out[cssVar(`theme.${k}`)] = `var(${cssVar(`product.platform.${k}`)})`;
+  // Scholar variants (HFE-COLOR-01): --cmp-variant-scholar-<v>-<part> re-points --cmp-product-scholar-<part> under
+  // [data-cmp-scholar="<v>"] (the generator derives that rule); --cmp-scholar-<v>-* are the surface and activity tokens.
+  for (const [v, def] of Object.entries(scholarVariant)) {
+    for (const [k, c] of Object.entries(def.theme)) out[cssVar(`variant.scholar.${v}.${k}`)] = c;
+    for (const [k, c] of Object.entries(def.surface)) out[cssVar(`scholar.${v}.${k}`)] = c;
+    for (const [a, t] of Object.entries(def.activity)) { out[cssVar(`scholar.${v}.activity.${a}.icon`)] = t.icon; out[cssVar(`scholar.${v}.activity.${a}.chip`)] = t.chip; }
+  }
   return out;
 }
 
@@ -216,8 +259,8 @@ export function themeCss(): string {
 // PUI-001 s10: "Design tokens ... available as JSON for system use" — served by /api/design/tokens so
 // tenant theming and any external consumer read the same values the app renders with.
 export function tokensJson() {
-  return { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme };
+  return { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme, scholarVariant };
 }
 
-const tokens = { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme, clinicalColor, cssVar, cssVariables, themeCss, tokensJson };
+const tokens = { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme, scholarVariant, clinicalColor, cssVar, cssVariables, themeCss, tokensJson };
 export default tokens;
