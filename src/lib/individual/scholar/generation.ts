@@ -254,6 +254,18 @@ const squash = (s: string) => s.toLowerCase().replace(/[‘’]/g, "'").replace(
 
 export type DropReason = "malformed" | "quote_not_in_passage" | "ungrounded" | QualityReason | "failed_verification" | "verification_unavailable";
 
+/**
+ * Pure. SCHOLAR-AI-OPT-01 P2: the words the vocabulary rule refused (unsupported_term), for the audit row. The acceptance
+ * run's commonest drop reason, recorded until now as a bare code, so no prompt change could be based on it. Single words
+ * the MODEL used that the passage does not -- never the passage, the stem or an answer. At most 12.
+ */
+export function refusedTerms(dropped: QuestionCheck["dropped"]): string[] {
+  const out = new Set<string>();
+  for (const d of dropped) if ((d.reason === "unsupported_term" || d.reason === "correct_not_supported") && d.detail)
+    for (const t of d.detail.split(/,s*/)) { const w = t.trim().toLowerCase().slice(0, 30); if (/^[a-z][a-z'-]*$/.test(w)) out.add(w); }
+  return [...out].slice(0, 12);
+}
+
 export type QuestionCheck = {
   kept: DraftQuestion[];
   dropped: { reason: DropReason; violations?: PhrasingViolation[]; detail?: string }[];
@@ -614,7 +626,7 @@ export const CASE_BLUEPRINT_SYSTEM = [
   "1. Every finding, value, option, rationale and expected answer comes from the passages. Do not invent any finding, value, consequence or change in the patient. Never write a number the passages do not contain, and never count things ('two signs').",
   "   Do not use words that assert a state or a change -- improved, improving, worse, worsening, reduced, raised, increased, decreased, stable, unstable, normal, abnormal, resolved, deteriorating -- unless the passages use that exact word. Use the passages' own words for findings.",
   "2. Findings: label and value in the passages' own words. shown is 'start', a stage number, or 'request' (the student must ask for it).",
-  "3. Two to four stages, each with one decision. A decision is 'single' (one right option), 'multiple' (several right options) or 'free_text' (the student explains, and expectedResponse says what a good answer contains, from the passages).",
+  "3. Two to four stages, each with exactly one decision (give each decision its own stage number). A decision is 'single' (one right option), 'multiple' (several right options) or 'free_text' (the student explains, and expectedResponse says what a good answer contains, from the passages -- REQUIRED for every free_text decision).",
   "4. Each option is built from the passages' words. Exactly one right option for 'single'. Give each decision a one or two sentence rationale in the passages' own words.",
   "5. canAskFor lists the refs of findings the student may ask for at that decision. sources lists the passage tags (S1, S2 ...) the decision rests on.",
   "6. dimension is one of: recognition, interpretation, prioritisation, decision, reassessment, escalation.",
@@ -623,7 +635,7 @@ export const CASE_BLUEPRINT_SYSTEM = [
   "9. Never include a name, NHS number, date of birth or any detail that could identify a real person.",
   "10. Keep it short: titles under ten words, no numbering in titles or prompts (the case numbers itself), rationales of one or two sentences.",
   "If the passages cannot support a case, reply {\"stages\": []}.",
-  'Reply with JSON ONLY: {"title": "...", "intro": "the opening a student reads, from the passages", "stages": ["...", "..."], "facts": [{"ref": "F1", "kind": "observation", "label": "...", "value": "...", "shown": "start", "safetyCritical": false}], "decisions": [{"stage": 1, "prompt": "...", "kind": "single", "dimension": "recognition", "options": [{"text": "...", "correct": true}, {"text": "...", "correct": false}], "rationale": "...", "canAskFor": ["F2"], "sources": ["S1"], "safety": null}], "objectives": [{"text": "...", "competencies": ["C1"]}]}',
+  'Reply with JSON ONLY: {"title": "...", "intro": "the opening a student reads, from the passages", "stages": ["...", "..."], "facts": [{"ref": "F1", "kind": "observation", "label": "...", "value": "...", "shown": "start", "safetyCritical": false}], "decisions": [{"stage": 1, "prompt": "...", "kind": "single", "dimension": "recognition", "options": [{"text": "...", "correct": true}, {"text": "...", "correct": false}], "rationale": "...", "canAskFor": ["F2"], "sources": ["S1"], "safety": null}, {"stage": 2, "prompt": "...", "kind": "free_text", "dimension": "escalation", "options": [], "expectedResponse": "what a good answer contains, from the passages", "rationale": "...", "canAskFor": [], "sources": ["S1"], "safety": null}], "objectives": [{"text": "...", "competencies": ["C1"]}]}',
 ].join("\n");
 
 const list0 = (v: unknown) => (Array.isArray(v) ? v.length : 0);

@@ -146,7 +146,7 @@ export async function recordAiFeedback(admin: any, f: FeedbackEntry): Promise<"o
 
 // ── THE QUALITY-AND-COST VIEW (Holdings) ────────────────────────────────────────────────────────────────────────
 
-export type RequestRow = { operation: string | null; attribution_scope?: string | null; cost_usd: number | string | null; action_id?: string | null; created_at: string };
+export type RequestRow = { operation: string | null; attribution_scope?: string | null; cost_usd: number | string | null; action_id?: string | null; actor_id?: string | null; created_at: string };
 export type OutcomeRow = {
   action_id: string; product: string; activity: string; output_kind: AiOutputKind; outcome: AiOutcome;
   accepted_count: number; rejected_count: number; rejection_reasons: string[] | null; sufficiency: Sufficiency; created_at: string;
@@ -182,17 +182,21 @@ export function summariseQuality(requests: readonly RequestRow[], outcomes: read
   const cost = (r: RequestRow) => Number(r.cost_usd ?? 0) || 0;
   const total = requests.reduce((n, r) => n + cost(r), 0);
 
-  const byProduct = new Map<string, { cost: number; n: number }>();
+  const byProduct = new Map<string, { cost: number; n: number; actors: Set<string> }>();
   const byActivity = new Map<string, { product: string; cost: number; n: number }>();
   const byAction = new Map<string, number>();
   for (const r of requests) {
     const p = productOf(r.operation, r.attribution_scope);
     const a = `${p}|${activityOf(r.operation)}`;
-    const gp = byProduct.get(p) ?? { cost: 0, n: 0 }; gp.cost += cost(r); gp.n++; byProduct.set(p, gp);
+    const gp = byProduct.get(p) ?? { cost: 0, n: 0, actors: new Set<string>() }; gp.cost += cost(r); gp.n++; if (r.actor_id) gp.actors.add(r.actor_id); byProduct.set(p, gp);
     const ga = byActivity.get(a) ?? { product: p, cost: 0, n: 0 }; ga.cost += cost(r); ga.n++; byActivity.set(a, ga);
     if (r.action_id) byAction.set(r.action_id, (byAction.get(r.action_id) ?? 0) + cost(r));
   }
 
+  // SCHOLAR-AI-OPT-01 P8/P10: the outputs measured are Scholar's, so "per learner" is per active Scholar learner -- a
+  // person with at least one Scholar AI call in the window. Counted here; no id leaves this function.
+  const learners = byProduct.get("Scholar")?.actors.size ?? 0;
+  const perLearner = (n: number) => (learners ? +(n / learners).toFixed(2) : null);
   const kinds: AiOutputKind[] = ["explanation", "question", "case"];
   const perKind = kinds.map(kind => {
     const rows = outcomes.filter(o => o.output_kind === kind);
@@ -210,6 +214,9 @@ export function summariseQuality(requests: readonly RequestRow[], outcomes: read
       unsuccessfulCost: money(failedCost),
       redirected: rows.length - generated.length,
       feedback: { n: fb.length, positive: fb.filter(f => f.rating === "positive").length },
+      actionsPerLearner: perLearner(generated.length), acceptedPerLearner: perLearner(accepted),
+      // Share of kept outputs a learner rated (one rating per learner and output). Null when nothing was kept.
+      feedbackRate: accepted ? Math.round((fb.length / accepted) * 100) : null,
     };
   });
 
@@ -228,8 +235,9 @@ export function summariseQuality(requests: readonly RequestRow[], outcomes: read
     const accepted = out.reduce((n, o) => n + (o.accepted_count ?? 0), 0);
     const actionSpend = out.reduce((n, o) => n + (byAction.get(o.action_id) ?? 0), 0);
     const fb = feedback.filter(f => inDay(f.created_at));
+    const dayLearners = new Set(requests.filter(r => inDay(r.created_at) && r.actor_id && productOf(r.operation, r.attribution_scope) === "Scholar").map(r => r.actor_id)).size;
     return {
-      day: start.toISOString().slice(0, 10),
+      day: start.toISOString().slice(0, 10), learners: dayLearners,
       spend: money(requests.filter(r => inDay(r.created_at)).reduce((n, r) => n + cost(r), 0)),
       actions: out.length, accepted,
       rejectionRate: out.length ? Math.round((out.filter(o => o.outcome === "rejected" || o.outcome === "error").length / out.length) * 100) : null,
@@ -242,7 +250,8 @@ export function summariseQuality(requests: readonly RequestRow[], outcomes: read
   return {
     totalSpend: money(total), requests: requests.length,
     attributedSpend: money([...byAction.values()].reduce((a, b) => a + b, 0)),
-    byProduct: [...byProduct.entries()].map(([label, g]) => ({ label, cost: money(g.cost), n: g.n })).sort((a, b) => b.cost - a.cost),
+    byProduct: [...byProduct.entries()].map(([label, g]) => ({ label, cost: money(g.cost), n: g.n, learners: g.actors.size, costPerLearner: g.actors.size ? money(g.cost / g.actors.size) : null })).sort((a, b) => b.cost - a.cost),
+    learners: { scholar: learners, costPerLearner: learners ? money((byProduct.get("Scholar")?.cost ?? 0) / learners) : null, callsPerLearner: perLearner(byProduct.get("Scholar")?.n ?? 0) },
     byActivity: [...byActivity.values()].length
       ? [...byActivity.entries()].map(([k, g]) => ({ product: g.product, activity: k.split("|")[1], cost: money(g.cost), n: g.n })).sort((a, b) => b.cost - a.cost)
       : [],
@@ -258,7 +267,7 @@ export function summariseQuality(requests: readonly RequestRow[], outcomes: read
 export async function loadAiQuality(admin: any, days = 14) {
   const since = new Date(Date.now() - days * DAY).toISOString();
   const [req, out, fb] = await Promise.all([
-    admin.from("plat_ai_requests").select("operation, attribution_scope, cost_usd, action_id, created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(10000),
+    admin.from("plat_ai_requests").select("operation, attribution_scope, cost_usd, action_id, actor_id, created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(10000),
     admin.from("plat_ai_outcomes").select("action_id, product, activity, output_kind, outcome, accepted_count, rejected_count, rejection_reasons, sufficiency, created_at").gte("created_at", since).limit(10000),
     admin.from("plat_ai_feedback").select("output_kind, rating, reasons, created_at").gte("created_at", since).limit(10000),
   ]);

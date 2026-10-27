@@ -99,6 +99,21 @@ describe("the quality-and-cost view", () => {
     expect(none.perKind.find(x => x.kind === "case")!.costPerAccepted).toBeNull();
     expect(none.perKind.find(x => x.kind === "explanation")!.rejectionRate).toBeNull();
   });
+  it("P8/P10: per active Scholar learner -- counted, never listed", () => {
+    const withActors = requests.map((r, i) => ({ ...r, actor_id: r.operation?.startsWith("practice") ? "staff-1" : i < 4 ? "L1" : "L2" }));
+    const w = summariseQuality(withActors, outcomes, [{ output_kind: "case", rating: "negative", reasons: [], created_at: at }], { days: 1, now });
+    expect(w.learners).toEqual({ scholar: 2, costPerLearner: 0.1, callsPerLearner: 3.5 });
+    expect(w.byProduct.find(p => p.label === "Scholar")).toMatchObject({ learners: 2, costPerLearner: 0.1 });
+    const k = Object.fromEntries(w.perKind.map(x => [x.kind, x]));
+    expect(k.case).toMatchObject({ actionsPerLearner: 1.5, acceptedPerLearner: 0.5, feedbackRate: 100 });
+    expect(k.explanation.feedbackRate).toBe(0);
+    expect(w.trend[0].learners).toBe(2);
+    expect(JSON.stringify(w)).not.toMatch(/L1|L2|staff-1/);
+  });
+  it("with no learner ids, per-learner figures are absent, not zero", () => {
+    expect(v.learners).toEqual({ scholar: 0, costPerLearner: null, callsPerLearner: null });
+    expect(v.perKind[0].actionsPerLearner).toBeNull();
+  });
   it("tallies reasons and gives a daily trend", () => {
     expect(v.reasons[0]).toEqual({ label: "ungrounded", n: 2 });
     expect(v.trend).toHaveLength(3);

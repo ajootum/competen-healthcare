@@ -41,12 +41,20 @@ export default function QualityCostPanel({ q }: { q: Quality }) {
           <h3 className="font-semibold text-gray-900 text-[14px] mb-2">Spend</h3>
           <p className="text-2xl font-bold tabular-nums text-gray-900">{q.usageReady ? money(q.totalSpend) : "—"}</p>
           <p className="text-[11px] text-gray-500">{q.requests.toLocaleString()} calls · {money(q.attributedSpend)} tied to a measured learner action</p>
-          <h4 className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">By product</h4>
+          <h4 className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">By product <span className="normal-case font-normal">· calls · spend · people · per person</span></h4>
           <ul className="mt-1 space-y-1">
             {q.byProduct.length === 0 ? <li className="text-xs text-gray-500">No AI calls in this window.</li> : q.byProduct.map(p => (
-              <li key={p.label} className="flex justify-between text-xs"><span className="text-gray-700">{p.label}</span><span className="tabular-nums text-gray-600">{p.n} · {money(p.cost)}</span></li>
+              <li key={p.label} className="flex justify-between gap-2 text-xs"><span className="text-gray-700">{p.label}</span><span className="tabular-nums text-gray-600">{p.n} · {money(p.cost)} · {p.learners || "—"} · {money(p.costPerLearner)}</span></li>
             ))}
           </ul>
+          {/* SCHOLAR-AI-OPT-01 P8/P10: per active learner, for allowance and pricing planning. Counts only. */}
+          <h4 className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Scholar learners</h4>
+          <dl className="mt-1 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg border border-gray-100 p-2"><dt className="text-[10px] text-gray-500">Active</dt><dd className="text-lg font-bold tabular-nums text-gray-900">{q.usageReady ? q.learners.scholar : "—"}</dd></div>
+            <div className="rounded-lg border border-gray-100 p-2"><dt className="text-[10px] text-gray-500">Cost / learner</dt><dd className="text-lg font-bold tabular-nums text-gray-900">{money(q.learners.costPerLearner)}</dd></div>
+            <div className="rounded-lg border border-gray-100 p-2"><dt className="text-[10px] text-gray-500">Calls / learner</dt><dd className="text-lg font-bold tabular-nums text-gray-900">{q.learners.callsPerLearner ?? "—"}</dd></div>
+          </dl>
+          <p className="mt-1 text-[10px] text-gray-500">Active = at least one Scholar AI call in the window. Over the window, not per month.</p>
         </div>
 
         <div className={`${card} p-5 lg:col-span-2 overflow-x-auto`}>
@@ -55,7 +63,8 @@ export default function QualityCostPanel({ q }: { q: Quality }) {
             <thead><tr className="text-left text-gray-500">
               <th className="py-1 pr-2 font-semibold">Output</th><th className="py-1 pr-2 font-semibold text-right">Actions</th><th className="py-1 pr-2 font-semibold text-right">Kept</th>
               <th className="py-1 pr-2 font-semibold text-right">Cost per kept</th><th className="py-1 pr-2 font-semibold text-right">Rejected</th>
-              <th className="py-1 pr-2 font-semibold text-right">Unsuccessful cost</th><th className="py-1 pr-2 font-semibold text-right">Redirected</th><th className="py-1 font-semibold text-right">Feedback +</th>
+              <th className="py-1 pr-2 font-semibold text-right">Unsuccessful cost</th><th className="py-1 pr-2 font-semibold text-right">Redirected</th>
+              <th className="py-1 pr-2 font-semibold text-right">Actions / learner</th><th className="py-1 pr-2 font-semibold text-right">Feedback rate</th><th className="py-1 font-semibold text-right">Feedback +</th>
             </tr></thead>
             <tbody>
               {q.perKind.map(k => (
@@ -67,12 +76,14 @@ export default function QualityCostPanel({ q }: { q: Quality }) {
                   <td className="py-1.5 pr-2 text-right tabular-nums">{unmeasured ? "—" : `${k.rejectedActions} (${pct(k.rejectionRate)})`}</td>
                   <td className="py-1.5 pr-2 text-right tabular-nums">{unmeasured ? "—" : money(k.unsuccessfulCost)}</td>
                   <td className="py-1.5 pr-2 text-right tabular-nums">{unmeasured ? "—" : k.redirected}</td>
+                  <td className="py-1.5 pr-2 text-right tabular-nums">{unmeasured || k.actionsPerLearner == null ? "—" : k.actionsPerLearner}</td>
+                  <td className="py-1.5 pr-2 text-right tabular-nums">{unmeasured || !q.feedbackReady ? "—" : pct(k.feedbackRate)}</td>
                   <td className="py-1.5 text-right tabular-nums">{!q.feedbackReady || !k.feedback.n ? "—" : `${k.feedback.positive}/${k.feedback.n}`}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="mt-2 text-[10px] text-gray-500">Rejected = nothing kept after the grounding, quality and blind-verification checks, which are unchanged. Redirected = not sent (saved content offered, notes unsuitable, or an identical rejected retry); no cost. A redirect is not counted as a saving.</p>
+          <p className="mt-2 text-[10px] text-gray-500">Rejected = nothing kept after the grounding, quality and blind-verification checks, which are unchanged. Redirected = not sent (saved content offered, notes unsuitable, or an identical rejected retry); no cost. A redirect is not counted as a saving. Feedback rate = ratings over outputs kept.</p>
         </div>
       </div>
 
@@ -108,12 +119,13 @@ export default function QualityCostPanel({ q }: { q: Quality }) {
         <div className={`${card} p-5 overflow-x-auto`}>
           <h3 className="font-semibold text-gray-900 text-[14px] mb-2">Daily trend</h3>
           <table className="w-full text-[11px]">
-            <thead><tr className="text-left text-gray-500"><th className="font-semibold pr-1">Day</th><th className="font-semibold pr-1">Spend</th><th className="font-semibold text-right pr-1">Kept</th><th className="font-semibold text-right pr-1">Rej.</th><th className="font-semibold text-right pr-1">Per kept</th><th className="font-semibold text-right">Fb +</th></tr></thead>
+            <thead><tr className="text-left text-gray-500"><th className="font-semibold pr-1">Day</th><th className="font-semibold pr-1">Spend</th><th className="font-semibold text-right pr-1">Learners</th><th className="font-semibold text-right pr-1">Kept</th><th className="font-semibold text-right pr-1">Rej.</th><th className="font-semibold text-right pr-1">Per kept</th><th className="font-semibold text-right">Fb +</th></tr></thead>
             <tbody>
               {q.trend.slice(-10).map(t => (
                 <tr key={t.day} className="border-t border-gray-50">
                   <td className="py-0.5 pr-1 text-gray-600">{t.day.slice(5)}</td>
                   <td className="py-0.5 pr-1"><span className="inline-block h-2 rounded bg-teal-200 align-middle" style={{ width: `${Math.max(2, (t.spend / maxSpend) * 40)}px` }} /> <span className="tabular-nums">{money(t.spend)}</span></td>
+                  <td className="py-0.5 pr-1 text-right tabular-nums">{t.learners}</td>
                   <td className="py-0.5 pr-1 text-right tabular-nums">{unmeasured ? "—" : t.accepted}</td>
                   <td className="py-0.5 pr-1 text-right tabular-nums">{unmeasured ? "—" : pct(t.rejectionRate)}</td>
                   <td className="py-0.5 pr-1 text-right tabular-nums">{unmeasured ? "—" : money(t.costPerAccepted)}</td>

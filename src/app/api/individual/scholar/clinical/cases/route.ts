@@ -144,7 +144,10 @@ export async function POST(req: Request) {
   if (!r.blueprint) return NextResponse.json({
     error: r.declaredInsufficient
       ? "These notes do not describe enough of a patient's care for a case, so none was written. A case question from the same sections may work, or add notes that describe a patient's assessment and care."
-      : "A case could not be written from these notes without adding things they do not say, so none was kept. Try a case question from these sections, other sections, or more of your notes.",
+      // SCHOLAR-AI-OPT-01 P2: say what actually failed. A draft refused only for its shape is not the notes' fault.
+      : r.problems.every(p => p.startsWith("structure:") || p.startsWith("malformed:"))
+        ? "The case drafted from these notes was not complete enough to play, so none was kept. Try a case question from these sections, or other sections."
+        : "A case could not be written from these notes without adding things they do not say, so none was kept. Try a case question from these sections, other sections, or more of your notes.",
     sufficiency: { outcome: readiness.outcome, alternative: "case_question", canAttempt: false, sectionIds, materialId },
   }, { status: 422 });
   const made = await insertPrivateCase(ctx.admin, ctx.userId, {

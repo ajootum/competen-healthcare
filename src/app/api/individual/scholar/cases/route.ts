@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { chunkMappings, getPassage, insertQuestions, storedStepCase } from "@/lib/individual/scholar/store";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk, routingVersion } from "@/lib/individual/scholar/http";
-import { runCase } from "@/lib/individual/scholar/generation";
+import { refusedTerms, runCase } from "@/lib/individual/scholar/generation";
 import { leadingCompetency } from "@/lib/competency/mapping";
 import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS } from "@/lib/individual/scholar/config";
 import { REPEAT_REJECTED, caseReadiness } from "@/lib/individual/scholar/sufficiency";
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
     reasons: [...(r.declaredInsufficient ? ["source_insufficient"] : []), ...r.dropped.map(d => d.reason), ...(saved.ok ? [] : ["save_failed"])],
   });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, OPERATION, caseId, {
-    chunk_id: passage.chunkId, steps: saved.ids.length, dropped: r.dropped.map(d => d.reason),
+    chunk_id: passage.chunkId, steps: saved.ids.length, dropped: r.dropped.map(d => d.reason), refused_terms: refusedTerms(r.dropped),
     model: r.model, prompt_version: r.promptVersion, saved: saved.ok, attempts: r.attempts, competency_id: competencyId,
     sufficiency: readiness.outcome, declared_insufficient: r.declaredInsufficient, action_id: ai.actionId,
   });

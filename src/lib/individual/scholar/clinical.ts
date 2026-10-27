@@ -66,8 +66,11 @@ export function blueprintFromDraft(draft: CaseDraft, ctx: { passages: readonly P
     if (!prompt) continue;
     const id = `d${decisionPoints.length + 1}`;
     const letters = "abcdefgh";
+    // SCHOLAR-AI-OPT-01 P2: option ids carry their decision ("d1a"), so two decisions the model put in one stage never
+    // share an id. The ids were "a", "b" ... for every decision, and the validator rightly refuses a stage whose decisions
+    // repeat an option id -- that refused 2 of the acceptance run's case drafts for a reason the notes had nothing to do with.
     const options = kind === "free_text" ? [] : list(d?.options).slice(0, 6).map((o, k) => ({
-      id: letters[k], text: str(o?.text, 500) ?? "", correct: o?.correct === true, rationale: str(o?.rationale, 2000),
+      id: `${id}${letters[k]}`, text: str(o?.text, 500) ?? "", correct: o?.correct === true, rationale: str(o?.rationale, 2000),
     })).filter(o => o.text);
     decisionPoints.push({
       id, stageId, prompt, kind, dimension: dims.includes(d?.dimension as string) ? d.dimension as string : undefined,

@@ -74,3 +74,15 @@ describe("a model's own 'not enough in these notes' is not asked again", () => {
     expect(sent).toHaveLength(2);
   });
 });
+
+describe("P2: the refused vocabulary is recorded as single words only", () => {
+  it("keeps the model's foreign words from unsupported_term and correct_not_supported, nothing else", async () => {
+    const { refusedTerms } = await import("./generation");
+    expect(refusedTerms([
+      { reason: "unsupported_term", detail: "tachycardia, improving, Worsening" },
+      { reason: "correct_not_supported", detail: "lactate" },
+      { reason: "ungrounded", detail: "the number 28" },
+      { reason: "unsupported_term", detail: "28 bpm, improving" },
+    ])).toEqual(["tachycardia", "improving", "worsening", "lactate"]);
+  });
+});
