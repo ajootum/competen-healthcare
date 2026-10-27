@@ -6,6 +6,8 @@ import {
 } from "@/lib/individual/policy";
 import { ChoiceDraft, IntDraft, LevelsDraft, OptionsDraft, PublishBar, RollbackButton, SequenceDraft, SetDraft } from "./_components/PolicyControls";
 import LcpdEditor from "./_components/LcpdEditor";
+import PresentationEditor from "./_components/PresentationEditor";
+import { PRESENTATION_PATH, resolvePresentation } from "@/lib/design/presentation-config";
 import { LCPD_PATH, REVIEW_LABEL, resolveLcpd } from "@/lib/individual/lcpd-config";
 
 // /super-admin/individual/configuration -- COMPETEN-CONFIG-002 item 6.
@@ -57,7 +59,7 @@ export default async function IndividualPolicyPage() {
   const admin = ctx.admin;
   const scope = (q: any) => q.eq("scope_type", POLICY_SCOPE.scopeType).eq("scope_ref", POLICY_SCOPE.scopeRef);
 
-  const [ovr, ver, aud, cats, progs, lcpdRow] = await Promise.all([
+  const [ovr, ver, aud, cats, progs, lcpdRow, presRow] = await Promise.all([
     scope(admin.from("workspace_config_overrides").select("config_path, draft, published, updated_by_name, updated_at")).like("config_path", `${POLICY_PATH_PREFIX}%`),
     scope(admin.from("workspace_config_versions").select("id, note, status, published_by_name, created_at, snapshot")).order("created_at", { ascending: false }).limit(25),
     scope(admin.from("workspace_config_audit").select("action, config_path, actor_name, created_at, new_value")).order("created_at", { ascending: false }).limit(40),
@@ -67,7 +69,10 @@ export default async function IndividualPolicyPage() {
     admin.from("individual_scholar_programme").select("code, label").eq("is_active", true).order("label"),
     // LCPD-01 s11: the Professional Learning and CPD document, one more path in the same scope.
     scope(admin.from("workspace_config_overrides").select("draft, published, updated_by_name")).eq("config_path", LCPD_PATH).maybeSingle(),
+    // DESIGN-SYSTEM-01 s4: the sign-in chooser wording for Individual, Scholar and Professional, one more path in the scope.
+    scope(admin.from("workspace_config_overrides").select("draft, published, updated_by_name")).eq("config_path", PRESENTATION_PATH).maybeSingle(),
   ]);
+  const presPending = !!presRow.data && !same(presRow.data.draft, presRow.data.published);
   const lcpdPublished = resolveLcpd(lcpdRow.data?.published ?? null);
   const lcpdDraft = lcpdRow.data?.draft ? resolveLcpd(lcpdRow.data.draft) : null;
   const lcpdPending = !!lcpdRow.data && !same(lcpdRow.data.draft, lcpdRow.data.published);
@@ -78,7 +83,7 @@ export default async function IndividualPolicyPage() {
   const unreadable = !!(ovr.error || ver.error || aud.error);
   const rows = new Map<string, any>((ovr.data ?? []).map((r: any) => [r.config_path, r]));
   const versions: any[] = ver.data ?? [];
-  const pending = POLICIES.filter(p => { const r = rows.get(policyPath(p.key)); return r && !same(r.draft, r.published); }).length + (lcpdPending ? 1 : 0);
+  const pending = POLICIES.filter(p => { const r = rows.get(policyPath(p.key)); return r && !same(r.draft, r.published); }).length + (lcpdPending ? 1 : 0) + (presPending ? 1 : 0);
 
   // Effective since: the oldest version in the unbroken run (newest first) that published the current value.
   const since = (path: string, published: any): string | null => {
@@ -183,6 +188,17 @@ export default async function IndividualPolicyPage() {
         </p>
         {lcpdRow.error && <p role="alert" className="mt-2 text-[13px] text-red-700">The Learning & CPD configuration could not be read just now. Nothing is shown rather than a guess.</p>}
         {!lcpdRow.error && <div className="mt-3"><LcpdEditor initial={lcpdDraft ?? lcpdPublished} /></div>}
+      </section>
+
+      <section aria-labelledby="pres-h" className="rounded-xl border border-gray-200 bg-white p-4">
+        <h2 id="pres-h" className="text-[15px] font-bold text-gray-900">Sign-in presentation</h2>
+        <p className="mt-1 text-[13px] text-gray-600">
+          How Competen Individual, Scholar and Professional describe themselves on the card a person chooses after signing in.
+          Names and colours are fixed. Wording changes nothing about who can enter.
+          {presPending ? ` An unpublished draft is saved${presRow.data?.updated_by_name ? ` by ${presRow.data.updated_by_name}` : ""}.` : ""}
+        </p>
+        {presRow.error && <p role="alert" className="mt-2 text-[13px] text-red-700">The sign-in presentation could not be read just now. Nothing is shown rather than a guess.</p>}
+        {!presRow.error && <div className="mt-3"><PresentationEditor initial={resolvePresentation(presRow.data?.draft ?? presRow.data?.published ?? null)} /></div>}
       </section>
 
       <section aria-labelledby="pub-h" className="rounded-xl border border-gray-200 bg-white p-4">

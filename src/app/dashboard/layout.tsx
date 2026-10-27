@@ -108,7 +108,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
+    <div data-cmp-theme="platform" className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <MobileSidebar fullName={profile?.full_name ?? "Nurse"} role={profile?.role ?? "nurse"} isAdmin={profile?.role === "hospital_admin"} unread={unreadCount ?? 0} avatarUrl={profile?.avatar_url ?? null} />
 
       {/* ONE header, one skip link. The PUI-002 roll-out (f053146) left this layout with two GlobalHeaders
@@ -132,38 +132,38 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </div>
 
       <div className="flex">
-        <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0f1b3d] flex-col py-5 px-3 fixed top-0 left-0 z-20">
+        <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[var(--cmp-theme-strong)] flex-col py-5 px-3 fixed top-0 left-0 z-20">
           <SidebarToggle />
           <Link href="/dashboard" className="flex items-center gap-2 mb-5 px-2" data-sb-item>
-            <div className="w-7 h-7 rounded-lg bg-[var(--cmp-color-information)] flex items-center justify-center text-white font-bold text-sm shrink-0">C</div>
+            <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center text-[var(--cmp-theme-accent)] font-bold text-sm shrink-0">C</div>
             <span className="text-white font-semibold text-sm tracking-wide" data-sb-label>COMPETEN</span>
           </Link>
 
           <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
             {NAV.map(({ label, href, icon, exact, badge }) => (
               <NavLink key={label} href={href} icon={icon} label={label} exact={exact} badge={badge || undefined}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-blue-100/70 hover:bg-blue-900/50 hover:text-white transition-colors"
-                activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] bg-[var(--cmp-color-information)] text-white font-medium" />
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-white/75 hover:bg-white/10 hover:text-white transition-colors"
+                activeClassName="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] bg-white/15 ring-1 ring-white/25 text-white font-medium" />
             ))}
           </nav>
 
           {/* Current Shift card */}
-          <div className="bg-blue-950/50 border border-blue-900/50 rounded-xl p-3 my-3" data-sb-label>
+          <div className="bg-black/20 border border-white/10 rounded-xl p-3 my-3" data-sb-label>
             {shift ? <>
-              <div className="flex items-center justify-between"><span className="text-[10px] font-semibold text-blue-200/70 uppercase tracking-wide">Current Shift</span><span className="flex items-center gap-1 text-[9px] text-emerald-400">● {shift.status === "active" ? "In Progress" : shift.status}</span></div>
+              <div className="flex items-center justify-between"><span className="text-[10px] font-semibold text-white/70 uppercase tracking-wide">Current Shift</span><span className="flex items-center gap-1 text-[9px] text-emerald-400">● {shift.status === "active" ? "In Progress" : shift.status}</span></div>
               <p className="text-white text-xs font-semibold mt-1">{SHIFT_TIMES[shift.type] ?? ""}</p>
-              <p className="text-blue-200/60 text-[10px]">{shift.ward}</p>
-              <p className="text-blue-200/60 text-[10px]">{SHIFT_LABEL[shift.type] ?? ""}</p>
-              <Link href="/healthcare-worker" className="block text-center text-[11px] font-medium text-white bg-[var(--cmp-color-information)] hover:bg-[var(--cmp-color-information)] rounded-lg py-1.5 mt-2">Open Shift Workspace</Link>
+              <p className="text-white/70 text-[10px]">{shift.ward}</p>
+              <p className="text-white/70 text-[10px]">{SHIFT_LABEL[shift.type] ?? ""}</p>
+              <Link href="/healthcare-worker" className="block text-center text-[11px] font-medium text-white bg-white/15 hover:bg-white/25 rounded-lg py-1.5 mt-2">Open Shift Workspace</Link>
             </> : <>
-              <span className="text-[10px] font-semibold text-blue-200/70 uppercase tracking-wide">Current Shift</span>
-              <p className="text-blue-200/60 text-[11px] mt-1">No active shift.</p>
+              <span className="text-[10px] font-semibold text-white/70 uppercase tracking-wide">Current Shift</span>
+              <p className="text-white/70 text-[11px] mt-1">No active shift.</p>
             </>}
           </div>
 
-          <a href="mailto:gabriel@semacast.com?subject=Competen support request" className="bg-blue-950/30 rounded-xl p-3 flex items-center gap-2 hover:bg-blue-900/40 transition-colors" data-sb-label>
+          <a href="mailto:gabriel@semacast.com?subject=Competen support request" className="bg-black/15 rounded-xl p-3 flex items-center gap-2 hover:bg-white/10 transition-colors" data-sb-label>
             <span className="text-lg">🎧</span>
-            <span><span className="block text-white text-[11px] font-medium">Need Help?</span><span className="block text-blue-300/70 text-[10px]">Contact Support</span></span>
+            <span><span className="block text-white text-[11px] font-medium">Need Help?</span><span className="block text-white/70 text-[10px]">Contact Support</span></span>
           </a>
 
           {/* PUI-002: user controls live in the global header; the sidebar is workflow navigation only. */}

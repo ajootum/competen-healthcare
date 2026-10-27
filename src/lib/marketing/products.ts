@@ -1,4 +1,5 @@
 import type { Solution, SolutionTemplate } from "@/lib/marketing/solutions";
+import { productTheme } from "@/lib/design/tokens";
 import { EXPERIENCE_LIST } from "@/lib/marketing/individual-family";
 
 // WEB-HOME-001 s5/s10 -- THE FOUR PRODUCTS, AS PUBLIC INFORMATION. Adopted by the owner 2026-08-11:
@@ -33,11 +34,11 @@ export type Product = {
 };
 
 export const PRODUCTS: Product[] = [
-  { key: "enterprise",  label: "Enterprise",  micro: "For organisations.",       href: "/enterprise",  accent: "#4F46E5", live: true,
+  { key: "enterprise",  label: "Enterprise",  micro: "For organisations.",       href: "/enterprise",  accent: productTheme.platform.accent, live: true,
     summary: "Develop capable teams and strengthen healthcare quality." },
   // ⚠ micro WIDENED by COMPETEN-WEB-IND-001 s2: Individual now serves students (Scholar) as well as
   // professionals (Professional), and "For professionals." would hide the half that starts at school.
-  { key: "individual",  label: "Individual",  micro: "For students & professionals.", href: "/individual", accent: "#0F766E", live: false,
+  { key: "individual",  label: "Individual",  micro: "For students & professionals.", href: "/individual", accent: productTheme.individual.accent, live: false,
     summary: "Learn, grow and advance throughout your healthcare career.",
     experiences: EXPERIENCE_LIST.map(e => ({ key: e.key, label: e.name, micro: e.micro, href: e.href, accent: e.accent })) },
   { key: "recruitment", label: "Recruitment", micro: "For talent & employers.",  href: "/recruitment", accent: "#7C3AED", live: false,

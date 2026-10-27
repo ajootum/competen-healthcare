@@ -35,7 +35,7 @@ export default async function LearningReturnPage({ searchParams }: { searchParam
         {!co ? (
           <StatePanel title="No course payment to show" actions={<Link href="/individual/learning" className={secondaryBtn}>Learning catalogue</Link>}><p>This link does not name one of your course payments.</p></StatePanel>
         ) : ent ? (
-          <StatePanel title="Your access is open" actions={course && <Link href={`/individual/learning/${course.code}`} className={`${primaryBtn} bg-teal-700`}>Go to {course.title}</Link>}><p>The payment provider confirmed your payment to Competen, and your access to the course is open.</p></StatePanel>
+          <StatePanel title="Your access is open" actions={course && <Link href={`/individual/learning/${course.code}`} className={`${primaryBtn} bg-[var(--cmp-theme-accent)]`}>Go to {course.title}</Link>}><p>The payment provider confirmed your payment to Competen, and your access to the course is open.</p></StatePanel>
         ) : co.status === "paid" ? (
           <StatePanel tone="warning" title="Your payment is confirmed, and your access is being opened"><p>If the course does not open within a few minutes, contact Competen: the payment is recorded and access will be granted.</p></StatePanel>
         ) : co.status === "failed" || co.status === "mismatched" || co.status === "abandoned" ? (

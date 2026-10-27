@@ -29,8 +29,8 @@ export default async function CertificatePage({ params }: { params: Promise<{ no
   const evidence = s.evidence?.basis;
   return (
     <LearningShell live={live} current="mine">
-      <article className="mx-auto max-w-2xl rounded-2xl border-2 border-teal-800 bg-white p-8 text-center">
-        <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-teal-800">Competen Learning certificate</p>
+      <article className="mx-auto max-w-2xl rounded-2xl border-2 border-[var(--cmp-theme-accent)] bg-white p-8 text-center">
+        <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[var(--cmp-theme-ink)]">Competen Learning certificate</p>
         <h1 className="mt-3 text-2xl font-bold text-gray-900">{s.outcomeLabel ?? "Certificate"}</h1>
         <p className="mt-4 text-[15px] text-gray-700">This records that</p>
         <p className="mt-1 text-[20px] font-bold text-gray-900">{s.learner ?? "the learner"}</p>
@@ -42,7 +42,7 @@ export default async function CertificatePage({ params }: { params: Promise<{ no
         <p className="mt-4 text-[12.5px] text-gray-500">{s.disclaimer ?? CERTIFICATE_DISCLAIMER}</p>
       </article>
       <div className="mx-auto mt-4 max-w-2xl text-[13.5px] text-gray-700">
-        <p>Anyone you give this link to can check the certificate: <Link className="font-semibold text-teal-800 underline" href={`/learning/verify/${c.verification_code}`}>/learning/verify/{c.verification_code}</Link>. Share it only if you choose to.</p>
+        <p>Anyone you give this link to can check the certificate: <Link className="font-semibold text-[var(--cmp-theme-ink)] underline" href={`/learning/verify/${c.verification_code}`}>/learning/verify/{c.verification_code}</Link>. Share it only if you choose to.</p>
       </div>
     </LearningShell>
   );

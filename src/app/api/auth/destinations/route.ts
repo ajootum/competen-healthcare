@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { resolveProductDestinations } from "@/lib/identity/product-resolution";
+import { loadPresentationConfig } from "@/lib/design/presentation-config";
 
 // COMP-ID-ROUTE-001 s8/s9 -- the neutral resolver's HTTP door, for the just-signed-in login page.
 //
@@ -14,6 +15,9 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "not signed in" }, { status: 401 });
 
-  const resolution = await resolveProductDestinations(createAdminClient(), user.id);
-  return NextResponse.json(resolution);
+  const admin = createAdminClient();
+  const [resolution, presentation] = await Promise.all([resolveProductDestinations(admin, user.id), loadPresentationConfig(admin)]);
+  // COMPETEN-DESIGN-SYSTEM-01 s4: the published card wording rides beside the set. Presentation only: it cannot
+  // add, remove or reorder a destination, and it falls back to the code defaults when unreadable.
+  return NextResponse.json({ ...resolution, presentation });
 }

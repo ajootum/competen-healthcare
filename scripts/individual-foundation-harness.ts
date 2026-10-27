@@ -381,8 +381,11 @@ function main() {
   ok("12h. the HQ sidebar links to the screen (a door, so the page is not left reachable only by URL)",
     GENERAL_NAV.some(s => s.items.some(i => i.href === "/super-admin/individual")));
   const loginSrc = strip(readFileSync("src/app/login/page.tsx", "utf8"));
-  ok("12i. the login's Individual presentation is copy only: next is still validated by the one existing rule",
-    /signInProductName\(/.test(loginSrc) && /next && next\.startsWith\("\/"\) && !next\.startsWith\("\/\/"\) && !BUILDING\[next\]/.test(loginSrc));
+  // COMPETEN-DESIGN-SYSTEM-01: the login now uses the ONE shared open-redirect guard (safeNextPath, which the OAuth
+  // callback also uses) instead of its own weaker copy of the rule. Still copy-only presentation for Individual.
+  ok("12i. the login's Individual presentation is copy only: next is still validated by the one shared rule",
+    /signInProductName\(/.test(loginSrc) && /safeNextPath\(new URLSearchParams\(window\.location\.search\)\.get\("next"\), ""\)/.test(loginSrc)
+      && /if \(next && !BUILDING\[next\]\)/.test(loginSrc));
 
   // ⚠ SWITCHING INDIVIDUAL ON IS THE OWNER'S ACT, NEVER AN APPLICATION'S (COMPETEN-IND-ACCESS-001 s5,
   // CONFIG-002). The release flag is a row the owner writes by hand. No route, page or library in the

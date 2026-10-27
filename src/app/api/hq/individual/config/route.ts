@@ -4,6 +4,7 @@ import { publishScope, resetOverride, rollbackVersion, setOverride, wceMissing }
 import { POLICY_SCOPE, policyDef, policyPath, validateDraft } from "@/lib/individual/policy";
 import { checkLcpdDraft, LCPD_PATH } from "@/lib/individual/lcpd-config";
 import { checkDocumentsDraft, DOCUMENTS_PATH, loadDocumentsConfig } from "@/lib/individual/documents-config";
+import { checkPresentationDraft, PRESENTATION_PATH } from "@/lib/design/presentation-config";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -22,6 +23,10 @@ export const dynamic = "force-dynamic";
 // "lcpd" (COMPETEN-PROFESSIONAL-LCPD-01 s11) is the one other path this door writes: the Professional Learning and CPD
 // document (src/lib/individual/professional/lcpd-config.ts) -- activity types, reflection templates, CPD requirements
 // with their source and review status, Passport eligibility. Validated whole, drafted, and published with the rest.
+//
+// "presentation" (COMPETEN-DESIGN-SYSTEM-01 s4) is how Individual, Scholar and Professional present themselves on the
+// sign-in chooser (src/lib/design/presentation-config.ts): role, description, action label and icon from a fixed set.
+// Names and colours are not configurable here. Validated whole, drafted, and published with the rest.
 //
 // ⚠ GATED BY hqApiGate(["hq.individual.config.manage"]) (migration 376) -- the right the Individual Product
 // Administrator appointment holds. Not super-admin, not landlord authority: this door can write only the
@@ -82,6 +87,12 @@ export async function POST(req: Request) {
       if (!v.ok) return refuse(422, v.error);
       const r = await setOverride(ctx.admin, actor, SCOPE, DOCUMENTS_PATH, v.settings);
       return r.ok ? NextResponse.json({ ok: true, settings: v.settings }) : refuse(500, "The draft could not be saved. Nothing has changed.");
+    }
+    case "presentation": {
+      const v = checkPresentationDraft(body.settings);
+      if (!v.ok) return refuse(422, v.error);
+      const r = await setOverride(ctx.admin, actor, SCOPE, PRESENTATION_PATH, v.settings);
+      return r.ok ? NextResponse.json({ ok: true }) : refuse(500, "The draft could not be saved. Nothing has changed.");
     }
     case "reset": {
       const def = typeof body.key === "string" ? policyDef(body.key) : undefined;

@@ -39,7 +39,7 @@ export default async function IndividualHome() {
         {learning && (
           <div className="mb-4">
             <StatePanel title="Competen Learning"
-              actions={<Link href="/individual/learning" className={`${primaryBtn} bg-teal-700`}>Open Competen Learning</Link>}>
+              actions={<Link href="/individual/learning" className={`${primaryBtn} bg-[var(--cmp-theme-accent)]`}>Open Competen Learning</Link>}>
               <p>Your courses, your learning record and any certificates are in Competen Learning. You do not need Competen Scholar or Competen Professional to use it.</p>
             </StatePanel>
           </div>

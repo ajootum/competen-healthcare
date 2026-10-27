@@ -2,8 +2,11 @@
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { PatternField } from "@/components/marketing/Pattern";
-import { enabledOAuthProviders } from "@/lib/oauth-providers";
+import { enabledOAuthProviders, safeNextPath } from "@/lib/oauth-providers";
 import { signInProductName } from "@/lib/individual/entry";
+import { DestinationChooser } from "./DestinationChooser";
+import type { PresentationConfig } from "@/lib/design/presentation-config";
+import { themeForName } from "@/lib/design/product-themes";
 
 // Login. Two-panel enterprise sign-in: brand panel left, form right, matching the approved design.
 //
@@ -81,7 +84,7 @@ export default function LoginPage() {
   // CLOSED with a retry -- access is never inferred from a failed read (s3).
   const [resolution, setResolution] = useState<
     | { state: "one"; destination: { name: string; href: string } }
-    | { state: "many"; destinations: { code: string; name: string; blurb: string; href: string }[] }
+    | { state: "many"; destinations: { code: string; name: string; blurb: string; href: string }[]; presentation?: Partial<PresentationConfig> }
     | { state: "none" }
     | { state: "unavailable" }
     | null
@@ -147,10 +150,12 @@ export default function LoginPage() {
       // idea why. `next` restores it, VALIDATED: a single leading slash only, so this cannot become an
       // open redirect ("//evil.example" parses as protocol-relative and is refused by the double-slash
       // test; anything with a scheme fails the leading-slash test).
-      const next = new URLSearchParams(window.location.search).get("next");
+      // COMPETEN-DESIGN-SYSTEM-01: the shared open-redirect guard (safeNextPath), not a second copy of the rule.
+      // It also refuses "://" anywhere and backslashes, which this page's own check used to let through.
+      const next = safeNextPath(new URLSearchParams(window.location.search).get("next"), "");
       // ⚠ A DESTINATION STILL BEING BUILT RESOLVES TO MY COMPETEN, where everything the account DOES
       // hold is one click away. Honouring the next would land them on a marketing page they just left.
-      if (next && next.startsWith("/") && !next.startsWith("//") && !BUILDING[next]) {
+      if (next && !BUILDING[next]) {
         // Explicit product intent overrides everything (COMP-ID-ROUTE s2/s10): a gateway sent them.
         window.location.href = next;
         return;
@@ -241,9 +246,10 @@ export default function LoginPage() {
               </div>
             )}
             {individualProduct && !resolution && (
-              <div className="mt-5 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
-                <p className="text-[13px] font-semibold text-teal-900">Signing in to {individualProduct}</p>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-teal-800">
+              // DESIGN-SYSTEM-01: the banner wears the theme of the experience being signed in to.
+              <div data-cmp-theme={themeForName(individualProduct)} className="mt-5 rounded-xl border border-[var(--cmp-theme-border)] bg-[var(--cmp-theme-soft)] px-4 py-3">
+                <p className="text-[13px] font-semibold text-[var(--cmp-theme-ink)]">Signing in to {individualProduct}</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-gray-800">
                   Use your Competen account: the email address your invitation was sent to. There is no
                   separate account for {individualProduct}.
                 </p>
@@ -263,22 +269,7 @@ export default function LoginPage() {
                 </Link>
               </div>
             )}
-            {resolution?.state === "many" && (
-              <div className="mt-7">
-                <p className="text-[14px] font-semibold text-gray-900">Where would you like to go?</p>
-                <ul className="mt-3 flex flex-col gap-2">
-                  {resolution.destinations.map(d => (
-                    <li key={d.code}>
-                      <Link href={d.href}
-                        className="block rounded-xl border border-gray-200 bg-white px-4 py-3 hover:border-[var(--cmp-color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--cmp-color-primary)]">
-                        <span className="block text-[13.5px] font-semibold text-gray-900">{d.name}</span>
-                        <span className="mt-0.5 block text-[12px] text-gray-600">{d.blurb}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {resolution?.state === "many" && <DestinationChooser destinations={resolution.destinations} presentation={resolution.presentation} />}
             {resolution?.state === "none" && (
               <div className="mt-7 rounded-2xl border border-gray-200 bg-white p-5">
                 <p className="text-[14px] font-semibold text-gray-900">Your Competen account is active</p>
