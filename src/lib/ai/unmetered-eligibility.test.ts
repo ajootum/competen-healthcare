@@ -14,7 +14,11 @@ import { getAiStanding, NOT_ELIGIBLE_REASON, runMeteredAi, unmeteredGate } from 
 import { activityState } from "../individual/scholar/ai-standing";
 
 const POLICY = {
-  includedCau: 4000, risk: { minTier: { standard_educational: "cheap", clinical_educational: "heavy", high_risk_clinical: "heavy" }, rules: [] },
+  includedCau: 4000, risk: { minTier: { standard_educational: "cheap", clinical_educational: "heavy", high_risk_clinical: "heavy" }, rules: [
+    // C1 (28 Oct 2026): the gate now classifies the subject, so the fixture needs rules a subject can match.
+    { id: "clinical", all: [["nurs*"]], tier: "clinical_educational", label: "Clinical", frameworks: [], competencyRisk: [] },
+    { id: "standard", all: [["revision"]], tier: "standard_educational", label: "Study", frameworks: [], competencyRisk: [] },
+  ] },
   activities: {
     teach: { tier: "reasoning", minTier: "cheap", riskFloor: "standard_educational" },
     questions: { tier: "heavy", minTier: "heavy", riskFloor: "clinical_educational" },
@@ -40,7 +44,7 @@ function admin(opts: { meteringOn?: boolean; policy?: any; policyError?: boolean
     rpc: async () => ({ data: null, error: { message: "metered path not expected" } }),
   };
 }
-const run = (a: any, activity: string) => runMeteredAi(a, { userId: "u", product: "scholar", activity, requestId: "u:r1", generate: { system: "s", user: "q", tier: "reasoning" } as any });
+const run = (a: any, activity: string, text = activity === "teach" ? "revision" : "nursing") => runMeteredAi(a, { userId: "u", product: "scholar", activity, requestId: "u:r1", generate: { system: "s", user: "q", tier: "reasoning" } as any, risk: { text } });
 
 beforeEach(() => generate.mockClear());
 
@@ -93,7 +97,7 @@ describe("metering OFF: eligibility still gates clinical-risk activities", () =>
   });
 
   it("the gate on its own: standard is unchanged (no tier), clinical needs the row", async () => {
-    expect(await unmeteredGate(admin({ rows: [] }), "scholar", "teach")).toEqual({ ok: true, tier: null, route: null });
-    expect(await unmeteredGate(admin({ rows: [OPUS("case_steps", "high_risk_clinical")] }), "scholar", "case_steps")).toEqual({ ok: true, tier: "heavy", route: { provider: "anthropic", model: "claude-opus-4-8" } });
+    expect(await unmeteredGate(admin({ rows: [] }), "scholar", "teach", "reasoning", { text: "revision" })).toMatchObject({ ok: true, tier: null, route: null });
+    expect(await unmeteredGate(admin({ rows: [OPUS("case_steps", "high_risk_clinical")] }), "scholar", "case_steps", "reasoning", { text: "nursing" })).toMatchObject({ ok: true, tier: "heavy", route: { provider: "anthropic", model: "claude-opus-4-8" } });
   });
 });

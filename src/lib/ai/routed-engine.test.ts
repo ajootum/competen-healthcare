@@ -11,7 +11,11 @@ vi.mock("./config", () => ({ AI_PROVIDERS: ["anthropic", "openai", "gemini"], ai
 import { getAiStanding, runMeteredAi } from "./allowance";
 
 const POLICY = {
-  includedCau: 4000, risk: { minTier: { standard_educational: "cheap", clinical_educational: "heavy", high_risk_clinical: "heavy" }, rules: [] },
+  includedCau: 4000, risk: { minTier: { standard_educational: "cheap", clinical_educational: "heavy", high_risk_clinical: "heavy" }, rules: [
+    // C1 (28 Oct 2026): the gate now classifies the subject, so the fixture needs rules a subject can match.
+    { id: "clinical", all: [["nurs*"]], tier: "clinical_educational", label: "Clinical", frameworks: [], competencyRisk: [] },
+    { id: "standard", all: [["revision"]], tier: "standard_educational", label: "Study", frameworks: [], competencyRisk: [] },
+  ] },
   activities: { teach: { tier: "reasoning", minTier: "cheap", riskFloor: "standard_educational" }, questions: { tier: "heavy", minTier: "heavy", riskFloor: "clinical_educational" } },
 };
 // OpenAI first for every tier, Anthropic second. This deployment has only an Anthropic key.
@@ -37,7 +41,7 @@ function admin(opts: { routing?: any; rows?: any[] }) {
     rpc: async () => ({ data: null, error: { message: "not expected" } }),
   };
 }
-const run = (a: any, activity: string) => runMeteredAi(a, { userId: "u", product: "scholar", activity, requestId: "u:r1", generate: { system: "s", user: "q", tier: "reasoning" } as any });
+const run = (a: any, activity: string) => runMeteredAi(a, { userId: "u", product: "scholar", activity, requestId: "u:r1", generate: { system: "s", user: "q", tier: "reasoning" } as any, risk: { text: activity === "teach" ? "revision" : "nursing" } });
 
 beforeEach(() => generate.mockClear());
 
