@@ -115,13 +115,16 @@ const checkPolicyPathsOnly = (src: Src): R => {
   const count = (re: RegExp) => (r.match(re) ?? []).length;
   // Two writes, each to a fixed kind of path: a policy catalogue path, and (LCPD-01 s11) the one Professional Learning and
   // CPD document, LCPD_PATH, only after checkLcpdDraft has refused anything invalid with 422, and (PROGRESS-01 PR7 s10.3)
-  // the one Document Studio document, DOCUMENTS_PATH, only after checkDocumentsDraft has refused anything invalid with 422.
-  return { ok: count(/\bsetOverride\(/g) === 3 && count(/\bresetOverride\(/g) === 1
+  // the one Document Studio document, DOCUMENTS_PATH, only after checkDocumentsDraft has refused anything invalid with 422,
+  // and (DESIGN-SYSTEM-01 s4) the one sign-in presentation document, PRESENTATION_PATH, only after checkPresentationDraft.
+  return { ok: count(/\bsetOverride\(/g) === 4 && count(/\bresetOverride\(/g) === 1
       && r.includes("setOverride(ctx.admin, actor, SCOPE, policyPath(v.def.key), v.settings)")
       && r.includes("setOverride(ctx.admin, actor, SCOPE, LCPD_PATH, v.settings)")
       && /const v = checkLcpdDraft\(body\.settings\);\s*if \(!v\.ok\) return refuse\(422/.test(r)
       && r.includes("setOverride(ctx.admin, actor, SCOPE, DOCUMENTS_PATH, v.settings)")
       && /const v = checkDocumentsDraft\(body\.settings, await loadDocumentsConfig\(ctx\.admin\)\);\s*if \(!v\.ok\) return refuse\(422/.test(r)
+      && r.includes("setOverride(ctx.admin, actor, SCOPE, PRESENTATION_PATH, v.settings)")
+      && /const v = checkPresentationDraft\(body\.settings\);\s*if \(!v\.ok\) return refuse\(422/.test(r)
       && r.includes("resetOverride(ctx.admin, actor, SCOPE, policyPath(def.key))")
       && /const v = validateDraft\(body\.key, body\.value\);\s*if \(!v\.ok\) return refuse\(422/.test(r),
     detail: "the route may write only catalogue paths, after validateDraft refuses out-of-range" };
@@ -252,6 +255,8 @@ function main() {
   red("W3 on an unvalidated documents write", checkPolicyPathsOnly(plant("route", "const v = checkDocumentsDraft(body.settings, await loadDocumentsConfig(ctx.admin));", "const v = { ok: true as const, settings: body.settings };")));
   red("W3 on a raw path through the LCPD write", checkPolicyPathsOnly(plant("route", "setOverride(ctx.admin, actor, SCOPE, LCPD_PATH, v.settings)", "setOverride(ctx.admin, actor, SCOPE, String(body.path), v.settings)")));
   red("W3 on the LCPD write without its check", checkPolicyPathsOnly(plant("route", "const v = checkLcpdDraft(body.settings);", "const v = { ok: true as const, settings: body.settings, error: \"\" };")));
+  red("W3 on a raw path through the presentation write", checkPolicyPathsOnly(plant("route", "setOverride(ctx.admin, actor, SCOPE, PRESENTATION_PATH, v.settings)", "setOverride(ctx.admin, actor, SCOPE, String(body.path), v.settings)")));
+  red("W3 on the presentation write without its check", checkPolicyPathsOnly(plant("route", "const v = checkPresentationDraft(body.settings);", "const v = { ok: true as const, settings: body.settings, error: \"\" };")));
   red("R1 on the reminder scan using the constant", checkConsumers(plant("reminders", "const horizonDays = (await loadIndividualPolicy(admin)).reminderHorizonDays;", "const horizonDays = REMINDER_HORIZON_DAYS;")));
   red("R1 on the upload cap reverting to the constant", checkConsumers(plant("uploads", "if (count >= maxMaterials)", "if (count >= MAX_MATERIALS_PER_PERSON)")));
   red("R1 on an AI route with only the estate quota", checkConsumers(plant("proAssistant", "const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));", "const quota = await checkAiQuota(ctx.admin, ctx.userId);")));
