@@ -390,8 +390,9 @@ const caseBrowserBoundary = (src: Src) => {
  */
 const privateCaseChecked = (src: Src) => {
   const g = src.get(GEN) ?? "", route = src.get(`${API}/clinical/cases/route.ts`) ?? "", clin = src.get(`${LIB}/clinical.ts`) ?? "", store = src.get(STORE) ?? "";
-  return /if \(!found\.length\) return \{ ok: true as const, blueprint, model, provider, promptVersion: PROMPT_VERSIONS\.caseBlueprint, problems \};/.test(g)
-    && /return \{ ok: true as const, blueprint: null, model, provider, promptVersion: PROMPT_VERSIONS\.caseBlueprint, problems \};/.test(g)
+  // SCHOLAR-AI-OPT-01: the returns may carry the attempts made and whether the model declared the notes insufficient.
+  return /if \(!found\.length\) return \{ ok: true as const, blueprint, model, provider, promptVersion: PROMPT_VERSIONS\.caseBlueprint, problems(, attempts: attempt, declaredInsufficient: false)? \};/.test(g)
+    && /return \{ ok: true as const, blueprint: null, model, provider, promptVersion: PROMPT_VERSIONS\.caseBlueprint, problems(, attempts: 2, declaredInsufficient: false)? \};/.test(g)
     && /if \(!r\.blueprint\) return NextResponse\.json/.test(route) && route.indexOf("if (!r.blueprint)") < route.indexOf("await insertPrivateCase(")
     && /facts, stages: used, decisionPoints, progression: \[\],/.test(clin)
     && /blueprint: input\.blueprint, review_status: "private_formative"/.test(store);

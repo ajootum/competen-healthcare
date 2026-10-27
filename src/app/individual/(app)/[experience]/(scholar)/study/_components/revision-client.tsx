@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AiFeedback } from "./ai-feedback";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
@@ -276,7 +277,7 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
             {items.map((i, n) => { const a = state.answered.find(x => x.questionId === i.id); return (
               <li key={i.id} className="rounded-xl border border-gray-200 p-3">
                 <p className="text-[14px] font-semibold text-gray-900">{n + 1}. {i.stem}</p>
-                {a?.feedback ? <FeedbackPanel f={a.feedback} sessionId={sid} compact />
+                {a?.feedback ? <FeedbackPanel f={a.feedback} sessionId={sid} compact questionId={i.id} />
                   : a?.selfGrade && sid ? <GradeAtEnd questionId={i.id} sessionId={sid} g={a.selfGrade} onGraded={graded} />
                     : <p className="text-[13px] text-gray-500">Not answered.</p>}
               </li>
@@ -353,7 +354,7 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
       <p className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-gray-500">{REVISION_FORMAT_LABEL[item.kind as RevisionFormat] ?? "Practice case step"}{item.difficulty ? ` · ${item.difficulty === 1 ? "easier" : item.difficulty === 3 ? "harder" : "standard"}` : ""}</p>
       <p className="mt-1 text-[16px] font-semibold leading-relaxed text-gray-900">{item.stem}</p>
       {answered ? (
-        fb ? <FeedbackPanel f={fb} sessionId={sessionId} /> : <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-700">Answer recorded. You will see how it went at the end of the session.</p>
+        fb ? <FeedbackPanel f={fb} sessionId={sessionId} questionId={item.id} /> : <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-700">Answer recorded. You will see how it went at the end of the session.</p>
       ) : item.kind === "flashcard" ? (
         !back ? <button type="button" className={`${btn} mt-4`} style={{ background: accent }} disabled={busy} onClick={reveal}>Show the answer</button> : (
           <div className="mt-4">
@@ -471,7 +472,7 @@ function GradeAtEnd({ questionId, sessionId, g, onGraded }: { questionId: string
   );
 }
 
-function FeedbackPanel({ f, sessionId, compact = false }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean }) {
+function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string }) {
   return (
     <div aria-live="polite" className={`mt-3 rounded-xl border p-4 ${f.correct ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
       <p className={`text-[14.5px] font-bold ${f.correct ? "text-emerald-900" : "text-red-900"}`}>
@@ -502,6 +503,8 @@ function FeedbackPanel({ f, sessionId, compact = false }: { f: RevisionFeedback;
         {/* CLINICAL-REASONING-01 CR1: from Revision, a case written from the same section. */}
         <Link href={`${studyHref("apply")}?section=${f.source.chunkId}&from=revision`} className={ghost}>Practise in a case</Link>
       </div>
+      {/* SCHOLAR-AI-OPT-01 s7: optional, one tap, about the AI-written question itself (not the student's answer). */}
+      <AiFeedback kind="question" target="question" refId={questionId} />
     </div>
   );
 }

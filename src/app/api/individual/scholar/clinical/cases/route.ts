@@ -6,15 +6,19 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { caseLibraryEnabled, loadCasePolicy } from "@/lib/cases/policy";
 import { findLibraryCases } from "@/lib/cases/library";
-import { caseHistory, getPassage, insertPrivateCase, listMaterials, listPrivateCases, sectionLinks } from "@/lib/individual/scholar/store";
+import { caseHistory, getPassage, insertPrivateCase, listMaterials, listPrivateCases, sectionLinks, storedPrivateCase } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { parseScope, resolveScope, type LearningScope } from "@/lib/individual/scholar/learn";
-import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
+import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk, routingVersion } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runCaseBlueprint } from "@/lib/individual/scholar/generation";
 import { startPrivatePlay } from "@/lib/individual/scholar/clinical-play";
-import { CASE_CONTEXT_LABEL, CASE_CONTEXTS, type CaseContext } from "@/lib/individual/scholar/config";
+import { CASE_CONTEXT_LABEL, CASE_CONTEXTS, PROMPT_VERSIONS, type CaseContext } from "@/lib/individual/scholar/config";
+import { REPEAT_REJECTED, caseReadiness } from "@/lib/individual/scholar/sufficiency";
+import { noCalls, recordScholarOutcome } from "@/lib/individual/scholar/outcome";
+import { materialKey, priorRejection } from "@/lib/ai/outcomes";
+import { randomUUID } from "node:crypto";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -31,6 +35,13 @@ export const dynamic = "force-dynamic";
 // blueprint and checked by clinical.ts; only a case that passes is stored (private_formative), and its session starts.
 // When new AI is not available, stored and library cases stay playable and the reply says so (Learning Continuity).
 // GET lists the student's own cases and their case history (private and library plays).
+//
+// SCHOLAR-AI-OPT-01, after the library and before any model is paid (no check on what IS written changes):
+//   reuse      a private case already written from exactly these sections, in this context, is offered (`fresh`)
+//   readiness  sufficiency.ts over the sections: no presentation and no action is not sent; a case question fits
+//              better is offered first (`attemptAnyway` is the learner's governed attempt)
+//   no repeat  exactly these sections, under the same prompt, configuration and routing, already rejected: not sent
+// Every action, sent or redirected, leaves one plat_ai_outcomes row (codes and counts only).
 
 const MAX_PASSAGES = 5;
 
@@ -88,19 +99,54 @@ export async function POST(req: Request) {
   if (pre) return pre;
   const passages = (await Promise.all(chunkIds.map(id => getPassage(ctx.admin, ctx.userId, id)))).filter((p): p is NonNullable<typeof p> => !!p);
   if (!passages.length) return NextResponse.json({ error: "Your notes could not be read just now." }, { status: 503 });
+
+  // ── SCHOLAR-AI-OPT-01: reuse, readiness, no identical repeat ──
+  const promptVersion = PROMPT_VERSIONS.caseBlueprint;
+  if (body?.fresh !== true) {
+    const stored = await storedPrivateCase(ctx.admin, ctx.userId, passages.map(p => p.chunkId), context, promptVersion);
+    if (stored) return NextResponse.json({ saved: stored, note: `You already have a case written from these sections ("${stored.title}"). Play it again, or have a new one written.` });
+  }
+  const readiness = caseReadiness(passages.map(p => p.content), "case_blueprint");
+  const configVersion = `${context};${[...policy.scholarCaseDimensions].sort().join(",")};${await routingVersion(ctx.admin)}`;
+  const key = materialKey({ userId: ctx.userId, activity: "case_blueprint", versions: [promptVersion, configVersion, ...competencyIds.slice().sort(), resolved.topic ?? ""], contents: passages.map(p => p.content) });
+  const redirect = async (reason: string, payload: Record<string, unknown>) => {
+    await recordScholarOutcome(ctx.admin, noCalls(randomUUID()), {
+      operation: "individual_scholar_case_blueprint", outputKind: "case", outcome: "redirected", reasons: [reason], sufficiency: readiness.outcome, promptVersion, configVersion, materialKey: key,
+    });
+    return NextResponse.json(payload, { status: 422 });
+  };
+  const sectionIds = passages.map(p => p.chunkId), materialId = passages[0].materialId;
+  if (readiness.outcome === "insufficient" || (readiness.outcome === "simpler" && body?.attemptAnyway !== true))
+    return redirect(`sufficiency_${readiness.outcome}`, {
+      error: readiness.message, sufficiency: { outcome: readiness.outcome, message: readiness.message, alternative: readiness.alternative, missing: readiness.missing, canAttempt: readiness.outcome === "simpler", sectionIds, materialId },
+    });
+  if (await priorRejection(ctx.admin, key))
+    return redirect("repeat_rejected", { error: REPEAT_REJECTED, repeat: true, sufficiency: { outcome: readiness.outcome, message: REPEAT_REJECTED, alternative: "case_question", canAttempt: false, sectionIds, materialId } });
+
   const titles = new Map((learner.competencies ?? []).map(c => [c.id, c]));
   const comps = competencyIds.map(id => ({ id, title: titles.get(id)?.title ?? "A competency", outcomes: titles.get(id)?.outcomes ?? [] }));
   const ai = scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { text: resolved.topic, passages, competencyIds }));
   const r = await runCaseBlueprint(ctx.userId, { passages, competencies: comps, context: CASE_CONTEXT_LABEL[context], dimensions: policy.scholarCaseDimensions, asked: resolved.topic }, ai.run);
   const refusal = ai.refusal();
   if (refusal) return NextResponse.json({ error: `${refusalWords(refusal).message} Your stored ${libraryOn ? "and library cases are" : "cases are"} still yours to play.`, continuity: true }, { status: 409 });
+  await recordScholarOutcome(ctx.admin, ai, {
+    operation: "individual_scholar_case_blueprint", outputKind: "case", sufficiency: readiness.outcome, promptVersion, configVersion, materialKey: key,
+    ...(!r.ok ? { outcome: "error" as const, reasons: [`error_${r.error}`] }
+      : r.blueprint ? { outcome: "accepted" as const, accepted: 1, reasons: r.problems }
+        : { outcome: "rejected" as const, rejected: 1, reasons: r.problems }),
+  });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_blueprint", null, {
     // Why a draft was refused, by the check's own words (kinds and the token or rule, never the case text).
     entry, context, chunk_ids: chunkIds, outcome: !r.ok ? `error:${r.error}` : r.blueprint ? "stored" : "withheld", problems: r.ok ? [...new Set(r.problems)].slice(0, 12) : [],
-    model: r.ok ? r.model : null, prompt_version: r.ok ? r.promptVersion : null,
+    model: r.ok ? r.model : null, prompt_version: r.ok ? r.promptVersion : null, sufficiency: readiness.outcome, action_id: ai.actionId,
   });
   if (!r.ok) return NextResponse.json({ error: "A case could not be written just now. Try again shortly." }, { status: 502 });
-  if (!r.blueprint) return NextResponse.json({ error: "A case could not be written from these notes without adding things they do not say, so none was kept. Try other sections, or more of your notes." }, { status: 422 });
+  if (!r.blueprint) return NextResponse.json({
+    error: r.declaredInsufficient
+      ? "These notes do not describe enough of a patient's care for a case, so none was written. A case question from the same sections may work, or add notes that describe a patient's assessment and care."
+      : "A case could not be written from these notes without adding things they do not say, so none was kept. Try a case question from these sections, other sections, or more of your notes.",
+    sufficiency: { outcome: readiness.outcome, alternative: "case_question", canAttempt: false, sectionIds, materialId },
+  }, { status: 422 });
   const made = await insertPrivateCase(ctx.admin, ctx.userId, {
     materialId: passages[0].materialId, title: r.blueprint.title, origin: entry, context, blueprint: r.blueprint, model: r.model, promptVersion: r.promptVersion,
     chunkIds, competencyIds: [...new Set(r.blueprint.learningObjectives.flatMap(l => l.competencyIds))],

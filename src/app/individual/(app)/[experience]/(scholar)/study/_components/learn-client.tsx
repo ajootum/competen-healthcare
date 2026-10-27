@@ -8,6 +8,7 @@ import type { SessionView } from "@/lib/individual/scholar/learn-view";
 import { sourceHref } from "./question-view";
 import { AiBadge } from "./client";
 import { AiFlagList, GovernedReferenceList } from "./learn-kinds";
+import { AiFeedback } from "./ai-feedback";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -37,6 +38,8 @@ type Reply = {
   provenance?: { model: string; promptVersion: string }; error?: string;
   /** s8: a saved artefact returned instead of a new AI call. */
   saved?: { at: string; reviewStatus: string } | null; savedForLater?: boolean;
+  /** SCHOLAR-AI-OPT-01: what learner feedback is about -- the saved explanation, or the action that wrote it. */
+  artefactId?: string; actionId?: string;
   /** s7: no new AI now; what is saved for these sections. */
   continuity?: { message: string; insufficient: boolean }; savedList?: Reply[];
 };
@@ -417,6 +420,9 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase }: { car
       )}
       {r.savedForLater && <p className="mt-2 text-[12px] text-gray-500">Saved to your learning, so you can come back to it without using AI again.</p>}
       {r.provenance && <p className="mt-2 text-[11px] text-gray-400">Model {r.provenance.model} · prompt {r.provenance.promptVersion}</p>}
+      {!r.withheld && r.answer && r.action !== "check" && !compact && (
+        <AiFeedback kind="explanation" target={r.artefactId ? "artefact" : "action"} refId={r.artefactId ?? r.actionId} />
+      )}
     </article>
   );
 }

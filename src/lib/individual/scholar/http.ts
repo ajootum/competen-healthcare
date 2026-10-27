@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
@@ -8,7 +9,8 @@ import type { IndividualContext } from "../guard";
 import { readConsent, sectionLinks, topicsOfSections } from "./store";
 import { consentDocuments, consentStatus } from "./consent-gate";
 import { CONSENT_AWAITING_LEGAL, CONSENT_UPDATED } from "./config";
-import { isMeteredRefusal, meteredRefusalBody, requestIdFor, runMeteredAi, runOwnedAi, type MeteredRefusal } from "@/lib/ai/allowance";
+import { isMeteredRefusal, loadModelRouting, meteredRefusalBody, requestIdFor, runMeteredAi, runOwnedAi, type MeteredRefusal } from "@/lib/ai/allowance";
+import { sha256Hex } from "@/lib/ai/outcomes";
 import type { ResolvedOwner } from "@/lib/ai/consumption";
 import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
 import type { RiskContext } from "@/lib/ai/clinical-risk";
@@ -101,19 +103,28 @@ export async function scholarRisk(admin: unknown, userId: string, input: {
 /** The request id the engine reserves against: the caller's, from the client's retry key when it is well formed. */
 export const scholarRequestId = (ctx: IndividualContext, req: Request) => requestIdFor(ctx.userId, req.headers.get("x-request-id"));
 
-export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext, callKey?: string): { run: ScholarAiRun; refusal: () => MeteredRefusal | null } {
+export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext, callKey?: string): { run: ScholarAiRun; refusal: () => MeteredRefusal | null; actionId: string; calls: () => Record<string, number> } {
   // `callKey`: one student action that makes several separate generations (a revision session filling its shortfall)
   // gives each its own deterministic id, `:g1`, `:g2` ..., so each is its own idempotent reservation.
   const requestId = callKey ? `${scholarRequestId(ctx, req)}:${callKey}` : scholarRequestId(ctx, req);
   let refused: MeteredRefusal | null = null;
+  // SCHOLAR-AI-OPT-01: every call of this one student action carries the same action id (plat_ai_requests.action_id),
+  // so its cost can be set against what it produced (plat_ai_outcomes). `calls` counts the calls made, by part.
+  const actionId = randomUUID();
+  const made: Record<string, number> = {};
   const run: ScholarAiRun = async (g, part = "main") => {
     if (refused) return { ok: false, error: "failed", detail: "metered" } as GenerateResult;
+    made[part] = (made[part] ?? 0) + 1;
+    g = withAction(g, actionId);
     const x = await runMeteredAi(ctx.admin, { userId: ctx.userId, product: "scholar", activity, requestId: part === "main" ? requestId : `${requestId}:${part}`, generate: g, risk });
     if (isMeteredRefusal(x)) { refused = x; return { ok: false, error: "failed", detail: "metered" } as GenerateResult; }
     return x;
   };
-  return { run, refusal: () => refused };
+  return { run, refusal: () => refused, actionId, calls: () => ({ ...made }) };
 }
+
+/** The same request, tagged with the student action it belongs to. Nothing else about it changes. */
+const withAction = (g: GenerateArgs, actionId: string): GenerateArgs => ({ ...g, context: { ...g.context, actionId } });
 
 /**
  * CLINICAL-REASONING-01: a Scholar call whose spend owner the consumption-ownership rules resolved (resolveOwner, by
@@ -141,4 +152,14 @@ export function meteredRefusal(refusal: MeteredRefusal | null): NextResponse | n
   if (!refusal) return null;
   const m = meteredRefusalBody(refusal);
   return NextResponse.json(m.body, { status: m.status });
+}
+
+
+/**
+ * A short fingerprint of the published Holdings model routing (read, never changed). Part of the identical-retry key:
+ * when the owner changes routing, the conditions changed, and a retry is allowed.
+ */
+export async function routingVersion(admin: unknown): Promise<string> {
+  const r = await loadModelRouting(admin).catch(() => null);
+  return r ? `routing:${sha256Hex(JSON.stringify(r)).slice(0, 12)}` : "routing:unreadable";
 }

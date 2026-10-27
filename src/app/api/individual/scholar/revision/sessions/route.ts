@@ -2,6 +2,8 @@
 export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
+import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
+import { outcomeOf } from "@/lib/ai/outcomes";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { leadingCompetency } from "@/lib/competency/mapping";
@@ -145,11 +147,12 @@ export async function POST(req: Request) {
             const ai = scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`);
             const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
             let ids: string[] = [], outcome = "";
+            let measured: { accepted: number; rejected: number; reasons: string[]; promptVersion: string | null } | null = null;
             if (call.kind === "mcq") {
               // Each call asks for up to three: the checks drop some, and what is kept beyond this session is saved
               // for the next one (reuse first), never written again.
               const r = await runQuestions(ctx.userId, "mcq", passage, Math.max(call.count, 3), ai.run);
-              if (r.ok) { const s = await insertQuestions(ctx.admin, ctx.userId, { passage, kind: "mcq", drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId }); ids = s.ids; outcome = `kept:${ids.length}`; }
+              if (r.ok) { const s = await insertQuestions(ctx.admin, ctx.userId, { passage, kind: "mcq", drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId }); ids = s.ids; outcome = `kept:${ids.length}`; measured = { accepted: ids.length, rejected: r.check.dropped.length, reasons: r.check.dropped.map(d => d.reason), promptVersion: r.promptVersion }; }
               else outcome = `error:${r.error}`;
             } else {
               const r = await runRevisionQuestions(ctx.userId, call.kind, passage, Math.max(call.count, 3), ai.run);
@@ -157,11 +160,17 @@ export async function POST(req: Request) {
                 const s = await insertRevisionQuestions(ctx.admin, ctx.userId, { passage, kind: call.kind, drafts: r.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
                 // The reasons items were dropped, counted (never their text): what the checks are refusing.
                 const why = [...new Set(r.dropped)].map(x => `${x}:${r.dropped.filter(y => y === x).length}`).join("/");
-                ids = s.ok ? s.ids : []; outcome = s.ok ? `kept:${ids.length},dropped:${r.dropped.length}${why ? `(${why})` : ""}` : s.notProvisioned ? "not_provisioned" : "save_failed";
+                ids = s.ok ? s.ids : []; measured = { accepted: ids.length, rejected: r.dropped.length, reasons: [...r.dropped, ...(s.ok ? [] : ["save_failed"])], promptVersion: r.promptVersion };
+                outcome = s.ok ? `kept:${ids.length},dropped:${r.dropped.length}${why ? `(${why})` : ""}` : s.notProvisioned ? "not_provisioned" : "save_failed";
               } else outcome = `error:${r.error}`;
             }
             const refusal = ai.refusal();
             if (refusal) { note = `${refusalWords(refusal).message} This session uses your saved questions.`; refused = true; break; }
+            // SCHOLAR-AI-OPT-01: one outcome per generation call, codes and counts only.
+            await recordScholarOutcome(ctx.admin, ai, {
+              operation: call.kind === "mcq" ? "individual_scholar_mcq" : `individual_scholar_revision_${call.kind}`, outputKind: "question",
+              ...(measured ? { outcome: outcomeOf(measured.accepted, measured.rejected), ...measured } : { outcome: "error" as const, reasons: [outcome.replace(/:/g, "_")] }),
+            });
             await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_revision_generate", null, { chunk_id: passage.chunkId, kind: call.kind, asked: call.count, outcome, competency_id: competencyId });
             made += ids.length;
           }

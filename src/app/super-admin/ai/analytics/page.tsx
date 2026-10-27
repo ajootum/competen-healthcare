@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAiAnalytics } from "@/lib/super-admin/ai-analytics";
 import AskPanel from "../_components/AskPanel";
+import QualityCostPanel from "../_components/QualityCostPanel";
+import { loadAiQuality } from "@/lib/ai/outcomes";
 import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +30,7 @@ export default async function IntelligenceAnalytics() {
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
   await requireHqCapability("hq.platform.ai.view");
 
-  const d = await loadAiAnalytics(admin);
+  const [d, quality] = await Promise.all([loadAiAnalytics(admin), loadAiQuality(admin, 14)]);
   const k = d.kpis;
 
   const kpiCards = [
@@ -70,6 +72,9 @@ export default async function IntelligenceAnalytics() {
           </div>
         ))}
       </div>
+
+      {/* COMPETEN-SCHOLAR-AI-OPT-01: cost per ACCEPTED output, rejections and their cost, learner feedback. */}
+      <QualityCostPanel q={quality} />
 
       {/* Live telemetry generator — every ask records a real plat_ai_requests row
           that immediately feeds the analytics below (reload to see it land). */}

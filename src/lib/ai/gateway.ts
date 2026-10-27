@@ -48,6 +48,8 @@ export type AiUsageEntry = {
   inputTokens?: number | null; outputTokens?: number | null; latencyMs?: number | null;
   status: "ok" | "refusal" | "error" | "not_configured"; error?: string | null;
   actorId?: string | null; attribution?: AiAttribution | null;
+  /** The learner action this call belonged to (migration 600, COMPETEN-SCHOLAR-AI-OPT-01). One action, many calls. */
+  actionId?: string | null;
 };
 
 // The identifier columns one attribution writes. workspace_id and attribution_scope arrive with
@@ -77,13 +79,18 @@ export async function recordAiUsage(e: AiUsageEntry) {
       latency_ms: e.latencyMs ?? null, status: e.status, error: e.error ? String(e.error).slice(0, 500) : null,
       cost_usd: estimateCost(e.model, input, output),
     };
-    let { error } = await admin.from("plat_ai_requests").insert({ ...row, workspace_id, attribution_scope });
-    // ⚠ BEFORE MIGRATION 371 IS APPLIED the two columns do not exist and PostgREST refuses the whole row
-    // (PGRST204). Land it without them -- usage counted, workspace unattributed -- rather than lose it.
-    // Only for THOSE two columns: PGRST204 names whichever column is missing, and any other missing
-    // column is a real schema fault that must be reported below, not retried around.
-    if (error?.code === "PGRST204" && /'(workspace_id|attribution_scope)'/.test(error.message ?? ""))
-      ({ error } = await admin.from("plat_ai_requests").insert(row));
+    // ⚠ BEFORE MIGRATION 371 (workspace_id, attribution_scope) OR 600 (action_id) IS APPLIED the column does not
+    // exist and PostgREST refuses the whole row (PGRST204, naming the column). Land it without that column -- usage
+    // counted, unattributed or ungrouped -- rather than lose it. Only for THOSE columns: any other missing column is
+    // a real schema fault that must be reported below, not retried around.
+    const optional: Record<string, unknown> = { workspace_id, attribution_scope, ...(e.actionId ? { action_id: e.actionId } : {}) };
+    let { error } = await admin.from("plat_ai_requests").insert({ ...row, ...optional });
+    for (let i = 0; i < 2 && error?.code === "PGRST204"; i++) {
+      const m = /'(workspace_id|attribution_scope|action_id)'/.exec(error.message ?? "");
+      if (!m) break;
+      if (m[1] === "action_id") delete optional.action_id; else { delete optional.workspace_id; delete optional.attribution_scope; }
+      ({ error } = await admin.from("plat_ai_requests").insert({ ...row, ...optional }));
+    }
     if (error) console.error(`${what}: ${error.message}`);
   } catch (err) {
     console.error(`${what}: ${String((err as Error)?.message ?? err)}`);

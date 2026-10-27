@@ -653,14 +653,21 @@ export async function runCaseBlueprint(userId: string, input: {
     model = r.model; provider = r.provider;
     const raw = (() => { const s = r.text.replace(/```(?:json)?/gi, "").trim(); const a = s.indexOf("{"), b = s.lastIndexOf("}"); try { return a >= 0 && b > a ? JSON.parse(s.slice(a, b + 1)) : null; } catch { return null; } })();
     if (!raw) { problems.push(`malformed:json (${r.text.length} chars)`); feedback = "the reply was not valid JSON -- reply with the JSON object only, and keep it short"; continue; }
+    // SCHOLAR-AI-OPT-01: the prompt's own answer for passages that cannot support a case is {"stages": []}. That is the
+    // model saying the notes are not enough, not a malformed reply, so it is not asked again (a retry told "the case
+    // needs two to four stages" only presses it to invent). Nothing is stored, exactly as for any withheld case.
+    if (Array.isArray(raw.stages) && raw.stages.length === 0) {
+      problems.push("source_insufficient:declared by the model");
+      return { ok: true as const, blueprint: null, model, provider, promptVersion: PROMPT_VERSIONS.caseBlueprint, problems, attempts: attempt, declaredInsufficient: true };
+    }
     const blueprint = blueprintFromDraft(raw, { passages: input.passages, competencies: input.competencies, dimensions: input.dimensions });
     if (!blueprint) { problems.push(`malformed:shape (${list0(raw.stages)} stages, ${list0(raw.decisions)} decisions)`); feedback = "the case needs two to four stages, each with one decision with its options"; continue; }
     const found = checkPrivateCase(blueprint, [...input.passages.map(p => p.content), input.asked ?? ""], input.dimensions);
-    if (!found.length) return { ok: true as const, blueprint, model, provider, promptVersion: PROMPT_VERSIONS.caseBlueprint, problems };
+    if (!found.length) return { ok: true as const, blueprint, model, provider, promptVersion: PROMPT_VERSIONS.caseBlueprint, problems, attempts: attempt, declaredInsufficient: false };
     problems.push(...found.map(f => `${f.kind}:${f.detail.slice(0, 80)}`));
     feedback = [...new Set(found.map(f => `${f.kind}${f.detail ? ` (${f.detail})` : ""}`))].slice(0, 6).join("; ");
   }
-  return { ok: true as const, blueprint: null, model, provider, promptVersion: PROMPT_VERSIONS.caseBlueprint, problems };
+  return { ok: true as const, blueprint: null, model, provider, promptVersion: PROMPT_VERSIONS.caseBlueprint, problems, attempts: 2, declaredInsufficient: false };
 }
 
 export const CASE_REASONING_SYSTEM = [
@@ -756,7 +763,8 @@ export async function runCase(userId: string, passage: Passage, run: AiRun = dir
   let model = "", provider = "";
   let attempts = 0;
   let feedback = "";
-  while (attempts < 2 && steps.length < CASE_MIN_STEPS) {
+  let declaredInsufficient = false;
+  while (attempts < 2 && steps.length < CASE_MIN_STEPS && !declaredInsufficient) {
     attempts++;
     const r = await run({
       system: CASE_SYSTEM,
@@ -769,6 +777,9 @@ export async function runCase(userId: string, passage: Passage, run: AiRun = dir
     model = r.model; provider = r.provider;
     const parsed = parseCase(r.text);
     if (!parsed) { dropped.push({ reason: "malformed" }); feedback = "malformed"; continue; }
+    // SCHOLAR-AI-OPT-01: {"steps": []} is CASE_SYSTEM's own answer for a passage that cannot support the steps. It is
+    // the model saying the notes are not enough, so the same passage is not sent again.
+    if (!parsed.steps.length) { declaredInsufficient = true; break; }
     const check = checkQuestions(JSON.stringify(parsed.steps), passage, CASE_MAX_STEPS, CASE_MAX_STEPS);
     dropped.push(...check.dropped);
     if (check.kept.length >= CASE_MIN_STEPS) {
@@ -792,7 +803,7 @@ export async function runCase(userId: string, passage: Passage, run: AiRun = dir
     feedback = [...new Set(dropped.map(d => d.detail ? `${d.reason} (${d.detail})` : d.reason))].slice(0, 6).join("; ");
   }
   return {
-    ok: true as const, title, steps, dropped, model, provider, attempts,
+    ok: true as const, title, steps, dropped, model, provider, attempts, declaredInsufficient,
     promptVersion: `${PROMPT_VERSIONS.caseSteps}+${PROMPT_VERSIONS.verify}`,
   };
 }
@@ -808,7 +819,8 @@ export async function runQuestions(userId: string, kind: QuestionKind, passage: 
   let model = "", provider = "";
   let attempts = 0;
   let feedback = "";
-  while (attempts < 2 && kept.length === 0) {
+  let declaredInsufficient = false;
+  while (attempts < 2 && kept.length === 0 && !declaredInsufficient) {
     attempts++;
     const r = await run({
       system: QUESTION_SYSTEM[kind],
@@ -822,6 +834,9 @@ A previous attempt was rejected for: ${feedback}. Write new questions that avoid
     if (!r.ok) return { ok: false, error: r.error } as AiFailure;
     model = r.model; provider = r.provider;
     const check = checkQuestions(r.text, passage, limit);
+    // SCHOLAR-AI-OPT-01: for case questions, [] is the prompt's own answer for a passage that cannot support a scenario
+    // (QUESTION_SYSTEM.case). Not asked again. Multiple-choice questions keep their one retry: [] is not defined there.
+    if (kind === "case" && parseJsonArray(r.text)?.length === 0) { declaredInsufficient = true; break; }
     dropped.push(...check.dropped);
     if (check.kept.length) {
       const v = await run({
@@ -843,7 +858,7 @@ A previous attempt was rejected for: ${feedback}. Write new questions that avoid
     feedback = [...new Set(dropped.map(d => d.detail ? `${d.reason} (${d.detail})` : d.reason))].slice(0, 6).join("; ");
   }
   return {
-    ok: true as const, check: { kept, dropped }, model, provider, attempts,
+    ok: true as const, check: { kept, dropped }, model, provider, attempts, declaredInsufficient,
     promptVersion: `${PROMPT_VERSIONS[kind]}+${PROMPT_VERSIONS.verify}`,
   };
 }

@@ -2151,3 +2151,88 @@ export async function materialOriginal(admin: Admin, userId: string, id: string)
   const { data } = await admin.from("individual_scholar_material").select("storage_path, extractor").eq("user_id", userId).eq("id", id).maybeSingle();
   return data ? { path: (data as any).storage_path, extractor: (data as any).extractor ?? "" } : null;
 }
+// ── WHAT THE STUDENT ALREADY HAS, BEFORE ANYTHING NEW IS WRITTEN ── COMPETEN-SCHOLAR-AI-OPT-01 (Wave 2, s6) ─────────
+//
+// Saved private content is offered again before new AI is paid for: unanswered questions on a section, a step-by-step
+// case already written from it, a private case already written from the same sections. Learn's saved explanations
+// (learn/act, artefactKey) and Revise's reuse-first pool (revision/sessions) already do this and are not touched.
+// The student can always ask for a new one (`fresh`): this offers, it never refuses.
+//
+// Only the caller's own rows, by user_id, and only at the CURRENT prompt version: content written under an older
+// prompt is not offered as if it were what the student would get now. Unreadable is "nothing saved" -- the request
+// goes ahead exactly as before.
+
+/** How many of the student's questions of this kind on this section, at this prompt version, they have never answered. */
+export async function unansweredQuestions(admin: Admin, userId: string, chunkId: string, kind: "mcq" | "case", promptVersion: string): Promise<number> {
+  try {
+    const q = await admin.from("individual_scholar_question").select("id")
+      .eq("user_id", userId).eq("chunk_id", chunkId).eq("kind", kind).eq("prompt_version", promptVersion).is("case_id", null).limit(50);
+    const ids = ((q.data ?? []) as { id: string }[]).map(r => r.id);
+    if (q.error || !ids.length) return 0;
+    const a = await admin.from("individual_scholar_attempt").select("question_id").eq("user_id", userId).in("question_id", ids);
+    if (a.error) return 0;
+    const answered = new Set(((a.data ?? []) as { question_id: string }[]).map(r => r.question_id));
+    return ids.filter(id => !answered.has(id)).length;
+  } catch { return 0; }
+}
+
+/** The newest step-by-step case already written from this section at this prompt version, or null. */
+export async function storedStepCase(admin: Admin, userId: string, chunkId: string, promptVersion: string): Promise<{ caseId: string; title: string } | null> {
+  try {
+    const { data, error } = await admin.from("individual_scholar_question").select("case_id, case_title")
+      .eq("user_id", userId).eq("chunk_id", chunkId).eq("kind", "case").eq("case_step", 1).eq("prompt_version", promptVersion)
+      .not("case_id", "is", null).order("created_at", { ascending: false }).limit(1);
+    if (error || !data?.length) return null;
+    return { caseId: data[0].case_id, title: data[0].case_title ?? "Practice case" };
+  } catch { return null; }
+}
+
+/** The newest private case written from exactly these sections, in this clinical context, at this prompt version. */
+export async function storedPrivateCase(admin: Admin, userId: string, chunkIds: readonly string[], context: string, promptVersion: string): Promise<{ caseId: string; title: string } | null> {
+  try {
+    const want = [...new Set(chunkIds)].sort();
+    if (!want.length) return null;
+    const c = await admin.from("individual_scholar_case").select("id, title")
+      .eq("user_id", userId).eq("context", context).eq("prompt_version", promptVersion).order("created_at", { ascending: false }).limit(30);
+    const cases = (c.data ?? []) as { id: string; title: string }[];
+    if (c.error || !cases.length) return null;
+    const s = await admin.from("individual_scholar_case_source").select("case_id, chunk_id").eq("user_id", userId).in("case_id", cases.map(x => x.id));
+    if (s.error) return null;
+    const by = new Map<string, string[]>();
+    for (const r of (s.data ?? []) as { case_id: string; chunk_id: string }[]) by.set(r.case_id, [...(by.get(r.case_id) ?? []), r.chunk_id]);
+    const same = cases.find(x => { const got = [...new Set(by.get(x.id) ?? [])].sort(); return got.length === want.length && got.every((v, i) => v === want[i]); });
+    return same ? { caseId: same.id, title: same.title } : null;
+  } catch { return null; }
+}
+
+// ── SCHOLAR-AI-OPT-01: THE OUTPUT BEHIND A LEARNER'S FEEDBACK (feedback.ts) ──
+
+const FEEDBACK_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export type ResolvedOutput = { kind: import("@/lib/ai/outcomes").AiOutputKind; activity: string; promptVersion: string | null; actionId: string | null };
+
+/** The caller's own output behind a feedback request, or null when it is not theirs (or not readable). */
+export async function resolveFeedbackTarget(admin: any, userId: string, target: import("./feedback").FeedbackTarget, ref: string): Promise<ResolvedOutput | null> {
+  if (!FEEDBACK_UUID.test(ref)) return null;
+  try {
+    if (target === "artefact") {
+      const { data } = await admin.from("individual_scholar_artefact").select("action, prompt_version").eq("user_id", userId).eq("id", ref).maybeSingle();
+      return data ? { kind: "explanation", activity: `learn:${data.action}`, promptVersion: data.prompt_version, actionId: null } : null;
+    }
+    if (target === "question") {
+      const { data } = await admin.from("individual_scholar_question").select("kind, prompt_version").eq("user_id", userId).eq("id", ref).maybeSingle();
+      return data ? { kind: "question", activity: data.kind, promptVersion: data.prompt_version, actionId: null } : null;
+    }
+    if (target === "case") {
+      const { data } = await admin.from("individual_scholar_case").select("prompt_version").eq("user_id", userId).eq("id", ref).maybeSingle();
+      return data ? { kind: "case", activity: "case_blueprint", promptVersion: data.prompt_version, actionId: null } : null;
+    }
+    if (target === "step_case") {
+      const { data } = await admin.from("individual_scholar_question").select("prompt_version").eq("user_id", userId).eq("case_id", ref).limit(1);
+      return data?.length ? { kind: "case", activity: "case_steps", promptVersion: data[0].prompt_version, actionId: null } : null;
+    }
+    // An unstored explanation: the action that produced it, which must be a Scholar outcome. The feedback key carries the
+    // caller's id, so naming someone else's action only ever writes the caller's own single row.
+    const { data } = await admin.from("plat_ai_outcomes").select("activity, output_kind, prompt_version").eq("action_id", ref).eq("product", "scholar").maybeSingle();
+    return data ? { kind: data.output_kind, activity: data.activity, promptVersion: data.prompt_version, actionId: ref } : null;
+  } catch { return null; }
+}

@@ -24,7 +24,7 @@ export type GenerateArgs = {
   // Optional attribution for the AI Runtime Gateway usage log (PFS-000 §15).
   // Usage (tokens/latency/cost/status) is always recorded; context adds who/what. The scope says which
   // kind of id the caller holds -- see AiAttribution for why there is no bare tenantId here.
-  context?: { userId?: string | null; operation?: string; attribution?: AiAttribution };
+  context?: { userId?: string | null; operation?: string; attribution?: AiAttribution; actionId?: string };
   /**
    * The provider and model the Holdings routing chose (model-routing.ts), already gated for eligibility by the engine.
    * Absent: this deployment's primary provider and its model for `tier`, exactly as before.
@@ -293,6 +293,7 @@ export async function generate(
     model,
     actorId: context?.userId ?? null,
     attribution: context?.attribution ?? null,
+    actionId: context?.actionId ?? null,
   };
 
   const t0 = Date.now();

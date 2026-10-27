@@ -7,6 +7,7 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
 import { CASE_CONTEXT_LABEL, CASE_DIMENSION_LABEL, CASE_ENTRY_LABEL, MARKING_LABEL, type CaseContext, type CaseEntry } from "@/lib/individual/scholar/config";
 import type { LearnerView } from "@/lib/cases/blueprint";
+import { AiFeedback } from "./ai-feedback";
 
 // CLINICAL REASONING -- COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (Stage 5A), the student's side.
 // A case shows only what the student has reached: the findings revealed so far and the decisions of the stages reached
@@ -32,6 +33,8 @@ async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok:
 const caseHref = (kind: string, id: string) => `${studyHref("apply/case")}?kind=${kind}&session=${id}`;
 
 type Offer = { versionId: string; title: string; intro: string | null; level: string };
+/** SCHOLAR-AI-OPT-01: why a case was not written from these notes, and what to do instead (sufficiency.ts). */
+type Readiness = { outcome: string; message?: string | null; alternative: "case_question" | "teach" | null; canAttempt: boolean; sectionIds?: string[]; materialId?: string };
 
 // ── START A CASE ──
 
@@ -51,9 +54,13 @@ export function CaseStart(props: {
   const [offers, setOffers] = useState<{ list: Offer[]; note: string } | null>(null);
   // Learning Continuity: a new case is not available, which is a state to explain, not an error.
   const [continuity, setContinuity] = useState("");
+  // SCHOLAR-AI-OPT-01: a case already written from these sections, or why these notes suit something else better.
+  const [saved, setSaved] = useState<{ caseId: string; title: string; note: string } | null>(null);
+  const [readiness, setReadiness] = useState<(Readiness & { error: string }) | null>(null);
+  const [alt, setAlt] = useState("");
 
-  async function begin(generateAnyway = false) {
-    setBusy(true); setError(""); setContinuity("");
+  async function begin(generateAnyway = false, opts: { fresh?: boolean; attemptAnyway?: boolean } = {}) {
+    setBusy(true); setError(""); setContinuity(""); setSaved(null); setReadiness(null); setAlt("");
     if (entry === "library") {
       const r = await call(`/api/individual/scholar/clinical/library${competency ? `?competency=${competency}` : ""}`, undefined, "GET");
       setBusy(false);
@@ -63,12 +70,21 @@ export function CaseStart(props: {
     }
     const scope = props.preset?.chunkId ? { kind: "section", chunkId: props.preset.chunkId }
       : entry === "competency" ? { kind: "competency", competencyId: competency } : entry === "surprise" ? null : { kind: "document", materialId: material };
-    const r = await call("/api/individual/scholar/clinical/cases", { entry, scope, context, mode, generateAnyway });
+    const r = await call("/api/individual/scholar/clinical/cases", { entry, scope, context, mode, generateAnyway, ...opts });
     setBusy(false);
     if (r.ok && r.json.offers) { setOffers({ list: r.json.offers, note: r.json.note }); return; }
+    if (r.ok && r.json.saved) { setSaved({ ...r.json.saved, note: r.json.note }); return; }
+    if (!r.ok && r.json.sufficiency) { setReadiness({ ...r.json.sufficiency, error: r.json.error ?? r.json.sufficiency.message ?? "A case could not be written from these notes." }); return; }
     if (!r.ok && r.json.continuity) { setContinuity(r.json.error ?? "A new case cannot be written right now."); return; }
     if (!r.ok) { setError(r.json.error ?? "A case could not be started."); return; }
     router.push(caseHref("private", r.json.play.sessionId));
+  }
+  // The simpler activity on the same notes: one case question, written and kept only if it passes every check.
+  async function caseQuestion(chunkId: string) {
+    setBusy(true); setAlt("");
+    const r = await call("/api/individual/scholar/questions", { chunkId, kind: "case" });
+    setBusy(false);
+    setAlt(!r.ok ? r.json.error ?? "A case question could not be written just now." : r.json.created ? `${r.json.created} case question${r.json.created === 1 ? " was" : "s were"} written from this section. Open the section to answer ${r.json.created === 1 ? "it" : "them"}.` : r.json.message ?? "No case question could be written from this section.");
   }
   async function play(versionId: string) {
     setBusy(true); setError("");
@@ -130,6 +146,31 @@ export function CaseStart(props: {
           {entry !== "library" && <button type="button" className={`${ghost} mt-3`} disabled={busy} onClick={() => begin(true)}>Write me a case from my notes instead</button>}
         </div>
       )}
+      {saved && (
+        <div role="status" className="mt-4 rounded-xl border border-gray-200 p-4">
+          <p className="text-[13.5px] text-gray-800">{saved.note}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <ReplayCase caseId={saved.caseId} title={`Play "${saved.title}" again`} />
+            <button type="button" className={ghost} disabled={busy} onClick={() => begin(true, { fresh: true })}>Write a new case</button>
+          </div>
+        </div>
+      )}
+      {readiness && (
+        <div role="status" className="mt-4 rounded-xl border border-amber-300 bg-amber-50/60 p-4">
+          <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-amber-900">{readiness.canAttempt ? "A simpler activity may suit these notes" : "No case from these notes"}</p>
+          <p className="mt-1 text-[14px] text-gray-800">{readiness.error}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {readiness.alternative === "case_question" && readiness.sectionIds?.[0] && (
+              <button type="button" className={btn} style={{ background: accent }} disabled={busy} onClick={() => caseQuestion(readiness.sectionIds![0])}>{busy ? "Writing…" : "Write a case question instead"}</button>
+            )}
+            {readiness.materialId && readiness.sectionIds?.[0] && (
+              <Link href={sourceHref(readiness.materialId, readiness.sectionIds[0])} className={ghost}>{readiness.alternative === "teach" ? "Learn from this section" : "Open the section"}</Link>
+            )}
+            {readiness.canAttempt && <button type="button" className={ghost} disabled={busy} onClick={() => begin(true, { attemptAnyway: true })}>Try the case anyway</button>}
+          </div>
+          {alt && <p role="status" className="mt-2 text-[13px] text-gray-800">{alt}</p>}
+        </div>
+      )}
       {continuity && (
         <div role="status" className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
           <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-sky-900">No new case right now</p>
@@ -149,7 +190,7 @@ type Debrief = {
   answered: number; of: number; correct: number; dimensions: { dimension: string; answered: number; correct: number; written: number }[];
   safetyEvents: string[]; missedFindings: { label: string }[]; objectives: { text: string }[]; revisit: { decisionPointId: string; chunkIds: string[] }[]; label: string;
 };
-export type Play = { kind: "private" | "library"; sessionId: string; status: string; view: LearnerView; answered: string[]; feedback: Feedback[]; debrief: Debrief | null; label: string; materialId?: string };
+export type Play = { kind: "private" | "library"; sessionId: string; status: string; view: LearnerView; answered: string[]; feedback: Feedback[]; debrief: Debrief | null; label: string; materialId?: string; caseId?: string };
 
 export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }) {
   const [play, setPlay] = useState<Play>(initial);
@@ -247,6 +288,8 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       </ol>
       {error && <p role="alert" className="mt-3 text-[13.5px] font-semibold text-red-800">{error}</p>}
       {play.status !== "active" && (play.debrief ? <CaseDebrief d={play.debrief} materialId={play.materialId} /> : <p className="mt-4 text-[14px] font-semibold text-gray-900">Case finished.</p>)}
+      {/* SCHOLAR-AI-OPT-01 s7: optional feedback on an AI-written private case (a library case is clinically reviewed). */}
+      {play.status !== "active" && play.kind === "private" && <AiFeedback kind="case" target="case" refId={play.caseId} />}
       <nav aria-label="What next" className="mt-5 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
         <Link href={studyHref("apply")} className={ghost}>Try another case</Link>
         <Link href={studyHref("revise")} className={ghost}>Revise related knowledge</Link>
