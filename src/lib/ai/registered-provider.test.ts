@@ -67,7 +67,11 @@ describe("the gateway, with a registered provider", () => {
 
 // ── The engine: routing honours the registry's status and the eligibility gate ─────────────────────────────────
 const POLICY = {
-  includedCau: 4000, risk: { minTier: { standard_educational: "cheap", clinical_educational: "heavy", high_risk_clinical: "heavy" }, rules: [] },
+  includedCau: 4000, risk: { minTier: { standard_educational: "cheap", clinical_educational: "heavy", high_risk_clinical: "heavy" }, rules: [
+    // C1 (28 Oct 2026): the gate now classifies the subject, so the fixture needs rules a subject can match.
+    { id: "clinical", all: [["nurs*"]], tier: "clinical_educational", label: "Clinical", frameworks: [], competencyRisk: [] },
+    { id: "standard", all: [["revision"]], tier: "standard_educational", label: "Study", frameworks: [], competencyRisk: [] },
+  ] },
   activities: { teach: { tier: "reasoning", minTier: "cheap", riskFloor: "standard_educational" }, questions: { tier: "heavy", minTier: "heavy", riskFloor: "clinical_educational" } },
 };
 const ROUTING = {
@@ -97,7 +101,7 @@ function admin(opts: { registry: any; rows?: any[] }) {
     rpc: async () => ({ data: null, error: { message: "not expected" } }),
   };
 }
-const run = (a: any, activity: string) => runMeteredAi(a, { userId: "u", product: "scholar", activity, requestId: "u:r1", generate: { system: "s", user: "q", tier: "reasoning" } as any }) as Promise<any>;
+const run = (a: any, activity: string) => runMeteredAi(a, { userId: "u", product: "scholar", activity, requestId: "u:r1", generate: { system: "s", user: "q", tier: "reasoning" } as any, risk: { text: activity === "teach" ? "revision" : "nursing" } }) as Promise<any>;
 
 describe("the engine, with a registered provider first in the routing", () => {
   it("INACTIVE: never routed -- the request goes to the next configured provider (Anthropic)", async () => {

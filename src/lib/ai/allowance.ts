@@ -260,23 +260,28 @@ const UNMETERED_BALANCE = { includedCau: 1, reserveCau: 0, usedCau: 0, reservedC
  * - An activity the published policy does not define has no known floor, and an unreadable policy or eligibility
  *   proves nothing, so both are refused (fail closed).
  *
- * Subject-level risk (a standard activity on a clinical subject) is classified on the metered path only. Applying
- * it here too is an owner decision (it would refuse most unrecognised subjects as high-risk, D1).
+ * SUBJECT-LEVEL RISK IS CLASSIFIED HERE TOO (owner GO, SCHOLAR-READINESS-02 C1, 28 Oct 2026). Until then only the
+ * activity's floor applied with metering off, so a standard activity on a clinical subject (Teach on sepsis, Personal
+ * AI on sepsis) ran on Sonnet 4.6, which is not clinically approved. The request's subject now goes through the same
+ * classifyRisk the metered path uses, and the HIGHER of floor and subject decides the gate. As on the metered path, a
+ * missing or unrecognised subject is high-risk clinical (classifyRisk), so the gate never reads a subject lower than
+ * it might be.
  */
-export async function unmeteredGate(admin: any, product: AiProduct, activity: string, callerTier: AiTier = "reasoning")
-  : Promise<{ ok: true; tier: AiTier | null; route: Route | null } | MeteredRefusal> {
+export async function unmeteredGate(admin: any, product: AiProduct, activity: string, callerTier: AiTier = "reasoning", subject?: RiskContext)
+  : Promise<{ ok: true; tier: AiTier | null; route: Route | null; risk?: RiskDecision } | MeteredRefusal> {
   const { policy, readable } = await loadProductPolicy(admin, product);
   if (!readable) return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
   const a = Object.prototype.hasOwnProperty.call(policy.activities, activity) ? policy.activities[activity] : undefined;
   if (!a) return { ok: false, error: "unknown_activity", standing: closed(policy, true, "This AI activity is not offered here yet.") };
   const routing = await loadModelRouting(admin);
   if (!routing) return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
-  const floor = a.riskFloor as RiskTier;
+  const risk = classifyRisk(policy.risk, await resolveRiskSubject(admin, subject), a.riskFloor as RiskTier);
+  const floor = risk.tier;
   if (riskRank(floor) <= 0) {
     // Standard educational: the caller's tier as before. Published routing picks its provider and model.
     if (!routing.published) return { ok: true, tier: null, route: null };
     const r = pickRoute(routing, null, product, activity, callerTier, "standard_educational");
-    return r ? { ok: true, tier: null, route: r } : { ok: false, error: "unreadable", standing: closed(policy, true, "No AI provider is available for this just now.") };
+    return r ? { ok: true, tier: null, route: r, risk } : { ok: false, error: "unreadable", standing: closed(policy, true, "No AI provider is available for this just now.") };
   }
   const d = activityAt(policy, "full", activity, UNMETERED_BALANCE, floor);
   const rows = await loadEligibility(admin, product);
@@ -284,8 +289,8 @@ export async function unmeteredGate(admin: any, product: AiProduct, activity: st
     activities: { [activity]: { label: a.label, available: false, via: null, reason: message } }, message, policyPublished: isPublishedPolicy(policy) });
   if (rows === null) return { ok: false, error: "unreadable", standing: standing(ELIGIBILITY_UNREADABLE) };
   const r = d.available && d.tier ? pickRoute(routing, rows, product, activity, d.tier, floor) : null;
-  if (!r) return { ok: false, error: "not_eligible", standing: standing(NOT_ELIGIBLE_REASON) };
-  return { ok: true, tier: d.tier, route: r };
+  if (!r) return { ok: false, error: "not_eligible", standing: standing(NOT_ELIGIBLE_REASON), risk };
+  return { ok: true, tier: d.tier, route: r, risk };
 }
 
 /**
@@ -295,7 +300,7 @@ export async function unmeteredGate(admin: any, product: AiProduct, activity: st
 export async function runMeteredAi(admin: any, args: { userId: string; product: AiProduct; activity: string; requestId: string; generate: GenerateArgs; risk?: RiskContext; record?: { type: string; ref: string } | null })
   : Promise<GenerateResult | MeteredRefusal> {
   if (!(await aiFairUseEnabled(admin))) {
-    const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning");
+    const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning", args.risk);
     if (!g.ok) return g;
     return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
   }
@@ -406,7 +411,7 @@ export async function runOwnedAi(admin: any, args: {
   const o = args.owner;
   if (o.type === "individual") return runMeteredAi(admin, { userId: o.userId, product: args.product, activity: args.activity, requestId: args.requestId, generate: args.generate, risk: args.risk, record: args.record ?? null });
   if (!(await aiFairUseEnabled(admin))) {
-    const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning");
+    const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning", args.risk);
     if (!g.ok) return { ok: false, error: g.error === "not_eligible" ? "not_eligible" : g.error === "unknown_activity" ? "unknown_activity" : "unreadable", budget: o.budget.code, message: g.standing.message ?? "This AI activity is not available just now." };
     return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
   }
