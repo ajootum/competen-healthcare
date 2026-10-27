@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Read } from "@/lib/hq/appointments";
 import {
-  AUTHORITY_BOUNDARIES, CONSTITUTION_LABEL, DELEGATION_LABEL, DOCUMENT_LABEL, GOV_MIN_REASON, LEVEL_LABEL, LINK_KIND_LABEL,
+  AUTHORITY_BOUNDARIES, CONSTITUTION_LABEL, DELEGATION_LABEL, DOCUMENT_LABEL, GOV_MIN_REASON, LINK_KIND_LABEL,
   RELATION_LABEL, SEAT_STATUS_LABEL, STATUS_ITEM_LABEL, type GovBodyView, type GovLinkView, type GovLoad, type GovSeatStatus,
   type GovSeatView, type GovStatusItemView,
 } from "@/lib/hq/governance-model";
@@ -56,6 +56,7 @@ function SeatCard({ seat, canRecord, post, busy }: { seat: GovSeatView; canRecor
         <StatusPill s={seat.status} />
       </div>
       {seat.accountability && <p className="text-[12px] text-gray-700"><span className="text-gray-500">Accountable for:</span> {seat.accountability}</p>}
+      {seat.requirements && <p className="text-[12px] text-gray-700"><span className="text-gray-500">Appointment requires:</span> {seat.requirements}</p>}
       {seat.provider && <p className="text-[12px] text-gray-700"><span className="text-gray-500">Provided by:</span> {seat.provider === "holdings" ? "Competen Holdings" : "Competen Scholar"}</p>}
       {c && (
         <div className="text-[12px] text-gray-800 rounded-md bg-gray-50 px-2 py-1.5 space-y-0.5">
@@ -273,6 +274,8 @@ export default function GovernanceBoard({ load, canRecord, people }: Props) {
         Three levels of accountability, every seat and its status, the delegations between them, and the existing
         workflows each seat runs through. This is a governance record: platform authority comes only from an HQ
         appointment to a position, on <Link href="/super-admin/users/appointments" className="text-teal-700 hover:underline">HQ positions</Link>.
+        {" "}The structure itself is configured in the <Link href="/super-admin/users/governance/studio" className="text-teal-700 hover:underline">Organisation &amp; Governance Studio</Link>
+        {" "}and every published version is kept in the <Link href="/super-admin/users/governance/history" className="text-teal-700 hover:underline">structure history</Link>.
       </p>
     </header>
   );
@@ -288,6 +291,7 @@ export default function GovernanceBoard({ load, canRecord, people }: Props) {
     );
 
   const b = load.board;
+  const versionNote = b.publishedVersion ? `Published structure v${b.publishedVersion.versionNo}${b.publishedVersion.effectiveFrom ? `, effective ${b.publishedVersion.effectiveFrom}` : ""}` : null;
   const seats = b.bodies.flatMap(x => x.seats);
   return (
     <div className="space-y-6">
@@ -295,6 +299,7 @@ export default function GovernanceBoard({ load, canRecord, people }: Props) {
       {msg && (
         <p role="status" className={`text-sm rounded-lg px-3 py-2 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-error)] text-red-800"}`}>{msg.t}</p>
       )}
+      {versionNote && <p className="text-[12px] text-gray-600">{versionNote}.</p>}
       {b.notes.map(n => <p key={n} className="text-sm rounded-lg px-3 py-2 bg-[var(--cmp-surface-warning)] text-amber-900">{n}</p>)}
 
       <section aria-label="Seat status" className="grid gap-2 grid-cols-2 md:grid-cols-5">
@@ -309,12 +314,12 @@ export default function GovernanceBoard({ load, canRecord, people }: Props) {
 
       <div className="grid gap-6 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start">
         <div className="space-y-6">
-          {([1, 2, 3] as const).map(level => {
+          {[...new Set(b.bodies.map(x => x.level).filter((l): l is NonNullable<typeof l> => l !== null))].sort((x, y) => x - y).map(level => {
             const bodies = b.bodies.filter(x => x.level === level);
             if (!bodies.length) return null;
             return (
               <section key={level} className="space-y-3">
-                <h2 className="text-sm font-bold tracking-wide text-indigo-800 uppercase">{LEVEL_LABEL[level]}</h2>
+                <h2 className="text-sm font-bold tracking-wide text-indigo-800 uppercase">{b.levelLabels[level] ?? `Level ${level}`}</h2>
                 {bodies.map(body => <BodyCard key={body.code} body={body} canRecord={canRecord} post={post} busy={busy} />)}
               </section>
             );

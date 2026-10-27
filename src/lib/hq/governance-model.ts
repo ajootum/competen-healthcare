@@ -111,6 +111,8 @@ export type GovPositionLink = {
 export type GovSeatView = {
   code: string; name: string; description: string | null; kind: string; nominationSource: string | null; provider: string | null;
   accountability: string | null; exclusive: boolean; status: GovSeatStatus;
+  /** Migration 620: what an appointment to the seat requires. Null when not recorded (or 620 absent). */
+  requirements: string | null;
   /** The live record (nominated, interim or active), or null when the seat is vacant. */
   current: GovRecordView | null;
   history: GovRecordView[];
@@ -121,7 +123,7 @@ export type GovSeatView = {
 };
 export type GovBodyView = {
   /** null for a shared service beside the three levels (V1.1 Holdings Technology Services). */
-  code: string; level: 1 | 2 | 3 | null; kind: string; name: string; description: string | null; parent: string | null;
+  code: string; level: number | null; kind: string; name: string; description: string | null; parent: string | null;
   constitution: string; constitutionNote: string | null; interimAuthority: string | null;
   documentStatus: string; documentRef: string | null; seats: GovSeatView[];
 };
@@ -129,7 +131,15 @@ export type GovDelegationView = { code: string; from: string; to: string; relati
 /** route null: a clearance with no workflow in the product. Its note says where it is recorded instead. */
 export type GovLinkView = { code: string; seat: string; kind: string; domain: string | null; step: number | null; label: string; route: string | null; capability: string | null; note: string | null };
 export type GovStatusItemView = { code: string; subject: string; status: string; evidence: string | null; residualRisk: string | null; decidedAt: string | null };
+/** Migration 620 data the board uses when present. Absent on a database without 620: the board is then V1.1 as built. */
+export type GovStructureExtras = {
+  levelLabels: Record<number, string>; relationLabels: Record<string, string>; requirements: Record<string, string>;
+  retiredRelationships: string[]; retiredLinks: string[]; publishedVersion: { versionNo: number; effectiveFrom: string | null } | null;
+};
 export type GovBoard = {
+  /** The level labels of the published version, or the V1.1 labels. */
+  levelLabels: Record<number, string>;
+  publishedVersion: { versionNo: number; effectiveFrom: string | null } | null;
   bodies: GovBodyView[];
   delegations: GovDelegationView[];
   escalation: (GovLinkView & { seatName: string; seatStatus: GovSeatStatus })[];
@@ -164,7 +174,13 @@ export function buildGovBoard(input: {
   bodies: BodyRow[]; seats: SeatRow[]; appointments: ApptRow[]; declarations: DeclRow[]; delegations: DelegationRow[];
   links: LinkRow[]; exclusions: ExclusionRow[]; statusItems: StatusItemRow[];
   positions: Read<PositionRow[]>; holderCounts: Read<Map<string, number>>;
+  extras?: GovStructureExtras | null;
 }): GovBoard {
+  const extras = input.extras ?? null;
+  // Retired relationships and links (620) are history, not the current structure.
+  const retiredRel = new Set(extras?.retiredRelationships ?? []);
+  const retiredLink = new Set(extras?.retiredLinks ?? []);
+  input = { ...input, delegations: input.delegations.filter(d => !retiredRel.has(d.code)), links: input.links.filter(l => !retiredLink.has(l.code)) };
   const notes: string[] = [];
   const posName = new Map(input.positions.ok ? input.positions.value.map(p => [p.code, p.name ?? p.code]) : []);
   if (!input.positions.ok) notes.push(`Position names could not be read (${input.positions.error}), so linked positions show their codes.`);
@@ -190,6 +206,7 @@ export function buildGovBoard(input: {
     seatViews.set(s.code, {
       code: s.code, name: s.name, description: s.description, kind: s.seat_kind, nominationSource: s.nomination_source,
       provider: s.provider, accountability: s.accountability, exclusive: s.exclusive === true,
+      requirements: extras?.requirements[s.code] ?? null,
       status: seatStatusOf(recs), current: live ? toRecord(live) : null,
       history: recs.filter(r => r.status === "ended").map(toRecord),
       authorityPosition: pos ? {
@@ -206,7 +223,7 @@ export function buildGovBoard(input: {
   const bodies: GovBodyView[] = [...input.bodies].filter(b => b.is_active !== false)
     .sort((a, b) => (a.level ?? 9) - (b.level ?? 9) || bySort(a, b))
     .map(b => ({
-      code: b.code, level: (b.level === 1 || b.level === 2 || b.level === 3 ? b.level : null) as 1 | 2 | 3 | null, kind: b.kind, name: b.name,
+      code: b.code, level: Number.isInteger(b.level) ? (b.level as number) : null, kind: b.kind, name: b.name,
       description: b.description, parent: b.parent_body_code ? bodyName.get(b.parent_body_code) ?? b.parent_body_code : null,
       constitution: b.constitution_status, constitutionNote: b.constitution_note, interimAuthority: b.interim_authority,
       // ⚠ An "approved" document with no reference is impossible in the database. Belt and braces here too.
@@ -239,6 +256,8 @@ export function buildGovBoard(input: {
     .map(({ s, body }) => ({ seat: s.code, seatName: s.name, body, status: s.status }));
   const count = (st: GovSeatStatus) => allSeats.filter(({ s }) => s.status === st).length;
   return {
+    levelLabels: { ...LEVEL_LABEL, ...(extras ? Object.fromEntries(Object.entries(extras.levelLabels).map(([k, v]) => [k, `Level ${k} · ${v}`])) : {}) },
+    publishedVersion: extras?.publishedVersion ?? null,
     bodies, delegations, escalation, clearances, statusItems, outstanding,
     counts: { seats: allSeats.length, vacant: count("vacant"), nominated: count("nominated"), interim: count("interim"), appointed: count("appointed") },
     notes,
@@ -291,14 +310,50 @@ export async function loadGovBoard(admin: Admin): Promise<GovLoad> {
     }
   }
 
+  const extras = await loadStructureExtras(admin, (bodies.data ?? []) as BodyRow[]);
   return {
     state: "ok",
     board: buildGovBoard({
       bodies: (bodies.data ?? []) as BodyRow[], seats: seatRows, appointments: (appts.data ?? []) as ApptRow[],
       declarations: (decls.data ?? []) as DeclRow[], delegations: (dels.data ?? []) as DelegationRow[],
       links: (links.data ?? []) as LinkRow[], exclusions: (excl.data ?? []) as ExclusionRow[],
-      statusItems: (items.data ?? []) as StatusItemRow[], positions, holderCounts,
+      statusItems: (items.data ?? []) as StatusItemRow[], positions, holderCounts, extras,
     }),
+  };
+}
+
+/**
+ * The published structure version and the 620 columns, when 620 is applied. Any failure returns null and the board
+ * stays exactly the V1.1 board: a missing optional read must never take the governance screen down.
+ */
+async function loadStructureExtras(admin: Admin, bodies: BodyRow[]): Promise<GovStructureExtras | null> {
+  const [structRes, delRes, linkRes, seatRes, typeRes] = await Promise.all([
+    admin.from("hq_gov_body").select("code, structure_code").limit(500),
+    admin.from("hq_gov_delegation").select("code, is_active").limit(500),
+    admin.from("hq_gov_link").select("code, is_active").limit(1000),
+    admin.from("hq_gov_seat").select("code, appointment_requirements").limit(1000),
+    admin.from("hq_gov_relation_type").select("code, label").limit(200),
+  ]);
+  if ([structRes, delRes, linkRes, seatRes, typeRes].some(r => r.error)) return null;
+  const codes = new Set(bodies.map(b => b.code));
+  const structure = ((structRes.data ?? []) as { code: string; structure_code: string | null }[]).find(b => codes.has(b.code) && b.structure_code)?.structure_code ?? null;
+  let levelLabels: Record<number, string> = {};
+  let publishedVersion: GovStructureExtras["publishedVersion"] = null;
+  if (structure) {
+    const { data, error } = await admin.from("hq_gov_structure_version").select("version_no, effective_from, definition")
+      .eq("structure_code", structure).eq("status", "published").order("version_no", { ascending: false }).limit(1);
+    const v = !error && data?.[0] ? data[0] as { version_no: number; effective_from: string | null; definition: { levels?: { level: number; label: string }[] } | null } : null;
+    if (v) {
+      publishedVersion = { versionNo: v.version_no, effectiveFrom: v.effective_from };
+      levelLabels = Object.fromEntries((v.definition?.levels ?? []).filter(l => Number.isInteger(l.level) && l.label).map(l => [l.level, l.label]));
+    }
+  }
+  return {
+    levelLabels, publishedVersion,
+    relationLabels: Object.fromEntries(((typeRes.data ?? []) as { code: string; label: string }[]).map(t => [t.code, t.label])),
+    requirements: Object.fromEntries(((seatRes.data ?? []) as { code: string; appointment_requirements: string | null }[]).filter(x => x.appointment_requirements).map(x => [x.code, x.appointment_requirements!])),
+    retiredRelationships: ((delRes.data ?? []) as { code: string; is_active: boolean }[]).filter(x => x.is_active === false).map(x => x.code),
+    retiredLinks: ((linkRes.data ?? []) as { code: string; is_active: boolean }[]).filter(x => x.is_active === false).map(x => x.code),
   };
 }
 

@@ -60,6 +60,9 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.platform.workflows.view",       space: "platform"  },
   { code: "hq.platform.metadata.view",        space: "platform"  },
   { code: "hq.platform.audit.view",           space: "platform"  },
+  // Addendum V1.2 (migration 620): the Organisation & Governance Studio. Draft and edit structure versions. Granted to NO
+  // position. Approval and publication stay with the platform owner. Platform-sensitive (its grant needs the acknowledgement).
+  { code: "hq.platform.governance.manage",    space: "platform"  },
   // COMPETEN-IND-003 D9 (migration 370): the Competen Individual pilot-grant right. Platform space, held by
   // the Individual Product Administrator position (product line `individual`). Its one page is the pilot
   // access screen, /super-admin/individual (COMPETEN-IND-ACCESS-001 s4).
@@ -210,6 +213,9 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/ai",                    capability: "hq.platform.ai.view" },
   { prefix: "/super-admin/assistant",             capability: "hq.platform.ai.view" },
   { prefix: "/super-admin/system",                capability: "hq.platform.system.view" },
+  // Addendum V1.2 (migration 620). Before /super-admin/users: the first matching prefix wins, and the Studio must not
+  // open on the users-view right. The published history (/super-admin/users/governance/history) stays on users.view.
+  { prefix: "/super-admin/users/governance/studio", capability: "hq.platform.governance.manage" },
   { prefix: "/super-admin/users",                 capability: "hq.platform.users.view" },
   { prefix: "/super-admin/hospitals",             capability: "hq.platform.tenants.view" },
   { prefix: "/super-admin/organisations",         capability: "hq.platform.tenants.view" },

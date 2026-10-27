@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import {
   HQ_CAPABILITY_EXCLUSIONS, HQ_SENSITIVE_CAPABILITIES, buildPositionBoard, exclusionConflict, parsePositionAction,
   rpcFor, sensitiveClassOf, statusForDbError, type HqGrantView,
@@ -12,6 +12,9 @@ import { readFail, readOk } from "./appointments";
 const SQL = readFileSync("supabase/migrations/511-competency-assessor-separation-of-duties.sql", "utf8");
 const SQL_580 = readFileSync("supabase/migrations/580-competency-framework-publication-authority.sql", "utf8");
 const SQL_500 = readFileSync("supabase/migrations/500-hq-position-administration.sql", "utf8");
+// The sensitive classes are read from the LATEST migration that defines them (511, then 620 for the studio right).
+const SQL_SENSITIVE = readdirSync("supabase/migrations").filter(n => n.endsWith(".sql")).sort()
+  .map(n => readFileSync(`supabase/migrations/${n}`, "utf8")).filter(s => s.includes("create or replace function hq_capability_sensitive_class(")).pop() ?? "";
 const bodyOf = (sql: string, fn: string) => {
   const at = sql.indexOf(`create or replace function ${fn}(`);
   return sql.slice(at, sql.indexOf("$$;", at));
@@ -52,7 +55,7 @@ describe("the latest migrations (511, 580) and positions.ts agree", () => {
   });
 
   it("the sensitive classes are the same sets", () => {
-    const fn = body("hq_capability_sensitive_class");
+    const fn = bodyOf(SQL_SENSITIVE, "hq_capability_sensitive_class");
     for (const [cls, codes] of Object.entries(HQ_SENSITIVE_CAPABILITIES)) {
       const clause = new RegExp(`when p_code in \\(([^)]*)\\) then '${cls}'`).exec(fn);
       expect(clause, cls).not.toBeNull();

@@ -406,6 +406,9 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       { key: "governance.positions", label: "Position Definitions", href: "/super-admin/users/positions", icon: "🧩" },
       // COMPETEN-SCHOLAR-GOV-IMPLEMENT-01 (migration 610): the Scholar Governance Model V1 registry. Grants nothing.
       { key: "governance.scholar", label: "Scholar Governance", href: "/super-admin/users/governance", icon: "🎓" },
+      // Addendum V1.2 (migration 620): the Organisation & Governance Studio and the published structure history.
+      { key: "governance.studio", label: "Organisation Studio", href: "/super-admin/users/governance/studio", icon: "🗂️" },
+      { key: "governance.history", label: "Structure History", href: "/super-admin/users/governance/history", icon: "🕰️" },
     ]},
     // Migration 395 (owner decision D2): the one shared Holdings clinical-content approval, for every product.
     // Its authoritative home is here; Learning and Research carry cross-links to their queues.
