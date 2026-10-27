@@ -27,12 +27,12 @@ export function LibraryRows({ rows }: { rows: LibraryRow[] }) {
       {rows.map(r => (
         <li key={r.id} className="border-b border-gray-200 py-[18px] first:pt-0 last:border-b-0 last:pb-0">
           <div className="flex flex-wrap items-center gap-4">
-            <span aria-hidden className="grid h-[54px] w-11 shrink-0 place-items-center rounded-[5px] bg-[#e5f1f3] text-[11px] font-extrabold" style={{ color: SCHOLAR.accent }}>{r.tile}</span>
+            <span aria-hidden className="grid h-[54px] w-11 shrink-0 place-items-center rounded-[5px] bg-[var(--cmp-theme-soft)] text-[11px] font-extrabold" style={{ color: SCHOLAR.accent }}>{r.tile}</span>
             <div className="min-w-0 flex-1">
               <h3 className="truncate text-[16px] font-bold text-gray-900">{r.title}</h3>
               <p className="text-[12px] text-gray-600">{r.meta}</p>
-              {r.badge && <span className="mr-1.5 mt-1 inline-block rounded-full bg-[#e9f7f8] px-2.5 py-1 text-[11px] font-semibold text-[#086b7b]">{r.badge}</span>}
-              {r.warning && <span className="mt-1 inline-block rounded-full bg-[#fff3d9] px-2.5 py-1 text-[11px] font-semibold text-[#805a19]">{r.warning}</span>}
+              {r.badge && <span className="mr-1.5 mt-1 inline-block rounded-full bg-[var(--cmp-theme-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--cmp-theme-ink)]">{r.badge}</span>}
+              {r.warning && <span className="mt-1 inline-block rounded-full bg-[var(--cmp-role-revision-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--cmp-role-revision-ink)]">{r.warning}</span>}
             </div>
             <Link href={r.href} className={`inline-flex min-h-[44px] items-center text-[15px] font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: SCHOLAR.accent }}>
               Open<span className="sr-only"> {r.title}</span> →

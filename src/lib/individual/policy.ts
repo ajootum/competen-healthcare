@@ -97,15 +97,13 @@ export type SequencePolicyKey = "professional_progress_views" | "professional_re
   | "professional_self_assessment_fields" | "passport_sections";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
-/** SCHOLAR-HFE-COLOR-01: who sees the Calm Teal variant by default (src/lib/design/scholar-theme.ts). */
-export type ScholarThemePolicy = "current" | "preview" | "calm";
 export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_profile_ai"
   | "professional_need_reopen" | "professional_need_competency_links" | "professional_need_ai_suggestions" | "professional_need_rule_suggestions"
   | "professional_need_learning" | "professional_reflection_ai"
   | "professional_goal_reopen" | "professional_plan_competency_links" | "professional_plan_learning" | "professional_plan_ai" | "professional_plan_ai_reflections"
   | "professional_competency_personal" | "professional_competency_ai"
   | "passport_recipient_label" | "passport_presentation" | "passport_validity_display" | "passport_export" | "passport_ai"
-  | "scholar_theme" | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
+  | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations"
   | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages"
@@ -842,16 +840,6 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Two choices. The background rules themselves are fixed.",
   },
   {
-    // COMPETEN-SCHOLAR-HFE-COLOR-01: the reviewable Calm Teal + Warm Learning Accents variant (tokens.ts scholarVariant).
-    // Presentation only: it changes no learning function, permission, record or AI rule.
-    key: "scholar_theme", kind: "choice", product: "Scholar",
-    label: "Scholar colour theme",
-    help: "Current keeps the approved Scholar theme for everyone. Preview keeps it as the default and lets each learner try Calm Teal from Settings, for comparison. Calm Teal makes the candidate theme the default; a learner can still switch back.",
-    options: [{ value: "current", label: "Current Scholar theme" }, { value: "preview", label: "Preview: learners may try Calm Teal" }, { value: "calm", label: "Calm Teal for everyone" }],
-    fallback: "current",
-    limitReason: "Three choices. Calm Teal is a candidate pending usability validation (owner approval after comparison).",
-  },
-  {
     key: "scholar_explanation_depth", kind: "choice", product: "Scholar",
     label: "Default explanation depth",
     help: "How long and detailed explanations are for a student who has not chosen. A student may choose their own.",
@@ -1449,7 +1437,6 @@ export type IndividualPolicy = {
   scholarDefaultAction: LearnAction;
   scholarBeyondNotes: "labelled" | "off";
   scholarExplanationDepth: ExplanationDepth;
-  scholarTheme: ScholarThemePolicy;
   scholarSessionMaxSteps: number;
   scholarCheckBehaviour: "offer" | "prompt" | "off";
   scholarLearningObjectives: "outcomes" | "off";
@@ -1584,7 +1571,6 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarLearningActions: clampSet(policyDef("scholar_learning_actions") as SetPolicy, published.get(policyPath("scholar_learning_actions"))) as LearnAction[],
     scholarDefaultAction: clampChoice(policyDef("scholar_default_action") as ChoicePolicy, published.get(policyPath("scholar_default_action"))) as LearnAction,
     scholarBeyondNotes: clampChoice(policyDef("scholar_beyond_notes") as ChoicePolicy, published.get(policyPath("scholar_beyond_notes"))) as "labelled" | "off",
-    scholarTheme: clampChoice(policyDef("scholar_theme") as ChoicePolicy, published.get(policyPath("scholar_theme"))) as ScholarThemePolicy,
     scholarExplanationDepth: clampChoice(policyDef("scholar_explanation_depth") as ChoicePolicy, published.get(policyPath("scholar_explanation_depth"))) as ExplanationDepth,
     scholarSessionMaxSteps: int("scholar_session_max_steps"),
     scholarCheckBehaviour: clampChoice(policyDef("scholar_check_behaviour") as ChoicePolicy, published.get(policyPath("scholar_check_behaviour"))) as "offer" | "prompt" | "off",

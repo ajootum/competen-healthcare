@@ -33,7 +33,7 @@ export default async function IndividualHome() {
   const learning = await learningEnabled(shell.ctx.admin);
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-10 sm:py-16">
+    <main className="min-h-screen bg-[var(--cmp-app-bg)] px-4 py-10 sm:py-16">
       <div className="mx-auto max-w-xl">
         <div className="mb-6"><IndividualMark /></div>
         {learning && (

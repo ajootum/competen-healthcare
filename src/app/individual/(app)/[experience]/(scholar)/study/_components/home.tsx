@@ -17,7 +17,7 @@ import { libraryRow } from "./library-rows";
 
 const card = "rounded-2xl border border-gray-200 bg-white p-6";
 const primary = `inline-flex min-h-[44px] items-center justify-center rounded-[9px] px-4 py-2.5 text-[15px] font-semibold text-white hover:opacity-90 ${focusRing}`;
-const secondary = `inline-flex min-h-[44px] items-center justify-center rounded-[9px] border border-gray-200 bg-white px-4 py-2.5 text-[15px] font-semibold text-gray-900 hover:bg-[#e9f7f8] ${focusRing}`;
+const secondary = `inline-flex min-h-[44px] items-center justify-center rounded-[9px] border border-gray-200 bg-white px-4 py-2.5 text-[15px] font-semibold text-gray-900 hover:bg-[var(--cmp-theme-soft)] ${focusRing}`;
 
 export default async function ScholarHome({ ctx, other }: { ctx: IndividualContext; other: ExperienceKey | undefined }) {
   const x = SCHOLAR;
@@ -35,8 +35,8 @@ export default async function ScholarHome({ ctx, other }: { ctx: IndividualConte
       {/* Notices in the person's own account (migration 437). Nothing while there are none. */}
       <HomeNotices admin={ctx.admin} userId={ctx.userId} accent={x.accent} />
 
-      <section aria-labelledby="hero-h" className="relative mb-6 overflow-hidden rounded-2xl border border-[#cce4e6] bg-[#e8f4f4] p-6 md:p-[30px]">
-        <span aria-hidden className="pointer-events-none absolute -top-[35px] right-[35px] hidden select-none text-[220px] font-extrabold leading-none text-[#d1e9eb] md:block">C</span>
+      <section aria-labelledby="hero-h" className="relative mb-6 overflow-hidden rounded-2xl border border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)] p-6 shadow-sm md:p-[30px]">
+        <span aria-hidden className="pointer-events-none absolute -top-[35px] right-[35px] hidden select-none text-[220px] font-extrabold leading-none text-[var(--cmp-theme-soft)] md:block">C</span>
         <div className="relative">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.18em]" style={{ color: x.accent }}>{firstName ? `Welcome back, ${firstName}` : "Welcome back"}</p>
           <h2 id="hero-h" className="mt-3 text-[28px] font-bold leading-tight tracking-[-0.02em] text-gray-900">A little understanding.<br />A stronger next decision.</h2>

@@ -1,10 +1,8 @@
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { individualShell, gatedMetadata } from "../_components/shell-context";
 import { experienceOfPath, forQuery, isIndividualNext } from "@/lib/individual/entry";
-import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { resolveScholarTheme, SCHOLAR_THEME_COOKIE } from "@/lib/design/scholar-theme";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -45,8 +43,5 @@ export default async function IndividualAppLayout({ children }: { children: Reac
   // access page works out the person's state itself and never trusts the URL for it.
   if (shell.state !== "READY") redirect(`/individual/access${forQuery(experienceOfPath(asked))}`);
   // COMPETEN-DESIGN-SYSTEM-01: the Individual theme for every page under the gate; an experience layout re-points it.
-  // SCHOLAR-HFE-COLOR-01: data-cmp-scholar="calm" re-points every Scholar colour to the reviewable variant (presentation
-  // only), here so the Scholar mark looks the same wherever it appears in the app. See src/lib/design/scholar-theme.ts.
-  const scholarTheme = resolveScholarTheme((await loadIndividualPolicy(shell.ctx.admin)).scholarTheme, (await cookies()).get(SCHOLAR_THEME_COOKIE)?.value);
-  return <div data-cmp-theme="individual" data-cmp-scholar={scholarTheme === "calm" ? "calm" : undefined}>{children}</div>;
+  return <div data-cmp-theme="individual">{children}</div>;
 }

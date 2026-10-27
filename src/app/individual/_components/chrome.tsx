@@ -114,7 +114,7 @@ export function PageHeader({ eyebrow, title, intro, accent }: { eyebrow?: string
  */
 export function BoundaryNotice({ notice, detail }: { notice: string; detail?: React.ReactNode }) {
   return (
-    <div className="mb-5 rounded-[9px] bg-[#edf3f6] px-[17px] py-[11px] text-[13px] leading-relaxed text-[#4f6475]">
+    <div className="mb-5 rounded-[9px] border border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)] px-[17px] py-[11px] text-[13px] leading-relaxed text-[var(--cmp-app-text-secondary)]">
       <p className="font-semibold">{notice}</p>
       {detail && (
         <details className="mt-1">
@@ -142,5 +142,5 @@ export function EmptyState({ title, children, action }: { title: string; childre
 
 /** A quiet statement of what a surface is and is not (Scholar HFE: formative, private, not verified). */
 export function Notice({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <p className={`mb-5 rounded-[9px] bg-[#edf3f6] px-[17px] py-[13px] text-[13px] leading-relaxed text-[#4f6475] ${className}`}>{children}</p>;
+  return <p className={`mb-5 rounded-[9px] border border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)] px-[17px] py-[13px] text-[13px] leading-relaxed text-[var(--cmp-app-text-secondary)] ${className}`}>{children}</p>;
 }

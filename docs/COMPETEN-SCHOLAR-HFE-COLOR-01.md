@@ -1,92 +1,101 @@
-# COMPETEN-SCHOLAR-HFE-COLOR-01 — build record
+# COMPETEN-SCHOLAR-HFE-COLOR-01 + COMPETEN-HFE-COLOR-02: build record
 
-Calm Teal + Warm Learning Accents for Competen Scholar, as a **reviewable variant** on COMPETEN-DESIGN-SYSTEM-01.
-Branch `scholar/hfe-color-01`. **No migration. No new capability. No production write.** The approved Scholar theme
-stays the default for everyone until the owner publishes otherwise, after comparison.
+Scholar's Calm Teal and warm learning accents (COLOR-01), refined and **approved** by COLOR-02 (owner, 27 Oct 2026). COLOR-02 adds one neutral canvas for every product.
+- **Built on:** COMPETEN-DESIGN-SYSTEM-01.
+- **Branch:** `scholar/hfe-color-01`.
+- **Scope:** no migration, no new capability, no production write.
+- **Visual only:** no change to workflows, AI, navigation architecture, the frozen sidebar structure, permissions or data.
+- **Checkpoints:** PR review on green CI, then the owner's deploy GO. COLOR-02 drops COLOR-01's switch, and the validation plan below is post-ship measurement, not a gate.
 
-## How it is switched
+## Tokens (`src/lib/design/tokens.ts`, generated into `globals.css`)
 
-| `scholar_theme` (Individual policy, HQ → Individual → Configuration) | Who sees Calm Teal |
-|---|---|
-| `current` (**default**) | Nobody. A stored learner choice is ignored. Nothing is offered. |
-| `preview` | Learners who choose it in Scholar → Settings → *Scholar colours*. Default stays current. |
-| `calm` | Everyone by default; a learner may choose the current theme back. |
+| Token | Value | Use |
+|---|---|---|
+| `--cmp-app-bg` | `#F7F8FA` | the one application canvas: Platform, Individual, Scholar and Professional |
+| `--cmp-app-surface` | `#FFFFFF` | headers, sidebars, cards |
+| `--cmp-app-border` | `#E2E8F0` | card edges and dividers |
+| `--cmp-app-text` / `-text-secondary` | `#142638` / `#475569` | primary and secondary text |
+| `--cmp-app-control-border` | `#7A8B99` | **derived**: form-field edges (see findings) |
+| `productTheme.scholar` | `#0B7089`, hover `#07566B`, soft `#E8F6F9` | Scholar action, navigation, selected navigation |
+| `--cmp-role-revision-*` | `#D97706` on `#FFF4DC`; **derived** ink `#92400E`, strong `#B45309` | revision and recommendations |
+| `--cmp-role-progress-*` | `#15803D` on `#ECFDF5`; ink `#166534` | progress |
+| `--cmp-role-indigo-*` | `#4338CA` on `#EEF0FD` | reasoning and evaluation, used selectively |
+| `--cmp-activity-<space>-icon/chip` | from `activityRole` | Scholar learning-space cues |
 
-Written through the existing CONFIG-002 door (`hq.individual.config.manage`): draft → publish → rollback, all audited.
-The learner's choice is a browser cookie (`cmp_scholar_theme`, path `/individual`), a display preference only.
-The Individual app layout resolves both (`src/lib/design/scholar-theme.ts`) into `data-cmp-scholar="calm"`.
-Nothing about learning, permissions, records or AI governance changes.
+Product accents are kept: Platform emerald, Individual indigo, Scholar teal (now `#0B7089`), Professional indigo.
 
-## What the variant changes
+## Material changes
 
-- **Tokens** (`tokens.ts` `scholarVariant.calm`, generated into `globals.css`): primary `#0B7089`, hover `#07566B`,
-  soft teal `#E8F6F9`, page `#F8FAF9`, card `#FFFFFF`, border `#D9E3E8`, text `#142638`, secondary `#475569`,
-  warm `#D97706` on `#FFF4DC`, success `#15803D`, error `#B91C1C`.
-- `[data-cmp-scholar="calm"]` re-points `--cmp-product-scholar-*`. Scholar's accents now come from CSS variables, so
-  every Scholar accent (header, tabs, buttons, links, switcher mark) follows at once. The `.cmp-scholar` gray and amber
-  scale is re-pointed to page, border, text, secondary and warm-tint tokens.
-- **Activity indicators:** each learning-space tab (Library, Learn, Revise, Apply, Evaluate, Progress) gets a small icon
-  on a soft chip, rendered only under the variant. It is one shared component, not six themes: teal stays the action
-  colour, and the tab label always names the space. The Revise "cards due" badge, the suggested step, turns warm.
-- **Unchanged:** Professional `#4338CA`, Individual, Platform, the frozen sidebar and nav structure, and semantic colours.
+- **One canvas:** Platform `/dashboard`, the Individual and experience shells, the Individual home, Learning and the welcome page all paint `--cmp-app-bg`.
+- **White header and sidebars:**
+  - Individual and Scholar/Professional: tokenised header, sidebar and borders.
+  - **Platform:** the desktop sidebar, mobile bar and drawer move from deep emerald to white. Emerald remains the logo tile, the selected item (`#064E3B` on `#ECF6F2`, 8.81:1) and the shift action.
+- **Scholar palette:** `#0B7089` replaces `#087F9C` everywhere through `productTheme.scholar`. The Scholar shell's gray scale reads the shared canvas, border and text tokens; `gray-500` darkens to `#5F6F80`, which is 4.85:1 on the canvas.
+- **Hard-coded colours removed:** every raw hex in Scholar screens and the shared Individual chrome became a token. The Scholar home hero's heavy teal fill is now a white card with a subtle border and shadow. Amber chips use the revision role; neutral notices are white cards.
+- **Activity cues:** each learning-space tab has an icon on a soft chip.
+  - Teal: Library and Learn.
+  - Amber: Revise.
+  - Indigo: Apply and Evaluate.
+  - Green: Progress.
+
+  The chips are `aria-hidden`, and the tab text always names the space. The Revise "cards due" badge uses the revision fill.
 
 ## Accessibility (WCAG 2.2 AA), measured
 
 | Use | Pair | Ratio | Need | Result |
 |---|---|---|---|---|
-| Body text | `#142638` on `#FFFFFF` / `#F8FAF9` | 15.39 / 14.69 | 4.5 | pass |
-| Secondary text | `#475569` on `#FFFFFF` / `#F8FAF9` | 7.58 / 7.23 | 4.5 | pass |
-| Button label / hover | white on `#0B7089` / `#07566B` | 5.69 / 8.23 | 4.5 | pass |
-| Links | `#0B7089` on card / page | 5.69 / 5.42 | 4.5 | pass |
-| Selected tab, navigation | `#0B7089` on `#E8F6F9` | 5.14 | 4.5 | pass |
-| Ink on soft teal | `#07566B` on `#E8F6F9` | 7.44 | 4.5 | pass |
-| Focus / selected outline | `#0B7089` on white | 5.69 | 3 | pass |
-| Form-field edge, candidate border | `#D9E3E8` on white | **1.30** | 3 | **fail**, fixed: fields use `#7A8B99` (3.51 / 3.35 on page) |
-| Warm as normal text | `#D97706` on white | **3.19** | 4.5 | **fail**: never used as text (harness-pinned) |
-| Warm as icon or large text | `#D97706` on white | 3.19 | 3 | pass |
-| Warm on its own tint | `#D97706` on `#FFF4DC` | **2.92** | 3 | **fail**: warm icons use `#B45309` (4.60) |
-| Words on warm tint | `#92400E` on `#FFF4DC` | 6.49 | 4.5 | pass |
-| Warm button (mock-up `#D97706` + white) | white on `#D97706` | **3.19** | 4.5 | **fail**: warm buttons use `#B45309` (5.02) |
-| Success / error text | `#15803D` / `#B91C1C` on white | 5.02 / 6.47 | 4.5 | pass |
-| Activity icons on chips | library 5.14, learn 5.17, revise 4.60, apply 6.02, evaluate 5.44, progress 4.49 | | 3 | pass |
+| Body text on card / canvas | `#142638` on `#FFFFFF` / `#F7F8FA` | 15.39 / 14.49 | 4.5 | pass |
+| Secondary text on card / canvas | `#475569` | 7.58 / 7.13 | 4.5 | pass |
+| Scholar button label / hover | white on `#0B7089` / `#07566B` | 5.69 / 8.23 | 4.5 | pass |
+| Scholar link on card / canvas | `#0B7089` | 5.69 / 5.35 | 4.5 | pass |
+| Selected navigation | `#0B7089` on `#E8F6F9` | 5.14 | 4.5 | pass |
+| Platform selected item | `#064E3B` on `#ECF6F2` | 8.81 | 4.5 | pass |
+| Borders | `#E2E8F0` on white | **1.23** | 3 if it identifies a control | pass for card edges and dividers. **Fails as a field edge**, so Scholar fields use `#7A8B99` (3.51 / 3.30) |
+| Amber as normal text | `#D97706` on white | **3.19** | 4.5 | **fail**: never used as text (harness-pinned) |
+| Amber as icon or large text | `#D97706` on white | 3.19 | 3 | pass |
+| Amber on its own tint | `#D97706` on `#FFF4DC` | **2.92** | 3 | **fail**: amber icons on the tint use `#B45309` (4.60) |
+| Words on the amber tint | `#92400E` on `#FFF4DC` | 6.49 | 4.5 | pass |
+| White on an amber fill | white on `#B45309` / on `#D97706` | 5.02 / **3.19** | 4.5 | fills use `#B45309` |
+| Progress text | `#15803D` on white / on `#ECFDF5` | 5.02 / 4.76 | 4.5 | pass |
+| Progress words on tint | `#166534` on `#ECFDF5` | 6.77 | 4.5 | pass |
+| Indigo words on tint | `#3730A3` on `#EEF0FD` | 8.76 | 4.5 | pass |
+| Activity icons on chips | 5.14 (teal) · 4.60 (amber) · 6.97 (indigo) · 4.76 (green) | | 3 | pass |
 
-Meaning is never carried by colour alone: tabs keep their text labels, and the due count keeps its number plus
-"cards due" for screen readers. The selected tab keeps its 3px underline. Touch targets are unchanged (CPR-MOB-001).
+**Never colour alone:** tab labels stay; the due count is a number plus "cards due" for screen readers; the selected tab keeps its 3px underline; selected sidebar items keep weight and a ring.
 
-**Pre-existing finding (current theme, not changed here):** Scholar's current field border (`#cbd8df`) is 1.46:1
-on white, below WCAG 1.4.11's 3:1. The variant fixes it for Calm Teal; the current theme needs its own decision.
+**Pre-existing, outside this change:** Platform and Professional form fields use Tailwind `gray-300` (`#D1D5DB`, 1.47:1), below 3:1. Scholar's are fixed here. Fixing the others is a separate, app-wide decision.
 
-## Decisions taken (derived values, all within the directive's palette family)
+## Genuine decisions
 
-1. `warmInk #92400E` for words on the warm tint, and `warmStrong #B45309` for warm buttons, badges and warm icons. `#D97706` itself is kept for large text, borders and decoration only.
-2. `controlBorder #7A8B99` for form fields. `#D9E3E8` stays for cards and dividers.
-3. Activity chip tints: Learn sky, Apply violet and Evaluate blue are added as icon tints only, following the mock-up. Teal remains the only action colour.
-4. Layout is unchanged. The mock-up's large activity tiles and three suggestion cards are a layout redesign, not a colour change. They are not built here.
+1. **Derived shades for AA:** `#92400E` for amber words, `#B45309` for amber fills and icons on the tint, and `#7A8B99` for field edges.
+2. **Platform sidebar becomes white,** applying COLOR-02's "white headers and sidebars" to Platform as well. This is the most visible change to a live surface.
+3. **Activity colours** are limited to COLOR-02's teal, amber, indigo and green, replacing the mock-up's sky, violet and blue.
+4. **No layout change:** the mock-up's large activity tiles and suggestion cards are a layout redesign, not part of this colour work.
 
-## Validation plan (directive §6)
+## Post-ship measurement (COLOR-01 §6, not a gate)
 
-Compare the current theme (A) with Calm Teal (B) on staging. Set `scholar_theme = preview`; each participant does both,
-order counterbalanced, on desktop and on phone.
+Compare against the previous build, or against recordings and metrics from before release. Five representative tasks on desktop and on phone:
+1. Find and open a material.
+2. Start Learn from the recommended step.
+3. Find and clear due revision.
+4. Start an Apply case.
+5. Read an explanation, then answer three recall questions.
 
-| Task | Measures |
-|---|---|
-| Find a material in My Learning and open it | time to target, errors, first click |
-| Start a Learn session from the recommended step | task completion, time, misclicks |
-| Find and complete due revision cards | finds the due count unaided (yes/no), time |
-| Start a clinical case in Apply | completion, navigation errors |
-| Read a 150-word explanation, answer 3 recall questions | reading time, recall accuracy, SEQ |
+**Measures:**
+- task completion;
+- time;
+- errors and misclicks;
+- SEQ per task;
+- UMUX-Lite;
+- a readability rating (1 to 7);
+- stated preference with a reason.
 
-- **After each theme:** SEQ per task, and UMUX-Lite (2 items) per theme.
-- **At the end:** preference (A, B or none) with a stated reason, plus a readability rating (1 to 7).
-- **Recruitment:** 8 to 12 Scholar learners, including at least 2 on low-end phones in bright light and at least 1 screen-reader or zoom user.
-
-**Decision rule:**
-- Adopt B (`scholar_theme = calm`) only if it is no worse on completion and errors, and is better or equal on SEQ and readability.
-- Engagement or retention gains are **not** claimed without longitudinal data.
+Recruit 8 to 12 learners, including low-end phones in bright light and at least one zoom or screen-reader user. No engagement or retention claim is made without longitudinal data.
 
 ## Verification
 
-- `design-system-themes-harness` passes 94/94, of which 33 checks are new in section 6. A planted visible chip went red, and restored it went green.
-- Unchanged and passing: individual-config 47/47, individual-foundation 74/74, pui-tokens 58/58, pui-colour 17/17, cpr040 14, access-doors 39/39.
-- Unit tests: design and individual suites, 693 tests, including the new resolver tests.
+- `design-system-themes-harness` 96/96 (section 6 rewritten for COLOR-02). Plants: a planted gray-50 Platform canvas went red, and restored it went green. Amber-as-text and raw-hex plants are built in.
+- CI harnesses 66/66 green, with every pure/local harness accounted for.
+- Unit tests: design, individual and marketing suites, 688 tests.
 - tsc is clean apart from the PDF typing errors that were already there. eslint is clean on the changed files.
+- **Screens:** not yet seen in a browser, signed in. Representative desktop and phone screenshots need a staging sign-in.

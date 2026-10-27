@@ -24,17 +24,6 @@ export function renderBlock(vars: Record<string, string>, fontFamily: string): s
   }
   const themeRules = [...themes].map(([p, parts]) =>
     [`[data-cmp-theme="${p}"] {`, ...parts.map(part => `  --cmp-theme-${part}: var(--cmp-product-${p}-${part});`), "}"].join("\n"));
-  // COMPETEN-SCHOLAR-HFE-COLOR-01: a product VARIANT (--cmp-variant-<product>-<variant>-<part>) re-points that product's
-  // palette under [data-cmp-<product>="<variant>"]; anything outside the attribute keeps the approved palette.
-  const variants = new Map<string, string[]>();
-  for (const k of Object.keys(vars)) {
-    const m = /^--cmp-variant-([a-z]+)-([a-z]+)-([a-z-]+)$/.exec(k);
-    if (m) variants.set(`${m[1]}|${m[2]}`, [...(variants.get(`${m[1]}|${m[2]}`) ?? []), m[3]]);
-  }
-  const variantRules = [...variants].map(([pv, parts]) => {
-    const [p, v] = pv.split("|");
-    return [`[data-cmp-${p}="${v}"] {`, ...parts.map(part => `  --cmp-product-${p}-${part}: var(--cmp-variant-${p}-${v}-${part});`), "}"].join("\n");
-  });
   return [
     START,
     "/* Platform Design System (PUI-001). Do not edit by hand — edit src/lib/design/tokens.ts. */",
@@ -43,7 +32,6 @@ export function renderBlock(vars: Record<string, string>, fontFamily: string): s
     `  --cmp-font-sans: ${fontFamily};`,
     "}",
     ...themeRules,
-    ...variantRules,
     END,
   ].join("\n");
 }

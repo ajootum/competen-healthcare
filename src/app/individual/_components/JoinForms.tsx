@@ -7,7 +7,8 @@ import Link from "next/link";
 // controls of at least 44px, native inputs with their own labels, and every state carried by text.
 // The server re-checks everything these forms send; their validation is a convenience, not the control.
 
-const ACCENT = "#0E7490";
+// HFE-COLOR-02: Scholar joining uses the Scholar action colour from the design tokens.
+const ACCENT = "var(--cmp-product-scholar-accent)";
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const input = "mt-1 block w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-[16px] text-gray-900 min-h-[44px] " + focusRing;
 const label = "block text-[14px] font-semibold text-gray-900";
