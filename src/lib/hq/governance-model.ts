@@ -1,4 +1,4 @@
-// Competen HQ — Scholar Governance Model V1: the registry of bodies, seats, delegations and the workflows
+// Competen HQ — Scholar Governance Model V1 with Addendum V1.1: the registry of bodies, seats, delegations and the workflows
 // each seat runs through (COMPETEN-SCHOLAR-GOV-IMPLEMENT-01, migration 610).
 //
 // ⚠ A REGISTRY, NOT AN AUTHORITY STORE. Nothing in the HQ guard reads these tables, and no table in 610 has a
@@ -47,6 +47,16 @@ export const DELEGATION_LABEL: Record<string, string> = {
 export const LINK_KIND_LABEL: Record<string, string> = {
   approval_workflow: "Clinical content approval", framework_governance: "Competency framework governance",
   administration: "Scholar administration", ai_escalation: "AI safety and incident escalation",
+  joint_clearance: "Joint specialist clearance",
+};
+/** V1.1: what each line between bodies IS. Corporate reporting is never drawn as oversight, or the reverse. */
+export const RELATION_LABEL: Record<string, string> = {
+  interim_authority: "Interim corporate authority", corporate_reporting: "Corporate reporting (solid line)",
+  mandate: "Mandate", specialist_oversight: "Specialist oversight (consultation, not line management)",
+  joint_review: "Joint specialist review (dashed bridge)", service: "Shared service relationship",
+};
+export const STATUS_ITEM_LABEL: Record<string, string> = {
+  proposed: "Proposed", pending: "Pending", unverified: "Unverified", deferred: "Deferred (owner decision)", verified: "Verified",
 };
 
 /** The authority boundaries of the model, shown verbatim on the screen. */
@@ -57,11 +67,15 @@ export const AUTHORITY_BOUNDARIES: readonly string[] = [
   "Holdings retains shared technical, security and AI infrastructure authority. Scholar retains educational and learner-service accountability.",
   "Pending or withdrawn delegations are inactive. A body that is not established cannot delegate.",
   "Board constitution and appointments remain pending until Competen Scholar is incorporated. Until then Holdings provides documented interim authority.",
+  "Holdings Technology Services is a shared corporate service beside the three Scholar levels, not a fourth level. Its functions are accountabilities, not necessarily separate employees, and carry no automatic privilege.",
+  "The Scholar Technology Liaison has no automatic production deployment, security-administration or privileged access.",
+  "A change touching both educational or clinical and technical domains needs each relevant clearance, given independently, before activation.",
+  "The Product Lead reports to the corporate authority. The Committee gives specialist oversight and is not the Product Lead's line manager.",
 ];
 
 // ── Row shapes ───────────────────────────────────────────────────────────────
 type BodyRow = {
-  code: string; level: number; kind: string; name: string; description: string | null; product_line_code: string | null;
+  code: string; level: number | null; kind: string; name: string; description: string | null; product_line_code: string | null;
   parent_body_code: string | null; constitution_status: string; constitution_note: string | null; interim_authority: string | null;
   document_status: string; document_ref: string | null; sort: number | null; is_active: boolean | null;
 };
@@ -75,8 +89,9 @@ type ApptRow = {
   effective_from: string | null; effective_to: string | null; end_reason: string | null; created_at: string | null;
 };
 type DeclRow = { appointment_id: string; interest: string; mitigation: string | null; declared_at: string | null };
-type DelegationRow = { code: string; from_body_code: string; to_body_code: string; scope: string; status: string; basis: string | null; decided_at: string | null; sort: number | null };
-type LinkRow = { code: string; seat_code: string; kind: string; step: number | null; label: string; route: string; capability_code: string; note: string | null; sort: number | null };
+type DelegationRow = { code: string; from_body_code: string; to_body_code: string; relation: string; scope: string; status: string; basis: string | null; decided_at: string | null; sort: number | null };
+type LinkRow = { code: string; seat_code: string; kind: string; clearance_domain: string | null; step: number | null; label: string; route: string | null; capability_code: string | null; note: string | null; sort: number | null };
+type StatusItemRow = { code: string; subject: string; status: string; evidence: string | null; residual_risk: string | null; decided_at: string | null; sort: number | null };
 type ExclusionRow = { seat_a: string; seat_b: string; reason: string };
 type PositionRow = { code: string; name: string | null; is_active: boolean | null };
 type OfficeRow = { id: string; office_type: string | null; is_active: boolean | null; status: string | null };
@@ -105,16 +120,21 @@ export type GovSeatView = {
   independentOf: { seat: string; reason: string }[];
 };
 export type GovBodyView = {
-  code: string; level: 1 | 2 | 3; kind: string; name: string; description: string | null; parent: string | null;
+  /** null for a shared service beside the three levels (V1.1 Holdings Technology Services). */
+  code: string; level: 1 | 2 | 3 | null; kind: string; name: string; description: string | null; parent: string | null;
   constitution: string; constitutionNote: string | null; interimAuthority: string | null;
   documentStatus: string; documentRef: string | null; seats: GovSeatView[];
 };
-export type GovDelegationView = { code: string; from: string; to: string; scope: string; status: string; basis: string | null; decidedAt: string | null; active: boolean };
-export type GovLinkView = { code: string; seat: string; kind: string; step: number | null; label: string; route: string; capability: string; note: string | null };
+export type GovDelegationView = { code: string; from: string; to: string; relation: string; scope: string; status: string; basis: string | null; decidedAt: string | null; active: boolean };
+/** route null: a clearance with no workflow in the product. Its note says where it is recorded instead. */
+export type GovLinkView = { code: string; seat: string; kind: string; domain: string | null; step: number | null; label: string; route: string | null; capability: string | null; note: string | null };
+export type GovStatusItemView = { code: string; subject: string; status: string; evidence: string | null; residualRisk: string | null; decidedAt: string | null };
 export type GovBoard = {
   bodies: GovBodyView[];
   delegations: GovDelegationView[];
   escalation: (GovLinkView & { seatName: string; seatStatus: GovSeatStatus })[];
+  clearances: (GovLinkView & { seatName: string; seatStatus: GovSeatStatus })[];
+  statusItems: GovStatusItemView[];
   outstanding: { seat: string; seatName: string; body: string; status: GovSeatStatus }[];
   counts: { seats: number; vacant: number; nominated: number; interim: number; appointed: number };
   notes: string[];
@@ -142,7 +162,7 @@ const bySort = <T extends { sort?: number | null }>(a: T, b: T) => (a.sort ?? 10
 /** Pure. Builds the board from rows already read. */
 export function buildGovBoard(input: {
   bodies: BodyRow[]; seats: SeatRow[]; appointments: ApptRow[]; declarations: DeclRow[]; delegations: DelegationRow[];
-  links: LinkRow[]; exclusions: ExclusionRow[];
+  links: LinkRow[]; exclusions: ExclusionRow[]; statusItems: StatusItemRow[];
   positions: Read<PositionRow[]>; holderCounts: Read<Map<string, number>>;
 }): GovBoard {
   const notes: string[] = [];
@@ -158,7 +178,7 @@ export function buildGovBoard(input: {
     interests: (declsBy.get(a.id) ?? []).map(d => ({ interest: d.interest, mitigation: d.mitigation, declaredAt: d.declared_at })),
   });
   const linksBySeat = new Map<string, GovLinkView[]>();
-  const linkViews = [...input.links].sort(bySort).map(l => ({ code: l.code, seat: l.seat_code, kind: l.kind, step: l.step, label: l.label, route: l.route, capability: l.capability_code, note: l.note }));
+  const linkViews = [...input.links].sort(bySort).map(l => ({ code: l.code, seat: l.seat_code, kind: l.kind, domain: l.clearance_domain, step: l.step, label: l.label, route: l.route, capability: l.capability_code, note: l.note }));
   for (const l of linkViews) linksBySeat.set(l.seat, [...(linksBySeat.get(l.seat) ?? []), l]);
 
   const seatViews = new Map<string, GovSeatView>();
@@ -184,9 +204,9 @@ export function buildGovBoard(input: {
 
   const bodyName = new Map(input.bodies.map(b => [b.code, b.name]));
   const bodies: GovBodyView[] = [...input.bodies].filter(b => b.is_active !== false)
-    .sort((a, b) => a.level - b.level || bySort(a, b))
+    .sort((a, b) => (a.level ?? 9) - (b.level ?? 9) || bySort(a, b))
     .map(b => ({
-      code: b.code, level: (b.level === 1 || b.level === 2 ? b.level : 3) as 1 | 2 | 3, kind: b.kind, name: b.name,
+      code: b.code, level: (b.level === 1 || b.level === 2 || b.level === 3 ? b.level : null) as 1 | 2 | 3 | null, kind: b.kind, name: b.name,
       description: b.description, parent: b.parent_body_code ? bodyName.get(b.parent_body_code) ?? b.parent_body_code : null,
       constitution: b.constitution_status, constitutionNote: b.constitution_note, interimAuthority: b.interim_authority,
       // ⚠ An "approved" document with no reference is impossible in the database. Belt and braces here too.
@@ -196,7 +216,7 @@ export function buildGovBoard(input: {
     }));
 
   const delegations = [...input.delegations].sort(bySort).map(d => ({
-    code: d.code, from: bodyName.get(d.from_body_code) ?? d.from_body_code, to: bodyName.get(d.to_body_code) ?? d.to_body_code,
+    code: d.code, from: bodyName.get(d.from_body_code) ?? d.from_body_code, to: bodyName.get(d.to_body_code) ?? d.to_body_code, relation: d.relation,
     scope: d.scope, status: d.status, basis: d.basis, decidedAt: d.decided_at,
     active: d.status === "approved" || d.status === "interim",
   }));
@@ -205,12 +225,21 @@ export function buildGovBoard(input: {
     .sort((a, b) => (a.step ?? 99) - (b.step ?? 99))
     .map(l => ({ ...l, seatName: seatViews.get(l.seat)?.name ?? l.seat, seatStatus: seatViews.get(l.seat)?.status ?? "vacant" as GovSeatStatus }));
 
+  const clearances = linkViews.filter(l => l.kind === "joint_clearance")
+    .map(l => ({ ...l, seatName: seatViews.get(l.seat)?.name ?? l.seat, seatStatus: seatViews.get(l.seat)?.status ?? "vacant" as GovSeatStatus }));
+  const statusItems = [...input.statusItems].sort(bySort).map(i => ({
+    code: i.code, subject: i.subject,
+    // ⚠ Verified without written evidence is impossible in the database. Belt and braces here too.
+    status: i.status === "verified" && !i.evidence ? "unverified" : i.status,
+    evidence: i.evidence, residualRisk: i.residual_risk, decidedAt: i.decided_at,
+  }));
+
   const allSeats = bodies.flatMap(b => b.seats.map(s => ({ s, body: b.name })));
   const outstanding = allSeats.filter(({ s }) => s.status === "vacant" || s.status === "nominated")
     .map(({ s, body }) => ({ seat: s.code, seatName: s.name, body, status: s.status }));
   const count = (st: GovSeatStatus) => allSeats.filter(({ s }) => s.status === st).length;
   return {
-    bodies, delegations, escalation, outstanding,
+    bodies, delegations, escalation, clearances, statusItems, outstanding,
     counts: { seats: allSeats.length, vacant: count("vacant"), nominated: count("nominated"), interim: count("interim"), appointed: count("appointed") },
     notes,
   };
@@ -218,16 +247,17 @@ export function buildGovBoard(input: {
 
 /** The registry, read once. Every structural read must succeed, or the board is not drawn. */
 export async function loadGovBoard(admin: Admin): Promise<GovLoad> {
-  const [bodies, seats, appts, decls, dels, links, excl] = await Promise.all([
+  const [bodies, seats, appts, decls, dels, links, excl, items] = await Promise.all([
     admin.from("hq_gov_body").select("code, level, kind, name, description, product_line_code, parent_body_code, constitution_status, constitution_note, interim_authority, document_status, document_ref, sort, is_active").limit(200),
     admin.from("hq_gov_seat").select("code, body_code, name, description, seat_kind, nomination_source, provider, accountability, authority_position_code, exclusive, sort, is_active").limit(500),
     admin.from("hq_gov_seat_appointment").select("id, seat_code, person_id, holder_name, status, basis, effective_from, effective_to, end_reason, created_at").limit(5000),
     admin.from("hq_gov_interest_declaration").select("appointment_id, interest, mitigation, declared_at").order("declared_at").limit(5000),
-    admin.from("hq_gov_delegation").select("code, from_body_code, to_body_code, scope, status, basis, decided_at, sort").limit(200),
-    admin.from("hq_gov_link").select("code, seat_code, kind, step, label, route, capability_code, note, sort").limit(500),
+    admin.from("hq_gov_delegation").select("code, from_body_code, to_body_code, relation, scope, status, basis, decided_at, sort").limit(200),
+    admin.from("hq_gov_link").select("code, seat_code, kind, clearance_domain, step, label, route, capability_code, note, sort").limit(500),
     admin.from("hq_gov_seat_exclusion").select("seat_a, seat_b, reason").limit(500),
+    admin.from("hq_gov_status_item").select("code, subject, status, evidence, residual_risk, decided_at, sort").limit(200),
   ]);
-  const structural = [bodies, seats, appts, decls, dels, links, excl];
+  const structural = [bodies, seats, appts, decls, dels, links, excl, items];
   const missing = structural.find(r => r.error && isMissingRelation(r.error.message, r.error.code));
   if (missing) return { state: "absent", reason: "Migration 610 is not applied to this database, so the Scholar governance registry is not available. Nothing was read and nothing can be recorded." };
   const failed = structural.find(r => r.error);
@@ -266,7 +296,8 @@ export async function loadGovBoard(admin: Admin): Promise<GovLoad> {
     board: buildGovBoard({
       bodies: (bodies.data ?? []) as BodyRow[], seats: seatRows, appointments: (appts.data ?? []) as ApptRow[],
       declarations: (decls.data ?? []) as DeclRow[], delegations: (dels.data ?? []) as DelegationRow[],
-      links: (links.data ?? []) as LinkRow[], exclusions: (excl.data ?? []) as ExclusionRow[], positions, holderCounts,
+      links: (links.data ?? []) as LinkRow[], exclusions: (excl.data ?? []) as ExclusionRow[],
+      statusItems: (items.data ?? []) as StatusItemRow[], positions, holderCounts,
     }),
   };
 }
@@ -280,7 +311,9 @@ export type GovAction =
   | { action: "appoint"; seat: string; personId: string | null; holderName: string | null; status: "nominated" | "interim" | "active"; basis: string | null; interests: string | null; reason: string }
   | { action: "end"; appointmentId: string; reason: string }
   | { action: "declare_interest"; appointmentId: string; interest: string; mitigation: string | null; reason: string }
-  | { action: "set_delegation"; code: string; status: "pending" | "interim" | "approved" | "withdrawn"; basis: string | null; reason: string };
+  | { action: "set_delegation"; code: string; status: "pending" | "interim" | "approved" | "withdrawn"; basis: string | null; reason: string }
+  | { action: "set_status_item"; code: string; status: GovStatusItemStatus; evidence: string | null; residualRisk: string | null; reason: string };
+export type GovStatusItemStatus = "proposed" | "pending" | "unverified" | "deferred" | "verified";
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 const opt = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -326,8 +359,17 @@ export function parseGovAction(b: unknown): { ok: true; value: GovAction } | { o
       if ((status === "interim" || status === "approved") && (!basis || basis.length < 5)) return { ok: false, error: "An interim or approved delegation names its basis." };
       return { ok: true, value: { action: "set_delegation", code, status: status as "pending" | "interim" | "approved" | "withdrawn", basis, reason } };
     }
+    case "set_status_item": {
+      const code = str(o.code);
+      const status = str(o.status);
+      if (!SEAT_CODE_RE.test(code)) return { ok: false, error: "Choose a status item." };
+      if (!["proposed", "pending", "unverified", "deferred", "verified"].includes(status)) return { ok: false, error: "The status must be proposed, pending, unverified, deferred or verified." };
+      const evidence = opt(o.evidence);
+      if (status === "verified" && (!evidence || evidence.length < 10)) return { ok: false, error: "Verified needs the evidence written down." };
+      return { ok: true, value: { action: "set_status_item", code, status: status as GovStatusItemStatus, evidence, residualRisk: opt(o.residual_risk), reason } };
+    }
     default:
-      return { ok: false, error: "action must be one of appoint, end, declare_interest, set_delegation." };
+      return { ok: false, error: "action must be one of appoint, end, declare_interest, set_delegation, set_status_item." };
   }
 }
 
@@ -339,6 +381,7 @@ export function govRpcFor(a: GovAction, actor: { id: string; name: string | null
     case "end": return { fn: "hq_gov_admin_end", args: { ...base, p_appointment: a.appointmentId } };
     case "declare_interest": return { fn: "hq_gov_admin_declare_interest", args: { ...base, p_appointment: a.appointmentId, p_interest: a.interest, p_mitigation: a.mitigation } };
     case "set_delegation": return { fn: "hq_gov_admin_set_delegation", args: { ...base, p_code: a.code, p_status: a.status, p_basis: a.basis } };
+    case "set_status_item": return { fn: "hq_gov_admin_set_status_item", args: { ...base, p_code: a.code, p_status: a.status, p_evidence: a.evidence, p_residual_risk: a.residualRisk } };
   }
 }
 

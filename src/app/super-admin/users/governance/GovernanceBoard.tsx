@@ -6,7 +6,8 @@ import Link from "next/link";
 import type { Read } from "@/lib/hq/appointments";
 import {
   AUTHORITY_BOUNDARIES, CONSTITUTION_LABEL, DELEGATION_LABEL, DOCUMENT_LABEL, GOV_MIN_REASON, LEVEL_LABEL, LINK_KIND_LABEL,
-  SEAT_STATUS_LABEL, type GovBodyView, type GovLoad, type GovSeatStatus, type GovSeatView,
+  RELATION_LABEL, SEAT_STATUS_LABEL, STATUS_ITEM_LABEL, type GovBodyView, type GovLinkView, type GovLoad, type GovSeatStatus,
+  type GovSeatView, type GovStatusItemView,
 } from "@/lib/hq/governance-model";
 
 /**
@@ -28,6 +29,14 @@ const STATUS_TONE: Record<GovSeatStatus, string> = {
   nominated: "bg-[var(--cmp-surface-warning)] text-amber-900 border-amber-300",
   interim: "bg-indigo-50 text-indigo-900 border-indigo-300",
   appointed: "bg-[var(--cmp-surface-success)] text-green-800 border-green-300",
+};
+const LinkOrText = ({ l }: { l: GovLinkView }) => l.route
+  ? <Link href={l.route} className="text-teal-700 hover:underline">{l.label}</Link>
+  : <span className="text-gray-900">{l.label} <span className="text-[11px] text-gray-500">(no product workflow)</span></span>;
+const ITEM_TONE: Record<string, string> = {
+  proposed: "bg-gray-100 text-gray-700 border-gray-300", pending: "bg-gray-100 text-gray-700 border-gray-300",
+  unverified: "bg-[var(--cmp-surface-warning)] text-amber-900 border-amber-300", deferred: "bg-indigo-50 text-indigo-900 border-indigo-300",
+  verified: "bg-[var(--cmp-surface-success)] text-green-800 border-green-300",
 };
 const StatusPill = ({ s }: { s: GovSeatStatus }) => (
   <span className={`inline-block text-[11px] font-semibold rounded-full border px-2 py-0.5 ${STATUS_TONE[s]}`}>{SEAT_STATUS_LABEL[s]}</span>
@@ -72,10 +81,10 @@ function SeatCard({ seat, canRecord, post, busy }: { seat: GovSeatView; canRecor
         <p className="text-[12px] text-gray-600">Independence: {seat.independentOf.map(x => x.reason).join(" · ")}</p>
       )}
       {seat.exclusive && <p className="text-[12px] text-gray-600">Independent seat: cannot be combined with any other seat.</p>}
-      {seat.links.filter(l => l.kind !== "ai_escalation").length > 0 && (
+      {seat.links.filter(l => l.kind !== "ai_escalation" && l.kind !== "joint_clearance").length > 0 && (
         <ul className="text-[12px] space-y-0.5">
-          {seat.links.filter(l => l.kind !== "ai_escalation").map(l => (
-            <li key={l.code}><Link href={l.route} className="text-teal-700 hover:underline">{l.label}</Link>{l.note && <span className="text-gray-500"> · {l.note}</span>}</li>
+          {seat.links.filter(l => l.kind !== "ai_escalation" && l.kind !== "joint_clearance").map(l => (
+            <li key={l.code}><LinkOrText l={l} />{l.note && <span className="text-gray-500"> · {l.note}</span>}</li>
           ))}
         </ul>
       )}
@@ -125,6 +134,43 @@ function BodyCard({ body, canRecord, post, busy }: { body: GovBodyView; canRecor
         ? <ul className="grid gap-2 md:grid-cols-2">{body.seats.map(s => <SeatCard key={s.code} seat={s} canRecord={canRecord} post={post} busy={busy} />)}</ul>
         : <p className="text-[12px] text-gray-500">This body has no seats of its own.</p>}
     </section>
+  );
+}
+
+function StatusItem({ item, canRecord, post, busy }: { item: GovStatusItemView; canRecord: boolean; post: Post; busy: string | null }) {
+  const [status, setStatus] = useState(item.status);
+  const [evidence, setEvidence] = useState("");
+  const [reason, setReason] = useState("");
+  const ready = status !== item.status && reason.trim().length >= GOV_MIN_REASON && (status !== "verified" || evidence.trim().length >= 10);
+  return (
+    <li className="rounded-lg border border-gray-200 bg-white p-3 space-y-1 text-sm">
+      <p className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-medium text-gray-900">{item.subject}</span>
+        <span className={`text-[11px] font-semibold rounded-full border px-2 py-0.5 ${ITEM_TONE[item.status] ?? ITEM_TONE.pending}`}>{STATUS_ITEM_LABEL[item.status] ?? item.status}</span>
+      </p>
+      {item.evidence && <p className="text-[12px] text-gray-700"><span className="text-gray-500">Evidence:</span> {item.evidence}</p>}
+      {item.residualRisk && <p className="text-[12px] text-gray-700"><span className="text-gray-500">Residual risk:</span> {item.residualRisk}</p>}
+      {canRecord && (
+        <details className="text-[12px]">
+          <summary className="cursor-pointer text-gray-700">Change this status</summary>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <label className="flex flex-col gap-1 text-gray-600">Status
+              <select value={status} onChange={e => setStatus(e.target.value)} className={input}>
+                {Object.entries(STATUS_ITEM_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-gray-600">Evidence (required for Verified)
+              <input value={evidence} onChange={e => setEvidence(e.target.value)} className={input} maxLength={1000} />
+            </label>
+            <label className="flex flex-col gap-1 text-gray-600">Reason (written to the audit trail)
+              <input value={reason} onChange={e => setReason(e.target.value)} className={input} maxLength={500} />
+            </label>
+          </div>
+          <button type="button" className={`${quiet} mt-2`} disabled={!ready || busy === `item-${item.code}`}
+            onClick={() => post({ action: "set_status_item", code: item.code, status, evidence: evidence || null, reason }, `item-${item.code}`, "Status recorded.")}>Record status</button>
+        </details>
+      )}
+    </li>
   );
 }
 
@@ -221,7 +267,7 @@ export default function GovernanceBoard({ load, canRecord, people }: Props) {
 
   const header = (
     <header>
-      <p className="text-[12px] font-semibold tracking-wide text-indigo-800 uppercase">Competen Scholar · Governance Model V1</p>
+      <p className="text-[12px] font-semibold tracking-wide text-indigo-800 uppercase">Competen Scholar · Governance Model V1 · IT integration 1.1</p>
       <h1 className="text-xl font-bold text-gray-900">Scholar governance</h1>
       <p className="text-gray-500 text-sm mt-1 max-w-3xl">
         Three levels of accountability, every seat and its status, the delegations between them, and the existing
@@ -261,24 +307,35 @@ export default function GovernanceBoard({ load, canRecord, people }: Props) {
 
       {canRecord && <RecordAppointment seats={seats} people={people} post={post} busy={busy} />}
 
-      {([1, 2, 3] as const).map(level => {
-        const bodies = b.bodies.filter(x => x.level === level);
-        if (!bodies.length) return null;
-        return (
-          <section key={level} className="space-y-3">
-            <h2 className="text-sm font-bold tracking-wide text-indigo-800 uppercase">{LEVEL_LABEL[level]}</h2>
-            {bodies.map(body => <BodyCard key={body.code} body={body} canRecord={canRecord} post={post} busy={busy} />)}
-          </section>
-        );
-      })}
+      <div className="grid gap-6 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start">
+        <div className="space-y-6">
+          {([1, 2, 3] as const).map(level => {
+            const bodies = b.bodies.filter(x => x.level === level);
+            if (!bodies.length) return null;
+            return (
+              <section key={level} className="space-y-3">
+                <h2 className="text-sm font-bold tracking-wide text-indigo-800 uppercase">{LEVEL_LABEL[level]}</h2>
+                {bodies.map(body => <BodyCard key={body.code} body={body} canRecord={canRecord} post={post} busy={busy} />)}
+              </section>
+            );
+          })}
+        </div>
+        {b.bodies.some(x => x.level === null) && (
+          <aside className="space-y-3 rounded-xl bg-gray-50 border border-gray-200 p-3" aria-label="Shared services beside the Scholar levels">
+            <h2 className="text-sm font-bold tracking-wide text-indigo-800 uppercase">Shared corporate service · not a Scholar level</h2>
+            {b.bodies.filter(x => x.level === null).map(body => <BodyCard key={body.code} body={body} canRecord={canRecord} post={post} busy={busy} />)}
+          </aside>
+        )}
+      </div>
 
       <section className="space-y-2">
-        <h2 className="text-base font-bold text-gray-900">Delegated authority</h2>
+        <h2 className="text-base font-bold text-gray-900">Authority, reporting and oversight relationships</h2>
         <ul className="space-y-2">
           {b.delegations.map(d => (
-            <li key={d.code} className="rounded-lg border border-gray-200 bg-white p-3 text-sm space-y-1">
+            <li key={d.code} className={`rounded-lg border ${d.relation === "joint_review" ? "border-dashed border-teal-600" : "border-gray-200"} bg-white p-3 text-sm space-y-1`}>
+              <p className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">{RELATION_LABEL[d.relation] ?? d.relation}</p>
               <p className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-gray-900">{d.from} → {d.to}</span>
+                <span className="font-medium text-gray-900">{d.from} {d.relation === "joint_review" ? "⇢" : "→"} {d.to}</span>
                 <span className={`text-[11px] font-semibold rounded-full border px-2 py-0.5 ${d.active ? "bg-indigo-50 text-indigo-900 border-indigo-300" : "bg-gray-100 text-gray-700 border-gray-300"}`}>{DELEGATION_LABEL[d.status] ?? d.status}</span>
               </p>
               <p className="text-[12px] text-gray-700">{d.scope}</p>
@@ -297,7 +354,38 @@ export default function GovernanceBoard({ load, canRecord, people }: Props) {
             <input value={delReason} onChange={e => setDelReason(e.target.value)} className={input} maxLength={500} />
           </label>
         )}
-        <p className="text-[12px] text-gray-500">A delegation from a body that is not established cannot be approved: the database refuses it.</p>
+        <p className="text-[12px] text-gray-500">A relationship from a body that is not established cannot be approved: the database refuses it. The Committee is not the Product Lead&apos;s line manager.</p>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-base font-bold text-gray-900">{LINK_KIND_LABEL.joint_clearance}</h2>
+        <p className="text-[12px] text-gray-600 max-w-3xl">
+          A change touching both domains needs each relevant clearance, given independently, before activation. These are the
+          existing workflows. There is no separate approval engine, and a clearance with no product workflow says where it is recorded.
+        </p>
+        <div className="grid gap-3 md:grid-cols-2">
+          {(["scholar", "holdings"] as const).map(domain => (
+            <div key={domain} className="rounded-xl border border-gray-200 bg-white p-3 space-y-1">
+              <h3 className="text-sm font-semibold text-gray-900">{domain === "scholar" ? "Scholar clears" : "Holdings clears"}</h3>
+              <ul className="space-y-1.5 text-sm">
+                {b.clearances.filter(c => c.domain === domain).map(c => (
+                  <li key={c.code}>
+                    <p className="flex flex-wrap items-center gap-2"><LinkOrText l={c} /><span className="text-[12px] text-gray-600">· {c.seatName}</span><StatusPill s={c.seatStatus} /></p>
+                    {c.note && <p className="text-[12px] text-gray-500">{c.note}</p>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-base font-bold text-gray-900">Status register</h2>
+        <p className="text-[12px] text-gray-600 max-w-3xl">Nothing here is marked operational without evidence. Vacant seats and pending relationships are listed in their own sections.</p>
+        <ul className="space-y-2">
+          {b.statusItems.map(i => <StatusItem key={i.code} item={i} canRecord={canRecord} post={post} busy={busy} />)}
+        </ul>
       </section>
 
       <section className="space-y-2">
@@ -306,7 +394,7 @@ export default function GovernanceBoard({ load, canRecord, people }: Props) {
           {b.escalation.map(e => (
             <li key={e.code} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm flex flex-wrap items-center gap-2">
               <span className="font-semibold text-gray-900">{e.step}.</span>
-              <Link href={e.route} className="text-teal-700 hover:underline">{e.label}</Link>
+              <LinkOrText l={e} />
               <span className="text-gray-600">· {e.seatName}</span>
               <StatusPill s={e.seatStatus} />
               {e.note && <span className="text-[12px] text-gray-500 basis-full">{e.note}</span>}

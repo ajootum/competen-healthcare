@@ -80,3 +80,24 @@ update hq_gov_body set document_status = 'approved', document_ref = null where c
 delete from audit_log where actor_id = '00000000-0000-0000-0000-00000000000a';
 delete from profiles where id = '00000000-0000-0000-0000-00000000000a';
 select count(*) as a_rows_kept from hq_gov_seat_appointment where seat_code = 'board_holdings_nominee_1';
+\echo V1.1 P30 status item marked verified without evidence refused
+select hq_gov_admin_set_status_item(:O, 'O', 't', 'recovery_capability', 'verified', 'short', null, 'claim it');
+\echo V1.1 P31 status item, non-owner refused
+select hq_gov_admin_set_status_item('00000000-0000-0000-0000-000000000003', 'D', 't', 'recovery_capability', 'pending', null, null, 'try it');
+\echo V1.1 P32 status item verified directly without a decider refused, constraint
+update hq_gov_status_item set status = 'verified', evidence = 'a long enough evidence text' where code = 'platform_governance_council_mandate';
+\echo V1.1 P33 status item change by owner OK, audited
+select hq_gov_admin_set_status_item(:O, 'O', 't', 'technical_appointments', 'pending', 'Nominations under discussion', null, 'status reviewed') ->> 'to';
+\echo V1.1 P34 relation of a delegation never changes
+update hq_gov_delegation set relation = 'corporate_reporting' where code = 'committee_to_product';
+\echo V1.1 P35 the Technology Authority mandate can be approved only by the established Holdings, with a basis
+select hq_gov_admin_set_delegation(:O, 'O', 't', 'holdings_to_technology_services', 'approved', null, 'approve it');
+select hq_gov_admin_set_delegation(:O, 'O', 't', 'holdings_to_technology_services', 'approved', 'Holdings resolution H-1', 'approve it') ->> 'to';
+\echo V1.1 P36 the joint review bridge cannot be approved while the Committee is not established
+select hq_gov_admin_set_delegation(:O, 'O', 't', 'committee_technology_joint_review', 'approved', 'Committee minute C-1', 'approve it');
+\echo V1.1 P37 a service body with a level refused, and a level body without one refused
+insert into hq_gov_body (code, level, kind, name) values ('x_service', 3, 'service', 'X');
+insert into hq_gov_body (code, level, kind, name) values ('x_board', null, 'board', 'X');
+\echo V1.1 P38 a clearance with no route needs its note, and a routed link needs a capability
+insert into hq_gov_link (code, seat_code, kind, clearance_domain, label) values ('x1', 'portfolio_product_technology', 'joint_clearance', 'scholar', 'X');
+insert into hq_gov_link (code, seat_code, kind, label, route) values ('x2', 'portfolio_product_technology', 'administration', 'X', '/super-admin/individual');
