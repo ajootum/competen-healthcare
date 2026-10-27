@@ -42,10 +42,22 @@ describe("CR3: a private case is made by code from the draft, and checked", () =
     expect(b.decisionPoints[0].permittedReveals).toEqual(["f1"]);
     expect(b.decisionPoints[0].sourceRefs).toEqual([PASSAGES[1].chunkId]);
     expect(b.learningObjectives[0].competencyIds).toEqual([COMP]);
-    expect(b.safetyCriteria).toEqual([{ id: "c1", text: "Escalate to the nurse in charge if hypoxaemia worsens.", decisionPointId: "d2", mustSelect: ["a"], mustNotSelect: undefined }]);
+    expect(b.safetyCriteria).toEqual([{ id: "c1", text: "Escalate to the nurse in charge if hypoxaemia worsens.", decisionPointId: "d2", mustSelect: ["d2a"], mustNotSelect: undefined }]);
     expect(b.metadata.provenance).toEqual({ kind: "private", rights: "student_private" });
     expect(validateBlueprint(b, "private")).toEqual([]);
     expect(checkPrivateCase(b, PASSAGES.map(p => p.content))).toEqual([]);
+  });
+  // SCHOLAR-AI-OPT-01 P2, the acceptance run's refusal: two decisions the model put in one stage shared option ids
+  // ("a", "b" for each), so the stage failed "option ids repeat between its decision points" whatever the notes said.
+  it("two decisions in one stage still make a valid case: option ids carry their decision", () => {
+    const two = blueprintFromDraft({ ...DRAFT, decisions: DRAFT.decisions.map(d => ({ ...d, stage: 1 })) }, { passages: PASSAGES, competencies: [] })!;
+    expect(two.stages.map(s => s.decisionPointIds)).toEqual([["d1", "d2"]]);
+    expect(two.decisionPoints.flatMap(d => d.options.map(o => o.id))).toEqual(["d1a", "d1b", "d2a", "d2b"]);
+    expect(validateBlueprint(two, "private")).toEqual([]);
+  });
+  it("a free-text decision with no expected response is still refused (the rule is unchanged; the prompt now asks for it)", () => {
+    const ft = blueprintFromDraft({ ...DRAFT, decisions: [DRAFT.decisions[0], { stage: 2, prompt: "What do you say when you escalate?", kind: "free_text", sources: ["S2"], rationale: "Escalate to the nurse in charge." }] }, { passages: PASSAGES, competencies: [] })!;
+    expect(validateBlueprint(ft, "private").join(" ")).toMatch(/a free-text decision needs its expected response/);
   });
   it("refuses a case that adds a value the notes do not hold, or identifies a person", () => {
     const invented = blueprintFromDraft({ ...DRAFT, facts: [{ ref: "F1", label: "Oxygen saturation", value: "88%", shown: "start" }] }, { passages: PASSAGES, competencies: [] })!;
@@ -72,13 +84,13 @@ describe("CR2/CR4: played on the shared engine, marked by code, debriefed from t
     expect(r2).toMatchObject({ completed: true, safety: 1 });
   });
   it("marks a choice by its key, never a written answer", () => {
-    expect(markDecision(b, "d1", ["a"])).toEqual({ correct: true, score: 1 });
-    expect(markDecision(b, "d2", ["b"])).toEqual({ correct: false, score: 0 });
+    expect(markDecision(b, "d1", ["d1a"])).toEqual({ correct: true, score: 1 });
+    expect(markDecision(b, "d2", ["d2b"])).toEqual({ correct: false, score: 0 });
   });
   it("the debrief: by dimension, the safety point missed, the finding never asked for, where to go back to", () => {
     const d = caseDebrief(b, [
-      { decisionPointId: "d1", chosen: ["a"], correct: true, safety: [], marking: "deterministic" },
-      { decisionPointId: "d2", chosen: ["b"], correct: false, safety: ["c1"], marking: "deterministic" },
+      { decisionPointId: "d1", chosen: ["d1a"], correct: true, safety: [], marking: "deterministic" },
+      { decisionPointId: "d2", chosen: ["d2b"], correct: false, safety: ["c1"], marking: "deterministic" },
     ], [], ["s1", "s2"]);
     expect(d.dimensions).toEqual([{ dimension: "interpretation", answered: 1, correct: 1, written: 0 }, { dimension: "escalation", answered: 1, correct: 0, written: 0 }]);
     expect(d.safetyEvents).toEqual(["Escalate to the nurse in charge if hypoxaemia worsens."]);

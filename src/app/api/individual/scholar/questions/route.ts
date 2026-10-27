@@ -6,7 +6,7 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { chunkMappings, getPassage, insertQuestions, unansweredQuestions } from "@/lib/individual/scholar/store";
 import { leadingCompetency } from "@/lib/competency/mapping";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
-import { runQuestions, type QuestionKind } from "@/lib/individual/scholar/generation";
+import { refusedTerms, runQuestions, type QuestionKind } from "@/lib/individual/scholar/generation";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { PROMPT_VERSIONS } from "@/lib/individual/scholar/config";
 import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     reasons: [...(r.declaredInsufficient ? ["source_insufficient"] : []), ...r.check.dropped.map(d => d.reason), ...(saved.ok ? [] : ["save_failed"])], promptVersion: r.promptVersion,
   });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, `individual_scholar_${kind}`, null, {
-    action_id: ai.actionId, chunk_id: passage.chunkId, kept: saved.ids.length, dropped: r.check.dropped.map(d => d.reason),
+    action_id: ai.actionId, chunk_id: passage.chunkId, kept: saved.ids.length, refused_terms: refusedTerms(r.check.dropped), dropped: r.check.dropped.map(d => d.reason),
     model: r.model, prompt_version: r.promptVersion, saved: saved.ok, attempts: r.attempts, competency_id: competencyId,
   });
   if (!saved.ok) return NextResponse.json({ error: "The questions could not be saved. Try again shortly." }, { status: 500 });

@@ -176,3 +176,118 @@ Reuse in serving: once a version is published, the library-first offer that alre
 ## Blockers
 
 None for Waves 1 and 2. Wave 3 step 1 is an owner and legal decision (the attestation text and the `case_library` flag).
+
+---
+
+# Follow-up, 27 Oct 2026: initial pilot priorities (owner directive "COMPETEN SCHOLAR: INITIAL PILOT PRIORITIES")
+
+State on entry:
+- Waves 1 and 2 are live: PR #149 is merged as 54903b7b and deployed.
+- Migration 600 has been applied in production.
+- The panel showed US$0.2165 over 11 calls and 0 measured actions, because the acceptance calls predate `action_id`.
+
+## Completed
+
+### Priority 2: what the 4 rejected acceptance attempts actually were
+
+This is from the production Scholar audit rows, read-only (`bin/q/AIOPT-01-rejected-cases.sql`).
+
+**Apply case, blueprint: 2 calls, US$0.0889. It was refused for its structure, not for grounding.** The refusal reasons were:
+- "stage s1: option ids repeat between its decision points";
+- "stage s3: option ids repeat between its decision points";
+- "decision d3: a free-text decision needs its expected response".
+
+The first two came from a code defect. `blueprintFromDraft` gave every decision's options the ids `a`, `b` …, so any stage that held two decisions failed the validator, whatever the notes said.
+- **Fix:** option ids now carry their decision (`d1a`).
+- A regression test reproduces the acceptance shape.
+- The validator is unchanged.
+
+The third reason, a free-text decision with no `expectedResponse`, came from the prompt. Its reply example showed no such field.
+- **Fix:** the example now shows a free-text decision with its `expectedResponse`, marks the field as required, and asks for exactly one decision per stage.
+- The prompt version moves to `scholar-case-blueprint-v3`. That also ends any identical-retry block on the old version.
+- The validator rule stays: a free-text decision without an expected response is still refused, and a test pins this.
+
+When a draft is refused only for its shape, the learner no longer sees "without adding things they do not say".
+
+**Step-by-step case: 2 calls, US$0.0540. 0 steps survived.** 8 drafts were dropped:
+- `unsupported_term` ×5 (options using words the passage does not use);
+- `correct_not_supported` ×1;
+- `malformed` ×2 (this includes "only one step survived").
+
+Across the whole run, the vocabulary rule caused 9 of the 12 question drops (mcq 2, case question 2, step case 5). The audit kept only the code, not the words, so there is no evidence for a targeted prompt change.
+- **No case-steps prompt change was made.** The vocabulary rule is unchanged.
+- **Added instead:** the step-case and questions audit rows now record `refused_terms`. These are at most 12 single words the model used that the passage does not contain. They never include the passage, the stem or an answer.
+- The next pilot rejections will show which words to address.
+
+**Sufficiency rules: unchanged, and the evidence supports leaving them.** The note was sufficient: a case question from the same section was kept. The failures were the defect, the missing field and the vocabulary rule. None of them was a lack of material.
+
+### Priority 7: metering, prepared and not activated (no production flag or policy changed)
+
+Production state (read-only, `AIOPT-02/03`):
+- `ai_fair_use`: unwritten, so OFF.
+- The published policies `ai.fair_use.scholar` and `ai.fair_use.professional` set UGX, 4,000 included CAU, a 500 reserve, renewal on the subscription anniversary, and a 10% FX buffer.
+- 0 allowance accounts.
+
+What ON still needs. `ai_reserve` refuses in this order, and each refusal reaches the learner as "allowance used":
+
+| Needed | Production now | `ai_reserve` refusal |
+|---|---|---|
+| `ai_price` rows for the routed models (`claude-opus-4-8`, `claude-sonnet-4-6`, and Haiku 4.5 if it is ever routed) | 0 rows | `model_not_priced` |
+| `ai_fx_rate` UGX per USD | 0 rows | `no_reference_rate` |
+| `ai_cau_basis` UGX per CAU | 0 rows | `no_cau_basis` |
+
+- `ai_cau_rate` (USD per CAU) also has 0 rows.
+- The gateway's list prices could serve as a reference for the price rows: Opus 4.8 is US$5/25 per MTok and Sonnet 4.6 is US$3/15. The owner sets the values.
+- **Until all three rows exist, turning metering ON would refuse every Scholar AI call.**
+
+Entitlement, tested on STAGING (flag set ON, standings read, flag restored to `false`):
+- Members with a live pilot entitlement had full standing. The pilot grant writes an open-ended `pilot` entitlement, which is enough. **Invite-only pilot users are not refused as `not_entitled`.** No plan or subscription is needed.
+- Members without a live entitlement (revoked, or never granted that product) would be refused. Their standing text says "allowance used" rather than "needs access", which is a wording follow-up.
+- Production: 1 member, with open-ended pilot entitlements for Scholar and Professional.
+- The staging reads opened 4 `ai_allowance_account` rows on staging.
+
+D1 subject-level risk, using the production rules and the real code (`classifyRisk`):
+
+| Request | Classified as | Rule |
+|---|---|---|
+| Teach on chunk 1 of the acceptance note (sections 1-2) | `high_risk_clinical` | `high.emergency` ("cardiac arrest") |
+| Teach on chunk 2 (sections 3-5) | `high_risk_clinical` | `high.emergency` ("sepsis") |
+| Personal AI "sepsis vs SIRS" | `high_risk_clinical` | `high.emergency` ("sepsis") |
+| Teach on chunk 3 (section 6) | `clinical_educational` | |
+| A study-skills question | `standard_educational` | |
+
+- Teach is eligible only up to `clinical_educational` (Opus 4.8).
+- **So with metering ON, 2 of the 2 clinical Teach or Personal AI requests made so far in production would be refused (`not_eligible`).** The same would happen to most notes on deterioration, sepsis or emergencies.
+- Personal AI question text is not stored, so for that request the subject was taken from the activation record.
+
+### Priorities 8 and 10: learner-level measures (no migration)
+
+The HQ AI Quality & Cost panel now also shows:
+- active Scholar learners in the window;
+- cost per learner and calls per learner;
+- for each output kind, actions and accepted outputs per learner, and the feedback rate (ratings over outputs kept);
+- people and cost per person by product;
+- learners per day in the trend.
+
+`actor_id` is counted in server memory only. No id or text reaches the page, and a test asserts that.
+
+## Measured
+
+- **Acceptance baseline, split by cause:**
+  - US$0.0889 went on the blueprint (code defect and missing field, both now fixed);
+  - US$0.0540 went on step cases (vocabulary rule, now instrumented);
+  - the rest was kept output.
+- **No savings are claimed.** The blueprint fix should stop the structural refusals, but there is no post-fix pilot evidence yet.
+
+## Next
+
+1. Merge and deploy. Then compare cost per accepted case on the next pilot cases, and read `refused_terms` after about 10 step-case attempts.
+2. The metering prerequisites are owner data entry: price, FX and CAU basis rows. Keep metering OFF until they exist and the D1 decision below is taken.
+
+## Blockers (genuine owner decisions)
+
+- **D1 versus Teach eligibility.** If metering were ON, Teach and Personal AI on emergency or sepsis topics would be refused. The owner needs to choose one of:
+  - (a) evaluate and approve a model for Teach at `high_risk_clinical`;
+  - (b) narrow the `high.emergency` rule for educational Teach;
+  - (c) accept that refusal.
+- **Metering money rows.** The `ai_price`, `ai_fx_rate` (UGX) and `ai_cau_basis` (UGX) values before any ON.

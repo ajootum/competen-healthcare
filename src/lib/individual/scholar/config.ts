@@ -114,7 +114,9 @@ export const PROMPT_VERSIONS = {
   revision: "scholar-revision-v2",
   // COMPETEN-SCHOLAR-CLINICAL-REASONING-01: a private case drafted from the notes, and AI feedback on written reasoning.
   // v2: no counting, and no state or change words the passages do not use (the staging runs' refusal reasons).
-  caseBlueprint: "scholar-case-blueprint-v2",
+  // v3 (SCHOLAR-AI-OPT-01 P2): the reply example shows expectedResponse on a free-text decision and says one decision per
+  // stage -- the acceptance run's other refused draft had a free-text decision with no expected response.
+  caseBlueprint: "scholar-case-blueprint-v3",
   caseReasoning: "scholar-case-reasoning-v1",
 } as const;
 
