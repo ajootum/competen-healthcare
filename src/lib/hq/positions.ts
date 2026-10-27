@@ -23,7 +23,7 @@ type Admin = ReturnType<typeof createAdminClient>;
 
 export type HqSensitiveClass = "clinical" | "financial" | "platform";
 
-/** Mirrors hq_capability_sensitive_class() as migration 511 last defined it. A grant of one needs an explicit acknowledgement. */
+/** Mirrors hq_capability_sensitive_class() as migration 620 last defined it (511 plus the studio right). A grant of one needs an explicit acknowledgement. */
 export const HQ_SENSITIVE_CAPABILITIES: Record<HqSensitiveClass, readonly string[]> = {
   clinical: ["hq.quality.clinical.approve", "hq.quality.clinical.govern", "hq.competency.verification.manage", "hq.competency.verification.assess"],
   financial: ["hq.practice.commercial.manage", "hq.individual.commercial.manage", "hq.learning.price.approve", "hq.platform.ai.manage"],
@@ -33,7 +33,7 @@ export const HQ_SENSITIVE_CAPABILITIES: Record<HqSensitiveClass, readonly string
     "hq.individual.config.manage", "hq.individual.professional.verify", "hq.practice.licence.verify",
     "hq.practice.provision.execute", "hq.practice.flags.manage", "hq.practice.release.activate",
     "hq.practice.release.rollback", "hq.practice.export.execute", "hq.practice.change.approve",
-    "hq.practice.risk.accept", "hq.practice.configuration.manage", "hq.learning.certificate.issue",
+    "hq.practice.risk.accept", "hq.practice.configuration.manage", "hq.learning.certificate.issue", "hq.platform.governance.manage",
   ],
 };
 
