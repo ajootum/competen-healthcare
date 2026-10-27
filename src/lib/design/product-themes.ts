@@ -59,6 +59,11 @@ export function presentationFor(code: string): ProductPresentation {
   return (PRODUCT_PRESENTATION as Record<string, ProductPresentation>)[code] ?? PRODUCT_PRESENTATION.platform;
 }
 
+/** The theme of a product by its approved name (the Individual sign-in banner knows only the name). Default: individual. */
+export function themeForName(name: string): ProductThemeKey {
+  return Object.values(PRODUCT_PRESENTATION).find(p => p.name === name)?.theme ?? "individual";
+}
+
 /** The hex palette of a theme, for the few consumers that need real colour values (SVG attributes, documents). */
 export function themePalette(key: ProductThemeKey) {
   return productTheme[key];

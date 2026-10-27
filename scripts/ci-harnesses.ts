@@ -192,6 +192,9 @@ const INCLUDED = [
   "role-authorization-ratchet-harness.ts",
   "pui-colour-harness.ts",
   "pui-tokens-harness.ts",
+  // COMPETEN-DESIGN-SYSTEM-01 -- four product themes, AA, chrome reads the theme, the login chooser stays presentation
+  // over the server's set, the presentation config cannot reach names, colours or Platform. Source-only: no client, no .env.local.
+  "design-system-themes-harness.ts",
   // Build isolation: a verification build must never write into the dev server's .next.
   // 13/13, pure static reads of next.config.ts, tsconfig.json, package.json and .vercelignore.
   "build-isolation-harness.ts",

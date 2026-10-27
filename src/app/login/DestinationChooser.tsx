@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { presentationFor, type ProductIcon } from "@/lib/design/product-themes";
+import { presentWith, type PresentationConfig } from "@/lib/design/presentation-config";
 
 // COMPETEN-DESIGN-SYSTEM-01 s4: the post-sign-in destination chooser, one card per AUTHORISED destination.
 //
@@ -38,7 +39,8 @@ function Icon({ name }: { name: ProductIcon }) {
   }
 }
 
-export function DestinationChooser({ destinations }: { destinations: Destination[] }) {
+// `presentation` is the published HQ wording (presentation-config.ts), laid over the code default per card.
+export function DestinationChooser({ destinations, presentation }: { destinations: Destination[]; presentation?: Partial<PresentationConfig> }) {
   // Lazy initialiser: this component renders only after the client resolved destinations, never on the server.
   const [last] = useState<string | null>(() => (typeof window === "undefined" ? null : readLast()));
   const ordered = orderDestinations(destinations, last);
@@ -49,7 +51,7 @@ export function DestinationChooser({ destinations }: { destinations: Destination
       <p className="mt-1 text-[13px] text-gray-600">Choose where to go now. You can switch at any time; your account is the same everywhere.</p>
       <ul className="mt-4 flex flex-col gap-3">
         {ordered.map(d => {
-          const p = presentationFor(d.code);
+          const p = presentWith(d.code, presentation, presentationFor(d.code));
           const isLast = d.code === last;
           return (
             <li key={d.code} data-cmp-theme={p.theme}>
