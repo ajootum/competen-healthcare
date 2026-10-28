@@ -6,7 +6,7 @@ mandatory independent decisions. Extends 640, which stays exactly as staged.
 | State | Status |
 |---|---|
 | 1. Authored | Done. Local rehearsal below. |
-| 2. Applied and verified on staging ×2 | **Pending: coordinator.** |
+| 2. Applied and verified on staging ×2 | **PASS 28 Oct** (coordinator): FINGERPRINT 0→7|4|3|5|1 ×2, VERIFY-641 9/9 (row 7 true), VERIFY-640 13/13, rollback 0 with 640 intact, re-applied. See 640-staging-record.md. |
 | 3. Merged into main | Not yet. |
 | 4. Applied to production | **Not applied.** The owner applies it by hand, after 640. |
 
