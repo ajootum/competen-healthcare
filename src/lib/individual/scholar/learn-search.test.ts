@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  PAGE_SIZE, displaySessionTitle, displayTitle, distinguishTitles, learnLanding, leadingTopic, looksLikeFileName, parseSearchParams,
+  PAGE_SIZE, displaySessionTitle, displayTitle, topicLabel, distinguishTitles, learnLanding, leadingTopic, looksLikeFileName, parseSearchParams,
   searchLibrary, sessionTitle, snippet, termScore, topicDetail, topicIndex,
 } from "./learn-search";
 import { parseScope, resolveScope, scopeText, storedScopeKind } from "./learn";
@@ -106,7 +106,12 @@ describe("naming (owner s7): deterministic, never a raw file name, history not r
     expect(displayTitle("recognising-deterioration-notes")).toBe("Recognising Deterioration Notes");
     expect(displayTitle("week_3_cardio.pdf")).toBe("Week 3 Cardio");
     expect(displayTitle("ECG interpretation, week 3")).toBe("ECG interpretation, week 3");
+    expect(displayTitle("re-escalation if no improvement")).toBe("Re-escalation if no improvement");
+    expect(displayTitle("sepsis six")).toBe("Sepsis six");
     expect(displayTitle("")).toBe("Untitled material");
+    expect(topicLabel("end-of-life care")).toBe("End-of-life care");
+    expect(topicLabel("re-escalation")).toBe("Re-escalation");
+    expect(topicLabel("NEWS2 escalation")).toBe("NEWS2 escalation");
   });
 
   it("the session title is topic, then source -- the owner's example", () => {
@@ -115,7 +120,7 @@ describe("naming (owner s7): deterministic, never a raw file name, history not r
     expect(sessionTitle({ kind: "document", sections: [s("c1"), s("c2")], topics })).toBe("Recognising clinical deterioration · Source: Recognising Deterioration Notes");
     expect(sessionTitle({ kind: "section", sections: [s("c1")], topics })).toBe("Recognising clinical deterioration · Source: Recognising Deterioration Notes, page 3");
     expect(sessionTitle({ kind: "document", sections: [s("x")], topics: new Map() })).toBe("Recognising Deterioration Notes");
-    expect(sessionTitle({ kind: "topic", topic: "oxygen therapy", sections: [s("c1"), { ...s("c3"), materialId: "m2", materialTitle: "Week 2" }], topics })).toBe("Oxygen Therapy · 2 sources");
+    expect(sessionTitle({ kind: "topic", topic: "oxygen therapy", sections: [s("c1"), { ...s("c3"), materialId: "m2", materialTitle: "Week 2" }], topics })).toBe("Oxygen therapy · 2 sources");
     expect(sessionTitle({ kind: "document", sections: [s("c1")], topics }).length).toBeLessThanOrEqual(160);
   });
 

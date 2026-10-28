@@ -45,9 +45,16 @@ export function looksLikeFileName(t: string): boolean {
 export function displayTitle(t: string): string {
   const s = (t ?? "").trim();
   if (!s) return "Untitled material";
-  if (!looksLikeFileName(s) && s !== s.toLowerCase()) return s;
+  // A label with spaces (a topic, a typed title) keeps its own words and hyphens: all lower case gets a capital first letter only.
+  if (!looksLikeFileName(s)) return s === s.toLowerCase() && /^[a-z]/.test(s) ? s[0].toUpperCase() + s.slice(1) : s;
   const words = s.replace(/\.(pdf|docx|pptx|txt)$/i, "").replace(/[-_.]+/g, " ").replace(/\s+/g, " ").trim().split(" ");
   return words.map(w => (/^[a-z]/.test(w) ? w[0].toUpperCase() + w.slice(1) : w)).join(" ") || "Untitled material";
+}
+
+/** Pure. A topic as topic finding or the student wrote it: never split on hyphens; all lower case gets a capital first letter only. */
+export function topicLabel(t: string): string {
+  const s = (t ?? "").replace(/\s+/g, " ").trim();
+  return s === s.toLowerCase() && /^[a-z]/.test(s) ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
 /** Pure. The topic most of these sections share (first seen breaks a tie), as written. Null when none is known. */
@@ -60,7 +67,7 @@ export function leadingTopic(chunkIds: readonly string[], topics: ReadonlyMap<st
     c.n++; counts.set(k, c);
   }
   const best = [...counts.values()].sort((a, b) => b.n - a.n || a.first - b.first)[0];
-  return best ? displayTitle(best.name) : null;
+  return best ? topicLabel(best.name) : null;
 }
 
 /**
@@ -73,7 +80,7 @@ export function sessionTitle(input: {
   topics: ReadonlyMap<string, readonly string[]>; topic?: string | null; competencyTitle?: string | null;
 }): string {
   const sources = [...new Set(input.sections.map(s => s.materialId))].map(id => displayTitle(input.sections.find(s => s.materialId === id)!.materialTitle));
-  const subject = input.kind === "topic" && input.topic ? displayTitle(input.topic)
+  const subject = input.kind === "topic" && input.topic ? topicLabel(input.topic)
     : input.kind === "competency" && input.competencyTitle ? input.competencyTitle
       : leadingTopic(input.sections.map(s => s.chunkId), input.topics);
   const first = input.sections[0];
@@ -145,7 +152,7 @@ export function materialTopics(rows: readonly { materialId: string; topics: read
     const e = n.get(k) ?? { name: t.trim(), c: 0, at: i++ };
     e.c++; n.set(k, e);
   }
-  return [...n.values()].sort((a, b) => b.c - a.c || a.at - b.at).slice(0, limit).map(e => displayTitle(e.name));
+  return [...n.values()].sort((a, b) => b.c - a.c || a.at - b.at).slice(0, limit).map(e => topicLabel(e.name));
 }
 
 export type SearchParams = {
@@ -219,7 +226,7 @@ export async function searchLibrary(admin: any, userId: string, params: SearchPa
     .map(x => x.e);
   const topicHits = (list: readonly TopicEntry[]): TopicHit[] => list.map(e => {
     const s = subjectOf(e.materialIds, shelf);
-    return { name: displayTitle(e.name), sections: e.sections, documents: e.materialIds.length, subject: s ? subjectName.get(s) ?? null : null };
+    return { name: topicLabel(e.name), sections: e.sections, documents: e.materialIds.length, subject: s ? subjectName.get(s) ?? null : null };
   });
 
   // Documents: title or file name, or a topic of theirs, matching; filtered by type, date and subject.
@@ -266,7 +273,7 @@ export async function searchLibrary(admin: any, userId: string, params: SearchPa
           total: ranked.length, matched: sectionCount,
           items: page.map((c, i) => ({
             chunkId: c.id, materialId: c.materialId, materialTitle: displayTitle(refs[i].materialTitle), location: citeChunk(c, refs[i].unit),
-            extract: snippet(c.content, terms), topics: (topicsByChunk.get(c.id) ?? []).slice(0, 3).map(displayTitle),
+            extract: snippet(c.content, terms), topics: (topicsByChunk.get(c.id) ?? []).slice(0, 3).map(topicLabel),
             competencies: [...new Map(links.filter(l => l.chunkId === c.id).map(l => [l.competencyId, {
               id: l.competencyId, title: names.get(l.competencyId)?.title ?? "A competency", code: names.get(l.competencyId)?.code ?? null, accepted: l.accepted,
             }])).values()].slice(0, 3),
@@ -320,7 +327,7 @@ export async function sessionHits(admin: any, userId: string, rows: readonly Lea
     const s = summaries.get(r.id);
     return {
       id: r.id, title: titles.get(r.id) ?? displaySessionTitle(r.title), status: r.status, steps: s?.steps ?? 0, currentStep: r.currentStep,
-      topic: r.topic ? displayTitle(r.topic) : leadingTopic(s?.chunkIds ?? [], topicMap),
+      topic: r.topic ? topicLabel(r.topic) : leadingTopic(s?.chunkIds ?? [], topicMap),
       sources: (s?.materialIds ?? []).map(id => name.get(id)).filter((t): t is string => !!t),
       lastActiveAt: r.lastActiveAt, createdAt: r.createdAt,
     };
@@ -366,7 +373,7 @@ export async function learnLanding(admin: any, userId: string, materials: readon
     for (const e of index.slice(0, LANDING_TOPICS)) {
       const s = subjectOf(e.materialIds, shelf);
       const key = s && names.has(s) ? s : "";
-      groups.set(key, [...(groups.get(key) ?? []), { name: displayTitle(e.name), sections: e.sections, documents: e.materialIds.length, subject: key ? names.get(key)! : null }]);
+      groups.set(key, [...(groups.get(key) ?? []), { name: topicLabel(e.name), sections: e.sections, documents: e.materialIds.length, subject: key ? names.get(key)! : null }]);
     }
     topicGroups = [...groups.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1) || (names.get(a[0]) ?? "").localeCompare(names.get(b[0]) ?? ""))
       .map(([k, topics]) => ({ subject: k ? names.get(k)! : null, topics }));
@@ -411,12 +418,12 @@ export async function topicDetail(admin: any, userId: string, name: string, page
   const comp = [...new Map(links.map(l => [l.competencyId, { id: l.competencyId, title: labels.get(l.competencyId)?.title ?? "A competency", code: labels.get(l.competencyId)?.code ?? null, accepted: l.accepted }])).values()];
   const s = subjectOf(entry.materialIds, shelf);
   return {
-    name: displayTitle(entry.name), subject: s ? names.get(s) ?? null : null, total: entry.sections,
+    name: topicLabel(entry.name), subject: s ? names.get(s) ?? null : null, total: entry.sections,
     competencies: comp.sort((a, b) => Number(b.accepted) - Number(a.accepted)).slice(0, 8),
     documents: docs.map(m => ({ id: m.id, title: displayTitle(m.title), fileName: m.fileName, format: FORMAT_LABEL[FORMAT_OF[m.mimeType]], unit: UNIT_OF(m.mimeType), addedAt: m.createdAt, sections: m.chunkCount, topics: [], subject: shelf.get(m.id) ? names.get(shelf.get(m.id)!) ?? null : null })),
     sections: pageRows.map((c, i) => ({
       chunkId: c.id, materialId: c.materialId, materialTitle: displayTitle(refs[i].materialTitle), location: citeChunk(c, refs[i].unit),
-      extract: snippet(c.content, searchTerms(name)), topics: (topicsByChunk.get(c.id) ?? []).slice(0, 3).map(displayTitle),
+      extract: snippet(c.content, searchTerms(name)), topics: (topicsByChunk.get(c.id) ?? []).slice(0, 3).map(topicLabel),
       competencies: [],
     })),
   };
