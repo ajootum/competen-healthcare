@@ -464,24 +464,34 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase }: { car
 }
 
 /** COMPETEN-RESEARCH-01: external research, apart from the notes, labelled, every record with its real link. */
+/**
+ * RESEARCH-02: two lists that never mix. "Sources cited" appears only beside a SHOWN research summary and holds exactly
+ * the records it cites. Everything else the server returned -- all of it identity-verified (learn-research.ts) -- is
+ * "Further reading": listed, linked, never presented as support for an answer. So a withheld summary still leaves the
+ * verified sources in view, and no message says they are there unless they are.
+ */
 function ResearchBlock({ x }: { x: ResearchReply }) {
   const cited = new Set(x.cited ?? []);
-  const evidence = x.references.filter(r => r.tag && (!x.cited || cited.has(Number(r.tag.slice(1)))));
-  const further = x.references.filter(r => !evidence.includes(r));
+  const support = x.text ? x.references.filter(r => r.tag && (!x.cited || cited.has(Number(r.tag.slice(1))))) : [];
+  const further = x.references.filter(r => !support.includes(r));
   return (
     <section aria-label="External research" className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-2.5">
       <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-indigo-900">{x.label}</p>
       {x.text && <div className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-gray-800">{x.text}</div>}
       {x.withheld && <p className="mt-1 text-[13px] text-gray-700">{x.withheld}</p>}
       {x.message && <p className="mt-1 text-[13px] text-gray-700">{x.message}</p>}
-      {x.text && evidence.length > 0 && (
-        <ul className="mt-2 space-y-2">{evidence.map(r => <li key={r.url}><ExternalRefLine r={r} /></li>)}</ul>
+      {support.length > 0 && (
+        <div className="mt-2">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-indigo-900">Sources cited in this research summary</p>
+          <ul className="mt-1 space-y-2">{support.map(r => <li key={r.url}><ExternalRefLine r={r} /></li>)}</ul>
+        </div>
       )}
       {further.length > 0 && (
-        <details className="mt-2">
-          <summary className={`cursor-pointer text-[12.5px] font-semibold text-gray-800 ${focusRing}`}>{x.text ? "Other research found" : "Research found"} ({further.length}): further reading, not used in the answer</summary>
+        <div className="mt-3 border-t border-indigo-200 pt-2">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-gray-700">Further reading ({further.length})</p>
+          <p className="text-[12px] text-gray-600">{x.text ? "Other verified sources found for this topic. They do not support the summary above." : "Verified sources found for this topic. No research summary is shown, so none of these supports an answer."}</p>
           <ul className="mt-1 space-y-2">{further.map(r => <li key={r.url}><ExternalRefLine r={{ ...r, tag: null, excerpt: null }} /></li>)}</ul>
-        </details>
+        </div>
       )}
       {x.scholarLink && (
         <p className="mt-2 text-[12px] text-gray-700">

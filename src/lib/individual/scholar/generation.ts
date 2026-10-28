@@ -393,7 +393,8 @@ export const RESEARCH_MARKER = "FROM RESEARCH:";
 /** What the model is shown of one verified external item. Evidence only: an item without an abstract never gets here. */
 export type ResearchEvidence = { title: string; journal: string | null; year: number | null; abstract: string };
 export type ResearchReason = "no_citation" | "bad_citation" | "mixed" | "uncited_sentence" | "identifier" | "dosing" | "ungrounded" | "too_long" | "risk_raised";
-export type ResearchCheck = { ok: true; text: string; cited: number[] } | { ok: false; reason: ResearchReason; violations?: PhrasingViolation[] };
+/** `dropped`: framing lines (a heading, an uncited lead-in) left out of what is shown. */
+export type ResearchCheck = { ok: true; text: string; cited: number[]; dropped?: number } | { ok: false; reason: ResearchReason; violations?: PhrasingViolation[] };
 // Doses, units and dose adjustment. Whether a medicine is prescribed is a fact, not a dose: medication ADVICE is judged
 // by the published risk rules on what the research part wrote (withinRequestRisk, risk_raised), not by a word list.
 const RESEARCH_DOSING = /\b(mg|mcg|micrograms?|milligrams?|ml|millilitres?|milliliters?|mmol|iu|units?\/kg|dose[sd]?|dosage|dosing|titrat\w*|bolus|regimen)\b/i;
@@ -407,7 +408,7 @@ export const RESEARCH_WITHHELD: Record<ResearchReason, string> = {
   dosing: "The research summary mentioned doses or prescribing, so it was not shown. Your course materials and supervisors are the place for that.",
   ungrounded: "The research summary included details the sources' abstracts do not contain, so it was not shown.",
   too_long: "The research summary was too long, so it was not shown.",
-  risk_raised: "The research summary went into clinical detail beyond what Scholar may explain for this topic, so it was not shown. The sources are listed for you to read.",
+  risk_raised: "The research summary went into clinical detail beyond what Scholar may explain for this topic, so it was not shown.",
 };
 
 /** Pure. The research part: cited sentence by sentence, only from the given abstracts (and the notes/what was asked). */
@@ -419,15 +420,54 @@ export function checkResearchPart(raw: string, evidence: readonly ResearchEviden
   if (!tags.length) return { ok: false, reason: "no_citation" };
   if (tags.some(n => n < 1 || n > evidence.length)) return { ok: false, reason: "bad_citation" };
   // A tag written after the full stop belongs to the sentence before it.
-  const sentences = t.replace(/([.!?])((?:\s*\[E\d+\])+)/g, "$2$1").split(/(?<=[.!?])\s+|\n+/).map(s => s.replace(/^[\s*-]+/, "").trim()).filter(s => s.split(/\s+/).length >= 4);
-  if (sentences.some(s => !/\[E\d+\]/.test(s))) return { ok: false, reason: "uncited_sentence" };
+  const units = researchUnits(t);
+  const uncited = units.filter(u => u.words >= 4 && !u.cited);
+  // RESEARCH-02 (owner GO 28 Oct): an uncited HEADING line, or an uncited LEAD-IN (the first sentence, carrying no caveat),
+  // is framing, not a claim. It is DROPPED from what is shown -- never accepted as evidence -- and every other uncited
+  // sentence (a middle one, a closing synthesis such as "Together these suggest ...") still withholds the whole part.
+  // A lead-in that carries a caveat is not dropped (losing it would overstate the evidence): it withholds too.
+  const leadIn = units.find(u => !u.heading)?.index;
+  const dropped = uncited.filter(u => u.heading || (u.index === leadIn && !RESEARCH_CAVEAT.test(u.text)));
+  if (uncited.some(u => !dropped.includes(u))) return { ok: false, reason: "uncited_sentence" };
+  // Every safety check runs on the FULL text, dropped framing included: dropping never lets anything else through.
   if (findPatientIdentifiers(t).length) return { ok: false, reason: "identifier" };
   if (RESEARCH_DOSING.test(t)) return { ok: false, reason: "dosing" };
-  const prose = t.replace(/\[E\d+\]/g, " ");
+  let shown = t;
+  if (dropped.length) {
+    shown = t.replace(/([.!?])((?:\s*\[E\d+\])+)/g, "$2$1");
+    for (const u of dropped) shown = shown.replace(u.text, "");
+    shown = shown.split("\n").map(l => l.replace(/^[\s*#>-]+$/, "").trim()).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+  if (!/\[E\d+\]/.test(shown)) return { ok: false, reason: "no_citation" };
+  // Grounding protects what is SHOWN, so it reads the shown text (a dropped lead-in's "Two studies ..." is never shown).
+  // "A study examined whether ..." describes method, not a clinical examination: only that construction is read as
+  // method. "The patient was examined" and every other clinical finding word are checked exactly as before.
+  const prose = shown.replace(/\[E\d+\]/g, " ").replace(RESEARCH_METHOD_EXAMINED, "$1 looked at");
   const grounding = [...evidence.map(e => `${e.title}\n${e.journal ?? ""} ${e.year ?? ""}\n${e.abstract}`), ...passages.map(p => `${passageCitation(p)}\n${p.content}`), asked];
   const violations = groundingViolations(prose, grounding);
   if (violations.length) return { ok: false, reason: "ungrounded", violations };
-  return { ok: true, text: t, cited: [...new Set(tags)].sort((a, b) => a - b) };
+  return { ok: true, text: shown, cited: [...new Set([...shown.matchAll(/\[E(\d+)\]/g)].map(m => Number(m[1])))].sort((a, b) => a - b), ...(dropped.length ? { dropped: dropped.length } : {}) };
+}
+
+/** A caveat a lead-in must keep: if the first sentence carries one, it is a claim about the evidence, never mere framing. */
+const RESEARCH_CAVEAT = /\b(limited|mixed|weak|preliminary|early (?:evidence|data|stage|studies|findings|results|research)|uncertain|unclear|conflicting|inconsistent|insufficient|small|few|caution|cautious|not|no|cannot|lack|lacks|lacking|only|however)\b/i;
+/** The study-method use of "examined" (the subject is the study or its authors), and only that. */
+const RESEARCH_METHOD_EXAMINED = /\b(stud(?:y|ies)|trial|trials|review|reviews|analysis|analyses|audit|survey|paper|authors|researchers|investigators|it|they)\s+examined\b/gi;
+
+/** Pure. The research part as units: one per sentence of each line, in order, with whether it cites and whether its line is a heading. */
+function researchUnits(t: string): { text: string; words: number; cited: boolean; heading: boolean; index: number }[] {
+  const out: { text: string; words: number; cited: boolean; heading: boolean; index: number }[] = [];
+  for (const rawLine of t.replace(/([.!?])((?:\s*\[E\d+\])+)/g, "$2$1").split(/\n+/)) {
+    const line = rawLine.replace(/^[\s*#>-]+/, "").replace(/[*_]+$/g, "").trim();
+    if (!line) continue;
+    // A heading: a short line with no sentence ending (or ending in a colon), and no citation.
+    const heading = !/\[E\d+\]/.test(line) && line.split(/\s+/).length <= 12 && (!/[.!?]$/.test(line) || /:$/.test(line));
+    for (const s of heading ? [line] : line.split(/(?<=[.!?])\s+/)) {
+      const text = s.trim();
+      if (text) out.push({ text, words: text.split(/\s+/).length, cited: /\[E\d+\]/.test(text), heading, index: out.length });
+    }
+  }
+  return out;
 }
 
 /** The system prompt for one learning action: EXPLAIN_SYSTEM's rules, the action, the depth, and what may follow. */
@@ -452,7 +492,7 @@ export function learnSystem(action: LearnAction | "check" | "clarify", opts: { d
 const researchInstruction = (words: number) => [
   "RESEARCH & EXPLAIN. The student asked for published research as well as their notes. After the passages you are given EXTERNAL RESEARCH, tagged [E1], [E2] ...: abstracts of published studies found for this topic. They are NOT the student's notes. Your reply has TWO parts.",
   `PART ONE, from the notes, under every rule above: cite [S n], never [E n]. If the passages do not cover the request, PART ONE is exactly ${NOT_IN_NOTES}.`,
-  `PART TWO: a line that reads exactly ${RESEARCH_MARKER} and then, under ${words} words, what the abstracts say that helps the student understand this topic, ending EVERY sentence with the [E n] it comes from. Use only what the abstracts say: no outside facts, no figures they do not contain, no doses, drug names, regimens or advice about any patient, and never [S n] or [R n] in this part. Say plainly when the evidence is limited, early or mixed. Write PART TWO whenever any abstract is relevant to the topic, and leave it out only if none is.`,
+  `PART TWO: a line that reads exactly ${RESEARCH_MARKER} and then, under ${words} words, what the abstracts say that helps the student understand this topic, ending EVERY sentence with the [E n] it comes from. Do not write a heading or an introduction: start with the first finding. Use only what the abstracts say: no outside facts, no figures they do not contain, no doses, drug names, regimens or advice about any patient, and never [S n] or [R n] in this part. Say plainly when the evidence is limited, early or mixed. Write PART TWO whenever any abstract is relevant to the topic, and leave it out only if none is.`,
 ].join("\n");
 
 export function learnUserPrompt(question: string, passages: Passage[], references: GovernedReference[], history: TutorTurn[], learnerContext: string | null, research: readonly ResearchEvidence[] = []): string {
@@ -543,7 +583,7 @@ export type LearnResult = AiFailure | {
 };
 
 /** COMPETEN-RESEARCH-01: a Research & Explain answer carries its own prompt version, so a saved one is never reused as notes-only. */
-export const RESEARCH_PROMPT_SUFFIX = "+research-v1";
+export const RESEARCH_PROMPT_SUFFIX = "+research-v2";
 export const learnResearchPromptVersion = (action: LearnAction | "check" | "clarify") => `${learnPromptVersion(action)}${RESEARCH_PROMPT_SUFFIX}`;
 /** Its own operation, so its spend is separable in plat_ai_requests (the per-learner cost limit, the HQ panel). */
 export const LEARN_RESEARCH_OPERATION = "individual_scholar_learn_research";

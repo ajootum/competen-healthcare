@@ -99,9 +99,13 @@ export type ExternalReference = {
   sourceVersion: string | null; reuse: "private_evidence_excerpt_only" | "metadata_only";
 };
 
-/** Pure. Evidence items first (tagged E1 ...), then further reading (untagged, when the rules show it). Only what the providers returned. */
+/**
+ * Pure. Evidence items first (tagged E1 ...), then further reading (untagged, when the rules show it). Only what the
+ * providers returned, and (RESEARCH-02) only records whose identity was VERIFIED: a PMID from PubMed or a DOI Crossref
+ * confirmed. An unverified record is never shown, as evidence or as reading; a contradicted one was already dropped.
+ */
 export function externalReferences(r: LearnResearch): ExternalReference[] {
-  const rest = r.furtherReading ? r.items.map((_, i) => i).filter(i => !r.evidence.includes(i)) : [];
+  const rest = r.furtherReading ? r.items.map((_, i) => i).filter(i => !r.evidence.includes(i) && (r.items[i].verified.pmid || r.items[i].verified.doi === true)) : [];
   return [...r.evidence, ...rest].map((i, n) => {
     const x = r.items[i];
     const rec = toEvidenceRecord(x, { question: null, query: r.query ?? "", strategy: "basic", sourceVersion: r.sourceVersions[x.provider] ?? "", licensing: r.licensing[x.provider] ?? "" }).verified;
