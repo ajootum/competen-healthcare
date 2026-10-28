@@ -36,3 +36,29 @@ describe("the number check and named gas terms", () => {
       .toEqual([{ kind: "ungrounded_number", token: "92" }]);
   });
 });
+
+// SCHOLAR-AI-OPT-01 (owner D3 follow-up, 28 Oct): two of the first three live clinical Learn answers were withheld for
+// "the number one" on a section with no "one" in it. Ordinary "one" is not a count; a counted "one" still is.
+describe("the number check and the ordinary word 'one'", () => {
+  const SECTION = ["Document the call, the advice given and the time. Increase the frequency of observations as agreed, recheck after any intervention, and escalate again if the person does not improve or gets worse."];
+  it("'one' in ordinary phrasing is not read as the number 1", () => {
+    expect(numbers("One of the things to document is the advice given.", SECTION)).toEqual([]);
+    expect(numbers("No one should skip the recheck after any intervention.", SECTION)).toEqual([]);
+    expect(numbers("Each one of the observations is repeated as agreed. One way to remember: document, recheck, escalate.", SECTION)).toEqual([]);
+    expect(numbers("Which one should you escalate? The one who does not improve.", SECTION)).toEqual([]);
+  });
+  it("control: 'one' as a quantity is still the number 1, alone or beside an ordinary use", () => {
+    expect(numbers("Recheck after one hour.", SECTION)).toEqual([{ kind: "ungrounded_number", token: "one" }]);
+    expect(numbers("Give one dose.", SECTION)).toEqual([{ kind: "ungrounded_number", token: "one" }]);
+    expect(numbers("One of the signs is confusion; recheck after one hour.", SECTION)).toEqual([{ kind: "ungrounded_number", token: "one" }]);
+    expect(numbers("Recheck after one hour.", ["Recheck after 1 hour."])).toEqual([]);
+  });
+  it("control: every other number word, and the digits, are untouched", () => {
+    expect(numbers("One of the two signs.", SECTION)).toEqual([{ kind: "ungrounded_number", token: "two" }]);
+    expect(numbers("One of the signs, every 4 hours.", SECTION)).toEqual([{ kind: "ungrounded_number", token: "4" }]);
+  });
+  it("control: the Practice verifier is unchanged and still reads 'one of' as 1", () => {
+    expect(verifyGrounded("One of the findings was noted.", [{ label: "finding noted" }]).filter(v => v.kind === "ungrounded_number"))
+      .toEqual([{ kind: "ungrounded_number", token: "one" }]);
+  });
+});

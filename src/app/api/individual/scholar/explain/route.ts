@@ -114,6 +114,8 @@ export async function POST(req: Request) {
     action_id: ai.actionId,
     chunk_ids: passages.map(p => p.chunkId), question_chars: question.length, mode, tutor_turns: history.length, learner_context: learnerContext !== null,
     outcome: r.ok ? (r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,
+    // SCHOLAR-AI-OPT-01: what the grounding check refused, in its own words ("the number one"), never the answer text.
+    withheld_detail: r.ok && !r.check.ok && r.check.violations?.length ? describeViolations(r.check.violations) : null,
     supplementary: r.ok && r.supplementary ? (r.supplementary.ok ? "shown" : `withheld:${r.supplementary.reason}`) : null,
     model: r.ok ? r.model : null, prompt_version: r.ok ? r.promptVersion : null,
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { activityOf, feedbackKey, feedbackReasons, materialKey, outcomeOf, priorRejection, productOf, reasonCodes, recordAiOutcome, summariseQuality, type OutcomeRow, type RequestRow } from "./outcomes";
+import { activityOf, feedbackKey, feedbackReasons, materialKey, nonDelivery, outcomeOf, priorRejection, productOf, reasonCodes, recordAiOutcome, summariseQuality, type OutcomeRow, type RequestRow } from "./outcomes";
 
 // COMPETEN-SCHOLAR-AI-OPT-01 Wave 1: the outcome record and the Holdings quality-and-cost view.
 
@@ -113,6 +113,33 @@ describe("the quality-and-cost view", () => {
   it("with no learner ids, per-learner figures are absent, not zero", () => {
     expect(v.learners).toEqual({ scholar: 0, costPerLearner: null, callsPerLearner: null });
     expect(v.perKind[0].actionsPerLearner).toBeNull();
+  });
+  it("D3: a fully withheld, unsupported answer is a safe non-answer; a not-in-notes decline and a broken draft are apart", () => {
+    expect(nonDelivery({ outcome: "rejected", rejection_reasons: ["ungrounded"] })).toBe("safe_non_answer");
+    expect(nonDelivery({ outcome: "rejected", rejection_reasons: ["failed_verification", "malformed"] })).toBe("safe_non_answer");
+    expect(nonDelivery({ outcome: "rejected", rejection_reasons: ["not_in_notes"] })).toBe("declined_not_in_notes");
+    expect(nonDelivery({ outcome: "rejected", rejection_reasons: ["ungrounded", "source_insufficient"] })).toBe("declined_not_in_notes");
+    expect(nonDelivery({ outcome: "rejected", rejection_reasons: ["structure", "malformed"] })).toBe("other_failure");
+    expect(nonDelivery({ outcome: "error", rejection_reasons: ["error_failed"] })).toBe("other_failure");
+    expect(nonDelivery({ outcome: "partial", rejection_reasons: ["ungrounded"] })).toBeNull();
+    expect(nonDelivery({ outcome: "redirected", rejection_reasons: ["repeat_rejected"] })).toBeNull();
+  });
+  it("D3: safe non-answers are counted with their cost, inside unsuccessful cost, and never as kept output", () => {
+    const rows = [
+      o("x1", "explanation", "accepted", 1, 0),
+      o("x2", "explanation", "rejected", 0, 1, ["ungrounded"]),
+      o("x3", "explanation", "rejected", 0, 1, ["not_in_notes"]),
+      // A row a writer got wrong must still not add a kept output: it delivered nothing.
+      { ...o("x4", "explanation", "rejected", 0, 1, ["no_citation"]), accepted_count: 1 },
+    ];
+    const req: RequestRow[] = ["x1", "x2", "x3", "x4"].map(a => ({ operation: "individual_scholar_explain", cost_usd: 0.01, action_id: a, created_at: at }));
+    const e = summariseQuality(req, rows, [], { days: 1, now }).perKind.find(k => k.kind === "explanation")!;
+    expect(e.accepted).toBe(1);
+    expect(e.safeNonAnswers).toEqual({ n: 2, cost: 0.02 });
+    expect(e.declined).toEqual({ n: 1, cost: 0.01 });
+    expect(e.otherFailures.n).toBe(0);
+    expect(e.unsuccessfulCost).toBe(0.03);
+    expect(e.rejectedActions).toBe(e.safeNonAnswers.n + e.declined.n + e.otherFailures.n);
   });
   it("tallies reasons and gives a daily trend", () => {
     expect(v.reasons[0]).toEqual({ label: "ungrounded", n: 2 });
