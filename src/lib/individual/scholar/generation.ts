@@ -359,10 +359,13 @@ export async function runExplain(userId: string, question: string, passages: Pas
 //     outside the ones given withholds the answer.
 
 /** `approved`: 395 approved this exact content (learn.ts referenceStatus). Absent, as on older saved answers, is not approved. */
-export type GovernedReference = { title: string; code: string | null; outcome: string | null; status: string; competencyId?: string; approved?: boolean };
+/** `library` (COMPETEN-RESEARCH-01): matched from the Competen library by topic, not linked to the sections. */
+export type GovernedReference = { title: string; code: string | null; outcome: string | null; status: string; competencyId?: string; approved?: boolean; library?: boolean };
 export const FLAG_MARKER = "CHECK THIS:";
 const DEPTH_WORDS: Record<ExplanationDepth, number> = { brief: 120, standard: 220, detailed: 350 };
 const BACKGROUND_ACTIONS: readonly LearnAction[] = ["teach", "deeper", "examples"];
+/** COMPETEN-RESEARCH-01: the actions that may carry a research part. A check question and a clarification never do. */
+export const RESEARCH_ACTIONS: readonly (LearnAction | "check" | "clarify")[] = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask"];
 
 const LEARN_INSTRUCTION: Record<LearnAction | "check" | "clarify", string> = {
   teach: "MODE: TEACH ME, one step of a guided lesson. First INTRODUCE the idea of these passages in one or two sentences: what it is and why it matters, from the passages. Then EXPLAIN it clearly, building from simple to more detailed, citing as you go. Teach, do not just list.",
@@ -376,8 +379,56 @@ const LEARN_INSTRUCTION: Record<LearnAction | "check" | "clarify", string> = {
   clarify: "MODE: CLARIFY. You asked the student a check question and they answered. Judge their answer ONLY against the passages. Your first line is exactly one of 'VERDICT: understood', 'VERDICT: partly' or 'VERDICT: not_yet'. Then, briefly and kindly: say what they got right, then correct or complete it from the passages, citing as you go. Do not judge anything the passages do not cover.",
 };
 
+// ── COMPETEN-RESEARCH-01: RESEARCH & EXPLAIN ── a FIFTH kind of content, kept apart ───────────────────────────────
+//
+// When the learner chooses Research & Explain, the abstracts the Holdings research service returned AND verified
+// (src/lib/holdings/research: an abstract and a PMID from PubMed or a DOI Crossref confirmed) are given as [E1] ...
+// The model writes them up after FROM RESEARCH:, apart from the notes. That part is checked on its own:
+//   every sentence cites a given [E n]; no [S n] or [R n] (the notes stay the notes); nothing the abstracts, the
+//   passages and what the student typed do not contain (the same grounding check); no dosing language; no identifier.
+// Failing that, it is withheld and the notes part stands or falls by its own check, unchanged. The notes part may
+// never cite [E n]. The references shown come from the provider records, never from what the model wrote.
+
+export const RESEARCH_MARKER = "FROM RESEARCH:";
+/** What the model is shown of one verified external item. Evidence only: an item without an abstract never gets here. */
+export type ResearchEvidence = { title: string; journal: string | null; year: number | null; abstract: string };
+export type ResearchReason = "no_citation" | "bad_citation" | "mixed" | "uncited_sentence" | "identifier" | "dosing" | "ungrounded" | "too_long";
+export type ResearchCheck = { ok: true; text: string; cited: number[] } | { ok: false; reason: ResearchReason; violations?: PhrasingViolation[] };
+const RESEARCH_DOSING = /\b(mg|mcg|micrograms?|milligrams?|ml|millilitres?|milliliters?|mmol|iu|units?\/kg|dose[sd]?|dosage|dosing|prescrib\w*|titrat\w*|bolus|regimen)\b/i;
+
+export const RESEARCH_WITHHELD: Record<ResearchReason, string> = {
+  no_citation: "The research summary did not say which source each point came from, so it was not shown.",
+  bad_citation: "The research summary cited a source it was not given, so it was not shown.",
+  mixed: "The research summary mixed in your notes, so it was not shown. External research is always kept apart from your notes.",
+  uncited_sentence: "Part of the research summary did not cite a source, so it was not shown.",
+  identifier: "The research summary contained something that looked like a personal identifier, so it was not shown.",
+  dosing: "The research summary mentioned doses or prescribing, so it was not shown. Your course materials and supervisors are the place for that.",
+  ungrounded: "The research summary included details the sources' abstracts do not contain, so it was not shown.",
+  too_long: "The research summary was too long, so it was not shown.",
+};
+
+/** Pure. The research part: cited sentence by sentence, only from the given abstracts (and the notes/what was asked). */
+export function checkResearchPart(raw: string, evidence: readonly ResearchEvidence[], passages: readonly Passage[], asked: string): ResearchCheck {
+  const t = raw.trim();
+  if (t.length > 2500) return { ok: false, reason: "too_long" };
+  if (/\[[SR]\d+\]/.test(t)) return { ok: false, reason: "mixed" };
+  const tags = [...t.matchAll(/\[E(\d+)\]/g)].map(m => Number(m[1]));
+  if (!tags.length) return { ok: false, reason: "no_citation" };
+  if (tags.some(n => n < 1 || n > evidence.length)) return { ok: false, reason: "bad_citation" };
+  // A tag written after the full stop belongs to the sentence before it.
+  const sentences = t.replace(/([.!?])((?:\s*\[E\d+\])+)/g, "$2$1").split(/(?<=[.!?])\s+|\n+/).map(s => s.replace(/^[\s*-]+/, "").trim()).filter(s => s.split(/\s+/).length >= 4);
+  if (sentences.some(s => !/\[E\d+\]/.test(s))) return { ok: false, reason: "uncited_sentence" };
+  if (findPatientIdentifiers(t).length) return { ok: false, reason: "identifier" };
+  if (RESEARCH_DOSING.test(t)) return { ok: false, reason: "dosing" };
+  const prose = t.replace(/\[E\d+\]/g, " ");
+  const grounding = [...evidence.map(e => `${e.title}\n${e.journal ?? ""} ${e.year ?? ""}\n${e.abstract}`), ...passages.map(p => `${passageCitation(p)}\n${p.content}`), asked];
+  const violations = groundingViolations(prose, grounding);
+  if (violations.length) return { ok: false, reason: "ungrounded", violations };
+  return { ok: true, text: t, cited: [...new Set(tags)].sort((a, b) => a - b) };
+}
+
 /** The system prompt for one learning action: EXPLAIN_SYSTEM's rules, the action, the depth, and what may follow. */
-export function learnSystem(action: LearnAction | "check" | "clarify", opts: { depth: ExplanationDepth; background: boolean; references: boolean }): string {
+export function learnSystem(action: LearnAction | "check" | "clarify", opts: { depth: ExplanationDepth; background: boolean; references: boolean; research?: boolean }): string {
   const parts = [EXPLAIN_SYSTEM, "", LEARN_INSTRUCTION[action]];
   if (action !== "check") parts.push(`Keep the part from the notes under ${DEPTH_WORDS[opts.depth]} words${opts.depth === "brief" ? ", and keep it short" : ""}.`);
   // v2: the staging journey saw Simplify withheld twice for "two" -- a count the notes did not contain. Said last,
@@ -389,23 +440,34 @@ export function learnSystem(action: LearnAction | "check" | "clarify", opts: { d
     parts.push(`Optional: general background that is NOT in the passages, after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 100 words, general principles only, with no numbers, units, doses, drug names, values or thresholds, no citation tags, and no advice about any patient.`);
   if (action !== "check")
     parts.push(`Optional, last: if a passage says something that contradicts another passage, or that looks unclear, outdated or possibly unsafe to act on, add a line that reads exactly ${FLAG_MARKER} and then one line per concern starting '- ', citing the passage concerned. Do not correct it with outside facts: say only what to check, against their course materials or with a supervisor. Leave this out when there is nothing to flag.`);
+  // COMPETEN-RESEARCH-01: said last, where it is read just before writing. The rules above govern the notes part.
+  if (opts.research && RESEARCH_ACTIONS.includes(action)) parts.push(researchInstruction(DEPTH_WORDS[opts.depth]));
   return parts.join("\n");
 }
 
-export function learnUserPrompt(question: string, passages: Passage[], references: GovernedReference[], history: TutorTurn[], learnerContext: string | null): string {
+/** COMPETEN-RESEARCH-01: the student chose Research & Explain, so the research part is expected whenever an abstract is relevant. */
+const researchInstruction = (words: number) => [
+  "RESEARCH & EXPLAIN. The student asked for published research as well as their notes. After the passages you are given EXTERNAL RESEARCH, tagged [E1], [E2] ...: abstracts of published studies found for this topic. They are NOT the student's notes. Your reply has TWO parts.",
+  `PART ONE, from the notes, under every rule above: cite [S n], never [E n]. If the passages do not cover the request, PART ONE is exactly ${NOT_IN_NOTES}.`,
+  `PART TWO: a line that reads exactly ${RESEARCH_MARKER} and then, under ${words} words, what the abstracts say that helps the student understand this topic, ending EVERY sentence with the [E n] it comes from. Use only what the abstracts say: no outside facts, no figures they do not contain, no doses, drug names, regimens or advice about any patient, and never [S n] or [R n] in this part. Say plainly when the evidence is limited, early or mixed. Write PART TWO whenever any abstract is relevant to the topic, and leave it out only if none is.`,
+].join("\n");
+
+export function learnUserPrompt(question: string, passages: Passage[], references: GovernedReference[], history: TutorTurn[], learnerContext: string | null, research: readonly ResearchEvidence[] = []): string {
   const about = learnerContext ? `${CONTEXT_PREAMBLE}\n${learnerContext}\n\n` : "";
   const blocks = passages.map((p, i) => `[${passageTag(i)}] (${passageCitation(p)})\n${p.content}`);
   const refs = references.length ? `\n\nGOVERNED REFERENCES:\n${references.map((r, i) => `[R${i + 1}] ${r.code ? `${r.code} ` : ""}${r.title}${r.outcome ? ` -- outcome: ${r.outcome}` : ""} (${r.status})`).join("\n")}` : "";
+  const ext = research.length ? `\n\nEXTERNAL RESEARCH (published abstracts, not my notes):\n\n${research.map((e, i) => `[E${i + 1}] ${e.title}${e.journal ? `. ${e.journal}` : ""}${e.year ? ` (${e.year})` : ""}\nAbstract: ${e.abstract}`).join("\n\n")}` : "";
   const convo = history.length ? `\n\nOUR CONVERSATION SO FAR:\n\n${history.map(t => `${t.speaker === "tutor" ? "SCHOLAR" : "STUDENT"}: ${t.text}`).join("\n\n")}` : "";
-  return `${about}PASSAGES FROM MY NOTES:\n\n${blocks.join("\n\n")}${refs}${convo}\n\n${history.length ? "MY REPLY" : "MY REQUEST"}: ${question}`;
+  const both = research.length ? `\n\n(Research & Explain: part one from my notes, then ${RESEARCH_MARKER} and part two from the research, cited [E n].)` : "";
+  return `${about}PASSAGES FROM MY NOTES:\n\n${blocks.join("\n\n")}${refs}${ext}${convo}\n\n${history.length ? "MY REPLY" : "MY REQUEST"}: ${question}${both}`;
 }
 
-/** Pure. The answer, its background (after BEYOND THE NOTES:) and its flags (after CHECK THIS:), in either order. */
-export function splitLearnAnswer(raw: string): { main: string; background: string | null; flags: string | null } {
-  const bg = /^[\s*_#>-]*BEYOND THE NOTES:?[\s*_]*/im.exec(raw), fl = /^[\s*_#>-]*CHECK THIS:?[\s*_]*/im.exec(raw);
-  const cuts = [bg && { k: "background" as const, at: bg.index, end: bg.index + bg[0].length }, fl && { k: "flags" as const, at: fl.index, end: fl.index + fl[0].length }]
-    .filter((x): x is { k: "background" | "flags"; at: number; end: number } => !!x).sort((a, b) => a.at - b.at);
-  const out = { main: (cuts.length ? raw.slice(0, cuts[0].at) : raw).trim(), background: null as string | null, flags: null as string | null };
+/** Pure. The answer, its background (BEYOND THE NOTES:), its research part (FROM RESEARCH:) and its flags (CHECK THIS:), in any order. */
+export function splitLearnAnswer(raw: string): { main: string; background: string | null; flags: string | null; research: string | null } {
+  const found = ([["background", /^[\s*_#>-]*BEYOND THE NOTES:?[\s*_]*/im], ["flags", /^[\s*_#>-]*CHECK THIS:?[\s*_]*/im], ["research", /^[\s*_#>-]*FROM RESEARCH:?[\s*_]*/im]] as const)
+    .map(([k, re]) => { const m = re.exec(raw); return m ? { k, at: m.index, end: m.index + m[0].length } : null; });
+  const cuts = found.filter((x): x is { k: "background" | "flags" | "research"; at: number; end: number } => !!x).sort((a, b) => a.at - b.at);
+  const out = { main: (cuts.length ? raw.slice(0, cuts[0].at) : raw).trim(), background: null as string | null, flags: null as string | null, research: null as string | null };
   cuts.forEach((c, i) => { const text = raw.slice(c.end, cuts[i + 1]?.at ?? raw.length).trim(); out[c.k] = text || null; });
   return out;
 }
@@ -421,6 +483,8 @@ export function checkLearnMain(main: string, asked: string, passages: Passage[],
   const s = [...text.matchAll(/\[S(\d+)\]/g)].map(m => Number(m[1])), r = [...text.matchAll(/\[R(\d+)\]/g)].map(m => Number(m[1]));
   if (!s.length) return { ok: false, reason: "no_citation" };
   if (s.some(t => t < 1 || t > passages.length) || r.some(t => t < 1 || t > references.length)) return { ok: false, reason: "bad_citation" };
+  // COMPETEN-RESEARCH-01: external research is never cited in the part from the notes.
+  if (/\[E\d+\]/.test(text)) return { ok: false, reason: "bad_citation" };
   const prose = text.replace(/\[[SR]\d+\]/g, " ");
   const grounding = [...passages.map(p => `${passageCitation(p)}\n${p.content}`), ...references.map(x => `${x.code ?? ""} ${x.title} ${x.outcome ?? ""}`), asked];
   const violations = groundingViolations(prose, grounding);
@@ -471,29 +535,39 @@ export type LearnResult = AiFailure | {
   ok: true; action: LearnAction | "check" | "clarify"; model: string; provider: string; promptVersion: string;
   check: ExplainCheck; background: SupplementaryCheck | null; flags: { kept: LearnFlag[]; dropped: number };
   verdict: CheckVerdict | null; question: CheckQuestionResult | null;
+  /** COMPETEN-RESEARCH-01: the research part, checked; null when no research was given or none was written. */
+  research: ResearchCheck | null;
 };
+
+/** COMPETEN-RESEARCH-01: a Research & Explain answer carries its own prompt version, so a saved one is never reused as notes-only. */
+export const RESEARCH_PROMPT_SUFFIX = "+research-v1";
+export const learnResearchPromptVersion = (action: LearnAction | "check" | "clarify") => `${learnPromptVersion(action)}${RESEARCH_PROMPT_SUFFIX}`;
+/** Its own operation, so its spend is separable in plat_ai_requests (the per-learner cost limit, the HQ panel). */
+export const LEARN_RESEARCH_OPERATION = "individual_scholar_learn_research";
 
 /**
  * One learning action on the given passages. `asked` grounding is what the student typed (their question, their
  * answer to a check) and the check question itself -- they were shown or wrote it. Background is asked for only
  * when `background` is true and the action may carry it; it is split off and checked by the background rules.
+ * `research` (COMPETEN-RESEARCH-01): verified external abstracts, given as [E n] and written up apart.
  */
 export async function runLearn(userId: string, args: {
   action: LearnAction | "check" | "clarify"; question: string; passages: Passage[]; references: GovernedReference[];
-  depth: ExplanationDepth; background: boolean; history: TutorTurn[]; learnerContext: string | null;
+  depth: ExplanationDepth; background: boolean; history: TutorTurn[]; learnerContext: string | null; research?: readonly ResearchEvidence[];
 }, run: AiRun = direct): Promise<LearnResult> {
+  const research = args.research?.length && RESEARCH_ACTIONS.includes(args.action) ? args.research : [];
   const r = await run({
-    system: learnSystem(args.action, { depth: args.depth, background: args.background, references: args.references.length > 0 }),
-    user: learnUserPrompt(args.question, args.passages, args.references, args.history, args.learnerContext),
+    system: learnSystem(args.action, { depth: args.depth, background: args.background, references: args.references.length > 0, research: research.length > 0 }),
+    user: learnUserPrompt(args.question, args.passages, args.references, args.history, args.learnerContext, research),
     tier: "reasoning",
-    maxTokens: args.action === "check" ? 200 : args.depth === "detailed" ? 1100 : 800,
-    context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_learn" },
+    maxTokens: args.action === "check" ? 200 : (args.depth === "detailed" ? 1100 : 800) + (research.length ? 500 : 0),
+    context: { userId, attribution: { scope: "person" }, operation: research.length ? LEARN_RESEARCH_OPERATION : "individual_scholar_learn" },
   });
   if (!r.ok) return { ok: false, error: r.error };
-  const base = { ok: true as const, action: args.action, model: r.model, provider: r.provider, promptVersion: learnPromptVersion(args.action) };
+  const base = { ok: true as const, action: args.action, model: r.model, provider: r.provider, promptVersion: research.length ? learnResearchPromptVersion(args.action) : learnPromptVersion(args.action) };
   if (args.action === "check") {
     const question = checkCheckQuestion(r.text, args.passages);
-    return { ...base, check: { ok: false, reason: "not_in_notes" }, background: null, flags: { kept: [], dropped: 0 }, verdict: null, question };
+    return { ...base, check: { ok: false, reason: "not_in_notes" }, background: null, flags: { kept: [], dropped: 0 }, verdict: null, question, research: null };
   }
   const { verdict, rest } = args.action === "clarify" ? parseVerdict(r.text) : { verdict: null, rest: r.text };
   const split = splitLearnAnswer(rest);
@@ -505,6 +579,7 @@ export async function runLearn(userId: string, args: {
     background: split.background === null ? null : mayBackground ? checkBackgroundText(split.background) : { ok: false, reason: "not_this_mode" },
     flags: checkFlags(split.flags, args.passages),
     verdict, question: null,
+    research: research.length && split.research ? checkResearchPart(split.research, research, args.passages, asked) : null,
   };
 }
 

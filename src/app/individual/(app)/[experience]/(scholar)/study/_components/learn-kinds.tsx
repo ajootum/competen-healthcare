@@ -5,7 +5,7 @@ import { CONTENT_STATUS_LABEL, FLAG_HEADING, FLAG_NOTE, SOURCE_KIND_LABEL } from
 // as review. A governed reference shows "Clinically approved" (emerald, with a tick) only where the route says
 // `approved` -- 395 approved that exact content (learn.ts referenceStatus). A status string alone never shows it.
 
-export type ShownReference = { tag?: string; title?: string; code?: string | null; outcome?: string | null; status?: string; approved?: boolean };
+export type ShownReference = { tag?: string; title?: string; code?: string | null; outcome?: string | null; status?: string; approved?: boolean; library?: boolean };
 
 export function GovernedReferenceList({ refs }: { refs: readonly ShownReference[] }) {
   return (
@@ -14,7 +14,7 @@ export function GovernedReferenceList({ refs }: { refs: readonly ShownReference[
       <ul className="mt-1 space-y-0.5">
         {refs.map((x, i) => (
           <li key={x.tag ?? i} className="text-[12.5px] text-gray-800">
-            {x.tag && <span className="font-mono font-bold">[{x.tag}] </span>}{x.code ? `${x.code} ` : ""}{x.title}{x.outcome ? ` -- ${x.outcome}` : ""}{" "}
+            {x.tag && <span className="font-mono font-bold">[{x.tag}] </span>}{x.library && <span className="mr-1 rounded-full border border-teal-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-teal-900">Competen library</span>}{x.code ? `${x.code} ` : ""}{x.title}{x.outcome ? ` -- ${x.outcome}` : ""}{" "}
             {x.approved === true
               ? <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11.5px] font-semibold text-emerald-900"><span aria-hidden>✓</span>{CONTENT_STATUS_LABEL.approved}</span>
               : <span className="text-gray-600">({x.status && x.status !== CONTENT_STATUS_LABEL.approved ? x.status : CONTENT_STATUS_LABEL.unreviewed})</span>}

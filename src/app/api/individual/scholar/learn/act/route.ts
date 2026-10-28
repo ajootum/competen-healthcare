@@ -11,11 +11,17 @@ import {
 } from "@/lib/individual/scholar/store";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 
-import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
+import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, evidenceWithinRisk, refusalWords, scholarAiRunner, scholarRisk, scholarRiskGate } from "@/lib/individual/scholar/http";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
-import { SUPPLEMENTARY_WITHHELD, describeViolations, learnPromptVersion, passageCitation, passageTag, runLearn, type Passage, type TutorTurn } from "@/lib/individual/scholar/generation";
+import {
+  RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, describeViolations, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
+  type Passage, type TutorTurn,
+} from "@/lib/individual/scholar/generation";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
-import { artefactKey, governedReferences, isArtefactAction, referenceSource, relabelReferences } from "@/lib/individual/scholar/learn";
+import { artefactKey, governedReferences, isArtefactAction, libraryReferences, referenceSource, relabelReferences } from "@/lib/individual/scholar/learn";
+import { externalReferences, learnResearch, researchEvidence, type LearnResearch } from "@/lib/individual/scholar/learn-research";
+import { topicsOfSections } from "@/lib/individual/scholar/store";
+import type { LearnSourceMode } from "@/lib/individual/policy";
 import { withheldNext } from "@/lib/individual/scholar/learn-view";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import {
@@ -67,6 +73,11 @@ export async function POST(req: Request) {
   if (!isLearnAction(action) && !isCheck) return NextResponse.json({ error: "Unknown learning action." }, { status: 400 });
   if (isLearnAction(action) && !policy.scholarLearningActions.includes(action)) return NextResponse.json({ error: "That way of learning is not offered here." }, { status: 403 });
   if (isCheck && policy.scholarCheckBehaviour === "off") return NextResponse.json({ error: "Understanding checks are not offered here." }, { status: 403 });
+  // COMPETEN-RESEARCH-01: what this request may draw on. Notes only unless the learner chose otherwise, for this request,
+  // and policy offers it. A check question and a clarification are always notes only.
+  const askedMode = typeof body?.mode === "string" ? body.mode as LearnSourceMode : "notes";
+  if (!policy.scholarResearch.modes.includes(askedMode)) return NextResponse.json({ error: "That way of learning is not offered here." }, { status: 403 });
+  const mode: LearnSourceMode = RESEARCH_ACTIONS.includes(action as LearnAction) ? askedMode : "notes";
 
   // ── what the student typed: bounded and screened, never stored ──
   const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -79,14 +90,14 @@ export async function POST(req: Request) {
   // ── the passages: the step's own sections, by the caller's id ──
   const sessionId = isUuid(body?.sessionId) ? body.sessionId as string : null;
   let stepIds: string[] = [], scopeIds: string[] = [], step = Number.isInteger(body?.step) ? Number(body.step) : 0;
-  let recorded = false;
+  let recorded = false, stepTitle: string | null = null;
   if (sessionId) {
     const s = await getLearningSession(ctx.admin, ctx.userId, sessionId);
     if (!s.ok) return NextResponse.json({ error: "Your session could not be read just now." }, { status: 503 });
     if (!s.data) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const here = s.data.steps.find(x => x.step === step) ?? s.data.steps[0];
     if (!here) return NextResponse.json({ error: "This session has nothing left to teach: its materials were deleted." }, { status: 404 });
-    step = here.step; stepIds = here.sections.map(x => x.chunkId); scopeIds = s.data.steps.flatMap(x => x.sections.map(y => y.chunkId)); recorded = true;
+    step = here.step; stepIds = here.sections.map(x => x.chunkId); scopeIds = s.data.steps.flatMap(x => x.sections.map(y => y.chunkId)); recorded = true; stepTitle = s.data.session.topic ?? s.data.session.title ?? null;
   } else {
     const ids = Array.isArray(body?.chunkIds) ? [...new Set((body.chunkIds as unknown[]).filter(isUuid))] as string[] : [];
     if (!ids.length) return NextResponse.json({ error: "Choose what to learn from." }, { status: 400 });
@@ -109,22 +120,31 @@ export async function POST(req: Request) {
   // Stage 3 acceptance item 5: the governed reference source is policy (the CFCA by default), and a saved answer's
   // references are labelled by it as it is now -- "clinically approved" only for content 395 approved as it stands.
   const refSource = await referenceSource(ctx.admin, policy, learner.competencies);
-  const references = policy.scholarLearningObjectives === "outcomes" ? await governedReferences(ctx.admin, ctx.userId, passages.map(p => p.chunkId), refSource) : [];
-  const background = policy.scholarBeyondNotes === "labelled";
+  const linked = policy.scholarLearningObjectives === "outcomes" ? await governedReferences(ctx.admin, ctx.userId, passages.map(p => p.chunkId), refSource) : [];
+  // COMPETEN-RESEARCH-01: the library modes add the Competen library entries matching the topic (no external call).
+  const topics = mode === "notes" ? [] : [...new Set([...(await topicsOfSections(ctx.admin, ctx.userId, passages.map(p => p.chunkId))).values()].flat())];
+  const references = mode === "notes" ? linked : [...linked, ...libraryReferences([action === "ask" ? question : "", stepTitle ?? "", ...topics].join(" "), refSource, linked)];
+  const background = policy.scholarBeyondNotes === "labelled" && mode !== "research";
 
   // ── s8: a saved artefact for exactly this request is returned, not regenerated ──
   const hasHistory = Array.isArray(body?.history) && body.history.length > 0;
   const oneMaterial = new Set(passages.map(p => p.materialId)).size === 1;
   const storable = isArtefactAction(action) && !hasHistory && oneMaterial;
-  const key = storable ? artefactKey({ action, depth, chunkIds: passages.map(p => p.chunkId), promptVersion: learnPromptVersion(action), references, background }) : null;
+  const promptVersion = mode === "research" ? learnResearchPromptVersion(action as LearnAction) : learnPromptVersion(action as LearnAction);
+  const key = storable ? artefactKey({ action, depth, chunkIds: passages.map(p => p.chunkId), promptVersion, references, background, mode }) : null;
   const savedReply = (a: ArtefactRow, extra: Record<string, unknown> = {}) => {
     const byId = new Map(passages!.map(p => [p.chunkId, p]));
     const src = a.sources.map(id => byId.get(id)).filter((p): p is Passage => !!p);
+    // COMPETEN-RESEARCH-01: a saved Research & Explain answer keeps its research part after the marker, and its
+    // external references (kind "external") beside the governed ones -- exactly as the providers returned them.
+    const split = splitLearnAnswer(a.content);
+    const external = a.refs.filter(r => r?.kind === "external");
     return {
       action, step, depth: a.depth, label: AI_LABEL, provenance: { model: a.model, promptVersion: a.promptVersion }, kinds: SOURCE_KIND_LABEL,
       sources: src.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) })),
-      passageIds: src.map(p => p.chunkId), references: relabelReferences(a.refs, refSource), answer: a.content, cited: src.map((_, i) => i + 1),
+      passageIds: src.map(p => p.chunkId), references: relabelReferences(a.refs, refSource), answer: split.research !== null ? split.main : a.content, cited: src.map((_, i) => i + 1),
       background: a.background ? { text: a.background, label: SUPPLEMENTARY_LABEL } : null, flags: a.flags, verdict: null,
+      research: external.length ? { state: "cached", label: SOURCE_KIND_LABEL.research, message: null, references: external, ...(split.research ? { text: split.research } : {}) } : null,
       saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...extra,
     };
   };
@@ -160,23 +180,49 @@ export async function POST(req: Request) {
 
   // AI-FAIR-USE-01: through the Holdings allowance, the learning action as the activity. A refusal becomes
   // Learning Continuity (s7): said plainly, with what is saved for these sections -- and nothing was sent.
-  const ai = scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages }));
-  const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext }, ai.run);
+  const risk = await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages });
+  // COMPETEN-RESEARCH-01, research workflow: (1) the subject's clinical risk, classified as for every Learn request;
+  // with metering OFF the same gate decides BEFORE any search, so a topic no model is eligible for is refused without
+  // an external call. (3-5) search, retrieve and verify (learn-research.ts). (6-7) the same runner and checks below,
+  // on a risk subject that also holds what the research returned, so the evidence never lowers the classification.
+  let research: LearnResearch | null = null;
+  if (mode === "research") {
+    const gate = await scholarRiskGate(ctx, action as LearnAction, risk);
+    if (gate) { const w = refusalWords(gate); return continuity(w.message, w.insufficient); }
+    research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle });
+    // Evidence that would lift the request above its own risk tier is not used (it stays listed as further reading):
+    // research never changes which models may answer. Clinical eligibility is exactly as without research.
+    if (research.evidence.length) {
+      const keep = await evidenceWithinRisk(ctx.admin, action as LearnAction, risk, researchEvidence(research).map(e => `${e.title}\n${e.abstract}`));
+      if (keep.some(k => !k)) research = { ...research, evidence: research.evidence.filter((_, k) => keep[k]), codes: [...research.codes, "dropped_risk"] };
+    }
+  }
+  const evidence = research ? researchEvidence(research) : [];
+  const runRisk = evidence.length ? { ...risk, text: `${risk.text}\n\n${evidence.map(e => `${e.title}\n${e.abstract}`).join("\n\n")}`.slice(0, 20000) } : risk;
+  const ai = scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", runRisk);
+  const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence }, ai.run);
   const refusal = ai.refusal();
   if (refusal) { const w = refusalWords(refusal); return continuity(w.message, w.insufficient); }
   // SCHOLAR-AI-OPT-01: the outcome of this one action, codes only. A check question is not an explanation.
+  // COMPETEN-RESEARCH-01: a research answer is its own operation; the notes part and the research part each count.
+  const rr = r.ok ? r.research : null;
+  const researchCodes = research ? [`research_${research.state}`, ...research.codes, ...(rr ? [rr.ok ? "research_shown" : `research_${rr.reason}`] : [])] : [];
   await recordScholarOutcome(ctx.admin, ai, {
-    operation: `individual_scholar_learn:${action}`, outputKind: action === "check" ? "other" : "explanation",
-    promptVersion: r.ok ? r.promptVersion : null, configVersion: `depth:${depth}`,
-    ...(!r.ok ? { outcome: "error" as const, reasons: [`error_${r.error}`] }
+    operation: `${mode === "research" ? "individual_scholar_learn_research" : "individual_scholar_learn"}:${action}`, outputKind: action === "check" ? "other" : "explanation",
+    promptVersion: r.ok ? r.promptVersion : null, configVersion: `depth:${depth}${mode === "notes" ? "" : `;mode:${mode}`}`,
+    ...(!r.ok ? { outcome: "error" as const, reasons: [`error_${r.error}`, ...researchCodes] }
       : action === "check" ? (r.question?.ok ? { outcome: "accepted" as const, accepted: 1 } : { outcome: "rejected" as const, rejected: 1, reasons: [r.question?.reason ?? "malformed"] })
-        : r.check.ok ? { outcome: "accepted" as const, accepted: 1 } : { outcome: "rejected" as const, rejected: 1, reasons: [r.check.reason] }),
+        : (() => {
+          const accepted = (r.check.ok ? 1 : 0) + (rr?.ok ? 1 : 0), rejected = (r.check.ok ? 0 : 1) + (rr && !rr.ok ? 1 : 0);
+          return { outcome: accepted ? (rejected ? "partial" as const : "accepted" as const) : "rejected" as const, accepted, rejected, reasons: [...(r.check.ok ? [] : [r.check.reason]), ...researchCodes] };
+        })()),
   });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn", sessionId, {
     action_id: ai.actionId,
     action, step, chunk_ids: passages.map(p => p.chunkId), depth, references: references.length, learner_context: learnerContext !== null, recorded,
     outcome: r.ok ? (action === "check" ? (r.question?.ok ? "shown" : `withheld:${r.question?.reason}`) : r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,
     flags: r.ok ? r.flags.kept.length : 0, verdict: r.ok ? r.verdict : null, model: r.ok ? r.model : null, prompt_version: r.ok ? r.promptVersion : null,
+    ...(mode !== "notes" ? { mode, research: research ? { state: research.state, items: research.items.length, evidence: evidence.length, outcome: rr ? (rr.ok ? "shown" : `withheld:${rr.reason}`) : null } : null } : {}),
   });
   if (!r.ok) return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
 
@@ -189,7 +235,13 @@ export async function POST(req: Request) {
 
   const sources = passages.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) }));
   const base = { action, step, depth, label: AI_LABEL, provenance: { model: r.model, promptVersion: r.promptVersion }, sources, passageIds: passages.map(p => p.chunkId), actionId: ai.actionId,
-    references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL };
+    references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL,
+    // COMPETEN-RESEARCH-01: external research, apart from the notes, with the providers' own records. Never mixed in.
+    research: research ? {
+      state: research.state, label: SOURCE_KIND_LABEL.research, query: research.query, scholarLink: research.scholarLink, references: externalReferences(research),
+      message: research.message ?? (evidence.length && !rr ? "The research found did not add to this request, so nothing from it is shown." : !evidence.length && research.items.length ? "Research found records without a verified abstract: listed as further reading only." : null),
+      ...(rr ? (rr.ok ? { text: rr.text, cited: rr.cited } : { withheld: RESEARCH_WITHHELD[rr.reason] }) : {}),
+    } : null };
   if (action === "check") {
     return NextResponse.json(r.question?.ok
       ? { ...base, checkQuestion: r.question.question, informal: INFORMAL_CHECK_LABEL }
@@ -205,8 +257,11 @@ export async function POST(req: Request) {
   // s8: the shown answer is saved for next time (private formative; replaced when the student asks for a new one).
   let savedNow: "ok" | "not_provisioned" | "failed" | null = null;
   if (key) savedNow = await saveArtefact(ctx.admin, ctx.userId, {
-    materialId: passages[0].materialId, action, depth, content: r.check.text, background: b?.ok ? b.text : null, flags: r.flags.kept,
-    refs: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), dedupeKey: key, model: r.model, promptVersion: r.promptVersion, chunkIds: passages.map(p => p.chunkId),
+    materialId: passages[0].materialId, action, depth, content: rr?.ok ? `${r.check.text}
+
+${RESEARCH_MARKER}
+${rr.text}` : r.check.text, background: b?.ok ? b.text : null, flags: r.flags.kept,
+    refs: [...references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), ...(research ? externalReferences(research) : [])], dedupeKey: key, model: r.model, promptVersion: r.promptVersion, chunkIds: passages.map(p => p.chunkId),
   });
   return NextResponse.json({
     ...base,

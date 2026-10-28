@@ -71,14 +71,15 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_evaluation_min_evidence" | "scholar_evaluation_recency_days" | "scholar_evaluation_min_sources" | "scholar_evaluation_band_strong"
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max"
   | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown"
-  | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days";
+  | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days"
+  | "scholar_research_max_results" | "scholar_research_cache_days" | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_research_max_age_years";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
   | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules"
-  | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources";
+  | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources" | "scholar_learn_source_modes";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -94,7 +95,7 @@ export type OptionsPolicyKey = "scholar_institutions" | "professional_evaluation
 /** COMPETEN-PROFESSIONAL-PROFILE-01: an ORDERED choice from a fixed list (form fields, profile sections). */
 export type SequencePolicyKey = "professional_progress_views" | "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages"
   | "professional_goal_fields" | "professional_goal_statuses" | "professional_activity_statuses" | "professional_goal_review_fields"
-  | "professional_self_assessment_fields" | "passport_sections";
+  | "professional_self_assessment_fields" | "passport_sections" | "scholar_research_providers";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
 export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_profile_ai"
@@ -109,7 +110,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages"
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
-  | "professional_progress_default_period" | "professional_documents_ai";
+  | "professional_progress_default_period" | "professional_documents_ai" | "scholar_research_abstracts" | "scholar_research_doi_check";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -151,6 +152,22 @@ export const EXAM_WEB_DOMAINS_DEFAULT = ["who.int", "health.go.ug", "nice.org.uk
 export type ExamEvidenceSource = "notes" | "library" | "web";
 export type ExamResearchDepth = "quick" | "standard" | "deep";
 /** COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570), as configured. */
+/** COMPETEN-RESEARCH-01: the three Learn modes. "notes" is always offered and is the default. */
+export const LEARN_SOURCE_MODES = ["notes", "library", "research"] as const;
+export type LearnSourceMode = (typeof LEARN_SOURCE_MODES)[number];
+export type ScholarResearchPolicy = {
+  /** The modes offered, in order. Always includes "notes"; "research" only with a provider. */
+  modes: LearnSourceMode[];
+  /** Governed priority order. Empty: research is off. */
+  providers: ("pubmed" | "openalex")[];
+  abstracts: boolean;
+  verifyDoi: boolean;
+  maxResults: number;
+  maxAgeYears: number;
+  cacheDays: number;
+  dailyMax: number;
+  dailyCostCents: number;
+};
 export type ScholarExamPolicy = {
   enabled: boolean;
   sources: ExamEvidenceSource[];
@@ -1075,6 +1092,76 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: 30, min: 0, max: 365,
     limitReason: "Zero to a year. Default: thirty days.",
   },
+  // COMPETEN-RESEARCH-01 (owner direction 2026-10-28): governed academic research for Learn, through the shared
+  // Holdings research service (src/lib/holdings/research). OFF until the owner publishes a provider AND the Research &
+  // Explain mode: only topic keywords leave (screened for patient identifiers), never a learner's notes or identity.
+  {
+    key: "scholar_learn_source_modes", kind: "set", product: "Scholar",
+    label: "What Learn may draw on",
+    help: "My notes only is always offered and is the default. My notes + approved Competen library adds the governed library entries that match the topic. Research & Explain also searches the academic providers below, only when the learner chooses it, and labels what it found as external research.",
+    options: [{ value: "notes", label: "My notes only" }, { value: "library", label: "My notes + approved Competen library" }, { value: "research", label: "Research & Explain (external academic research)" }],
+    fallback: ["notes"],
+    limitReason: "My notes only cannot be removed. Research & Explain also needs a research provider below. Default: notes only.",
+  },
+  {
+    key: "scholar_research_providers", kind: "sequence", product: "Scholar",
+    label: "Academic research providers, in priority order",
+    help: "Which providers Research & Explain searches, first to last. Each is called from the server with the topic keywords only. A Google Scholar search link is shown for the learner to follow; Google Scholar itself is never searched by Competen.",
+    options: [{ value: "pubmed", label: "PubMed (NCBI E-utilities)" }, { value: "openalex", label: "OpenAlex" }],
+    fallback: [],
+    limitReason: "None by default: research is off until the owner chooses a provider.",
+  },
+  {
+    key: "scholar_research_abstracts", kind: "choice", product: "Scholar",
+    label: "Use published abstracts as evidence",
+    help: "On: abstracts the providers return (PubMed, OpenAlex's open abstract index) may ground an explanation, and the learner sees a short excerpt with a link to the source. Off: results are listed as further reading only and ground nothing. Full text is never fetched.",
+    options: [{ value: "on", label: "Use abstracts as evidence" }, { value: "off", label: "Metadata only (further reading)" }],
+    fallback: "on",
+    limitReason: "Only abstracts the provider publishes through its API. Default: on (research itself is off by default).",
+  },
+  {
+    key: "scholar_research_doi_check", kind: "choice", product: "Scholar",
+    label: "Verify DOIs with Crossref",
+    help: "On: each DOI is checked against Crossref, and a result whose DOI names a different work is dropped. A PubMed result's PMID is always PubMed's own.",
+    options: [{ value: "on", label: "Verify with Crossref" }, { value: "off", label: "Do not verify DOIs" }],
+    fallback: "on",
+    limitReason: "Default: on. Off leaves OpenAlex-only results unverified, so they ground nothing.",
+  },
+  {
+    key: "scholar_research_max_results", kind: "int", product: "Scholar", unit: "results",
+    label: "Research depth (results per search)",
+    help: "How many results one research request keeps, across all providers.",
+    fallback: 5, min: 1, max: 10,
+    limitReason: "One to ten. Default: five.",
+  },
+  {
+    key: "scholar_research_max_age_years", kind: "int", product: "Scholar", unit: "years",
+    label: "Only research published within",
+    help: "Results older than this are left out. Zero: any date (never one in the future).",
+    fallback: 15, min: 0, max: 50,
+    limitReason: "Zero to fifty years. Default: fifteen.",
+  },
+  {
+    key: "scholar_research_cache_days", kind: "int", product: "Scholar", unit: "days",
+    label: "How long research results are reused",
+    help: "Results (public bibliographic records and abstracts, never a learner's material) are reused for this many days, then searched again, and expire. Zero turns reuse off.",
+    fallback: 30, min: 0, max: 90,
+    limitReason: "Zero to ninety days. Default: thirty.",
+  },
+  {
+    key: "scholar_research_daily_max", kind: "int", product: "Scholar", unit: "research requests",
+    label: "Research requests per learner per day",
+    help: "Fresh research searches one learner may run in a day. A reused result does not count. At the limit, Learn answers from the notes (and library) and says why.",
+    fallback: 5, min: 0, max: 50,
+    limitReason: "Zero to fifty. Default: five.",
+  },
+  {
+    key: "scholar_research_daily_cost_cents", kind: "int", product: "Scholar", unit: "US cents",
+    label: "Research AI spend per learner per day",
+    help: "The most AI spend Research & Explain answers may use for one learner in a day, from the recorded cost of those answers. At the limit, Learn answers from the notes (and library) and says why.",
+    fallback: 25, min: 0, max: 500,
+    limitReason: "Zero to five dollars. Default: twenty-five cents.",
+  },
   {
     key: "scholar_exam_scanned_pages", kind: "choice", product: "Scholar",
     label: "Scanned examination pages",
@@ -1496,6 +1583,8 @@ export type IndividualPolicy = {
   scholarInstitutions: ContextOption[];
   /** COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570). */
   scholarExams: ScholarExamPolicy;
+  /** COMPETEN-RESEARCH-01: the Learn source modes and governed academic research. */
+  scholarResearch: ScholarResearchPolicy;
   scholarOnboardingFields: ("level" | "institution")[];
   /** P0: the least-reviewed content status Scholar offers. Default "unreviewed": everything, labelled. */
   scholarCatalogueMinStatus: ContentStatusLevel;
@@ -1622,6 +1711,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
     scholarExams: resolveScholarExams(published),
+    scholarResearch: resolveScholarResearch(published),
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
     scholarCatalogueMinStatus: clampChoice(policyDef("scholar_catalogue_min_status") as ChoicePolicy, published.get(policyPath("scholar_catalogue_min_status"))) as ContentStatusLevel,
     professionalEvaluation: resolveProfessionalEvaluation(published),
@@ -1815,5 +1905,19 @@ function resolveScholarExams(published: Map<string, unknown>): ScholarExamPolicy
     webDailyMax: int("scholar_exam_web_daily_max"),
     cacheDays: int("scholar_exam_research_cache_days"),
     scannedPages: choice("scholar_exam_scanned_pages") as "off" | "ai_transcription",
+  };
+}
+
+/** COMPETEN-RESEARCH-01. Research & Explain is offered only with the mode published AND at least one provider. */
+function resolveScholarResearch(published: Map<string, unknown>): ScholarResearchPolicy {
+  const choice = (key: ChoicePolicyKey) => clampChoice(policyDef(key) as ChoicePolicy, published.get(policyPath(key)));
+  const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
+  const providers = clampSequence(policyDef("scholar_research_providers") as SequencePolicy, published.get(policyPath("scholar_research_providers"))) as ("pubmed" | "openalex")[];
+  const chosen = clampSet(policyDef("scholar_learn_source_modes") as SetPolicy, published.get(policyPath("scholar_learn_source_modes"))) as LearnSourceMode[];
+  const modes = LEARN_SOURCE_MODES.filter(m => m === "notes" || (chosen.includes(m) && (m !== "research" || providers.length > 0)));
+  return {
+    modes, providers, abstracts: choice("scholar_research_abstracts") === "on", verifyDoi: choice("scholar_research_doi_check") === "on",
+    maxResults: int("scholar_research_max_results"), maxAgeYears: int("scholar_research_max_age_years"), cacheDays: int("scholar_research_cache_days"),
+    dailyMax: int("scholar_research_daily_max"), dailyCostCents: int("scholar_research_daily_cost_cents"),
   };
 }

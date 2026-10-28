@@ -2146,6 +2146,27 @@ export async function webResearchToday(admin: Admin, userId: string): Promise<nu
   return error ? null : (count ?? 0);
 }
 
+// COMPETEN-RESEARCH-01: Learn's Research & Explain. A fresh search writes one audit row (counts only, under its own
+// action, so it never spends the hourly AI quota); its AI answers carry their own operation in plat_ai_requests.
+export const LEARN_RESEARCH_ENTITY = "individual_scholar_learn_research";
+export const LEARN_RESEARCH_AUDIT_ACTION = "scholar_research_search";
+
+/** Fresh Learn research searches the person ran today (UTC). Unreadable: null (refuse). */
+export async function learnResearchToday(admin: Admin, userId: string): Promise<number | null> {
+  const since = `${new Date().toISOString().slice(0, 10)}T00:00:00Z`;
+  const { count, error } = await admin.from("audit_log").select("id", { count: "exact", head: true })
+    .eq("actor_id", userId).eq("action", LEARN_RESEARCH_AUDIT_ACTION).eq("entity_type", LEARN_RESEARCH_ENTITY).gte("created_at", since);
+  return error ? null : (count ?? 0);
+}
+
+/** Today's recorded AI spend (USD, UTC day) on one operation for the person. Unreadable: null (refuse). */
+export async function aiSpendToday(admin: Admin, userId: string, operation: string): Promise<number | null> {
+  const since = `${new Date().toISOString().slice(0, 10)}T00:00:00Z`;
+  const { data, error } = await admin.from("plat_ai_requests").select("cost_usd").eq("actor_id", userId).eq("operation", operation).gte("created_at", since).limit(1000);
+  if (error) return null;
+  return ((data ?? []) as { cost_usd: number | string | null }[]).reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
+}
+
 /** The stored original and the extractor of one material (exam-paper transcription reads both). Own rows only. */
 export async function materialOriginal(admin: Admin, userId: string, id: string): Promise<{ path: string; extractor: string } | null> {
   const { data } = await admin.from("individual_scholar_material").select("storage_path, extractor").eq("user_id", userId).eq("id", id).maybeSingle();
