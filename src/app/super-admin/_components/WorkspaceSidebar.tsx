@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
@@ -9,20 +9,32 @@ import RoleSwitcher from "@/components/RoleSwitcher";
 import type { AppRole } from "@/lib/roles";
 import { parentHrefs, pathMatches } from "@/lib/nav/active";
 import { filterHqNav } from "@/lib/hq/nav-filter";
+import { isParentOpen, submenuWithOverview } from "@/lib/nav/expand";
 import { HQ_WORKSPACES, OVERVIEW_HREFS, hqWorkspaceForPath, type HqSection, type NavEntry } from "./nav-tables";
+import { setParentOpen, useParentRecords } from "./nav-expand-store";
 
-// Competen HQ sidebar (COMPETEN-HQ-IA-02): seven workspaces, always listed, and the one you are in
-// expanded into its contextual sections. Which workspace is "in" is the registry's answer for the
-// pathname (hqWorkspaceForPath), so the swap is instant on client navigation and needs no state.
+// Competen HQ sidebar (COMPETEN-HQ-IA-02): seven workspaces, always listed, each opening into its
+// contextual sections. Which workspace holds the page is the registry's answer for the pathname
+// (hqWorkspaceForPath).
+//
+// HQ-NAV-EXPAND-01: A PARENT IS A DISCLOSURE, NOT A LINK. A workspace, or an item with children, is a
+// button that opens and closes its submenu and never navigates -- on a tablet a tap on Governance must
+// not leave the page. An item's own landing page is its submenu's first row, "Overview". The parent of
+// the page you are on opens by itself, several parents may be open at once, and what you open stays open
+// as you move (src/lib/nav/expand.ts holds the rule, ./nav-expand-store the choices).
 //
 // The registry lives in ./nav-tables so the CP-HQ-NAV-001 capability filter can be asserted against the
 // real data rather than a fixture.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const ROW = "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors";
-const ROW_ACTIVE = "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs bg-rose-900/50 text-white font-medium";
-const CHILD = "flex items-center gap-2 pl-9 pr-3 py-1 rounded-lg text-[11px] text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors";
-const CHILD_ACTIVE = "flex items-center gap-2 pl-9 pr-3 py-1 rounded-lg text-[11px] bg-rose-900/50 text-white font-medium";
+// ⚠ TOUCH TARGETS FOLLOW pointer-coarse, NEVER THE VIEWPORT WIDTH (the CPR-MOB-001 freeze). Written out in
+// full, never composed from a variable inside a class name: Tailwind reads source text.
+const TOUCH = "pointer-coarse:min-h-[var(--cp-touch)]";
+const FOCUS = "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-rose-300";
+const ROW = `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors ${TOUCH} ${FOCUS}`;
+const ROW_ACTIVE = `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs bg-rose-900/50 text-white font-medium ${TOUCH} ${FOCUS}`;
+const CHILD = `flex items-center gap-2 pl-9 pr-3 py-1 rounded-lg text-[11px] text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors ${TOUCH} ${FOCUS}`;
+const CHILD_ACTIVE = `flex items-center gap-2 pl-9 pr-3 py-1 rounded-lg text-[11px] bg-rose-900/50 text-white font-medium ${TOUCH} ${FOCUS}`;
 
 // activeRole is NULLABLE as of CP-SPLIT-002. highestRole() returns null for an identity that holds no
 // estate role at all, and RoleSwitcher indexes ROLE_CONFIG[activeRole] -- so passing a fabricated role
@@ -58,6 +70,9 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
     navRef.current?.querySelector("a[aria-current=\"page\"]")?.scrollIntoView({ block: "nearest" });
   }, [pathname]);
   const inWorkspace = activeKey !== "mission";
+  const uid = useId();
+  const records = useParentRecords();
+  const domId = (key: string) => `${uid}-${key.replace(/[^a-z0-9-]/gi, "-")}`;
 
   // CP-HQ-NAV-001, per workspace. Owners get each table back unchanged; a workspace with nothing visible
   // is not drawn (the same rule that drops an empty group, one level up).
@@ -68,12 +83,8 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
     // would stop looking like a parent and revert to prefix matching -- so in observe mode an appointee
     // standing on a hidden child would light up its parent. Highlighting must not depend on who is looking.
     const exactHrefs = parentHrefs(table.flatMap(g => g.items.flatMap(i => [i, ...(i.children ?? [])])));
-    // The label goes to the first destination this viewer can open, in registry order: no landing page
-    // was built for a workspace, and clicking a label must still have a predictable destination.
-    const home = nav.flatMap(s => s.items).find(i => i.kind !== "cross" && i.kind !== "external")?.href
-      ?? nav[0]?.items[0]?.href;
-    return { w, nav, exactHrefs, home };
-  }).filter(v => v.nav.length > 0 && v.home);
+    return { w, nav, exactHrefs };
+  }).filter(v => v.nav.length > 0);
 
   // ⚠ THE NAME OF THIS PLACE, AS TOLD TO THE PERSON STANDING IN IT. "Super Admin" is a role, and an HQ
   // appointee does not hold it -- Elisha holds a POSITION (Practice Product Director) that opens three
@@ -106,36 +117,47 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
       </div>
 
       <nav ref={navRef} aria-label="Competen HQ" className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-        {visible.map(({ w, nav, exactHrefs, home }) => {
-          const open = w.key === activeKey;
+        {visible.map(({ w, nav, exactHrefs }) => {
+          const wsKey = `ws:${w.key}`;
+          const holdsPage = w.key === activeKey;
+          const open = isParentOpen(holdsPage, records[wsKey], pathname);
           return (
             <div key={w.key} data-hq-workspace={w.key} className={open ? "mb-2" : undefined}>
-              {/* The workspace row. Open, it wears the SECTION tone, never the page fill: exactly one row
-                  -- the page you are on -- carries the full treatment. */}
-              <Link href={home!} data-sb-item title={w.label}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-colors ${open ? "bg-white/5 text-white font-semibold" : "text-slate-300 hover:bg-rose-900/30 hover:text-white"}`}>
-                <span className="w-5 text-center text-sm leading-none" aria-hidden>{w.icon}</span>
-                <span className="flex-1" data-sb-label>{w.label}</span>
-                <span className={`text-[8px] text-slate-500 transition-transform ${open ? "rotate-90" : ""}`} aria-hidden data-sb-label>▶</span>
-              </Link>
-              {open && nav.map(section => {
-                const s = section as HqSection; // filterHqNav spreads the section, so its key and plain survive
-                return (
-                  <NavGroupOrPlain key={s.key} heading={s.plain ? null : section.group} hrefs={flat(section.items).map(i => i.href)}
-                    headerClass="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                    {section.items.map(e => {
-                      const kids = e.children ?? [];
-                      const showKids = kids.length > 0 && (pathMatches(e.href, pathname, false) || kids.some(c => pathMatches(c.href, pathname, false)));
-                      return (
-                        <div key={e.key ?? e.href} className="flex flex-col gap-0.5">
-                          {row(e, OVERVIEW_HREFS.has(e.href) || exactHrefs.has(e.href.split("?")[0]))}
-                          {showKids && kids.map(c => row(c, OVERVIEW_HREFS.has(c.href) || exactHrefs.has(c.href.split("?")[0]), true))}
-                        </div>
-                      );
-                    })}
-                  </NavGroupOrPlain>
-                );
-              })}
+              {/* The workspace row. Holding the page, it wears the SECTION tone, never the page fill:
+                  exactly one row -- the page you are on -- carries the full treatment. */}
+              <ParentToggle id={domId(wsKey)} open={open} holdsPage={holdsPage} icon={w.icon} label={w.label}
+                onToggle={() => setParentOpen(wsKey, !open, pathname)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-left text-[13px] transition-colors ${TOUCH} ${FOCUS} ${holdsPage ? "bg-white/5 text-white font-semibold" : "text-slate-300 hover:bg-rose-900/30 hover:text-white"}`} />
+              <div id={domId(wsKey)} hidden={!open} className="flex flex-col gap-0.5">
+                {nav.map(section => {
+                  const s = section as HqSection; // filterHqNav spreads the section, so its key and plain survive
+                  return (
+                    <NavGroupOrPlain key={s.key} heading={s.plain ? null : section.group} hrefs={flat(section.items).map(i => i.href)} defaultOpen
+                      headerClass="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                      {section.items.map(e => {
+                        const kids = e.children ?? [];
+                        if (kids.length === 0) return row(e, OVERVIEW_HREFS.has(e.href) || exactHrefs.has(e.href.split("?")[0]));
+                        // An item with children: a disclosure whose submenu starts with its own page, "Overview".
+                        const itemKey = `item:${e.key ?? e.href}`;
+                        const submenu = submenuWithOverview(e, kids) as NavEntry[];
+                        const holds = submenu.some(c => pathMatches(c.href, pathname, false));
+                        const itemOpen = isParentOpen(holds, records[itemKey], pathname);
+                        return (
+                          <div key={e.key ?? e.href} className="flex flex-col gap-0.5">
+                            <ParentToggle id={domId(itemKey)} open={itemOpen} holdsPage={holds} icon={e.icon} label={e.label}
+                              status={offSwitches && e.flag && off.has(e.flag) ? "Off" : undefined}
+                              onToggle={() => setParentOpen(itemKey, !itemOpen, pathname)}
+                              className={`flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-left text-xs transition-colors ${TOUCH} ${FOCUS} ${holds ? "bg-white/5 text-white font-medium" : "text-slate-400 hover:bg-rose-900/30 hover:text-white"}`} />
+                            <div id={domId(itemKey)} hidden={!itemOpen} className="flex flex-col gap-0.5">
+                              {submenu.map(c => row(c, OVERVIEW_HREFS.has(c.href) || exactHrefs.has(c.href.split("?")[0]), true))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </NavGroupOrPlain>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
@@ -173,6 +195,28 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
             in the same position on every screen, rather than a second one that drifts. */}
       </div>
     </>
+  );
+}
+
+/**
+ * A parent row (HQ-NAV-EXPAND-01). A real button, so Enter and Space work and focus is visible; it states
+ * whether it is open (aria-expanded) and what it opens (aria-controls), and shows it with a chevron that
+ * turns. It never navigates.
+ */
+function ParentToggle({ id, open, holdsPage, icon, label, status, onToggle, className }: {
+  id: string; open: boolean; holdsPage: boolean; icon: string; label: string; status?: string;
+  onToggle: () => void; className: string;
+}) {
+  return (
+    <button type="button" aria-expanded={open} aria-controls={id} onClick={onToggle} data-sb-item title={label}
+      data-holds-page={holdsPage || undefined} className={className}>
+      <span className="w-5 text-center text-sm leading-none" aria-hidden>{icon}</span>
+      <span className="flex-1" data-sb-label>{label}</span>
+      {status && (
+        <span aria-label={`(${status})`} className="rounded border border-slate-500/60 px-1 text-[9px] font-semibold uppercase tracking-wide text-slate-300" data-sb-label>{status}</span>
+      )}
+      <span className={`text-[9px] text-slate-400 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} aria-hidden data-sb-label>▶</span>
+    </button>
   );
 }
 
