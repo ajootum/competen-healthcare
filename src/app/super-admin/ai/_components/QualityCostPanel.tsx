@@ -87,6 +87,35 @@ export default function QualityCostPanel({ q }: { q: Quality }) {
         </div>
       </div>
 
+      {/* Owner D3 (AI-ROUTING-01, 28 Oct): a fully withheld, unsupported answer is a SAFE NON-ANSWER -- recorded on its own
+          four counts and never an accepted output. An expected "not in your notes" decline is kept apart from it. */}
+      <div className={`${card} p-5 overflow-x-auto`}>
+        <h3 className="font-semibold text-gray-900 text-[14px] mb-1">When nothing was delivered</h3>
+        <p className="text-[11px] text-gray-500 mb-2">Safe non-answers (withheld, unsupported): safety containment <span className="font-semibold text-gray-700">successful</span> · educational output <span className="font-semibold text-gray-700">not delivered</span> · provider cost <span className="font-semibold text-gray-700">incurred</span> · learner usefulness <span className="font-semibold text-gray-700">unsuccessful</span>. Never counted as kept output.</p>
+        <table className="w-full text-xs">
+          <thead><tr className="text-left text-gray-500">
+            <th className="py-1 pr-2 font-semibold">Output</th>
+            <th className="py-1 pr-2 font-semibold text-right">Safe non-answers</th><th className="py-1 pr-2 font-semibold text-right">Their cost</th>
+            <th className="py-1 pr-2 font-semibold text-right">Not-in-notes declines</th><th className="py-1 pr-2 font-semibold text-right">Their cost</th>
+            <th className="py-1 pr-2 font-semibold text-right">Other failures</th><th className="py-1 font-semibold text-right">Their cost</th>
+          </tr></thead>
+          <tbody>
+            {q.perKind.map(k => (
+              <tr key={k.kind} className="border-t border-gray-100">
+                <td className="py-1.5 pr-2 font-medium text-gray-800">{KIND[k.kind]}</td>
+                <td className="py-1.5 pr-2 text-right tabular-nums font-semibold">{unmeasured ? "—" : k.safeNonAnswers.n}</td>
+                <td className="py-1.5 pr-2 text-right tabular-nums">{unmeasured ? "—" : money(k.safeNonAnswers.cost)}</td>
+                <td className="py-1.5 pr-2 text-right tabular-nums">{unmeasured ? "—" : k.declined.n}</td>
+                <td className="py-1.5 pr-2 text-right tabular-nums">{unmeasured ? "—" : money(k.declined.cost)}</td>
+                <td className="py-1.5 pr-2 text-right tabular-nums">{unmeasured ? "—" : k.otherFailures.n}</td>
+                <td className="py-1.5 text-right tabular-nums">{unmeasured ? "—" : money(k.otherFailures.cost)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-2 text-[10px] text-gray-500">The three together are the Rejected column above, and their cost is its unsuccessful cost. Declines: the notes do not cover the request, or the model said the material cannot support it. Other failures: malformed or incomplete drafts, outages.</p>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-[14px] mb-2">Rejection reasons</h3>

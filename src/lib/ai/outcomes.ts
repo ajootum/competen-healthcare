@@ -153,6 +153,36 @@ export type OutcomeRow = {
 };
 export type FeedbackRow = { output_kind: AiOutputKind; rating: "positive" | "negative"; reasons: string[] | null; created_at: string };
 
+// ── OWNER D3 (AI-ROUTING-01, 28 Oct 2026): A FULLY WITHHELD, UNSUPPORTED ANSWER IS A SAFE NON-ANSWER ──────────────
+//
+// Recorded on four separate counts: safety containment successful, educational output not delivered, provider cost
+// incurred, learner usefulness unsuccessful. It is NEVER an accepted educational output, and it never grants clinical
+// eligibility. An expected "not in your notes" decline (the notes do not cover it, or the model said the material
+// cannot support it) is a different thing again, and is kept apart.
+
+/** Codes meaning a check withheld content as unsupported, ungrounded or unsafe (the writers' own reason codes). */
+export const SAFE_WITHHOLD_REASONS = [
+  "ungrounded", "no_citation", "bad_citation", "quote_not_in_passage", "unsupported_term", "correct_not_supported",
+  "failed_verification", "identifier",
+] as const;
+/** Codes meaning the AI declined as expected because the material does not cover the request. */
+export const DECLINE_REASONS = ["not_in_notes", "source_insufficient"] as const;
+
+export type NonDelivery = "safe_non_answer" | "declined_not_in_notes" | "other_failure";
+
+/**
+ * Pure. Why a learner action delivered nothing, or null when it delivered something (accepted or partial) or sent
+ * nothing (redirected). A decline wins over a withhold: the model said up front the notes do not cover it.
+ */
+export function nonDelivery(o: Pick<OutcomeRow, "outcome" | "rejection_reasons">): NonDelivery | null {
+  if (o.outcome !== "rejected" && o.outcome !== "error") return null;
+  if (o.outcome === "error") return "other_failure";
+  const r = new Set(o.rejection_reasons ?? []);
+  if (DECLINE_REASONS.some(c => r.has(c))) return "declined_not_in_notes";
+  if (SAFE_WITHHOLD_REASONS.some(c => r.has(c))) return "safe_non_answer";
+  return "other_failure";
+}
+
 /** Pure. Which product an operation belongs to: its prefix first, then the attribution scope. */
 export function productOf(operation: string | null, scope?: string | null): string {
   const op = operation ?? "";
@@ -201,13 +231,17 @@ export function summariseQuality(requests: readonly RequestRow[], outcomes: read
   const perKind = kinds.map(kind => {
     const rows = outcomes.filter(o => o.output_kind === kind);
     const generated = rows.filter(o => o.outcome !== "redirected");
-    const accepted = generated.reduce((n, o) => n + (o.accepted_count ?? 0), 0);
+    // Only an action that delivered something can add kept outputs (D3: a safe non-answer is never one), whatever its counts say.
+    const accepted = generated.filter(o => o.outcome === "accepted" || o.outcome === "partial").reduce((n, o) => n + (o.accepted_count ?? 0), 0);
     const spend = generated.reduce((n, o) => n + (byAction.get(o.action_id) ?? 0), 0);
     const failed = generated.filter(o => o.outcome === "rejected" || o.outcome === "error");
     const failedCost = failed.reduce((n, o) => n + (byAction.get(o.action_id) ?? 0), 0);
     const fb = feedback.filter(f => f.output_kind === kind);
+    const by = (k: NonDelivery) => { const x = failed.filter(o => nonDelivery(o) === k); return { n: x.length, cost: money(x.reduce((n, o) => n + (byAction.get(o.action_id) ?? 0), 0)) }; };
     return {
       kind, actions: generated.length, accepted,
+      // D3: the three ways nothing was delivered. Each one's cost is part of unsuccessfulCost, never of what was kept.
+      safeNonAnswers: by("safe_non_answer"), declined: by("declined_not_in_notes"), otherFailures: by("other_failure"),
       rejectedActions: failed.length,
       rejectionRate: generated.length ? Math.round((failed.length / generated.length) * 100) : null,
       spend: money(spend), costPerAccepted: accepted ? money(spend / accepted) : null,
@@ -232,7 +266,7 @@ export function summariseQuality(requests: readonly RequestRow[], outcomes: read
     const end = start.getTime() + DAY;
     const inDay = (t: string) => { const x = new Date(t).getTime(); return x >= start.getTime() && x < end; };
     const out = outcomes.filter(o => inDay(o.created_at) && o.outcome !== "redirected");
-    const accepted = out.reduce((n, o) => n + (o.accepted_count ?? 0), 0);
+    const accepted = out.filter(o => o.outcome === "accepted" || o.outcome === "partial").reduce((n, o) => n + (o.accepted_count ?? 0), 0);
     const actionSpend = out.reduce((n, o) => n + (byAction.get(o.action_id) ?? 0), 0);
     const fb = feedback.filter(f => inDay(f.created_at));
     const dayLearners = new Set(requests.filter(r => inDay(r.created_at) && r.actor_id && productOf(r.operation, r.attribution_scope) === "Scholar").map(r => r.actor_id)).size;
