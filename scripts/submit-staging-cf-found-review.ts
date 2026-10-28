@@ -25,6 +25,7 @@
  * It never approves, publishes, or writes ai_model_eligibility or clinical_review_decision.
  */
 import { loadEnvConfig } from "@next/env";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "node:crypto";
 import { judgeTarget } from "./production-guard";
@@ -57,6 +58,7 @@ async function findUser() {
 const cookieOf = (session: any) => `sb-${new URL(url).hostname.split(".")[0]}-auth-token=base64-${Buffer.from(JSON.stringify(session)).toString("base64")}`;
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   say(`CF-FOUND staging submission -- target ${(verdict as any).ref}, server ${BASE}`);
   if (await findUser()) { console.error(`REFUSING: ${EMAIL} already exists. This GO creates one temporary actor, once. Nothing changed.`); process.exit(1); }
   const carrier = (await admin.from("frameworks").select("id, code, pub_status").is("hospital_id", null).eq("code", "CF-FOUND-RC").maybeSingle()).data;
@@ -75,7 +77,7 @@ async function main() {
   if (mem.error) throw new Error(`membership: ${mem.error.message}`);
   const office = (await admin.from("ogs_offices").select("id").eq("office_type", "hq_platform").limit(1).maybeSingle()).data;
   if (!office) throw new Error("no hq_platform office to appoint into");
-  const appt = await admin.from("ogs_office_appointments").insert({ office_id: office.id, person_id: uid, person_name: NAME, role: POSITION, status: "active",
+  const appt = await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER), office_id: office.id, person_id: uid, person_name: NAME, role: POSITION, status: "active",
     term_start: new Date(Date.now() - 60_000).toISOString(), scope: "staging: CF-FOUND clinical review submission only (owner GO Option B)" }).select("id").single();
   if (appt.error) throw new Error(`appointment: ${appt.error.message}`);
   say(`actor ${uid} created; membership ${mem.data.id}; appointment ${appt.data.id} (${POSITION}, not super_admin)`);

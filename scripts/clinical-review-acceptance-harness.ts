@@ -20,6 +20,7 @@
  * existing HQ office, and one shared draft framework. No real content is reviewed. PEND until 395.
  */
 import { loadEnvConfig } from "@next/env";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { loadClinicalReviews, submitForReview, decideReview } from "../src/lib/competency/clinical-review";
@@ -65,6 +66,7 @@ async function person(email: string, name: string) {
 }
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   console.log(`CLINICAL REVIEW ACCEPTANCE (395) -- target ${ref}\n`);
   const probe = await admin.from("clinical_review_decision").select("id").limit(0);
   if (probe.error) { pend("H-Z", `migration 395 is not applied here (${probe.error.message}). Nothing created.`); return; }
@@ -75,14 +77,14 @@ async function main() {
 
   try {
     const [author, r1, r2, r3] = [await person(EMAILS.author, "CR Author"), await person(EMAILS.r1, "CR Reviewer 1"), await person(EMAILS.r2, "CR Reviewer 2"), await person(EMAILS.r3, "CR Reviewer 3")];
-    const appoint = async (p: string, status = "active") => (await admin.from("ogs_office_appointments").insert({ office_id: office.id, person_id: p, role: "clinical_content_reviewer", status }).select("id").single()).data.id as string;
+    const appoint = async (p: string, status = "active") => (await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER), office_id: office.id, person_id: p, role: "clinical_content_reviewer", status }).select("id").single()).data.id as string;
     const [a1, a2, a3, a1s] = [await appoint(r1), await appoint(r2), await appoint(r3), await appoint(r1, "suspended")];
     const fw = (await admin.from("frameworks").insert({ name: FIXTURE, library: "core", is_active: true, pub_status: "draft", hospital_id: null }).select("id").single()).data;
     const d1 = (await admin.from("framework_domains").insert({ framework_id: fw.id, name: `${FIXTURE} domain 1` }).select("id").single()).data;
     const d2 = (await admin.from("framework_domains").insert({ framework_id: fw.id, name: `${FIXTURE} domain 2` }).select("id").single()).data;
     const c1 = (await admin.from("framework_competencies").insert({ domain_id: d1.id, name: `${FIXTURE} standard`, description: "First wording", risk_category: "standard" }).select("id").single()).data;
     const c2 = (await admin.from("framework_competencies").insert({ domain_id: d1.id, name: `${FIXTURE} high risk`, description: "High risk", risk_category: "high" }).select("id").single()).data;
-    const scope = (a: string, kind: string, r: string) => admin.from("clinical_reviewer_scope").insert({ appointment_id: a, scope_kind: kind, scope_ref: r });
+    const scope = (a: string, kind: string, r: string) => admin.from("clinical_reviewer_scope").insert({ granted_by: HQ_OWNER, appointment_id: a, scope_kind: kind, scope_ref: r });
     await scope(a1, "domain", d1.id); await scope(a1s, "domain", d1.id); await scope(a2, "domain", d2.id); await scope(a3, "framework", fw.id);
     const badScope = await scope(a2, "profession", fw.id);
     ok("S2. ⚠ a scope must name a record of its kind (a framework id is not a profession term)", !!badScope.error, badScope.error?.message ?? "accepted");
@@ -97,7 +99,7 @@ async function main() {
     ok("H2. ⚠ a version cannot be rewritten (append-only)", !!forged.error);
 
     // ── I, A, S. who may decide ──
-    const authorSelf = await admin.from("ogs_office_appointments").insert({ office_id: office.id, person_id: author, role: "clinical_content_reviewer", status: "active" }).select("id").single();
+    const authorSelf = await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER), office_id: office.id, person_id: author, role: "clinical_content_reviewer", status: "active" }).select("id").single();
     await scope(authorSelf.data.id, "framework", fw.id);
     const self = await decideReview(admin, v1.id, author, authorSelf.data.id, "approved", null);
     ok("I1. ⚠ the author cannot approve their own content, even holding an in-scope reviewer appointment", !self.ok && /cannot review it/.test((self as any).error), JSON.stringify(self));

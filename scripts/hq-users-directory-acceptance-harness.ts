@@ -15,6 +15,7 @@
  * Refuses production via assertSafeTarget. Creates and deletes its own harness-usersc-* identities.
  */
 import { loadEnvConfig } from "@next/env";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { activeProducts, holdsHqPosition, loadDirectoryAccess } from "../src/lib/hq/user-directory";
@@ -59,6 +60,7 @@ async function cookieFor(email: string) {
 }
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   console.log(`HQ USERS DIRECTORY ACCEPTANCE (HQ-USERS-C) -- target ${ref}${BASE ? `, server ${BASE}` : ", no server"}\n`);
   await cleanup();
   const id: Record<string, string> = {};
@@ -74,7 +76,7 @@ async function main() {
     const appts = await admin.from("ogs_office_appointments").insert([
       { office_id: officeFor("hq_platform"), person_id: id.viewer, person_name: "Harness usersC viewer", role: "platform_director", status: "active", term_start: new Date(Date.now() - 60_000).toISOString() },
       { office_id: officeFor("hq_executive"), person_id: id.subject, person_name: "Harness usersC subject", role: "chief_financial_officer", status: "active", term_start: new Date(Date.now() - 60_000).toISOString() },
-    ]);
+    ].map(r => ({ ...r, ...appointmentAuthority(HQ_OWNER) })));
     const im = await admin.from("individual_membership").insert({ user_id: id.subject, status: "active", source: "hq_pilot_grant" });
     const ie = await admin.from("individual_entitlement").insert({ user_id: id.subject, experience_code: "professional", status: "active", source: "pilot", operating_entity: "competen_holdings" });
     ok("0. fixtures: appointments, Individual membership and a live Professional entitlement", !appts.error && !im.error && !ie.error, [appts.error?.message, im.error?.message, ie.error?.message].filter(Boolean).join(" | "));

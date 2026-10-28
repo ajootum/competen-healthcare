@@ -398,6 +398,24 @@ export function decideHq(input: HqDecisionInput): HqDecisionResult {
 }
 
 /** Capability grants whose time window is open at `now`. Mirrors practice_role_assignment's semantics. */
+/**
+ * Migration 641 (HQ-SOD-CROSSCUT-01 addendum): is an appointment's term in force today? Dates, compared as
+ * UTC calendar days, the same rule as hq_appointment_in_force() (current_date on the database). A missing
+ * start or end is open. Pure.
+ */
+export function appointmentInTerm(termStart: string | null | undefined, termEnd: string | null | undefined, today: string = new Date().toISOString().slice(0, 10)): boolean {
+  return (!termStart || termStart.slice(0, 10) <= today) && (!termEnd || termEnd.slice(0, 10) >= today);
+}
+
+/**
+ * Migration 641: what one appointment carries of its position's capabilities. A null scope carries all of
+ * them. A scope carries only what it names, plus the HQ landing page every appointee reaches. Pure.
+ */
+export function narrowToScope(capabilities: string[], scope: string[] | null | undefined): string[] {
+  if (!scope) return capabilities;
+  return capabilities.filter(c => c === HQ_HOME_CAPABILITY || scope.includes(c));
+}
+
 export function activeGrants<T extends { effective_from?: string | null; effective_to?: string | null }>(
   rows: T[],
   now: number = Date.now(),

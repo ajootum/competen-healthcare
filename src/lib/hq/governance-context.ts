@@ -18,7 +18,7 @@
 
 import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
 import { isHqOfficeType } from "./spaces";
-import { activeGrants } from "./spaces";
+import { activeGrants, appointmentInTerm, narrowToScope } from "./spaces";
 
 export const HQ_CONTEXT_COOKIE = "hq_context";
 
@@ -61,15 +61,16 @@ export async function listGovernanceContexts(admin: any, userId: string): Promis
     .map(o => o.id));
   if (!hqOfficeIds.size) return [];
 
-  const { data: appts, error: aErr } = await admin
-    .from("ogs_office_appointments")
-    .select("id, office_id, person_id, role, status, product_line_code")
-    .eq("person_id", userId)
-    .limit(200);
+  // Migration 641: each appointment's own capability scope and term. Before 641 the columns are absent and the
+  // read falls back to the old shape, so nothing is narrowed (exactly the behaviour before).
+  const base = "id, office_id, person_id, role, status, product_line_code";
+  let res = await admin.from("ogs_office_appointments").select(`${base}, capability_scope, term_start, term_end`).eq("person_id", userId).limit(200);
+  if (res.error && /capability_scope|column/i.test(res.error.message ?? "")) res = await admin.from("ogs_office_appointments").select(base).eq("person_id", userId).limit(200);
+  const { data: appts, error: aErr } = res;
   if (aErr || !appts?.length) return [];
 
   const live = (appts as any[]).filter(a =>
-    hqOfficeIds.has(a.office_id) && appointmentGrantsAccess(a.status) && !!a.role);
+    hqOfficeIds.has(a.office_id) && appointmentGrantsAccess(a.status) && !!a.role && appointmentInTerm(a.term_start, a.term_end));
   if (!live.length) return [];
 
   const codes = [...new Set(live.map(a => a.role as string))];
@@ -95,7 +96,8 @@ export async function listGovernanceContexts(admin: any, userId: string): Promis
         // The appointment's own product line wins over the position's -- s6 puts it on the appointment
         // because that is what the ACTIVE context is resolved from.
         productLineCode: (a.product_line_code ?? pos.product_line_code ?? null) as string | null,
-        capabilities: [...new Set(inDate.filter((g: any) => g.position_code === a.role).map((g: any) => g.capability_code))].sort(),
+        // Migration 641: narrowed by this appointment's own scope, so holders of one shared role differ.
+        capabilities: narrowToScope([...new Set(inDate.filter((g: any) => g.position_code === a.role).map((g: any) => g.capability_code as string))], a.capability_scope).sort(),
       };
     })
     // Deterministic, so an unchosen default is stable between requests rather than whatever the database

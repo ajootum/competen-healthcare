@@ -19,6 +19,7 @@
  * ⚠ STAGING ONLY. It refuses unless STAGING_SUPABASE_URL is a confirmed non-production project (production-guard).
  */
 import { randomBytes } from "node:crypto";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { judgeTarget } from "./production-guard";
@@ -46,6 +47,7 @@ async function find() {
 const appointments = async (id: string) => (await admin.from("ogs_office_appointments").select("id, role, status").eq("person_id", id)).data ?? [];
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   console.log(`staging ${verdict.ok ? verdict.ref : ""}`);
   const u = await find();
   if (mode === "status") {
@@ -71,7 +73,7 @@ async function main() {
   if (error || !data?.user) { console.error(`the sign-in could not be created: ${error?.message}`); process.exit(1); }
   await admin.from("profiles").update({ full_name: NAME }).eq("id", data.user.id);
   for (const role of ["clinical_case_educator", ...(withPublisher ? ["quality_council_member"] : [])]) {
-    const a = await admin.from("ogs_office_appointments").insert({ office_id: office.id, person_id: data.user.id, person_name: NAME, role, status: "active" });
+    const a = await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER), office_id: office.id, person_id: data.user.id, person_name: NAME, role, status: "active" });
     if (a.error) { console.error(`the ${role} appointment failed (${a.error.message}). Retiring the user.`); await admin.auth.admin.deleteUser(data.user.id); process.exit(1); }
   }
   console.log(`created ${EMAIL} (${data.user.id}) as ${withPublisher ? "Clinical Case Educator + Quality Council Member" : "Clinical Case Educator"}`);

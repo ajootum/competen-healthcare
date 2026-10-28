@@ -14,6 +14,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { readFileSync } from "node:fs";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { listGovernanceContexts, resolveActiveGovernance, recordContextSwitch, effectiveAuthority, readMultipleAppointments, type GovernanceContext } from "../src/lib/hq/governance-context";
@@ -126,6 +127,7 @@ const strip = (s: string) =>
     process.exit(failures.length ? 1 : 0);
   }
   const admin = createClient(url, key, { auth: { persistSession: false } }) as any;
+  const HQ_OWNER = await fixtureOwnerId(admin);
 
   let fixtureApptId: string | null = null;
   try {
@@ -188,7 +190,7 @@ const strip = (s: string) =>
 
     if (!hqOffice || !spare) skip("C1-C3", "no spare HQ office/position to build a second appointment from");
     else {
-      const { data: made, error: mkErr } = await admin.from("ogs_office_appointments").insert({
+      const { data: made, error: mkErr } = await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER),
         office_id: hqOffice.id, person_id: subject.p.id, person_name: subject.p.full_name,
         role: spare.code, status: "active",
       }).select("id").single();

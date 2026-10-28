@@ -18,6 +18,7 @@
  * Refuses production via assertSafeTarget. Creates and deletes its own harness-usersA-* identities.
  */
 import { loadEnvConfig } from "@next/env";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { resolveHqPositions } from "../src/lib/hq/context";
@@ -94,6 +95,7 @@ const call = async (method: string, path: string, cookie: string, body?: unknown
 };
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   console.log(`HQ USERS AUTHORITY ACCEPTANCE (HQ-USERS-A) -- target ${ref}${BASE ? `, server ${BASE}` : ", no server"}\n`);
   if (!BASE) { console.log("  PEND  every check -- BASE_URL is not set: this run is NOT acceptance. Nothing created."); return; }
   const pos = await admin.from("hq_position_capability").select("capability_code").eq("position_code", POSITION).is("effective_to", null);
@@ -109,7 +111,7 @@ async function main() {
       await admin.from("platform_membership").insert({ user_id: data.user.id, status: "active", source: "admin_grant", note: "HQ-USERS-A acceptance fixture. Staging only." });
     }
     const office = await admin.from("ogs_offices").select("id").eq("office_type", "hq_platform").limit(1).maybeSingle();
-    const appt = office.data ? await admin.from("ogs_office_appointments").insert({ office_id: office.data.id, person_id: made.viewer, person_name: "Harness usersA viewer", role: POSITION, status: "active", term_start: new Date(Date.now() - 60_000).toISOString() }) : { error: { message: "no hq_platform office" } };
+    const appt = office.data ? await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER), office_id: office.data.id, person_id: made.viewer, person_name: "Harness usersA viewer", role: POSITION, status: "active", term_start: new Date(Date.now() - 60_000).toISOString() }) : { error: { message: "no hq_platform office" } };
     ok("0. the viewer is appointed platform_director", !appt.error, appt.error?.message);
     const caps = (await resolveHqPositions(admin, made.viewer)).capabilities;
     ok("0b. the viewer holds hq.platform.users.view and is not an owner", caps.includes("hq.platform.users.view"), caps.join(","));

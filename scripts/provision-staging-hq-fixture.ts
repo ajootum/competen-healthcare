@@ -28,6 +28,7 @@
  *   npx tsx scripts/provision-staging-hq-fixture.ts --verify    (no writes)
  */
 import { loadEnvConfig } from "@next/env";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { createClient } from "@supabase/supabase-js";
 import { judgeTarget } from "./production-guard";
 
@@ -106,6 +107,7 @@ async function findUser(): Promise<any | null> {
 }
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   console.log(`\n=== CPR-PD-014 §14 synthetic HQ operator ===`);
   console.log(`target : ${url}  (${verdict.ref})`);
   console.log(`mode   : ${VERIFY_ONLY ? "VERIFY ONLY, no writes" : "provision (idempotent)"}\n`);
@@ -204,7 +206,7 @@ async function main() {
     if (error) bad(`could not correct the appointment: ${error.message}`);
     else ok(`appointment corrected to ${POSITION_CODE}/${GRANTING_STATUS}`);
   } else {
-    const { error } = await admin.from("ogs_office_appointments").insert({
+    const { error } = await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER),
       office_id: (office as any).id, person_id: user.id, person_name: FIXTURE_NAME,
       role: POSITION_CODE, status: GRANTING_STATUS, term_start: new Date().toISOString(),
     });

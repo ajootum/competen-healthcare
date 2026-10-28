@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveHqContext } from "@/lib/hq/context";
 import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
 import { currentTraceId } from "@/lib/trace";
-import { HQ_SPACES, type HqSpace } from "@/lib/hq/spaces";
+import { HQ_CAPABILITY_CODES, HQ_SPACES, type HqSpace } from "@/lib/hq/spaces";
 import {
   loadHqAppointmentBoard, officeForSpace, officeIsUsable, readHqOffices,
   HQ_END_STATUSES,
@@ -96,6 +96,71 @@ async function auditOrNull(ctx: OkCtx, row: Record<string, unknown>): Promise<st
   }
 }
 
+// ── Migration 641: scope, primary, and the database's refusals ───────────────
+/** null = the whole position. A list must be non-empty and code-defined (the database checks the position). */
+function parseCapabilityScope(v: unknown): string[] | null | "invalid" {
+  if (v === null || v === undefined) return null;
+  if (!Array.isArray(v) || v.length === 0 || v.length > 100) return "invalid";
+  const codes = [...new Set(v.map(x => (typeof x === "string" ? x.trim() : "")))];
+  return codes.every(c => HQ_CAPABILITY_CODES.includes(c)) ? codes : "invalid";
+}
+const missing641 = (m: string | undefined) => /authorised_by|authorised_at|capability_scope|is_primary/.test(m ?? "") && /column|schema cache/i.test(m ?? "");
+/** An hq_appointment refusal (641), as a status and the database's own sentence. */
+function appointmentRefusal(m: string | undefined): { status: number; error: string } | null {
+  const x = /hq_appointment (\w+): ([\s\S]*)$/.exec(m ?? "");
+  if (!x) return null;
+  const status = x[1] === "not_independent" || x[1] === "owner_required" ? 403 : x[1] === "invalid" ? 400 : 409;
+  return { status, error: x[2] };
+}
+
+/**
+ * Change what an appointment carries (its capability scope) or whether it is the role's primary holder.
+ * Owner only, never on your own appointment, stamped with who authorised it so the database (641) can refuse
+ * a stale or self-authorised change for every writer.
+ */
+async function changeAppointment(ctx: OkCtx, b: any): Promise<NextResponse> {
+  const appointmentId = b?.appointment_id;
+  if (!isUuid(appointmentId)) return NextResponse.json({ error: "appointment_id is required" }, { status: 400 });
+  const reason = typeof b?.reason === "string" ? b.reason.trim() : "";
+  if (reason.length < 5) return NextResponse.json({ error: "A reason of at least 5 characters is required. It is written to the audit trail." }, { status: 400 });
+  let patch: Record<string, unknown>;
+  if (b.action === "set_scope") {
+    const scope = parseCapabilityScope(b.capability_scope);
+    if (scope === "invalid") return NextResponse.json({ error: "capability_scope must be a list of code-defined capabilities, or null for the whole position" }, { status: 400 });
+    patch = { capability_scope: scope };
+  } else {
+    if (typeof b.is_primary !== "boolean") return NextResponse.json({ error: "is_primary must be true or false" }, { status: 400 });
+    patch = { is_primary: b.is_primary };
+  }
+
+  const { data: appt, error: aErr } = await ctx.admin
+    .from("ogs_office_appointments").select("id, office_id, person_id, person_name, role, status").eq("id", appointmentId).maybeSingle();
+  if (aErr) return NextResponse.json({ error: missing641(aErr.message) ? "This needs migration 641. Nothing was changed." : `The appointment could not be read: ${aErr.message}` }, { status: aErr && missing641(aErr.message) ? 503 : 500 });
+  if (!appt) return NextResponse.json({ error: "No such appointment" }, { status: 404 });
+  const offices = await readHqOffices(ctx.admin);
+  if (!offices.ok) return NextResponse.json({ error: `HQ spaces could not be read: ${offices.error}` }, { status: 500 });
+  if (!offices.value.some(o => o.id === (appt as any).office_id))
+    return NextResponse.json({ error: "That appointment is not in a Competen HQ space." }, { status: 403 });
+  if ((appt as any).person_id === ctx.userId)
+    return NextResponse.json({ error: "Nobody changes what their own appointment carries. Another platform owner has to do it." }, { status: 403 });
+  if ((appt as any).status !== "active") return NextResponse.json({ error: "Only an active appointment can be changed. Make a new appointment instead." }, { status: 409 });
+
+  const { error: uErr } = await ctx.admin.from("ogs_office_appointments")
+    .update({ ...patch, authorised_by: ctx.userId, authorised_at: new Date().toISOString() }).eq("id", appointmentId);
+  if (uErr) {
+    if (missing641(uErr.message)) return NextResponse.json({ error: "This needs migration 641, which this database does not have. Nothing was changed." }, { status: 503 });
+    const r = appointmentRefusal(uErr.message);
+    return NextResponse.json({ error: r?.error ?? `The appointment was not changed: ${uErr.message}` }, { status: r?.status ?? 500 });
+  }
+  const auditError = await auditOrNull(ctx, {
+    trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.fullName ?? null,
+    action: b.action === "set_scope" ? "hq_appointment_scope_set" : "hq_appointment_primary_set", entity_type: "ogs_office_appointment",
+    entity_id: appointmentId, entity_name: (appt as any).person_name ?? (appt as any).person_id, hospital_id: null,
+    new_value: { ...patch, position: (appt as any).role, reason },
+  });
+  return NextResponse.json({ ok: true, id: appointmentId, audit_error: auditError });
+}
+
 // ── GET: the board ───────────────────────────────────────────────────────────
 export async function GET() {
   const ctx = await gate();
@@ -160,9 +225,16 @@ export async function POST(req: Request) {
   if ((existing ?? []).length)
     return NextResponse.json({ error: `${(person as any).full_name ?? "That person"} already holds ${(position as any).name ?? positionCode}.`, id: (existing as any[])[0].id }, { status: 409 });
 
+  // Migration 641: what this appointment carries of the position (null = all of it), and whether it is the
+  // role's primary coordinator. The database checks the scope against the position and refuses self or a
+  // non-owner authoriser; this only keeps the codes inside the code catalogue.
+  const scope = parseCapabilityScope(b?.capability_scope);
+  if (scope === "invalid") return NextResponse.json({ error: "capability_scope must be a list of code-defined capabilities, or null for the whole position" }, { status: 400 });
+  const isPrimary = b?.is_primary === true;
+
   // ⚠ NEVER DISCARD THE INSERT'S ERROR. A discarded write error is the bug class this codebase has been
   // bitten by twice — a partial index that could not be an ON CONFLICT target, failing silently.
-  const { data: ins, error: insErr } = await ctx.admin.from("ogs_office_appointments").insert({
+  const row = {
     office_id: office.id,
     person_id: personId,
     person_name: (person as any).full_name ?? null,
@@ -174,14 +246,23 @@ export async function POST(req: Request) {
     scope: "enterprise",
     status: "active",
     appointed_by: ctx.fullName ?? ctx.userId,
-  }).select("id").single();
+  };
+  // 641 stamps who authorised this write. Before 641 the columns are absent: a plain appointment still goes
+  // through as before, but a scoped or primary one cannot be made faithfully, so it is refused.
+  let { data: ins, error: insErr } = await ctx.admin.from("ogs_office_appointments")
+    .insert({ ...row, capability_scope: scope, is_primary: isPrimary, authorised_by: ctx.userId, authorised_at: new Date().toISOString() }).select("id").single();
+  if (insErr && missing641(insErr.message)) {
+    if (scope || isPrimary) return NextResponse.json({ error: "Scoped and primary appointments need migration 641, which this database does not have. Nothing was changed." }, { status: 503 });
+    ({ data: ins, error: insErr } = await ctx.admin.from("ogs_office_appointments").insert(row).select("id").single());
+  }
+  if (insErr) { const r = appointmentRefusal(insErr.message); if (r) return NextResponse.json({ error: r.error }, { status: r.status }); }
   if (insErr || !ins) return NextResponse.json({ error: `The appointment was not written: ${insErr?.message ?? "no row returned"}` }, { status: 500 });
 
   const auditError = await auditOrNull(ctx, {
     trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.fullName ?? null,
     action: `hq_appoint_${positionCode}`, entity_type: "ogs_office_appointment", entity_id: ins.id,
     entity_name: (person as any).full_name ?? personId, hospital_id: null,
-    new_value: { position: positionCode, space, office_id: office.id, person_id: personId, status: "active" },
+    new_value: { position: positionCode, space, office_id: office.id, person_id: personId, status: "active", capability_scope: scope, is_primary: isPrimary },
   });
 
   return NextResponse.json({ ok: true, id: ins.id, position: positionCode, space, audit_error: auditError }, { status: 201 });
@@ -195,6 +276,7 @@ export async function PATCH(req: Request) {
 
   const b = await req.json().catch(() => ({} as any));
   const appointmentId = b?.appointment_id;
+  if (b?.action === "set_scope" || b?.action === "set_primary") return changeAppointment(ctx, b);
   const status = typeof b?.status === "string" ? b.status.trim() : "";
   if (!isUuid(appointmentId)) return NextResponse.json({ error: "appointment_id is required" }, { status: 400 });
   if (!(HQ_END_STATUSES as readonly string[]).includes(status))

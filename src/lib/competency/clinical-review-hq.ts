@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { approverPositions, reviewerAppointments, scopeCovers, type ReviewerScope, type ScopeKind } from "./clinical-review";
+import { approverPositions, carryingApproval, reviewerAppointments, scopeCovers, type ReviewerScope, type ScopeKind } from "./clinical-review";
 
 // ── CLINICAL REVIEW: WHAT THE HQ PAGES READ ── migration 395 ──────────────────────────────────────────────
 //
@@ -104,7 +104,7 @@ export async function governanceView(admin: any): Promise<{ reviewers: ReviewerV
   const approvers = await approverPositions(admin);
   if (approvers === null) return null;
   const [appts, terms, fws] = await Promise.all([
-    approvers.length ? rows(admin.from("ogs_office_appointments").select("id, person_id, person_name, role").in("role", approvers).eq("status", "active").limit(500)) : Promise.resolve([]),
+    approvers.length ? carryingApproval((cols: string) => admin.from("ogs_office_appointments").select(cols).in("role", approvers).eq("status", "active").limit(500), "id, person_id, person_name, role") : Promise.resolve([]),
     rows(admin.from("taxonomy_terms").select("id, value, taxonomies!inner(kind)").in("taxonomies.kind", ["profession", "specialty"]).order("value").limit(1000)),
     rows(admin.from("frameworks").select("id, name, specialty_term_id").is("hospital_id", null).order("name").limit(500)),
   ]);

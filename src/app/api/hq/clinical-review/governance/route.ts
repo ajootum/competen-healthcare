@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { currentTraceId } from "@/lib/trace";
 import { publishScope, setOverride, wceMissing } from "@/lib/config/workspace-config-write";
-import { CLINICAL_PATH, CLINICAL_SCOPE, REQUIRED_MAX, REQUIRED_MIN, SCOPE_KINDS, approverPositions, loadRequiredApprovals, type ScopeKind } from "@/lib/competency/clinical-review";
+import { CLINICAL_PATH, CLINICAL_SCOPE, REQUIRED_MAX, REQUIRED_MIN, SCOPE_KINDS, approverPositions, carryingApproval, loadRequiredApprovals, type ScopeKind } from "@/lib/competency/clinical-review";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -37,9 +37,12 @@ export async function POST(req: Request) {
       // HQ-SOD-CROSSCUT-01: any appointment whose position grants clinical approval (a cross-cutting one included).
       const approvers = await approverPositions(ctx.admin);
       if (approvers === null) return refuse(503, "Reviewer positions could not be read just now. Nothing was changed.");
-      const { data: a } = approvers.length
-        ? await ctx.admin.from("ogs_office_appointments").select("id, person_id").eq("id", body.appointmentId).in("role", approvers).eq("status", "active").maybeSingle()
-        : { data: null };
+      // ...and whose own scope and term carry approval (migration 641).
+      const carrying = approvers.length
+        ? await carryingApproval((cols: string) => ctx.admin.from("ogs_office_appointments").select(cols).eq("id", body.appointmentId).in("role", approvers).eq("status", "active").limit(1), "id, person_id")
+        : [];
+      if (carrying === null) return refuse(503, "The appointment could not be read just now. Nothing was changed.");
+      const a = carrying[0] as { id: string; person_id: string | null } | undefined;
       if (!a) return refuse(404, "That is not an active clinical reviewer appointment.");
       // Never your own scope. The database refuses it for every writer (640). This says so first.
       if (a.person_id === ctx.userId) return refuse(403, "Nobody sets or widens their own reviewer scope. Another clinical governance holder or the platform owner must.");

@@ -17,6 +17,7 @@
  *   Z1  everything it made is gone, and the reviewer recorded no decision
  */
 import { loadEnvConfig } from "@next/env";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { createClient } from "@supabase/supabase-js";
 import { judgeTarget } from "./production-guard";
 import { HQ_OFFICE_TYPE_PREFIX } from "../src/lib/hq/spaces";
@@ -59,6 +60,7 @@ const firstCompetency = async (frameworkId: string) => {
 };
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   console.log(`NURSING REVIEWER SCOPE REHEARSAL -- target ${(verdict as any).ref}\n`);
   const nursing = (await admin.from("taxonomy_terms").select("id, value, taxonomies!inner(kind)").eq("value", "Nursing").eq("taxonomies.kind", "profession").maybeSingle()).data;
   const fws = (await admin.from("frameworks").select("id, code, profession_term_id").is("hospital_id", null).in("code", ["CF-FOUND", "NUR-RESP"])).data ?? [];
@@ -76,23 +78,23 @@ async function main() {
     const { data: u, error } = await admin.auth.admin.createUser({ email: EMAIL, password: `rh-${Math.random().toString(36).slice(2)}-Aa1!`, email_confirm: true, user_metadata: { full_name: NAME, synthetic: true } });
     if (error || !u?.user) throw new Error(`createUser: ${error?.message}`);
     await admin.from("profiles").update({ full_name: NAME }).eq("id", u.user.id);
-    const appt = await admin.from("ogs_office_appointments").insert({ office_id: office.id, person_id: u.user.id, person_name: NAME, role: "clinical_content_reviewer", status: "active" }).select("id").single();
+    const appt = await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER), office_id: office.id, person_id: u.user.id, person_name: NAME, role: "clinical_content_reviewer", status: "active" }).select("id").single();
     if (appt.error) throw new Error(`appointment: ${appt.error.message}`);
     const a = appt.data.id as string;
 
-    const prof = await admin.from("clinical_reviewer_scope").insert({ appointment_id: a, scope_kind: "profession", scope_ref: nursing.id }).select("id").single();
+    const prof = await admin.from("clinical_reviewer_scope").insert({ granted_by: HQ_OWNER, appointment_id: a, scope_kind: "profession", scope_ref: nursing.id }).select("id").single();
     if (prof.error) throw new Error(`profession scope: ${prof.error.message}`);
     const cfByProfession = await Promise.all(cfComps.map(c => covers(a, c.id)));
     const nrByProfession = await covers(a, nrComps[0].id);
     ok("R2. a Nursing profession scope covers a Nursing framework (NUR-RESP) and NONE of CF-FOUND (its profession is null)",
       nrByProfession && cfByProfession.every(x => !x), JSON.stringify({ nurResp: nrByProfession, cfFound: cfByProfession }));
 
-    const fwScope = await admin.from("clinical_reviewer_scope").insert({ appointment_id: a, scope_kind: "framework", scope_ref: cf.id }).select("id").single();
+    const fwScope = await admin.from("clinical_reviewer_scope").insert({ granted_by: HQ_OWNER, appointment_id: a, scope_kind: "framework", scope_ref: cf.id }).select("id").single();
     if (fwScope.error) throw new Error(`framework scope: ${fwScope.error.message}`);
     const cfByFramework = await Promise.all(cfComps.map(c => covers(a, c.id)));
     ok(`R3. adding the CF-FOUND framework scope covers all ${cfComps.length} CF-FOUND competencies`, cfComps.length > 0 && cfByFramework.every(Boolean), JSON.stringify(cfByFramework));
 
-    const wrong = await admin.from("clinical_reviewer_scope").insert({ appointment_id: a, scope_kind: "profession", scope_ref: cf.id }).select("id");
+    const wrong = await admin.from("clinical_reviewer_scope").insert({ granted_by: HQ_OWNER, appointment_id: a, scope_kind: "profession", scope_ref: cf.id }).select("id");
     ok("R4. a scope must name a record of its kind: a framework id given as a profession is refused", !!wrong.error, wrong.error?.message ?? "accepted");
 
     await admin.from("clinical_reviewer_scope").update({ ended_at: new Date().toISOString() }).eq("id", fwScope.data.id);

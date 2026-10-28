@@ -7,7 +7,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { estateRolesOf, platformRolesOf, hasPlatformRole, type PlatformRole } from "@/lib/roles";
 import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
 import {
-  decideHq, activeGrants, capabilityForRoute, isHqOfficeType,
+  decideHq, activeGrants, appointmentInTerm, capabilityForRoute, isHqOfficeType, narrowToScope,
   type HqDecision, type HqMode,
 } from "./spaces";
 
@@ -112,16 +112,18 @@ export async function resolveHqPositions(
     .map(o => o.id);
   if (!hqOfficeIds.length) return { positions: [], capabilities: [], positionNames: [] };
 
-  const { data: appts, error: aErr } = await admin
-    .from("ogs_office_appointments")
-    .select("office_id, person_id, role, status")
-    .in("office_id", hqOfficeIds)
-    .eq("person_id", userId)
-    .limit(200);
-  if (aErr || !appts?.length) return { positions: [], capabilities: [], positionNames: [] };
+  // Migration 641: each appointment's capability scope and term. Falls back to the old shape before 641.
+  const read = (cols: string) => admin.from("ogs_office_appointments").select(cols).in("office_id", hqOfficeIds).eq("person_id", userId).limit(200);
+  let apptRes = await read("office_id, person_id, role, status, capability_scope, term_start, term_end");
+  if (apptRes.error && /capability_scope|column/i.test(apptRes.error.message ?? "")) apptRes = await read("office_id, person_id, role, status");
+  const { data: rawAppts, error: aErr } = apptRes;
+  if (aErr || !rawAppts?.length) return { positions: [], capabilities: [], positionNames: [] };
+  type ApptRow = { role: string | null; status: string | null; capability_scope?: string[] | null; term_start?: string | null; term_end?: string | null };
+  // A lapsed or not-yet-started term grants nothing, whatever its status says (hq_appointment_in_force).
+  const appts = (rawAppts as unknown as ApptRow[]).filter(a => appointmentInTerm(a.term_start, a.term_end));
 
   const positions = [...new Set(
-    (appts as { role: string | null; status: string | null }[])
+    appts
       // ⚠ WAS A DENYLIST (status !== "removed" && status !== "expired") AND THAT ADMITTED `suspended`.
       // Suspending an office holder is the action taken to stop their access; it did not stop it. It also
       // admitted `nominated`, which is a proposal. The allowlist lives in ogs/lifecycle so this and the
@@ -155,9 +157,12 @@ export async function resolveHqPositions(
     .select("position_code, capability_code, effective_from, effective_to")
     .in("position_code", activePositions)
     .limit(2000);
+  // The union over appointments, each narrowed by its own scope (migration 641).
+  const inDate = activeGrants((grants ?? []) as { position_code: string; capability_code: string; effective_from: string | null; effective_to: string | null }[]);
   const capabilities = [...new Set(
-    activeGrants((grants ?? []) as { capability_code: string; effective_from: string | null; effective_to: string | null }[])
-      .map(g => g.capability_code),
+    appts
+      .filter(a => appointmentGrantsAccess(a.status) && !!a.role && live.has(a.role as string))
+      .flatMap(a => narrowToScope(inDate.filter(g => g.position_code === a.role).map(g => g.capability_code), a.capability_scope)),
   )].sort();
 
   return { positions, capabilities, positionNames };

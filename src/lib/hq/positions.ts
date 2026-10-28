@@ -17,7 +17,7 @@
 
 import type { createAdminClient } from "@/lib/supabase/server";
 import { HQ_CAPABILITIES, HQ_CAPABILITY_CODES, HQ_SPACES, spaceOfCapability, type HqSpace } from "./spaces";
-import { readFail, readOk, type Read } from "./appointments";
+import { readFail, readOk, type HqAppointmentRules, type HqPrimaryPolicy, type Read } from "./appointments";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -167,7 +167,9 @@ export type HqPositionAction =
   // Migration 640: the separation-of-duties configuration. Owner only, like every action here.
   | { action: "set_pair"; a: string; b: string; allowed: boolean; reason: string }
   | { action: "set_settings"; strict: boolean; multipleAppointments: boolean; reason: string }
-  | { action: "set_content_rule"; kind: HqSodContentKind; publisherNotApprover: boolean; reason: string };
+  | { action: "set_content_rule"; kind: HqSodContentKind; publisherNotApprover: boolean; reason: string }
+  // Migration 641: a position's appointment rules. Unlimited holders unless a maximum is set.
+  | { action: "set_rules"; code: string; maxHolders: number | null; primaryPolicy: HqPrimaryPolicy; scopedAppointments: boolean; productLine: string | null; reason: string };
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 const optStr = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -236,8 +238,21 @@ export function parsePositionAction(b: unknown): { ok: true; value: HqPositionAc
       if (typeof o.publisher_not_approver !== "boolean") return { ok: false, error: "publisher_not_approver must be true or false." };
       return { ok: true, value: { action, kind: kind as HqSodContentKind, publisherNotApprover: o.publisher_not_approver, reason } };
     }
+    case "set_rules": {
+      const e = needCode();
+      if (e) return { ok: false, error: e };
+      const max = o.max_holders;
+      if (!(max === null || max === undefined || (Number.isInteger(max) && (max as number) >= 1 && (max as number) <= 10000)))
+        return { ok: false, error: "max_holders is a whole number of at least 1, or empty for unlimited holders." };
+      const primary = str(o.primary_policy);
+      if (!(PRIMARY_POLICIES as readonly string[]).includes(primary)) return { ok: false, error: "primary_policy is not_used, optional or required." };
+      if (typeof o.scoped_appointments !== "boolean") return { ok: false, error: "scoped_appointments must be true or false." };
+      const line = optStr(o.product_line);
+      if (line !== null && !/^[a-z][a-z0-9_]{1,62}$/.test(line)) return { ok: false, error: "product_line must be a product line code, or empty." };
+      return { ok: true, value: { action, code, maxHolders: (max ?? null) as number | null, primaryPolicy: primary as HqPrimaryPolicy, scopedAppointments: o.scoped_appointments, productLine: line, reason } };
+    }
     default:
-      return { ok: false, error: "action must be one of create, update, set_active, grant, end_grant, register, set_pair, set_settings, set_content_rule." };
+      return { ok: false, error: "action must be one of create, update, set_active, grant, end_grant, register, set_pair, set_settings, set_content_rule, set_rules." };
   }
 }
 
@@ -254,6 +269,7 @@ export function rpcFor(a: HqPositionAction, actor: { id: string; name: string | 
     case "set_pair": return { fn: "hq_sod_admin_set_pair", args: { ...base, p_capability_a: a.a, p_capability_b: a.b, p_allowed: a.allowed, p_reason: a.reason } };
     case "set_settings": return { fn: "hq_sod_admin_set_settings", args: { ...base, p_strict: a.strict, p_multiple: a.multipleAppointments, p_reason: a.reason } };
     case "set_content_rule": return { fn: "hq_sod_admin_set_content_rule", args: { ...base, p_content_kind: a.kind, p_publisher_not_approver: a.publisherNotApprover, p_reason: a.reason } };
+    case "set_rules": return { fn: "hq_position_admin_set_rules", args: { ...base, p_code: a.code, p_max_holders: a.maxHolders, p_primary_policy: a.primaryPolicy, p_scoped_appointments: a.scopedAppointments, p_product_line: a.productLine, p_reason: a.reason } };
   }
 }
 
@@ -267,7 +283,9 @@ export function statusForDbError(message: string, code?: string | null): { statu
   if (code === "PGRST202" || code === "42883" || /could not find the function|function .* does not exist/i.test(message))
     return /hq_sod_admin/.test(message)
       ? { status: 503, error: "Separation-of-duties settings are not available yet: migration 640 is not applied to this database. Nothing was changed." }
-      : { status: 503, error: "Position administration is not available yet: migration 500 is not applied to this database. Nothing was changed." };
+      : /hq_position_admin_set_rules/.test(message)
+        ? { status: 503, error: "Appointment rules are not available yet: migration 641 is not applied to this database. Nothing was changed." }
+        : { status: 503, error: "Position administration is not available yet: migration 500 is not applied to this database. Nothing was changed." };
   const m = /(?:hq_position(?:_admin|_capability)?|hq_sod) (\w+): ([\s\S]*)$/.exec(message);
   const tag = m?.[1] ?? "";
   const text = m ? m[2] : message;
@@ -299,6 +317,8 @@ export type HqGrantView = {
 export type HqPositionAdminView = {
   code: string; space: HqSpace; name: string; description: string | null; isActive: boolean;
   grants: Read<HqGrantView[]>;
+  /** Migration 641: appointment rules and product line. null = not readable (641 absent). */
+  rules: (HqAppointmentRules & { productLine: string | null }) | null;
 };
 export type HqCatalogueEntry = { code: string; space: HqSpace; applied: boolean; label: string | null; sensitive: HqSensitiveClass | null };
 export type HqPositionBoard = {
@@ -311,9 +331,28 @@ export type HqPositionBoard = {
   sod?: Read<HqSodPolicy>;
 };
 
-type PosRow = { code: string; space: string; name: string | null; description: string | null; is_active: boolean | null };
+type PosRow = { code: string; space: string; name: string | null; description: string | null; is_active: boolean | null; max_holders?: number | null; primary_policy?: string | null; scoped_appointments?: boolean | null; product_line_code?: string | null };
 type GrantRow = { id: string; position_code: string; capability_code: string; source: string | null; effective_from: string | null; effective_to: string | null; grant_reason?: string | null; end_reason?: string | null };
 type CapRow = { code: string; label: string | null };
+
+export const PRIMARY_POLICIES = ["not_used", "optional", "required"] as const;
+/** Pure: a position's appointment rules, or null when the 641 columns were not read. */
+function rulesOf(p: PosRow): HqPositionAdminView["rules"] {
+  if (p.primary_policy === undefined) return null;
+  return {
+    maxHolders: p.max_holders ?? null,
+    primaryPolicy: (PRIMARY_POLICIES as readonly string[]).includes(p.primary_policy ?? "") ? (p.primary_policy as HqPrimaryPolicy) : "optional",
+    scopedAppointments: p.scoped_appointments === true,
+    productLine: p.product_line_code ?? null,
+  };
+}
+/** The positions, with the 641 rule columns when they exist and without them before 641. */
+async function readPositionRows(admin: Admin) {
+  const BASE = "code, space, name, description, is_active";
+  const r = await admin.from("hq_position").select(`${BASE}, max_holders, primary_policy, scoped_appointments, product_line_code`).limit(500);
+  if (r.error && /max_holders|primary_policy|scoped_appointments|column/i.test(r.error.message)) return admin.from("hq_position").select(BASE).limit(500);
+  return r;
+}
 
 /** Live at `now` by the same window rule as activeGrants. Pure. */
 const isLive = (g: { effective_from: string | null; effective_to: string | null }, now: number) =>
@@ -339,6 +378,7 @@ export function buildPositionBoard(
         name: p.name ?? p.code,
         description: p.description,
         isActive: p.is_active !== false,
+        rules: rulesOf(p),
         grants: grants.ok
           ? readOk(grants.value.filter(g => g.position_code === p.code).map(g => ({
               id: g.id,
@@ -366,7 +406,7 @@ export function buildPositionBoard(
  */
 export async function loadPositionBoard(admin: Admin): Promise<HqPositionBoard & { migrationApplied: boolean }> {
   const [posRes, capRes, sod] = await Promise.all([
-    admin.from("hq_position").select("code, space, name, description, is_active").limit(500),
+    readPositionRows(admin),
     admin.from("hq_capability").select("code, label").limit(500),
     loadSodPolicy(admin),
   ]);

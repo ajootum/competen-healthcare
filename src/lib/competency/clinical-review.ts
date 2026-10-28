@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { activeGrants } from "@/lib/hq/spaces";
+import { activeGrants, appointmentInTerm, narrowToScope } from "@/lib/hq/spaces";
 
 // ── COMPETEN HOLDINGS CLINICAL-CONTENT APPROVAL ── migration 395, owner decisions D2 and D3 ─────────────────
 //
@@ -192,13 +192,26 @@ export async function approverPositions(admin: any): Promise<string[] | null> {
   return [...new Set(activeGrants((data ?? []) as { position_code: string; effective_from: string | null; effective_to: string | null }[]).map(g => g.position_code))].sort();
 }
 
+/**
+ * Appointments (read by `query` with the columns given) that carry clinical approval today: migration 641
+ * narrows an appointment by its own capability scope and term, as clinical_review_decision_scope_guard does.
+ * Before 641 those columns are absent and every appointment of an approving position counts. null = unreadable.
+ */
+export async function carryingApproval(query: (cols: string) => PromiseLike<{ data: any[] | null; error: any }>, cols: string): Promise<any[] | null> {
+  let r = await query(`${cols}, capability_scope, term_start, term_end`);
+  if (r.error && /capability_scope|column/i.test(String(r.error.message ?? ""))) r = await query(cols);
+  if (r.error) return null;
+  return (r.data ?? []).filter((a: any) => narrowToScope([APPROVE_CAPABILITY], a.capability_scope).length > 0 && appointmentInTerm(a.term_start, a.term_end));
+}
+
 /** A person's active clinical reviewer appointments (any position granting approval) and their active scopes. */
 export async function reviewerAppointments(admin: any, personId: string): Promise<{ id: string; scopes: ReviewerScope[] }[] | null> {
   const positions = await approverPositions(admin);
   if (positions === null) return null;
   if (!positions.length) return [];
-  const { data: appts, error } = await admin.from("ogs_office_appointments").select("id").eq("person_id", personId).in("role", positions).eq("status", "active");
-  if (error) return null;
+  const all = await carryingApproval((cols: string) => admin.from("ogs_office_appointments").select(cols).eq("person_id", personId).in("role", positions).eq("status", "active"), "id");
+  if (all === null) return null;
+  const appts = all;
   if (!appts?.length) return [];
   const { data: sc, error: sErr } = await admin.from("clinical_reviewer_scope").select("id, appointment_id, scope_kind, scope_ref").in("appointment_id", appts.map((a: any) => a.id)).is("ended_at", null);
   if (sErr) return absent(sErr) ? appts.map((a: any) => ({ id: a.id, scopes: [] })) : null;

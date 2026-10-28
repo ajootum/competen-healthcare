@@ -42,6 +42,7 @@
  * exactly as it was.
  */
 import { loadEnvConfig } from "@next/env";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { HQ_OFFICE_TYPE_PREFIX } from "../src/lib/hq/spaces";
@@ -119,6 +120,7 @@ function libraryCase(competencyId: string, title: string): Blueprint {
 }
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   console.log(`CASE INTELLIGENCE ACCEPTANCE (422-423) -- target ${ref}\n`);
   const probe = await admin.from("case_candidate").select("id").limit(0);
   if (probe.error) { pend("J-Z", `migration 423 is not applied here (${probe.error.message}). Nothing created.`); return; }
@@ -136,10 +138,10 @@ async function main() {
   try {
     const [s1, s2, edu, rev, pub] = [await person(EMAILS.s1, "CI Student 1 (synthetic)"), await person(EMAILS.s2, "CI Student 2 (synthetic)"),
       await person(EMAILS.edu, "CI Educator (synthetic)"), await person(EMAILS.rev, "CI Reviewer (synthetic, harness)"), await person(EMAILS.pub, "CI Publisher (synthetic)")];
-    const appoint = async (p: string, role: string) => (await admin.from("ogs_office_appointments").insert({ office_id: office.id, person_id: p, role, status: "active" }).select("id").single()).data.id as string;
+    const appoint = async (p: string, role: string) => (await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER), office_id: office.id, person_id: p, role, status: "active" }).select("id").single()).data.id as string;
     await appoint(edu, "clinical_case_educator"); await appoint(pub, "quality_council_member");
     const revAppt = await appoint(rev, "clinical_content_reviewer");
-    await admin.from("clinical_reviewer_scope").insert({ appointment_id: revAppt, scope_kind: "framework", scope_ref: fw.id });
+    await admin.from("clinical_reviewer_scope").insert({ granted_by: HQ_OWNER, appointment_id: revAppt, scope_kind: "framework", scope_ref: fw.id });
     const people = [s1, s2, edu, rev, pub];
     const ai0 = await aiRows(people);
 
@@ -215,7 +217,7 @@ async function main() {
 
     // ── J5 ──
     const eduAppt = await appoint(edu, "clinical_content_reviewer");
-    await admin.from("clinical_reviewer_scope").insert({ appointment_id: eduAppt, scope_kind: "framework", scope_ref: fw.id });
+    await admin.from("clinical_reviewer_scope").insert({ granted_by: HQ_OWNER, appointment_id: eduAppt, scope_kind: "framework", scope_ref: fw.id });
     const selfApprove = sub.ok ? await decideReview(admin, sub.reviewVersionId, edu, eduAppt, "approved", null) : { ok: true };
     ok("J5. the educator who authored and edited it cannot approve it, even holding an in-scope reviewer appointment", !selfApprove.ok && /cannot review it/.test((selfApprove as any).error ?? ""), JSON.stringify(selfApprove));
     await admin.from("ogs_office_appointments").delete().eq("id", eduAppt);

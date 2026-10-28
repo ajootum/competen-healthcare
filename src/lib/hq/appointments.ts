@@ -21,7 +21,7 @@
 
 import type { createAdminClient } from "@/lib/supabase/server";
 import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
-import { HQ_SPACES, activeGrants, hqOfficeType, isHqOfficeType, type HqSpace } from "./spaces";
+import { HQ_SPACES, activeGrants, appointmentInTerm, hqOfficeType, isHqOfficeType, type HqSpace } from "./spaces";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -63,10 +63,10 @@ export const STATUS_MEANING: Record<string, string> = {
 
 // ── Row shapes ───────────────────────────────────────────────────────────────
 type OfficeRow = { id: string; office_type: string | null; name: string | null; code: string | null; status: string | null; is_active: boolean | null; hospital_id: string | null };
-type PositionRow = { code: string; space: string | null; name: string | null; description: string | null; is_active: boolean | null };
+type PositionRow = { code: string; space: string | null; name: string | null; description: string | null; is_active: boolean | null; max_holders?: number | null; primary_policy?: string | null; scoped_appointments?: boolean | null };
 type GrantRow = { position_code: string; capability_code: string; effective_from: string | null; effective_to: string | null };
 type CapabilityRow = { code: string; label: string | null };
-type AppointmentRow = { id: string; office_id: string; person_id: string | null; person_name: string | null; role: string | null; status: string | null; term_start: string | null; term_end: string | null; scope: string | null; appointed_by: string | null; created_at: string | null };
+type AppointmentRow = { id: string; office_id: string; person_id: string | null; person_name: string | null; role: string | null; status: string | null; term_start: string | null; term_end: string | null; scope: string | null; appointed_by: string | null; created_at: string | null; capability_scope?: string[] | null; is_primary?: boolean | null };
 
 type ProfileRow = { id: string; full_name: string | null; email: string | null; phone: string | null };
 
@@ -106,7 +106,16 @@ export type HqHolderView = {
   appointedBy: string | null;
   createdAt: string | null;
   officeId: string;
+  /** Migration 641: the capabilities this appointment carries of its position. null = all of them. */
+  capabilityScope: string[] | null;
+  /** Migration 641: the role's primary coordinator or accountable owner. */
+  isPrimary: boolean;
+  /** Migration 641: the term is in force today. A lapsed term grants nothing, whatever the status says. */
+  inTerm: boolean;
 };
+export type HqPrimaryPolicy = "not_used" | "optional" | "required";
+/** Migration 641: a position's appointment rules. Many holders by default, never capped unless set. */
+export type HqAppointmentRules = { maxHolders: number | null; primaryPolicy: HqPrimaryPolicy; scopedAppointments: boolean };
 export type HqPositionView = {
   code: string;
   name: string;
@@ -115,6 +124,8 @@ export type HqPositionView = {
   isActive: boolean;
   capabilities: Read<HqCapabilityView[]>;
   holders: Read<HqHolderView[]>;
+  /** null = the rules could not be read (641 absent): unlimited holders, no primary, whole-position appointments. */
+  rules: HqAppointmentRules | null;
 };
 export type HqSpaceView = {
   space: HqSpace;
@@ -183,12 +194,15 @@ export const toHolder = (a: AppointmentRow, profiles: Read<Map<string, ProfileRo
   personName: a.person_name,
   person: personDetails(a.person_id, profiles),
   status: a.status ?? "unknown",
-  grantsAccess: appointmentGrantsAccess(a.status),
+  grantsAccess: appointmentGrantsAccess(a.status) && appointmentInTerm(a.term_start, a.term_end),
   termStart: a.term_start,
   termEnd: a.term_end,
   appointedBy: a.appointed_by,
   createdAt: a.created_at,
   officeId: a.office_id,
+  capabilityScope: a.capability_scope ?? null,
+  isPrimary: a.is_primary === true,
+  inTerm: appointmentInTerm(a.term_start, a.term_end),
 });
 
 /** Every HQ office row, read once. Shared by the loader and by the write handlers. */
@@ -222,15 +236,24 @@ export async function loadHqAppointmentBoard(admin: Admin): Promise<HqAppointmen
   const offices = officesRead.value;
   const officeIds = offices.map(o => o.id);
 
+  // Migration 641 columns are asked for and dropped when absent, so the board still reads before 641.
+  const POS = "code, space, name, description, is_active";
+  const APPT = "id, office_id, person_id, person_name, role, status, term_start, term_end, scope, appointed_by, created_at";
+  const absent = (e: { message?: string } | null) => !!e && /max_holders|primary_policy|scoped_appointments|capability_scope|is_primary|column/i.test(e.message ?? "");
+  const readPositions = async () => {
+    const r = await admin.from("hq_position").select(`${POS}, max_holders, primary_policy, scoped_appointments`).limit(500);
+    return absent(r.error) ? { ...(await admin.from("hq_position").select(POS).limit(500)), rulesRead: false } : { ...r, rulesRead: true };
+  };
+  const readAppts = async () => {
+    if (!officeIds.length) return { data: [] as AppointmentRow[], error: null };
+    const r = await admin.from("ogs_office_appointments").select(`${APPT}, capability_scope, is_primary`).in("office_id", officeIds).limit(2000);
+    return absent(r.error) ? await admin.from("ogs_office_appointments").select(APPT).in("office_id", officeIds).limit(2000) : r;
+  };
   const [posRes, grantRes, capRes, apptRes] = await Promise.all([
-    admin.from("hq_position").select("code, space, name, description, is_active").limit(500),
+    readPositions(),
     admin.from("hq_position_capability").select("position_code, capability_code, effective_from, effective_to").limit(5000),
     admin.from("hq_capability").select("code, label").limit(500),
-    officeIds.length
-      ? admin.from("ogs_office_appointments")
-          .select("id, office_id, person_id, person_name, role, status, term_start, term_end, scope, appointed_by, created_at")
-          .in("office_id", officeIds).limit(2000)
-      : Promise.resolve({ data: [] as AppointmentRow[], error: null }),
+    readAppts(),
   ]);
 
   const positions: Read<PositionRow[]> = posRes.error ? readFail(posRes.error.message) : readOk((posRes.data ?? []) as PositionRow[]);
@@ -282,6 +305,11 @@ export async function loadHqAppointmentBoard(admin: Admin): Promise<HqAppointmen
             isActive: p.is_active !== false,
             capabilities: caps,
             holders,
+            rules: posRes.rulesRead ? {
+              maxHolders: p.max_holders ?? null,
+              primaryPolicy: (p.primary_policy === "not_used" || p.primary_policy === "required" ? p.primary_policy : "optional") as HqPrimaryPolicy,
+              scopedAppointments: p.scoped_appointments === true,
+            } : null,
           };
         }).sort((a, b) => a.name.localeCompare(b.name)))
       : readFail<HqPositionView[]>(positions.error);

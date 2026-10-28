@@ -237,6 +237,13 @@ function PositionCard({ p, catalogue, exclusions, canAdminister, post, busy, say
       </div>
       <div className="px-4 py-3 space-y-3">
         {p.description && <p className="text-[12px] text-gray-600">{p.description}</p>}
+        {p.rules && (
+          <p className="text-[12px] text-gray-600">
+            Holders: {p.rules.maxHolders === null ? "unlimited" : `at most ${p.rules.maxHolders}`} · Primary coordinator: {PRIMARY_LABEL[p.rules.primaryPolicy]}
+            {" · "}{p.rules.scopedAppointments ? "each appointment names the capabilities it carries" : "an appointment carries the whole position unless scoped"}
+            {p.rules.productLine ? ` · Product line: ${p.rules.productLine}` : ""}
+          </p>
+        )}
         {!p.grants.ok ? <Unreadable what="This position's grants" error={p.grants.error} /> : (
           <>
             {live.length === 0
@@ -287,6 +294,8 @@ function PositionCard({ p, catalogue, exclusions, canAdminister, post, busy, say
               </div>
             )}
 
+            {p.rules && <AppointmentRules p={p} rules={p.rules} reason={reason} guard={guard} post={post} busy={busy} onDone={() => setReason("")} />}
+
             <details>
               <summary className="cursor-pointer text-[12px] text-gray-600">Edit name and description</summary>
               <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_2fr_auto] items-end">
@@ -314,6 +323,52 @@ function PositionCard({ p, catalogue, exclusions, canAdminister, post, busy, say
         )}
       </div>
     </div>
+  );
+}
+
+// ── Appointment rules (migration 641) ────────────────────────────────────────
+const PRIMARY_LABEL: Record<"not_used" | "optional" | "required", string> = {
+  not_used: "not used", optional: "optional", required: "required",
+};
+
+/** Many holders by default. The owner may cap a role, require a primary coordinator, or require scoped appointments. */
+function AppointmentRules({ p, rules, reason, guard, post, busy, onDone }: {
+  p: HqPositionAdminView; rules: NonNullable<HqPositionAdminView["rules"]>; reason: string;
+  guard: (ok: boolean) => boolean; post: Post; busy: string | null; onDone: () => void;
+}) {
+  const [max, setMax] = useState(rules.maxHolders === null ? "" : String(rules.maxHolders));
+  const [primary, setPrimary] = useState(rules.primaryPolicy);
+  const [scoped, setScoped] = useState(rules.scopedAppointments);
+  const [line, setLine] = useState(rules.productLine ?? "");
+  const maxOk = max.trim() === "" || (/^\d+$/.test(max.trim()) && Number(max) >= 1);
+  return (
+    <details>
+      <summary className="cursor-pointer text-[12px] text-gray-600">Appointment rules</summary>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2 items-end text-[12px] text-gray-600">
+        <label className="flex flex-col gap-1">Maximum concurrent holders (empty = unlimited)
+          <input value={max} onChange={e => setMax(e.target.value)} className={input} inputMode="numeric" aria-invalid={!maxOk} />
+        </label>
+        <label className="flex flex-col gap-1">Primary coordinator or accountable owner
+          <select value={primary} onChange={e => setPrimary(e.target.value as typeof primary)} className={input}>
+            <option value="not_used">Not used</option>
+            <option value="optional">Optional</option>
+            <option value="required">Required by policy</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={scoped} onChange={e => setScoped(e.target.checked)} className="size-4" />
+          Each appointment must name the capabilities it carries (a broad role grants nothing by default)
+        </label>
+        <label className="flex flex-col gap-1">Product line code (empty = all of HQ)
+          <input value={line} onChange={e => setLine(e.target.value.trim())} className={input} maxLength={63} />
+        </label>
+      </div>
+      <button className={`${quiet} mt-2`} disabled={!maxOk || busy === `rules-${p.code}`}
+        onClick={() => guard(true) && post({ action: "set_rules", code: p.code, max_holders: max.trim() === "" ? null : Number(max), primary_policy: primary,
+          scoped_appointments: scoped, product_line: line || null, reason }, `rules-${p.code}`, `Saved the appointment rules of ${p.name}.`).then(ok => ok && onDone())}>
+        Save rules
+      </button>
+    </details>
   );
 }
 
