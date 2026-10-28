@@ -142,3 +142,46 @@ describe("owner pilot: the library mode offers approved content only", () => {
     expect(libraryReferences("oxygen target saturation therapy", source, []).map(r => r.competencyId)).toEqual(["k2"]);
   });
 });
+
+describe("RESEARCH-02: framing is dropped, claims stay strictly cited", () => {
+  const EWS: ResearchEvidence[] = [
+    { title: "Digital early warning scores: a stepped-wedge trial", journal: "J", year: 2023, abstract: "We examined whether a digital early warning score system led to more frequent observation. There was no difference in time to next observation. Evidence is mixed." },
+    { title: "National early warning score implementation", journal: "J", year: 2021, abstract: "Implementation was associated with reductions in cardiopulmonary arrest and increases in the frequency of vital signs measurements." },
+  ];
+  it("the production failures: an uncited lead-in or introduction is dropped, the cited findings are shown", () => {
+    const lead = checkResearchPart("Research on early warning scores helps explain why this monitoring-and-escalation step matters. Implementation was associated with reductions in cardiopulmonary arrest [E2].", EWS, NOTES, "");
+    expect(lead).toEqual({ ok: true, text: "Implementation was associated with reductions in cardiopulmonary arrest [E2].", cited: [2], dropped: 1 });
+    const intro = checkResearchPart("Two studies looked at early warning scores and patient deterioration in hospital settings.\n\nThere was no difference in time to next observation [E1].", EWS, NOTES, "");
+    expect(intro).toMatchObject({ ok: true, text: "There was no difference in time to next observation [E1].", dropped: 1 });
+  });
+  it("an uncited heading line is dropped", () => {
+    expect(checkResearchPart("**What the research says**\nThere was no difference in time to next observation [E1].", EWS, NOTES, "")).toMatchObject({ ok: true, dropped: 1, text: "There was no difference in time to next observation [E1]." });
+  });
+  it("STRICT: an uncited closing synthesis or middle claim still withholds the whole part", () => {
+    expect(checkResearchPart("There was no difference in time to next observation [E1]. Together, these abstracts suggest the scoring tool matters less than the actions around it.", EWS, NOTES, "")).toMatchObject({ ok: false, reason: "uncited_sentence" });
+    expect(checkResearchPart("There was no difference in time to next observation [E1]. Escalation always saves lives in every ward. Evidence is mixed [E1].", EWS, NOTES, "")).toMatchObject({ ok: false, reason: "uncited_sentence" });
+  });
+  it("STRICT: a lead-in that carries a caveat is never dropped (that would overstate the evidence)", () => {
+    expect(checkResearchPart("The evidence here is limited and mixed.\nThere was no difference in time to next observation [E1].", EWS, NOTES, "")).toMatchObject({ ok: false, reason: "uncited_sentence" });
+  });
+  it("STRICT: unsupported clinical claims stay blocked, and dropped framing never hides a dose", () => {
+    expect(checkResearchPart("One study found improved outcomes [E2].", EWS, NOTES, "")).toMatchObject({ ok: false, reason: "ungrounded" });
+    expect(checkResearchPart("Arrests fell by 40 percent [E2].", EWS, NOTES, "")).toMatchObject({ ok: false, reason: "ungrounded" });
+    expect(checkResearchPart("Give the usual dose before escalating.\nThere was no difference in time to next observation [E1].", EWS, NOTES, "")).toMatchObject({ ok: false, reason: "dosing" });
+    expect(checkResearchPart("The patient was examined and found stable [E2].", EWS, NOTES, "")).toMatchObject({ ok: false, reason: "ungrounded" });
+  });
+  it("a study 'examined' is method, not a clinical examination", () => {
+    const ev = [{ ...EWS[0], abstract: "A digital early warning score system was compared with paper. There was no difference in time to next observation." }];
+    expect(checkResearchPart("One stepped-wedge study examined whether a digital early warning score system changed time to next observation [E1].", ev, NOTES, "")).toMatchObject({ ok: true });
+  });
+});
+
+describe("RESEARCH-02: only verified sources are ever shown", () => {
+  const rec = (n: number, verified: { pmid: boolean; doi: boolean | null }, abstract: string | null) => ({
+    provider: "openalex" as const, sourceId: `W${n}`, pmid: null, doi: `10.1/${n}`, title: `T${n}`, journal: null, year: 2022, authors: [], url: `https://doi.org/10.1/${n}`, abstract, verified, retrievedAt: "",
+  });
+  it("an unverified record is neither evidence nor further reading", () => {
+    const R: LearnResearch = { state: "searched", message: null, query: "q", scholarLink: null, items: [rec(1, { pmid: false, doi: true }, "A"), rec(2, { pmid: false, doi: null }, null), rec(3, { pmid: false, doi: true }, null)], evidence: [0], calls: [], codes: [], sourceVersions: {}, excerptChars: 320, furtherReading: true, licensing: {} };
+    expect(externalReferences(R).map(r => [r.tag, r.title])).toEqual([["E1", "T1"], [null, "T3"]]);
+  });
+});
