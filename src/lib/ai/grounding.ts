@@ -157,8 +157,21 @@ export function verifyGrounded(prose: string, facts: readonly GroundingFact[], t
 // and no fact can be missing. One adjustment, stated here: the month check reads the word "may" as the
 // month May. In study prose "may" is almost always the modal verb, so that one token is excused. Every other
 // number, month and finding rule applies as written.
+//
+// A second adjustment, of the same kind (SCHOLAR-AI-OPT-01, owner D3 follow-up, 28 Oct 2026): "one" in ordinary
+// phrasing -- "one of the signs", "no one", "each one", "one way to remember" -- is not a count. Read as the number
+// 1, it withheld 2 of the first 3 live clinical Learn answers in production (Opus Teach and Sonnet Explain on a
+// section with no "one" and no "1" in it), each a safe non-answer that cost money and taught nothing. The phrases are
+// a closed, exact list. "one" anywhere else -- "one dose", "after one hour", "one sign" -- is still the number 1 and
+// still needs it in the notes, and every other number word is untouched. The Practice verifier above is unchanged.
+const ORDINARY_ONE = /\b(?:one of|one another|no one|each one|every one|any one|the one|this one|that one|which one|one way|one thing|one or more|one by one|one at a time)\b/g;
+
+const onlyOrdinaryOne = (output: string) => !/\bone\b/.test(normalise(output).replace(ORDINARY_ONE, " "));
+
 export function textGroundingViolations(output: string, grounding: string[]): PhrasingViolation[] {
-  return verifyGrounded(output, [], grounding).filter(v => !(v.kind === "ungrounded_month" && v.token === "may"));
+  return verifyGrounded(output, [], grounding).filter(v =>
+    !(v.kind === "ungrounded_month" && v.token === "may")
+    && !(v.kind === "ungrounded_number" && v.token === "one" && onlyOrdinaryOne(output)));
 }
 
 /** Pure. The first JSON array in a model reply, or null. Code fences and leading prose are tolerated. */

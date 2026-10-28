@@ -319,3 +319,32 @@ It states the four D3 counts. The three groups add up to the Rejected column, an
 Kept outputs now come only from actions that delivered something (accepted or partial), in both the per-kind figures and the daily trend. So a safe non-answer can never add a kept output, even if a writer recorded a non-zero count.
 
 Cost per kept output is unchanged: it stays all spend on that kind divided by what was kept (directive s4, cost per useful output). The provider cost of safe non-answers is therefore inside it as waste, and is never counted as output.
+
+## Follow-up, 28 Oct 2026: "one" read as a number (a false-positive safe non-answer)
+
+### Evidence
+
+Production read-only query (`AIOPT-05`). Two of the first three live clinical Learn answers were withheld with reason `ungrounded`:
+
+- Opus Teach, 27 Oct 23:14 UTC.
+- Sonnet Explain, 28 Oct 05:55 UTC.
+
+Both were on chunk 3 of c4c503e2, which contains neither the word "one" nor the digit 1. The learner-facing reason named "the number one".
+
+`verifyGrounded` reads the word "one" as the number 1 wherever it appears. The study text above has no 1, so any ordinary "one" ("one of", "no one", "each one") was enough to withhold the whole answer.
+
+### Fix (`textGroundingViolations`, the study-text wrapper only)
+
+- **What is excused:** "one" is no longer read as the number 1 when every occurrence sits in a closed, exact list of ordinary phrases:
+  - one of, one another, no one, each one, every one, any one;
+  - the one, this one, that one, which one;
+  - one way, one thing, one or more, one by one, one at a time.
+- **What is still checked:**
+  - Any other "one" ("one dose", "after one hour", "one sign") still needs a 1 in the notes. This holds even when the same answer also uses an ordinary "one".
+  - Every other number word and every digit is untouched.
+- **Practice:** the Practice verifier is unchanged.
+- **Tests:** each excused use is paired with a test proving the counted use still fails.
+
+### Evidence for next time
+
+The Learn and Explain audit rows now record `withheld_detail`: the check's own words (for example "the number one"), never the answer text.
