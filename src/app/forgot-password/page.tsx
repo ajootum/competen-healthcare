@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -12,13 +11,19 @@ export default function ForgotPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setError("");
-    const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    setLoading(false);
-    if (error) { setError(error.message); return; }
-    setSent(true);
+    // Requested from the server, so the emailed link works on any device or browser (src/lib/auth/self-service-reset.ts).
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
+      });
+      const body = await res.json().catch(() => ({}));
+      setLoading(false);
+      if (!res.ok) { setError(body?.error ?? "The reset email could not be sent just now. Try again shortly."); return; }
+      setSent(true);
+    } catch {
+      setLoading(false);
+      setError("The reset email could not be sent just now. Check your connection and try again.");
+    }
   }
 
   return (

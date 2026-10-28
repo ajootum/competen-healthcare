@@ -56,7 +56,11 @@ const checkGate = (src: Src): R => {
 // It is the same kind of sender as the owner-only invitation fallback in actions, and is listed for that reason.
 const INVITATIONS = "src/lib/individual/invitations.ts";
 const INVITE_ROUTE = "src/app/api/hq/individual/invitations/route.ts";
-const ALLOWED_SENDERS = new Set<string>([F.lib, F.actions, F.forgot, INVITATIONS]);
+// 28 Oct 2026: the self-service "forgot password" send moved from the browser page (PKCE: its link failed when
+// opened on another device) to the server lib below. It sends only to the address the person typed, with the
+// configured return URL, and answers the same whether or not the account exists.
+const SELF_SERVICE = "src/lib/auth/self-service-reset.ts";
+const ALLOWED_SENDERS = new Set<string>([F.lib, F.actions, F.forgot, INVITATIONS, SELF_SERVICE]);
 const checkOnePath = (all: Src, src: Src): R => {
   const senders = [...all].filter(([, s]) => /resetPasswordForEmail\(/.test(s)).map(([f]) => f);
   const extra = senders.filter(f => !ALLOWED_SENDERS.has(f as never));
