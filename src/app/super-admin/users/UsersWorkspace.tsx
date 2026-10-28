@@ -1,8 +1,14 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useTransition } from "react";
 import { useDismiss } from "@/components/ui/use-dismiss";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import {
+  ACCOUNT_TYPES, ACCOUNT_TYPE_LABEL, USER_VIEWS, USER_VIEW_LABEL, USER_VIEW_RULE,
+  type AccountType, type UserView,
+} from "@/lib/hq/account-classification";
+import { toQueryString, type DirectoryFilters, type DirectoryStats } from "@/lib/hq/user-directory-query";
+import { usersCsv } from "@/lib/hq/users-csv";
 import { ROLE_CONFIG, ORG_ROLE_CONFIG, PLATFORM_ROLE_CONFIG, type AppRole, type OrgRole, type PlatformRole } from "@/lib/roles";
 import UserRoleEditor from "./UserRoleEditor";
 import { Modal, Drawer } from "@/components/ui/interactive";
@@ -30,8 +36,19 @@ export type UserRow = {
   access: Access;
   products: string[];
   hqActive: boolean;
+  /** HQ-USERS-CLASSIFY-01: an administrative label for filtering and reporting. It decides no access. */
+  accountType: AccountType;
 };
 export type AuditEntry = { id: string; action: string; entityType: string | null; entityName: string | null; at: string };
+export type ClassificationEntry = { id: string; at: string; by: string; from: string; to: string; reason: string | null };
+
+const TYPE_PILL: Record<AccountType, string> = {
+  human: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]",
+  demo: "bg-purple-100 text-purple-700",
+  test: "bg-amber-100 text-amber-800",
+  system: "bg-slate-200 text-slate-700",
+  unclassified: "bg-gray-100 text-gray-600",
+};
 
 const ROLE_BADGE: Record<string, string> = {
   nurse:          "bg-teal-100 text-teal-700",
@@ -76,12 +93,23 @@ function Ring({ pct }: { pct: number | null }) {
   );
 }
 
-const PAGE_SIZE = 25;
-
 export default function UsersWorkspace({
-  users, auditByActor, hospitals, organisations, departments, currentUserId, canManage, canReset, readable, authComplete,
+  users, total, page, pages, viewCounts, filters, defaultView, classificationAvailable, classificationHistory, stats,
+  auditByActor, hospitals, organisations, departments, currentUserId, canManage, canReset, readable, authComplete,
 }: {
+  /** HQ-USERS-CLASSIFY-01: ONE page, filtered and paginated on the server. */
   users: UserRow[];
+  total: number;
+  page: number;
+  pages: number;
+  viewCounts: Record<UserView, number>;
+  filters: DirectoryFilters;
+  defaultView: UserView;
+  /** False while migration 650 is absent: every account reads Unclassified and nothing can be classified. */
+  classificationAvailable: boolean;
+  classificationHistory: Record<string, ClassificationEntry[]>;
+  /** The stat cards, counted over the selected account view (named on screen). */
+  stats: DirectoryStats;
   auditByActor: Record<string, AuditEntry[]>;
   hospitals: { id: string; name: string; country: string }[];
   organisations: { id: string; name: string }[];
@@ -98,15 +126,29 @@ export default function UsersWorkspace({
   authComplete: boolean;
 }) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [fRole, setFRole] = useState("all");
-  const [fOrg, setFOrg] = useState("all");
-  const [fFacility, setFFacility] = useState("all");
-  const [fStatus, setFStatus] = useState("all");
-  const [fLogin, setFLogin] = useState("all");
-  const [fProduct, setFProduct] = useState("all");
-  const [fHq, setFHq] = useState("all");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const pathname = usePathname();
+  const [navigating, startNav] = useTransition();
+  // HQ-USERS-CLASSIFY-01: the URL is the query. A filter change navigates, and the server answers one page.
+  const queryKey = toQueryString(filters, defaultView);
+  const go = useCallback((patch: Partial<DirectoryFilters>) => {
+    const qs = toQueryString({ ...filters, page: 0, ...patch }, defaultView);
+    startNav(() => router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+  }, [filters, defaultView, pathname, router]);
+  // Search is typed, so it waits for a pause before asking the server.
+  const [search, setSearch] = useState(filters.q);
+  useEffect(() => {
+    if (search.trim() === filters.q.trim()) return;
+    const t = setTimeout(() => go({ q: search }), 350);
+    return () => clearTimeout(t);
+  }, [search, filters.q, go]);
+  // A selection belongs to the page it was made on: a new query starts with nothing selected, so a bulk action
+  // only ever touches rows the person can see.
+  const [sel, setSel] = useState<{ key: string; ids: Set<string> }>({ key: queryKey, ids: new Set() });
+  const selected = sel.key === queryKey ? sel.ids : new Set<string>();
+  const setSelected = (ids: Set<string> | ((p: Set<string>) => Set<string>)) =>
+    setSel(prev => ({ key: queryKey, ids: typeof ids === "function" ? ids(prev.key === queryKey ? prev.ids : new Set()) : ids }));
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [classifyForm, setClassifyForm] = useState<{ type: AccountType; reason: string }>({ type: "human", reason: "" });
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
 
@@ -121,49 +163,22 @@ export default function UsersWorkspace({
   const [drawer, setDrawer] = useState<UserRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const [page, setPage] = useState(0);
-  // Captured once per mount so the memoized filter below stays pure.
-  const [now] = useState(() => Date.now());
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({ full_name: "", email: "", role: "nurse", mode: "invite", organisation_id: "", hospital_id: "" });
   const [createdCreds, setCreatedCreds] = useState<{ email: string; password: string } | null>(null);
 
-  const anyFilter = search || fRole !== "all" || fOrg !== "all" || fFacility !== "all" || fStatus !== "all" || fLogin !== "all" || fProduct !== "all" || fHq !== "all";
+  const anyFilter = !!filters.q || (["role", "org", "facility", "status", "login", "product", "hq"] as const).some(k => filters[k] !== "all");
+  const shown = users;
+  const viewName = USER_VIEW_LABEL[filters.view];
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return users.filter(u => {
-      if (q && !u.name.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q) && !(u.phone ?? "").toLowerCase().includes(q)) return false;
-      if (fRole !== "all" && !u.roles.includes(fRole)) return false;
-      if (fOrg !== "all" && u.organisationId !== fOrg) return false;
-      if (fFacility !== "all" && u.hospitalId !== fFacility) return false;
-      if (fStatus !== "all" && u.status !== fStatus) return false;
-      if (fLogin !== "all") {
-        const age = u.lastSignIn ? (now - new Date(u.lastSignIn).getTime()) / 86400000 : Infinity;
-        if (fLogin === "today" && age > 1) return false;
-        if (fLogin === "7d" && age > 7) return false;
-        if (fLogin === "30d" && age > 30) return false;
-        if (fLogin === "never" && u.lastSignIn) return false;
-      }
-      if (fProduct === "none" && u.products.length > 0) return false;
-      if (fProduct !== "all" && fProduct !== "none" && !u.products.includes(fProduct)) return false;
-      if (fHq === "yes" && !u.hqActive) return false;
-      if (fHq === "no" && u.hqActive) return false;
-      return true;
-    });
-  }, [users, search, fRole, fOrg, fFacility, fStatus, fLogin, fProduct, fHq, now]);
-
-  const pages = Math.ceil(filtered.length / PAGE_SIZE);
-  const shown = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  const isActive = (u: UserRow) => u.status === "active";
+  // The stat cards count the SELECTED VIEW, and the first card says which view, with every account beside it, so
+  // a figure reported before classification is still on the screen rather than silently replaced.
   const cardFor = (portal: string) => {
-    const members = users.filter(u => u.roles.includes(portal));
-    const active = members.filter(isActive).length;
-    return { count: members.length, sub: members.length ? `${Math.round((active / members.length) * 100)}% active` : "none yet" };
+    const s = stats.byRole[portal] ?? { count: 0, active: 0 };
+    return { count: s.count, sub: s.count ? `${Math.round((s.active / s.count) * 100)}% active` : "none yet" };
   };
   const STAT_CARDS = [
-    { label: "Total Users", icon: "👥", tintBg: "bg-[var(--cmp-surface-information)]", count: users.length, sub: `${users.filter(isActive).length} active` },
+    { label: `Users · ${viewName}`, icon: "👥", tintBg: "bg-[var(--cmp-surface-information)]", count: stats.total, sub: `${stats.active} active · ${viewCounts.all} accounts in all` },
     { label: "Super Admins", icon: "🛡️", tintBg: "bg-[var(--cmp-surface-error)]", ...cardFor("super_admin") },
     { label: "Admins", icon: "🏛️", tintBg: "bg-[var(--cmp-surface-warning)]", ...cardFor("hospital_admin") },
     { label: "Educators", icon: "🎓", tintBg: "bg-purple-50", ...cardFor("educator") },
@@ -191,17 +206,39 @@ export default function UsersWorkspace({
   }
 
   function exportCsv(rows: UserRow[]) {
-    const esc = (v: string | number | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const head = ["Name", "Email", "Phone", "Roles", "Organisation", "Facility", "Status", "Last login", "Competency %", "Passport %"];
-    const csv = [head.join(","), ...rows.map(u => [
-      esc(u.name), esc(u.email), esc(u.phone), esc(u.roles.map(r => ROLE_CONFIG[r as AppRole]?.label ?? r).join("; ")),
-      esc(u.organisation), esc(u.facility), esc(u.status), esc(u.lastSignIn ? new Date(u.lastSignIn).toISOString() : "never"),
-      esc(u.competencyPct ?? ""), esc(u.passportPct ?? ""),
-    ].join(","))].join("\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const url = URL.createObjectURL(new Blob([usersCsv(rows)], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url; a.download = `competen-users-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click(); URL.revokeObjectURL(url);
+  }
+
+  // HQ-USERS-CLASSIFY-01: one request for the whole selection. The server re-checks the owner gate, and every
+  // change writes its own audit row (before, after, who, when, reason) in the same transaction.
+  async function classifySelected() {
+    setBusy(true); setNotice(null);
+    const res = await fetch("/api/super-admin/users/classification", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "classify", userIds: [...selected], accountType: classifyForm.type, reason: classifyForm.reason }),
+    });
+    setBusy(false);
+    const j = (await res.json().catch(() => ({}))) as { error?: string; changed?: number; unchanged?: number };
+    if (!res.ok) { setNotice({ kind: "err", text: j.error ?? "Classification failed." }); return; }
+    setClassifyOpen(false); setClassifyForm(f => ({ ...f, reason: "" })); setSelected(new Set());
+    setNotice({ kind: "ok", text: `Classified ${j.changed ?? 0} account(s) as ${ACCOUNT_TYPE_LABEL[classifyForm.type]}${j.unchanged ? ` · ${j.unchanged} already were` : ""}.` });
+    router.refresh();
+  }
+
+  async function makeDefaultView() {
+    setBusy(true); setNotice(null);
+    const res = await fetch("/api/super-admin/users/classification", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_default_view", view: filters.view }),
+    });
+    setBusy(false);
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) { setNotice({ kind: "err", text: j.error ?? "Could not change the default view." }); return; }
+    setNotice({ kind: "ok", text: `${viewName} is now the default view for everyone opening User Management.` });
+    startNav(() => router.push(pathname, { scroll: false }));
   }
 
   async function bulkAct(action: "send_reset" | "suspend" | "unsuspend", label: string) {
@@ -295,40 +332,70 @@ export default function UsersWorkspace({
         ))}
       </div>
 
+      {/* HQ-USERS-CLASSIFY-01: account views. Each count is the number of accounts that view would show under the
+          other filters below; the rule each view applies is stated, not implied. */}
+      <nav aria-label="Account views" className="mb-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {USER_VIEWS.map(v => {
+            const on = filters.view === v;
+            return (
+              <button key={v} onClick={() => go({ view: v })} aria-pressed={on} title={USER_VIEW_RULE[v]}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${on ? "bg-teal-700 border-teal-700 text-white" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                {USER_VIEW_LABEL[v]}{v === defaultView ? " (default)" : ""}
+                <span className={`ml-1.5 tabular-nums ${on ? "text-teal-100" : "text-gray-500"}`}>{viewCounts[v]}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-gray-500 mt-1.5">
+          Showing <b>{viewName}</b>: {USER_VIEW_RULE[filters.view]}.
+          {canManage && classificationAvailable && filters.view !== defaultView && (
+            <button onClick={makeDefaultView} disabled={busy} className="ml-2 font-semibold text-teal-700 hover:text-teal-900 underline disabled:opacity-50">
+              Make {viewName} the default view
+            </button>
+          )}
+        </p>
+        {!classificationAvailable && (
+          <p role="status" className="text-xs rounded-lg px-3 py-2 mt-2 border text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]">
+            Account classification is not available yet (migration 650 is not applied), so every account reads Unclassified and the screen opens on All Accounts.
+          </p>
+        )}
+      </nav>
+
       {/* Search + filters */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }}
+      <div className="flex flex-wrap items-center gap-2 mb-4" aria-busy={navigating}>
+        <input value={search} onChange={e => setSearch(e.target.value)} aria-label="Search users"
           placeholder="Search by name, email or phone…" className={`${input} flex-1 min-w-[220px]`} />
-        <select value={fRole} onChange={e => { setFRole(e.target.value); setPage(0); }} className={input}>
+        <select value={filters.role} onChange={e => go({ role: e.target.value })} className={input} aria-label="Filter by role">
           <option value="all">Role: All</option>
           {Object.entries(ROLE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
         {organisations.length > 0 && (
-          <select value={fOrg} onChange={e => { setFOrg(e.target.value); setPage(0); }} className={input}>
+          <select value={filters.org} onChange={e => go({ org: e.target.value })} className={input} aria-label="Filter by organisation">
             <option value="all">Organisation: All</option>
             {organisations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>
         )}
         {hospitals.length > 0 && (
-          <select value={fFacility} onChange={e => { setFFacility(e.target.value); setPage(0); }} className={input}>
+          <select value={filters.facility} onChange={e => go({ facility: e.target.value })} className={input} aria-label="Filter by facility">
             <option value="all">Facility: All</option>
             {hospitals.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
           </select>
         )}
-        <select value={fStatus} onChange={e => { setFStatus(e.target.value); setPage(0); }} className={input}>
+        <select value={filters.status} onChange={e => go({ status: e.target.value })} className={input} aria-label="Filter by status">
           <option value="all">Status: All</option>
           <option value="active">Active</option>
           <option value="pending">Pending</option>
           <option value="suspended">Suspended</option>
         </select>
-        <select value={fLogin} onChange={e => { setFLogin(e.target.value); setPage(0); }} className={input}>
+        <select value={filters.login} onChange={e => go({ login: e.target.value })} className={input} aria-label="Filter by last login">
           <option value="all">Last login: Any</option>
           <option value="today">Last 24 hours</option>
           <option value="7d">Last 7 days</option>
           <option value="30d">Last 30 days</option>
           <option value="never">Never</option>
         </select>
-        <select value={fProduct} onChange={e => { setFProduct(e.target.value); setPage(0); }} className={input} aria-label="Filter by product access">
+        <select value={filters.product} onChange={e => go({ product: e.target.value })} className={input} aria-label="Filter by product access">
           <option value="all">Product: Any</option>
           <option value="platform">Platform</option>
           <option value="enterprise">Enterprise</option>
@@ -336,13 +403,13 @@ export default function UsersWorkspace({
           <option value="individual">Individual</option>
           <option value="none">No active product</option>
         </select>
-        <select value={fHq} onChange={e => { setFHq(e.target.value); setPage(0); }} className={input} aria-label="Filter by HQ position">
+        <select value={filters.hq} onChange={e => go({ hq: e.target.value })} className={input} aria-label="Filter by HQ position">
           <option value="all">HQ position: Any</option>
           <option value="yes">Holds an HQ position</option>
           <option value="no">No HQ position</option>
         </select>
         {anyFilter && (
-          <button onClick={() => { setSearch(""); setFRole("all"); setFOrg("all"); setFFacility("all"); setFStatus("all"); setFLogin("all"); setFProduct("all"); setFHq("all"); setPage(0); }}
+          <button onClick={() => { setSearch(""); go({ q: "", role: "all", org: "all", facility: "all", status: "all", login: "all", product: "all", hq: "all" }); }}
             className="text-xs font-semibold text-teal-600 hover:text-teal-800 px-2">Clear</button>
         )}
       </div>
@@ -370,6 +437,10 @@ export default function UsersWorkspace({
                 <button onClick={() => { setBulkOpen(false); bulkAct("send_reset", "Password reset requested (each account that can receive one is emailed)"); }} disabled={busy}
                   className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">🔑 Send password reset</button>
                 )}
+                {canManage && classificationAvailable && (
+                <button onClick={() => { setBulkOpen(false); setClassifyOpen(true); }} disabled={busy}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">🏷 Classify selected…</button>
+                )}
                 {canManage && <>
                 <button onClick={() => {
                   setBulkOpen(false);
@@ -384,11 +455,12 @@ export default function UsersWorkspace({
           )}
         </div>
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs text-gray-500">{filtered.length} user{filtered.length === 1 ? "" : "s"} found</span>
+          <span className="text-xs text-gray-500" role="status">{navigating ? "Loading…" : `${total} user${total === 1 ? "" : "s"} found`}</span>
           <button onClick={() => router.refresh()} title="Refresh"
             className="text-gray-500 hover:text-gray-600 text-sm">⟳</button>
-          <button onClick={() => exportCsv(filtered)} title="Export all filtered users"
-            className="text-xs font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg">Export</button>
+          {/* The export runs the same query on the server, so it carries every matching row, not this page. */}
+          <a href={`/api/super-admin/users/export${queryKey ? `?${queryKey}` : ""}`} title="Export all filtered users"
+            className="text-xs font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg">Export</a>
         </div>
       </div>
 
@@ -424,7 +496,12 @@ export default function UsersWorkspace({
           </thead>
           <tbody className="divide-y divide-gray-50">
             {shown.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-500">No users match the current filters.</td></tr>
+              <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-500">
+                {(filters.view === "active_humans" || filters.view === "all_humans") && viewCounts.all_humans === 0 && classificationAvailable ? (
+                  <>No account has been classified Human yet. Accounts stay Unclassified until someone reviews them.{" "}
+                    <button onClick={() => go({ view: "unclassified" })} className="font-semibold text-teal-700 underline">Review Unclassified ({viewCounts.unclassified})</button></>
+                ) : "No users match the current filters."}
+              </td></tr>
             )}
             {shown.map(u => {
               const st = STATUS_UI[u.status];
@@ -470,6 +547,9 @@ export default function UsersWorkspace({
                   </td>
                   <td className="px-3 py-3">
                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${st.pill}`}>{st.label}</span>
+                    <span className={`ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${TYPE_PILL[u.accountType]}`} title="Account type (administrative, grants no access)">
+                      {ACCOUNT_TYPE_LABEL[u.accountType]}
+                    </span>
                     <p className="text-[9px] text-gray-500 mt-1">{u.statusDetail}</p>
                   </td>
                   {/* Relative times drift between server render and hydration */}
@@ -526,9 +606,9 @@ export default function UsersWorkspace({
 
       {pages > 1 && (
         <div className="flex items-center justify-end gap-2 mt-3 text-xs">
-          <button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-40">‹ Prev</button>
+          <button disabled={page === 0 || navigating} onClick={() => go({ ...filters, page: page - 1 })} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-40">‹ Prev</button>
           <span className="text-gray-500">Page {page + 1} of {pages}</span>
-          <button disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-40">Next ›</button>
+          <button disabled={page >= pages - 1 || navigating} onClick={() => go({ ...filters, page: page + 1 })} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-40">Next ›</button>
         </div>
       )}
 
@@ -556,6 +636,44 @@ export default function UsersWorkspace({
           </div>
         </div>
       </div>
+
+      {/* HQ-USERS-CLASSIFY-01: bulk classification. An administrative label only: it changes no sign-in, entitlement,
+          appointment, seat, record or relationship, and the dialog says so before anything is sent. */}
+      {classifyOpen && (
+        <Modal open title={`Classify ${selected.size} account${selected.size === 1 ? "" : "s"}`} onClose={() => setClassifyOpen(false)} initialIndex={1}>
+          <div className="space-y-3 text-sm">
+            <div>
+              <label htmlFor="classify-type" className="text-xs font-semibold text-gray-500 mb-1 block">Account type</label>
+              <select id="classify-type" value={classifyForm.type} onChange={e => setClassifyForm(f => ({ ...f, type: e.target.value as AccountType }))} className={`${input} w-full`}>
+                {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{ACCOUNT_TYPE_LABEL[t]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="classify-reason" className="text-xs font-semibold text-gray-500 mb-1 block">Reason (recorded in the audit trail)</label>
+              <textarea id="classify-reason" value={classifyForm.reason} maxLength={500} rows={3}
+                onChange={e => setClassifyForm(f => ({ ...f, reason: e.target.value }))}
+                placeholder="What you checked, e.g. confirmed with the facility that these are staff"
+                className={`${input} w-full`} />
+            </div>
+            <p className="text-xs text-gray-500">
+              Classification is used for filtering and reporting only. It does not change sign-in, product access, HQ positions,
+              governance seats, competency records, Passport, learning or relationships.
+            </p>
+            <ul className="max-h-32 overflow-y-auto text-xs text-gray-600 border border-gray-100 rounded-lg p-2">
+              {users.filter(u => selected.has(u.id)).map(u => (
+                <li key={u.id}>{u.name} · {u.email} · now {ACCOUNT_TYPE_LABEL[u.accountType]}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex gap-2 mt-5">
+            <button onClick={() => setClassifyOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button onClick={classifySelected} disabled={busy || !classifyForm.reason.trim() || selected.size === 0}
+              className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-800 disabled:opacity-50">
+              {busy ? "Saving…" : `Classify as ${ACCOUNT_TYPE_LABEL[classifyForm.type]}`}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Add User modal */}
       {addOpen && (
@@ -656,7 +774,30 @@ export default function UsersWorkspace({
                 <span className={`inline-block mt-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded ${STATUS_UI[drawer.status].pill}`}>
                   {STATUS_UI[drawer.status].label} · {drawer.statusDetail}
                 </span>
+                <span className={`inline-block mt-1.5 ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${TYPE_PILL[drawer.accountType]}`}>
+                  {ACCOUNT_TYPE_LABEL[drawer.accountType]}
+                </span>
               </div>
+            </div>
+
+            {/* HQ-USERS-CLASSIFY-01: how this account came to be classified, from audit_log. */}
+            <div className="-mx-5 px-5 pb-4 mb-4 border-b border-gray-50 text-xs">
+              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">Account type history</p>
+              {!classificationAvailable ? (
+                <p className="text-gray-500">Not available until migration 650 is applied.</p>
+              ) : (classificationHistory[drawer.id] ?? []).length === 0 ? (
+                <p className="text-gray-500">Never classified. Unclassified until someone reviews it.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {(classificationHistory[drawer.id] ?? []).map(h => (
+                    <li key={h.id} className="text-gray-700">
+                      <b>{ACCOUNT_TYPE_LABEL[h.from as AccountType] ?? h.from}</b> → <b>{ACCOUNT_TYPE_LABEL[h.to as AccountType] ?? h.to}</b>
+                      <span className="text-gray-500"> · {h.by} · <span suppressHydrationWarning>{formatDateTime(h.at)}</span></span>
+                      {h.reason && <p className="text-[11px] text-gray-500">{h.reason}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="-mx-5 px-5 pb-5 grid grid-cols-2 gap-3 text-xs border-b border-gray-50">

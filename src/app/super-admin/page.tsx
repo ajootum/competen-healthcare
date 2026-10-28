@@ -9,6 +9,7 @@ import { resolveMissionProfile, resolveMissionProfileByCode, listMissionProfiles
 import EnterpriseExplorer from "./_mc/EnterpriseExplorer";
 import Sparkline from "./_mc/Sparkline";
 import PdMissionControl from "./_mc/pd/PdMissionControl";
+import { typeCountsLine } from "@/lib/hq/account-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -202,7 +203,7 @@ export default async function MissionControl({ searchParams }: { searchParams: P
     { icon: "💚", iconBg: "bg-[var(--cmp-surface-success)]", label: "Platform Health", value: kpis.platformHealth.status, sub: kpis.platformHealth.note, tone: "text-[var(--cmp-text-success)]", spark: [] as number[], sparkColor: "#16a34a" },
     { icon: "🛡️", iconBg: "bg-[var(--cmp-surface-critical)]", label: "Critical Alerts", value: fmt(kpis.criticalAlerts), sub: kpis.criticalAlerts ? "Needs attention" : "All clear", tone: kpis.criticalAlerts ? "text-[var(--cmp-text-critical)]" : "text-gray-900", spark: [] as number[], sparkColor: "#ef4444" },
     { icon: "🏛️", iconBg: "bg-violet-50", label: "Enterprise Tenants", value: fmt(kpis.tenants), sub: `${counts.countries} countr${counts.countries === 1 ? "y" : "ies"}`, spark: spark.tenants, sparkColor: "#8b5cf6" },
-    { icon: "👥", iconBg: "bg-[var(--cmp-surface-information)]", label: "Active Users", value: fmt(kpis.activeUsers), sub: "across all tenants", spark: spark.users, sparkColor: "#3b82f6" },
+    { icon: "👥", iconBg: "bg-[var(--cmp-surface-information)]", label: kpis.accounts.available ? "User Accounts (all)" : "Active Users", value: fmt(kpis.activeUsers), sub: typeCountsLine(kpis.accounts, "across all tenants"), spark: spark.users, sparkColor: "#3b82f6" },
     { icon: "🧠", iconBg: "bg-purple-50", label: "AI Operations", value: "Standby", sub: "No serving layer provisioned", muted: true },
     { icon: "📋", iconBg: "bg-[var(--cmp-surface-warning)]", label: "Pending Approvals", value: kpis.pendingApprovals == null ? "—" : fmt(kpis.pendingApprovals), sub: kpis.pendingApprovals == null ? "Governance module not active" : "governance change requests", tone: "text-[var(--cmp-text-warning)]", spark: spark.approvals, sparkColor: "#f59e0b", muted: kpis.pendingApprovals == null },
     { icon: "🚀", iconBg: "bg-[var(--cmp-surface-information)]", label: "Deployments Today", value: "—", sub: "No deploy ledger provisioned", muted: true },

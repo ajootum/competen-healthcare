@@ -1,26 +1,17 @@
 import { requireHqCapability } from "@/lib/hq/context";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { estateRolesOf } from "@/lib/roles";
-import UsersWorkspace, { type UserRow, type AuditEntry } from "./UsersWorkspace";
-import { EMPTY_ACCESS, activeProducts, holdsHqPosition, listAllAuthUsers, loadDirectoryAccess } from "@/lib/hq/user-directory";
+import UsersWorkspace, { type AuditEntry, type ClassificationEntry } from "./UsersWorkspace";
+import { loadDirectory } from "./load-directory";
+import { directoryStats, parseDirectoryFilters, queryDirectory } from "@/lib/hq/user-directory-query";
+import { viewMatches } from "@/lib/hq/account-classification";
 
-// Landlord Portal — User Management (Design System spec §6).
-// Every column is computed from live sources: auth admin metadata gives last
-// login / verification / suspension; competency_decisions gives the progress
-// and passport rings; audit_log backs the drawer's history. Progress rings are
-// null (shown as "—") for users with no assessment decisions rather than 0%.
+// Landlord Portal — User Management (Design System spec §6). The rows are built in ./load-directory.ts.
+// HQ-USERS-CLASSIFY-01: the filters, the account view and the pagination run HERE, on the server, so the browser
+// receives one page. The URL is the whole query. With no ?view the configured default applies
+// (hq_config.users_default_view, Active Humans unless changed), or All Accounts while migration 650 is absent.
 
-type ProfileRow = {
-  id: string; full_name: string; email: string; phone: string | null;
-  role: string; roles: string[] | null; org_role: string | null; org_roles: string[] | null;
-  hospital_id: string | null; organisation_id: string | null; platform_role: string | null;
-  department_id: string | null; specialization: string | null; created_at: string;
-};
-
-const OK_OUTCOMES = new Set(["competent", "competent_with_conditions", "provisionally_competent"]);
-
-export default async function AllUsersPage() {
+export default async function AllUsersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -29,119 +20,29 @@ export default async function AllUsersPage() {
   // route segments and Server Actions from being accessed" -- so the gate lives here, not upstairs.
   const { admin, isOwner, capabilities } = await requireHqCapability("hq.platform.users.view");
 
-  const [
-    { data: rawProfiles },
-    { data: hospitals },
-    { data: organisations },
-    { data: rawDepts },
-    { data: decisions },
-    { data: authz },
-    { data: audit },
-    authList,
-    directory,
-  ] = await Promise.all([
-    admin.from("profiles")
-      .select("id, full_name, email, phone, role, roles, org_role, org_roles, hospital_id, organisation_id, platform_role, department_id, specialization, created_at")
-      .order("created_at", { ascending: false })
-      .returns<ProfileRow[]>(),
-    admin.from("hospitals").select("id, name, country"),
-    admin.from("organisations").select("id, name"),
-    admin.from("departments").select("id, name, hospital_id"),
-    admin.from("competency_decisions")
-      .select("nurse_id, competency_id, cpu_id, outcome, expiry_date, created_at")
-      .order("created_at", { ascending: false }),
-    admin.from("clinical_authorizations").select("nurse_id, status"),
-    admin.from("audit_log")
-      .select("id, actor_id, actor_name, action, entity_type, entity_name, created_at")
-      .order("created_at", { ascending: false }).limit(200),
-    // HQ-USERS-C: every Auth page, not only the first 1000, and the access each person holds.
-    listAllAuthUsers(admin),
-    loadDirectoryAccess(admin),
+  const [dir, sp] = await Promise.all([loadDirectory(admin), searchParams]);
+  const filters = parseDirectoryFilters(sp, dir.defaultView);
+  const result = queryDirectory(dir.users, filters);
+  const pageIds = result.rows.map(u => u.id);
+
+  // History for the drawer, for this page's people only: what they did, and how their account was classified.
+  const [{ data: audit }, { data: classAudit }] = await Promise.all([
+    pageIds.length
+      ? admin.from("audit_log")
+          .select("id, actor_id, actor_name, action, entity_type, entity_name, created_at")
+          .in("actor_id", pageIds)
+          .order("created_at", { ascending: false }).limit(400)
+      : Promise.resolve({ data: [] }),
+    pageIds.length
+      ? admin.from("audit_log")
+          .select("id, actor_name, entity_id, old_value, new_value, created_at")
+          .eq("action", "hq_account_classified").in("entity_id", pageIds)
+          .order("created_at", { ascending: false }).limit(400)
+      : Promise.resolve({ data: [] }),
   ]);
 
-  const authById = new Map(
-    authList.users.map((u: { id: string; last_sign_in_at?: string | null; email_confirmed_at?: string | null; invited_at?: string | null }) => [u.id, {
-      lastSignIn: u.last_sign_in_at ?? null,
-      emailConfirmed: !!u.email_confirmed_at,
-      invitedAt: u.invited_at ?? null,
-      bannedUntil: (u as { banned_until?: string | null }).banned_until ?? null,
-    }])
-  );
-
-  // Latest decision per (nurse, competency-or-cpu); rows are newest-first.
-  const seen = new Set<string>();
-  const perUser = new Map<string, { total: number; ok: number; current: number }>();
-  const today = new Date().toISOString().slice(0, 10);
-  for (const d of decisions ?? []) {
-    const key = `${d.nurse_id}:${d.competency_id ?? d.cpu_id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const m = perUser.get(d.nurse_id) ?? { total: 0, ok: 0, current: 0 };
-    m.total++;
-    if (OK_OUTCOMES.has(d.outcome)) {
-      m.ok++;
-      if (!d.expiry_date || d.expiry_date >= today) m.current++;
-    }
-    perUser.set(d.nurse_id, m);
-  }
-
-  const authzByUser = new Map<string, number>();
-  for (const a of authz ?? []) {
-    if (a.status === "active") authzByUser.set(a.nurse_id, (authzByUser.get(a.nurse_id) ?? 0) + 1);
-  }
-
-  const hospitalMap = Object.fromEntries((hospitals ?? []).map(h => [h.id, h.name as string]));
-  const orgMap = Object.fromEntries((organisations ?? []).map(o => [o.id, o.name as string]));
-  const deptMap = Object.fromEntries((rawDepts ?? []).map(d => [d.id, d.name as string]));
-
-  const users: UserRow[] = (rawProfiles ?? []).map(p => {
-    const a = authById.get(p.id);
-    const m = perUser.get(p.id);
-    const suspended = !!a?.bannedUntil && new Date(a.bannedUntil) > new Date();
-    const status: UserRow["status"] =
-      suspended ? "suspended"
-      : !a?.lastSignIn && a?.invitedAt ? "pending"
-      : a && !a.emailConfirmed ? "pending"
-      : "active";
-    return {
-      id: p.id, name: p.full_name ?? "—", email: p.email, phone: p.phone ?? null,
-      // ⚠ THE DRIFTED FOLD THIS LINE USED TO CARRY: `p.roles ?? [p.role]`, which answers [] for a
-      // profile holding roles: [] beside a real role -- and 35 of 47 live profiles are exactly that
-      // shape (identity-resolver-harness measurement, 2026-08-16). Those people rendered with no
-      // role chips, matched no role filter, joined no portal group and exported blank, while every
-      // GATE in the product admitted them by the canonical fold. Repointing to estateRolesOf is a
-      // deliberate behaviour change AT THIS SITE: the screen now answers what the gates answer.
-      role: p.role, roles: estateRolesOf(p),
-      orgRole: p.org_role ?? null, orgRoles: p.org_roles ?? null,
-      platformRole: p.platform_role ?? null,
-      organisationId: p.organisation_id ?? null,
-      organisation: p.organisation_id ? orgMap[p.organisation_id] ?? null : null,
-      hospitalId: p.hospital_id ?? null,
-      facility: p.hospital_id ? hospitalMap[p.hospital_id] ?? null : null,
-      department: p.department_id ? deptMap[p.department_id] ?? null : null,
-      departmentId: p.department_id ?? null,
-      specialization: p.specialization ?? null,
-      status,
-      statusDetail: suspended ? "Access suspended"
-        : status === "pending" ? (!a?.emailConfirmed && a?.lastSignIn ? "Email unverified" : "Invitation sent")
-        : "Email verified",
-      lastSignIn: a?.lastSignIn ?? null,
-      joinedAt: p.created_at,
-      // null = never assessed; the UI renders "—", not a misleading 0%
-      competencyPct: m ? Math.round((m.ok / m.total) * 100) : null,
-      passportPct: m ? Math.round((m.current / m.total) * 100) : null,
-      decisionsTotal: m?.total ?? 0,
-      decisionsOk: m?.ok ?? 0,
-      decisionsCurrent: m?.current ?? 0,
-      activeAuthorizations: authzByUser.get(p.id) ?? 0,
-      access: directory.byUser.get(p.id) ?? EMPTY_ACCESS(),
-      products: activeProducts(directory.byUser.get(p.id) ?? EMPTY_ACCESS()),
-      hqActive: holdsHqPosition(directory.byUser.get(p.id) ?? EMPTY_ACCESS()),
-    };
-  });
-
   const auditByActor = new Map<string, AuditEntry[]>();
-  for (const e of audit ?? []) {
+  for (const e of (audit ?? []) as { id: string; actor_id: string | null; action: string; entity_type: string | null; entity_name: string | null; created_at: string }[]) {
     if (!e.actor_id) continue;
     const list = auditByActor.get(e.actor_id) ?? [];
     if (list.length < 15) list.push({
@@ -151,18 +52,39 @@ export default async function AllUsersPage() {
     auditByActor.set(e.actor_id, list);
   }
 
+  const classHistory = new Map<string, ClassificationEntry[]>();
+  type ClassAuditRow = { id: string; actor_name: string | null; entity_id: string; old_value: Record<string, unknown> | null; new_value: Record<string, unknown> | null; created_at: string };
+  for (const e of (classAudit ?? []) as ClassAuditRow[]) {
+    const list = classHistory.get(e.entity_id) ?? [];
+    if (list.length < 10) list.push({
+      id: e.id, at: e.created_at, by: e.actor_name ?? "System (migration 650)",
+      from: String(e.old_value?.account_type ?? "unclassified"), to: String(e.new_value?.account_type ?? ""),
+      reason: typeof e.new_value?.reason === "string" ? e.new_value.reason : null,
+    });
+    classHistory.set(e.entity_id, list);
+  }
+
   return (
     <UsersWorkspace
-      users={users}
+      users={result.rows}
+      total={result.total}
+      page={result.page}
+      pages={result.pages}
+      viewCounts={result.viewCounts}
+      stats={directoryStats(dir.users.filter(u => viewMatches(filters.view, u)))}
+      filters={{ ...filters, page: result.page }}
+      defaultView={dir.defaultView}
+      classificationAvailable={dir.classificationAvailable}
+      classificationHistory={Object.fromEntries(classHistory)}
       auditByActor={Object.fromEntries(auditByActor)}
-      hospitals={(hospitals ?? []).map(h => ({ id: h.id as string, name: h.name as string, country: (h as Record<string, string>).country ?? "" }))}
-      organisations={(organisations ?? []).map(o => ({ id: o.id as string, name: o.name as string }))}
-      departments={(rawDepts ?? []).map(d => ({ id: d.id as string, name: d.name as string, hospital_id: (d as Record<string, string>).hospital_id ?? "" }))}
+      hospitals={dir.hospitals}
+      organisations={dir.organisations}
+      departments={dir.departments}
       currentUserId={user.id}
       canManage={isOwner}
       canReset={isOwner || capabilities.includes("hq.platform.users.reset")}
-      readable={directory.readable}
-      authComplete={authList.complete}
+      readable={dir.readable}
+      authComplete={dir.authComplete}
     />
   );
 }

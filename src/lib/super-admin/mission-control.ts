@@ -10,6 +10,7 @@
 
 import pkg from "../../../package.json";
 import { estateRolesOf } from "@/lib/roles";
+import { loadClassifications, typeCounts } from "@/lib/hq/account-classification";
 
 const DAY = 86400000;
 
@@ -49,7 +50,7 @@ export type MissionControl = Awaited<ReturnType<typeof loadMissionControl>>;
 
 export async function loadMissionControl(admin: any) {
   // ── Core platform tables (always present) ────────────────────────────────
-  const [orgsRes, hospitalsRes, profilesRes, frameworksRes, deptsRes, cyclesRes, assessRes] = await Promise.all([
+  const [orgsRes, hospitalsRes, profilesRes, frameworksRes, deptsRes, cyclesRes, assessRes, classes] = await Promise.all([
     admin.from("organisations").select("id, name, is_active, created_at").order("created_at", { ascending: false }).limit(1000),
     admin.from("hospitals").select("id, name, country, country_code, city, tier, admin_id, organisation_id, created_at").order("created_at", { ascending: false }).limit(2000),
     admin.from("profiles").select("id, full_name, role, roles, organisation_id, hospital_id, created_at").limit(20000),
@@ -57,6 +58,8 @@ export async function loadMissionControl(admin: any) {
     admin.from("departments").select("id, hospital_id, name").limit(4000),
     admin.from("competency_cycles").select("id, status", { count: "exact", head: false }).eq("status", "active").limit(1),
     admin.from("assessments").select("id, status, created_at").limit(20000),
+    // HQ-USERS-CLASSIFY-01: the account type of each counted profile, for the users card (fails safe without 650).
+    loadClassifications(admin),
   ]);
 
   const orgs = (orgsRes.data ?? []) as any[];
@@ -108,6 +111,8 @@ export async function loadMissionControl(admin: any) {
     criticalAlerts: criticalCount,
     tenants: orgs.length,
     activeUsers: profiles.length,
+    // The all-accounts figure above is kept as reported. This says what it is made of.
+    accounts: typeCounts(profiles.map(p => p.id as string), classes),
     aiOps: { provisioned: false as const },
     pendingApprovals,
     deploymentsProvisioned: false as const,
