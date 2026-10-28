@@ -6,6 +6,7 @@ import { loadPlatformOperations } from "@/lib/platform/operations";
 import PlatformOpsHeader from "./_po/PlatformOpsHeader";
 import MissionControlBoard from "./MissionControlBoard";
 import { requireHqCapability } from "@/lib/hq/context";
+import { typeCountsLine } from "@/lib/hq/account-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +77,7 @@ export default async function PlatformOperations() {
   const kpiCards = [
     { label: "Overall Health", value: kpis.health, icon: healthIcon, iconBg: healthBg, sub: "core services responding", tone: healthTone },
     { label: "Tenants", value: fmt(kpis.tenants), icon: "🏢", iconBg: "bg-[var(--cmp-surface-information)]", sub: `on ${licensing.plans} plans` },
-    { label: "Users", value: fmt(kpis.activeUsers), icon: "👥", iconBg: "bg-violet-50", sub: "registered across tenants" },
+    { label: kpis.accounts.available ? "User Accounts (all)" : "Users", value: fmt(kpis.activeUsers), icon: "👥", iconBg: "bg-violet-50", sub: typeCountsLine(kpis.accounts, "registered across tenants") },
     { label: "API Requests (24h)", value: "—", icon: "🧩", iconBg: "bg-[var(--cmp-surface-information)]", sub: "Not metered", muted: true },
     { label: "AI Requests (24h)", value: "—", icon: "🧠", iconBg: "bg-purple-50", sub: "Not metered", muted: true },
     { label: "Storage Used", value: "—", icon: "🗄️", iconBg: "bg-teal-50", sub: "Not metered", muted: true },

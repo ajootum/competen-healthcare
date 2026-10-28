@@ -10,6 +10,7 @@
 
 import pkg from "../../../package.json";
 import { estateRolesOf } from "@/lib/roles";
+import { loadClassifications, typeCounts } from "@/lib/hq/account-classification";
 
 const WORKSPACE: Record<string, string> = {
   nurse: "Healthcare Worker", assessor: "Assessor", educator: "Educator", senior_educator: "Educator",
@@ -19,7 +20,7 @@ const WORKSPACE: Record<string, string> = {
 const rolesOf = (p: any): string[] => estateRolesOf(p);
 
 export async function loadPlatformOps(admin: any) {
-  const [tenRes, statusRes, planRes, subRes, prodRes, flagRes, profRes] = await Promise.all([
+  const [tenRes, statusRes, planRes, subRes, prodRes, flagRes, profRes, classes] = await Promise.all([
     admin.from("tenants").select("id, name, tenant_type, status, primary_country, region_code, created_at").limit(4000),
     admin.from("plat_tenant_status").select("code, label, sort").order("sort"),
     admin.from("plat_plans").select("id, code, name, price_monthly, currency, is_active, sort").order("sort"),
@@ -27,6 +28,8 @@ export async function loadPlatformOps(admin: any) {
     admin.from("plat_products").select("code, name, description, is_core, default_on, sort").order("sort"),
     admin.from("plat_feature_flags").select("key, default_on, product_code").limit(2000),
     admin.from("profiles").select("id, role, roles, created_at").limit(60000),
+    // HQ-USERS-CLASSIFY-01: the account type of each counted profile, for the Users card (fails safe without 650).
+    loadClassifications(admin),
   ]);
   const tenants = (tenRes.data ?? []) as any[];
   const statuses = (statusRes.error ? [] : (statusRes.data ?? [])) as any[];
@@ -52,6 +55,8 @@ export async function loadPlatformOps(admin: any) {
     health: "Healthy" as string, // refined below once services are derived
     tenants: tenants.length,
     activeUsers: profiles.length,
+    // The all-accounts figure above is kept as reported. This says what it is made of.
+    accounts: typeCounts(profiles.map(p => p.id as string), classes),
     apiRequests: null as number | null, // no request telemetry
     aiRequests: null as number | null,
     storageBytes: null as number | null, // no storage metering

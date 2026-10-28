@@ -10,6 +10,8 @@
  *   D3  an HQ seat comes only from an hq_* office -- a tenant office appointment is not an HQ position
  *   D4  every one of the five sources can say "Not readable" in the drawer, and the page warns when one did
  *   D5  the page reads every Auth page through listAllAuthUsers, not a single page of 1000
+ *   D6  HQ-USERS-CLASSIFY-01: the rows are built in load-directory.ts (shared with the CSV export). It reads the
+ *       account type for display and writes nothing, and the page still gates before calling it
  */
 import { readFileSync, existsSync } from "node:fs";
 
@@ -17,6 +19,7 @@ const F = {
   lib: "src/lib/hq/user-directory.ts",
   page: "src/app/super-admin/users/page.tsx",
   ws: "src/app/super-admin/users/UsersWorkspace.tsx",
+  loader: "src/app/super-admin/users/load-directory.ts",
 } as const;
 type K = keyof typeof F;
 type Src = Map<string, string>;
@@ -38,7 +41,7 @@ const checkPageGate = (src: Src): R => {
   const gateAt = body.indexOf(`await requireHqCapability("hq.platform.users.view")`);
   const before = body.slice(0, gateAt);
   // Only the session read may precede the gate (it redirects to /login); no data read may.
-  const dataBefore = /admin\.from\(|loadDirectoryAccess|listAllAuthUsers/.test(before);
+  const dataBefore = /admin\.from\(|loadDirectoryAccess|listAllAuthUsers|loadDirectory\(/.test(before);
   return { ok: gateAt > -1 && !dataBefore, detail: `gate at ${gateAt}, data read before it ${dataBefore}` };
 };
 const checkReads = (src: Src): R => {
@@ -59,9 +62,21 @@ const checkUnreadable = (src: Src): R => {
   const banner = /\(!authComplete \|\| Object\.values\(readable\)\.some\(v => !v\)\) && \(/.test(ws);
   return { ok: all && banner, detail: `all five sources ${all}, banner ${banner}` };
 };
+// HQ-USERS-CLASSIFY-01: the reads moved to load-directory.ts, so the Auth read is pinned there and the page must
+// still pass completeness through.
 const checkPaging = (src: Src): R => {
-  const p = code(src, "page");
-  return { ok: /listAllAuthUsers\(admin\)/.test(p) && !/listUsers\(\{ page: 1, perPage: 1000 \}\)/.test(p) && /authComplete=\{authList\.complete\}/.test(p), detail: "every Auth page, and completeness passed to the screen" };
+  const l = code(src, "loader"), p = code(src, "page");
+  return { ok: /listAllAuthUsers\(admin\)/.test(l) && !/listUsers\(\{ page: 1, perPage: 1000 \}\)/.test(l + p) && /authComplete: authList\.complete/.test(l) && /authComplete=\{dir\.authComplete\}/.test(p), detail: "every Auth page, and completeness passed to the screen" };
+};
+const checkLoader = (src: Src): R => {
+  const l = code(src, "loader");
+  const writes = /\.(insert|update|upsert|delete|rpc)\(|\.auth\.admin\.(update|delete|create|invite)/.test(l);
+  const classes = /loadClassifications\(admin\)/.test(l) && /accountType: typeOf\(classes, p\.id\)/.test(l);
+  // Exactly the reads page.tsx always made (status columns of clinical_authorizations, decision outcomes),
+  // moved here unchanged. A new table is a new read and fails until it is named.
+  const LOADER_READS = new Set(["profiles", "hospitals", "organisations", "departments", "competency_decisions", "clinical_authorizations"]);
+  const extra = [...l.matchAll(/\.from\("([a-z_]+)"\)/g)].map(m => m[1]).filter(t => !LOADER_READS.has(t));
+  return { ok: !writes && classes && extra.length === 0, detail: `writes ${writes}, reads the type for display ${classes}, unexpected tables ${extra.join(",")}` };
 };
 
 const plant = (k: K, from: string, to: string): Src => {
@@ -80,6 +95,7 @@ run("D2. the loader reads only access tables, writes nothing, and no patient / c
 run("D3. an HQ seat comes only from an hq_* office", checkHqOffices(RAW));
 run("D4. every source can say Not readable, and the page warns", checkUnreadable(RAW));
 run("D5. every Auth page is read", checkPaging(RAW));
+run("D6. the shared loader reads the account type for display and writes nothing", checkLoader(RAW));
 console.log("");
 red("D1 on a data read before the gate", checkPageGate(plant("page", `  const { admin, isOwner, capabilities } = await requireHqCapability("hq.platform.users.view");`, `  await loadDirectoryAccess(null);\n  const { admin, isOwner, capabilities } = await requireHqCapability("hq.platform.users.view");`)));
 red("D2 on a patient table", checkReads(plant("lib", `rows(admin.from("hq_position").select("code, name").limit(500)),`, `rows(admin.from("hq_position").select("code, name").limit(500)),\n    rows(admin.from("practice_patient").select("id")),`)));
@@ -87,7 +103,11 @@ red("D2 on Individual record content", checkReads(plant("lib", `rows(admin.from(
 red("D2 on a write", checkReads(plant("lib", `const rows = async (p: Promise<any>) =>`, `const w = (admin: any) => admin.from("tenants").update({});\nconst rows = async (p: Promise<any>) =>`)));
 red("D3 on tenant offices counted as HQ", checkHqOffices(plant("lib", `.like("office_type", "hq_%")`, "")));
 red("D4 on an unreadable source shown as none", checkUnreadable(plant("ws", `!readable.practice ? "Not readable" : `, "")));
-red("D5 on the first page only", checkPaging(plant("page", "listAllAuthUsers(admin),", "admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),")));
+red("D5 on the first page only", checkPaging(plant("loader", "listAllAuthUsers(admin),", "admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),")));
+red("D1 on the loader called before the gate", checkPageGate(plant("page", `  const { admin, isOwner, capabilities } = await requireHqCapability("hq.platform.users.view");`, `  await loadDirectory(null);\n  const { admin, isOwner, capabilities } = await requireHqCapability("hq.platform.users.view");`)));
+red("D6 on a loader that reads a patient table", checkLoader(plant("loader", `admin.from("hospitals").select("id, name, country"),`, `admin.from("hospitals").select("id, name, country"),
+    admin.from("practice_patient").select("id"),`)));
+red("D6 on a loader that writes", checkLoader(plant("loader", "  const defaultView = await loadDefaultView(admin, classes.available);", "  const defaultView = await loadDefaultView(admin, classes.available);\n  await admin.from(\"hq_account_classification\").upsert({});")));
 
 console.log(fails.length ? `\nRED -- ${pass} passed, ${fails.length} failed` : `\nALL GREEN -- ${pass} passed, 0 failed`);
 process.exit(fails.length ? 1 : 0);

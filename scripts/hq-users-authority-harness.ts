@@ -9,6 +9,9 @@
  *   U3  the owner gate runs the HQ gate first and then requires isOwner -- the view right opens no write
  *   U4  the page hands the owner flag to the workspace, and every account write control sits behind it
  *   U5  "the last super admin" is counted over role AND roles[]
+ *   U6  HQ-USERS-CLASSIFY-01: classification and the default view open with the owner gate, call only the two
+ *       audited 650 functions (no Auth, no table write: it grants and revokes nothing), the CSV export opens
+ *       with hqApiGate(hq.platform.users.view), and the Classify control sits behind the owner flag
  */
 import { readFileSync, existsSync } from "node:fs";
 
@@ -19,6 +22,8 @@ const F = {
   users: "src/app/api/super-admin/users/route.ts",
   page: "src/app/super-admin/users/page.tsx",
   ws: "src/app/super-admin/users/UsersWorkspace.tsx",
+  classify: "src/app/api/super-admin/users/classification/route.ts",
+  exportCsv: "src/app/api/super-admin/users/export/route.ts",
 } as const;
 type K = keyof typeof F;
 type Src = Map<string, string>;
@@ -71,6 +76,21 @@ const checkLastOwner = (src: Src): R => ({
   detail: "the last-super-admin guard must read role and roles[]",
 });
 
+const checkClassify = (src: Src): R => {
+  const c = code(src, "classify");
+  const h = handlers(c);
+  const gate = h.length === 1 && h[0].verb === "POST" && firstAwaitIs(h[0].body, `await hqOwnerApiGate(["hq.platform.users.view"])`);
+  const rpcs = [...c.matchAll(/\.rpc\("([a-z_]+)"/g)].map(m => m[1]).sort();
+  const onlyRpcs = rpcs.join(",") === "hq_account_classify,hq_users_default_view_set";
+  const noOtherWrite = !/\.from\(|\.auth\.|\.storage\./.test(c);
+  const e = handlers(code(src, "exportCsv"));
+  const exportGate = e.length === 1 && e[0].verb === "GET" && firstAwaitIs(e[0].body, `await hqApiGate(["hq.platform.users.view"])`);
+  const ui = /\{canManage && classificationAvailable && \(\s*<button onClick=\{\(\) => \{ setBulkOpen\(false\); setClassifyOpen\(true\); \}\}/.test(code(src, "ws"))
+    && /\{canManage && classificationAvailable && filters\.view !== defaultView && \(/.test(code(src, "ws"));
+  return { ok: gate && onlyRpcs && noOtherWrite && exportGate && ui,
+    detail: `owner gate ${gate}, only the 650 functions ${onlyRpcs} (${rpcs.join(",")}), no other write ${noOtherWrite}, export gate ${exportGate}, controls guarded ${ui}` };
+};
+
 const plant = (k: K, from: string, to: string): Src => {
   const s = RAW.get(F[k]) ?? ""; const n = s.replace(from, to);
   if (n === s) throw new Error(`plant did not apply in ${F[k]}: ${from.slice(0, 60)}`);
@@ -87,6 +107,7 @@ run("U2. list = hqApiGate(users.view); actions and every users handler = the own
 run("U3. the owner gate is the HQ gate followed by isOwner", checkOwnerGate(RAW));
 run("U4. the page passes the owner flag and every account write control sits behind it", checkUi(RAW));
 run("U5. the last-super-admin guard counts role and roles[]", checkLastOwner(RAW));
+run("U6. classification is owner-gated, writes only through the audited 650 functions, and its controls are owner-only", checkClassify(RAW));
 console.log("");
 red("U1 on a legacy role test", checkNoLegacy(plant("list", `const admin = ctx.admin;`, `const admin = ctx.admin;\n  const me: any = null; if (me?.role !== "super_admin") return null;`)));
 red("U2 on a list route that skips the gate", checkGates(plant("list", `const ctx = await hqApiGate(["hq.platform.users.view"]);`, `await Promise.resolve();\n  const ctx = await hqApiGate(["hq.platform.users.view"]);`)));
@@ -95,6 +116,11 @@ red("U2 on a users handler that skips requireOwner", checkGates(plant("users", `
 red("U3 on an owner gate that admits any holder", checkOwnerGate(plant("gate", "return ctx.isOwner ? ctx : NextResponse.json(", "return true ? ctx : NextResponse.json(")));
 red("U4 on unguarded owner-only row actions", checkUi(plant("ws", `{canManage && <>\n                            {u.status === "pending" && (`, `{<>\n                            {u.status === "pending" && (`)));
 red("U4 on a page that hands everyone the controls", checkUi(plant("page", "canManage={isOwner}", "canManage={true}")));
+red("U6 on classification behind the view right only (the bypass)", checkClassify(plant("classify", `await hqOwnerApiGate(["hq.platform.users.view"])`, `await hqApiGate(["hq.platform.users.view"])`)));
+red("U6 on classification that also writes an entitlement", checkClassify(plant("classify", `const trace = await currentTraceId();`, `const trace = await currentTraceId();\n  await ctx.admin.from("platform_membership").delete().eq("user_id", ctx.userId);`)));
+red("U6 on classification that touches Auth", checkClassify(plant("classify", `const trace = await currentTraceId();`, `const trace = await currentTraceId();\n  await ctx.admin.auth.admin.updateUserById(ctx.userId, {});`)));
+red("U6 on an export that skips the gate", checkClassify(plant("exportCsv", `const ctx = await hqApiGate(["hq.platform.users.view"]);`, `await Promise.resolve();\n  const ctx = await hqApiGate(["hq.platform.users.view"]);`)));
+red("U6 on a Classify control shown to every viewer", checkClassify(plant("ws", `{canManage && classificationAvailable && (`, `{classificationAvailable && (`)));
 red("U5 on a count over role only", checkLastOwner(plant("users", `.or("role.eq.super_admin,roles.cs.{super_admin}")`, `.eq("role", "super_admin")`)));
 
 console.log(fails.length ? `\nRED -- ${pass} passed, ${fails.length} failed` : `\nALL GREEN -- ${pass} passed, 0 failed`);
