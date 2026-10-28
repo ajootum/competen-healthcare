@@ -11,7 +11,7 @@ import {
 } from "@/lib/individual/scholar/store";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 
-import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, evidenceWithinRisk, refusalWords, scholarAiRunner, scholarRisk, scholarRiskGate } from "@/lib/individual/scholar/http";
+import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, withinRequestRisk, scholarAiRunner, scholarRisk, scholarRiskGate } from "@/lib/individual/scholar/http";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import {
   RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, describeViolations, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
@@ -183,31 +183,32 @@ export async function POST(req: Request) {
   // AI-FAIR-USE-01: through the Holdings allowance, the learning action as the activity. A refusal becomes
   // Learning Continuity (s7): said plainly, with what is saved for these sections -- and nothing was sent.
   const risk = await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages });
-  // COMPETEN-RESEARCH-01, research workflow: (1) the subject's clinical risk, classified as for every Learn request;
-  // with metering OFF the same gate decides BEFORE any search, so a topic no model is eligible for is refused without
-  // an external call. (3-5) search, retrieve and verify (learn-research.ts). (6-7) the same runner and checks below,
-  // on a risk subject that also holds what the research returned, so the evidence never lowers the classification.
+  // COMPETEN-RESEARCH-01, research workflow. DISCOVERY IS NOT GENERATION (commissioning GO, 28 Oct):
+  //   (1) the REQUEST's clinical risk is classified as for every Learn request (its prompt and passages). With metering
+  //       OFF the same gate decides BEFORE any search, so a request no model is eligible for is refused before anything
+  //       is sent to a research source -- high-risk generation stays refused exactly as without research.
+  //   (3-5) discovery: search, retrieve, verify (learn-research.ts). Every verified abstract may inform the answer, even
+  //       one that mentions medicines: reading published research is not clinical advice, and dropping it used to
+  //       exclude most legitimate educational evidence (about 4 of 5 abstracts on an oxygen-therapy step).
+  //   (6-7) generation runs on the REQUEST's risk and its eligible model, unchanged. What the research part SAYS is then
+  //       classified by the same published rules: research text that would lift the request above its own tier (a dose,
+  //       a medication instruction) is withheld as risk_raised, on top of the dosing and grounding checks.
+  // The runner is built first so the research it pays for carries the same action id as the AI call and its outcome.
+  const ai = scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", risk);
   let research: LearnResearch | null = null;
   if (mode === "research") {
     const gate = await scholarRiskGate(ctx, action as LearnAction, risk);
     if (gate) { const w = refusalWords(gate); return continuity(w.message, w.insufficient); }
-    research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle });
-    // Evidence that would lift the request above its own risk tier is not used (it stays listed as further reading):
-    // research never changes which models may answer. Clinical eligibility is exactly as without research.
-    if (research.evidence.length) {
-      const keep = await evidenceWithinRisk(ctx.admin, action as LearnAction, risk, researchEvidence(research).map(e => `${e.title}\n${e.abstract}`));
-      if (keep.some(k => !k)) research = { ...research, evidence: research.evidence.filter((_, k) => keep[k]), codes: [...research.codes, "dropped_risk"] };
-    }
+    research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle }, ai.actionId);
   }
   const evidence = research ? researchEvidence(research) : [];
-  const runRisk = evidence.length ? { ...risk, text: `${risk.text}\n\n${evidence.map(e => `${e.title}\n${e.abstract}`).join("\n\n")}`.slice(0, 20000) } : risk;
-  const ai = scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", runRisk);
   const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence }, ai.run);
   const refusal = ai.refusal();
   if (refusal) { const w = refusalWords(refusal); return continuity(w.message, w.insufficient); }
   // SCHOLAR-AI-OPT-01: the outcome of this one action, codes only. A check question is not an explanation.
   // COMPETEN-RESEARCH-01: a research answer is its own operation; the notes part and the research part each count.
-  const rr = r.ok ? r.research : null;
+  let rr = r.ok ? r.research : null;
+  if (rr?.ok && !(await withinRequestRisk(ctx.admin, action as LearnAction, risk, [rr.text]))[0]) rr = { ok: false, reason: "risk_raised" };
   const researchCodes = research ? [`research_${research.state}`, ...research.codes, ...(rr ? [rr.ok ? "research_shown" : `research_${rr.reason}`] : [])] : [];
   await recordScholarOutcome(ctx.admin, ai, {
     operation: `${mode === "research" ? "individual_scholar_learn_research" : "individual_scholar_learn"}:${action}`, outputKind: action === "check" ? "other" : "explanation",

@@ -176,13 +176,12 @@ export async function scholarRiskGate(ctx: IndividualContext, activity: ScholarA
 }
 
 /**
- * COMPETEN-RESEARCH-01: which retrieved research texts stay within the request's OWN risk tier. The request is
- * classified exactly as before; a research text that would lift it (an abstract about medication on an oxygen-therapy
- * step, say) is not used as evidence -- so research never raises what the request asks the model to do, and never
- * lowers it either. Each text is classified WITH the request's subject, by the same published rules. An unreadable
- * policy keeps none (fail closed: the answer comes from the notes alone).
+ * COMPETEN-RESEARCH-01: which texts stay within the request's OWN risk tier, classified WITH the request's subject by the
+ * same published rules. Learn applies it to what the research part WROTE (generation), never to what was found
+ * (discovery): research text that would lift the request above its tier is withheld, so research never raises what is
+ * shown beyond the eligible model's tier. An unreadable policy keeps none (fail closed: the notes part alone is shown).
  */
-export async function evidenceWithinRisk(admin: unknown, activity: ScholarAiActivity, risk: RiskContext, texts: readonly string[]): Promise<boolean[]> {
+export async function withinRequestRisk(admin: unknown, activity: ScholarAiActivity, risk: RiskContext, texts: readonly string[]): Promise<boolean[]> {
   const { policy, readable } = await loadProductPolicy(admin, "scholar");
   if (!readable || !texts.length) return texts.map(() => false);
   const floor = ((policy.activities as Record<string, { riskFloor?: string }>)[activity]?.riskFloor ?? "standard_educational") as RiskTier;

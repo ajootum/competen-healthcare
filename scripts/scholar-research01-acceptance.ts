@@ -13,9 +13,12 @@
  *   R5  a high-risk topic is still refused: classified high-risk clinical, no eligible model, and staging's real gate
  *       (the one the route calls BEFORE any search, scholarRiskGate) refuses it
  *   R6  with nothing published, Learn is notes only, staging's engine is not operational and no seeded source is invocable
+ *   R7  research usage (630) is recorded under the Scholar AI action and attributed to its outcome (600)
+ *   R8  retention runs through the existing job runner (plat_job_runs) and keeps current records
  *
  * ⚠ STAGING ONLY. It writes NO configuration: the research policy and the D1 routing lists are applied in memory. The
- * only rows it causes are the gateway's own plat_ai_requests usage rows for the R4 call (operation
+ * rows it causes: the gateway's plat_ai_requests rows for the R4 call, this run's plat_research_requests and plat_ai_outcomes
+ * rows (codes and counts only), and one plat_job_runs row for R8 (operation
  * individual_scholar_learn_research), exactly as scripts/run-routing-evaluation.ts does.
  *
  *   npx tsx scripts/scholar-research01-acceptance.ts
@@ -52,7 +55,11 @@ const note = (s: string) => console.log(`        ${s}`);
   const { runLearn, LEARN_RESEARCH_OPERATION } = await import("../src/lib/individual/scholar/generation");
   const { generate } = await import("../src/lib/ai/client") as any;
   const { aiStatus } = await import("../src/lib/ai/config");
-  const { evidenceWithinRisk } = await import("../src/lib/individual/scholar/http");
+  const { withinRequestRisk } = await import("../src/lib/individual/scholar/http");
+  const { researchUsage, researchCostByOutcome } = await import("../src/lib/holdings/research/load");
+  const { recordAiOutcome } = await import("../src/lib/ai/outcomes");
+  const { runJob } = await import("../src/lib/platform/jobs");
+  const ACTION = (await import("node:crypto")).randomUUID();
   const { loadProductPolicy, loadModelRouting, resolveRiskSubject, unmeteredGate } = await import("../src/lib/ai/allowance");
   const { classifyRisk } = await import("../src/lib/ai/clinical-risk");
   const { routeCandidates, selectRoute, clinicalGate } = await import("../src/lib/ai/model-routing");
@@ -68,7 +75,9 @@ const note = (s: string) => console.log(`        ${s}`);
   const usage: any[] = [];
 
   console.log("R1  live research");
-  const research = await runResearch("oxygen therapy target saturation", plan, { usage: { record: async (row: any) => { usage.push(row); }, allow: async () => true } });
+  // Real research usage rows on staging (630), under this action's id, through the engine's own recorder and budgets.
+  const recorder = researchUsage(admin, { actionId: ACTION, product: "scholar", operation: LEARN_RESEARCH_OPERATION, workflow: "basic", policy: plan.policy });
+  const research = await runResearch("oxygen therapy target saturation", plan, { usage: { record: async (row: any) => { usage.push(row); await recorder.record(row); }, allow: recorder.allow } });
   const lr = { state: research.state as any, message: null, query: research.query, scholarLink: research.scholarLink, items: research.items, evidence: research.evidence, calls: research.calls, codes: research.codes,
     sourceVersions: research.sourceVersions, excerptChars: DEFAULT_POLICY.rules.excerptChars, furtherReading: true, licensing: Object.fromEntries(Object.values(registry).map((r: any) => [r.id, r.licensing])) };
   note(`research usage recorded apart from AI: ${usage.map(u => `${u.provider} ${u.capability} ${u.requests} req ${u.outcome} ${u.costUsd}`).join("; ")}`);
@@ -87,12 +96,15 @@ const note = (s: string) => console.log(`        ${s}`);
   const risk = classifyRisk(aiPolicy.risk, await resolveRiskSubject(admin, subject), (aiPolicy.activities.teach?.riskFloor ?? "standard_educational") as any);
   note(`risk: ${risk.tier} (${risk.rule})`);
   ok("R2. the Research & Explain request on oxygen therapy is classified clinical educational", risk.tier === "clinical_educational");
-  // The route's own filter: evidence that would lift the request's tier is not used (it stays as further reading).
-  const keep = await evidenceWithinRisk(admin, "teach", subject, researchEvidence(lr).map(e => `${e.title}\n${e.abstract}`));
-  lr.evidence = lr.evidence.filter((_: number, k: number) => keep[k]);
+  // Discovery is not generation: every verified abstract may inform the answer (the route no longer drops any).
   const evidence = researchEvidence(lr);
-  note(`evidence kept within the request's tier: ${keep.filter(Boolean).length} of ${keep.length}`);
-  ok("R2b. some verified evidence stays within the request's own risk tier", evidence.length > 0);
+  const wouldHaveDropped = (await withinRequestRisk(admin, "teach", subject, evidence.map(e => `${e.title}\n${e.abstract}`))).filter(k => !k).length;
+  note(`verified evidence given to the model: ${evidence.length} (the old discovery filter would have dropped ${wouldHaveDropped})`);
+  ok("R2b. legitimate educational research is not excluded at discovery: every verified abstract is evidence", evidence.length === lr.evidence.length && evidence.length > 0);
+  // Generation stays restricted: research text that would lift the request above its tier is withheld.
+  const dosing = "Patients received an insulin infusion and the dose was titrated to glucose with intravenous antibiotics [E1].";
+  const bounded = (await withinRequestRisk(admin, "teach", subject, [dosing]))[0];
+  ok("R2c. a research part carrying high-risk clinical detail would be withheld (risk_raised) by the published rules", bounded === false);
 
   console.log("R3  routing");
   const staged = await loadModelRouting(admin);
@@ -108,7 +120,9 @@ const note = (s: string) => console.log(`        ${s}`);
   if (!route) { ok("R4. the model answered", false, "no eligible route"); }
   const raw: string[] = [];
   const r: any = !route ? { ok: false, error: "no_route" } : await runLearn(EVAL_USER, { action: "teach", question: "Teach me this step.", passages: passages as any, references: [], depth: "standard", background: false, history: [], learnerContext: null, research: evidence },
-    async (g: any) => { seen.push(g); const x = await generate({ ...g, route }); if (x.ok) raw.push(x.text); return x; });
+    async (g: any) => { seen.push(g); const x = await generate({ ...g, route, context: { ...g.context, actionId: ACTION } }); if (x.ok) raw.push(x.text); return x; });
+  // The route's generation-side check on what the research part wrote, exactly as learn/act applies it.
+  if (r.ok && r.research?.ok && !(await withinRequestRisk(admin, "teach", subject, [r.research.text]))[0]) r.research = { ok: false, reason: "risk_raised" };
   if (!r.ok) { ok("R4. the model answered", false, r.error); }
   else {
     note(`model ${r.model} prompt ${r.promptVersion} operation ${seen[0]?.context?.operation}`);
@@ -131,6 +145,27 @@ const note = (s: string) => console.log(`        ${s}`);
   const gate: any = await unmeteredGate(admin, "scholar", "teach", "reasoning", { text: HIGH_RISK, competencyIds: [], topicTerms: [] });
   note(`risk: ${hr.tier} (${hr.rule}); D1 route: ${hrRoute ? hrRoute.model : "none"}; staging gate: ${gate.ok ? "ok" : gate.error}`);
   ok("R5. still refused: high-risk clinical, no eligible model under D1 routing, and the pre-search gate refuses", hr.tier === "high_risk_clinical" && hrRoute === null && !gate.ok && gate.error === "not_eligible");
+
+  console.log("R7  cost attribution (staging, 630)");
+  if (r.ok) {
+    const shown = (r.check.ok ? 1 : 0) + (r.research?.ok ? 1 : 0), withheld = (r.check.ok ? 0 : 1) + (r.research && !r.research.ok ? 1 : 0);
+    await recordAiOutcome(admin, { actionId: ACTION, product: "scholar", activity: "learn_research:teach", operation: `${LEARN_RESEARCH_OPERATION}:teach`, outputKind: "explanation",
+      outcome: shown ? (withheld ? "partial" : "accepted") : "rejected", accepted: shown, rejected: withheld, reasons: ["acceptance_run"], promptVersion: r.promptVersion });
+  }
+  const urows = (await admin.from("plat_research_requests").select("action_id, provider, capability, requests, outcome, cost_usd").eq("action_id", ACTION)).data ?? [];
+  const orows = (await admin.from("plat_ai_outcomes").select("action_id, outcome").eq("action_id", ACTION)).data ?? [];
+  const byOutcome = researchCostByOutcome(urows, orows);
+  note(`research rows for action ${ACTION.slice(0, 8)}: ${urows.length} (${urows.map((u: any) => `${u.provider}/${u.capability}`).join(", ")}); outcome ${orows[0]?.outcome ?? "none"}`);
+  note(`cost by outcome: ${JSON.stringify(byOutcome)}`);
+  ok("R7. research requests and spend are recorded under the Scholar AI action and attributed to its outcome",
+    urows.length > 0 && orows.length === 1 && byOutcome.unlinked.actions === 0 && Object.values(byOutcome).reduce((s, b) => s + b.requests, 0) === urows.reduce((s: number, u: any) => s + u.requests, 0));
+
+  console.log("R8  retention through the existing job runner (staging)");
+  const job: any = await runJob(admin, "research_retention", "manual", null);
+  const run = (await admin.from("plat_job_runs").select("status, detail").eq("job_key", "research_retention").order("started_at", { ascending: false }).limit(1)).data?.[0];
+  const stillThere = (await admin.from("plat_research_requests").select("id", { count: "exact", head: true }).eq("action_id", ACTION)).count ?? 0;
+  note(`job: ${job.ok ? "ok" : job.error} -- ${run?.status}: ${run?.detail}`);
+  ok("R8. the retention job ran in plat_job_runs and kept today's records", !!job.ok && run?.status === "success" && stillThere === urows.length);
 
   console.log("R6  defaults");
   const def = resolvePolicy([]).scholarResearch;

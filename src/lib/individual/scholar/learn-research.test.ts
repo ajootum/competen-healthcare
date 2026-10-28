@@ -124,3 +124,21 @@ describe("policy: Scholar's own settings; whether research can run is the engine
     expect(resolvePolicy([big]).scholarResearch.dailyMax).toBeLessThanOrEqual(50);
   });
 });
+
+describe("commissioning GO: discovery is not generation", () => {
+  it("saying a medicine is prescribed is not a dose; a dose, unit or titration still is", () => {
+    const ev = [{ title: "Oxygen therapy review", journal: "J", year: 2022, abstract: "Oxygen is commonly prescribed and life-saving, but like any drug it can cause adverse effects. The dose was titrated in trials." }];
+    expect(checkResearchPart("Oxygen is commonly prescribed and life-saving, but like any drug it can cause adverse effects [E1].", ev, NOTES, "")).toMatchObject({ ok: true });
+    expect(checkResearchPart("The dose was titrated in trials [E1].", ev, NOTES, "")).toMatchObject({ ok: false, reason: "dosing" });
+  });
+});
+
+describe("owner pilot: the library mode offers approved content only", () => {
+  it("an unreviewed or draft match is not offered", () => {
+    const source = { collections: false as const, catalogue: [
+      { id: "k1", code: "RESP-1", title: "Oxygen therapy administration", outcomes: ["Explain oxygen target saturation"], contentStatus: "draft" },
+      { id: "k2", code: "RESP-2", title: "Oxygen therapy monitoring", outcomes: ["Monitor oxygen target saturation"], contentStatus: "approved" },
+    ] as never };
+    expect(libraryReferences("oxygen target saturation therapy", source, []).map(r => r.competencyId)).toEqual(["k2"]);
+  });
+});

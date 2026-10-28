@@ -208,16 +208,18 @@ export function artefactKey(input: { action: string; depth: string; chunkIds: re
 }
 
 /**
- * COMPETEN-RESEARCH-01, "My notes + approved Competen library": the reference source's entries (the governed CFCA
- * library HQ offers, at the policy's minimum review state) that match the topic, labelled as library and by
+ * COMPETEN-RESEARCH-01, "My notes + approved Competen library": the reference source's APPROVED entries (the governed
+ * CFCA library HQ offers, clinically approved as they stand) that match the topic, labelled as library and by
  * referenceStatus. They ground only their own words, like every governed reference. Ones already given are not repeated.
  */
 export function libraryReferences(text: string, source: ReferenceSource, have: readonly GovernedReference[], limit = 3): GovernedReference[] {
   const catalogue = source.catalogue ?? [];
   const known = new Map(catalogue.map(c => [c.id, c]));
   const entries = catalogue.map(c => ({ id: c.id, code: c.code ?? null, title: c.title, outcomes: [...(c.outcomes ?? [])], contentStatus: c.contentStatus ?? "unreviewed" }));
-  return matchLibrary(text, entries, limit + have.length)
+  // Owner (pilot, 28 Oct): the library mode offers APPROVED content only -- clinically approved as it stands (395).
+  return matchLibrary(text, entries.filter(e => e.contentStatus === "approved"), limit + have.length)
     .filter(m => !have.some(h => h.competencyId === m.id))
-    .slice(0, limit)
-    .map(m => ({ competencyId: m.id, title: m.title, code: m.code, outcome: m.outcome, library: true, ...referenceStatus(known.get(m.id), m.outcome) }));
+    .map(m => ({ competencyId: m.id, title: m.title, code: m.code, outcome: m.outcome, library: true, ...referenceStatus(known.get(m.id), m.outcome) }))
+    .filter(r => r.approved)
+    .slice(0, limit);
 }

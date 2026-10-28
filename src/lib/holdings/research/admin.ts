@@ -9,7 +9,7 @@ import {
   LIFECYCLE, REGISTRY_PATH, RESEARCH_SCOPE, applyEdit, hasAdapter, resolveRegistry, transitionNeeds,
   type Lifecycle, type ProviderRecord, type Registry,
 } from "./registry";
-import { summariseResearchUsage } from "./load";
+import { researchCostByOutcome, summariseResearchUsage } from "./load";
 
 // ── THE RESEARCH SOURCES & EVIDENCE STUDIO, SERVER SIDE ── COMPETEN-RESEARCH-01 ADDENDUM V2 item 12 ───────────────────
 //
@@ -60,8 +60,8 @@ export async function loadStudioView(admin: any) {
   }]));
   const since = new Date(Date.now() - 14 * 86400000).toISOString();
   const [usage, outcomes, aiCost, versions] = await Promise.all([
-    admin.from("plat_research_requests").select("provider, requests, outcome, latency_ms, cost_usd").gte("created_at", since).limit(20000),
-    admin.from("plat_ai_outcomes").select("outcome, rejection_reasons").like("operation", "individual_scholar_learn_research%").gte("created_at", since).limit(5000),
+    admin.from("plat_research_requests").select("action_id, provider, requests, outcome, latency_ms, cost_usd").gte("created_at", since).limit(20000),
+    admin.from("plat_ai_outcomes").select("action_id, outcome, rejection_reasons").like("operation", "individual_scholar_learn_research%").gte("created_at", since).limit(5000),
     admin.from("plat_ai_requests").select("cost_usd").eq("operation", "individual_scholar_learn_research").gte("created_at", since).limit(20000),
     admin.from("workspace_config_versions").select("id, label, note, published_by_name, created_at").eq("scope_type", RESEARCH_SCOPE.scopeType).eq("scope_ref", RESEARCH_SCOPE.scopeRef).order("created_at", { ascending: false }).limit(10),
   ]);
@@ -71,6 +71,8 @@ export async function loadStudioView(admin: any) {
     published, draft, pending, readiness, workflowReadiness,
     analytics: {
       usage: usage.error ? null : summariseResearchUsage(usage.data ?? []),
+      // Research cost attributed to the Scholar AI action it served, by that action's outcome (joined on action_id).
+      costByOutcome: usage.error || outcomes.error ? null : researchCostByOutcome(usage.data ?? [], outcomes.data ?? []),
       outcomes: outcomes.error ? null : {
         total: (outcomes.data ?? []).length,
         accepted: (outcomes.data ?? []).filter((o: any) => o.outcome === "accepted").length,

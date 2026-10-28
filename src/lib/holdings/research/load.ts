@@ -83,3 +83,30 @@ export function summariseResearchUsage(rows: readonly { provider: string; reques
   }
   return [...by.values()].map(({ lat, latN, ...x }) => ({ ...x, costUsd: +x.costUsd.toFixed(4), avgLatencyMs: latN ? Math.round(lat / latN) : null })).sort((a, b) => b.calls - a.calls);
 }
+
+export type CostBucket = "accepted" | "partial" | "safe_non_answer" | "error" | "unlinked";
+export type CostByOutcome = Record<CostBucket, { actions: number; requests: number; costUsd: number }>;
+
+/**
+ * Pure. Research usage and cost attributed to the AI action it served and that action's outcome (plat_ai_outcomes,
+ * migration 600), joined on action_id: an answer shown (accepted), partly shown, a safe non-answer (everything
+ * withheld by the checks), an error, or unlinked (no action id, or no outcome recorded for it).
+ */
+export function researchCostByOutcome(
+  usage: readonly { action_id: string | null; requests: number; cost_usd: number | string }[],
+  outcomes: readonly { action_id: string; outcome: string }[],
+): CostByOutcome {
+  const of = new Map(outcomes.map(o => [o.action_id, o.outcome]));
+  const out = Object.fromEntries((["accepted", "partial", "safe_non_answer", "error", "unlinked"] as CostBucket[]).map(b => [b, { actions: 0, requests: 0, costUsd: 0 }])) as CostByOutcome;
+  const seen = new Map<CostBucket, Set<string>>();
+  for (const u of usage) {
+    const o = u.action_id ? of.get(u.action_id) : undefined;
+    const b: CostBucket = !o ? "unlinked" : o === "accepted" ? "accepted" : o === "partial" ? "partial" : o === "rejected" || o === "redirected" ? "safe_non_answer" : "error";
+    out[b].requests += Number(u.requests) || 0;
+    out[b].costUsd += Number(u.cost_usd) || 0;
+    const s = seen.get(b) ?? new Set<string>(); s.add(u.action_id ?? `row-${s.size}`); seen.set(b, s);
+  }
+  for (const [b, s] of seen) out[b].actions = s.size;
+  for (const b of Object.keys(out) as CostBucket[]) out[b].costUsd = +out[b].costUsd.toFixed(6);
+  return out;
+}

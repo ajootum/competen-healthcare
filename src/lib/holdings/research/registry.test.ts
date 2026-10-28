@@ -148,3 +148,28 @@ describe("the common evidence model keeps verified metadata apart from AI interp
     expect(e.verified).toMatchObject({ abstract: "A", fullTextRefs: [], reuse: "private_evidence_excerpt_only", sourceVersion: "pubmed@v3" });
   });
 });
+
+describe("commissioning GO: cost attribution and retention", () => {
+  it("research cost is attributed to the outcome of the AI action it served", async () => {
+    const { researchCostByOutcome } = await import("./load");
+    const out = researchCostByOutcome(
+      [{ action_id: "a1", requests: 3, cost_usd: 0.01 }, { action_id: "a1", requests: 1, cost_usd: 0 }, { action_id: "a2", requests: 2, cost_usd: 0.02 }, { action_id: "a3", requests: 1, cost_usd: 0 }, { action_id: null, requests: 1, cost_usd: 0 }],
+      [{ action_id: "a1", outcome: "accepted" }, { action_id: "a2", outcome: "rejected" }, { action_id: "a3", outcome: "error" }],
+    );
+    expect(out.accepted).toEqual({ actions: 1, requests: 4, costUsd: 0.01 });
+    expect(out.safe_non_answer).toEqual({ actions: 1, requests: 2, costUsd: 0.02 });
+    expect(out.error.actions).toBe(1);
+    expect(out.unlinked.actions).toBe(1);
+  });
+  it("retention deletes only the engine cache and zero-cost usage, and nothing when configuration is unreadable", async () => {
+    const { pruneResearchRecords } = await import("./retention");
+    const calls: string[] = [];
+    const chain = (t: string) => { const q: any = { delete: () => q, like: (c: string, v: string) => (calls.push(`${t}:${c}=${v}`), q), eq: (c: string, v: unknown) => (calls.push(`${t}:${c}=${v}`), q), lt: async (c: string) => (calls.push(`${t}:${c}<`), { count: 2, error: null }) }; return q; }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const admin = { from: (t: string) => (t === "workspace_config_overrides" ? { select: () => ({ eq: () => ({ eq: () => ({ in: async () => ({ data: [], error: null }) }) }) }) } : chain(t)) };
+    const r = await pruneResearchRecords(admin, new Date("2026-10-28T03:00:00Z"));
+    expect(r).toMatchObject({ ran: true, cache: 4, usage: 2, days: 30 });
+    expect(calls).toEqual(["individual_scholar_research_cache:provider=holdings:%", "individual_scholar_research_cache:expires_at<", "individual_scholar_research_cache:provider=holdings:%", "individual_scholar_research_cache:created_at<", "plat_research_requests:cost_usd=0", "plat_research_requests:created_at<"]);
+    const unreadable = { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ in: async () => ({ data: null, error: { message: "down" } }) }) }) }), delete: () => { throw new Error("must not delete"); } }) };
+    expect(await pruneResearchRecords(unreadable)).toMatchObject({ ran: false, cache: 0, usage: 0 });
+  });
+});

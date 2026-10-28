@@ -141,6 +141,15 @@ export function ResearchStudio(props: {
             <thead><tr className="border-b border-gray-200 text-[11.5px] uppercase tracking-[0.08em] text-gray-500"><th scope="col" className="py-1.5">Source</th><th scope="col">Calls</th><th scope="col">HTTP requests</th><th scope="col">Failed</th><th scope="col">Over budget</th><th scope="col">Cache hits</th><th scope="col">Avg latency</th><th scope="col">Research cost</th></tr></thead>
             <tbody>{view.analytics.usage.map((u: any) => <tr key={u.provider} className="border-b border-gray-100"><th scope="row" className="py-1.5 font-normal">{u.provider}</th><td>{u.calls}</td><td>{u.requests}</td><td>{u.failed}</td><td>{u.budget}</td><td>{u.cache}</td><td>{u.avgLatencyMs === null ? "Not measured" : `${u.avgLatencyMs} ms`}</td><td>${u.costUsd}</td></tr>)}</tbody>
           </table></div>)}
+        {view.analytics.costByOutcome && (
+          <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[560px] text-left text-[13px]">
+            <caption className="text-left text-[12.5px] font-semibold text-gray-800">Research cost by the outcome of the Scholar answer it served</caption>
+            <thead><tr className="border-b border-gray-200 text-[11.5px] uppercase tracking-[0.08em] text-gray-500"><th scope="col" className="py-1.5">Outcome</th><th scope="col">Answers</th><th scope="col">HTTP requests</th><th scope="col">Research cost</th></tr></thead>
+            <tbody>{([["accepted", "Shown"], ["partial", "Partly shown"], ["safe_non_answer", "Safe non-answer (withheld)"], ["error", "Error"], ["unlinked", "Not linked to an answer"]] as const).map(([k, label]) => {
+              const b = view.analytics.costByOutcome[k];
+              return <tr key={k} className="border-b border-gray-100"><th scope="row" className="py-1.5 font-normal">{label}</th><td>{b.actions}</td><td>{b.requests}</td><td>${b.costUsd}</td></tr>;
+            })}</tbody>
+          </table></div>)}
         <p className="mt-3 text-[13px] text-gray-800">AI cost of Research &amp; Explain answers: {view.analytics.aiCostUsd === null ? "not readable" : `$${view.analytics.aiCostUsd}`}.</p>
         {view.analytics.outcomes && <p className="mt-1 text-[13px] text-gray-800">Outcomes: {view.analytics.outcomes.total} answers · {view.analytics.outcomes.accepted} accepted · {view.analytics.outcomes.partial} partly · {view.analytics.outcomes.rejected} withheld.{view.analytics.outcomes.reasons.length ? ` Reasons: ${view.analytics.outcomes.reasons.map(([r, n]: [string, number]) => `${r} (${n})`).join(", ")}.` : ""}</p>}
       </section>

@@ -53,7 +53,8 @@ export async function scholarResearchOperational(admin: unknown, engine?: Resear
 }
 
 /** The research for one Learn request, within the learner's limits and the engine's configuration. */
-export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPolicy, input: { question?: string | null; topics: readonly string[]; title?: string | null }): Promise<LearnResearch> {
+/** `actionId`: the Scholar AI action this research serves, so its usage and cost are attributed to that action's outcome. */
+export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPolicy, input: { question?: string | null; topics: readonly string[]; title?: string | null }, actionId: string | null = null): Promise<LearnResearch> {
   const engine = await loadResearchEngine(ctx.admin);
   if (!p.modes.includes("research") || !researchOperational(engine, "scholar", "learn")) return none("off", "Research & Explain is not available on Scholar at the moment.", ["off"]);
   const q = researchQuery(input);
@@ -62,7 +63,11 @@ export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPo
   const rules = { excerptChars: engine.policy.rules.excerptChars, furtherReading: engine.policy.rules.showFurtherReading, licensing: Object.fromEntries(Object.values(engine.registry).map(r => [r.id, r.licensing])) };
   const key = researchKey(q.query, plan);
   const cached = await readResearchCache(ctx.admin, key, new Date().toISOString());
-  if (cached) return { ...fromResult(cachedResult(q.query, cached.sources as unknown[], plan)), ...rules };
+  const usage = researchUsage(ctx.admin, { actionId, product: "scholar", operation: LEARN_RESEARCH_OPERATION, workflow: "basic", policy: plan.policy });
+  if (cached) {
+    await usage.record({ provider: "cache", capability: "search", requests: 0, results: cached.sources.length, outcome: "cache", latencyMs: 0, costUsd: 0 });
+    return { ...fromResult(cachedResult(q.query, cached.sources as unknown[], plan)), ...rules };
+  }
 
   const [count, spend] = await Promise.all([learnResearchToday(ctx.admin, ctx.userId), aiSpendToday(ctx.admin, ctx.userId, LEARN_RESEARCH_OPERATION)]);
   if (count === null || spend === null) return none("failed", "Your research allowance could not be checked, so no research was run.", ["limit_unreadable"], q.query);
@@ -71,11 +76,11 @@ export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPo
 
   const r = await runResearch(q.query, plan, {
     cache: { read: async () => null, write: (k, items, providers, days) => writeResearchCache(ctx.admin, { key: k, provider: `holdings:${providers}`, policyVersion: `research:${Object.values(plan.registry).filter(x => x.status === "active").map(x => `${x.id}@${x.version}`).join(",")}`.slice(0, 200), sources: items as never, searches: 1, days }) },
-    usage: researchUsage(ctx.admin, { actionId: null, product: "scholar", operation: LEARN_RESEARCH_OPERATION, workflow: "basic", policy: plan.policy }),
+    usage,
   });
   // One row per fresh search: counts and codes only, never the query text. It is what the learner's daily limit counts.
   await audit(ctx, LEARN_RESEARCH_AUDIT_ACTION, LEARN_RESEARCH_ENTITY, null,
-    { query_chars: q.query.length, state: r.state, items: r.items.length, evidence: r.evidence.length, calls: r.calls, codes: r.codes });
+    { action_id: actionId, query_chars: q.query.length, state: r.state, items: r.items.length, evidence: r.evidence.length, calls: r.calls, codes: r.codes });
   return { ...fromResult(r), ...rules };
 }
 

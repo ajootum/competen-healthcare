@@ -392,9 +392,11 @@ const LEARN_INSTRUCTION: Record<LearnAction | "check" | "clarify", string> = {
 export const RESEARCH_MARKER = "FROM RESEARCH:";
 /** What the model is shown of one verified external item. Evidence only: an item without an abstract never gets here. */
 export type ResearchEvidence = { title: string; journal: string | null; year: number | null; abstract: string };
-export type ResearchReason = "no_citation" | "bad_citation" | "mixed" | "uncited_sentence" | "identifier" | "dosing" | "ungrounded" | "too_long";
+export type ResearchReason = "no_citation" | "bad_citation" | "mixed" | "uncited_sentence" | "identifier" | "dosing" | "ungrounded" | "too_long" | "risk_raised";
 export type ResearchCheck = { ok: true; text: string; cited: number[] } | { ok: false; reason: ResearchReason; violations?: PhrasingViolation[] };
-const RESEARCH_DOSING = /\b(mg|mcg|micrograms?|milligrams?|ml|millilitres?|milliliters?|mmol|iu|units?\/kg|dose[sd]?|dosage|dosing|prescrib\w*|titrat\w*|bolus|regimen)\b/i;
+// Doses, units and dose adjustment. Whether a medicine is prescribed is a fact, not a dose: medication ADVICE is judged
+// by the published risk rules on what the research part wrote (withinRequestRisk, risk_raised), not by a word list.
+const RESEARCH_DOSING = /\b(mg|mcg|micrograms?|milligrams?|ml|millilitres?|milliliters?|mmol|iu|units?\/kg|dose[sd]?|dosage|dosing|titrat\w*|bolus|regimen)\b/i;
 
 export const RESEARCH_WITHHELD: Record<ResearchReason, string> = {
   no_citation: "The research summary did not say which source each point came from, so it was not shown.",
@@ -405,6 +407,7 @@ export const RESEARCH_WITHHELD: Record<ResearchReason, string> = {
   dosing: "The research summary mentioned doses or prescribing, so it was not shown. Your course materials and supervisors are the place for that.",
   ungrounded: "The research summary included details the sources' abstracts do not contain, so it was not shown.",
   too_long: "The research summary was too long, so it was not shown.",
+  risk_raised: "The research summary went into clinical detail beyond what Scholar may explain for this topic, so it was not shown. The sources are listed for you to read.",
 };
 
 /** Pure. The research part: cited sentence by sentence, only from the given abstracts (and the notes/what was asked). */

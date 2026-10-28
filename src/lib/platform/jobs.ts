@@ -13,6 +13,7 @@ import { runOrchestration } from "@/lib/delivery/orchestrator";
 import { scanReminders } from "@/lib/delivery/reminders";
 import { scanDuplicateNotices, scanProfessionalReminders } from "@/lib/individual/professional/reminders";
 import { processEvents } from "@/lib/delivery/consumer";
+import { pruneResearchRecords } from "@/lib/holdings/research/retention";
 
 export type JobDef = { key: string; name: string; description: string; category: string; schedule: string; runnable: boolean };
 
@@ -28,6 +29,7 @@ export const JOB_REGISTRY: JobDef[] = [
   { key: "delivery_orchestration", name: "Competency Delivery Orchestration", description: "Evaluate active assignment rules and materialise pending competency deliveries across all tenants (CDP-001).", category: "competency", schedule: "0 4 * * *", runnable: true },
   { key: "learning_reminders", name: "Learning Reminders", description: "Proactively remind learners of expiring credentials and competencies, once per due milestone (CDP-011).", category: "competency", schedule: "0 6 * * *", runnable: true },
   { key: "individual_professional_reminders", name: "Competen Professional Reminders", description: "Email people who hold Competen Professional about credentials, registrations and qualifications they recorded that are about to expire, on the schedule and for the kinds set in the Individual policy, once per expiry date and offset, and post an in-account notice about a CPD entry they logged that a Competen Learning completion now counts once (COMPETEN-IND-007, COMPETEN-PROFESSIONAL-PROFILE-01).", category: "individual", schedule: "0 6 * * *", runnable: true },
+  { key: "research_retention", name: "Research Record Retention", description: "Remove research cache records and zero-cost research usage rows past the retention published in HQ Research Sources. Research spend rows, audit and AI records are kept (COMPETEN-RESEARCH-01).", category: "research", schedule: "0 3 * * *", runnable: true },
   { key: "delivery_event_consumer", name: "Delivery Event Consumer", description: "Drain delivery-relevant domain events; auto-remediate failed assessments (CDP-015).", category: "competency", schedule: "0 * * * *", runnable: true },
 ];
 
@@ -93,6 +95,12 @@ const HANDLERS: Record<string, (admin: any) => Promise<string>> = {
     // A failed send is released for the next run, and counted here so it stays visible (counts only).
     if (r.failed) await emitPlatformEvent(admin, { event_type: "individual.professional_reminders_failed", severity: "warning", payload: { failed: r.failed } });
     return `${r.sent} reminder(s) sent${r.skipped ? ` · ${r.skipped} already sent` : ""}${r.failed ? ` · ${r.failed} not delivered, retried next run` : ""}${d.posted || d.failed ? ` · ${d.posted} duplicate notice(s) posted in-account${d.failed ? `, ${d.failed} retried next run` : ""}` : ""}`;
+  },
+  research_retention: async (admin) => {
+    const r = await pruneResearchRecords(admin);
+    if (!r.ran) return `skipped: ${r.reason}`;
+    if (r.cache || r.usage) await emitPlatformEvent(admin, { event_type: "research.retention_applied", severity: "info", payload: { cache: r.cache, usage: r.usage, days: r.days } });
+    return `${r.cache} research cache record(s) and ${r.usage} zero-cost usage row(s) past ${r.days} day(s) removed · spend, audit and AI records kept`;
   },
   delivery_event_consumer: async (admin) => {
     const r = await processEvents(admin);
