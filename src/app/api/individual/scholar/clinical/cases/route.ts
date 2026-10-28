@@ -9,7 +9,7 @@ import { findLibraryCases } from "@/lib/cases/library";
 import { caseHistory, getPassage, insertPrivateCase, listMaterials, listPrivateCases, sectionLinks, storedPrivateCase } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
-import { parseScope, resolveScope, type LearningScope } from "@/lib/individual/scholar/learn";
+import { parseScope, resolveScope, scopeText, type LearningScope } from "@/lib/individual/scholar/learn";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk, routingVersion } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runCaseBlueprint } from "@/lib/individual/scholar/generation";
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     scope = { kind: "document", materialId: usable[day % usable.length].id };
   } else scope = parseScope(body);
   if (typeof scope === "string") return NextResponse.json({ error: scope }, { status: 400 });
-  if (scope.kind === "topic" && findPatientIdentifiers(scope.topic).length)
+  if (scopeText(scope) && findPatientIdentifiers(scopeText(scope)).length)
     return NextResponse.json({ error: "That topic looks like it identifies a patient. Name the topic only." }, { status: 422 });
   const learner = await loadLearnerCatalogue(ctx.admin, ctx.userId);
   const resolved = await resolveScope(ctx.admin, ctx.userId, scope, { competencyTitle: scope.kind === "competency" ? learner.competencies?.find(c => c.id === (scope as { competencyId: string }).competencyId)?.title ?? null : null });

@@ -13,7 +13,8 @@
 import { createHash } from "node:crypto";
 import { STEP_MAX_SECTIONS } from "./config";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "./retrieval";
-import { competencyChunks, getPassage, isUuid, searchCandidates, sectionLinks, sectionRefs, sectionsOf, topicsOfSections, type LearningStep, type SectionRef } from "./store";
+import { chunksByIds, competencyChunks, getPassage, isUuid, searchCandidates, sectionLinks, sectionRefs, sectionTopicRows, sectionsOf, topicsOfSections, type LearningStep, type SectionRef } from "./store";
+import { topicIndex, topicKey } from "./learn-search";
 import { competencyLabels } from "./competency-view";
 import { referenceCollections, type CatalogueCompetency, type ReferenceCompetency } from "./catalogue";
 import type { GovernedReference } from "./generation";
@@ -22,16 +23,35 @@ import { CONTENT_STATUS_LABEL, REFERENCE_CHANGED_LABEL } from "./config";
 import type { IndividualPolicy } from "../policy";
 
 export type ScopeKind = "section" | "document" | "documents" | "topic" | "competency";
+/** SCH-LEARN-UX-01: the sources a student chose from a search -- documents, sections and topics -- and, optionally, what they typed. */
+export type SourcesScope = { kind: "sources"; materialIds: string[]; chunkIds: string[]; topics: string[]; topic?: string };
 export type LearningScope =
   | { kind: "section"; chunkId: string }
   | { kind: "document"; materialId: string }
   | { kind: "documents"; materialIds: string[] }
   | { kind: "topic"; topic: string; materialIds?: string[] }
-  | { kind: "competency"; competencyId: string };
+  | { kind: "competency"; competencyId: string }
+  | SourcesScope;
 
 /** Sections a topic session gathers from across the library, at most. */
 export const TOPIC_SECTIONS = 24;
 export const MAX_SCOPE_MATERIALS = 10;
+/** SCH-LEARN-UX-01: chosen sections and chosen topics in one "Teach me using selected sources", at most (the selection itself is held to MAX_SCOPE_MATERIALS in all). */
+export const MAX_SCOPE_SECTIONS = TOPIC_SECTIONS;
+export const MAX_SCOPE_TOPICS = MAX_SCOPE_MATERIALS;
+
+/** Pure. The words a student typed into a scope (a topic, or chosen topics), screened for patient identifiers before use. */
+export const scopeText = (scope: LearningScope): string =>
+  scope.kind === "topic" ? scope.topic : scope.kind === "sources" ? [scope.topic ?? "", ...scope.topics].join(" ").trim() : "";
+
+/** Pure. How a sources session is kept (414's kinds): a named topic as a topic session, otherwise by what it covers. */
+export function storedScopeKind(scope: LearningScope, sections: readonly SectionRef[]): ScopeKind {
+  if (scope.kind !== "sources") return scope.kind;
+  if (scope.topic || scope.topics.length) return "topic";
+  if (!scope.chunkIds.length) return scope.materialIds.length > 1 ? "documents" : "document";
+  if (sections.length === 1) return "section";
+  return new Set(sections.map(s => s.materialId)).size > 1 ? "documents" : "document";
+}
 
 const norm = (t: string) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 
@@ -100,10 +120,37 @@ export async function resolveScope(admin: any, userId: string, scope: LearningSc
     const ordered = [...picked].sort((a, b) => firstSeen.get(a.materialId)! - firstSeen.get(b.materialId)! || a.ordinal - b.ordinal);
     return { ok: true, title: scope.topic, sections: await sectionRefs(admin, userId, ordered), topic: scope.topic, competencyId: null };
   }
+  if (scope.kind === "sources") return resolveSources(admin, userId, scope);
   const linked = await competencyChunks(admin, userId, scope.competencyId);
   if (!linked.ok) return { ok: false, status: 503, error: "Your notes could not be read just now." };
   if (!linked.data.length) return { ok: false, status: 404, error: "None of your notes is linked to that competency yet. Find the topics in a material and accept the links that fit." };
   return { ok: true, title: labels?.competencyTitle ?? "A competency", sections: await sectionRefs(admin, userId, linked.data), topic: null, competencyId: scope.competencyId };
+}
+
+/**
+ * SCH-LEARN-UX-01: the chosen sources -> their sections in teaching order. A chosen topic brings the sections topic finding
+ * gave it (the student's corrections included), spread over its documents; a chosen document brings all of its own.
+ * Every read is keyed on the student's id, so another person's section, document or topic is simply not found.
+ */
+async function resolveSources(admin: any, userId: string, scope: SourcesScope): Promise<ResolvedScope> {
+  const [chosen, docs, topicRows] = await Promise.all([
+    chunksByIds(admin, userId, scope.chunkIds), sectionsOf(admin, userId, scope.materialIds),
+    scope.topics.length ? sectionTopicRows(admin, userId) : Promise.resolve({ ok: true as const, data: [] }),
+  ]);
+  if (!chosen.ok || !docs.ok || !topicRows.ok) return { ok: false, status: 503, error: "Your materials could not be read just now." };
+  const wanted = new Set(scope.topics.map(topicKey));
+  const index = topicIndex(topicRows.data).filter(e => wanted.has(e.key));
+  const byMaterial = topicRows.data.filter(r => index.some(e => e.chunkIds.includes(r.chunkId))).map(r => ({ materialId: r.materialId, id: r.chunkId }));
+  const topicChunks = await chunksByIds(admin, userId, spreadAcrossMaterials(byMaterial, TOPIC_SECTIONS).map(c => c.id));
+  if (!topicChunks.ok) return { ok: false, status: 503, error: "Your materials could not be read just now." };
+  const picked = await sectionRefs(admin, userId, [...chosen.data, ...topicChunks.data]);
+  const all = [...new Map([...docs.data, ...picked].map(s => [s.chunkId, s])).values()];
+  if (!all.length) return { ok: false, status: 404, error: "Those sources could not be found." };
+  const firstSeen = new Map<string, number>(); all.forEach((s, i) => { if (!firstSeen.has(s.materialId)) firstSeen.set(s.materialId, i); });
+  const ordered = all.sort((a, b) => firstSeen.get(a.materialId)! - firstSeen.get(b.materialId)! || a.ordinal - b.ordinal);
+  const named = scope.topic ?? (index.length === 1 ? index[0].name : scope.topics[0]) ?? null;
+  const titles = [...new Set(ordered.map(s => s.materialTitle))];
+  return { ok: true, title: named ?? (titles.length === 1 ? titles[0] : `${titles.length} materials`), sections: ordered, topic: named, competencyId: null };
 }
 
 /** A scope from a request body: a section, a document, chosen documents, a topic (optionally within materials) or a competency. Learn and Revision both use it. A string is the reason it was refused. */
@@ -123,6 +170,15 @@ export function parseScope(body: { scope?: Record<string, unknown> } | null): Le
     return { kind: "topic", topic, materialIds: m.length ? m : undefined };
   }
   if (s.kind === "competency") return isUuid(s.competencyId) ? { kind: "competency", competencyId: s.competencyId } : "Choose a competency.";
+  if (s.kind === "sources") {
+    const m = ids(s.materialIds);
+    const c = Array.isArray(s.chunkIds) ? [...new Set(s.chunkIds.filter(isUuid))].slice(0, MAX_SCOPE_SECTIONS) : [];
+    const t = Array.isArray(s.topics) ? [...new Set(s.topics.filter((x): x is string => typeof x === "string").map(x => x.replace(/\s+/g, " ").trim()).filter(x => x.length >= 2 && x.length <= 120))].slice(0, MAX_SCOPE_TOPICS) : [];
+    const topic = typeof s.topic === "string" ? s.topic.replace(/\s+/g, " ").trim() : "";
+    if (topic && (topic.length < 2 || topic.length > 120)) return "Name a topic in a few words.";
+    if (!m.length && !c.length && !t.length) return topic ? { kind: "topic", topic } : "Choose at least one source.";
+    return { kind: "sources", materialIds: m, chunkIds: c, topics: t, ...(topic ? { topic } : {}) };
+  }
   return "Choose what to learn.";
 }
 

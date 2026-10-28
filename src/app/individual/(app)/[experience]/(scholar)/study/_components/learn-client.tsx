@@ -25,7 +25,8 @@ const chip = `inline-flex items-center rounded-full border px-3 py-1.5 text-[13p
 
 export type StartScope =
   | { kind: "section"; chunkId: string } | { kind: "document"; materialId: string } | { kind: "documents"; materialIds: string[] }
-  | { kind: "topic"; topic: string } | { kind: "competency"; competencyId: string };
+  | { kind: "topic"; topic: string } | { kind: "competency"; competencyId: string }
+  | { kind: "sources"; materialIds: string[]; chunkIds: string[]; topics: string[]; topic?: string };
 
 type Source = { tag: string; chunkId: string; materialId: string; materialTitle: string; citation: string };
 type Reference = { tag: string; title: string; code: string | null; outcome: string | null; status: string; approved?: boolean; library?: boolean };
@@ -96,6 +97,7 @@ export function LearnWorkspace(props: {
   const [assist, setAssist] = useState<{ id: number; asked: string; answer?: string; error?: string }[]>([]);
   const seq = useRef(0);
   const started = useRef(false);
+  const opened = useRef(false);
   const step = session?.steps.find(s => s.step === at) ?? session?.steps[0] ?? null;
 
   const act = useCallback(async (action: string, extra: Record<string, unknown> = {}, target: "lesson" | "ask" = "lesson", asked?: string) => {
@@ -142,10 +144,17 @@ export function LearnWorkspace(props: {
       const r = await call("/api/individual/scholar/learn/sessions", { scope: props.start });
       setBusy("");
       if (!r.ok) { setError(r.json.error ?? "This session could not be started."); return; }
-      setSession(r.json.session); setNote(r.json.note ?? null); setAt(0);
+      // SCH-LEARN-UX-01: the address becomes the session's, so a reload or a return resumes it instead of starting again.
+      if (r.json.session?.id) try { window.history.replaceState(null, "", `${window.location.pathname}?session=${r.json.session.id}`); } catch { /* the address stays */ }
+      if (r.json.resumed) {
+        // Already being learned: carried on where it was left, recorded as a resume, nothing generated unasked.
+        opened.current = true;
+        setProgress(r.json.progress ?? {});
+        void call(`/api/individual/scholar/learn/sessions/${r.json.session.id}`, { move: "resume", currentStep: r.json.session.currentStep }, "PATCH");
+      }
+      setSession(r.json.session); setNote(r.json.note ?? null); setAt(r.json.resumed ? r.json.session.currentStep : 0);
     })();
   }, [props.start, session]);
-  const opened = useRef(false);
   useEffect(() => {
     if (opened.current || !session || !props.start || !props.consent) return;
     opened.current = true;
