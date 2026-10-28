@@ -63,6 +63,9 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // Addendum V1.2 (migration 620): the Organisation & Governance Studio. Draft and edit structure versions. Granted to NO
   // position. Approval and publication stay with the platform owner. Platform-sensitive (its grant needs the acknowledgement).
   { code: "hq.platform.governance.manage",    space: "platform"  },
+  // RESEARCH-01 Addendum V2 (migration 630): edit the research source registry, policies, evidence rules, workflows and
+  // budgets (/api/hq/research-sources). Granted to NO position. Approval, activation and publication stay owner-only.
+  { code: "hq.platform.research.manage",      space: "platform"  },
   // COMPETEN-IND-003 D9 (migration 370): the Competen Individual pilot-grant right. Platform space, held by
   // the Individual Product Administrator position (product line `individual`). Its one page is the pilot
   // access screen, /super-admin/individual (COMPETEN-IND-ACCESS-001 s4).
