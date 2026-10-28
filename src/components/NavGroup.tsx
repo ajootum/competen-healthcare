@@ -16,11 +16,13 @@ import { useEffect, useRef } from "react";
 // via the ref — React keeps the `open` prop at the constant `true`, so it never
 // fights the user's clicks after mount.
 
-export default function NavGroup({ title, hrefs, headerClass, badge, children }: {
+export default function NavGroup({ title, hrefs, headerClass, badge, defaultOpen = false, children }: {
   title: string;
   hrefs: string[];              // item hrefs in this group — used to auto-open the active section
   headerClass: string;         // per-workspace styling for the section label
   badge?: number;              // aggregate unread/attention count — useful when collapsed
+  /** Open when nothing is saved, even off the active page (HQ-NAV-EXPAND-01: a workspace opened by a tap shows its rows). */
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -39,8 +41,8 @@ export default function NavGroup({ title, hrefs, headerClass, badge, children }:
     if (!el) return;
     let saved: string | null = null;
     try { saved = localStorage.getItem(key); } catch { /* ignore */ }
-    el.open = saved === null ? active : saved === "1";
-  }, [active, key]);
+    el.open = saved === null ? active || defaultOpen : saved === "1";
+  }, [active, key, defaultOpen]);
 
   return (
     <details ref={ref} data-nav-group open className="group/nav flex flex-col gap-0.5"
@@ -64,13 +66,14 @@ export default function NavGroup({ title, hrefs, headerClass, badge, children }:
 // plain container. Exists because the choice sits inside a JSX expression where an early return is not
 // available -- and because it is the same decision in several layouts, which is exactly the thing that
 // drifts when each one re-implements it.
-export function NavGroupOrPlain({ heading, hrefs, headerClass, badge, children }: {
+export function NavGroupOrPlain({ heading, hrefs, headerClass, badge, defaultOpen, children }: {
   heading: string | null;
   hrefs: string[];
   headerClass: string;
   badge?: number;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
   if (!heading) return <div className="flex flex-col gap-0.5">{children}</div>;
-  return <NavGroup title={heading} hrefs={hrefs} headerClass={headerClass} badge={badge}>{children}</NavGroup>;
+  return <NavGroup title={heading} hrefs={hrefs} headerClass={headerClass} badge={badge} defaultOpen={defaultOpen}>{children}</NavGroup>;
 }
