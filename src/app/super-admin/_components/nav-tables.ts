@@ -304,6 +304,8 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       { key: "ai.overview", label: "AI Home", href: "/super-admin/ai", icon: "🧠" },
       // AI-FAIR-USE-01 (migration 410): prices, allowance units and product AI policies (hq.platform.ai.manage).
       { key: "ai.fair-use", label: "AI Fair Use", href: "/super-admin/ai/fair-use", icon: "⚖️", flag: "ai-fair-use" },
+      // COMPETEN-RESEARCH-01 ADDENDUM V2: the Research Sources & Evidence Studio (hq.platform.ai.view, edits need 630).
+      { key: "ai.research-sources", label: "Research Sources", href: "/super-admin/ai/research-sources", icon: "📚" },
       { key: "ai.operations", label: "1. AI Operations Centre", href: "/super-admin/ai/operations", icon: "⚙️" },
       { key: "ai.clinical", label: "2. Clinical Intelligence", href: "/super-admin/ai/clinical", icon: "🩺" },
       { key: "ai.workforce", label: "3. Workforce Intelligence", href: "/super-admin/ai/workforce", icon: "👥" },

@@ -72,7 +72,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max"
   | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown"
   | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days"
-  | "scholar_research_max_results" | "scholar_research_cache_days" | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_research_max_age_years";
+  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -95,7 +95,7 @@ export type OptionsPolicyKey = "scholar_institutions" | "professional_evaluation
 /** COMPETEN-PROFESSIONAL-PROFILE-01: an ORDERED choice from a fixed list (form fields, profile sections). */
 export type SequencePolicyKey = "professional_progress_views" | "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages"
   | "professional_goal_fields" | "professional_goal_statuses" | "professional_activity_statuses" | "professional_goal_review_fields"
-  | "professional_self_assessment_fields" | "passport_sections" | "scholar_research_providers";
+  | "professional_self_assessment_fields" | "passport_sections";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
 export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_profile_ai"
@@ -110,7 +110,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages"
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
-  | "professional_progress_default_period" | "professional_documents_ai" | "scholar_research_abstracts" | "scholar_research_doi_check";
+  | "professional_progress_default_period" | "professional_documents_ai";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -156,15 +156,9 @@ export type ExamResearchDepth = "quick" | "standard" | "deep";
 export const LEARN_SOURCE_MODES = ["notes", "library", "research"] as const;
 export type LearnSourceMode = (typeof LEARN_SOURCE_MODES)[number];
 export type ScholarResearchPolicy = {
-  /** The modes offered, in order. Always includes "notes"; "research" only with a provider. */
+  /** The modes Scholar offers, in order. Always includes "notes". "research" is SHOWN only while the engine has it operational. */
   modes: LearnSourceMode[];
-  /** Governed priority order. Empty: research is off. */
-  providers: ("pubmed" | "openalex")[];
-  abstracts: boolean;
-  verifyDoi: boolean;
-  maxResults: number;
-  maxAgeYears: number;
-  cacheDays: number;
+  /** Per learner per day: fresh research searches, and research-answer AI spend in US cents. */
   dailyMax: number;
   dailyCostCents: number;
 };
@@ -1098,55 +1092,10 @@ export const POLICIES: readonly PolicyDef[] = [
   {
     key: "scholar_learn_source_modes", kind: "set", product: "Scholar",
     label: "What Learn may draw on",
-    help: "My notes only is always offered and is the default. My notes + approved Competen library adds the governed library entries that match the topic. Research & Explain also searches the academic providers below, only when the learner chooses it, and labels what it found as external research.",
+    help: "My notes only is always offered and is the default. My notes + approved Competen library adds the governed library entries that match the topic. Research & Explain also searches the research sources the Research & Evidence Engine has Active, only when the learner chooses it, and labels what it found as external research.",
     options: [{ value: "notes", label: "My notes only" }, { value: "library", label: "My notes + approved Competen library" }, { value: "research", label: "Research & Explain (external academic research)" }],
     fallback: ["notes"],
-    limitReason: "My notes only cannot be removed. Research & Explain also needs a research provider below. Default: notes only.",
-  },
-  {
-    key: "scholar_research_providers", kind: "sequence", product: "Scholar",
-    label: "Academic research providers, in priority order",
-    help: "Which providers Research & Explain searches, first to last. Each is called from the server with the topic keywords only. A Google Scholar search link is shown for the learner to follow; Google Scholar itself is never searched by Competen.",
-    options: [{ value: "pubmed", label: "PubMed (NCBI E-utilities)" }, { value: "openalex", label: "OpenAlex" }],
-    fallback: [],
-    limitReason: "None by default: research is off until the owner chooses a provider.",
-  },
-  {
-    key: "scholar_research_abstracts", kind: "choice", product: "Scholar",
-    label: "Use published abstracts as evidence",
-    help: "On: abstracts the providers return (PubMed, OpenAlex's open abstract index) may ground an explanation, and the learner sees a short excerpt with a link to the source. Off: results are listed as further reading only and ground nothing. Full text is never fetched.",
-    options: [{ value: "on", label: "Use abstracts as evidence" }, { value: "off", label: "Metadata only (further reading)" }],
-    fallback: "on",
-    limitReason: "Only abstracts the provider publishes through its API. Default: on (research itself is off by default).",
-  },
-  {
-    key: "scholar_research_doi_check", kind: "choice", product: "Scholar",
-    label: "Verify DOIs with Crossref",
-    help: "On: each DOI is checked against Crossref, and a result whose DOI names a different work is dropped. A PubMed result's PMID is always PubMed's own.",
-    options: [{ value: "on", label: "Verify with Crossref" }, { value: "off", label: "Do not verify DOIs" }],
-    fallback: "on",
-    limitReason: "Default: on. Off leaves OpenAlex-only results unverified, so they ground nothing.",
-  },
-  {
-    key: "scholar_research_max_results", kind: "int", product: "Scholar", unit: "results",
-    label: "Research depth (results per search)",
-    help: "How many results one research request keeps, across all providers.",
-    fallback: 5, min: 1, max: 10,
-    limitReason: "One to ten. Default: five.",
-  },
-  {
-    key: "scholar_research_max_age_years", kind: "int", product: "Scholar", unit: "years",
-    label: "Only research published within",
-    help: "Results older than this are left out. Zero: any date (never one in the future).",
-    fallback: 15, min: 0, max: 50,
-    limitReason: "Zero to fifty years. Default: fifteen.",
-  },
-  {
-    key: "scholar_research_cache_days", kind: "int", product: "Scholar", unit: "days",
-    label: "How long research results are reused",
-    help: "Results (public bibliographic records and abstracts, never a learner's material) are reused for this many days, then searched again, and expire. Zero turns reuse off.",
-    fallback: 30, min: 0, max: 90,
-    limitReason: "Zero to ninety days. Default: thirty.",
+    limitReason: "My notes only cannot be removed. Research & Explain is shown only while the Research & Evidence Engine has it operational (HQ, AI and Intelligence, Research Sources). Default: notes only.",
   },
   {
     key: "scholar_research_daily_max", kind: "int", product: "Scholar", unit: "research requests",
@@ -1908,16 +1857,13 @@ function resolveScholarExams(published: Map<string, unknown>): ScholarExamPolicy
   };
 }
 
-/** COMPETEN-RESEARCH-01. Research & Explain is offered only with the mode published AND at least one provider. */
+/** COMPETEN-RESEARCH-01. Scholar's own settings. Whether research can run is the engine's (src/lib/holdings/research). */
 function resolveScholarResearch(published: Map<string, unknown>): ScholarResearchPolicy {
-  const choice = (key: ChoicePolicyKey) => clampChoice(policyDef(key) as ChoicePolicy, published.get(policyPath(key)));
   const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
-  const providers = clampSequence(policyDef("scholar_research_providers") as SequencePolicy, published.get(policyPath("scholar_research_providers"))) as ("pubmed" | "openalex")[];
   const chosen = clampSet(policyDef("scholar_learn_source_modes") as SetPolicy, published.get(policyPath("scholar_learn_source_modes"))) as LearnSourceMode[];
-  const modes = LEARN_SOURCE_MODES.filter(m => m === "notes" || (chosen.includes(m) && (m !== "research" || providers.length > 0)));
-  return {
-    modes, providers, abstracts: choice("scholar_research_abstracts") === "on", verifyDoi: choice("scholar_research_doi_check") === "on",
-    maxResults: int("scholar_research_max_results"), maxAgeYears: int("scholar_research_max_age_years"), cacheDays: int("scholar_research_cache_days"),
-    dailyMax: int("scholar_research_daily_max"), dailyCostCents: int("scholar_research_daily_cost_cents"),
-  };
+  return { modes: LEARN_SOURCE_MODES.filter(m => m === "notes" || chosen.includes(m)), dailyMax: int("scholar_research_daily_max"), dailyCostCents: int("scholar_research_daily_cost_cents") };
 }
+
+/** COMPETEN-RESEARCH-01 ADDENDUM V2: the modes a learner is SHOWN. An inactive mode is never shown as available. */
+export const shownLearnModes = (p: ScholarResearchPolicy, researchOperational: boolean): LearnSourceMode[] =>
+  p.modes.filter(m => m !== "research" || researchOperational);

@@ -19,7 +19,7 @@ import {
 } from "@/lib/individual/scholar/generation";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
 import { artefactKey, governedReferences, isArtefactAction, libraryReferences, referenceSource, relabelReferences } from "@/lib/individual/scholar/learn";
-import { externalReferences, learnResearch, researchEvidence, type LearnResearch } from "@/lib/individual/scholar/learn-research";
+import { externalReferences, learnResearch, researchEvidence, scholarResearchOperational, type LearnResearch } from "@/lib/individual/scholar/learn-research";
 import { topicsOfSections } from "@/lib/individual/scholar/store";
 import type { LearnSourceMode } from "@/lib/individual/policy";
 import { withheldNext } from "@/lib/individual/scholar/learn-view";
@@ -77,6 +77,8 @@ export async function POST(req: Request) {
   // and policy offers it. A check question and a clarification are always notes only.
   const askedMode = typeof body?.mode === "string" ? body.mode as LearnSourceMode : "notes";
   if (!policy.scholarResearch.modes.includes(askedMode)) return NextResponse.json({ error: "That way of learning is not offered here." }, { status: 403 });
+  // ADDENDUM V2: an inactive mode is never available -- research only while the engine has it operational.
+  if (askedMode === "research" && !(await scholarResearchOperational(ctx.admin))) return NextResponse.json({ error: "Research & Explain is not available on Scholar at the moment." }, { status: 403 });
   const mode: LearnSourceMode = RESEARCH_ACTIONS.includes(action as LearnAction) ? askedMode : "notes";
 
   // ── what the student typed: bounded and screened, never stored ──

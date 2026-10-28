@@ -2,7 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
-import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { loadIndividualPolicy, shownLearnModes } from "@/lib/individual/policy";
+import { scholarResearchOperational } from "@/lib/individual/scholar/learn-research";
 import { countDue, getLearningPreference, getLearningSession, getRevisionSession, isUuid, learningEvents, listLearningSessions, listMaterials, readConsent } from "@/lib/individual/scholar/store";
 import { sessionTopics } from "@/lib/individual/scholar/learn";
 import { offeredActions, sessionView } from "@/lib/individual/scholar/learn-view";
@@ -104,7 +105,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
           actions={offered.actions} startAction={startAction} labels={LEARN_ACTION_LABEL}
           consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? null : "Your AI help setting could not be read just now."}
           checks={policy.scholarCheckBehaviour} depth={pref?.depth ?? policy.scholarExplanationDepth} maxTurns={policy.scholarTutorTurns}
-          materials={materials} standingMessage={standingMessage} modes={policy.scholarResearch.modes}
+          materials={materials} standingMessage={standingMessage} modes={shownLearnModes(policy.scholarResearch, policy.scholarResearch.modes.includes("research") && await scholarResearchOperational(ctx.admin))}
         />
       )}
     </>

@@ -12,7 +12,7 @@
  *       provider records, and is kept apart from the notes part (which never cites [E n])
  *   R5  a high-risk topic is still refused: classified high-risk clinical, no eligible model, and staging's real gate
  *       (the one the route calls BEFORE any search, scholarRiskGate) refuses it
- *   R6  with nothing published, Learn is notes only and research is off
+ *   R6  with nothing published, Learn is notes only, staging's engine is not operational and no seeded source is invocable
  *
  * ⚠ STAGING ONLY. It writes NO configuration: the research policy and the D1 routing lists are applied in memory. The
  * only rows it causes are the gateway's own plat_ai_requests usage rows for the R4 call (operation
@@ -45,7 +45,10 @@ const note = (s: string) => console.log(`        ${s}`);
 (async () => {
   const { resolvePolicy, policyPath } = await import("../src/lib/individual/policy");
   const { runResearch } = await import("../src/lib/holdings/research/service");
-  const { researchConfig, researchEvidence, externalReferences } = await import("../src/lib/individual/scholar/learn-research");
+  const { researchEvidence, externalReferences } = await import("../src/lib/individual/scholar/learn-research");
+  const { SEED_REGISTRY, resolveRegistry, notInvocable } = await import("../src/lib/holdings/research/registry");
+  const { DEFAULT_POLICY, resolveWorkflows, workflowOperational } = await import("../src/lib/holdings/research/engine-config");
+  const { loadResearchEngine, researchOperational } = await import("../src/lib/holdings/research/load");
   const { runLearn, LEARN_RESEARCH_OPERATION } = await import("../src/lib/individual/scholar/generation");
   const { generate } = await import("../src/lib/ai/client") as any;
   const { aiStatus } = await import("../src/lib/ai/config");
@@ -57,14 +60,19 @@ const note = (s: string) => console.log(`        ${s}`);
 
   // In memory only: the owner's publication this acceptance assumes. Nothing is written.
   const published = (await admin.from("workspace_config_overrides").select("config_path, published").eq("scope_type", "platform").eq("scope_ref", "individual").like("config_path", "individual.policy.%")).data ?? [];
-  const policy = resolvePolicy([...published,
-    { config_path: policyPath("scholar_learn_source_modes"), published: { enabled: ["notes", "library", "research"] } },
-    { config_path: policyPath("scholar_research_providers"), published: { order: ["pubmed", "openalex"] } }]);
-  const rp = policy.scholarResearch;
+  resolvePolicy([...published, { config_path: policyPath("scholar_learn_source_modes"), published: { enabled: ["notes", "library", "research"] } }]);
+  // The engine as the owner would leave it after the Phase 1 lifecycle (Integrated, Evaluated, Approved, Active), in memory.
+  const stamp = { at: new Date().toISOString(), by: "acceptance", ok: true, detail: "in-memory acceptance only" };
+  const registry = resolveRegistry(Object.fromEntries(["pubmed", "openalex", "crossref", "google_scholar_link"].map(id => [id, { ...SEED_REGISTRY[id], status: "active", checks: { connectivity: stamp, approval: stamp, activation: stamp } }])));
+  const plan = { product: "scholar" as const, activity: "learn" as const, registry, policy: DEFAULT_POLICY, workflow: resolveWorkflows({ basic: { status: "active" } }).basic };
+  const usage: any[] = [];
 
   console.log("R1  live research");
-  const research = await runResearch("oxygen therapy target saturation", researchConfig(rp));
-  const lr = { state: research.state as any, message: null, query: research.query, scholarLink: research.scholarLink, items: research.items, evidence: research.evidence, calls: research.calls, codes: research.codes };
+  const research = await runResearch("oxygen therapy target saturation", plan, { usage: { record: async (row: any) => { usage.push(row); }, allow: async () => true } });
+  const lr = { state: research.state as any, message: null, query: research.query, scholarLink: research.scholarLink, items: research.items, evidence: research.evidence, calls: research.calls, codes: research.codes,
+    sourceVersions: research.sourceVersions, excerptChars: DEFAULT_POLICY.rules.excerptChars, furtherReading: true, licensing: Object.fromEntries(Object.values(registry).map((r: any) => [r.id, r.licensing])) };
+  note(`research usage recorded apart from AI: ${usage.map(u => `${u.provider} ${u.capability} ${u.requests} req ${u.outcome} ${u.costUsd}`).join("; ")}`);
+  note(`Google Scholar link (Active link record only): ${research.scholarLink}`);
   for (const r of externalReferences(lr)) note(`${r.tag ?? "--"} ${r.provider} PMID ${r.pmid ?? "-"} DOI ${r.doi ?? "-"} verified pmid=${r.verified.pmid} doi=${r.verified.doi} ${r.evidence ? "EVIDENCE" : "further reading"} | ${r.title.slice(0, 70)} (${r.year})`);
   note(`calls: ${JSON.stringify(research.calls)} codes: ${research.codes.join(",") || "-"}`);
   ok("R1. genuine records came back, each with its own record link, and at least one verified abstract is evidence",
@@ -107,6 +115,7 @@ const note = (s: string) => console.log(`        ${s}`);
     note(`notes part: ${r.check.ok ? "SHOWN" : `withheld (${r.check.reason})`}${r.check.ok ? ` -- ${r.check.text.slice(0, 160).replace(/\n/g, " ")}…` : ""}`);
     if (!r.research?.ok && process.env.SHOW_RAW) console.log(raw.join("\n---\n"));
     note(`research part: ${r.research?.ok ? `SHOWN, cites E${r.research.cited.join(", E")}` : `withheld (${r.research?.reason ?? "not written"})`}`);
+    if (r.research && !r.research.ok && r.research.violations) note(`  what the check found beyond the sources: ${JSON.stringify(r.research.violations).slice(0, 400)}`);
     if (r.research?.ok) console.log(`\n        FROM RESEARCH (External research label):\n        ${r.research.text.replace(/\n/g, "\n        ")}\n`);
     const refs = externalReferences(lr);
     if (r.research?.ok) for (const n of r.research.cited) { const x = refs[n - 1]; note(`[E${n}] -> ${x.provider} PMID ${x.pmid ?? "-"} DOI ${x.doi ?? "-"} ${x.url}`); }
@@ -125,7 +134,12 @@ const note = (s: string) => console.log(`        ${s}`);
 
   console.log("R6  defaults");
   const def = resolvePolicy([]).scholarResearch;
-  ok("R6. with nothing published: notes only, no provider", JSON.stringify(def.modes) === '["notes"]' && def.providers.length === 0);
+  const live = await loadResearchEngine(admin);
+  const seeded = resolveRegistry(null);
+  ok("R6. with nothing published: notes only; on staging the engine is not operational and no seeded source is invocable",
+    JSON.stringify(def.modes) === '["notes"]' && !researchOperational(live, "scholar", "learn")
+    && Object.values(seeded).every((r: any) => notInvocable(r, { product: "scholar", activity: "learn", capability: "search" }) !== null)
+    && !workflowOperational(resolveWorkflows(null).basic, seeded, { product: "scholar", activity: "learn" }));
 
   console.log(fails.length ? `\nRED -- ${pass} passed, ${fails.length} failed` : `\nALL GREEN -- ${pass} passed, 0 failed`);
   process.exit(fails.length ? 1 : 0);

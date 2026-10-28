@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { openAlexAbstract, parsePubmedAbstracts, sameTitle, scholarSearchUrl, type FetchLike } from "./providers";
-import { cachedResult, datePlausible, isEvidence, mergeItems, researchKey, researchQuery, runResearch, type ResearchConfig } from "./service";
+import { cachedResult, datePlausible, isEvidence, mergeItems, researchKey, researchQuery, runResearch, type ResearchPlan } from "./service";
+import { SEED_REGISTRY, resolveRegistry, type Registry } from "./registry";
+import { DEFAULT_POLICY, resolveWorkflows } from "./engine-config";
 
 // COMPETEN-RESEARCH-01: the shared Holdings research service, against canned provider responses. No network.
 
-const CFG: ResearchConfig = { providers: ["pubmed", "openalex"], maxResults: 5, abstracts: true, verifyDoi: true, maxAgeYears: 15 };
+const ok1 = { at: "2026-10-28T00:00:00Z", by: "owner", ok: true, detail: "test" };
+/** A registry with these sources Active, as the lifecycle would leave them (connectivity, approval, activation recorded). */
+export function activeRegistry(ids: string[], patch: Record<string, unknown> = {}): Registry {
+  return resolveRegistry(Object.fromEntries(ids.map(id => [id, { ...SEED_REGISTRY[id], status: "active", checks: { connectivity: ok1, approval: ok1, activation: ok1 }, ...patch }])));
+}
+const planOf = (reg: Registry, over: Partial<ResearchPlan> = {}): ResearchPlan => ({
+  product: "scholar", activity: "learn", registry: reg, policy: { ...DEFAULT_POLICY, limits: { ...DEFAULT_POLICY.limits, maxResultsPerRequest: 5 } },
+  workflow: resolveWorkflows({ basic: { status: "active" } }).basic, ...over,
+});
+const CFG = planOf(activeRegistry(["pubmed", "openalex", "crossref", "google_scholar_link"]));
 const NOW = () => new Date("2026-10-28T10:00:00Z");
 
 const ESEARCH = { esearchresult: { idlist: ["111", "222"] } };
@@ -53,7 +64,7 @@ describe("researchQuery: only topic keywords leave, never an identifier", () => 
   });
   it("the cache key holds the configuration and the query, nothing else", () => {
     expect(researchKey("oxygen", CFG)).toMatch(/^[0-9a-f]{64}$/);
-    expect(researchKey("oxygen", CFG)).not.toBe(researchKey("oxygen", { ...CFG, maxResults: 3 }));
+    expect(researchKey("oxygen", CFG)).not.toBe(researchKey("oxygen", { ...CFG, policy: { ...CFG.policy, limits: { ...CFG.policy.limits, maxResultsPerRequest: 3 } } }));
   });
 });
 
@@ -107,21 +118,21 @@ describe("runResearch: search, merge, date, verify, fail soft", () => {
 
   it("a timeout aborts the call and fails soft", async () => {
     const hang: FetchLike = (_u, init) => new Promise((_, reject) => init?.signal?.addEventListener("abort", () => reject(new Error("aborted"))));
-    const r = await runResearch("oxygen", { ...CFG, providers: ["openalex"] }, { fetch: hang, timeoutMs: 20, now: NOW });
+    const r = await runResearch("oxygen", planOf(activeRegistry(["openalex"]), { policy: { ...DEFAULT_POLICY, limits: { ...DEFAULT_POLICY.limits, timeoutMs: 1000 } } }), { fetch: hang, now: NOW });
     expect(r.state).toBe("failed");
   });
 
   it("with abstracts off, nothing is evidence (metadata is never full text)", async () => {
-    const r = await runResearch("oxygen targets", { ...CFG, abstracts: false }, { fetch: fakeFetch(standard), now: NOW });
+    const r = await runResearch("oxygen targets", { ...CFG, policy: { ...CFG.policy, rules: { ...CFG.policy.rules, abstractsAsEvidence: false } } }, { fetch: fakeFetch(standard), now: NOW });
     expect(r.items.length).toBeGreaterThan(0);
     expect(r.items.every(i => i.abstract === null)).toBe(true);
     expect(r.evidence).toEqual([]);
   });
 
-  it("no provider configured: nothing is called", async () => {
+  it("nothing Active (the seeded registry): the workflow is not operational and nothing is called", async () => {
     const log: string[] = [];
-    const r = await runResearch("oxygen", { ...CFG, providers: [] }, { fetch: fakeFetch(standard, log) });
-    expect(r.state).toBe("failed");
+    const r = await runResearch("oxygen", planOf(resolveRegistry(null)), { fetch: fakeFetch(standard, log) });
+    expect(r).toMatchObject({ state: "failed", codes: ["workflow_not_operational"] });
     expect(log).toEqual([]);
   });
 

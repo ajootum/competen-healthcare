@@ -6,7 +6,7 @@ import {
 } from "./generation";
 import { artefactKey, libraryReferences, relabelReferences } from "./learn";
 import { externalReferences, researchEvidence, type LearnResearch } from "./learn-research";
-import { policyPath, resolvePolicy } from "../policy";
+import { policyPath, resolvePolicy, shownLearnModes } from "../policy";
 
 // COMPETEN-RESEARCH-01: Research & Explain on the ONE Learn engine. The research part is its own kind of content,
 // checked on its own; the notes part is unchanged and may never cite external research.
@@ -81,11 +81,15 @@ describe("references: real records only, labelled, saved apart", () => {
     provider: "pubmed" as const, sourceId: String(n), pmid: String(n), doi: null, title: `Title ${n}`, journal: "J", year: 2022, authors: ["A"],
     url: `https://pubmed.ncbi.nlm.nih.gov/${n}/`, abstract, verified, retrievedAt: "2026-10-28T00:00:00Z",
   });
-  const R: LearnResearch = { state: "searched", message: null, query: "oxygen", scholarLink: "https://scholar.google.com/scholar?q=oxygen", items: [item(1, null), item(2, "Abstract two")], evidence: [1], calls: [], codes: [] };
+  const R: LearnResearch = { state: "searched", message: null, query: "oxygen", scholarLink: "https://scholar.google.com/scholar?q=oxygen", items: [item(1, null), item(2, "Abstract two")], evidence: [1], calls: [], codes: [],
+    sourceVersions: { pubmed: "pubmed@v4" }, excerptChars: 320, furtherReading: true, licensing: { pubmed: "NLM terms" } };
   it("evidence first and tagged E1, further reading untagged, with the provider's own ids and link", () => {
     const refs = externalReferences(R);
     expect(refs.map(r => [r.tag, r.pmid, r.evidence])).toEqual([["E1", "2", true], [null, "1", false]]);
-    expect(refs[0]).toMatchObject({ kind: "external", provider: "PubMed", url: "https://pubmed.ncbi.nlm.nih.gov/2/", excerpt: "Abstract two" });
+    expect(refs[0]).toMatchObject({ kind: "external", provider: "PubMed", url: "https://pubmed.ncbi.nlm.nih.gov/2/", excerpt: "Abstract two", sourceVersion: "pubmed@v4", reuse: "private_evidence_excerpt_only" });
+    expect(refs[1]).toMatchObject({ excerpt: null, reuse: "metadata_only" });
+    // The evidence rules, as published: no further reading, no excerpt.
+    expect(externalReferences({ ...R, furtherReading: false, excerptChars: 0 })).toEqual([expect.objectContaining({ tag: "E1", excerpt: null })]);
     expect(researchEvidence(R)).toEqual([{ title: "Title 2", journal: "J", year: 2022, abstract: "Abstract two" }]);
   });
   it("a saved answer's external references are never relabelled as governed ones", () => {
@@ -104,19 +108,19 @@ describe("references: real records only, labelled, saved apart", () => {
   });
 });
 
-describe("policy: research is OFF until the owner publishes a mode AND a provider", () => {
-  it("defaults to notes only, no provider", () => {
-    const p = resolvePolicy([]).scholarResearch;
-    expect(p).toMatchObject({ modes: ["notes"], providers: [], abstracts: true, verifyDoi: true, maxResults: 5, cacheDays: 30, dailyMax: 5, dailyCostCents: 25 });
+describe("policy: Scholar's own settings; whether research can run is the engine's", () => {
+  it("defaults to notes only, with the learner limits", () => {
+    expect(resolvePolicy([]).scholarResearch).toEqual({ modes: ["notes"], dailyMax: 5, dailyCostCents: 25 });
   });
-  it("research mode needs a provider; notes is always offered", () => {
+  it("notes is always offered; research is SHOWN only while the engine has it operational", () => {
     const modes = { config_path: policyPath("scholar_learn_source_modes"), published: { enabled: ["research", "library"] } };
-    expect(resolvePolicy([modes]).scholarResearch.modes).toEqual(["notes", "library"]);
-    const providers = { config_path: policyPath("scholar_research_providers"), published: { order: ["openalex", "pubmed", "google"] } };
-    expect(resolvePolicy([modes, providers]).scholarResearch).toMatchObject({ modes: ["notes", "library", "research"], providers: ["openalex", "pubmed"] });
+    const p = resolvePolicy([modes]).scholarResearch;
+    expect(p.modes).toEqual(["notes", "library", "research"]);
+    expect(shownLearnModes(p, false)).toEqual(["notes", "library"]);
+    expect(shownLearnModes(p, true)).toEqual(["notes", "library", "research"]);
   });
   it("ranges are enforced", () => {
-    const big = { config_path: policyPath("scholar_research_max_results"), published: { value: 500 } };
-    expect(resolvePolicy([big]).scholarResearch.maxResults).toBeLessThanOrEqual(10);
+    const big = { config_path: policyPath("scholar_research_daily_max"), published: { value: 500 } };
+    expect(resolvePolicy([big]).scholarResearch.dailyMax).toBeLessThanOrEqual(50);
   });
 });

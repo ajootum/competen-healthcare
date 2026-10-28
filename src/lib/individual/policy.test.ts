@@ -127,8 +127,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
         domains: ["who.int", "health.go.ug", "nice.org.uk", "nhs.uk", "cdc.gov", "nih.gov", "cochranelibrary.com", "resus.org.uk", "sign.ac.uk"],
         webDailyMax: 10, cacheDays: 30, scannedPages: "off",
       },
-      // COMPETEN-RESEARCH-01: notes only, no research provider. Research is OFF until the owner publishes both.
-      scholarResearch: { modes: ["notes"], providers: [], abstracts: true, verifyDoi: true, maxResults: 5, maxAgeYears: 15, cacheDays: 30, dailyMax: 5, dailyCostCents: 25 },
+      // COMPETEN-RESEARCH-01: notes only. Research also needs the engine operational (HQ Research Sources).
+      scholarResearch: { modes: ["notes"], dailyMax: 5, dailyCostCents: 25 },
       // P0: label, do not hide -- everything of a chosen catalogue is offered, labelled, by default.
       scholarCatalogueMinStatus: "unreviewed",
       // COMPETEN-PROFESSIONAL-PROFILE-01: free text where nothing is configured, every country, the default statuses,
