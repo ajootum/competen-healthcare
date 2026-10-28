@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
-import { INFORMAL_CHECK_LABEL, NOT_IN_NOTES_LABEL, PERSONAL_AI_LABEL, QUESTION_MAX, SOURCE_KIND_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
+import { INFORMAL_CHECK_LABEL, LEARN_MODE_LABEL, NOT_IN_NOTES_LABEL, PERSONAL_AI_LABEL, QUESTION_MAX, SOURCE_KIND_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import type { SessionView } from "@/lib/individual/scholar/learn-view";
 import { sourceHref } from "./question-view";
 import { AiBadge } from "./client";
@@ -28,7 +28,14 @@ export type StartScope =
   | { kind: "topic"; topic: string } | { kind: "competency"; competencyId: string };
 
 type Source = { tag: string; chunkId: string; materialId: string; materialTitle: string; citation: string };
-type Reference = { tag: string; title: string; code: string | null; outcome: string | null; status: string; approved?: boolean };
+type Reference = { tag: string; title: string; code: string | null; outcome: string | null; status: string; approved?: boolean; library?: boolean };
+/** COMPETEN-RESEARCH-01: one external record, exactly as the provider returned it. Untagged = further reading only. */
+type ExternalRef = { tag: string | null; provider: string; title: string; journal: string | null; year: number | null; authors: string[]; pmid: string | null; doi: string | null; url: string; evidence: boolean; excerpt: string | null; verified: { pmid: boolean; doi: boolean | null } };
+type ResearchReply = { state: string; label: string; message: string | null; query?: string | null; scholarLink?: string | null; references: ExternalRef[]; text?: string; cited?: number[]; withheld?: string };
+type LearnMode = "notes" | "library" | "research";
+const MODE_KEY = "scholar.learn.mode";
+const noSubscribe = () => () => {};
+const rememberedMode = (): string | null => { try { return window.localStorage.getItem(MODE_KEY); } catch { return null; } };
 /** Stage 3 acceptance item 4: an answer withheld as unsupported -- why, and next steps from the notes only. */
 type WithheldNext = { why: string; notInNotes: boolean; nearest: { tag: string; chunkId: string; materialId: string; citation: string }[]; rephrase: boolean; background: { text: string; label: string } | null };
 type Reply = {
@@ -36,6 +43,8 @@ type Reply = {
   background?: { text?: string; label?: string; withheld?: string } | null; flags?: { text: string; cited: number[] }[];
   verdict?: { value: string; label: string; informal: string } | null; checkQuestion?: string; informal?: string;
   provenance?: { model: string; promptVersion: string }; error?: string;
+  /** COMPETEN-RESEARCH-01: external research, kept apart from the notes. */
+  research?: ResearchReply | null;
   /** s8: a saved artefact returned instead of a new AI call. */
   saved?: { at: string; reviewStatus: string } | null; savedForLater?: boolean;
   /** SCHOLAR-AI-OPT-01: what learner feedback is about -- the saved explanation, or the action that wrote it. */
@@ -60,6 +69,8 @@ export function LearnWorkspace(props: {
   checks: "offer" | "prompt" | "off"; depth: "brief" | "standard" | "detailed"; maxTurns: number; materials: { id: string; title: string }[];
   /** s7: when new AI is limited, the plain message from the student's standing. Saved learning stays available. */
   standingMessage?: string | null;
+  /** COMPETEN-RESEARCH-01: the Learn modes policy offers. "notes" is always first and the default. */
+  modes?: LearnMode[];
 }) {
   const [session, setSession] = useState<SessionView | null>(props.initial);
   const [note, setNote] = useState<string | null>(null);
@@ -68,6 +79,14 @@ export function LearnWorkspace(props: {
   const [cards, setCards] = useState<Record<number, Card[]>>({});
   const [busy, setBusy] = useState<string>("");
   const [depth, setDepth] = useState(props.depth);
+  // COMPETEN-RESEARCH-01: the learner's own choice, remembered on this device only (a clear saved preference). Notes
+  // only unless they choose otherwise; a remembered mode policy no longer offers falls back to notes only.
+  const modes = props.modes?.length ? props.modes : (["notes"] as LearnMode[]);
+  const remembered = useSyncExternalStore(noSubscribe, rememberedMode, () => null);
+  const [chosen, setChosen] = useState<LearnMode | null>(null);
+  const pick = (chosen ?? remembered) as LearnMode | null;
+  const mode: LearnMode = pick && modes.includes(pick) ? pick : "notes";
+  const setMode = (m: LearnMode) => { setChosen(m); try { window.localStorage.setItem(MODE_KEY, m); } catch { /* not remembered */ } };
   const [tab, setTab] = useState<"lesson" | "sources" | "ask">("lesson");
   const [progress, setProgress] = useState(props.initialProgress);
   const [check, setCheck] = useState<{ question: string; answer: string } | null>(null);
@@ -84,7 +103,7 @@ export function LearnWorkspace(props: {
     setBusy(action); setError("");
     const scopeIds = session.steps.flatMap(s => s.sections.map(x => x.chunkId));
     const r = await call("/api/individual/scholar/learn/act", {
-      action, step: step.step, depth, ...extra,
+      action, step: step.step, depth, ...(mode !== "notes" && action !== "check" && action !== "clarify" ? { mode } : {}), ...extra,
       ...(session.id ? { sessionId: session.id } : { chunkIds: action === "ask" ? scopeIds : step.sections.map(x => x.chunkId) }),
     });
     setBusy("");
@@ -95,7 +114,7 @@ export function LearnWorkspace(props: {
     else setCards(c => ({ ...c, [step.step]: [...(c[step.step] ?? []), card] }));
     if (!r.json.withheld && !r.json.continuity) setProgress(p => ({ ...p, [step.step]: { actions: [...new Set([...(p[step.step]?.actions ?? []), action])], verdict: r.json.verdict?.value ?? p[step.step]?.verdict ?? null } }));
     return r.json as Reply;
-  }, [session, step, depth]);
+  }, [session, step, depth, mode]);
   // Owner D3: the step, handed to the shared personal AI (Teach Me). Shown apart under PERSONAL_AI_LABEL, never saved.
   const continueWithAssistant = useCallback(async (question: string) => {
     if (!session || !step) return;
@@ -251,11 +270,27 @@ export function LearnWorkspace(props: {
             </label>
           </div>
 
+          {modes.length > 1 && (
+            <fieldset className="mt-3 rounded-xl border border-gray-200 px-3 py-2">
+              <legend className="px-1 text-[12px] font-bold text-gray-700">Learn from</legend>
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Learn from">
+                {modes.map(m => (
+                  <button key={m} type="button" role="radio" aria-checked={mode === m} disabled={!!busy} onClick={() => setMode(m)}
+                    className={`${chip} ${mode === m ? "border-transparent text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`} style={mode === m ? { background: accent } : undefined}>
+                    {LEARN_MODE_LABEL[m]}
+                  </button>
+                ))}
+              </div>
+              {mode === "research" && <p className="mt-1.5 text-[12px] text-gray-600">Scholar searches published research (PubMed, OpenAlex) for this topic. Only a few topic words are sent, never your notes or who you are. What it finds is shown apart from your notes, with its real source.</p>}
+              {mode === "library" && <p className="mt-1.5 text-[12px] text-gray-600">Adds the Competen library entries that match this topic, labelled as library.</p>}
+            </fieldset>
+          )}
+
           <div aria-live="polite" className="mt-4 space-y-4">
             {thread.length === 0 && !busy && <p className="text-[13.5px] text-gray-600">{props.consent ? `Choose ${props.labels[props.startAction]} to begin this step, or ask Scholar anything.` : "Learning needs AI help, which is off."}</p>}
             {thread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }) : undefined}
               onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} />)}
-            {busy && busy !== "ask" && <p className="text-[13px] text-gray-500">Scholar is reading your notes…</p>}
+            {busy && busy !== "ask" && <p className="text-[13px] text-gray-500">{mode === "research" ? "Scholar is reading your notes and searching published research…" : "Scholar is reading your notes…"}</p>}
           </div>
 
           {check && (
@@ -411,6 +446,7 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase }: { car
           </div>
         ) : r.background.withheld ? <p className="mt-2 text-[12.5px] text-gray-600">{r.background.withheld}</p> : null
       )}
+      {r.research && <ResearchBlock x={r.research} />}
       {r.flags && r.flags.length > 0 && <AiFlagList flags={r.flags} />}
       {r.saved && (
         <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-gray-600">
@@ -424,5 +460,49 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase }: { car
         <AiFeedback kind="explanation" target={r.artefactId ? "artefact" : "action"} refId={r.artefactId ?? r.actionId} />
       )}
     </article>
+  );
+}
+
+/** COMPETEN-RESEARCH-01: external research, apart from the notes, labelled, every record with its real link. */
+function ResearchBlock({ x }: { x: ResearchReply }) {
+  const cited = new Set(x.cited ?? []);
+  const evidence = x.references.filter(r => r.tag && (!x.cited || cited.has(Number(r.tag.slice(1)))));
+  const further = x.references.filter(r => !evidence.includes(r));
+  return (
+    <section aria-label="External research" className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-2.5">
+      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-indigo-900">{x.label}</p>
+      {x.text && <div className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-gray-800">{x.text}</div>}
+      {x.withheld && <p className="mt-1 text-[13px] text-gray-700">{x.withheld}</p>}
+      {x.message && <p className="mt-1 text-[13px] text-gray-700">{x.message}</p>}
+      {x.text && evidence.length > 0 && (
+        <ul className="mt-2 space-y-2">{evidence.map(r => <li key={r.url}><ExternalRefLine r={r} /></li>)}</ul>
+      )}
+      {further.length > 0 && (
+        <details className="mt-2">
+          <summary className={`cursor-pointer text-[12.5px] font-semibold text-gray-800 ${focusRing}`}>{x.text ? "Other research found" : "Research found"} ({further.length}): further reading, not used in the answer</summary>
+          <ul className="mt-1 space-y-2">{further.map(r => <li key={r.url}><ExternalRefLine r={{ ...r, tag: null, excerpt: null }} /></li>)}</ul>
+        </details>
+      )}
+      {x.scholarLink && (
+        <p className="mt-2 text-[12px] text-gray-700">
+          <a href={x.scholarLink} target="_blank" rel="noopener noreferrer" className={`font-semibold underline underline-offset-2 ${focusRing}`}>Search Google Scholar for this topic</a> (opens Google Scholar; Competen does not search it)
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ExternalRefLine({ r }: { r: ExternalRef }) {
+  const ids = [r.pmid ? { label: `PMID ${r.pmid}`, href: `https://pubmed.ncbi.nlm.nih.gov/${r.pmid}/` } : null, r.doi ? { label: `DOI ${r.doi}`, href: `https://doi.org/${r.doi}` } : null].filter((v): v is { label: string; href: string } => !!v);
+  const checked = [r.verified.pmid ? "PMID from PubMed" : null, r.verified.doi === true ? "DOI confirmed by Crossref" : null].filter(Boolean).join(" · ");
+  return (
+    <div className="text-[12.5px] text-gray-800">
+      {r.tag && <span className="mr-1 font-mono font-bold text-indigo-900">[{r.tag}]</span>}
+      <a href={r.url} target="_blank" rel="noopener noreferrer" className={`font-semibold underline underline-offset-2 ${focusRing}`}>{r.title}</a>
+      <span className="text-gray-700">{r.authors.length ? ` ${r.authors.join(", ")}${r.authors.length >= 3 ? " et al." : ""}.` : ""}{r.journal ? ` ${r.journal}` : ""}{r.year ? ` (${r.year})` : ""}. Found via {r.provider}.</span>
+      {ids.length > 0 && <span> {ids.map((i, n) => <span key={i.href}>{n ? " · " : ""}<a href={i.href} target="_blank" rel="noopener noreferrer" className={`underline ${focusRing}`}>{i.label}</a></span>)}</span>}
+      {checked && <span className="block text-[11.5px] text-gray-600">Verified: {checked}</span>}
+      {r.excerpt && <span className="mt-0.5 block text-[12px] italic text-gray-700">Abstract excerpt: {r.excerpt}</span>}
+    </div>
   );
 }

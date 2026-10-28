@@ -46,8 +46,8 @@ describe("L3: the suggested steps (no AI)", () => {
 describe("L2 and s7: four kinds of content, kept apart and checked", () => {
   it("splits the notes, the background and the AI flags, in either order", () => {
     const raw = `Oxygen is prescribed to a target range [S1].\n${FLAG_MARKER}\n- Check the escalation rule in [S2].\n${SUPPLEMENTARY_MARKER}\nGeneral principle.`;
-    expect(splitLearnAnswer(raw)).toEqual({ main: "Oxygen is prescribed to a target range [S1].", background: "General principle.", flags: "- Check the escalation rule in [S2]." });
-    expect(splitLearnAnswer("Just notes [S1].")).toEqual({ main: "Just notes [S1].", background: null, flags: null });
+    expect(splitLearnAnswer(raw)).toEqual({ main: "Oxygen is prescribed to a target range [S1].", background: "General principle.", flags: "- Check the escalation rule in [S2].", research: null });
+    expect(splitLearnAnswer("Just notes [S1].")).toEqual({ main: "Just notes [S1].", background: null, flags: null, research: null });
   });
   it("shows a cited answer that may cite a governed reference, and withholds an invented tag or an added figure", () => {
     expect(checkLearnMain("A Venturi mask delivers a fixed concentration [S1]. This supports your outcome [R1].", "Teach me.", PASSAGES, REFS)).toMatchObject({ ok: true, cited: [1] });

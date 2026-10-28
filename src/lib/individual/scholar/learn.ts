@@ -17,6 +17,7 @@ import { competencyChunks, getPassage, isUuid, searchCandidates, sectionLinks, s
 import { competencyLabels } from "./competency-view";
 import { referenceCollections, type CatalogueCompetency, type ReferenceCompetency } from "./catalogue";
 import type { GovernedReference } from "./generation";
+import { matchLibrary } from "./exam-answer";
 import { CONTENT_STATUS_LABEL, REFERENCE_CHANGED_LABEL } from "./config";
 import type { IndividualPolicy } from "../policy";
 
@@ -181,11 +182,12 @@ export async function governedReferences(admin: any, userId: string, chunkIds: r
 export function relabelReferences(refs: readonly unknown[], source: ReferenceSource): (GovernedReference & { tag?: string })[] {
   const known = new Map((source.catalogue ?? []).map(c => [c.id, c]));
   return refs.flatMap(raw => {
-    const r = raw as Partial<GovernedReference> & { tag?: string } | null;
-    if (!r || typeof r.title !== "string") return [];
+    const r = raw as Partial<GovernedReference> & { tag?: string; kind?: string } | null;
+    // COMPETEN-RESEARCH-01: an external research reference is not a governed one (learn-research.ts shows it).
+    if (!r || typeof r.title !== "string" || r.kind === "external") return [];
     const outcome = typeof r.outcome === "string" ? r.outcome : null;
     const c = typeof r.competencyId === "string" ? known.get(r.competencyId) : undefined;
-    return [{ ...(r.tag ? { tag: r.tag } : {}), competencyId: r.competencyId, title: r.title, code: typeof r.code === "string" ? r.code : null, outcome, ...referenceStatus(c, outcome) }];
+    return [{ ...(r.tag ? { tag: r.tag } : {}), competencyId: r.competencyId, title: r.title, code: typeof r.code === "string" ? r.code : null, outcome, ...(r.library ? { library: true } : {}), ...referenceStatus(c, outcome) }];
   });
 }
 
@@ -198,8 +200,26 @@ export const isArtefactAction = (a: string): a is (typeof ARTEFACT_ACTIONS)[numb
  * action, the depth, the sections (as a set), the prompt version, and which references (by competency and outcome)
  * it would be given. Anything that would change the answer changes the key.
  */
-export function artefactKey(input: { action: string; depth: string; chunkIds: readonly string[]; promptVersion: string; references: readonly GovernedReference[]; background: boolean }): string {
+export function artefactKey(input: { action: string; depth: string; chunkIds: readonly string[]; promptVersion: string; references: readonly GovernedReference[]; background: boolean; mode?: string }): string {
   const refs = input.references.map(r => `${r.competencyId ?? r.title}|${r.outcome ?? ""}`).sort().join(";");
-  const basis = [input.action, input.depth, [...input.chunkIds].sort().join(","), input.promptVersion, refs, input.background ? "bg" : "nobg"].join("\n");
+  // COMPETEN-RESEARCH-01: a library or research answer has its own key; a notes-only key is exactly as before.
+  const basis = [input.action, input.depth, [...input.chunkIds].sort().join(","), input.promptVersion, refs, input.background ? "bg" : "nobg", ...(input.mode && input.mode !== "notes" ? [`mode:${input.mode}`] : [])].join("\n");
   return createHash("sha256").update(basis).digest("hex");
+}
+
+/**
+ * COMPETEN-RESEARCH-01, "My notes + approved Competen library": the reference source's APPROVED entries (the governed
+ * CFCA library HQ offers, clinically approved as they stand) that match the topic, labelled as library and by
+ * referenceStatus. They ground only their own words, like every governed reference. Ones already given are not repeated.
+ */
+export function libraryReferences(text: string, source: ReferenceSource, have: readonly GovernedReference[], limit = 3): GovernedReference[] {
+  const catalogue = source.catalogue ?? [];
+  const known = new Map(catalogue.map(c => [c.id, c]));
+  const entries = catalogue.map(c => ({ id: c.id, code: c.code ?? null, title: c.title, outcomes: [...(c.outcomes ?? [])], contentStatus: c.contentStatus ?? "unreviewed" }));
+  // Owner (pilot, 28 Oct): the library mode offers APPROVED content only -- clinically approved as it stands (395).
+  return matchLibrary(text, entries.filter(e => e.contentStatus === "approved"), limit + have.length)
+    .filter(m => !have.some(h => h.competencyId === m.id))
+    .map(m => ({ competencyId: m.id, title: m.title, code: m.code, outcome: m.outcome, library: true, ...referenceStatus(known.get(m.id), m.outcome) }))
+    .filter(r => r.approved)
+    .slice(0, limit);
 }

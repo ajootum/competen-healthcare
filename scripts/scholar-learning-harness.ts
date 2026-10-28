@@ -343,7 +343,10 @@ const artefactsBounded = (src: Src) => {
  */
 const AI_ROUTES: [string, string, RegExp][] = [
   [`${API}/explain/route.ts`, `scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode, await scholarRisk(ctx.admin, ctx.userId, { text: question, passages }))`, /runExplain\([^)]*ai\.run\)/],
-  [`${API}/learn/act/route.ts`, `scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages }))`, /runLearn\([\s\S]*?\}, ai\.run\)/],
+  // COMPETEN-RESEARCH-01: Learn runs on the REQUEST's risk subject (scholarRisk), built before research so research cost
+  // carries the action id; what the research part writes is then checked against that same tier (withinRequestRisk).
+  [`${API}/learn/act/route.ts`, `scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", risk)`,
+    /const risk = await scholarRisk\(ctx\.admin, ctx\.userId, \{ text: prompt, passages \}\);[\s\S]*const ai = scholarAiRunner\([\s\S]*runLearn\([\s\S]*?\}, ai\.run\)[\s\S]*if \(rr\?\.ok && !\(await withinRequestRisk\(ctx\.admin, action as LearnAction, risk, \[rr\.text\]\)\)\[0\]\) rr = \{ ok: false, reason: "risk_raised" \};/],
   [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runQuestions\([^;]*ai\.run\)/],
   [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run\)/],
   [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }))`, /runAnalysis\([^)]*ai\.run\)/],
@@ -667,7 +670,29 @@ const learnBounded = (src: Src) => {
     && /if \(recorded && sessionId && shown && policy\.scholarLearningHistory === "record"\)/.test(act)
     && !/insertQuestions|individual_scholar_question/.test(act)
     && /const asked = \[args\.question, \.\.\.args\.history\.map\(t => t\.text\)\]\.join\("\\n"\);/.test(run) && !/asked[^;]*learnerContext/.test(run)
-    && /attribution: \{ scope: "person" \}, operation: "individual_scholar_learn"/.test(run);
+    && /attribution: \{ scope: "person" \}, operation: research\.length \? LEARN_RESEARCH_OPERATION : "individual_scholar_learn"/.test(run);
+};
+/**
+ * K43 (COMPETEN-RESEARCH-01): RESEARCH & EXPLAIN IS GOVERNED. The mode is the learner's explicit choice and must be one
+ * policy offers (403 otherwise); research runs in one place, only in that mode, AFTER the clinical-risk gate and before
+ * the one Learn call; the query is built from the question (Ask), the section topics and the session's title -- never
+ * the passages -- and refused on an identifier; only an abstract with a verified identity is evidence; the notes part
+ * may never cite [E n]; Google Scholar is a link, never fetched.
+ */
+const RESEARCH_LIB = "src/lib/holdings/research";
+const researchGoverned = (src: Src) => {
+  const act = src.get(`${API}/learn/act/route.ts`) ?? "", gen = src.get(GEN) ?? "";
+  const svc = strip(read(`${RESEARCH_LIB}/service.ts`)), prov = strip(read(`${RESEARCH_LIB}/providers.ts`));
+  const iMode = act.indexOf('if (mode === "research") {'), iGate = act.indexOf("await scholarRiskGate(ctx,"), iSearch = act.indexOf("await learnResearch(ctx,"), iRun = act.indexOf("await runLearn(");
+  return act.includes('const askedMode = typeof body?.mode === "string" ? body.mode as LearnSourceMode : "notes";')
+    && /if \(!policy\.scholarResearch\.modes\.includes\(askedMode\)\) return NextResponse\.json\(\{[^}]*\}, \{ status: 403 \}\)/.test(act)
+    && iMode > 0 && iGate > iMode && iSearch > iGate && iRun > iSearch && (act.match(/learnResearch\(/g) ?? []).length === 1
+    && act.includes('{ question: action === "ask" ? question : null, topics, title: stepTitle }')
+    && svc.includes('if (findPatientIdentifiers(source).length) return { ok: false, reason: "identifier" };')
+    && svc.includes("export const isEvidence = (i: ResearchItem) => !!i.abstract && (i.verified.pmid || i.verified.doi === true);")
+    && (prov.match(/scholar\.google/g) ?? []).length === 1 && prov.includes("export const scholarSearchUrl = (query: string) => `https://scholar.google.com/scholar?q=${encodeURIComponent(query)}`;")
+    && !/scholar\.google/.test(svc)
+    && gen.includes('if (/\\[E\\d+\\]/.test(text)) return { ok: false, reason: "bad_citation" };');
 };
 const MIG413 = migText("supabase/migrations/413-individual-scholar-upload-25mb.sql");
 /**
@@ -1095,6 +1120,8 @@ function main() {
     libraryFeedbackOwned(REAL));
   ok("K24. LEARN-01: history holds no conversation, the act route keeps to policy, screens input, records only what was shown, stores no practice question, and the student's context is never grounding",
     learnBounded(REAL));
+  ok("K43. COMPETEN-RESEARCH-01: Research & Explain only on the learner's explicit, offered choice, after the clinical-risk gate; topic keywords only leave, screened; only verified abstracts are evidence; notes never cite research; Google Scholar is a link only",
+    researchGoverned(REAL));
   ok("K23. upload limits: 413 raises the CHECK and the bucket to 25 MB, the live value stays 10 MB until HQ raises it, and the session is enforced on the server at both steps",
     uploadLimitsHold(REAL));
   ok("K22. UPLOAD-01: the real kind is read from the bytes, a duplicate is refused before extraction, read quality is stored and returned (partial is never a bare success), outcomes are opted in, the no-catalogue absence is said through one rule, student topics are screened, and Start learning opens Teach Me (LEARN-01)",
@@ -1209,6 +1236,10 @@ function main() {
     !assistantShared(plant(ASSIST, "if (findPatientIdentifiers(question).length)", "if (false)"))
     && !assistantShared(plant(ASSIST, "  const study = await scholarRisk(", "  await saveArtefact(ctx.admin, ctx.userId, {} as never);\n  const study = await scholarRisk("))
     && !assistantShared(plant(ASSIST, "label: PERSONAL_AI_LABEL", "label: null")));
+  ok("P61. ⚠ K43 goes red when the search runs without the risk gate, or the query is built from the passages",
+    !meteredEverywhere(plant(`${API}/learn/act/route.ts`, "if (rr?.ok && !(await withinRequestRisk(ctx.admin, action as LearnAction, risk, [rr.text]))[0]) rr = { ok: false, reason: \"risk_raised\" };", ""))
+    && !researchGoverned(plant(`${API}/learn/act/route.ts`, "const gate = await scholarRiskGate(ctx, action as LearnAction, risk);", "const gate = null;"))
+    && !researchGoverned(plant(`${API}/learn/act/route.ts`, "topics, title: stepTitle }", "topics, title: passages.map(p => p.content).join(\" \") }")));
   ok("P48. ⚠ K30 goes red when the learner view carries the rationale, or a route sends a raw question",
     !answersServerSide(plant(REV, "  const base = { id: q.id, kind: q.kind, stem: q.stem,", "  const base = { id: q.id, kind: q.kind, rationale: q.rationale, stem: q.stem,"))
     && !answersServerSide(plant(`${API}/revision/sessions/route.ts`, "items: ordered.map(revisionItemView), generated, reused", "items: ordered, generated, reused")));

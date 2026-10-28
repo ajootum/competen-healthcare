@@ -235,7 +235,13 @@ export const SOURCE_KIND_LABEL = {
   reference: "Governed reference: what you are working towards. Clinically reviewed only where marked approved",
   interpretation: "AI explanation beyond your notes: general background, not from your notes and not verified",
   flag: `${FLAG_HEADING}: possibly contradictory, unclear or unsafe in your notes. Not verified.`,
+  /** COMPETEN-RESEARCH-01: matched from the governed Competen library by topic. */
+  library: "Competen library: governed competencies and outcomes. Clinically reviewed only where marked approved",
+  /** COMPETEN-RESEARCH-01: Research & Explain, apart from the notes. */
+  research: "External research: from published abstracts Competen found (PubMed, OpenAlex). Not from your notes and not clinically reviewed. Open the source before relying on it",
 } as const;
+/** COMPETEN-RESEARCH-01: the three Learn modes, as the learner sees them. */
+export const LEARN_MODE_LABEL = { notes: "My notes only", library: "My notes + Competen library", research: "Research & Explain" } as const;
 
 /**
  * S3: background the AI adds beyond the notes is shown APART from the notes-based answer, under this

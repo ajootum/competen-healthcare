@@ -9,11 +9,11 @@ import type { IndividualContext } from "../guard";
 import { readConsent, sectionLinks, topicsOfSections } from "./store";
 import { consentDocuments, consentStatus } from "./consent-gate";
 import { CONSENT_AWAITING_LEGAL, CONSENT_UPDATED } from "./config";
-import { isMeteredRefusal, loadModelRouting, meteredRefusalBody, requestIdFor, runMeteredAi, runOwnedAi, type MeteredRefusal } from "@/lib/ai/allowance";
+import { aiFairUseEnabled, isMeteredRefusal, loadModelRouting, loadProductPolicy, meteredRefusalBody, requestIdFor, resolveRiskSubject, runMeteredAi, runOwnedAi, unmeteredGate, type MeteredRefusal } from "@/lib/ai/allowance";
 import { sha256Hex } from "@/lib/ai/outcomes";
 import type { ResolvedOwner } from "@/lib/ai/consumption";
 import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
-import type { RiskContext } from "@/lib/ai/clinical-risk";
+import { classifyRisk, riskRank, type RiskContext, type RiskTier } from "@/lib/ai/clinical-risk";
 import type { ScholarAiActivity } from "./ai-standing";
 
 // ── WHAT EVERY SCHOLAR AI ROUTE CHECKS, IN ORDER ── after requireIndividualContext("scholar") ────────────
@@ -162,4 +162,30 @@ export function meteredRefusal(refusal: MeteredRefusal | null): NextResponse | n
 export async function routingVersion(admin: unknown): Promise<string> {
   const r = await loadModelRouting(admin).catch(() => null);
   return r ? `routing:${sha256Hex(JSON.stringify(r)).slice(0, 12)}` : "routing:unreadable";
+}
+
+/**
+ * COMPETEN-RESEARCH-01: before Learn searches external research, the same clinical-risk gate the AI call will meet,
+ * on the same risk subject -- so a topic no model is eligible for is refused before anything is sent to a research
+ * provider. With metering ON the call itself decides (runMeteredAi); this returns null and the call refuses as before.
+ */
+export async function scholarRiskGate(ctx: IndividualContext, activity: ScholarAiActivity, risk: RiskContext): Promise<MeteredRefusal | null> {
+  if (await aiFairUseEnabled(ctx.admin)) return null;
+  const g = await unmeteredGate(ctx.admin, "scholar", activity, "reasoning", risk);
+  return g.ok ? null : g;
+}
+
+/**
+ * COMPETEN-RESEARCH-01: which texts stay within the request's OWN risk tier, classified WITH the request's subject by the
+ * same published rules. Learn applies it to what the research part WROTE (generation), never to what was found
+ * (discovery): research text that would lift the request above its tier is withheld, so research never raises what is
+ * shown beyond the eligible model's tier. An unreadable policy keeps none (fail closed: the notes part alone is shown).
+ */
+export async function withinRequestRisk(admin: unknown, activity: ScholarAiActivity, risk: RiskContext, texts: readonly string[]): Promise<boolean[]> {
+  const { policy, readable } = await loadProductPolicy(admin, "scholar");
+  if (!readable || !texts.length) return texts.map(() => false);
+  const floor = ((policy.activities as Record<string, { riskFloor?: string }>)[activity]?.riskFloor ?? "standard_educational") as RiskTier;
+  const subject = await resolveRiskSubject(admin, risk);
+  const base = riskRank(classifyRisk(policy.risk, subject, floor).tier);
+  return texts.map(t => riskRank(classifyRisk(policy.risk, { ...subject, text: `${subject.text}\n\n${t}` }, floor).tier) <= base);
 }

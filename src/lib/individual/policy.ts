@@ -71,14 +71,15 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_evaluation_min_evidence" | "scholar_evaluation_recency_days" | "scholar_evaluation_min_sources" | "scholar_evaluation_band_strong"
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max"
   | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown"
-  | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days";
+  | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days"
+  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
   | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules"
-  | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources";
+  | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources" | "scholar_learn_source_modes";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -151,6 +152,16 @@ export const EXAM_WEB_DOMAINS_DEFAULT = ["who.int", "health.go.ug", "nice.org.uk
 export type ExamEvidenceSource = "notes" | "library" | "web";
 export type ExamResearchDepth = "quick" | "standard" | "deep";
 /** COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570), as configured. */
+/** COMPETEN-RESEARCH-01: the three Learn modes. "notes" is always offered and is the default. */
+export const LEARN_SOURCE_MODES = ["notes", "library", "research"] as const;
+export type LearnSourceMode = (typeof LEARN_SOURCE_MODES)[number];
+export type ScholarResearchPolicy = {
+  /** The modes Scholar offers, in order. Always includes "notes". "research" is SHOWN only while the engine has it operational. */
+  modes: LearnSourceMode[];
+  /** Per learner per day: fresh research searches, and research-answer AI spend in US cents. */
+  dailyMax: number;
+  dailyCostCents: number;
+};
 export type ScholarExamPolicy = {
   enabled: boolean;
   sources: ExamEvidenceSource[];
@@ -1075,6 +1086,31 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: 30, min: 0, max: 365,
     limitReason: "Zero to a year. Default: thirty days.",
   },
+  // COMPETEN-RESEARCH-01 (owner direction 2026-10-28): governed academic research for Learn, through the shared
+  // Holdings research service (src/lib/holdings/research). OFF until the owner publishes a provider AND the Research &
+  // Explain mode: only topic keywords leave (screened for patient identifiers), never a learner's notes or identity.
+  {
+    key: "scholar_learn_source_modes", kind: "set", product: "Scholar",
+    label: "What Learn may draw on",
+    help: "My notes only is always offered and is the default. My notes + approved Competen library adds the governed library entries that match the topic. Research & Explain also searches the research sources the Research & Evidence Engine has Active, only when the learner chooses it, and labels what it found as external research.",
+    options: [{ value: "notes", label: "My notes only" }, { value: "library", label: "My notes + approved Competen library" }, { value: "research", label: "Research & Explain (external academic research)" }],
+    fallback: ["notes"],
+    limitReason: "My notes only cannot be removed. Research & Explain is shown only while the Research & Evidence Engine has it operational (HQ, AI and Intelligence, Research Sources). Default: notes only.",
+  },
+  {
+    key: "scholar_research_daily_max", kind: "int", product: "Scholar", unit: "research requests",
+    label: "Research requests per learner per day",
+    help: "Fresh research searches one learner may run in a day. A reused result does not count. At the limit, Learn answers from the notes (and library) and says why.",
+    fallback: 5, min: 0, max: 50,
+    limitReason: "Zero to fifty. Default: five.",
+  },
+  {
+    key: "scholar_research_daily_cost_cents", kind: "int", product: "Scholar", unit: "US cents",
+    label: "Research AI spend per learner per day",
+    help: "The most AI spend Research & Explain answers may use for one learner in a day, from the recorded cost of those answers. At the limit, Learn answers from the notes (and library) and says why.",
+    fallback: 25, min: 0, max: 500,
+    limitReason: "Zero to five dollars. Default: twenty-five cents.",
+  },
   {
     key: "scholar_exam_scanned_pages", kind: "choice", product: "Scholar",
     label: "Scanned examination pages",
@@ -1496,6 +1532,8 @@ export type IndividualPolicy = {
   scholarInstitutions: ContextOption[];
   /** COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570). */
   scholarExams: ScholarExamPolicy;
+  /** COMPETEN-RESEARCH-01: the Learn source modes and governed academic research. */
+  scholarResearch: ScholarResearchPolicy;
   scholarOnboardingFields: ("level" | "institution")[];
   /** P0: the least-reviewed content status Scholar offers. Default "unreviewed": everything, labelled. */
   scholarCatalogueMinStatus: ContentStatusLevel;
@@ -1622,6 +1660,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
     scholarExams: resolveScholarExams(published),
+    scholarResearch: resolveScholarResearch(published),
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
     scholarCatalogueMinStatus: clampChoice(policyDef("scholar_catalogue_min_status") as ChoicePolicy, published.get(policyPath("scholar_catalogue_min_status"))) as ContentStatusLevel,
     professionalEvaluation: resolveProfessionalEvaluation(published),
@@ -1817,3 +1856,14 @@ function resolveScholarExams(published: Map<string, unknown>): ScholarExamPolicy
     scannedPages: choice("scholar_exam_scanned_pages") as "off" | "ai_transcription",
   };
 }
+
+/** COMPETEN-RESEARCH-01. Scholar's own settings. Whether research can run is the engine's (src/lib/holdings/research). */
+function resolveScholarResearch(published: Map<string, unknown>): ScholarResearchPolicy {
+  const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
+  const chosen = clampSet(policyDef("scholar_learn_source_modes") as SetPolicy, published.get(policyPath("scholar_learn_source_modes"))) as LearnSourceMode[];
+  return { modes: LEARN_SOURCE_MODES.filter(m => m === "notes" || chosen.includes(m)), dailyMax: int("scholar_research_daily_max"), dailyCostCents: int("scholar_research_daily_cost_cents") };
+}
+
+/** COMPETEN-RESEARCH-01 ADDENDUM V2: the modes a learner is SHOWN. An inactive mode is never shown as available. */
+export const shownLearnModes = (p: ScholarResearchPolicy, researchOperational: boolean): LearnSourceMode[] =>
+  p.modes.filter(m => m !== "research" || researchOperational);
