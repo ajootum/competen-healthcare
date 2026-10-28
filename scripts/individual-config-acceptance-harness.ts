@@ -23,6 +23,7 @@
  * Creates and deletes its own harness-cfg002-* identities.
  */
 import { loadEnvConfig } from "@next/env";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { resolveHqPositions } from "../src/lib/hq/context";
@@ -84,6 +85,7 @@ const post = (cookie: string | null, body: unknown) => fetch(`${BASE}/api/hq/ind
 const page = (cookie: string) => fetch(`${BASE}/super-admin/individual/configuration`, { redirect: "manual", headers: { Cookie: cookie } });
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   console.log(`INDIVIDUAL CONFIG ACCEPTANCE (COMPETEN-CONFIG-002) -- target ${ref}${BASE ? `, server ${BASE}` : ", no server"}\n`);
 
   const cap = await admin.from("hq_capability").select("code").eq("code", CAP).maybeSingle();
@@ -108,7 +110,7 @@ async function main() {
     }
     const office = await admin.from("ogs_offices").select("id").eq("office_type", "hq_platform").limit(1).maybeSingle();
     if (!office.data) { ok("0. an hq_platform office exists to appoint into", false); return; }
-    const appt = await admin.from("ogs_office_appointments").insert({
+    const appt = await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER),
       office_id: office.data.id, person_id: made.holder, person_name: "Harness CFG002 holder",
       role: POSITION, status: "active", term_start: new Date(Date.now() - 60_000).toISOString(),
     });

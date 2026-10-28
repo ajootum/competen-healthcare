@@ -80,21 +80,71 @@ function PersonDetails({ d }: { d: HqPersonDetails }) {
   );
 }
 
-function HolderRow({ h, canAppoint, onEnd, busy }: {
-  h: HqHolderView; canAppoint: boolean; busy: string | null;
+/** The capabilities a position grants today, for choosing what one appointment carries (migration 641). */
+const grantedCodes = (p: HqPositionView): string[] => (p.capabilities.ok ? p.capabilities.value.filter(c => c.inWindow).map(c => c.code) : []);
+
+function ScopePicker({ codes, value, onChange }: { codes: string[]; value: string[]; onChange: (v: string[]) => void }) {
+  return (
+    <fieldset className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-700">
+      <legend className="text-[11px] text-gray-500 mb-1">Capabilities this appointment carries</legend>
+      {codes.map(c => (
+        <label key={c} className="flex items-center gap-1">
+          <input type="checkbox" className="size-4" checked={value.includes(c)}
+            onChange={e => onChange(e.target.checked ? [...value, c] : value.filter(x => x !== c))} />
+          <code>{c}</code>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function HolderRow({ h, p, canAppoint, onEnd, onChange, busy }: {
+  h: HqHolderView; p: HqPositionView; canAppoint: boolean; busy: string | null;
   onEnd: (h: HqHolderView, status: string) => void;
+  onChange: (h: HqHolderView, body: Record<string, unknown>, okText: string) => void;
 }) {
   const [status, setStatus] = useState<string>("removed");
+  const [scope, setScope] = useState<string[]>(h.capabilityScope ?? grantedCodes(p));
+  const [reason, setReason] = useState("");
+  const editable = canAppoint && h.status === "active" && !!p.rules;
   return (
     <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-t border-gray-50 first:border-0">
       <span className="font-medium text-gray-900 text-sm">{h.personName ?? <span className="text-gray-500">Name not recorded</span>}</span>
       <StatusBadge status={h.status} grantsAccess={h.grantsAccess} />
+      {h.isPrimary && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--cmp-surface-success)] text-green-800">Primary coordinator</span>}
+      {h.status === "active" && !h.inTerm && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--cmp-surface-warning)] text-amber-900">Outside its term: grants nothing</span>}
       <span className="text-[11px] text-gray-500">
         {h.termStart ? `from ${h.termStart}` : "no start date recorded"}
         {h.termEnd ? ` to ${h.termEnd}` : ""}
         {h.appointedBy ? ` · appointed by ${h.appointedBy}` : ""}
       </span>
+      <span className="text-[11px] text-gray-600 basis-full">
+        Carries: {h.capabilityScope ? h.capabilityScope.join(", ") : "everything the position grants"}
+      </span>
       <PersonDetails d={h.person} />
+      {editable && (
+        <details className="basis-full">
+          <summary className="cursor-pointer text-[11px] text-teal-700">Change what this appointment carries, or its primary designation</summary>
+          <div className="mt-2 space-y-2">
+            <ScopePicker codes={grantedCodes(p)} value={scope} onChange={setScope} />
+            <label className="flex flex-col gap-1 text-[11px] text-gray-600">Reason (audit trail, at least 5 characters)
+              <input value={reason} onChange={e => setReason(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1 text-[12px]" maxLength={500} />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button disabled={!scope.length || reason.trim().length < 5 || busy === h.appointmentId}
+                onClick={() => onChange(h, { action: "set_scope", capability_scope: scope.length === grantedCodes(p).length && !p.rules?.scopedAppointments ? null : scope, reason }, "Saved what this appointment carries.")}
+                className="text-[11px] font-medium rounded-lg border border-gray-300 px-2.5 py-1 disabled:opacity-40">Save scope</button>
+              {p.rules?.primaryPolicy !== "not_used" && (
+                <button disabled={reason.trim().length < 5 || busy === h.appointmentId}
+                  onClick={() => onChange(h, { action: "set_primary", is_primary: !h.isPrimary, reason }, h.isPrimary ? "No longer the primary coordinator." : "Now the primary coordinator.")}
+                  className="text-[11px] font-medium rounded-lg border border-gray-300 px-2.5 py-1 disabled:opacity-40">
+                  {h.isPrimary ? "Remove primary designation" : "Make primary coordinator"}
+                </button>
+              )}
+            </div>
+          </div>
+        </details>
+      )}
       {canAppoint && h.status !== "removed" && (
         <span className="ml-auto flex items-center gap-1.5">
           <select
@@ -115,17 +165,26 @@ function HolderRow({ h, canAppoint, onEnd, busy }: {
   );
 }
 
-function PositionCard({ p, canAppoint, people, busy, onAppoint, onEnd, spaceStaffable }: {
+function PositionCard({ p, canAppoint, people, busy, onAppoint, onEnd, onChange, spaceStaffable }: {
   p: HqPositionView; canAppoint: boolean; people: Read<PersonOption[]>; busy: string | null;
   spaceStaffable: boolean;
-  onAppoint: (positionCode: string, personId: string, termEnd: string) => void;
+  onAppoint: (positionCode: string, personId: string, termEnd: string, scope: string[] | null, isPrimary: boolean) => void;
   onEnd: (h: HqHolderView, status: string) => void;
+  onChange: (h: HqHolderView, body: Record<string, unknown>, okText: string) => void;
 }) {
   const [person, setPerson] = useState("");
   const [termEnd, setTermEnd] = useState("");
+  const [narrow, setNarrow] = useState(false);
+  const [scope, setScope] = useState<string[]>([]);
+  const [primary, setPrimary] = useState(false);
   const holders = p.holders;
   const live = holders.ok ? holders.value.filter(h => h.grantsAccess) : [];
   const other = holders.ok ? holders.value.filter(h => !h.grantsAccess) : [];
+  // Migration 641: a scoped role needs each appointment to name what it carries.
+  const mustScope = p.rules?.scopedAppointments === true;
+  const scoping = mustScope || narrow;
+  const full = p.rules?.maxHolders != null && live.length >= p.rules.maxHolders;
+  const primaryMissing = p.rules?.primaryPolicy === "required" && holders.ok && !holders.value.some(h => h.grantsAccess && h.isPrimary);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
@@ -139,10 +198,13 @@ function PositionCard({ p, canAppoint, people, busy, onAppoint, onEnd, spaceStaf
         )}
         {holders.ok && (
           <span className="ml-auto text-[11px] text-gray-500">
-            {live.length} holding now{other.length ? ` · ${other.length} on the roster without access` : ""}
+            {live.length} holding now{p.rules?.maxHolders != null ? ` of at most ${p.rules.maxHolders}` : ""}{other.length ? ` · ${other.length} on the roster without access` : ""}
           </span>
         )}
       </div>
+      {primaryMissing && (
+        <p className="px-4 pt-3 text-[12px] text-amber-900">This role&apos;s policy requires a primary coordinator, and none of its current holders is designated.</p>
+      )}
 
       {p.description && <p className="px-4 pt-3 text-[12px] text-gray-500">{p.description}</p>}
 
@@ -179,7 +241,7 @@ function PositionCard({ p, canAppoint, people, busy, onAppoint, onEnd, spaceStaf
         {!holders.ok ? <div className="p-3"><Unreadable what="Who holds this position" error={holders.error} /></div>
           : holders.value.length === 0
             ? <p className="px-4 py-3 text-[12px] text-gray-500">Nobody has ever been appointed to this position.</p>
-            : <div>{holders.value.map(h => <HolderRow key={h.appointmentId} h={h} canAppoint={canAppoint} busy={busy} onEnd={onEnd} />)}</div>}
+            : <div>{holders.value.map(h => <HolderRow key={h.appointmentId} h={h} p={p} canAppoint={canAppoint} busy={busy} onEnd={onEnd} onChange={onChange} />)}</div>}
       </div>
 
       {canAppoint && (
@@ -206,14 +268,29 @@ function PositionCard({ p, canAppoint, people, busy, onAppoint, onEnd, spaceStaf
                 />
                 <span className="text-gray-500">(optional)</span>
               </label>
+              {p.rules && !mustScope && (
+                <label className="text-[11px] text-gray-600 flex items-center gap-1">
+                  <input type="checkbox" className="size-4" checked={narrow} onChange={e => setNarrow(e.target.checked)} />
+                  Carry only some of what it grants
+                </label>
+              )}
+              {p.rules && p.rules.primaryPolicy !== "not_used" && (
+                <label className="text-[11px] text-gray-600 flex items-center gap-1">
+                  <input type="checkbox" className="size-4" checked={primary} onChange={e => setPrimary(e.target.checked)} />
+                  Primary coordinator
+                </label>
+              )}
+              {scoping && <div className="basis-full"><ScopePicker codes={grantedCodes(p)} value={scope} onChange={setScope} /></div>}
               <button
-                onClick={() => onAppoint(p.code, person, termEnd)}
-                disabled={!person || busy === p.code || !p.isActive || !spaceStaffable}
+                onClick={() => onAppoint(p.code, person, termEnd, scoping ? scope : null, primary)}
+                disabled={!person || busy === p.code || !p.isActive || !spaceStaffable || (scoping && !scope.length) || full}
                 className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-3 py-1.5 disabled:opacity-40"
               >
                 Appoint
               </button>
               {!p.isActive && <span className="text-[11px] text-amber-800">This position is deactivated, so it cannot be filled.</span>}
+              {full && <span className="text-[11px] text-amber-800">This role is at its configured maximum of {p.rules?.maxHolders} holders.</span>}
+              {mustScope && <span className="text-[11px] text-gray-500">This is a broad role: each appointment carries only the capabilities you tick.</span>}
               {p.isActive && !spaceStaffable && <span className="text-[11px] text-amber-800">This space has no usable office row, so it cannot be staffed.</span>}
             </>
           )}
@@ -314,8 +391,10 @@ export default function AppointmentsBoard({ board, people, canAppoint, viewerId,
     setBusy(null);
   }
 
-  const appoint = (position_code: string, person_id: string, term_end: string) =>
-    call({ position_code, person_id, term_end: term_end || undefined }, "POST", position_code, "Appointed. They can open Competen HQ now.");
+  const appoint = (position_code: string, person_id: string, term_end: string, capability_scope: string[] | null, is_primary: boolean) =>
+    call({ position_code, person_id, term_end: term_end || undefined, capability_scope, is_primary }, "POST", position_code, "Appointed. They can open Competen HQ now.");
+  const change = (h: HqHolderView, body: Record<string, unknown>, okText: string) =>
+    call({ appointment_id: h.appointmentId, ...body }, "PATCH", h.appointmentId, okText);
   const end = (h: HqHolderView, status: string) =>
     call({ appointment_id: h.appointmentId, status }, "PATCH", h.appointmentId,
       `Set to ${STATUS_LABEL[status] ?? status}. The row is kept as the record that the appointment happened.`);
@@ -374,7 +453,7 @@ export default function AppointmentsBoard({ board, people, canAppoint, viewerId,
       {!board.spaces.ok ? <Unreadable what="The HQ spaces" error={board.spaces.error} /> : (
         <div className="space-y-8">
           {board.spaces.value.map(s => (
-            <SpaceSection key={s.space} s={s} canAppoint={canAppoint} people={people} busy={busy} onAppoint={appoint} onEnd={end} />
+            <SpaceSection key={s.space} s={s} canAppoint={canAppoint} people={people} busy={busy} onAppoint={appoint} onEnd={end} onChange={change} />
           ))}
         </div>
       )}

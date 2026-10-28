@@ -18,7 +18,7 @@
 
 import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
 import { isHqOfficeType } from "./spaces";
-import { activeGrants } from "./spaces";
+import { activeGrants, appointmentInTerm, narrowToScope } from "./spaces";
 
 export const HQ_CONTEXT_COOKIE = "hq_context";
 
@@ -61,15 +61,16 @@ export async function listGovernanceContexts(admin: any, userId: string): Promis
     .map(o => o.id));
   if (!hqOfficeIds.size) return [];
 
-  const { data: appts, error: aErr } = await admin
-    .from("ogs_office_appointments")
-    .select("id, office_id, person_id, role, status, product_line_code")
-    .eq("person_id", userId)
-    .limit(200);
+  // Migration 641: each appointment's own capability scope and term. Before 641 the columns are absent and the
+  // read falls back to the old shape, so nothing is narrowed (exactly the behaviour before).
+  const base = "id, office_id, person_id, role, status, product_line_code";
+  let res = await admin.from("ogs_office_appointments").select(`${base}, capability_scope, term_start, term_end`).eq("person_id", userId).limit(200);
+  if (res.error && /capability_scope|column/i.test(res.error.message ?? "")) res = await admin.from("ogs_office_appointments").select(base).eq("person_id", userId).limit(200);
+  const { data: appts, error: aErr } = res;
   if (aErr || !appts?.length) return [];
 
   const live = (appts as any[]).filter(a =>
-    hqOfficeIds.has(a.office_id) && appointmentGrantsAccess(a.status) && !!a.role);
+    hqOfficeIds.has(a.office_id) && appointmentGrantsAccess(a.status) && !!a.role && appointmentInTerm(a.term_start, a.term_end));
   if (!live.length) return [];
 
   const codes = [...new Set(live.map(a => a.role as string))];
@@ -95,7 +96,8 @@ export async function listGovernanceContexts(admin: any, userId: string): Promis
         // The appointment's own product line wins over the position's -- s6 puts it on the appointment
         // because that is what the ACTIVE context is resolved from.
         productLineCode: (a.product_line_code ?? pos.product_line_code ?? null) as string | null,
-        capabilities: [...new Set(inDate.filter((g: any) => g.position_code === a.role).map((g: any) => g.capability_code))].sort(),
+        // Migration 641: narrowed by this appointment's own scope, so holders of one shared role differ.
+        capabilities: narrowToScope([...new Set(inDate.filter((g: any) => g.position_code === a.role).map((g: any) => g.capability_code as string))], a.capability_scope).sort(),
       };
     })
     // Deterministic, so an unchosen default is stable between requests rather than whatever the database
@@ -126,6 +128,48 @@ export async function resolveActiveGovernance(
   return chosen
     ? { active: chosen, available, defaulted: false }
     : { active: available[0], available, defaulted: available.length > 1 };
+}
+
+/**
+ * What the ACTIVE context may do. HQ-SOD-CROSSCUT-01 (owner GO, 28 Oct 2026) revises "exactly one active
+ * appointment decides": where multiple appointments are switched on (hq_config.multiple_appointments,
+ * migration 640), the authority is the UNION of every valid appointment in the active context's product line.
+ *
+ * ⚠ NEVER ACROSS PRODUCT LINES. GOV-MC-001 acceptance 4 still holds: an appointment in another product adds
+ * nothing here, and the switcher is still how a person acts there. Two appointments in the same product line
+ * are one person doing several jobs in one place, which is what the owner asked for.
+ *
+ * ⚠ WIDENING CAPABILITIES NEVER WIDENS AN ITEM. The database refuses a person's own content at approval and
+ * publication across ALL their appointments, and refuses a blocked pair across all of them (migration 640).
+ * Pure.
+ */
+export function effectiveAuthority(
+  active: GovernanceContext | null,
+  available: GovernanceContext[],
+  multipleAppointments: boolean,
+): { positions: string[]; capabilities: string[] } {
+  if (!active) return { positions: [], capabilities: [] };
+  if (!multipleAppointments) return { positions: [active.positionCode], capabilities: active.capabilities };
+  // `available` is already the valid set (live office, access-granting status, active position, in-date grants).
+  const same = [active, ...available.filter(c => c.appointmentId !== active.appointmentId && c.productLineCode === active.productLineCode)];
+  return {
+    positions: [...new Set(same.map(c => c.positionCode))].sort(),
+    capabilities: [...new Set(same.flatMap(c => c.capabilities))].sort(),
+  };
+}
+
+/**
+ * hq_config.multiple_appointments (migration 640). ⚠ FAILS CLOSED TO FALSE: absent column, absent row or a read
+ * error all answer "one active appointment", which is exactly the behaviour before 640.
+ */
+export async function readMultipleAppointments(admin: any): Promise<boolean> {
+  try {
+    const { data, error } = await admin.from("hq_config").select("multiple_appointments").eq("id", "singleton").limit(1);
+    if (error) return false;
+    return (data?.[0] as { multiple_appointments?: boolean } | undefined)?.multiple_appointments === true;
+  } catch {
+    return false;
+  }
 }
 
 /**

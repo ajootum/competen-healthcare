@@ -14,9 +14,10 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { readFileSync } from "node:fs";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
-import { listGovernanceContexts, resolveActiveGovernance, recordContextSwitch } from "../src/lib/hq/governance-context";
+import { listGovernanceContexts, resolveActiveGovernance, recordContextSwitch, effectiveAuthority, readMultipleAppointments, type GovernanceContext } from "../src/lib/hq/governance-context";
 import { resolveHqPositions } from "../src/lib/hq/context";
 import { isHqOfficeType } from "../src/lib/hq/spaces";
 
@@ -49,9 +50,23 @@ const strip = (s: string) =>
   // the old union left S1 green, because the call itself was untouched -- the resolver ran and its answer
   // was then thrown away. Calling a narrowing function is not narrowing. These pin the expressions that
   // actually decide, and they are exact rather than prefixes for the same reason.
-  ok("S1b", /const positions = governance\.active \? \[governance\.active\.positionCode\] : \[\];/.test(ctxSrc)
-        && /const capabilities = governance\.active \? governance\.active\.capabilities : \[\];/.test(ctxSrc),
-    "...and authorization is built from that ONE context, not from the union of every position held");
+  // HQ-SOD-CROSSCUT-01 (owner GO, 28 Oct 2026) revised "one appointment decides": with multiple appointments on,
+  // the active context is the union of the person's valid appointments in the SAME product line, never across.
+  ok("S1b", /const \{ positions, capabilities \} = effectiveAuthority\(governance\.active, governance\.available, multiple\);/.test(ctxSrc)
+        && /readMultipleAppointments\(admin\),/.test(ctxSrc),
+    "...and authorization is built from the active context (effectiveAuthority), not from the union of every position held");
+  const govSrc = strip(readFileSync("src/lib/hq/governance-context.ts", "utf8"));
+  const readFn = govSrc.slice(govSrc.indexOf("export async function readMultipleAppointments"), govSrc.indexOf("export async function recordContextSwitch"));
+  ok("S1c", /if \(error\) return false;/.test(readFn) && /=== true;/.test(readFn) && /catch \{\s*return false;/.test(readFn),
+    "multiple appointments read FAILS CLOSED to one active appointment (absent column, row or read error)");
+  const ctxOf = (id: string, pos: string, line: string | null, caps: string[]): GovernanceContext =>
+    ({ appointmentId: id, positionCode: pos, positionName: pos, productLineCode: line, capabilities: caps });
+  const a1 = ctxOf("a1", "p1", "individual", ["x.one"]), a2 = ctxOf("a2", "p2", "individual", ["x.two"]), a3 = ctxOf("a3", "p3", "practice", ["x.three"]);
+  const on = effectiveAuthority(a1, [a1, a2, a3], true), off = effectiveAuthority(a1, [a1, a2, a3], false);
+  ok("S1d", on.capabilities.join(",") === "x.one,x.two" && off.capabilities.join(",") === "x.one",
+    "union within the product line when on, one appointment when off, and never another product line's capability (acceptance 4)");
+  ok("S1d-control", effectiveAuthority(a3, [a1, a2, a3], true).capabilities.join(",") === "x.three",
+    "control: from the other product line the same person holds only that line's capability");
 
   // ⚠ THE DOOR MUST STAY THE UNION. If the layout narrowed too, an identity whose active context is narrow
   // could be refused the building it needs to enter in order to change context.
@@ -112,6 +127,7 @@ const strip = (s: string) =>
     process.exit(failures.length ? 1 : 0);
   }
   const admin = createClient(url, key, { auth: { persistSession: false } }) as any;
+  const HQ_OWNER = await fixtureOwnerId(admin);
 
   let fixtureApptId: string | null = null;
   try {
@@ -174,7 +190,7 @@ const strip = (s: string) =>
 
     if (!hqOffice || !spare) skip("C1-C3", "no spare HQ office/position to build a second appointment from");
     else {
-      const { data: made, error: mkErr } = await admin.from("ogs_office_appointments").insert({
+      const { data: made, error: mkErr } = await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER),
         office_id: hqOffice.id, person_id: subject.p.id, person_name: subject.p.full_name,
         role: spare.code, status: "active",
       }).select("id").single();
@@ -189,9 +205,18 @@ const strip = (s: string) =>
         const nowActive = await resolveActiveGovernance(admin, subject.p.id, null);
         const activeCaps = nowActive.active?.capabilities ?? [];
 
-        // ⚠ THE DEVIATION, MEASURED. The union is what the product used to hand out.
+        // ⚠ MEASURED ON THE REAL TABLES. The single appointment is still narrower than the door's union, and the
+        // effective authority (HQ-SOD-CROSSCUT-01) never carries a capability only another product line grants.
         ok("C1", activeCaps.length < union.length,
-          `the ACTIVE context grants ${activeCaps.length} capabilities where the union grants ${union.length} -- acceptance 4, a director cannot act in another product from the same shell`);
+          `the ACTIVE appointment grants ${activeCaps.length} capabilities where the union grants ${union.length}`);
+        const multiple = await readMultipleAppointments(admin);
+        const eff = effectiveAuthority(nowActive.active, nowActive.available, multiple);
+        const line = nowActive.active?.productLineCode ?? null;
+        const sameLine = new Set(nowActive.available.filter(c => c.productLineCode === line).flatMap(c => c.capabilities));
+        const otherOnly = nowActive.available.filter(c => c.productLineCode !== line).flatMap(c => c.capabilities).filter(c => !sameLine.has(c));
+        ok("C1b", otherOnly.every(c => !eff.capabilities.includes(c))
+              && (multiple ? [...sameLine].every(c => eff.capabilities.includes(c)) : eff.capabilities.join(",") === activeCaps.join(",")),
+          `effective authority (multiple appointments ${multiple ? "on" : "off"}) holds ${eff.capabilities.length} capabilities, none only another product line grants -- acceptance 4`);
 
         ok("C2", nowActive.defaulted === true,
           "holding two contexts with none chosen is reported as DEFAULTED, so the screen can say so rather than imply a decision");

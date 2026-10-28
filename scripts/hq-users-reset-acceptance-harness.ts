@@ -21,6 +21,7 @@
  * Refuses production via assertSafeTarget. PEND (exit 0, nothing created) until 379 is applied.
  */
 import { loadEnvConfig } from "@next/env";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { resolveHqPositions } from "../src/lib/hq/context";
@@ -109,6 +110,7 @@ const lastOutcome = async (actorId: string, targetId: string) => {
 };
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   console.log(`HQ USERS RESET ACCEPTANCE (HQ-USERS-B) -- target ${ref}${BASE ? `, server ${BASE}` : ", no server"}\n`);
   const cap = await admin.from("hq_capability").select("code").eq("code", "hq.platform.users.reset").maybeSingle();
   if (!cap.data) { console.log("  PEND  migration 379 is not applied here. Nothing created."); return; }
@@ -131,8 +133,8 @@ async function main() {
     ok("0d. the reservation function (383) answers on this project", !probe.error && (Array.isArray(probe.data) ? probe.data[0] : probe.data)?.outcome === "reserved", probe.error?.message ?? JSON.stringify(probe.data));
     if (probe.error) return;
     const office = await admin.from("ogs_offices").select("id").eq("office_type", "hq_platform").limit(1).maybeSingle();
-    const appt = office.data ? await admin.from("ogs_office_appointments").insert({ office_id: office.data.id, person_id: id.resetter, person_name: "Harness usersB resetter", role: "platform_director", status: "active", term_start: new Date(Date.now() - 60_000).toISOString() }) : { error: { message: "no hq_platform office" } };
-    if (office.data) await admin.from("ogs_office_appointments").insert({ office_id: office.data.id, person_id: id.burstactor, person_name: "Harness usersB second administrator", role: "platform_director", status: "active", term_start: new Date(Date.now() - 60_000).toISOString() });
+    const appt = office.data ? await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER), office_id: office.data.id, person_id: id.resetter, person_name: "Harness usersB resetter", role: "platform_director", status: "active", term_start: new Date(Date.now() - 60_000).toISOString() }) : { error: { message: "no hq_platform office" } };
+    if (office.data) await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER), office_id: office.data.id, person_id: id.burstactor, person_name: "Harness usersB second administrator", role: "platform_director", status: "active", term_start: new Date(Date.now() - 60_000).toISOString() });
     ok("0. the resetter is appointed platform_director", !appt.error, appt.error?.message);
     const caps = (await resolveHqPositions(admin, id.resetter)).capabilities;
     ok("G0. 379: the Platform Director appointment holds hq.platform.users.reset", caps.includes("hq.platform.users.reset"), caps.join(","));
@@ -199,7 +201,7 @@ async function main() {
     // ── C. the Chief Executive: sees the directory, may reset, may not do owner-only operations ──
     const ceoView = (await admin.from("hq_position_capability").select("capability_code").eq("position_code", "chief_executive").eq("capability_code", "hq.platform.users.view").is("effective_to", null)).data ?? [];
     const execOffice = await admin.from("ogs_offices").select("id").eq("office_type", "hq_executive").limit(1).maybeSingle();
-    const ceoAppt = execOffice.data ? await admin.from("ogs_office_appointments").insert({ office_id: execOffice.data.id, person_id: id.ceo, person_name: "Harness usersB chief executive", role: "chief_executive", status: "active", term_start: new Date(Date.now() - 60_000).toISOString() }) : { error: { message: "no hq_executive office" } };
+    const ceoAppt = execOffice.data ? await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER), office_id: execOffice.data.id, person_id: id.ceo, person_name: "Harness usersB chief executive", role: "chief_executive", status: "active", term_start: new Date(Date.now() - 60_000).toISOString() }) : { error: { message: "no hq_executive office" } };
     const ceo = await cookieFor(FIX.ceo);
     const ceoCaps = (await resolveHqPositions(admin, id.ceo)).capabilities;
     ok("C0. the Chief Executive appointment holds users.reset and users.view, and no owner authority", !ceoAppt.error && !!ceo && ceoCaps.includes("hq.platform.users.reset") && ceoCaps.includes("hq.platform.users.view") && ceoView.length === 1, `${ceoAppt.error?.message ?? ""} ${ceoCaps.join(",")}`);

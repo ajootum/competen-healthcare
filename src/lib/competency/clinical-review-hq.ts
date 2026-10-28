@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { REVIEWER_POSITION, reviewerAppointments, scopeCovers, type ReviewerScope, type ScopeKind } from "./clinical-review";
+import { approverPositions, carryingApproval, reviewerAppointments, scopeCovers, type ReviewerScope, type ScopeKind } from "./clinical-review";
 
 // ── CLINICAL REVIEW: WHAT THE HQ PAGES READ ── migration 395 ──────────────────────────────────────────────
 //
@@ -25,7 +25,11 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
   const versions = await rows(admin.from("clinical_content_version").select("*")
     .order("created_at", { ascending: false }).limit(300));
   if (versions === null) return null;
-  const independent = versions.filter((v: any) => v.submitted_by !== reviewerId && !(v.authored_by ?? []).includes(reviewerId));
+  // Migration 640: independence covers every version of a competency, so a resubmission naming somebody else is
+  // still not this reviewer's to decide. The trigger refuses it either way. This keeps it out of the queue.
+  const mine = (v: any) => v.submitted_by === reviewerId || (v.authored_by ?? []).includes(reviewerId);
+  const ownCompetencies = new Set(versions.filter((v: any) => v.competency_id && mine(v)).map((v: any) => v.competency_id));
+  const independent = versions.filter((v: any) => !mine(v) && !(v.competency_id && ownCompetencies.has(v.competency_id)));
   // Migration 422: a case version has no competency_id. The competency path reads competency versions only, so one
   // case in review never makes the whole queue unreadable. Cases are listed below, by their own rule.
   const open = independent.filter((v: any) => v.competency_id);
@@ -96,8 +100,11 @@ export type ScopeOption = { kind: ScopeKind; ref: string; label: string };
 
 /** Every active clinical reviewer appointment, with its scopes, and what a scope may name. */
 export async function governanceView(admin: any): Promise<{ reviewers: ReviewerView[]; options: ScopeOption[]; frameworks: { id: string; name: string; specialtyTermId: string | null }[]; specialties: { id: string; value: string }[] } | null> {
+  // HQ-SOD-CROSSCUT-01: every appointment to a position granting approval, not only the reviewer position.
+  const approvers = await approverPositions(admin);
+  if (approvers === null) return null;
   const [appts, terms, fws] = await Promise.all([
-    rows(admin.from("ogs_office_appointments").select("id, person_id, person_name").eq("role", REVIEWER_POSITION).eq("status", "active").limit(500)),
+    approvers.length ? carryingApproval((cols: string) => admin.from("ogs_office_appointments").select(cols).in("role", approvers).eq("status", "active").limit(500), "id, person_id, person_name, role") : Promise.resolve([]),
     rows(admin.from("taxonomy_terms").select("id, value, taxonomies!inner(kind)").in("taxonomies.kind", ["profession", "specialty"]).order("value").limit(1000)),
     rows(admin.from("frameworks").select("id, name, specialty_term_id").is("hospital_id", null).order("name").limit(500)),
   ]);

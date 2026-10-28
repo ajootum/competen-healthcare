@@ -67,8 +67,15 @@ export async function publishScope(admin: any, actor: WceActor, scope: WceScope,
   const { data: rows } = await admin.from("workspace_config_overrides")
     .select("config_path, draft").eq("scope_type", scope.scopeType).eq("scope_ref", scope.scopeRef);
   for (const r of rows ?? []) {
-    await admin.from("workspace_config_overrides").update({ published: r.draft, updated_at: nowIso() })
+    // HQ-SOD-CROSSCUT-01: the publisher is recorded on the row (migration 640), so the database can refuse a
+    // governed value that only the owner may lower. Before 640 the column is absent and the write goes without it.
+    const write = (withPublisher: boolean) => admin.from("workspace_config_overrides")
+      .update({ published: r.draft, updated_at: nowIso(), ...(withPublisher ? { published_by: actor.userId } : {}) })
       .eq("scope_type", scope.scopeType).eq("scope_ref", scope.scopeRef).eq("config_path", r.config_path);
+    let res = await write(true);
+    if (res?.error && /published_by/.test(res.error.message ?? "")) res = await write(false);
+    // ⚠ A REFUSED WRITE IS NOT A PUBLICATION. Without this the version and its audit row were recorded anyway.
+    if (res?.error) return { ok: false, status: /self_reduction/.test(res.error.message ?? "") ? 403 : 409, error: (res.error.message ?? "").replace(/^hq_sod \w+: /, "") || "The configuration could not be published. Nothing was published." };
   }
   const snapshot = (rows ?? []).map((r: any) => ({ config_path: r.config_path, settings: r.draft }));
   const { data: ver } = await admin.from("workspace_config_versions").insert({
@@ -96,11 +103,16 @@ export async function rollbackVersion(admin: any, actor: WceActor, versionId: st
   const scope: WceScope = { scopeType: ver.scope_type, scopeRef: ver.scope_ref };
   const snap: any[] = ver.snapshot ?? [];
   for (const e of snap) {
-    await admin.from("workspace_config_overrides").upsert({
+    // The publisher rides on the row (migration 640), as in publishScope, with the same pre-640 fallback.
+    const write = (withPublisher: boolean) => admin.from("workspace_config_overrides").upsert({
       scope_type: scope.scopeType, scope_ref: scope.scopeRef, config_path: e.config_path,
       hospital_id: hospitalOf(scope),
       draft: e.settings, published: e.settings, updated_by: actor.userId, updated_by_name: actor.name, updated_at: nowIso(),
+      ...(withPublisher ? { published_by: actor.userId } : {}),
     }, { onConflict: "scope_type,scope_ref,config_path" });
+    let res = await write(true);
+    if (res?.error && /published_by/.test(res.error.message ?? "")) res = await write(false);
+    if (res?.error) return { ok: false, status: /self_reduction/.test(res.error.message ?? "") ? 403 : 409, error: (res.error.message ?? "").replace(/^hq_sod \w+: /, "") || "The version could not be restored. Nothing was restored." };
   }
   let pruned = 0;
   if (opts.prune) {

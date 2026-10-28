@@ -22,6 +22,7 @@
  *   npx tsx scripts/privileged-harnesses.ts --staging --only professional-profile-b-acceptance
  */
 import { loadEnvConfig } from "@next/env";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { grantIndividualAccess, validateGrant, isGrantRefusal } from "../src/lib/individual/grants";
@@ -109,6 +110,7 @@ async function restore() {
 const publish = (path: string, settings: unknown) => admin.from("workspace_config_overrides").upsert({ ...SCOPE, config_path: path, draft: settings, published: settings }, { onConflict: "scope_type,scope_ref,config_path" });
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   console.log(`PROFESSIONAL PROFILE PART B ACCEPTANCE against ${ref}\n`);
   for (const t of ["individual_professional_item_verification", "individual_professional_reminder_log", "individual_professional_share_item"]) {
     const p = await admin.from(t).select("*").limit(0);
@@ -136,7 +138,7 @@ async function main() {
     const byPlain = await recordVerdict(admin, plain, { itemId: reg, userId: person, event: "verified", method: "register_check", validUntil: null, reason: null });
     ok("V1. before any appointment nobody can verify; a request comes first; a non-appointee is refused by the database",
       !early.ok && req.ok && !byPlain.ok && /appointment/.test((byPlain as any).error), `${JSON.stringify(early)} ${JSON.stringify(byPlain)}`);
-    await admin.from("ogs_office_appointments").insert([{ office_id: office.id, person_id: verifier, role: ROLE, status: "active" }, { office_id: office.id, person_id: person, role: ROLE, status: "active" }]);
+    await admin.from("ogs_office_appointments").insert([{ office_id: office.id, person_id: verifier, role: ROLE, status: "active" }, { office_id: office.id, person_id: person, role: ROLE, status: "active" }].map(r => ({ ...r, ...appointmentAuthority(HQ_OWNER) })));
     const self = await recordVerdict(admin, person, { itemId: reg, userId: person, event: "verified", method: "register_check", validUntil: null, reason: null });
     const own = await recordPersonEvent(admin, verifier, reg, "requested", null);
     const queue = await loadOpenRequests(admin, person, today);

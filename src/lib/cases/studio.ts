@@ -381,7 +381,11 @@ export async function publishCase(admin: any, publisherId: string, versionId: st
   if (!UUID.test(versionId)) return { ok: false, error: "No such version." };
   const { error } = await admin.rpc("case_library_publish", { p_version: versionId, p_publisher: publisherId });
   if (!error) return { ok: true };
-  return { ok: false, error: /not clinically approved/i.test(error.message) ? "This exact version is not clinically approved." : /retired/i.test(error.message) ? "The case is retired." : /only a submitted/i.test(error.message) ? "Only a submitted, approved version can be published." : "The case could not be published just now." };
+  return { ok: false, error: /not clinically approved/i.test(error.message) ? "This exact version is not clinically approved."
+    // Migration 640: never the author, an editor or the submitter, and (where the case rule is on) never an approver.
+    : /clinical approvers/i.test(error.message) ? "You clinically approved this version, and for cases the publisher must be someone else."
+    : /not independent/i.test(error.message) ? "You authored, edited or submitted this version, so someone else must publish it."
+    : /retired/i.test(error.message) ? "The case is retired." : /only a submitted/i.test(error.message) ? "Only a submitted, approved version can be published." : "The case could not be published just now." };
 }
 
 /** Retire a case: no longer offered. Its versions and their review records stay. */

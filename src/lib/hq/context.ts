@@ -1,13 +1,13 @@
 import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  resolveActiveGovernance, HQ_CONTEXT_COOKIE, type GovernanceContext,
+  resolveActiveGovernance, effectiveAuthority, readMultipleAppointments, HQ_CONTEXT_COOKIE, type GovernanceContext,
 } from "./governance-context";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { estateRolesOf, platformRolesOf, hasPlatformRole, type PlatformRole } from "@/lib/roles";
 import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
 import {
-  decideHq, activeGrants, capabilityForRoute, isHqOfficeType,
+  decideHq, activeGrants, appointmentInTerm, capabilityForRoute, isHqOfficeType, narrowToScope,
   type HqDecision, type HqMode,
 } from "./spaces";
 
@@ -112,16 +112,18 @@ export async function resolveHqPositions(
     .map(o => o.id);
   if (!hqOfficeIds.length) return { positions: [], capabilities: [], positionNames: [] };
 
-  const { data: appts, error: aErr } = await admin
-    .from("ogs_office_appointments")
-    .select("office_id, person_id, role, status")
-    .in("office_id", hqOfficeIds)
-    .eq("person_id", userId)
-    .limit(200);
-  if (aErr || !appts?.length) return { positions: [], capabilities: [], positionNames: [] };
+  // Migration 641: each appointment's capability scope and term. Falls back to the old shape before 641.
+  const read = (cols: string) => admin.from("ogs_office_appointments").select(cols).in("office_id", hqOfficeIds).eq("person_id", userId).limit(200);
+  let apptRes = await read("office_id, person_id, role, status, capability_scope, term_start, term_end");
+  if (apptRes.error && /capability_scope|column/i.test(apptRes.error.message ?? "")) apptRes = await read("office_id, person_id, role, status");
+  const { data: rawAppts, error: aErr } = apptRes;
+  if (aErr || !rawAppts?.length) return { positions: [], capabilities: [], positionNames: [] };
+  type ApptRow = { role: string | null; status: string | null; capability_scope?: string[] | null; term_start?: string | null; term_end?: string | null };
+  // A lapsed or not-yet-started term grants nothing, whatever its status says (hq_appointment_in_force).
+  const appts = (rawAppts as unknown as ApptRow[]).filter(a => appointmentInTerm(a.term_start, a.term_end));
 
   const positions = [...new Set(
-    (appts as { role: string | null; status: string | null }[])
+    appts
       // ⚠ WAS A DENYLIST (status !== "removed" && status !== "expired") AND THAT ADMITTED `suspended`.
       // Suspending an office holder is the action taken to stop their access; it did not stop it. It also
       // admitted `nominated`, which is a proposal. The allowlist lives in ogs/lifecycle so this and the
@@ -155,9 +157,12 @@ export async function resolveHqPositions(
     .select("position_code, capability_code, effective_from, effective_to")
     .in("position_code", activePositions)
     .limit(2000);
+  // The union over appointments, each narrowed by its own scope (migration 641).
+  const inDate = activeGrants((grants ?? []) as { position_code: string; capability_code: string; effective_from: string | null; effective_to: string | null }[]);
   const capabilities = [...new Set(
-    activeGrants((grants ?? []) as { capability_code: string; effective_from: string | null; effective_to: string | null }[])
-      .map(g => g.capability_code),
+    appts
+      .filter(a => appointmentGrantsAccess(a.status) && !!a.role && live.has(a.role as string))
+      .flatMap(a => narrowToScope(inDate.filter(g => g.position_code === a.role).map(g => g.capability_code), a.capability_scope)),
   )].sort();
 
   return { positions, capabilities, positionNames };
@@ -275,7 +280,12 @@ export async function resolveHqContext(
   // ⚠ THIS IS THE NARROWING, AND IT IS THE POINT. Until now capabilities were the union of every position a
   // person held, so an identity appointed to two products could act in both from one screen -- which
   // acceptance criterion 4 forbids ("a Product Director cannot see another product merely because the same
-  // shell is used"). Authorization now answers from the ACTIVE appointment alone.
+  // shell is used"). Authorization now answers from the ACTIVE context.
+  //
+  // ⚠ HQ-SOD-CROSSCUT-01 (owner GO, 28 Oct 2026) REVISES "ONE APPOINTMENT DECIDES". Where hq_config allows
+  // multiple appointments (migration 640, read fail-closed to false) the active context is the union of the
+  // person's valid appointments in the SAME product line (effectiveAuthority). Never across product lines, so
+  // acceptance 4 holds, and the database still refuses a person's own content across all their appointments.
   //
   // ⚠ THE COOKIE IS A HINT AND CANNOT WIDEN ANYTHING. resolveActiveGovernance only ever selects from
   // appointments this identity actually holds, re-read and re-checked on every request. An id belonging to
@@ -292,13 +302,13 @@ export async function resolveHqContext(
     // Outside a request scope (a harness, a script). No selection is a valid state, not an error.
   }
 
-  const [governance, mode] = await Promise.all([
+  const [governance, mode, multiple] = await Promise.all([
     resolveActiveGovernance(admin, user.id, selected),
-    // An enforcing call needs no config read: nothing hq_config could say would loosen it.
+    // An enforcing call needs no mode read: nothing hq_config.mode could say would loosen it.
     opts.enforce ? Promise.resolve<HqMode>("enforce") : readHqMode(admin),
+    readMultipleAppointments(admin),
   ]);
-  const positions = governance.active ? [governance.active.positionCode] : [];
-  const capabilities = governance.active ? governance.active.capabilities : [];
+  const { positions, capabilities } = effectiveAuthority(governance.active, governance.available, multiple);
   const verdict = decideHq({ isOwner: false, positions, capabilities, capability: declared, mode });
 
   if (verdict.decision !== "allow" && !opts.probe) {

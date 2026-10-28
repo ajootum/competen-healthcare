@@ -29,6 +29,7 @@
  * PEND (exit 0, nothing created) until 464 is applied.
  */
 import { loadEnvConfig } from "@next/env";
+import { appointmentAuthority, fixtureOwnerId } from "./_hq-fixture-authority";
 import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { HQ_OFFICE_TYPE_PREFIX } from "../src/lib/hq/spaces";
@@ -98,6 +99,7 @@ function ecg(competencyId: string, title: string): Blueprint {
 }
 
 async function main() {
+  const HQ_OWNER = await fixtureOwnerId(admin);
   console.log(`LEARNING ACCEPTANCE (460-464) -- target ${ref}\n`);
   const probe = await admin.from("learning_offering_price").select("id").limit(0);
   const probe464 = await admin.from("hq_position").select("code").eq("code", "learning_certificate_issuer").maybeSingle();
@@ -118,10 +120,10 @@ async function main() {
       await person(EMAILS.pub, "LRN Publisher (synthetic)"), await person(EMAILS.price, "LRN Price Approver (synthetic)"), await person(EMAILS.issuer, "LRN Issuer (synthetic)"),
       await person(EMAILS.learner, "LRN Learner (synthetic)"), await person(EMAILS.learner2, "LRN Learner Two (synthetic)")];
     const people = [author, rev, pub, pricer, issuer, learner, learner2];
-    const appoint = async (p: string, role: string) => (await admin.from("ogs_office_appointments").insert({ office_id: office.id, person_id: p, role, status: "active" }).select("id").single()).data.id as string;
+    const appoint = async (p: string, role: string) => (await admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(HQ_OWNER), office_id: office.id, person_id: p, role, status: "active" }).select("id").single()).data.id as string;
     await appoint(author, "learning_course_author"); await appoint(pub, "learning_publisher"); await appoint(pricer, "learning_price_approver"); await appoint(issuer, "learning_certificate_issuer");
     const revAppt = await appoint(rev, "clinical_content_reviewer");
-    await admin.from("clinical_reviewer_scope").insert({ appointment_id: revAppt, scope_kind: "framework", scope_ref: fw.id });
+    await admin.from("clinical_reviewer_scope").insert({ granted_by: HQ_OWNER, appointment_id: revAppt, scope_kind: "framework", scope_ref: fw.id });
     // Course-only members: an Individual membership and NO Scholar or Professional entitlement (D2, D5).
     for (const u of [learner, learner2]) await admin.from("individual_membership").insert({ user_id: u, status: "active", source: "hq_grant", granted_by: author });
     const ai0 = await aiRows(people);
