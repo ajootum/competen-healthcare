@@ -42,8 +42,11 @@ The following are settled decisions, not defaults waiting to be improved:
   Platform and Practice are separate products with explicit `platform_membership`; `profiles.role` is
   nullable and Practice code must never read it.
 - **The governance/product-line model** (`docs/` PLAT-GOV-001 / GOV-MC-001 material, migrations 281+282).
-  `plat_product_line` is not `plat_products`. Mission Control composes per governance context. Exactly one
-  active appointment decides authorization at any moment.
+  `plat_product_line` is not `plat_products`. Mission Control composes per governance context. One active
+  governance context decides authorization at any moment. Revised by owner GO HQ-SOD-CROSSCUT-01 (28 Oct 2026,
+  migration 640): where `hq_config.multiple_appointments` is on, that context is the union of the person's valid
+  appointments in the SAME product line (never across product lines), and independence is enforced per item and
+  version in the database (never approve or publish your own work), not by forbidding role combinations.
 - **The CPR-MOB-001 responsive freeze** — one `md` breakpoint edge, `pointer-coarse` (not viewport width)
   gates touch-target sizing. This was an executed freeze, not a preference.
 - **The CPR-HFE-001 sidebar and screen doctrine** (`docs/CPR-PD-SCREEN-DOCTRINE.md`,

@@ -7,8 +7,8 @@ import type { Read } from "@/lib/hq/appointments";
 import { SPACE_LABEL } from "@/lib/hq/appointments";
 import { HQ_SPACES, type HqSpace } from "@/lib/hq/spaces";
 import {
-  HQ_CAPABILITY_EXCLUSIONS, MIN_REASON, POSITION_CODE_RE, SENSITIVE_LABEL, exclusionConflict,
-  type HqCatalogueEntry, type HqGrantView, type HqPositionAdminView, type HqPositionBoard, type HqSensitiveClass,
+  HQ_CAPABILITY_PAIRS, MIN_REASON, POSITION_CODE_RE, SENSITIVE_LABEL, effectiveExclusions, exclusionConflict,
+  type HqCatalogueEntry, type HqGrantView, type HqPositionAdminView, type HqPositionBoard, type HqSensitiveClass, type HqSodPolicy,
 } from "@/lib/hq/positions";
 
 /**
@@ -197,8 +197,9 @@ function GrantRow({ g, canAdminister, onEnd, busy }: { g: HqGrantView; canAdmini
   );
 }
 
-function PositionCard({ p, catalogue, canAdminister, post, busy, say }: {
-  p: HqPositionAdminView; catalogue: Read<HqCatalogueEntry[]>; canAdminister: boolean; post: Post; busy: string | null; say: Say;
+function PositionCard({ p, catalogue, exclusions, canAdminister, post, busy, say }: {
+  p: HqPositionAdminView; catalogue: Read<HqCatalogueEntry[]>; exclusions: readonly { a: string; b: string; reason: string }[];
+  canAdminister: boolean; post: Post; busy: string | null; say: Say;
 }) {
   const [reason, setReason] = useState("");
   const [name, setName] = useState(p.name);
@@ -218,7 +219,7 @@ function PositionCard({ p, catalogue, canAdminister, post, busy, say }: {
     if (!c.applied) return "not in the database yet: register it first";
     if (liveCodes.includes(c.code)) return "already held";
     if (everHeld.has(c.code)) return "held before and ended: kept as history, not reopened";
-    const x = exclusionConflict(c.code, liveCodes);
+    const x = exclusionConflict(c.code, liveCodes, exclusions);
     return x ? `separation of duties: ${x.reason}` : null;
   };
   const chosen = catalogue.ok ? catalogue.value.find(c => c.code === cap) ?? null : null;
@@ -316,12 +317,146 @@ function PositionCard({ p, catalogue, canAdminister, post, busy, say }: {
   );
 }
 
+// ── Separation of duties (migration 640) ─────────────────────────────────────
+/**
+ * The no-code separation-of-duties settings: which pairs may sit on one position, strict separation, multiple
+ * appointments, and extra rules per content type. ⚠ THE ITEM-LEVEL PROTECTIONS ARE NOT HERE BECAUSE THEY ARE
+ * NOT SWITCHABLE. The panel says what they are, so nobody reads an allowed pair as permission to approve their
+ * own work.
+ */
+function SeparationOfDuties({ sod, post, busy, canAdminister, say }: {
+  sod: Read<HqSodPolicy> | undefined; post: Post; busy: string | null; canAdminister: boolean; say: Say;
+}) {
+  const [reason, setReason] = useState("");
+  const reasonOk = reason.trim().length >= MIN_REASON;
+  const send = (body: Record<string, unknown>, key: string, okText: string) => {
+    if (!reasonOk) { say("err", `Give a reason of at least ${MIN_REASON} characters first. It is written to the audit trail.`); return; }
+    void post({ ...body, reason }, key, okText).then(ok => ok && setReason(""));
+  };
+  const policy = sod?.ok ? sod.value : null;
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-base font-bold text-gray-900">Separation of duties</h2>
+      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
+        <div className="rounded-lg bg-[var(--cmp-surface-success)] px-3 py-2 text-[12px] text-green-900 max-w-3xl">
+          <p className="font-semibold">Always on, for every content item and version, whatever positions a person holds:</p>
+          <ul className="list-disc ml-5 mt-1 space-y-0.5">
+            <li>Nobody approves content they, or any earlier version of it, authored, edited or submitted. Resubmitting, reassigning, delegating or a second appointment does not change that.</li>
+            <li>Nobody publishes content they authored, edited, submitted or reviewed as its educator.</li>
+            <li>Nobody sets or widens their own reviewer scope. Only the platform owner lowers the number of independent approvals.</li>
+            <li>Each version needs its own approvals, and a changed version needs new ones. Every change is audited.</li>
+          </ul>
+        </div>
+
+        {!policy ? (
+          <p className="text-sm rounded-lg px-3 py-2 bg-[var(--cmp-surface-warning)] text-amber-900">
+            The separation settings could not be read{sod && !sod.ok ? ` (${sod.error})` : ""}. Until migration 640 is applied every pair
+            below is blocked on positions, exactly as before.
+          </p>
+        ) : (
+          <>
+            <div className="grid gap-2 sm:grid-cols-2 text-[12px]">
+              <div className="rounded-lg border border-gray-100 p-3 space-y-1">
+                <p className="font-semibold text-gray-900">Strict position-level separation: {policy.strict ? "On" : "Off"}</p>
+                <p className="text-gray-600">{policy.strict
+                  ? "Every pair below is blocked on a position, whatever its own setting."
+                  : "Each pair follows its own setting. Turn this on as the organisation grows. It is refused while a position or person still holds a pair."}</p>
+                {canAdminister && (
+                  <button className={quiet} disabled={busy === "sod-strict"}
+                    onClick={() => send({ action: "set_settings", strict: !policy.strict, multiple_appointments: policy.multipleAppointments }, "sod-strict",
+                      policy.strict ? "Strict separation is off. Each pair follows its own setting." : "Strict separation is on. Every pair is blocked on positions.")}>
+                    {policy.strict ? "Turn strict separation off" : "Turn strict separation on"}
+                  </button>
+                )}
+              </div>
+              <div className="rounded-lg border border-gray-100 p-3 space-y-1">
+                <p className="font-semibold text-gray-900">Multiple appointments per person: {policy.multipleAppointments ? "Allowed" : "Not allowed"}</p>
+                <p className="text-gray-600">{policy.multipleAppointments
+                  ? "A person may hold several HQ appointments. What they may do is the union of them within one product, and the per-item rules apply across all of them."
+                  : "A person holds one HQ appointment at a time. Prefer one cross-cutting position."}</p>
+                {canAdminister && (
+                  <button className={quiet} disabled={busy === "sod-multi"}
+                    onClick={() => send({ action: "set_settings", strict: policy.strict, multiple_appointments: !policy.multipleAppointments }, "sod-multi",
+                      policy.multipleAppointments ? "Multiple appointments are switched off." : "Multiple appointments are allowed.")}>
+                    {policy.multipleAppointments ? "Switch multiple appointments off" : "Allow multiple appointments"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <details>
+              <summary className="cursor-pointer text-sm text-gray-800">
+                {policy.pairs.filter(p => policy.strict || !p.allowed).length} of {policy.pairs.length} capability pairs are blocked on positions
+              </summary>
+              <ul className="mt-2 space-y-2 text-[12px] text-gray-700">
+                {policy.pairs.map(p => {
+                  const blocked = policy.strict || !p.allowed;
+                  return (
+                    <li key={`${p.a}|${p.b}`} className="rounded-lg border border-gray-100 px-3 py-2 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code>{p.a}</code> with <code>{p.b}</code>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${blocked ? "bg-gray-100 text-gray-800" : "bg-[var(--cmp-surface-success)] text-green-800"}`}>
+                          {blocked ? "Blocked on positions" : "May share a position"}
+                        </span>
+                        {!p.liftable && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--cmp-surface-warning)] text-amber-900">Always blocked</span>}
+                        {canAdminister && p.liftable && (
+                          <button className={`${quiet} ml-auto`} disabled={busy === `pair-${p.a}-${p.b}`}
+                            onClick={() => send({ action: "set_pair", a: p.a, b: p.b, allowed: !p.allowed }, `pair-${p.a}-${p.b}`,
+                              p.allowed ? `Blocked ${p.a} with ${p.b} on positions.` : `${p.a} and ${p.b} may now share a position. The item-level rule still applies.`)}>
+                            {p.allowed ? "Block" : "Allow"}
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-gray-500">When blocked: {p.reason}.</p>
+                      <p className="text-gray-500">{p.liftable
+                        ? `Item-level safeguard that makes it safe to allow: ${p.safeguard}`
+                        : "No equal or stronger item-level safeguard exists, so it cannot be allowed."}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </details>
+
+            <div className="space-y-1">
+              <p className="text-sm text-gray-800">Extra separation by content type</p>
+              <ul className="space-y-1 text-[12px] text-gray-700">
+                {policy.contentRules.map(r => (
+                  <li key={r.kind} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 px-3 py-2">
+                    <span className="font-medium text-gray-900">{r.label}</span>
+                    <span className="text-gray-600">The publisher may not be one of its clinical approvers: {r.publisherNotApprover ? "Required" : "Not required"}</span>
+                    {canAdminister && (
+                      <button className={`${quiet} ml-auto`} disabled={busy === `rule-${r.kind}`}
+                        onClick={() => send({ action: "set_content_rule", kind: r.kind, publisher_not_approver: !r.publisherNotApprover }, `rule-${r.kind}`,
+                          `${r.label}: the publisher-not-approver rule is ${r.publisherNotApprover ? "off" : "on"}.`)}>
+                        {r.publisherNotApprover ? "Stop requiring" : "Require"}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {canAdminister && <ReasonField id="sod-reason" value={reason} onChange={setReason} />}
+          </>
+        )}
+        <p className="text-[12px] text-gray-500">
+          {HQ_CAPABILITY_PAIRS.filter(p => !p.liftable).length} pairs are always blocked: the competency assessor stays separate from content
+          approval and the Verification Studio, and a research proposer never reviews or governs research.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 // ── The page ─────────────────────────────────────────────────────────────────
 export default function PositionsBoard({ board, migrationApplied, canAdminister, isOwner, viewerName }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ k: "ok" | "err"; t: string } | null>(null);
   const say: Say = (k, t) => setMsg({ k, t });
+  // What the database refuses on a position now. Unreadable policy (640 absent) counts every pair, as 580 did.
+  const exclusions = effectiveExclusions(board.sod ?? { ok: false, error: "not loaded" });
 
   const post: Post = async (body, key, okText) => {
     setBusy(key); setMsg(null);
@@ -370,21 +505,7 @@ export default function PositionsBoard({ board, migrationApplied, canAdminister,
 
       <CatalogueSync board={board} post={post} busy={busy} canAdminister={canAdminister} />
 
-      <section className="space-y-2">
-        <h2 className="text-base font-bold text-gray-900">Pairs no position may hold together</h2>
-        <details className="rounded-xl border border-gray-200 bg-white p-4">
-          <summary className="cursor-pointer text-sm text-gray-800">{HQ_CAPABILITY_EXCLUSIONS.length} separation-of-duties pairs, refused by the database for every writer</summary>
-          <ul className="mt-2 space-y-1 text-[12px] text-gray-700">
-            {HQ_CAPABILITY_EXCLUSIONS.map(e => (
-              <li key={`${e.a}|${e.b}`}><code>{e.a}</code> with <code>{e.b}</code>: {e.reason}</li>
-            ))}
-          </ul>
-          <p className="mt-2 text-[12px] text-gray-500">
-            These are per position. The per-item independence rules stay as they were: nobody may review content they
-            wrote, edited or submitted, whatever positions they hold.
-          </p>
-        </details>
-      </section>
+      <SeparationOfDuties sod={board.sod} post={post} busy={busy} canAdminister={canAdminister} say={say} />
 
       {!board.positions.ok ? <Unreadable what="The positions" error={board.positions.error} /> : (
         <div className="space-y-8">
@@ -396,7 +517,7 @@ export default function PositionsBoard({ board, migrationApplied, canAdminister,
                 {list.length === 0
                   ? <p className="text-[12px] text-gray-500">No position in this space.</p>
                   : <div className="grid gap-3 lg:grid-cols-2">
-                      {list.map(p => <PositionCard key={p.code} p={p} catalogue={board.catalogue} canAdminister={canAdminister} post={post} busy={busy} say={say} />)}
+                      {list.map(p => <PositionCard key={p.code} p={p} catalogue={board.catalogue} exclusions={exclusions} canAdminister={canAdminister} post={post} busy={busy} say={say} />)}
                     </div>}
               </section>
             );

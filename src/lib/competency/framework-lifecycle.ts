@@ -73,7 +73,19 @@ export async function transitionFramework(
     ? { version_major: opts.nextVersion.major, version_minor: opts.nextVersion.minor, version_revision: opts.nextVersion.revision } : {};
   // One statement: the 466 guard refuses the status and the version label together, so a refused publication
   // never advances the label.
-  const { error: updateErr } = await admin.from("frameworks").update({ pub_status: newStatus, ...bump }).eq("id", frameworkId);
+  // HQ-SOD-CROSSCUT-01: a publication records its publisher on the row, in the same statement, so the database
+  // (migration 640) can refuse a publisher who put the framework forward or contributed to it. Before 640 the
+  // column is absent and the write goes without it, exactly as before.
+  const write = (withPublisher: boolean) => admin.from("frameworks")
+    .update({ pub_status: newStatus, ...bump, ...(withPublisher && action === "publish" ? { published_by: actor.id } : {}) }).eq("id", frameworkId);
+  let { error: updateErr } = await write(true);
+  if (updateErr && /published_by/.test(updateErr.message ?? "") && !/not independent/i.test(updateErr.message ?? "")) ({ error: updateErr } = await write(false));
+  if (updateErr && /not independent/i.test(updateErr.message ?? "")) {
+    return { ok: false, code: 403, error: /put the framework forward/i.test(updateErr.message) ? "You put this framework forward, so a different publisher must decide it."
+      : /authored or curated/i.test(updateErr.message) ? "You authored or curated content in this framework, so a different publisher must decide it."
+      : /clinical approvers/i.test(updateErr.message) ? "For frameworks, the publisher may not be one of the clinical approvers of its competencies."
+      : "The publication must record an independent publisher." };
+  }
   // Migration 466: a shared CFCA framework is published only when every competency it owns is clinically approved (395)
   // at its current content. The database refuses; this says why, in words.
   if (updateErr && /cfca publication/i.test(updateErr.message ?? "")) {

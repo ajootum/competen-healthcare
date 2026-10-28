@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { activeGrants } from "@/lib/hq/spaces";
 
 // ── COMPETEN HOLDINGS CLINICAL-CONTENT APPROVAL ── migration 395, owner decisions D2 and D3 ─────────────────
 //
@@ -149,7 +150,7 @@ export async function submitForReview(admin: any, competencyId: string, submitte
 /** Pure: a 395 refusal, in words. */
 export function reviewRefusal(message: string | undefined): string {
   const m = message ?? "";
-  if (/not independent/i.test(m)) return "You authored, edited or put forward this content, so you cannot review it. Another reviewer must.";
+  if (/not independent/i.test(m)) return "You authored, edited or put forward this content, or an earlier version of it, so you cannot review it. Another reviewer must.";
   if (/not authorised/i.test(m)) return "You do not hold an active clinical reviewer appointment for this.";
   if (/out of scope/i.test(m)) return "This content is outside the scope of your clinical reviewer appointment.";
   if (/stale/i.test(m)) return "The content has changed since this version was put forward. It needs a new version and renewed review.";
@@ -177,9 +178,26 @@ export function scopeCovers(scopes: readonly ReviewerScope[], c: { domainId: str
     || (s.kind === "framework" && s.ref === c.frameworkId) || (s.kind === "domain" && s.ref === c.domainId));
 }
 
-/** A person's active clinical reviewer appointments and their active scopes. */
+export const APPROVE_CAPABILITY = "hq.quality.clinical.approve";
+
+/**
+ * The positions that grant clinical approval now. ⚠ HQ-SOD-CROSSCUT-01: since migration 640 that is ANY position
+ * holding hq.quality.clinical.approve (a cross-cutting one such as scholar_clinical_lead included), not only
+ * REVIEWER_POSITION. It is the same test the 395/461 trigger makes for every decision. null = unreadable.
+ */
+export async function approverPositions(admin: any): Promise<string[] | null> {
+  const { data, error } = await admin.from("hq_position_capability")
+    .select("position_code, effective_from, effective_to").eq("capability_code", APPROVE_CAPABILITY).limit(500);
+  if (error) return null;
+  return [...new Set(activeGrants((data ?? []) as { position_code: string; effective_from: string | null; effective_to: string | null }[]).map(g => g.position_code))].sort();
+}
+
+/** A person's active clinical reviewer appointments (any position granting approval) and their active scopes. */
 export async function reviewerAppointments(admin: any, personId: string): Promise<{ id: string; scopes: ReviewerScope[] }[] | null> {
-  const { data: appts, error } = await admin.from("ogs_office_appointments").select("id").eq("person_id", personId).eq("role", REVIEWER_POSITION).eq("status", "active");
+  const positions = await approverPositions(admin);
+  if (positions === null) return null;
+  if (!positions.length) return [];
+  const { data: appts, error } = await admin.from("ogs_office_appointments").select("id").eq("person_id", personId).in("role", positions).eq("status", "active");
   if (error) return null;
   if (!appts?.length) return [];
   const { data: sc, error: sErr } = await admin.from("clinical_reviewer_scope").select("id, appointment_id, scope_kind, scope_ref").in("appointment_id", appts.map((a: any) => a.id)).is("ended_at", null);

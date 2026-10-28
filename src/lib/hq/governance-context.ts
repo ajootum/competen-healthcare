@@ -129,6 +129,48 @@ export async function resolveActiveGovernance(
 }
 
 /**
+ * What the ACTIVE context may do. HQ-SOD-CROSSCUT-01 (owner GO, 28 Oct 2026) revises "exactly one active
+ * appointment decides": where multiple appointments are switched on (hq_config.multiple_appointments,
+ * migration 640), the authority is the UNION of every valid appointment in the active context's product line.
+ *
+ * ⚠ NEVER ACROSS PRODUCT LINES. GOV-MC-001 acceptance 4 still holds: an appointment in another product adds
+ * nothing here, and the switcher is still how a person acts there. Two appointments in the same product line
+ * are one person doing several jobs in one place, which is what the owner asked for.
+ *
+ * ⚠ WIDENING CAPABILITIES NEVER WIDENS AN ITEM. The database refuses a person's own content at approval and
+ * publication across ALL their appointments, and refuses a blocked pair across all of them (migration 640).
+ * Pure.
+ */
+export function effectiveAuthority(
+  active: GovernanceContext | null,
+  available: GovernanceContext[],
+  multipleAppointments: boolean,
+): { positions: string[]; capabilities: string[] } {
+  if (!active) return { positions: [], capabilities: [] };
+  if (!multipleAppointments) return { positions: [active.positionCode], capabilities: active.capabilities };
+  // `available` is already the valid set (live office, access-granting status, active position, in-date grants).
+  const same = [active, ...available.filter(c => c.appointmentId !== active.appointmentId && c.productLineCode === active.productLineCode)];
+  return {
+    positions: [...new Set(same.map(c => c.positionCode))].sort(),
+    capabilities: [...new Set(same.flatMap(c => c.capabilities))].sort(),
+  };
+}
+
+/**
+ * hq_config.multiple_appointments (migration 640). ⚠ FAILS CLOSED TO FALSE: absent column, absent row or a read
+ * error all answer "one active appointment", which is exactly the behaviour before 640.
+ */
+export async function readMultipleAppointments(admin: any): Promise<boolean> {
+  try {
+    const { data, error } = await admin.from("hq_config").select("multiple_appointments").eq("id", "singleton").limit(1);
+    if (error) return false;
+    return (data?.[0] as { multiple_appointments?: boolean } | undefined)?.multiple_appointments === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * GOV-001 section 17 requires "governance context switched" as an audit event.
  *
  * ⚠ WRITTEN TO audit_log RATHER THAN A NEW TABLE, and that is a considered choice rather than laziness:

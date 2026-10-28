@@ -1,7 +1,7 @@
 import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  resolveActiveGovernance, HQ_CONTEXT_COOKIE, type GovernanceContext,
+  resolveActiveGovernance, effectiveAuthority, readMultipleAppointments, HQ_CONTEXT_COOKIE, type GovernanceContext,
 } from "./governance-context";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { estateRolesOf, platformRolesOf, hasPlatformRole, type PlatformRole } from "@/lib/roles";
@@ -275,7 +275,12 @@ export async function resolveHqContext(
   // ⚠ THIS IS THE NARROWING, AND IT IS THE POINT. Until now capabilities were the union of every position a
   // person held, so an identity appointed to two products could act in both from one screen -- which
   // acceptance criterion 4 forbids ("a Product Director cannot see another product merely because the same
-  // shell is used"). Authorization now answers from the ACTIVE appointment alone.
+  // shell is used"). Authorization now answers from the ACTIVE context.
+  //
+  // ⚠ HQ-SOD-CROSSCUT-01 (owner GO, 28 Oct 2026) REVISES "ONE APPOINTMENT DECIDES". Where hq_config allows
+  // multiple appointments (migration 640, read fail-closed to false) the active context is the union of the
+  // person's valid appointments in the SAME product line (effectiveAuthority). Never across product lines, so
+  // acceptance 4 holds, and the database still refuses a person's own content across all their appointments.
   //
   // ⚠ THE COOKIE IS A HINT AND CANNOT WIDEN ANYTHING. resolveActiveGovernance only ever selects from
   // appointments this identity actually holds, re-read and re-checked on every request. An id belonging to
@@ -292,13 +297,13 @@ export async function resolveHqContext(
     // Outside a request scope (a harness, a script). No selection is a valid state, not an error.
   }
 
-  const [governance, mode] = await Promise.all([
+  const [governance, mode, multiple] = await Promise.all([
     resolveActiveGovernance(admin, user.id, selected),
-    // An enforcing call needs no config read: nothing hq_config could say would loosen it.
+    // An enforcing call needs no mode read: nothing hq_config.mode could say would loosen it.
     opts.enforce ? Promise.resolve<HqMode>("enforce") : readHqMode(admin),
+    readMultipleAppointments(admin),
   ]);
-  const positions = governance.active ? [governance.active.positionCode] : [];
-  const capabilities = governance.active ? governance.active.capabilities : [];
+  const { positions, capabilities } = effectiveAuthority(governance.active, governance.available, multiple);
   const verdict = decideHq({ isOwner: false, positions, capabilities, capability: declared, mode });
 
   if (verdict.decision !== "allow" && !opts.probe) {

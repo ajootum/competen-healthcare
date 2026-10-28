@@ -49,34 +49,108 @@ export function sensitiveClassOf(code: string): HqSensitiveClass | null {
   return null;
 }
 
-/** Mirrors hq_capability_exclusions() as migration 580 last defined it: no single position may hold both live. */
-export const HQ_CAPABILITY_EXCLUSIONS: readonly { a: string; b: string; reason: string }[] = [
-  { a: "hq.quality.clinical.approve", b: "hq.quality.competency.author", reason: "a competency author cannot hold clinical approval" },
-  { a: "hq.quality.clinical.approve", b: "hq.quality.case.author", reason: "a case author cannot hold clinical approval" },
-  { a: "hq.quality.clinical.approve", b: "hq.learning.course.author", reason: "a course author cannot hold clinical approval" },
-  { a: "hq.quality.clinical.approve", b: "hq.learning.ckri.educator", reason: "a knowledge educator cannot hold clinical approval" },
-  { a: "hq.quality.clinical.approve", b: "hq.quality.clinical.govern", reason: "a clinical reviewer cannot set reviewer scopes" },
-  { a: "hq.quality.case.author", b: "hq.quality.case.publish", reason: "a case author cannot publish cases" },
-  { a: "hq.learning.course.author", b: "hq.learning.course.publish", reason: "a course author cannot publish courses" },
-  { a: "hq.learning.ckri.educator", b: "hq.quality.knowledge.publish", reason: "a knowledge educator cannot publish knowledge resources" },
-  { a: "hq.quality.research.propose", b: "hq.quality.research.review", reason: "a research proposer cannot review research" },
-  { a: "hq.quality.research.propose", b: "hq.quality.research.govern", reason: "a research proposer cannot govern research" },
+/**
+ * The 15 separation-of-duties pairs, mirrored from the hq_sod_pair_policy seed of migration 640 (the 580 list,
+ * same order). Since HQ-SOD-CROSSCUT-01 a pair is CONFIGURATION: allowed or blocked on positions. Only a
+ * `liftable` pair may be allowed, and only because an equal or stronger item-level safeguard exists (`safeguard`,
+ * enforced by the database for every writer). Liftable is set by migration, never by the screen.
+ */
+export type HqCapabilityPair = { a: string; b: string; reason: string; liftable: boolean; safeguard: string | null };
+export const HQ_CAPABILITY_PAIRS: readonly HqCapabilityPair[] = [
+  { a: "hq.quality.clinical.approve", b: "hq.quality.competency.author", reason: "a competency author cannot hold clinical approval", liftable: true,
+    safeguard: "No reviewer decides a competency version that they, or any earlier version, authored, edited or submitted, read from every version and the audit trail (395, 640)" },
+  { a: "hq.quality.clinical.approve", b: "hq.quality.case.author", reason: "a case author cannot hold clinical approval", liftable: true,
+    safeguard: "No reviewer decides a version of a case when they authored, edited or submitted any version of that case (422, 640)" },
+  { a: "hq.quality.clinical.approve", b: "hq.learning.course.author", reason: "a course author cannot hold clinical approval", liftable: true,
+    safeguard: "No reviewer decides a version of a learning offering when they authored, edited or submitted any version of it (461, 640)" },
+  { a: "hq.quality.clinical.approve", b: "hq.learning.ckri.educator", reason: "a knowledge educator cannot hold clinical approval", liftable: true,
+    safeguard: "No reviewer decides a version of a knowledge resource when they authored, submitted or educator-reviewed any version of it (442, 640)" },
+  { a: "hq.quality.clinical.approve", b: "hq.quality.clinical.govern", reason: "a clinical reviewer cannot set reviewer scopes", liftable: true,
+    safeguard: "Nobody sets or widens their own reviewer scope, and lowering the number of independent approvals needs the platform owner (640)" },
+  { a: "hq.quality.case.author", b: "hq.quality.case.publish", reason: "a case author cannot publish cases", liftable: true,
+    safeguard: "An author, editor or submitter of a case version cannot publish it (640, verified absent from 422 before lifting)" },
+  { a: "hq.learning.course.author", b: "hq.learning.course.publish", reason: "a course author cannot publish courses", liftable: true,
+    safeguard: "An author, editor or submitter of a learning version cannot publish it (460, 461, 640)" },
+  { a: "hq.learning.ckri.educator", b: "hq.quality.knowledge.publish", reason: "a knowledge educator cannot publish knowledge resources", liftable: true,
+    safeguard: "An author, submitter or reviewing educator of a knowledge version cannot publish it (640)" },
+  { a: "hq.quality.research.propose", b: "hq.quality.research.review", reason: "a research proposer cannot review research", liftable: false, safeguard: null },
+  { a: "hq.quality.research.propose", b: "hq.quality.research.govern", reason: "a research proposer cannot govern research", liftable: false, safeguard: null },
   // Migration 511, COMPETENCY-01 C5: the Competency Assessor is a separate authority from content approval and the Studio.
-  { a: "hq.competency.verification.assess", b: "hq.quality.clinical.approve", reason: "a competency assessor cannot hold clinical content approval" },
-  { a: "hq.competency.verification.assess", b: "hq.quality.clinical.govern", reason: "a competency assessor cannot govern clinical reviewer scopes" },
-  { a: "hq.competency.verification.assess", b: "hq.quality.competency.author", reason: "a competency assessor cannot author competency content" },
-  { a: "hq.competency.verification.assess", b: "hq.competency.verification.manage", reason: "a competency assessor cannot set assessment criteria, scopes or assignments" },
+  { a: "hq.competency.verification.assess", b: "hq.quality.clinical.approve", reason: "a competency assessor cannot hold clinical content approval", liftable: false, safeguard: null },
+  { a: "hq.competency.verification.assess", b: "hq.quality.clinical.govern", reason: "a competency assessor cannot govern clinical reviewer scopes", liftable: false, safeguard: null },
+  { a: "hq.competency.verification.assess", b: "hq.quality.competency.author", reason: "a competency assessor cannot author competency content", liftable: false, safeguard: null },
+  { a: "hq.competency.verification.assess", b: "hq.competency.verification.manage", reason: "a competency assessor cannot set assessment criteria, scopes or assignments", liftable: false, safeguard: null },
   // Migration 580 (owner CENTRAL GOVERNANCE): a competency author never publishes competency frameworks.
-  { a: "hq.quality.competency.author", b: "hq.quality.competency.publish", reason: "a competency author cannot publish competency frameworks" },
+  { a: "hq.quality.competency.author", b: "hq.quality.competency.publish", reason: "a competency author cannot publish competency frameworks", liftable: true,
+    safeguard: "The publisher of a shared framework is never its submitter or a contributor in its audit trail (580, 640)" },
 ];
 
+/** Every pair, exactly as 580 defined hq_capability_exclusions(). The strict set, and the fail-closed one. */
+export const HQ_CAPABILITY_EXCLUSIONS: readonly { a: string; b: string; reason: string }[] = HQ_CAPABILITY_PAIRS.map(({ a, b, reason }) => ({ a, b, reason }));
+
 /** The first live capability on the position that `code` may not sit beside, or null. */
-export function exclusionConflict(code: string, liveCodes: string[]): { with: string; reason: string } | null {
-  for (const e of HQ_CAPABILITY_EXCLUSIONS) {
+export function exclusionConflict(
+  code: string, liveCodes: string[], exclusions: readonly { a: string; b: string; reason: string }[] = HQ_CAPABILITY_EXCLUSIONS,
+): { with: string; reason: string } | null {
+  for (const e of exclusions) {
     if (e.a === code && liveCodes.includes(e.b)) return { with: e.b, reason: e.reason };
     if (e.b === code && liveCodes.includes(e.a)) return { with: e.a, reason: e.reason };
   }
   return null;
+}
+
+// ── Separation-of-duties configuration (migration 640) ───────────────────────
+export const SOD_CONTENT_KINDS = ["competency_framework", "case", "resource", "learning"] as const;
+export type HqSodContentKind = (typeof SOD_CONTENT_KINDS)[number];
+export type HqSodPairState = HqCapabilityPair & { allowed: boolean };
+export type HqSodPolicy = {
+  /** hq_config.sod_strict_positions: every pair blocked on positions again. */
+  strict: boolean;
+  /** hq_config.multiple_appointments: a person may hold several live HQ appointments. */
+  multipleAppointments: boolean;
+  pairs: HqSodPairState[];
+  contentRules: { kind: HqSodContentKind; label: string; publisherNotApprover: boolean }[];
+};
+
+/**
+ * The pairs the database refuses on a position right now. ⚠ FAIL CLOSED: when the policy cannot be read (640
+ * absent, or a read error) every pair counts, which is exactly what 580 enforced.
+ */
+export function effectiveExclusions(policy: Read<HqSodPolicy>): readonly { a: string; b: string; reason: string }[] {
+  if (!policy.ok) return HQ_CAPABILITY_EXCLUSIONS;
+  return policy.value.pairs.filter(p => policy.value.strict || !p.allowed).map(({ a, b, reason }) => ({ a, b, reason }));
+}
+
+type PairRow = { capability_a: string; capability_b: string; reason: string; liftable: boolean; item_safeguard: string | null; allowed: boolean };
+type RuleRow = { content_kind: string; label: string; publisher_not_approver: boolean };
+type SodConfigRow = { sod_strict_positions?: boolean | null; multiple_appointments?: boolean | null };
+
+/** Pure: the policy from its rows, in the catalogue's order. A pair the code does not know is still shown, last. */
+export function buildSodPolicy(pairs: PairRow[], rules: RuleRow[], cfg: SodConfigRow | null): HqSodPolicy {
+  const order = (r: PairRow) => { const i = HQ_CAPABILITY_PAIRS.findIndex(p => p.a === r.capability_a && p.b === r.capability_b); return i < 0 ? 999 : i; };
+  return {
+    strict: cfg?.sod_strict_positions === true,
+    multipleAppointments: cfg?.multiple_appointments !== false,
+    pairs: [...pairs].sort((x, y) => order(x) - order(y)).map(r => ({
+      a: r.capability_a, b: r.capability_b, reason: r.reason, liftable: r.liftable, safeguard: r.item_safeguard, allowed: r.allowed,
+    })),
+    contentRules: rules
+      .filter(r => (SOD_CONTENT_KINDS as readonly string[]).includes(r.content_kind))
+      .sort((x, y) => SOD_CONTENT_KINDS.indexOf(x.content_kind as HqSodContentKind) - SOD_CONTENT_KINDS.indexOf(y.content_kind as HqSodContentKind))
+      .map(r => ({ kind: r.content_kind as HqSodContentKind, label: r.label, publisherNotApprover: r.publisher_not_approver })),
+  };
+}
+
+/** The policy, read once. Unreadable (never a guessed default) when 640 is absent or a read fails. */
+export async function loadSodPolicy(admin: Admin): Promise<Read<HqSodPolicy>> {
+  const [pairs, rules, cfg] = await Promise.all([
+    admin.from("hq_sod_pair_policy").select("capability_a, capability_b, reason, liftable, item_safeguard, allowed").limit(200),
+    admin.from("hq_sod_content_rule").select("content_kind, label, publisher_not_approver").limit(50),
+    admin.from("hq_config").select("sod_strict_positions, multiple_appointments").eq("id", "singleton").limit(1),
+  ]);
+  const err = pairs.error ?? rules.error ?? cfg.error;
+  if (err) return readFail(err.message);
+  return readOk(buildSodPolicy((pairs.data ?? []) as PairRow[], (rules.data ?? []) as RuleRow[], ((cfg.data ?? [])[0] ?? null) as SodConfigRow | null));
 }
 
 // ── Requests ─────────────────────────────────────────────────────────────────
@@ -89,7 +163,11 @@ export type HqPositionAction =
   | { action: "set_active"; code: string; active: boolean; reason: string }
   | { action: "grant"; code: string; capability: string; reason: string; acknowledgeSensitive: boolean }
   | { action: "end_grant"; code: string; capability: string; reason: string }
-  | { action: "register"; capability: string; label: string; description: string | null; reason: string };
+  | { action: "register"; capability: string; label: string; description: string | null; reason: string }
+  // Migration 640: the separation-of-duties configuration. Owner only, like every action here.
+  | { action: "set_pair"; a: string; b: string; allowed: boolean; reason: string }
+  | { action: "set_settings"; strict: boolean; multipleAppointments: boolean; reason: string }
+  | { action: "set_content_rule"; kind: HqSodContentKind; publisherNotApprover: boolean; reason: string };
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 const optStr = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -142,8 +220,24 @@ export function parsePositionAction(b: unknown): { ok: true; value: HqPositionAc
       const e = needCatalogue(capability) ?? (!label ? "The label is required." : null);
       return e ? { ok: false, error: e } : { ok: true, value: { action, capability, label, description: optStr(o.description), reason } };
     }
+    case "set_pair": {
+      const a = str(o.a), b2 = str(o.b);
+      if (typeof o.allowed !== "boolean") return { ok: false, error: "allowed must be true or false." };
+      if (!HQ_CAPABILITY_PAIRS.some(p => (p.a === a && p.b === b2) || (p.a === b2 && p.b === a))) return { ok: false, error: "That is not one of the separation-of-duties pairs." };
+      return { ok: true, value: { action, a, b: b2, allowed: o.allowed, reason } };
+    }
+    case "set_settings": {
+      if (typeof o.strict !== "boolean" || typeof o.multiple_appointments !== "boolean") return { ok: false, error: "strict and multiple_appointments must each be true or false." };
+      return { ok: true, value: { action, strict: o.strict, multipleAppointments: o.multiple_appointments, reason } };
+    }
+    case "set_content_rule": {
+      const kind = str(o.kind);
+      if (!(SOD_CONTENT_KINDS as readonly string[]).includes(kind)) return { ok: false, error: "That is not a content type with separation rules." };
+      if (typeof o.publisher_not_approver !== "boolean") return { ok: false, error: "publisher_not_approver must be true or false." };
+      return { ok: true, value: { action, kind: kind as HqSodContentKind, publisherNotApprover: o.publisher_not_approver, reason } };
+    }
     default:
-      return { ok: false, error: "action must be one of create, update, set_active, grant, end_grant, register." };
+      return { ok: false, error: "action must be one of create, update, set_active, grant, end_grant, register, set_pair, set_settings, set_content_rule." };
   }
 }
 
@@ -157,6 +251,9 @@ export function rpcFor(a: HqPositionAction, actor: { id: string; name: string | 
     case "grant": return { fn: "hq_position_admin_grant", args: { ...base, p_position: a.code, p_capability: a.capability, p_reason: a.reason, p_acknowledge_sensitive: a.acknowledgeSensitive } };
     case "end_grant": return { fn: "hq_position_admin_end_grant", args: { ...base, p_position: a.code, p_capability: a.capability, p_reason: a.reason } };
     case "register": return { fn: "hq_position_admin_register", args: { ...base, p_code: a.capability, p_space: spaceOfCapability(a.capability), p_label: a.label, p_description: a.description, p_reason: a.reason } };
+    case "set_pair": return { fn: "hq_sod_admin_set_pair", args: { ...base, p_capability_a: a.a, p_capability_b: a.b, p_allowed: a.allowed, p_reason: a.reason } };
+    case "set_settings": return { fn: "hq_sod_admin_set_settings", args: { ...base, p_strict: a.strict, p_multiple: a.multipleAppointments, p_reason: a.reason } };
+    case "set_content_rule": return { fn: "hq_sod_admin_set_content_rule", args: { ...base, p_content_kind: a.kind, p_publisher_not_approver: a.publisherNotApprover, p_reason: a.reason } };
   }
 }
 
@@ -168,14 +265,17 @@ export function rpcFor(a: HqPositionAction, actor: { id: string; name: string | 
  */
 export function statusForDbError(message: string, code?: string | null): { status: number; error: string } {
   if (code === "PGRST202" || code === "42883" || /could not find the function|function .* does not exist/i.test(message))
-    return { status: 503, error: "Position administration is not available yet: migration 500 is not applied to this database. Nothing was changed." };
-  const m = /hq_position(?:_admin|_capability)? (\w+): ([\s\S]*)$/.exec(message);
+    return /hq_sod_admin/.test(message)
+      ? { status: 503, error: "Separation-of-duties settings are not available yet: migration 640 is not applied to this database. Nothing was changed." }
+      : { status: 503, error: "Position administration is not available yet: migration 500 is not applied to this database. Nothing was changed." };
+  const m = /(?:hq_position(?:_admin|_capability)?|hq_sod) (\w+): ([\s\S]*)$/.exec(message);
   const tag = m?.[1] ?? "";
   const text = m ? m[2] : message;
   const status =
     tag === "owner_required" ? 403
     : tag === "not_found" ? 404
-    : tag === "exists" || tag === "history" || tag === "separation_of_duties" || tag === "unchanged" ? 409
+    : tag === "exists" || tag === "history" || tag === "separation_of_duties" || tag === "unchanged"
+      || tag === "not_liftable" || tag === "conflict" || tag === "single_appointment" ? 409
     : tag === "invalid" || tag === "sensitive" ? 400
     : 500;
   return { status, error: status === 500 ? `The change was not written: ${message}` : text };
@@ -207,6 +307,8 @@ export type HqPositionBoard = {
   catalogue: Read<HqCatalogueEntry[]>;
   /** Applied codes the code catalogue does not define. hq-guard B1 is red while this is non-empty. */
   appliedNotInCode: Read<string[]>;
+  /** Migration 640: which pairs are blocked, strict separation, multiple appointments, content rules. */
+  sod?: Read<HqSodPolicy>;
 };
 
 type PosRow = { code: string; space: string; name: string | null; description: string | null; is_active: boolean | null };
@@ -263,9 +365,10 @@ export function buildPositionBoard(
  * are absent, so the screen still READS on a database without 500 (and says writes are unavailable).
  */
 export async function loadPositionBoard(admin: Admin): Promise<HqPositionBoard & { migrationApplied: boolean }> {
-  const [posRes, capRes] = await Promise.all([
+  const [posRes, capRes, sod] = await Promise.all([
     admin.from("hq_position").select("code, space, name, description, is_active").limit(500),
     admin.from("hq_capability").select("code, label").limit(500),
+    loadSodPolicy(admin),
   ]);
   let migrationApplied = true;
   let grantRes = await admin.from("hq_position_capability")
@@ -280,5 +383,5 @@ export async function loadPositionBoard(admin: Admin): Promise<HqPositionBoard &
     grantRes.error ? readFail(grantRes.error.message) : readOk((grantRes.data ?? []) as GrantRow[]),
     capRes.error ? readFail(capRes.error.message) : readOk((capRes.data ?? []) as CapRow[]),
   );
-  return { ...board, migrationApplied };
+  return { ...board, sod, migrationApplied };
 }
