@@ -1472,6 +1472,111 @@ export async function learningEvents(admin: Admin, userId: string, sessionId: st
   return { ok: true, data: ((data ?? []) as any[]).map(r => ({ step: r.step, action: r.action, verdict: r.verdict, createdAt: r.created_at })) };
 }
 
+// ── SCH-LEARN-UX-01: SEARCH-FIRST LEARN ── reads only, over what Stages 2 and 3 already store ────────────────
+//
+// No AI, no index of its own: Postgres full-text search on the chunks' tsv (372), the material titles and file
+// names, the topics topic finding wrote (with the student's corrections, 408), and the session titles (414). Every
+// statement is keyed on the caller's own id. The one write is a personal topic rename, kept as the student's own
+// topic corrections (408) -- never a change to a governed competency or to the AI analysis record.
+
+/** The person's materials matching any term in the title or file name (all of them when no terms), with filters. */
+export async function searchMaterialRows(admin: Admin, userId: string, opts: { terms: readonly string[]; mime?: string | null; sinceIso?: string | null; ids?: readonly string[] | null; limit: number }): Promise<Read<MaterialRow[]>> {
+  let q = admin.from("individual_scholar_material").select(MATERIAL_COLS).eq("user_id", userId);
+  // Terms are letters and digits only (retrieval.searchTerms), so nothing reaches the filter unescaped.
+  const like = opts.terms.filter(t => /^[a-z0-9]+$/.test(t)).flatMap(t => [`title.ilike.%${t}%`, `file_name.ilike.%${t}%`]);
+  if (opts.ids) q = q.in("id", opts.ids.length ? [...opts.ids] : ["00000000-0000-0000-0000-000000000000"]);
+  else if (like.length) q = q.or(like.join(","));
+  if (opts.mime) q = q.eq("mime_type", opts.mime);
+  if (opts.sinceIso) q = q.gte("created_at", opts.sinceIso);
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(opts.limit);
+  if (error) return fail(error);
+  return { ok: true, data: (data ?? []).map(toMaterial) };
+}
+
+/** Full-text candidates over the person's own sections, and how many sections match in all (exact). */
+export async function searchSectionRows(admin: Admin, userId: string, tsquery: string, limit: number): Promise<Read<{ rows: CandidateChunk[]; total: number }>> {
+  const { data, error, count } = await admin.from("individual_scholar_chunk").select("id, material_id, ordinal, page_from, page_to, content", { count: "exact" })
+    .eq("user_id", userId).textSearch("tsv", tsquery, { config: "english" }).limit(limit);
+  if (error) return fail(error);
+  return { ok: true, data: { rows: (data ?? []).map(toCandidate), total: count ?? (data ?? []).length } };
+}
+
+/** Some of the person's own sections, by id (search-selected sources, a topic's sections). */
+export async function chunksByIds(admin: Admin, userId: string, ids: readonly string[], withContent = true): Promise<Read<CandidateChunk[]>> {
+  const keep = [...new Set(ids.filter(isUuid))];
+  if (!keep.length) return { ok: true, data: [] };
+  const { data, error } = await admin.from("individual_scholar_chunk").select(withContent ? "id, material_id, ordinal, page_from, page_to, content" : "id, material_id, ordinal, page_from, page_to")
+    .eq("user_id", userId).in("id", keep).limit(keep.length);
+  if (error) return fail(error);
+  return { ok: true, data: (data ?? []).map(toCandidate) };
+}
+
+/** Every analysed section's topics (the student's correction where they made one). Read<[]> where 408/388 are absent. */
+export async function sectionTopicRows(admin: Admin, userId: string): Promise<Read<{ chunkId: string; materialId: string; topics: string[] }[]>> {
+  const { data, error } = await admin.from("individual_scholar_chunk_analysis").select("chunk_id, material_id, concepts").eq("user_id", userId).limit(10000);
+  if (error) return isNotProvisioned(error) ? { ok: true, data: [] } : fail(error);
+  const corrections = await topicCorrections(admin, userId, null);
+  return { ok: true, data: ((data ?? []) as any[]).map(r => ({ chunkId: r.chunk_id, materialId: r.material_id, topics: corrections.byChunk.get(r.chunk_id) ?? r.concepts ?? [] })) };
+}
+
+/** The person's sessions, searched on title and topic (all when no terms), sorted, one page, with the exact total. */
+export async function searchLearningSessionRows(admin: Admin, userId: string, opts: { terms: readonly string[]; sort: "recent" | "title" | "oldest"; offset: number; limit: number }): Promise<Read<{ rows: LearningSessionRow[]; total: number }>> {
+  let q = admin.from("individual_scholar_learning_session").select(SESSION_COLS, { count: "exact" }).eq("user_id", userId);
+  const like = opts.terms.filter(t => /^[a-z0-9]+$/.test(t)).flatMap(t => [`title.ilike.%${t}%`, `topic.ilike.%${t}%`]);
+  if (like.length) q = q.or(like.join(","));
+  q = opts.sort === "title" ? q.order("title", { ascending: true }) : q.order("last_active_at", { ascending: opts.sort === "oldest" });
+  const { data, error, count } = await q.range(opts.offset, opts.offset + opts.limit - 1);
+  if (error) return fail(error);
+  return { ok: true, data: { rows: ((data ?? []) as any[]).map(toSession), total: count ?? (data ?? []).length } };
+}
+
+/** Per session: how many steps it has and which of the person's sections and materials its steps use. */
+export async function sessionStepSummaries(admin: Admin, userId: string, sessionIds: readonly string[]): Promise<Map<string, { steps: number; chunkIds: string[]; materialIds: string[] }>> {
+  const ids = sessionIds.filter(isUuid);
+  const out = new Map<string, { steps: number; chunkIds: string[]; materialIds: string[] }>();
+  if (!ids.length) return out;
+  const { data, error } = await admin.from("individual_scholar_learning_step").select("session_id, step, chunk_id, material_id").eq("user_id", userId).in("session_id", ids).limit(5000);
+  if (error) return out;
+  const steps = new Map<string, Set<number>>();
+  for (const r of (data ?? []) as any[]) {
+    const s = out.get(r.session_id) ?? { steps: 0, chunkIds: [], materialIds: [] };
+    s.chunkIds.push(r.chunk_id); if (!s.materialIds.includes(r.material_id)) s.materialIds.push(r.material_id);
+    out.set(r.session_id, s);
+    steps.set(r.session_id, (steps.get(r.session_id) ?? new Set()).add(r.step));
+  }
+  for (const [id, s] of out) s.steps = steps.get(id)?.size ?? 0;
+  return out;
+}
+
+/** The person's ACTIVE sessions of one kind and title, most recent first -- the candidates a new start would repeat. */
+export async function activeSessionsTitled(admin: Admin, userId: string, scopeKind: LearningSessionRow["scopeKind"], title: string): Promise<Read<LearningSessionRow[]>> {
+  const { data, error } = await admin.from("individual_scholar_learning_session").select(SESSION_COLS).eq("user_id", userId)
+    .eq("scope_kind", scopeKind).eq("title", title.slice(0, 160)).eq("status", "active").order("last_active_at", { ascending: false }).limit(5);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(toSession) };
+}
+
+/**
+ * The student renames one of THEIR topics across their library: every section showing it gets the student's own
+ * topic list with the new name (408). The AI analysis stays as the record; nothing reaches a shared catalogue or a
+ * competency. `from` is matched case-insensitively. Returns how many sections changed.
+ */
+export async function renameTopic(admin: Admin, userId: string, from: string, to: string, maxSections = 500): Promise<{ ok: true; sections: number } | { ok: false; error: "not_provisioned" | "failed" }> {
+  const rows = await sectionTopicRows(admin, userId);
+  if (!rows.ok) return { ok: false, error: rows.notProvisioned ? "not_provisioned" : "failed" };
+  const key = from.trim().toLowerCase();
+  const now = new Date().toISOString();
+  const changes = rows.data.filter(r => r.topics.some(t => t.trim().toLowerCase() === key)).slice(0, maxSections).map(r => {
+    const next: string[] = [];
+    for (const t of r.topics.map(t => (t.trim().toLowerCase() === key ? to : t))) if (!next.some(x => x.toLowerCase() === t.toLowerCase())) next.push(t);
+    return { chunk_id: r.chunkId, user_id: userId, topics: next.slice(0, 12), updated_at: now };
+  });
+  if (!changes.length) return { ok: true, sections: 0 };
+  const { error } = await admin.from("individual_scholar_topic_correction").upsert(changes.map(c => ({ ...c, user_id: userId })), { onConflict: "chunk_id" });
+  if (error) return { ok: false, error: isNotProvisioned(error) ? "not_provisioned" : "failed" };
+  return { ok: true, sections: changes.length };
+}
+
 export type LearningPreference = { depth: "brief" | "standard" | "detailed"; defaultAction: string };
 
 export async function getLearningPreference(admin: Admin, userId: string): Promise<LearningPreference | null> {

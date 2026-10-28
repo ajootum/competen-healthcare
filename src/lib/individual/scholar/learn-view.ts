@@ -8,6 +8,7 @@ import type { IndividualPolicy } from "../policy";
 import { LEARN_ACTIONS, SUPPLEMENTARY_LABEL, WITHHELD_NEAREST_MAX, WITHHELD_WHY, type LearnAction } from "./config";
 import type { SupplementaryCheck } from "./generation";
 import { stepTitle } from "./learn";
+import { displayTitle } from "./learn-search";
 import type { LearningStep } from "./store";
 
 export type SessionView = {
@@ -29,7 +30,8 @@ export function sessionView(input: {
     id: input.id, recorded: input.recorded, title: input.title, scopeKind: input.scopeKind, currentStep: input.currentStep, status: input.status, coverage: input.coverage,
     steps: input.steps.map(s => ({
       step: s.step, title: stepTitle(s, input.topics),
-      sections: s.sections.map(x => ({ chunkId: x.chunkId, materialId: x.materialId, materialTitle: x.materialTitle, citation: `${x.materialTitle}, ${citeChunk(x, x.unit)}` })),
+      // SCH-LEARN-UX-01: a file-like material title is shown as a title here; the act route cites the passages as stored.
+      sections: s.sections.map(x => ({ chunkId: x.chunkId, materialId: x.materialId, materialTitle: displayTitle(x.materialTitle), citation: `${displayTitle(x.materialTitle)}, ${citeChunk(x, x.unit)}` })),
     })),
   };
 }
