@@ -118,8 +118,13 @@ export async function transitionFramework(
       // A controlled catalogue (migration 394) publishes what it NAMES, with each content status, so the
       // version records what the approver saw. Where 394 is absent, or the framework names nothing, the
       // snapshot is exactly what it was before.
-      const { data: entries, error: entErr } = await admin.from("competency_catalogue_entry")
-        .select("competency_id, content_status, status_note, sort_order").eq("catalogue_id", frameworkId).order("sort_order");
+      // CFCA-STUDIO-P1 (660): the programme overlay and component requirements are part of what was published.
+      // Before 660 those columns are absent, and the entries are recorded as they were.
+      const OVERLAY = "competency_id, content_status, status_note, sort_order, requirement, expected_level_id, competency_catalogue_entry_component(component_code, pass_level_id, is_mandatory, is_safety_critical, weight)";
+      let { data: entries, error: entErr } = await admin.from("competency_catalogue_entry")
+        .select(OVERLAY).eq("catalogue_id", frameworkId).order("sort_order");
+      if (entErr) ({ data: entries, error: entErr } = await admin.from("competency_catalogue_entry")
+        .select("competency_id, content_status, status_note, sort_order").eq("catalogue_id", frameworkId).order("sort_order"));
       const ids: string[] = (fullFw.framework_domains ?? []).flatMap((d: any) => (d.framework_competencies ?? []).map((c: any) => c.id));
       const refs = fullFw.competency_layer && ids.length ? await approvalRefs(admin, ids) : null;
       const snapshot = {

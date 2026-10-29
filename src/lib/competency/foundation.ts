@@ -75,7 +75,33 @@ export type CatalogueCompetency = {
   clinicalState?: ClinicalState;
   /** Holdings-scope links to other competencies in the offered set (ids), by kind. */
   links: { prerequisites: string[]; extends: string[]; sharedWith: string[] };
+  /** CFCA-STUDIO-P1 (migration 660): what each offered catalogue that NAMES this competency requires of it --
+   *  the programme overlay. Empty when no catalogue entry names it, or before 660. */
+  overlays?: CatalogueOverlay[];
 };
+
+export const REQUIREMENTS = ["required", "recommended", "optional"] as const;
+export type Requirement = (typeof REQUIREMENTS)[number];
+/** One catalogue's requirement on a competency it names (competency_catalogue_entry, 394 + 660). */
+export type CatalogueOverlay = {
+  catalogueId: string; catalogueName: string; catalogueVersion: string; entryId: string | null; requirement: Requirement;
+  /** The target level in this catalogue, or null: the competency's own expected level applies. */
+  expectedLevel: { id: string; score: number; label: string } | null;
+};
+export const isRequirement = (v: unknown): v is Requirement => typeof v === "string" && (REQUIREMENTS as readonly string[]).includes(v);
+
+/**
+ * Pure: the overlay that governs a competency in a programme -- the one from the programme's catalogue that comes
+ * first in the programme's own order. Null when none of the programme's catalogues names it (its own default applies).
+ */
+export function pickOverlay(overlays: readonly CatalogueOverlay[] | undefined, order: ReadonlyMap<string, number>): CatalogueOverlay | null {
+  let best: CatalogueOverlay | null = null, at = Infinity;
+  for (const o of overlays ?? []) {
+    const i = order.get(o.catalogueId);
+    if (i !== undefined && i < at) { best = o; at = i; }
+  }
+  return best;
+}
 
 /** Pure: an allowlist value from the Individual policy, as framework ids. */
 export const allowedCatalogueIds = (policy: { scholarCatalogues: string[]; professionalCatalogues: string[] }, scope: CatalogueScope) =>
@@ -113,6 +139,18 @@ export function assembleCatalogue(r: {
   }
   const out: CatalogueCompetency[] = [];
   const comp = new Map(r.competencies.map(c => [c.id, c]));
+  // The programme overlay (660): every offered catalogue's entry for a competency, kept beside the placement below.
+  const overlays = new Map<string, CatalogueOverlay[]>();
+  for (const e of r.entries ?? []) {
+    if (!offered.has(e.catalogue_id) || !comp.has(e.competency_id)) continue;
+    const l = e.expected_level_id ? lvl.get(e.expected_level_id) : undefined;
+    const cf = offered.get(e.catalogue_id)!;
+    overlays.set(e.competency_id, [...(overlays.get(e.competency_id) ?? []), {
+      catalogueId: e.catalogue_id, catalogueName: cf.name, catalogueVersion: `${cf.version_major ?? 1}.${cf.version_minor ?? 0}.${cf.version_revision ?? 0}`,
+      entryId: e.id ?? null, requirement: isRequirement(e.requirement) ? e.requirement : "required",
+      expectedLevel: l ? { id: l.id, score: l.score, label: l.label } : null,
+    }]);
+  }
   // Each competency once: as a catalogue's own, else as the first catalogue entry that names it.
   const placements: { c: Row; f: Row; entry: Row | null }[] = [];
   for (const c of r.competencies) {
@@ -149,6 +187,7 @@ export function assembleCatalogue(r: {
       contentStatus: status,
       statusNote: entry?.status_note ?? null,
       links: links.get(c.id) ?? { prerequisites: [], extends: [], sharedWith: [] },
+      overlays: overlays.get(c.id) ?? [],
     });
   }
   return out;
@@ -186,10 +225,22 @@ export async function loadIndividualCatalogue(admin: any, allowedFrameworkIds: r
   try { return await readCatalogue(admin, allowedFrameworkIds); } catch { return null; }
 }
 
-async function readCatalogue(admin: any, allowedFrameworkIds: readonly string[]): Promise<CatalogueCompetency[] | null> {
-  const frameworks = await rows(admin.from("frameworks")
-    .select("id, name, code, version_major, version_minor, version_revision, competency_layer, profession_term_id")
-    .in("id", [...allowedFrameworkIds]).is("hospital_id", null).eq("is_active", true).eq("pub_status", "published"));
+/**
+ * CFCA-STUDIO-P1 PREVIEW, FOR HQ ONLY: the same read for shared catalogues in ANY status, so a draft programme
+ * framework can be previewed before it is published. It is never an offer: the Individual read above keeps the
+ * shared, active, published rule, and only it reaches a person.
+ */
+export async function loadCatalogueForPreview(admin: any, frameworkIds: readonly string[]): Promise<CatalogueCompetency[] | null> {
+  if (!frameworkIds.length) return [];
+  try { return await readCatalogue(admin, frameworkIds, true); } catch { return null; }
+}
+
+const FW_COLS = "id, name, code, version_major, version_minor, version_revision, competency_layer, profession_term_id";
+
+async function readCatalogue(admin: any, allowedFrameworkIds: readonly string[], anyStatus = false): Promise<CatalogueCompetency[] | null> {
+  const frameworks = await rows(anyStatus
+    ? admin.from("frameworks").select(FW_COLS).in("id", Array.from(allowedFrameworkIds)).is("hospital_id", null)
+    : admin.from("frameworks").select(FW_COLS).in("id", [...allowedFrameworkIds]).is("hospital_id", null).eq("is_active", true).eq("pub_status", "published"));
   if (frameworks === null) return null;
   if (!frameworks.length) return [];
   const catalogueIds: string[] = frameworks.map((f: Row) => f.id);
@@ -219,7 +270,7 @@ async function readCatalogue(admin: any, allowedFrameworkIds: readonly string[])
   const competencies = [...own, ...referenced];
   const ids = competencies.map((c: Row) => c.id);
   const cpuIds = [...new Set(competencies.map((c: Row) => c.cpu_id).filter(Boolean))];
-  const levelIds = [...new Set(competencies.map((c: Row) => c.expected_level_id).filter(Boolean))];
+  const levelIds = [...new Set([...competencies.map((c: Row) => c.expected_level_id), ...entries.map((e: Row) => e.expected_level_id)].filter(Boolean))];
   const termIds = [...new Set(frameworks.map((f: Row) => f.profession_term_id).filter(Boolean))];
   const [cpus, levels, terms, dependencies, equivalencies] = await Promise.all([
     cpuIds.length ? rows(admin.from("clinical_practice_units").select("id, code, name, practice_id").in("id", cpuIds)) : Promise.resolve([]),
@@ -240,12 +291,22 @@ async function readCatalogue(admin: any, allowedFrameworkIds: readonly string[])
   return withClinicalReview(items, reviews);
 }
 
-/** The entries of the offered catalogues. [] when migration 394 is not applied here, null when unreadable. */
+/**
+ * The entries of the offered catalogues, with the programme overlay (660) where it exists. [] when migration 394
+ * is not applied here, null when unreadable. Before 660 the overlay columns are absent and the entries are read
+ * without them: every entry then reads as required, at the competency's own expected level.
+ */
 async function entriesOf(admin: any, catalogueIds: string[]): Promise<Row[] | null> {
-  const r = await admin.from("competency_catalogue_entry").select("catalogue_id, competency_id, content_status, status_note, sort_order").in("catalogue_id", catalogueIds);
-  if (r?.error) return NOT_PROVISIONED.has(String(r.error.code ?? "")) ? [] : null;
-  return r?.data ?? [];
+  const read = (cols: string) => admin.from("competency_catalogue_entry").select(cols).in("catalogue_id", catalogueIds);
+  const r = await read("id, catalogue_id, competency_id, content_status, status_note, sort_order, requirement, expected_level_id");
+  if (!r?.error) return r?.data ?? [];
+  if (NOT_PROVISIONED.has(String(r.error.code ?? ""))) return [];
+  if (!NO_COLUMN.has(String(r.error.code ?? ""))) return null;
+  const legacy = await read("catalogue_id, competency_id, content_status, status_note, sort_order");
+  return legacy?.error ? null : (legacy?.data ?? []);
 }
+// An undefined column (Postgres) and its PostgREST form: the entry overlay before migration 660.
+const NO_COLUMN = new Set(["42703", "PGRST204"]);
 // An undefined table (Postgres) and its PostgREST schema-cache forms: the access.ts rule, kept here so
 // this Holdings module imports no Individual code.
 const NOT_PROVISIONED = new Set(["42P01", "PGRST205"]);

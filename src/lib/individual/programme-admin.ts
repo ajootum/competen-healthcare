@@ -126,3 +126,16 @@ export async function saveProgramme(admin: any, p: ProgrammeInput): Promise<{ ok
   const saved = after.ok ? after.programmes.find(x => x.code === p.code) ?? null : null;
   return { ok: true, before, after: saved ?? { ...row, frameworks: p.frameworks.map(f => ({ framework_id: f.frameworkId, layer: f.layer, sort_order: f.sortOrder })) } };
 }
+
+// CFCA-STUDIO-P1 (migration 660): a programme's qualification level, set from Programme frameworks. This file stays
+// the one writer of programme rows.
+/** A programme's qualification level (a qualification_level term, or none). The 660 trigger checks the kind. */
+export async function setProgrammeQualification(admin: any, programmeCode: string, termId: unknown): Promise<({ ok: true } | { ok: false; error: string }) & { before?: string | null }> {
+  const term = termId ? String(termId).toLowerCase() : null;
+  if (term && !UUID.test(term)) return { ok: false, error: "Choose the qualification level from the list." };
+  const prev = await admin.from("individual_scholar_programme").select("qualification_term_id").eq("code", programmeCode).maybeSingle();
+  if (prev.error || !prev.data) return { ok: false, error: "That programme does not exist." };
+  const { error } = await admin.from("individual_scholar_programme").update({ qualification_term_id: term }).eq("code", programmeCode);
+  if (error) return { ok: false, error: /qualification_level/i.test(error.message ?? "") ? "That is not a qualification level." : "The qualification could not be saved just now." };
+  return { ok: true, before: prev.data.qualification_term_id ?? null };
+}

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { CONTENT_STATUSES, type ContentStatus } from "./foundation";
+import { CONTENT_STATUSES, isRequirement, type ContentStatus } from "./foundation";
 import { loadClinicalReviews, type ClinicalReview } from "./clinical-review";
 
 // ── CONTROLLED CATALOGUES: CURATION ── migration 394, P0 competency catalogue ─────────────────────────────
@@ -172,5 +172,19 @@ export async function setEntryStatus(admin: any, catalogueId: string, entryId: s
 export async function removeEntry(admin: any, catalogueId: string, entryId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data, error } = await admin.from("competency_catalogue_entry").delete().eq("id", entryId).eq("catalogue_id", catalogueId).select("id");
   if (error) return { ok: false, error: entryRefusal(error.message) };
+  return data?.length ? { ok: true } : { ok: false, error: "That entry is not in this catalogue." };
+}
+
+const LEVEL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// CFCA-STUDIO-P1 (migration 660): the PROGRAMME OVERLAY of an entry. Same draft-only rule as every entry column.
+/** The overlay of one entry of a draft catalogue: its requirement and target level. Refused outside draft by 394. */
+export async function setEntryOverlay(admin: any, catalogueId: string, entryId: string, requirement: unknown, expectedLevelId: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isRequirement(requirement)) return { ok: false, error: "Choose required, recommended or optional." };
+  const level = expectedLevelId ? String(expectedLevelId).toLowerCase() : null;
+  if (level && !LEVEL_ID.test(level)) return { ok: false, error: "Choose the target level from a scale." };
+  const { data, error } = await admin.from("competency_catalogue_entry").update({ requirement, expected_level_id: level })
+    .eq("id", entryId).eq("catalogue_id", catalogueId).select("id");
+  if (error) return { ok: false, error: /frozen/i.test(error.message ?? "") ? "This catalogue is in review or published, so its entries are frozen. Start a new draft version to change them." : "The requirement could not be saved just now. Nothing has changed." };
   return data?.length ? { ok: true } : { ok: false, error: "That entry is not in this catalogue." };
 }

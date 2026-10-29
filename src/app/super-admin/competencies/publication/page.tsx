@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadPublicationView } from "@/lib/competency/framework-publication";
 import { Archive, Decide } from "./_components/PublicationControls";
+import Link from "next/link";
+import { listStages, loadScalesWithMappings, mappingProblems } from "@/lib/competency/stage-mapping";
+import { PublishMappingButton } from "../_studio/StudioForms";
 
 // /super-admin/competencies/publication -- Holdings framework publication (migration 580, owner CENTRAL GOVERNANCE).
 //
@@ -19,7 +22,10 @@ const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "n
 
 export default async function FrameworkPublicationPage() {
   const ctx = await requireHqCapability("hq.quality.competency.publish");
-  const v = await loadPublicationView(ctx.admin);
+  const [v, scales, stages] = await Promise.all([loadPublicationView(ctx.admin), loadScalesWithMappings(ctx.admin), listStages(ctx.admin)]);
+  const stageName = new Map((stages ?? []).map(s => [s.code, s.label]));
+  const drafts = (scales ?? []).flatMap(scale => scale.mappings.filter(m => m.status === "draft")
+    .map(draft => ({ scale, draft, problems: mappingProblems(scale.levels, draft.bands, stages ?? []) })));
   return (
     <div className="max-w-5xl space-y-6">
       <header>
@@ -86,6 +92,25 @@ export default async function FrameworkPublicationPage() {
           </p>
         </section>
       ))}
+
+      {/* CFCA-STUDIO-P1 (migration 660): stage-mapping versions an author has drafted, for an independent publisher. */}
+      <section aria-labelledby="pub-stages" className="rounded-2xl border border-gray-200 bg-white p-4">
+        <h2 id="pub-stages" className="text-[16px] font-bold text-gray-900">Stage mappings awaiting publication</h2>
+        <p className="text-[12.5px] text-gray-600">
+          Draft versions of a scale&apos;s level-to-stage mapping, made on <Link href="/super-admin/competencies/stages" className="font-semibold underline">Scales and stages</Link>.
+          You cannot publish a version you drafted. Publishing retires the version it replaces, which is kept.
+        </p>
+        {scales === null ? <p className="mt-2 text-[13px] text-[var(--cmp-text-critical)]">The stage mappings could not be read just now.</p>
+          : drafts.length === 0 ? <p className="mt-2 text-[13px] text-gray-700">No draft version is waiting.</p>
+          : drafts.map(({ scale, draft, problems }) => (
+            <div key={draft.id} className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <p className="text-[13.5px] font-semibold text-amber-950">{scale.name}, draft version {draft.version}</p>
+              <p className="text-[12.5px] text-amber-950">{scale.levels.map(l => `${l.score} ${stageName.get(draft.bands.find(b => b.levelId === l.id)?.stageCode ?? "") ?? "no stage"}`).join(" · ")}</p>
+              {problems.length ? <p className="mt-1 text-[12.5px] text-amber-950">Not ready: {problems.join(" ")}</p>
+                : <div className="mt-2"><PublishMappingButton mappingId={draft.id} label={`Publish ${scale.name} version ${draft.version}`} /></div>}
+            </div>
+          ))}
+      </section>
     </div>
   );
 }
