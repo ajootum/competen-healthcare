@@ -1,0 +1,21 @@
+removed 0 STAGING P1 catalogue(s) and any throwaway draft mapping
+
+Programme-specific filtering (HQ preview = the learner's projection):
+  STAGING P1 Enrolled Nursing:
+    Administer Oxygen via Delivery Devices (synthetic) | required | target 3 (programme) | stage advanced_beginner | components none
+    Assess Oxygen Requirement (synthetic) | recommended | target - (competency) | stage - | components none
+  STAGING P1 BSc Nursing:
+    Administer Oxygen via Delivery Devices (synthetic) | required | target 4 (programme) | stage competent | components clinical_skills*+knowledge+knowledge_application
+    Assess Oxygen Requirement (synthetic) | required | target 4 (programme) | stage competent | components none
+    Communication and Patient Partnership (synthetic) | optional | target 5 (programme) | stage proficient | components none
+  PASS  F1  Enrolled resolves to exactly its 2 named competencies (2)
+  PASS  F2  BSc resolves to its 3, the shared competency at target 4 (stage competent) where Enrolled sets 3, and its optional one
+  PASS  F3  Enrolled's target 3 is Advanced Beginner on the DACUM mapping; a blank target falls back to the competency; BSc's components resolve
+
+Database guards:
+  PASS  G1  safety-critical but not mandatory is refused (23514)
+  PASS  G2  a catalogue in review freezes the overlay and the component requirements
+  PASS  G3  published bands are frozen, the author cannot publish, an incomplete draft cannot be published, and v1 stays published
+removed 2 STAGING P1 catalogue(s) and any throwaway draft mapping
+
+ALL GREEN

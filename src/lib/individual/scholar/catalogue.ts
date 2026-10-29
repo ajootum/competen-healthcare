@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { COMPETENCY_LAYERS, loadIndividualCatalogue, type CompetencyLayer } from "@/lib/competency/foundation";
+import { COMPETENCY_LAYERS, loadIndividualCatalogue, pickOverlay, type CatalogueOverlay, type CompetencyLayer, type Requirement } from "@/lib/competency/foundation";
 import { loadCatalogueFor } from "../catalogue";
 import { loadIndividualPolicy, meetsMinStatus, type ContentStatusLevel } from "../policy";
 
@@ -62,6 +62,13 @@ export type CatalogueCompetency = {
   statusNote: string | null;
   /** UPLOAD-01 U3: the catalogue version S1 read it from (major.minor.revision), recorded on every mapping. */
   catalogueVersion?: string | null;
+  /** CFCA-STUDIO-P1: what THIS programme requires of it -- its catalogue overlay, else required (660). */
+  requirement?: Requirement;
+  /** Whether expectedLevel is the programme's own target (an overlay) or the competency's default. */
+  targetFrom?: "programme" | "competency";
+  /** The level id of expectedLevel, and the catalogue entry whose overlay set it (HQ preview only). */
+  expectedLevelId?: string | null;
+  overlayEntryId?: string | null;
 };
 
 /** A programme as configuration: which catalogues, in which layer. Read by the store from 387. */
@@ -90,12 +97,14 @@ export interface CompetencyCatalogue {
 export type S1Competency = {
   competencyId: string; code: string | null; title: string; layer: Layer | null;
   profession: { label: string } | null; catalogue: { id: string; name: string; version?: string }; domain: { name: string }; outcomes: string[];
-  expectedLevel?: { score: number; label: string } | null;
+  expectedLevel?: { id?: string; score: number; label: string } | null;
   cpu?: { code: string | null; name: string } | null;
   /** The CKCM practice (S1, #49): the competency's own, or its CPU's. */
   practice?: { code: string | null; name: string } | null;
   contentStatus?: string;
   statusNote?: string | null;
+  /** The programme overlays of the catalogues that name it (S1, migration 660). */
+  overlays?: CatalogueOverlay[];
 };
 
 /** Pure. An unknown or missing status is unreviewed -- never approved by default (S1's own rule). */
@@ -110,21 +119,32 @@ export function structureLabel(c: Pick<CatalogueCompetency, "practice" | "cpu">)
 /** Pure. S1's competencies, narrowed to the programme's catalogues, in layer then programme then catalogue order. */
 export function projectForProgramme(all: S1Competency[], programme: ProgrammeConfig): CatalogueCompetency[] {
   const config = new Map(programme.frameworks.map(f => [f.frameworkId, f]));
+  const rank = new Map(programme.frameworks.map(f => [f.frameworkId, f.sortOrder]));
   const order = (l: Layer) => LAYERS.indexOf(l);
+  // The programme's own requirement and target (660) come from the first of its catalogues that names the
+  // competency. A competency one of its catalogues NAMES is the programme's even where S1 placed it under another
+  // allowed catalogue (its own home, say): it is then shown under the programme's catalogue.
   return all
-    .filter(c => config.has(c.catalogue.id))
-    .map((c, i) => {
-      const f = config.get(c.catalogue.id)!;
+    .map(c => ({ c, o: pickOverlay(c.overlays, rank) }))
+    .filter(({ c, o }) => config.has(c.catalogue.id) || o !== null)
+    .map(({ c, o }, i) => {
+      const own = config.has(c.catalogue.id);
+      const f = config.get(own ? c.catalogue.id : o!.catalogueId)!;
+      const level = o?.expectedLevel ?? c.expectedLevel ?? null;
+      const layer = own ? c.layer ?? f.layer : f.layer;
       return {
-        sort: [order(c.layer ?? f.layer), f.sortOrder, i] as const,
+        sort: [order(layer), f.sortOrder, i] as const,
         c: {
-          id: c.competencyId, layer: c.layer ?? f.layer, profession: c.profession?.label ?? programme.profession,
-          catalogue: c.catalogue.name, frameworkId: c.catalogue.id, domain: c.domain.name, code: c.code, title: c.title, outcomes: c.outcomes,
-          expectedLevel: c.expectedLevel ? { score: c.expectedLevel.score, label: c.expectedLevel.label } : null,
+          id: c.competencyId, layer, profession: c.profession?.label ?? programme.profession,
+          catalogue: own ? c.catalogue.name : o!.catalogueName, frameworkId: own ? c.catalogue.id : o!.catalogueId,
+          domain: c.domain.name, code: c.code, title: c.title, outcomes: c.outcomes,
+          expectedLevel: level ? { score: level.score, label: level.label } : null,
+          requirement: o?.requirement ?? "required", targetFrom: (o?.expectedLevel ? "programme" : "competency") as "programme" | "competency",
+          expectedLevelId: level?.id ?? null, overlayEntryId: o?.entryId ?? null,
           practice: c.practice ? { code: c.practice.code, name: c.practice.name } : null,
           cpu: c.cpu ? { code: c.cpu.code, name: c.cpu.name } : null,
           contentStatus: normaliseStatus(c.contentStatus), statusNote: c.statusNote ?? null,
-          catalogueVersion: c.catalogue.version ?? null,
+          catalogueVersion: own ? c.catalogue.version ?? null : o!.catalogueVersion,
         },
       };
     })

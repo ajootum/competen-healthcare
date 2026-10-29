@@ -770,7 +770,11 @@ const catalogueLeaks = (src: Src): string[] => {
   const bad: string[] = [];
   if (!/import \{ loadCatalogueFor \} from "\.\.\/catalogue";/.test(c) || !/const all = await loadCatalogueFor\(admin, "scholar"\);/.test(c)) bad.push("not read through S1's Scholar allowlist");
   if (!/if \(all === null\) return \{ ok: false \};/.test(c)) bad.push("unreadable not refused");
-  if (!/\.filter\(c => config\.has\(c\.catalogue\.id\)\)/.test(c)) bad.push("programme does not narrow");
+  // CFCA-STUDIO-P1 (660): a competency is the programme's when it sits in one of its catalogues, or one of ITS
+  // catalogues names it -- the overlay, ranked by the programme's own catalogue order, never another catalogue's.
+  if (!/\.filter\(\(\{ c, o \}\) => config\.has\(c\.catalogue\.id\) \|\| o !== null\)/.test(c)
+    || !/const rank = new Map\(programme\.frameworks\.map\(f => \[f\.frameworkId, f\.sortOrder\]\)\);/.test(c)
+    || !/o: pickOverlay\(c\.overlays, rank\)/.test(c)) bad.push("programme does not narrow");
   bad.push(...[...src].filter(([, s]) => /from\("(frameworks|framework_domains|framework_competencies)"\)/.test(s)).map(([f]) => f));
   return bad;
 };
@@ -1208,7 +1212,8 @@ function main() {
     configWrites(plant(STORE, "export function isUuid", 'export async function x(admin: Admin) { await admin.from("individual_scholar_programme").insert({ code: "x" }); }\nexport function isUuid')).length > 0);
   ok("P22. ⚠ K2 goes red when Scholar reads another experience's allowlist, stops narrowing to the programme, or a page reads competencies around the catalogue",
     catalogueLeaks(plant(CAT, 'loadCatalogueFor(admin, "scholar")', 'loadCatalogueFor(admin, "professional")')).length > 0
-    && catalogueLeaks(plant(CAT, ".filter(c => config.has(c.catalogue.id))", ".filter(() => true)")).length > 0
+    && catalogueLeaks(plant(CAT, ".filter(({ c, o }) => config.has(c.catalogue.id) || o !== null)", ".filter(() => true)")).length > 0
+    && catalogueLeaks(plant(CAT, "o: pickOverlay(c.overlays, rank)", "o: c.overlays?.[0] ?? null")).length > 0
     && catalogueLeaks(plant(`${PAGES}/progress/page.tsx`, "const learner = rows.ok", 'const leak = ctx.admin.from("framework_competencies").select("*");\n  const learner = rows.ok')).length > 0);
   ok("P23. ⚠ K3 goes red when the prompt shows the model competency ids",
     idsReachModel(new Map([...HOLD, [ENGINE, (HOLD.get(ENGINE) ?? "").replace("[${candidateTag(i)}]", "[${c.competencyId}]")]])));

@@ -180,9 +180,21 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
   ]},
 
   { key: "frameworks", label: "Competency Frameworks", icon: "🧬", sections: [
-    { key: "frameworks.home", group: "Competency Frameworks", plain: true, items: [
+    // CFCA-STUDIO-P1: the Competency Studio, in the order the work is done -- author the shared catalogue, shape
+    // each programme framework over it, set scales, stages and components, review clinically, publish independently.
+    { key: "frameworks.home", group: "Competency Studio", plain: true, items: [
       // Migration 465: shared competency authoring (the Competency Author). Approval is Clinical Content Approval.
       { key: "frameworks.authoring", label: "Competency Authoring", href: "/super-admin/competencies/authoring", icon: "✍️" },
+      // Migration 394: controlled catalogues name shared competencies, never copying them (home: Individual).
+      { key: "frameworks.catalogues", label: "Controlled Catalogues", href: "/super-admin/individual/catalogues", icon: "🗂️", kind: "cross" },
+      // Migration 660: per-programme requirement, target level and components, with the resolved preview.
+      { key: "frameworks.programmes", label: "Programme Frameworks", href: "/super-admin/competencies/programmes", icon: "🎓" },
+      { key: "frameworks.scholar-programmes", label: "Scholar Programmes", href: "/super-admin/individual/programmes", icon: "🏫", kind: "cross" },
+      // Migration 660: competency stages and the versioned scale-to-stage mapping (DACUM 0-6, Benner 0-6).
+      { key: "frameworks.stages", label: "Scales & Stages", href: "/super-admin/competencies/stages", icon: "📶" },
+      // Migration 660: the CCHU assessment components (Clinical Skills, Knowledge, Knowledge Application).
+      { key: "frameworks.components", label: "Assessment Components", href: "/super-admin/competencies/components", icon: "🧩" },
+      { key: "frameworks.clinical-review", label: "Clinical Content Review", href: "/super-admin/clinical-review", icon: "🩺", kind: "cross" },
       // Migration 580: governed publication of shared frameworks and catalogues, by an independent publisher.
       { key: "frameworks.publication", label: "Framework Publication", href: "/super-admin/competencies/publication", icon: "🚦" },
       { key: "frameworks.library", label: "Global Competency Library", href: "/super-admin/competencies", icon: "📖" },
@@ -193,7 +205,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       { key: "frameworks.verification.studio", label: "Verification Studio", href: "/super-admin/verification-studio", icon: "🧭" },
       { key: "frameworks.verification.assessment", label: "Competency Assessment", href: "/super-admin/competency-assessment", icon: "📝" },
     ]},
-    { key: "frameworks.studio", group: "Competency Studio", items: [
+    { key: "frameworks.studio", group: "Studio Toolkit", items: [
       { key: "frameworks.studio.home", label: "Competency Studio Home", href: "/super-admin/studio", icon: "🎨" },
       { key: "frameworks.studio.assets", label: "Asset Repository", href: "/super-admin/studio/assets", icon: "🗄️", children: [
         { key: "frameworks.studio.assets.browser", label: "Asset Browser", href: "/super-admin/studio/assets/browser", icon: "·" },

@@ -229,6 +229,11 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   // Migration 465. Authoring first: the first matching prefix wins, and it must not inherit the library view.
   { prefix: "/super-admin/competencies/authoring", capability: "hq.quality.competency.author" },
   { prefix: "/super-admin/competencies/publication", capability: "hq.quality.competency.publish" },
+  // Migration 660 (CFCA-STUDIO-P1). Programme frameworks are curated with the catalogue right. Stages and
+  // components are authored, and a stage mapping is published on the publication page above.
+  { prefix: "/super-admin/competencies/programmes", capability: "hq.individual.config.manage" },
+  { prefix: "/super-admin/competencies/stages",     capability: "hq.quality.competency.author" },
+  { prefix: "/super-admin/competencies/components", capability: "hq.quality.competency.author" },
   { prefix: "/super-admin/competencies",          capability: "hq.learning.competencies.view" },
   { prefix: "/super-admin/content",               capability: "hq.learning.content.view" },
   { prefix: "/super-admin/studio",                capability: "hq.learning.studio.view" },
