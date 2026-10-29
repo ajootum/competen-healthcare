@@ -118,8 +118,10 @@ const checkC5Wiring = (src: Sources): R => {
   const adapter = src.get(VERIF) ?? "";
   const used = [...adapter.matchAll(/\bc5\.(\w+)/g)].map(m => m[1]);
   const personSide = used.length > 0 && used.every(u => C5_PERSON_SIDE.has(u));
+  // CFCA P2 (680): the adapter also takes the pure isAssessorEvidence predicate and its EvidenceKind type, to keep the
+  // assessor's own record off the person's evidence list. The import stays pinned name for name.
   const viaAdapter = /import \* as c5 from "@\/lib\/competency\/verification";/.test(adapter)
-    && /import \{ NOT_A_DECLARATION, STANDING_LABEL, STATE_LABEL, type RequestState \} from "@\/lib\/competency\/verification-config";/.test(adapter)
+    && /import \{ NOT_A_DECLARATION, STANDING_LABEL, STATE_LABEL, isAssessorEvidence, type EvidenceKind, type RequestState \} from "@\/lib\/competency\/verification-config";/.test(adapter)
     && STAGE5_FILES.filter(f => f !== VERIF).every(f => !/@\/lib\/competency\/|\.\.\/competency\//.test(src.get(f) ?? ""));
   const route = src.get(R_VER) ?? "";
   const noResend = /const fresh = h\.handed\.evidence\.filter\(e => !request\.evidence\.some\(x => x\.linkId === e\.linkId\)\);/.test(route)
