@@ -103,3 +103,18 @@ describe("migration 660 guards", () => {
     expect(m).toMatch(/'nur-found', 'core',[\s\S]*?true, 'draft', null, 'profession'/);
   });
 });
+
+describe("migration 670 guards (criteria by component, DACUM source wording)", () => {
+  const m = readFileSync(join(process.cwd(), "supabase/migrations/670-cfca-criteria-components.sql"), "utf8").toLowerCase();
+  it("adds only nullable columns, and the hash is unchanged for an untagged skill", () => {
+    expect(m).toContain("add column if not exists component_code text");
+    expect(m).toContain("references competency_assessment_component(code) on delete restrict");
+    expect(m).toContain("jsonb_agg(s.name || coalesce(' [' || s.component_code || ']', '') order by s.name, s.id)");
+    expect(m).not.toMatch(/\bdrop (table|column)\b|\btruncate\b|\bdelete from\b|update (framework_competencies|competency_skills|frameworks)\b/);
+  });
+  it("sets the DACUM wording only where the 660 seed is still in place, and leaves scores and the mapping alone", () => {
+    expect(m).toMatch(/where s\.id = l\.scale_id and s\.name = 'dacum 0-6' and l\.score = v\.score and l\.label = v\.seeded;/);
+    expect(m).toContain("'can perform this activity satisfactorily without supervision and assistance'");
+    expect(m).not.toMatch(/update competency_stage_mapping|set score|is_passing\s*=/);
+  });
+});

@@ -3,6 +3,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 import { reviewQueue } from "@/lib/competency/clinical-review-hq";
 import { Decide } from "./_components/ReviewControls";
 import { CaseContent } from "./_components/CaseContent";
+import { CriteriaList } from "../competencies/_studio/CriteriaList";
 
 // /super-admin/clinical-review -- owner decision D2, migration 395. The clinical reviewer's queue.
 //
@@ -19,7 +20,8 @@ export const metadata: Metadata = { title: "Clinical review" };
 
 export default async function ClinicalReviewPage() {
   const ctx = await requireHqCapability("hq.quality.clinical.approve");
-  const q = await reviewQueue(ctx.admin, ctx.userId);
+  const [q, comps] = await Promise.all([reviewQueue(ctx.admin, ctx.userId), ctx.admin.from("competency_assessment_component").select("code, label").order("sort_order")]);
+  const components: Record<string, string> = Object.fromEntries(((comps.data ?? []) as { code: string; label: string }[]).map(c => [c.code, c.label]));
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -55,7 +57,9 @@ export default async function ClinicalReviewPage() {
               <dl className="mt-3 space-y-2 text-[13.5px]">
                 <div><dt className="text-[12px] font-semibold text-gray-500">Description</dt><dd className="text-gray-800">{i.snapshot.description ?? "None recorded"}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Learning outcomes</dt><dd className="text-gray-800">{i.snapshot.outcomes.length ? <ul className="list-disc pl-5">{i.snapshot.outcomes.map((o, n) => <li key={n}>{o}</li>)}</ul> : "None recorded"}</dd></div>
-                <div><dt className="text-[12px] font-semibold text-gray-500">Skills</dt><dd className="text-gray-800">{i.snapshot.skills.length ? i.snapshot.skills.join(", ") : "None recorded"}</dd></div>
+                {i.criteria?.some(k => k.component) ? (
+                  <div><dt className="text-[12px] font-semibold text-gray-500">Assessment criteria, by component</dt><dd><CriteriaList criteria={i.criteria} components={components} open /></dd></div>
+                ) : <div><dt className="text-[12px] font-semibold text-gray-500">Skills</dt><dd className="text-gray-800">{i.snapshot.skills.length ? i.snapshot.skills.join(", ") : "None recorded"}</dd></div>}
               </dl>)}
               <div className="mt-4 border-t border-gray-100 pt-3"><Decide versionId={i.versionId} appointmentId={i.appointmentId} idPrefix={`v-${i.versionId}`} /></div>
             </li>

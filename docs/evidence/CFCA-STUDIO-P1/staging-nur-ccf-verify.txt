@@ -1,0 +1,34 @@
+staging: "Core Nursing" is not unique here, settled to its oldest framework
+staging: 24 parent(s) not on staging, left out of this run:
+  NUR-CCF-004 -> Intensive and Progressive Care / Manages Mechanical Ventilation
+  NUR-CCF-005 -> Intensive and Progressive Care / Manages Mechanical Ventilation
+  NUR-CCF-006 -> Intensive and Progressive Care / Manages Mechanical Ventilation
+  NUR-CCF-006 -> Intensive and Progressive Care / Manages Advanced Airway
+  NUR-CCF-010 -> Core Nursing / Provides Safe Hemodynamic Care
+  NUR-CCF-010 -> Intensive and Progressive Care / Manages Hemodynamic Monitoring
+  NUR-CCF-011 -> Core Nursing / Provides Safe Hemodynamic Care
+  NUR-CCF-012 -> Core Nursing / Provides Safe Hemodynamic Care
+  NUR-CCF-012 -> Core Nursing / Manages Renal Care
+  NUR-CCF-013 -> Core Nursing / Performs Neurological Assessment and Monitoring
+  NUR-CCF-014 -> Core Nursing / Performs Neurological Assessment and Monitoring
+  NUR-CCF-017 -> Neurosurgical Nursing / Provides Neurosurgical Care
+  NUR-CCF-017 -> Intensive and Progressive Care / Manages Neurocritical Care
+  NUR-CCF-018 -> Neurosurgical Nursing / Provides Neurosurgical Care
+  NUR-CCF-023 -> Core Nursing / Manages Skin and Wound Care
+  NUR-CCF-019 -> Core Nursing / Manages Renal Care
+  NUR-CCF-020 -> Core Nursing / Manages GI and Nutritional Care
+  NUR-CCF-021 -> Core Nursing / Manages GI and Nutritional Care
+  NUR-CCF-025 -> Core Nursing / Applies Infection Prevention and Control
+  NUR-CCF-022 -> Core Nursing / Provides Psychosocial and Family Care
+  NUR-CCF-030 -> Core Nursing / Contributes to Quality and Safety
+  NUR-CCF-027 -> Core Nursing / Communicates and Collaborates Effectively
+  NUR-CCF-029 -> Core Nursing / Provides End-of-Life and Palliative Care
+  NUR-CCF-028 -> Core Nursing / Provides Neonatal Care
+  PASS  V1  one draft framework, 30 competencies with their codes and domains (13 domains)
+  PASS  V2  458 criteria (Clinical Skills 194, Knowledge 174, Knowledge Application 90), each exactly as in the package; 0 competencies differ
+  PASS  V3  7 inherited Holdings-scope links to 2 existing parents, exactly as named
+  PASS  V4  verify only: 0 of 349 pre-existing competency hashes changed; parents' hashes unchanged true
+  PASS  V5  the authoring view shows 458 criteria on 30 competencies, every one with its component
+  PASS  V6  not published, offers 0 competencies even if allowlisted, clinical state unreviewed
+
+ALL GREEN

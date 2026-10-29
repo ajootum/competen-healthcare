@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadAuthoringView } from "@/lib/competency/authoring-view";
 import { CLINICAL_STATE_LABEL, clinicalNote } from "@/lib/competency/clinical-review";
+import { CriteriaList } from "../_studio/CriteriaList";
 import { CompetencyEditor, DomainName, FrameworkIdentity, FrameworkMeta, ImportDraft, NewCpu, NewDomain, NewFramework, NewPractice, SubmitReview } from "./_components/AuthoringControls";
 import { SubmitForPublication } from "../publication/_components/PublicationControls";
 
@@ -90,6 +91,7 @@ export default async function CompetencyAuthoringPage() {
                                 {c.clinical ? `${CLINICAL_STATE_LABEL[c.clinical.state]}. ${clinicalNote(c.clinical)}` : "Clinical state not readable"}
                               </p>
                             </div>
+                            <CriteriaList criteria={c.criteria} components={v.components} />
                             <details className="mt-1"><summary className="cursor-pointer text-[12.5px] text-gray-700">Edit content</summary>
                               <div className="mt-2"><CompetencyEditor c={c} levels={v.levels} approved={c.clinical?.state === "approved"} cpus={d.practices.flatMap(p => p.cpus.map(u => ({ id: u.id, label: `${u.code ?? ""} ${u.name} (${p.name})` })))} /></div>
                             </details>
