@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { createCompetency, createCpu, createDomain, createFramework, createPractice, importDraftPackage, isId, renameDomain, setFrameworkIdentity, updateCompetency, updateFramework } from "@/lib/competency/authoring";
