@@ -5,6 +5,8 @@ import type { PassportEvaluation } from "./scholar/passport-evaluations";
 import type { StudyAchievement } from "./scholar/passport-items";
 import { learningProvenance, loadProfessionalLearning } from "./professional/learning";
 import { learningPassportItems } from "@/lib/learning/products";
+import { ASSESSOR_AUTHORITY, listVerifications, type VerificationItem } from "@/lib/competency/verification";
+import type { Standing } from "@/lib/competency/verification-config";
 
 // ── THE COMPETEN PASSPORT, AS COMPETEN INDIVIDUAL SHOWS IT ── COMPETEN-IND-003 s2(5), ADR-016 ──────────
 //
@@ -95,6 +97,23 @@ export type PassportEmployment = {
 
 export type PassportLearning = ReturnType<typeof learningPassportItems>[number] & { recordId: string; label: string };
 
+/**
+ * CFCA verification P2 (680): a Competen Holdings verification of one competency, read BY REFERENCE from the 510
+ * Verification Studio through its one product reader (listVerifications). Only verified or partial outcomes -- an
+ * assessment that did not verify is not a Passport item. Standing is 510's own (standingOf): current, expired, revoked
+ * or superseded, derived for the day asked and never stored.
+ */
+export type PassportVerification = {
+  decisionId: string; competencyId: string; title: string; code: string | null;
+  frameworkVersion: string | null;
+  method: { name: string | null; code: string | null; versionNo: number | null; criteriaHash: string | null };
+  outcomeLabel: string; outcomeClass: string | null; level: { score: number; label: string } | null;
+  standing: Standing; current: boolean; decidedAt: string; validUntil: string | null;
+  issuer: string;
+  /** The consolidated CCHU outcome the database computed, when the method assessed components. */
+  components: { status: string; overall: number | null; results: { code: string; score: number | null; label: string | null }[] } | null;
+};
+
 export type IndividualPassport = {
   competencies: PassportCompetency[] | null;
   credentials: PassportCredential[] | null;
@@ -108,7 +127,36 @@ export type IndividualPassport = {
   /** Completed Competen Learning, by reference. enabled false = Learning is off here, and the section is not shown.
    *  Optional only so fixtures from before Learning still type: loadIndividualPassport always sets it. */
   learning?: { enabled: boolean; items: PassportLearning[] | null };
+  /** Competen Holdings verifications (510/680). provisioned false = verification is not on this environment, items
+   *  null = could not be read. Optional only so fixtures from before it still type: loadIndividualPassport always sets it. */
+  verifications?: { provisioned: boolean; items: PassportVerification[] | null };
 };
+
+/**
+ * Pure: one Passport item per competency -- the decision that stands today, or else the latest verified or partial one
+ * (shown as expired, revoked or superseded). Newest first. Existing competency_decisions items are not touched.
+ */
+export function passportVerifications(items: readonly VerificationItem[]): PassportVerification[] {
+  const best = new Map<string, PassportVerification>();
+  for (const it of items) {
+    const verifications = it.decisions.filter(d => d.outcomeClass === "verified" || d.outcomeClass === "partial");
+    const d = it.current ?? [...verifications].sort((a, b) => b.decidedAt.localeCompare(a.decidedAt))[0];
+    if (!d) continue;
+    const item: PassportVerification = {
+      decisionId: d.decisionId, competencyId: it.competency.frameworkCompetencyId, title: it.competency.title || "Unnamed competency", code: it.competency.code,
+      frameworkVersion: it.competency.frameworkVersion,
+      method: { name: it.method.name, code: it.method.code, versionNo: d.criteriaVersion.versionNo ?? it.method.versionNo, criteriaHash: d.criteriaVersion.hash },
+      outcomeLabel: d.outcomeLabel, outcomeClass: d.outcomeClass, level: d.level ? { score: d.level.score, label: d.level.label } : null,
+      standing: d.standing, current: d.standing === "current", decidedAt: d.decidedAt, validUntil: d.validUntil, issuer: ASSESSOR_AUTHORITY,
+      components: d.components ? { status: d.components.outcome.status, overall: d.components.outcome.overall,
+        results: d.components.results.map(r => ({ code: r.code, score: r.score, label: r.label })) } : null,
+    };
+    const had = best.get(item.competencyId);
+    // A current verification wins; otherwise the newer one.
+    if (!had || (item.current && !had.current) || (item.current === had.current && item.decidedAt > had.decidedAt)) best.set(item.competencyId, item);
+  }
+  return [...best.values()].sort((a, b) => Number(b.current) - Number(a.current) || b.decidedAt.localeCompare(a.decidedAt));
+}
 
 const nameOf = (row: any): string => {
   const fc = row?.framework_competencies;
@@ -139,7 +187,7 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
   const settle = async (p: PromiseLike<any>) => {
     try { const r = await p; return r?.error ? null : (r?.data ?? []); } catch { return null; }
   };
-  const [decRows, credRows, empRows, own, study, evaluations, learning] = await Promise.all([
+  const [decRows, credRows, empRows, own, study, evaluations, learning, verified] = await Promise.all([
     settle(admin.from("competency_decisions")
       .select("competency_id, outcome, expiry_date, created_at, hospital_id, organisation_id, framework_competencies(name)")
       .eq("nurse_id", userId).order("created_at", { ascending: false }).limit(3000)),
@@ -153,6 +201,7 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
     loadStudyAchievements(admin, userId).catch((): Read<StudyAchievement[]> => ({ ok: false, notProvisioned: false })),
     loadPassportEvaluations(admin, userId).catch((): Read<PassportEvaluation[]> => ({ ok: false, notProvisioned: false })),
     loadProfessionalLearning(admin, userId).catch(() => ({ enabled: true, refs: null })),
+    listVerifications(admin, userId, { today }).catch(() => null),
   ]);
 
   // Issuer names: the organisations and facilities stamped on this person's own rows, and no others.
@@ -196,5 +245,8 @@ export async function loadIndividualPassport(admin: any, userId: string, today: 
       items: learning.refs === null ? null
         : learningPassportItems(learning.refs).map((p, i) => ({ ...p, recordId: learning.refs![i].recordId, label: learningProvenance(learning.refs![i]) })),
     },
+    verifications: verified === null ? { provisioned: true, items: null }
+      : !verified.provisioned ? { provisioned: false, items: [] }
+        : { provisioned: true, items: passportVerifications(verified.items) },
   };
 }

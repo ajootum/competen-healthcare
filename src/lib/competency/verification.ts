@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { checkDecision, checkMethodContent, deriveState, standingOf, type MethodContent, type RequestState, type Standing, type EvidenceKind } from "./verification-config";
+import {
+  checkAssessorRecord, checkDecision, checkMethodContent, componentOutcomeOf, deriveState, isAssessorEvidence, standingOf,
+  type AnyEvidenceKind, type MethodContent, type RequestState, type ScaleLevel, type Standing, type EvidenceKind,
+} from "./verification-config";
 
 // ── THE COMPETENCY VERIFICATION STUDIO: READ AND WRITTEN ── COMPETENCY-01 C5, migration 510 ───────────────────────
 //
@@ -35,6 +38,18 @@ export function refusalOf(e: any, what: string): { ok: false; status: number; er
   return { ok: false, status: 500, error: `The ${what} could not be saved just now. Try again shortly.` };
 }
 
+/**
+ * 680 is not yet applied everywhere (CLAUDE.md, state 3: main can hold code a database does not have yet). A read or
+ * write that names a 680 column is tried first and, ONLY when the database says that column does not exist, tried again
+ * as 510 wrote it. Where 680 is absent there is no component rule and no publication independence to bypass: the
+ * database simply predates them.
+ */
+async function with680<T = any>(run: (has680: boolean) => PromiseLike<{ data: T; error: any }>): Promise<{ data: T; error: any }> {
+  const first = await run(true);
+  if (first.error && missing(first.error) && /edited_by|component_|assessor_record|recorded_by|method_version_id/i.test(String(first.error.message ?? ""))) return run(false);
+  return first;
+}
+
 /** Whether 510 is on this environment. A zero-row read, never HEAD. */
 export async function verificationReady(admin: any): Promise<boolean> {
   try { const { error } = await admin.from("competency_verification_method_version").select("id").limit(0); return !error; } catch { return false; }
@@ -43,14 +58,20 @@ export async function verificationReady(admin: any): Promise<boolean> {
 // ── THE STUDIO (manage) ───────────────────────────────────────────────────────────────────────────────────────────
 
 export type MethodVersionRow = { id: string; method_id: string; version_no: number; state: "draft" | "published" | "retired"; content: MethodContent; content_hash: string | null;
-  authored_by: string | null; published_by: string | null; published_at: string | null; retired_at: string | null; updated_at: string };
+  authored_by: string | null; published_by: string | null; published_at: string | null; retired_at: string | null; updated_at: string;
+  /** 680: everyone who edited the draft. None of them, nor the author, may publish it. Absent before 680. */
+  edited_by?: string[] };
 export type MethodRow = { id: string; code: string; name: string; kind: string; created_at: string; versions: MethodVersionRow[] };
+const VERSION_COLS = "id, method_id, version_no, state, content, content_hash, authored_by, published_by, published_at, retired_at, updated_at";
+
+/** Pure: whether this actor may publish this draft (680): never its author, never one of its editors. */
+export const mayPublish = (v: Pick<MethodVersionRow, "authored_by" | "edited_by">, actor: string) => v.authored_by !== actor && !(v.edited_by ?? []).includes(actor);
 
 export async function loadMethods(admin: any): Promise<MethodRow[] | null> {
   try {
     const [m, v] = await Promise.all([
       admin.from("competency_verification_method").select("id, code, name, kind, created_at").order("name").limit(500),
-      admin.from("competency_verification_method_version").select("id, method_id, version_no, state, content, content_hash, authored_by, published_by, published_at, retired_at, updated_at").order("version_no", { ascending: false }).limit(5000),
+      with680(has => admin.from("competency_verification_method_version").select(has ? `${VERSION_COLS}, edited_by` : VERSION_COLS).order("version_no", { ascending: false }).limit(5000)),
     ]);
     if (m.error || v.error) return missing(m.error ?? v.error) ? [] : null;
     return (m.data ?? []).map((x: any) => ({ ...x, versions: (v.data ?? []).filter((y: any) => y.method_id === x.id) }));
@@ -79,18 +100,22 @@ export async function newDraft(admin: any, actor: string, methodId: string): Pro
   return error || !data ? refusalOf(error, "version") : { ok: true, versionId: data.id };
 }
 
-export async function saveDraft(admin: any, versionId: string, input: unknown): Promise<Write<{ problems: string[] }>> {
+/** A draft edit. 680 records the editor, who then can never publish this version. */
+export async function saveDraft(admin: any, actor: string, versionId: string, input: unknown): Promise<Write<{ problems: string[] }>> {
   if (!UUID.test(versionId)) return { ok: false, status: 400, error: "Choose a version." };
   const c = checkMethodContent(input);
   if (!c.ok) return { ok: false, status: 400, error: c.error };
-  const { data, error } = await admin.from("competency_verification_method_version").update({ content: c.content }).eq("id", versionId).eq("state", "draft").select("id").maybeSingle();
+  const { data, error } = await with680(has => admin.from("competency_verification_method_version").update(has ? { content: c.content, last_edited_by: actor } : { content: c.content })
+    .eq("id", versionId).eq("state", "draft").select("id").maybeSingle());
   if (error) return refusalOf(error, "draft");
   return data ? { ok: true, problems: c.problems } : { ok: false, status: 409, error: "Only a draft is edited. Published criteria never change: make a new version." };
 }
 
 export async function publishVersion(admin: any, actor: string, versionId: string): Promise<Write> {
-  const { data: v } = await admin.from("competency_verification_method_version").select("content, state").eq("id", versionId).maybeSingle();
+  const { data: v } = await with680(has => admin.from("competency_verification_method_version").select(has ? "content, state, authored_by, edited_by" : "content, state, authored_by").eq("id", versionId).maybeSingle()) as { data: any; error: any };
   if (!v) return { ok: false, status: 404, error: "No such version." };
+  // 680 refuses it too. Said here first, in words.
+  if (Array.isArray(v.edited_by) && !mayPublish(v, actor)) return { ok: false, status: 403, error: "Not independent. You created or edited this version, so another administrator publishes it." };
   const c = checkMethodContent(v.content, true);
   if (!c.ok) return { ok: false, status: 400, error: c.error };
   const { data, error } = await admin.from("competency_verification_method_version").update({ state: "published", published_by: actor }).eq("id", versionId).eq("state", "draft").select("id").maybeSingle();
@@ -150,10 +175,22 @@ export async function endScope(admin: any, actor: string, scopeId: string, reaso
 
 // ── REQUESTS, READ ────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type EvidenceView = { id: string; kind: EvidenceKind; outcomeIndexes: number[]; provenance: Record<string, any>; sourcePresent: boolean; addedAt: string };
+/** sourcePresent: the person's source record still exists. Always true for 680 assessor evidence, which has no source but itself. */
+export type EvidenceView = { id: string; kind: AnyEvidenceKind; outcomeIndexes: number[]; provenance: Record<string, any>; sourcePresent: boolean; addedAt: string };
+/** 680: one component as the decision recorded it (levelId null: not assessed). */
+export type ComponentResultView = { code: string; levelId: string | null; score: number | null; label: string | null; note: string | null };
+export type ConsolidatedView = NonNullable<ReturnType<typeof componentOutcomeOf>>;
 export type DecisionView = { id: string; assessorId: string | null; appointmentId: string | null; methodVersionId: string; methodContentHash: string | null; competencyHash: string | null;
   outcomeCode: string; outcomeClass: string | null; outcomeLabel: string | null; levelId: string | null; criteria: any[]; checklist: any[]; evidenceReviewed: string[];
-  rationale: string; validFrom: string | null; validUntil: string | null; decidedAt: string; standing: Standing; revokedReason: string | null };
+  rationale: string; validFrom: string | null; validUntil: string | null; decidedAt: string; standing: Standing; revokedReason: string | null;
+  /** 680: empty and null when the method version assesses no components (or 680 is absent). */
+  componentResults: ComponentResultView[]; componentOutcome: ConsolidatedView | null };
+
+/** Pure: a stored 680 component_results array, as a view. */
+export const componentResultsOf = (v: unknown): ComponentResultView[] => (Array.isArray(v) ? v : []).filter((r: any) => typeof r?.code === "string").map((r: any) => ({
+  code: r.code, levelId: typeof r.levelId === "string" ? r.levelId : null, score: typeof r.score === "number" ? r.score : null, label: typeof r.label === "string" ? r.label : null,
+  note: typeof r.note === "string" ? r.note : null,
+}));
 export type RequestView = { id: string; userId: string; competencyId: string; competency: { name: string; code: string | null; learning_outcomes: string[] } | null;
   frameworkVersion: string | null; methodVersionId: string; outcomeIndexes: number[]; targetLevelId: string | null; context: string; note: string | null; createdAt: string;
   state: RequestState; assignedTo: { assessorId: string; appointmentId: string } | null; evidence: EvidenceView[]; decisions: DecisionView[];
@@ -168,7 +205,7 @@ async function assemble(admin: any, reqs: any[], today: string): Promise<Request
   const [ev, evts, decs] = await Promise.all([
     admin.from("competency_verification_evidence").select("id, request_id, kind, outcome_indexes, provenance, cpd_id, learning_record_id, evidence_id, profile_item_id, reflection_id, created_at").in("request_id", ids).order("created_at"),
     admin.from("competency_verification_event").select("id, request_id, event, actor_id, assessor_id, appointment_id, decision_id, reason, created_at").in("request_id", ids).order("created_at"),
-    admin.from("competency_verification_decision").select("id, request_id, user_id, assessor_id, appointment_id, method_version_id, method_content_hash, competency_hash, outcome_code, outcome_class, outcome_label, level_id, criteria_results, checklist_results, evidence_reviewed, rationale, valid_from, valid_until, created_at").in("request_id", ids).order("created_at"),
+    with680(has => admin.from("competency_verification_decision").select(`id, request_id, user_id, assessor_id, appointment_id, method_version_id, method_content_hash, competency_hash, outcome_code, outcome_class, outcome_label, level_id, criteria_results, checklist_results, evidence_reviewed, rationale, valid_from, valid_until, created_at${has ? ", component_results, component_outcome" : ""}`).in("request_id", ids).order("created_at")),
   ]);
   if (ev.error || evts.error || decs.error) return null;
   const allDecisions = decs.data ?? [];
@@ -185,11 +222,12 @@ async function assemble(admin: any, reqs: any[], today: string): Promise<Request
       state: deriveState(events, decisions, evidence),
       assignedTo: lastAssign?.event === "assigned" ? { assessorId: lastAssign.assessor_id, appointmentId: lastAssign.appointment_id } : null,
       evidence: evidence.map((e: any) => ({ id: e.id, kind: e.kind, outcomeIndexes: e.outcome_indexes ?? [-1], provenance: e.provenance ?? {},
-        sourcePresent: !!(e.cpd_id ?? e.learning_record_id ?? e.evidence_id ?? e.profile_item_id ?? e.reflection_id), addedAt: e.created_at })),
+        sourcePresent: isAssessorEvidence(e.kind) || !!(e.cpd_id ?? e.learning_record_id ?? e.evidence_id ?? e.profile_item_id ?? e.reflection_id), addedAt: e.created_at })),
       decisions: decisions.map((d: any) => ({ id: d.id, assessorId: d.assessor_id, appointmentId: d.appointment_id, methodVersionId: d.method_version_id, methodContentHash: d.method_content_hash,
         competencyHash: d.competency_hash, outcomeCode: d.outcome_code, outcomeClass: d.outcome_class, outcomeLabel: d.outcome_label, levelId: d.level_id, criteria: d.criteria_results ?? [],
         checklist: d.checklist_results ?? [], evidenceReviewed: d.evidence_reviewed ?? [], rationale: d.rationale, validFrom: d.valid_from, validUntil: d.valid_until, decidedAt: d.created_at,
-        standing: standingOf(d, new Set(revoked.keys()), sameCompetencyLater, today), revokedReason: revoked.get(d.id) ?? null })),
+        standing: standingOf(d, new Set(revoked.keys()), sameCompetencyLater, today), revokedReason: revoked.get(d.id) ?? null,
+        componentResults: componentResultsOf(d.component_results), componentOutcome: componentOutcomeOf(d.component_outcome) })),
       events: events.map((e: any) => ({ event: e.event, actorId: e.actor_id, reason: e.reason, decisionId: e.decision_id ?? null, at: e.created_at })),
     };
   });
@@ -223,13 +261,15 @@ export type VerificationDecision = {
   competencyHash: string | null; rationale: string;
   decidedAt: string; validFrom: string | null; validUntil: string | null;
   standing: Standing; revokedAt: string | null; revokedReason: string | null; supersededBy: string | null;
+  /** 680: the per-component results and the consolidated CCHU outcome the database computed. null: no components. */
+  components: { results: ComponentResultView[]; outcome: ConsolidatedView } | null;
 };
 export type VerificationItem = {
   requestId: string; status: RequestState;
   competency: { frameworkCompetencyId: string; frameworkId: string | null; frameworkVersion: string | null; code: string | null; title: string; learningOutcomes: string[]; allLearningOutcomes: string[] };
   method: { code: string | null; name: string | null; kind: string | null; versionNo: number | null; criteriaHash: string | null };
   context: string; requestedAt: string;
-  evidence: { evidenceId: string; linkId: string | null; kind: EvidenceKind; title: string; evidenceClass: string | null; issuer: string | null; occurredOn: string | null; learningOutcomes: string[]; sourcePresent: boolean; submittedAt: string }[];
+  evidence: { evidenceId: string; linkId: string | null; kind: AnyEvidenceKind; title: string; evidenceClass: string | null; issuer: string | null; occurredOn: string | null; learningOutcomes: string[]; sourcePresent: boolean; submittedAt: string }[];
   decisions: VerificationDecision[];
   /** The decision that stands today as a verification (verified or partial, not revoked, expired or superseded), or null. */
   current: VerificationDecision | null;
@@ -276,6 +316,7 @@ export async function listVerifications(admin: any, userId: string, opts: { fram
           criteriaVersion: { versionId: d.methodVersionId, versionNo: versions.get(d.methodVersionId)?.version_no ?? null, hash: d.methodContentHash },
           competencyHash: d.competencyHash, rationale: d.rationale, decidedAt: d.decidedAt, validFrom: d.validFrom, validUntil: d.validUntil,
           standing: d.standing, revokedAt: revoked?.at ?? null, revokedReason: d.revokedReason, supersededBy: d.standing === "superseded" ? later?.id ?? null : null,
+          components: d.componentOutcome ? { results: d.componentResults, outcome: d.componentOutcome } : null,
         };
       });
       return {
@@ -495,21 +536,56 @@ export async function declineAssignment(admin: any, actor: string, requestId: st
 }
 
 export async function recordDecision(admin: any, assessorId: string, requestId: string, input: unknown): Promise<Write<{ decisionId: string }>> {
-  const { data: req } = await admin.from("competency_verification_request").select("id, user_id, method_version_id").eq("id", requestId).maybeSingle();
+  const { data: req } = await admin.from("competency_verification_request").select("id, user_id, method_version_id, target_level_id").eq("id", requestId).maybeSingle();
   if (!req) return { ok: false, status: 404, error: "No such request." };
   if (req.user_id === assessorId) return { ok: false, status: 403, error: "No self-verification. You can never decide your own request." };
-  const { data: assign } = await admin.from("competency_verification_event").select("assessor_id, appointment_id, event").eq("request_id", requestId).in("event", ["assigned", "assignment_declined"]).order("created_at", { ascending: false }).limit(1);
-  const a = assign?.[0];
+  const a = await assignedTo(admin, requestId);
   if (a?.event !== "assigned" || a.assessor_id !== assessorId) return { ok: false, status: 403, error: "Only the assessor assigned to this request decides it." };
   const { data: v } = await admin.from("competency_verification_method_version").select("content").eq("id", req.method_version_id).maybeSingle();
   const { data: ev } = await admin.from("competency_verification_evidence").select("id").eq("request_id", requestId);
-  const c = checkDecision(input, v?.content ?? {}, (ev ?? []).map((e: any) => e.id));
+  const content = { ...({ components: [] } as Partial<MethodContent>), ...(v?.content ?? {}) } as MethodContent;
+  const levels = content.components?.length ? await scaleLevels(admin, content.scaleId) : [];
+  const c = checkDecision(input, content, (ev ?? []).map((e: any) => e.id), { levels, requestTargetLevelId: req.target_level_id ?? null });
   if (!c.ok) return { ok: false, status: 400, error: c.error };
+  // 680 computes and stores the consolidated outcome itself. Only the component levels are sent, and only where the method has components.
   const { data, error } = await admin.from("competency_verification_decision").insert({
     request_id: requestId, user_id: req.user_id, assessor_id: assessorId, appointment_id: a.appointment_id, method_version_id: req.method_version_id,
     outcome_code: c.value.outcomeCode, level_id: c.value.levelId, rationale: c.value.rationale, criteria_results: c.value.criteria, checklist_results: c.value.checklist, evidence_reviewed: c.value.evidenceReviewed,
+    ...(content.components?.length ? { component_results: c.value.componentResults } : {}),
   }).select("id").single();
   return error || !data ? refusalOf(error, "decision") : { ok: true, decisionId: data.id };
+}
+
+async function assignedTo(admin: any, requestId: string): Promise<{ assessor_id: string; appointment_id: string; event: string } | null> {
+  const { data } = await admin.from("competency_verification_event").select("assessor_id, appointment_id, event").eq("request_id", requestId).in("event", ["assigned", "assignment_declined"]).order("created_at", { ascending: false }).limit(1);
+  return data?.[0] ?? null;
+}
+
+/** The levels of one proficiency scale, with their scores. */
+export async function scaleLevels(admin: any, scaleId: string | null | undefined): Promise<ScaleLevel[]> {
+  if (!scaleId || !UUID.test(scaleId)) return [];
+  const { data } = await admin.from("scoring_levels").select("id, scale_id, score, label").eq("scale_id", scaleId).order("score");
+  return (data ?? []).map((l: any) => ({ id: l.id, scaleId: l.scale_id, score: Number(l.score), label: l.label ?? "" }));
+}
+
+/**
+ * 680: an assessor observation or exam result, by the ASSIGNED assessor, under their appointment and the method version of
+ * the request. The database checks all of it again, snapshots it into provenance and refuses it on their own request.
+ */
+export async function recordAssessorEvidence(admin: any, assessorId: string, requestId: string, input: unknown, today = new Date().toISOString().slice(0, 10)): Promise<Write<{ evidenceId: string }>> {
+  const { data: req } = await admin.from("competency_verification_request").select("id, user_id, method_version_id").eq("id", requestId).maybeSingle();
+  if (!req) return { ok: false, status: 404, error: "No such request." };
+  if (req.user_id === assessorId) return { ok: false, status: 403, error: "No self-verification. You can never record assessor evidence on your own request." };
+  const a = await assignedTo(admin, requestId);
+  if (a?.event !== "assigned" || a.assessor_id !== assessorId) return { ok: false, status: 403, error: "Only the assessor assigned to this request records assessor evidence." };
+  const { data: v } = await admin.from("competency_verification_method_version").select("content").eq("id", req.method_version_id).maybeSingle();
+  const c = checkAssessorRecord(input, { components: (v?.content as MethodContent | undefined)?.components ?? [] }, today);
+  if (!c.ok) return { ok: false, status: 400, error: c.error };
+  const { data, error } = await admin.from("competency_verification_evidence").insert({
+    request_id: requestId, user_id: req.user_id, kind: c.value.kind, recorded_by: assessorId, appointment_id: a.appointment_id, method_version_id: req.method_version_id, assessor_record: c.value.record,
+  }).select("id").single();
+  if (error && missing(error)) return NOT_PROVISIONED;
+  return error || !data ? refusalOf(error, "evidence") : { ok: true, evidenceId: data.id };
 }
 
 export async function revokeDecision(admin: any, actor: string, decisionId: string, reason: unknown): Promise<Write> {

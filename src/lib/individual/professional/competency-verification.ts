@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { CompetencyRef, EvidenceRef } from "./competency-store";
 import * as c5 from "@/lib/competency/verification";
-import { NOT_A_DECLARATION, STANDING_LABEL, STATE_LABEL, type RequestState } from "@/lib/competency/verification-config";
+import { NOT_A_DECLARATION, STANDING_LABEL, STATE_LABEL, isAssessorEvidence, type EvidenceKind, type RequestState } from "@/lib/competency/verification-config";
 
 // ── THE C5 BOUNDARY, READ SIDE ── COMPETEN-PROFESSIONAL-COMPETENCY-01 C5 (Verification Studio, COMPETEN-IND-007) ─────
 //
@@ -74,7 +74,8 @@ function toSummary(i: c5.VerificationItem): VerificationSummary {
       title: i.competency.title, learningOutcomes: i.competency.learningOutcomes },
     method: i.method.name, requestedAt: i.requestedAt,
     // C5 keeps its own snapshot of each piece and returns the portfolio link, not the source record's id.
-    evidence: i.evidence.map(e => ({ linkId: e.linkId ?? "", kind: e.kind, sourceId: "", title: e.title, evidenceClass: e.evidenceClass ?? "", issuer: e.issuer,
+    // 680 assessor observations and exam results are the assessor's record, not portfolio evidence: they are not listed here.
+    evidence: i.evidence.filter((e): e is typeof e & { kind: EvidenceKind } => !isAssessorEvidence(e.kind)).map(e => ({ linkId: e.linkId ?? "", kind: e.kind, sourceId: "", title: e.title, evidenceClass: e.evidenceClass ?? "", issuer: e.issuer,
       occurredOn: e.occurredOn, learningOutcome: e.learningOutcomes[0] ?? null, relation: "", frameworkVersion: null })),
     decisions: i.decisions.map(d => ({
       outcomeCode: d.outcomeCode, outcomeClass: OUTCOME_CLASS_SET.includes(d.outcomeClass ?? "") ? d.outcomeClass as OutcomeClass : null, standing: d.standing,

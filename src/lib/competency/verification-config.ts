@@ -11,13 +11,21 @@
 // HFE rules a form can explain (labels, limits). The integrity controls themselves -- no self-verification, appointment
 // and scope, assignment, pinned criteria, immutable history -- are 510's triggers and are not configuration.
 //
-// PURE, AND IMPORTS NOTHING.
+// ⚠ 680 (CFCA verification P2). Two method kinds (knowledge exam, clinical reasoning), CCHU components in method content
+// (each with its own pass level, mandatory, safety-critical and weight, configured explicitly, never defaulted), assessor
+// evidence (an observation or an exam result by the assigned assessor) and the consolidated component outcome of a
+// decision, computed by the ONE roll-up rule, componentOutcome (studio-components.ts), which the database mirrors line for
+// line in competency_component_outcome().
+//
+// PURE. It imports only the pure roll-up rule.
+import { componentOutcome, type ComponentOutcome, type ComponentRequirement } from "./studio-components";
 
-export const METHOD_KINDS = ["direct_observation", "simulation", "portfolio_review", "practical_assessment", "oral_assessment", "structured_assessment", "other"] as const;
+export const METHOD_KINDS = ["direct_observation", "simulation", "portfolio_review", "practical_assessment", "oral_assessment", "structured_assessment", "other", "knowledge_exam", "clinical_reasoning"] as const;
 export type MethodKind = (typeof METHOD_KINDS)[number];
 export const METHOD_KIND_LABEL: Record<MethodKind, string> = {
   direct_observation: "Direct observation", simulation: "Simulation", portfolio_review: "Portfolio review", practical_assessment: "Practical assessment",
   oral_assessment: "Oral assessment", structured_assessment: "Structured competency assessment", other: "Other authorised method",
+  knowledge_exam: "Knowledge examination", clinical_reasoning: "Clinical reasoning assessment",
 };
 
 /** The fixed outcome classes (510 CHECK). An administrator names the outcomes; each one is of exactly one class. */
@@ -32,20 +40,31 @@ export const NOT_A_DECLARATION = "This is the outcome of one assessment, by the 
 
 export const EVIDENCE_KINDS = ["cpd", "learning_record", "evidence", "profile_item", "reflection", "study_achievement"] as const;
 export type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
-export const EVIDENCE_KIND_LABEL: Record<EvidenceKind, string> = {
+/** 680: evidence the ASSIGNED assessor records under the method version of the request. Never the person's own record. */
+export const ASSESSOR_EVIDENCE_KINDS = ["assessor_observation", "exam_result"] as const;
+export type AssessorEvidenceKind = (typeof ASSESSOR_EVIDENCE_KINDS)[number];
+export type AnyEvidenceKind = EvidenceKind | AssessorEvidenceKind;
+export const EVIDENCE_KIND_LABEL: Record<AnyEvidenceKind, string> = {
   cpd: "CPD entry", learning_record: "Competen Learning record", evidence: "Evidence item", profile_item: "Profile record", reflection: "Reflection (deliberately shared by the person)",
   study_achievement: "Competen Scholar study (formative, not a verification)",
+  assessor_observation: "Assessor observation", exam_result: "Examination result",
 };
+export const isAssessorEvidence = (k: string): k is AssessorEvidenceKind => (ASSESSOR_EVIDENCE_KINDS as readonly string[]).includes(k);
 
 export type Outcome = { code: string; class: OutcomeClass; label: string; description?: string };
-export type Criterion = { id: string; text: string; required: boolean };
-export type ChecklistItem = { id: string; text: string; critical: boolean };
+/** component: a competency_assessment_component code (660) configured in MethodContent.components, or absent. */
+export type Criterion = { id: string; text: string; required: boolean; component?: string | null };
+export type ChecklistItem = { id: string; text: string; critical: boolean; component?: string | null };
+/** 680: one CCHU component this method assesses, with the settings 660 gives a catalogue entry. */
+export type MethodComponent = { code: string; passLevelId: string | null; mandatory: boolean; safetyCritical: boolean; weight: number | null };
 export type RequiredEvidence = { kind: EvidenceKind | "any"; min: number; description: string };
 export type MethodContent = {
   summary: string;
   applicability: { professionTermIds: string[]; specialtyTermIds: string[]; frameworkIds: string[]; competencyIds: string[]; contexts: string[] };
   scaleId: string | null; levelIds: string[];
   outcomes: Outcome[]; criteria: Criterion[]; checklist: ChecklistItem[];
+  /** 680. Empty: the method decides as under 510, with no component results. */
+  components: MethodComponent[];
   requiredEvidence: RequiredEvidence[]; minEvidence: number;
   decisionGuidance: string;
   workflow: { assignment: "administrator" | "self_claim"; allowFurtherEvidence: boolean };
@@ -55,7 +74,7 @@ export type MethodContent = {
 
 export const EMPTY_CONTENT: MethodContent = {
   summary: "", applicability: { professionTermIds: [], specialtyTermIds: [], frameworkIds: [], competencyIds: [], contexts: ["independent"] },
-  scaleId: null, levelIds: [], outcomes: [], criteria: [], checklist: [], requiredEvidence: [], minEvidence: 0, decisionGuidance: "",
+  scaleId: null, levelIds: [], outcomes: [], criteria: [], checklist: [], components: [], requiredEvidence: [], minEvidence: 0, decisionGuidance: "",
   workflow: { assignment: "administrator", allowFurtherEvidence: true }, validity: { months: null, renewal: null }, reassessment: { waitDays: null },
 };
 
@@ -64,6 +83,7 @@ export const STARTER_OUTCOMES: Outcome[] = OUTCOME_CLASSES.map(c => ({ code: c, 
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE = /^[a-z][a-z0-9_]{1,40}$/;
+const COMPONENT = /^[a-z][a-z0-9_]{2,40}$/;
 const ITEM_ID = /^[a-z0-9][a-z0-9_-]{0,40}$/;
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && UUID.test(x)))].slice(0, 200) : []);
@@ -90,13 +110,31 @@ export function checkMethodContent(input: any, forPublish = false): Checked {
     if (DECLARATION.test(o.label) || DECLARATION.test(o.description ?? "")) return { ok: false, error: `${o.code}: an outcome says what this assessment found, not that a person is or is not competent.` };
   }
   if (new Set(outcomes.map(o => o.code)).size !== outcomes.length) return { ok: false, error: "Outcome codes must be different from each other." };
-  const items = (v: unknown, flag: "required" | "critical") => (Array.isArray(v) ? v : []).slice(0, 60).map((c: any) => ({ id: str(c?.id, 41).toLowerCase(), text: str(c?.text, 500), [flag]: flag === "required" ? c?.required !== false : c?.critical === true }));
+  const items = (v: unknown, flag: "required" | "critical") => (Array.isArray(v) ? v : []).slice(0, 60).map((c: any) => ({
+    id: str(c?.id, 41).toLowerCase(), text: str(c?.text, 500), [flag]: flag === "required" ? c?.required !== false : c?.critical === true,
+    ...(typeof c?.component === "string" && c.component ? { component: c.component } : {}),
+  }));
   const criteria = items(input?.criteria, "required") as Criterion[];
   const checklist = items(input?.checklist, "critical") as ChecklistItem[];
   for (const c of [...criteria, ...checklist]) {
     if (!ITEM_ID.test(c.id) || c.text.length < 3) return { ok: false, error: "Every criterion and checklist item needs a short id and its words." };
   }
   if (new Set([...criteria, ...checklist].map(c => c.id)).size !== criteria.length + checklist.length) return { ok: false, error: "Criterion and checklist ids must be different from each other." };
+  // 680: the CCHU components, each explicit. The database checks the registry and the scale again when it publishes.
+  const components: MethodComponent[] = [];
+  for (const k of (Array.isArray(input?.components) ? input.components : []).slice(0, 20) as any[]) {
+    const code = typeof k?.code === "string" ? k.code : "";
+    if (!COMPONENT.test(code)) return { ok: false, error: "Choose each component from the registry." };
+    if (components.some(x => x.code === code)) return { ok: false, error: `${code} is listed twice.` };
+    const passLevelId = typeof k?.passLevelId === "string" && UUID.test(k.passLevelId) ? k.passLevelId : null;
+    const safetyCritical = k?.safetyCritical === true;
+    const weight = k?.weight === null || k?.weight === undefined || k?.weight === "" ? null : Number(k.weight);
+    if (weight !== null && !(Number.isFinite(weight) && weight > 0 && weight <= 100 && Math.abs(Math.round(weight * 100) - weight * 100) < 1e-9))
+      return { ok: false, error: `${code}: the weight is a number above 0 and at most 100, to two decimal places, or blank.` };
+    components.push({ code, passLevelId, mandatory: k?.mandatory !== false || safetyCritical, safetyCritical, weight });
+  }
+  const unconfigured = [...criteria, ...checklist].find(c => c.component && !components.some(k => k.code === c.component));
+  if (unconfigured) return { ok: false, error: `${unconfigured.id}: its component is not one of the components of this method. Add it to the components first.` };
   const requiredEvidence: RequiredEvidence[] = (Array.isArray(input?.requiredEvidence) ? input.requiredEvidence : []).slice(0, 20).map((r: any) => ({
     kind: r?.kind === "any" || (EVIDENCE_KINDS as readonly string[]).includes(r?.kind) ? r.kind : "any", min: int(r?.min, 1, 20) ?? 1, description: str(r?.description, 300),
   }));
@@ -105,7 +143,7 @@ export function checkMethodContent(input: any, forPublish = false): Checked {
     applicability: { professionTermIds: ids(a.professionTermIds), specialtyTermIds: ids(a.specialtyTermIds), frameworkIds: ids(a.frameworkIds), competencyIds: ids(a.competencyIds), contexts: codes(a.contexts) },
     scaleId: typeof input?.scaleId === "string" && UUID.test(input.scaleId) ? input.scaleId : null,
     levelIds: ids(input?.levelIds),
-    outcomes, criteria, checklist, requiredEvidence,
+    outcomes, criteria, checklist, components, requiredEvidence,
     minEvidence: int(input?.minEvidence, 0, 50) ?? 0,
     decisionGuidance: str(input?.decisionGuidance, 4000),
     workflow: { assignment: input?.workflow?.assignment === "self_claim" ? "self_claim" : "administrator", allowFurtherEvidence: input?.workflow?.allowFurtherEvidence !== false },
@@ -117,6 +155,7 @@ export function checkMethodContent(input: any, forPublish = false): Checked {
   if (content.outcomes.some(o => o.class === "verified") && !content.scaleId) problems.push("An outcome that verifies at a level needs the proficiency scale.");
   if (!content.criteria.length && !content.checklist.length) problems.push("Give the criteria or the checklist the assessor decides against.");
   if (content.summary.length < 10) problems.push("Describe the method in a sentence or two.");
+  if (content.components.length && !content.scaleId) problems.push("Components are scored on the proficiency scale: choose it.");
   if (forPublish && problems.length) return { ok: false, error: problems[0] };
   return { ok: true, content, problems };
 }
@@ -126,13 +165,91 @@ export type DecisionInput = {
   criteria: { id: string; result: "met" | "not_met" | "not_applicable"; note?: string }[];
   checklist: { id: string; result: "done" | "not_done"; note?: string }[];
   evidenceReviewed: string[];
+  /** 680: one per component the assessor answered. levelId null: not assessed. Empty when the method has no components. */
+  componentResults: ComponentResultInput[];
 };
+export type ComponentResultInput = { code: string; levelId: string | null; note?: string };
+/** A level of the method scale, with its score (scoring_levels). */
+export type ScaleLevel = { id: string; scaleId: string; score: number; label: string };
+
+// ── 680: CCHU COMPONENTS, CONSOLIDATED BY THE ONE RULE ─────────────────────────────────────────────────────────
+
+/** Pure: the method's components as the roll-up rule reads them, pass levels as scores. Mirrors competency_method_components(). */
+export function methodRequirements(content: Pick<MethodContent, "components">, levels: readonly ScaleLevel[]): ComponentRequirement[] {
+  const byId = new Map(levels.map(l => [l.id, l]));
+  return (content.components ?? []).map(k => {
+    const l = k.passLevelId ? byId.get(k.passLevelId) : undefined;
+    return { code: k.code, passLevel: l ? { id: l.id, score: l.score, label: l.label } : null, mandatory: k.mandatory !== false || k.safetyCritical === true,
+      safetyCritical: k.safetyCritical === true, weight: k.weight ?? null };
+  });
+}
+
+/**
+ * Pure: the consolidated component outcome of a decision -- componentOutcome over the method's components, the
+ * component levels the assessor stated, and the target: the level verified for a verified outcome, otherwise the level
+ * the request asked about. Exactly what 680's decision guard computes and stores. null when the method has no components.
+ */
+export function consolidatedOutcome(content: Pick<MethodContent, "components">, results: readonly ComponentResultInput[], levels: readonly ScaleLevel[],
+  targetLevelId: string | null): ComponentOutcome | null {
+  if (!content.components?.length) return null;
+  const byId = new Map(levels.map(l => [l.id, l]));
+  const target = targetLevelId ? byId.get(targetLevelId)?.score ?? null : null;
+  return componentOutcome(methodRequirements(content, levels), results.map(r => ({ code: r.code, score: r.levelId ? byId.get(r.levelId)?.score ?? null : null })), target);
+}
+
+export const COMPONENT_STATUS_LABEL: Record<ComponentOutcome["status"], string> = {
+  achieved: "All components reached", not_achieved: "Not reached in every component", incomplete: "Incomplete: a mandatory component is not assessed",
+};
+
+/** Pure: the decision a stored component outcome reads as (680 component_outcome jsonb), or null. */
+export function componentOutcomeOf(stored: any): (Omit<ComponentOutcome, "reasons"> & { target: number | null }) | null {
+  if (!stored || typeof stored !== "object" || !["achieved", "not_achieved", "incomplete"].includes(stored.status)) return null;
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  return { status: stored.status, overall: typeof stored.overall === "number" ? stored.overall : null, target: typeof stored.target === "number" ? stored.target : null,
+    failedMandatory: list(stored.failedMandatory), failedSafetyCritical: list(stored.failedSafetyCritical), missingMandatory: list(stored.missingMandatory) };
+}
+
+export type AssessorRecord =
+  | { kind: "assessor_observation"; record: { summary: string; observedOn: string; setting?: string; component?: string } }
+  | { kind: "exam_result"; record: { title: string; score: number; maxScore: number; passMark?: number; takenOn: string; component?: string } };
+
+/** Pure: an assessor observation or exam result, checked as 680's competency_assessor_record_problem() checks it. */
+export function checkAssessorRecord(input: any, content: Pick<MethodContent, "components">, today: string): { ok: true; value: AssessorRecord } | { ok: false; error: string } {
+  const day = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v ? v : null);
+  const component = typeof input?.component === "string" && input.component ? input.component : undefined;
+  if (component && !(content.components ?? []).some(k => k.code === component)) return { ok: false, error: "That component is not one this method assesses." };
+  if (input?.kind === "assessor_observation") {
+    const summary = str(input?.summary, 4000);
+    if (summary.length < 10) return { ok: false, error: "Say what you observed, in at least 10 characters." };
+    const observedOn = day(input?.observedOn);
+    if (!observedOn) return { ok: false, error: "State the day of the observation." };
+    if (observedOn > today) return { ok: false, error: "An observation cannot be dated in the future." };
+    const setting = str(input?.setting, 200);
+    return { ok: true, value: { kind: "assessor_observation", record: { summary, observedOn, ...(setting ? { setting } : {}), ...(component ? { component } : {}) } } };
+  }
+  if (input?.kind === "exam_result") {
+    const title = str(input?.title, 200);
+    if (title.length < 3) return { ok: false, error: "Name the examination." };
+    const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : NaN);
+    const score = num(input?.score), maxScore = num(input?.maxScore), passMark = num(input?.passMark);
+    if (score === null || maxScore === null || Number.isNaN(score) || Number.isNaN(maxScore) || Number.isNaN(passMark as number)) return { ok: false, error: "State the score and the maximum score as numbers." };
+    if (maxScore <= 0 || score < 0 || score > maxScore) return { ok: false, error: "The score is between 0 and the maximum score." };
+    if (passMark !== null && (passMark < 0 || passMark > maxScore)) return { ok: false, error: "The pass mark is between 0 and the maximum score." };
+    const takenOn = day(input?.takenOn);
+    if (!takenOn) return { ok: false, error: "State the day the examination was taken." };
+    if (takenOn > today) return { ok: false, error: "An exam result cannot be dated in the future." };
+    return { ok: true, value: { kind: "exam_result", record: { title, score, maxScore, ...(passMark !== null ? { passMark } : {}), takenOn, ...(component ? { component } : {}) } } };
+  }
+  return { ok: false, error: "Choose an observation or an exam result." };
+}
 
 /**
  * Pure: a decision as the assessor form sent it, checked against the pinned method content the way 510 will check it,
- * so the form explains a refusal before the database makes it.
+ * so the form explains a refusal before the database makes it. With 680 components, `scale` gives the method's levels
+ * and the request's target level, so the consolidated outcome is checked here by the same rule the database applies.
  */
-export function checkDecision(input: any, content: MethodContent, evidenceIds: readonly string[]): { ok: true; value: DecisionInput; outcome: Outcome } | { ok: false; error: string } {
+export function checkDecision(input: any, content: MethodContent, evidenceIds: readonly string[], scale: { levels: readonly ScaleLevel[]; requestTargetLevelId: string | null } = { levels: [], requestTargetLevelId: null }):
+  { ok: true; value: DecisionInput; outcome: Outcome; components: ComponentOutcome | null } | { ok: false; error: string } {
   const outcome = content.outcomes.find(o => o.code === input?.outcomeCode);
   if (!outcome) return { ok: false, error: "Choose the outcome of this assessment." };
   const rationale = str(input?.rationale, 4000);
@@ -150,7 +267,25 @@ export function checkDecision(input: any, content: MethodContent, evidenceIds: r
   if (outcome.class === "further_evidence" && !content.workflow.allowFurtherEvidence) return { ok: false, error: "This method decides on the evidence submitted. It does not ask for more." };
   const reviewed = ids(input?.evidenceReviewed).filter(id => evidenceIds.includes(id));
   if ((outcome.class === "verified" || outcome.class === "partial") && reviewed.length < content.minEvidence) return { ok: false, error: `This method needs at least ${content.minEvidence} evidence item${content.minEvidence === 1 ? "" : "s"} reviewed.` };
-  return { ok: true, outcome, value: { outcomeCode: outcome.code, levelId, rationale, criteria: criteria.filter(Boolean) as DecisionInput["criteria"], checklist: checklist.filter(Boolean) as DecisionInput["checklist"], evidenceReviewed: reviewed } };
+  // 680: one level (or not assessed) per component, and a verified outcome only when the components are reached.
+  const componentResults: ComponentResultInput[] = [];
+  const comps = content.components ?? [];
+  const raw = Array.isArray(input?.componentResults) ? input.componentResults : [];
+  if (!comps.length && raw.length) return { ok: false, error: "This method assesses no components." };
+  const onScale = new Set(scale.levels.filter(l => l.scaleId === content.scaleId).map(l => l.id));
+  for (const r of raw.slice(0, 20) as any[]) {
+    const k = comps.find(c => c.code === r?.code);
+    if (!k) return { ok: false, error: "Answer only the components of this method." };
+    if (componentResults.some(x => x.code === k.code)) return { ok: false, error: `${k.code} is answered twice.` };
+    const lv = typeof r?.levelId === "string" && r.levelId ? r.levelId : null;
+    if (lv && !onScale.has(lv)) return { ok: false, error: `Choose the level for ${k.code} from the scale of this method.` };
+    const note = str(r?.note, 500);
+    componentResults.push({ code: k.code, levelId: lv, ...(note ? { note } : {}) });
+  }
+  const components = consolidatedOutcome(content, componentResults, scale.levels, levelId ?? scale.requestTargetLevelId);
+  if (outcome.class === "verified" && components && components.status !== "achieved")
+    return { ok: false, error: `A verified outcome needs every component reached. ${components.reasons[0] ?? "The weighted level is below the level verified."}` };
+  return { ok: true, outcome, components, value: { outcomeCode: outcome.code, levelId, rationale, criteria: criteria.filter(Boolean) as DecisionInput["criteria"], checklist: checklist.filter(Boolean) as DecisionInput["checklist"], evidenceReviewed: reviewed, componentResults } };
 }
 
 // ── STATE, AS 510 DERIVES IT ──────────────────────────────────────────────────────────────────────────────────

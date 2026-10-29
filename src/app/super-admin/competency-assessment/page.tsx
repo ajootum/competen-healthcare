@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadAssessorQueue, loadVersionsById, verificationReady, type RequestView } from "@/lib/competency/verification";
 import { EMPTY_CONTENT, EVIDENCE_KIND_LABEL, NOT_A_DECLARATION, STATE_LABEL, type MethodContent } from "@/lib/competency/verification-config";
-import { Claim, Decline, DecisionForm } from "./_components/AssessControls";
+import { AssessorEvidenceForm, Claim, Decline, DecisionForm } from "./_components/AssessControls";
+import { listComponents } from "@/lib/competency/studio-components";
 
 // /super-admin/competency-assessment -- COMPETEN-PROFESSIONAL-COMPETENCY-01 C5 (migration 510), the Competency Assessor.
 // Guarded by hq.competency.verification.assess, which only the Competency Assessor position holds, and nobody holds that
@@ -32,12 +33,14 @@ export default async function CompetencyAssessmentPage() {
   const people = [...new Set(all.map(r => r.userId))];
   const { data: names } = people.length ? await ctx.admin.from("profiles").select("id, full_name").in("id", people) : { data: [] };
   const nameOf = new Map((names ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name ?? "Unnamed person"]));
+  const registry = all.length ? await listComponents(ctx.admin) : [];
+  const componentLabels = Object.fromEntries((registry ?? []).map(k => [k.code, k.label]));
 
   const card = (r: RequestView & { claimWith?: string }, assigned: boolean) => {
     const v = versions.get(r.methodVersionId);
     const content = { ...EMPTY_CONTENT, ...((v?.content ?? {}) as Partial<MethodContent>) } as MethodContent;
     const outcomes = r.competency?.learning_outcomes ?? [];
-    const lv = (levels ?? []).filter((l: { scale_id: string }) => l.scale_id === content.scaleId).map((l: { id: string; score: number; label: string }) => ({ id: l.id, label: `${l.score} · ${l.label}` }));
+    const lv = (levels ?? []).filter((l: { scale_id: string }) => l.scale_id === content.scaleId).map((l: { id: string; scale_id: string; score: number; label: string }) => ({ id: l.id, scaleId: l.scale_id, score: Number(l.score), label: l.label }));
     return (
       <article key={r.id} className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -57,16 +60,19 @@ export default async function CompetencyAssessmentPage() {
               {r.evidence.map(e => (
                 <li key={e.id} className="text-[13px] text-gray-800">
                   <span className="font-medium">{String(e.provenance.title ?? e.provenance.template ?? EVIDENCE_KIND_LABEL[e.kind])}</span>
-                  <span className="text-gray-500"> · {EVIDENCE_KIND_LABEL[e.kind]} · {e.provenance.evidence_class === "platform_recorded" ? "Recorded by Competen Learning" : e.provenance.evidence_class === "source_linked" ? "Self-declared, document attached" : "Self-declared"} · submitted {fmt(e.addedAt)}{e.sourcePresent ? "" : " · the person has since removed the source record"}</span>
+                  <span className="text-gray-500"> · {EVIDENCE_KIND_LABEL[e.kind]} · {e.provenance.evidence_class === "assessor_recorded" ? `Recorded by the assessor under method version ${e.provenance.method_version_no ?? "?"}` : e.provenance.evidence_class === "platform_recorded" ? "Recorded by Competen Learning" : e.provenance.evidence_class === "source_linked" ? "Self-declared, document attached" : "Self-declared"} · submitted {fmt(e.addedAt)}{e.sourcePresent ? "" : " · the person has since removed the source record"}</span>
                   {assigned && typeof e.provenance.document_path === "string" && <> · <a href={`/api/hq/competency-assessment?evidence=${e.id}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-teal-800 underline underline-offset-2">Open {String(e.provenance.document_name ?? "document")}</a></>}
                   {e.kind === "reflection" && typeof e.provenance.body === "string" && <p className="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2 text-[12.5px] text-gray-700">{e.provenance.body}</p>}
+                  {e.kind === "assessor_observation" && typeof e.provenance.record?.summary === "string" && <p className="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2 text-[12.5px] text-gray-700">{e.provenance.record.summary}</p>}
+                  {e.kind === "exam_result" && <p className="mt-1 text-[12.5px] text-gray-700">Score {String(e.provenance.record?.score)} of {String(e.provenance.record?.maxScore)}{typeof e.provenance.record?.passMark === "number" ? `, pass mark ${e.provenance.record.passMark}` : ""}</p>}
                 </li>
               ))}
             </ul>
           )}
         </div>
         {content.decisionGuidance && <p className="rounded-lg border border-teal-100 bg-teal-50 p-2.5 text-[13px] text-teal-900">Guidance: {content.decisionGuidance}</p>}
-        {assigned && r.state === "assigned" && <DecisionForm requestId={r.id} content={content} levels={lv} idPrefix={`d-${r.id.slice(0, 8)}`}
+        {assigned && r.state === "assigned" && <AssessorEvidenceForm requestId={r.id} idPrefix={`ae-${r.id.slice(0, 8)}`} components={(content.components ?? []).map(k => ({ code: k.code, label: componentLabels[k.code] ?? k.code }))} />}
+        {assigned && r.state === "assigned" && <DecisionForm requestId={r.id} content={content} levels={lv} idPrefix={`d-${r.id.slice(0, 8)}`} requestTargetLevelId={r.targetLevelId} componentLabels={componentLabels}
           evidence={r.evidence.map(e => ({ id: e.id, label: `${String(e.provenance.title ?? EVIDENCE_KIND_LABEL[e.kind])} (${EVIDENCE_KIND_LABEL[e.kind]})` }))} />}
         {assigned && r.state === "awaiting_evidence" && <p className="text-[13px] text-amber-900">You asked for further evidence. The request comes back to you when the person adds it.</p>}
         {assigned && <Decline requestId={r.id} idPrefix={`dc-${r.id.slice(0, 8)}`} />}

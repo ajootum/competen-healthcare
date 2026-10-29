@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { currentTraceId } from "@/lib/trace";
-import { assignRequest, declineAssignment, evidenceDocumentPath, recordDecision } from "@/lib/competency/verification";
+import { assignRequest, declineAssignment, evidenceDocumentPath, recordAssessorEvidence, recordDecision } from "@/lib/competency/verification";
 import { signDocument } from "@/lib/individual/professional/documents";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 
 // /api/hq/competency-assessment -- COMPETEN-PROFESSIONAL-COMPETENCY-01 C5 (migration 510), the Competency Assessor.
 //
-//   POST { action: "decide", requestId, outcomeCode, levelId?, rationale, criteria[], checklist[], evidenceReviewed[] }
+//   POST { action: "decide", requestId, outcomeCode, levelId?, rationale, criteria[], checklist[], evidenceReviewed[], componentResults[]? }
+//        { action: "record_evidence", requestId, kind, ... }  (680) an assessor observation or exam result, by the assigned assessor
 //        { action: "claim", requestId, appointmentId }   only where the method lets an assessor claim (self_claim)
 //        { action: "decline", requestId, reason }        hand an assignment back
 //   GET  ?evidence=<id>  a five-minute link to a document of submitted evidence, for the assigned assessor only
@@ -30,16 +31,17 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   const requestId = typeof b?.requestId === "string" && UUID.test(b.requestId) ? b.requestId : null;
   if (!requestId) return refuse(400, "Choose a request.");
-  let out: { ok: true; decisionId?: string } | { ok: false; status: number; error: string };
+  let out: { ok: true; decisionId?: string; evidenceId?: string } | { ok: false; status: number; error: string };
   if (b.action === "decide") out = await recordDecision(ctx.admin, ctx.userId, requestId, b);
   else if (b.action === "claim") out = await assignRequest(ctx.admin, ctx.userId, requestId, typeof b.appointmentId === "string" ? b.appointmentId : "");
   else if (b.action === "decline") out = await declineAssignment(ctx.admin, ctx.userId, requestId, b.reason);
+  else if (b.action === "record_evidence") out = await recordAssessorEvidence(ctx.admin, ctx.userId, requestId, b);
   else return refuse(400, "Unknown action.");
   if (!out.ok) return refuse(out.status, out.error);
   await ctx.admin.from("audit_log").insert({
     trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.fullName,
     action: `competency_assessment_${b.action}`, entity_type: "competency_verification_request", entity_id: requestId,
-    new_value: b.action === "decide" ? { decision: out.decisionId, outcome: b.outcomeCode } : {},
+    new_value: b.action === "decide" ? { decision: out.decisionId, outcome: b.outcomeCode } : b.action === "record_evidence" ? { evidence: out.evidenceId, kind: b.kind } : {},
   }).then((r: unknown) => r, () => {});
   return NextResponse.json({ ok: true, ...(out.decisionId ? { decisionId: out.decisionId } : {}) });
 }
