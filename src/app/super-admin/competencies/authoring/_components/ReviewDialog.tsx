@@ -11,8 +11,8 @@ import { useRouter } from "next/navigation";
 // went stale. Nothing here approves or publishes. The server (/api/hq/competency/authoring, review_* actions) decides.
 
 type Scope = { kind: "framework" } | { kind: "domain"; domainId: string } | { kind: "competencies"; ids: string[] };
-type Item = { competencyId: string; code: string | null; name: string; domain?: string; hash: string | null; eligibility: string; reason: string };
-type Preview = { scopeLabel: string; items: Item[]; counts: { inScope: number; eligible: number; excluded: number } };
+type Item = { competencyId: string; code: string | null; name: string; domain?: string; hash: string | null; eligibility: string; reason: string; checks?: string[] };
+type Preview = { scopeLabel: string; items: Item[]; counts: { inScope: number; eligible: number; excluded: number; withChecks?: number } };
 type Result = { competencyId: string; code: string | null; name: string; outcome: "submitted" | "skipped" | "excluded" | "stale" | "failed" | "not_reached"; reason: string; versionId?: string };
 
 const btn = "inline-flex items-center justify-center rounded-lg px-4 py-2 text-[13.5px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)]";
@@ -125,7 +125,8 @@ function ReviewDialog({ frameworkId, scope, onClose }: { frameworkId: string; sc
               <p className="mt-3 rounded-lg border border-teal-100 bg-teal-50/60 px-3 py-2 text-[12.5px] text-teal-950">
                 Each eligible competency gets its own request for its exact content version. Content already in review is skipped. Independent review and publication stay separate: nothing is approved or published here.
               </p>
-              <ItemTable rows={preview.items.map(i => ({ id: i.competencyId, code: i.code, name: i.name, badge: i.eligibility, reason: i.eligibility === "eligible" ? "" : i.reason }))} head="Eligibility" />
+              {(preview.counts.withChecks ?? 0) > 0 && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-950">Outstanding points: {preview.counts.withChecks} competenc{preview.counts.withChecks === 1 ? "y has" : "ies have"} points worth checking before review, listed below. They do not block submission; the reviewer sees them too.</p>}
+              <ItemTable rows={preview.items.map(i => ({ id: i.competencyId, code: i.code, name: i.name, badge: i.eligibility, reason: [i.eligibility === "eligible" ? "" : i.reason, i.checks?.length ? `Worth checking: ${i.checks.join(" ")}` : ""].filter(Boolean).join(" ") }))} head="Eligibility" />
               {preview.counts.eligible > 0 && (
                 <label className="mt-3 flex items-start gap-2 text-[13px] text-gray-800">
                   <input type="checkbox" className="mt-0.5" checked={ack} onChange={e => setAck(e.target.checked)} />
