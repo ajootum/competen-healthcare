@@ -208,6 +208,12 @@ export async function POST(req: Request) {
     .from("profiles").select("id, full_name").eq("id", personId).maybeSingle();
   if (personErr) return NextResponse.json({ error: `Profiles could not be read: ${personErr.message}` }, { status: 500 });
   if (!person) return NextResponse.json({ error: "No such person" }, { status: 404 });
+  // ...and classified Human (migration 650, owner 29 Oct 2026). A demo, test, system or unclassified account is
+  // never appointed to an HQ position, whatever the client sends. Unreadable classification refuses.
+  const { data: cls, error: clsErr } = await ctx.admin.from("hq_account_classification").select("account_type").eq("profile_id", personId).maybeSingle();
+  if (clsErr) return NextResponse.json({ error: "Account classification could not be read, so the appointment was not made." }, { status: 503 });
+  if ((cls as any)?.account_type !== "human")
+    return NextResponse.json({ error: "Only an account marked Human can hold an HQ position. Mark this person as Human on HQ Users first." }, { status: 422 });
 
   // The office is DERIVED, not supplied.
   const offices = await readHqOffices(ctx.admin);

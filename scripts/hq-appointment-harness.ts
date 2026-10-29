@@ -115,6 +115,12 @@ function allHolders(board: HqAppointmentBoard): { readable: boolean; holders: { 
       "[source] there is no DELETE verb -- ending an appointment sets status");
     ok("S5", /HQ_END_STATUSES/.test(routeSrc) && !HQ_END_STATUSES.some(s => appointmentGrantsAccess(s)),
       `[source] PATCH accepts only end statuses (${HQ_END_STATUSES.join(", ")}), and NONE of them grants access`);
+    // Owner 29 Oct 2026: only accounts classified Human (650) are offered, and only they can be appointed.
+    ok("S6", /typeOf\(classes, p\.id\) === "human"/.test(pageSrc) && /!classes\.available/.test(pageSrc)
+      && /from\("hq_account_classification"\)[^;]*eq\("profile_id", personId\)/.test(routeSrc) && /account_type !== "human"/.test(routeSrc) && /clsErr\) return/.test(routeSrc),
+      "[source] the picker lists Human accounts only (unreadable classification refuses), and POST refuses a non-Human appointee");
+    ok("S6-red", !/account_type !== "human"/.test(routeSrc.replace('account_type !== "human"', 'account_type === "nobody"')),
+      "[control] S6 goes red when the route stops checking the classification");
 
     // ── 2. The capability it names is real ───────────────────────────────────────────────────────
     console.log("\n  -- 2. the capability --");
