@@ -9,6 +9,7 @@ import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "@/lib/individual/policy";
 import { individualPlanAiLimit } from "@/lib/individual/commerce";
+import { pilotQuotaRefusal } from "@/lib/individual/pilot-ai";
 import { currentTraceId } from "@/lib/trace";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { cleanActivity, isAssistTask } from "@/lib/individual/professional/assistant";
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
   if (await professionalLegacyQuotaApplies(ctx.admin)) {
     const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
     // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
-    const refusal = individualQuotaRefusal(quota, "questions");
+    const refusal = await pilotQuotaRefusal(ctx.admin, "professional", ctx.userId, quota, individualQuotaRefusal(quota, "questions"), "questions");
     if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
   }
   if (!aiStatus().configured) return NextResponse.json({ error: "The personal AI is not configured on this environment." }, { status: 503 });
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
   await ctx.admin.from("audit_log").insert({
     trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.profile.fullName,
     action: "ai_assistant_query", entity_type: "individual_professional_assistant", entity_id: null,
-    new_value: { experience: "professional", task, notes_chars: activity?.notes?.length ?? 0, model: out.model },
+    new_value: { experience: "professional", task, notes_chars: activity?.notes?.length ?? 0, model: out.model, scopes_read: out.scopesRead },
   }).then((r: unknown) => r, () => {});
 
   return NextResponse.json({ answer: out.answer });

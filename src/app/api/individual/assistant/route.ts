@@ -14,6 +14,7 @@ import { currentTraceId } from "@/lib/trace";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { isExperienceKey } from "@/lib/individual/experiences";
 import { cleanQuestion, QUESTION_MAX } from "@/lib/individual/assistant";
+import { pilotQuotaRefusal, purposeFrom } from "@/lib/individual/pilot-ai";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -21,7 +22,8 @@ export const dynamic = "force-dynamic";
 
 // POST /api/individual/assistant -- COMPETEN-IND-003 s2(6), the personal AI entry point.
 //
-// Body: { experience, question, mode? }. The engine is the Holdings Personal AI (src/lib/ai/personal-assistant.ts,
+// Body: { experience, question, mode?, purpose? }. `purpose: "education"` is the learner's answer to a clarify question
+// (AI operating modes; anything else is ignored). The engine is the Holdings Personal AI (src/lib/ai/personal-assistant.ts,
 // owner D3): one persona, one engine, no memory, with each product's modes and authorised data as no-code policy.
 // Scholar opens in Teach Me, Professional in professional-development assistance. An unoffered mode is refused.
 //
@@ -54,6 +56,7 @@ export async function POST(req: Request) {
   if (!known) return NextResponse.json({ error: "Unknown experience" }, { status: 400 });
 
   const question = cleanQuestion(body?.question);
+  const purpose = purposeFrom(body);
   if (!question) return NextResponse.json({ error: `Ask a question of up to ${QUESTION_MAX} characters.` }, { status: 400 });
 
   // The estate limit (quota.ts, unchanged) and the Individual policy limit, whichever is tighter (CONFIG-002).
@@ -62,7 +65,7 @@ export async function POST(req: Request) {
   if (experience !== "professional" || (await professionalLegacyQuotaApplies(ctx.admin))) {
     const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
     // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
-    const refusal = individualQuotaRefusal(quota, "questions");
+    const refusal = await pilotQuotaRefusal(ctx.admin, experience, ctx.userId, quota, individualQuotaRefusal(quota, "questions"), "questions");
     if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
   }
   if (!aiStatus().configured) return NextResponse.json({ error: "Personal AI is not available yet." }, { status: 503 });
@@ -70,7 +73,7 @@ export async function POST(req: Request) {
   const out = await runIndividualAssistant(ctx.admin, {
     userId: ctx.userId, fullName: ctx.profile.fullName, live: ctx.live, experience,
     mode: typeof body?.mode === "string" ? body.mode as AssistantMode : null, question,
-    requestId: requestIdFor(ctx.userId, req.headers.get("x-request-id")),
+    requestId: requestIdFor(ctx.userId, req.headers.get("x-request-id")), purpose,
   });
   if (!out.ok && out.kind === "invalid") return NextResponse.json({ error: out.error }, { status: out.status });
   if (!out.ok && out.kind === "metered") { const m = meteredRefusalBody(out.refusal); return NextResponse.json(m.body, { status: m.status }); }
@@ -83,7 +86,7 @@ export async function POST(req: Request) {
   await ctx.admin.from("audit_log").insert({
     trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.profile.fullName,
     action: "ai_assistant_query", entity_type: "individual_assistant", entity_id: null,
-    new_value: { experience, mode: out.mode, question_chars: question.length, model: out.model },
+    new_value: { experience, mode: out.mode, question_chars: question.length, model: out.model, purpose, scopes_read: out.scopesRead },
   }).then((r: unknown) => r, () => {});
 
   return NextResponse.json({ answer: out.answer, mode: out.mode });

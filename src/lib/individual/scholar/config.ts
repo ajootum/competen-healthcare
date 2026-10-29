@@ -273,6 +273,27 @@ export const SELF_DIRECTED_LABEL = "Self-directed study. Nothing here is verifie
 // notice, not legal text: the Terms and Privacy Notice the person accepted on entry (owner ruling D2)
 // remain the legal documents, and this notice must be reviewed alongside them (COMPETEN-LEGAL-001).
 export const CONSENT_FEATURE = "ai_processing_uploads";
+/**
+ * COMPETEN INDIVIDUAL CROSS-EXPERIENCE PERSONAL AI CONTEXT (owner decision, approved subject to explicit consent,
+ * 29 Oct 2026, migration 700). OFF until the person turns it on, revocable at any time, and only for a person who also
+ * has Professional. What it shares is exactly what the notice says. Do not edit a word without a new version.
+ */
+export const CROSS_EXPERIENCE_FEATURE = "ai_cross_experience_context";
+export const CROSS_EXPERIENCE_NOTICE_VERSION = "cross-experience-ai-notice-v1";
+export const CROSS_EXPERIENCE_NOTICE = {
+  heading: "Let your Scholar assistant use your Professional development plan",
+  shares: [
+    "The development needs you recorded in Professional",
+    "The goals in your Professional development plan",
+  ],
+  never: [
+    "Anything an employer, a workplace or another person recorded about you",
+    "Your reflections, documents or private notes",
+    "Anyone else's information",
+  ],
+  how: "Your Scholar assistant reads them, as you recorded them, only when you ask it something, to suggest how your studies can help. It never changes them, and its suggestions are labelled as suggestions, never as your goals.",
+  off: "You can turn this off at any time. Your assistant stops reading them straight away. Nothing is deleted.",
+} as const;
 export const CONSENT_NOTICE_VERSION = "scholar-ai-uploads-notice-v3";
 /**
  * v3 (owner GO, 2026-10-23): the owner-approved v2 wording with the seven consistency corrections from

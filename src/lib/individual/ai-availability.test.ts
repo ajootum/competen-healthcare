@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { aiReasonCopy, availabilityFromStanding, reasonFromRefusal } from "./ai-availability";
+import { aiReasonCopy, availabilityFromStanding, clarifyFrom, reasonFromRefusal } from "./ai-availability";
 import { meteredRefusalBody, type AiStanding } from "@/lib/ai/allowance";
+import { CLARIFY, SUPPORTIVE_REFUSAL } from "@/lib/ai/operating-mode";
 
 const standing = (o: Partial<AiStanding> = {}): AiStanding => ({
   readable: true, metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null,
@@ -30,6 +31,23 @@ describe("HFE-01 Wave 1: AI availability", () => {
     expect(availabilityFromStanding(standing({ activities: { ask: { label: "Ask", available: false, via: null, reason: "level_insufficient" } } }), "ask")).toEqual({ available: false, reason: "level_insufficient" });
     expect(availabilityFromStanding(standing({ readable: false }), "teach")).toEqual({ available: false, reason: "unreadable" });
     expect(availabilityFromStanding(null, "ask")).toEqual({ available: false, reason: "unreadable" });
+  });
+
+  it("a mode that answers the educational part words the same refusal supportively, and it is still not_eligible", () => {
+    expect(availabilityFromStanding(standing({ activities: { ask: { label: "Ask", available: false, via: null, reason: SUPPORTIVE_REFUSAL } } }), "ask")).toEqual({ available: false, reason: "not_eligible" });
+    expect(aiReasonCopy("not_eligible", "scholar")).toEqual({ text: SUPPORTIVE_REFUSAL, next: null });
+    expect(aiReasonCopy("not_eligible", "scholar").text).not.toMatch(/none is approved/);
+  });
+
+  it("a clarify question is not a refusal: it carries its question and answers, and shows no unavailable reason", () => {
+    const m = meteredRefusalBody({ ok: false, error: "clarify_purpose", standing: standing({ message: CLARIFY.question }), clarify: CLARIFY });
+    expect(m.status).toBe(409);
+    expect(m.body).toMatchObject({ code: "clarify_purpose", clarify: { question: CLARIFY.question, education: CLARIFY.education, patient: CLARIFY.patient, patientAnswer: CLARIFY.patientAnswer } });
+    expect(reasonFromRefusal(m.body)).toBeNull();
+    expect(clarifyFrom(m.body)).toEqual({ question: CLARIFY.question, education: CLARIFY.education, patient: CLARIFY.patient, patientAnswer: CLARIFY.patientAnswer });
+    expect(clarifyFrom({ code: "clarify_purpose", clarify: { question: "Q" } })).toBeNull();
+    expect(clarifyFrom({ code: "not_eligible", clarify: CLARIFY })).toBeNull();
+    expect(clarifyFrom(null)).toBeNull();
   });
 
   it("reads the reason from a server refusal, and the engine now marks the unpublished policy", () => {

@@ -73,7 +73,7 @@ describe("D1: the risk subject every Scholar AI call carries", () => {
     const r = await scholarRisk({}, "user-1", { text: "Why a target range?", passages: [passage] });
     expect(r).toEqual({ text: `Why a target range?
 
-${passage.content}`, competencyIds: ["comp-1"], topicTerms: ["oxygen therapy", "saturation"] });
+${passage.content}`, competencyIds: ["comp-1"], topicTerms: ["oxygen therapy", "saturation"], actorId: "user-1", purpose: null });
   });
   it("uses the competencies the caller names when it names them", async () => {
     expect((await scholarRisk({}, "user-1", { passages: [passage], competencyIds: ["named"] })).competencyIds).toEqual(["named"]);

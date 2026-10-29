@@ -9,6 +9,8 @@ import { sourceHref } from "./question-view";
 import { AiBadge } from "./client";
 import { AiFlagList, GovernedReferenceList } from "./learn-kinds";
 import { AiFeedback } from "./ai-feedback";
+import ClarifyPurpose from "@/app/individual/_components/ai/ClarifyPurpose";
+import { clarifyFrom, type ClarifyPrompt } from "@/lib/individual/ai-availability";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -54,6 +56,8 @@ type Reply = {
   continuity?: { message: string; insufficient: boolean }; savedList?: Reply[];
 };
 type Card = { id: number; asked?: string; reply: Reply };
+/** AI operating modes: a clarify question put to the student instead of a refusal, and the request to resend if it is for study. */
+type Pending = { prompt: ClarifyPrompt; target: "lesson" | "ask" | "assistant"; action?: string; extra?: Record<string, unknown>; asked?: string; question?: string };
 
 async function call(url: string, body: unknown, method = "POST"): Promise<{ ok: boolean; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
   try {
@@ -95,6 +99,7 @@ export function LearnWorkspace(props: {
   const [askThread, setAskThread] = useState<Card[]>([]);
   // Owner D3: the shared personal AI on this step. Its own thread, never mixed into a Learn answer, never saved.
   const [assist, setAssist] = useState<{ id: number; asked: string; answer?: string; error?: string }[]>([]);
+  const [pending, setPending] = useState<Pending | null>(null);
   const seq = useRef(0);
   const started = useRef(false);
   const opened = useRef(false);
@@ -102,13 +107,15 @@ export function LearnWorkspace(props: {
 
   const act = useCallback(async (action: string, extra: Record<string, unknown> = {}, target: "lesson" | "ask" = "lesson", asked?: string) => {
     if (!session || !step) return null;
-    setBusy(action); setError("");
+    setBusy(action); setError(""); setPending(null);
     const scopeIds = session.steps.flatMap(s => s.sections.map(x => x.chunkId));
     const r = await call("/api/individual/scholar/learn/act", {
       action, step: step.step, depth, ...(mode !== "notes" && action !== "check" && action !== "clarify" ? { mode } : {}), ...extra,
       ...(session.id ? { sessionId: session.id } : { chunkIds: action === "ask" ? scopeIds : step.sections.map(x => x.chunkId) }),
     });
     setBusy("");
+    const prompt = r.ok ? null : clarifyFrom(r.json);
+    if (prompt) { setPending({ prompt, target, action, extra, asked }); return null; }
     if (!r.ok && !r.json.withheld) { setError(r.json.error ?? "Scholar could not answer just now."); return null; }
     const reply = (r.json.continuity ? { ...r.json, savedList: r.json.saved, saved: null, sources: [], references: [] } : r.json) as Reply;
     const card: Card = { id: ++seq.current, asked, reply };
@@ -118,14 +125,16 @@ export function LearnWorkspace(props: {
     return r.json as Reply;
   }, [session, step, depth, mode]);
   // Owner D3: the step, handed to the shared personal AI (Teach Me). Shown apart under PERSONAL_AI_LABEL, never saved.
-  const continueWithAssistant = useCallback(async (question: string) => {
+  const continueWithAssistant = useCallback(async (question: string, purpose?: "education") => {
     if (!session || !step) return;
-    setBusy("assistant");
+    setBusy("assistant"); setPending(null);
     const r = await call("/api/individual/scholar/learn/assistant", {
-      question, mode: "teach", step: step.step,
+      question, mode: "teach", step: step.step, ...(purpose ? { purpose } : {}),
       ...(session.id ? { sessionId: session.id } : { chunkIds: step.sections.map(x => x.chunkId) }),
     });
     setBusy("");
+    const prompt = r.ok ? null : clarifyFrom(r.json);
+    if (prompt) { setPending({ prompt, target: "assistant", question }); return; }
     setAssist(list => [{ id: ++seq.current, asked: question, ...(r.ok ? { answer: String(r.json.answer ?? "") } : { error: r.json.error ?? "Your assistant could not answer just now." }) }, ...list]);
   }, [session, step]);
   // Item 4: a withheld answer's rephrase -- to Ask, with the student's own question back in the box to change.
@@ -167,12 +176,23 @@ export function LearnWorkspace(props: {
 
   async function goTo(next: number, move: "skip" | "revisit" | null) {
     if (!session) return;
-    setAt(next); setCheck(null); setTab("lesson");
+    setAt(next); setCheck(null); setPending(null); setTab("lesson");
     if (session.id) await call(`/api/individual/scholar/learn/sessions/${session.id}`, { currentStep: next, ...(move ? { move } : {}) }, "PATCH");
   }
   async function finish() {
     if (session?.id) await call(`/api/individual/scholar/learn/sessions/${session.id}`, { status: "completed" }, "PATCH");
     setSession(s => (s ? { ...s, status: "completed" } : s));
+  }
+  // The student says the clarified question is for study: the SAME request, resent with purpose "education".
+  async function answerEducation() {
+    const p = pending;
+    if (!p) return;
+    if (p.target === "assistant") { await continueWithAssistant(p.question ?? "", "education"); return; }
+    const r = await act(p.action ?? "", { ...p.extra, purpose: "education" }, p.target, p.asked);
+    if (!r) return;
+    if (p.action === "ask") setAsk("");
+    else if (p.action === "check" && r.checkQuestion) setCheck({ question: r.checkQuestion, answer: "" });
+    else if (p.action === "clarify" && !r.error) setCheck(null);
   }
   async function startCheck() {
     const r = await act("check");
@@ -295,8 +315,9 @@ export function LearnWorkspace(props: {
             </fieldset>
           )}
 
+          {pending?.target === "lesson" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-4" onEducation={() => void answerEducation()} />}
           <div aria-live="polite" className="mt-4 space-y-4">
-            {thread.length === 0 && !busy && <p className="text-[13.5px] text-gray-600">{props.consent ? `Choose ${props.labels[props.startAction]} to begin this step, or ask Scholar anything.` : "Learning needs AI help, which is off."}</p>}
+            {thread.length === 0 && !busy && pending?.target !== "lesson" && <p className="text-[13.5px] text-gray-600">{props.consent ? `Choose ${props.labels[props.startAction]} to begin this step, or ask Scholar anything.` : "Learning needs AI help, which is off."}</p>}
             {thread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }) : undefined}
               onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} />)}
             {busy && busy !== "ask" && <p className="text-[13px] text-gray-500">{mode === "research" ? "Scholar is reading your notes and searching published research…" : "Scholar is reading your notes…"}</p>}
@@ -342,6 +363,7 @@ export function LearnWorkspace(props: {
               <button type="submit" className={`${ghost} mt-2`} disabled={!!busy || !ask.trim() || !props.consent}>{busy === "ask" ? "Reading your notes…" : "Ask"}</button>
             </form>
           ) : <p className="mt-2 text-[13px] text-gray-600">Asking is switched off here.</p>}
+          {pending?.target === "ask" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-3" onEducation={() => void answerEducation()} />}
           <div aria-live="polite" className="mt-3 space-y-3">
             {askThread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} compact onRephrase={() => rephrase(c.asked ?? "")} />)}
           </div>
@@ -351,6 +373,7 @@ export function LearnWorkspace(props: {
                 {busy === "assistant" ? "Asking your assistant…" : "Continue with your personal assistant"}
               </button>
               <p className="mt-1 text-[12px] text-gray-600">Your general personal AI, given this step&apos;s sections. Its answers are not checked against your notes.</p>
+              {pending?.target === "assistant" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-3" onEducation={() => void answerEducation()} />}
               <div aria-live="polite" className="mt-3 space-y-3">
                 {assist.map(a => (
                   <article key={a.id} className="rounded-xl border-2 border-indigo-200 bg-indigo-50/50 p-3">

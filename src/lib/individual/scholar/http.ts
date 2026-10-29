@@ -4,6 +4,7 @@ import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "../policy";
 import { individualPlanAiLimit } from "../commerce";
+import { pilotQuotaRefusal } from "../pilot-ai";
 import { currentTraceId } from "@/lib/trace";
 import type { IndividualContext } from "../guard";
 import { readConsent, sectionLinks, topicsOfSections } from "./store";
@@ -39,7 +40,7 @@ export async function aiPreflight(ctx: IndividualContext): Promise<NextResponse 
   // The estate limit (quota.ts, unchanged) and the Individual policy limit, whichever is tighter (CONFIG-002).
   const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
   // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
-  const refusal = individualQuotaRefusal(quota, "AI requests");
+  const refusal = await pilotQuotaRefusal(ctx.admin, "scholar", ctx.userId, quota, individualQuotaRefusal(quota, "AI requests"), "AI requests");
   if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
   if (!aiStatus().configured) return NextResponse.json({ error: "AI is not configured on this environment." }, { status: 503 });
   return null;
@@ -82,9 +83,12 @@ const RISK_TEXT_MAX = 20000, RISK_MAX_TERMS = 50;
  * student's own words (after the route's identifier screen), the sections the request works from (screened when
  * they were uploaded), those sections' competencies (their live links, unless the caller names them) and their topic
  * terms. The engine reads it in memory only. Never omitted: a request with no subject is classified as high risk.
+ * `actorId` is the signed-in student (their operating mode and cohort); `purpose` is only their answer to a clarify question.
  */
 export async function scholarRisk(admin: unknown, userId: string, input: {
   text?: string | null; passages: readonly { chunkId: string; content: string }[]; competencyIds?: readonly string[];
+  /** AI operating modes: "education" once the student confirmed a clarify question was for study (purposeFrom). */
+  purpose?: "education" | null;
 }): Promise<RiskContext> {
   const chunkIds = input.passages.map(p => p.chunkId);
   const [links, topics] = await Promise.all([input.competencyIds ? null : sectionLinks(admin, userId, chunkIds), topicsOfSections(admin, userId, chunkIds)]);
@@ -92,6 +96,7 @@ export async function scholarRisk(admin: unknown, userId: string, input: {
     text: [input.text ?? "", ...input.passages.map(p => p.content)].filter(Boolean).join("\n\n").slice(0, RISK_TEXT_MAX),
     competencyIds: [...new Set(input.competencyIds ?? (links ?? []).map(l => l.competencyId))].slice(0, RISK_MAX_TERMS),
     topicTerms: [...new Set([...topics.values()].flat())].slice(0, RISK_MAX_TERMS),
+    actorId: userId, purpose: input.purpose ?? null,
   };
 }
 

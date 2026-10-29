@@ -4,10 +4,16 @@ import { useState } from "react";
 import type { ExperienceKey } from "@/lib/individual/experiences";
 import { QUESTION_MAX } from "@/lib/individual/assistant-limits";
 import { AiRefusalNotice, aiActionProps } from "../../../_components/ai/AiAvailability";
+import ClarifyPurpose from "../../../_components/ai/ClarifyPurpose";
+import { clarifyFrom, type ClarifyPrompt } from "@/lib/individual/ai-availability";
 
 // The personal AI's question box. One question, one answer, held only in this page's state -- the
 // server stores nothing (see src/lib/individual/assistant.ts). Earlier answers in this visit stay on
 // screen for the person's convenience and are gone when they leave.
+//
+// AI operating modes: a clinical question that could be a study question or about a real patient comes back as a
+// question (HTTP 409, code clarify_purpose), not a refusal. "For my studies" resends the SAME question with
+// purpose "education"; "A real patient" shows its answer here and sends nothing.
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 
@@ -22,19 +28,22 @@ export default function AssistantPanel({ experience, accent, unavailable = false
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ body: unknown } | null>(null);
+  const [clarify, setClarify] = useState<{ q: string; prompt: ClarifyPrompt } | null>(null);
   const off = aiActionProps(unavailable ? { available: false, reason: "unreadable" } : { available: true }, "ai-unavailable");
   const [turns, setTurns] = useState<{ q: string; a: string }[]>([]);
 
-  async function ask(q: string) {
+  async function ask(q: string, purpose?: "education") {
     const text = q.trim();
     if (!text || busy || unavailable) return;
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setClarify(null);
     try {
       const res = await fetch("/api/individual/assistant", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ experience, question: text }),
+        body: JSON.stringify({ experience, question: text, ...(purpose ? { purpose } : {}) }),
       });
       const json = await res.json().catch(() => ({}));
+      const prompt = res.status === 409 ? clarifyFrom(json) : null;
+      if (prompt) { setClarify({ q: text, prompt }); return; }
       if (!res.ok) { setError({ body: json }); return; }
       setTurns(t => [{ q: text, a: String(json.answer ?? "") }, ...t]);
       setQuestion("");
@@ -71,6 +80,8 @@ export default function AssistantPanel({ experience, accent, unavailable = false
           </div>
         )}
       </form>
+
+      {clarify && <ClarifyPurpose key={clarify.q} clarify={clarify.prompt} busy={busy} accent={accent} className="mt-3" onEducation={() => void ask(clarify.q, "education")} />}
 
       {error && <AiRefusalNotice body={error.body} fallback="The assistant could not answer just now." experience={experience} className="mt-3" />}
 

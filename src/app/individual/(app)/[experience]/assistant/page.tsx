@@ -5,7 +5,9 @@ import type { Metadata } from "next";
 import { PageHeader } from "../../../_components/chrome";
 import AssistantPanel from "./AssistantPanel";
 import { getAiStanding } from "@/lib/ai/allowance";
-import { DEFAULT_PROFILE, MODE_ACTIVITY } from "@/lib/ai/personal-assistant";
+import { DEFAULT_PROFILE, MODE_ACTIVITY, loadAssistantProfile } from "@/lib/ai/personal-assistant";
+import { crossExperienceConsented } from "@/lib/individual/scholar/store";
+import CrossExperienceConsent from "./CrossExperienceConsent";
 import { availabilityFromStanding } from "@/lib/individual/ai-availability";
 import { AiUnavailableNote } from "../../../_components/ai/AiAvailability";
 
@@ -28,6 +30,10 @@ export default async function AssistantPage({ params }: { params: Promise<{ expe
   // standing the route's gate reads; the route still refuses on its own.
   const standing = await getAiStanding(page.ctx.admin, { userId: page.ctx.userId, product: experience });
   const availability = availabilityFromStanding(standing, MODE_ACTIVITY[DEFAULT_PROFILE[experience].defaultMode]);
+  // Migration 700: the cross-experience choice is offered only where the product allows it and the person has Professional.
+  const crossOffered = experience === "scholar" && page.ctx.live.includes("professional")
+    && (await loadAssistantProfile(page.ctx.admin, "scholar")).scopes.includes("own_development");
+  const crossGranted = crossOffered && await crossExperienceConsented(page.ctx.admin, page.ctx.userId);
 
   return (
     <>
@@ -36,12 +42,13 @@ export default async function AssistantPage({ params }: { params: Promise<{ expe
           ? "A study companion. Ask about a topic, how to revise, or what is on your Competen record."
           : "A development companion. Ask about CPD planning, your development, or what is on your Competen record."} />
       <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13px] leading-relaxed text-gray-600">
-        <p><span className="font-semibold text-gray-800">What it can see:</span> your name, the experiences on your account, and the competencies, credentials and employment in your Passport{experience === "professional" ? ", plus your Professional record: your self-declared profession and registering body, your development needs and goals, and your CPD activity (titles, dates and hours, never documents)" : ""}. It cannot see files, courses or other people.</p>
+        <p><span className="font-semibold text-gray-800">What it can see:</span> your name, the experiences on your account, and the competencies, credentials and employment in your Passport{experience === "professional" ? ", plus your Professional record: your self-declared profession and registering body, your development needs and goals, and your CPD activity (titles, dates and hours, never documents)" : ", plus your programme, level and study progress in Scholar"}{crossGranted ? ", and, because you turned it on, your Professional development needs and plan goals" : ""}. It cannot see files, courses or other people.</p>
         <p className="mt-1"><span className="font-semibold text-gray-800">Not saved:</span> each question is answered and then forgotten. Answers are general guidance, not clinical advice.</p>
         {/* AI-FAIR-USE-01: where the person's AI allowance stands. Only while an allowance is actually metered
             (HFE-01 F1: with metering off the allowance page has nothing to show). */}
         {standing.metered && <p className="mt-1"><a href={experienceHref(experience, "ai-allowance")} className="font-semibold underline underline-offset-2" style={{ color: x.accent }}>Your AI allowance</a></p>}
       </div>
+      {crossOffered && <CrossExperienceConsent granted={crossGranted} accent={x.accent} />}
       {!availability.available && <AiUnavailableNote id="ai-unavailable" reason={availability.reason} experience={experience} className="mb-4" />}
       {configured ? <AssistantPanel experience={experience} accent={x.accent} unavailable={!availability.available} />
         : <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-900">Personal AI is not available yet, so it cannot answer here.</p>}

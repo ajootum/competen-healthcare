@@ -161,7 +161,7 @@ const checkRisk = (src: Src, classify: Classify, at: typeof activityAt): R => {
   const opt = at(p, "optimised", "teach", b, "high_risk_clinical"), full = at(p, "full", "teach", { ...b, usedCau: 0 }, "high_risk_clinical");
   const floor = !opt.available && opt.refusal === "level_insufficient" && full.tier === "heavy";
   const e = code(src, "engine");
-  const passed = /p_risk_tier: m\.risk\.tier, p_risk_rule: m\.risk\.rule,/.test(e) && /risk: risk!,/.test(e) && e.indexOf("classifyRisk(policy.risk") > -1 && e.indexOf("classifyRisk(policy.risk") < e.indexOf("const decision = activityAt(");
+  const passed = /p_risk_tier: m\.risk\.tier, p_risk_rule: m\.risk\.rule,/.test(e) && /risk: risk!,/.test(e) && (() => { const at = Math.min(...["classifyRisk(policy.risk", "decideRisk(policy.risk"].map(k => e.indexOf(k)).filter(i => i > -1)); return Number.isFinite(at) && at < e.indexOf("const decision = activityAt("); })();
   const r = fn(mig(src), "ai_reserve");
   const db = !HAS_MIG || (/v_tier := case when p_risk_tier in \('standard_educational', 'clinical_educational', 'high_risk_clinical'\) then p_risk_tier else 'high_risk_clinical' end;/.test(r)
     && /if v_rank > 1 and not exists \(/.test(r) && /and e\.eligible and ai_risk_rank\(coalesce\(e\.max_risk_tier, 'clinical_educational'\)\) >= v_rank/.test(r)
@@ -277,12 +277,14 @@ function checkUnmeteredGate(src: Src, allSrc: Src): R {
   const standing = bodyOf("getAiStanding");
   const off = standing.indexOf("if (!(await aiFairUseEnabled(admin)))");
   if (off < 0 || !/return withEligibility\(unmetered,/.test(standing.slice(off, off + 1200))) bad.push("getAiStanding: the unmetered standing does not apply eligibility");
-  const gate = bodyOf("unmeteredGate");
+  // AI operating modes (29 Oct 2026): unmeteredGate reads the mode and logs; gateCore holds the gate itself.
+  const gate = bodyOf("unmeteredGate") + bodyOf("gateCore");
   if (!/if \(riskRank\(floor\) <= 0\) \{[^]{0,200}?if \(!routing\.published\) return \{ ok: true, tier: null, route: null \};/.test(gate)) bad.push("unmeteredGate: standard-educational activities are not left unchanged");
   if (!/if \(!a\) return \{ ok: false, error: "unknown_activity"/.test(gate)) bad.push("unmeteredGate: an undefined activity is not refused");
   // C1 (SCHOLAR-READINESS-02, 28 Oct 2026): the request's subject is classified with the metered path's classifyRisk,
   // and that tier (never the activity floor alone) decides the gate.
-  if (!/const risk = classifyRisk\(policy\.risk, await resolveRiskSubject\(admin, subject\), a\.riskFloor as RiskTier\);\n  const floor = risk\.tier;/.test(gate)) bad.push("unmeteredGate: the request's subject is not classified (C1)");
+  if (!/const risk = classifyRisk\(policy\.risk, await resolveRiskSubject\(admin, subject\), a\.riskFloor as RiskTier\);\n  const floor = risk\.tier;/.test(gate)
+    && !/const verdict = decideRisk\(policy\.risk, await resolveRiskSubject\(admin, subject\), a\.riskFloor as RiskTier, mode, subject\?\.purpose \?\? null\);\n  const risk = verdict\.risk;\n[^\n]*\n  const floor = risk\.tier;/.test(gate)) bad.push("unmeteredGate: the request's subject is not classified (C1)");
   if (!/if \(rows === null\) return \{ ok: false, error: "unreadable"/.test(gate)) bad.push("unmeteredGate: unreadable eligibility does not fail closed");
   if (/!standing\.metered && standing\.readable\) return \{ available: true/.test(allSrc.get(STANDING_FILE) ?? "")) bad.push("activityState: not metered still means available");
   return { ok: bad.length === 0, detail: bad.join("; ") };
@@ -370,6 +372,7 @@ red("A5 (FI) an unknown charge released as free", checkNoEstimate(plant("engine"
 red("A6 metering on with no flag check", checkFailClosed(plant("engine", `  if (!(await aiFairUseEnabled(admin))) {
     const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning", args.risk);
     if (!g.ok) return g;
+    args = { ...args, generate: withBoundary(args.generate, g.mode, g.risk) };
     return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
   }
   const { policy, readable }`, "  const { policy, readable }")));
@@ -386,6 +389,7 @@ red("A16 an eligibility check that offers everything", checkStandingEligibility(
 red("A18 the old unmetered path (generate with no gate)", checkUnmeteredGate(plant("engine", `  if (!(await aiFairUseEnabled(admin))) {
     const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning", args.risk);
     if (!g.ok) return g;
+    args = { ...args, generate: withBoundary(args.generate, g.mode, g.risk) };
     return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
   }`, "  if (!(await aiFairUseEnabled(admin))) return generate(args.generate);"), ALL));
 red("A18 (C1) the unmetered gate called without the subject", checkUnmeteredGate(plant("engine", `    const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning", args.risk);

@@ -4,6 +4,7 @@ import { checkAiQuota } from "@/lib/ai/quota";
 import { runIndividualAssistant } from "../personal-ai";
 import { individualAiQuota, individualQuotaRefusal, loadIndividualPolicy } from "../policy";
 import { individualPlanAiLimit } from "../commerce";
+import { pilotQuotaRefusal } from "../pilot-ai";
 import type { IndividualContext } from "../guard";
 import { professionalLegacyQuotaApplies } from "./ai-quota";
 
@@ -21,7 +22,7 @@ export type AskOutcome = { ok: true; answer: string; model: string | null } | { 
 export async function askProfessionalAssistant(ctx: IndividualContext, req: Request, question: string): Promise<AskOutcome> {
   if (await professionalLegacyQuotaApplies(ctx.admin)) {
     const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
-    const refusal = individualQuotaRefusal(quota, "questions");
+    const refusal = await pilotQuotaRefusal(ctx.admin, "professional", ctx.userId, quota, individualQuotaRefusal(quota, "questions"), "questions");
     if (refusal) return { ok: false, status: refusal.status, body: { error: refusal.error } };
   }
   if (!aiStatus().configured) return { ok: false, status: 503, body: { error: "The personal AI is not configured on this environment." } };

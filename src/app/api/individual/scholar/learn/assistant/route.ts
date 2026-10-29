@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { runIndividualAssistant } from "@/lib/individual/personal-ai";
+import { purposeFrom } from "@/lib/individual/pilot-ai";
 import { getLearningSession, getPassage, isUuid } from "@/lib/individual/scholar/store";
 import type { Passage } from "@/lib/individual/scholar/generation";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarRequestId, scholarRisk } from "@/lib/individual/scholar/http";
@@ -16,7 +17,8 @@ import { PERSONAL_AI_LABEL, QUESTION_MAX, STEP_MAX_SECTIONS } from "@/lib/indivi
 export const dynamic = "force-dynamic";
 
 // POST /api/individual/scholar/learn/assistant -- owner D3, from the Learn workspace: "Continue with your personal
-// assistant". Body { question, mode?, sessionId?, step?, chunkIds? }.
+// assistant". Body { question, mode?, sessionId?, step?, chunkIds?, purpose? }. `purpose: "education"` is the student's answer to a
+// clarify question (AI operating modes): the same question resent as a study question. Anything else is ignored.
 //
 // THE ONE HOLDINGS PERSONAL AI (src/lib/individual/personal-ai.ts runIndividualAssistant), never a Scholar-only one,
 // given the step the student is on as its study context: the sections' text, their competencies and topic terms --
@@ -36,6 +38,7 @@ export async function POST(req: Request) {
   if (!question || question.length > QUESTION_MAX) return NextResponse.json({ error: `Ask a question of up to ${QUESTION_MAX} characters.` }, { status: 400 });
   if (findPatientIdentifiers(question).length) return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
   const mode = body?.mode === "ask" ? "ask" : "teach";
+  const purpose = purposeFrom(body);
 
   // ── the step's own sections, by the caller's id ──
   let ids: string[] = [];
@@ -59,12 +62,12 @@ export async function POST(req: Request) {
   const study = await scholarRisk(ctx.admin, ctx.userId, { passages });
   const out = await runIndividualAssistant(ctx.admin, {
     userId: ctx.userId, fullName: ctx.profile.fullName, live: ctx.live, experience: "scholar", mode, question,
-    requestId: scholarRequestId(ctx, req), study,
+    requestId: scholarRequestId(ctx, req), study, purpose,
   });
   if (!out.ok && out.kind === "invalid") return NextResponse.json({ error: out.error }, { status: out.status });
   if (!out.ok && out.kind === "metered") return meteredRefusal(out.refusal)!;
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn_assistant", isUuid(body?.sessionId) ? body.sessionId : null, {
-    mode, chunk_ids: ids, question_chars: question.length, outcome: out.ok ? "shown" : `error:${out.result.error}`, model: out.ok ? out.model : null,
+    mode, chunk_ids: ids, question_chars: question.length, purpose, scopes_read: out.ok ? out.scopesRead : [], outcome: out.ok ? "shown" : `error:${out.result.error}`, model: out.ok ? out.model : null,
   });
   if (!out.ok) {
     const status = out.result.error === "not_configured" ? 503 : 502;

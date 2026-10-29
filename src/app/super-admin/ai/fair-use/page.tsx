@@ -8,6 +8,8 @@ import { PolicyEditor, PublishPolicies, RateForm } from "./_components/FairUseCo
 import { BudgetCreate, BudgetPolicyEditor, BudgetStatus, RoutingEditor } from "./_components/BudgetControls";
 import { ModelRoutingEditor } from "./_components/ModelRoutingControls";
 import { ProviderRegistry } from "./_components/ProviderRegistryControls";
+import { loadModeVersions, loadModes, loadPilotMetrics } from "@/lib/ai/modes-admin";
+import { ModesSection } from "./_components/ModesSection";
 import { AI_PROVIDERS, availableProviders, primaryProvider, providerModels } from "@/lib/ai/config";
 
 // /super-admin/ai/fair-use -- COMPETEN-AI-FAIR-USE-01 s12. Holdings AI usage governance, no code.
@@ -27,7 +29,10 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB",
 
 export default async function FairUsePage() {
   const ctx = await requireHqCapability("hq.platform.ai.manage");
-  const [rates, policies, on, evaluations, budgets, drafts, modelRouting, registry] = await Promise.all([loadRates(ctx.admin), loadPolicies(ctx.admin), aiFairUseEnabled(ctx.admin), loadEvaluations(ctx.admin), loadBudgets(ctx.admin), pendingDrafts(ctx.admin), loadModelRoutingView(ctx.admin), loadProviderRegistryView(ctx.admin)]);
+  const [rates, policies, on, evaluations, budgets, drafts, modelRouting, registry, modes, modeVersions] = await Promise.all([loadRates(ctx.admin), loadPolicies(ctx.admin), aiFairUseEnabled(ctx.admin), loadEvaluations(ctx.admin), loadBudgets(ctx.admin), pendingDrafts(ctx.admin), loadModelRoutingView(ctx.admin), loadProviderRegistryView(ctx.admin), loadModes(ctx.admin), loadModeVersions(ctx.admin)]);
+  const metrics = await loadPilotMetrics(ctx.admin, 30, modes);
+  // The product's published risk rule ids: the choices for "clarifiable rules" (ids only, never rule text).
+  const ruleIds = Object.fromEntries((policies ?? []).map(p => [p.product, p.published.risk.rules.map(r => r.id)]));
   // Whether each provider's key is present in this deployment: a yes or no, never the key.
   const keyed = Object.fromEntries(AI_PROVIDERS.map(p => [p, availableProviders().includes(p)])) as Record<(typeof AI_PROVIDERS)[number], boolean>;
   const primary = primaryProvider();
@@ -239,6 +244,8 @@ export default async function FairUsePage() {
               </div>
             )}
           </section>
+
+          <ModesSection modes={modes} versions={modeVersions} ruleIds={ruleIds} metrics={metrics} />
 
           <section aria-labelledby="pub-h" className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 id="pub-h" className="text-[16px] font-bold text-gray-900">Publish</h2>

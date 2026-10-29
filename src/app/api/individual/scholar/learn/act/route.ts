@@ -10,8 +10,9 @@ import {
   type ArtefactRow,
 } from "@/lib/individual/scholar/store";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
+import { purposeFrom } from "@/lib/individual/pilot-ai";
 
-import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, withinRequestRisk, scholarAiRunner, scholarRisk, scholarRiskGate } from "@/lib/individual/scholar/http";
+import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, refusalWords, withinRequestRisk, scholarAiRunner, scholarRisk, scholarRiskGate } from "@/lib/individual/scholar/http";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import {
   RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, describeViolations, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
@@ -35,7 +36,8 @@ export const dynamic = "force-dynamic";
 
 // POST /api/individual/scholar/learn/act -- COMPETEN-SCHOLAR-LEARN-01 L2 and L3, one learning action.
 //
-// Body { action, sessionId?, step?, chunkIds?, question?, checkQuestion?, answer?, history?, depth? }.
+// Body { action, sessionId?, step?, chunkIds?, question?, checkQuestion?, answer?, history?, depth?, purpose? }.
+//   purpose  "education" only: the student's answer to a clarify question (AI operating modes), the same request resent as study.
 //   action  teach | explain | simplify | deeper | examples | summary | ask  (the policy's, L5)
 //           check (write an informal check question) | clarify (judge the answer to it, and clarify)
 // The passages are the step's own sections, read by the caller's id (a recorded session's, or -- for a session the
@@ -182,7 +184,7 @@ export async function POST(req: Request) {
 
   // AI-FAIR-USE-01: through the Holdings allowance, the learning action as the activity. A refusal becomes
   // Learning Continuity (s7): said plainly, with what is saved for these sections -- and nothing was sent.
-  const risk = await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages });
+  const risk = await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages, purpose: purposeFrom(body) });
   // COMPETEN-RESEARCH-01, research workflow. DISCOVERY IS NOT GENERATION (commissioning GO, 28 Oct):
   //   (1) the REQUEST's clinical risk is classified as for every Learn request (its prompt and passages). With metering
   //       OFF the same gate decides BEFORE any search, so a request no model is eligible for is refused before anything
@@ -198,12 +200,15 @@ export async function POST(req: Request) {
   let research: LearnResearch | null = null;
   if (mode === "research") {
     const gate = await scholarRiskGate(ctx, action as LearnAction, risk);
+    // AI operating modes: a clarify question is put to the student, not shown as a refusal. Nothing was sent anywhere.
+    if (gate?.error === "clarify_purpose") return meteredRefusal(gate)!;
     if (gate) { const w = refusalWords(gate); return continuity(w.message, w.insufficient); }
     research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle }, ai.actionId);
   }
   const evidence = research ? researchEvidence(research) : [];
   const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence }, ai.run);
   const refusal = ai.refusal();
+  if (refusal?.error === "clarify_purpose") return meteredRefusal(refusal)!;
   if (refusal) { const w = refusalWords(refusal); return continuity(w.message, w.insufficient); }
   // SCHOLAR-AI-OPT-01: the outcome of this one action, codes only. A check question is not an explanation.
   // COMPETEN-RESEARCH-01: a research answer is its own operation; the notes part and the research part each count.
@@ -221,7 +226,7 @@ export async function POST(req: Request) {
         })()),
   });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn", sessionId, {
-    action_id: ai.actionId,
+    action_id: ai.actionId, purpose: purposeFrom(body),
     action, step, chunk_ids: passages.map(p => p.chunkId), depth, references: references.length, learner_context: learnerContext !== null, recorded,
     outcome: r.ok ? (action === "check" ? (r.question?.ok ? "shown" : `withheld:${r.question?.reason}`) : r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,
     // SCHOLAR-AI-OPT-01: what the grounding check refused, in its own words ("the number one"), never the answer text.

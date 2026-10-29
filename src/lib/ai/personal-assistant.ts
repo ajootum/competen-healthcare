@@ -15,8 +15,10 @@ import { findPatientIdentifiers, PII_LABEL } from "@/lib/privacy/patient-identif
 //   - the modes it offers and the one it opens in. Scholar opens in Teach Me. Professional opens in
 //     professional-development assistance, with CPD planning and reflection drafting alongside.
 //   - the data it may ground on. Each product has an AUTHORISED set, fixed here, and the profile can only narrow
-//     it. Scholar: the person's Passport and the study material its workspace hands over. Professional: the
-//     Passport and the person's own Professional record. Neither ever reads the other's private record.
+//     it. Scholar: the person's Passport, the study material its workspace hands over and the person's own
+//     recorded learning (programme, level, Scholar progress). Professional: the Passport and the person's own
+//     Professional record. Scholar reads the person's own Professional needs and plan ONLY when the published profile
+//     lists own_development (the owner decides). Never another person's record, never an employer's.
 //
 // ⚠ THIS FILE KNOWS NO PRODUCT'S DATA. The product composes the prompt and loads its own authorised data
 // (src/lib/individual/personal-ai.ts for Scholar and Professional), and is told which scopes the profile allows.
@@ -29,7 +31,9 @@ import { findPatientIdentifiers, PII_LABEL } from "@/lib/privacy/patient-identif
 // the button said.
 
 export type AssistantMode = "teach" | "ask" | "development" | "cpd_plan" | "reflection";
-export type DataScope = "passport" | "professional_record" | "study_context";
+/** `own_learning` (Scholar): the person's own recorded programme, level and Scholar progress. `own_development` (Scholar): their own
+ *  Professional needs and plan, a cross-experience read that is OFF unless the published profile lists it (the owner decides). */
+export type DataScope = "passport" | "professional_record" | "study_context" | "own_learning" | "own_development";
 
 /** The modes each product's assistant can ever offer, and the allowance activity each one is metered as. */
 export const PRODUCT_MODES: Record<AiProduct, readonly AssistantMode[]> = { scholar: ["teach", "ask"], professional: ["development", "cpd_plan", "reflection"] };
@@ -38,12 +42,13 @@ export const MODE_LABEL: Record<AssistantMode, string> = {
   teach: "Teach me", ask: "Ask about my material", development: "Professional development", cpd_plan: "Plan my CPD", reflection: "Draft a reflection",
 };
 /** The data each product's assistant is AUTHORISED to read. A profile can narrow this, never widen it. */
-export const AUTHORISED_SCOPES: Record<AiProduct, readonly DataScope[]> = { scholar: ["passport", "study_context"], professional: ["passport", "professional_record"] };
+export const AUTHORISED_SCOPES: Record<AiProduct, readonly DataScope[]> = { scholar: ["passport", "study_context", "own_learning", "own_development"], professional: ["passport", "professional_record"] };
 
 export type AssistantProfile = { defaultMode: AssistantMode; modes: AssistantMode[]; scopes: DataScope[] };
 export const assistantPath = (p: AiProduct) => `ai.assistant.${p}`;
 export const DEFAULT_PROFILE: Record<AiProduct, AssistantProfile> = {
-  scholar: { defaultMode: "teach", modes: ["teach", "ask"], scopes: ["passport", "study_context"] },
+  // own_development is authorised but NOT in the default: the owner publishes it to switch the cross-experience read on.
+  scholar: { defaultMode: "teach", modes: ["teach", "ask"], scopes: ["passport", "study_context", "own_learning"] },
   professional: { defaultMode: "development", modes: ["development", "cpd_plan", "reflection"], scopes: ["passport", "professional_record"] },
 };
 
@@ -74,7 +79,9 @@ export function chooseMode(profile: AssistantProfile, requested: unknown): Assis
 }
 
 /** What the product composes for one request, given the mode and the scopes the profile allows. */
-export type Composed = { system: string; user: string; maxTokens?: number } | { error: string; status: number };
+export type Composed =
+  | { system: string; user: string; maxTokens?: number; /** The scopes whose data was actually read, for the audit row. Defaults to the profile's. */ scopesRead?: readonly DataScope[] }
+  | { error: string; status: number };
 export type AssistantRequest = {
   userId: string;
   product: AiProduct;
@@ -87,7 +94,7 @@ export type AssistantRequest = {
   compose: (mode: AssistantMode, scopes: readonly DataScope[]) => Promise<Composed>;
 };
 export type AssistantOutcome =
-  | { ok: true; answer: string; mode: AssistantMode; model: string }
+  | { ok: true; answer: string; mode: AssistantMode; model: string; scopesRead: readonly DataScope[] }
   | { ok: false; kind: "invalid"; status: number; error: string }
   | { ok: false; kind: "metered"; refusal: MeteredRefusal }
   | { ok: false; kind: "generation"; result: Extract<GenerateResult, { ok: false }> };
@@ -117,5 +124,5 @@ export async function runPersonalAssistant(admin: any, r: AssistantRequest): Pro
   });
   if (isMeteredRefusal(result)) return { ok: false, kind: "metered", refusal: result };
   if (!result.ok) return { ok: false, kind: "generation", result };
-  return { ok: true, answer: result.text, mode, model: result.model };
+  return { ok: true, answer: result.text, mode, model: result.model, scopesRead: composed.scopesRead ?? profile.scopes };
 }

@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import { isNotProvisioned } from "../access";
-import { BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
+import { BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
 import type { Chunk, ExtractionQuality } from "./extract";
 import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
@@ -41,12 +41,15 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 
 // ── CONSENT ────────────────────────────────────────────────────────────────────────────────────────
 
+/** The consents this table holds: uploads (372) and the cross-experience context (700). */
+export type ConsentFeature = typeof CONSENT_FEATURE | typeof CROSS_EXPERIENCE_FEATURE;
+
 export type ConsentState = { granted: boolean; noticeVersion: string | null; grantedAt: string | null; revokedAt: string | null };
 
-export async function readConsent(admin: Admin, userId: string): Promise<Read<ConsentState>> {
+export async function readConsent(admin: Admin, userId: string, feature: ConsentFeature = CONSENT_FEATURE): Promise<Read<ConsentState>> {
   const { data, error } = await admin.from("individual_scholar_consent")
     .select("status, notice_version, granted_at, revoked_at")
-    .eq("user_id", userId).eq("feature", CONSENT_FEATURE).maybeSingle();
+    .eq("user_id", userId).eq("feature", feature).maybeSingle();
   if (error) return fail(error);
   return {
     ok: true,
@@ -57,19 +60,25 @@ export async function readConsent(admin: Admin, userId: string): Promise<Read<Co
 }
 
 /** Grant or revoke. A grant records the notice version shown. A revoke keeps it, and says when. */
-export async function setConsent(admin: Admin, userId: string, grant: boolean): Promise<{ ok: boolean }> {
+export async function setConsent(admin: Admin, userId: string, grant: boolean, feature: ConsentFeature = CONSENT_FEATURE): Promise<{ ok: boolean }> {
   const now = new Date().toISOString();
   if (grant) {
     const { error } = await admin.from("individual_scholar_consent").upsert({
-      user_id: userId, feature: CONSENT_FEATURE, status: "granted", notice_version: CONSENT_NOTICE_VERSION,
+      user_id: userId, feature, status: "granted", ...(feature === CONSENT_FEATURE ? { notice_version: CONSENT_NOTICE_VERSION } : { notice_version: CROSS_EXPERIENCE_NOTICE_VERSION }),
       granted_at: now, revoked_at: null, updated_at: now,
     }, { onConflict: "user_id,feature" });
     return { ok: !error };
   }
   const { error } = await admin.from("individual_scholar_consent")
     .update({ status: "revoked", revoked_at: now, updated_at: now })
-    .eq("user_id", userId).eq("feature", CONSENT_FEATURE);
+    .eq("user_id", userId).eq("feature", feature);
   return { ok: !error };
+}
+
+/** Migration 700: the cross-experience consent, current only for the notice version now shown. */
+export async function crossExperienceConsented(admin: Admin, userId: string): Promise<boolean> {
+  const r = await readConsent(admin, userId, CROSS_EXPERIENCE_FEATURE);
+  return r.ok && r.data.granted && r.data.noticeVersion === CROSS_EXPERIENCE_NOTICE_VERSION;
 }
 
 // ── MATERIALS ──────────────────────────────────────────────────────────────────────────────────────

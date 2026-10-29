@@ -91,6 +91,10 @@ export type RiskContext = {
   /** Competencies the request is about (its sources, its mapping subjects). The engine reads their risk. */
   competencyIds?: readonly string[];
   frameworkCodes?: readonly string[];
+  /** AI operating modes (operating-mode.ts): who is asking, for their mode and cohort, and "education" once the learner
+   *  confirmed a clarify question was for study. Never part of the subject text. */
+  actorId?: string | null;
+  purpose?: "education" | null;
 };
 /** The subject as the classifier sees it, after the engine has read competency risk and framework codes. */
 export type ResolvedRiskSubject = { text: string; competencyRisks: readonly string[]; frameworkCodes: readonly string[] };
