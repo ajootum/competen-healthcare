@@ -49,34 +49,34 @@ async function main() {
   const pkg = JSON.parse(readFileSync(file, "utf8"));
   const verifyOnly = process.argv.includes("--verify");
   const before = await hashes();
+  // STAGING ONLY: staging holds two shared "Core Nursing" frameworks (production holds one). A parent framework
+  // name that is not unique here is settled to its OLDEST framework, the one production also has.
+  const names = [...new Set(pkg.domains.flatMap((d: any) => d.competencies.flatMap((c: any) => c.parents.map((p: any) => p.framework))))];
+  const settled = new Map<string, string>();
+  for (const n of names) {
+    const { data } = await admin.from("frameworks").select("id").eq("name", n).is("hospital_id", null).order("created_at").limit(2);
+    if ((data ?? []).length > 1) { settled.set(n as string, data[0].id); console.log(`staging: "${n}" is not unique here, settled to its oldest framework`); }
+  }
+  // STAGING ONLY: staging's specialty frameworks do not mirror production's competency names. A parent that does
+  // not exist here is left out of the staging run and listed. Production's parents are proven separately, read
+  // only (PRECHECK-670 in the release package).
+  const exists = async (p: any) => {
+    let q = admin.from("framework_competencies").select("id, framework_domains!inner(framework_id, frameworks!inner(name, hospital_id))")
+      .eq("name", p.competency).eq("framework_domains.frameworks.name", p.framework).is("framework_domains.frameworks.hospital_id", null);
+    if (settled.has(p.framework)) q = q.eq("framework_domains.framework_id", settled.get(p.framework));
+    return ((await q.limit(2)).data ?? []).length === 1;
+  };
+  const dropped: string[] = [];
+  for (const d of pkg.domains) for (const c of d.competencies) {
+    const keep = [];
+    for (const p of c.parents) if (await exists(p)) keep.push(settled.has(p.framework) ? { ...p, frameworkId: settled.get(p.framework) } : p); else dropped.push(`${c.code} -> ${p.framework} / ${p.competency}`);
+    c.parents = keep;
+  }
+  if (dropped.length) console.log(`staging: ${dropped.length} parent(s) not on staging, left out of this run:\n  ${dropped.join("\n  ")}`);
+  const staged = pkg;
   if (!verifyOnly) {
     const { importDraftPackage } = await import("../src/lib/competency/authoring");
     const owner = (await admin.from("profiles").select("id, full_name").eq("role", "super_admin").order("created_at").limit(1).single()).data;
-    // STAGING ONLY: staging holds two shared "Core Nursing" frameworks (production holds one). A parent framework
-    // name that is not unique here is settled to its OLDEST framework, the one production also has.
-    const names = [...new Set(pkg.domains.flatMap((d: any) => d.competencies.flatMap((c: any) => c.parents.map((p: any) => p.framework))))];
-    const settled = new Map<string, string>();
-    for (const n of names) {
-      const { data } = await admin.from("frameworks").select("id").eq("name", n).is("hospital_id", null).order("created_at").limit(2);
-      if ((data ?? []).length > 1) { settled.set(n as string, data[0].id); console.log(`staging: "${n}" is not unique here, settled to its oldest framework`); }
-    }
-    // STAGING ONLY: staging's specialty frameworks do not mirror production's competency names. A parent that does
-    // not exist here is left out of the staging run and listed. Production's parents are proven separately, read
-    // only (PRECHECK-670 in the release package).
-    const exists = async (p: any) => {
-      let q = admin.from("framework_competencies").select("id, framework_domains!inner(framework_id, frameworks!inner(name, hospital_id))")
-        .eq("name", p.competency).eq("framework_domains.frameworks.name", p.framework).is("framework_domains.frameworks.hospital_id", null);
-      if (settled.has(p.framework)) q = q.eq("framework_domains.framework_id", settled.get(p.framework));
-      return ((await q.limit(2)).data ?? []).length === 1;
-    };
-    const dropped: string[] = [];
-    for (const d of pkg.domains) for (const c of d.competencies) {
-      const keep = [];
-      for (const p of c.parents) if (await exists(p)) keep.push(settled.has(p.framework) ? { ...p, frameworkId: settled.get(p.framework) } : p); else dropped.push(`${c.code} -> ${p.framework} / ${p.competency}`);
-      c.parents = keep;
-    }
-    if (dropped.length) console.log(`staging: ${dropped.length} parent(s) not on staging, left out of this run:\n  ${dropped.join("\n  ")}`);
-    const staged = pkg;
     const r = await importDraftPackage(admin, { userId: owner.id, name: owner.full_name ?? "Staging owner" }, staged);
     console.log(`import: ${JSON.stringify(r)}`);
     if (!r.ok) process.exit(1);
