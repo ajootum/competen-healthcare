@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   COMPONENT_STATUS_LABEL, METHOD_KINDS, METHOD_KIND_LABEL, OUTCOME_CLASSES, OUTCOME_CLASS_LABEL, STARTER_OUTCOMES, EVIDENCE_KINDS, EVIDENCE_KIND_LABEL,
-  type MethodContent, type MethodComponent, type Outcome, type Criterion, type ChecklistItem,
+  isPinned, type MethodContent, type MethodComponent, type Outcome, type Criterion, type ChecklistItem,
 } from "@/lib/competency/verification-config";
 
 // The write half of /super-admin/verification-studio (migration 510). Every control posts to
@@ -58,6 +58,116 @@ export function NewMethod() {
 }
 
 type Option = { id: string; label: string };
+/** One competency a method can be made from. state = its clinical state (null: could not be read), stateLabel its words. */
+export type MethodSource = { id: string; label: string; code: string | null; framework: string; frameworkStatus: string; state: string | null; stateLabel: string };
+/** A programme catalogue entry naming a competency, with how many assessment components it configures. */
+export type SourceEntry = { id: string; competencyId: string; label: string; components: number };
+export type GenerateOptions = { competencies: MethodSource[]; scales: Option[]; defaultScaleId: string; entries: SourceEntry[] };
+
+/** Why a competency cannot be the source of a method yet, in words. Null: it can. */
+function sourceRefusal(c: MethodSource | undefined): string | null {
+  if (!c) return "Choose a competency first.";
+  switch (c.state) {
+    case "approved": return null;
+    case "in_review": return "Criteria still in clinical review. A method is made only from approved criteria.";
+    case "changes_requested": return "A clinical reviewer asked for changes to the criteria. A method is made only from approved criteria.";
+    case "stale": return "Criteria changed since their clinical approval, so they need renewed approval.";
+    case null: return "The clinical state of these criteria could not be read just now. Try again shortly.";
+    default: return "Criteria not yet clinically approved.";
+  }
+}
+
+/** The code a competency's own code suggests: lower-case letters, digits and underscores, starting with a letter. */
+const codeFrom = (raw: string | null) => {
+  const c = (raw ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return /^[a-z]/.test(c) && c.length >= 3 ? c.slice(0, 61) : "";
+};
+
+/**
+ * 690: a method DRAFT made from one competency's criteria exactly as the competency has them. The server refuses unless
+ * the competency's current content is clinically approved; this form says so up front rather than after a click. The
+ * draft then goes through clinical review and independent publication like any other.
+ */
+export function GenerateMethod({ options }: { options: GenerateOptions }) {
+  const [competencyId, setCompetencyId] = useState("");
+  const [code, setCode] = useState(""); const [name, setName] = useState(""); const [kind, setKind] = useState<string>("structured_assessment");
+  const [scaleId, setScaleId] = useState(options.defaultScaleId); const [entryId, setEntryId] = useState("");
+  const [touched, setTouched] = useState({ code: false, name: false });
+  const [made, setMade] = useState<{ methodId: string; problems: string[] } | null>(null);
+  const { busy, msg, send } = useSend(PATH);
+  const chosen = options.competencies.find(c => c.id === competencyId);
+  const entries = options.entries.filter(e => e.competencyId === competencyId);
+  const refusal = sourceRefusal(chosen);
+  const frameworks = [...new Set(options.competencies.map(c => c.framework))];
+
+  function pick(id: string) {
+    setCompetencyId(id); setEntryId("");
+    const c = options.competencies.find(x => x.id === id);
+    if (c && !touched.code) setCode(codeFrom(c.code));
+    if (c && !touched.name) setName(c.label);
+  }
+
+  // After the refresh the new draft is on the page: bring it into view and focus it, so it is clear where it went.
+  useEffect(() => {
+    if (!made) return;
+    let tries = 0;
+    const t = setInterval(() => {
+      const el = document.getElementById(`method-${made.methodId}`);
+      if (el) { clearInterval(t); el.scrollIntoView({ block: "start" }); el.focus({ preventScroll: true }); }
+      else if (++tries > 20) clearInterval(t);
+    }, 250);
+    return () => clearInterval(t);
+  }, [made]);
+
+  async function submit() {
+    setMade(null);
+    const j = await send({ action: "generate_method", competencyId, code, name, kind, scaleId: scaleId || undefined, entryId: entryId || undefined },
+      "Draft made from the competency criteria. It is opened below: put it forward for clinical review, then another administrator publishes it.");
+    if (j && typeof j.methodId === "string") setMade({ methodId: j.methodId, problems: (j.problems as string[]) ?? [] });
+  }
+
+  return (
+    <form className="grid gap-3 md:grid-cols-2" onSubmit={e => { e.preventDefault(); if (!refusal) void submit(); }}>
+      <div className="md:col-span-2"><label htmlFor="gm-comp" className={label}>Competency</label>
+        <select id="gm-comp" required value={competencyId} onChange={e => pick(e.target.value)} aria-describedby="gm-comp-note" className={`${input} w-full`}>
+          <option value="">Choose a competency…</option>
+          {frameworks.map(f => {
+            const group = options.competencies.filter(c => c.framework === f);
+            return <optgroup key={f} label={`${f}${group[0].frameworkStatus !== "published" ? ` (${group[0].frameworkStatus})` : ""}`}>{group.map(c => <option key={c.id} value={c.id}>{c.label} · {c.stateLabel}</option>)}</optgroup>;
+          })}
+        </select>
+        <p id="gm-comp-note" className={`mt-1 text-[12.5px] ${chosen && !refusal ? "text-[var(--cmp-text-success)]" : "text-gray-600"}`}>
+          {chosen ? (refusal ?? "Criteria clinically approved. The method starts from them exactly as the competency has them.") : "Only a competency whose current criteria are clinically approved can be the source of a method."}
+        </p></div>
+      <div><label htmlFor="gm-name" className={label}>Method name</label>
+        <input id="gm-name" required minLength={3} maxLength={160} value={name} onChange={e => { setName(e.target.value); setTouched(t => ({ ...t, name: true })); }} className={`${input} w-full`} /></div>
+      <div><label htmlFor="gm-code" className={label}>Code <span className="font-normal text-gray-500">(lower-case letters, digits, underscores)</span></label>
+        <input id="gm-code" required pattern="[a-z][a-z0-9_]{2,60}" value={code} onChange={e => { setCode(e.target.value.toLowerCase()); setTouched(t => ({ ...t, code: true })); }} className={`${input} w-full font-mono`} placeholder="ecg_structured_assessment" /></div>
+      <div><label htmlFor="gm-kind" className={label}>Kind of method</label>
+        <select id="gm-kind" value={kind} onChange={e => setKind(e.target.value)} className={`${input} w-full`}>{METHOD_KINDS.map(k => <option key={k} value={k}>{METHOD_KIND_LABEL[k]}</option>)}</select></div>
+      <div><label htmlFor="gm-scale" className={label}>Proficiency scale</label>
+        <select id="gm-scale" value={scaleId} onChange={e => setScaleId(e.target.value)} className={`${input} w-full`}>
+          <option value="">No scale: this method does not verify at a level</option>{options.scales.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select></div>
+      <div className="md:col-span-2"><label htmlFor="gm-entry" className={label}>Programme catalogue entry <span className="font-normal text-gray-500">(optional: prefills the assessment components)</span></label>
+        <select id="gm-entry" value={entryId} onChange={e => setEntryId(e.target.value)} disabled={!entries.length} className={`${input} w-full`}>
+          <option value="">{competencyId && !entries.length ? "No programme names this competency" : "No programme: components are set in the editor"}</option>
+          {entries.map(e => <option key={e.id} value={e.id}>{e.label} · {e.components} component{e.components === 1 ? "" : "s"}</option>)}
+        </select></div>
+      <div className="flex flex-wrap items-center gap-2 md:col-span-2">
+        <button type="submit" disabled={busy || !!refusal} className={primary}>Make the method draft</button>
+        <Message msg={msg} />
+      </div>
+      {made && made.problems.length > 0 && (
+        <div className="text-[12.5px] text-amber-900 md:col-span-2">
+          <p className="font-semibold">To settle before this draft can be put forward:</p>
+          <ul className="list-disc pl-5">{made.problems.map(x => <li key={x}>{x}</li>)}</ul>
+        </div>
+      )}
+    </form>
+  );
+}
+
 /** components: the active CCHU components of the 660 registry, id = code (680). */
 export type EditorOptions = { frameworks: Option[]; competencies: Option[]; professions: Option[]; specialties: Option[]; scales: (Option & { levels: Option[] })[]; components: Option[] };
 
@@ -81,14 +191,21 @@ function MultiPick({ id, title, options, value, onChange }: { id: string; title:
  * criteria fixed, and (680) is never done by the author or an editor: `mayPublish` false hides the button, and the
  * database refuses it whatever is sent.
  */
-export function MethodEditor({ versionId, initial, options, idPrefix, mayPublish = true }: { versionId: string; initial: MethodContent; options: EditorOptions; idPrefix: string; mayPublish?: boolean }) {
+export function MethodEditor({ versionId, initial, options, idPrefix, mayPublish = true, reviewApproved = true, reviewLabel = "" }: {
+  versionId: string; initial: MethodContent; options: EditorOptions; idPrefix: string; mayPublish?: boolean;
+  /** 690: publication needs clinical approval of the exact saved draft (the database refuses otherwise). */
+  reviewApproved?: boolean; reviewLabel?: string;
+}) {
   const [c, setC] = useState<MethodContent>({ ...initial, components: initial.components ?? [], outcomes: initial.outcomes?.length ? initial.outcomes : STARTER_OUTCOMES });
   const [problems, setProblems] = useState<string[] | null>(null);
   const { busy, msg, send } = useSend(PATH);
   const set = <K extends keyof MethodContent>(k: K, v: MethodContent[K]) => setC(x => ({ ...x, [k]: v }));
   const scale = options.scales.find(s => s.id === c.scaleId);
   const p = idPrefix;
+  const canPublish = mayPublish && reviewApproved;
   const componentLabel = (code: string) => options.components.find(o => o.id === code)?.label ?? code;
+  // Removing a component clears it from the items that use it, which would change a pinned item's component.
+  const pinnedUse = (code: string) => [...c.criteria, ...c.checklist].some(it => isPinned(it) && it.component === code);
   const setComponent = (i: number, patch: Partial<MethodComponent>) => set("components", c.components.map((x, j) => {
     if (j !== i) return x;
     const next = { ...x, ...patch };
@@ -98,23 +215,38 @@ export function MethodEditor({ versionId, initial, options, idPrefix, mayPublish
   const listEditor = <T extends Criterion | ChecklistItem>(title: string, key: "criteria" | "checklist", flag: "required" | "critical", flagLabel: string) => (
     <fieldset className="space-y-2">
       <legend className={label}>{title}</legend>
-      {(c[key] as T[]).map((it, i) => (
+      {(c[key] as T[]).map((it, i) => {
+        // 690: an item pinned to a competency criterion keeps that criterion's words and component, which the database
+        // checks on review, publication and every request. Editing them here would break the pin, so they are read-only.
+        const pinned = isPinned(it);
+        const pinNote = `${p}-${key}-${i}-pin`;
+        return (
         <div key={i} className="grid gap-2 sm:grid-cols-[8rem_1fr_11rem_auto_auto] sm:items-center">
           <label htmlFor={`${p}-${key}-${i}-id`} className="sr-only">Id</label>
-          <input id={`${p}-${key}-${i}-id`} value={it.id} onChange={e => set(key, (c[key] as T[]).map((x, j) => (j === i ? { ...x, id: e.target.value.toLowerCase() } : x)) as never)} className={`${input} font-mono`} placeholder="id" />
+          <input id={`${p}-${key}-${i}-id`} value={it.id} readOnly={pinned} onChange={e => set(key, (c[key] as T[]).map((x, j) => (j === i ? { ...x, id: e.target.value.toLowerCase() } : x)) as never)} className={`${input} font-mono ${pinned ? "bg-gray-50 text-gray-600" : ""}`} placeholder="id" />
           <label htmlFor={`${p}-${key}-${i}-t`} className="sr-only">Words</label>
-          <input id={`${p}-${key}-${i}-t`} value={it.text} onChange={e => set(key, (c[key] as T[]).map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) as never)} className={input} placeholder="What the assessor decides" />
+          <input id={`${p}-${key}-${i}-t`} value={it.text} readOnly={pinned} aria-describedby={pinned ? pinNote : undefined} onChange={e => set(key, (c[key] as T[]).map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) as never)} className={`${input} ${pinned ? "bg-gray-50 text-gray-700" : ""}`} placeholder="What the assessor decides" />
           <label htmlFor={`${p}-${key}-${i}-cmp`} className="sr-only">Component</label>
-          <select id={`${p}-${key}-${i}-cmp`} value={it.component ?? ""} disabled={!c.components.length} title={c.components.length ? undefined : "Add a component below first"}
+          <select id={`${p}-${key}-${i}-cmp`} value={it.component ?? ""} disabled={pinned || !c.components.length} title={pinned ? "Fixed by the competency criteria" : c.components.length ? undefined : "Add a component below first"}
             onChange={e => set(key, (c[key] as T[]).map((x, j) => (j === i ? { ...x, component: e.target.value || null } : x)) as never)} className={input}>
-            <option value="">No component</option>{c.components.map(k => <option key={k.code} value={k.code}>{componentLabel(k.code)}</option>)}
+            <option value="">No component</option>
+            {it.component && !c.components.some(k => k.code === it.component) && <option value={it.component}>{componentLabel(it.component)}</option>}
+            {c.components.map(k => <option key={k.code} value={k.code}>{componentLabel(k.code)}</option>)}
           </select>
           <label htmlFor={`${p}-${key}-${i}-f`} className="flex items-center gap-1.5 text-[12.5px] text-gray-700">
             <input id={`${p}-${key}-${i}-f`} type="checkbox" checked={(it as Record<string, unknown>)[flag] === true} onChange={e => set(key, (c[key] as T[]).map((x, j) => (j === i ? { ...x, [flag]: e.target.checked } : x)) as never)} />{flagLabel}
           </label>
           <button type="button" className={ghost} onClick={() => set(key, (c[key] as T[]).filter((_, j) => j !== i) as never)}>Remove</button>
+          {pinned && (
+            <p id={pinNote} className="flex flex-wrap items-center gap-2 text-[12.5px] text-gray-600 sm:col-span-5">
+              <span className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11.5px] font-semibold text-teal-900">From the competency criteria</span>
+              {it.sourceRef ? <span>Source: {it.sourceRef}</span> : <span>No source reference recorded.</span>}
+              <span>Its words and component are fixed. You may still mark it {flagLabel.toLowerCase()}.</span>
+            </p>
+          )}
         </div>
-      ))}
+        );
+      })}
       <button type="button" className={ghost} onClick={() => set(key, [...(c[key] as T[]), { id: `${key === "criteria" ? "c" : "k"}${(c[key] as T[]).length + 1}`, text: "", [flag]: flag === "required" }] as never)}>Add {key === "criteria" ? "a criterion" : "a checklist item"}</button>
     </fieldset>
   );
@@ -164,7 +296,8 @@ export function MethodEditor({ versionId, initial, options, idPrefix, mayPublish
             </label>
             <label htmlFor={`${p}-k-${i}-w`} className="sr-only">Weight for {componentLabel(k.code)}</label>
             <input id={`${p}-k-${i}-w`} type="number" min={0.01} max={100} step={0.01} value={k.weight ?? ""} placeholder="weight 1" onChange={e => setComponent(i, { weight: e.target.value ? Number(e.target.value) : null })} className={input} />
-            <button type="button" className={ghost} onClick={() => setC(x => ({ ...x, components: x.components.filter((_, j) => j !== i),
+            <button type="button" className={ghost} disabled={pinnedUse(k.code)} title={pinnedUse(k.code) ? "A criterion from the competency uses this component, so it stays" : undefined}
+              onClick={() => setC(x => ({ ...x, components: x.components.filter((_, j) => j !== i),
               criteria: x.criteria.map(it => (it.component === k.code ? { ...it, component: null } : it)), checklist: x.checklist.map(it => (it.component === k.code ? { ...it, component: null } : it)) }))}>Remove</button>
           </div>
         ))}
@@ -229,6 +362,8 @@ export function MethodEditor({ versionId, initial, options, idPrefix, mayPublish
             <label key={v} htmlFor={`${p}-as-${v}`} className="flex items-center gap-2 text-[13px] text-gray-800"><input id={`${p}-as-${v}`} type="radio" name={`${p}-as`} checked={c.workflow.assignment === v} onChange={() => set("workflow", { ...c.workflow, assignment: v })} />{v === "administrator" ? "An administrator assigns it" : "An assessor in scope may claim it"}</label>
           ))}
           <label htmlFor={`${p}-fe`} className="mt-1 flex items-center gap-2 text-[13px] text-gray-800"><input id={`${p}-fe`} type="checkbox" checked={c.workflow.allowFurtherEvidence} onChange={e => set("workflow", { ...c.workflow, allowFurtherEvidence: e.target.checked })} />The assessor may ask for further evidence</label>
+          <label htmlFor={`${p}-sa`} className="mt-1 flex items-center gap-2 text-[13px] text-gray-800"><input id={`${p}-sa`} type="checkbox" checked={c.workflow.secondAssessor === true} aria-describedby={`${p}-sa-note`} onChange={e => set("workflow", { ...c.workflow, secondAssessor: e.target.checked })} />Second assessor required</label>
+          <p id={`${p}-sa-note`} className="text-[12.5px] text-gray-600">A verified or partial outcome then stands only once a second appointed assessor confirms it.</p>
         </fieldset>
         <div><label htmlFor={`${p}-val`} className={label}>A verified or partial outcome is valid for (months, blank: no expiry)</label>
           <input id={`${p}-val`} type="number" min={1} max={240} value={c.validity.months ?? ""} onChange={e => set("validity", { ...c.validity, months: e.target.value ? Number(e.target.value) : null })} className={`${input} w-24`} />
@@ -243,12 +378,15 @@ export function MethodEditor({ versionId, initial, options, idPrefix, mayPublish
       {problems && problems.length > 0 && <ul className="list-disc pl-5 text-[12.5px] text-amber-900">{problems.map(x => <li key={x}>{x}</li>)}</ul>}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" disabled={busy} className={ghost} onClick={async () => { const j = await send({ action: "save_draft", versionId, content: c }, "Draft saved. You are recorded as an editor, so another administrator publishes it."); if (j) setProblems((j.problems as string[]) ?? []); }}>Save draft</button>
-        {mayPublish && <button type="button" disabled={busy} className={primary} onClick={() => void send({ action: "publish", versionId }, "Published as saved. These criteria are now fixed for every decision made under this version.")}>Publish the saved draft</button>}
+        <button type="button" disabled={busy || !canPublish} aria-describedby={`${p}-pub-note`} className={primary} onClick={() => void send({ action: "publish", versionId }, "Published as saved. These criteria are now fixed for every decision made under this version.")}>Publish the saved draft</button>
         <Message msg={msg} />
       </div>
-      <p className="text-[12.5px] text-gray-600">{mayPublish
-        ? "Publishing publishes the draft as last saved, not unsaved changes on this page. Saving a change makes you an editor, and an editor never publishes."
-        : "You created or edited this version, so another administrator reviews and publishes it."}</p>
+      <p id={`${p}-pub-note`} className="text-[12.5px] text-gray-600">
+        {mayPublish
+          ? "Publishing publishes the draft as last saved, not unsaved changes on this page. Saving a change makes you an editor, and an editor never publishes."
+          : "You created or edited this version, so another administrator reviews and publishes it."}
+        {!reviewApproved && ` It also needs clinical approval of the saved draft (now: ${reviewLabel || "not approved"}), so publishing is not available yet.`}
+      </p>
     </div>
   );
 }

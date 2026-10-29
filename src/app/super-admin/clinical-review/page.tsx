@@ -3,6 +3,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 import { reviewQueue } from "@/lib/competency/clinical-review-hq";
 import { Decide } from "./_components/ReviewControls";
 import { CaseContent } from "./_components/CaseContent";
+import { MethodContent } from "./_components/MethodContent";
 import { CriteriaList } from "../competencies/_studio/CriteriaList";
 import { ReviewPackView } from "../competencies/_studio/ReviewPackView";
 import { checksFor, loadReviewerPack } from "@/lib/competency/review-pack";
@@ -31,6 +32,13 @@ export default async function ClinicalReviewPage({ searchParams }: { searchParam
   }
   const [q, comps] = await Promise.all([reviewQueue(ctx.admin, ctx.userId), ctx.admin.from("competency_assessment_component").select("code, label").order("sort_order")]);
   const components: Record<string, string> = Object.fromEntries(((comps.data ?? []) as { code: string; label: string }[]).map(c => [c.code, c.label]));
+  // Method items (690) name scale levels by id. Read only when one is waiting; a failed read shows "no longer listed", never a guess.
+  const levels: Record<string, string> = {}, scales: Record<string, string> = {};
+  if (q?.items.some(i => i.kind === "method")) {
+    const [lv, sc] = await Promise.all([ctx.admin.from("scoring_levels").select("id, score, label").order("score"), ctx.admin.from("scoring_scales").select("id, name")]);
+    for (const l of (lv.data ?? []) as { id: string; score: number; label: string }[]) levels[l.id] = `${l.score} · ${l.label}`;
+    for (const x of (sc.data ?? []) as { id: string; name: string }[]) scales[x.id] = x.name;
+  }
   // Framework-level approval: the waiting competencies grouped by framework, each with its version and points worth checking.
   const byFramework = q ? [...q.items.filter(i => i.kind === "competency").reduce((m, i) => m.set(i.home, [...(m.get(i.home) ?? []), {
     versionId: i.versionId, competencyId: i.competencyId, title: i.title, domain: i.domain, version: i.versionId.slice(0, 8),
@@ -78,7 +86,8 @@ export default async function ClinicalReviewPage({ searchParams }: { searchParam
                 <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11.5px] font-semibold text-amber-900">{i.approvals} of {i.required} approval{i.required === 1 ? "" : "s"}</span>
               </div>
               <p className="text-[12.5px] text-gray-600">{i.home} · {i.domain}{i.risk ? ` · reviewed at ${i.risk}` : ""} · put forward {new Date(i.submittedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}</p>
-              {i.kind === "case" ? <div className="mt-3"><p className="mb-2 text-[12.5px] text-gray-600">Clinical case. You are approving every finding, the key, the rationales, the progression and the safety criteria below, for this exact version.</p><CaseContent c={i.caseContent} /></div> : (
+              {i.kind === "case" ? <div className="mt-3"><p className="mb-2 text-[12.5px] text-gray-600">Clinical case. You are approving every finding, the key, the rationales, the progression and the safety criteria below, for this exact version.</p><CaseContent c={i.caseContent} /></div>
+              : i.kind === "method" ? <div className="mt-3"><p className="mb-2 text-[12.5px] text-gray-600">Assessment method. You are approving the criteria, checklist, components with their pass levels, outcomes, evidence required and decision guidance below, for this exact version. Approval publishes nothing.</p><MethodContent m={i.methodContent} components={components} levels={levels} scales={scales} /></div> : (
               <dl className="mt-3 space-y-2 text-[13.5px]">
                 <div><dt className="text-[12px] font-semibold text-gray-500">Description</dt><dd className="text-gray-800">{i.snapshot.description ?? "None recorded"}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Learning outcomes</dt><dd className="text-gray-800">{i.snapshot.outcomes.length ? <ul className="list-disc pl-5">{i.snapshot.outcomes.map((o, n) => <li key={n}>{o}</li>)}</ul> : "None recorded"}</dd></div>

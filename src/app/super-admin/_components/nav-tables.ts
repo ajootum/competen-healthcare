@@ -204,6 +204,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     { key: "frameworks.verification", group: "Competency Verification", items: [
       { key: "frameworks.verification.studio", label: "Verification Studio", href: "/super-admin/verification-studio", icon: "🧭" },
       { key: "frameworks.verification.assessment", label: "Competency Assessment", href: "/super-admin/competency-assessment", icon: "📝" },
+      { key: "frameworks.verification.requests", label: "Assessment Requests", href: "/super-admin/competency-requests", icon: "📨" },
     ]},
     { key: "frameworks.studio", group: "Studio Toolkit", items: [
       { key: "frameworks.studio.home", label: "Competency Studio Home", href: "/super-admin/studio", icon: "🎨" },

@@ -52,9 +52,14 @@ export const EVIDENCE_KIND_LABEL: Record<AnyEvidenceKind, string> = {
 export const isAssessorEvidence = (k: string): k is AssessorEvidenceKind => (ASSESSOR_EVIDENCE_KINDS as readonly string[]).includes(k);
 
 export type Outcome = { code: string; class: OutcomeClass; label: string; description?: string };
-/** component: a competency_assessment_component code (660) configured in MethodContent.components, or absent. */
-export type Criterion = { id: string; text: string; required: boolean; component?: string | null };
-export type ChecklistItem = { id: string; text: string; critical: boolean; component?: string | null };
+/**
+ * component: a competency_assessment_component code (660) configured in MethodContent.components, or absent.
+ * 690: criterionId pins the item to a competency_skills criterion (670). Its words and component must then equal the
+ * criterion as the competency has it, which the database checks on review, publication and every request. sourceRef is
+ * the criterion's source reference, carried for traceability.
+ */
+export type Criterion = { id: string; text: string; required: boolean; component?: string | null; criterionId?: string; sourceRef?: string | null };
+export type ChecklistItem = { id: string; text: string; critical: boolean; component?: string | null; criterionId?: string; sourceRef?: string | null };
 /** 680: one CCHU component this method assesses, with the settings 660 gives a catalogue entry. */
 export type MethodComponent = { code: string; passLevelId: string | null; mandatory: boolean; safetyCritical: boolean; weight: number | null };
 export type RequiredEvidence = { kind: EvidenceKind | "any"; min: number; description: string };
@@ -67,7 +72,8 @@ export type MethodContent = {
   components: MethodComponent[];
   requiredEvidence: RequiredEvidence[]; minEvidence: number;
   decisionGuidance: string;
-  workflow: { assignment: "administrator" | "self_claim"; allowFurtherEvidence: boolean };
+  /** 690 secondAssessor: a verified or partial outcome stands only once a second appointed assessor confirms it. */
+  workflow: { assignment: "administrator" | "self_claim"; allowFurtherEvidence: boolean; secondAssessor: boolean };
   validity: { months: number | null; renewal: "reassessment" | "evidence_review" | null };
   reassessment: { waitDays: number | null };
 };
@@ -75,7 +81,7 @@ export type MethodContent = {
 export const EMPTY_CONTENT: MethodContent = {
   summary: "", applicability: { professionTermIds: [], specialtyTermIds: [], frameworkIds: [], competencyIds: [], contexts: ["independent"] },
   scaleId: null, levelIds: [], outcomes: [], criteria: [], checklist: [], components: [], requiredEvidence: [], minEvidence: 0, decisionGuidance: "",
-  workflow: { assignment: "administrator", allowFurtherEvidence: true }, validity: { months: null, renewal: null }, reassessment: { waitDays: null },
+  workflow: { assignment: "administrator", allowFurtherEvidence: true, secondAssessor: false }, validity: { months: null, renewal: null }, reassessment: { waitDays: null },
 };
 
 /** A starting point an administrator edits: the five outcome classes, each with its plain label. Not criteria. */
@@ -113,6 +119,9 @@ export function checkMethodContent(input: any, forPublish = false): Checked {
   const items = (v: unknown, flag: "required" | "critical") => (Array.isArray(v) ? v : []).slice(0, 60).map((c: any) => ({
     id: str(c?.id, 41).toLowerCase(), text: str(c?.text, 500), [flag]: flag === "required" ? c?.required !== false : c?.critical === true,
     ...(typeof c?.component === "string" && c.component ? { component: c.component } : {}),
+    // 690: the pin to the competency's criterion, and its source reference, are kept exactly.
+    ...(typeof c?.criterionId === "string" && UUID.test(c.criterionId) ? { criterionId: c.criterionId.toLowerCase() } : {}),
+    ...(str(c?.sourceRef, 200) ? { sourceRef: str(c?.sourceRef, 200) } : {}),
   }));
   const criteria = items(input?.criteria, "required") as Criterion[];
   const checklist = items(input?.checklist, "critical") as ChecklistItem[];
@@ -146,7 +155,8 @@ export function checkMethodContent(input: any, forPublish = false): Checked {
     outcomes, criteria, checklist, components, requiredEvidence,
     minEvidence: int(input?.minEvidence, 0, 50) ?? 0,
     decisionGuidance: str(input?.decisionGuidance, 4000),
-    workflow: { assignment: input?.workflow?.assignment === "self_claim" ? "self_claim" : "administrator", allowFurtherEvidence: input?.workflow?.allowFurtherEvidence !== false },
+    workflow: { assignment: input?.workflow?.assignment === "self_claim" ? "self_claim" : "administrator", allowFurtherEvidence: input?.workflow?.allowFurtherEvidence !== false,
+      secondAssessor: input?.workflow?.secondAssessor === true },
     validity: { months: int(input?.validity?.months, 1, 240), renewal: input?.validity?.renewal === "reassessment" || input?.validity?.renewal === "evidence_review" ? input.validity.renewal : null },
     reassessment: { waitDays: int(input?.reassessment?.waitDays, 0, 3650) },
   };
@@ -290,36 +300,142 @@ export function checkDecision(input: any, content: MethodContent, evidenceIds: r
 
 // ── STATE, AS 510 DERIVES IT ──────────────────────────────────────────────────────────────────────────────────
 
-export type RequestState = "open" | "assigned" | "awaiting_evidence" | "decided" | "withdrawn";
+export type RequestState = "open" | "assigned" | "awaiting_evidence" | "awaiting_confirmation" | "decided" | "withdrawn";
 export const STATE_LABEL: Record<RequestState, string> = {
-  open: "Waiting for an assessor", assigned: "With an assessor", awaiting_evidence: "Further evidence requested", decided: "Decided", withdrawn: "Withdrawn",
+  open: "Waiting for an assessor", assigned: "With an assessor", awaiting_evidence: "Further evidence requested",
+  awaiting_confirmation: "Waiting for a second assessor", decided: "Decided", withdrawn: "Withdrawn",
 };
 
-/** Pure mirror of competency_verification_state(): the database decides, this explains it on a page. */
-export function deriveState(events: readonly { event: string; created_at: string }[], decisions: readonly { outcome_class: string | null; created_at: string }[],
-  evidence: readonly { created_at: string }[]): RequestState {
+/** 690: a second assessor's confirmation of a decision, or that they did not confirm it. */
+export type Confirmation = { decision_id: string; result: "confirmed" | "not_confirmed"; created_at?: string };
+
+/**
+ * Pure mirror of competency_verification_state() (510, with 690 confirmation): the database decides, this explains
+ * it on a page. A decision a second assessor did not confirm is set aside. A decision still awaiting its confirmation
+ * leaves the request awaiting_confirmation.
+ */
+export function deriveState(events: readonly { event: string; created_at: string }[],
+  decisions: readonly { id?: string; outcome_class: string | null; created_at: string; confirmation_required?: boolean | null }[],
+  evidence: readonly { created_at: string }[], confirmations: readonly Confirmation[] = []): RequestState {
   if (events.some(e => e.event === "withdrawn")) return "withdrawn";
-  const last = [...decisions].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-  if (last && last.outcome_class !== "further_evidence") return "decided";
+  const setAside = new Set(confirmations.filter(c => c.result === "not_confirmed").map(c => c.decision_id));
+  const last = [...decisions].filter(d => !(d.id && setAside.has(d.id))).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  if (last && last.outcome_class !== "further_evidence") {
+    if (last.confirmation_required && !confirmations.some(c => c.decision_id === last.id)) return "awaiting_confirmation";
+    return "decided";
+  }
   if (last && !evidence.some(e => e.created_at > last.created_at)) return "awaiting_evidence";
   const assign = [...events].filter(e => e.event === "assigned" || e.event === "assignment_declined").sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
   return assign?.event === "assigned" ? "assigned" : "open";
 }
 
-export type Standing = "current" | "expired" | "revoked" | "superseded" | "not_a_verification";
+export type Standing = "current" | "expired" | "revoked" | "superseded" | "awaiting_confirmation" | "not_confirmed" | "not_a_verification";
 
 /**
  * Pure: what one decision means today. Expiry is its valid_until read against today, revocation is an event, and a
- * later verified decision on the same competency supersedes it. Nothing is rewritten to say so.
+ * later verified decision on the same competency supersedes it. 690: a decision needing a second assessor stands only
+ * once confirmed, and one that was not confirmed never stands. Nothing is rewritten to say so. `later` holds only
+ * decisions that stand on their own (confirmed where required), so an unconfirmed one supersedes nothing.
  */
-export function standingOf(d: { id: string; outcome_class: string | null; valid_until: string | null; created_at: string },
-  revoked: ReadonlySet<string>, later: readonly { outcome_class: string | null; created_at: string }[], today: string): Standing {
+export function standingOf(d: { id: string; outcome_class: string | null; valid_until: string | null; created_at: string; confirmation_required?: boolean | null },
+  revoked: ReadonlySet<string>, later: readonly { outcome_class: string | null; created_at: string }[], today: string,
+  confirmation: Confirmation["result"] | null = null): Standing {
   if (d.outcome_class !== "verified" && d.outcome_class !== "partial") return "not_a_verification";
+  if (confirmation === "not_confirmed") return "not_confirmed";
   if (revoked.has(d.id)) return "revoked";
+  if (d.confirmation_required && confirmation !== "confirmed") return "awaiting_confirmation";
   if (later.some(x => x.outcome_class === "verified" && x.created_at > d.created_at)) return "superseded";
   if (d.valid_until && d.valid_until < today) return "expired";
   return "current";
 }
 export const STANDING_LABEL: Record<Standing, string> = {
-  current: "Current", expired: "Expired", revoked: "Revoked", superseded: "Superseded by a later verification", not_a_verification: "Not a verification",
+  current: "Current", expired: "Expired", revoked: "Revoked", superseded: "Superseded by a later verification",
+  awaiting_confirmation: "Waiting for a second assessor to confirm", not_confirmed: "Not confirmed by the second assessor", not_a_verification: "Not a verification",
 };
+
+// ── 690: A METHOD DRAFT MADE FROM A COMPETENCY'S APPROVED CRITERIA ────────────────────────────────────────────────
+
+export type SourceCriterion = { id: string; name: string; componentCode: string | null; sourceRef: string | null };
+export type SourceComponent = { code: string; passLevelId: string | null; mandatory: boolean; safetyCritical: boolean; weight: number | null };
+
+/**
+ * Pure: the content of a new method draft for one competency, made from its criteria exactly as the competency has
+ * them. Every criterion keeps its id (as criterionId and as the item id), its words, its component and its source
+ * reference, so the database can hold the method to them. Components come from the programme's component requirements
+ * (660) where they are configured, otherwise each component the criteria use is listed for the author to configure.
+ * Nothing clinical is decided here: outcomes are the five plain starter outcomes, and the draft goes through clinical
+ * review and independent publication like any other.
+ */
+export function methodDraftFromCompetency(c: { id: string; name: string }, criteria: readonly SourceCriterion[],
+  configured: readonly SourceComponent[], scaleId: string | null): { ok: true; content: MethodContent; problems: string[] } | { ok: false; error: string } {
+  if (!criteria.length) return { ok: false, error: "This competency has no assessment criteria to make a method from." };
+  if (criteria.length > 60) return { ok: false, error: "This competency has more than 60 criteria. A method holds at most 60: split it with the author." };
+  const long = criteria.find(k => k.name.trim().length > 500);
+  if (long) return { ok: false, error: "A criterion is longer than 500 characters, so it cannot be held word for word. Shorten it in the competency first." };
+  const used = [...new Set(criteria.map(k => k.componentCode).filter((x): x is string => !!x))];
+  const components: MethodComponent[] = used.map(code => {
+    const k = configured.find(x => x.code === code);
+    return k ? { code, passLevelId: k.passLevelId, mandatory: k.mandatory || k.safetyCritical, safetyCritical: k.safetyCritical, weight: k.weight }
+      : { code, passLevelId: null, mandatory: true, safetyCritical: false, weight: null };
+  });
+  const content: MethodContent = {
+    ...EMPTY_CONTENT,
+    summary: `Assessment of ${c.name.trim()} against its ${criteria.length} approved criteri${criteria.length === 1 ? "on" : "a"}.`,
+    applicability: { ...EMPTY_CONTENT.applicability, competencyIds: [c.id] },
+    scaleId, outcomes: STARTER_OUTCOMES, components,
+    criteria: criteria.map(k => ({ id: k.id.toLowerCase(), criterionId: k.id.toLowerCase(), text: k.name.trim(), required: true,
+      ...(k.componentCode ? { component: k.componentCode } : {}), ...(k.sourceRef ? { sourceRef: k.sourceRef } : {}) })),
+    workflow: { ...EMPTY_CONTENT.workflow, secondAssessor: components.some(k => k.safetyCritical) },
+  };
+  const checked = checkMethodContent(content);
+  if (!checked.ok) return checked;
+  const problems = [...checked.problems];
+  for (const k of components) if (!configured.some(x => x.code === k.code)) problems.push(`Configure the ${k.code} component: its pass level, whether it is mandatory or safety critical, and its weight.`);
+  if (!scaleId) problems.push("Choose the proficiency scale the components and outcomes are scored on.");
+  return { ok: true, content: checked.content, problems };
+}
+
+/** Pure: whether an item is pinned to its competency's criterion (its words are then not edited in the method). */
+export const isPinned = (c: { criterionId?: string }) => typeof c.criterionId === "string" && c.criterionId.length > 0;
+
+// ── 690: AN ASSESSOR'S WORKING DRAFT ──────────────────────────────────────────────────────────────────────────────
+
+/** What a decision draft keeps: the form as the assessor left it. Not a record, and never read as one. */
+export type DecisionDraft = { outcomeCode?: string; levelId?: string | null; rationale?: string;
+  criteria?: { id: string; result: string; note?: string }[]; checklist?: { id: string; result: string; note?: string }[];
+  componentResults?: { code: string; levelId: string | null; note?: string }[]; evidenceReviewed?: string[] };
+
+/** Pure: a draft as the form sent it, bounded. Only known keys, only strings and short lists. */
+export function cleanDraft(input: any): DecisionDraft {
+  const list = (v: unknown, keys: string[]) => (Array.isArray(v) ? v : []).slice(0, 80).filter((x: any) => x && typeof x === "object")
+    .map((x: any) => Object.fromEntries(keys.filter(k => x[k] !== undefined).map(k => [k, k === "levelId" ? (typeof x[k] === "string" ? x[k] : null) : str(x[k], 500)]))) as any[];
+  return {
+    ...(typeof input?.outcomeCode === "string" ? { outcomeCode: str(input.outcomeCode, 41) } : {}),
+    ...(typeof input?.levelId === "string" || input?.levelId === null ? { levelId: input.levelId ? str(input.levelId, 40) : null } : {}),
+    ...(typeof input?.rationale === "string" ? { rationale: str(input.rationale, 4000) } : {}),
+    criteria: list(input?.criteria, ["id", "result", "note"]), checklist: list(input?.checklist, ["id", "result", "note"]),
+    componentResults: list(input?.componentResults, ["code", "levelId", "note"]),
+    evidenceReviewed: Array.isArray(input?.evidenceReviewed) ? input.evidenceReviewed.filter((x: unknown) => typeof x === "string" && UUID.test(x)).slice(0, 50) : [],
+  };
+}
+
+// ── 690: WHAT AN UNSUCCESSFUL OR INCOMPLETE OUTCOME LEAVES TO DEVELOP ─────────────────────────────────────────────
+
+export type DevelopmentNeed = { competencyId: string; title: string; reason: string; detail: string[]; decidedAt: string; decisionId: string };
+
+/**
+ * Pure: the development needs an assessment outcome points to. Only outcomes that did not verify (partial, further
+ * evidence, not demonstrated) and components below their pass level or not assessed. Offered to the person to add to
+ * their own development plan, never written for them.
+ */
+export function developmentNeedsOf(item: { competencyId: string; title: string; decisions: readonly { decisionId: string; outcomeClass: string | null; outcomeLabel: string; decidedAt: string;
+  components: { results: readonly { code: string; label: string | null }[]; outcome: { failedMandatory: readonly string[]; missingMandatory: readonly string[] } } | null }[] },
+  componentLabel: (code: string) => string = c => c): DevelopmentNeed | null {
+  const last = [...item.decisions].sort((a, b) => b.decidedAt.localeCompare(a.decidedAt))[0];
+  if (!last || !["partial", "further_evidence", "not_demonstrated"].includes(last.outcomeClass ?? "")) return null;
+  const detail = [
+    ...(last.components?.outcome.failedMandatory ?? []).map(c => `${componentLabel(c)}: below the level required`),
+    ...(last.components?.outcome.missingMandatory ?? []).map(c => `${componentLabel(c)}: not yet assessed`),
+  ];
+  return { competencyId: item.competencyId, title: item.title, reason: last.outcomeLabel, detail, decidedAt: last.decidedAt, decisionId: last.decisionId };
+}

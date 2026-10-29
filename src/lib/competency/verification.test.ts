@@ -87,7 +87,7 @@ describe("C5-E/F: a decision is checked against the pinned criteria before 510 c
     expect(checkDecision({ ...ok, outcomeCode: "more", levelId: null, evidenceReviewed: [] }, content, [])).toMatchObject({ ok: true });
   });
   it("a method that decides on what was submitted cannot ask for more", () => {
-    expect(checkDecision({ ...ok, outcomeCode: "more", levelId: null }, { ...content, workflow: { assignment: "administrator", allowFurtherEvidence: false } }, [EV1])).toMatchObject({ ok: false });
+    expect(checkDecision({ ...ok, outcomeCode: "more", levelId: null }, { ...content, workflow: { assignment: "administrator", allowFurtherEvidence: false, secondAssessor: false } }, [EV1])).toMatchObject({ ok: false });
   });
 });
 

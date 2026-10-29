@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { currentTraceId } from "@/lib/trace";
 import {
-  assignRequest, createMethod, endScope, grantScope, newDraft, publishVersion, retireVersion, revokeDecision, saveDraft,
+  assignRequest, createMethod, endScope, generateMethodFromCompetency, grantScope, newDraft, publishVersion, retireVersion, revokeDecision, saveDraft, submitMethodForReview,
 } from "@/lib/competency/verification";
+import { loadClinicalReviews } from "@/lib/competency/clinical-review";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -21,6 +22,9 @@ export const dynamic = "force-dynamic";
 //     end_scope     { scopeId, reason }
 //     assign        { requestId, appointmentId }     an assessor appointment takes a request
 //     revoke        { decisionId, reason }           a standing outcome is revoked, with the reason the person sees
+//     generate_method { competencyId, code, name?, kind?, scaleId?, entryId? }   (690) a method draft made from the
+//                   competency criteria exactly as it has them, only where they are clinically approved
+//     submit_review { versionId }                    (690) the exact draft goes to clinical review. Publication needs its approval
 //
 // ⚠ GATED BY hq.competency.verification.manage, held only by the Verification Studio Administrator (510), which nobody
 // holds until the owner appoints someone. The DATABASE checks again on every write: the actor's ACTIVE appointment, an
@@ -52,6 +56,16 @@ export async function POST(req: Request) {
     case "save_draft": {
       const r = await saveDraft(ctx.admin, ctx.userId, id("versionId"), b.content);
       if (r.ok) { await audit(ctx, "competency_verification_version_save", { type: "competency_verification_method_version", id: id("versionId") }, { problems: r.problems.length }); return NextResponse.json({ ok: true, problems: r.problems }); }
+      out = r; break;
+    }
+    case "generate_method": {
+      const r = await generateMethodFromCompetency(ctx.admin, ctx.userId, b, async (admin, cid) => (await loadClinicalReviews(admin, [cid]))?.get(cid)?.state ?? null);
+      if (r.ok) { await audit(ctx, "competency_verification_method_generate", { type: "competency_verification_method", id: r.methodId }, { version: r.versionId, competency: id("competencyId") }); return NextResponse.json({ ok: true, methodId: r.methodId, versionId: r.versionId, problems: r.problems }, { status: 201 }); }
+      out = r; break;
+    }
+    case "submit_review": {
+      const r = await submitMethodForReview(ctx.admin, ctx.userId, id("versionId"));
+      if (r.ok) { await audit(ctx, "competency_verification_submit_review", { type: "competency_verification_method_version", id: id("versionId") }, { review: r.reviewVersionId }); return NextResponse.json({ ok: true }); }
       out = r; break;
     }
     case "publish": out = await publishVersion(ctx.admin, ctx.userId, id("versionId")); entity = { type: "competency_verification_method_version", id: id("versionId") }; break;

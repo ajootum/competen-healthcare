@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
-import { loadAssessorQueue, loadVersionsById, verificationReady, type RequestView } from "@/lib/competency/verification";
+import { loadAssessorQueue, loadConfirmationQueue, loadDecisionDraft, loadVersionsById, verificationReady, type RequestView } from "@/lib/competency/verification";
 import { EMPTY_CONTENT, EVIDENCE_KIND_LABEL, NOT_A_DECLARATION, STATE_LABEL, type MethodContent } from "@/lib/competency/verification-config";
-import { AssessorEvidenceForm, Claim, Decline, DecisionForm } from "./_components/AssessControls";
+import { AssessorEvidenceForm, Claim, ConfirmForm, Decline, DecisionForm } from "./_components/AssessControls";
+import { DecisionSummary } from "./_components/DecisionSummary";
 import { listComponents } from "@/lib/competency/studio-components";
 
 // /super-admin/competency-assessment -- COMPETEN-PROFESSIONAL-COMPETENCY-01 C5 (migration 510), the Competency Assessor.
@@ -26,7 +27,11 @@ export default async function CompetencyAssessmentPage() {
     return <div className="max-w-4xl"><h1 className="text-xl font-bold text-gray-900">Competency assessment</h1><p className="mt-2 text-[13.5px] text-gray-700">Competency verification is not set up on this environment yet (migration 510).</p></div>;
   }
   const queue = await loadAssessorQueue(ctx.admin, ctx.userId, today);
-  const all = queue ? [...queue.assigned, ...queue.claimable] : [];
+  // 690: decisions waiting for this assessor as the second assessor (never their own, never on their own request).
+  const confirmations = queue ? await loadConfirmationQueue(ctx.admin, ctx.userId, today) : null;
+  const all = queue ? [...queue.assigned, ...queue.claimable, ...(confirmations ?? [])] : [];
+  // 690: each request this assessor is deciding keeps its working draft on the server, so any device resumes it.
+  const drafts = new Map(await Promise.all((queue?.assigned ?? []).filter(r => r.state === "assigned").map(async r => [r.id, await loadDecisionDraft(ctx.admin, ctx.userId, r.id)] as const)));
   const versions = await loadVersionsById(ctx.admin, [...new Set(all.map(r => r.methodVersionId))]);
   const scaleIds = [...new Set([...versions.values()].map(v => (v.content as MethodContent)?.scaleId).filter(Boolean))] as string[];
   const { data: levels } = scaleIds.length ? await ctx.admin.from("scoring_levels").select("id, scale_id, score, label").in("scale_id", scaleIds).order("score") : { data: [] };
@@ -35,6 +40,9 @@ export default async function CompetencyAssessmentPage() {
   const nameOf = new Map((names ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name ?? "Unnamed person"]));
   const registry = all.length ? await listComponents(ctx.admin) : [];
   const componentLabels = Object.fromEntries((registry ?? []).map(k => [k.code, k.label]));
+  const levelName = new Map((levels ?? []).map((l: { id: string; score: number; label: string }) => [l.id, `${Number(l.score)} · ${l.label}`]));
+  const levelLabel = (id: string | null) => (id ? levelName.get(id) ?? null : null);
+  const personName = (id: string) => nameOf.get(id) ?? "person";
 
   const card = (r: RequestView & { claimWith?: string }, assigned: boolean) => {
     const v = versions.get(r.methodVersionId);
@@ -44,7 +52,7 @@ export default async function CompetencyAssessmentPage() {
     return (
       <article key={r.id} className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-[15px] font-semibold text-gray-900">{r.competency?.name ?? "Competency"} <span className="font-normal text-gray-500">· {nameOf.get(r.userId) ?? "person"}</span></h3>
+          <h3 className="text-[15px] font-semibold text-gray-900">{r.competency?.name ?? "Competency"} <span className="font-normal text-gray-500">· {personName(r.userId)}</span></h3>
           <p className="text-[12.5px] font-semibold text-gray-700">{STATE_LABEL[r.state]}</p>
         </div>
         <p className="text-[12.5px] text-gray-600">{v?.method?.name ?? "Method"}, version {v?.version_no ?? "?"} (criteria {v?.content_hash?.slice(0, 8) ?? "unpublished"}) · framework version {r.frameworkVersion ?? "not recorded"} · requested {fmt(r.createdAt)}</p>
@@ -70,13 +78,40 @@ export default async function CompetencyAssessmentPage() {
             </ul>
           )}
         </div>
+        {r.decisions.length > 0 && (
+          <div>
+            <p className="text-[13px] font-semibold text-gray-900">Decisions on this request ({r.decisions.length})</p>
+            <ul className="mt-1 space-y-2">{[...r.decisions].reverse().map(d => <li key={d.id}><DecisionSummary d={d} levelLabel={levelLabel} componentLabels={componentLabels} /></li>)}</ul>
+          </div>
+        )}
         {content.decisionGuidance && <p className="rounded-lg border border-teal-100 bg-teal-50 p-2.5 text-[13px] text-teal-900">Guidance: {content.decisionGuidance}</p>}
         {assigned && r.state === "assigned" && <AssessorEvidenceForm requestId={r.id} idPrefix={`ae-${r.id.slice(0, 8)}`} components={(content.components ?? []).map(k => ({ code: k.code, label: componentLabels[k.code] ?? k.code }))} />}
         {assigned && r.state === "assigned" && <DecisionForm requestId={r.id} content={content} levels={lv} idPrefix={`d-${r.id.slice(0, 8)}`} requestTargetLevelId={r.targetLevelId} componentLabels={componentLabels}
-          evidence={r.evidence.map(e => ({ id: e.id, label: `${String(e.provenance.title ?? EVIDENCE_KIND_LABEL[e.kind])} (${EVIDENCE_KIND_LABEL[e.kind]})` }))} />}
+          evidence={r.evidence.map(e => ({ id: e.id, label: `${String(e.provenance.title ?? EVIDENCE_KIND_LABEL[e.kind])} (${EVIDENCE_KIND_LABEL[e.kind]})` }))} draft={drafts.get(r.id) ?? null} />}
+        {assigned && r.state === "awaiting_confirmation" && <p className="text-[13px] text-amber-900">Waiting for a second assessor to confirm your decision.</p>}
         {assigned && r.state === "awaiting_evidence" && <p className="text-[13px] text-amber-900">You asked for further evidence. The request comes back to you when the person adds it.</p>}
         {assigned && <Decline requestId={r.id} idPrefix={`dc-${r.id.slice(0, 8)}`} />}
         {!assigned && r.claimWith && <Claim requestId={r.id} appointmentId={r.claimWith} />}
+      </article>
+    );
+  };
+
+  // 690: the first assessor's decision, set before a second assessor who is neither the person nor the first assessor.
+  const confirmCard = (r: RequestView & { decisionId: string; confirmWith: string }) => {
+    const v = versions.get(r.methodVersionId);
+    const d = r.decisions.find(x => x.id === r.decisionId);
+    return (
+      <article key={r.id} className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-[15px] font-semibold text-gray-900">{r.competency?.name ?? "Competency"} <span className="font-normal text-gray-500">· {personName(r.userId)}</span></h3>
+          <p className="text-[12.5px] font-semibold text-gray-700">{STATE_LABEL[r.state]}</p>
+        </div>
+        <p className="text-[12.5px] text-gray-600">{v?.method?.name ?? "Method"}, version {v?.version_no ?? "?"} · framework version {r.frameworkVersion ?? "not recorded"} · requested {fmt(r.createdAt)}</p>
+        <div>
+          <p className="text-[13px] font-semibold text-gray-900">The first assessor decided</p>
+          {d ? <DecisionSummary d={d} levelLabel={levelLabel} componentLabels={componentLabels} /> : <p className="text-[12.5px] text-gray-600">The decision could not be read just now.</p>}
+        </div>
+        <ConfirmForm requestId={r.id} decisionId={r.decisionId} appointmentId={r.confirmWith} idPrefix={`cf-${r.id.slice(0, 8)}`} />
       </article>
     );
   };
@@ -95,6 +130,14 @@ export default async function CompetencyAssessmentPage() {
             <h2 id="mine-h" className={h2}>Assigned to you</h2>
             {queue.assigned.length === 0 ? <p className="rounded-xl border border-dashed border-gray-300 bg-white p-4 text-[13.5px] text-gray-600">Nothing is assigned to you.</p> : queue.assigned.map(r => card(r, true))}
           </section>
+          {confirmations === null && <p role="alert" className="text-[13.5px] text-red-700">Decisions waiting for your confirmation could not be read just now.</p>}
+          {confirmations && confirmations.length > 0 && (
+            <section aria-labelledby="confirm-h" className="space-y-3">
+              <h2 id="confirm-h" className={h2}>Waiting for your confirmation</h2>
+              <p className="text-[12.5px] text-gray-600">The method asks for a second assessor. Not confirmed sets the decision aside and the request is decided again.</p>
+              {confirmations.map(confirmCard)}
+            </section>
+          )}
           {queue.claimable.length > 0 && (
             <section aria-labelledby="claim-h" className="space-y-3">
               <h2 id="claim-h" className={h2}>Open requests you may take</h2>
