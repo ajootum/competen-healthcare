@@ -355,9 +355,11 @@ function main() {
   ok("12b. with the gate on, the door redirects ONLY to entry.ts destinations -- the ?experience= value is never echoed",
     /redirect\(user \? entryDestination\(experience\) : signInHref\(experience\)\)/.test(doorSrc)
     && /requestedExperience\(\(await searchParams\)\.experience\)/.test(doorSrc) && (doorSrc.match(/redirect\(/g) ?? []).length === 1);
-  const marketing = ["src/components/marketing/ExperiencePage.tsx", "src/components/marketing/IndividualFamily.tsx"].map(f => strip(readFileSync(f, "utf8")));
+  // SCHOLAR-WEB-REDESIGN-01: /scholar is ScholarLanding (one Sign in of its own, besides the product bar's).
+  const marketing = ["src/components/marketing/ExperiencePage.tsx", "src/components/marketing/IndividualFamily.tsx",
+    "src/components/marketing/ScholarLanding.tsx"].map(f => strip(readFileSync(f, "utf8")));
   ok("12c. every Sign in on the Scholar and Professional pages names its experience; none uses the bare door",
-    marketing.every(s => !/INDIVIDUAL_SIGN_IN/.test(s)) && marketing.reduce((n, s) => n + (s.match(/experienceSignIn\(e\.key\)/g) ?? []).length, 0) === 3);
+    marketing.every(s => !/INDIVIDUAL_SIGN_IN/.test(s)) && marketing.reduce((n, s) => n + (s.match(/experienceSignIn\((e|S)\.key\)/g) ?? []).length, 0) === 4);
   const reqDriven = ["src/app/individual/(app)/layout.tsx", "src/app/individual/(app)/[experience]/layout.tsx",
     "src/app/individual/_components/shell-context.ts", "src/app/individual/access/page.tsx", "src/app/individual/(app)/welcome/page.tsx"];
   const rawReq = reqDriven.filter(f => {

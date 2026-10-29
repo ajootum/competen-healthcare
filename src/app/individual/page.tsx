@@ -176,8 +176,8 @@ function ExperienceChooser() {
                 <p className="relative mt-2 text-[14px] leading-relaxed text-gray-600">{e.body}</p>
               </div>
               <div className="flex flex-1 flex-col px-6 pb-6 pt-5 sm:px-8 sm:pb-8">
-                {/* The experience's five demonstration steps -- the same flow its own page opens with. */}
-                <FlowChips steps={e.steps.map(s => s.label)} accent={e.accent} />
+                {/* The experience's demonstration flow, where its page has one (Scholar no longer does: SCHOLAR-WEB-REDESIGN-01). */}
+                {"steps" in e && <FlowChips steps={e.steps.map(s => s.label)} accent={e.accent} />}
                 <span className="mt-6 inline-flex items-center text-[14.5px] font-semibold" style={{ color: e.accent }}>
                   {`Explore ${e.name.replace("Competen ", "")}`}
                   <span aria-hidden className="ml-1.5 inline-block transition-transform group-hover:translate-x-0.5">→</span>

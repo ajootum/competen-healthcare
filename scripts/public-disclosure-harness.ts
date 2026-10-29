@@ -439,6 +439,37 @@ async function main() {
     ok("7f. Quality is not offered as an access route",
       !/Access[\s\S]{0,400}?>Quality</.test(home),
       "the /quality PAGE stays (asserted above); the footer Access entry does not");
+
+    // ── 7q. SCHOLAR-WEB-REDESIGN-01: /scholar sells the value and never shows the workings ──────────
+    // The five-step demonstration it replaced (file names, a sourced AI answer, revision cards, a case
+    // prompt, a progress board) was CONTROLLED material; any of its phrases coming back is a regression.
+    // And Get Started may reach the registration journey ONLY when both of its gates are on -- an iff,
+    // like 6, so the launch is not reported as a failure.
+    const scholar = await (await fetch(BASE + "/scholar")).text();
+    const scholarText = visibleText(scholar);
+    const demo = ["lecture 4.pdf", ".docx", "Your notes · p. 7", "cards due today", "68-year-old", "How Competen Scholar works",
+      "Upload → Understand", "Illustrative"].filter(p => scholarText.includes(p));
+    ok("7q-control. /scholar rendered the redesigned page",
+      scholarText.includes("From your notes to real understanding") && scholarText.includes("For healthcare students at every stage"));
+    ok("7q. /scholar carries none of the old product demonstration", demo.length === 0, demo.join(", "));
+    ok("7q. /scholar makes no unverified scale claim", !/thousands of|millions of|\d[\d,]* (students|learners|users)/i.test(scholarText));
+    {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const db = url && key ? createSupabase(url, key, { auth: { persistSession: false } }) : null;
+      const { data } = db
+        ? await db.from("practice_platform_flags").select("flag, enabled").in("flag", ["individual_app", "individual_self_registration"])
+        : { data: null };
+      if (!data) console.log("  SKIP  7q. join iff -- flags not readable here");
+      else {
+        const on = (f: string) => !!(data as { flag: string; enabled: boolean }[]).find(r => r.flag === f)?.enabled;
+        const open = on("individual_app") && on("individual_self_registration");
+        const links = /href="\/individual\/join"/.test(scholar);
+        ok("7q. /scholar offers the registration journey iff individual_app AND individual_self_registration are on",
+          links === open, `gates=${open ? "OPEN" : "CLOSED"} page=${links ? "links /individual/join" : "does not"}`);
+        ok("7q. while closed, /scholar says Scholar is by invitation and offers the conversation",
+          open || (scholarText.includes("available by invitation") && /href="mailto:[^"]*invitation/.test(scholar)));
+      }
+    }
   }
 
   console.log(`\n${fails.length ? "FAILED" : "PASSED"}  ${pass} assertion(s)${fails.length ? `, ${fails.length} failure(s):\n  - ${fails.join("\n  - ")}` : ""}\n`);

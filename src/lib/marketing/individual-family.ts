@@ -64,24 +64,10 @@ export type Experience = {
   eyebrow: string;
   headline: string[];
   body: string;
-  /** The hero panel's one-line idea. Its flow is the step labels. */
-  signatureTitle: string;
   image: string;
   imageAlt: string;
-  /**
-   * CSS object-position for the hero portrait. Both source images are portrait (about 1:2) with the face
-   * in the upper third, so the crop is aimed at the face rather than left to the centre default.
-   */
-  imagePosition: string;
-  stepsTitle: string;
-  stepsBody: string;
-  steps: ExperienceStep[];
-  /**
-   * The concise lifecycle reference for this page (refinement item 4). The full journey lives on
-   * /individual only; experience pages say one contextual thing and link to it.
-   */
-  journeyNote: { title: string; body: string };
-  closing: { title: string; body: string };
+  /** The product bar's in-page anchors. Absent = the family default in ExperienceNav. */
+  nav?: { href: string; label: string }[];
   /**
    * ⚠ WHERE THIS EXPERIENCE'S CONVERSATIONS GO -- configurable per experience (owner decision at the
    * review GO). Scholar runs through its own subsidiary, so its enquiries may need their own mailbox; until
@@ -97,6 +83,29 @@ export type Experience = {
   operator: string | null;
 };
 
+/**
+ * An experience presented through the step-by-step template (ExperiencePage): Competen Professional.
+ * Competen Scholar left that template with SCHOLAR-WEB-REDESIGN-01 and carries `landing` instead.
+ */
+export type DemoExperience = Experience & {
+  /** The hero panel's one-line idea. Its flow is the step labels. */
+  signatureTitle: string;
+  /**
+   * CSS object-position for the hero portrait. The source image is portrait (about 1:2) with the face
+   * in the upper third, so the crop is aimed at the face rather than left to the centre default.
+   */
+  imagePosition: string;
+  stepsTitle: string;
+  stepsBody: string;
+  steps: ExperienceStep[];
+  /**
+   * The concise lifecycle reference for this page (refinement item 4). The full journey lives on
+   * /individual only; experience pages say one contextual thing and link to it.
+   */
+  journeyNote: { title: string; body: string };
+  closing: { title: string; body: string };
+};
+
 const SIGN_IN = "/individual/sign-in";
 export const INDIVIDUAL_SIGN_IN = SIGN_IN;
 /** An experience page's "Sign in": the Individual door, naming the experience the visitor came from. */
@@ -105,7 +114,56 @@ export const experienceSignIn = (k: ExperienceKey) => `${SIGN_IN}?experience=${k
 /** The shared Competen enquiries mailbox -- the address every public conversation CTA uses today. */
 const COMPETEN_ENQUIRIES = "gabriel@semacast.com";
 
-export const SCHOLAR: Experience = {
+// ── COMPETEN SCHOLAR: THE PUBLIC LANDING PAGE ── SCHOLAR-WEB-REDESIGN-01 (owner, 29 Oct 2026) ──────────────
+//
+// "Public websites sell the value. Authenticated experiences deliver the capabilities. Internal governance
+// protects the intelligence." Every word and image reference /scholar shows is in this block; the page
+// (src/components/marketing/ScholarLanding.tsx) only lays it out.
+//
+// ⚠ CONTENT CLASSES -- the rule this block is written under. Competen Holdings has no content-governance
+// store to record them in, so they are recorded here and in the build record. They govern PUBLICATION, not
+// access, and no engine enforces them; the disclosure harness (7q) guards the known leaks.
+//   PUBLIC        may appear here: benefits, approved descriptions, pricing, brand, approved photography.
+//   CONTROLLED    never here, only in an authorised setting (the signed-in product, a pilot briefing):
+//                 detailed demos, selected workflows, institutional onboarding, authorised previews.
+//   CONFIDENTIAL  never on any public surface: AI orchestration, the learning architecture, competency
+//                 mapping, knowledge contribution, case intelligence, governance engines, allowances, and
+//                 how any of it is implemented.
+// So: no file names, sample AI answers, citations, revision screens, case prompts or progress dashboards
+// (the five-step demonstration this replaced was CONTROLLED material), and no engine or stage names.
+//
+// ⚠ NO UNVERIFIED CLAIMS. No user counts, partners, approvals or outcomes -- the approved mockup's "Join
+// thousands of healthcare students" is unverified and stays out. The availability copy says what is true.
+
+export type ScholarIcon = "book" | "cap" | "stethoscope" | "people" | "heart" | "building";
+
+export type ScholarLanding = {
+  hero: { primary: string; secondary: string };
+  benefits: {
+    eyebrow: string; title: string; body: string;
+    items: { title: string; body: string; icon: ScholarIcon; tone: "scholar" | "indigo" }[];
+  };
+  journey: {
+    eyebrow: string; title: string; body: string; professionalLine: string;
+    cta: { label: string; href: string };
+    /** The section's photograph (the owner-supplied master; variants by scripts/build-scholar-images.mjs), or null for the drawn panel. */
+    image: { src: string; alt: string } | null;
+  };
+  /**
+   * ⚠ AUDIENCES ARE A LIST, NOT A LAYOUT. Adding a profession is adding an entry; nothing on the page is
+   * written for nursing, and the grid takes any count.
+   */
+  audiences: { eyebrow: string; title: string; items: { key: string; title: string; body: string; icon: ScholarIcon }[] };
+  start: {
+    eyebrow: string; title: string; body: string; primary: string; school: string;
+    /** Shown only while public sign-up is closed (scholarGetStarted below). */
+    closedNote: string; invited: string; signIn: string;
+  };
+  /** The enquiry subjects, so an invitation request and a school conversation arrive distinguishable. */
+  subjects: { invitation: string; school: string };
+};
+
+export const SCHOLAR: Experience & { landing: ScholarLanding } = {
   key: "scholar",
   name: "Competen Scholar",
   wordmark: "scholar",
@@ -117,76 +175,82 @@ export const SCHOLAR: Experience = {
   tagline: "Learn · Understand · Apply",
   micro: "AI-powered healthcare education.",
   eyebrow: "Your AI-powered healthcare learning companion",
-  headline: ["Study smarter.", "Think clinically.", "Grow confidently."],
+  headline: ["Your notes.", "Your knowledge.", "Your clinical confidence."],
   body:
-    "Turn your notes into explanations, practice questions and clinical reasoning cases. " +
-    "Designed for healthcare students and the journey ahead of them.",
-  signatureTitle: "Your notes become active learning.",
-  image: "/images/home/path-students.webp",
-  imageAlt: "A smiling student nurse in scrubs with a stethoscope",
-  imagePosition: "72% 16%",
-  stepsTitle: "How Competen Scholar works",
-  stepsBody: "Five steps from the notes you already have to clinical confidence you can see.",
-  steps: [
-    {
-      id: "upload", label: "Upload", title: "Bring your own notes",
-      body: "Add lecture notes, slides and reading. Competen Scholar works from your material, organised by module.",
-      points: ["PDF and Word notes", "Organised by module and topic"],
-      mock: { heading: "My Learning · Cardiovascular", lines: [
-        { text: "Heart failure — lecture 4.pdf", tag: "Added" },
-        { text: "Cardiac drugs summary.docx", tag: "Added" },
-      ] },
-    },
-    {
-      id: "understand", label: "Understand", title: "Explanations grounded in your sources",
-      body: "Ask about anything you have uploaded and get an explanation that cites the page it came from, then ask a follow-up.",
-      points: ["Answers cite your notes", "Follow-up questions"],
-      mock: { heading: "Explain", lines: [
-        { text: "Why does left-sided heart failure cause breathlessness?" },
-        { text: "Pressure backs up into the lungs' circulation, so fluid collects there.", tag: "Your notes · p. 7" },
-      ] },
-    },
-    {
-      id: "revise", label: "Revise", title: "Questions and revision from your material",
-      body: "Practise with questions generated from your notes. Anything you miss comes back for review until it sticks.",
-      points: ["Practice questions from your notes", "Spaced review of what you miss"],
-      mock: { heading: "Revision · cards due today", lines: [
-        { text: "A normal adult resting heart rate is…" },
-        { text: "60–100 beats per minute", tag: "Correct" },
-      ] },
-    },
-    {
-      id: "apply", label: "Apply", title: "Think through clinical cases",
-      body: "Work through patient scenarios and explain your reasoning, preparing for practice and practical examinations.",
-      points: ["Case-based scenarios", "Reasoning, not just recall"],
-      mock: { heading: "Case", lines: [
-        { text: "A 68-year-old is breathless when lying flat." },
-        { text: "What would you assess first, and why?", tag: "Your answer" },
-      ] },
-    },
-    {
-      id: "progress", label: "Progress", title: "See your progress build",
-      body: "See what you have practised and remembered, and what to revisit, topic by topic, across your whole course.",
-      points: ["Topic-by-topic progress", "A record that stays with you"],
-      mock: { heading: "Progress", lines: [
-        { text: "Cardiovascular", tag: "Practised" },
-        { text: "Respiratory", tag: "Revisit" },
-      ] },
-    },
+    "Competen Scholar is your AI-powered learning companion, helping you understand difficult concepts, " +
+    "prepare confidently for assessments, and connect classroom learning with clinical practice.",
+  // The owner-approved photograph (29 Oct). Variants: scripts/build-scholar-images.mjs. Social card: build-og-images.mjs.
+  image: "/images/scholar/hero-students.webp",
+  imageAlt: "Healthcare students in scrubs and nursing uniforms gathered around a simulation manikin, discussing a case together",
+  nav: [
+    { href: "#overview", label: "Overview" },
+    { href: "#benefits", label: "Benefits" },
+    { href: "#journey", label: "Your Journey" },
+    { href: "#start", label: "Get Started" },
   ],
-  journeyNote: {
-    title: "Part of your Competen journey",
-    body: "What you learn in Scholar stays in your Competen Passport. Graduation is a natural moment to add Competen Professional to the same account, and you can keep Scholar for further study.",
-  },
-  closing: {
-    title: "Start your learning journey.",
-    body: "Talk to us about Competen Scholar for you, your cohort or your school.",
+  landing: {
+    hero: { primary: "Get Started", secondary: "Talk to Us" },
+    benefits: {
+      eyebrow: "What Competen Scholar helps you do",
+      title: "From your notes to real understanding",
+      body: "Learn more effectively, prepare with confidence, and develop the knowledge and reasoning skills needed for clinical practice.",
+      items: [
+        { title: "Understand difficult concepts", icon: "book", tone: "scholar",
+          body: "Make challenging healthcare topics easier to understand through personalised learning support." },
+        { title: "Prepare with confidence", icon: "cap", tone: "indigo",
+          body: "Strengthen your knowledge and prepare for examinations through meaningful practice and revision." },
+        { title: "Apply your learning clinically", icon: "stethoscope", tone: "scholar",
+          body: "Develop clinical thinking and decision-making through practical learning experiences." },
+      ],
+    },
+    journey: {
+      eyebrow: "Learning that grows with you",
+      title: "Build your skills for the future",
+      body: "Your learning journey does not end at graduation. Competen helps you continue developing your knowledge, skills, and professional confidence throughout your career.",
+      professionalLine: "When you begin to practise, Competen Professional is there for the next stage of your career.",
+      cta: { label: "Explore Your Journey", href: "/individual#journey" },
+      image: { src: "/images/scholar/journey-student-laptop.webp", alt: "A nursing student in scrubs smiling as she studies on a laptop, with books beside her" },
+    },
+    audiences: {
+      eyebrow: "Who is Competen Scholar for?",
+      title: "For healthcare students at every stage",
+      items: [
+        { key: "nursing", title: "Nursing students", body: "Build knowledge and clinical confidence.", icon: "people" },
+        { key: "medical", title: "Medical students", body: "Support your studies and clinical training.", icon: "stethoscope" },
+        { key: "allied", title: "Allied health students", body: "Apply your learning to real practice.", icon: "heart" },
+        { key: "schools", title: "Schools and training institutions", body: "Support your learners with a modern learning companion.", icon: "building" },
+      ],
+    },
+    start: {
+      eyebrow: "Get started",
+      title: "Start your learning journey",
+      body: "Discover a smarter way to learn, build confidence, and prepare for your future in healthcare.",
+      primary: "Get Started",
+      school: "Talk to Us About Your School",
+      closedNote: "Competen Scholar is currently available by invitation while we run our pilot. Get Started asks us for an invitation for you or your school.",
+      invited: "Already invited?",
+      signIn: "Sign in",
+    },
+    subjects: { invitation: "Competen Scholar invitation request", school: "Competen Scholar for our school" },
   },
   contact: { email: COMPETEN_ENQUIRIES, subject: "Competen Scholar enquiry" },
   operator: null,
 };
 
-export const PROFESSIONAL: Experience = {
+/**
+ * ⚠ GET STARTED FOLLOWS THE GATES, NEVER AHEAD OF THEM. /individual/join is the Scholar registration journey
+ * and is a 404 unless individual_app AND individual_self_registration are both on (src/lib/individual/join.ts,
+ * selfRegistrationEnabled). `open` is that answer, read by the page at request time. While it is false the
+ * button never offers a sign-up the gates would refuse: in the hero it goes to the Get Started section, which
+ * says the pilot is by invitation; there it asks for an invitation through the enquiry route.
+ */
+export const SCHOLAR_JOIN = "/individual/join";
+export function scholarGetStarted(open: boolean, place: "hero" | "start"): string {
+  if (open) return SCHOLAR_JOIN;
+  return place === "hero" ? "#start" : enquiryHref({ email: SCHOLAR.contact.email, subject: SCHOLAR.landing.subjects.invitation });
+}
+
+export const PROFESSIONAL: DemoExperience = {
   key: "professional",
   name: "Competen Professional",
   wordmark: "professional",
@@ -267,8 +331,10 @@ export const PROFESSIONAL: Experience = {
   operator: null,
 };
 
-export const EXPERIENCES: Record<ExperienceKey, Experience> = { scholar: SCHOLAR, professional: PROFESSIONAL };
-export const EXPERIENCE_LIST: Experience[] = [SCHOLAR, PROFESSIONAL];
+/** Either shape: the step template (Professional) or the landing page (Scholar). */
+export type AnyExperience = DemoExperience | typeof SCHOLAR;
+export const EXPERIENCES: Record<ExperienceKey, AnyExperience> = { scholar: SCHOLAR, professional: PROFESSIONAL };
+export const EXPERIENCE_LIST: AnyExperience[] = [SCHOLAR, PROFESSIONAL];
 export const siblingOf = (k: ExperienceKey): Experience => (k === "scholar" ? PROFESSIONAL : SCHOLAR);
 
 export const enquiryHref = (c: { email: string; subject: string }) =>
