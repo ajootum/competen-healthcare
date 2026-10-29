@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadClinicalReviews, submitForReview, type ClinicalReview } from "./clinical-review";
+import { checksFor } from "./criteria-checks";
 
 // ── PUTTING MANY COMPETENCIES FORWARD FOR CLINICAL REVIEW ── CFCA-STUDIO-UX-02 ──────────────────────────────
 //
@@ -25,8 +26,8 @@ import { loadClinicalReviews, submitForReview, type ClinicalReview } from "./cli
 
 export type ReviewScope = { kind: "framework" } | { kind: "domain"; domainId: string } | { kind: "competencies"; ids: string[] };
 export type Eligibility = "eligible" | "in_review" | "approved" | "changes_requested" | "framework_locked" | "unreadable";
-export type PreviewItem = { competencyId: string; code: string | null; name: string; domain: string; hash: string | null; eligibility: Eligibility; reason: string };
-export type Preview = { scopeLabel: string; items: PreviewItem[]; counts: { inScope: number; eligible: number; excluded: number } };
+export type PreviewItem = { competencyId: string; code: string | null; name: string; domain: string; hash: string | null; eligibility: Eligibility; reason: string; checks: string[] };
+export type Preview = { scopeLabel: string; items: PreviewItem[]; counts: { inScope: number; eligible: number; excluded: number; withChecks: number } };
 export type Outcome = "submitted" | "skipped" | "excluded" | "stale" | "failed" | "not_reached";
 export type OutcomeItem = { competencyId: string; code: string | null; name: string; outcome: Outcome; reason: string; versionId?: string; required?: number };
 
@@ -49,7 +50,7 @@ export function eligibilityOf(clinical: ClinicalReview | null | undefined, frame
 }
 
 type Fw = { id: string; name: string; code: string | null; pubStatus: string;
-  domains: { id: string; name: string; competencies: { id: string; code: string | null; name: string; clinical: ClinicalReview | null }[] }[] };
+  domains: { id: string; name: string; competencies: { id: string; code: string | null; name: string; clinical: ClinicalReview | null; checks?: string[] }[] }[] };
 
 /** Pure: the preview for a scope over a framework, with each competency's current hash. */
 export function previewOf(fw: Fw, scope: ReviewScope, hashes: ReadonlyMap<string, string>): Preview | { error: string } {
@@ -60,12 +61,12 @@ export function previewOf(fw: Fw, scope: ReviewScope, hashes: ReadonlyMap<string
   for (const d of doms) for (const c of d.competencies) {
     if (want && !want.has(c.id)) continue;
     const e = eligibilityOf(c.clinical, fw.pubStatus);
-    items.push({ competencyId: c.id, code: c.code, name: c.name, domain: d.name, hash: hashes.get(c.id) ?? null, eligibility: e, reason: ELIGIBILITY_REASON[e] });
+    items.push({ competencyId: c.id, code: c.code, name: c.name, domain: d.name, hash: hashes.get(c.id) ?? null, eligibility: e, reason: ELIGIBILITY_REASON[e], checks: c.checks ?? [] });
   }
   if (want && items.length !== want.size) return { error: "Some chosen competencies are not in this framework. Nothing is previewed." };
   const eligible = items.filter(i => i.eligibility === "eligible").length;
   const scopeLabel = scope.kind === "framework" ? `Entire framework · ${fw.code ?? fw.name}` : scope.kind === "domain" ? `Domain · ${doms[0].name}` : `${items.length} selected competenc${items.length === 1 ? "y" : "ies"}`;
-  return { scopeLabel, items, counts: { inScope: items.length, eligible, excluded: items.length - eligible } };
+  return { scopeLabel, items, counts: { inScope: items.length, eligible, excluded: items.length - eligible, withChecks: items.filter(i => i.checks.length).length } };
 }
 
 const OUTCOME_OF: Partial<Record<Eligibility, Outcome>> = { in_review: "skipped", approved: "skipped", changes_requested: "excluded", framework_locked: "excluded", unreadable: "failed" };
@@ -119,13 +120,18 @@ export async function loadFrameworkForReview(admin: any, frameworkId: string): P
   if (!f || f.hospital_id !== null) return { error: "That is not a shared framework.", status: 404 };
   const doms = [...(f.framework_domains ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
   const ids: string[] = doms.flatMap((d: any) => (d.framework_competencies ?? []).map((c: any) => c.id));
-  const [reviews, hashes] = await Promise.all([ids.length ? loadClinicalReviews(admin, ids) : Promise.resolve(new Map()), contentHashes(admin, ids)]);
+  const [reviews, hashes, skills, comps] = await Promise.all([ids.length ? loadClinicalReviews(admin, ids) : Promise.resolve(new Map()), contentHashes(admin, ids),
+    ids.length ? admin.from("competency_skills").select("competency_id, name, component_code, sort_order").in("competency_id", ids).order("sort_order").limit(20000) : Promise.resolve({ data: [] }),
+    admin.from("competency_assessment_component").select("code, label").order("sort_order")]);
+  // Outstanding points per competency (repeated wording, empty components): a summary, never an eligibility rule.
+  const labels: Record<string, string> = Object.fromEntries(((comps?.data ?? []) as any[]).map(c => [c.code, c.label]));
+  const crit = (id: string) => ((skills?.data ?? []) as any[]).filter(k => k.competency_id === id).map(k => ({ component: k.component_code ?? null, text: k.name }));
   if (hashes === null) return { error: "The content versions could not be read just now.", status: 503 };
   return {
     hashes,
     fw: { id: f.id, name: f.name, code: f.code ?? null, pubStatus: f.pub_status ?? "draft",
       domains: doms.map((d: any) => ({ id: d.id, name: d.name,
         competencies: [...(d.framework_competencies ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order)
-          .map((c: any) => ({ id: c.id, code: c.code ?? null, name: c.name, clinical: reviews ? reviews.get(c.id) ?? null : null })) })) },
+          .map((c: any) => ({ id: c.id, code: c.code ?? null, name: c.name, clinical: reviews ? reviews.get(c.id) ?? null : null, checks: checksFor(crit(c.id), labels) })) })) },
   };
 }

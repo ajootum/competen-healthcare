@@ -3,6 +3,8 @@ import { AlignmentType, BorderStyle, Document, Footer, HeadingLevel, Packer, Pag
 import { reviewQueue } from "./clinical-review-hq";
 import { CLINICAL_STATE_LABEL, loadClinicalReviews } from "./clinical-review";
 import { contentHashes } from "./review-batch";
+import { checksFor } from "./criteria-checks";
+export { checksFor };
 
 // ── THE CLINICAL REVIEW PACK ── owner, 29 Oct 2026 ─────────────────────────────────────────────────────────────────
 //
@@ -38,19 +40,6 @@ export function groupCriteria(criteria: { component: string | null; text: string
     const items = criteria.filter(c => (c.component ?? "") === code);
     return { label: code ? components[code] ?? code : "Not classified", criteria: items.map((c, i) => ({ n: `${PREFIX[code] ?? "C"}${i + 1}`, text: c.text, sourceRef: c.sourceRef })) };
   }).filter(g => g.criteria.length);
-}
-
-/** Pure: what a reviewer may want to look at -- read from the content itself, never a judgement about it. */
-export function checksFor(criteria: { component: string | null; text: string }[], components: Record<string, string>): string[] {
-  const out: string[] = [];
-  const seen = new Map<string, number>();
-  criteria.forEach((c, i) => {
-    const k = `${c.component ?? ""}\u0000${c.text.trim().toLowerCase()}`;
-    if (seen.has(k)) out.push(`Criterion ${i + 1} repeats criterion ${seen.get(k)! + 1} word for word.`); else seen.set(k, i);
-  });
-  if (criteria.length) for (const [code, label] of Object.entries(components)) if (!criteria.some(c => c.component === code)) out.push(`No ${label} criteria are recorded.`);
-  if (!criteria.length) out.push("No assessment criteria are recorded.");
-  return out;
 }
 
 const shortHash = (h: string | null) => (h ? `${h.slice(0, 8)}…${h.slice(-4)}` : "not recorded");

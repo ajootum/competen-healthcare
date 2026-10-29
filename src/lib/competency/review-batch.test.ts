@@ -30,12 +30,12 @@ describe("eligibility is the existing rule", () => {
 describe("the preview, for each scope", () => {
   it("framework: every competency, with its exact hash and the reason it is or is not put forward", () => {
     const p: any = previewOf(FW, { kind: "framework" }, HASH);
-    expect(p.counts).toEqual({ inScope: 5, eligible: 2, excluded: 3 });
+    expect(p.counts).toEqual({ inScope: 5, eligible: 2, excluded: 3, withChecks: 0 });
     expect(p.items.find((i: any) => i.competencyId === "a")).toMatchObject({ hash: "ha", eligibility: "eligible" });
     expect(p.items.find((i: any) => i.competencyId === "d").reason).toMatch(/Revise the content/);
   });
   it("domain and selection narrow it; a competency outside the framework refuses the whole preview", () => {
-    expect((previewOf(FW, { kind: "domain", domainId: "d2" }, HASH) as any).counts).toEqual({ inScope: 3, eligible: 1, excluded: 2 });
+    expect((previewOf(FW, { kind: "domain", domainId: "d2" }, HASH) as any).counts).toEqual({ inScope: 3, eligible: 1, excluded: 2, withChecks: 0 });
     expect((previewOf(FW, { kind: "competencies", ids: ["a", "b"] }, HASH) as any).counts.inScope).toBe(2);
     expect(previewOf(FW, { kind: "competencies", ids: ["a", "zzz"] }, HASH)).toHaveProperty("error");
     expect(previewOf(FW, { kind: "domain", domainId: "nope" }, HASH)).toHaveProperty("error");

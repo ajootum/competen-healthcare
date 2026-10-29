@@ -5,7 +5,8 @@ import { Decide } from "./_components/ReviewControls";
 import { CaseContent } from "./_components/CaseContent";
 import { CriteriaList } from "../competencies/_studio/CriteriaList";
 import { ReviewPackView } from "../competencies/_studio/ReviewPackView";
-import { loadReviewerPack } from "@/lib/competency/review-pack";
+import { checksFor, loadReviewerPack } from "@/lib/competency/review-pack";
+import { ApproveFramework, type ApproveItem } from "./_components/ApproveFramework";
 
 // /super-admin/clinical-review -- owner decision D2, migration 395. The clinical reviewer's queue.
 //
@@ -30,6 +31,11 @@ export default async function ClinicalReviewPage({ searchParams }: { searchParam
   }
   const [q, comps] = await Promise.all([reviewQueue(ctx.admin, ctx.userId), ctx.admin.from("competency_assessment_component").select("code, label").order("sort_order")]);
   const components: Record<string, string> = Object.fromEntries(((comps.data ?? []) as { code: string; label: string }[]).map(c => [c.code, c.label]));
+  // Framework-level approval: the waiting competencies grouped by framework, each with its version and points worth checking.
+  const byFramework = q ? [...q.items.filter(i => i.kind === "competency").reduce((m, i) => m.set(i.home, [...(m.get(i.home) ?? []), {
+    versionId: i.versionId, competencyId: i.competencyId, title: i.title, domain: i.domain, version: i.versionId.slice(0, 8),
+    criteria: i.criteria?.length ?? i.snapshot.skills.length, checks: checksFor(i.criteria ?? [], components) }]), new Map<string, ApproveItem[]>())]
+    .map(([framework, items]) => ({ framework, items })).filter(g => g.items.length > 1) : [];
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -54,6 +60,16 @@ export default async function ClinicalReviewPage({ searchParams }: { searchParam
       ) : q.items.length === 0 ? (
         <p className="text-[13.5px] text-gray-700">Nothing is waiting for you. Content appears here when someone else puts it forward within your scope.</p>
       ) : (
+        <>
+        {byFramework.length > 0 && (
+          <section aria-labelledby="fw-approve-h" className="rounded-xl border border-teal-200 bg-teal-50/40 p-4">
+            <h2 id="fw-approve-h" className="text-[14px] font-bold text-gray-900">Review a whole framework</h2>
+            <p className="mt-1 text-[12.5px] text-gray-600">Approve every competency you have reviewed in a framework at once. Each still gets its own decision at its exact version, so every criterion stays traceable. Ask for changes on any competency individually below.</p>
+            <ul className="mt-2 space-y-2">{byFramework.map(g => (
+              <li key={g.framework} className="flex flex-wrap items-center justify-between gap-2"><span className="text-[13.5px] text-gray-900">{g.framework} <span className="text-gray-500">· {g.items.length} waiting</span></span><ApproveFramework framework={g.framework} items={g.items} /></li>
+            ))}</ul>
+          </section>
+        )}
         <ul className="space-y-4">
           {q.items.map(i => (
             <li key={i.versionId} className="rounded-xl border border-gray-200 bg-white p-5">
@@ -74,6 +90,7 @@ export default async function ClinicalReviewPage({ searchParams }: { searchParam
             </li>
           ))}
         </ul>
+        </>
       )}
     </div>
   );
