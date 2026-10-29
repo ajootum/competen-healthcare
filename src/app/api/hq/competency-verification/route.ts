@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
 //   POST { action, ... }
 //     create_method { code, name, kind }             a method and its first draft
 //     new_draft     { methodId }                     a new draft from the latest criteria
-//     save_draft    { versionId, content }           the no-code editor saves the draft (never a published version)
+//     save_draft    { versionId, content }           the no-code editor saves the draft (never a published version). 680 records the editor
+//     publish       (680) never by the author or an editor of the version: another administrator publishes it
 //     publish       { versionId }                    the criteria become fixed, and the older version retires
 //     retire        { versionId }                    no new requests on it. Decisions under it keep it
 //     grant_scope   { appointmentId, kind, ref | value, validUntil?, reason }
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
       out = r; break;
     }
     case "save_draft": {
-      const r = await saveDraft(ctx.admin, id("versionId"), b.content);
+      const r = await saveDraft(ctx.admin, ctx.userId, id("versionId"), b.content);
       if (r.ok) { await audit(ctx, "competency_verification_version_save", { type: "competency_verification_method_version", id: id("versionId") }, { problems: r.problems.length }); return NextResponse.json({ ok: true, problems: r.problems }); }
       out = r; break;
     }

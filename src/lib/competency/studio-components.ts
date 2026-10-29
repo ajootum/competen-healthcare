@@ -55,7 +55,9 @@ export function componentOutcome(reqs: readonly ComponentRequirement[], results:
       if (r.mandatory) { missingMandatory.push(r.code); reasons.push(`${r.code} is mandatory and not yet assessed.`); }
       continue;
     }
-    const w = r.weight ?? 1;
+    // Weights are kept to two decimal places (660 numeric(5,2), 680 method content), so they are summed in
+    // hundredths: exact integer arithmetic, and the same result as the database (680 competency_component_outcome).
+    const w = Math.round((r.weight ?? 1) * 100);
     sum += score * w; weights += w;
     if (pass === null) {
       if (r.mandatory) { missingMandatory.push(r.code); reasons.push(`${r.code} has no pass level and the programme sets no target.`); }

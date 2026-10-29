@@ -2,17 +2,20 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  EMPTY_CONTENT, EVIDENCE_KINDS, METHOD_KINDS, OUTCOME_CLASSES, STARTER_OUTCOMES, checkDecision, checkMethodContent, deriveState, standingOf, type MethodContent,
+  ASSESSOR_EVIDENCE_KINDS, EMPTY_CONTENT, EVIDENCE_KINDS, METHOD_KINDS, OUTCOME_CLASSES, STARTER_OUTCOMES, checkDecision, checkMethodContent, deriveState, standingOf, type MethodContent,
 } from "./verification-config";
 import { ASSESSOR_AUTHORITY, SCOPE_KINDS, addRequestEvidence, listVerifications, recordDecision, refusalOf, requestVerification, verificationMethodsFor, verificationsForCompetency, withdrawRequest } from "./verification";
 
 // COMPETEN-PROFESSIONAL-COMPETENCY-01 C5 (migration 510): the Holdings Competency Verification Studio.
 const SQL = readFileSync("supabase/migrations/510-competency-verification-studio.sql", "utf8").replace(/\r\n/g, "\n");
-const listIn = (constraint: string, column: string) => {
-  const at = SQL.indexOf(`add constraint ${constraint}`);
-  const m = new RegExp(`${column} in \\(([^)]*)\\)`).exec(SQL.slice(at, SQL.indexOf(");", at) + 2));
+const listInOf = (sql: string) => (constraint: string, column: string) => {
+  const at = sql.indexOf(`add constraint ${constraint}`);
+  const m = new RegExp(`${column} in \\(([^)]*)\\)`).exec(sql.slice(at, sql.indexOf(");", at) + 2));
   return m ? [...m[1].matchAll(/'([a-z_]+)'/g)].map(x => x[1]) : [];
 };
+const listIn = listInOf(SQL);
+// 680 redefines the method and evidence kind CHECKs: its definition is the latest, the one the code must name.
+const listIn680 = listInOf(readFileSync("supabase/migrations/680-cfca-verification-components.sql", "utf8").replace(/\r\n/g, "\n"));
 
 const U = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const PERSON = U(1), ASSESSOR = U(2), OTHER = U(3), REQ = U(10), VER = U(20), APPT = U(30), EV1 = U(40), LVL = U(50), SCALE = U(60);
@@ -28,9 +31,11 @@ const content: MethodContent = {
 describe("510 and the code name the same fixed vocabularies", () => {
   it("outcome classes, method kinds, scope kinds and evidence kinds", () => {
     expect(listIn("competency_verification_decision_check", "outcome_class")).toEqual([...OUTCOME_CLASSES]);
-    expect(listIn("competency_verification_method_check", "kind")).toEqual([...METHOD_KINDS]);
+    expect(listIn680("competency_verification_method_check", "kind")).toEqual([...METHOD_KINDS]);
+    expect(listIn680("competency_verification_method_check", "kind").slice(0, 7)).toEqual(listIn("competency_verification_method_check", "kind"));
     expect(listIn("competency_assessor_scope_check", "scope_kind")).toEqual([...SCOPE_KINDS]);
     expect(listIn("competency_verification_evidence_check", "kind")).toEqual([...EVIDENCE_KINDS]);
+    expect(listIn680("competency_verification_evidence_check", "kind")).toEqual([...EVIDENCE_KINDS, ...ASSESSOR_EVIDENCE_KINDS]);
   });
 });
 

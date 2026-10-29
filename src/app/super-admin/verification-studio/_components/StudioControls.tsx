@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  METHOD_KINDS, METHOD_KIND_LABEL, OUTCOME_CLASSES, OUTCOME_CLASS_LABEL, STARTER_OUTCOMES, EVIDENCE_KINDS, EVIDENCE_KIND_LABEL,
-  type MethodContent, type Outcome, type Criterion, type ChecklistItem,
+  COMPONENT_STATUS_LABEL, METHOD_KINDS, METHOD_KIND_LABEL, OUTCOME_CLASSES, OUTCOME_CLASS_LABEL, STARTER_OUTCOMES, EVIDENCE_KINDS, EVIDENCE_KIND_LABEL,
+  type MethodContent, type MethodComponent, type Outcome, type Criterion, type ChecklistItem,
 } from "@/lib/competency/verification-config";
 
 // The write half of /super-admin/verification-studio (migration 510). Every control posts to
@@ -58,7 +58,8 @@ export function NewMethod() {
 }
 
 type Option = { id: string; label: string };
-export type EditorOptions = { frameworks: Option[]; competencies: Option[]; professions: Option[]; specialties: Option[]; scales: (Option & { levels: Option[] })[] };
+/** components: the active CCHU components of the 660 registry, id = code (680). */
+export type EditorOptions = { frameworks: Option[]; competencies: Option[]; professions: Option[]; specialties: Option[]; scales: (Option & { levels: Option[] })[]; components: Option[] };
 
 function MultiPick({ id, title, options, value, onChange }: { id: string; title: string; options: Option[]; value: string[]; onChange: (v: string[]) => void }) {
   return (
@@ -75,24 +76,39 @@ function MultiPick({ id, title, options, value, onChange }: { id: string; title:
   );
 }
 
-/** The no-code editor of one DRAFT version. Saving checks the form; publishing makes the criteria fixed. */
-export function MethodEditor({ versionId, initial, options, idPrefix }: { versionId: string; initial: MethodContent; options: EditorOptions; idPrefix: string }) {
-  const [c, setC] = useState<MethodContent>({ ...initial, outcomes: initial.outcomes?.length ? initial.outcomes : STARTER_OUTCOMES });
+/**
+ * The no-code editor of one DRAFT version. Saving checks the form and records you as an editor. Publishing makes the
+ * criteria fixed, and (680) is never done by the author or an editor: `mayPublish` false hides the button, and the
+ * database refuses it whatever is sent.
+ */
+export function MethodEditor({ versionId, initial, options, idPrefix, mayPublish = true }: { versionId: string; initial: MethodContent; options: EditorOptions; idPrefix: string; mayPublish?: boolean }) {
+  const [c, setC] = useState<MethodContent>({ ...initial, components: initial.components ?? [], outcomes: initial.outcomes?.length ? initial.outcomes : STARTER_OUTCOMES });
   const [problems, setProblems] = useState<string[] | null>(null);
   const { busy, msg, send } = useSend(PATH);
   const set = <K extends keyof MethodContent>(k: K, v: MethodContent[K]) => setC(x => ({ ...x, [k]: v }));
   const scale = options.scales.find(s => s.id === c.scaleId);
   const p = idPrefix;
+  const componentLabel = (code: string) => options.components.find(o => o.id === code)?.label ?? code;
+  const setComponent = (i: number, patch: Partial<MethodComponent>) => set("components", c.components.map((x, j) => {
+    if (j !== i) return x;
+    const next = { ...x, ...patch };
+    return next.safetyCritical ? { ...next, mandatory: true } : next;
+  }));
 
   const listEditor = <T extends Criterion | ChecklistItem>(title: string, key: "criteria" | "checklist", flag: "required" | "critical", flagLabel: string) => (
     <fieldset className="space-y-2">
       <legend className={label}>{title}</legend>
       {(c[key] as T[]).map((it, i) => (
-        <div key={i} className="grid gap-2 sm:grid-cols-[8rem_1fr_auto_auto] sm:items-center">
+        <div key={i} className="grid gap-2 sm:grid-cols-[8rem_1fr_11rem_auto_auto] sm:items-center">
           <label htmlFor={`${p}-${key}-${i}-id`} className="sr-only">Id</label>
           <input id={`${p}-${key}-${i}-id`} value={it.id} onChange={e => set(key, (c[key] as T[]).map((x, j) => (j === i ? { ...x, id: e.target.value.toLowerCase() } : x)) as never)} className={`${input} font-mono`} placeholder="id" />
           <label htmlFor={`${p}-${key}-${i}-t`} className="sr-only">Words</label>
           <input id={`${p}-${key}-${i}-t`} value={it.text} onChange={e => set(key, (c[key] as T[]).map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) as never)} className={input} placeholder="What the assessor decides" />
+          <label htmlFor={`${p}-${key}-${i}-cmp`} className="sr-only">Component</label>
+          <select id={`${p}-${key}-${i}-cmp`} value={it.component ?? ""} disabled={!c.components.length} title={c.components.length ? undefined : "Add a component below first"}
+            onChange={e => set(key, (c[key] as T[]).map((x, j) => (j === i ? { ...x, component: e.target.value || null } : x)) as never)} className={input}>
+            <option value="">No component</option>{c.components.map(k => <option key={k.code} value={k.code}>{componentLabel(k.code)}</option>)}
+          </select>
           <label htmlFor={`${p}-${key}-${i}-f`} className="flex items-center gap-1.5 text-[12.5px] text-gray-700">
             <input id={`${p}-${key}-${i}-f`} type="checkbox" checked={(it as Record<string, unknown>)[flag] === true} onChange={e => set(key, (c[key] as T[]).map((x, j) => (j === i ? { ...x, [flag]: e.target.checked } : x)) as never)} />{flagLabel}
           </label>
@@ -125,6 +141,42 @@ export function MethodEditor({ versionId, initial, options, idPrefix }: { versio
           </select></div>
         {scale && <MultiPick id={`${p}-lv`} title="Levels it can verify" options={scale.levels} value={c.levelIds} onChange={v => set("levelIds", v)} />}
       </div>
+
+      <fieldset className="space-y-2">
+        <legend className={label}>Assessment components (CCHU)</legend>
+        <p className="text-[12.5px] text-gray-600">
+          Optional. Each component is scored on the proficiency scale above. A verified outcome needs every mandatory component at its pass level
+          (blank: the level verified) and the weighted level at the level verified. A weighted level never overrides a failed safety-critical or mandatory component.
+          Pass levels, weights and which components are mandatory are clinical settings: set them as clinically approved.
+        </p>
+        {c.components.map((k, i) => (
+          <div key={k.code} className="grid gap-2 sm:grid-cols-[12rem_12rem_auto_auto_6rem_auto] sm:items-center">
+            <span className="text-[13px] font-medium text-gray-900">{componentLabel(k.code)}</span>
+            <label htmlFor={`${p}-k-${i}-pass`} className="sr-only">Pass level for {componentLabel(k.code)}</label>
+            <select id={`${p}-k-${i}-pass`} value={k.passLevelId ?? ""} onChange={e => setComponent(i, { passLevelId: e.target.value || null })} className={input} disabled={!scale}>
+              <option value="">Pass level: the level verified</option>{(scale?.levels ?? []).map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+            </select>
+            <label htmlFor={`${p}-k-${i}-m`} className="flex items-center gap-1.5 text-[12.5px] text-gray-700">
+              <input id={`${p}-k-${i}-m`} type="checkbox" checked={k.mandatory} disabled={k.safetyCritical} onChange={e => setComponent(i, { mandatory: e.target.checked })} />Mandatory
+            </label>
+            <label htmlFor={`${p}-k-${i}-s`} className="flex items-center gap-1.5 text-[12.5px] text-gray-700">
+              <input id={`${p}-k-${i}-s`} type="checkbox" checked={k.safetyCritical} onChange={e => setComponent(i, { safetyCritical: e.target.checked })} />Safety-critical
+            </label>
+            <label htmlFor={`${p}-k-${i}-w`} className="sr-only">Weight for {componentLabel(k.code)}</label>
+            <input id={`${p}-k-${i}-w`} type="number" min={0.01} max={100} step={0.01} value={k.weight ?? ""} placeholder="weight 1" onChange={e => setComponent(i, { weight: e.target.value ? Number(e.target.value) : null })} className={input} />
+            <button type="button" className={ghost} onClick={() => setC(x => ({ ...x, components: x.components.filter((_, j) => j !== i),
+              criteria: x.criteria.map(it => (it.component === k.code ? { ...it, component: null } : it)), checklist: x.checklist.map(it => (it.component === k.code ? { ...it, component: null } : it)) }))}>Remove</button>
+          </div>
+        ))}
+        {options.components.filter(o => !c.components.some(k => k.code === o.id)).length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor={`${p}-k-add`} className="sr-only">Add a component</label>
+            <select id={`${p}-k-add`} value="" onChange={e => { if (e.target.value) set("components", [...c.components, { code: e.target.value, passLevelId: null, mandatory: true, safetyCritical: false, weight: null }]); }} className={input}>
+              <option value="">Add a component…</option>{options.components.filter(o => !c.components.some(k => k.code === o.id)).map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          </div>
+        )}
+      </fieldset>
 
       <fieldset className="space-y-2">
         <legend className={label}>Outcomes the assessor may record</legend>
@@ -190,10 +242,45 @@ export function MethodEditor({ versionId, initial, options, idPrefix }: { versio
 
       {problems && problems.length > 0 && <ul className="list-disc pl-5 text-[12.5px] text-amber-900">{problems.map(x => <li key={x}>{x}</li>)}</ul>}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={busy} className={ghost} onClick={async () => { const j = await send({ action: "save_draft", versionId, content: c }, "Draft saved."); if (j) setProblems((j.problems as string[]) ?? []); }}>Save draft</button>
-        <button type="button" disabled={busy} className={primary} onClick={async () => { const j = await send({ action: "save_draft", versionId, content: c }, "Draft saved."); if (j) await send({ action: "publish", versionId }, "Published. These criteria are now fixed for every decision made under this version."); }}>Save and publish</button>
+        <button type="button" disabled={busy} className={ghost} onClick={async () => { const j = await send({ action: "save_draft", versionId, content: c }, "Draft saved. You are recorded as an editor, so another administrator publishes it."); if (j) setProblems((j.problems as string[]) ?? []); }}>Save draft</button>
+        {mayPublish && <button type="button" disabled={busy} className={primary} onClick={() => void send({ action: "publish", versionId }, "Published as saved. These criteria are now fixed for every decision made under this version.")}>Publish the saved draft</button>}
         <Message msg={msg} />
       </div>
+      <p className="text-[12.5px] text-gray-600">{mayPublish
+        ? "Publishing publishes the draft as last saved, not unsaved changes on this page. Saving a change makes you an editor, and an editor never publishes."
+        : "You created or edited this version, so another administrator reviews and publishes it."}</p>
+    </div>
+  );
+}
+
+/**
+ * 680: a decision's component results and the consolidated outcome the DATABASE computed and stored. Nothing is
+ * recomputed here. Not assessed is said in words, never shown as a zero.
+ */
+export function DecisionComponents({ results, outcome, labels }: {
+  results: { code: string; score: number | null; label: string | null; note: string | null }[];
+  outcome: { status: "achieved" | "not_achieved" | "incomplete"; overall: number | null; target: number | null; failedMandatory: string[]; failedSafetyCritical: string[]; missingMandatory: string[] } | null;
+  labels: Record<string, string>;
+}) {
+  if (!outcome) return null;
+  const name = (c: string) => labels[c] ?? c;
+  const tone = outcome.status === "achieved" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-critical)]";
+  return (
+    <div className="mt-1 space-y-1">
+      <p className={`text-[12.5px] font-semibold ${tone}`}>
+        Components: {COMPONENT_STATUS_LABEL[outcome.status]}{outcome.overall !== null ? ` · weighted level ${outcome.overall}` : " · no component assessed"}{outcome.target !== null ? ` against ${outcome.target}` : ""}
+      </p>
+      <ul className="text-[12.5px] text-gray-700">
+        {results.map(r => (
+          <li key={r.code}>
+            {name(r.code)}: {r.score === null ? "not assessed" : `${r.score}${r.label ? ` · ${r.label}` : ""}`}
+            {outcome.failedSafetyCritical.includes(r.code) ? " · safety-critical, below its pass level" : outcome.failedMandatory.includes(r.code) ? " · below its pass level"
+              : r.score !== null && outcome.missingMandatory.includes(r.code) ? " · no pass level or target to judge it against" : ""}
+            {r.note ? ` · ${r.note}` : ""}
+          </li>
+        ))}
+        {outcome.missingMandatory.filter(c => !results.some(r => r.code === c && r.score !== null)).map(c => <li key={`m-${c}`}>{name(c)}: mandatory, not assessed</li>)}
+      </ul>
     </div>
   );
 }

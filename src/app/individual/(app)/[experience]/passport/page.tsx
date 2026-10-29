@@ -106,6 +106,37 @@ export default async function PassportPage({ params }: { params: Promise<{ exper
             )}
       </Section>
 
+      {passport.verifications?.provisioned && (
+        <Section title="Verified by Competen Holdings" note="Each one is the outcome of one independent assessment, by the method and criteria version stated. It is not a general declaration of professional competence.">
+          {passport.verifications.items === null ? <Unreadable what="Competen Holdings verifications" />
+            : passport.verifications.items.length === 0 ? <Empty>No verified competencies yet. When a Competency Assessor verifies a competency you asked to be assessed, it appears here.</Empty>
+              : (
+                <ul className="divide-y divide-gray-100">
+                  {passport.verifications.items.map(v => (
+                    <li key={v.decisionId} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
+                      <div className="min-w-0">
+                        <p className="text-[14.5px] font-semibold text-gray-900">{v.title}{v.code ? <span className="font-normal text-gray-500"> · {v.code}</span> : null}</p>
+                        <p className="text-[12.5px] text-gray-500">
+                          {v.issuer} · {v.method.name ?? "Assessment method"}{v.method.versionNo ? `, version ${v.method.versionNo}` : ""} · framework version {v.frameworkVersion ?? "not recorded"} · {fmt(v.decidedAt)}
+                        </p>
+                        {v.components && (
+                          <p className="text-[12.5px] text-gray-600">
+                            Components: {v.components.status === "achieved" ? "all reached" : v.components.status === "incomplete" ? "incomplete" : "not all reached"}
+                            {v.components.results.length ? ` (${v.components.results.map(r => `${r.code.replace(/_/g, " ")} ${r.score === null ? "not assessed" : r.score}`).join(", ")})` : ""}
+                          </p>
+                        )}
+                      </div>
+                      <p className={`text-[12.5px] font-semibold ${v.current ? "text-green-800" : "text-gray-600"}`}>
+                        {v.outcomeLabel}{v.level ? ` · level ${v.level.score} ${v.level.label}` : ""} · {v.current ? "Current" : v.standing.replace(/_/g, " ")}
+                        {v.validUntil && (v.current || v.standing === "expired") ? ` · ${v.current ? "valid until" : "expired"} ${fmt(v.validUntil)}` : ""}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+        </Section>
+      )}
+
       <Section title="Credentials and registrations" note="Each one says whether an organisation verified it or it was only declared.">
         {passport.credentials === null ? <Unreadable what="credentials" />
           : passport.credentials.length === 0 ? <Empty>No credentials on your record yet.</Empty>

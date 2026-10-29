@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
-import { loadAssessorAppointments, loadMethods, loadQueue, SCOPE_KIND_LABEL, verificationReady } from "@/lib/competency/verification";
+import { loadAssessorAppointments, loadMethods, loadQueue, mayPublish, SCOPE_KIND_LABEL, verificationReady } from "@/lib/competency/verification";
+import { listComponents } from "@/lib/competency/studio-components";
 import { EMPTY_CONTENT, METHOD_KIND_LABEL, NOT_A_DECLARATION, STANDING_LABEL, STATE_LABEL, type MethodContent, type MethodKind } from "@/lib/competency/verification-config";
-import { Assign, GrantScope, MethodEditor, NewMethod, ReasonAction, VersionAction, type EditorOptions } from "./_components/StudioControls";
+import { Assign, DecisionComponents, GrantScope, MethodEditor, NewMethod, ReasonAction, VersionAction, type EditorOptions } from "./_components/StudioControls";
 
 // /super-admin/verification-studio -- COMPETEN-PROFESSIONAL-COMPETENCY-01 C5 (migration 510), the Holdings Competency
 // Verification Studio. Guarded by hq.competency.verification.manage, which only the Verification Studio Administrator
@@ -33,13 +34,14 @@ export default async function VerificationStudioPage() {
       </div>
     );
   }
-  const [methods, assessors, queue, fw, comps, terms, scales, levels] = await Promise.all([
+  const [methods, assessors, queue, fw, comps, terms, scales, levels, registry] = await Promise.all([
     loadMethods(ctx.admin), loadAssessorAppointments(ctx.admin), loadQueue(ctx.admin, today),
     ctx.admin.from("frameworks").select("id, code, name").is("hospital_id", null).eq("pub_status", "published").order("name").limit(200),
     ctx.admin.from("framework_competencies").select("id, code, name, framework_domains!inner(framework_id, frameworks!inner(hospital_id, pub_status))").is("framework_domains.frameworks.hospital_id", null).eq("framework_domains.frameworks.pub_status", "published").order("code").limit(500),
     ctx.admin.from("taxonomy_terms").select("id, value, taxonomies!inner(kind)").in("taxonomies.kind", ["profession", "specialty"]).limit(500),
     ctx.admin.from("scoring_scales").select("id, name").order("name"),
     ctx.admin.from("scoring_levels").select("id, scale_id, score, label").order("score"),
+    listComponents(ctx.admin),
   ]);
   // Plain rows: the joins below come back as nested objects whose shape the typed client cannot see.
   const rows = (r: { data: unknown }) => (r.data ?? []) as any[];
@@ -50,8 +52,11 @@ export default async function VerificationStudioPage() {
     professions: rows(terms).filter(t => kindOf(t) === "profession").map(t => ({ id: t.id, label: t.value ?? "" })),
     specialties: rows(terms).filter(t => kindOf(t) === "specialty").map(t => ({ id: t.id, label: t.value ?? "" })),
     scales: rows(scales).map(sc => ({ id: sc.id, label: sc.name, levels: rows(levels).filter(l => l.scale_id === sc.id).map(l => ({ id: l.id, label: `${l.score} · ${l.label}` })) })),
+    // 680: the active CCHU components of the 660 registry. Null (660 absent): none offered.
+    components: (registry ?? []).filter(k => k.active).map(k => ({ id: k.code, label: k.label })),
   };
   const levelLabel = new Map<string, string>(rows(levels).map(l => [l.id, `${l.score} · ${l.label}`]));
+  const componentLabels = Object.fromEntries((registry ?? []).map(k => [k.code, k.label]));
   const versionLabel = new Map((methods ?? []).flatMap(m => m.versions.map(v => [v.id, `${m.name}, version ${v.version_no}`] as const)));
   const people = [...new Set([...(queue ?? []).map(r => r.userId), ...(assessors ?? []).map(a => a.personId)])];
   const { data: names } = people.length ? await ctx.admin.from("profiles").select("id, full_name").in("id", people) : { data: [] };
@@ -104,7 +109,7 @@ export default async function VerificationStudioPage() {
                 {draft && (
                   <details open={!published}>
                     <summary className="cursor-pointer text-[13px] font-semibold text-teal-800">Edit draft version {draft.version_no}</summary>
-                    <div className="mt-3"><MethodEditor versionId={draft.id} initial={{ ...EMPTY_CONTENT, ...(draft.content as Partial<MethodContent>) } as MethodContent} options={options} idPrefix={`ed-${draft.id.slice(0, 8)}`} /></div>
+                    <div className="mt-3"><MethodEditor versionId={draft.id} initial={{ ...EMPTY_CONTENT, ...(draft.content as Partial<MethodContent>) } as MethodContent} options={options} idPrefix={`ed-${draft.id.slice(0, 8)}`} mayPublish={draft.edited_by === undefined || mayPublish(draft, ctx.userId)} /></div>
                   </details>
                 )}
               </article>
@@ -155,6 +160,7 @@ export default async function VerificationStudioPage() {
                   {r.decisions.map(d => (
                     <div key={d.id} className="rounded-lg bg-gray-50 p-2.5 text-[13px] text-gray-800">
                       <p><span className="font-semibold">{d.outcomeLabel ?? d.outcomeCode}</span>{d.levelId ? ` at ${levelLabel.get(d.levelId) ?? "a level"}` : ""} · decided {fmt(d.decidedAt)} by {nameOf.get(d.assessorId ?? "") ?? "an assessor"} · {STANDING_LABEL[d.standing]}{d.validUntil ? ` · valid until ${fmt(d.validUntil)}` : ""}</p>
+                      <DecisionComponents results={d.componentResults} outcome={d.componentOutcome} labels={componentLabels} />
                       {d.revokedReason && <p className="text-[12.5px] text-gray-600">Revoked: {d.revokedReason}</p>}
                       {d.standing === "current" && <div className="mt-2"><ReasonAction action="revoke" body={{ decisionId: d.id }} label="Revoke this outcome" done="Revoked. The decision is kept as history, with your reason." idPrefix={`rv-${d.id.slice(0, 8)}`} reasonLabel="Why it is revoked (the person sees this)" /></div>}
                     </div>
