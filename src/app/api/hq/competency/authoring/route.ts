@@ -1,7 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { createCompetency, createCpu, createDomain, createFramework, createPractice, importDraftPackage, isId, renameDomain, setFrameworkIdentity, updateCompetency, updateFramework } from "@/lib/competency/authoring";
 import { submitForReview } from "@/lib/competency/clinical-review";
+import { loadFrameworkForReview, outcomeCounts, previewOf, runSubmission, type ReviewScope } from "@/lib/competency/review-batch";
+import { currentTraceId } from "@/lib/trace";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -42,6 +45,40 @@ export async function POST(req: Request) {
       const r = await submitForReview(ctx.admin, body.competencyId, ctx.userId);
       return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(409, r.error);
     }
+    case "review_preview": {
+      // CFCA-STUDIO-UX-02: a whole framework, a domain or chosen competencies -- eligibility and exact versions, read only.
+      if (!isId(body.frameworkId)) return refuse(400, "Choose a framework.");
+      const scope = parseScope(body.scope);
+      if (!scope) return refuse(400, "Choose the framework, a domain, or the competencies to put forward.");
+      const f = await loadFrameworkForReview(ctx.admin, body.frameworkId);
+      if ("error" in f) return refuse(f.status, f.error);
+      const pv = previewOf(f.fw, scope, f.hashes);
+      return "error" in pv ? refuse(422, pv.error) : NextResponse.json(pv);
+    }
+    case "review_submit": {
+      // Each previewed item, re-checked at its boundary and put forward through the existing per-competency operation.
+      if (!isId(body.frameworkId)) return refuse(400, "Choose a framework.");
+      const items = Array.isArray(body.items) ? body.items.filter((i: any) => isId(i?.competencyId)).slice(0, 500) : [];
+      if (!items.length) return refuse(400, "Nothing to put forward.");
+      const f = await loadFrameworkForReview(ctx.admin, body.frameworkId);
+      if ("error" in f) return refuse(f.status, f.error);
+      const inFw = new Map(f.fw.domains.flatMap(d => d.competencies.map(c => [c.id, c] as const)));
+      if (items.some((i: any) => !inFw.has(i.competencyId))) return refuse(422, "Some items are not in this framework. Nothing was put forward.");
+      const results = await runSubmission(ctx.admin, ctx.userId, f.fw.pubStatus,
+        items.map((i: any) => ({ competencyId: i.competencyId, code: inFw.get(i.competencyId)!.code, name: inFw.get(i.competencyId)!.name, hash: typeof i.hash === "string" ? i.hash : null })));
+      const counts = outcomeCounts(results);
+      await ctx.admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: actor.name,
+        action: "cfca_review_batch_submitted", entity_type: "framework", entity_id: f.fw.id, entity_name: f.fw.name,
+        new_value: { counts, items: results.map(r => ({ competency_id: r.competencyId, outcome: r.outcome, version_id: r.versionId ?? null })) } }).then((x: unknown) => x, () => {});
+      return NextResponse.json({ results, counts });
+    }
     default: return refuse(400, "Unknown action");
   }
+}
+
+function parseScope(s: any): ReviewScope | null {
+  if (s?.kind === "framework") return { kind: "framework" };
+  if (s?.kind === "domain" && isId(s.domainId)) return { kind: "domain", domainId: s.domainId };
+  if (s?.kind === "competencies" && Array.isArray(s.ids)) { const ids = [...new Set(s.ids.filter(isId))] as string[]; return ids.length && ids.length <= 500 ? { kind: "competencies", ids } : null; }
+  return null;
 }
