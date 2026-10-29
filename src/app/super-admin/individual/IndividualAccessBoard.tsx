@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useState } from "react";
+import { ACCOUNT_TYPES, ACCOUNT_TYPE_LABEL, type AccountType } from "@/lib/hq/account-classification";
 import type { ExperienceKey } from "@/lib/individual/experiences";
 import type { PersonLookup } from "@/lib/individual/grants";
 import type { InvitationView } from "@/lib/individual/invitations";
@@ -347,6 +348,7 @@ function InviteForm({ email, experiences, busy, setBusy, onDone }: {
   const [endsOn, setEndsOn] = useState("");
   const [days, setDays] = useState("14");
   const [note, setNote] = useState("");
+  const [accountType, setAccountType] = useState<AccountType>("human");
   const needsAdult = chosen.includes("scholar");
 
   async function invite(e: React.FormEvent) {
@@ -355,9 +357,9 @@ function InviteForm({ email, experiences, busy, setBusy, onDone }: {
     try {
       const r = await call("/api/hq/individual/invitations", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, name: name || null, experiences: chosen, adultConfirmed: adult, endsOn: endsOn || null, expiresInDays: Number(days), note: note || null }),
+        body: JSON.stringify({ email, name: name || null, experiences: chosen, adultConfirmed: adult, endsOn: endsOn || null, expiresInDays: Number(days), note: note || null, accountType }),
       });
-      await onDone(r.ok ? `Invitation sent to ${email}. It is open for ${days} days.` : messageOf(r), r.ok ? "ok" : "error");
+      await onDone(!r.ok ? messageOf(r) : r.json?.classificationWarning ? `Invitation sent to ${email}. ${r.json.classificationWarning}` : `Invitation sent to ${email}, classified ${ACCOUNT_TYPE_LABEL[accountType]}. It is open for ${days} days.`, r.ok && !r.json?.classificationWarning ? "ok" : "error");
     } catch {
       await onDone("The invitation could not be sent. Check your connection.", "error");
     } finally { setBusy(null); }
@@ -369,6 +371,13 @@ function InviteForm({ email, experiences, busy, setBusy, onDone }: {
       <div className="mt-3">
         <label htmlFor="inv-name" className="block text-[12.5px] font-semibold text-gray-700">Name (optional)</label>
         <input id="inv-name" type="text" maxLength={200} value={name} onChange={e => setName(e.target.value)} className={input} />
+      </div>
+      <div className="mt-3">
+        <label htmlFor="inv-type" className="block text-[12.5px] font-semibold text-gray-700">Account type</label>
+        <select id="inv-type" value={accountType} onChange={e => setAccountType(e.target.value as AccountType)} className={input}>
+          {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{t === "unclassified" ? "Leave unclassified" : ACCOUNT_TYPE_LABEL[t]}</option>)}
+        </select>
+        <p className="mt-1 text-[12px] text-gray-500">Human for a real person. Only Human accounts can be appointed to HQ positions.</p>
       </div>
       <fieldset className="mt-3">
         <legend className="text-[12.5px] font-semibold text-gray-700">Experiences</legend>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqOwnerApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { classifyAtOnboarding, onboardingType } from "@/lib/hq/account-classification";
 import { estateRolesOf, profileUpdateForOrgRoles } from "@/lib/roles";
 import { grantPlatformMembership } from "@/lib/platform-membership";
 
@@ -54,10 +55,13 @@ export async function POST(req: Request) {
   if (ctx instanceof NextResponse) return ctx;
   const { admin, actorId, actorName } = ctx;
 
-  const { email, full_name, role, mode, organisation_id, hospital_id } = await req.json();
+  const { email, full_name, role, mode, organisation_id, hospital_id, account_type } = await req.json();
   if (!email || !full_name || !PORTALS.has(role) || !["invite", "password"].includes(mode)) {
     return NextResponse.json({ error: "email, full_name, a valid role and mode are required" }, { status: 400 });
   }
+  // Owner 29 Oct 2026: the account type is chosen at onboarding (Human by default), checked before anything is created.
+  const kind = onboardingType(account_type);
+  if (!kind.ok) return NextResponse.json({ error: kind.error }, { status: 400 });
 
   let userId: string;
   let tempPassword: string | null = null;
@@ -111,6 +115,9 @@ export async function POST(req: Request) {
   });
   if (!membership.ok) console.error(`[platform-membership] GRANT FAILED for ${userId} at admin create: ${membership.error}`);
 
+  // The account type, through the owner-only audited function (650). A refusal is reported, never a rollback.
+  const classification = await classifyAtOnboarding(admin, { id: actorId, name: actorName, isOwner: true }, userId, kind.type, "HQ Add User", await currentTraceId());
+
   await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: actorId, actor_name: actorName,
     action: mode === "invite" ? "invite_user" : "create_user",
@@ -120,6 +127,8 @@ export async function POST(req: Request) {
   return NextResponse.json({
     ok: true, userId, tempPassword,
     platformMembershipWarning: membership.ok ? undefined : membership.error,
+    accountType: classification.ok ? classification.type : "unclassified",
+    classificationWarning: classification.ok ? undefined : classification.error,
   }, { status: 201 });
 }
 

@@ -164,7 +164,7 @@ export default function UsersWorkspace({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [addForm, setAddForm] = useState({ full_name: "", email: "", role: "nurse", mode: "invite", organisation_id: "", hospital_id: "" });
+  const [addForm, setAddForm] = useState({ full_name: "", email: "", role: "nurse", mode: "invite", organisation_id: "", hospital_id: "", account_type: "human" });
   const [createdCreds, setCreatedCreds] = useState<{ email: string; password: string } | null>(null);
 
   const anyFilter = !!filters.q || (["role", "org", "facility", "status", "login", "product", "hq"] as const).some(k => filters[k] !== "all");
@@ -277,15 +277,16 @@ export default function UsersWorkspace({
       }),
     });
     setBusy(false);
-    const j = (await res.json().catch(() => ({}))) as { error?: string; tempPassword?: string | null };
+    const j = (await res.json().catch(() => ({}))) as { error?: string; tempPassword?: string | null; classificationWarning?: string };
     if (!res.ok) { setNotice({ kind: "err", text: j.error ?? "Failed to create user." }); return; }
     if (j.tempPassword) {
       setCreatedCreds({ email: addForm.email, password: j.tempPassword });
+      if (j.classificationWarning) setNotice({ kind: "err", text: j.classificationWarning });
     } else {
       setAddOpen(false);
-      setNotice({ kind: "ok", text: `Invitation sent to ${addForm.email}.` });
+      setNotice(j.classificationWarning ? { kind: "err", text: `Invitation sent to ${addForm.email}. ${j.classificationWarning}` } : { kind: "ok", text: `Invitation sent to ${addForm.email}, classified ${ACCOUNT_TYPE_LABEL[addForm.account_type as AccountType] ?? addForm.account_type}.` });
     }
-    setAddForm({ full_name: "", email: "", role: "nurse", mode: "invite", organisation_id: "", hospital_id: "" });
+    setAddForm({ full_name: "", email: "", role: "nurse", mode: "invite", organisation_id: "", hospital_id: "", account_type: "human" });
     router.refresh();
   }
 
@@ -729,6 +730,14 @@ export default function UsersWorkspace({
                         {hospitals.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                       </select>
                     </div>
+                  </div>
+                  <div>
+                    <label htmlFor="add-account-type" className="text-xs font-semibold text-gray-500 mb-1 block">Account type</label>
+                    <select id="add-account-type" value={addForm.account_type} onChange={e => setAddForm(p => ({ ...p, account_type: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                      {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{t === "unclassified" ? "Leave unclassified" : ACCOUNT_TYPE_LABEL[t]}</option>)}
+                    </select>
+                    <p className="mt-1 text-[11.5px] text-gray-500">Human for a real person. Only Human accounts can be appointed to HQ positions.</p>
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">Access</label>
