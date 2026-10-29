@@ -4,6 +4,7 @@ import { individualAppEnabled } from "@/lib/individual/gate";
 import { currentTraceId } from "@/lib/trace";
 import { createIndividualInvitation, inviteDeliveryMode, isRefusal, validateInvitation } from "@/lib/individual/invitations";
 import { SITE_URL } from "@/lib/marketing/site";
+import { classifyAtOnboarding, onboardingType } from "@/lib/hq/account-classification";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -30,8 +31,12 @@ export async function POST(req: Request) {
   if (isHqRefusal(ctx)) return ctx;
   if (!(await individualAppEnabled(ctx.admin))) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
 
-  const parsed = validateInvitation(await req.json().catch(() => ({})));
+  const body = await req.json().catch(() => ({}));
+  const parsed = validateInvitation(body);
   if (isRefusal(parsed)) return NextResponse.json({ error: { code: parsed.code, message: parsed.message } }, { status: parsed.status });
+  // Owner 29 Oct 2026: the account type is chosen at onboarding (Human by default), checked before anything is created.
+  const kind = onboardingType(body?.accountType);
+  if (!kind.ok) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: kind.error } }, { status: 400 });
 
   const delivery = inviteDeliveryMode();
   // ⚠ THE TRUSTED ORIGIN, NEVER THE REQUEST'S. The invite link's return URL is SITE_URL (the HQ-USERS-B rule,
@@ -50,5 +55,8 @@ export async function POST(req: Request) {
     },
   }).then((r: unknown) => r, () => {});
 
-  return NextResponse.json(outcome, { status: 201 });
+  // The account type, through the owner-only audited function (650). Not the owner, or 650 absent: said, never undone.
+  const classification = await classifyAtOnboarding(ctx.admin, { id: ctx.userId, name: ctx.fullName ?? null, isOwner: ctx.isOwner }, outcome.authUserId, kind.type, "Individual invitation", await currentTraceId());
+
+  return NextResponse.json({ ...outcome, accountType: classification.ok ? classification.type : "unclassified", ...(classification.ok ? {} : { classificationWarning: classification.error }) }, { status: 201 });
 }

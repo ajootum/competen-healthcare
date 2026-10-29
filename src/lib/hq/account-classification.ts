@@ -165,3 +165,32 @@ export function parseClassifyRequest(body: unknown): { ok: true; req: ClassifyRe
   if (reason.length > 500) return { ok: false, error: "The reason is limited to 500 characters" };
   return { ok: true, req: { action: "classify", userIds: [...new Set(b.userIds as string[])], accountType: b.accountType, reason } };
 }
+
+/**
+ * CLASSIFIED AT ONBOARDING (owner, 29 Oct 2026). An account HQ creates -- Add User, an Individual invitation -- is
+ * given its account type in the same step, through the same owner-only, audited function as bulk classification
+ * (hq_account_classify, migration 650). Pure: the onboarding choice from a request body. Human by default, since
+ * the person creating the account is vouching for it. "unclassified" (or no choice) on a body that says so leaves it
+ * for later. Anything else is refused.
+ */
+export const ONBOARDING_TYPES = ["human", "demo", "test", "system", "unclassified"] as const satisfies readonly AccountType[];
+export function onboardingType(v: unknown): { ok: true; type: AccountType } | { ok: false; error: string } {
+  if (v === undefined || v === null || v === "") return { ok: true, type: "human" };
+  return isAccountType(v) ? { ok: true, type: v } : { ok: false, error: "Choose the account type: Human, Demo, Test, System or leave it unclassified." };
+}
+
+/**
+ * Classify one account just created at onboarding. Never undoes the onboarding: the account exists either way, so a
+ * refusal (not the owner, 650 absent) is RETURNED for the caller to say, not thrown. Unclassified writes nothing.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function classifyAtOnboarding(admin: any, actor: { id: string; name: string | null; isOwner: boolean },
+  profileId: string, type: AccountType, how: string, trace: string | null): Promise<{ ok: true; type: AccountType } | { ok: false; error: string }> {
+  if (type === "unclassified") return { ok: true, type };
+  if (!actor.isOwner) return { ok: false, error: "The account was created but not classified: only a platform owner classifies accounts. Classify it on HQ Users." };
+  const { error } = await admin.rpc("hq_account_classify", {
+    p_actor: actor.id, p_actor_name: actor.name, p_profile_ids: [profileId], p_account_type: type,
+    p_reason: `Set at onboarding (${how}) by ${actor.name ?? "a platform owner"}.`.slice(0, 500), p_trace: trace,
+  });
+  return error ? { ok: false, error: "The account was created but could not be classified just now. Classify it on HQ Users." } : { ok: true, type };
+}
