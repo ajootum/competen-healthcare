@@ -7,10 +7,11 @@ import {
   container, primaryBtn, secondaryBtn,
 } from "@/components/marketing/IndividualFamily";
 import {
-  INDIVIDUAL, enquiryHref, experienceSignIn, siblingOf, type Experience, type ExperienceStep,
+  INDIVIDUAL, enquiryHref, experienceSignIn, siblingOf, type DemoExperience, type ExperienceStep,
 } from "@/lib/marketing/individual-family";
 
-// ONE TEMPLATE, TWO BRANDS -- COMPETEN-WEB-IND-001 s3. Competen Scholar (/scholar) and Competen
+// ONE TEMPLATE, TWO BRANDS -- COMPETEN-WEB-IND-001 s3. (Since SCHOLAR-WEB-REDESIGN-01, 29 Oct 2026, it serves
+// Competen Professional only: /scholar is ScholarLanding.tsx, a benefits page with no product demonstration.) Competen Scholar (/scholar) and Competen
 // Professional (/professional) are distinct public experiences with their own name, accent, navigation
 // and conversion journey, and they share one structure for the same reason SolutionPage exists: two
 // near-identical pages written out twice stop looking like one family within a week. The differences that
@@ -21,7 +22,7 @@ import {
 // the release gate is off, the one Competen sign-in with the destination preserved when it is on. There
 // is no /signup link anywhere on the page -- the disclosure harness (7c, 7l) holds both properties.
 
-export default function ExperiencePage({ e }: { e: Experience }) {
+export default function ExperiencePage({ e }: { e: DemoExperience }) {
   const sibling = siblingOf(e.key);
   // ⚠ ONE template string, not adjacent JSX text: server rendering puts a comment node between a text
   // node and an expression, which splits the phrase the disclosure harness searches the HTML for.
@@ -157,7 +158,7 @@ export default function ExperiencePage({ e }: { e: Experience }) {
  * The drawn illustration for one demonstration step: a small product-shaped card with the step's heading
  * and two lines. aria-hidden as a whole would hide real example text, so it is a labelled figure instead.
  */
-function StepMock({ e, step }: { e: Experience; step: ExperienceStep }) {
+function StepMock({ e, step }: { e: DemoExperience; step: ExperienceStep }) {
   return (
     <figure aria-label={`Illustration: ${step.label}`}
       className="relative overflow-hidden rounded-xl p-4 sm:p-5"

@@ -38,6 +38,7 @@ const CARDS = [
   ["competen",         "public/images/home/hero-clinicians.png",     "site-wide default"],
   ["practice",         "public/images/practice/command-centre.webp", "Competen Practice"],
   ["practice-booking", "public/images/practice/booking.webp",        "patient booking journey"],
+  ["scholar",          "public/images/scholar/hero-students.webp",   "Competen Scholar (SCHOLAR-WEB-REDESIGN-01)"],
 ];
 
 mkdirSync(OUT, { recursive: true });

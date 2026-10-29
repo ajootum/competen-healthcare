@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PatternField } from "@/components/marketing/Pattern";
 import {
   EXPERIENCES, INDIVIDUAL, LIFECYCLE, experienceSignIn, PASSPORT, siblingOf,
-  type Experience, type ExperienceKey,
+  type DemoExperience, type Experience, type ExperienceKey,
 } from "@/lib/marketing/individual-family";
 
 // The shared pieces of the Competen Individual family (COMPETEN-WEB-IND-001): the gateway at /individual
@@ -155,7 +155,7 @@ export function LifecycleJourney({ current }: { current?: ExperienceKey }) {
  * and Passport band live on /individual only; here, one contextual sentence and the way to the rest.
  * Carries id="journey" so the product bar's "Your journey" anchor still lands somewhere.
  */
-export function JourneyNote({ e }: { e: Experience }) {
+export function JourneyNote({ e }: { e: DemoExperience }) {
   return (
     <section id="journey" aria-labelledby="journey-note-title" className={`${container} scroll-mt-36 py-14 lg:py-16`}>
       <div className="flex flex-col gap-4 rounded-3xl border border-gray-200 bg-white px-6 py-6 sm:flex-row sm:items-center sm:px-8">
@@ -212,7 +212,7 @@ export function PassportBand({ line, action }: { line?: string; action?: { label
  */
 export function ExperienceNav({ e }: { e: Experience }) {
   const sibling = siblingOf(e.key);
-  const anchors = [
+  const anchors = e.nav ?? [
     { href: "#overview", label: "Overview" },
     { href: "#features", label: "How it works" },
     { href: "#journey", label: "Your journey" },
