@@ -52,11 +52,27 @@ describe("Scholar landing copy is the owner's brief", () => {
   });
 });
 
-describe("Scholar hero photograph", () => {
-  it("every variant the page references exists, with real alt text", () => {
-    const files = [...page.matchAll(/\/images\/scholar\/[\w.-]+/g)].map(m => m[0]);
-    expect(files.length).toBeGreaterThanOrEqual(6);
-    for (const f of [...files, SCHOLAR.image, "/images/og/scholar.jpg"]) expect(existsSync(`public${f}`), f).toBe(true);
-    expect(SCHOLAR.imageAlt.length).toBeGreaterThan(30);
+describe("Scholar photographs", () => {
+  const photos = [
+    { src: SCHOLAR.image, alt: SCHOLAR.imageAlt },
+    ...(SCHOLAR.landing.journey.image ? [SCHOLAR.landing.journey.image] : []),
+  ];
+  it("both owner-approved photos are in use, each with real alt text", () => {
+    expect(photos.map(p => p.src)).toEqual(["/images/scholar/hero-students.webp", "/images/scholar/journey-student-laptop.webp"]);
+    for (const p of photos) expect(p.alt.length).toBeGreaterThan(30);
+  });
+  it("every variant ScholarPhoto builds a srcset from exists", () => {
+    expect(page).toMatch(/SCHOLAR_PHOTO_WIDTHS = \[640, 1024\]/);
+    expect(page).toMatch(/MASTER_WIDTH = 1672/);
+    for (const { src } of photos) {
+      const base = src.replace(/\.webp$/, "");
+      for (const f of [src, `${base}-1672.avif`, ...[640, 1024].flatMap(w => [`${base}-${w}.avif`, `${base}-${w}.webp`])]) {
+        expect(existsSync(`public${f}`), f).toBe(true);
+      }
+    }
+    expect(existsSync("public/images/og/scholar.jpg")).toBe(true);
+  });
+  it("only the hero loads eagerly", () => {
+    expect((page.match(/<ScholarPhoto[^>]*\beager\b/g) ?? []).length).toBe(1);
   });
 });

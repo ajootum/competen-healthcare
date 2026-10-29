@@ -79,15 +79,8 @@ export default function ScholarLanding({ joinOpen }: { joinOpen: boolean }) {
             <div className="relative">
               <span aria-hidden className="absolute -left-10 -bottom-8 hidden h-56 w-56 rounded-full md:block"
                 style={{ background: `color-mix(in srgb, ${S.accent} 14%, transparent)` }} />
-              <picture>
-                <source type="image/avif" sizes="(min-width: 768px) 50vw, 100vw"
-                  srcSet="/images/scholar/hero-students-640.avif 640w, /images/scholar/hero-students-1024.avif 1024w, /images/scholar/hero-students-1672.avif 1672w" />
-                <source type="image/webp" sizes="(min-width: 768px) 50vw, 100vw"
-                  srcSet="/images/scholar/hero-students-640.webp 640w, /images/scholar/hero-students-1024.webp 1024w, /images/scholar/hero-students.webp 1672w" />
-                <img src={S.image} alt={S.imageAlt} width={1672} height={941} loading="eager" fetchPriority="high" decoding="async"
-                  className="relative aspect-[16/10] w-full rounded-[2rem] object-cover shadow-xl shadow-black/5 md:aspect-[5/4] md:rounded-l-[9rem] md:rounded-r-[2rem]"
-                  style={{ objectPosition: "45% 40%" }} />
-              </picture>
+              <ScholarPhoto src={S.image} alt={S.imageAlt} eager position="45% 40%"
+                className="relative aspect-[16/10] w-full rounded-[2rem] object-cover shadow-xl shadow-black/5 md:aspect-[5/4] md:rounded-l-[9rem] md:rounded-r-[2rem]" />
             </div>
           </div>
         </section>
@@ -193,17 +186,44 @@ export default function ScholarLanding({ joinOpen }: { joinOpen: boolean }) {
 }
 
 /**
- * Section C's picture. The approved direction shows a student studying on a laptop, but no photograph was
- * supplied (cropping the mockup or using stock is ruled out), so until L.journey.image is set this is a
- * drawn panel: Scholar leading on to Professional -- the relationship, not how it works.
+ * The approved photographs as a <picture>: pre-built AVIF and WebP widths (scripts/build-scholar-images.mjs),
+ * the repo's convention for static marketing art, with the supplied master as the widest WebP. `src` is the
+ * master; the variants sit beside it as <name>-<width>.<ext>. The hero is eager and high priority (the LCP);
+ * everything below the fold is lazy.
+ */
+export const SCHOLAR_PHOTO_WIDTHS = [640, 1024] as const;
+const MASTER_WIDTH = 1672, MASTER_HEIGHT = 941;
+function ScholarPhoto({ src, alt, className, position, eager = false }: {
+  src: string; alt: string; className: string; position?: string; eager?: boolean;
+}) {
+  const base = src.replace(/\.webp$/, "");
+  const sizes = "(min-width: 768px) 50vw, 100vw";
+  const set = (ext: "avif" | "webp") => [
+    ...SCHOLAR_PHOTO_WIDTHS.map(w => `${base}-${w}.${ext} ${w}w`),
+    `${ext === "avif" ? `${base}-${MASTER_WIDTH}.avif` : src} ${MASTER_WIDTH}w`,
+  ].join(", ");
+  return (
+    <picture className="block h-full">
+      <source type="image/avif" sizes={sizes} srcSet={set("avif")} />
+      <source type="image/webp" sizes={sizes} srcSet={set("webp")} />
+      <img src={src} alt={alt} width={MASTER_WIDTH} height={MASTER_HEIGHT} decoding="async"
+        loading={eager ? "eager" : "lazy"} fetchPriority={eager ? "high" : "auto"}
+        className={className} style={position ? { objectPosition: position } : undefined} />
+    </picture>
+  );
+}
+
+/**
+ * Section C's picture: the owner-supplied photograph of a student studying on a laptop (29 Oct). Should
+ * L.journey.image ever be unset, a drawn panel stands in -- Scholar leading on to Professional, the
+ * relationship and not how it works -- never a crop of the mockup or a stock image.
  */
 function JourneyPicture() {
   const img = L.journey.image;
   if (img) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- a static marketing photograph, as in the hero
-      <img src={img.src} alt={img.alt} loading="lazy" decoding="async"
-        className="h-full min-h-[240px] w-full object-cover md:rounded-l-[8rem]" />
+      <ScholarPhoto src={img.src} alt={img.alt} position="50% 35%"
+        className="aspect-[16/10] h-full w-full object-cover md:aspect-auto md:min-h-[320px] md:rounded-l-[8rem]" />
     );
   }
   const stages = [

@@ -146,7 +146,7 @@ export type ScholarLanding = {
   journey: {
     eyebrow: string; title: string; body: string; professionalLine: string;
     cta: { label: string; href: string };
-    /** The section's photograph -- null until the owner supplies one (an owner asset gap, see the build record). */
+    /** The section's photograph (the owner-supplied master; variants by scripts/build-scholar-images.mjs), or null for the drawn panel. */
     image: { src: string; alt: string } | null;
   };
   /**
@@ -209,7 +209,7 @@ export const SCHOLAR: Experience & { landing: ScholarLanding } = {
       body: "Your learning journey does not end at graduation. Competen helps you continue developing your knowledge, skills, and professional confidence throughout your career.",
       professionalLine: "When you begin to practise, Competen Professional is there for the next stage of your career.",
       cta: { label: "Explore Your Journey", href: "/individual#journey" },
-      image: null,
+      image: { src: "/images/scholar/journey-student-laptop.webp", alt: "A nursing student in scrubs smiling as she studies on a laptop, with books beside her" },
     },
     audiences: {
       eyebrow: "Who is Competen Scholar for?",
