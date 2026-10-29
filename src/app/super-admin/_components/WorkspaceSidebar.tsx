@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
@@ -93,6 +93,13 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
   const spaceLabel = isOwner ? "Super Admin" : "Competen HQ";
   const off = new Set(offSwitches ?? []);
 
+  // THE SIDEBAR FILTER (owner, 29 Oct 2026). Typing replaces the tree with the matching rows, each with where it
+  // lives, drawn from the SAME capability-filtered tables -- so a filter never shows a page the viewer cannot open.
+  // Search HQ (Ctrl/Cmd+K) stays the search across every destination.
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+  const matches = query ? sidebarMatches(visible.map(v => ({ label: v.w.label, sections: v.nav as HqSection[] })), query) : [];
+
   const row = (e: NavEntry, exact: boolean, child = false) => (
     <NavLink key={e.key ?? e.href} href={e.href} icon={child ? "" : e.icon}
       label={e.kind === "cross" ? `${e.label} ↗` : e.label}
@@ -116,8 +123,30 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
         <span className="text-[10px] font-bold text-rose-300 uppercase tracking-widest">{spaceLabel} Workspace</span>
       </div>
 
+      <div className="px-2 mb-3" data-sb-label>
+        <label htmlFor={`${uid}-filter`} className="sr-only">Filter the menu</label>
+        <input id={`${uid}-filter`} type="search" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === "Escape") setQ(""); }}
+          placeholder="Filter the menu…" autoComplete="off"
+          className={`w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 ${TOUCH} ${FOCUS}`} />
+      </div>
+
       <nav ref={navRef} aria-label="Competen HQ" className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-        {visible.map(({ w, nav, exactHrefs }) => {
+        {query ? (
+          <div aria-live="polite" className="flex flex-col gap-0.5">
+            {matches.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-slate-400">
+                <p>No menu item matches.</p>
+                <button type="button" className={`mt-1 font-semibold text-rose-300 hover:text-white ${FOCUS}`}
+                  onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}>Search all of HQ</button>
+              </div>
+            ) : matches.map(m => (
+              <div key={m.e.key ?? m.e.href}>
+                {row(m.e, OVERVIEW_HREFS.has(m.e.href))}
+                <p className="px-3 pb-1 -mt-0.5 text-[10px] text-slate-500 truncate" data-sb-label>{m.where}</p>
+              </div>
+            ))}
+          </div>
+        ) : visible.map(({ w, nav, exactHrefs }) => {
           const wsKey = `ws:${w.key}`;
           const holdsPage = w.key === activeKey;
           const open = isParentOpen(holdsPage, records[wsKey], pathname);
@@ -221,3 +250,27 @@ function ParentToggle({ id, open, holdsPage, icon, label, status, onToggle, clas
 }
 
 const flat = (items: NavEntry[]) => items.flatMap(i => [i, ...(i.children ?? [])]);
+
+/**
+ * Pure: the sidebar filter. Every row (children included) whose label contains the query, once per destination,
+ * with where it lives ("Workspace › Group › Parent"). A row also matches when its workspace, group or parent does,
+ * so typing a section name lists what is in it. The input is already the viewer's capability-filtered tables.
+ */
+export function sidebarMatches(workspaces: { label: string; sections: HqSection[] }[], query: string, limit = 40): { e: NavEntry; where: string }[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const out: { e: NavEntry; where: string }[] = [];
+  const seen = new Set<string>();
+  const has = (s: string | null | undefined) => !!s && s.toLowerCase().includes(q);
+  for (const w of workspaces) for (const s of w.sections) for (const i of s.items) {
+    const rows: { e: NavEntry; trail: (string | null | undefined)[] }[] = [{ e: i, trail: [w.label, s.plain ? null : s.group] }, ...(i.children ?? []).map(c => ({ e: c, trail: [w.label, s.plain ? null : s.group, i.label] }))];
+    for (const r of rows) {
+      const href = r.e.href.split("?")[0];
+      if (seen.has(href) || !(has(r.e.label) || r.trail.some(has))) continue;
+      seen.add(href);
+      out.push({ e: r.e, where: r.trail.filter(Boolean).join(" › ") });
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
+}
