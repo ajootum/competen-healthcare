@@ -4,6 +4,7 @@ import { clinicalGate, MODEL_ROUTING_PATH, resolveModelRouting, routeCandidates,
 import { PROVIDER_REGISTRY_PATH, registeredAvailable, resolveRegistry, type ProviderRegistry } from "./provider-registry";
 import { generate, type GenerateArgs, type GenerateResult } from "./client";
 import { classifyRisk, riskRank, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision, type RiskTier } from "./clinical-risk";
+import { CLARIFY, EDUCATIONAL_BOUNDARY, decideRisk, loadRequestMode, logGateDecision, SUPPORTIVE_REFUSAL, type RequestMode } from "./operating-mode";
 import {
   activityAt, allowancePeriod, defaultPolicy, fairUsePath, FAIR_USE_SCOPE, maxInputTokens, remainingBand, resolvePolicy, serviceLevel,
   type AiProduct, type AiServiceLevel, type AiTier, type Balance, type ProductAiPolicy,
@@ -55,9 +56,10 @@ export type AiStanding = {
 /** Pure: whether a resolved product policy is a published one (the unpublished default allows nothing). */
 export const isPublishedPolicy = (policy: Pick<ProductAiPolicy, "version">) => policy.version !== "default-nothing-allowed";
 export type MeteredError = "allowance_exhausted" | "not_entitled" | "unreadable" | "duplicate_request" | "unknown_activity" | "level_insufficient"
-  | "not_eligible" | "pending_reconciliation";
-/** `risk` is the request's classified clinical risk where it was decided, so the page can say why. Never the text. */
-export type MeteredRefusal = { ok: false; error: MeteredError; standing: AiStanding; risk?: RiskDecision };
+  | "not_eligible" | "pending_reconciliation" | "clarify_purpose";
+/** `risk` is the request's classified clinical risk where it was decided, so the page can say why. Never the text.
+ *  `clarify` (AI operating modes): the question to put to the learner instead of a refusal, with its two answers. */
+export type MeteredRefusal = { ok: false; error: MeteredError; standing: AiStanding; risk?: RiskDecision; clarify?: typeof CLARIFY; mode?: string };
 
 /**
  * The subject as the classifier sees it: the request text and topic terms as given, and the risk category and
@@ -245,6 +247,15 @@ const legacyRoute = (tier: AiTier): Route | null => {
 const pickRoute = (routing: ModelRouting & { registry: ProviderRegistry }, rows: readonly EligibilityRow[] | null, product: AiProduct, activity: string, tier: AiTier, risk: RiskTier) =>
   selectRoute(routeCandidates(routing, legacyRoute(tier), { product, activity, tier }, routing.registry), availableNow(routing.registry), clinicalGate(rows, activity, risk));
 
+/**
+ * AI operating modes: in a mode that answers the educational part, a request above standard educational carries the
+ * educational boundary in its instructions. Prompt only: the gate has already decided the model and the tier.
+ */
+function withBoundary(g: GenerateArgs, mode: RequestMode | undefined, risk: RiskDecision | undefined): GenerateArgs {
+  if (!mode?.behaviour.educationalBoundary || !risk || riskRank(risk.tier) <= 0) return g;
+  return { ...g, system: [g.system, EDUCATIONAL_BOUNDARY].filter(Boolean).join("\n\n") };
+}
+
 /** A balance that never limits: with metering off only the policy's routing and eligibility apply, not an allowance. */
 const UNMETERED_BALANCE = { includedCau: 1, reserveCau: 0, usedCau: 0, reservedCau: 0, reserveUsedCau: 0, reserveReservedCau: 0 };
 
@@ -268,6 +279,17 @@ const UNMETERED_BALANCE = { includedCau: 1, reserveCau: 0, usedCau: 0, reservedC
  * it might be.
  */
 export async function unmeteredGate(admin: any, product: AiProduct, activity: string, callerTier: AiTier = "reasoning", subject?: RiskContext)
+  : Promise<{ ok: true; tier: AiTier | null; route: Route | null; risk?: RiskDecision; mode?: RequestMode } | MeteredRefusal> {
+  // AI operating modes (owner GO, Supervised Pilot, 29 Oct 2026): the person's mode, and a log of the decision.
+  const mode = await loadRequestMode(admin, product, subject?.actorId ?? null);
+  const g = await gateCore(admin, product, activity, callerTier, subject, mode);
+  await logGateDecision(admin, mode, { userId: subject?.actorId ?? null, product, activity, decision: g.ok ? "served" : g.error === "clarify_purpose" ? "clarify" : "refused",
+    reason: g.ok ? "ok" : g.error, risk: g.risk });
+  return g.ok ? { ...g, mode } : g;
+}
+
+/** The gate itself, for one person's mode. unmeteredGate logs its decision. Exported for the harness pins. */
+export async function gateCore(admin: any, product: AiProduct, activity: string, callerTier: AiTier, subject: RiskContext | undefined, mode: RequestMode)
   : Promise<{ ok: true; tier: AiTier | null; route: Route | null; risk?: RiskDecision } | MeteredRefusal> {
   const { policy, readable } = await loadProductPolicy(admin, product);
   if (!readable) return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
@@ -275,7 +297,9 @@ export async function unmeteredGate(admin: any, product: AiProduct, activity: st
   if (!a) return { ok: false, error: "unknown_activity", standing: closed(policy, true, "This AI activity is not offered here yet.") };
   const routing = await loadModelRouting(admin);
   if (!routing) return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
-  const risk = classifyRisk(policy.risk, await resolveRiskSubject(admin, subject), a.riskFloor as RiskTier);
+  const verdict = decideRisk(policy.risk, await resolveRiskSubject(admin, subject), a.riskFloor as RiskTier, mode, subject?.purpose ?? null);
+  const risk = verdict.risk;
+  if (verdict.kind === "clarify") return { ok: false, error: "clarify_purpose", standing: closed(policy, true, CLARIFY.question), risk, clarify: CLARIFY, mode: mode.mode };
   const floor = risk.tier;
   if (riskRank(floor) <= 0) {
     // Standard educational: the caller's tier as before. Published routing picks its provider and model.
@@ -289,7 +313,7 @@ export async function unmeteredGate(admin: any, product: AiProduct, activity: st
     activities: { [activity]: { label: a.label, available: false, via: null, reason: message } }, message, policyPublished: isPublishedPolicy(policy) });
   if (rows === null) return { ok: false, error: "unreadable", standing: standing(ELIGIBILITY_UNREADABLE) };
   const r = d.available && d.tier ? pickRoute(routing, rows, product, activity, d.tier, floor) : null;
-  if (!r) return { ok: false, error: "not_eligible", standing: standing(NOT_ELIGIBLE_REASON), risk };
+  if (!r) return { ok: false, error: "not_eligible", standing: standing(mode.behaviour.educationalBoundary ? SUPPORTIVE_REFUSAL : NOT_ELIGIBLE_REASON), risk, mode: mode.mode };
   return { ok: true, tier: d.tier, route: r, risk };
 }
 
@@ -299,9 +323,12 @@ export async function unmeteredGate(admin: any, product: AiProduct, activity: st
  */
 export async function runMeteredAi(admin: any, args: { userId: string; product: AiProduct; activity: string; requestId: string; generate: GenerateArgs; risk?: RiskContext; record?: { type: string; ref: string } | null })
   : Promise<GenerateResult | MeteredRefusal> {
+  // AI operating modes: the gate reads the person's mode and cohort from the actor.
+  args = { ...args, risk: { ...args.risk, actorId: args.risk?.actorId ?? args.userId } };
   if (!(await aiFairUseEnabled(admin))) {
     const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning", args.risk);
     if (!g.ok) return g;
+    args = { ...args, generate: withBoundary(args.generate, g.mode, g.risk) };
     return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
   }
   const { policy, readable } = await loadProductPolicy(admin, args.product);
@@ -313,7 +340,13 @@ export async function runMeteredAi(admin: any, args: { userId: string; product: 
   const b = toBalance(a.account);
   const known = Object.prototype.hasOwnProperty.call(policy.activities, args.activity);
   // Owner D1: the request's clinical risk, from its subject. It sets the model floor and the eligibility needed.
-  const risk = known ? classifyRisk(policy.risk, await resolveRiskSubject(admin, args.risk), policy.activities[args.activity].riskFloor) : undefined;
+  const mode = await loadRequestMode(admin, args.product, args.userId);
+  const verdict = known ? decideRisk(policy.risk, await resolveRiskSubject(admin, args.risk), policy.activities[args.activity].riskFloor, mode, args.risk?.purpose ?? null) : undefined;
+  const risk = verdict?.risk;
+  if (verdict?.kind === "clarify") {
+    await logGateDecision(admin, mode, { userId: args.userId, product: args.product, activity: args.activity, decision: "clarify", reason: "clarify_purpose", risk });
+    return { ok: false, error: "clarify_purpose", standing: { ...standing, message: CLARIFY.question }, risk, clarify: CLARIFY, mode: mode.mode };
+  }
   const decision = activityAt(policy, standing.level, args.activity, b, risk?.tier);
   if (!decision.available || !decision.via || !decision.tier) {
     const error: MeteredError = decision.refusal === "unknown_activity" ? "unknown_activity" : decision.refusal === "level_insufficient" ? "level_insufficient" : "allowance_exhausted";
@@ -324,13 +357,14 @@ export async function runMeteredAi(admin: any, args: { userId: string; product: 
     accountId: a.account.id, product: args.product, policy, activity: args.activity, tier: decision.tier, pool: decision.via, risk: risk!,
     capPerPeriod: policy.activities[args.activity].capPerPeriod, unreconciledCap: policy.maxUnreconciledCau,
     windowMinutes: policy.windowMinutes, windowCapCau: policy.windowCapCau,
-    actor: args.userId, service: null, record: args.record ?? null, requestId: args.requestId, generate: args.generate,
+    actor: args.userId, service: null, record: args.record ?? null, requestId: args.requestId, generate: withBoundary(args.generate, mode, risk),
   });
+  await logGateDecision(admin, mode, { userId: args.userId, product: args.product, activity: args.activity, decision: "result" in m ? "served" : "refused", reason: "result" in m ? "ok" : String(m.refused), risk });
   if ("result" in m) return m.result;
   if (m.refused === "unreadable") return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
   if (m.refused === "not_configured") return { ok: false, error: "not_configured" };
   if (m.refused === "duplicate") return { ok: false, error: "duplicate_request", standing };
-  if (m.refused === "not_eligible") return { ok: false, error: "not_eligible", standing: { ...standing, message: NOT_ELIGIBLE }, risk };
+  if (m.refused === "not_eligible") return { ok: false, error: "not_eligible", standing: { ...standing, message: mode.behaviour.educationalBoundary ? SUPPORTIVE_REFUSAL : NOT_ELIGIBLE }, risk, mode: mode.mode };
   if (m.refused === "unreconciled_ceiling") return { ok: false, error: "pending_reconciliation", standing: { ...standing, message: PENDING } };
   return { ok: false, error: "allowance_exhausted", standing: { ...standing, message: policy.messages[standing.level === "full" ? "optimised" : standing.level] } };
 }
@@ -469,6 +503,8 @@ export function meteredRefusalBody(r: MeteredRefusal): { status: number; body: {
   // HFE-01 Wave 1: a machine code beside the words, so every page can say WHY in one consistent way. An unknown
   // activity under the unpublished default policy is "not switched on yet", not "not offered".
   const code = r.error === "unknown_activity" && r.standing.policyPublished === false ? "policy_unpublished" : r.error;
+  // AI operating modes: a question back to the learner, not a refusal. Nothing was sent to a model.
+  if (r.error === "clarify_purpose") return { status: 409, body: { error: r.clarify?.question ?? r.standing.message ?? "", code, continuity: false, standing: r.standing, ...(r.clarify ? { clarify: r.clarify } : {}) } as any };
   const error = r.error === "duplicate_request" ? "That request was already received."
     : code === "policy_unpublished" ? "AI help is not switched on for Competen Individual yet."
     : r.error === "unknown_activity" ? "This AI activity is not offered."

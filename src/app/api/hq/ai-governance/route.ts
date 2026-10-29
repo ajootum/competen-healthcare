@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { currentTraceId } from "@/lib/trace";
-import { wceMissing } from "@/lib/config/workspace-config-write";
+import { publishScope, rollbackVersion, setOverride, wceMissing } from "@/lib/config/workspace-config-write";
+import { MODE_SCOPE, modePath } from "@/lib/ai/operating-mode";
+import { strictDoc, validateModeDoc } from "@/lib/ai/modes-admin";
 import { attestProvider, changeRate, createBudget, publishPolicies, RATE_KINDS, runProviderChecks, saveBudgetPolicyDraft, saveModelRoutingDraft, savePolicyDraft, saveProviderRegistration, saveRoutingDraft, setBudgetStatus, setProviderStatus, type RateKind } from "@/lib/ai/fair-use-admin";
 import { BUDGET_CODE } from "@/lib/ai/consumption";
 import { AI_PRODUCTS, type AiProduct } from "@/lib/ai/fair-use-policy";
@@ -15,6 +17,9 @@ export const dynamic = "force-dynamic";
 //       { action: "publish", note? } | { action: "budget_create", code, ownerType, product, label, institutionRef?, fundingRef? } |
 //       { action: "budget_status", budgetId, status } | { action: "budget_policy", code, settings } | { action: "routing", settings } |
 //       { action: "model_routing", settings }   (providers, models, primary and alternatives: never a credential) |
+//       { action: "save_mode", product, doc } | { action: "strict_now", product } | { action: "publish_modes", note? } |
+//       { action: "rollback_modes", versionId }   (AI operating modes: operating-mode.ts. Their own CONFIG-002 scope, so a
+//                                                  pilot publishes and rolls back without the other AI drafts.)
 //       { action: "provider_save", provider } | { action: "provider_check", id } | { action: "provider_attest", id, kind, ... } |
 //       { action: "provider_status", id, status }   (registration: provider-registry.ts. A key is never sent or returned.)
 //
@@ -51,6 +56,40 @@ export async function POST(req: Request) {
       if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
       const r = await publishPolicies(ctx.admin, actor, typeof body.note === "string" ? body.note.slice(0, 500) : null);
       return r.ok ? NextResponse.json({ ok: true }) : refuse(r.status, r.error);
+    }
+    // ── AI operating modes (owner GO SUPERVISED PILOT MODE, 29 Oct 2026). Draft, publish and roll back in the modes scope only. ──
+    // ⚠ A mode never approves a model. These actions write who is in which mode, nothing about eligibility.
+    case "save_mode":
+    case "strict_now": {
+      if (!(AI_PRODUCTS as readonly string[]).includes(body.product)) return refuse(400, "Choose a product.");
+      if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
+      let doc;
+      if (body.action === "strict_now") doc = strictDoc();
+      else {
+        const v = validateModeDoc(body.doc);
+        if (!v.ok) return refuse(422, v.error);
+        doc = v.doc;
+      }
+      const r = await setOverride(ctx.admin, actor, MODE_SCOPE, modePath(body.product as AiProduct), doc);
+      if (!r.ok) return refuse(r.status, r.error);
+      await audit(body.action === "strict_now" ? "ai_mode_strict_draft" : "ai_mode_draft", { product: body.product, defaultMode: doc.defaultMode, cohorts: doc.cohorts.map(c => ({ code: c.code, mode: c.mode, members: c.userIds.length })) });
+      return NextResponse.json({ ok: true });
+    }
+    case "publish_modes": {
+      if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
+      const note = typeof body.note === "string" ? body.note.slice(0, 500) : null;
+      const r = await publishScope(ctx.admin, actor, MODE_SCOPE, { label: "AI operating modes", note });
+      if (!r.ok) return refuse(r.status, r.error);
+      await audit("ai_modes_published", { version_id: r.version_id ?? null, modules: r.modules, note });
+      return NextResponse.json({ ok: true });
+    }
+    case "rollback_modes": {
+      if (typeof body.versionId !== "string" || !body.versionId) return refuse(400, "Choose a version.");
+      if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
+      const r = await rollbackVersion(ctx.admin, actor, body.versionId, { scope: MODE_SCOPE, prune: true });
+      if (!r.ok) return refuse(r.status, r.error);
+      await audit("ai_modes_rolled_back", { to_version: body.versionId, restored: r.restored, pruned: r.pruned });
+      return NextResponse.json({ ok: true });
     }
     // ── Budgets (AI-CONSUMPTION-01 s6). Identity and status are rows; policy and routing are CONFIG-002 drafts. ──
     case "budget_create": {

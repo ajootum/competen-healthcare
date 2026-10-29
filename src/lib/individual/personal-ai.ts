@@ -7,6 +7,8 @@ import { loadProfessionalRecord } from "./professional/record";
 import { professionalContext, taskInstruction, type ActivityNotes } from "./professional/assistant";
 import { CPD_ACTIVITY_LABEL } from "./professional/vocabulary";
 import { loadIndividualPolicy } from "./policy";
+import { loadOwnLearning } from "./own-learning";
+import { crossExperienceConsented } from "./scholar/store";
 import { loadProfessionalProfile } from "./professional/profile-store";
 import { profileContext } from "./professional/profile-ai";
 
@@ -55,6 +57,8 @@ export function assistantUserMessage(mode: AssistantMode, grounding: readonly st
 export async function runIndividualAssistant(admin: any, r: {
   userId: string; fullName: string | null; live: readonly ExperienceKey[]; experience: ExperienceKey; mode?: unknown; requestId: string;
   question?: string | null; activity?: ActivityNotes | null; study?: StudyContext | null;
+  /** The learner's answer to a clarify question (purposeFrom): "education" runs the request as a study question. */
+  purpose?: "education" | null;
 }): Promise<AssistantOutcome> {
   const studyFor = (scopes: readonly DataScope[]) => (scopes.includes("study_context") ? r.study ?? null : null);
   return runPersonalAssistant(admin, {
@@ -64,23 +68,34 @@ export async function runIndividualAssistant(admin: any, r: {
     // A CPD plan has no question: its subject is the task itself.
     risk: (mode, scopes) => {
       const study = studyFor(scopes);
-      return { text: [mode === "cpd_plan" ? "CPD plan" : "", r.question ?? "", r.activity?.title ?? "", r.activity?.notes ?? "", study?.text ?? ""].join("\n"), topicTerms: study?.topicTerms, competencyIds: study?.competencyIds };
+      return { text: [mode === "cpd_plan" ? "CPD plan" : "", r.question ?? "", r.activity?.title ?? "", r.activity?.notes ?? "", study?.text ?? ""].join("\n"), topicTerms: study?.topicTerms, competencyIds: study?.competencyIds,
+        actorId: r.userId, purpose: r.purpose ?? null };
     },
     compose: async (mode, scopes) => {
       if ((mode === "teach" || mode === "ask" || mode === "development") && !r.question) return { error: "Ask a question.", status: 400 };
       if (mode === "reflection" && !r.activity) return { error: "Name the activity to reflect on.", status: 400 };
       const today = new Date().toISOString().slice(0, 10);
       const grounding: string[] = [];
+      const read: DataScope[] = [];
+      if (scopes.includes("passport")) read.push("passport");
       if (scopes.includes("passport")) grounding.push(recordContext({ name: r.fullName, experience: r.experience, live: r.live, passport: await loadIndividualPassport(admin, r.userId, today) }));
-      if (scopes.includes("professional_record")) grounding.push(professionalContext(await loadProfessionalRecord(admin, r.userId), today));
+      if (scopes.includes("professional_record")) { grounding.push(professionalContext(await loadProfessionalRecord(admin, r.userId), today)); read.push("professional_record"); }
       // COMPETEN-PROFESSIONAL-PROFILE-01: the person's own profile (migration 450), when the privacy policy allows it.
       if (scopes.includes("professional_record") && (await loadIndividualPolicy(admin)).professionalProfile.ai === "on") {
         const profile = profileContext(await loadProfessionalProfile(admin, r.userId));
         if (profile) grounding.push(profile);
       }
+      // Supervised Pilot, learner side: the person's own recorded learning, read-only and by their own id. The Professional
+      // needs and plan part is a cross-experience read: only when the published profile lists own_development.
+      if (scopes.includes("own_learning")) {
+        // Migration 700: and only with the person's own current consent, and Professional live for them.
+        const development = scopes.includes("own_development") && r.live.includes("professional") && await crossExperienceConsented(admin, r.userId);
+        const own = await loadOwnLearning(admin, r.userId, { development });
+        grounding.push(own.text); read.push(...own.read);
+      }
       const study = studyFor(scopes);
-      if (study?.text) grounding.push(`Study material (from the person's own Scholar workspace):\n${study.text.slice(0, 6000)}`);
-      return { system: assistantSystemPrompt(r.experience, mode), user: assistantUserMessage(mode, grounding, r) };
+      if (study?.text) { grounding.push(`Study material (from the person's own Scholar workspace):\n${study.text.slice(0, 6000)}`); read.push("study_context"); }
+      return { system: assistantSystemPrompt(r.experience, mode), user: assistantUserMessage(mode, grounding, r), scopesRead: read };
     },
   });
 }

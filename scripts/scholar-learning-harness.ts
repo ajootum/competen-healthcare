@@ -346,7 +346,7 @@ const AI_ROUTES: [string, string, RegExp][] = [
   // COMPETEN-RESEARCH-01: Learn runs on the REQUEST's risk subject (scholarRisk), built before research so research cost
   // carries the action id; what the research part writes is then checked against that same tier (withinRequestRisk).
   [`${API}/learn/act/route.ts`, `scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", risk)`,
-    /const risk = await scholarRisk\(ctx\.admin, ctx\.userId, \{ text: prompt, passages \}\);[\s\S]*const ai = scholarAiRunner\([\s\S]*runLearn\([\s\S]*?\}, ai\.run\)[\s\S]*if \(rr\?\.ok && !\(await withinRequestRisk\(ctx\.admin, action as LearnAction, risk, \[rr\.text\]\)\)\[0\]\) rr = \{ ok: false, reason: "risk_raised" \};/],
+    /const risk = await scholarRisk\(ctx\.admin, ctx\.userId, \{ text: prompt, passages, purpose: purposeFrom\(body\) \}\);[\s\S]*const ai = scholarAiRunner\([\s\S]*runLearn\([\s\S]*?\}, ai\.run\)[\s\S]*if \(rr\?\.ok && !\(await withinRequestRisk\(ctx\.admin, action as LearnAction, risk, \[rr\.text\]\)\)\[0\]\) rr = \{ ok: false, reason: "risk_raised" \};/],
   [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runQuestions\([^;]*ai\.run\)/],
   [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run\)/],
   [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }))`, /runAnalysis\([^)]*ai\.run\)/],
@@ -598,7 +598,7 @@ const assistantShared = (src: Src) => {
   const screen = r.indexOf("findPatientIdentifiers(question)"), pre = r.indexOf("await aiPreflight(ctx)"), call = r.indexOf("await runIndividualAssistant(");
   return screen > -1 && pre > screen && call > pre
     && /experience: "scholar", mode, question,/.test(r) && /const mode = body\?\.mode === "ask" \? "ask" : "teach";/.test(r)
-    && /const study = await scholarRisk\(ctx\.admin, ctx\.userId, \{ passages \}\);/.test(r) && /, study,\n/.test(r)
+    && /const study = await scholarRisk\(ctx\.admin, ctx\.userId, \{ passages \}\);/.test(r) && /, study, purpose,\n/.test(r)
     && !/saveArtefact|recordLearningEvent|updateLearningSession|runMeteredAi|scholarAiRunner|generate\(/.test(r)
     && /label: PERSONAL_AI_LABEL/.test(r)
     && /\{PERSONAL_AI_LABEL\}/.test(client) && /setAssist\(/.test(client) && !/setCards\([^;]*assistant/.test(client)

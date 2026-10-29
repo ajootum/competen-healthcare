@@ -31,17 +31,20 @@ export type LearnerContextInput = {
 };
 
 /** Words only: no digits, no codes, one line. */
-const words = (s: string) => s.replace(/\b[A-Z]{2,}(?:-[A-Z0-9]+)+\b/g, "").replace(/\d+/g, "").replace(/\s+/g, " ").replace(/\s+([,.;:)])/g, "$1").replace(/\(\s+/g, "(").trim();
+export const words = (s: string) => s.replace(/\b[A-Z]{2,}(?:-[A-Z0-9]+)+\b/g, "").replace(/\d+/g, "").replace(/\s+/g, " ").replace(/\s+([,.;:)])/g, "$1").replace(/\(\s+/g, "(").trim();
 const list = (xs: string[]) => [...new Set(xs.map(words).filter(Boolean))].slice(0, MAX_ITEMS).join("; ");
 
 const SMALL = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+
+/** A level as words: its small numbers are spelled out ("Year 2" -> "Year two"), so it survives the words-only rule. */
+export const levelWords = (level: string) => words(level.replace(/\b(\d{1,2})\b/g, (_, n) => SMALL[Number(n)] ?? ""));
 
 /** Pure. The context block, or null when there is nothing worth saying. */
 export function buildLearnerContext(input: LearnerContextInput): string | null {
   const lines: string[] = [];
   if (input.programme && words(input.programme)) lines.push(`I study: ${words(input.programme)}.`);
   // A level is often "Year 2": its small numbers are spelled out, so the level survives the words-only rule.
-  const level = input.level ? words(input.level.replace(/\b(\d{1,2})\b/g, (_, n) => SMALL[Number(n)] ?? "")) : "";
+  const level = input.level ? levelWords(input.level) : "";
   if (level) lines.push(`My level: ${level}. Pitch explanations to it.`);
   const here = list(input.passageCompetencies.map(c => (c.structure ? `${c.title} (${c.structure})` : c.title)));
   if (here) lines.push(`I have linked these passages to these competencies: ${here}.`);

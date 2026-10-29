@@ -11,6 +11,7 @@
 import { experienceHref, type ExperienceKey } from "./experiences";
 import type { AiStanding } from "@/lib/ai/allowance";
 import type { ConsentStatus } from "./scholar/consent-gate";
+import { SUPPORTIVE_REFUSAL } from "@/lib/ai/operating-mode";
 
 export type AiUnavailableReason =
   | "policy_unpublished"      // HQ has not published the product's AI policy: nothing is switched on yet
@@ -37,7 +38,8 @@ export function availabilityFromStanding(standing: AiStanding | null, activity: 
   if (!standing.readable) return { available: false, reason: "unreadable" };
   if (!a) return { available: false, reason: "activity_unsupported" };
   if (a.reason === "level_insufficient") return { available: false, reason: "level_insufficient" };
-  if (/approved for clinical content/i.test(a.reason ?? "")) return { available: false, reason: "not_eligible" };
+  // The server words this as NOT_ELIGIBLE_REASON, or as SUPPORTIVE_REFUSAL in a mode that answers the educational part.
+  if (/approved for clinical content/i.test(a.reason ?? "") || a.reason === SUPPORTIVE_REFUSAL) return { available: false, reason: "not_eligible" };
   if (/subscription/i.test(standing.message ?? "")) return { available: false, reason: "not_entitled" };
   return { available: false, reason: "allowance_exhausted" };
 }
@@ -70,8 +72,20 @@ export function aiReasonCopy(reason: AiUnavailableReason, experience: Experience
     case "allowance_exhausted": return { text: "You have used this period's AI allowance. Everything you have saved stays available.", next: allowance };
     case "level_insufficient": return { text: "This needs more AI help than your allowance has left this period. A weaker model is never used instead.", next: allowance };
     case "activity_unsupported": return { text: `This kind of AI help is not offered in ${product} yet.`, next: null };
-    case "not_eligible": return { text: "This needs an AI model approved for clinical content, and none is approved for it yet.", next: null };
+    case "not_eligible": return { text: SUPPORTIVE_REFUSAL, next: null };
     case "unreadable": return { text: "AI help could not be checked just now, so nothing was sent. Try again shortly.", next: null };
     case "not_entitled": return { text: `This needs an active ${product} subscription.`, next: null };
   }
+}
+
+/** The question an AI operating mode puts to the learner instead of a refusal (allowance.ts meteredRefusalBody, HTTP 409). */
+export type ClarifyPrompt = { question: string; education: string; patient: string; patientAnswer: string };
+
+/** Pure: the clarify prompt in a failed AI response body (`code: "clarify_purpose"`), or null for anything else. All four texts must be present. */
+export function clarifyFrom(body: any): ClarifyPrompt | null {
+  if (body?.code !== "clarify_purpose") return null;
+  const c = body.clarify;
+  const t = (v: unknown) => (typeof v === "string" && v.trim() ? v : null);
+  const question = t(c?.question), education = t(c?.education), patient = t(c?.patient), patientAnswer = t(c?.patientAnswer);
+  return question && education && patient && patientAnswer ? { question, education, patient, patientAnswer } : null;
 }
