@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
-import { loadAssessorAppointments, loadMethods, loadQueue, mayPublish, SCOPE_KIND_LABEL, verificationReady } from "@/lib/competency/verification";
+import { loadAssessorAppointments, loadMethodReviews, loadMethods, loadQueue, mayPublish, METHOD_REVIEW_LABEL, SCOPE_KIND_LABEL, verificationReady, type MethodReview } from "@/lib/competency/verification";
+import { CLINICAL_STATE_LABEL, loadClinicalReviews, type ClinicalState } from "@/lib/competency/clinical-review";
 import { listComponents } from "@/lib/competency/studio-components";
 import { EMPTY_CONTENT, METHOD_KIND_LABEL, NOT_A_DECLARATION, STANDING_LABEL, STATE_LABEL, type MethodContent, type MethodKind } from "@/lib/competency/verification-config";
-import { Assign, DecisionComponents, GrantScope, MethodEditor, NewMethod, ReasonAction, VersionAction, type EditorOptions } from "./_components/StudioControls";
+import { Assign, DecisionComponents, GenerateMethod, GrantScope, MethodEditor, NewMethod, ReasonAction, VersionAction, type EditorOptions, type GenerateOptions } from "./_components/StudioControls";
 
 // /super-admin/verification-studio -- COMPETEN-PROFESSIONAL-COMPETENCY-01 C5 (migration 510), the Holdings Competency
 // Verification Studio. Guarded by hq.competency.verification.manage, which only the Verification Studio Administrator
@@ -22,6 +23,20 @@ export const metadata: Metadata = { title: "Verification Studio" };
 const fmt = (d: string | null) => (d ? new Date(d.length === 10 ? `${d}T00:00:00Z` : d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : null);
 const section = "space-y-3 rounded-xl border border-gray-200 bg-white p-4";
 const h2 = "text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500";
+const chunks = <T,>(xs: readonly T[], n = 80) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
+
+/** The clinical review state of one method version: its words, the approvals so far, and what the reviewer said. */
+function ReviewLine({ r }: { r: MethodReview | undefined }) {
+  if (!r) return <p className="text-[12.5px] text-gray-600">Clinical review: could not be read just now.</p>;
+  const tone = r.state === "approved" ? "text-[var(--cmp-text-success)]" : r.state === "changes_requested" ? "text-[var(--cmp-text-critical)]" : "text-gray-700";
+  return (
+    <div className="space-y-0.5">
+      <p className="text-[12.5px] text-gray-600">Clinical review: <span className={`font-semibold ${tone}`}>{METHOD_REVIEW_LABEL[r.state]}</span>
+        {r.state !== "not_submitted" && <> · {r.approvals} of {r.required} independent approval{r.required === 1 ? "" : "s"}{r.submittedAt ? ` · put forward ${fmt(r.submittedAt)}` : ""}</>}</p>
+      {r.state === "changes_requested" && r.comment && <p className="text-[12.5px] text-gray-800">Reviewer: {r.comment}</p>}
+    </div>
+  );
+}
 
 export default async function VerificationStudioPage() {
   const ctx = await requireHqCapability("hq.competency.verification.manage");
@@ -54,6 +69,40 @@ export default async function VerificationStudioPage() {
     scales: rows(scales).map(sc => ({ id: sc.id, label: sc.name, levels: rows(levels).filter(l => l.scale_id === sc.id).map(l => ({ id: l.id, label: `${l.score} · ${l.label}` })) })),
     // 680: the active CCHU components of the 660 registry. Null (660 absent): none offered.
     components: (registry ?? []).filter(k => k.active).map(k => ({ id: k.code, label: k.label })),
+  };
+  const reviews = await loadMethodReviews(ctx.admin, (methods ?? []).flatMap(m => m.versions.filter(v => v.state !== "retired")));
+
+  // "Make a method from a competency": every competency of a shared framework, whatever the framework's status, with its
+  // clinical state, and the programme catalogue entries that name it. Unreadable clinical state stays null, never "approved".
+  const { data: srcRows } = await ctx.admin.from("framework_competencies")
+    .select("id, code, name, framework_domains!inner(framework_id, frameworks!inner(id, name, code, hospital_id, pub_status))")
+    .is("framework_domains.frameworks.hospital_id", null).order("code").limit(1000);
+  const sources = ((srcRows ?? []) as any[]).map(c => {
+    const d = Array.isArray(c.framework_domains) ? c.framework_domains[0] : c.framework_domains;
+    const f = Array.isArray(d?.frameworks) ? d.frameworks[0] : d?.frameworks;
+    return { id: c.id as string, code: (c.code ?? null) as string | null, name: c.name as string, framework: `${f?.name ?? "Framework"}${f?.code ? ` (${f.code})` : ""}`, frameworkStatus: (f?.pub_status ?? "draft") as string };
+  }).sort((a, b) => a.framework.localeCompare(b.framework) || (a.code ?? "").localeCompare(b.code ?? "") || a.name.localeCompare(b.name));
+  const clinical = new Map<string, ClinicalState | null>();
+  for (const ids of chunks(sources.map(s => s.id))) {
+    const r = await loadClinicalReviews(ctx.admin, ids);
+    for (const id of ids) clinical.set(id, r?.get(id)?.state ?? null);
+  }
+  const { data: entryRows } = await ctx.admin.from("competency_catalogue_entry").select("id, competency_id, catalogue_id").limit(3000);
+  const sourceIds = new Set(sources.map(s => s.id));
+  const entries = ((entryRows ?? []) as any[]).filter(e => sourceIds.has(e.competency_id));
+  const catalogueName = new Map<string, string>();
+  for (const ids of chunks([...new Set(entries.map(e => e.catalogue_id as string))])) {
+    const { data } = await ctx.admin.from("frameworks").select("id, name, code").in("id", ids);
+    for (const f of (data ?? []) as any[]) catalogueName.set(f.id, `${f.name}${f.code ? ` (${f.code})` : ""}`);
+  }
+  const { data: entryComps } = entries.length ? await ctx.admin.from("competency_catalogue_entry_component").select("entry_id").limit(5000) : { data: [] };
+  const generate: GenerateOptions = {
+    competencies: sources.map(s => ({ id: s.id, code: s.code, label: `${s.code ? `${s.code} ` : ""}${s.name}`, framework: s.framework, frameworkStatus: s.frameworkStatus,
+      state: clinical.get(s.id) ?? null, stateLabel: clinical.get(s.id) ? CLINICAL_STATE_LABEL[clinical.get(s.id) as ClinicalState] : "clinical state not readable" })),
+    scales: options.scales.map(s => ({ id: s.id, label: s.label })),
+    defaultScaleId: options.scales.find(s => /dacum/i.test(s.label))?.id ?? "",
+    entries: entries.map(e => ({ id: e.id as string, competencyId: e.competency_id as string, label: catalogueName.get(e.catalogue_id) ?? "Programme catalogue",
+      components: ((entryComps ?? []) as any[]).filter(k => k.entry_id === e.id).length })),
   };
   const levelLabel = new Map<string, string>(rows(levels).map(l => [l.id, `${l.score} · ${l.label}`]));
   const componentLabels = Object.fromEntries((registry ?? []).map(k => [k.code, k.label]));
@@ -91,7 +140,7 @@ export default async function VerificationStudioPage() {
             const draft = m.versions.find(v => v.state === "draft");
             const published = m.versions.find(v => v.state === "published");
             return (
-              <article key={m.id} className="space-y-3 rounded-lg border border-gray-200 p-3">
+              <article key={m.id} id={`method-${m.id}`} tabIndex={-1} className="space-y-3 rounded-lg border border-gray-200 p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h3 className="text-[15px] font-semibold text-gray-900">{m.name} <span className="font-normal text-gray-500">· {METHOD_KIND_LABEL[m.kind as MethodKind] ?? m.kind} · <span className="font-mono">{m.code}</span></span></h3>
                   <p className="text-[12.5px] text-gray-600">{published ? `Version ${published.version_no} published ${fmt(published.published_at)}` : "Not published"}</p>
@@ -99,6 +148,7 @@ export default async function VerificationStudioPage() {
                 <ul className="flex flex-wrap gap-2 text-[12px]">
                   {m.versions.map(v => <li key={v.id} className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-gray-700">v{v.version_no}: {v.state}{v.content_hash ? ` · ${v.content_hash.slice(0, 8)}` : ""}</li>)}
                 </ul>
+                {published && <ReviewLine r={reviews.get(published.id)} />}
                 {published && (
                   <div className="flex flex-wrap gap-2">
                     <VersionAction action="retire" body={{ versionId: published.id }} label="Retire this version" done="Retired. No new requests use it. Decisions made under it keep it." confirm="Retire this version? People can no longer request it." />
@@ -107,15 +157,32 @@ export default async function VerificationStudioPage() {
                 )}
                 {!published && !draft && <VersionAction action="new_draft" body={{ methodId: m.id }} label="Start a new version" done="New draft started." />}
                 {draft && (
+                  <div className="space-y-2 rounded-lg bg-gray-50 p-2.5">
+                    <p className="text-[12.5px] font-semibold text-gray-800">Draft version {draft.version_no}</p>
+                    <ReviewLine r={reviews.get(draft.id)} />
+                    {(() => {
+                      const st = reviews.get(draft.id)?.state;
+                      return (st === "not_submitted" || st === "changed_since" || st === "changes_requested")
+                        ? <VersionAction action="submit_review" body={{ versionId: draft.id }} label="Put forward for clinical review" done="Put forward. Independent clinical reviewers now see the saved draft, exactly as saved." />
+                        : st === "in_review" ? <p className="text-[12.5px] text-gray-600">With the clinical reviewers. Editing the draft takes it out of review, and you put it forward again.</p> : null;
+                    })()}
+                  </div>
+                )}
+                {draft && (
                   <details open={!published}>
                     <summary className="cursor-pointer text-[13px] font-semibold text-teal-800">Edit draft version {draft.version_no}</summary>
-                    <div className="mt-3"><MethodEditor versionId={draft.id} initial={{ ...EMPTY_CONTENT, ...(draft.content as Partial<MethodContent>) } as MethodContent} options={options} idPrefix={`ed-${draft.id.slice(0, 8)}`} mayPublish={draft.edited_by === undefined || mayPublish(draft, ctx.userId)} /></div>
+                    <div className="mt-3"><MethodEditor versionId={draft.id} initial={{ ...EMPTY_CONTENT, ...(draft.content as Partial<MethodContent>) } as MethodContent} options={options} idPrefix={`ed-${draft.id.slice(0, 8)}`} mayPublish={draft.edited_by === undefined || mayPublish(draft, ctx.userId)} reviewApproved={reviews.get(draft.id)?.state === "approved"} reviewLabel={reviews.get(draft.id) ? METHOD_REVIEW_LABEL[reviews.get(draft.id)!.state] : "could not be read"} /></div>
                   </details>
                 )}
               </article>
             );
           })}
-        <div className="border-t border-gray-100 pt-3"><h3 className="mb-2 text-[13.5px] font-semibold text-gray-900">New method</h3><NewMethod /></div>
+        <div className="border-t border-gray-100 pt-3">
+          <h3 className="mb-1 text-[13.5px] font-semibold text-gray-900">Make a method from a competency</h3>
+          <p className="mb-2 text-[12.5px] text-gray-600">Starts a draft from a competency&apos;s criteria exactly as it has them, so the rubric cannot drift from what clinical reviewers approved. Only competencies whose current criteria are clinically approved can be chosen. The draft is then put forward for clinical review and published by another administrator.</p>
+          <GenerateMethod options={generate} />
+        </div>
+        <div className="border-t border-gray-100 pt-3"><h3 className="mb-2 text-[13.5px] font-semibold text-gray-900">New blank method</h3><NewMethod /></div>
       </section>
 
       <section aria-labelledby="assessors-h" className={section}>

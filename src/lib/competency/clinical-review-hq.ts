@@ -12,7 +12,10 @@ export type QueueItem = {
   snapshot: { description: string | null; outcomes: string[]; skills: string[]; risk: string | null };
   required: number; approvals: number; risk: string | null; submittedAt: string; appointmentId: string;
   /** Migration 422: a clinical case version, reviewed through the same process. Its content is the exact version. */
-  kind: "competency" | "case"; caseContent?: any;
+  kind: "competency" | "case" | "method"; caseContent?: any;
+  /** Migration 690: an assessment method version, reviewed through the same process. Its content is the exact draft
+   *  (`{ method, version_no, content }`), with `applies` naming what its applicability resolves to. */
+  methodContent?: any;
   /** CFCA-STUDIO-P1 (670): the criteria by component. Live rows, shown only for a CURRENT version (its hash, which
    *  covers each criterion and its component, still matches), so they are exactly what is being approved. */
   criteria?: { component: string | null; text: string; sourceRef: string | null }[];
@@ -37,22 +40,30 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
   // case in review never makes the whole queue unreadable. Cases are listed below, by their own rule.
   const open = independent.filter((v: any) => v.competency_id);
   const cases = independent.filter((v: any) => !v.competency_id && v.case_version_id);
-  if (!open.length && !cases.length) return { appointments, items: [] };
+  // Migration 690: a method version has neither. Independence covers EVERY version of the same method (author, editor or
+  // submitter of any), so the method rows are read first. They are read apart: an unreadable method row costs only the
+  // method items, never the competencies and cases beside them.
+  const methods = await methodCandidates(admin, reviewerId, versions, mine);
+  if (!open.length && !cases.length && !methods.length) return { appointments, items: [] };
   const compIds = [...new Set(open.map((v: any) => v.competency_id))] as string[];
   const caseVersionIds = cases.map((v: any) => v.case_version_id);
   const [decisions, hashes, caseRows, links] = await Promise.all([
-    rows(admin.from("clinical_review_decision").select("version_id, reviewer_id, decision").in("version_id", [...open, ...cases].map((v: any) => v.id))),
+    rows(admin.from("clinical_review_decision").select("version_id, reviewer_id, decision").in("version_id", [...open, ...cases, ...methods.map(m => m.v)].map((v: any) => v.id))),
     compIds.length ? (async () => { const r = await admin.rpc("competency_content_hashes", { p_ids: compIds }); return r.error ? null : r.data ?? []; })() : Promise.resolve([]),
     caseVersionIds.length ? rows(admin.from("case_library_version").select("id, content_hash, state").in("id", caseVersionIds)) : Promise.resolve([]),
     caseVersionIds.length ? rows(admin.from("case_library_version_competency").select("version_id, competency_id").in("version_id", caseVersionIds)) : Promise.resolve([]),
   ]);
   if (decisions === null || hashes === null || caseRows === null || links === null) return null;
-  const allComp = [...new Set([...compIds, ...links.map((l: any) => l.competency_id)])];
+  const methodApplies = (v: any) => { const a = v.content_snapshot?.content?.applicability ?? {};
+    const list = (x: any) => (Array.isArray(x) ? x.filter((y: any) => typeof y === "string") : []) as string[];
+    return { frameworkIds: list(a.frameworkIds), competencyIds: list(a.competencyIds) }; };
+  const methodComp = methods.flatMap(m => methodApplies(m.v).competencyIds), methodFw = methods.flatMap(m => methodApplies(m.v).frameworkIds);
+  const allComp = [...new Set([...compIds, ...links.map((l: any) => l.competency_id), ...methodComp])];
   const comps = allComp.length ? await rows(admin.from("framework_competencies").select("id, name, domain_id").in("id", allComp)) : [];
   if (comps === null) return null;
   const doms = await rows(admin.from("framework_domains").select("id, name, framework_id").in("id", [...new Set(comps.map((c: any) => c.domain_id))]));
   if (doms === null) return null;
-  const fws = await rows(admin.from("frameworks").select("id, name, profession_term_id, specialty_term_id").in("id", [...new Set(doms.map((d: any) => d.framework_id))]).is("hospital_id", null));
+  const fws = await rows(admin.from("frameworks").select("id, name, profession_term_id, specialty_term_id").in("id", [...new Set([...doms.map((d: any) => d.framework_id), ...methodFw])]).is("hospital_id", null));
   if (fws === null) return null;
   const hash = new Map<string, string>(hashes.map((h: any) => [h.competency_id, h.content_hash]));
   const comp = new Map<string, any>(comps.map((c: any) => [c.id, c])), dom = new Map<string, any>(doms.map((d: any) => [d.id, d])), fw = new Map<string, any>(fws.map((f: any) => [f.id, f]));
@@ -95,6 +106,34 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
       snapshot: { description: s.summary ?? null, outcomes: Array.isArray(s.learningObjectives) ? s.learningObjectives.map((l: any) => l?.text).filter(Boolean) : [], skills: [], risk: s.metadata?.risk ?? null },
     });
   }
+  // Methods (690): current (still the draft, not changed since it was put forward) and in scope only if ONE appointment
+  // covers EVERY framework (a framework, profession or specialty scope of it) and EVERY competency the method names.
+  for (const m of methods) {
+    try {
+      const v = m.v, ds = decisions.filter((d: any) => d.version_id === v.id);
+      if (ds.some((d: any) => d.decision === "rejected" || d.reviewer_id === reviewerId)) continue;
+      const approvals = ds.filter((d: any) => d.decision === "approved").length;
+      if (approvals >= v.required_approvals) continue;
+      const s = v.content_snapshot ?? {}, content = s.content ?? {}, ap = methodApplies(v);
+      if (!ap.frameworkIds.length && !ap.competencyIds.length) continue;
+      const fwsNamed = ap.frameworkIds.map(id => fw.get(id)), taught = ap.competencyIds.map(id => comp.get(id));
+      if (fwsNamed.some(f => !f) || taught.some(c => !c)) continue;
+      const place = (c: any) => { const d = dom.get(c.domain_id), f = d ? fw.get(d.framework_id) : null; return d && f ? { d, f } : null; };
+      if (taught.some(c => !place(c))) continue;
+      const covering = appointments.find(a => fwsNamed.every((f: any) => scopeCovers(a.scopes.filter(sc => sc.kind !== "domain"), { domainId: "", frameworkId: f.id, professionTermId: f.profession_term_id, specialtyTermId: f.specialty_term_id }))
+        && taught.every((c: any) => { const { d, f } = place(c)!; return scopeCovers(a.scopes, { domainId: d.id, frameworkId: f.id, professionTermId: f.profession_term_id, specialtyTermId: f.specialty_term_id }); }));
+      if (!covering) continue;
+      const homes = [...new Set([...fwsNamed.map((f: any) => f.name), ...taught.map((c: any) => place(c)!.f.name)])] as string[];
+      items.push({
+        versionId: v.id, competencyId: "", title: `${s.method?.name ?? "Assessment method"} v${s.version_no ?? "?"}`, home: homes.join(", "),
+        domain: taught.length ? taught.map((c: any) => c.name).join(", ") : "Every competency in the framework",
+        required: v.required_approvals, approvals, risk: v.risk_basis ?? null, submittedAt: v.created_at, appointmentId: covering.id, kind: "method",
+        methodContent: { ...s, applies: { frameworks: fwsNamed.map((f: any) => f.name), competencies: taught.map((c: any) => ({ name: c.name, framework: place(c)!.f.name })) } },
+        snapshot: { description: typeof content.summary === "string" ? content.summary : null,
+          outcomes: Array.isArray(content.outcomes) ? content.outcomes.map((o: any) => o?.label).filter(Boolean) : [], skills: [], risk: null },
+      });
+    } catch { /* one unreadable method row never makes the queue unreadable */ }
+  }
   const ids = items.filter(i => i.kind === "competency").map(i => i.competencyId);
   if (ids.length) {
     const read = (cols: string) => admin.from("competency_skills").select(cols).in("competency_id", ids).order("sort_order").limit(20000);
@@ -104,6 +143,37 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
       .map(k => ({ component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null }));
   }
   return { appointments, items };
+}
+
+/**
+ * Method versions (690) this reviewer may act on by independence and currency: put forward by somebody else, never
+ * authored, edited or put forward by this reviewer for ANY version of the same method, and still the unchanged draft
+ * (state draft and not updated since it was put forward -- the database compares the exact hash). Scope is applied by
+ * the caller, who has the framework and competency rows. A failed read returns none: it costs only the method items.
+ */
+async function methodCandidates(admin: any, reviewerId: string, versions: any[], mine: (v: any) => boolean): Promise<{ v: any; row: any }[]> {
+  const all = versions.filter((v: any) => !v.competency_id && v.method_version_id);
+  if (!all.length) return [];
+  try {
+    const own = await rows(admin.from("competency_verification_method_version").select("id, state, updated_at, method_id").in("id", all.map((v: any) => v.method_version_id)));
+    if (own === null) return [];
+    const byId = new Map<string, any>(own.map((r: any) => [r.id, r]));
+    const methodIds = [...new Set(own.map((r: any) => r.method_id).filter(Boolean))] as string[];
+    // Every version of those methods, for author/editor independence, and the method's creator.
+    const sib = methodIds.length ? await rows(admin.from("competency_verification_method_version").select("id, method_id, authored_by, edited_by").in("method_id", methodIds)) : [];
+    const made = methodIds.length ? await rows(admin.from("competency_verification_method").select("id, created_by").in("id", methodIds)) : [];
+    if (sib === null || made === null) return [];
+    const mineMethod = new Set<string>();
+    for (const r of sib) if (r.authored_by === reviewerId || (r.edited_by ?? []).includes(reviewerId)) mineMethod.add(r.method_id);
+    for (const r of made) if (r.created_by === reviewerId) mineMethod.add(r.id);
+    for (const v of all) { const r = byId.get(v.method_version_id); if (r && mine(v)) mineMethod.add(r.method_id); }
+    return all.flatMap((v: any) => {
+      const r = byId.get(v.method_version_id);
+      if (!r || mine(v) || mineMethod.has(r.method_id)) return [];
+      if (r.state !== "draft" || !r.updated_at || !v.created_at || new Date(r.updated_at).getTime() > new Date(v.created_at).getTime()) return [];
+      return [{ v, row: r }];
+    });
+  } catch { return []; }
 }
 
 export type ReviewerView = { appointmentId: string; personId: string | null; name: string; scopes: (ReviewerScope & { label: string })[] };

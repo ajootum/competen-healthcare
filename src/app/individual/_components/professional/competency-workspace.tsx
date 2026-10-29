@@ -5,10 +5,11 @@ import { findLearningHref } from "@/lib/individual/professional/learning";
 import { reassessDue, suggestEvidence, type ScaleLevel } from "@/lib/individual/professional/competency-form";
 import { ASPECT_TEXT, PORTFOLIO_KIND_LABEL, SELF_REPORTED, SHAREABLE_KINDS } from "@/lib/individual/professional/competency-vocabulary";
 import { linkKind, linkSourceId, type CompetencyEntry, type EntryHistoryRow, type EvidenceLink, type PortfolioItem, type SelfAssessment } from "@/lib/individual/professional/competency-store";
-import { DECISION_STANDING_LABEL, ONE_ASSESSMENT, currentDecision, type VerificationRead } from "@/lib/individual/professional/competency-verification";
+import { DECISION_STANDING_LABEL, ONE_ASSESSMENT, currentDecision, decisionValidity, mayAskReassessment, showsStage, type VerificationDecision, type VerificationRead } from "@/lib/individual/professional/competency-verification";
 import { Empty, fmtDate } from "./bits";
 import { AddPanel, ApiButton, ApiForm, Field, inputCls } from "./forms";
 import CompetencyAssist from "./CompetencyAssist";
+import VerificationNeed from "./VerificationNeed";
 
 // MY COMPETENCIES -- COMPETEN-PROFESSIONAL-COMPETENCY-01 (Professional Stage 5), C1 C2 C3 C4 C6.
 //
@@ -150,6 +151,22 @@ function ExpectedPanel({ c }: { c: CatalogueCompetency | null }) {
   );
 }
 
+// ── Outcomes, validity and reassessment (plain language; an outcome is one assessment, never a declaration) ──────────────
+
+const OPEN_REQUEST = ["open", "assigned", "awaiting_evidence"];
+
+/** The validity sentence beside an outcome (the adapter decides which outcomes have one). */
+function validityText(d: VerificationDecision, today: string): string | null {
+  const v = decisionValidity(d, today);
+  return !v || !d.validUntil ? null : v === "expired" ? `Expired on ${fmtDate(d.validUntil)}` : `Valid until ${fmtDate(d.validUntil)}`;
+}
+
+/** Second-assessor confirmation, in words, when the standing label does not already say it. */
+function confirmationText(d: VerificationDecision): string | null {
+  const standing = d.confirmation === "awaiting" ? "awaiting_confirmation" : d.confirmation === "not_confirmed" ? "not_confirmed" : null;
+  return standing && d.standing !== standing ? DECISION_STANDING_LABEL[standing] : null;
+}
+
 // ── An entry in detail: the four aspects, history and integrations ───────────────────────────────────────────
 
 export function EntryDetail(p: {
@@ -167,6 +184,8 @@ export function EntryDetail(p: {
   const suggestionsFor = (target: string) => suggestEvidence(target, p.portfolio.filter(i => !open.some(l => linkKind(l) === i.kind && linkSourceId(l) === i.id)), 3);
   const decisions = p.verifications.provisioned && p.verifications.items
     ? p.verifications.items.filter(v => v.competency.frameworkCompetencyId === e.framework_competency_id) : [];
+  // What the latest outcome leaves to develop: the most recently decided one only. Offered, never written.
+  const need = decisions.filter(v => v.developmentNeed).map(v => v.developmentNeed!).sort((a, b) => b.decidedAt.localeCompare(a.decidedAt))[0] ?? null;
   const history = [
     ...p.history.map(h => ({ at: h.recorded_at, text: h.removed ? "Removed from My Competencies" : `${e.title}${h.framework_version ? ` (${h.framework_version})` : ""}${h.interest ? ", development interest" : ""}` })),
     ...p.assessments.map(a => ({ at: a.assessed_at, text: `Self-assessed ${a.level_label}${a.learning_outcome ? ` for "${a.learning_outcome}"` : ""}${a.confidence_label ? `, ${a.confidence_label.toLowerCase()}` : ""} (self-reported${a.framework_version ? `, ${a.framework_version}` : ""})` })),
@@ -326,7 +345,33 @@ export function EntryDetail(p: {
                 <ul className="mt-1 space-y-1 text-[13px] text-gray-800">
                   {decisions.map(v => (
                     <li key={v.requestId}>Request of {fmtDate(v.requestedAt)} · {v.statusLabel ?? v.status}{v.method ? ` · ${v.method}` : ""}
-                      {v.decisions.map((d, i) => <p key={i} className={currentDecision(d, p.today) ? "font-semibold text-violet-900" : "text-gray-600"}>{d.outcomeLabel}{d.level ? ` at ${d.level}` : ""} · {d.assessorName} ({d.authority}){d.criteriaVersion ? ` · criteria ${d.criteriaVersion}` : ""} · {fmtDate(d.decidedAt)}{d.validUntil ? ` · valid until ${fmtDate(d.validUntil)}` : ""}{d.standing ? ` · ${DECISION_STANDING_LABEL[d.standing]}` : ""}</p>)}
+                      {v.requestedByOther && <span className="ml-1 rounded-md bg-violet-100 px-1.5 py-0.5 text-[11.5px] font-semibold text-violet-900">Requested by your programme lead</span>}
+                      {v.decisions.map((d, i) => {
+                        const valid = validityText(d, p.today), confirm = confirmationText(d);
+                        const staged = showsStage(d);
+                        return (
+                          <div key={i} className="mt-0.5">
+                            <p className={currentDecision(d, p.today) ? "font-semibold text-violet-900" : "text-gray-600"}>{d.outcomeLabel}{d.level ? ` at ${d.level}` : ""}{staged ? ` · Stage: ${d.stage}` : ""} · {d.assessorName} ({d.authority}){d.criteriaVersion ? ` · criteria ${d.criteriaVersion}` : ""} · {fmtDate(d.decidedAt)}{valid ? ` · ${valid}` : ""}{d.standing ? ` · ${DECISION_STANDING_LABEL[d.standing]}` : ""}{confirm ? ` · ${confirm}` : ""}</p>
+                            {!e.removed_at && mayAskReassessment(d, p.today) && !decisions.some(x => OPEN_REQUEST.includes(x.status)) && (p.methods === undefined || (p.methods?.length ?? 0) > 0) && (
+                              <div className="mt-1">
+                                <ApiForm action="/api/individual/professional/competency-verification" submitLabel="Ask to be reassessed" accent={accent} savedText="Requested. An appointed assessor will review it.">
+                                  <input type="hidden" name="entryId" value={e.id} /><input type="hidden" name="renewsDecisionId" value={d.decisionId} />
+                                  {p.methods && p.methods.length > 1 && (
+                                    <Field label="How it is to be assessed" htmlFor={`ver-r-${d.decisionId}`}>
+                                      <select id={`ver-r-${d.decisionId}`} name="method" required defaultValue="" className={inputCls}>
+                                        <option value="" disabled>Choose a method</option>
+                                        {p.methods.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
+                                      </select>
+                                    </Field>
+                                  )}
+                                  {p.methods && p.methods.length === 1 && <p className="text-[12.5px] text-gray-600">Method: {p.methods[0].name}</p>}
+                                  <p className="text-[12.5px] text-gray-600">Sends this competency and the evidence linked to it again, as a new request. This outcome does not change until an assessor decides.</p>
+                                </ApiForm>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                       {!e.removed_at && ["open", "assigned", "awaiting_evidence"].includes(v.status) && (
                         <div className="mt-1 flex flex-wrap gap-2">
                           {open.some(l => SHAREABLE_KINDS.includes(linkKind(l)) && !v.evidence.some(x => x.linkId === l.id)) && (
@@ -340,6 +385,15 @@ export function EntryDetail(p: {
                 </ul>
               )}
               {decisions.some(v => v.decisions.length > 0) && <p className="mt-1 text-[12px] text-gray-600">{ONE_ASSESSMENT}</p>}
+              {need && (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                  <p className="text-[13px] font-semibold text-gray-900">What is left to develop</p>
+                  <p className="text-[13px] text-gray-800">{need.reason}</p>
+                  {need.detail.length > 0 && <ul className="mt-1 list-disc pl-5 text-[13px] text-gray-800">{need.detail.map((t, i) => <li key={i}>{t}</li>)}</ul>}
+                  <p className="mt-1 text-[12px] text-gray-600">From the outcome of {fmtDate(need.decidedAt)}. It is only a suggestion: nothing is added to your plan unless you choose to.</p>
+                  {!e.removed_at && <VerificationNeed competencyTitle={e.title} frameworkCompetencyId={e.framework_competency_id ?? null} reason={need.reason} detail={need.detail} accent={accent} />}
+                </div>
+              )}
               {!e.removed_at && p.methods !== undefined && (p.methods === null || p.methods.length === 0) && (
                 <p className="mt-2 text-[13px] text-gray-700">{p.methods === null ? "The assessment methods could not be read just now." : "No assessment method is offered for this competency yet."}</p>
               )}

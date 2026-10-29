@@ -38,6 +38,23 @@ type Studio = {
 let studio: Studio | null = c5Studio();
 export function registerVerificationStudio(s: Studio) { studio = s; }
 
+// 690: validity, reassessment and stage, decided here so no Professional page names an outcome class (harness E6).
+const lapsedOn = (d: VerificationDecision, today: string) => d.standing === "expired" || (!d.standing && !!d.validUntil && d.validUntil < today);
+/** Pure: "valid" while a verified or partial outcome stands with an end date, "expired" once lapsed, else null. */
+export function decisionValidity(d: VerificationDecision, today: string): "valid" | "expired" | null {
+  if (!d.validUntil || (d.outcomeClass !== "verified" && d.outcomeClass !== "partial") || d.revokedAt || d.supersededBy) return null;
+  if (lapsedOn(d, today)) return "expired";
+  return currentDecision(d, today) ? "valid" : null;
+}
+/** Pure: a verified outcome current and ending within the window, or expired, and not replaced, may be reassessed. */
+export function mayAskReassessment(d: VerificationDecision, today: string, windowDays = 90): boolean {
+  if (d.outcomeClass !== "verified" || !d.decisionId || !d.validUntil || d.revokedAt || d.supersededBy) return false;
+  if (lapsedOn(d, today)) return true;
+  return currentDecision(d, today) && Math.round((Date.parse(`${d.validUntil.slice(0, 10)}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000) <= windowDays;
+}
+/** Pure: whether the stage at decision is shown (a verified or partial outcome that states one). */
+export const showsStage = (d: VerificationDecision) => !!d.stage && (d.outcomeClass === "verified" || d.outcomeClass === "partial");
+
 /** A decision that stands now as a verification outcome (verified or partial): C5's own standing when it gives one, else
  *  not revoked, superseded or expired. A decision without a class never stands. */
 export const currentDecision = (d: VerificationDecision, today: string) =>
@@ -52,7 +69,7 @@ export async function loadVerifications(admin: any, userId: string, frameworkCom
   try { return await studio.listVerifications(admin, userId, { frameworkCompetencyId }); } catch { return { provisioned: true, items: null }; }
 }
 
-export async function requestVerification(admin: any, userId: string, r: { competency: CompetencyRef; evidence: EvidenceRef[]; methodCode?: string; note?: string }) {
+export async function requestVerification(admin: any, userId: string, r: { competency: CompetencyRef; evidence: EvidenceRef[]; methodCode?: string; note?: string; renewsDecisionId?: string }) {
   if (!studio) return { ok: false as const, status: 409, error: "Independent verification is not available yet." };
   return studio.requestVerification(admin, userId, r);
 }
@@ -87,7 +104,7 @@ function toSummary(i: c5.VerificationItem): VerificationSummary {
       criteriaVersion: d.criteriaVersion.versionNo === null ? null : `version ${d.criteriaVersion.versionNo}`,
       decidedAt: d.decidedAt, validUntil: d.validUntil, revokedAt: d.revokedAt, supersededBy: d.supersededBy,
       decisionId: d.decisionId, stage: d.stage?.label ?? null,
-      confirmation: !d.confirmation.required ? null : d.confirmation.result ?? "awaiting",
+      confirmation: !d.confirmation?.required ? null : d.confirmation.result ?? "awaiting",
     })),
     requestedByOther: i.requestedByOther,
     developmentNeed: i.developmentNeed ? { reason: i.developmentNeed.reason, detail: i.developmentNeed.detail, decidedAt: i.developmentNeed.decidedAt } : null,

@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 // person, the method chosen from those C5 offers for it (the only one, when there is one), and the evidence linked to it
 // (competency-store evidenceForVerification: never a personal entry). A private reflection goes only when the person
 // ticked that reflection for this request (fields named reflection:<link id>).
+// A POST may also carry renewsDecisionId: a reassessment of that earlier decision, which the Studio validates.
 // PATCH { requestId, action: "withdraw" } withdraws the person's own request. PATCH { requestId, action: "add_evidence",
 // entryId, reflection:<linkId> } sends the evidence now linked to that competency, as further evidence.
 // Everything after the hand-over -- assessor assignment, assessment, the decision, expiry and revocation -- is the
@@ -47,10 +48,13 @@ export async function POST(req: Request) {
   const method = asked ? offered.methods.find(m => m.code === asked)?.code : offered.methods.length === 1 ? offered.methods[0].code : undefined;
   if (!offered.methods.length) return refuse("No assessment method is offered for this competency yet.", 409);
   if (!method) return refuse(asked ? "That method is not offered for this competency." : "Choose how the competency is to be assessed.");
-  const out = await requestVerification(ctx.admin, ctx.userId, { competency: h.handed.competency, evidence: h.handed.evidence, methodCode: method });
+  // A reassessment names the decision it renews (the Studio checks it); nothing else is passed through.
+  const renewsDecisionId = isUuid(fields.renewsDecisionId) ? fields.renewsDecisionId : undefined;
+  const asking = { competency: h.handed.competency, evidence: h.handed.evidence, methodCode: method, ...(renewsDecisionId ? { renewsDecisionId } : {}) };
+  const out = await requestVerification(ctx.admin, ctx.userId, asking);
   if (!out.ok) return refuse(out.error, out.status);
   await audit(ctx, "individual_professional_verification_requested", "individual_professional_my_competency", fields.entryId,
-    { request: out.requestId, method, evidence: h.handed.evidence.length, reflections_chosen: h.reflections.length });
+    { request: out.requestId, method, evidence: h.handed.evidence.length, reflections_chosen: h.reflections.length, renews: renewsDecisionId ?? null });
   return NextResponse.json({ ok: true, requestId: out.requestId }, { status: 201 });
 }
 
