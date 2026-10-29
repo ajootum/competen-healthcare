@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   checkAssessorRecord, checkDecision, checkMethodContent, componentOutcomeOf, deriveState, isAssessorEvidence, standingOf,
-  type AnyEvidenceKind, type MethodContent, type RequestState, type ScaleLevel, type Standing, type EvidenceKind,
+  cleanDraft, developmentNeedsOf, methodDraftFromCompetency,
+  type AnyEvidenceKind, type DecisionDraft, type DevelopmentNeed, type MethodContent, type RequestState, type ScaleLevel, type SourceComponent, type Standing, type EvidenceKind,
 } from "./verification-config";
 
 // ── THE COMPETENCY VERIFICATION STUDIO: READ AND WRITTEN ── COMPETENCY-01 C5, migration 510 ───────────────────────
@@ -48,6 +49,18 @@ async function with680<T = any>(run: (has680: boolean) => PromiseLike<{ data: T;
   const first = await run(true);
   if (first.error && missing(first.error) && /edited_by|component_|assessor_record|recorded_by|method_version_id/i.test(String(first.error.message ?? ""))) return run(false);
   return first;
+}
+
+/**
+ * 690 is likewise not yet everywhere. A read naming 690 columns is tried first, then as 680 wrote it, then as 510 did,
+ * each step ONLY when the database says a column of the newer migration does not exist.
+ */
+type Level = 690 | 680 | 510;
+async function withLevel<T = any>(run: (level: Level) => PromiseLike<{ data: T; error: any }>): Promise<{ data: T; error: any }> {
+  let r = await run(690);
+  if (r.error && missing(r.error) && /confirmation_required|stage_|requested_by/i.test(String(r.error.message ?? ""))) r = await run(680);
+  if (r.error && missing(r.error) && /edited_by|component_|assessor_record|recorded_by|method_version_id/i.test(String(r.error.message ?? ""))) r = await run(510);
+  return r;
 }
 
 /** Whether 510 is on this environment. A zero-row read, never HEAD. */
@@ -184,7 +197,13 @@ export type DecisionView = { id: string; assessorId: string | null; appointmentI
   outcomeCode: string; outcomeClass: string | null; outcomeLabel: string | null; levelId: string | null; criteria: any[]; checklist: any[]; evidenceReviewed: string[];
   rationale: string; validFrom: string | null; validUntil: string | null; decidedAt: string; standing: Standing; revokedReason: string | null;
   /** 680: empty and null when the method version assesses no components (or 680 is absent). */
-  componentResults: ComponentResultView[]; componentOutcome: ConsolidatedView | null };
+  componentResults: ComponentResultView[]; componentOutcome: ConsolidatedView | null;
+  /** 690: the stage of the published stage mapping, pinned to its version. null: no mapping published, or no level. */
+  stage: StageView | null;
+  /** 690: a second assessor's confirmation, where the method requires one. */
+  confirmationRequired: boolean; confirmation: ConfirmationView | null };
+export type StageView = { code: string; label: string; mappingVersion: number | null };
+export type ConfirmationView = { result: "confirmed" | "not_confirmed"; assessorId: string | null; rationale: string; at: string };
 
 /** Pure: a stored 680 component_results array, as a view. */
 export const componentResultsOf = (v: unknown): ComponentResultView[] => (Array.isArray(v) ? v : []).filter((r: any) => typeof r?.code === "string").map((r: any) => ({
@@ -194,40 +213,61 @@ export const componentResultsOf = (v: unknown): ComponentResultView[] => (Array.
 export type RequestView = { id: string; userId: string; competencyId: string; competency: { name: string; code: string | null; learning_outcomes: string[] } | null;
   frameworkVersion: string | null; methodVersionId: string; outcomeIndexes: number[]; targetLevelId: string | null; context: string; note: string | null; createdAt: string;
   state: RequestState; assignedTo: { assessorId: string; appointmentId: string } | null; evidence: EvidenceView[]; decisions: DecisionView[];
-  events: { event: string; actorId: string | null; reason: string | null; decisionId: string | null; at: string }[] };
+  events: { event: string; actorId: string | null; reason: string | null; decisionId: string | null; at: string }[];
+  /** 690: who asked for the assessment: the person, or a programme lead. null before 690. */
+  requestedBy: string | null; renewsDecisionId: string | null };
 
-const REQ_COLS = "id, user_id, competency_id, method_version_id, outcome_indexes, target_level_id, context, note, competency_snapshot, framework_version, created_at";
+const REQ_COLS = "id, user_id, competency_id, method_version_id, outcome_indexes, target_level_id, context, note, competency_snapshot, framework_version, created_at, renews_decision_id";
+const reqCols = (level: Level) => (level === 690 ? `${REQ_COLS}, requested_by` : REQ_COLS);
+const DEC_COLS = "id, request_id, user_id, assessor_id, appointment_id, method_version_id, method_content_hash, competency_hash, outcome_code, outcome_class, outcome_label, level_id, criteria_results, checklist_results, evidence_reviewed, rationale, valid_from, valid_until, created_at";
+const decCols = (level: Level) => DEC_COLS + (level !== 510 ? ", component_results, component_outcome" : "") + (level === 690 ? ", confirmation_required, stage_code, stage_label, stage_mapping_version" : "");
 
-/** Assemble requests with their evidence, events and decisions, deriving state and standing as 510 does. */
+/** 690 confirmations of these requests. Absent before 690, so none. */
+async function confirmationsOf(admin: any, requestIds: string[]): Promise<any[] | null> {
+  if (!requestIds.length) return [];
+  const { data, error } = await admin.from("competency_verification_confirmation").select("decision_id, request_id, assessor_id, result, rationale, created_at").in("request_id", requestIds);
+  if (error) return missing(error) ? [] : null;
+  return data ?? [];
+}
+
+/** Assemble requests with their evidence, events and decisions, deriving state and standing as 510 (and 690) does. */
 async function assemble(admin: any, reqs: any[], today: string): Promise<RequestView[] | null> {
   if (!reqs.length) return [];
   const ids = reqs.map(r => r.id);
-  const [ev, evts, decs] = await Promise.all([
+  const [ev, evts, decs, confs] = await Promise.all([
     admin.from("competency_verification_evidence").select("id, request_id, kind, outcome_indexes, provenance, cpd_id, learning_record_id, evidence_id, profile_item_id, reflection_id, created_at").in("request_id", ids).order("created_at"),
     admin.from("competency_verification_event").select("id, request_id, event, actor_id, assessor_id, appointment_id, decision_id, reason, created_at").in("request_id", ids).order("created_at"),
-    with680(has => admin.from("competency_verification_decision").select(`id, request_id, user_id, assessor_id, appointment_id, method_version_id, method_content_hash, competency_hash, outcome_code, outcome_class, outcome_label, level_id, criteria_results, checklist_results, evidence_reviewed, rationale, valid_from, valid_until, created_at${has ? ", component_results, component_outcome" : ""}`).in("request_id", ids).order("created_at")),
+    withLevel(level => admin.from("competency_verification_decision").select(decCols(level)).in("request_id", ids).order("created_at")),
+    confirmationsOf(admin, ids),
   ]);
-  if (ev.error || evts.error || decs.error) return null;
+  if (ev.error || evts.error || decs.error || confs === null) return null;
   const allDecisions = decs.data ?? [];
+  const confirmationOf = new Map<string, any>(confs.map((c: any) => [c.decision_id, c]));
+  // A decision stands on its own only when no confirmation is required, or it was confirmed. Only those supersede.
+  const standsAlone = (d: any) => !d.confirmation_required ? confirmationOf.get(d.id)?.result !== "not_confirmed" : confirmationOf.get(d.id)?.result === "confirmed";
   return reqs.map(r => {
     const evidence = (ev.data ?? []).filter((e: any) => e.request_id === r.id);
     const events = (evts.data ?? []).filter((e: any) => e.request_id === r.id);
     const decisions = allDecisions.filter((d: any) => d.request_id === r.id);
     const revoked = new Map<string, string | null>(events.filter((e: any) => e.event === "revoked").map((e: any) => [e.decision_id as string, e.reason as string | null]));
-    const sameCompetencyLater = allDecisions.filter((d: any) => reqs.find(x => x.id === d.request_id)?.competency_id === r.competency_id && d.user_id === r.user_id);
+    const sameCompetencyLater = allDecisions.filter((d: any) => reqs.find(x => x.id === d.request_id)?.competency_id === r.competency_id && d.user_id === r.user_id && standsAlone(d));
     const lastAssign = [...events].reverse().find((e: any) => e.event === "assigned" || e.event === "assignment_declined");
     return {
       id: r.id, userId: r.user_id, competencyId: r.competency_id, competency: r.competency_snapshot ?? null, frameworkVersion: r.framework_version, methodVersionId: r.method_version_id,
       outcomeIndexes: r.outcome_indexes ?? [-1], targetLevelId: r.target_level_id, context: r.context, note: r.note, createdAt: r.created_at,
-      state: deriveState(events, decisions, evidence),
+      requestedBy: r.requested_by ?? null, renewsDecisionId: r.renews_decision_id ?? null,
+      state: deriveState(events, decisions, evidence, confs.filter((c: any) => c.request_id === r.id)),
       assignedTo: lastAssign?.event === "assigned" ? { assessorId: lastAssign.assessor_id, appointmentId: lastAssign.appointment_id } : null,
       evidence: evidence.map((e: any) => ({ id: e.id, kind: e.kind, outcomeIndexes: e.outcome_indexes ?? [-1], provenance: e.provenance ?? {},
         sourcePresent: isAssessorEvidence(e.kind) || !!(e.cpd_id ?? e.learning_record_id ?? e.evidence_id ?? e.profile_item_id ?? e.reflection_id), addedAt: e.created_at })),
       decisions: decisions.map((d: any) => ({ id: d.id, assessorId: d.assessor_id, appointmentId: d.appointment_id, methodVersionId: d.method_version_id, methodContentHash: d.method_content_hash,
         competencyHash: d.competency_hash, outcomeCode: d.outcome_code, outcomeClass: d.outcome_class, outcomeLabel: d.outcome_label, levelId: d.level_id, criteria: d.criteria_results ?? [],
         checklist: d.checklist_results ?? [], evidenceReviewed: d.evidence_reviewed ?? [], rationale: d.rationale, validFrom: d.valid_from, validUntil: d.valid_until, decidedAt: d.created_at,
-        standing: standingOf(d, new Set(revoked.keys()), sameCompetencyLater, today), revokedReason: revoked.get(d.id) ?? null,
-        componentResults: componentResultsOf(d.component_results), componentOutcome: componentOutcomeOf(d.component_outcome) })),
+        standing: standingOf(d, new Set(revoked.keys()), sameCompetencyLater, today, confirmationOf.get(d.id)?.result ?? null), revokedReason: revoked.get(d.id) ?? null,
+        componentResults: componentResultsOf(d.component_results), componentOutcome: componentOutcomeOf(d.component_outcome),
+        stage: d.stage_code ? { code: d.stage_code, label: d.stage_label ?? d.stage_code, mappingVersion: d.stage_mapping_version ?? null } : null,
+        confirmationRequired: d.confirmation_required === true,
+        confirmation: confirmationOf.has(d.id) ? { result: confirmationOf.get(d.id).result, assessorId: confirmationOf.get(d.id).assessor_id ?? null, rationale: confirmationOf.get(d.id).rationale, at: confirmationOf.get(d.id).created_at } : null })),
       events: events.map((e: any) => ({ event: e.event, actorId: e.actor_id, reason: e.reason, decisionId: e.decision_id ?? null, at: e.created_at })),
     };
   });
@@ -236,7 +276,7 @@ async function assemble(admin: any, reqs: any[], today: string): Promise<Request
 /** Internal assembly of the person's own requests, newest first. Products use listVerifications. null = unreadable. */
 export async function loadVerifications(admin: any, userId: string, today = new Date().toISOString().slice(0, 10)): Promise<RequestView[] | null> {
   try {
-    const { data, error } = await admin.from("competency_verification_request").select(REQ_COLS).eq("user_id", userId).order("created_at", { ascending: false }).limit(500);
+    const { data, error } = await withLevel(level => admin.from("competency_verification_request").select(reqCols(level)).eq("user_id", userId).order("created_at", { ascending: false }).limit(500));
     if (error) return missing(error) ? [] : null;
     return assemble(admin, data ?? [], today);
   } catch { return null; }
@@ -263,6 +303,9 @@ export type VerificationDecision = {
   standing: Standing; revokedAt: string | null; revokedReason: string | null; supersededBy: string | null;
   /** 680: the per-component results and the consolidated CCHU outcome the database computed. null: no components. */
   components: { results: ComponentResultView[]; outcome: ConsolidatedView } | null;
+  /** 690: the stage at decision (published mapping, pinned), and the second assessor's confirmation where required. */
+  stage: StageView | null;
+  confirmation: { required: boolean; result: "confirmed" | "not_confirmed" | null; at: string | null };
 };
 export type VerificationItem = {
   requestId: string; status: RequestState;
@@ -273,6 +316,10 @@ export type VerificationItem = {
   decisions: VerificationDecision[];
   /** The decision that stands today as a verification (verified or partial, not revoked, expired or superseded), or null. */
   current: VerificationDecision | null;
+  /** 690: true when a programme lead, not the person, asked for this assessment. */
+  requestedByOther: boolean;
+  /** 690: what the latest outcome leaves to develop (partial, further evidence, not demonstrated), or null. Offered, never written. */
+  developmentNeed: DevelopmentNeed | null;
 };
 /** Who decides, in words. The Competency Assessor is a Holdings appointment, separate from content review. */
 export const ASSESSOR_AUTHORITY = "Competency Assessor, appointed by Competen Holdings";
@@ -290,12 +337,14 @@ export async function listVerifications(admin: any, userId: string, opts: { fram
     const decisions = mine.flatMap(v => v.decisions);
     const levelIds = [...new Set(decisions.map(d => d.levelId).filter(Boolean))] as string[];
     const assessorIds = [...new Set(decisions.map(d => d.assessorId).filter(Boolean))] as string[];
-    const [lv, ppl, rq, ev] = await Promise.all([
+    const [lv, ppl, rq, ev, reg] = await Promise.all([
       levelIds.length ? admin.from("scoring_levels").select("id, score, label").in("id", levelIds) : { data: [] },
       assessorIds.length ? admin.from("profiles").select("id, full_name").in("id", assessorIds) : { data: [] },
       admin.from("competency_verification_request").select("id, framework_id").in("id", mine.map(v => v.id)),
       admin.from("competency_verification_evidence").select("id, portfolio_link_id").in("request_id", mine.map(v => v.id)),
+      decisions.some(d => d.componentOutcome) ? admin.from("competency_assessment_component").select("code, label") : { data: [] },
     ]);
+    const componentLabel = new Map<string, string>((reg.data ?? []).map((c: any) => [c.code, c.label]));
     const level = new Map<string, any>((lv.data ?? []).map((l: any) => [l.id, l]));
     const name = new Map<string, string | null>((ppl.data ?? []).map((p: any) => [p.id, p.full_name ?? null]));
     const fwOf = new Map<string, string | null>((rq.data ?? []).map((r: any) => [r.id, r.framework_id ?? null]));
@@ -306,7 +355,7 @@ export async function listVerifications(admin: any, userId: string, opts: { fram
       const words = (idx: number[]) => (idx.includes(-1) ? [] : idx.map(i => all[i] ?? `Outcome ${i + 1}`));
       const ver = versions.get(v.methodVersionId);
       const ds: VerificationDecision[] = v.decisions.map(d => {
-        const later = sameCompetency(v).filter(x => x.outcomeClass === "verified" && x.decidedAt > d.decidedAt).sort((a, b) => a.decidedAt.localeCompare(b.decidedAt))[0];
+        const later = sameCompetency(v).filter(x => x.outcomeClass === "verified" && x.decidedAt > d.decidedAt && x.standing !== "awaiting_confirmation" && x.standing !== "not_confirmed").sort((a, b) => a.decidedAt.localeCompare(b.decidedAt))[0];
         const revoked = v.events.find(e => e.event === "revoked" && e.decisionId === d.id);
         const l = d.levelId ? level.get(d.levelId) : null;
         return {
@@ -317,6 +366,7 @@ export async function listVerifications(admin: any, userId: string, opts: { fram
           competencyHash: d.competencyHash, rationale: d.rationale, decidedAt: d.decidedAt, validFrom: d.validFrom, validUntil: d.validUntil,
           standing: d.standing, revokedAt: revoked?.at ?? null, revokedReason: d.revokedReason, supersededBy: d.standing === "superseded" ? later?.id ?? null : null,
           components: d.componentOutcome ? { results: d.componentResults, outcome: d.componentOutcome } : null,
+          stage: d.stage, confirmation: { required: d.confirmationRequired, result: d.confirmation?.result ?? null, at: d.confirmation?.at ?? null },
         };
       });
       return {
@@ -333,6 +383,8 @@ export async function listVerifications(admin: any, userId: string, opts: { fram
         })),
         decisions: ds,
         current: [...ds].reverse().find(d => d.standing === "current") ?? null,
+        requestedByOther: !!v.requestedBy && v.requestedBy !== v.userId,
+        developmentNeed: developmentNeedsOf({ competencyId: v.competencyId, title: v.competency?.name ?? "", decisions: ds.filter(d => d.standing !== "not_confirmed") }, c => componentLabel.get(c) ?? c),
       };
     });
     return { provisioned: true, items };
@@ -345,7 +397,7 @@ export const verificationsForCompetency = (items: readonly VerificationItem[], f
 /** For the Studio: every request not withdrawn, newest first. */
 export async function loadQueue(admin: any, today = new Date().toISOString().slice(0, 10)): Promise<RequestView[] | null> {
   try {
-    const { data, error } = await admin.from("competency_verification_request").select(REQ_COLS).order("created_at", { ascending: false }).limit(500);
+    const { data, error } = await withLevel(level => admin.from("competency_verification_request").select(reqCols(level)).order("created_at", { ascending: false }).limit(500));
     if (error) return missing(error) ? [] : null;
     return assemble(admin, data ?? [], today);
   } catch { return null; }
@@ -610,4 +662,194 @@ export async function evidenceDocumentPath(admin: any, assessorId: string, evide
   const { data: assign } = await admin.from("competency_verification_event").select("assessor_id, event").eq("request_id", e.request_id).in("event", ["assigned", "assignment_declined"]).order("created_at", { ascending: false }).limit(1);
   if (assign?.[0]?.event !== "assigned" || assign[0].assessor_id !== assessorId) return { ok: false, status: 403, error: "Only the assessor assigned to this request can open its documents." };
   return { ok: true, path };
+}
+
+// ── 690: CCHU ASSESSMENT OPERATIONS ───────────────────────────────────────────────────────────────────────────────
+//
+// Every write below is re-checked by migration 690's triggers, beside 510 and 680: clinical approval of the exact method
+// content before publication and before any verification, criteria pinned to the competency, requests by a programme
+// lead only with hq.competency.verification.request, drafts only by the assigned assessor, and a second assessor who is
+// neither the person nor the first assessor.
+
+const NOT_690 = { ok: false as const, status: 409, error: "This part of competency assessment is not set up on this environment yet (migration 690)." };
+
+/**
+ * A method draft made from one competency's criteria, exactly as the competency has them (690 pins each one). Only from
+ * a competency whose current content is clinically approved, so the method starts from approved criteria. The draft
+ * then goes through clinical review and independent publication like any other.
+ */
+export async function generateMethodFromCompetency(admin: any, actor: string, b: { competencyId?: unknown; code?: unknown; name?: unknown; kind?: unknown; scaleId?: unknown; entryId?: unknown },
+  clinicalState: (admin: any, id: string) => Promise<string | null>): Promise<Write<{ methodId: string; versionId: string; problems: string[] }>> {
+  const competencyId = String(b.competencyId ?? "");
+  if (!UUID.test(competencyId)) return { ok: false, status: 400, error: "Choose the competency." };
+  const { data: comp } = await admin.from("framework_competencies").select("id, name, framework_domains!inner(frameworks!inner(hospital_id))").eq("id", competencyId).maybeSingle();
+  if (!comp) return { ok: false, status: 404, error: "That competency is not in the catalogue." };
+  const dom = Array.isArray(comp.framework_domains) ? comp.framework_domains[0] : comp.framework_domains;
+  const fw = Array.isArray(dom?.frameworks) ? dom.frameworks[0] : dom?.frameworks;
+  if (fw?.hospital_id) return { ok: false, status: 409, error: "Only a competency of a shared framework is assessed here." };
+  if ((await clinicalState(admin, competencyId)) !== "approved") return { ok: false, status: 409, error: "Its criteria are not clinically approved at their current version. A method is made only from approved criteria." };
+  const { data: skills, error: sErr } = await admin.from("competency_skills").select("id, name, component_code, source_ref, sort_order").eq("competency_id", competencyId).order("sort_order").limit(200);
+  if (sErr) return refusalOf(sErr, "criteria");
+  let configured: SourceComponent[] = [];
+  if (UUID.test(String(b.entryId ?? ""))) {
+    const { data: ec } = await admin.from("competency_catalogue_entry_component").select("component_code, pass_level_id, is_mandatory, is_safety_critical, weight, sort_order").eq("entry_id", b.entryId).order("sort_order");
+    configured = (ec ?? []).map((k: any) => ({ code: k.component_code, passLevelId: k.pass_level_id ?? null, mandatory: k.is_mandatory !== false, safetyCritical: k.is_safety_critical === true, weight: k.weight === null || k.weight === undefined ? null : Number(k.weight) }));
+  }
+  const made = methodDraftFromCompetency({ id: comp.id, name: comp.name }, (skills ?? []).map((k: any) => ({ id: k.id, name: k.name, componentCode: k.component_code ?? null, sourceRef: k.source_ref ?? null })),
+    configured, UUID.test(String(b.scaleId ?? "")) ? String(b.scaleId) : null);
+  if (!made.ok) return { ok: false, status: 400, error: made.error };
+  const m = await createMethod(admin, actor, { code: b.code, name: b.name ?? comp.name, kind: b.kind ?? "structured_assessment" });
+  if (!m.ok) return m;
+  const s = await saveDraft(admin, actor, m.versionId, made.content);
+  if (!s.ok) return s;
+  return { ok: true, methodId: m.methodId, versionId: m.versionId, problems: [...new Set([...made.problems, ...s.problems])] };
+}
+
+/** Put a draft method version forward for clinical review (690, on the one clinical-approval process). */
+export async function submitMethodForReview(admin: any, actor: string, versionId: string): Promise<Write<{ reviewVersionId: string }>> {
+  if (!UUID.test(versionId)) return { ok: false, status: 400, error: "Choose a version." };
+  const { data, error } = await admin.rpc("competency_method_submit_review", { p_version: versionId, p_submitter: actor });
+  if (error && missing(error)) return NOT_690;
+  if (error) {
+    const m = String(error.message ?? "").replace(/^(competency_method_submit_review|clinical_content_version): /, "");
+    return { ok: false, status: /not authorised/i.test(m) ? 403 : 409, error: m.replace(/^./, c => c.toUpperCase()) + (/\.$/.test(m) ? "" : ".") };
+  }
+  return { ok: true, reviewVersionId: data as string };
+}
+
+export type MethodReview = { state: "not_submitted" | "in_review" | "approved" | "changes_requested" | "changed_since"; approvals: number; required: number; submittedAt: string | null; comment: string | null };
+export const METHOD_REVIEW_LABEL: Record<MethodReview["state"], string> = {
+  not_submitted: "Not yet put forward for clinical review", in_review: "In clinical review", approved: "Clinically approved",
+  changes_requested: "Clinical reviewer asked for changes", changed_since: "Edited since it was put forward: put it forward again",
+};
+
+/**
+ * Pure: the clinical review state of one method version, from its review records and their decisions. A draft edited
+ * after it was put forward is "changed_since": that review no longer applies to it (the database compares the exact hash).
+ */
+export function methodReviewOf(v: { state: string; content_hash: string | null; updated_at: string }, records: readonly { id: string; content_hash: string; required_approvals: number; created_at: string }[],
+  decisions: readonly { version_id: string; decision: string; comment: string | null }[]): MethodReview {
+  const r = [...records].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  if (!r) return { state: "not_submitted", approvals: 0, required: 1, submittedAt: null, comment: null };
+  const ds = decisions.filter(d => d.version_id === r.id);
+  const approvals = ds.filter(d => d.decision === "approved").length;
+  const rejected = ds.find(d => d.decision === "rejected");
+  const base = { approvals, required: r.required_approvals, submittedAt: r.created_at, comment: rejected?.comment ?? null };
+  if (v.state === "draft" ? v.updated_at > r.created_at : v.content_hash !== r.content_hash) return { ...base, state: "changed_since" };
+  if (rejected) return { ...base, state: "changes_requested" };
+  return { ...base, state: approvals >= r.required_approvals ? "approved" : "in_review" };
+}
+
+/** The clinical review state of each method version. Empty before 690. */
+export async function loadMethodReviews(admin: any, versions: readonly Pick<MethodVersionRow, "id" | "state" | "content_hash" | "updated_at">[]): Promise<Map<string, MethodReview>> {
+  const out = new Map<string, MethodReview>();
+  if (!versions.length) return out;
+  const { data: recs, error } = await admin.from("clinical_content_version").select("id, method_version_id, content_hash, required_approvals, created_at").eq("content_kind", "method").in("method_version_id", versions.map(v => v.id));
+  if (error) return out;
+  const { data: decs } = (recs ?? []).length ? await admin.from("clinical_review_decision").select("version_id, decision, comment").in("version_id", (recs ?? []).map((r: any) => r.id)) : { data: [] };
+  for (const v of versions) out.set(v.id, methodReviewOf(v, (recs ?? []).filter((r: any) => r.method_version_id === v.id), decs ?? []));
+  return out;
+}
+
+/**
+ * A programme lead asks for an assessment for an eligible person (690 requested_by, needing
+ * hq.competency.verification.request). Eligible: an account confirmed as a real person, never the lead themself (their
+ * own request is made from their own competencies). The person adds the evidence and may withdraw.
+ */
+export async function requestAssessmentFor(admin: any, actor: string, b: { userId?: unknown; competencyId?: unknown; methodVersionId?: unknown; targetLevelId?: unknown;
+  context?: unknown; note?: unknown; renewsDecisionId?: unknown }, isEligible: (admin: any, userId: string) => Promise<boolean>): Promise<Write<{ requestId: string }>> {
+  if (!(await verificationReady(admin))) return NOT_PROVISIONED;
+  const userId = String(b.userId ?? ""), competencyId = String(b.competencyId ?? ""), methodVersionId = String(b.methodVersionId ?? "");
+  if (!UUID.test(userId)) return { ok: false, status: 400, error: "Choose the person to be assessed." };
+  if (userId === actor) return { ok: false, status: 400, error: "Ask for your own assessment from your own competencies, not here." };
+  if (!UUID.test(competencyId) || !UUID.test(methodVersionId)) return { ok: false, status: 400, error: "Choose the competency and the assessment method." };
+  if (!(await isEligible(admin, userId))) return { ok: false, status: 409, error: "Only a person whose account is confirmed as a real person can be put forward for assessment." };
+  const note = typeof b.note === "string" && b.note.trim() ? b.note.trim().slice(0, 2000) : null;
+  const context = typeof b.context === "string" && /^[a-z][a-z0-9_]{1,40}$/.test(b.context) ? b.context : "independent";
+  const { data, error } = await admin.from("competency_verification_request").insert({
+    user_id: userId, competency_id: competencyId, method_version_id: methodVersionId, requested_by: actor, context, note,
+    target_level_id: UUID.test(String(b.targetLevelId ?? "")) ? b.targetLevelId : null, renews_decision_id: UUID.test(String(b.renewsDecisionId ?? "")) ? b.renewsDecisionId : null,
+  }).select("id").single();
+  if (error && missing(error)) return NOT_690;
+  return error || !data ? refusalOf(error, "request") : { ok: true, requestId: data.id };
+}
+
+/** The requests a programme lead raised, newest first. Empty before 690. */
+export async function loadRequestsBy(admin: any, actor: string, today = new Date().toISOString().slice(0, 10)): Promise<RequestView[] | null> {
+  try {
+    const { data, error } = await admin.from("competency_verification_request").select(reqCols(690)).eq("requested_by", actor).order("created_at", { ascending: false }).limit(200);
+    if (error) return missing(error) ? [] : null;
+    return assemble(admin, data ?? [], today);
+  } catch { return null; }
+}
+
+/** The assigned assessor's working draft of a decision, or null. */
+export async function loadDecisionDraft(admin: any, assessorId: string, requestId: string): Promise<{ content: DecisionDraft; updatedAt: string } | null> {
+  if (!UUID.test(requestId)) return null;
+  const { data, error } = await admin.from("competency_verification_decision_draft").select("content, updated_at").eq("request_id", requestId).eq("assessor_id", assessorId).maybeSingle();
+  return error || !data ? null : { content: cleanDraft(data.content ?? {}), updatedAt: data.updated_at };
+}
+
+/** Save the working draft, for this assessor on any device. Only while the request is with them (690 checks). */
+export async function saveDecisionDraft(admin: any, assessorId: string, requestId: string, input: unknown): Promise<Write<{ savedAt: string }>> {
+  if (!UUID.test(requestId)) return { ok: false, status: 400, error: "Choose a request." };
+  const a = await assignedTo(admin, requestId);
+  if (a?.event !== "assigned" || a.assessor_id !== assessorId) return { ok: false, status: 403, error: "Only the assessor assigned to this request keeps a draft of it." };
+  const { data, error } = await admin.from("competency_verification_decision_draft")
+    .upsert({ request_id: requestId, assessor_id: assessorId, appointment_id: a.appointment_id, content: cleanDraft(input) }, { onConflict: "request_id,assessor_id" })
+    .select("updated_at").single();
+  if (error && missing(error)) return NOT_690;
+  return error || !data ? refusalOf(error, "draft") : { ok: true, savedAt: data.updated_at };
+}
+
+/** For a second assessor: decisions awaiting confirmation they may confirm (not theirs, not on their own request, in scope). */
+export async function loadConfirmationQueue(admin: any, assessorId: string, today = new Date().toISOString().slice(0, 10)): Promise<(RequestView & { decisionId: string; confirmWith: string })[] | null> {
+  const all = await loadQueue(admin, today);
+  if (all === null) return null;
+  const waiting = all.filter(r => r.state === "awaiting_confirmation" && r.userId !== assessorId);
+  if (!waiting.length) return [];
+  const { data: appts } = await admin.from("ogs_office_appointments").select("id").eq("person_id", assessorId).eq("role", "competency_assessor").eq("status", "active");
+  const versions = await loadVersionsById(admin, [...new Set(waiting.map(r => r.methodVersionId))]);
+  const out: (RequestView & { decisionId: string; confirmWith: string })[] = [];
+  for (const r of waiting) {
+    const d = [...r.decisions].reverse().find(x => x.confirmationRequired && !x.confirmation);
+    if (!d || d.assessorId === assessorId) continue;
+    for (const ap of (appts ?? []).map((x: any) => x.id as string)) {
+      const { data: covers } = await admin.rpc("competency_assessor_covers", { p_appointment: ap, p_competency: r.competencyId, p_method: versions.get(r.methodVersionId)?.method_id, p_level: d.levelId ?? r.targetLevelId, p_context: r.context, p_on: today });
+      if (covers === true) { out.push({ ...r, decisionId: d.id, confirmWith: ap }); break; }
+    }
+  }
+  return out;
+}
+
+/** A second assessor confirms, or does not confirm, a decision awaiting confirmation (690). */
+export async function confirmDecision(admin: any, assessorId: string, b: { decisionId?: unknown; appointmentId?: unknown; result?: unknown; rationale?: unknown }): Promise<Write> {
+  const decisionId = String(b.decisionId ?? ""), appointmentId = String(b.appointmentId ?? "");
+  if (!UUID.test(decisionId) || !UUID.test(appointmentId)) return { ok: false, status: 400, error: "Choose the decision and your assessor appointment." };
+  if (b.result !== "confirmed" && b.result !== "not_confirmed") return { ok: false, status: 400, error: "Confirm the outcome, or say it is not confirmed." };
+  const rationale = typeof b.rationale === "string" ? b.rationale.trim().slice(0, 2000) : "";
+  if (rationale.length < 10) return { ok: false, status: 400, error: "Give your reasons, in at least 10 characters." };
+  const { data: d } = await admin.from("competency_verification_decision").select("request_id, user_id, assessor_id").eq("id", decisionId).maybeSingle();
+  if (!d) return { ok: false, status: 404, error: "No such decision." };
+  if (d.user_id === assessorId || d.assessor_id === assessorId) return { ok: false, status: 403, error: "Not independent. The second assessor is neither the person nor the first assessor." };
+  const { error } = await admin.from("competency_verification_confirmation").insert({ decision_id: decisionId, request_id: d.request_id, user_id: d.user_id, assessor_id: assessorId, appointment_id: appointmentId, result: b.result, rationale });
+  if (error && missing(error)) return NOT_690;
+  return error ? refusalOf(error, "confirmation") : { ok: true };
+}
+
+/** Pure: verifications whose validity ends within `days`, or has ended, soonest first, unless a later request renews them. */
+export function renewalsDue(items: readonly VerificationItem[], today: string, days = 90, renewed: ReadonlySet<string> = new Set()): { item: VerificationItem; decision: VerificationDecision; daysLeft: number }[] {
+  const t = Date.parse(`${today}T00:00:00Z`);
+  const out: { item: VerificationItem; decision: VerificationDecision; daysLeft: number }[] = [];
+  const newest = new Map<string, VerificationItem>();
+  for (const i of items) { const k = i.competency.frameworkCompetencyId, p = newest.get(k); if (!p || i.requestedAt > p.requestedAt) newest.set(k, i); }
+  for (const item of items) {
+    const d = item.current ?? [...item.decisions].reverse().find(x => x.standing === "expired" && x.outcomeClass === "verified") ?? null;
+    if (!d?.validUntil || d.outcomeClass !== "verified" || renewed.has(d.decisionId)) continue;
+    // Only the newest request about the competency can be due: an older one has been assessed again since.
+    if (newest.get(item.competency.frameworkCompetencyId) !== item) continue;
+    const left = Math.round((Date.parse(`${d.validUntil}T00:00:00Z`) - t) / 86400000);
+    if (left <= days) out.push({ item, decision: d, daysLeft: left });
+  }
+  return out.sort((a, b) => a.daysLeft - b.daysLeft);
 }

@@ -13,20 +13,24 @@ import { NOT_A_DECLARATION, STANDING_LABEL, STATE_LABEL, isAssessorEvidence, typ
 
 /** The kind of outcome, fixed by C5. The CODE is per-method configuration ("verified_at_level"), so no rule reads it. */
 export type OutcomeClass = "verified" | "partial" | "further_evidence" | "not_demonstrated" | "unable_to_determine";
-export type Standing = "current" | "expired" | "revoked" | "superseded" | "not_a_verification";
+export type Standing = "current" | "expired" | "revoked" | "superseded" | "awaiting_confirmation" | "not_confirmed" | "not_a_verification";
 
 export type VerificationDecision = {
   outcomeCode: string; outcomeClass: OutcomeClass | null; standing?: Standing; outcomeLabel: string; level: string | null; assessorName: string; authority: string; criteriaVersion: string | null;
   decidedAt: string; validUntil: string | null; revokedAt: string | null; supersededBy: string | null;
+  /** 690: the stage at decision (published mapping), and the second assessor confirmation where the method needs one. */
+  decisionId?: string; stage?: string | null; confirmation?: "awaiting" | "confirmed" | "not_confirmed" | null;
 };
 export type VerificationSummary = {
   requestId: string; status: string; statusLabel?: string; competency: CompetencyRef; method: string | null; requestedAt: string; evidence: EvidenceRef[]; decisions: VerificationDecision[];
+  /** 690: a programme lead asked for it, and what the latest outcome leaves to develop (offered to the person, never written). */
+  requestedByOther?: boolean; developmentNeed?: { reason: string; detail: string[]; decidedAt: string } | null;
 };
 export type VerificationRead = { provisioned: false } | { provisioned: true; items: VerificationSummary[] | null };
 
 type Studio = {
   listVerifications: (admin: any, userId: string, f: { frameworkCompetencyId?: string }) => Promise<VerificationRead>;
-  requestVerification: (admin: any, userId: string, r: { competency: CompetencyRef; evidence: EvidenceRef[]; methodCode?: string; note?: string }) => Promise<{ ok: true; requestId: string } | { ok: false; status: number; error: string }>;
+  requestVerification: (admin: any, userId: string, r: { competency: CompetencyRef; evidence: EvidenceRef[]; methodCode?: string; note?: string; renewsDecisionId?: string }) => Promise<{ ok: true; requestId: string } | { ok: false; status: number; error: string }>;
 };
 
 /** The Studio (COMPETEN-IND-007), adapted at the foot of this file. Its own readiness check answers "not provisioned"
@@ -82,7 +86,11 @@ function toSummary(i: c5.VerificationItem): VerificationSummary {
       outcomeLabel: d.outcomeLabel, level: d.level?.label ?? null, assessorName: d.assessorName ?? "An appointed assessor", authority: d.authority,
       criteriaVersion: d.criteriaVersion.versionNo === null ? null : `version ${d.criteriaVersion.versionNo}`,
       decidedAt: d.decidedAt, validUntil: d.validUntil, revokedAt: d.revokedAt, supersededBy: d.supersededBy,
+      decisionId: d.decisionId, stage: d.stage?.label ?? null,
+      confirmation: !d.confirmation.required ? null : d.confirmation.result ?? "awaiting",
     })),
+    requestedByOther: i.requestedByOther,
+    developmentNeed: i.developmentNeed ? { reason: i.developmentNeed.reason, detail: i.developmentNeed.detail, decidedAt: i.developmentNeed.decidedAt } : null,
   };
 }
 
@@ -93,7 +101,7 @@ function c5Studio(): Studio {
       if (r === null) return { provisioned: true, items: null };
       return r.provisioned ? { provisioned: true, items: r.items.map(toSummary) } : { provisioned: false };
     },
-    requestVerification: (admin, userId, r) => c5.requestVerification(admin, userId, { competency: r.competency, methodCode: r.methodCode, note: r.note, evidence: r.evidence.map(toRef) }),
+    requestVerification: (admin, userId, r) => c5.requestVerification(admin, userId, { competency: r.competency, methodCode: r.methodCode, note: r.note, renewsDecisionId: r.renewsDecisionId, evidence: r.evidence.map(toRef) }),
   };
 }
 

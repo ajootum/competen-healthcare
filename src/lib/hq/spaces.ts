@@ -183,6 +183,8 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // Neither is granted to any existing position, and 511 keeps assess apart from content approval and the Studio.
   { code: "hq.competency.verification.manage", space: "quality"  },
   { code: "hq.competency.verification.assess", space: "quality"  },
+  // Migration 690: a Competency Programme Lead asks for assessments for the people on their programme. Never decides one.
+  { code: "hq.competency.verification.request", space: "quality"  },
 ];
 
 export const HQ_CAPABILITY_CODES = HQ_CAPABILITIES.map(c => c.code);
@@ -270,6 +272,8 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   // Migration 510 (COMPETENCY-01 C5). Two separate doors: the assessor queue must not inherit the Studio, nor the reverse.
   { prefix: "/super-admin/competency-assessment", capability: "hq.competency.verification.assess" },
   { prefix: "/super-admin/verification-studio", capability: "hq.competency.verification.manage" },
+  // Migration 690: the programme lead door, separate from both.
+  { prefix: "/super-admin/competency-requests", capability: "hq.competency.verification.request" },
   { prefix: "/super-admin/learning/review",       capability: "hq.quality.clinical.approve" },
   { prefix: "/super-admin/learning/publication",  capability: "hq.learning.course.publish" },
   { prefix: "/super-admin/learning/prices",       capability: "hq.learning.price.approve" },
