@@ -21,13 +21,15 @@ function fake() {
     const q: any = {};
     let write: { op: string; row: any } | null = null;
     const rec = (op: string, args: any[]) => S.calls.push({ table, op, args });
-    for (const op of ["select", "order", "limit", "or", "in"]) q[op] = (...a: any[]) => { rec(op, a); return q; };
+    const within: [string, any[]][] = [];
+    for (const op of ["select", "order", "limit", "or"]) q[op] = (...a: any[]) => { rec(op, a); return q; };
+    q.in = (...a: any[]) => { rec("in", a); within.push([a[0], a[1]]); return q; };
     q.eq = (...a: any[]) => { rec("eq", a); f.push([a[0], a[1]]); return q; };
     q.is = (...a: any[]) => { rec("is", a); f.push([a[0], a[1]]); return q; };
     q.insert = (row: any) => { rec("insert", [row]); write = { op: "insert", row }; return q; };
     q.update = (row: any) => { rec("update", [row]); write = { op: "update", row }; return q; };
     q.delete = () => { rec("delete", []); write = { op: "delete", row: null }; return q; };
-    const hit = () => (S.rows[table] ?? []).filter(r => f.every(([k, v]) => !(k in r) || r[k] === v));
+    const hit = () => (S.rows[table] ?? []).filter(r => f.every(([k, v]) => !(k in r) || r[k] === v) && within.every(([k, vs]) => !(k in r) || vs.includes(r[k])));
     const done = () => {
       if (write?.op === "insert") {
         if (table === "audit_log" && S.auditFails) return { data: null, error: { message: "down" } };
@@ -149,7 +151,19 @@ describe("a draft package: DRAFT, not clinically reviewed, nothing approved or p
     expect(S.rows.audit_log.find(a => a.action === "cfca_draft_imported")?.new_value.provenance).toMatchObject({ source: expect.stringMatching(/staging/) });
   });
 
-  it("an import is refused whole when the framework code already exists, and writes nothing", async () => {
+  it("the same package again resumes its own DRAFT: nothing already there is written twice", async () => {
+    S.rows.frameworks = [{ id: FW, code: "CF-FOUND", name: "Competen Foundational", pub_status: "draft", hospital_id: null }];
+    S.rows.framework_domains = []; S.rows.framework_competencies = [];
+    const r = await importDraftPackage(fake(), ME, PKG);
+    expect(r).toMatchObject({ ok: true, resumed: true, competencies: 8 });
+    expect(S.rows.frameworks).toHaveLength(1);
+    const again = await importDraftPackage(fake(), ME, PKG);
+    expect(again).toMatchObject({ ok: true, resumed: true, competencies: 0 });
+    expect(S.rows.framework_competencies).toHaveLength(8);
+  });
+
+  it("an import is refused whole when the framework exists and is no longer a draft, and writes nothing", async () => {
+    S.rows.frameworks = [{ id: FW, code: "CF-FOUND", name: "Competen Foundational", pub_status: "published", hospital_id: null }];
     expect(await importDraftPackage(fake(), ME, PKG)).toMatchObject({ ok: false, status: 409 });
     expect(writes()).toEqual([]);
   });
@@ -177,7 +191,7 @@ describe("CFCA-STUDIO-P1 (670): criteria by component and parent links travel wi
   });
   const seed = () => {
     S.rows.frameworks = []; S.rows.framework_domains = []; S.rows.competency_skills = []; S.rows.competency_dependencies = [];
-    S.rows.framework_competencies = [{ id: PARENT, name: "Provides Safe Respiratory Care", code: null }];
+    S.rows.framework_competencies = [{ id: PARENT, name: "Provides Safe Respiratory Care", code: null, domain_id: "core-domain" }];
     S.rows.taxonomy_terms = [{ id: "00000000-0000-4000-8000-00000000aa01", value: "Nursing" }];
     S.rows.competency_assessment_component = ["clinical_skills", "knowledge", "knowledge_application"].map(code => ({ code, is_active: true }));
   };
@@ -208,6 +222,21 @@ describe("CFCA-STUDIO-P1 (670): criteria by component and parent links travel wi
     S.rows.competency_assessment_component = [{ code: "knowledge", is_active: true }];
     expect(await importDraftPackage(fake(), ME, pkg())).toMatchObject({ ok: false, status: 422 });
     expect(writes()).toEqual([]);
+  });
+
+  it("a partial import (stopped after the first competency) resumes: the rest is added, nothing duplicated, a hand-changed one refused", async () => {
+    seed();
+    const two = pkg();
+    two.domains[0].competencies.push({ ...two.domains[0].competencies[0], code: "NUR-TEST-002", name: "Respiratory Interventions" });
+    const once: any = { ...two, domains: [{ ...two.domains[0], competencies: [two.domains[0].competencies[0]] }] };
+    expect(await importDraftPackage(fake(), ME, once)).toMatchObject({ ok: true, competencies: 1, criteria: 4, parents: 1 });
+    const r = await importDraftPackage(fake(), ME, two);
+    expect(r).toMatchObject({ ok: true, resumed: true, competencies: 1, criteria: 4, parents: 1 });
+    expect(S.rows.frameworks).toHaveLength(1);
+    expect(S.rows.competency_skills).toHaveLength(8);
+    expect(S.rows.competency_dependencies).toHaveLength(2);
+    S.rows.competency_skills.pop();
+    expect(await importDraftPackage(fake(), ME, two)).toMatchObject({ ok: false, status: 409 });
   });
 
   it("criteria are not learning outcomes: 39 criteria pass where 21 outcomes would not", () => {

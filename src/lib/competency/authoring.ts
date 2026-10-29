@@ -368,7 +368,7 @@ export function checkPackage(pkg: any): Ok<DraftPackage> | Bad {
   return { ok: true, value: pkg as DraftPackage };
 }
 
-export async function importDraftPackage(admin: any, actor: Actor, raw: any): Promise<Result<{ id: string; competencies: number; criteria: number; parents: number }>> {
+export async function importDraftPackage(admin: any, actor: Actor, raw: any): Promise<Result<{ id: string; competencies: number; criteria: number; parents: number; resumed: boolean }>> {
   // A profession named by its value is resolved here, before anything is checked or written.
   let pkg = raw;
   if (raw?.framework && !raw.framework.professionTermId && typeof raw.framework.profession === "string" && raw.framework.profession.trim()) {
@@ -380,10 +380,39 @@ export async function importDraftPackage(admin: any, actor: Actor, raw: any): Pr
   const v = checkPackage(pkg);
   if (!v.ok) return { ok: false, status: 422, error: v.error };
   const p = v.value;
-  const { data: same, error: sErr } = await admin.from("frameworks").select("id").eq("code", p.framework.code.toUpperCase()).is("hospital_id", null).limit(1);
+  const { data: same, error: sErr } = await admin.from("frameworks").select("id, name, pub_status").eq("code", p.framework.code.toUpperCase()).is("hospital_id", null).limit(1);
   if (sErr) return { ok: false, status: 503, error: "Frameworks could not be read just now. Nothing has changed." };
-  if (same?.length) return { ok: false, status: 409, error: `A shared framework with the code ${p.framework.code.toUpperCase()} already exists. Edit it instead of importing again.` };
+  // RESUME (CFCA-STUDIO-P1, 29 Oct 2026). A large package can outlast one request: the first NUR-CCF import in
+  // production stopped cleanly after 24 of 30 competencies. Pasting the SAME package again continues the same DRAFT:
+  // its domains are reused by name, competencies already there are kept, and only what is missing is written. It is
+  // refused unless the framework is still a draft and holds nothing the package does not name, so it never merges
+  // into a framework someone has edited or put forward.
+  const existing = same?.[0] ?? null;
+  const have = { domains: new Map<string, string>(), comps: new Map<string, string>(), skills: new Map<string, number>(), deps: new Map<string, number>() };
+  if (existing) {
+    if ((existing.pub_status ?? "draft") !== "draft") return { ok: false, status: 409, error: `A shared framework with the code ${p.framework.code.toUpperCase()} already exists and is no longer a draft. Edit it instead of importing again.` };
+    const { data: ds, error: dErr } = await admin.from("framework_domains").select("id, name").eq("framework_id", existing.id);
+    if (dErr) return { ok: false, status: 503, error: "The existing draft could not be read just now. Nothing has changed." };
+    for (const d of ds ?? []) have.domains.set(d.name, d.id);
+    const { data: cs, error: cErr } = (ds ?? []).length ? await admin.from("framework_competencies").select("id, code, domain_id").in("domain_id", (ds ?? []).map((d: any) => d.id)) : { data: [], error: null };
+    if (cErr) return { ok: false, status: 503, error: "The existing draft could not be read just now. Nothing has changed." };
+    const named = new Set(p.domains.flatMap(d => d.competencies.map(c => String(c.code).toUpperCase())));
+    const foreign = (cs ?? []).filter((c: any) => !named.has(String(c.code ?? "").toUpperCase()));
+    if (foreign.length) return { ok: false, status: 409, error: `The draft ${p.framework.code.toUpperCase()} holds ${foreign.length} competenc${foreign.length === 1 ? "y" : "ies"} this package does not name, so it is not continued. Edit it on the authoring page instead.` };
+    for (const c of cs ?? []) have.comps.set(String(c.code).toUpperCase(), c.id);
+    const ids = [...have.comps.values()];
+    if (ids.length) {
+      const [sk, dp] = await Promise.all([
+        admin.from("competency_skills").select("competency_id").in("competency_id", ids).limit(20000),
+        admin.from("competency_dependencies").select("source_competency_id").in("source_competency_id", ids).limit(20000),
+      ]);
+      if (sk.error || dp.error) return { ok: false, status: 503, error: "The existing draft could not be read just now. Nothing has changed." };
+      for (const r of sk.data ?? []) have.skills.set(r.competency_id, (have.skills.get(r.competency_id) ?? 0) + 1);
+      for (const r of dp.data ?? []) have.deps.set(r.source_competency_id, (have.deps.get(r.source_competency_id) ?? 0) + 1);
+    }
+  }
   for (const d of p.domains) for (const c of d.competencies) {
+    if (have.comps.has(String(c.code).toUpperCase())) continue;
     const t = await competencyCodeTaken(admin, String(c.code).toUpperCase(), null);
     if (t !== false) return { ok: false, status: t === null ? 503 : 409, error: t === null ? "Competency codes could not be checked just now. Nothing has changed." : `A shared competency with the code ${String(c.code).toUpperCase()} already exists.` };
   }
@@ -421,19 +450,46 @@ export async function importDraftPackage(admin: any, actor: Actor, raw: any): Pr
     parentIds.set(k, hit[0].id);
   }
 
-  const created = await createFramework(admin, actor, p.framework);
-  if (!created.ok) return created;
-  // The package's provenance, on the framework's authorship trail (never in its content).
-  await authored(admin, actor, "cfca_draft_imported", "framework", created.id, p.framework.name, { provenance: p.provenance ?? null, domains: p.domains.length });
+  let frameworkId: string;
+  if (existing) {
+    frameworkId = existing.id;
+    await authored(admin, actor, "cfca_draft_import_resumed", "framework", existing.id, existing.name, { provenance: p.provenance ?? null, kept: have.comps.size });
+  } else {
+    const created = await createFramework(admin, actor, p.framework);
+    if (!created.ok) return created;
+    frameworkId = created.id;
+    // The package's provenance, on the framework's authorship trail (never in its content).
+    await authored(admin, actor, "cfca_draft_imported", "framework", created.id, p.framework.name, { provenance: p.provenance ?? null, domains: p.domains.length });
+  }
+  // One request has a time limit. The import pauses cleanly between competencies well before it, and the same
+  // package pasted again continues from there.
+  const started = Date.now(), BUDGET_MS = 40_000;
   let n = 0, nCriteria = 0, nParents = 0;
   for (const d of p.domains) {
-    const dom = await createDomain(admin, actor, { frameworkId: created.id, name: d.name });
-    if (!dom.ok) return { ok: false, status: dom.status, error: `Stopped at domain "${d.name}": ${dom.error} The framework is a draft: finish it on the authoring page.` };
+    let domainId = have.domains.get(d.name);
+    if (!domainId) {
+      const dom = await createDomain(admin, actor, { frameworkId, name: d.name });
+      if (!dom.ok) return { ok: false, status: dom.status, error: `Stopped at domain "${d.name}": ${dom.error} The framework is a draft: paste the same package again to continue.` };
+      domainId = dom.id; have.domains.set(d.name, dom.id);
+    }
     for (const c of d.competencies) {
-      const r = await createCompetency(admin, actor, { ...c, domainId: dom.id, expectedLevelId: c.expectedLevel ? levels.get(c.expectedLevel.score) : null });
-      if (!r.ok) return { ok: false, status: r.status, error: `Stopped at ${c.code}: ${r.error} The framework is a draft: finish it on the authoring page.` };
-      n++;
-      const criteria = c.criteria ?? [], parents = [...new Set((c.parents ?? []).map(parentKey))];
+      if (Date.now() - started > BUDGET_MS)
+        return { ok: false, status: 503, error: `Paused to stay within the time limit, with ${n} more competenc${n === 1 ? "y" : "ies"} imported. The draft is safe and complete so far: paste the same package again to continue.` };
+      const code = String(c.code).toUpperCase();
+      let compId = have.comps.get(code);
+      if (!compId) {
+        const r = await createCompetency(admin, actor, { ...c, domainId, expectedLevelId: c.expectedLevel ? levels.get(c.expectedLevel.score) : null });
+        if (!r.ok) return { ok: false, status: r.status, error: `Stopped at ${c.code}: ${r.error} The framework is a draft: paste the same package again to continue.` };
+        compId = r.id; n++;
+      }
+      const r = { id: compId };
+      const allCriteria = c.criteria ?? [], allParents = [...new Set((c.parents ?? []).map(parentKey))];
+      // A competency already holding exactly the package's criteria (or links) is complete. One holding a
+      // different number was changed by hand, and is left for the author rather than guessed at.
+      const hasK = have.skills.get(compId) ?? 0, hasP = have.deps.get(compId) ?? 0;
+      if (hasK && hasK !== allCriteria.length) return { ok: false, status: 409, error: `${c.code} already holds ${hasK} criteria and the package names ${allCriteria.length}. Finish it on the authoring page.` };
+      if (hasP && hasP !== allParents.length) return { ok: false, status: 409, error: `${c.code} already holds ${hasP} parent links and the package names ${allParents.length}. Finish it on the authoring page.` };
+      const criteria = hasK ? [] : allCriteria, parents = hasP ? [] : allParents;
       if (criteria.length || parents.length) {
         if (!(await authored(admin, actor, "cfca_criteria_imported", "framework_competency", r.id, c.name, {
           criteria: criteria.length, by_component: Object.fromEntries(comps.map(k => [k, criteria.filter(x => x.component === k).length])), parents: parents.map(k => parentIds.get(k)),
@@ -456,5 +512,5 @@ export async function importDraftPackage(admin: any, actor: Actor, raw: any): Pr
       }
     }
   }
-  return { ok: true, id: created.id, competencies: n, criteria: nCriteria, parents: nParents };
+  return { ok: true, id: frameworkId, competencies: n, criteria: nCriteria, parents: nParents, resumed: !!existing };
 }
