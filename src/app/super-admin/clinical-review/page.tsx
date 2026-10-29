@@ -4,6 +4,8 @@ import { reviewQueue } from "@/lib/competency/clinical-review-hq";
 import { Decide } from "./_components/ReviewControls";
 import { CaseContent } from "./_components/CaseContent";
 import { CriteriaList } from "../competencies/_studio/CriteriaList";
+import { ReviewPackView } from "../competencies/_studio/ReviewPackView";
+import { loadReviewerPack } from "@/lib/competency/review-pack";
 
 // /super-admin/clinical-review -- owner decision D2, migration 395. The clinical reviewer's queue.
 //
@@ -18,8 +20,14 @@ import { CriteriaList } from "../competencies/_studio/CriteriaList";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Clinical review" };
 
-export default async function ClinicalReviewPage() {
+export default async function ClinicalReviewPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const ctx = await requireHqCapability("hq.quality.clinical.approve");
+  // The paper copy of exactly this queue (owner, 29 Oct 2026). Notes on paper; decisions recorded here.
+  if ((await searchParams).view === "pack") {
+    const pack = await loadReviewerPack(ctx.admin, { id: ctx.userId, name: ctx.fullName ?? null });
+    return pack ? <ReviewPackView pack={pack} back={{ href: "/super-admin/clinical-review", label: "Clinical review" }} wordHref="/api/hq/clinical-review/pack" />
+      : <p role="alert" className="text-[13.5px] text-[var(--cmp-text-critical)]">Your review queue could not be read just now.</p>;
+  }
   const [q, comps] = await Promise.all([reviewQueue(ctx.admin, ctx.userId), ctx.admin.from("competency_assessment_component").select("code, label").order("sort_order")]);
   const components: Record<string, string> = Object.fromEntries(((comps.data ?? []) as { code: string; label: string }[]).map(c => [c.code, c.label]));
 
@@ -32,6 +40,7 @@ export default async function ClinicalReviewPage() {
           Shared clinical content waiting for your independent review. Your approval applies to the exact content shown: if it changes, it
           needs review again. You cannot review content you wrote, edited or put forward.
         </p>
+        {q && q.items.length > 0 && <p className="mt-2"><a href="?view=pack" className="text-[13px] font-semibold text-teal-800 underline">Review pack for paper review (print, PDF or Word) →</a></p>}
       </header>
 
       {q === null ? (
