@@ -42,6 +42,8 @@ const MODE = process.argv.includes("--setup") ? "setup" : process.argv.includes(
 const WHO = {
   admin: { email: "c5-studio-admin@staging.competen.invalid", name: "SYNTHETIC C5 studio administrator (IND-007, staging, retire after)", position: "competency_verification_administrator" },
   assessor: { email: "c5-assessor@staging.competen.invalid", name: "SYNTHETIC C5 assessor (IND-007, staging, retire after)", position: "competency_assessor" },
+  // Migration 680: a method version is published by a DIFFERENT Studio Administrator than the one who wrote it.
+  publisher: { email: "c5-studio-publisher@staging.competen.invalid", name: "SYNTHETIC C5 studio publisher (second administrator, 680, staging, retire after)", position: "competency_verification_administrator" },
 } as const;
 const PURPOSE = "Owner GO COMPETEN-PROFESSIONAL-COMPETENCY-01 Stage 5, s15 items 17-22, staging only. Synthetic assessment identity. Retired after: kept, banned.";
 const METHOD_CODE = `c5_synthetic_ecg_observation`;
@@ -95,6 +97,8 @@ async function journey() {
   const st = JSON.parse(readFileSync(STATE, "utf8"));
   const requester = process.env.REQUESTER_ID ?? "", cpdId = process.env.REQUESTER_CPD_ID ?? "";
   const aAdm = await activeAppointment(st.admin.id, WHO.admin.position), aAss = await activeAppointment(st.assessor.id, WHO.assessor.position);
+  const aPub = st.publisher ? await activeAppointment(st.publisher.id, WHO.publisher.position) : null;
+  if (!aPub) { console.error("WAITING: migration 680 needs a second Studio Administrator. Re-run --setup, then the owner appoints the publisher identity as competency_verification_administrator."); process.exit(2); }
   if (!aAdm || !aAss) { console.error(`WAITING: the owner has not appointed both yet (administrator ${aAdm ? "appointed" : "not appointed"}, assessor ${aAss ? "appointed" : "not appointed"}). Nothing done.`); process.exit(2); }
   // COMPETENCY_ID: the requester's own competency from the integrated journey (its CPD evidence is linked to outcome 0).
   // Without it, the first published respiratory competency with two outcomes.
@@ -108,6 +112,7 @@ async function journey() {
   const levels = [...(scale.scoring_levels ?? [])].sort((a: any, b: any) => a.score - b.score);
   const target = levels[Math.min(levels.length - 1, 4)];
   const A = await session(WHO.admin.email, st.admin.password), S = await session(WHO.assessor.email, st.assessor.password);
+  const P = await session(WHO.publisher.email, st.publisher.password);
   console.log(`C5 JOURNEY -- staging ${REF}; competency ${comp.code} ${comp.name}; scale levels ${levels.length}\n`);
 
   // 17. Configure an assessment method through the no-code Studio
@@ -126,7 +131,10 @@ async function journey() {
     workflow: { assignment: "administrator", allowFurtherEvidence: true }, validity: { months: 24, renewal: "reassessment" },
   };
   const saved = versionId ? await call(A.cookie, "POST", "/api/hq/competency-verification", { action: "save_draft", versionId, content }) : { status: 0, text: "" } as any;
-  const published = versionId ? await call(A.cookie, "POST", "/api/hq/competency-verification", { action: "publish", versionId }) : { status: 0, text: "" } as any;
+  // 680: the author cannot publish their own draft; another administrator does.
+  const authorPublish = versionId ? await call(A.cookie, "POST", "/api/hq/competency-verification", { action: "publish", versionId }) : { status: 0, text: "" } as any;
+  ok("17-680. the administrator who wrote a method version cannot publish it", authorPublish.status >= 400, JSON.stringify({ status: authorPublish.status, text: authorPublish.text?.slice(0, 120) }));
+  const published = versionId ? await call(P.cookie, "POST", "/api/hq/competency-verification", { action: "publish", versionId }) : { status: 0, text: "" } as any;
   const v1 = versionId ? (await admin.from("competency_verification_method_version").select("state, content_hash").eq("id", versionId).maybeSingle()).data : null;
   ok("17. a method is configured and published through the no-code Studio, its criteria fixed by hash; the assessor cannot open the Studio",
     opens(studioPage, STUDIO_TEXT) && !opens(notForAssessor, STUDIO_TEXT) && made.status === 201 && saved.status === 200 && published.status === 200 && v1?.state === "published" && !!v1.content_hash,
@@ -190,7 +198,7 @@ async function journey() {
     const del = await admin.from("competency_verification_decision").delete().eq("id", d.id);
     const revoke = await call(A.cookie, "POST", "/api/hq/competency-verification", { action: "revoke", decisionId: d.id, reason: "SYNTHETIC C5: revocation probe" });
     const v2 = await call(A.cookie, "POST", "/api/hq/competency-verification", { action: "new_draft", methodId });
-    const v2pub = v2.json?.versionId ? await call(A.cookie, "POST", "/api/hq/competency-verification", { action: "publish", versionId: v2.json.versionId }) : null;
+    const v2pub = v2.json?.versionId ? await call(P.cookie, "POST", "/api/hq/competency-verification", { action: "publish", versionId: v2.json.versionId }) : null;
     const after = (await admin.from("competency_verification_decision").select("rationale, method_version_id, method_content_hash").eq("id", d.id).maybeSingle()).data;
     const v1now = (await admin.from("competency_verification_method_version").select("state, content_hash").eq("id", versionId).maybeSingle()).data;
     const { loadVerifications } = await import("../src/lib/competency/verification");
@@ -224,7 +232,7 @@ async function doors() {
 
 async function retire() {
   const st = JSON.parse(readFileSync(STATE, "utf8"));
-  const ids = [st.admin.id, st.assessor.id];
+  const ids = [st.admin.id, st.assessor.id, ...(st.publisher ? [st.publisher.id] : [])];
   // 1. Scopes end through the Studio route, as the Studio Administrator -- the real control.
   const A = await session(WHO.admin.email, st.admin.password).catch(() => null);
   const assessorAppts = ((await admin.from("ogs_office_appointments").select("id").eq("person_id", st.assessor.id).eq("role", WHO.assessor.position)).data ?? []).map((a: any) => a.id);
@@ -245,6 +253,7 @@ async function retire() {
   }
   // 4. Sessions revoked BEFORE the ban (a banned user's sign-out is refused), then banned and kept.
   for (const [k, w] of Object.entries(WHO)) {
+    if (!st[k]) continue; // a state file from before 680 has no publisher
     const sess = await session(w.email, st[k].password).catch(() => null);
     if (sess) await admin.auth.admin.signOut(sess.token, "global");
     await admin.auth.admin.updateUserById(st[k].id, { ban_duration: "876000h", user_metadata: { full_name: w.name, synthetic: true, purpose: PURPOSE, retired: new Date().toISOString() } });
