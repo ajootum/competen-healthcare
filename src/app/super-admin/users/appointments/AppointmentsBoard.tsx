@@ -31,6 +31,8 @@ type Props = {
   viewerName: string | null;
   holdingNow: number | null;
   onRosterOnly: number | null;
+  /** Accounts the picker leaves out because they are not classified Human (migration 650), or null when unknown. */
+  notListed?: { demo: number; test: number; system: number; unclassified: number } | null;
 };
 
 const Unreadable = ({ what, error }: { what: string; error: string }) => (
@@ -354,7 +356,7 @@ function SpaceSection({ s, ...rest }:{ s: HqSpaceView } & Omit<Parameters<typeof
   );
 }
 
-export default function AppointmentsBoard({ board, people, canAppoint, viewerId, viewerName, holdingNow, onRosterOnly }: Props) {
+export default function AppointmentsBoard({ board, people, canAppoint, viewerId, viewerName, holdingNow, onRosterOnly, notListed }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ k: "ok" | "err"; t: string } | null>(null);
@@ -412,6 +414,15 @@ export default function AppointmentsBoard({ board, people, canAppoint, viewerId,
         <p className="text-sm mt-2">
           <a href="/super-admin/users/positions" className="text-teal-700 font-medium hover:underline">Create positions and change what they grant →</a>
         </p>
+        {canAppoint && people.ok && notListed && (
+          <p className="mt-2 max-w-3xl rounded-lg border border-[var(--cmp-color-information)] bg-[var(--cmp-surface-information)] px-3 py-2 text-[13px] text-blue-900">
+            {people.value.length
+              ? `Only accounts marked Human can be appointed (${people.value.length} listed). `
+              : "No account is marked Human yet, so nobody can be appointed. "}
+            Not listed: {notListed.unclassified} unclassified, {notListed.demo} demo, {notListed.test} test{notListed.system ? `, ${notListed.system} system` : ""}.{" "}
+            <a href="/super-admin/users?view=unclassified" className="font-semibold underline">Mark real people as Human on HQ Users</a> and they appear here.
+          </p>
+        )}
       </header>
 
       {msg && (

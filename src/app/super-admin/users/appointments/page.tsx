@@ -1,6 +1,7 @@
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadHqAppointmentBoard, countHolders, type Read } from "@/lib/hq/appointments";
 import AppointmentsBoard, { type PersonOption } from "./AppointmentsBoard";
+import { loadClassifications, typeCounts, typeOf } from "@/lib/hq/account-classification";
 
 /**
  * Competen HQ — Position appointments.
@@ -35,12 +36,21 @@ export default async function HqAppointmentsPage() {
 
   // The person picker. ⚠ A FAILED READ IS NOT AN EMPTY LIST: an empty <select> would read as "there is
   // nobody in this product to appoint", which is a sentence about the data rather than about the query.
-  const { data: profiles, error: peopleErr } = await ctx.admin
-    .from("profiles").select("id, full_name, email, role").order("full_name").limit(2000);
+  // ⚠ ONLY REAL PEOPLE ARE OFFERED (owner, 29 Oct 2026). An HQ position is held by a person, so the picker lists
+  // accounts classified Human (migration 650) and nothing else: demo, test, system and unclassified accounts are
+  // left out and counted, never silently dropped. If the classification cannot be read, the picker says so rather
+  // than offer every account.
+  const [{ data: profiles, error: peopleErr }, classes] = await Promise.all([
+    ctx.admin.from("profiles").select("id, full_name, email, role").order("full_name").limit(2000),
+    loadClassifications(ctx.admin),
+  ]);
+  const everyone = ((profiles ?? []) as { id: string; full_name: string | null; email: string | null; role: string | null }[]);
   const people: Read<PersonOption[]> = peopleErr
     ? { ok: false, error: peopleErr.message }
-    : { ok: true, value: ((profiles ?? []) as { id: string; full_name: string | null; email: string | null; role: string | null }[])
-        .map(p => ({ id: p.id, name: p.full_name, email: p.email, role: p.role })) };
+    : !classes.available
+      ? { ok: false, error: "Account classification could not be read, so real people cannot be told apart from demo and test accounts." }
+      : { ok: true, value: everyone.filter(p => typeOf(classes, p.id) === "human").map(p => ({ id: p.id, name: p.full_name, email: p.email, role: p.role })) };
+  const notListed = classes.available && !peopleErr ? typeCounts(everyone.filter(p => typeOf(classes, p.id) !== "human").map(p => p.id), classes) : null;
 
   return (
     <AppointmentsBoard
@@ -51,6 +61,7 @@ export default async function HqAppointmentsPage() {
       viewerName={ctx.fullName}
       holdingNow={countHolders(board, h => h.grantsAccess)}
       onRosterOnly={countHolders(board, h => !h.grantsAccess)}
+      notListed={notListed ? { demo: notListed.demo, test: notListed.test, system: notListed.system, unclassified: notListed.unclassified } : null}
     />
   );
 }
