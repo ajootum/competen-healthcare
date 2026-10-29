@@ -31,7 +31,7 @@ function fake() {
     const done = () => {
       if (write?.op === "insert") {
         if (table === "audit_log" && S.auditFails) return { data: null, error: { message: "down" } };
-        (S.rows[table] ??= []).push(write.row);
+        (S.rows[table] ??= []).push(...[].concat(write.row));
       }
       if (write?.op === "update") for (const r of hit()) Object.assign(r, write.row);
       return { data: write ? null : hit(), error: null };
@@ -158,6 +158,62 @@ describe("a draft package: DRAFT, not clinically reviewed, nothing approved or p
     S.rows.frameworks = []; S.rows.framework_competencies = []; S.rows.scoring_levels = [];
     expect(await importDraftPackage(fake(), ME, PKG)).toMatchObject({ ok: false, status: 422 });
     expect(writes()).toEqual([]);
+  });
+});
+
+describe("CFCA-STUDIO-P1 (670): criteria by component and parent links travel with a draft package", () => {
+  const PARENT = "00000000-0000-4000-8000-0000000000b1";
+  const pkg = (over: any = {}) => ({
+    framework: { code: "NUR-TEST", name: "Nursing Test Framework", layer: "profession", profession: "Nursing", description: null },
+    domains: [{ name: "Breathing", competencies: [{ code: "NUR-TEST-001", name: "Respiratory Assessment", description: null, learningOutcomes: [], expectedLevel: null, riskCategory: "standard",
+      criteria: [
+        { component: "clinical_skills", text: "Able to perform a comprehensive respiratory assessment.", sourceRef: "Sheet!D4" },
+        { component: "clinical_skills", text: "Able to perform a comprehensive respiratory assessment.", sourceRef: "Sheet!D5" },
+        { component: "knowledge", text: "Demonstrates knowledge of normal respiratory cycle", sourceRef: "Sheet!D11" },
+        { component: "knowledge_application", text: "Liaises with other nursing and medical team members.", sourceRef: "Sheet!D17" },
+      ],
+      parents: [{ framework: "Core Nursing", competency: "Provides Safe Respiratory Care" }], ...over }] }],
+    provenance: { source: "workbook.xlsx" },
+  });
+  const seed = () => {
+    S.rows.frameworks = []; S.rows.framework_domains = []; S.rows.competency_skills = []; S.rows.competency_dependencies = [];
+    S.rows.framework_competencies = [{ id: PARENT, name: "Provides Safe Respiratory Care", code: null }];
+    S.rows.taxonomy_terms = [{ id: "00000000-0000-4000-8000-00000000aa01", value: "Nursing" }];
+    S.rows.competency_assessment_component = ["clinical_skills", "knowledge", "knowledge_application"].map(code => ({ code, is_active: true }));
+  };
+
+  it("each criterion is its own skill row, in its source words and order, with its component and source; duplicates are kept", async () => {
+    seed();
+    const r = await importDraftPackage(fake(), ME, pkg());
+    expect(r).toMatchObject({ ok: true, competencies: 1, criteria: 4, parents: 1 });
+    expect(S.rows.competency_skills.map(k => [k.sort_order, k.component_code, k.source_ref])).toEqual([[1, "clinical_skills", "Sheet!D4"], [2, "clinical_skills", "Sheet!D5"], [3, "knowledge", "Sheet!D11"], [4, "knowledge_application", "Sheet!D17"]]);
+    expect(S.rows.competency_skills[2].name).toBe("Demonstrates knowledge of normal respiratory cycle");
+    expect(S.rows.frameworks[0]).toMatchObject({ code: "NUR-TEST", pub_status: "draft", profession_term_id: "00000000-0000-4000-8000-00000000aa01" });
+  });
+
+  it("the parent is linked by an inherited Holdings-scope dependency and is never written", async () => {
+    seed();
+    await importDraftPackage(fake(), ME, pkg());
+    expect(S.rows.competency_dependencies).toEqual([expect.objectContaining({ hospital_id: null, target_competency_id: PARENT, dependency_type: "inherited" })]);
+    expect(writes().filter(w => w.table === "framework_competencies" && w.op !== "insert")).toEqual([]);
+    expect(writes().filter(w => w.table === "framework_competencies").every(w => w.args[0].id !== PARENT)).toBe(true);
+    expect(writes().map(w => w.table).filter(t => /clinical_review|clinical_content_version|framework_versions|content_approvals/.test(t))).toEqual([]);
+  });
+
+  it("an unknown parent or component refuses the whole package before any write", async () => {
+    seed();
+    S.rows.framework_competencies = [];
+    expect(await importDraftPackage(fake(), ME, pkg())).toMatchObject({ ok: false, status: 422 });
+    seed();
+    S.rows.competency_assessment_component = [{ code: "knowledge", is_active: true }];
+    expect(await importDraftPackage(fake(), ME, pkg())).toMatchObject({ ok: false, status: 422 });
+    expect(writes()).toEqual([]);
+  });
+
+  it("criteria are not learning outcomes: 39 criteria pass where 21 outcomes would not", () => {
+    const many = Array.from({ length: 39 }, (_, i) => ({ component: "knowledge", text: `Criterion number ${i + 1}` }));
+    expect(checkPackage({ ...pkg({ criteria: many }), framework: { ...pkg().framework, professionTermId: "00000000-0000-4000-8000-00000000aa01" } }).ok).toBe(true);
+    expect(checkPackage({ ...pkg({ learningOutcomes: Array.from({ length: 21 }, (_, i) => `Outcome ${i + 1}`) }), framework: { ...pkg().framework, professionTermId: "00000000-0000-4000-8000-00000000aa01" } }).ok).toBe(false);
   });
 });
 

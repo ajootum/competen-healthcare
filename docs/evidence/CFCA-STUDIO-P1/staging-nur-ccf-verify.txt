@@ -1,0 +1,8 @@
+  PASS  V1  one draft framework, 30 competencies with their codes and domains (13 domains)
+  PASS  V2  458 criteria (Clinical Skills 194, Knowledge 174, Knowledge Application 90), each exactly as in the package; 0 competencies differ
+  FAIL  V3  7 inherited Holdings-scope links to 2 existing parents, exactly as named
+  PASS  V4  verify only: 0 of 349 pre-existing competency hashes changed; parents' hashes unchanged true
+  PASS  V5  the authoring view shows 458 criteria on 30 competencies, every one with its component
+  PASS  V6  not published, offers 0 competencies even if allowlisted, clinical state unreviewed
+
+RED -- 1 failed

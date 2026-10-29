@@ -309,11 +309,39 @@ export async function updateCompetency(admin: any, actor: Actor, b: any): Promis
 // (where it came from, its source ids) is recorded in the authorship row, never in the content. Nothing is approved,
 // put forward or published by an import: approvals that do not exist are not imported, and none are implied.
 
+// CFCA-STUDIO-P1 (migration 670): a competency may carry its assessment CRITERIA, each kept as its own skill row in
+// its source wording, classified by component (Clinical Skills, Knowledge, Knowledge Application) with where it
+// came from -- never compressed into learning outcomes. It may name PARENTS: existing shared competencies it
+// extends, by framework and competency name (ids differ between environments). A parent is linked by a
+// Holdings-scope "inherited" dependency, so the parent record is neither copied nor changed. A profession may be
+// named by its taxonomy value instead of an id, for the same reason.
+export type PackageCriterion = { component: string; text: string; sourceRef?: string | null };
+/** frameworkId (optional) settles a framework name that is not unique on an environment (staging holds two Core Nursing). */
+export type PackageParent = { framework: string; competency: string; frameworkId?: string };
 export type DraftPackage = {
-  framework: { code: string; name: string; description: string | null; layer: string; professionTermId?: string | null; specialtyTermId?: string | null };
-  domains: { name: string; competencies: { code: string; name: string; description: string | null; learningOutcomes: string[]; expectedLevel: { score: number } | null; riskCategory: string }[] }[];
+  framework: { code: string; name: string; description: string | null; layer: string; professionTermId?: string | null; specialtyTermId?: string | null; profession?: string };
+  domains: { name: string; competencies: { code: string; name: string; description: string | null; learningOutcomes: string[]; expectedLevel: { score: number } | null; riskCategory: string;
+    criteria?: PackageCriterion[]; parents?: PackageParent[] }[] }[];
   provenance: Record<string, unknown>;
 };
+const COMPONENT = /^[a-z][a-z0-9_]{2,40}$/;
+export const MAX_CRITERIA = 300;
+
+/** Pure: a competency's criteria and parents in a package, or the first reason they are not acceptable. */
+export function checkCriteria(c: any): string | null {
+  const criteria = c?.criteria ?? [];
+  if (!Array.isArray(criteria) || criteria.length > MAX_CRITERIA) return `at most ${MAX_CRITERIA} criteria, as a list.`;
+  for (const [i, k] of criteria.entries()) {
+    if (!COMPONENT.test(String(k?.component ?? ""))) return `criterion ${i + 1} needs a component code.`;
+    const t = typeof k?.text === "string" ? k.text.trim() : "";
+    if (t.length < 3 || t.length > 2000) return `criterion ${i + 1} is 3 to 2,000 characters.`;
+    if (k?.sourceRef != null && (typeof k.sourceRef !== "string" || k.sourceRef.length > 300)) return `criterion ${i + 1} has a source reference of at most 300 characters.`;
+  }
+  const parents = c?.parents ?? [];
+  if (!Array.isArray(parents) || parents.length > 10) return "at most 10 parents, as a list.";
+  for (const p of parents) if (text(p?.framework).length < 2 || text(p?.competency).length < 2) return "each parent names its framework and competency.";
+  return null;
+}
 
 /** Pure: a package is whole and valid, or the first reason it is not. Nothing is written for a bad package. */
 export function checkPackage(pkg: any): Ok<DraftPackage> | Bad {
@@ -331,6 +359,8 @@ export function checkPackage(pkg: any): Ok<DraftPackage> | Bad {
       if (!p.ok) return { ok: false, error: `${text(c?.code) || "A competency"}: ${p.error}` };
       if (codes.has(p.value.code)) return { ok: false, error: `The code ${p.value.code} appears twice in the package.` };
       codes.add(p.value.code);
+      const crit = checkCriteria(c);
+      if (crit) return { ok: false, error: `${p.value.code}: ${crit}` };
       if (c?.expectedLevel != null && !(Number.isInteger(c.expectedLevel.score) && c.expectedLevel.score >= 0 && c.expectedLevel.score <= 10)) return { ok: false, error: `${p.value.code}: the expected level is a score on the default scale.` };
     }
   }
@@ -338,7 +368,15 @@ export function checkPackage(pkg: any): Ok<DraftPackage> | Bad {
   return { ok: true, value: pkg as DraftPackage };
 }
 
-export async function importDraftPackage(admin: any, actor: Actor, pkg: any): Promise<Result<{ id: string; competencies: number }>> {
+export async function importDraftPackage(admin: any, actor: Actor, raw: any): Promise<Result<{ id: string; competencies: number; criteria: number; parents: number }>> {
+  // A profession named by its value is resolved here, before anything is checked or written.
+  let pkg = raw;
+  if (raw?.framework && !raw.framework.professionTermId && typeof raw.framework.profession === "string" && raw.framework.profession.trim()) {
+    const { data: t, error: tErr } = await admin.from("taxonomy_terms").select("id, taxonomies!inner(kind)").eq("value", raw.framework.profession.trim()).eq("taxonomies.kind", "profession").limit(2);
+    if (tErr) return { ok: false, status: 503, error: "The profession could not be read just now. Nothing has changed." };
+    if ((t ?? []).length !== 1) return { ok: false, status: 422, error: `No single profession is called "${raw.framework.profession.trim()}".` };
+    pkg = { ...raw, framework: { ...raw.framework, professionTermId: t[0].id } };
+  }
   const v = checkPackage(pkg);
   if (!v.ok) return { ok: false, status: 422, error: v.error };
   const p = v.value;
@@ -359,12 +397,35 @@ export async function importDraftPackage(admin: any, actor: Actor, pkg: any): Pr
     const missing = scores.filter(s => !levels.has(s));
     if (missing.length) return { ok: false, status: 422, error: `The default scale has no level with score ${missing.join(", ")}.` };
   }
+  // Components and parents are resolved BEFORE anything is written, so a package that names an unknown one
+  // changes nothing.
+  const all = p.domains.flatMap(d => d.competencies);
+  const comps = [...new Set(all.flatMap(c => (c.criteria ?? []).map(k => k.component)))];
+  if (comps.length) {
+    const { data: reg, error: rErr } = await admin.from("competency_assessment_component").select("code, is_active").in("code", comps);
+    if (rErr) return { ok: false, status: 503, error: "The assessment components could not be read just now (migration 660). Nothing has changed." };
+    const live = new Set((reg ?? []).filter((r: any) => r.is_active !== false).map((r: any) => r.code));
+    const unknown = comps.filter(c => !live.has(c));
+    if (unknown.length) return { ok: false, status: 422, error: `Unknown or retired assessment component: ${unknown.join(", ")}.` };
+  }
+  const parentKey = (x: PackageParent) => `${text(x.framework)}\u0000${text(x.competency)}\u0000${isId(x.frameworkId) ? x.frameworkId : ""}`;
+  const parentIds = new Map<string, string>();
+  for (const k of new Set(all.flatMap(c => (c.parents ?? []).map(parentKey)))) {
+    const [fw, name, fwId] = k.split("\u0000");
+    let q = admin.from("framework_competencies").select("id, framework_domains!inner(framework_id, frameworks!inner(name, hospital_id))")
+      .eq("name", name).eq("framework_domains.frameworks.name", fw).is("framework_domains.frameworks.hospital_id", null);
+    if (fwId) q = q.eq("framework_domains.framework_id", fwId);
+    const { data: hit, error: hErr } = await q.limit(2);
+    if (hErr) return { ok: false, status: 503, error: "The parent competencies could not be read just now. Nothing has changed." };
+    if ((hit ?? []).length !== 1) return { ok: false, status: 422, error: `The parent "${name}" in ${fw} was ${hit?.length ? "found more than once" : "not found"} among shared frameworks. Nothing has changed.` };
+    parentIds.set(k, hit[0].id);
+  }
 
   const created = await createFramework(admin, actor, p.framework);
   if (!created.ok) return created;
   // The package's provenance, on the framework's authorship trail (never in its content).
   await authored(admin, actor, "cfca_draft_imported", "framework", created.id, p.framework.name, { provenance: p.provenance ?? null, domains: p.domains.length });
-  let n = 0;
+  let n = 0, nCriteria = 0, nParents = 0;
   for (const d of p.domains) {
     const dom = await createDomain(admin, actor, { frameworkId: created.id, name: d.name });
     if (!dom.ok) return { ok: false, status: dom.status, error: `Stopped at domain "${d.name}": ${dom.error} The framework is a draft: finish it on the authoring page.` };
@@ -372,7 +433,28 @@ export async function importDraftPackage(admin: any, actor: Actor, pkg: any): Pr
       const r = await createCompetency(admin, actor, { ...c, domainId: dom.id, expectedLevelId: c.expectedLevel ? levels.get(c.expectedLevel.score) : null });
       if (!r.ok) return { ok: false, status: r.status, error: `Stopped at ${c.code}: ${r.error} The framework is a draft: finish it on the authoring page.` };
       n++;
+      const criteria = c.criteria ?? [], parents = [...new Set((c.parents ?? []).map(parentKey))];
+      if (criteria.length || parents.length) {
+        if (!(await authored(admin, actor, "cfca_criteria_imported", "framework_competency", r.id, c.name, {
+          criteria: criteria.length, by_component: Object.fromEntries(comps.map(k => [k, criteria.filter(x => x.component === k).length])), parents: parents.map(k => parentIds.get(k)),
+        }))) return { ...NOT_RECORDED, error: `Stopped at ${c.code}: ${NOT_RECORDED.error}` };
+      }
+      if (criteria.length) {
+        const { error: kErr } = await admin.from("competency_skills").insert(criteria.map((k, i) => ({
+          competency_id: r.id, name: k.text.trim(), sort_order: i + 1, component_code: k.component, source_ref: k.sourceRef ?? null, is_active: true,
+        })));
+        if (kErr) return { ok: false, status: 422, error: `Stopped at ${c.code}: its criteria could not be saved (migration 670 is needed). The framework is a draft: finish it on the authoring page.` };
+        nCriteria += criteria.length;
+      }
+      if (parents.length) {
+        const { error: dErr } = await admin.from("competency_dependencies").insert(parents.map(k => ({
+          hospital_id: null, source_competency_id: r.id, target_competency_id: parentIds.get(k), dependency_type: "inherited",
+          notes: "Extends this competency (draft import).", created_by: actor.userId, created_by_name: actor.name,
+        })));
+        if (dErr) return { ok: false, status: 422, error: `Stopped at ${c.code}: its parent links could not be saved. The framework is a draft: finish it on the authoring page.` };
+        nParents += parents.length;
+      }
     }
   }
-  return { ok: true, id: created.id, competencies: n };
+  return { ok: true, id: created.id, competencies: n, criteria: nCriteria, parents: nParents };
 }

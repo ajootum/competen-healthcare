@@ -13,6 +13,9 @@ export type QueueItem = {
   required: number; approvals: number; risk: string | null; submittedAt: string; appointmentId: string;
   /** Migration 422: a clinical case version, reviewed through the same process. Its content is the exact version. */
   kind: "competency" | "case"; caseContent?: any;
+  /** CFCA-STUDIO-P1 (670): the criteria by component. Live rows, shown only for a CURRENT version (its hash, which
+   *  covers each criterion and its component, still matches), so they are exactly what is being approved. */
+  criteria?: { component: string | null; text: string; sourceRef: string | null }[];
 };
 
 const rows = async (p: PromiseLike<any>) => { try { const r = await p; return r?.error ? null : (r?.data ?? []); } catch { return null; } };
@@ -91,6 +94,14 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
       required: v.required_approvals, approvals, risk: v.risk_basis ?? null, submittedAt: v.created_at, appointmentId: covering.id, kind: "case", caseContent: s,
       snapshot: { description: s.summary ?? null, outcomes: Array.isArray(s.learningObjectives) ? s.learningObjectives.map((l: any) => l?.text).filter(Boolean) : [], skills: [], risk: s.metadata?.risk ?? null },
     });
+  }
+  const ids = items.filter(i => i.kind === "competency").map(i => i.competencyId);
+  if (ids.length) {
+    const read = (cols: string) => admin.from("competency_skills").select(cols).in("competency_id", ids).order("sort_order").limit(20000);
+    let r = await read("competency_id, name, sort_order, component_code, source_ref");
+    if (r.error) r = await read("competency_id, name, sort_order");
+    for (const it of items) if (it.kind === "competency") it.criteria = ((r.data ?? []) as any[]).filter(k => k.competency_id === it.competencyId)
+      .map(k => ({ component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null }));
   }
   return { appointments, items };
 }

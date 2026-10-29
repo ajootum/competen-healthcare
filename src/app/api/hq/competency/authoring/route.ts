@@ -5,6 +5,8 @@ import { submitForReview } from "@/lib/competency/clinical-review";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
+// A draft import (CFCA-STUDIO-P1: 30 competencies, 458 criteria) is one request of a few hundred sequential writes.
+export const maxDuration = 60;
 
 // POST /api/hq/competency/authoring -- CFCA authoring in production (migration 465, owner CFCA PRODUCTION AUTHORING).
 //

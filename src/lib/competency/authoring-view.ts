@@ -8,7 +8,10 @@ import { loadClinicalReviews, type ClinicalReview } from "./clinical-review";
 export type AuthoringCompetency = {
   id: string; code: string | null; name: string; description: string | null; learningOutcomes: string[];
   expectedLevelId: string | null; riskCategory: string; sortOrder: number; cpuId: string | null; clinical: ClinicalReview | null;
+  /** CFCA-STUDIO-P1 (670): its skills / assessment criteria, in order, each with its component (null = not classified). */
+  criteria: AuthoringCriterion[];
 };
+export type AuthoringCriterion = { component: string | null; text: string; sourceRef: string | null };
 export type AuthoringPractice = { id: string; code: string | null; name: string; cpus: { id: string; code: string | null; name: string; riskCategory: string; complexity: number }[] };
 export type AuthoringFramework = {
   id: string; code: string | null; name: string; description: string | null; layer: string | null; pubStatus: string; versionNum: number;
@@ -21,6 +24,8 @@ export type AuthoringView = {
   professions: { id: string; value: string }[];
   specialties: { id: string; value: string }[];
   clinicalReadable: boolean;
+  /** The assessment component names (660), by code. */
+  components: Record<string, string>;
 };
 
 async function terms(admin: any, kind: string): Promise<{ id: string; value: string }[]> {
@@ -37,10 +42,11 @@ export async function loadAuthoringView(admin: any): Promise<AuthoringView | nul
       .is("hospital_id", null).or("competency_layer.not.is.null,code.not.is.null").order("name").limit(200);
     if (error) return null;
     const ids = (fws ?? []).flatMap((f: any) => (f.framework_domains ?? []).flatMap((d: any) => (d.framework_competencies ?? []).map((c: any) => c.id)));
-    const [reviews, lv, professions, specialties] = await Promise.all([
+    const [reviews, lv, professions, specialties, skills, comps] = await Promise.all([
       ids.length ? loadClinicalReviews(admin, ids) : Promise.resolve(new Map<string, ClinicalReview>()),
       admin.from("scoring_levels").select("id, score, label, scoring_scales!inner(is_default)").eq("scoring_scales.is_default", true).order("score"),
-      terms(admin, "profession"), terms(admin, "specialty"),
+      terms(admin, "profession"), terms(admin, "specialty"), loadCriteria(admin, ids),
+      admin.from("competency_assessment_component").select("code, label").order("sort_order"),
     ]);
     const frameworks: AuthoringFramework[] = (fws ?? []).map((f: any) => ({
       id: f.id, code: f.code ?? null, name: f.name, description: f.description ?? null, layer: f.competency_layer ?? null, pubStatus: f.pub_status ?? "draft", versionNum: f.version_num ?? 0,
@@ -54,6 +60,7 @@ export async function loadAuthoringView(admin: any): Promise<AuthoringView | nul
           learningOutcomes: Array.isArray(c.learning_outcomes) ? c.learning_outcomes.map(String) : [],
           expectedLevelId: c.expected_level_id ?? null, riskCategory: c.risk_category ?? "standard", sortOrder: c.sort_order, cpuId: c.cpu_id ?? null,
           clinical: reviews ? reviews.get(c.id) ?? null : null,
+          criteria: skills.get(c.id) ?? [],
         })),
       })),
     }));
@@ -61,6 +68,18 @@ export async function loadAuthoringView(admin: any): Promise<AuthoringView | nul
       frameworks, clinicalReadable: reviews !== null,
       levels: (lv.data ?? []).map((l: any) => ({ id: l.id, score: l.score, label: l.label })),
       professions, specialties,
+      components: Object.fromEntries(((comps?.data ?? []) as any[]).map(c => [c.code, c.label])),
     };
   } catch { return null; }
+}
+
+/** Skills and criteria of the shown competencies, with their component (670). Before 670 they are read without it. */
+async function loadCriteria(admin: any, ids: string[]): Promise<Map<string, AuthoringCriterion[]>> {
+  const out = new Map<string, AuthoringCriterion[]>();
+  if (!ids.length) return out;
+  const read = (cols: string) => admin.from("competency_skills").select(cols).in("competency_id", ids).order("sort_order").limit(20000);
+  let r = await read("competency_id, name, sort_order, component_code, source_ref");
+  if (r.error) r = await read("competency_id, name, sort_order");
+  for (const k of (r.data ?? []) as any[]) out.set(k.competency_id, [...(out.get(k.competency_id) ?? []), { component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null }]);
+  return out;
 }
