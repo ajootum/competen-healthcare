@@ -34,9 +34,17 @@ type Props = {
   isAdmin: boolean;
   unread?: number;
   avatarUrl?: string | null;
+  /**
+   * The workspaces this person may switch to: the SAME server-side, RBAC-filtered list the desktop header's
+   * "Switch workspace" menu offers (loadHeaderContext). Below md that header is not rendered, so without
+   * this a Super Admin who lands here on a phone had no way into /super-admin but typing the URL.
+   */
+  workspaces?: { label: string; href: string; icon?: string }[];
+  /** The one-tap jump the desktop banner offers ("Open Super Admin →"); null for a personal-only user. */
+  primary?: { label: string; href: string } | null;
 };
 
-export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, avatarUrl }: Props) {
+export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, avatarUrl, workspaces = [], primary = null }: Props) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -85,6 +93,14 @@ export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, ava
           </span>
         </Link>
         <span className="flex-1" />
+        {/* The mobile half of the desktop "You're in your Personal Workspace · Open … →" banner: everyone
+            lands here (PW-AC-01), so the person's primary functional workspace is one tap away. */}
+        {primary && primary.href !== "/dashboard" && (
+          <Link href={primary.href} aria-label={`Open ${primary.label}`}
+            className="shrink-0 max-w-[9rem] truncate rounded-md bg-[var(--cmp-color-information)] px-2.5 py-1.5 text-xs font-medium text-white pointer-coarse:min-h-[var(--cp-touch)] flex items-center">
+            {primary.label} →
+          </Link>
+        )}
         <Link href="/dashboard/notifications" aria-label="Notifications"
           className="relative w-10 h-10 rounded-lg flex items-center justify-center text-lg hover:bg-[var(--cmp-app-bg)] transition-colors shrink-0">
           🔔
@@ -133,6 +149,20 @@ export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, ava
         </div>
 
         <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
+          {/* Switch workspace, first: the desktop header's menu, which this width does not render. */}
+          {workspaces.filter(w => w.href !== "/dashboard").length > 0 && (
+            <div className="mb-3 pb-3 border-b border-[var(--cmp-app-border)]">
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--cmp-app-text-secondary)]">Switch workspace</p>
+              {workspaces.filter(w => w.href !== "/dashboard").map(w => (
+                <Link key={w.href} href={w.href} onClick={() => setOpen(false)}
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-[var(--cmp-app-text)] hover:bg-[var(--cmp-app-bg)] transition-colors pointer-coarse:min-h-[var(--cp-touch)]">
+                  <span className="text-sm leading-none w-5 text-center" aria-hidden>{w.icon ?? "▸"}</span>
+                  <span className="flex-1">{w.label}</span>
+                  <span className="text-[var(--cmp-app-text-secondary)]" aria-hidden>→</span>
+                </Link>
+              ))}
+            </div>
+          )}
           {navItems.map(({ label, href, icon }) => {
             const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
             return (
