@@ -30,5 +30,19 @@ export async function recordScholarOutcome(admin: unknown, ai: RunnerTrace, e: {
   });
 }
 
+/**
+ * SCHOLAR-SQIE-02: a safe withhold is tracked apart from an answer, by reason CODE, never the request text. 600's CHECK
+ * has no "withheld" or "answered" outcome, so neither is invented: a withhold is outcome "rejected" with the codes
+ * "withheld" and "withheld_<reason>", an answer is "accepted" with the code "answered".
+ */
+export function answerOutcome(withheldReason: string | null): { outcome: AiOutcome; reasons: string[] } {
+  return withheldReason
+    ? { outcome: "rejected", reasons: ["withheld", `withheld_${withheldReason.replace(/[^a-z0-9_]/gi, "_").slice(0, 40)}`] }
+    : { outcome: "accepted", reasons: ["answered"] };
+}
+
+/** SCHOLAR-SQIE-02: the typed result a path returns when it withholds, so the student's question and attempt are kept. */
+export type Withheld = { reason: string };
+
 /** A redirect before any call was made (sufficiency or an identical retry): an outcome with no cost and no attempts. */
 export const noCalls = (actionId: string): RunnerTrace => ({ actionId, calls: () => ({}) });

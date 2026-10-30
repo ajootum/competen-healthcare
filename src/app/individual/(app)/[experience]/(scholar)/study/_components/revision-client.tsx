@@ -13,6 +13,8 @@ import {
 } from "@/lib/individual/scholar/config";
 import type { RevisionFeedback, RevisionItemView } from "@/lib/individual/scholar/revision-view";
 import { MakeEvaluation } from "./evaluation-client";
+import { FEEDBACK_HEADINGS, GROUNDING_LABEL } from "@/lib/individual/scholar/config";
+import type { FeedbackParts, SourceMode } from "@/lib/individual/scholar/question-intel";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
 // Revise -> Answer -> Understand mistakes -> Reinforce -> Revisit -> Improve. Every answer goes to
@@ -66,6 +68,7 @@ export function RevisionStart(props: {
   const [quantity, setQuantity] = useState(props.quantity);
   const [difficulty, setDifficulty] = useState(props.preset?.difficulty && ["any", "easy", "standard", "harder"].includes(props.preset.difficulty) ? props.preset.difficulty : props.difficulty);
   const [feedback, setFeedback] = useState(props.feedback);
+  const [source, setSource] = useState<SourceMode>("notes");
   const [mode, setMode] = useState<RevisionMode>(props.modes.includes("quick") ? "quick" : props.modes[0] ?? "today");
   const [unsaved, setUnsaved] = useState<{ items: RevisionItemView[]; label: string | null } | null>(null);
 
@@ -74,14 +77,14 @@ export function RevisionStart(props: {
     const scope = !custom || scopeKind === "library" ? { kind: "library" }
       : scopeKind === "documents" ? { kind: "documents", materialIds: chosen }
         : scopeKind === "topic" ? { kind: "topic", topic } : { kind: "competency", competencyId: competency };
-    const r = await call("/api/individual/scholar/revision/sessions", { mode: m, scope, ...(custom ? { formats, quantity, difficulty, feedback } : {}) });
+    const r = await call("/api/individual/scholar/revision/sessions", { mode: m, scope, ...(custom ? { formats, quantity, difficulty, feedback, source } : {}) });
     setBusy("");
     if (!r.ok && r.json.continuity) { setContinuity(r.json.error ?? "New questions are not available right now."); return; }
     if (!r.ok) { setError(r.json.error ?? "Revision could not start just now."); return; }
     if (r.json.session?.id) router.push(revisionHref(r.json.session.id));
     // A session this environment could not keep (417 absent): run here, for this sitting only.
     else { setNote(r.json.note ?? ""); setUnsaved({ items: r.json.items ?? [], label: r.json.label ?? null }); }
-  }, [router, scopeKind, chosen, topic, competency, formats, quantity, difficulty, feedback]);
+  }, [router, scopeKind, chosen, topic, competency, formats, quantity, difficulty, feedback, source]);
 
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
   if (unsaved) return <RevisionRunner session={null} items={unsaved.items} answered={[]} label={unsaved.label} />;
@@ -154,6 +157,13 @@ export function RevisionStart(props: {
             <label className="text-[13px] font-semibold text-gray-800">Feedback
               <select value={feedback} onChange={e => setFeedback(e.target.value as "immediate" | "end")} className={`${field} ml-2`} disabled={mode === "mock"}>
                 <option value="immediate">After each answer</option><option value="end">At the end</option>
+              </select>
+            </label>
+            {/* SCHOLAR-SQIE-01: where new questions come from. Approved references apply to the revision formats. */}
+            <label className="text-[13px] font-semibold text-gray-800">New questions from
+              <select value={source} onChange={e => setSource(e.target.value as SourceMode)} className={`${field} ml-2`}>
+                <option value="notes">{GROUNDING_LABEL.notes.replace(/^From y/, "Y")}</option>
+                <option value="notes_and_references">{GROUNDING_LABEL.references.replace(/^From y/, "Y")}</option>
               </select>
             </label>
           </div>
@@ -352,7 +362,11 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
 
   return (
     <article className="mt-4">
-      <p className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-gray-500">{REVISION_FORMAT_LABEL[item.kind as RevisionFormat] ?? "Practice case step"}{item.difficulty ? ` · ${item.difficulty === 1 ? "easier" : item.difficulty === 3 ? "harder" : "standard"}` : ""}</p>
+      <p className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-gray-500">
+        {REVISION_FORMAT_LABEL[item.kind as RevisionFormat] ?? "Practice case step"}{item.difficulty ? ` · ${item.difficulty === 1 ? "easier" : item.difficulty === 3 ? "harder" : "standard"}` : ""}
+        {/* SCHOLAR-SQIE-01: what the question rests on. */}
+        <span className="ml-2 rounded-full bg-[var(--cmp-theme-soft)] px-2 py-0.5 normal-case tracking-normal text-gray-700">{item.grounding ?? GROUNDING_LABEL.notes}</span>
+      </p>
       <p className="mt-1 text-[16px] font-semibold leading-relaxed text-gray-900">{item.stem}</p>
       {answered ? (
         fb ? <FeedbackPanel f={fb} sessionId={sessionId} questionId={item.id} /> : <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-700">Answer recorded. You will see how it went at the end of the session.</p>
@@ -473,6 +487,22 @@ function GradeAtEnd({ questionId, sessionId, g, onGraded }: { questionId: string
   );
 }
 
+/** SCHOLAR-QUESTION-INTELLIGENCE-01: the five parts of formative feedback, each only where it has something. */
+export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackParts; tone?: "amber" | "plain" }) {
+  const ink = tone === "amber" ? "text-amber-950" : "text-gray-900";
+  const rows: [string, string[]][] = [
+    [FEEDBACK_HEADINGS.right, parts.right], [FEEDBACK_HEADINGS.missing, parts.missing], [FEEDBACK_HEADINGS.misconceptions, parts.misconceptions],
+    [FEEDBACK_HEADINGS.why, parts.why ? [parts.why] : []], [FEEDBACK_HEADINGS.next, parts.next ? [parts.next] : []],
+  ];
+  return (
+    <dl className={`mt-1 space-y-1 text-[13.5px] ${ink}`}>
+      {rows.filter(([, xs]) => xs.length).map(([h, xs]) => (
+        <div key={h}><dt className="font-semibold">{h}</dt><dd>{xs.length > 1 ? <ul className="list-disc pl-5">{xs.map(x => <li key={x}>{x}</li>)}</ul> : xs[0]}</dd></div>
+      ))}
+    </dl>
+  );
+}
+
 function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string }) {
   return (
     <div aria-live="polite" className={`mt-3 rounded-xl border p-4 ${f.correct ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
@@ -483,12 +513,19 @@ function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: Revis
       {f.evaluation && (
         <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
           <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{f.evaluation.label}</p>
-          <p className="mt-1 text-[13.5px] text-amber-950">{f.evaluation.feedback}</p>
+          {f.evaluation.parts ? <FeedbackPartsView parts={f.evaluation.parts} /> : <p className="mt-1 text-[13.5px] text-amber-950">{f.evaluation.feedback}</p>}
           <FormativeAiLabel className="mt-1" />
         </div>
       )}
       <p className="mt-2 text-[13.5px] text-gray-900"><span className="font-semibold">Your notes:</span> {f.answer}</p>
       {!compact && <p className="mt-1 text-[13.5px] leading-relaxed text-gray-800">{f.rationale}</p>}
+      {/* SCHOLAR-QUESTION-INTELLIGENCE-01: after answering -- what it checks, at what level, and its key points. */}
+      {!compact && f.rubric && (f.rubric.objective || f.rubric.keyPoints.length > 0) && (
+        <div className="mt-2 text-[13px] text-gray-800">
+          <p><span className="font-semibold">Checks:</span> {f.rubric.objective ?? "—"} <span className="text-gray-600">({f.rubric.level} · {f.rubric.grounding})</span></p>
+          {f.rubric.keyPoints.length > 0 && <ul className="mt-1 list-disc pl-5">{f.rubric.keyPoints.map(k => <li key={k}>{k}</li>)}</ul>}
+        </div>
+      )}
       <blockquote className="mt-2 border-l-4 pl-3 text-[13px] italic text-gray-700" style={{ borderColor: accent }}>“{f.source.quote}”</blockquote>
       {f.practises && (
         <p className="mt-2 text-[12.5px] text-gray-700">
@@ -504,6 +541,8 @@ function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: Revis
         {!f.correct && <Link href={learnHref(f.source.chunkId, sessionId)} className={ghost}>Teach me this</Link>}
         {/* CLINICAL-REASONING-01 CR1: from Revision, a case written from the same section. */}
         <Link href={`${studyHref("apply")}?section=${f.source.chunkId}&from=revision`} className={ghost}>Practise in a case</Link>
+        {/* SCHOLAR-SQIE-01: more on the same material, a step easier after a miss and harder after a right answer. */}
+        {f.nextDifficulty && <Link href={`${studyHref("revise")}?material=${f.source.materialId}&difficulty=${f.nextDifficulty}`} className={ghost}>{f.correct ? "Try harder questions on this" : "More practice on this"}</Link>}
       </div>
       {/* SCHOLAR-AI-OPT-01 s7: optional, one tap, about the AI-written question itself (not the student's answer). */}
       <AiFeedback kind="question" target="question" refId={questionId} />

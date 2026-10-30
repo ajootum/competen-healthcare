@@ -9,6 +9,7 @@ import { governedReferences, referenceSource } from "./learn";
 import { loadLearnerCatalogue } from "./competency-view";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "./http";
 import type { ScholarAiActivity } from "./ai-standing";
+import { answerOutcome, recordScholarOutcome } from "./outcome";
 import { NOTES_NOT_PAPER, PAPER_PARSER, isNotesNotPaper, leadInFor, linesFromChunks, parsePaper, questionText, revisionFront, type PaperLine } from "./exam-paper";
 import {
   ANSWER_WITHHELD, buildEvidence, matchLibrary, runAnswer, runFollowUp, runGuide, runTranscription, type Evidence, type LibraryEntry,
@@ -235,8 +236,10 @@ export async function answerQuestion(ctx: IndividualContext, req: Request, input
   if ("status" in web) return web;
   const evidence = buildEvidence(local.passages, local.library, web.sources);
   const research = { depth, sources, web: { state: web.state, message: web.message, searches: web.searches } };
+  // SCHOLAR-SQIE-02: every withhold is typed (withheld.reason) and carries the question and the attempt back.
+  const kept = { questionId: q.id, attempt: input.attempt ?? null };
   if (!evidence.length)
-    return json(200, { noEvidence: true, research, message: "No evidence was found for this question in your notes, the Competen library or web research, so no answer was written. Upload notes that cover it, then try again." });
+    return json(200, { noEvidence: true, withheld: { reason: "no_evidence" }, ...kept, research, message: "No evidence was found for this question in your notes, the Competen library or web research, so no answer was written. Upload notes that cover it, then try again." });
 
   const ai = scholarAiRunner(ctx, req, EXAM_ACTIVITY.answer, await scholarRisk(ctx.admin, ctx.userId, { text, passages: local.passages }));
   const r = await runAnswer(ai.run, ctx.userId, { question: text, evidence, attempt: attemptText, optionLabels: q.options.map(o => o.label) });
@@ -247,8 +250,11 @@ export async function answerQuestion(ctx: IndividualContext, req: Request, input
     outcome: r.ok ? (r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`, model: r.ok ? r.model : null,
   });
   if (!r.ok) return json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error });
+  // SCHOLAR-SQIE-02: withheld vs answered, counted apart (codes only). The paper answer stays on its own activity.
+  const o = answerOutcome(r.check.ok ? null : r.check.reason);
+  await recordScholarOutcome(ctx.admin, ai, { operation: "individual_scholar_exam_answer", outputKind: "explanation", outcome: o.outcome, reasons: o.reasons, promptVersion: r.promptVersion });
   const shownEvidence = evidence.map(storedEvidence);
-  if (!r.check.ok) return json(200, { withheld: true, reason: r.check.reason, message: ANSWER_WITHHELD[r.check.reason], evidence: shownEvidence, research });
+  if (!r.check.ok) return json(200, { withheld: { reason: r.check.reason }, reason: r.check.reason, ...kept, message: ANSWER_WITHHELD[r.check.reason], evidence: shownEvidence, research });
 
   const attempt = input.attempt && (input.attempt.option || input.attempt.text) ? { option: input.attempt.option ?? null, text: input.attempt.text?.slice(0, 3000) ?? null } : null;
   const id = await saveExamAnswer(ctx.admin, ctx.userId, {
@@ -268,7 +274,7 @@ export async function followUp(ctx: IndividualContext, req: Request, input: { an
   const pre = await aiPreflight(ctx);
   if (pre) return json(pre.status, await pre.json());
   const evidence = a.evidence.map(fromStored);
-  if (!evidence.length) return json(200, { withheld: true, message: "This answer has no evidence to ask about." });
+  if (!evidence.length) return json(200, { withheld: { reason: "no_evidence" }, answerId: a.id, ask: input.ask, message: "This answer has no evidence to ask about." });
   const text = await questionWithContext(ctx, q);
   const answer = [String(a.content.examAnswer ?? ""), String(a.content.explanation ?? "")].join("\n");
   const ai = scholarAiRunner(ctx, req, EXAM_ACTIVITY.follow_up, await scholarRisk(ctx.admin, ctx.userId, { text: `${text}\n${input.ask}`, passages: [] }));
@@ -277,7 +283,7 @@ export async function followUp(ctx: IndividualContext, req: Request, input: { an
   if (refused) return json(refused.status, await refused.json());
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_exam_follow_up", a.id, { ask_chars: input.ask.length, outcome: r.ok ? (r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}` });
   if (!r.ok) return json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error });
-  if (!r.check.ok) return json(200, { withheld: true, message: r.check.reason === "no_citation" || r.check.reason === "bad_citation" ? "The reply did not cite the evidence correctly, so it was not shown." : r.check.reason === "identifier" ? ANSWER_WITHHELD.identifier : ANSWER_WITHHELD.ungrounded });
+  if (!r.check.ok) return json(200, { withheld: { reason: r.check.reason }, answerId: a.id, ask: input.ask, message: r.check.reason === "no_citation" || r.check.reason === "bad_citation" ? "The reply did not cite the evidence correctly, so it was not shown." : r.check.reason === "identifier" ? ANSWER_WITHHELD.identifier : ANSWER_WITHHELD.ungrounded });
   return json(200, { text: r.check.text, cited: r.check.cited });
 }
 
@@ -307,7 +313,7 @@ export async function revisionGuide(ctx: IndividualContext, req: Request, materi
   if (refused) return json(refused.status, await refused.json());
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_exam_guide", materialId, { questions: qs.length, outcome: r.ok ? (r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}` });
   if (!r.ok) return json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error });
-  if (!r.check.ok) return json(200, { withheld: true, message: "The guide included details its evidence does not support, so it was not shown. Try again." });
+  if (!r.check.ok) return json(200, { withheld: { reason: r.check.reason }, materialId, message: "The guide included details its evidence does not support, so it was not shown. Try again." });
   const stored = evidence.map(storedEvidence);
   const id = await saveExamAnswer(ctx.admin, ctx.userId, {
     materialId, questionId: null, kind: "guide", attempt: null, content: { text: r.check.text, cited: r.check.cited, questions: qs.length },

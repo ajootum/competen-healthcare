@@ -19,6 +19,10 @@ import { REVISION_GENERATION_CALLS_MAX, type RevisionDifficulty, type RevisionFo
 import { findPatientIdentifiers } from "./extract";
 import { textGroundingViolations } from "@/lib/ai/grounding";
 import type { Passage } from "./generation";
+import {
+  asksQuestion, difficultyFits, difficultyOf, distractorProblem, flashcardFrontAsks, keyConsistent, parseRubric, referenceGrounding, stemKey,
+  type GenerationDifficulty, type PromptReference,
+} from "./question-intel";
 
 const groundingViolations = textGroundingViolations;
 const normaliseAnswer = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -164,21 +168,37 @@ export function storedResponse(r: Response): { chosenIndex: number | null; respo
 // ── NEW QUESTIONS FROM A PASSAGE: THE CHECKS (generation.ts writes them) ──
 
 export type RevisionDraft = { stem: string; options: string[]; answer: Record<string, unknown>; rationale: string; sourceQuote: string; difficulty: 1 | 2 | 3 };
-export type DraftReason = "malformed" | "quote_not_in_passage" | "ungrounded" | "identifier" | "duplicate";
+export type DraftReason =
+  | "malformed" | "quote_not_in_passage" | "ungrounded" | "identifier" | "duplicate"
+  // SCHOLAR-QUESTION-INTELLIGENCE-01: it asks nothing, repeats a stored question, has give-away options, its key and
+  // explanation disagree, or it is not the difficulty asked for.
+  | "not_a_question" | "repeat" | "weak_distractors" | "inconsistent" | "off_difficulty";
+
+/** What a revision item is checked against besides its passage. All optional: none is the 416 check exactly. */
+export type DraftChecks = {
+  /** stemKey of the questions already stored for this material: a repeat is not stored again. */
+  existing?: ReadonlySet<string>;
+  /** The difficulty asked for. */
+  difficulty?: GenerationDifficulty | null;
+  /** Mode notes_and_references: the references the item may draw on, and their text as extra grounding. */
+  references?: readonly PromptReference[];
+};
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 const text = (v: unknown, max: number): string | null => (typeof v === "string" && v.trim() && v.length <= max ? v.trim() : null);
-const difficultyOf = (v: unknown): 1 | 2 | 3 => (v === 1 || v === 3 ? v : 2);
 
 /**
  * Pure. One AI-written item checked like a practice question: well formed for its kind, its quote really in the
  * passage, and nothing anywhere in it -- stem, options, key, rationale -- that the passage does not hold, and nothing
  * that identifies a patient. A sequence is stored shuffled, with the order as its key.
+ * SCHOLAR-QUESTION-INTELLIGENCE-01: then it must ask (a flashcard front a question or a short term, never a
+ * statement), not repeat a stored stem, have real distractors, a key its explanation supports, and the difficulty
+ * asked for. Its rubric (question-intel.ts) is stored with its key.
  */
-export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: unknown, passage: Passage): { ok: true; draft: RevisionDraft } | { ok: false; reason: DraftReason } {
+export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: unknown, passage: Passage, checks: DraftChecks = {}): { ok: true; draft: RevisionDraft } | { ok: false; reason: DraftReason } {
   const r = (raw ?? {}) as Record<string, unknown>;
   const quote = text(r.sourceQuote, 500);
-  const difficulty = difficultyOf(r.difficulty);
+  const difficulty = difficultyOf(r);
   let d: RevisionDraft | null = null;
   if (kind === "mrq") {
     const stem = text(r.stem, 400), options = strs(r.options)?.map(o => o.trim()), correct = nums(r.correct), rationale = text(r.rationale, 1200);
@@ -215,8 +235,30 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   if (!norm(passage.content).includes(norm(d.sourceQuote))) return { ok: false, reason: "quote_not_in_passage" };
   const all = [d.stem, ...d.options, ...Object.values(d.answer).flatMap(v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : typeof v === "string" ? [v] : [])), d.rationale].join("\n");
   if (findPatientIdentifiers(all).length) return { ok: false, reason: "identifier" };
-  if (groundingViolations(all, [passage.content]).length) return { ok: false, reason: "ungrounded" };
-  return { ok: true, draft: d };
+  const grounding = [passage.content, ...referenceGrounding(checks.references ?? [])];
+  if (groundingViolations(all, grounding).length) return { ok: false, reason: "ungrounded" };
+
+  // ── SCHOLAR-QUESTION-INTELLIGENCE-01: the item asks, is new, has real distractors, agrees with itself ──
+  if (kind === "flashcard" ? !flashcardFrontAsks(d.stem) : kind !== "match" && !asksQuestion(d.stem)) return { ok: false, reason: "not_a_question" };
+  if (checks.existing?.has(stemKey(d.stem))) return { ok: false, reason: "repeat" };
+  if (kind === "mrq" && distractorProblem(d.options)) return { ok: false, reason: "weak_distractors" };
+  const expected = expectedOf(kind, d);
+  if (kind !== "match" && kind !== "sequence" && !keyConsistent(expected, `${d.rationale}\n${d.stem}`, d.sourceQuote)) return { ok: false, reason: "inconsistent" };
+  if (!difficultyFits(d.difficulty, checks.difficulty ?? null)) return { ok: false, reason: "off_difficulty" };
+  const rubric = parseRubric(r, grounding, {
+    expectedAnswer: expected || null, accepted: kind === "short" ? (d.answer.accepted as string[]) : [], difficulty: d.difficulty, references: checks.references,
+  });
+  return { ok: true, draft: { ...d, answer: { ...d.answer, rubric } } };
+}
+
+/** The answer an item expects, in words: what its rubric records and its consistency check reads. */
+function expectedOf(kind: Exclude<RevisionFormat, "mcq">, d: RevisionDraft): string {
+  const a = d.answer as Record<string, unknown>;
+  if (kind === "short") return String((a.accepted as string[])[0] ?? "");
+  if (kind === "flashcard") return String(a.back ?? "");
+  if (kind === "mrq") return (a.correct as number[]).map(i => d.options[i]).join("; ");
+  if (kind === "match") return d.options.map((o, i) => `${o}: ${(a.matches as string[])[i]}`).join("; ");
+  return (a.order as number[]).map(i => d.options[i]).join("; ");
 }
 
 // ── WHICH QUESTIONS A SESSION OFFERS ──
