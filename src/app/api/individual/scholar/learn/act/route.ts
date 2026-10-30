@@ -21,13 +21,14 @@ import {
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
 import { artefactKey, governedReferences, isArtefactAction, libraryReferences, referenceSource, relabelReferences } from "@/lib/individual/scholar/learn";
 import { externalReferences, learnResearch, researchEvidence, scholarResearchOperational, type LearnResearch } from "@/lib/individual/scholar/learn-research";
+import { qualityOf } from "@/lib/individual/scholar/source-quality";
 import { topicsOfSections } from "@/lib/individual/scholar/store";
 import type { LearnSourceMode } from "@/lib/individual/policy";
 import { withheldNext } from "@/lib/individual/scholar/learn-view";
 import { parseRecoveryRequest, recordRecoveryResult, recoveredReply, rederiveRecovery, type Rederived } from "@/lib/individual/scholar/evidence-recovery";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import {
-  AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, STEP_MAX_SECTIONS,
+  AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD, RESEARCH_READING_ONLY, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, STEP_MAX_SECTIONS,
   isLearnAction, type ExplanationDepth, type LearnAction,
 } from "@/lib/individual/scholar/config";
 
@@ -225,7 +226,9 @@ export async function POST(req: Request) {
     // AI operating modes: a clarify question is put to the student, not shown as a refusal. Nothing was sent anywhere.
     if (gate?.error === "clarify_purpose") return meteredRefusal(gate)!;
     if (gate) { const w = refusalWords(gate); return continuity(w.message, w.insufficient); }
-    research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle }, ai.actionId);
+    // SCHOLAR-SOURCE-QUALITY-01: the result comes back GATED (source-quality.ts), so only abstracts that pass the HQ
+    // source-quality rules can reach generation below; the rest are listed as reading only.
+    research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle }, ai.actionId, null, qualityOf(policy.scholarRecovery));
   }
   const evidence = [...(research ? researchEvidence(research) : []), ...(recovered?.ok ? recovered.inputs.research : [])];
   const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence }, ai.run);
@@ -273,7 +276,8 @@ export async function POST(req: Request) {
     // COMPETEN-RESEARCH-01: external research, apart from the notes, with the providers' own records. Never mixed in.
     research: research ? {
       state: research.state, label: SOURCE_KIND_LABEL.research, query: research.query, scholarLink: research.scholarLink, references: externalReferences(research),
-      message: research.message ?? (evidence.length && !rr ? "The research found did not add to this request, so nothing from it is shown." : !evidence.length && research.items.length ? "Research found records without a verified abstract: listed as further reading only." : null),
+      message: research.message ?? (evidence.length && !rr ? "The research found did not add to this request, so nothing from it is shown." : !evidence.length && Object.keys(research.notUsed ?? {}).length ? RESEARCH_READING_ONLY
+          : !evidence.length && research.items.length ? "Research found records without a verified abstract: listed as further reading only." : null),
       ...(rr ? (rr.ok ? { text: rr.text, cited: rr.cited } : { withheld: RESEARCH_WITHHELD[rr.reason] }) : {}),
     } : null };
   if (action === "check") {

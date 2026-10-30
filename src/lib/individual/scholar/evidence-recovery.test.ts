@@ -448,8 +448,9 @@ describe("SCHOLAR-SOURCE-QUALITY-01: PubMed-indexed, allowed publication type, o
     const all = research([ayurveda, asb, review, caseReport, untyped], [0, 1, 2, 3, 4], { query: "antibiotic choice pyelonephritis" });
     const f = fakeSources({ research: all });
     const r = await runRecovery({ question: Q, mode: "notes_and_references" }, tierPlan("notes_and_references", OPEN, true), f.sources, { wider: null });
+    // Evidence first (as Learn lists it), then every item the gate stopped, in the engine's order, with its reason.
     expect(r.evidence.external.map(e => [e.title.slice(0, 12), e.evidence, e.tag, e.notUsed])).toEqual([
-      ["Acute Pyelon", false, null, "not_indexed"], ["Clinical Pra", false, null, "off_topic"], ["Antibiotic t", true, "E1", null],
+      ["Antibiotic t", true, "E1", null], ["Acute Pyelon", false, null, "not_indexed"], ["Clinical Pra", false, null, "off_topic"],
       ["Emphysematou", false, null, "type_excluded"], ["Pyelonephrit", false, null, "type_unknown"],
     ]);
     expect(r.evidence.external.filter(e => !e.evidence).every(e => e.excerpt === null)).toBe(true); // reading shows no evidence excerpt
@@ -472,8 +473,10 @@ describe("SCHOLAR-SOURCE-QUALITY-01: PubMed-indexed, allowed publication type, o
   });
   it("gateResearch keeps the engine's order of what passed", () => {
     const g = gateResearch(research([review, asb, { ...review, sourceId: "6", pmid: "6", url: "https://pubmed.ncbi.nlm.nih.gov/6/" }], [0, 1, 2]), kw);
-    expect(g.research.evidence).toEqual([0, 2]);
-    expect([...g.notUsed]).toEqual([[1, "off_topic"]]);
+    expect(g.evidence).toEqual([0, 2]);
+    expect(g.notUsed).toEqual({ 1: "off_topic" });
+    // Idempotent: a second pass (recovery after learnResearch) keeps what the first stopped.
+    expect(gateResearch(g, kw)).toEqual(g);
   });
   it("records why items were not used: codes and counts only", async () => {
     const f = fakeSources({ research: research([ayurveda, asb, review, caseReport, untyped, { ...asb, sourceId: "7", pmid: "7", url: "https://pubmed.ncbi.nlm.nih.gov/7/" }], [0, 1, 2, 3, 4, 5]) });

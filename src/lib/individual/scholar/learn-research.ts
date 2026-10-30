@@ -6,6 +6,7 @@ import type { IndividualContext } from "../guard";
 import type { ScholarResearchPolicy } from "../policy";
 import { LEARN_RESEARCH_OPERATION, type ResearchEvidence } from "./generation";
 import { audit } from "./http";
+import { DEFAULT_QUALITY, gateResearch, queryKeywords, type EvidenceQuality, type NotUsedByIndex, type NotUsedReason } from "./source-quality";
 import { LEARN_RESEARCH_AUDIT_ACTION, LEARN_RESEARCH_ENTITY, aiSpendToday, learnResearchToday, readResearchCache, writeResearchCache } from "./store";
 
 // ── LEARN: RESEARCH & EXPLAIN ── COMPETEN-RESEARCH-01 + ADDENDUM V2 ─────────────────────────────────────────────────────
@@ -27,8 +28,13 @@ export type LearnResearch = {
   query: string | null;
   scholarLink: string | null;
   items: ResearchItem[];
-  /** Indexes into items: the verified abstracts the model may use, in [E n] order. */
+  /**
+   * Indexes into items: the verified abstracts the model may use, in [E n] order. SCHOLAR-SOURCE-QUALITY-01: only those
+   * that passed Scholar's source-quality gate (learnResearch applies it), never the engine's raw list.
+   */
   evidence: number[];
+  /** SCHOLAR-SOURCE-QUALITY-01: engine evidence the gate stopped, by item index, with the rule it failed. Reading only. */
+  notUsed?: NotUsedByIndex;
   calls: ProviderCall[];
   codes: string[];
   /** Provenance: provider -> registry record version. */
@@ -76,9 +82,13 @@ export function narrowPlan(plan: ResearchPlan, n: ResearchNarrowing): ResearchPl
   };
 }
 
-/** The research for one Learn request, within the learner's limits and the engine's configuration. */
-/** `actionId`: the Scholar AI action this research serves, so its usage and cost are attributed to that action's outcome. */
-export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPolicy, input: { question?: string | null; topics: readonly string[]; title?: string | null }, actionId: string | null = null, narrow: ResearchNarrowing | null = null): Promise<LearnResearch> {
+/**
+ * The research for one Learn request, within the learner's limits and the engine's configuration.
+ * `actionId`: the Scholar AI action this research serves, so its usage and cost are attributed to that action's outcome.
+ * `quality`: SCHOLAR-SOURCE-QUALITY-01 -- every result (fresh or cached) leaves here GATED: only items passing the
+ * source-quality rules remain evidence; the rest are reading. Every Scholar caller (Learn, evidence recovery) gets this.
+ */
+export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPolicy, input: { question?: string | null; topics: readonly string[]; title?: string | null }, actionId: string | null = null, narrow: ResearchNarrowing | null = null, quality: EvidenceQuality = DEFAULT_QUALITY): Promise<LearnResearch> {
   const engine = await loadResearchEngine(ctx.admin);
   if (!p.modes.includes("research") || !researchOperational(engine, "scholar", "learn")) return none("off", "Research & Explain is not available on Scholar at the moment.", ["off"]);
   const q = researchQuery(input);
@@ -93,7 +103,7 @@ export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPo
   const usage = researchUsage(ctx.admin, { actionId, product: "scholar", operation: LEARN_RESEARCH_OPERATION, workflow: "basic", policy: plan.policy });
   if (cached) {
     await usage.record({ provider: "cache", capability: "search", requests: 0, results: cached.sources.length, outcome: "cache", latencyMs: 0, costUsd: 0 });
-    return { ...fromResult(cachedResult(q.query, cached.sources as unknown[], plan)), ...rules };
+    return gated({ ...fromResult(cachedResult(q.query, cached.sources as unknown[], plan)), ...rules }, quality);
   }
 
   const [count, spend] = await Promise.all([learnResearchToday(ctx.admin, ctx.userId), aiSpendToday(ctx.admin, ctx.userId, LEARN_RESEARCH_OPERATION)]);
@@ -108,8 +118,11 @@ export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPo
   // One row per fresh search: counts and codes only, never the query text. It is what the learner's daily limit counts.
   await audit(ctx, LEARN_RESEARCH_AUDIT_ACTION, LEARN_RESEARCH_ENTITY, null,
     { action_id: actionId, query_chars: q.query.length, state: r.state, items: r.items.length, evidence: r.evidence.length, calls: r.calls, codes: r.codes });
-  return { ...fromResult(r), ...rules };
+  return gated({ ...fromResult(r), ...rules }, quality);
 }
+
+/** Pure. Research as Scholar may use it: gated on the de-identified query that left Competen (SCHOLAR-SOURCE-QUALITY-01). */
+export const gated = (r: LearnResearch, quality: EvidenceQuality = DEFAULT_QUALITY): LearnResearch => gateResearch(r, queryKeywords(r.query), quality);
 
 function fromResult(r: ResearchResult): Omit<LearnResearch, "excerptChars" | "furtherReading" | "licensing"> & Partial<LearnResearch> {
   return { state: r.state, message: MESSAGE[r.state] ?? null, query: r.query, scholarLink: r.scholarLink, items: r.items, evidence: r.evidence, calls: r.calls, codes: r.codes, sourceVersions: r.sourceVersions };
@@ -124,6 +137,8 @@ export type ExternalReference = {
   kind: "external"; tag: string | null; provider: string; title: string; journal: string | null; year: number | null; authors: string[];
   pmid: string | null; doi: string | null; url: string; evidence: boolean; excerpt: string | null; verified: { pmid: boolean; doi: boolean | null }; retrievedAt: string;
   sourceVersion: string | null; reuse: "private_evidence_excerpt_only" | "metadata_only";
+  /** SCHOLAR-SOURCE-QUALITY-01: why the engine's evidence is reading only here (the source-quality rule it failed). */
+  notUsed: NotUsedReason | null;
   /** SCHOLAR-SQIE-02: PubMed Central's open-access link and licence, when it was asked and has one. Never fetched. */
   openAccess: OpenAccess | null;
 };
@@ -132,10 +147,14 @@ export type ExternalReference = {
  * Pure. Evidence items first (tagged E1 ...), then further reading (untagged, when the rules show it). Only what the
  * providers returned, and (RESEARCH-02) only records whose identity was VERIFIED: a PMID from PubMed or a DOI Crossref
  * confirmed. An unverified record is never shown, as evidence or as reading; a contradicted one was already dropped.
+ * SCHOLAR-SOURCE-QUALITY-01: engine evidence the source-quality gate stopped is always listed (after the evidence, before
+ * other further reading), untagged, without an excerpt, with the rule it failed.
  */
 export function externalReferences(r: LearnResearch): ExternalReference[] {
-  const rest = r.furtherReading ? r.items.map((_, i) => i).filter(i => !r.evidence.includes(i) && (r.items[i].verified.pmid || r.items[i].verified.doi === true)) : [];
-  return [...r.evidence, ...rest].map((i, n) => {
+  const notUsed = r.notUsed ?? {};
+  const stopped = r.items.map((_, i) => i).filter(i => !!notUsed[i] && !r.evidence.includes(i));
+  const rest = r.furtherReading ? r.items.map((_, i) => i).filter(i => !r.evidence.includes(i) && !notUsed[i] && (r.items[i].verified.pmid || r.items[i].verified.doi === true)) : [];
+  return [...r.evidence, ...stopped, ...rest].map((i, n) => {
     const x = r.items[i];
     const rec = toEvidenceRecord(x, { question: null, query: r.query ?? "", strategy: "basic", sourceVersion: r.sourceVersions[x.provider] ?? "", licensing: r.licensing[x.provider] ?? "" }).verified;
     const evidence = n < r.evidence.length;
@@ -144,7 +163,7 @@ export function externalReferences(r: LearnResearch): ExternalReference[] {
       kind: "external", tag: evidence ? `E${n + 1}` : null, provider: PROVIDER_LABEL[x.provider], title: rec.title, journal: rec.source, year: rec.year, authors: rec.authors,
       pmid: rec.pmid, doi: rec.doi, url: rec.url, evidence,
       excerpt: evidence && rec.abstract && max > 0 ? (rec.abstract.length > max ? `${rec.abstract.slice(0, max).replace(/\s+\S*$/, "")}…` : rec.abstract) : null,
-      verified: rec.identity, retrievedAt: rec.retrievedAt, sourceVersion: rec.sourceVersion || null, reuse: rec.reuse,
+      verified: rec.identity, retrievedAt: rec.retrievedAt, sourceVersion: rec.sourceVersion || null, reuse: evidence || !notUsed[i] ? rec.reuse : "metadata_only", notUsed: evidence ? null : notUsed[i] ?? null,
       openAccess: x.openAccess && !x.openAccess.retracted ? x.openAccess : null,
     };
   });

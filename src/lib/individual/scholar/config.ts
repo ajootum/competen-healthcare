@@ -274,6 +274,8 @@ export const RECOVERY_NOT_USED_LABEL = {
   type_excluded: "not a review, guideline or trial",
   off_topic: "its title does not name this topic",
 } as const;
+/** Learn Research & Explain: research was found, but none of it met the source rules, so nothing from it explains. */
+export const RESEARCH_READING_ONLY = "The research found did not meet the source rules for explaining (PubMed-indexed reviews, guidelines or trials naming this topic), so it is listed as reading only.";
 export const RECOVERY_UNANSWERED_LABEL = "Not found in any of these sources yet";
 /** An explanation written from recovered evidence, by the same checked AI the learner was using. */
 export const RECOVERY_EXPLANATION_LABEL = "AI explanation from your notes + approved references";

@@ -88,7 +88,7 @@ const retentionSafe = (src: Src) => {
 const attributed = (src: Src) => {
   const a = src.get(ACT) ?? "", l = src.get(LR) ?? "";
   const iRunner = a.indexOf("const ai = scholarAiRunner("), iSearch = a.indexOf("await learnResearch(ctx,");
-  return iRunner > 0 && iSearch > iRunner && a.includes("topics, title: stepTitle }, ai.actionId);")
+  return iRunner > 0 && iSearch > iRunner && a.includes("topics, title: stepTitle }, ai.actionId,")
     && l.includes('researchUsage(ctx.admin, { actionId, product: "scholar"') && l.includes("{ action_id: actionId, query_chars:");
 };
 
@@ -136,7 +136,7 @@ async function forgedSendsNothing(): Promise<boolean> {
     && !retentionSafe(plant(RET, 'from("individual_scholar_research_cache").delete({ count: "exact" }).like("provider", "holdings:%").lt("expires_at"', 'from("individual_scholar_research_cache").delete({ count: "exact" }).lt("expires_at"'))
     && !retentionSafe(plant(RET, "  return { ran: true,", '  await admin.from("audit_log").delete().lt("created_at", cutoff);\n  return { ran: true,')));
   ok("P8. ⚠ E9 goes red when research no longer carries the action id",
-    !attributed(plant(ACT, "topics, title: stepTitle }, ai.actionId);", "topics, title: stepTitle });")));
+    !attributed(plant(ACT, "topics, title: stepTitle }, ai.actionId,", "topics, title: stepTitle }, null,")));
 
   console.log(fails.length ? `\nRED -- ${pass} passed, ${fails.length} failed\n  FAILED: ${fails.join("\n  FAILED: ")}` : `\nALL GREEN -- ${pass} passed, 0 failed`);
   process.exit(fails.length ? 1 : 0);
