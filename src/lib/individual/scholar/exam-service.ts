@@ -13,7 +13,7 @@ import { answerOutcome, recordScholarOutcome } from "./outcome";
 import { recordRecoveryResult, recoveredReply, rederiveRecovery, type RecoveryRequest } from "./evidence-recovery";
 import { RECOVERY_STILL_WITHHELD } from "./config";
 import {
-  NOTES_NOT_PAPER, PAPER_PARSER, isCurrentParser, isNotesNotPaper, judgeLegacyPaper, leadInFor, linesFromChunks, parsePaper, questionText, revisionFront,
+  NOTES_NOT_PAPER, NOTES_VERDICT, PAPER_PARSER, isCurrentParser, isNotesNotPaper, judgeLegacyPaper, leadInFor, linesFromChunks, parsePaper, questionText, revisionFront,
   type LegacyJudgement, type PaperLine,
 } from "./exam-paper";
 import {
@@ -162,6 +162,22 @@ export async function judgeOpenedPaper(ctx: IndividualContext, paper: Pick<ExamP
   return j;
 }
 
+/**
+ * SCHOLAR-SQIE-CLOSE-01 P0, the answer route: a stored row of an earlier-parser paper that today's rules judge a
+ * statement is never answered, even when called directly (the page no longer offers it). Read-only, no audit (the page
+ * already records the redirect). Unreadable paper: refused (fail closed), never answered as a question.
+ */
+export async function legacyStatementRefusal(ctx: IndividualContext, q: ExamQuestionRow): Promise<Out | null> {
+  const paper = await getExamPaper(ctx.admin, ctx.userId, q.materialId);
+  if (!paper.ok) return json(503, { error: "Your papers could not be read just now. Try again shortly." });
+  if (!paper.data || isCurrentParser(paper.data.extractor)) return null;
+  const [all, chunks] = await Promise.all([listExamQuestions(ctx.admin, ctx.userId, q.materialId), listChunks(ctx.admin, ctx.userId, q.materialId)]);
+  if (!all.ok) return json(503, { error: "Your papers could not be read just now. Try again shortly." });
+  const reparsed = chunks.ok && chunks.data.length ? parsePaper(linesFromChunks(chunks.data.map(c => ({ id: c.id, content: c.content, pageFrom: c.pageFrom })))) : null;
+  const j = judgeLegacyPaper(paper.data, all.data, reparsed);
+  return j.statementIds.includes(q.id) ? json(409, { error: NOTES_VERDICT, notesLike: true, materialId: q.materialId }) : null;
+}
+
 /** The question as the model reads it: its lead-in (when it has one), number, instructions, stem and options. */
 async function questionWithContext(ctx: IndividualContext, q: ExamQuestionRow): Promise<string> {
   const all = await listExamQuestions(ctx.admin, ctx.userId, q.materialId);
@@ -264,6 +280,8 @@ export async function answerQuestion(ctx: IndividualContext, req: Request, input
   const q = await getExamQuestion(ctx.admin, ctx.userId, input.questionId);
   if (!q) return json(404, { error: "That question could not be found." });
   if (q.flags.some(f => f.kind === "lead_in")) return json(400, { error: "This is the shared information for the parts below it. Choose one of its parts." });
+  const statement = await legacyStatementRefusal(ctx, q);
+  if (statement) return statement;
   const text = await questionWithContext(ctx, q);
   const attemptText = [input.attempt?.option ? `Chose ${input.attempt.option}` : null, input.attempt?.text?.trim() || null].filter(Boolean).join(". ").slice(0, 3000) || null;
   if ([text, attemptText ?? ""].some(t => findPatientIdentifiers(t).length))
