@@ -8,6 +8,7 @@ import { sourceHref, studyHref } from "./question-view";
 import { CASE_CONTEXT_LABEL, CASE_DIMENSION_LABEL, CASE_ENTRY_LABEL, MARKING_LABEL, type CaseContext, type CaseEntry } from "@/lib/individual/scholar/config";
 import type { LearnerView } from "@/lib/cases/blueprint";
 import { AiFeedback } from "./ai-feedback";
+import { FormativeAiLabel } from "./edu-notice";
 
 // CLINICAL REASONING -- COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (Stage 5A), the student's side.
 // A case shows only what the student has reached: the findings revealed so far and the decisions of the stages reached
@@ -306,6 +307,7 @@ function DecisionFeedback({ d, fb, materialId }: { d: LearnerView["stages"][numb
         <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
           <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{MARKING_LABEL.ai_evaluation}</p>
           <p className="mt-1 text-[13.5px] text-amber-950">{fb.aiFeedback}</p>
+          <FormativeAiLabel className="mt-1" />
         </div>
       )}
     </div>
@@ -330,6 +332,7 @@ function DecisionFeedback({ d, fb, materialId }: { d: LearnerView["stages"][numb
         <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
           <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{MARKING_LABEL.ai_evaluation}</p>
           <p className="mt-1 text-[13.5px] text-amber-950">{fb.aiFeedback}</p>
+          <FormativeAiLabel className="mt-1" />
         </div>
       )}
       {a.safetyEvents.length > 0 && (

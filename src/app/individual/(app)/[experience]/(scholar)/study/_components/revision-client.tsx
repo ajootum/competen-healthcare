@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AiFeedback } from "./ai-feedback";
+import { FormativeAiLabel } from "./edu-notice";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
@@ -483,6 +484,7 @@ function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: Revis
         <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
           <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{f.evaluation.label}</p>
           <p className="mt-1 text-[13.5px] text-amber-950">{f.evaluation.feedback}</p>
+          <FormativeAiLabel className="mt-1" />
         </div>
       )}
       <p className="mt-2 text-[13.5px] text-gray-900"><span className="font-semibold">Your notes:</span> {f.answer}</p>

@@ -10,7 +10,9 @@ import { AiBadge } from "./client";
 import { AiFlagList, GovernedReferenceList } from "./learn-kinds";
 import { AiFeedback } from "./ai-feedback";
 import ClarifyPurpose from "@/app/individual/_components/ai/ClarifyPurpose";
-import { clarifyFrom, type ClarifyPrompt } from "@/lib/individual/ai-availability";
+import { aiReasonCopy, clarifyFrom, type ClarifyPrompt } from "@/lib/individual/ai-availability";
+import { useAiAvailabilityOf } from "@/app/individual/_components/ai/AiAvailabilityContext";
+import { FormativeAiLabel } from "./edu-notice";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -104,6 +106,9 @@ export function LearnWorkspace(props: {
   const started = useRef(false);
   const opened = useRef(false);
   const step = session?.steps.find(s => s.step === at) ?? session?.steps[0] ?? null;
+  // SCHOLAR-EDU-AI-01 s6: an action whose activity the standing says is not available is shown disabled, with why.
+  const aiOf = useAiAvailabilityOf();
+  const offReason = (a: string) => { const v = aiOf(a); return v && !v.available ? v.reason : null; };
 
   const act = useCallback(async (action: string, extra: Record<string, unknown> = {}, target: "lesson" | "ask" = "lesson", asked?: string) => {
     if (!session || !step) return null;
@@ -190,9 +195,10 @@ export function LearnWorkspace(props: {
     if (p.target === "assistant") { await continueWithAssistant(p.question ?? "", "education"); return; }
     const r = await act(p.action ?? "", { ...p.extra, purpose: "education" }, p.target, p.asked);
     if (!r) return;
-    if (p.action === "ask") setAsk("");
+    // SCHOLAR-EDU-AI-01 s6: no new AI (continuity) keeps what the student typed, so they can try again or carry on.
+    if (p.action === "ask") { if (!r.continuity) setAsk(""); }
     else if (p.action === "check" && r.checkQuestion) setCheck({ question: r.checkQuestion, answer: "" });
-    else if (p.action === "clarify" && !r.error) setCheck(null);
+    else if (p.action === "clarify" && !r.error && !r.continuity) setCheck(null);
   }
   async function startCheck() {
     const r = await act("check");
@@ -202,7 +208,7 @@ export function LearnWorkspace(props: {
     e.preventDefault();
     if (!check?.answer.trim()) return;
     const r = await act("clarify", { checkQuestion: check.question, answer: check.answer.trim() }, "lesson", `Your answer: ${check.answer.trim()}`);
-    if (r && !r.error) setCheck(null);
+    if (r && !r.error && !r.continuity) setCheck(null); // no new AI: the answer stays in the box
   }
   async function submitAsk(e: React.FormEvent) {
     e.preventDefault();
@@ -210,7 +216,7 @@ export function LearnWorkspace(props: {
     if (!q) return;
     const history = askThread.slice(0, props.maxTurns).reverse().flatMap(c => [{ speaker: "student", text: c.asked ?? "" }, ...(c.reply.answer ? [{ speaker: "tutor", text: c.reply.answer }] : [])]);
     const r = await act("ask", { question: q, history }, "ask", q);
-    if (r) setAsk("");
+    if (r && !r.continuity) setAsk(""); // no new AI: the question stays in the box
   }
 
   if (!session) {
@@ -287,7 +293,7 @@ export function LearnWorkspace(props: {
           <h3 id="lesson-h" className="text-[16px] font-bold text-gray-900">{step?.title}</h3>
           <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Ways of learning">
             {props.actions.filter(a => a !== "ask").map(a => (
-              <button key={a} type="button" disabled={!!busy || !props.consent} onClick={() => act(a)}
+              <button key={a} type="button" disabled={!!busy || !props.consent || !!offReason(a)} aria-describedby={offReason(a) ? "learn-ai-why" : undefined} onClick={() => act(a)}
                 className={`${chip} ${a === "teach" ? "border-transparent text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`} style={a === "teach" ? { background: accent } : undefined}>
                 {busy === a ? "Working…" : props.labels[a]}
               </button>
@@ -298,6 +304,14 @@ export function LearnWorkspace(props: {
               </select>
             </label>
           </div>
+          {(() => {
+            const off = props.actions.filter(a => a !== "ask" && offReason(a));
+            return props.consent && off.length > 0 && (
+              <p id="learn-ai-why" className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] leading-relaxed text-gray-700">
+                <span className="font-semibold">Not available yet: {off.map(a => props.labels[a]).join(", ")}.</span> {aiReasonCopy(offReason(off[0])!, "scholar").text}
+              </p>
+            );
+          })()}
 
           {modes.length > 1 && (
             <fieldset className="mt-3 rounded-xl border border-gray-200 px-3 py-2">
@@ -340,10 +354,11 @@ export function LearnWorkspace(props: {
 
           <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
             {offerCheck && !check && (
-              <button type="button" className={props.checks === "prompt" ? btn : ghost} style={props.checks === "prompt" ? { background: accent } : undefined} disabled={!!busy} onClick={startCheck}>
+              <button type="button" className={props.checks === "prompt" ? btn : ghost} style={props.checks === "prompt" ? { background: accent } : undefined} disabled={!!busy || !!offReason("check")} aria-describedby={offReason("check") ? "learn-check-why" : undefined} onClick={startCheck}>
                 {busy === "check" ? "Writing a check…" : "Check my understanding"}
               </button>
             )}
+            {offerCheck && !check && offReason("check") && <p id="learn-check-why" className="order-last w-full text-[12.5px] text-gray-600">{aiReasonCopy(offReason("check")!, "scholar").text}</p>}
             {idx > 0 && <button type="button" className={ghost} onClick={() => goTo(session.steps[idx - 1].step, "revisit")}>Previous step</button>}
             {!last ? <button type="button" className={ghost} onClick={() => goTo(session.steps[idx + 1].step, thread.length ? null : "skip")}>{thread.length ? "Continue" : "Skip this step"}</button>
               : session.status !== "completed" && <button type="button" className={ghost} onClick={finish}>Finish session</button>}
@@ -360,7 +375,8 @@ export function LearnWorkspace(props: {
               <label htmlFor="ask-q" className="sr-only">Your question</label>
               <textarea id="ask-q" rows={2} maxLength={QUESTION_MAX} value={ask} onChange={e => setAsk(e.target.value)} placeholder="For example: why is oxygen given to a target range?"
                 className={`w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} disabled={!props.consent} />
-              <button type="submit" className={`${ghost} mt-2`} disabled={!!busy || !ask.trim() || !props.consent}>{busy === "ask" ? "Reading your notes…" : "Ask"}</button>
+              <button type="submit" className={`${ghost} mt-2`} disabled={!!busy || !ask.trim() || !props.consent || !!offReason("ask")} aria-describedby={offReason("ask") ? "learn-ask-why" : undefined}>{busy === "ask" ? "Reading your notes…" : "Ask"}</button>
+              {props.consent && offReason("ask") && <p id="learn-ask-why" className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] leading-relaxed text-gray-700">{aiReasonCopy(offReason("ask")!, "scholar").text}</p>}
             </form>
           ) : <p className="mt-2 text-[13px] text-gray-600">Asking is switched off here.</p>}
           {pending?.target === "ask" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-3" onEducation={() => void answerEducation()} />}
@@ -453,6 +469,9 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase }: { car
             <p className="mt-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[13px] text-violet-950">
               <span className="font-semibold">{r.verdict.label}.</span> {r.verdict.informal}
             </p>
+          )}
+          {r.verdict && (
+            <FormativeAiLabel className="mt-1" />
           )}
           <div className="mt-2"><AiBadge /></div>
           <p className="mt-2 text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>

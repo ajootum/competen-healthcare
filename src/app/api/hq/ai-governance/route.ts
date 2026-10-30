@@ -4,6 +4,7 @@ import { currentTraceId } from "@/lib/trace";
 import { publishScope, rollbackVersion, setOverride, wceMissing } from "@/lib/config/workspace-config-write";
 import { MODE_SCOPE, modePath } from "@/lib/ai/operating-mode";
 import { strictDoc, resolveCohortPeople, validateModeDoc } from "@/lib/ai/modes-admin";
+import { gapList, loadReadiness } from "@/lib/ai/readiness";
 import { attestProvider, changeRate, createBudget, publishPolicies, RATE_KINDS, runProviderChecks, saveBudgetPolicyDraft, saveModelRoutingDraft, savePolicyDraft, saveProviderRegistration, saveRoutingDraft, setBudgetStatus, setProviderStatus, type RateKind } from "@/lib/ai/fair-use-admin";
 import { BUDGET_CODE } from "@/lib/ai/consumption";
 import { AI_PRODUCTS, type AiProduct } from "@/lib/ai/fair-use-policy";
@@ -38,6 +39,8 @@ export async function POST(req: Request) {
     trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.fullName ?? null, action, entity_type: "ai_fair_use", entity_id: null, new_value: detail,
   }).then((x: unknown) => x, () => {});
 
+  // SCHOLAR-EDU-AI-01 section 7: each publish records which Scholar activities had no clinical educational model.
+  const scholarGaps = async () => { try { return gapList((await loadReadiness(ctx.admin, ["scholar"]))[0]?.rows ?? null); } catch { return null; } };
   switch (body?.action) {
     case "rate": {
       if (!(RATE_KINDS as readonly string[]).includes(body.kind)) return refuse(400, "Choose a rate kind.");
@@ -55,6 +58,7 @@ export async function POST(req: Request) {
     case "publish": {
       if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
       const r = await publishPolicies(ctx.admin, actor, typeof body.note === "string" ? body.note.slice(0, 500) : null);
+      if (r.ok) await audit("ai_publish_readiness", { scope: "ai_fair_use", scholar_gaps: await scholarGaps() });
       return r.ok ? NextResponse.json({ ok: true }) : refuse(r.status, r.error);
     }
     // ── AI operating modes (owner GO SUPERVISED PILOT MODE, 29 Oct 2026). Draft, publish and roll back in the modes scope only. ──
@@ -82,7 +86,7 @@ export async function POST(req: Request) {
       const note = typeof body.note === "string" ? body.note.slice(0, 500) : null;
       const r = await publishScope(ctx.admin, actor, MODE_SCOPE, { label: "AI operating modes", note });
       if (!r.ok) return refuse(r.status, r.error);
-      await audit("ai_modes_published", { version_id: r.version_id ?? null, modules: r.modules, note });
+      await audit("ai_modes_published", { version_id: r.version_id ?? null, modules: r.modules, note, scholar_gaps: await scholarGaps() });
       return NextResponse.json({ ok: true });
     }
     case "rollback_modes": {

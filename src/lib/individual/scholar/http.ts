@@ -16,6 +16,7 @@ import type { ResolvedOwner } from "@/lib/ai/consumption";
 import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
 import { classifyRisk, riskRank, type RiskContext, type RiskTier } from "@/lib/ai/clinical-risk";
 import type { ScholarAiActivity } from "./ai-standing";
+import { studentAiText } from "../ai-availability";
 
 // ── WHAT EVERY SCHOLAR AI ROUTE CHECKS, IN ORDER ── after requireIndividualContext("scholar") ────────────
 //
@@ -147,15 +148,26 @@ export function scholarOwnedRunner(admin: unknown, args: { owner: ResolvedOwner;
   return { run, refusal: () => refused };
 }
 
-/** The engine's student-facing words for a refusal, and whether it is about the level of AI (never quietly weaker). */
-export function refusalWords(refusal: MeteredRefusal): { message: string; insufficient: boolean } {
-  return { message: meteredRefusalBody(refusal).body.error, insufficient: refusal.error === "level_insufficient" || refusal.error === "not_eligible" };
+/**
+ * SCHOLAR-EDU-AI-01 s6: the engine's refusal body as a student receives it. The governance wording for "no eligible
+ * model" (allowance.ts NOT_ELIGIBLE_REASON / NOT_ELIGIBLE, kept for HQ) becomes the plain student words; the machine
+ * code, the status and the standing's per-activity reasons are unchanged, so every page still knows WHY.
+ */
+export function studentRefusalBody(refusal: MeteredRefusal): ReturnType<typeof meteredRefusalBody> {
+  const m = meteredRefusalBody(refusal);
+  const message = m.body.standing?.message;
+  return { status: m.status, body: { ...m.body, error: studentAiText(m.body.error), standing: { ...m.body.standing, message: message ? studentAiText(message) : message } } };
 }
 
-/** The refusal, as the engine words it (with the standing, for Learning Continuity), or null. */
+/** The engine's student-facing words for a refusal, and whether it is about the level of AI (never quietly weaker). */
+export function refusalWords(refusal: MeteredRefusal): { message: string; insufficient: boolean } {
+  return { message: studentRefusalBody(refusal).body.error, insufficient: refusal.error === "level_insufficient" || refusal.error === "not_eligible" };
+}
+
+/** The refusal, in the student's words (with the standing, for Learning Continuity), or null. */
 export function meteredRefusal(refusal: MeteredRefusal | null): NextResponse | null {
   if (!refusal) return null;
-  const m = meteredRefusalBody(refusal);
+  const m = studentRefusalBody(refusal);
   return NextResponse.json(m.body, { status: m.status });
 }
 

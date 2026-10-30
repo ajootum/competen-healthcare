@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { experienceHref } from "@/lib/individual/experiences";
-import { aiReasonCopy, reasonFromRefusal } from "@/lib/individual/ai-availability";
+import { reasonFromRefusal, refusalCopy } from "@/lib/individual/ai-availability";
 
 // The words a Professional AI action shows when the AI is not available -- the server's own refusal
 // (src/lib/ai/allowance.ts meteredRefusalBody: error, code, continuity, standing), never a bare "try again".
@@ -16,7 +16,7 @@ export function aiNotice(j: any, fallback: string): AiNotice {
   const reason = reasonFromRefusal(j);
   // The allowance words are the published policy's own (they can say when it renews), so they are kept.
   if (reason && reason !== "allowance_exhausted" && reason !== "level_insufficient") {
-    const c = aiReasonCopy(reason, "professional");
+    const c = refusalCopy(j, "professional")!;
     return { text: c.text, continuity, next: c.next };
   }
   const text = typeof j?.error === "string" && j.error.trim() ? j.error : fallback;

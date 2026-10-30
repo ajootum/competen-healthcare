@@ -15,6 +15,7 @@ import { JOIN_START, selfRegistrationEnabled } from "@/lib/individual/join";
 import { learningEnabled } from "@/lib/learning/policy";
 import { ShellActionProvider } from "../../_components/Dialog";
 import { AiHelpSwitch, JourneyButton } from "./(scholar)/study/_components/shell-pieces";
+import { ScholarEduNotice } from "./(scholar)/study/_components/edu-notice";
 import { getAiStanding } from "@/lib/ai/allowance";
 import { AiAvailabilityProvider } from "../../_components/ai/AiAvailabilityContext";
 
@@ -194,6 +195,7 @@ export default async function ExperienceLayout({ children, params }: {
             <div className={scholar
               ? "w-full max-w-[1600px] px-4 py-6 md:px-[42px] md:pt-[30px] md:pb-[70px]"
               : "mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8"}>
+              {scholar && <ScholarEduNotice />}
               {children}
               {scholar && (
                 <footer className="mt-8 text-[12px] text-[var(--cmp-app-text-secondary)]">

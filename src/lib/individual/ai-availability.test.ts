@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { aiReasonCopy, availabilityFromStanding, clarifyFrom, reasonFromRefusal } from "./ai-availability";
+import { aiReasonCopy, availabilityFromStanding, clarifyFrom, reasonFromRefusal, refusalCopy } from "./ai-availability";
+import { SCHOLAR_EDU_AI } from "./scholar/config";
 import { meteredRefusalBody, type AiStanding } from "@/lib/ai/allowance";
 import { CLARIFY, SUPPORTIVE_REFUSAL } from "@/lib/ai/operating-mode";
 
@@ -35,7 +36,9 @@ describe("HFE-01 Wave 1: AI availability", () => {
 
   it("a mode that answers the educational part words the same refusal supportively, and it is still not_eligible", () => {
     expect(availabilityFromStanding(standing({ activities: { ask: { label: "Ask", available: false, via: null, reason: SUPPORTIVE_REFUSAL } } }), "ask")).toEqual({ available: false, reason: "not_eligible" });
-    expect(aiReasonCopy("not_eligible", "scholar")).toEqual({ text: SUPPORTIVE_REFUSAL, next: null });
+    // SCHOLAR-EDU-AI-01 s6: the shared copy is the plain student words; the mode's supportive answer is kept after a click (refusalCopy).
+    expect(aiReasonCopy("not_eligible", "scholar")).toEqual({ text: SCHOLAR_EDU_AI.unavailable.general, next: null });
+    expect(refusalCopy({ code: "not_eligible", error: SUPPORTIVE_REFUSAL }, "scholar")).toEqual({ text: SUPPORTIVE_REFUSAL, next: null });
     expect(aiReasonCopy("not_eligible", "scholar").text).not.toMatch(/none is approved/);
   });
 

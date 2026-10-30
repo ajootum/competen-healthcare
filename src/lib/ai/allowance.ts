@@ -3,7 +3,7 @@ import { aiStatus } from "./config";
 import { clinicalGate, MODEL_ROUTING_PATH, resolveModelRouting, routeCandidates, selectRoute, type ModelRouting, type Route } from "./model-routing";
 import { PROVIDER_REGISTRY_PATH, registeredAvailable, resolveRegistry, type ProviderRegistry } from "./provider-registry";
 import { generate, type GenerateArgs, type GenerateResult } from "./client";
-import { classifyRisk, riskRank, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision, type RiskTier } from "./clinical-risk";
+import { classifyRisk, RISK_TIERS, riskRank, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision, type RiskTier } from "./clinical-risk";
 import { CLARIFY, EDUCATIONAL_BOUNDARY, decideRisk, loadRequestMode, logGateDecision, SUPPORTIVE_REFUSAL, type RequestMode } from "./operating-mode";
 import {
   activityAt, allowancePeriod, defaultPolicy, fairUsePath, FAIR_USE_SCOPE, maxInputTokens, remainingBand, resolvePolicy, serviceLevel,
@@ -286,6 +286,27 @@ export async function unmeteredGate(admin: any, product: AiProduct, activity: st
   await logGateDecision(admin, mode, { userId: subject?.actorId ?? null, product, activity, decision: g.ok ? "served" : g.error === "clarify_purpose" ? "clarify" : "refused",
     reason: g.ok ? "ok" : g.error, risk: g.risk });
   return g.ok ? { ...g, mode } : g;
+}
+
+/**
+ * SCHOLAR-EDU-AI-01 (readiness): for each activity of a product, the route a request would get at each clinical risk
+ * tier at or above the activity's floor, exactly as the gate picks it (routing, keyed providers, eligibility). Read
+ * only; nothing is decided here. Null when the policy, routing or eligibility cannot be read.
+ */
+export type ActivityReadiness = { code: string; label: string; floor: RiskTier; routes: Partial<Record<RiskTier, Route | null>> };
+export async function activityReadiness(admin: any, product: AiProduct): Promise<ActivityReadiness[] | null> {
+  const [{ policy, readable }, routing, rows] = await Promise.all([loadProductPolicy(admin, product), loadModelRouting(admin), loadEligibility(admin, product)]);
+  if (!readable || !routing || rows === null) return null;
+  return Object.entries(policy.activities).map(([code, a]) => {
+    const floor = a.riskFloor as RiskTier;
+    const routes: Partial<Record<RiskTier, Route | null>> = {};
+    for (const risk of RISK_TIERS) {
+      if (riskRank(risk) < riskRank(floor)) continue;
+      const d = activityAt(policy, "full", code, UNMETERED_BALANCE, risk);
+      routes[risk] = d.available && d.tier ? pickRoute(routing, riskRank(risk) > 0 ? rows : null, product, code, d.tier, risk) : null;
+    }
+    return { code, label: a.label, floor, routes };
+  });
 }
 
 /** The gate itself, for one person's mode. unmeteredGate logs its decision. Exported for the harness pins. */

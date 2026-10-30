@@ -2,6 +2,7 @@ import { AI_MODE_LABEL, type AiMode } from "@/lib/ai/operating-mode";
 import type { ModeVersion, ModeView, PilotMetrics } from "@/lib/ai/modes-admin";
 import { RISK_TIER_LABEL, type RiskTier } from "@/lib/ai/clinical-risk";
 import { ModesPanel } from "./ModesControls";
+import { ReadinessWarning } from "./FairUseControls";
 
 // "AI operating modes" on /super-admin/ai/fair-use: the editor, and the pilot metrics beside it. Server-rendered from
 // counts only (the decision log holds no request text); the client part is ModesControls.
@@ -9,7 +10,7 @@ import { ModesPanel } from "./ModesControls";
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
 const th = "text-[11.5px] uppercase tracking-[0.08em] text-gray-500";
 
-export function ModesSection({ modes, versions, ruleIds, metrics }: { modes: ModeView[] | null; versions: ModeVersion[] | null; ruleIds: Record<string, string[]>; metrics: PilotMetrics | null }) {
+export function ModesSection({ modes, versions, ruleIds, metrics, gaps = [] }: { modes: ModeView[] | null; versions: ModeVersion[] | null; ruleIds: Record<string, string[]>; metrics: PilotMetrics | null; gaps?: string[] }) {
   const pendingCount = (modes ?? []).filter(m => m.pending).length;
   return (
     <section aria-labelledby="md-h" className="rounded-xl border border-gray-200 bg-white p-5">
@@ -19,6 +20,7 @@ export function ModesSection({ modes, versions, ruleIds, metrics }: { modes: Mod
         high-risk clinical requests still need a model made eligible by a recorded evaluation. Modes publish and roll back on their own, apart from the
         other AI policies, and every gate decision in a pilot is logged without the request text.
       </p>
+      {gaps.length > 0 && <ReadinessWarning gaps={gaps} />}
       {modes === null ? (
         <p role="status" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">The operating modes could not be read just now (or the configuration engine, migration 076, is not applied here). Every request runs in Strict Production.</p>
       ) : (

@@ -12,6 +12,7 @@ import { experienceHref, type ExperienceKey } from "./experiences";
 import type { AiStanding } from "@/lib/ai/allowance";
 import type { ConsentStatus } from "./scholar/consent-gate";
 import { SUPPORTIVE_REFUSAL } from "@/lib/ai/operating-mode";
+import { SCHOLAR_EDU_AI } from "./scholar/config";
 
 export type AiUnavailableReason =
   | "policy_unpublished"      // HQ has not published the product's AI policy: nothing is switched on yet
@@ -72,10 +73,51 @@ export function aiReasonCopy(reason: AiUnavailableReason, experience: Experience
     case "allowance_exhausted": return { text: "You have used this period's AI allowance. Everything you have saved stays available.", next: allowance };
     case "level_insufficient": return { text: "This needs more AI help than your allowance has left this period. A weaker model is never used instead.", next: allowance };
     case "activity_unsupported": return { text: `This kind of AI help is not offered in ${product} yet.`, next: null };
-    case "not_eligible": return { text: SUPPORTIVE_REFUSAL, next: null };
+    // SCHOLAR-EDU-AI-01 s6: plain words, never the governance reason (allowance.ts NOT_ELIGIBLE_REASON).
+    case "not_eligible": return { text: experience === "scholar" ? SCHOLAR_EDU_AI.unavailable.general : PROFESSIONAL_NOT_YET, next: null };
     case "unreadable": return { text: "AI help could not be checked just now, so nothing was sent. Try again shortly.", next: null };
     case "not_entitled": return { text: `This needs an active ${product} subscription.`, next: null };
   }
+}
+
+const PROFESSIONAL_NOT_YET = "AI help isn't available for this yet. Nothing you have written or saved is lost — you can carry on by hand and try AI help again later.";
+
+// ── SCHOLAR-EDU-AI-01 s6: THE GOVERNANCE REASON STAYS WITH HQ ────────────────────────────────────────────────────
+// The engine words a clinical-eligibility refusal for governance ("...needs an AI model approved for clinical
+// content..."): allowance.ts NOT_ELIGIBLE_REASON on the standing, NOT_ELIGIBLE on an owned-budget refusal. Precise for
+// HQ, meaningless to a student, so Individual surfaces and responses swap it for the plain words above. The standing's
+// per-activity reason is left as the engine wrote it (availabilityFromStanding reads it as a code).
+const GOVERNANCE_NOT_ELIGIBLE = /approved for clinical content/i;
+
+/** Pure: whether a message is the engine's governance wording for "no eligible model". */
+export const isGovernanceNotEligible = (text: string | null | undefined): boolean => GOVERNANCE_NOT_ELIGIBLE.test(text ?? "");
+
+/** Pure: a message as a student may see it -- the governance wording swapped for the plain words; anything else as is. */
+export function studentAiText(text: string, experience: ExperienceKey = "scholar"): string {
+  return isGovernanceNotEligible(text) ? aiReasonCopy("not_eligible", experience).text : text;
+}
+
+/**
+ * Pure: the words for a failed AI response, or null if it is not an AI refusal. An operating mode's supportive answer
+ * (SUPPORTIVE_REFUSAL, about a real patient's care) is kept as that mode words it; every other refusal gets the shared copy.
+ */
+export function refusalCopy(body: any, experience: ExperienceKey): AiReasonCopy | null {
+  const reason = reasonFromRefusal(body);
+  if (!reason) return null;
+  if (reason === "not_eligible" && body?.error === SUPPORTIVE_REFUSAL) return { text: SUPPORTIVE_REFUSAL, next: null };
+  return aiReasonCopy(reason, experience);
+}
+
+/**
+ * Pure: what an examination-paper AI action (a suggested answer / "Check my attempt", activity `deeper`) says when it
+ * is not available -- before a click (`reason`, from the standing) or after one (`body`, the refusal). No eligible model
+ * gets the paper's own words, pointing at what still works without AI; anything else the shared copy. Null: not an AI refusal.
+ */
+export function paperAiCopy(source: { reason: AiUnavailableReason } | { body: any }, saved: boolean): AiReasonCopy | null {
+  const c = "reason" in source ? aiReasonCopy(source.reason, "scholar") : refusalCopy(source.body, "scholar");
+  const reason = "reason" in source ? source.reason : reasonFromRefusal(source.body);
+  if (c && reason === "not_eligible" && c.text !== SUPPORTIVE_REFUSAL) return { text: SCHOLAR_EDU_AI.unavailable.paper(saved), next: null };
+  return c;
 }
 
 /** The question an AI operating mode puts to the learner instead of a refusal (allowance.ts meteredRefusalBody, HTTP 409). */

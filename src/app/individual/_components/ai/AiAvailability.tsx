@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { aiReasonCopy, reasonFromRefusal, type AiAvailability, type AiUnavailableReason } from "@/lib/individual/ai-availability";
+import { aiReasonCopy, refusalCopy, type AiAvailability, type AiUnavailableReason } from "@/lib/individual/ai-availability";
 import type { ExperienceKey } from "@/lib/individual/experiences";
 
 // HFE-01 Wave 1: the one way an Individual surface shows that AI is not available, before or after a click.
@@ -30,9 +30,8 @@ export function aiActionProps(availability: AiAvailability | null | undefined, n
  * else (validation, network) shows its own message.
  */
 export function AiRefusalNotice({ body, fallback, experience, className = "" }: { body: any; fallback: string; experience: ExperienceKey; className?: string }) {
-  const reason = reasonFromRefusal(body);
-  if (reason) {
-    const c = aiReasonCopy(reason, experience);
+  const c = refusalCopy(body, experience);
+  if (c) {
     return <p role="alert" className={`text-[13.5px] font-medium text-red-700 ${className}`}>{c.text}<Next next={c.next} /></p>;
   }
   const text = typeof body?.error === "string" && body.error.trim() ? body.error : fallback;
