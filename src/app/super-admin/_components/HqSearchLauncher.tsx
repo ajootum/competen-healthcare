@@ -120,7 +120,7 @@ export default function HqSearchLauncher({ destinations }: { destinations: HqDes
                   <span aria-hidden className="text-[14px]">{d.icon}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13.5px] text-white">{d.label}</span>
-                    <span className="block truncate text-[11px] text-gray-400">{d.group}</span>
+                    <span className="block truncate text-[11px] text-gray-400">{d.group}{d.via?.length ? ` · matches: ${d.via.join(", ")}` : ""}</span>
                   </span>
                 </button>
               </li>

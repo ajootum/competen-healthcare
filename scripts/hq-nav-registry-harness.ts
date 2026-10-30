@@ -104,8 +104,11 @@ ok("R3", badDeep.length === 0, `every deep link is reached from a drawn page who
 
 console.log("\nA. Authority");
 // ⚠ NO CAPABILITY IN THE REGISTRY: the nav and the guard must not become two opinions about one door.
-const ALLOWED = new Set(["key", "label", "href", "icon", "kind", "flag", "children"]);
+const ALLOWED = new Set(["key", "label", "href", "icon", "kind", "flag", "children", "keywords"]);
 const extraFields = rows.flatMap(r => Object.keys(r.e).filter(k => !ALLOWED.has(k)).map(k => `${r.e.href}.${k}`));
+// "keywords" is SEARCH metadata (nav-search.ts): strings only, never read by canSeeHqLink.
+const badKeywords = rows.filter(r => r.e.keywords !== undefined && !(Array.isArray(r.e.keywords) && r.e.keywords.length > 0 && r.e.keywords.length <= 12 && r.e.keywords.every(k => typeof k === "string" && k.trim() !== "" && k.length <= 60))).map(r => r.e.href);
+ok("A1b", badKeywords.length === 0, `search keywords are 1-12 short non-empty strings per entry${show(badKeywords)}`);
 ok("A1", extraFields.length === 0, `registry entries carry no capability or other authority field${show(extraFields)}`);
 // ⚠ A child is shown only under its parent, so a child the parent's viewer could not open is fine, but a
 // child they COULD open under a parent they cannot see would be stranded. Same capability, always.

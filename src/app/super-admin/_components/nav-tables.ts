@@ -49,13 +49,19 @@ export type NavEntry = {
   icon: string;
   kind?: NavKind;
   flag?: NavSwitch;
+  /**
+   * SEARCH ONLY (lib/hq/nav-search.ts, used by the sidebar filter and Search HQ): synonyms, configuration terms and the
+   * page's own heading when it differs from the label. Never drawn, never a visibility input, and not a structure change,
+   * so adding or editing keywords does not bump HQ_NAV_REGISTRY_VERSION. Keep them few and true to the page.
+   */
+  keywords?: string[];
   /** Shown under this item only while the reader is inside it. Same capability as the parent (harness R7). */
   children?: NavEntry[];
 };
 export type NavSection = { group: string; items: NavEntry[] };
 
 /** A registered page the sidebar does not draw: reached from `via`, found by search. */
-export type NavDeep = { key: string; label: string; href: string; via: string };
+export type NavDeep = { key: string; label: string; href: string; via: string; keywords?: string[] };
 
 export type HqWorkspaceKey = "mission" | "products" | "knowledge" | "frameworks" | "ai" | "platform" | "governance";
 export type HqSection = NavSection & { key: string; /** no heading: the workspace's landing group */ plain?: boolean };
@@ -82,7 +88,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
   { key: "mission", label: "Mission Control", icon: "🎛️", sections: [
     { key: "mission.home", group: "Mission Control", plain: true, items: [
       { key: "mission.overview", label: "Mission Control", href: "/super-admin", icon: "🎛️" },
-      { key: "mission.command-centre", label: "Command Centre", href: "/super-admin/command-centre", icon: "📡" },
+      { key: "mission.command-centre", label: "Command Centre", href: "/super-admin/command-centre", icon: "📡", keywords: ["executive command centre"] },
       { key: "mission.reports", label: "Report Templates", href: "/super-admin/reports", icon: "📈" },
     ]},
     { key: "mission.priorities", group: "Strategy & Priorities", items: [
@@ -99,32 +105,32 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
 
   { key: "products", label: "Products", icon: "📦", sections: [
     { key: "products.enterprise", group: "Competen Enterprise", items: [
-      { key: "products.enterprise.overview", label: "Enterprise Overview", href: "/super-admin/enterprise", icon: "🏢" },
+      { key: "products.enterprise.overview", label: "Enterprise Overview", href: "/super-admin/enterprise", icon: "🏢", keywords: ["enterprise administration"] },
       { key: "products.enterprise.organisations", label: "Organisations", href: "/super-admin/enterprise/organisations", icon: "🏛️" },
-      { key: "products.enterprise.networks", label: "Networks", href: "/super-admin/enterprise/networks", icon: "🌐" },
+      { key: "products.enterprise.networks", label: "Networks", href: "/super-admin/enterprise/networks", icon: "🌐", keywords: ["enterprise groups"] },
       { key: "products.enterprise.facilities", label: "Facilities", href: "/super-admin/enterprise/facilities", icon: "🏥" },
       { key: "products.enterprise.structure", label: "Structure Builder", href: "/super-admin/enterprise/structure", icon: "🗂️" },
       // ⚠ The hospital ESTATE's people. HQ positions -- who governs the platform -- live in Governance &
       // Administration, never beside this (CP-HQ-NAV-001: the two planes the HQ programme separates).
-      { key: "products.enterprise.people", label: "People & Roles", href: "/super-admin/enterprise/people", icon: "👥" },
+      { key: "products.enterprise.people", label: "People & Roles", href: "/super-admin/enterprise/people", icon: "👥", keywords: ["positions"] },
       { key: "products.enterprise.templates", label: "Enterprise Templates", href: "/super-admin/enterprise/templates", icon: "📦" },
-      { key: "products.enterprise.import", label: "Bulk Import", href: "/super-admin/import", icon: "📥", kind: "action" },
+      { key: "products.enterprise.import", label: "Bulk Import", href: "/super-admin/import", icon: "📥", keywords: ["import users"], kind: "action" },
     ]},
     // COMPETEN-IND-ACCESS-001 s4, CONFIG-002 (migration 376), P0 catalogues (394), PROFILE-01 part B (451).
     { key: "products.individual", group: "Competen Individual", items: [
       { key: "products.individual.access", label: "Individual Pilot Access", href: "/super-admin/individual", icon: "🎓", flag: "individual" },
-      { key: "products.individual.policy", label: "Individual Policy", href: "/super-admin/individual/configuration", icon: "🎚️", flag: "individual", children: [
+      { key: "products.individual.policy", label: "Individual Policy", href: "/super-admin/individual/configuration", icon: "🎚️", keywords: ["configuration","settings","policy","scholar settings","learning resources","finding more learning resources","external scholarly sources","source quality","recovery","sign-in presentation","professional learning","CPD"], flag: "individual", children: [
         { key: "products.individual.programmes", label: "Scholar Programmes", href: "/super-admin/individual/programmes", icon: "·" },
-        { key: "products.individual.documents", label: "Document Templates", href: "/super-admin/individual/documents", icon: "·" },
+        { key: "products.individual.documents", label: "Document Templates", href: "/super-admin/individual/documents", icon: "·", keywords: ["document template studio"] },
       ]},
       { key: "products.individual.catalogues", label: "Controlled Catalogues", href: "/super-admin/individual/catalogues", icon: "📚", flag: "individual" },
       { key: "products.individual.verification", label: "Professional Verification", href: "/super-admin/individual/verification", icon: "✅", flag: "individual" },
-      { key: "products.individual.economics", label: "Unit Economics & FX", href: "/super-admin/individual/economics", icon: "💱", flag: "individual" },
+      { key: "products.individual.economics", label: "Unit Economics & FX", href: "/super-admin/individual/economics", icon: "💱", keywords: ["fx exposure","exchange rate","currency"], flag: "individual" },
       { key: "products.individual.course-access", label: "Course Access", href: "/super-admin/learning/access", icon: "🔑", kind: "cross" },
     ]},
     { key: "products.practice", group: "Competen Practice", items: [
       ...PRACTICE_FROM_PD_NAV,
-      { key: "products.practice.technical", label: "Technical Operations", href: "/super-admin/platform-ops/practice", icon: "🩺", children: [
+      { key: "products.practice.technical", label: "Technical Operations", href: "/super-admin/platform-ops/practice", icon: "🩺", keywords: ["practice operations"], children: [
         { key: "products.practice.identifiers", label: "Practitioner Number Format", href: "/super-admin/platform-ops/practice/identifiers", icon: "·" },
       ]},
     ]},
@@ -146,7 +152,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       { key: "knowledge.learning.review", label: "Learning Review", href: "/super-admin/learning/review", icon: "🩺", kind: "cross" },
     ]},
     { key: "knowledge.ckp", group: "Clinical Knowledge Platform", items: [
-      { key: "knowledge.ckp.overview", label: "CKP Overview", href: "/super-admin/ckp", icon: "📚" },
+      { key: "knowledge.ckp.overview", label: "CKP Overview", href: "/super-admin/ckp", icon: "📚", keywords: ["clinical knowledge platform"] },
       { key: "knowledge.ckp.studio", label: "1. Knowledge Studio", href: "/super-admin/ckp/studio", icon: "🏭" },
       { key: "knowledge.ckp.competency", label: "2. Competency & Framework Centre", href: "/super-admin/ckp/competency", icon: "📐" },
       { key: "knowledge.ckp.repository", label: "3. Clinical Knowledge Repository", href: "/super-admin/ckp/repository", icon: "🗄️" },
@@ -154,7 +160,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       { key: "knowledge.ckp.publishing", label: "5. Knowledge Publishing & Governance", href: "/super-admin/ckp/publishing", icon: "🚦" },
       { key: "knowledge.ckp.intelligence", label: "6. Knowledge Intelligence", href: "/super-admin/ckp/intelligence", icon: "📡" },
       { key: "knowledge.ckp.graph", label: "Knowledge Graph", href: "/super-admin/knowledge-graph", icon: "🕸️" },
-      { key: "knowledge.ckp.policy", label: "Create Policy", href: "/super-admin/policy-manager", icon: "📋", kind: "action" },
+      { key: "knowledge.ckp.policy", label: "Create Policy", href: "/super-admin/policy-manager", icon: "📋", keywords: ["policy manager"], kind: "action" },
       { key: "knowledge.ckp.create-cpu", label: "Create New CPU", href: "/super-admin/studio/cpus", icon: "➕", kind: "cross" },
       { key: "knowledge.ckp.create-competency", label: "Create Competency", href: "/super-admin/content", icon: "🎯", kind: "cross" },
       { key: "knowledge.ckp.create-assessment", label: "Create Assessment", href: "/super-admin/assessment-methods", icon: "📝", kind: "cross" },
@@ -165,7 +171,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       { key: "knowledge.research.workspace", label: "Research Workspace", href: "/super-admin/research", icon: "🔬", flag: "ckri" },
       { key: "knowledge.research.educator", label: "Educator Knowledge", href: "/super-admin/research/educator", icon: "🧑‍🏫", flag: "ckri" },
       { key: "knowledge.research.governance", label: "Research Governance", href: "/super-admin/research/governance", icon: "⚖️", flag: "ckri" },
-      { key: "knowledge.research.intelligence", label: "Research Learning Intelligence", href: "/super-admin/research/intelligence", icon: "📊", flag: "ckri" },
+      { key: "knowledge.research.intelligence", label: "Research Learning Intelligence", href: "/super-admin/research/intelligence", icon: "📊", keywords: ["learning intelligence"], flag: "ckri" },
       { key: "knowledge.research.oversight", label: "Research Oversight", href: "/super-admin/research/oversight", icon: "🛡️", flag: "ckri" },
       { key: "knowledge.research.scientific-review", label: "Scientific Review", href: "/super-admin/research/scientific-review", icon: "🧪", flag: "ckri" },
       { key: "knowledge.research.publication", label: "Knowledge Publication", href: "/super-admin/research/knowledge-publication", icon: "📢", flag: "ckri" },
@@ -173,7 +179,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     ]},
     // Migrations 422-423: the shared clinical case library, on the 395 approval process.
     { key: "knowledge.cases", group: "Clinical Cases", items: [
-      { key: "knowledge.cases.studio", label: "Clinical Case Studio", href: "/super-admin/cases", icon: "🧪", flag: "case-library" },
+      { key: "knowledge.cases.studio", label: "Clinical Case Studio", href: "/super-admin/cases", icon: "🧪", keywords: ["case studio"], flag: "case-library" },
       { key: "knowledge.cases.publication", label: "Case Publication", href: "/super-admin/cases/publication", icon: "📢", flag: "case-library" },
       { key: "knowledge.cases.intelligence", label: "Case Intelligence", href: "/super-admin/cases/intelligence", icon: "📊", flag: "case-library" },
     ]},
@@ -184,7 +190,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     // each programme framework over it, set scales, stages and components, review clinically, publish independently.
     { key: "frameworks.home", group: "Competency Studio", plain: true, items: [
       // Migration 465: shared competency authoring (the Competency Author). Approval is Clinical Content Approval.
-      { key: "frameworks.authoring", label: "Competency Authoring", href: "/super-admin/competencies/authoring", icon: "✍️" },
+      { key: "frameworks.authoring", label: "Competency Authoring", href: "/super-admin/competencies/authoring", icon: "✍️", keywords: ["framework library"] },
       // Migration 394: controlled catalogues name shared competencies, never copying them (home: Individual).
       { key: "frameworks.catalogues", label: "Controlled Catalogues", href: "/super-admin/individual/catalogues", icon: "🗂️", kind: "cross" },
       // Migration 660: per-programme requirement, target level and components, with the resolved preview.
@@ -214,9 +220,9 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
         { key: "frameworks.studio.translations", label: "Localisation Engine", href: "/super-admin/studio/translations", icon: "·" },
       ]},
       { key: "frameworks.studio.content", label: "Framework & Competency", href: "/super-admin/content", icon: "🧬" },
-      { key: "frameworks.studio.dependencies", label: "Dependencies", href: "/super-admin/studio/dependencies", icon: "🔗" },
-      { key: "frameworks.studio.rules", label: "Rules Engine", href: "/super-admin/studio/rules", icon: "⚙️" },
-      { key: "frameworks.studio.mapping", label: "Mapping Studio", href: "/super-admin/studio/mapping", icon: "🗺️" },
+      { key: "frameworks.studio.dependencies", label: "Dependencies", href: "/super-admin/studio/dependencies", icon: "🔗", keywords: ["competency dependencies"] },
+      { key: "frameworks.studio.rules", label: "Rules Engine", href: "/super-admin/studio/rules", icon: "⚙️", keywords: ["competency rules library"] },
+      { key: "frameworks.studio.mapping", label: "Mapping Studio", href: "/super-admin/studio/mapping", icon: "🗺️", keywords: ["competency traceability"] },
       { key: "frameworks.studio.standards", label: "Standards Mapping", href: "/super-admin/studio/standards", icon: "📏" },
       { key: "frameworks.studio.assessment", label: "Assessment Studio", href: "/super-admin/studio/assessment", icon: "🩺", children: [
         { key: "frameworks.studio.adaptive", label: "Adaptive Exam Designer", href: "/super-admin/studio/adaptive", icon: "·" },
@@ -230,21 +236,21 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
         { key: "frameworks.studio.scoring", label: "Scoring Rules", href: "/super-admin/scoring", icon: "·" },
       ]},
       { key: "frameworks.studio.schedules", label: "Reassessment Schedules", href: "/super-admin/schedules", icon: "🗓️" },
-      { key: "frameworks.studio.skills", label: "Skills Library", href: "/super-admin/studio/skills", icon: "✋" },
-      { key: "frameworks.studio.checklists", label: "Checklists", href: "/super-admin/studio/checklists", icon: "☑️" },
+      { key: "frameworks.studio.skills", label: "Skills Library", href: "/super-admin/studio/skills", icon: "✋", keywords: ["skill builder"] },
+      { key: "frameworks.studio.checklists", label: "Checklists", href: "/super-admin/studio/checklists", icon: "☑️", keywords: ["checklist builder"] },
       { key: "frameworks.studio.cpus", label: "Practices & CPUs", href: "/super-admin/studio/cpus", icon: "🏥" },
-      { key: "frameworks.studio.questions", label: "Question Banks", href: "/super-admin/studio/questions", icon: "❓" },
+      { key: "frameworks.studio.questions", label: "Question Banks", href: "/super-admin/studio/questions", icon: "❓", keywords: ["question builder"] },
       { key: "frameworks.studio.templates", label: "Template Library", href: "/super-admin/studio/templates", icon: "🧩" },
-      { key: "frameworks.studio.packages", label: "Package Manager", href: "/super-admin/studio/packages", icon: "📦" },
+      { key: "frameworks.studio.packages", label: "Package Manager", href: "/super-admin/studio/packages", icon: "📦", keywords: ["competency packages"] },
       { key: "frameworks.studio.marketplace", label: "Competency Marketplace", href: "/super-admin/studio/marketplace", icon: "🛍️" },
-      { key: "frameworks.studio.knowledge", label: "Knowledge Objects", href: "/super-admin/studio/knowledge", icon: "🫀" },
+      { key: "frameworks.studio.knowledge", label: "Knowledge Objects", href: "/super-admin/studio/knowledge", icon: "🫀", keywords: ["clinical knowledge objects"] },
       { key: "frameworks.studio.cases", label: "Competency Case Studies", href: "/super-admin/studio/cases", icon: "🧑‍⚕️" },
-      { key: "frameworks.studio.learning", label: "Competency Learning Paths", href: "/super-admin/studio/learning", icon: "📚" },
-      { key: "frameworks.studio.simulations", label: "Simulation Studio", href: "/super-admin/studio/simulations", icon: "🎬" },
-      { key: "frameworks.studio.responsibilities", label: "Ownership", href: "/super-admin/studio/responsibilities", icon: "🧾" },
+      { key: "frameworks.studio.learning", label: "Competency Learning Paths", href: "/super-admin/studio/learning", icon: "📚", keywords: ["learning paths","curricula"] },
+      { key: "frameworks.studio.simulations", label: "Simulation Studio", href: "/super-admin/studio/simulations", icon: "🎬", keywords: ["simulation scenarios"] },
+      { key: "frameworks.studio.responsibilities", label: "Ownership", href: "/super-admin/studio/responsibilities", icon: "🧾", keywords: ["responsibilities"] },
       { key: "frameworks.studio.import", label: "Import CPU Document", href: "/super-admin/studio/import", icon: "📥", kind: "action" },
       { key: "frameworks.studio.testing", label: "Release Readiness", href: "/super-admin/studio/testing", icon: "🧪" },
-      { key: "frameworks.studio.qa", label: "Quality Assurance", href: "/super-admin/studio/qa", icon: "✅" },
+      { key: "frameworks.studio.qa", label: "Quality Assurance", href: "/super-admin/studio/qa", icon: "✅", keywords: ["content quality assurance"] },
     ]},
     { key: "frameworks.publishing", group: "Studio Publishing & Review", items: [
       { key: "frameworks.publishing.publishing", label: "Publishing & Versioning", href: "/competency-office/publishing", icon: "🚦", kind: "external" },
@@ -266,7 +272,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
         { key: "frameworks.delivery.config", label: "Delivery Policy", href: "/super-admin/delivery/config", icon: "·" },
       ]},
       { key: "frameworks.assurance", label: "Competency Assurance", href: "/super-admin/assurance", icon: "🛡️", children: [
-        { key: "frameworks.assurance.dashboard", label: "Organisational Assurance", href: "/super-admin/assurance/dashboard", icon: "·" },
+        { key: "frameworks.assurance.dashboard", label: "Organisational Assurance", href: "/super-admin/assurance/dashboard", icon: "·", keywords: ["organizational assurance"] },
         { key: "frameworks.assurance.evidence", label: "Evidence Integrity", href: "/super-admin/assurance/evidence", icon: "·" },
         { key: "frameworks.assurance.assessor-reliability", label: "Assessor Reliability", href: "/super-admin/assurance/assessor-reliability", icon: "·" },
         { key: "frameworks.assurance.assessment-quality", label: "Assessment Quality", href: "/super-admin/assurance/assessment-quality", icon: "·" },
@@ -316,9 +322,9 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     { key: "ai.home", group: "AI & Intelligence", plain: true, items: [
       { key: "ai.overview", label: "AI Home", href: "/super-admin/ai", icon: "🧠" },
       // AI-FAIR-USE-01 (migration 410): prices, allowance units and product AI policies (hq.platform.ai.manage).
-      { key: "ai.fair-use", label: "AI Fair Use", href: "/super-admin/ai/fair-use", icon: "⚖️", flag: "ai-fair-use" },
+      { key: "ai.fair-use", label: "AI Fair Use", href: "/super-admin/ai/fair-use", icon: "⚖️", keywords: ["fair use","risk rules","model routing","operating modes","pilot cohort","AI readiness","eligibility","provider prices","budgets","allowance"], flag: "ai-fair-use" },
       // COMPETEN-RESEARCH-01 ADDENDUM V2: the Research Sources & Evidence Studio (hq.platform.ai.view, edits need 630).
-      { key: "ai.research-sources", label: "Research Sources", href: "/super-admin/ai/research-sources", icon: "📚" },
+      { key: "ai.research-sources", label: "Research Sources", href: "/super-admin/ai/research-sources", icon: "📚", keywords: ["research","pubmed","openalex","crossref","pubmed central","google scholar","workflows","sources","evidence"] },
       { key: "ai.operations", label: "1. AI Operations Centre", href: "/super-admin/ai/operations", icon: "⚙️" },
       { key: "ai.clinical", label: "2. Clinical Intelligence", href: "/super-admin/ai/clinical", icon: "🩺" },
       { key: "ai.workforce", label: "3. Workforce Intelligence", href: "/super-admin/ai/workforce", icon: "👥" },
@@ -340,8 +346,8 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       ]},
     ]},
     { key: "ai.tools", group: "AI Tools & Quality Intelligence", items: [
-      { key: "ai.assistant", label: "AI Assistant Chat", href: "/super-admin/assistant", icon: "💬" },
-      { key: "ai.gateway", label: "AI Gateway", href: "/super-admin/platform-ops/ai-gateway", icon: "✨" },
+      { key: "ai.assistant", label: "AI Assistant Chat", href: "/super-admin/assistant", icon: "💬", keywords: ["clinical intelligence assistant"] },
+      { key: "ai.gateway", label: "AI Gateway", href: "/super-admin/platform-ops/ai-gateway", icon: "✨", keywords: ["ai runtime gateway"] },
       // HQ-IA-02 H2: the hub was linked only from its own two children.
       { key: "ai.quality", label: "Quality Intelligence", href: "/super-admin/quality-intelligence", icon: "📐", children: [
         { key: "ai.quality.indicators", label: "Metrics & Indicator Registry", href: "/super-admin/quality-intelligence/indicators", icon: "·" },
@@ -357,17 +363,17 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     { key: "platform.operations", group: "Operations", items: [
       { key: "platform.overview", label: "Operations Overview", href: "/super-admin/platform-ops", icon: "🎛️" },
       { key: "platform.tenants", label: "Tenant Operations", href: "/super-admin/platform-ops/tenants", icon: "🏢" },
-      { key: "platform.workspaces", label: "Workspaces", href: "/super-admin/platform-ops/workspaces", icon: "🖥️" },
-      { key: "platform.licensing", label: "Licensing", href: "/super-admin/platform-ops/licensing", icon: "🧾" },
+      { key: "platform.workspaces", label: "Workspaces", href: "/super-admin/platform-ops/workspaces", icon: "🖥️", keywords: ["workspace management"] },
+      { key: "platform.licensing", label: "Licensing", href: "/super-admin/platform-ops/licensing", icon: "🧾", keywords: ["subscription"] },
       { key: "platform.monitoring", label: "Monitoring", href: "/super-admin/platform-ops/monitoring", icon: "📡" },
-      { key: "platform.notifications", label: "Notifications", href: "/super-admin/platform-ops/notifications", icon: "📨" },
-      { key: "platform.control-plane", label: "Control Plane", href: "/super-admin/platform-ops/control-plane", icon: "🧭" },
+      { key: "platform.notifications", label: "Notifications", href: "/super-admin/platform-ops/notifications", icon: "📨", keywords: ["delivery"] },
+      { key: "platform.control-plane", label: "Control Plane", href: "/super-admin/platform-ops/control-plane", icon: "🧭", keywords: ["platform control plane"] },
       { key: "platform.platform-admin", label: "Platform Workspace", href: "/platform-admin", icon: "🛰️", kind: "external" },
     ]},
     { key: "platform.no-code", group: "No-Code Configuration", items: [
       { key: "platform.no-code.home", label: "No-Code Configuration Platform", href: "/super-admin/platform-ops/no-code-platform", icon: "🧱", children: [
         { key: "platform.no-code.studio", label: "Configuration Studio", href: "/super-admin/platform-ops/studio", icon: "·" },
-        { key: "platform.no-code.registry", label: "Configuration Registry", href: "/super-admin/platform-ops/registry", icon: "·" },
+        { key: "platform.no-code.registry", label: "Configuration Registry", href: "/super-admin/platform-ops/registry", icon: "·", keywords: ["platform configuration registry","settings"] },
         { key: "platform.no-code.schema", label: "Schema & Object Model", href: "/super-admin/platform-ops/schema", icon: "·" },
         { key: "platform.no-code.catalogue", label: "Module & Widget Catalogue", href: "/super-admin/platform-ops/catalogue", icon: "·" },
         { key: "platform.no-code.configuration", label: "Workspace Configuration Engine", href: "/super-admin/platform-ops/configuration", icon: "·" },
@@ -395,7 +401,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
         { key: "platform.no-code.versions", label: "Versioning & Audit", href: "/super-admin/platform-ops/versions", icon: "·" },
         { key: "platform.no-code.migration", label: "Migration Toolkit", href: "/super-admin/platform-ops/migration", icon: "·" },
         { key: "platform.no-code.runtime", label: "Runtime & Resolution Engine", href: "/super-admin/platform-ops/runtime", icon: "·" },
-        { key: "platform.no-code.analytics", label: "Configuration Analytics", href: "/super-admin/platform-ops/analytics", icon: "·" },
+        { key: "platform.no-code.analytics", label: "Configuration Analytics", href: "/super-admin/platform-ops/analytics", icon: "·", keywords: ["optimisation"] },
       ]},
     ]},
     { key: "platform.system", group: "System & Security", items: [
@@ -408,8 +414,8 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     ]},
     { key: "platform.settings", group: "Platform Settings", items: [
       { key: "platform.settings.settings", label: "Platform Settings", href: "/super-admin/settings", icon: "⚙️" },
-      { key: "platform.settings.metadata", label: "Metadata & Tags", href: "/super-admin/metadata", icon: "🏷️" },
-      { key: "platform.settings.workflows", label: "Workflow Definitions", href: "/super-admin/workflows", icon: "⚡" },
+      { key: "platform.settings.metadata", label: "Metadata & Tags", href: "/super-admin/metadata", icon: "🏷️", keywords: ["taxonomy"] },
+      { key: "platform.settings.workflows", label: "Workflow Definitions", href: "/super-admin/workflows", icon: "⚡", keywords: ["workflow templates"] },
     ]},
   ]},
 
@@ -430,20 +436,20 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     { key: "governance.clinical", group: "Clinical Content Approval", items: [
       { key: "governance.clinical.review", label: "Clinical Review", href: "/super-admin/clinical-review", icon: "🩺" },
       { key: "governance.clinical.learning", label: "Learning Review", href: "/super-admin/learning/review", icon: "📘" },
-      { key: "governance.clinical.knowledge", label: "Knowledge Review", href: "/super-admin/research/knowledge-review", icon: "🔬" },
+      { key: "governance.clinical.knowledge", label: "Knowledge Review", href: "/super-admin/research/knowledge-review", icon: "🔬", keywords: ["knowledge resource review"] },
       { key: "governance.clinical.governance", label: "Clinical Review Governance", href: "/super-admin/clinical-review/governance", icon: "⚖️" },
     ]},
     { key: "governance.compliance", group: "Governance & Compliance", items: [
-      { key: "governance.dashboard", label: "1. Governance Dashboard", href: "/super-admin/governance", icon: "🛡️" },
+      { key: "governance.dashboard", label: "1. Governance Dashboard", href: "/super-admin/governance", icon: "🛡️", keywords: ["governance and compliance"] },
       { key: "governance.policies", label: "2. Policy & Standards Center", href: "/super-admin/governance/policies", icon: "📄" },
       { key: "governance.compliance.management", label: "3. Compliance Management", href: "/super-admin/governance/compliance", icon: "✅" },
       { key: "governance.risk", label: "4. Risk & Internal Controls", href: "/super-admin/governance/risk", icon: "⚠️" },
       { key: "governance.audit", label: "5. Audit & Assurance", href: "/super-admin/governance/audit", icon: "📋" },
       { key: "governance.accreditation", label: "6. Regulatory & Accreditation", href: "/super-admin/governance/accreditation", icon: "🏛️" },
-      { key: "governance.committees", label: "Committees", href: "/super-admin/governance/committees", icon: "⚖️" },
+      { key: "governance.committees", label: "Committees", href: "/super-admin/governance/committees", icon: "⚖️", keywords: ["governance committees"] },
     ]},
     { key: "governance.control", group: "Approvals & Audit", items: [
-      { key: "governance.approvals", label: "Approvals", href: "/super-admin/platform-ops/approvals", icon: "🔀" },
+      { key: "governance.approvals", label: "Approvals", href: "/super-admin/platform-ops/approvals", icon: "🔀", keywords: ["workflow approvals"] },
       { key: "governance.audit-log", label: "Audit Log", href: "/super-admin/audit", icon: "🗒️" },
     ]},
   ]},
@@ -475,7 +481,7 @@ export const HQ_SEARCH_TABLES: { name: string; sections: NavSection[] }[] = [
   ...ALL_NAV_TABLES,
   ...HQ_WORKSPACES.filter(w => w.deep?.length).map(w => ({
     name: `${w.key}.deep`,
-    sections: [{ group: w.label, items: (w.deep ?? []).map(d => ({ key: d.key, label: d.label, href: d.href, icon: "↪" })) }],
+    sections: [{ group: w.label, items: (w.deep ?? []).map(d => ({ key: d.key, label: d.label, href: d.href, icon: "↪", ...(d.keywords ? { keywords: d.keywords } : {}) })) }],
   })),
 ];
 
