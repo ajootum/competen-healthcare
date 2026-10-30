@@ -4,10 +4,10 @@ import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
 import {
   DEFAULT_UPLOAD_MB, FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, LEARN_ACTIONS, LEARN_ACTION_LABEL, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES,
-  MAX_SESSION_FILES, MAX_SESSION_MB, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, REVISION_FORMATS, REVISION_FORMAT_LABEL, REVISION_MODES, REVISION_MODE_LABEL, REVISION_QUANTITY_MAX,
+  MAX_SESSION_FILES, MAX_SESSION_MB, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, REVISION_FORMATS, REVISION_FORMAT_LABEL, REVISION_MODES, REVISION_MODE_LABEL, REVISION_QUANTITY_MAX, ADAPTIVE_FORMATS, ADAPTIVE_LENGTH_MAX, ADAPTIVE_LENGTH_MIN,
   SESSION_MAX_STEPS, TUTOR_MAX_TURNS, UPLOAD_SESSION_MINUTES, CASE_CONTEXTS, CASE_CONTEXT_LABEL, CASE_ENTRIES, CASE_ENTRY_LABEL, CASE_DIMENSION_LABEL,
   type CaseContext, type CaseEntry,
-  type ExplanationDepth, type LearnAction, type RevisionDifficulty, type RevisionFormat, type RevisionMode, type UploadFormat,
+  type AdaptiveFormat, type ExplanationDepth, type LearnAction, type RevisionDifficulty, type RevisionFormat, type RevisionMode, type UploadFormat,
 } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
 import { COUNTRIES } from "../countries";
@@ -72,7 +72,8 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max"
   | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown"
   | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days"
-  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms";
+  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms"
+  | "scholar_adaptive_length" | "scholar_adaptive_max_length";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -80,7 +81,7 @@ export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fi
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
   | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules"
   | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources" | "scholar_learn_source_modes" | "scholar_recovery_providers"
-  | "scholar_recovery_evidence_types";
+  | "scholar_recovery_evidence_types" | "scholar_adaptive_formats";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -112,7 +113,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
-  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic";
+  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_adaptive_exams";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1005,6 +1006,39 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "on",
     limitReason: "Recommendations come only from recorded answers and reviews, each with its reason.",
   },
+  // ── SCHOLAR-PRACTICE-EXAMS-01: ADAPTIVE EXAMS, on the revision engine ──
+  // What is offered and its defaults. The rule beneath is not a setting: transparent rule-based adaptation (three right
+  // in a row up, two of the last three missed down), formative only, never a calibrated score or an examination.
+  {
+    key: "scholar_adaptive_exams", kind: "choice", product: "Scholar",
+    label: "Adaptive exams",
+    help: "Whether Revise offers adaptive exams: a practice exam whose next question is harder or easier by a stated rule on the student's own answers. Formative practice only.",
+    options: [{ value: "on", label: "Offer adaptive exams" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Rule-based adaptation only. The report always says it is a practice estimate, not a calibrated score, an examination result or verified competence.",
+  },
+  {
+    key: "scholar_adaptive_length", kind: "int", product: "Scholar", unit: "questions",
+    label: "Default length of an adaptive exam",
+    help: "How many questions an adaptive exam has when the student does not choose. Never more than the maximum below.",
+    fallback: 15, min: ADAPTIVE_LENGTH_MIN, max: ADAPTIVE_LENGTH_MAX,
+    limitReason: "Five to fifty: the rule needs answers to act on, and migration 417 holds at most fifty questions in one session.",
+  },
+  {
+    key: "scholar_adaptive_max_length", kind: "int", product: "Scholar", unit: "questions",
+    label: "Longest adaptive exam a student may choose",
+    help: "The most questions a student may choose for one adaptive exam.",
+    fallback: 30, min: ADAPTIVE_LENGTH_MIN, max: ADAPTIVE_LENGTH_MAX,
+    limitReason: "Five to fifty: migration 417 holds at most fifty questions in one session.",
+  },
+  {
+    key: "scholar_adaptive_formats", kind: "set", product: "Scholar",
+    label: "Adaptive exam question formats",
+    help: "Which question formats an adaptive exam may use. Only formats Revision also offers are used. Flashcards are self-graded recall and are never part of an exam.",
+    options: ADAPTIVE_FORMATS.map(v => ({ value: v, label: REVISION_FORMAT_LABEL[v] })),
+    fallback: [...ADAPTIVE_FORMATS],
+    limitReason: "Only the formats migrations 416 and 710 store. Structured (multi-part) needs 710 and feedback after each answer. Default: all of these.",
+  },
   {
     key: "scholar_srs_mastery_reps", kind: "int", product: "Scholar", unit: "reviews",
     label: "Spaced review: consecutive good reviews for a long interval",
@@ -1618,6 +1652,11 @@ export type IndividualPolicy = {
   scholarRevisionGeneration: "generate" | "saved_only";
   scholarShortAnswerMarking: "ai_then_self" | "self";
   scholarRevisionRecommendations: "on" | "off";
+  /** SCHOLAR-PRACTICE-EXAMS-01: adaptive exams. */
+  scholarAdaptiveExams: "on" | "off";
+  scholarAdaptiveLength: number;
+  scholarAdaptiveMaxLength: number;
+  scholarAdaptiveFormats: AdaptiveFormat[];
   scholarSrsMasteryReps: number;
   scholarSrsMasteryDays: number;
   scholarSrsMaxIntervalDays: number;
@@ -1753,6 +1792,11 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarRevisionGeneration: clampChoice(policyDef("scholar_revision_generation") as ChoicePolicy, published.get(policyPath("scholar_revision_generation"))) as "generate" | "saved_only",
     scholarShortAnswerMarking: clampChoice(policyDef("scholar_short_answer_marking") as ChoicePolicy, published.get(policyPath("scholar_short_answer_marking"))) as "ai_then_self" | "self",
     scholarRevisionRecommendations: clampChoice(policyDef("scholar_revision_recommendations") as ChoicePolicy, published.get(policyPath("scholar_revision_recommendations"))) as "on" | "off",
+    scholarAdaptiveExams: clampChoice(policyDef("scholar_adaptive_exams") as ChoicePolicy, published.get(policyPath("scholar_adaptive_exams"))) as "on" | "off",
+    scholarAdaptiveMaxLength: int("scholar_adaptive_max_length"),
+    // The default never exceeds the maximum, whatever was published.
+    scholarAdaptiveLength: Math.min(int("scholar_adaptive_length"), int("scholar_adaptive_max_length")),
+    scholarAdaptiveFormats: clampSet(policyDef("scholar_adaptive_formats") as SetPolicy, published.get(policyPath("scholar_adaptive_formats"))) as AdaptiveFormat[],
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),
     scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
     scholarSrsMaxIntervalDays: int("scholar_srs_max_interval_days"),

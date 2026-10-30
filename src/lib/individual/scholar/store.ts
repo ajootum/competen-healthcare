@@ -955,7 +955,8 @@ export async function createRevisionSet(admin: Admin, userId: string, input: {
 export async function listRevisionSets(admin: Admin, userId: string, limit = 30): Promise<Read<RevisionSetRow[]>> {
   const { data, error } = await admin.from("individual_scholar_revision_set").select(REV_SET_COLS).eq("user_id", userId).order("updated_at", { ascending: false }).limit(limit);
   if (error) return fail(error);
-  const sets = (data ?? []) as any[];
+  // SCHOLAR-PRACTICE-EXAMS-01: an adaptive exam's blueprint set is not a saved revision set (it has no questions to replay).
+  const sets = ((data ?? []) as any[]).filter(s => !isAdaptiveScope(s.scope));
   if (!sets.length) return { ok: true, data: [] };
   const { data: items, error: iErr } = await admin.from("individual_scholar_revision_set_item").select("set_id, ordinal, question_id").eq("user_id", userId).in("set_id", sets.map(s => s.id)).order("ordinal");
   if (iErr) return fail(iErr);
@@ -980,6 +981,108 @@ export async function getRevisionSet(admin: Admin, userId: string, id: string): 
 export async function touchRevisionSet(admin: Admin, userId: string, id: string): Promise<void> {
   const now = new Date().toISOString();
   await admin.from("individual_scholar_revision_set").update({ last_used_at: now, updated_at: now }).eq("user_id", userId).eq("id", id).then((r: unknown) => r, () => {});
+}
+
+// ── ADAPTIVE EXAMS (SCHOLAR-PRACTICE-EXAMS-01) ── on 417 as it stands, and on 720 where it is applied ──────────────────
+//
+// An adaptive exam is a revision session (417) whose questions are added one at a time as they are chosen, naming a
+// revision set (417) whose `scope` holds its blueprint under scope.adaptive (adaptive.ts). The set has no items and is
+// never listed as a saved set. Migration 720 lets a session say mode 'adaptive': detected by the first insert (a CHECK
+// refusal means it is absent), remembered for the process. Without it the session is mode 'mock', and the set's
+// scope.adaptive marker is what makes it adaptive.
+let adaptive720: boolean | null = null;
+const isCheckRefusal = (error: any) => !!error && (String(error.code ?? "") === "23514" || /check constraint/i.test(String(error.message ?? "")));
+/** Tests only: forget what was detected. */
+export const resetAdaptiveSchema = () => { adaptive720 = null; };
+/** Whether a set's scope is an adaptive exam's blueprint (never a saved revision set). */
+export const isAdaptiveScope = (scope: unknown) => !!scope && typeof scope === "object" && !!(scope as Record<string, unknown>).adaptive;
+
+/** The blueprint's set: no items, mode 'mock' (417 allows it), its blueprint in scope.adaptive. Owner-keyed. */
+export async function createAdaptiveSet(admin: Admin, userId: string, input: { title: string; scope: Record<string, unknown>; formats: readonly string[]; quantity: number; difficulty: string; feedback: "immediate" | "end" }): Promise<{ ok: true; id: string } | { ok: false; notProvisioned: boolean }> {
+  // 417's set CHECK names the formats it knew: structured is kept in the blueprint only.
+  const formats = input.formats.filter(f => ["mcq", "case", "mrq", "short", "flashcard", "match", "sequence"].includes(f));
+  const { data, error } = await admin.from("individual_scholar_revision_set").insert({
+    user_id: userId, title: input.title.slice(0, 120) || "Adaptive exam", mode: "mock", scope: input.scope, formats: formats.length ? formats : ["mcq"],
+    quantity: Math.max(1, Math.min(50, input.quantity)), difficulty: input.difficulty, feedback: input.feedback,
+  }).select("id").single();
+  if (error || !data) return { ok: false, notProvisioned: !!error && isNotProvisioned(error) };
+  return { ok: true, id: data.id };
+}
+
+/** A blueprint's set, read by id. null when it is not the caller's or not an adaptive exam's. Owner-keyed. */
+export async function getAdaptiveSet(admin: Admin, userId: string, id: string | null): Promise<{ id: string; title: string; scope: Record<string, unknown>; createdAt: string } | null> {
+  if (!isUuid(id)) return null;
+  const { data, error } = await admin.from("individual_scholar_revision_set").select("id, title, scope, created_at").eq("user_id", userId).eq("id", id).maybeSingle();
+  if (error || !data || !isAdaptiveScope(data.scope)) return null;
+  return { id: data.id, title: data.title, scope: data.scope, createdAt: data.created_at };
+}
+
+/** The blueprint updated (its generation count). Owner-keyed. */
+export async function updateAdaptiveScope(admin: Admin, userId: string, id: string, scope: Record<string, unknown>): Promise<boolean> {
+  const { error } = await admin.from("individual_scholar_revision_set").update({ scope, updated_at: new Date().toISOString() }).eq("user_id", userId).eq("id", id);
+  return !error;
+}
+
+/**
+ * An adaptive exam's session: mode 'adaptive' where 720 allows it, else 'mock'; its length as its total; its first
+ * question as item 1. not_provisioned where 417 is absent.
+ */
+export async function createAdaptiveSession(admin: Admin, userId: string, input: { setId: string; feedback: "immediate" | "end"; total: number; firstQuestionId: string }): Promise<{ ok: true; id: string; mode: "adaptive" | "mock" } | { ok: false; notProvisioned: boolean }> {
+  const insert = (mode: "adaptive" | "mock") => admin.from("individual_scholar_revision_session")
+    .insert({ user_id: userId, set_id: input.setId, mode, feedback: input.feedback, total: Math.max(1, Math.min(50, input.total)) }).select("id").single();
+  let mode: "adaptive" | "mock" = adaptive720 === false ? "mock" : "adaptive";
+  let { data, error } = await insert(mode);
+  if (error && mode === "adaptive" && isCheckRefusal(error)) { adaptive720 = false; mode = "mock"; ({ data, error } = await insert(mode)); }
+  else if (!error && mode === "adaptive") adaptive720 = true;
+  if (error || !data) return { ok: false, notProvisioned: !!error && isNotProvisioned(error) };
+  if (!(await appendAdaptiveItem(admin, userId, data.id, 1, input.firstQuestionId))) {
+    await admin.from("individual_scholar_revision_session").delete().eq("user_id", userId).eq("id", data.id);
+    return { ok: false, notProvisioned: false };
+  }
+  return { ok: true, id: data.id, mode };
+}
+
+/** The next chosen question, as the session's next item. false when it could not be added (a race: taken already). Owner-keyed. */
+export async function appendAdaptiveItem(admin: Admin, userId: string, sessionId: string, ordinal: number, questionId: string): Promise<boolean> {
+  if (ordinal < 1 || ordinal > 50) return false;
+  const { error } = await admin.from("individual_scholar_revision_session_item").insert({ session_id: sessionId, user_id: userId, ordinal, question_id: questionId });
+  return !error;
+}
+
+/** Questions by id, hydrated as every revision read is (a library copy no longer servable is left out). Owner-keyed. */
+export async function questionsByIds(admin: Admin, userId: string, ids: readonly string[]): Promise<Read<QuestionRow[]>> {
+  const want = [...new Set(ids)].filter(isUuid).slice(0, 100);
+  if (!want.length) return { ok: true, data: [] };
+  const { data, error } = await admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId).in("id", want);
+  if (error) return fail(error);
+  return { ok: true, data: await hydrate(admin, userId, data ?? []) };
+}
+
+export type AdaptiveExamRow = { session: RevisionSessionRow; setId: string; title: string; scope: Record<string, unknown>; marked: number; scoreSum: number };
+/** The student's adaptive exams, newest first: each session with its blueprint and its marked answers so far. Owner-keyed. */
+export async function listAdaptiveExams(admin: Admin, userId: string, limit = 20): Promise<Read<AdaptiveExamRow[]>> {
+  const { data: sets, error } = await admin.from("individual_scholar_revision_set").select("id, title, scope").eq("user_id", userId).order("created_at", { ascending: false }).limit(200);
+  if (error) return fail(error);
+  const adaptive = new Map(((sets ?? []) as any[]).filter(s => isAdaptiveScope(s.scope)).map(s => [s.id as string, s]));
+  if (!adaptive.size) return { ok: true, data: [] };
+  const { data: rows, error: sErr } = await admin.from("individual_scholar_revision_session").select(REV_SESSION_COLS).eq("user_id", userId)
+    .in("set_id", [...adaptive.keys()].slice(0, 200)).order("created_at", { ascending: false }).limit(limit);
+  if (sErr) return fail(sErr);
+  const sessions = ((rows ?? []) as any[]).map(toRevSession);
+  const att = sessions.length ? await admin.from("individual_scholar_attempt").select("revision_session_id, correct, score").eq("user_id", userId).in("revision_session_id", sessions.map(s => s.id)).limit(2500) : { data: [], error: null };
+  const by = new Map<string, { marked: number; scoreSum: number }>();
+  for (const a of (att.error ? [] : att.data ?? []) as any[]) {
+    const m = by.get(a.revision_session_id) ?? { marked: 0, scoreSum: 0 };
+    m.marked++; m.scoreSum += a.score === null || a.score === undefined ? (a.correct ? 1 : 0) : Math.max(0, Math.min(1, Number(a.score)));
+    by.set(a.revision_session_id, m);
+  }
+  return {
+    ok: true,
+    data: sessions.filter(s => s.setId && adaptive.has(s.setId)).map(s => {
+      const set = adaptive.get(s.setId!)!;
+      return { session: s, setId: s.setId!, title: set.title, scope: set.scope, marked: by.get(s.id)?.marked ?? 0, scoreSum: by.get(s.id)?.scoreSum ?? 0 };
+    }),
+  };
 }
 
 /** Delete a saved set (its items go with it). Its sessions keep their own snapshot. Owner-keyed. */
