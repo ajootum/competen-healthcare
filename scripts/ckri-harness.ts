@@ -13,7 +13,9 @@
  *         project, and both go through ckri_holds_capability
  *   K1-3  440: both trails are written only by their record trigger, append-only, with the cascade path
  *   K1-4  Scholar never reads CKRI participation to decide anything: no Individual file imports lib/knowledge or names
- *         a ckri_ table, except the one research-choices route
+ *         a ckri_ table, except the one research-choices route, and the governed library read (SCHOLAR-SQIE-CLOSE-01):
+ *         library-questions.ts may READ the three 442 knowledge tables only -- no other ckri_ table, no write
+ *   K1-4b that library read reads published versions, checks ckri_knowledge_approved, and names no other ckri_ table
  *   K1-5  the research-choices route: one CKRI permission per request, and a withdrawal is never gated
  *   K1-6  the HQ governance route: its capability fixed server-side, then the gate, before any action
  *   K1-7  CKRI library code names no individual_scholar_ table except the person's own AI consent
@@ -42,6 +44,8 @@ const F = {
   rgov: "src/lib/knowledge/research-governance.ts",
   contracts: "src/lib/knowledge/data-contracts.ts",
   choices: "src/app/api/individual/research/route.ts",
+  // SCHOLAR-SQIE-CLOSE-01: Revision reads published, clinically approved knowledge resources (442), and nothing else of CKRI.
+  libraryQuestions: "src/lib/individual/scholar/library-questions.ts",
   hqGov: "src/app/api/hq/knowledge/governance/route.ts",
   spaces: "src/lib/hq/spaces.ts",
 } as const;
@@ -97,10 +101,26 @@ CHECKS.push({ id: "K1-3 trails trigger-written, append-only, cascade path", chec
   return r(insertOnlyFromTrigger && cascade && both, `insert=${insertOnlyFromTrigger} cascade=${cascade} bothTables=${both}`);
 }, plant: plantIn(F.m440, "if pg_trigger_depth() > 1 then return new; end if;", "return new;") });
 
+/** SCHOLAR-SQIE-CLOSE-01: any ckri_ table other than the three 442 knowledge tables. */
+const KNOWLEDGE_OTHER = /from\(\s*["'`]ckri_(?!(?:knowledge_version_competency|knowledge_version|knowledge_resource)["'`])/;
+
 CHECKS.push({ id: "K1-4 Scholar never reads CKRI to decide anything", check: s => {
-  const offenders = INDIVIDUAL.filter(f => f !== F.choices && /@\/lib\/knowledge|from\(\s*["'`]ckri_/.test(tsCode(s.get(f) ?? "")));
+  const offenders = INDIVIDUAL.filter(f => {
+    if (f === F.choices) return false;
+    const code = tsCode(s.get(f) ?? "");
+    // SCHOLAR-SQIE-CLOSE-01: the governed library read may READ the three 442 knowledge tables, and nothing else of CKRI.
+    if (f === F.libraryQuestions) return /@\/lib\/knowledge/.test(code) || KNOWLEDGE_OTHER.test(code) || /\.(insert|update|upsert|delete)\(/.test(code);
+    return /@\/lib\/knowledge|from\(\s*["'`]ckri_/.test(code);
+  });
   return r(offenders.length === 0 && INDIVIDUAL.length > 50, `${INDIVIDUAL.length} Individual files scanned, offenders: ${offenders.join(", ") || "none"}`);
 }, plant: s => { const n = new Map(s); const f = INDIVIDUAL.find(x => x.endsWith("scholar/http.ts"))!; n.set(f, `import { ckriEnabled } from "@/lib/knowledge/governance";\n${n.get(f)}`); return n; } });
+
+CHECKS.push({ id: "K1-4b the governed library read reads published, approved knowledge resources only, and writes nothing", check: s => {
+  const code = tsCode(s.get(F.libraryQuestions) ?? "");
+  const reads = /from\("ckri_knowledge_version"\)/.test(code) && /\.eq\("state", "published"\)/.test(code) && /rpc\("ckri_knowledge_approved"/.test(code);
+  const others = KNOWLEDGE_OTHER.test(code) || /\.(insert|update|upsert|delete)\(/.test(code) || /@\/lib\/knowledge/.test(code);
+  return r(reads && !others, `published and approved read=${reads}, other ckri table or a write=${others}`);
+}, plant: plantIn(F.libraryQuestions, "from(\"ckri_knowledge_version_competency\")", "from(\"ckri_participation_event\")") });
 
 CHECKS.push({ id: "K1-5 one permission per request, withdrawal never gated", check: s => {
   const c = get(s, "choices");

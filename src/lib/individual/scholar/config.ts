@@ -119,6 +119,9 @@ export const PROMPT_VERSIONS = {
   // v3 (SCHOLAR-QUESTION-INTELLIGENCE-01): every item asks (never a statement as a flashcard front), the rubric fields,
   // the guidance block; mrq and short carry +verifyRevision (generation.ts revisionPromptVersion).
   revision: "scholar-revision-v3",
+  // SCHOLAR-SQIE-CLOSE-01 (710): a structured question -- a lead-in and two to four parts, each with its marks and its
+  // rubric -- on the revision rules (generation.ts REVISION_SYSTEM.structured). Its own version: a new prompt.
+  structured: "scholar-structured-v1",
   // COMPETEN-SCHOLAR-CLINICAL-REASONING-01: a private case drafted from the notes, and AI feedback on written reasoning.
   // v2: no counting, and no state or change words the passages do not use (the staging runs' refusal reasons).
   // v3 (SCHOLAR-AI-OPT-01 P2): the reply example shows expectedResponse on a free-text decision and says one decision per
@@ -131,11 +134,20 @@ export const PROMPT_VERSIONS = {
 // ── STAGE 4: REVISION ── COMPETEN-SCHOLAR-REVISION-01 (owner GO 2026-10-24) ─────────────────────────────────────
 // Formative revision from the student's own notes. Never assessment, never competence, never Passport evidence as
 // such. Every AI-written question is private_formative (migration 416 makes nothing else storable).
-export const REVISION_FORMATS = ["mcq", "mrq", "short", "flashcard", "match", "sequence"] as const;
+// SCHOLAR-SQIE-CLOSE-01: structured (multi-part) is stored only where migration 710 is applied (store.ts sqieSchema).
+// Where it is absent it is never offered, whatever the policy says.
+export const REVISION_FORMATS = ["mcq", "mrq", "short", "flashcard", "match", "sequence", "structured"] as const;
 export type RevisionFormat = (typeof REVISION_FORMATS)[number];
 export const REVISION_FORMAT_LABEL: Record<RevisionFormat, string> = {
   mcq: "Multiple choice", mrq: "Multiple response", short: "Short answer", flashcard: "Flashcards", match: "Matching", sequence: "Sequencing",
+  structured: "Structured (multi-part)",
 };
+/** SCHOLAR-SQIE-CLOSE-01: a structured question has 2 to 4 parts of 1 to 5 marks each (migration 710 CHECK). */
+export const STRUCTURED_PARTS_MIN = 2;
+export const STRUCTURED_PARTS_MAX = 4;
+export const STRUCTURED_PART_MARKS_MAX = 5;
+/** The total of a structured question's part marks, as the learner sees it: formative, never an assessment. */
+export const PRACTICE_MARKS_LABEL = "Practice marks (formative): not an assessment and not a grade";
 export const REVISION_MODES = ["today", "quick", "spaced", "weak", "mock", "flashcards", "custom"] as const;
 export type RevisionMode = (typeof REVISION_MODES)[number];
 export const REVISION_MODE_LABEL: Record<RevisionMode, string> = {
@@ -173,6 +185,9 @@ export const PRIVATE_CASE_LABEL = "Practice case written by AI from your notes �
 export const LIBRARY_CASE_LABEL = "Governed library case · clinically approved for this exact version · formative simulation";
 export const MOCK_LABEL = "Mock practice from your own notes: formative revision, not an assessment, and never evidence of competence.";
 export const REVISION_LABEL = "Revision from your notes · formative practice, not an assessment";
+/** SCHOLAR-SQIE-CLOSE-01 C: a question reused from the governed Competen library (442, published and clinically approved). */
+export const LIBRARY_QUESTION_LABEL = "From the Competen library (clinically reviewed)";
+export const LIBRARY_REVISION_LABEL = `${LIBRARY_QUESTION_LABEL} · formative practice, not an assessment`;
 /** SCHOLAR-SQIE-01: what a generated question rests on (question-intel.ts rubric.source), in words. */
 export const GROUNDING_LABEL = { notes: "From your notes", references: "From your notes + approved references" } as const;
 /** SCHOLAR-QUESTION-INTELLIGENCE-01: the five parts of formative feedback (question-intel.ts FeedbackParts). */

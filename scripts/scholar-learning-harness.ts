@@ -484,6 +484,8 @@ const shortAnswerAiOff = (src: Src, policyText: string) => {
   const block = policyText.slice(at, at + 1400);
   return at > 0 && /fallback: "self",/.test(block) && !/fallback: "ai_then_self",/.test(block)
     && /if \(policy\.scholarShortAnswerMarking === "ai_then_self"\) \{/.test(route)
+    // SCHOLAR-SQIE-CLOSE-01: the structured path asks the same way -- EVERY reading of the setting is an explicit "ai_then_self".
+    && (route.match(/scholarShortAnswerMarking/g) ?? []).length === (route.match(/scholarShortAnswerMarking === "ai_then_self"/g) ?? []).length
     && /let mark = markResponse\(q, r\);/.test(route);
 };
 const caseFeedbackOff = (src: Src, policyText: string) => {
@@ -540,7 +542,8 @@ const answersServerSide = (src: Src) => {
     page.slice(page.indexOf("if (q.session) {"), page.indexOf("const [policy, materials, sets"))];
   return learner.length > 50 && learner.length < 3000 && !/rationale|sourceQuote|correctIndex/.test(learner)
     // SCHOLAR-SQIE-01: plus the grounding label only -- a word from the rubric's source, never the rubric itself.
-    && /return \{\n    \.\.\.learnerItem\(q\), materialId: q\.materialId, materialTitle: q\.materialTitle, chunkId: q\.chunkId, citation: citationOf\(q\), label: REVISION_LABEL,\n    grounding: GROUNDING_LABEL\[rubricOf\(q\.answer\)\?\.source \?\? "notes"\],\n  \};/.test(view)
+    // SCHOLAR-SQIE-CLOSE-01: a governed library copy carries its own label and its provenance (resource, version, approval), nothing else.
+    && /return \{\n    \.\.\.learnerItem\(q\), materialId: q\.materialId, materialTitle: q\.materialTitle, chunkId: q\.chunkId, citation: citationOf\(q\),\n    label: q\.library \? LIBRARY_REVISION_LABEL : REVISION_LABEL,\n    grounding: q\.library \? LIBRARY_QUESTION_LABEL : GROUNDING_LABEL\[rubricOf\(q\.answer\)\?\.source \?\? "notes"\],\n    \.\.\.\(q\.library \? \{ library: q\.library \} : \{\}\),\n  \};/.test(view)
     // Every list of items any of them sends is the learner view, none raw.
     && routes.every(s => /items: \S*\.map\(revisionItemView\)|items=\{questions\.map\(revisionItemView\)\}/.test(s)
       && !/\bitems: (?![A-Z]|\S*\.map\(revisionItemView\))/.test(s) && !/\bitems=\{(?!questions\.map\(revisionItemView\))/.test(s))

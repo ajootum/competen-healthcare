@@ -4,7 +4,7 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import {
-  countDue, dueCards, getRevisionSession, listMaterials, listRevisionSessions, listRevisionSets, readConsent, revisionInsightRows, revisionPool, type QuestionRow,
+  countDue, dueCards, getRevisionSession, listMaterials, listRevisionSessions, listRevisionSets, readConsent, revisionInsightRows, revisionPool, sqieSchema, type QuestionRow,
 } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
 import { answerText, buildRevisionInsights } from "@/lib/individual/scholar/revision";
@@ -86,10 +86,13 @@ export default async function Revise({ params, searchParams }: { params: Promise
   }
 
   // ── the workspace ──
-  const [policy, materials, sets, sessions, rows, cards, learner, consent] = await Promise.all([
+  const [policy, materials, sets, sessions, rows, cards, learner, consent, sqie] = await Promise.all([
     loadIndividualPolicy(ctx.admin), listMaterials(ctx.admin, ctx.userId), listRevisionSets(ctx.admin, ctx.userId), listRevisionSessions(ctx.admin, ctx.userId, 5),
     revisionInsightRows(ctx.admin, ctx.userId), dueCards(ctx.admin, ctx.userId), loadLearnerCatalogue(ctx.admin, ctx.userId), readConsent(ctx.admin, ctx.userId),
+    sqieSchema(ctx.admin, ctx.userId),
   ]);
+  // SCHOLAR-SQIE-CLOSE-01: structured (multi-part) is offered only where migration 710 stores it.
+  const formats = policy.scholarRevisionFormats.filter(x => x !== "structured" || sqie);
   const status = consent.ok ? consentStatus(consent.data, consentDocuments().published) : null;
   const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "questions");
   const aiNote = policy.scholarRevisionGeneration === "saved_only" ? "New questions are not written here: revision uses your saved questions."
@@ -130,7 +133,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
       {papers}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">
-          <RevisionStart modes={policy.scholarRevisionModes} formats={policy.scholarRevisionFormats} quantity={policy.scholarRevisionQuantity}
+          <RevisionStart modes={policy.scholarRevisionModes} formats={formats} quantity={policy.scholarRevisionQuantity}
             difficulty={policy.scholarRevisionDifficulty} feedback={policy.scholarRevisionFeedback} materials={mats}
             competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote}
             preset={q.material ? { materialId: q.material, difficulty: q.difficulty ?? null } : null} />

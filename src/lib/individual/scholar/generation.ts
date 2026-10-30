@@ -690,18 +690,28 @@ const REVISION_COMMON = [
   RUBRIC_RULE,
   "Reply with a JSON array ONLY, no prose and no code fence. If the passage cannot support an item of this kind, reply [].",
 ];
-export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence", string> = {
+export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence" | "structured", string> = {
   mrq: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? that says to choose all that apply", "options": [4 to 6 short options built only from the passage\'s words, each a plausible answer, never "all of the above"], "correct": [the indexes of EVERY option the passage supports, at least one and not all], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   short: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? whose answer is a few words from the passage", "accepted": [1 to 4 short answers the passage supports, in its own words], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   flashcard: [...REVISION_COMMON, 'Each item: {"front": "a short question ending with ?, or a single term (a few words) to recall -- never a sentence or a statement", "back": "its answer or meaning, in the passage\'s words", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   match: [...REVISION_COMMON, 'Each item: {"stem": "what to match, e.g. Match each term to its meaning", "pairs": [{"left": "...", "right": "..."}, {"left": "...", "right": "..."}, {"left": "...", "right": "..."}], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Three to six pairs, each stated by the passage, every left and every right different. Only write one when the passage states at least three such pairs.'].join("\n"),
   sequence: [...REVISION_COMMON, 'Each item: {"stem": "what to put in order, ending with ?", "steps": [3 to 6 steps IN THE ORDER THE PASSAGE GIVES THEM], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Only write one when the passage itself gives an order.'].join("\n"),
+  // SCHOLAR-SQIE-CLOSE-01 (structured v1, migration 710): a lead-in and two to four parts, each its own question with
+  // whole practice marks and its own rubric. Marked part by part by code or by the evaluator (activity evaluate).
+  structured: [...REVISION_COMMON,
+    'Each item: {"stem": "a short lead-in from the passage that sets up the parts (a statement is allowed here)", "parts": [{"prompt": "part (a): a question ending with ?", "marks": 1, "accepted": [1 to 4 short answers the passage supports, in its own words], "keyPoints": ["..."], "misconceptions": []}, {"prompt": "part (b): a different question ending with ?", "marks": 2, "accepted": ["..."], "keyPoints": ["..."], "misconceptions": []}], "rationale": "...", "sourceQuote": "...", "difficulty": 2, "level": "understanding", "objective": "...", "references": []}.',
+    "Two to four parts. Each part asks something DIFFERENT that the passage answers, building from recall to understanding or application where the passage allows. marks is a whole number from 1 to 5: more for a part that needs more of the passage. Write at most one item.",
+  ].join("\n"),
 };
 
 /** The revision kinds the blind check fits (question-quality.ts REVISION_VERIFY_SYSTEM). */
 export const REVISION_VERIFIED_KINDS: readonly (keyof typeof REVISION_SYSTEM)[] = ["mrq", "short"];
 export const revisionPromptVersion = (kind: keyof typeof REVISION_SYSTEM) =>
-  `${PROMPT_VERSIONS.revision}:${kind}${REVISION_VERIFIED_KINDS.includes(kind) ? `+${PROMPT_VERSIONS.verifyRevision}` : ""}`;
+  kind === "structured" ? PROMPT_VERSIONS.structured
+    : `${PROMPT_VERSIONS.revision}:${kind}${REVISION_VERIFIED_KINDS.includes(kind) ? `+${PROMPT_VERSIONS.verifyRevision}` : ""}`;
+/** The prompt version prefix a stored question of a format was written at: what "already written at this version" reads. */
+export const formatPromptVersion = (kind: string): string =>
+  kind === "mcq" ? PROMPT_VERSIONS.mcq : kind === "structured" ? PROMPT_VERSIONS.structured : `${PROMPT_VERSIONS.revision}:${kind}`;
 
 /**
  * One call (and one retry): revision items of one kind from one passage, each checked. `run` is the metered runner.
@@ -720,7 +730,7 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
     calls++;
     const r = await run({
       system: REVISION_SYSTEM[kind],
-      user: `${questionUserPrompt(passage)}${generationContextBlock(context ?? NO_CONTEXT, Math.min(3, Math.max(1, limit)))}`,
+      user: `${questionUserPrompt(passage)}${generationContextBlock(context ?? NO_CONTEXT, kind === "structured" ? 1 : Math.min(3, Math.max(1, limit)))}`,
       tier: "reasoning",
       maxTokens: 1800,
       context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_revision_${kind}` },
@@ -730,7 +740,8 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
     // A repeat of a stored stem, or of one kept earlier in this reply, is not stored again.
     const seen = new Set(opts.existing ?? []);
     let batch: RevisionDraft[] = [];
-    for (const raw of (parseJsonArray(r.text) ?? []).slice(0, limit)) {
+    // A structured question is one substantial item a call (its prompt asks for at most one).
+    for (const raw of (parseJsonArray(r.text) ?? []).slice(0, kind === "structured" ? 1 : limit)) {
       const c = checkRevisionDraft(kind, raw, passage, { existing: seen, difficulty: context?.difficulty ?? null, references: refs });
       if (c.ok) { batch.push(c.draft); seen.add(stemKey(c.draft.stem)); } else dropped.push(c.reason);
     }

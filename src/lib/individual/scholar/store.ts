@@ -16,6 +16,7 @@ import { STUDY_ACHIEVEMENT, isStudyAchievementKind, studyAchievementsFrom, type 
 import { passportEvaluationOf, type PassportEvaluation } from "./passport-evaluations";
 import type { ExamOption, PaperFlag, ParsedQuestion, QuestionFlag } from "./exam-paper";
 import { stemKey } from "./question-intel";
+import { servableLibraryVersions, type LibraryPick } from "./library-questions";
 import type { ResearchSource } from "./exam-research";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
@@ -36,6 +37,28 @@ import type { ResearchSource } from "./exam-research";
 // read. A table that does not exist yet (372 not applied) is reported as not provisioned.
 
 type Admin = any;
+
+// ── MIGRATION 710 (SCHOLAR-SQIE-CLOSE-01) ── detected once, and Scholar keeps working without it ──────────────────
+//
+// 710 lets an mcq or case keep its rubric, stores structured questions, and holds governed library copies. Where it is
+// absent all three are simply not done: the rubric is used at generation and not stored, structured is not offered, and
+// no library question is reused -- exactly the 416 behaviour. Detected by one read of a 710 column, remembered for the
+// process. A 710 refusal seen later (a CHECK or column error on a 710 write) also marks it absent.
+let sqie710: boolean | null = null;
+/** Whether migration 710 is applied on this environment. A transient read error is "no" for now, and asked again. */
+export async function sqieSchema(admin: Admin, userId: string): Promise<boolean> {
+  if (sqie710 !== null) return sqie710;
+  // Keyed on the caller, as every read here is: it fails only where the 710 column is missing.
+  const { error } = await admin.from("individual_scholar_question").select("library_version_id").eq("user_id", userId).limit(1);
+  if (!error) return (sqie710 = true);
+  if (isNotProvisioned(error)) return (sqie710 = false);
+  return false;
+}
+/** A 710 write was refused: 710 is treated as absent from now on in this process. */
+export const markSqieAbsent = () => { sqie710 = false; };
+/** Tests only: forget what was detected. */
+export const resetSqieSchema = () => { sqie710 = null; };
+const isSchemaRefusal = (error: any) => !!error && (String(error.code ?? "") === "23514" || isNotProvisioned(error) || /check constraint|column|schema cache/i.test(String(error.message ?? "")));
 export type Read<T> = { ok: true; data: T } | { ok: false; notProvisioned: boolean };
 const fail = (error: unknown): { ok: false; notProvisioned: boolean } => ({ ok: false, notProvisioned: isNotProvisioned(error) });
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -447,7 +470,13 @@ export type QuestionRow = {
   /** Migration 388. Null where 388 is absent, or the question practises no particular competency. */
   competencyId: string | null;
   caseId: string | null; caseStep: number | null; caseTitle: string | null;
+  /**
+   * SCHOLAR-SQIE-CLOSE-01 (710): a copy of a governed library question -- its resource, version and approval -- or null
+   * for the student's own. A copy whose version is no longer published and approved is not returned at all.
+   */
+  library?: LibraryProvenance | null;
 };
+export type LibraryProvenance = { resourceId: string; versionId: string; versionNo: number; approval: "clinically_approved" };
 
 const QUESTION_COLS = "id, material_id, chunk_id, kind, stem, options, correct_index, rationale, source_quote, model, prompt_version, created_at";
 
@@ -463,17 +492,24 @@ export async function insertQuestions(admin: Admin, userId: string, input: {
 }): Promise<{ ok: boolean; ids: string[] }> {
   if (!input.drafts.length) return { ok: true, ids: [] };
   if (input.caseId && input.kind !== "case") return { ok: false, ids: [] };
+  // SCHOLAR-SQIE-CLOSE-01 (710): an mcq or case keeps its rubric in `answer` (a rubric only). Without 710 it is not stored.
+  let withRubric = input.drafts.some(d => d.rubric) && await sqieSchema(admin, userId);
   const rows = (withDifficulty: boolean) => input.drafts.map((d, i) => ({
     user_id: userId, material_id: input.passage.materialId, chunk_id: input.passage.chunkId, kind: input.kind,
     stem: d.stem, options: d.options, correct_index: d.correctIndex, rationale: d.rationale, source_quote: d.sourceQuote,
     model: input.model, provider: input.provider, prompt_version: input.promptVersion,
     ...(input.competencyId ? { competency_id: input.competencyId } : {}),
     ...(input.caseId ? { case_id: input.caseId, case_step: i + 1, ...(i === 0 ? { case_title: input.caseTitle ?? null } : {}) } : {}),
-    // SCHOLAR-QUESTION-INTELLIGENCE-01: its difficulty (416's column, any kind). NOT its rubric: 416's options CHECK
-    // requires answer IS NULL for mcq and case, so their rubric is used at generation and not stored (a CHECK change).
+    // SCHOLAR-QUESTION-INTELLIGENCE-01: its difficulty (416's column, any kind).
     ...(withDifficulty && d.difficulty ? { difficulty: d.difficulty } : {}),
+    ...(withRubric && d.rubric ? { answer: { rubric: d.rubric } } : {}),
   }));
   let { data, error } = await admin.from("individual_scholar_question").insert(rows(true).map(r => ({ ...r, user_id: userId }))).select("id");
+  // 710 absent after all (or refused the rubric): stored as 416 stores it, without the rubric, and not tried again.
+  if (error && withRubric && isSchemaRefusal(error)) {
+    markSqieAbsent(); withRubric = false;
+    ({ data, error } = await admin.from("individual_scholar_question").insert(rows(true).map(r => ({ ...r, user_id: userId }))).select("id"));
+  }
   // Where 416 is absent the column is not there: the question is stored exactly as before.
   if (error && /column|schema cache/i.test(String((error as any)?.message ?? "")) && input.drafts.some(d => d.difficulty))
     ({ data, error } = await admin.from("individual_scholar_question").insert(rows(false).map(r => ({ ...r, user_id: userId }))).select("id"));
@@ -484,17 +520,21 @@ export async function insertQuestions(admin: Admin, userId: string, input: {
 async function hydrate(admin: Admin, userId: string, rows: any[]): Promise<QuestionRow[]> {
   if (!rows.length) return [];
   const ids = rows.map(r => r.id);
-  const [titles, chunksRes, attRes, extra, revision] = await Promise.all([
+  const [titles, chunksRes, attRes, extra, revision, library] = await Promise.all([
     titlesOf(admin, userId, [...new Set(rows.map(r => r.material_id as string))]),
     admin.from("individual_scholar_chunk").select("id, ordinal, page_from, page_to").eq("user_id", userId).in("id", [...new Set(rows.map(r => r.chunk_id as string))]),
     admin.from("individual_scholar_attempt").select("question_id, correct, chosen_index, answered_at").eq("user_id", userId).in("question_id", ids).order("answered_at", { ascending: false }),
     questionExtras(admin, userId, ids),
     revisionExtras(admin, userId, ids),
+    libraryExtras(admin, userId, ids),
   ]);
   const chunk = new Map(((chunksRes.data ?? []) as any[]).map(c => [c.id, c]));
+  // A library copy is offered only while its version is still published and clinically approved (library-questions.ts).
+  const servable = library.size ? await servableLibraryVersions(admin, [...library.values()].map(l => l.versionId)) : new Map();
+  const live = rows.filter(r => !library.has(r.id) || servable.has(library.get(r.id)!.versionId));
   const latest = new Map<string, any>();
   for (const a of (attRes.data ?? []) as any[]) if (!latest.has(a.question_id)) latest.set(a.question_id, a);
-  return rows.map(r => {
+  return live.map(r => {
     const c = chunk.get(r.chunk_id);
     const l = latest.get(r.id);
     return {
@@ -507,8 +547,18 @@ async function hydrate(admin: Admin, userId: string, rows: any[]): Promise<Quest
       latest: l ? { correct: l.correct, chosenIndex: l.chosen_index, answeredAt: l.answered_at } : null,
       competencyId: extra.get(r.id)?.competency_id ?? null, caseId: extra.get(r.id)?.case_id ?? null,
       caseStep: extra.get(r.id)?.case_step ?? null, caseTitle: extra.get(r.id)?.case_title ?? null,
+      library: library.has(r.id) ? { ...library.get(r.id)!, versionNo: servable.get(library.get(r.id)!.versionId)!.versionNo, approval: "clinically_approved" as const } : null,
     };
   });
+}
+
+/** The 710 library columns, read apart: where 710 is absent there are none (and nothing is read once that is known). */
+async function libraryExtras(admin: Admin, userId: string, ids: string[]): Promise<Map<string, { resourceId: string; versionId: string }>> {
+  if (!ids.length || sqie710 === false) return new Map();
+  const { data, error } = await admin.from("individual_scholar_question").select("id, library_resource_id, library_version_id")
+    .eq("user_id", userId).in("id", ids).not("library_version_id", "is", null);
+  if (error) return new Map();
+  return new Map(((data ?? []) as any[]).map(r => [r.id, { resourceId: r.library_resource_id, versionId: r.library_version_id }]));
 }
 
 /** The 416 columns, read apart likewise: where 416 is absent there are none, and only mcq and case exist. */
@@ -549,7 +599,8 @@ export async function listQuestions(admin: Admin, userId: string, opts: { materi
   q = opts.kind ? q.eq("kind", opts.kind) : q.in("kind", ["mcq", "case"]);
   const { data, error } = await q.order("created_at", { ascending: false }).limit(200);
   if (error) return fail(error);
-  return { ok: true, data: await hydrate(admin, userId, data ?? []) };
+  // A governed library copy is Revision's (710): the practice surfaces, which cite the student's notes, never show it.
+  return { ok: true, data: (await hydrate(admin, userId, data ?? [])).filter(x => !x.library) };
 }
 
 export async function getQuestion(admin: Admin, userId: string, id: string): Promise<QuestionRow | null> {
@@ -598,7 +649,7 @@ export async function dueCards(admin: Admin, userId: string): Promise<Read<CardR
   if (!rows.length) return { ok: true, data: [] };
   const qRes = await admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId).in("id", rows.map(r => r.question_id));
   if (qRes.error) return fail(qRes.error);
-  const qs = new Map((await hydrate(admin, userId, qRes.data ?? [])).map(q => [q.id, q]));
+  const qs = new Map((await hydrate(admin, userId, qRes.data ?? [])).filter(q => !q.library).map(q => [q.id, q]));
   return {
     ok: true,
     data: rows.filter(r => qs.has(r.question_id)).map(r => ({ id: r.id, nextReviewAt: r.next_review_at, reviews: r.reviews, status: r.status, question: qs.get(r.question_id)! })),
@@ -659,10 +710,13 @@ export async function reviewRows(admin: Admin, userId: string): Promise<Read<{ m
 export type PoolStats = { misses: number; latestCorrect: boolean | null; lastAnsweredAt: string | null; due: boolean };
 
 /** Questions of the chosen kinds within some sections (or the whole library when none are named), with their stats. */
-export async function revisionPool(admin: Admin, userId: string, opts: { chunkIds?: readonly string[] | null; kinds: readonly RevisionKind[] }): Promise<Read<{ questions: QuestionRow[]; stats: Map<string, PoolStats> }>> {
-  if (!opts.kinds.length || (opts.chunkIds && !opts.chunkIds.length)) return { ok: true, data: { questions: [], stats: new Map() } };
+export async function revisionPool(admin: Admin, userId: string, opts: { chunkIds?: readonly string[] | null; kinds: readonly RevisionKind[]; extraIds?: readonly string[] }): Promise<Read<{ questions: QuestionRow[]; stats: Map<string, PoolStats> }>> {
+  const extra = (opts.extraIds ?? []).filter(isUuid).slice(0, 50);
+  if (!opts.kinds.length || (opts.chunkIds && !opts.chunkIds.length && !extra.length)) return { ok: true, data: { questions: [], stats: new Map() } };
   let q = admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId).in("kind", [...opts.kinds]);
-  if (opts.chunkIds) q = q.in("chunk_id", [...opts.chunkIds].slice(0, 200));
+  // SCHOLAR-SQIE-CLOSE-01: library copies this session reuses, wherever they were first filed, beside the sections.
+  if (opts.chunkIds && extra.length) q = q.or(`chunk_id.in.(${[...opts.chunkIds].slice(0, 200).join(",")}),id.in.(${extra.join(",")})`);
+  else if (opts.chunkIds) q = q.in("chunk_id", [...opts.chunkIds].slice(0, 200));
   const { data, error } = await q.order("created_at", { ascending: false }).limit(500);
   if (error) return fail(error);
   const questions = await hydrate(admin, userId, data ?? []);
@@ -697,12 +751,56 @@ export async function insertRevisionQuestions(admin: Admin, userId: string, inpu
     rationale: d.rationale, source_quote: d.sourceQuote, model: input.model, provider: input.provider, prompt_version: input.promptVersion,
     ...(input.competencyId ? { competency_id: input.competencyId } : {}),
   }))).select("id");
-  if (error) return { ok: false, ids: [], notProvisioned: isNotProvisioned(error) || /check constraint|column/i.test(String((error as any)?.message ?? "")) };
+  if (error) {
+    // A structured question refused by the schema: 710 is not applied here, so structured is not offered again.
+    if (input.kind === "structured" && isSchemaRefusal(error)) markSqieAbsent();
+    return { ok: false, ids: [], notProvisioned: isNotProvisioned(error) || /check constraint|column/i.test(String((error as any)?.message ?? "")) };
+  }
   const ids = ((data ?? []) as any[]).map(r => r.id as string);
   if (input.kind === "flashcard" && ids.length)
     await admin.from("individual_scholar_card").insert(ids.map(id => ({ user_id: userId, question_id: id, material_id: input.passage.materialId, next_review_at: todayIso(), status: "active" })))
       .then((r: unknown) => r, () => {});
   return { ok: true, ids };
+}
+
+/**
+ * SCHOLAR-SQIE-CLOSE-01 C (710): the learner's own copy of each picked governed library question -- an mcq row naming its
+ * resource and version, review_status library_approved, filed under the section it was matched to, practising the
+ * competency it matched. One copy per learner and version: one already held is reused. The 710 guard refuses any copy
+ * that is not the published, clinically approved content exactly. Returns the ids in pick order ([] where 710 is absent).
+ */
+export async function insertLibraryCopies(admin: Admin, userId: string, picks: readonly LibraryPick[]): Promise<{ ok: boolean; ids: string[]; copied: number }> {
+  if (!picks.length) return { ok: true, ids: [], copied: 0 };
+  if (!(await sqieSchema(admin, userId))) return { ok: false, ids: [], copied: 0 };
+  const versionIds = picks.map(p => p.question.versionId);
+  const held = await admin.from("individual_scholar_question").select("id, library_version_id").eq("user_id", userId).in("library_version_id", versionIds);
+  if (held.error) return { ok: false, ids: [], copied: 0 };
+  const have = new Map(((held.data ?? []) as any[]).map(r => [r.library_version_id as string, r.id as string]));
+  const fresh = picks.filter(p => !have.has(p.question.versionId));
+  let copied = 0;
+  if (fresh.length) {
+    const chunks = await admin.from("individual_scholar_chunk").select("id, material_id").eq("user_id", userId).in("id", [...new Set(fresh.map(p => p.chunkId))]);
+    if (chunks.error) return { ok: false, ids: [], copied: 0 };
+    const material = new Map(((chunks.data ?? []) as any[]).map(c => [c.id as string, c.material_id as string]));
+    const rows = fresh.filter(p => material.has(p.chunkId)).map(p => ({
+      user_id: userId, material_id: material.get(p.chunkId)!, chunk_id: p.chunkId, kind: "mcq",
+      stem: p.question.stem, options: p.question.options, correct_index: p.question.correctIndex, rationale: p.question.rationale,
+      // Not a quote from the student's notes: the library item is its own source, shown as such (revision-view.ts).
+      source_quote: "", model: "competen-library", provider: "competen-library", prompt_version: `library:v${p.question.versionNo}`,
+      review_status: "library_approved", library_resource_id: p.question.resourceId, library_version_id: p.question.versionId,
+      competency_id: p.competencyId,
+    }));
+    // One at a time: a version refused by the guard (unpublished since it was read) costs only itself.
+    for (const row of rows) {
+      const { data, error } = await admin.from("individual_scholar_question").insert({ ...row, user_id: userId }).select("id").single();
+      if (!error && data) { have.set(row.library_version_id, data.id); copied++; }
+      else if (error && String(error.code ?? "") === "23505") {
+        const again = await admin.from("individual_scholar_question").select("id").eq("user_id", userId).eq("library_version_id", row.library_version_id).maybeSingle();
+        if (again.data) have.set(row.library_version_id, again.data.id);
+      }
+    }
+  }
+  return { ok: true, ids: versionIds.map(v => have.get(v)).filter((x): x is string => !!x), copied };
 }
 
 /** A missed question's card: created due today, or put back to the start of its schedule by SM-2 itself (a lapse). */

@@ -24,6 +24,8 @@ import type { FeedbackParts, SourceMode } from "@/lib/individual/scholar/questio
 // evaluation, each labelled. A wrong answer offers Explain the answer, Show the source, Teach me this, Try another.
 // Leaving for Teach Me keeps the session: Learn links back to it, and it resumes at the same question.
 // One column below md (the CPR-MOB-001 single md edge); touch targets grow on coarse pointers.
+// SCHOLAR-SQIE-CLOSE-01: a structured question is its parts, each with its own answer box and marks, marked part by part
+// and totalled as practice marks (formative). A governed library question is labelled as such and cites the library.
 
 const accent = SCHOLAR.accent;
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
@@ -232,6 +234,8 @@ type SessionState = { id: string | null; mode: string; feedback: "immediate" | "
 type HeldGrade = { response: string; accepted: string[]; rationale: string; source: RevisionFeedback["source"]; label: string };
 type Answered = { questionId: string; feedback?: RevisionFeedback; held?: boolean; selfGrade?: HeldGrade };
 type Summary = { answered: number; of: number; correct: number; toGrade?: number; byMarking: Record<string, number> };
+/** SCHOLAR-SQIE-CLOSE-01: a structured part the student marks themselves, with what code or the AI already said of it. */
+type PartToGrade = { prompt: string; marks: number; accepted: string[]; byCode: boolean; ai: { awarded: number; feedback: string | null; label: string } | null };
 
 export function RevisionRunner(props: { session: SessionState | null; items: RevisionItemView[]; answered: Answered[]; label?: string | null;
   /** EVALUATION-01: this sitting is the knowledge check of an evaluation, made from it when it ends. */
@@ -339,6 +343,10 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
   const [order, setOrder] = useState<number[]>(item.options.map((_, i) => i));
   const [back, setBack] = useState<{ back: string; source: { quote: string; citation: string; materialId: string; chunkId: string } } | null>(null);
   const [selfGrade, setSelfGrade] = useState<{ accepted: string[]; reason: string; label: string } | null>(null);
+  // SCHOLAR-SQIE-CLOSE-01: a structured question's answers, one per part, and the student's own marking of each part.
+  const [texts, setTexts] = useState<string[]>((item.parts ?? []).map(() => ""));
+  const [partGrade, setPartGrade] = useState<{ reason: string; label: string; parts: PartToGrade[] } | null>(null);
+  const [grades, setGrades] = useState<(boolean | null)[]>([]);
   // SCHOLAR-SQIE-02: a withheld AI evaluation opens evidence recovery beneath the student's answer, which is kept as typed.
   const [recovery, setRecovery] = useState<{ key: number; withheldReason: string | null } | null>(null);
   const [recovered, setRecovered] = useState(false);
@@ -347,6 +355,12 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
     setBusy(true); setError("");
     const r = await call("/api/individual/scholar/revision/answer", { questionId: item.id, sessionId, response, ...extra });
     setBusy(false);
+    if (r.json.needsSelfGrade && item.kind === "structured") {
+      const parts = (r.json.parts ?? []) as PartToGrade[];
+      setPartGrade({ reason: r.json.reason ?? "", label: r.json.label ?? "", parts });
+      setGrades(parts.map(x => (x.byCode ? null : x.ai ? x.ai.awarded > 0 : null)));
+      return;
+    }
     if (r.json.needsSelfGrade) {
       setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "" });
       if (r.json.withheld && item.kind === "short") setRecovery(x => ({ key: (x?.key ?? 0) + 1, withheldReason: r.json.withheld?.reason ?? null }));
@@ -376,9 +390,10 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
     setBack(r.json as typeof back);
   }
   const responseOf = (): unknown => item.kind === "mcq" || item.kind === "case" ? { index: choice } : item.kind === "mrq" ? { indexes: set }
-    : item.kind === "short" ? { text } : item.kind === "match" ? { matches } : item.kind === "sequence" ? { order } : null;
+    : item.kind === "short" ? { text } : item.kind === "match" ? { matches } : item.kind === "sequence" ? { order } : item.kind === "structured" ? { texts } : null;
   const ready = item.kind === "mcq" || item.kind === "case" ? choice !== null : item.kind === "mrq" ? set.length > 0 : item.kind === "short" ? text.trim().length > 0
-    : item.kind === "match" ? matches.every(Boolean) : item.kind === "sequence";
+    : item.kind === "match" ? matches.every(Boolean) : item.kind === "sequence" ? true : item.kind === "structured" ? texts.some(t => t.trim()) : false;
+  const partLetter = (i: number) => String.fromCharCode(97 + i);
   const letter = (i: number) => String.fromCharCode(65 + i);
   const fb = answered?.feedback ?? null;
 
@@ -410,6 +425,29 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
             </fieldset>
           </div>
         )
+      ) : partGrade ? (
+        <div className="mt-4 rounded-xl border border-gray-200 p-4">
+          <p className="text-[13.5px] text-gray-800">{partGrade.reason}</p>
+          <ol className="mt-3 space-y-3">
+            {partGrade.parts.map((pt, i) => (
+              <li key={i} className="rounded-lg bg-gray-50 p-3">
+                <p className="text-[13.5px] font-semibold text-gray-900">({partLetter(i)}) {pt.prompt} <span className="font-normal text-gray-600">· {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span></p>
+                <p className="mt-1 text-[13px] text-gray-700">Your answer: <span className="font-semibold">{texts[i] || "(left blank)"}</span></p>
+                <p className="mt-1 text-[13px] text-gray-800"><span className="font-semibold">{item.library ? "The library answer" : "Your notes"}:</span> {pt.accepted.join("; ")}</p>
+                {pt.ai?.feedback && <p className="mt-1 rounded border border-dashed border-amber-400 bg-amber-50 px-2 py-1 text-[12.5px] text-amber-950"><span className="font-semibold">{pt.ai.label}</span> {pt.ai.feedback}</p>}
+                {pt.byCode ? <p className="mt-1 text-[12px] text-gray-600">Marked against the stored answer.</p> : (
+                  <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={`Your judgement of part ${partLetter(i)}`}>
+                    <button type="button" aria-pressed={grades[i] === true} className={`${ghost} ${grades[i] === true ? "border-gray-900" : ""}`} disabled={busy} onClick={() => setGrades(g => g.map((x, k) => (k === i ? true : x)))}>It says the same</button>
+                    <button type="button" aria-pressed={grades[i] === false} className={`${ghost} ${grades[i] === false ? "border-gray-900" : ""}`} disabled={busy} onClick={() => setGrades(g => g.map((x, k) => (k === i ? false : x)))}>It does not</button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+          <p className="mt-2 text-[12px] text-gray-500">{partGrade.label}</p>
+          <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={busy || partGrade.parts.some((pt, i) => !pt.byCode && grades[i] === null)}
+            onClick={() => send({ texts }, { selfGrades: partGrade.parts.map((pt, i) => (pt.byCode ? null : grades[i])) })}>{busy ? "Saving…" : "Save my marking"}</button>
+        </div>
       ) : selfGrade ? (
         <div className="mt-4 rounded-xl border border-gray-200 p-4">
           <p className="text-[13.5px] text-gray-800">{selfGrade.reason}</p>
@@ -443,6 +481,17 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
                 ))}
               </div>
             </fieldset>
+          )}
+          {item.kind === "structured" && (
+            <ol className="space-y-3">
+              {(item.parts ?? []).map((pt, i) => (
+                <li key={i}>
+                  <label className="block text-[13.5px] font-semibold text-gray-900">({partLetter(i)}) {pt.prompt} <span className="font-normal text-gray-600">· {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span>
+                    <textarea rows={2} maxLength={1000} value={texts[i] ?? ""} onChange={e => setTexts(t => t.map((x, k) => (k === i ? e.target.value : x)))} className={`${field} mt-1 block w-full font-normal`} />
+                  </label>
+                </li>
+              ))}
+            </ol>
           )}
           {item.kind === "short" && (
             <label className="block text-[13px] font-semibold text-gray-800">Your answer
@@ -530,11 +579,15 @@ export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackPa
 }
 
 function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string }) {
+  const basis = f.library ? "the Competen library answer" : "your notes";
   return (
     <div aria-live="polite" className={`mt-3 rounded-xl border p-4 ${f.correct ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
       <p className={`text-[14.5px] font-bold ${f.correct ? "text-emerald-900" : "text-red-900"}`}>
-        {f.correct ? "That matches your notes." : f.score !== null && f.score > 0 ? `Partly: ${Math.round(f.score * 100)}% matched your notes.` : "That does not match your notes."}
+        {f.structured ? `${f.structured.practiceMarks.awarded} of ${f.structured.practiceMarks.total} practice marks`
+          : f.correct ? `That matches ${basis}.` : f.score !== null && f.score > 0 ? `Partly: ${Math.round(f.score * 100)}% matched ${basis}.` : `That does not match ${basis}.`}
       </p>
+      {f.structured && <p className="text-[12px] text-gray-700">{f.structured.practiceMarks.label}</p>}
+      {f.library && <p className="mt-1 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{f.library.label} · version {f.library.versionNo}</p>}
       <p className="text-[12px] text-gray-700"><span className="font-semibold">{f.markingLabel}.</span> {f.marking === "deterministic" ? MARKED_AGAINST_NOTES : ""}</p>
       {f.evaluation && (
         <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
@@ -543,7 +596,23 @@ function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: Revis
           <FormativeAiLabel className="mt-1" />
         </div>
       )}
-      <p className="mt-2 text-[13.5px] text-gray-900"><span className="font-semibold">Your notes:</span> {f.answer}</p>
+      {f.structured ? (
+        <ol className="mt-2 space-y-2">
+          {f.structured.parts.map((pt, i) => (
+            <li key={i} className="rounded-lg bg-white/70 p-2.5 text-[13.5px] text-gray-900">
+              <p className="font-semibold">({String.fromCharCode(97 + i)}) {pt.prompt} <span className="font-normal text-gray-700">· {pt.awarded === null ? "—" : pt.awarded} of {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span></p>
+              <p className="mt-0.5"><span className="font-semibold">Your notes:</span> {pt.accepted}</p>
+              {!compact && pt.keyPoints.length > 0 && <ul className="mt-1 list-disc pl-5 text-[13px] text-gray-800">{pt.keyPoints.map(k => <li key={k}>{k}</li>)}</ul>}
+              {pt.evaluation && (
+                <div className="mt-1 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
+                  <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{pt.evaluation.label}</p>
+                  {pt.evaluation.parts ? <FeedbackPartsView parts={pt.evaluation.parts} /> : <p className="mt-1 text-[13.5px] text-amber-950">{pt.evaluation.feedback}</p>}
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      ) : <p className="mt-2 text-[13.5px] text-gray-900"><span className="font-semibold">{f.library ? "The library answer" : "Your notes"}:</span> {f.answer}</p>}
       {!compact && <p className="mt-1 text-[13.5px] leading-relaxed text-gray-800">{f.rationale}</p>}
       {/* SCHOLAR-QUESTION-INTELLIGENCE-01: after answering -- what it checks, at what level, and its key points. */}
       {!compact && f.rubric && (f.rubric.objective || f.rubric.keyPoints.length > 0) && (
@@ -552,7 +621,7 @@ function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: Revis
           {f.rubric.keyPoints.length > 0 && <ul className="mt-1 list-disc pl-5">{f.rubric.keyPoints.map(k => <li key={k}>{k}</li>)}</ul>}
         </div>
       )}
-      <blockquote className="mt-2 border-l-4 pl-3 text-[13px] italic text-gray-700" style={{ borderColor: accent }}>“{f.source.quote}”</blockquote>
+      {f.source.quote && <blockquote className="mt-2 border-l-4 pl-3 text-[13px] italic text-gray-700" style={{ borderColor: accent }}>“{f.source.quote}”</blockquote>}
       {f.practises && (
         <p className="mt-2 text-[12.5px] text-gray-700">
           <span className="font-semibold">Practises:</span> {f.practises.competency}{f.practises.outcome ? <> · <span className="font-semibold">outcome:</span> {f.practises.outcome}</> : null}. <span className="text-gray-600">{f.practises.label}</span>
@@ -563,7 +632,7 @@ function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: Revis
       {f.card === "reviewed" && f.nextReviewAt && <p className="mt-2 text-[12.5px] font-semibold text-gray-800">Reviewed: it comes back {new Date(`${f.nextReviewAt}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}.</p>}
       <div className="mt-3 flex flex-wrap gap-2 text-[13px]">
         {!f.correct && <Link href={learnHref(f.source.chunkId, sessionId, "explain")} className={ghost}>Explain the answer</Link>}
-        <Link href={sourceHref(f.source.materialId, f.source.chunkId)} className={ghost}>Show the source</Link>
+        <Link href={sourceHref(f.source.materialId, f.source.chunkId)} className={ghost}>{f.library ? "Show my notes on this" : "Show the source"}</Link>
         {!f.correct && <Link href={learnHref(f.source.chunkId, sessionId)} className={ghost}>Teach me this</Link>}
         {/* CLINICAL-REASONING-01 CR1: from Revision, a case written from the same section. */}
         <Link href={`${studyHref("apply")}?section=${f.source.chunkId}&from=revision`} className={ghost}>Practise in a case</Link>
@@ -571,7 +640,7 @@ function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: Revis
         {f.nextDifficulty && <Link href={`${studyHref("revise")}?material=${f.source.materialId}&difficulty=${f.nextDifficulty}`} className={ghost}>{f.correct ? "Try harder questions on this" : "More practice on this"}</Link>}
       </div>
       {/* SCHOLAR-AI-OPT-01 s7: optional, one tap, about the AI-written question itself (not the student's answer). */}
-      <AiFeedback kind="question" target="question" refId={questionId} />
+      {!f.library && <AiFeedback kind="question" target="question" refId={questionId} />}
     </div>
   );
 }

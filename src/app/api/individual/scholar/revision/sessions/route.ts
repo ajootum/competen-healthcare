@@ -8,21 +8,22 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { leadingCompetency } from "@/lib/competency/mapping";
 import {
-  chunkMappings, createRevisionSession, getPassage, getRevisionSet, insertQuestions, insertRevisionQuestions, isUuid, listMaterials, listRevisionSessions,
-  revisionPool, touchRevisionSet, type QuestionRow,
+  chunkMappings, createRevisionSession, getPassage, getRevisionSet, insertLibraryCopies, insertQuestions, insertRevisionQuestions, isUuid, listMaterials, listRevisionSessions,
+  revisionPool, sectionLinks, sqieSchema, topicsOfSections, touchRevisionSet, type QuestionRow,
 } from "@/lib/individual/scholar/store";
+import { loadLibraryQuestions, pickLibraryQuestions, type LibrarySection } from "@/lib/individual/scholar/library-questions";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { parseScope, resolveScope } from "@/lib/individual/scholar/learn";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
-import { runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/generation";
+import { formatPromptVersion, runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/generation";
 import { GENERATING_MODES, keyOf, pickQuestions, planGeneration, type PoolItem } from "@/lib/individual/scholar/revision";
 import { revisionItemView } from "@/lib/individual/scholar/revision-view";
 import { generationContextLoader } from "@/lib/individual/scholar/question-context";
 import { adaptDifficulty, generationDifficulty, isSourceMode, stemKey, type SourceMode } from "@/lib/individual/scholar/question-intel";
 import {
-  MOCK_LABEL, PROMPT_VERSIONS, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
+  MOCK_LABEL, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
   type RevisionDifficulty, type RevisionFormat, type RevisionMode,
 } from "@/lib/individual/scholar/config";
 
@@ -42,6 +43,14 @@ export const dynamic = "force-dynamic";
 // at most REVISION_GENERATION_CALLS_MAX calls, each through the Holdings allowance (activity questions) with its risk.
 // When new AI is not available the session is made from what is saved, and says so (s8 Learning Continuity).
 // The browser receives learner views only: no key, no rationale, no source quote (revision-view.ts).
+// SCHOLAR-SQIE-CLOSE-01 (migration 710):
+//   LIBRARY FIRST, THEN WRITTEN. Before anything is written for a shortfall, multiple-choice places are filled from the
+//   governed Competen library (442): published, clinically approved revision questions teaching a competency the
+//   section is linked to (accepted links only) and naming its topic (library-questions.ts). No AI. Each is the
+//   learner's own copy, with its provenance, labelled "From the Competen library (clinically reviewed)".
+//   STRUCTURED (multi-part) is offered where policy allows it AND 710 is applied, in sessions with feedback after each
+//   answer (a multi-part answer cannot yet be held to the end, so mock and end-of-session sessions leave it out).
+//   Without 710 neither happens: the session is made exactly as before.
 // GET lists the student's recent revision sessions to resume.
 
 const pickFormats = (v: unknown, allowed: readonly RevisionFormat[]): RevisionFormat[] => {
@@ -68,7 +77,7 @@ export async function POST(req: Request) {
     const pool = await revisionPool(ctx.admin, ctx.userId, { kinds: [...REVISION_FORMATS, "case"] });
     if (!pool.ok) return NextResponse.json({ error: "Your saved questions could not be read just now." }, { status: 503 });
     const have = new Map(pool.data.questions.map(q => [q.id, q]));
-    const ordered = set.questionIds.map(id => have.get(id)).filter((q): q is QuestionRow => !!q && !!keyOf(q));
+    const ordered = set.questionIds.map(id => have.get(id)).filter((q): q is QuestionRow => !!q && !!keyOf(q) && (q.kind !== "structured" || set.feedback === "immediate"));
     if (!ordered.length) return NextResponse.json({ error: "The questions in this set are no longer stored (their materials were removed)." }, { status: 404 });
     const made = await createRevisionSession(ctx.admin, ctx.userId, { mode, feedback: set.feedback, setId: set.id, questionIds: ordered.map(q => q.id) });
     await touchRevisionSet(ctx.admin, ctx.userId, set.id);
@@ -103,7 +112,9 @@ export async function POST(req: Request) {
     }
   }
 
-  const formats = pickFormats(body?.formats, policy.scholarRevisionFormats);
+  // SCHOLAR-SQIE-CLOSE-01: structured only where 710 stores it, and only with feedback after each answer.
+  const sqie = await sqieSchema(ctx.admin, ctx.userId);
+  const formats = pickFormats(body?.formats, policy.scholarRevisionFormats).filter(f => f !== "structured" || (sqie && feedback === "immediate"));
   if (!formats.length) return NextResponse.json({ error: "None of those question formats is offered here." }, { status: 400 });
   const quantity = Number.isInteger(body?.quantity) ? Math.min(REVISION_QUANTITY_MAX, Math.max(1, body.quantity)) : policy.scholarRevisionQuantity;
   const asked: RevisionDifficulty | null = (REVISION_DIFFICULTIES as readonly string[]).includes(body?.difficulty) ? body.difficulty : null;
@@ -114,8 +125,10 @@ export async function POST(req: Request) {
   const kinds = mode === "flashcards" ? (["flashcard"] as RevisionFormat[]) : formats;
   const seed = `${ctx.userId}:${new Date().toISOString().slice(0, 10)}:${mode}`;
 
+  // Library copies this session reuses: read with the pool wherever they were first filed.
+  let libraryIds: string[] = [];
   const poolOf = async () => {
-    const p = await revisionPool(ctx.admin, ctx.userId, { chunkIds, kinds });
+    const p = await revisionPool(ctx.admin, ctx.userId, { chunkIds, kinds, extraIds: libraryIds });
     if (!p.ok) return null;
     const items: PoolItem[] = p.data.questions.filter(q => !!keyOf(q)).map(q => {
       const s = p.data.stats.get(q.id)!;
@@ -136,6 +149,30 @@ export async function POST(req: Request) {
   }
   let pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed });
 
+  // ── SCHOLAR-SQIE-CLOSE-01 C: the shortfall's multiple-choice places from the governed library first, with no AI ──
+  let libraryVersions: string[] = [];
+  if (pick.shortfall > 0 && GENERATING_MODES.includes(mode) && kinds.includes("mcq") && scopeSections.length && sqie) {
+    const sections = scopeSections.slice(0, 40);
+    const [links, topics] = await Promise.all([sectionLinks(ctx.admin, ctx.userId, sections), topicsOfSections(ctx.admin, ctx.userId, sections)]);
+    const libSections: LibrarySection[] = sections
+      .map(c => ({ chunkId: c, competencyIds: [...new Set(links.filter(l => l.chunkId === c && l.accepted).map(l => l.competencyId))], topics: topics.get(c) ?? [] }))
+      .filter(x => x.competencyIds.length);
+    if (libSections.length) {
+      const library = await loadLibraryQuestions(ctx.admin, libSections.flatMap(x => x.competencyIds));
+      const held = new Set(pool.questions.map(q => q.library?.versionId).filter((v): v is string => !!v));
+      const picks = pickLibraryQuestions({ questions: library, sections: libSections, exclude: held, limit: pick.shortfall });
+      const copies = await insertLibraryCopies(ctx.admin, ctx.userId, picks);
+      if (copies.ids.length) {
+        libraryIds = copies.ids; libraryVersions = picks.map(x => x.question.versionId);
+        pool = (await poolOf()) ?? pool;
+        pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed });
+      }
+      await audit(ctx, "individual_scholar_revision_library", "individual_scholar_revision_session", null, {
+        offered: library.length, picked: picks.length, copied: copies.copied, reused: copies.ids.length, versions: libraryVersions,
+      });
+    }
+  }
+
   // ── the shortfall: written new only where the mode, the policy and the student's AI allow ──
   let generated = 0, note: string | null = null, aiCalls = 0, referencesUsed = false;
   const stems = new Set(pool.questions.map(q => stemKey(q.stem)));
@@ -148,8 +185,7 @@ export async function POST(req: Request) {
       else if (pre) note = ((await pre.clone().json().catch(() => ({}))) as { error?: string }).error ?? "New questions could not be written just now. This session uses your saved questions.";
       else {
         // Identical content is not written twice: a section and format that already has questions at this prompt version is skipped.
-        const version = (k: string) => (k === "mcq" ? PROMPT_VERSIONS.mcq : `${PROMPT_VERSIONS.revision}:${k}`);
-        const existing = new Set(pool.questions.filter(q => q.promptVersion.startsWith(version(q.kind))).map(q => `${q.chunkId}|${q.kind}`));
+        const existing = new Set(pool.questions.filter(q => q.promptVersion.startsWith(formatPromptVersion(q.kind))).map(q => `${q.chunkId}|${q.kind}`));
         // Rounds: an item the checks drop leaves the session short, so a second round writes for what is still
         // missing -- never a section and format already written, and never more than REVISION_GENERATION_CALLS_MAX calls.
         let i = 0, refused = false;
@@ -230,14 +266,17 @@ export async function POST(req: Request) {
   const byId = new Map(pool.questions.map(q => [q.id, q]));
   const ordered = pick.ids.map(id => byId.get(id)!).filter(Boolean);
   const made = await createRevisionSession(ctx.admin, ctx.userId, { mode, feedback, questionIds: ordered.map(q => q.id) });
+  // SCHOLAR-SQIE-CLOSE-01: how the session was filled -- saved questions reused, governed library questions reused, new ones written.
+  const fromLibrary = ordered.filter(q => q.library && libraryIds.includes(q.id)).length;
+  const reused = Math.max(0, ordered.length - Math.min(generated, ordered.length) - fromLibrary);
   await audit(ctx, "individual_scholar_revision_started", "individual_scholar_revision_session", made.ok ? made.id : null,
-    { mode, scope: chunkIds ? "scoped" : "library", questions: ordered.length, generated, formats: kinds, ai_calls: aiCalls, difficulty, adapted: !asked, source: sourceMode, references_used: referencesUsed });
+    { mode, scope: chunkIds ? "scoped" : "library", questions: ordered.length, generated, reused, library: fromLibrary, library_versions: libraryVersions, formats: kinds, ai_calls: aiCalls, difficulty, adapted: !asked, source: sourceMode, references_used: referencesUsed });
   // Mode notes_and_references with no approved reference linked to these notes: said, never implied.
   const sourceNote = sourceMode === "notes_and_references" && generated > 0 && !referencesUsed
     ? "No clinically approved reference is linked to these notes yet, so the new questions are from your notes only." : null;
   return NextResponse.json({
     session: made.ok ? { id: made.id, mode, feedback, total: ordered.length, position: 0 } : null,
-    items: ordered.map(revisionItemView), generated, reused: ordered.length - Math.min(generated, ordered.length),
+    items: ordered.map(revisionItemView), generated, reused, library: fromLibrary,
     label: mode === "mock" ? MOCK_LABEL : null, difficulty, source: sourceMode, aiCalls, ...(withheld ? { withheld } : {}),
     note: [note ?? (made.ok ? null : "Revision sessions are not kept on this environment, so this one cannot be resumed later."), sourceNote].filter(Boolean).join(" ") || null,
   });
