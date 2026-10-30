@@ -945,7 +945,7 @@ export const POLICIES: readonly PolicyDef[] = [
     help: "Which question formats Revision may generate and offer. Questions already saved in a format that is switched off are kept, and not offered.",
     options: REVISION_FORMATS.map(v => ({ value: v, label: REVISION_FORMAT_LABEL[v] })),
     fallback: [...REVISION_FORMATS],
-    limitReason: "Only the six formats migration 416 stores. Default: all.",
+    limitReason: "Only the formats migrations 416 and 710 store. Structured (multi-part) is offered only where 710 is applied. Default: all.",
   },
   {
     key: "scholar_revision_modes", kind: "set", product: "Scholar",

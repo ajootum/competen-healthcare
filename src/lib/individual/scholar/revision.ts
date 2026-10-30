@@ -15,13 +15,15 @@
 import { createHash } from "node:crypto";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import type { Insufficient, NotMeasured } from "@/lib/competency/progress-model";
-import { REVISION_GENERATION_CALLS_MAX, type RevisionDifficulty, type RevisionFormat, type RevisionMode } from "./config";
+import {
+  REVISION_GENERATION_CALLS_MAX, STRUCTURED_PART_MARKS_MAX, STRUCTURED_PARTS_MAX, STRUCTURED_PARTS_MIN, type RevisionDifficulty, type RevisionFormat, type RevisionMode,
+} from "./config";
 import { findPatientIdentifiers } from "./extract";
 import { textGroundingViolations } from "@/lib/ai/grounding";
 import type { Passage } from "./generation";
 import {
-  asksQuestion, difficultyFits, difficultyOf, distractorProblem, flashcardFrontAsks, keyConsistent, parseRubric, referenceGrounding, stemKey,
-  type GenerationDifficulty, type PromptReference,
+  asksQuestion, difficultyFits, difficultyOf, distractorProblem, flashcardFrontAsks, keyConsistent, parseRubric, referenceGrounding, rubricOf, stemKey,
+  type FeedbackParts, type GenerationDifficulty, type PromptReference, type Rubric,
 } from "./question-intel";
 
 const groundingViolations = textGroundingViolations;
@@ -46,9 +48,27 @@ export type RevisionQuestion = {
 
 // ── THE KEY OF EACH KIND (migration 416 `answer`) ──
 
+/** SCHOLAR-SQIE-CLOSE-01 (710): one part of a structured question -- its prompt, its marks, what it accepts, its rubric. */
+export type StructuredPart = { prompt: string; marks: number; accepted: string[]; rubric: Rubric | null };
+
 export type Key =
   | { kind: "choice"; index: number } | { kind: "set"; indexes: number[] } | { kind: "accepted"; answers: string[] }
-  | { kind: "back"; text: string } | { kind: "matches"; matches: string[] } | { kind: "order"; order: number[] };
+  | { kind: "back"; text: string } | { kind: "matches"; matches: string[] } | { kind: "order"; order: number[] }
+  | { kind: "parts"; parts: StructuredPart[] };
+
+const isMarks = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= STRUCTURED_PART_MARKS_MAX;
+
+/** Pure. The parts of a stored structured question, or null when one is not sound (the question is then not offered). */
+function partsOf(v: unknown): StructuredPart[] | null {
+  if (!Array.isArray(v) || v.length < STRUCTURED_PARTS_MIN || v.length > STRUCTURED_PARTS_MAX) return null;
+  const parts = v.map(raw => {
+    const x = (raw ?? {}) as Record<string, unknown>;
+    const accepted = strs(x.accepted);
+    return typeof x.prompt === "string" && x.prompt.trim() && isMarks(x.marks) && accepted && accepted.length
+      ? { prompt: x.prompt, marks: x.marks, accepted, rubric: rubricOf({ rubric: x.rubric }) } : null;
+  });
+  return parts.every(Boolean) ? (parts as StructuredPart[]) : null;
+}
 
 const nums = (v: unknown): number[] | null => (Array.isArray(v) && v.every(n => Number.isInteger(n)) ? (v as number[]) : null);
 const strs = (v: unknown): string[] | null => (Array.isArray(v) && v.every(s => typeof s === "string") ? (v as string[]) : null);
@@ -63,8 +83,12 @@ export function keyOf(q: RevisionQuestion): Key | null {
     case "flashcard": return typeof a.back === "string" && a.back ? { kind: "back", text: a.back } : null;
     case "match": { const c = strs(a.matches); return c && c.length === q.options.length ? { kind: "matches", matches: c } : null; }
     case "sequence": { const c = nums(a.order); return c && c.length === q.options.length && new Set(c).size === c.length && c.every(i => i >= 0 && i < c.length) ? { kind: "order", order: c } : null; }
+    case "structured": { const p = partsOf(a.parts); return p ? { kind: "parts", parts: p } : null; }
   }
 }
+
+/** Pure. A structured question's parts (its key), or [] for any other kind. */
+export const structuredParts = (q: RevisionQuestion): StructuredPart[] => { const k = keyOf(q); return k?.kind === "parts" ? k.parts : []; };
 
 /** Pure. The key in words, for the reveal after answering and for a review card. */
 export function answerText(q: RevisionQuestion): string {
@@ -77,6 +101,7 @@ export function answerText(q: RevisionQuestion): string {
     case "back": return k.text;
     case "matches": return q.options.map((p, i) => `${p} → ${k.matches[i]}`).join("; ");
     case "order": return k.order.map(i => q.options[i]).join(" → ");
+    case "parts": return k.parts.map((p, i) => `(${String.fromCharCode(97 + i)}) ${p.accepted[0]}`).join("; ");
   }
 }
 
@@ -88,6 +113,8 @@ export type LearnerItem = {
   options: string[];
   /** match only: the items to match, shuffled. */
   choices?: string[];
+  /** structured only: each part's prompt and its marks. Never what it accepts or its rubric. */
+  parts?: { prompt: string; marks: number }[];
 };
 
 /** A deterministic shuffle by seed. Stable for one question, so a resumed session shows the same order. */
@@ -107,6 +134,7 @@ export function learnerItem(q: RevisionQuestion): LearnerItem {
     const m = k?.kind === "matches" ? k.matches : [];
     return { ...base, choices: seededOrder(m.length, `${q.id}:choices`).map(i => m[i]) };
   }
+  if (q.kind === "structured") return { ...base, parts: structuredParts(q).map(p => ({ prompt: p.prompt, marks: p.marks })) };
   return base;
 }
 
@@ -114,7 +142,8 @@ export function learnerItem(q: RevisionQuestion): LearnerItem {
 
 export type Response =
   | { kind: "choice"; index: number } | { kind: "set"; indexes: number[] } | { kind: "text"; text: string }
-  | { kind: "recall"; quality: number } | { kind: "matches"; matches: string[] } | { kind: "order"; order: number[] };
+  | { kind: "recall"; quality: number } | { kind: "matches"; matches: string[] } | { kind: "order"; order: number[] }
+  | { kind: "parts"; texts: string[] };
 
 /** Pure. The answer a body carries for this question's kind, bounded, or null. */
 export function parseResponse(q: RevisionQuestion, raw: unknown): Response | null {
@@ -127,7 +156,37 @@ export function parseResponse(q: RevisionQuestion, raw: unknown): Response | nul
     case "flashcard": return Number.isInteger(r.quality) && (r.quality as number) >= 0 && (r.quality as number) <= 5 ? { kind: "recall", quality: r.quality as number } : null;
     case "match": { const c = strs(r.matches); return c && c.length === n && c.every(s => s.length <= 500) ? { kind: "matches", matches: c } : null; }
     case "sequence": { const c = nums(r.order); return c && c.length === n && new Set(c).size === n && c.every(i => i >= 0 && i < n) ? { kind: "order", order: c } : null; }
+    case "structured": {
+      // One answer per part, each bounded. A part left blank is allowed (it earns no marks), all blank is not an answer.
+      const c = strs(r.texts), parts = structuredParts(q).length;
+      return c && parts && c.length === parts && c.every(t => t.length <= 1000) && c.some(t => t.trim()) ? { kind: "parts", texts: c.map(t => t.trim()) } : null;
+    }
   }
+}
+
+// ── STRUCTURED: PRACTICE MARKS, PART BY PART ── SCHOLAR-SQIE-CLOSE-01 (710) ──
+
+/** How one part was marked: blank, by code against what it accepts, by AI evaluation, or by the student. */
+export type PartResult = { awarded: number; by: "blank" | "code" | "ai" | "self"; feedback?: string | null; parts?: FeedbackParts | null };
+
+/** Pure. The parts code can mark: blank earns nothing, a match with an accepted answer earns its marks. null: needs judgement. */
+export function codeMarkParts(parts: readonly StructuredPart[], texts: readonly string[]): (PartResult | null)[] {
+  return parts.map((p, i) => {
+    const t = (texts[i] ?? "").trim();
+    if (!t) return { awarded: 0, by: "blank" };
+    return markShortAnswer(t, p.accepted) ? { awarded: p.marks, by: "code" } : null;
+  });
+}
+
+/** Pure. A part's marks from an evaluation verdict: all of them, half (rounded down), or none. Formative only. */
+export const partMarks = (marks: number, verdict: "correct" | "partly" | "incorrect"): number =>
+  verdict === "correct" ? marks : verdict === "partly" ? Math.floor(marks / 2) : 0;
+
+/** Pure. The practice marks of a structured answer: awarded of total, its share (the attempt score), and whether full. */
+export function practiceMarks(parts: readonly StructuredPart[], results: readonly PartResult[]): { awarded: number; total: number; score: number; correct: boolean } {
+  const total = parts.reduce((n, p) => n + p.marks, 0);
+  const awarded = results.reduce((n, r, i) => n + Math.max(0, Math.min(parts[i]?.marks ?? 0, r.awarded)), 0);
+  return { awarded, total, score: total ? awarded / total : 0, correct: total > 0 && awarded === total };
 }
 
 export type Mark = { correct: boolean; score: number; marking: "deterministic" | "self_graded" } | { needsJudgement: true };
@@ -154,6 +213,13 @@ export function markResponse(q: RevisionQuestion, r: Response): Mark {
   if (k.kind === "order" && r.kind === "order") {
     const right = r.order.filter((v, i) => v === k.order[i]).length;
     return { correct: right === k.order.length, score: right / k.order.length, marking: "deterministic" };
+  }
+  if (k.kind === "parts" && r.kind === "parts") {
+    // Marked by code only when every part is blank or matches what it accepts. Otherwise each remaining part is judged.
+    const coded = codeMarkParts(k.parts, r.texts);
+    if (coded.some(x => x === null)) return { needsJudgement: true };
+    const m = practiceMarks(k.parts, coded as PartResult[]);
+    return { correct: m.correct, score: m.score, marking: "deterministic" };
   }
   return { correct: false, score: 0, marking: "deterministic" };
 }
@@ -200,6 +266,7 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   const quote = text(r.sourceQuote, 500);
   const difficulty = difficultyOf(r);
   let d: RevisionDraft | null = null;
+  let structuredRaw: Record<string, unknown>[] = [];
   if (kind === "mrq") {
     const stem = text(r.stem, 400), options = strs(r.options)?.map(o => o.trim()), correct = nums(r.correct), rationale = text(r.rationale, 1200);
     if (stem && options && options.length >= 4 && options.length <= 6 && options.every(o => o && o.length <= 200) && correct && correct.length >= 1
@@ -221,6 +288,20 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
       if (new Set(pairs.map(p => norm(p.left!))).size !== pairs.length || new Set(pairs.map(p => norm(p.right!))).size !== pairs.length) return { ok: false, reason: "duplicate" };
       d = { stem, options: pairs.map(p => p.left!), answer: { matches: pairs.map(p => p.right!) }, rationale, sourceQuote: quote, difficulty };
     }
+  } else if (kind === "structured") {
+    // SCHOLAR-SQIE-CLOSE-01 (710): a lead-in and 2 to 4 parts, each a genuine prompt with whole marks and what it accepts.
+    const stem = text(r.stem, 800), rationale = text(r.rationale, 1200);
+    const parts = Array.isArray(r.parts) ? (r.parts as unknown[]).map(p => {
+      const x = (p ?? {}) as Record<string, unknown>;
+      return { raw: x, prompt: text(x.prompt, 400), marks: x.marks, accepted: (strs(x.accepted) ?? []).map(a => a.trim()).filter(Boolean) };
+    }) : null;
+    if (stem && rationale && quote && parts && parts.length >= STRUCTURED_PARTS_MIN && parts.length <= STRUCTURED_PARTS_MAX
+      && parts.every(p => p.prompt && isMarks(p.marks) && p.accepted.length >= 1 && p.accepted.length <= 4 && p.accepted.every(a => a.length <= 200))) {
+      const keys = parts.map(p => stemKey(p.prompt!));
+      if (new Set(keys).size !== parts.length || keys.includes(stemKey(stem))) return { ok: false, reason: "duplicate" };
+      d = { stem, options: [], answer: { parts: parts.map(p => ({ prompt: p.prompt!, marks: p.marks as number, accepted: [...new Set(p.accepted)] })) }, rationale, sourceQuote: quote, difficulty };
+      structuredRaw = parts.map(p => p.raw);
+    }
   } else if (kind === "sequence") {
     const stem = text(r.stem, 400), rationale = text(r.rationale, 1200), steps = strs(r.steps)?.map(s => s.trim());
     if (stem && rationale && quote && steps && steps.length >= 3 && steps.length <= 6 && steps.every(s => s && s.length <= 200)) {
@@ -233,18 +314,30 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   }
   if (!d) return { ok: false, reason: "malformed" };
   if (!norm(passage.content).includes(norm(d.sourceQuote))) return { ok: false, reason: "quote_not_in_passage" };
-  const all = [d.stem, ...d.options, ...Object.values(d.answer).flatMap(v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : typeof v === "string" ? [v] : [])), d.rationale].join("\n");
+  const partTexts = kind === "structured" ? (d.answer.parts as { prompt: string; accepted: string[] }[]).flatMap(p => [p.prompt, ...p.accepted]) : [];
+  const all = [d.stem, ...d.options, ...Object.values(d.answer).flatMap(v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : typeof v === "string" ? [v] : [])), ...partTexts, d.rationale].join("\n");
   if (findPatientIdentifiers(all).length) return { ok: false, reason: "identifier" };
   const grounding = [passage.content, ...referenceGrounding(checks.references ?? [])];
   if (groundingViolations(all, grounding).length) return { ok: false, reason: "ungrounded" };
 
   // ── SCHOLAR-QUESTION-INTELLIGENCE-01: the item asks, is new, has real distractors, agrees with itself ──
-  if (kind === "flashcard" ? !flashcardFrontAsks(d.stem) : kind !== "match" && !asksQuestion(d.stem)) return { ok: false, reason: "not_a_question" };
+  // A structured lead-in may set the scene: it is its PARTS that must each ask.
+  if (kind === "structured" ? !(d.answer.parts as { prompt: string }[]).every(p => asksQuestion(p.prompt))
+    : kind === "flashcard" ? !flashcardFrontAsks(d.stem) : kind !== "match" && !asksQuestion(d.stem)) return { ok: false, reason: "not_a_question" };
   if (checks.existing?.has(stemKey(d.stem))) return { ok: false, reason: "repeat" };
   if (kind === "mrq" && distractorProblem(d.options)) return { ok: false, reason: "weak_distractors" };
   const expected = expectedOf(kind, d);
-  if (kind !== "match" && kind !== "sequence" && !keyConsistent(expected, `${d.rationale}\n${d.stem}`, d.sourceQuote)) return { ok: false, reason: "inconsistent" };
+  if (kind !== "match" && kind !== "sequence" && kind !== "structured" && !keyConsistent(expected, `${d.rationale}\n${d.stem}`, d.sourceQuote)) return { ok: false, reason: "inconsistent" };
   if (!difficultyFits(d.difficulty, checks.difficulty ?? null)) return { ok: false, reason: "off_difficulty" };
+  if (kind === "structured") {
+    // Each part's rubric is grounded as every revision rubric is: an entry the notes do not hold is left out.
+    const draft = d;
+    const parts = (draft.answer.parts as { prompt: string; marks: number; accepted: string[] }[]).map((p, i) => ({
+      ...p, rubric: parseRubric(structuredRaw[i], grounding, { expectedAnswer: p.accepted[0], accepted: p.accepted, difficulty: draft.difficulty, references: checks.references }),
+    }));
+    const rubric = parseRubric(r, grounding, { expectedAnswer: expected || null, difficulty: draft.difficulty, references: checks.references });
+    return { ok: true, draft: { ...draft, answer: { parts, rubric } } };
+  }
   const rubric = parseRubric(r, grounding, {
     expectedAnswer: expected || null, accepted: kind === "short" ? (d.answer.accepted as string[]) : [], difficulty: d.difficulty, references: checks.references,
   });
@@ -258,6 +351,7 @@ function expectedOf(kind: Exclude<RevisionFormat, "mcq">, d: RevisionDraft): str
   if (kind === "flashcard") return String(a.back ?? "");
   if (kind === "mrq") return (a.correct as number[]).map(i => d.options[i]).join("; ");
   if (kind === "match") return d.options.map((o, i) => `${o}: ${(a.matches as string[])[i]}`).join("; ");
+  if (kind === "structured") return (a.parts as { accepted: string[] }[]).map(p => p.accepted[0]).join("; ");
   return (a.order as number[]).map(i => d.options[i]).join("; ");
 }
 

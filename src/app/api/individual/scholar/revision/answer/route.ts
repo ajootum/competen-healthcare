@@ -2,14 +2,14 @@
 export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
-import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
+import { requireIndividualContext, isGuardRefusal, type IndividualContext } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { clearHeldAnswer, getPassage, getQuestion, getRevisionSession, holdRevisionAnswer, recordRevisionAttempt, updateRevisionSession, isUuid } from "@/lib/individual/scholar/store";
+import { clearHeldAnswer, getPassage, getQuestion, getRevisionSession, holdRevisionAnswer, recordRevisionAttempt, updateRevisionSession, isUuid, type QuestionRow } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runEvaluate } from "@/lib/individual/scholar/generation";
-import { keyOf, markResponse, parseResponse, storedResponse } from "@/lib/individual/scholar/revision";
+import { codeMarkParts, keyOf, markResponse, parseResponse, partMarks, practiceMarks, storedResponse, structuredParts, type PartResult } from "@/lib/individual/scholar/revision";
 import { citationOf, feedbackView } from "@/lib/individual/scholar/revision-view";
 import { questionLinks } from "@/lib/individual/scholar/revision-links";
 import { MARKING_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD } from "@/lib/individual/scholar/config";
@@ -35,6 +35,9 @@ export const dynamic = "force-dynamic";
 // SCHOLAR-SQIE-02: recovery { id, mode, question } re-runs the SAME evaluation on the question's passage plus the
 // evidence that recovery found -- re-derived here from the learner's own notes and the approved library, never taken
 // from the request -- under the same checks. Published abstracts are not added: the evaluation reads notes only.
+// SCHOLAR-SQIE-CLOSE-01 (710): a STRUCTURED question { response: { texts: [one per part] }, selfGrades? } is marked part by
+// part -- blank or matching what the part accepts by code, otherwise by the same evaluation (activity `evaluate`, one
+// metered call per part, the part's rubric), otherwise by the student -- and its practice marks are formative.
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");
@@ -65,6 +68,13 @@ export async function POST(req: Request) {
   if (body?.reveal === true) {
     if (q.kind !== "flashcard") return NextResponse.json({ error: "Only a flashcard is revealed before answering." }, { status: 400 });
     return NextResponse.json({ back: feedbackView(q, { correct: true, score: null, marking: "self_graded" }).answer, source: { quote: q.sourceQuote, citation: citationOf(q), materialId: q.materialId, chunkId: q.chunkId } });
+  }
+
+  // ── SCHOLAR-SQIE-CLOSE-01: a structured question, part by part ──
+  if (q.kind === "structured") {
+    // Offered only with feedback after each answer (sessions route): a multi-part answer is not held to the end.
+    if (feedbackMode === "end" && !finished) return NextResponse.json({ error: "Structured questions are answered in sessions with feedback after each answer." }, { status: 409 });
+    return answerStructured(ctx, req, body, q, sessionId, answeredCount);
   }
 
   const r = held ? { kind: "text" as const, text: held.text } : parseResponse(q, body?.response);
@@ -157,5 +167,87 @@ export async function POST(req: Request) {
     recorded: true,
     feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, evaluation, evaluationParts, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
     ...(recovered?.ok && evaluator ? { recovered: recoveredReply(recovered, true) } : {}),
+  });
+}
+
+/**
+ * SCHOLAR-SQIE-CLOSE-01. One structured answer: each part marked by code where code can, else by AI evaluation where
+ * policy and the student's AI allow (stopping at the first part it cannot judge), else by the student's own judgement
+ * of every part code could not mark. One attempt, labelled for how it was marked; practice marks are formative.
+ */
+async function answerStructured(ctx: IndividualContext, req: Request, body: any, q: QuestionRow, sessionId: string | null, answeredCount: number) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const parts = structuredParts(q);
+  const r = parseResponse(q, body?.response);
+  if (!r || r.kind !== "parts") return NextResponse.json({ error: "Answer at least one part first." }, { status: 400 });
+  if (r.texts.some(t => findPatientIdentifiers(t).length)) return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
+  const policy = await loadIndividualPolicy(ctx.admin);
+  const srs = { masteryReps: policy.scholarSrsMasteryReps, masteryDays: policy.scholarSrsMasteryDays, maxIntervalDays: policy.scholarSrsMaxIntervalDays, harderIntervalPercent: policy.scholarSrsHarderIntervalPercent };
+  const results: (PartResult | null)[] = codeMarkParts(parts, r.texts);
+  let evaluator: { model: string; promptVersion: string } | null = null;
+  const selfGrades: unknown[] | null = Array.isArray(body?.selfGrades) ? body.selfGrades : null;
+
+  if (results.some(x => x === null)) {
+    if (selfGrades) {
+      // The student's own judgement, for every part code could not mark. Nothing the AI said earlier is kept as a mark.
+      for (let i = 0; i < parts.length; i++) if (results[i] === null) {
+        if (typeof selfGrades[i] !== "boolean") return NextResponse.json({ error: "Mark each part yourself first." }, { status: 400 });
+        results[i] = { awarded: selfGrades[i] ? parts[i].marks : 0, by: "self" };
+      }
+    } else {
+      let why = "Some parts do not match the stored answers word for word, so compare them yourself.";
+      if (policy.scholarShortAnswerMarking === "ai_then_self") {
+        const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate");
+        const pre = standing.available ? await aiPreflight(ctx) : null;
+        const passage = standing.available && !pre ? await getPassage(ctx.admin, ctx.userId, q.chunkId) : null;
+        if (!standing.available) why = `${standing.message ?? "AI evaluation is not available right now."} Compare your answers yourself.`;
+        else if (passage) {
+          for (let i = 0; i < parts.length; i++) {
+            if (results[i] !== null) continue;
+            const part = parts[i];
+            const ai = scholarAiRunner(ctx, req, "evaluate", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\n${part.prompt}\n${r.texts[i]}`, passages: [passage] }), `p${i + 1}`);
+            const e = await runEvaluate(ctx.userId, { question: `${q.stem}\n${part.prompt}`, accepted: part.accepted, answer: r.texts[i], passage, rubric: part.rubric }, ai.run);
+            const refused = ai.refusal();
+            await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_evaluate", sessionId, {
+              question_id: q.id, part: i + 1, outcome: refused ? `refused:${refused.error}` : !e.ok ? `error:${e.error}` : e.evaluation.ok ? `shown:${e.evaluation.verdict}` : `withheld:${e.evaluation.reason}`,
+              model: e.ok ? e.model : null, prompt_version: e.ok ? e.promptVersion : null,
+            });
+            if (!refused && e.ok) {
+              const o = answerOutcome(e.evaluation.ok ? null : e.evaluation.reason);
+              await recordScholarOutcome(ctx.admin, ai, { operation: "individual_scholar_evaluate", outputKind: "other", outcome: o.outcome, reasons: o.reasons, promptVersion: e.promptVersion });
+            }
+            if (!refused && e.ok && e.evaluation.ok) {
+              results[i] = { awarded: partMarks(part.marks, e.evaluation.verdict), by: "ai", feedback: e.evaluation.feedback, parts: e.evaluation.parts ?? null };
+              evaluator = { model: e.model, promptVersion: e.promptVersion };
+            } else {
+              // No more AI is spent on the rest: the student compares every part code could not mark.
+              why = refused ? "AI evaluation is not available for this right now, so compare your answers yourself." : "The AI could not judge every part against your notes, so compare them yourself.";
+              break;
+            }
+          }
+        }
+      }
+      if (results.some(x => x === null)) {
+        return NextResponse.json({
+          needsSelfGrade: true, reason: why, label: MARKING_LABEL.self_graded,
+          parts: parts.map((p, i) => ({ prompt: p.prompt, marks: p.marks, accepted: p.accepted, byCode: results[i]?.by === "blank" || results[i]?.by === "code",
+            ai: results[i]?.by === "ai" ? { awarded: results[i]!.awarded, feedback: results[i]!.feedback ?? null, label: MARKING_LABEL.ai_evaluation } : null })),
+        });
+      }
+    }
+  }
+
+  const final = results as PartResult[];
+  const m = practiceMarks(parts, final);
+  const marking = final.some(x => x.by === "self") ? "self_graded" as const : evaluator ? "ai_evaluation" as const : "deterministic" as const;
+  const stored = storedResponse(r);
+  const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
+    chosenIndex: null, response: { ...stored.response, awarded: final.map(x => x.awarded) }, correct: m.correct, score: m.score, marking,
+    evaluator: marking === "ai_evaluation" ? evaluator : null, sessionId, srs,
+  });
+  if (!saved.ok) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });
+  if (sessionId) await updateRevisionSession(ctx.admin, ctx.userId, sessionId, { position: answeredCount + 1 });
+  return NextResponse.json({
+    recorded: true,
+    feedback: feedbackView(q, { correct: m.correct, score: m.score, marking, structured: final, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
   });
 }
