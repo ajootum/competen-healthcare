@@ -52,7 +52,11 @@ export type ParsedQuestion = {
   flags: QuestionFlag[];
 };
 
-export type ParsedPaper = { instructions: string | null; questions: ParsedQuestion[]; flags: PaperFlag[] };
+export type ParsedPaper = {
+  instructions: string | null; questions: ParsedQuestion[]; flags: PaperFlag[];
+  /** Every numbered item read, in order, and whether it is a question (false: a statement, not kept as one). */
+  items: { number: string; question: boolean }[];
+};
 
 export const EXAM_QUESTION_MAX = 300;
 // v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): a numbered line is a question only when something says it asks -- a question
@@ -199,6 +203,8 @@ export function parsePaper(lines: readonly PaperLine[], opts: { emptyPages?: rea
     || out.some((a, j) => asks[j] && o.number.startsWith(`${a.number}(`))
     || (o.leadIn && out.some((d, j) => asks[j] && d.number.startsWith(`${o.number}(`))));
   const statements = keep.filter(k => !k).length;
+  // A bare number with nothing after it is neither: it is not kept as a question either (below).
+  const items = out.flatMap((o, i) => o.stem.join("\n").trim().replace(MARKS_RE, "").trim() || o.instructions.length || o.options.length ? [{ number: o.number.slice(0, 40), question: keep[i] }] : []);
 
   const questions: ParsedQuestion[] = [];
   for (const [i, o] of out.entries()) {
@@ -230,7 +236,7 @@ export function parsePaper(lines: readonly PaperLine[], opts: { emptyPages?: rea
   let kept = questions;
   if (questions.length > EXAM_QUESTION_MAX) { kept = questions.slice(0, EXAM_QUESTION_MAX); flags.push({ kind: "too_many_questions", kept: EXAM_QUESTION_MAX }); }
   const instructions = preamble.join("\n").trim().slice(0, 4000) || null;
-  return { instructions, questions: kept, flags };
+  return { instructions, questions: kept, flags, items };
 }
 
 /** The words a student reads for each flag, beside the question or the paper. */
@@ -254,11 +260,71 @@ export function paperFlagText(f: PaperFlag): string {
   }
 }
 
+/** The verdict a student reads on a material that is notes rather than a paper. */
+export const NOTES_VERDICT = "This looks like notes rather than an exam paper: its numbered lines are statements, not questions.";
 /** What a student reads when a material is notes rather than a paper, with the way on (revise from this material). */
-export const NOTES_NOT_PAPER = "This looks like notes rather than an exam paper: its numbered lines are statements, not questions. Generate practice questions from it instead.";
+export const NOTES_NOT_PAPER = `${NOTES_VERDICT} Generate practice questions from it instead.`;
 
 /** True when a parsed paper is notes rather than a paper: it is then not kept as a paper. */
 export const isNotesNotPaper = (p: Pick<ParsedPaper, "flags">): boolean => p.flags.some(f => f.kind === "looks_like_notes");
+
+// ── A PAPER KEPT BY AN EARLIER PARSER ── SCHOLAR-SQIE-CLOSE-01 P0 ─────────────────────────────────────────────────
+//
+// A paper prepared before v2 may hold numbered NOTES as "questions" (v1 kept every numbered line). When one is opened it
+// is judged again with today's rules, IN THE RESPONSE ONLY: its paper, question and answer rows are never changed.
+//
+// Basis. The material's own text, read again with parsePaper, is the primary basis: it is exactly what a fresh prepare
+// would conclude, and it still sees what the stored rows lost (a "Question N" label, a section's "Answer all questions"
+// line). Each stored row is matched to the item with the same number, in order (a number can repeat across sections).
+// Where that text cannot serve -- it could not be read, it has no item of that number, or the paper was partly
+// transcribed by AI (those lines were never kept as text) -- the row is judged from what is stored, with the same tests
+// v2 applies: options, marks, a question cue, the paper's or the section's instruction, an unreadable mark, and a part
+// or lead-in of a row that asks.
+
+/** Whether a paper was read by the current parser (a transcribed paper's extractor carries "+ai-transcription"). */
+export const isCurrentParser = (extractor: string): boolean => extractor === PAPER_PARSER || extractor.startsWith(`${PAPER_PARSER}+`);
+
+export type LegacyRow = Pick<ParsedQuestion, "number" | "section" | "instructions" | "stem" | "options" | "marks" | "flags"> & { id: string; source?: "text_layer" | "ai_transcription" };
+export type LegacyJudgement = {
+  /** Mostly (or only) statements: the student is sent to practise from the material instead. */
+  notesLike: boolean;
+  /** The stored rows that are statements, not questions: never offered as a question to answer. */
+  statementIds: string[];
+  statements: number;
+  questions: number;
+  basis: "material_text" | "stored_questions" | "both";
+};
+
+/** Pure. A paper kept by an earlier parser, judged with today's rules. `reparsed`: its material text through parsePaper, or null. */
+export function judgeLegacyPaper(paper: { extractor: string; instructions: string | null }, rows: readonly LegacyRow[], reparsed: Pick<ParsedPaper, "items"> | null): LegacyJudgement {
+  // The material text only stands for rows that came from it: AI-transcribed lines were never kept as text.
+  const text = paper.extractor.includes("ai-transcription") ? null : reparsed;
+  const byKey = new Map<string, boolean>();
+  const seen = new Map<string, number>();
+  for (const it of text?.items ?? []) { const k = seen.get(it.number) ?? 0; seen.set(it.number, k + 1); byKey.set(`${it.number}#${k}`, it.question); }
+  const paperCue = CONTEXT_CUE.test(paper.instructions ?? "");
+  const asks = rows.map(r => paperCue || (!!r.section && CONTEXT_CUE.test(r.section)) || r.options.length > 0 || r.marks !== null
+    || questionLike([r.instructions ?? "", r.stem].join(" ")) || r.stem.includes(UNREADABLE_MARK));
+  const stored = rows.map((r, i) => asks[i]
+    || rows.some((a, j) => asks[j] && r.number.startsWith(`${a.number}(`))
+    || (r.flags.some(f => f.kind === "lead_in") && rows.some((d, j) => asks[j] && d.number.startsWith(`${r.number}(`))));
+  const count = new Map<string, number>();
+  let fromText = 0;
+  const question = rows.map((r, i) => {
+    const k = count.get(r.number) ?? 0; count.set(r.number, k + 1);
+    const t = r.source === "ai_transcription" ? undefined : byKey.get(`${r.number}#${k}`);
+    if (t === undefined) return stored[i];
+    fromText++;
+    return t;
+  });
+  const statementIds = rows.filter((_, i) => !question[i]).map(r => r.id);
+  const statements = statementIds.length, questions = rows.length - statements;
+  return {
+    notesLike: statements > 0 && ((statements >= NOTES_MIN_STATEMENTS && statements > questions) || questions === 0),
+    statementIds, statements, questions,
+    basis: fromText === rows.length ? "material_text" : fromText === 0 ? "stored_questions" : "both",
+  };
+}
 
 /**
  * Pure. The front of a revision card made from a paper question, or null when it does not read as a question (a
