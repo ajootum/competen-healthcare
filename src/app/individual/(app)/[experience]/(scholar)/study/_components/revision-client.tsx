@@ -231,8 +231,8 @@ export function SavedSets({ sets }: { sets: { id: string; title: string; questio
 
 type SessionState = { id: string | null; mode: string; feedback: "immediate" | "end"; status?: string; total: number; position: number };
 /** 425, owner decision R4: a short answer held until the end, then graded by the student against its notes. */
-type HeldGrade = { response: string; accepted: string[]; rationale: string; source: RevisionFeedback["source"]; label: string };
-type Answered = { questionId: string; feedback?: RevisionFeedback; held?: boolean; selfGrade?: HeldGrade };
+export type HeldGrade = { response: string; accepted: string[]; rationale: string; source: RevisionFeedback["source"]; label: string };
+export type Answered = { questionId: string; feedback?: RevisionFeedback; held?: boolean; selfGrade?: HeldGrade };
 type Summary = { answered: number; of: number; correct: number; toGrade?: number; byMarking: Record<string, number> };
 /** SCHOLAR-SQIE-CLOSE-01: a structured part the student marks themselves, with what code or the AI already said of it. */
 type PartToGrade = { prompt: string; marks: number; accepted: string[]; byCode: boolean; ai: { awarded: number; feedback: string | null; label: string } | null };
@@ -330,7 +330,7 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
   );
 }
 
-function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, onNext }: {
+export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, onNext }: {
   item: RevisionItemView; sessionId: string | null; feedbackMode: "immediate" | "end"; answered: Answered | null;
   onAnswered: (a: Answered) => void; onNext: () => void;
 }) {
@@ -535,7 +535,7 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
 
 /** After an answer: right or not against the notes, how it was marked, the source, and what to do about a mistake. */
 /** At the end of the session: a held short answer beside what the notes accept, the explanation and the source, graded by the student. */
-function GradeAtEnd({ questionId, sessionId, g, onGraded }: { questionId: string; sessionId: string; g: HeldGrade; onGraded: (a: Answered) => void }) {
+export function GradeAtEnd({ questionId, sessionId, g, onGraded }: { questionId: string; sessionId: string; g: HeldGrade; onGraded: (a: Answered) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function grade(selfGrade: boolean) {
@@ -578,7 +578,7 @@ export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackPa
   );
 }
 
-function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string }) {
+export function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string }) {
   const basis = f.library ? "the Competen library answer" : "your notes";
   return (
     <div aria-live="polite" className={`mt-3 rounded-xl border p-4 ${f.correct ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
