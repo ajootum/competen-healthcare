@@ -3,6 +3,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { checkEvidence, type AttestedCheck } from "@/lib/holdings/research/registry";
 
 // THE RESEARCH SOURCES & EVIDENCE STUDIO -- COMPETEN-RESEARCH-01 ADDENDUM V2 item 12. Eight parts, one draft. Every button
 // posts to /api/hq/research-sources, which writes a CONFIG-002 draft; what runs changes only when an owner publishes.
@@ -231,14 +232,19 @@ function ProviderEditor({ r, caps, disabled, onSave }: { r: any; caps: Cap[]; di
 function ReadinessControls({ r, next, ready, adapter, isOwner, busy, onCheck, onAttest, onMove }: {
   r: any; next: string | null; ready: boolean; adapter: boolean; isOwner: boolean; busy: boolean; onCheck: () => void; onAttest: (kind: string, note: string) => void; onMove: (to: string) => void;
 }) {
-  const [kind, setKind] = useState<string>("evaluation"), [note, setNote] = useState("");
+  // What each check rests on is filled in from the source's own record (registry.ts checkEvidence), for the person to
+  // review and edit, never typed from memory. Null: the record does not settle it, and the page says so.
+  const suggest = (k: string) => checkEvidence(r, k as AttestedCheck) ?? "";
+  const [kind, setKind] = useState<string>("evaluation"), [note, setNote] = useState(() => suggest("evaluation"));
+  const unknown = !checkEvidence(r, kind as AttestedCheck);
   const ownerStep = next === "approved" || next === "active";
   return (
     <div className="mt-2 flex flex-wrap items-end gap-2">
       {adapter && r.type !== "external_link" && <button type="button" className={ghost} disabled={busy} onClick={onCheck}>Run connectivity check</button>}
-      <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); onAttest(kind, note); setNote(""); }}>
-        <label className="text-[12.5px] text-gray-700">Record <select className={input} value={kind} onChange={e => setKind(e.target.value)}>{CHECKS.filter(([k]) => k !== "paidApproval" || isOwner).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
-        <label className="text-[12.5px] text-gray-700">What it rests on <input className={`${input} w-64`} value={note} onChange={e => setNote(e.target.value)} minLength={10} maxLength={500} required /></label>
+      <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); onAttest(kind, note); setNote(suggest(kind)); }}>
+        <label className="text-[12.5px] text-gray-700">Record <select className={input} value={kind} onChange={e => { setKind(e.target.value); setNote(suggest(e.target.value)); }}>{CHECKS.filter(([k]) => k !== "paidApproval" || isOwner).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+        <label className="text-[12.5px] text-gray-700">What it rests on (from the source&apos;s record; review it) <textarea rows={2} className={`${input} block w-[28rem] max-w-full`} value={note} onChange={e => setNote(e.target.value)} minLength={10} maxLength={500} required placeholder={unknown ? "Not known from the record yet: say what this rests on" : undefined} /></label>
+        {unknown && <p className="w-full text-[12px] text-amber-900">The source&apos;s record does not settle this check yet. Record it only once you know what it rests on.</p>}
         <button type="submit" className={ghost} disabled={busy}>Record</button>
       </form>
       {next && <button type="button" className={btn} disabled={busy || !ready || (ownerStep && !isOwner)} onClick={() => onMove(next)}>Move to {next}</button>}

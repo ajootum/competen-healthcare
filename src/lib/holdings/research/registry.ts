@@ -312,3 +312,42 @@ export function notInvocable(r: ProviderRecord | undefined, c: InvokeContext): s
 /** Pure. The providers that may be called for this, in priority order. */
 export const invocableProviders = (reg: Registry, c: InvokeContext): ProviderRecord[] =>
   Object.values(reg).filter(r => notInvocable(r, c) === null).sort((a, b) => a.priority - b.priority);
+
+/** The checks a person records on the Research Sources page (connectivity is the server's own). */
+export type AttestedCheck = "evaluation" | "access" | "licensing" | "governance" | "cost" | "paidApproval";
+
+const UNSETTLED = /\bto (confirm|define)\b/i;
+const day = (iso: string) => iso.slice(0, 10);
+
+/**
+ * Pure. What a check rests on, written FROM THE RECORD, so the person recording it reviews facts the registry already
+ * holds instead of typing facts they cannot verify. Null when the record does not settle it (licensing "to confirm",
+ * a commercial source with no price, no connectivity yet): the page then says so and the person must supply it.
+ * It never records anything itself; the person still presses Record, and owner steps stay the owner's.
+ */
+export function checkEvidence(r: ProviderRecord, kind: AttestedCheck): string | null {
+  const link = r.type === "external_link";
+  const docs = r.docsUrl ? ` Documentation: ${r.docsUrl}.` : "";
+  const commercial = /commercial/i.test(r.licensing);
+  switch (kind) {
+    case "evaluation": {
+      if (link) return `${r.name} is a plain link for the learner to follow. Nothing is retrieved, so there is no output to evaluate.`;
+      const c = r.checks.connectivity;
+      if (!c?.ok) return null;
+      return `Adapter for ${r.name} is in code (${r.capabilities.join(", ")}), and the server's connectivity check passed on ${day(c.at)}.${docs}`;
+    }
+    case "access":
+      if (link) return "No API and no key: Competen only builds a link. Nothing is fetched, scraped or automated.";
+      return `${r.needsKey ? `Needs a key, held only in the deployment as ${r.secretRef}.` : "Public service, no API key."} Limit ${r.rateLimitPerMinute} requests per minute, ${r.dailyRequestBudget} per day.${docs}`;
+    case "licensing":
+      return r.licensing && !UNSETTLED.test(r.licensing) ? r.licensing : null;
+    case "governance":
+      return `Used only by ${r.products.join(", ") || "no product"} for ${r.activities.map(a => a.replace(/_/g, " ")).join(", ") || "no activity"}. Retained ${r.retentionDays} days, cached ${r.cacheDays} days. The product's own evidence rules decide what may ground an answer.`;
+    case "cost":
+      if (r.costPerRequestUsd > 0) return `USD ${r.costPerRequestUsd} per request, at most USD ${r.dailySpendBudgetUsd} per day.`;
+      return commercial ? null : "No charge per request: a free public service.";
+    case "paidApproval":
+      if (r.costPerRequestUsd > 0) return `Owner approves spend of USD ${r.costPerRequestUsd} per request, up to USD ${r.dailySpendBudgetUsd} per day.`;
+      return commercial ? null : "No spend: a free service. Not required to activate.";
+  }
+}
