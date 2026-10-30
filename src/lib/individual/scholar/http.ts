@@ -95,6 +95,10 @@ export async function scholarRisk(admin: unknown, userId: string, input: {
   const [links, topics] = await Promise.all([input.competencyIds ? null : sectionLinks(admin, userId, chunkIds), topicsOfSections(admin, userId, chunkIds)]);
   return {
     text: [input.text ?? "", ...input.passages.map(p => p.content)].filter(Boolean).join("\n\n").slice(0, RISK_TEXT_MAX),
+    // SQIE D-1: the student's own request (their question, attempt or chosen topic) apart from the notes passed as
+    // context. Rules of scope "request" (a real patient now, giving now, acting now, personal safety) read only this;
+    // every other rule, and the identifiable-details rule, still reads the notes too. No request words: "".
+    requestText: (input.text ?? "").slice(0, RISK_TEXT_MAX),
     competencyIds: [...new Set(input.competencyIds ?? (links ?? []).map(l => l.competencyId))].slice(0, RISK_MAX_TERMS),
     topicTerms: [...new Set([...topics.values()].flat())].slice(0, RISK_MAX_TERMS),
     actorId: userId, purpose: input.purpose ?? null,

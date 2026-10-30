@@ -175,7 +175,10 @@ export async function POST(req: Request) {
               const r = await runQuestions(ctx.userId, "mcq", passage, Math.max(call.count, 3), ai.run, { context, existing: stems });
               if (r.ok) {
                 calls = r.calls; r.check.kept.forEach(d => stems.add(stemKey(d.stem)));
-                const s = await insertQuestions(ctx.admin, ctx.userId, { passage, kind: "mcq", drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId }); ids = s.ids; outcome = `kept:${ids.length}`; measured = { accepted: ids.length, rejected: r.check.dropped.length, reasons: r.check.dropped.map(d => d.reason), promptVersion: r.promptVersion };
+                const s = await insertQuestions(ctx.admin, ctx.userId, { passage, kind: "mcq", drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId }); ids = s.ids;
+                // SQIE D-6: the reasons multiple-choice items were dropped, counted (never their text), as for the revision kinds.
+                const reasons = r.check.dropped.map(d => d.reason), why = [...new Set(reasons)].map(x => `${x}:${reasons.filter(y => y === x).length}`).join("/");
+                outcome = `kept:${ids.length},dropped:${reasons.length}${why ? `(${why})` : ""}`; measured = { accepted: ids.length, rejected: r.check.dropped.length, reasons: r.check.dropped.map(d => d.reason), promptVersion: r.promptVersion };
               }
               else outcome = `error:${r.error}`;
             } else {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assessSufficiency, externalEvidence, generationInputs, keyTermsOf, matchedTerms, parseRecoveryMode, recoveryKey, retrievedOf, runRecovery,
-  suggestedActions, summariseRecovery, tierPlan, topicKeywords, widerMode, type RecoverySources, type RecoveryOutcomeRow,
+  suggestedActions, summariseRecovery, tierPlan, topicKeywords, widerMode, restatesOnly, withoutQuestion, type RecoverySources, type RecoveryOutcomeRow,
 } from "./evidence-recovery";
 import { narrowPlan, type LearnResearch } from "./learn-research";
 import type { Passage } from "./generation";
@@ -158,17 +158,35 @@ describe("the sufficiency decision is deterministic", () => {
     expect(s).toMatchObject({ verdict: "insufficient", canExplain: false });
     expect(s.unanswered).toEqual(keyTermsOf("hypercapnic respiratory failure"));
   });
-  it("notes containing most key terms: sufficient; fewer: partial with what remains unanswered", async () => {
+  it("SQIE D-4: notes alone are not an approved reference: insufficient, all unanswered, never sufficient beside unanswered", async () => {
     const f = fakeSources({ notes: [passage("c1", "Hypercapnic respiratory failure follows uncontrolled oxygen.")] });
     const all = await runRecovery({ question: "hypercapnic respiratory failure", mode: "notes_only" }, tierPlan("notes_only", OPEN, true), f.sources, { wider: null });
+    // The notes are still shown, with what they mention; they just cannot ground an explanation on their own.
+    expect(all.evidence.notes[0].matched).toEqual(["hypercapnic", "respiratory", "failure"]);
+    expect(all.sufficiency).toMatchObject({ verdict: "insufficient", canExplain: false, covered: [], unanswered: ["hypercapnic", "respiratory", "failure"] });
+    expect([all.explainable, all.state, all.generation]).toEqual([false, "unanswered", null]);
+  });
+  it("notes with an approved library reference: sufficient when most key terms are covered, else partial with what remains", async () => {
+    const lib = (title: string) => [{ origin: "library" as const, kind: "competency" as const, itemId: "k1", version: "1", code: "R1", title, outcome: null, text: title, status: "Clinically approved", approved: true }];
+    const f = fakeSources({ notes: [passage("c1", "Hypercapnic respiratory failure follows uncontrolled oxygen.")], library: lib("Respiratory failure") });
+    const all = await runRecovery({ question: "hypercapnic respiratory failure", mode: "notes_and_library" }, tierPlan("notes_and_library", OPEN, true), f.sources, { wider: null });
     expect(all.sufficiency).toMatchObject({ verdict: "sufficient", canExplain: true, unanswered: [] });
-    // More of the learner's own notes are not approved references: no "Explain using approved references" from them alone.
-    expect(all.explainable).toBe(false);
-    expect(all.generation).toBeNull();
-    const g = fakeSources({ notes: [passage("c1", "Respiratory assessment is routine.")] });
-    const part = await runRecovery({ question: "hypercapnic respiratory failure", mode: "notes_only" }, tierPlan("notes_only", OPEN, true), g.sources, { wider: null });
+    expect([all.explainable, all.state]).toEqual([true, "explanation_available"]);
+    const g = fakeSources({ notes: [passage("c1", "Respiratory assessment is routine.")], library: lib("Respiratory assessment") });
+    const part = await runRecovery({ question: "hypercapnic respiratory failure", mode: "notes_and_library" }, tierPlan("notes_and_library", OPEN, true), g.sources, { wider: null });
     expect(part.sufficiency).toMatchObject({ verdict: "partial", canExplain: true });
     expect(part.sufficiency.unanswered).toEqual(["hypercapnic", "failure"]);
+  });
+  it("SQIE D-4: a chunk that only restates the question (the learner's own paper) is not evidence for it", async () => {
+    const q = "Question 1: Antibiotic choice in pyelonephritis";
+    const f = fakeSources({ notes: [passage("p1", "1. Antibiotic choice in pyelonephritis (4 marks)", "paper"), passage("n1", "Antibiotic choice in pyelonephritis\nAntibiotics follow the local guideline; send an MSU for culture first.", "notes")] });
+    const r = await runRecovery({ question: q, mode: "notes_only" }, tierPlan("notes_only", OPEN, true), f.sources, { wider: null });
+    expect(r.evidence.notes.find(n => n.chunkId === "p1")?.matched).toEqual([]);
+    // A note with the question as its heading and an explanation under it stays evidence, with all it mentions.
+    expect(r.evidence.notes.find(n => n.chunkId === "n1")?.matched).toEqual(["antibiotic", "choice", "pyelonephritis"]);
+    expect(withoutQuestion("Antibiotic choice in pyelonephritis (4 marks)", q)).toBe("4 marks");
+    // A short topic is what notes say: never taken out.
+    expect(restatesOnly("Hypercapnic respiratory failure follows uncontrolled oxygen.", "hypercapnic respiratory failure", ["hypercapnic", "respiratory", "failure"])).toBe(false);
   });
   it("a details-only external reference is reading, never evidence; an unapproved library item never counts", () => {
     const s = assessSufficiency("oxygen copd", {
@@ -196,7 +214,9 @@ describe("the sufficiency decision is deterministic", () => {
     f.sources.external = async () => { throw new Error("network"); };
     const r = await runRecovery({ question: "oxygen copd", mode: "notes_and_references" }, tierPlan("notes_and_references", OPEN, true), f.sources, { wider: null });
     expect(r.external).toMatchObject({ ran: false, reason: "unavailable" });
-    expect(r.sufficiency.canExplain).toBe(true);
+    expect(r.evidence.notes.map(n => n.matched)).toEqual([["oxygen", "copd"]]);
+    // SQIE D-4: notes alone are not an approved reference, so the state and the verdict agree: nothing to explain from.
+    expect([r.sufficiency.verdict, r.sufficiency.canExplain, r.state]).toEqual(["insufficient", false, "reading_only"]);
   });
   it("actions: wider first, explain only with evidence, continue always", () => {
     expect(suggestedActions(true, "notes_and_references").map(a => a.action)).toEqual(["find_resources", "explain_with_references", "continue_with_notes"]);
@@ -326,5 +346,22 @@ describe("Scholar's narrowing only ever narrows the engine's plan", () => {
   it("an engine rule that is off stays off", () => {
     const off = { ...plan, policy: { ...plan.policy, rules: { ...plan.policy.rules, doiVerification: false } } };
     expect(narrowPlan(off, { providers: ["pubmed", "crossref"], maxResults: 5, timeoutMs: 5000 }).policy.rules.doiVerification).toBe(false);
+  });
+});
+
+// SQIE D-3 (staging 30 Oct): "Question 1: antibiotic choice in pyelonephritis" gave key terms with the numbering.
+describe("SQIE D-3: key terms and topic keywords leave out labels, numbering and command words", () => {
+  it("a paper question gives its topic words only", () => {
+    const q = "Question 1: Antibiotic choice in pyelonephritis (4 marks)";
+    expect(keyTermsOf(q)).toEqual(["antibiotic", "choice", "pyelonephritis"]);
+    const k = topicKeywords(q);
+    expect(k.ok && k.keywords).toEqual(["antibiotic", "choice", "pyelonephritis"]);
+  });
+  it("drops Q and part labels, roman numerals and command words", () => {
+    expect(keyTermsOf("Q2 Part b (iii) Explain and describe how ascending infection reaches the kidney. List the symptoms.")).toEqual(["ascending", "infection", "reaches", "kidney", "symptoms"]);
+    expect(keyTermsOf("Outline and discuss: why is an MSU culture sent before antibiotics?")).toEqual(["msu", "culture", "sent", "antibiotics"]);
+  });
+  it("keeps a clinical word that is also a command word where it is not one ('mental state')", () => {
+    expect(keyTermsOf("State the parts of a mental state examination")).toEqual(["mental", "state", "examination"]);
   });
 });

@@ -115,6 +115,20 @@ describe("R1/R3: which questions a session offers", () => {
     expect(plan.reduce((n, p) => n + p.count, 0)).toBe(9);
     expect(planGeneration({ shortfall: 100, chunkIds: ["a", "b", "c", "d"], formats: ["mcq", "short"], existing: new Set() }).length).toBe(8);
   });
+  it("SQIE D-6: a small shortfall is shared, so every asked format is written (not the first format only)", () => {
+    // Staging 30 Oct: short answer + multiple choice from one note. The first format took the whole shortfall.
+    for (const formats of [["short", "mcq"], ["mcq", "short"]] as const) {
+      const plan = planGeneration({ shortfall: 3, chunkIds: ["note"], formats, existing: new Set() });
+      expect(plan.map(p => p.kind).sort()).toEqual(["mcq", "short"]);
+      expect(plan.reduce((n, p) => n + p.count, 0)).toBe(3);
+    }
+    expect(planGeneration({ shortfall: 5, chunkIds: ["note"], formats: ["mcq", "short"], existing: new Set() }).map(p => `${p.kind}:${p.count}`)).toEqual(["mcq:3", "short:2"]);
+  });
+  it("SQIE D-6: today's new questions are interleaved by format, so both asked formats reach the session", () => {
+    const made = [P("m1", { createdAt: "2026-10-30T10:00:01" }), P("m2", { createdAt: "2026-10-30T10:00:02" }), P("m3", { createdAt: "2026-10-30T10:00:03" }),
+      P("s1", { kind: "short", createdAt: "2026-10-30T10:00:04" }), P("s2", { kind: "short", createdAt: "2026-10-30T10:00:05" }), P("s3", { kind: "short", createdAt: "2026-10-30T10:00:06" })];
+    expect(pickQuestions({ mode: "today", pool: made, quantity: 3, formats: ["short", "mcq"], difficulty: "any", seed: "s" }).ids).toEqual(["m1", "s1", "m2"]);
+  });
 });
 
 describe("R3: the shared SM-2, within the policy's bounds", () => {

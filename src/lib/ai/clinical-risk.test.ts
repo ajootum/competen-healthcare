@@ -86,3 +86,24 @@ describe("no silent downgrade below a risk tier's model floor", () => {
     expect(activityAt(p, "optimised", "teach", bal(75), "high_risk_clinical")).toMatchObject({ available: false, refusal: "level_insufficient" });
   });
 });
+
+describe("SQIE D-1: rule scope", () => {
+  const p = resolveRiskPolicy({ rules: [
+    { id: "high.now", label: "Now", tier: "high_risk_clinical", scope: "request", all: [["urgent*"], ["patient*"]] },
+    { id: "high.any", label: "Any", tier: "high_risk_clinical", all: [["nhs number"]] },
+    { id: "clin.topic", label: "Topic", tier: "clinical_educational", scope: "nonsense", all: [["patient*"]] },
+  ] });
+  const S = (text: string, requestText?: string): ResolvedRiskSubject => ({ text, requestText, competencyRisks: [], frameworkCodes: [] });
+  it("parses scope; absent or unknown is subject", () => {
+    expect(p.rules.map(r => r.scope)).toEqual(["request", "subject", "subject"]);
+  });
+  it("a request-scoped rule reads the request text only; a subject rule reads everything", () => {
+    expect(classifyRisk(p, S("Explain this.\n\nEscalate urgently if the patient is unwell.", "Explain this.")).tier).toBe("clinical_educational");
+    expect(classifyRisk(p, S("Urgent: my patient\n\nnotes", "Urgent: my patient")).rule).toBe("high.now");
+    expect(classifyRisk(p, S("Explain\n\nnhs number 1", "Explain")).rule).toBe("high.any");
+  });
+  it("no request text: the whole subject, as before; no subject at all stays high", () => {
+    expect(classifyRisk(p, S("Explain this.\n\nEscalate urgently if the patient is unwell.")).rule).toBe("high.now");
+    expect(classifyRisk(p, S("", "")).rule).toBe("unknown:no_subject");
+  });
+});

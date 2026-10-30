@@ -73,7 +73,11 @@ describe("D1: the risk subject every Scholar AI call carries", () => {
     const r = await scholarRisk({}, "user-1", { text: "Why a target range?", passages: [passage] });
     expect(r).toEqual({ text: `Why a target range?
 
-${passage.content}`, competencyIds: ["comp-1"], topicTerms: ["oxygen therapy", "saturation"], actorId: "user-1", purpose: null });
+${passage.content}`, requestText: "Why a target range?", competencyIds: ["comp-1"], topicTerms: ["oxygen therapy", "saturation"], actorId: "user-1", purpose: null });
+  });
+  it("SQIE D-1: carries the student's own request apart from the notes; no request words is an empty request", async () => {
+    expect((await scholarRisk({}, "user-1", { text: "Generate practice questions", passages: [passage] })).requestText).toBe("Generate practice questions");
+    expect((await scholarRisk({}, "user-1", { passages: [passage] })).requestText).toBe("");
   });
   it("uses the competencies the caller names when it names them", async () => {
     expect((await scholarRisk({}, "user-1", { passages: [passage], competencyIds: ["named"] })).competencyIds).toEqual(["named"]);

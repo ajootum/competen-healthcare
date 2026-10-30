@@ -117,3 +117,29 @@ describe("C1: subject-level clinical risk is enforced with metering OFF", () => 
     expect(generate).not.toHaveBeenCalled();
   });
 });
+
+// SQIE D-5 (staging 30 Oct): in Strict Production a high-risk refusal said "AI help isn't available for this yet... try
+// AI help again later", which invites retrying a patient-care question. A high-risk refusal now always gets the
+// supportive words; a clinical-educational one keeps the availability reason.
+describe("SQIE D-5: a high-risk refusal is the supportive words in every mode", () => {
+  it("strict production, high-risk subject, no eligible model: SUPPORTIVE_REFUSAL, no model called", async () => {
+    const { SUPPORTIVE_REFUSAL } = await import("./operating-mode");
+    const { studentAiText, refusalCopy } = await import("@/lib/individual/ai-availability");
+    const { meteredRefusalBody } = await import("./allowance");
+    const r: any = await run("teach", "What should I do for sepsis on the ward");
+    expect(r).toMatchObject({ ok: false, error: "not_eligible", mode: "strict_production", risk: { tier: "high_risk_clinical" } });
+    expect(r.standing.message).toBe(SUPPORTIVE_REFUSAL);
+    expect(generate).not.toHaveBeenCalled();
+    // The student-wording swap passes it through unchanged.
+    const body = meteredRefusalBody(r).body;
+    expect(studentAiText(body.error)).toBe(SUPPORTIVE_REFUSAL);
+    expect(refusalCopy({ ...body, error: studentAiText(body.error) }, "scholar")).toEqual({ text: SUPPORTIVE_REFUSAL, next: null });
+  });
+  it("a clinical-educational refusal keeps the availability reason", async () => {
+    const { SUPPORTIVE_REFUSAL } = await import("./operating-mode");
+    const { NOT_ELIGIBLE_REASON } = await import("./allowance");
+    const r: any = await run("teach", "Explain why respiratory rate is the earliest vital sign of deterioration");
+    expect(r.standing.message).toBe(NOT_ELIGIBLE_REASON);
+    expect(r.standing.message).not.toBe(SUPPORTIVE_REFUSAL);
+  });
+});

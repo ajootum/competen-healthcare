@@ -3,7 +3,7 @@ import { aiStatus } from "./config";
 import { clinicalGate, MODEL_ROUTING_PATH, resolveModelRouting, routeCandidates, selectRoute, type ModelRouting, type Route } from "./model-routing";
 import { PROVIDER_REGISTRY_PATH, registeredAvailable, resolveRegistry, type ProviderRegistry } from "./provider-registry";
 import { generate, type GenerateArgs, type GenerateResult } from "./client";
-import { classifyRisk, RISK_TIERS, riskRank, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision, type RiskTier } from "./clinical-risk";
+import { classifyRisk, RISK_TIERS, requestTextOf, riskRank, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision, type RiskTier } from "./clinical-risk";
 import { CLARIFY, EDUCATIONAL_BOUNDARY, decideRisk, loadRequestMode, logGateDecision, SUPPORTIVE_REFUSAL, type RequestMode } from "./operating-mode";
 import {
   activityAt, allowancePeriod, defaultPolicy, fairUsePath, FAIR_USE_SCOPE, maxInputTokens, remainingBand, resolvePolicy, serviceLevel,
@@ -68,12 +68,14 @@ export type MeteredRefusal = { ok: false; error: MeteredError; standing: AiStand
  */
 export async function resolveRiskSubject(admin: any, ctx: RiskContext | undefined): Promise<ResolvedRiskSubject> {
   const text = subjectText(ctx);
+  // SQIE D-1: the learner's own request words for rules of scope "request" (undefined: the whole subject, as before).
+  const requestText = requestTextOf(ctx);
   const frameworkCodes = [...(ctx?.frameworkCodes ?? [])];
   const ids = [...new Set(ctx?.competencyIds ?? [])].slice(0, 200);
-  if (!ids.length) return { text, competencyRisks: [], frameworkCodes };
+  if (!ids.length) return { text, requestText, competencyRisks: [], frameworkCodes };
   try {
     const { data: comps, error } = await admin.from("framework_competencies").select("id, risk_category, cpu_id, domain_id").in("id", ids);
-    if (error || !comps) return { text, competencyRisks: ["high"], frameworkCodes };
+    if (error || !comps) return { text, requestText, competencyRisks: ["high"], frameworkCodes };
     const cpuIds = [...new Set(comps.map((c: any) => c.cpu_id).filter(Boolean))];
     const domIds = [...new Set(comps.map((c: any) => c.domain_id).filter(Boolean))];
     const [cpus, doms] = await Promise.all([
@@ -82,10 +84,10 @@ export async function resolveRiskSubject(admin: any, ctx: RiskContext | undefine
     ]);
     const fwIds = [...new Set((doms.data ?? []).map((d: any) => d.framework_id))];
     const fws = fwIds.length ? await admin.from("frameworks").select("code").in("id", fwIds) : { data: [] };
-    if (cpus.error || doms.error || fws.error) return { text, competencyRisks: ["high"], frameworkCodes };
+    if (cpus.error || doms.error || fws.error) return { text, requestText, competencyRisks: ["high"], frameworkCodes };
     const risks = [...comps.map((c: any) => c.risk_category), ...(cpus.data ?? []).map((c: any) => c.risk_category)].filter(Boolean).map((r: string) => r.toLowerCase());
-    return { text, competencyRisks: risks, frameworkCodes: [...frameworkCodes, ...(fws.data ?? []).map((f: any) => f.code).filter(Boolean)] };
-  } catch { return { text, competencyRisks: ["high"], frameworkCodes }; }
+    return { text, requestText, competencyRisks: risks, frameworkCodes: [...frameworkCodes, ...(fws.data ?? []).map((f: any) => f.code).filter(Boolean)] };
+  } catch { return { text, requestText, competencyRisks: ["high"], frameworkCodes }; }
 }
 
 export async function aiFairUseEnabled(admin: any): Promise<boolean> {
@@ -147,6 +149,15 @@ function standingFrom(policy: ProductAiPolicy, acc: any): AiStanding {
 /** An eligibility decision as ai_reserve reads it (411, 412): only the effective rows. */
 export type EligibilityRow = { activity: string; provider: string; model_prefix: string; eligible: boolean; max_risk_tier: string | null };
 export const NOT_ELIGIBLE_REASON = "This needs an AI model approved for clinical content, and none is approved for it yet.";
+
+/**
+ * Pure. SQIE D-5: what a "no eligible model" refusal says. A HIGH-RISK request (a real patient now, giving now, acting
+ * now, personal safety, identifiable details) always gets the supportive words, in every mode: the availability words
+ * ("try again later") would invite retrying a patient-care question. Otherwise as before: the supportive words in a
+ * mode that answers the educational part, the governance reason elsewhere.
+ */
+export const notEligibleMessage = (mode: Pick<RequestMode, "behaviour">, risk: Pick<RiskDecision, "tier"> | undefined, governance: string): string =>
+  risk?.tier === "high_risk_clinical" || mode.behaviour.educationalBoundary ? SUPPORTIVE_REFUSAL : governance;
 const ELIGIBILITY_UNREADABLE = "Whether a model is approved for this could not be checked just now.";
 
 /**
@@ -334,7 +345,7 @@ export async function gateCore(admin: any, product: AiProduct, activity: string,
     activities: { [activity]: { label: a.label, available: false, via: null, reason: message } }, message, policyPublished: isPublishedPolicy(policy) });
   if (rows === null) return { ok: false, error: "unreadable", standing: standing(ELIGIBILITY_UNREADABLE) };
   const r = d.available && d.tier ? pickRoute(routing, rows, product, activity, d.tier, floor) : null;
-  if (!r) return { ok: false, error: "not_eligible", standing: standing(mode.behaviour.educationalBoundary ? SUPPORTIVE_REFUSAL : NOT_ELIGIBLE_REASON), risk, mode: mode.mode };
+  if (!r) return { ok: false, error: "not_eligible", standing: standing(notEligibleMessage(mode, risk, NOT_ELIGIBLE_REASON)), risk, mode: mode.mode };
   return { ok: true, tier: d.tier, route: r, risk };
 }
 
@@ -385,7 +396,7 @@ export async function runMeteredAi(admin: any, args: { userId: string; product: 
   if (m.refused === "unreadable") return { ok: false, error: "unreadable", standing: closed(policy, false, "AI help could not be checked just now.") };
   if (m.refused === "not_configured") return { ok: false, error: "not_configured" };
   if (m.refused === "duplicate") return { ok: false, error: "duplicate_request", standing };
-  if (m.refused === "not_eligible") return { ok: false, error: "not_eligible", standing: { ...standing, message: mode.behaviour.educationalBoundary ? SUPPORTIVE_REFUSAL : NOT_ELIGIBLE }, risk, mode: mode.mode };
+  if (m.refused === "not_eligible") return { ok: false, error: "not_eligible", standing: { ...standing, message: notEligibleMessage(mode, risk, NOT_ELIGIBLE) }, risk, mode: mode.mode };
   if (m.refused === "unreconciled_ceiling") return { ok: false, error: "pending_reconciliation", standing: { ...standing, message: PENDING } };
   return { ok: false, error: "allowance_exhausted", standing: { ...standing, message: policy.messages[standing.level === "full" ? "optimised" : standing.level] } };
 }

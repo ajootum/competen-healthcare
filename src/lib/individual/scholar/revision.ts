@@ -272,6 +272,14 @@ const DIFFICULTY_LEVEL: Record<Exclude<RevisionDifficulty, "any">, number> = { e
 /** The modes that may write new questions for a shortfall. Spaced, weak and a saved set never do. */
 export const GENERATING_MODES: readonly RevisionMode[] = ["today", "quick", "mock", "flashcards"];
 
+/** Pure. Items interleaved by format, in their given order within a format, the format seen first leading. */
+const byFormat = (xs: readonly PoolItem[]): PoolItem[] => {
+  const lanes = [...new Set(xs.map(p => p.kind))].map(k => xs.filter(p => p.kind === k));
+  const out: PoolItem[] = [];
+  for (let i = 0; lanes.some(l => i < l.length); i++) for (const l of lanes) if (i < l.length) out.push(l[i]);
+  return out;
+};
+
 /**
  * Pure. The questions a session offers, in order, and how many it is short. Deterministic for a seed. Questions of a
  * format the session does not offer are left out; a difficulty is preferred, then filled from the rest.
@@ -289,7 +297,9 @@ export function pickQuestions(input: { mode: RevisionMode; pool: readonly PoolIt
     case "weak": ordered = [...pool.filter(weak)].sort((a, b) => b.misses - a.misses || Number(a.latestCorrect) - Number(b.latestCorrect) || a.id.localeCompare(b.id)); break;
     case "flashcards": ordered = [...stable(pool.filter(p => p.due)), ...stable(pool.filter(p => !p.due && p.lastAnsweredAt === null)), ...stable(pool.filter(p => !p.due && p.lastAnsweredAt !== null))]; break;
     case "today": {
-      const due = stable(pool.filter(p => p.due)), hard = stable(pool.filter(p => !p.due && weak(p))), fresh = stable(pool.filter(p => !p.due && !weak(p) && p.lastAnsweredAt === null));
+      // SQIE fix D-6: new questions interleaved by format (oldest format first), so a session asked for two formats
+      // is not filled by whichever format happened to be written first.
+      const due = stable(pool.filter(p => p.due)), hard = stable(pool.filter(p => !p.due && weak(p))), fresh = byFormat(stable(pool.filter(p => !p.due && !weak(p) && p.lastAnsweredAt === null)));
       const rest = [...pool.filter(p => !p.due && !weak(p) && p.lastAnsweredAt !== null)].sort((a, b) => (a.lastAnsweredAt ?? "").localeCompare(b.lastAnsweredAt ?? ""));
       ordered = [...due, ...hard, ...fresh, ...rest]; break;
     }
@@ -322,10 +332,16 @@ export function planGeneration(input: { shortfall: number; chunkIds: readonly st
   const fresh = pairs.filter(p => !input.existing.has(`${p.chunkId}|${p.kind}`));
   const out: { chunkId: string; kind: RevisionFormat; count: number }[] = [];
   let left = input.shortfall;
+  // SQIE fix D-6: the shortfall is SHARED across the asked formats. Before, the first format took the whole of a
+  // small shortfall (three items), so "short answer and multiple choice" for three questions never wrote a multiple
+  // choice item at all. A format with no call yet takes only its share of what is left.
+  const planned = new Set<RevisionFormat>();
   for (const p of fresh) {
     if (left <= 0 || out.length >= REVISION_GENERATION_CALLS_MAX) break;
-    const count = Math.min(per, left);
-    out.push({ ...p, count }); left -= count;
+    const waiting = new Set(fresh.filter(x => !planned.has(x.kind)).map(x => x.kind)).size;
+    const share = planned.has(p.kind) ? left : Math.ceil(left / Math.max(1, waiting));
+    const count = Math.min(per, left, share);
+    out.push({ ...p, count }); left -= count; planned.add(p.kind);
   }
   return out;
 }

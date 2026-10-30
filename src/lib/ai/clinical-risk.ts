@@ -34,11 +34,26 @@ export const higherRisk = (a: RiskTier, b: RiskTier): RiskTier => (riskRank(a) >
  * One classification rule. It matches when EVERY group in `all` has at least one term present in the subject
  * (a term ending in * matches any word starting with it), OR when a competency of the given risk category is
  * in the subject, OR when a framework of the given code is. A rule with several kinds matches on any of them.
+ *
+ * SQIE D-1: `scope` says WHICH text the term groups are matched in. "subject" (the default, and the behaviour before
+ * scopes) is the whole subject: the request and the study material passed with it. "request" is the learner's own
+ * request words only, for a rule that describes the learner's USE (a real patient now, giving now, acting now, their
+ * own safety): a lecture note that says "escalate urgently if the patient is unwell" is study material, not an urgent
+ * request about a patient. Competency and framework kinds are unaffected. A caller that does not separate the request
+ * from the material leaves the request as the whole text, so it is exactly as strict as before.
  */
+export type RiskRuleScope = "request" | "subject";
+export const RISK_RULE_SCOPES: readonly RiskRuleScope[] = ["subject", "request"];
+export const RISK_RULE_SCOPE_LABEL: Record<RiskRuleScope, string> = {
+  subject: "Matches the request and the study material",
+  request: "Matches the learner's request only",
+};
 export type RiskRule = {
   id: string;
   label: string;
   tier: RiskTier;
+  /** Where the term groups match. Absent or unknown: "subject". */
+  scope?: RiskRuleScope;
   all?: string[][];
   competencyRisk?: string[];
   frameworks?: string[];
@@ -78,7 +93,8 @@ export function resolveRiskPolicy(s: any): RiskPolicy {
     const frameworks = Array.isArray(r.frameworks) ? r.frameworks.filter((f: unknown) => typeof f === "string" && /^[A-Za-z0-9-]{2,40}$/.test(f)).map((f: string) => f.toUpperCase()) : [];
     if (!all.length && !competencyRisk.length && !frameworks.length) continue;
     seen.add(r.id);
-    rules.push({ id: r.id, label: typeof r.label === "string" && r.label.trim() ? r.label.trim().slice(0, 120) : r.id, tier: r.tier, all, competencyRisk, frameworks });
+    const scope: RiskRuleScope = r.scope === "request" ? "request" : "subject";
+    rules.push({ id: r.id, label: typeof r.label === "string" && r.label.trim() ? r.label.trim().slice(0, 120) : r.id, tier: r.tier, scope, all, competencyRisk, frameworks });
   }
   return { minTier: { standard_educational: std, clinical_educational: clin, high_risk_clinical: high }, rules };
 }
@@ -87,6 +103,9 @@ export function resolveRiskPolicy(s: any): RiskPolicy {
 export type RiskContext = {
   /** The request text, after the product's identifier screen. Read in memory only. */
   text?: string | null;
+  /** SQIE D-1: the learner's OWN request words, without the study material in `text` (rules of scope "request").
+   *  Absent: the whole subject text, so a caller that does not separate them is as strict as before. */
+  requestText?: string | null;
   topicTerms?: readonly string[];
   /** Competencies the request is about (its sources, its mapping subjects). The engine reads their risk. */
   competencyIds?: readonly string[];
@@ -97,7 +116,11 @@ export type RiskContext = {
   purpose?: "education" | null;
 };
 /** The subject as the classifier sees it, after the engine has read competency risk and framework codes. */
-export type ResolvedRiskSubject = { text: string; competencyRisks: readonly string[]; frameworkCodes: readonly string[] };
+export type ResolvedRiskSubject = {
+  text: string; competencyRisks: readonly string[]; frameworkCodes: readonly string[];
+  /** What rules of scope "request" match. Absent: `text` (the whole subject). */
+  requestText?: string;
+};
 export type RiskDecision = { tier: RiskTier; rule: string; reason: string };
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -108,7 +131,7 @@ const norm = (s: string) => ` ${s.toLowerCase().replace(/\s+/g, " ")} `;
 
 /** Pure: whether one rule matches the subject. */
 export function ruleMatches(r: RiskRule, s: ResolvedRiskSubject): boolean {
-  const text = norm(s.text);
+  const text = norm(r.scope === "request" ? (s.requestText ?? s.text) : s.text);
   if (r.all?.length && r.all.every(group => group.some(t => termIn(text, t)))) return true;
   if (r.competencyRisk?.length && s.competencyRisks.some(k => r.competencyRisk!.includes(k.toLowerCase()))) return true;
   if (r.frameworks?.length && s.frameworkCodes.some(c => r.frameworks!.includes(c.toUpperCase()))) return true;
@@ -137,3 +160,6 @@ export function classifyRisk(policy: RiskPolicy, subject: ResolvedRiskSubject, a
 
 /** Pure: the subject text to classify from the parts a product sends. */
 export const subjectText = (ctx: RiskContext | undefined) => [ctx?.text ?? "", ...(ctx?.topicTerms ?? [])].filter(Boolean).join(" \n ").slice(0, 8000);
+/** Pure: the request text for rules of scope "request". Undefined (the whole subject) where the caller sent none. */
+export const requestTextOf = (ctx: RiskContext | undefined): string | undefined =>
+  typeof ctx?.requestText === "string" ? ctx.requestText.slice(0, 8000) : undefined;
