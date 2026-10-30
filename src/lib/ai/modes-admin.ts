@@ -33,14 +33,14 @@ export function validateModeDoc(input: any): { ok: true; doc: ModeDoc } | { ok: 
   if (doc.cohorts.length !== cohorts.length) {
     const kept = new Set(doc.cohorts.map(c => c.code));
     const lost = cohorts.map((c, i) => (c && typeof c.code === "string" && kept.has(c.code) ? null : `cohort ${i + 1}${c?.code ? ` (${String(c.code).slice(0, 40)})` : ""}`)).filter(Boolean);
-    return { ok: false, error: `Not saved: ${lost.join(", ")} would be ignored. A cohort needs a unique code (lower case letters, digits, - or _), a mode, and at least one person (by user id), entitlement source or plan.` };
+    return { ok: false, error: `Not saved: ${lost.join(", ")} would be ignored. A cohort needs a unique code (lower case letters, digits, - or _), a mode, and at least one person (by email or user id), entitlement source or plan.` };
   }
   for (const [i, c] of cohorts.entries()) {
     const r = doc.cohorts[i];
     if (r.code !== c.code) return { ok: false, error: `Not saved: cohort ${i + 1} (${String(c.code).slice(0, 40)}) is not valid.` };
     const checks: [string, number, number][] = [["user ids", norm(c.userIds).length, r.userIds.length], ["entitlement sources", norm(c.entitlementSources).length, r.entitlementSources.length], ["plan codes", norm(c.planCodes).length, r.planCodes.length]];
     const bad = checks.find(([, a, b]) => a !== b);
-    if (bad) return { ok: false, error: `Not saved: cohort "${r.code}" has ${bad[1] - bad[2]} ${bad[0]} that are not valid or too many (user ids are UUIDs, one per line; at most 500).` };
+    if (bad) return { ok: false, error: `Not saved: cohort "${r.code}" has ${bad[1] - bad[2]} ${bad[0]} that are not valid or too many (each person is an email or a user id, one per line; at most 500).` };
     const h = c.hourlyLimit;
     if (h !== null && h !== undefined && h !== "" && r.hourlyLimit === null) return { ok: false, error: `Not saved: cohort "${r.code}" hourly limit must be a whole number from 1 to 500, or empty.` };
   }
@@ -51,19 +51,56 @@ export function validateModeDoc(input: any): { ok: true; doc: ModeDoc } | { ok: 
   return { ok: true, doc };
 }
 
+// ── People by email ───────────────────────────────────────────────────────────────────────────────────────────
+//
+// A cohort STORES user ids: the gate matches the signed-in account's id on every request, and an id never changes when
+// a person changes their email. The People box takes emails too: they become ids here, before validation, and an email
+// with no account refuses the save (a silently dropped person would leave the owner believing they were in the pilot).
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAILS = 1000;
+
+/** Pure: the emails among a People list, lower-cased and de-duplicated. Anything else is left for validation. */
+export const emailsIn = (v: unknown): string[] => [...new Set((Array.isArray(v) ? v : []).filter((x): x is string => typeof x === "string").map(x => x.trim().toLowerCase()).filter(x => EMAIL.test(x)))];
+
+/** The mode settings with every email in a cohort's People list replaced by that person's user id, or why not. */
+export async function resolveCohortPeople(admin: any, input: any): Promise<{ ok: true; input: any } | { ok: false; error: string }> {
+  const cohorts: any[] = Array.isArray(input?.cohorts) ? input.cohorts : [];
+  const emails = [...new Set(cohorts.flatMap(c => emailsIn(c?.userIds)))];
+  if (!emails.length) return { ok: true, input };
+  if (emails.length > MAX_EMAILS) return { ok: false, error: `Not saved: at most ${MAX_EMAILS} emails at once.` };
+  const data = await rows(admin.from("profiles").select("id, email").in("email", emails));
+  if (data === null) return { ok: false, error: "The emails could not be checked just now. Nothing was saved." };
+  const idOf = new Map<string, string>(data.filter((p: any) => p?.email && p?.id).map((p: any) => [String(p.email).toLowerCase(), String(p.id)]));
+  const missing = emails.filter(e => !idOf.has(e));
+  if (missing.length) return { ok: false, error: `Not saved: no Competen account has the email ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ` and ${missing.length - 5} more` : ""}. Check the spelling, or ask the person to sign up first.` };
+  return {
+    ok: true,
+    input: { ...input, cohorts: cohorts.map(c => (c && Array.isArray(c.userIds) ? { ...c, userIds: c.userIds.map((x: unknown) => (typeof x === "string" && idOf.has(x.trim().toLowerCase()) ? idOf.get(x.trim().toLowerCase()) : x)) } : c)) },
+  };
+}
+
+/** Each named person's email, by user id, so the panel shows emails. Empty when unreadable (the ids then show). */
+async function loadPeople(admin: any, docs: ModeDoc[]): Promise<Record<string, string>> {
+  const ids = [...new Set(docs.flatMap(d => d.cohorts.flatMap(c => c.userIds)))].slice(0, MAX_EMAILS);
+  if (!ids.length) return {};
+  const data = await rows(admin.from("profiles").select("id, email").in("id", ids));
+  return Object.fromEntries((data ?? []).filter((p: any) => p?.id && p?.email).map((p: any) => [String(p.id).toLowerCase(), String(p.email)]));
+}
+
 /** Pure: the Strict Production document the "Return to Strict Production now" button saves. */
 export const strictDoc = (): ModeDoc => structuredClone(STRICT_DOC);
 
 // ── Reads ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type ModeView = { product: AiProduct; published: ModeDoc; draft: ModeDoc | null; hasPublished: boolean; pending: boolean; publishedAt: string | null };
+export type ModeView = { product: AiProduct; published: ModeDoc; draft: ModeDoc | null; hasPublished: boolean; pending: boolean; publishedAt: string | null; people: Record<string, string> };
 
 /** Per product: what runs (Strict Production when nothing is published), the draft if saved, and whether it differs. Null when unreadable. */
 export async function loadModes(admin: any): Promise<ModeView[] | null> {
   const data = await rows(admin.from("workspace_config_overrides").select("config_path, draft, published, updated_at")
     .eq("scope_type", MODE_SCOPE.scopeType).eq("scope_ref", MODE_SCOPE.scopeRef));
   if (data === null) return null;
-  return AI_PRODUCTS.map(product => {
+  const views = AI_PRODUCTS.map(product => {
     const r = data.find((x: any) => x.config_path === modePath(product));
     return {
       product, published: resolveModeDoc(r?.published ?? null), draft: r?.draft ? resolveModeDoc(r.draft) : null,
@@ -71,6 +108,8 @@ export async function loadModes(admin: any): Promise<ModeView[] | null> {
       pending: !!r && JSON.stringify(r.draft ?? null) !== JSON.stringify(r.published ?? null),
     };
   });
+  const people = await loadPeople(admin, views.flatMap(v => (v.draft ? [v.published, v.draft] : [v.published])));
+  return views.map(v => ({ ...v, people }));
 }
 
 export type ModeVersion = { id: string; createdAt: string; label: string | null; note: string | null; publishedBy: string | null };
