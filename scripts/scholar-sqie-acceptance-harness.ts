@@ -283,6 +283,21 @@ async function makeStudent(grantor: string, email: string) {
     foundation_terms_version: LEGAL.h.terms, foundation_privacy_version: LEGAL.h.privacy, foundation_accepted_at: now }).eq("user_id", u);
   await admin.from("individual_entitlement").update({ terms_version: LEGAL.s.terms, privacy_version: LEGAL.s.privacy, terms_accepted_at: now }).eq("user_id", u);
   const s = await signIn(email);
+  // The versions this server publishes are its own environment's. Unless they are given here, the student accepts
+  // them the way a student does: the versions the terms page shows, sent back to /api/individual/terms.
+  let terms = 0;
+  if (s.status === 200 && !LEGAL.s.terms) {
+    const page = await fetch(`${BASE}/individual/scholar`, { redirect: "manual", headers: { Cookie: cookieHeader(s.jar) } });
+    const t = (await page.text()).replace(/\\"/g, '"');
+    const f = t.match(/"foundation":\{"terms":"([^"]+)","privacy":"([^"]+)"\}/), x = t.match(/"experienceDocs":\{"terms":"([^"]+)","privacy":"([^"]+)"\}/);
+    if (f && x) terms = (await send("POST", "/api/individual/terms", { experience: "scholar", foundation: { terms: f[1], privacy: f[2] }, experienceDocs: { terms: x[1], privacy: x[2] } }, s.jar)).status;
+    else {
+      terms = -page.status;
+      const at = t.search(/foundation|Accept|terms/i);
+      console.log(`        terms page did not show versions: ${t.slice(Math.max(0, at - 200), at + 400).replace(/\s+/g, " ")}`);
+    }
+  }
+  if (terms && terms !== 200) console.log(`        terms acceptance for ${email}: ${terms}`);
   const consent = s.status === 200 ? await send("POST", "/api/individual/scholar/consent", { grant: true }, s.jar) : { status: 0, json: {} };
   return { id: u, jar: s.jar, signIn: s.status, consent: consent.status, consentError: consent.json?.error ?? null };
 }
