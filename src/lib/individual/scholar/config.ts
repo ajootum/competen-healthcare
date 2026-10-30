@@ -359,3 +359,33 @@ export const WITHHELD_NEAREST_MAX = 3;
 export const REFERENCE_CHANGED_LABEL = "Changed since: not clinically reviewed";
 /** Shown where the policy floor offers only approved content and the programme has none yet. */
 export const NO_APPROVED_COMPETENCIES = "No clinically approved competencies yet.";
+
+// ── SCHOLAR-EDU-AI-01 (owner, 30 Oct 2026, s3, s4, s6): WHAT A STUDENT IS TOLD ABOUT SCHOLAR'S AI ─────────────
+// Scholar is an AI-supported EDUCATION product, not clinical decision support. Every student-facing sentence about
+// that -- the persistent notice, the full disclaimer, the formative label on AI feedback, and what an unavailable AI
+// action says -- lives here, so wording changes in one place. Change a word: change the version with it.
+// The governance reason HQ reads (allowance.ts NOT_ELIGIBLE_REASON) is untouched: students get these words instead.
+export const SCHOLAR_EDU_AI = {
+  version: "scholar-edu-ai-v1",
+  /** s3: one line, shown once in the Scholar shell (never per answer). */
+  notice: "For learning only — AI can be incomplete or wrong. Check against your course materials and current local guidelines.",
+  disclaimerLabel: "Full disclaimer",
+  disclaimerHeading: "Using Competen Scholar's AI",
+  disclaimer: [
+    "Competen Scholar is for education. It helps you study; it is not a clinical tool.",
+    "AI-generated content may be incomplete or inaccurate. Verify it against your course materials, recognised references and current local clinical guidelines.",
+    "Scholar is not intended for real-time patient management, prescribing or treatment decisions. In a real clinical situation, follow local policy and your clinical team.",
+    "AI feedback is formative. It is not a formal examination result or a verified competency.",
+  ],
+  /** s4: once per block of AI feedback on a student's answer or knowledge check. */
+  formative: "Practice feedback from AI — not a formal exam result or a verified competency.",
+  /** s4, Evaluate: the results are computed from the student's own evidence (AI-judged answers shown apart), not written by AI. */
+  formativeEvaluation: "Practice feedback on your own learning — not a formal exam result or a verified competency.",
+  /** s6: what an AI action that is not available says to the student, before or after a click. */
+  unavailable: {
+    general: "AI help isn't available for this yet. Nothing you have written or saved is lost — you can carry on with your notes and try AI help again later.",
+    /** The examination-paper "Check my attempt" / suggested answer (activity `deeper`). `saved`: a suggested answer is already kept. */
+    paper: (saved: boolean) =>
+      `AI feedback isn't available for this question yet. Your answer stays here — you can compare it with ${saved ? "the suggested answer you saved" : "your notes or the original paper"}, and try AI feedback again later.`,
+  },
+} as const;

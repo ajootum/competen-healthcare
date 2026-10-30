@@ -2,12 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useState } from "react";
+import { Fragment, useId, useState } from "react";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
+import { paperAiCopy, refusalCopy, type AiReasonCopy } from "@/lib/individual/ai-availability";
+import { useAiAvailability } from "@/app/individual/_components/ai/AiAvailabilityContext";
+import { AiUnavailableNote } from "@/app/individual/_components/ai/AiAvailability";
+import { FormativeAiLabel } from "./edu-notice";
 
 // Studying an examination paper (COMPETEN-SCHOLAR-EXAM-PAPERS-01): attempt a question, then reveal a suggested answer
 // with its evidence; ask a follow-up; turn it into revision. Every call goes to a gate-3 route, which decides; this
 // shows what the route says, its refusals included, in words.
+// SCHOLAR-EDU-AI-01 s6: an AI action the student's standing says is not available is shown disabled WITH the reason
+// (the shell's AiAvailabilityProvider -- the activity's floor). A request's own subject can still raise its risk, so a
+// refusal after the click is shown in the same plain words. Nothing the student typed or chose is ever cleared by one.
 
 const accent = SCHOLAR.accent;
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
@@ -63,6 +70,16 @@ function Cited({ text, prefix }: { text: string; prefix: string }) {
   );
 }
 
+/** One message under an action: an AI that is not available (a calm note, with its next step) or an error (an alert). */
+function CopyLine({ id, c, tone }: { id?: string; c: AiReasonCopy; tone: "note" | "alert" }) {
+  return (
+    <p id={id} role={tone === "alert" ? "alert" : "status"}
+      className={tone === "alert" ? "mt-3 text-[13.5px] font-medium text-red-700" : "mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13.5px] leading-relaxed text-gray-800"}>
+      {c.text}{c.next && <> <a href={c.next.href} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{c.next.label}</a></>}
+    </p>
+  );
+}
+
 function EvidenceList({ evidence, prefix }: { evidence: EvidenceView[]; prefix: string }) {
   if (!evidence.length) return null;
   return (
@@ -104,22 +121,30 @@ function AnswerView({ a, onRevise, onDelete, busy }: { a: SavedAnswerView; onRev
   const [reply, setReply] = useState<{ text?: string; message?: string } | null>(null);
   const [asking, setAsking] = useState(false);
   const prefix = `a-${a.id.slice(0, 8)}`;
+  const askAi = useAiAvailability("ask");
+  const askOff = !!askAi && !askAi.available;
   async function followUp(e: React.FormEvent) {
     e.preventDefault();
     if (!ask.trim()) return;
     setAsking(true); setReply(null);
     const r = await call("/api/individual/scholar/papers/follow-up", { answerId: a.id, ask });
     setAsking(false);
-    setReply(r.ok && r.json.text ? { text: r.json.text } : { message: r.json.message ?? r.json.error ?? "No reply could be shown." });
+    // The question typed stays in the box whatever the reply.
+    setReply(r.ok && r.json.text ? { text: r.json.text } : { message: (!r.ok ? refusalCopy(r.json, "scholar")?.text : null) ?? r.json.message ?? r.json.error ?? "No reply could be shown." });
   }
+  const attempted = !!a.attempt && !!(a.attempt.option || a.attempt.text);
   return (
     <div className="mt-4 rounded-xl border border-[var(--cmp-theme-border)] bg-[var(--cmp-app-bg)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-semibold text-amber-900"><span aria-hidden>✦</span>Suggested answer, written by AI from the evidence below. Not an answer key or a mark.</p>
         <span className="text-[11.5px] text-gray-500">{new Date(a.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · {a.model}</span>
       </div>
-      {a.attempt && (a.attempt.option || a.attempt.text) && (
-        <p className="mt-3 text-[13.5px] text-gray-700"><span className="font-semibold">Your attempt:</span> {a.attempt.option ? `${a.attempt.option}. ` : ""}{a.attempt.text}</p>
+      {attempted && (
+        <>
+          <p className="mt-3 text-[13.5px] text-gray-700"><span className="font-semibold">Your attempt:</span> {a.attempt!.option ? `${a.attempt!.option}. ` : ""}{a.attempt!.text}</p>
+          {/* SCHOLAR-EDU-AI-01 s4: this block is AI feedback on the student's attempt -- labelled once. */}
+          <FormativeAiLabel className="mt-1" />
+        </>
       )}
       <h4 className="mt-3 text-[13px] font-bold uppercase tracking-[0.12em] text-gray-500">The examination answer</h4>
       {c.option && <p className="mt-1 text-[15px] font-bold text-gray-900">Option {c.option}{a.attempt?.option ? (a.attempt.option === c.option ? " · matches your choice" : ` · you chose ${a.attempt.option}`) : ""}</p>}
@@ -158,9 +183,10 @@ function AnswerView({ a, onRevise, onDelete, busy }: { a: SavedAnswerView; onRev
         <div className="mt-1 flex flex-wrap gap-2">
           <input id={`${prefix}-ask`} value={ask} onChange={e => setAsk(e.target.value)} maxLength={500} placeholder="Why is option B not the best answer?"
             className={`min-h-[44px] min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-[14px] ${focusRing}`} />
-          <button type="submit" className={ghost} disabled={asking || !ask.trim()}>{asking ? "Asking…" : "Ask"}</button>
+          <button type="submit" className={ghost} disabled={asking || !ask.trim() || askOff} aria-describedby={askOff ? `${prefix}-ask-why` : undefined}>{asking ? "Asking…" : "Ask"}</button>
         </div>
-        {reply && <p className="mt-2 whitespace-pre-line rounded-lg bg-white p-3 text-[13.5px] text-gray-800">{reply.text ? <Cited text={reply.text} prefix={prefix} /> : reply.message}</p>}
+        {askAi && !askAi.available && <AiUnavailableNote id={`${prefix}-ask-why`} reason={askAi.reason} experience="scholar" className="mt-2" />}
+        {reply &&<p className="mt-2 whitespace-pre-line rounded-lg bg-white p-3 text-[13.5px] text-gray-800">{reply.text ? <Cited text={reply.text} prefix={prefix} /> : reply.message}</p>}
       </form>
       <div className="mt-4 flex flex-wrap gap-2">
         {a.revisionQuestionId
@@ -177,17 +203,24 @@ function QuestionCard({ q, saved, choice, onSaved }: { q: PaperQuestionView; sav
   const [option, setOption] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ c: AiReasonCopy; ai: boolean } | null>(null);
   const [answer, setAnswer] = useState<SavedAnswerView | null>(saved);
+  // A suggested answer and "Check my attempt" are both AI (EXAM_ACTIVITY.answer = "deeper").
+  const deeper = useAiAvailability("deeper");
+  const aiOff = !!deeper && !deeper.available;
+  const offCopy = deeper && !deeper.available ? paperAiCopy({ reason: deeper.reason }, !!answer) : null;
+  const whyId = `why-${useId().replace(/:/g, "")}`;
+  const say = (text: string) => ({ c: { text, next: null }, ai: false });
   async function reveal(withAttempt: boolean) {
+    // The attempt (option and text) is never cleared here: a refusal leaves it exactly as the student left it.
     setBusy(true); setNotice(null);
     const sources = [choice.notes ? "notes" : null, choice.library ? "library" : null, choice.web.on ? "web" : null].filter(Boolean);
     const r = await call("/api/individual/scholar/papers/answer", {
       questionId: q.id, attempt: withAttempt ? { option, text: text.trim() || null } : null, sources, depth: choice.depth,
     });
     setBusy(false);
-    if (!r.ok) { setNotice(r.json.error ?? "No answer could be written just now."); return; }
-    if (r.json.noEvidence || r.json.withheld) { setNotice(r.json.message ?? "No answer could be shown."); return; }
+    if (!r.ok) { const c = paperAiCopy({ body: r.json }, !!answer); setNotice(c ? { c, ai: true } : say(r.json.error ?? "No answer could be written just now.")); return; }
+    if (r.json.noEvidence || r.json.withheld) { setNotice(say(r.json.message ?? "No answer could be shown.")); return; }
     setAnswer({ id: r.json.id, content: r.json.content, evidence: r.json.evidence, attempt: r.json.attempt, research: r.json.research, model: r.json.provenance?.model ?? "", createdAt: new Date().toISOString(), revisionQuestionId: null });
     onSaved();
   }
@@ -196,14 +229,14 @@ function QuestionCard({ q, saved, choice, onSaved }: { q: PaperQuestionView; sav
     setBusy(true);
     const r = await call(`/api/individual/scholar/papers/answers/${answer.id}`);
     setBusy(false);
-    if (r.ok) { setAnswer({ ...answer, revisionQuestionId: r.json.revisionQuestionId }); router.refresh(); } else setNotice(r.json.error ?? "It could not be added to revision.");
+    if (r.ok) { setAnswer({ ...answer, revisionQuestionId: r.json.revisionQuestionId }); router.refresh(); } else setNotice(say(r.json.error ?? "It could not be added to revision."));
   }
   async function remove() {
     if (!answer) return;
     setBusy(true);
     const r = await call(`/api/individual/scholar/papers/answers/${answer.id}`, undefined, "DELETE");
     setBusy(false);
-    if (r.ok) { setAnswer(null); router.refresh(); } else setNotice(r.json.error ?? "It could not be deleted.");
+    if (r.ok) { setAnswer(null); router.refresh(); } else setNotice(say(r.json.error ?? "It could not be deleted."));
   }
   const attempted = !!option || !!text.trim();
   return (
@@ -232,10 +265,11 @@ function QuestionCard({ q, saved, choice, onSaved }: { q: PaperQuestionView; sav
           <textarea id={`att-${q.id}`} rows={q.options.length ? 2 : 4} value={text} onChange={e => setText(e.target.value)} maxLength={3000}
             className={`mt-1 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-[14.5px] ${focusRing}`} placeholder="Attempt it before you reveal the suggested answer." />
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className={btn} style={{ background: accent }} disabled={busy || !attempted} onClick={() => reveal(true)}>{busy ? "Working…" : answer ? "Check my new attempt" : "Check my attempt"}</button>
-            <button type="button" className={ghost} disabled={busy} onClick={() => reveal(false)}>{answer ? "Write a fresh answer" : "Show a suggested answer"}</button>
+            <button type="button" className={btn} style={{ background: accent }} disabled={busy || !attempted || aiOff} aria-describedby={aiOff ? whyId : undefined} onClick={() => reveal(true)}>{busy ? "Working…" : answer ? "Check my new attempt" : "Check my attempt"}</button>
+            <button type="button" className={ghost} disabled={busy || aiOff} aria-describedby={aiOff ? whyId : undefined} onClick={() => reveal(false)}>{answer ? "Write a fresh answer" : "Show a suggested answer"}</button>
           </div>
-          {notice && <p role="alert" className="mt-3 text-[13.5px] font-medium text-red-700">{notice}</p>}
+          {offCopy && <CopyLine id={whyId} c={offCopy} tone="note" />}
+          {notice && <CopyLine c={notice.c} tone={notice.ai ? "note" : "alert"} />}
           {answer && <AnswerView a={answer} busy={busy} onRevise={revise} onDelete={remove} />}
         </>
       )}
@@ -324,11 +358,13 @@ export function PaperActions({ materialId, guides }: { materialId: string; guide
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [confirm, setConfirm] = useState(false);
+  const teach = useAiAvailability("teach");
+  const guideOff = !!teach && !teach.available;
   async function guide() {
     setBusy(true); setMsg("");
     const r = await call(`/api/individual/scholar/papers/${materialId}/guide`);
     setBusy(false);
-    if (!r.ok || r.json.withheld) { setMsg(r.json.message ?? r.json.error ?? "The guide could not be written."); return; }
+    if (!r.ok || r.json.withheld) { setMsg((!r.ok ? refusalCopy(r.json, "scholar")?.text : null) ?? r.json.message ?? r.json.error ?? "The guide could not be written."); return; }
     router.refresh();
   }
   async function remove() {
@@ -341,7 +377,8 @@ export function PaperActions({ materialId, guides }: { materialId: string; guide
     <section aria-labelledby="guide-h" className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
       <h2 id="guide-h" className="text-[16px] font-bold text-gray-900">Revision guide</h2>
       <p className="mt-1 text-[14px] text-gray-600">A short guide written from the suggested answers you have revealed and their evidence.</p>
-      <button type="button" className={`${ghost} mt-3`} disabled={busy} onClick={guide}>{busy ? "Writing…" : guides.length ? "Write a new guide" : "Write a revision guide"}</button>
+      <button type="button" className={`${ghost} mt-3`} disabled={busy || guideOff} aria-describedby={guideOff ? "guide-why" : undefined} onClick={guide}>{busy ? "Writing…" : guides.length ? "Write a new guide" : "Write a revision guide"}</button>
+      {teach && !teach.available && <AiUnavailableNote id="guide-why" reason={teach.reason} experience="scholar" className="mt-2" />}
       {msg && <p role="alert" className="mt-2 text-[13.5px] font-medium text-red-700">{msg}</p>}
       {guides.slice(0, 1).map(g => (
         <div key={g.id} className="mt-4 rounded-xl bg-[var(--cmp-app-bg)] p-4">

@@ -9,6 +9,8 @@ import { BudgetCreate, BudgetPolicyEditor, BudgetStatus, RoutingEditor } from ".
 import { ModelRoutingEditor } from "./_components/ModelRoutingControls";
 import { ProviderRegistry } from "./_components/ProviderRegistryControls";
 import { loadModeVersions, loadModes, loadPilotMetrics } from "@/lib/ai/modes-admin";
+import { gapList, loadReadiness } from "@/lib/ai/readiness";
+import { ReadinessSection } from "./_components/ReadinessSection";
 import { ModesSection } from "./_components/ModesSection";
 import { AI_PROVIDERS, availableProviders, primaryProvider, providerModels } from "@/lib/ai/config";
 
@@ -30,7 +32,9 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB",
 export default async function FairUsePage() {
   const ctx = await requireHqCapability("hq.platform.ai.manage");
   const [rates, policies, on, evaluations, budgets, drafts, modelRouting, registry, modes, modeVersions] = await Promise.all([loadRates(ctx.admin), loadPolicies(ctx.admin), aiFairUseEnabled(ctx.admin), loadEvaluations(ctx.admin), loadBudgets(ctx.admin), pendingDrafts(ctx.admin), loadModelRoutingView(ctx.admin), loadProviderRegistryView(ctx.admin), loadModes(ctx.admin), loadModeVersions(ctx.admin)]);
-  const metrics = await loadPilotMetrics(ctx.admin, 30, modes);
+  const [metrics, readiness] = await Promise.all([loadPilotMetrics(ctx.admin, 30, modes), loadReadiness(ctx.admin)]);
+  // SCHOLAR-EDU-AI-01: shown beside both publish buttons, so nothing is published without seeing what students cannot use.
+  const scholarGaps = gapList(readiness.find(r => r.product === "scholar")?.rows ?? null);
   // The product's published risk rule ids: the choices for "clarifiable rules" (ids only, never rule text).
   const ruleIds = Object.fromEntries((policies ?? []).map(p => [p.product, p.published.risk.rules.map(r => r.id)]));
   // Whether each provider's key is present in this deployment: a yes or no, never the key.
@@ -245,11 +249,13 @@ export default async function FairUsePage() {
             )}
           </section>
 
-          <ModesSection modes={modes} versions={modeVersions} ruleIds={ruleIds} metrics={metrics} />
+          <ReadinessSection readiness={readiness} />
+
+          <ModesSection modes={modes} versions={modeVersions} ruleIds={ruleIds} metrics={metrics} gaps={scholarGaps} />
 
           <section aria-labelledby="pub-h" className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 id="pub-h" className="text-[16px] font-bold text-gray-900">Publish</h2>
-            <PublishPolicies pending={pending} />
+            <PublishPolicies pending={pending} gaps={scholarGaps} />
           </section>
         </>
       )}

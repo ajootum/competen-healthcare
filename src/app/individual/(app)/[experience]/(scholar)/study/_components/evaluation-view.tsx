@@ -4,6 +4,7 @@ import { EVALUATION_BAND_LABEL, EVALUATION_CONFIDENCE_LABEL, EVALUATION_DIMENSIO
 import { CASE_DIMENSION_LABEL } from "@/lib/individual/scholar/config";
 import type { Area, Confidence, Evaluation, Recommendation } from "@/lib/individual/scholar/evaluation";
 import { sourceHref, studyHref } from "./question-view";
+import { FormativeAiLabel } from "./edu-notice";
 
 // EVALUATION-01 (Stage 6) E1/E4: one evaluation as the student reads it -- the live, continuous one or a kept
 // record. Six dimensions, each on its own card and never summed; what each could not say, said in its place; the
@@ -78,6 +79,8 @@ export function EvaluationView({ r, confidence, limitations, cfca }: { r: Evalua
   const k = r.knowledge, ret = r.retention, app = r.application, rs = r.reasoning, cov = r.coverage;
   return (
     <div className="space-y-5">
+      {/* SCHOLAR-EDU-AI-01 s4: once, above the results. */}
+      <FormativeAiLabel evaluation />
       <section aria-labelledby="ev-conf" className="rounded-2xl border border-gray-200 bg-white p-4">
         <h3 id="ev-conf" className="text-[14px] font-bold text-gray-900">{EVALUATION_DIMENSION_LABEL.confidence.title}: {EVALUATION_CONFIDENCE_LABEL[confidence.level]}</h3>
         <p className="text-[12px] text-gray-600">{EVALUATION_DIMENSION_LABEL.confidence.what}</p>

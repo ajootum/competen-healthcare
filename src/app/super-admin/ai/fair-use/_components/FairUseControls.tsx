@@ -193,11 +193,22 @@ export function PolicyEditor({ product, initial }: { product: string; initial: P
   );
 }
 
-export function PublishPolicies({ pending }: { pending: number }) {
+/** SCHOLAR-EDU-AI-01 section 7: what Scholar students cannot use, shown before anything is published. Never blocks. */
+export function ReadinessWarning({ gaps }: { gaps: string[] }) {
+  return (
+    <p role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">
+      Before publishing: {gaps.length} Scholar AI {gaps.length === 1 ? "activity has" : "activities have"} no model for clinical educational content, so
+      students meet a refusal there on clinical notes: {gaps.join(", ")}. See AI readiness.
+    </p>
+  );
+}
+
+export function PublishPolicies({ pending, gaps = [] }: { pending: number; gaps?: string[] }) {
   const [note, setNote] = useState("");
   const { busy, msg, send } = useSend();
   return (
     <div className="space-y-2">
+      {gaps.length > 0 && <ReadinessWarning gaps={gaps} />}
       <label htmlFor="fu-note" className="block text-[12.5px] font-semibold text-gray-700">Why this change (recorded with the version)</label>
       <textarea id="fu-note" rows={2} maxLength={500} value={note} onChange={e => setNote(e.target.value)} className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-[14px]" />
       <button type="button" className={primary} disabled={busy || pending === 0} onClick={() => send({ action: "publish", note }, "Published. New allowance periods use it.")}>

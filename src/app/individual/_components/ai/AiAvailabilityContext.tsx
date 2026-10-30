@@ -17,9 +17,16 @@ export function AiAvailabilityProvider({ standing, children }: { standing: SlimS
   return <Ctx.Provider value={standing}>{children}</Ctx.Provider>;
 }
 
+const of = (s: SlimStanding | null, activity: string): AiAvailability | null =>
+  s ? availabilityFromStanding({ metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null, ...s } as AiStanding, activity) : null;
+
 /** Availability of one activity, or null outside a provider (then the action stays enabled and the server decides). */
 export function useAiAvailability(activity: string): AiAvailability | null {
+  return of(useContext(Ctx), activity);
+}
+
+/** The same question for several activities on one surface (a row of AI actions): a lookup, null outside a provider. */
+export function useAiAvailabilityOf(): (activity: string) => AiAvailability | null {
   const s = useContext(Ctx);
-  if (!s) return null;
-  return availabilityFromStanding({ metered: false, level: "full", remaining: { band: "plenty", percent: null }, resetsAt: null, ...s } as AiStanding, activity);
+  return (activity: string) => of(s, activity);
 }

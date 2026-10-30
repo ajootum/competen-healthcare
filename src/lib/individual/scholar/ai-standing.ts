@@ -10,6 +10,7 @@
 // Passport stay available whatever the standing says.
 
 import { getAiStanding, type AiActivityState, type AiStanding } from "@/lib/ai/allowance";
+import { studentAiText } from "../ai-availability";
 
 export type { AiActivityState, AiStanding };
 export type AiServiceLevel = AiStanding["level"];
@@ -34,6 +35,7 @@ export function activityState(standing: AiStanding, activity: ScholarAiActivity)
     available: false, insufficient,
     message: insufficient
       ? "This needs a level of AI help that is not available to you right now. Scholar will not use a weaker one instead."
-      : standing.message ?? a?.reason ?? "New AI help is not available right now. Everything you have saved is still here.",
+      // SCHOLAR-EDU-AI-01 s6: never the governance reason (NOT_ELIGIBLE_REASON) -- the plain student words instead.
+      : studentAiText(standing.message ?? a?.reason ?? "New AI help is not available right now. Everything you have saved is still here."),
   };
 }

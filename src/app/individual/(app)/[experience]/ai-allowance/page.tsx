@@ -4,6 +4,8 @@ import { getAiStanding } from "@/lib/ai/allowance";
 import type { AiServiceLevel } from "@/lib/ai/fair-use-policy";
 import { experiencePage, gatedMetadata } from "../../../_components/shell-context";
 import { AiUnavailableNote } from "../../../_components/ai/AiAvailability";
+// SCHOLAR-EDU-AI-01 s6: an activity with no eligible model reads "Not available yet", never the governance reason.
+import { isGovernanceNotEligible } from "@/lib/individual/ai-availability";
 import { PageHeader } from "../../../_components/chrome";
 
 // Request-time only: it reads the release gate, the session and the allowance, never prerendered.
@@ -83,7 +85,7 @@ export default async function AiAllowancePage({ params }: { params: Promise<{ ex
                 <li key={code} className="flex flex-wrap items-baseline justify-between gap-2 py-2.5">
                   <span className="text-[14px] text-gray-900">{a.label}</span>
                   <span className={`text-[13px] font-semibold ${a.available ? "text-gray-800" : "text-amber-900"}`}>
-                    {a.available ? (a.via === "reserve" ? "Available from your essential-learning reserve" : "Available") : (a.reason ?? "Not available right now")}
+                    {a.available ? (a.via === "reserve" ? "Available from your essential-learning reserve" : "Available") : isGovernanceNotEligible(a.reason) ? "Not available yet" : (a.reason ?? "Not available right now")}
                   </span>
                 </li>
               ))}

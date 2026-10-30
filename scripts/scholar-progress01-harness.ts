@@ -275,7 +275,8 @@ async function main() {
       decided++; cur = r.json.play;
     }
   }
-  const caseRefused = !made.json?.play && /approved for clinical content/.test(String(made.json?.error ?? ""));
+  // SCHOLAR-EDU-AI-01 s6: students now get plain words for "no eligible model", not the governance reason.
+  const caseRefused = !made.json?.play && /approved for clinical content|AI help isn.t available for this yet/.test(String(made.json?.error ?? ""));
   if (caseRefused) note(`clinical case: refused (${made.json?.error}) -- no eligible model to write it; reasoning is not exercised in this run`);
   ok("2. the student completes Teach Me, Revision and Clinical Reasoning activities (a case where a model may write one)", teach.status === 200 && answered >= 3 && (decided >= 2 || caseRefused),
     `teach ${teach.status} · answers ${answered}${seeded ? ` (seeded ${seeded})` : ""} · decisions ${decided}${caseRefused ? " (case refused: no eligible model)" : ""}`);
