@@ -12,7 +12,8 @@ import { runEvaluate } from "@/lib/individual/scholar/generation";
 import { keyOf, markResponse, parseResponse, storedResponse } from "@/lib/individual/scholar/revision";
 import { citationOf, feedbackView } from "@/lib/individual/scholar/revision-view";
 import { questionLinks } from "@/lib/individual/scholar/revision-links";
-import { MARKING_LABEL } from "@/lib/individual/scholar/config";
+import { MARKING_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD } from "@/lib/individual/scholar/config";
+import { parseRecoveryRequest, recordRecoveryResult, recoveredReply, recoveryPassage, rederiveRecovery, type Rederived } from "@/lib/individual/scholar/evidence-recovery";
 import { rubricOf, type FeedbackParts } from "@/lib/individual/scholar/question-intel";
 import { answerOutcome, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
 
@@ -31,6 +32,9 @@ export const dynamic = "force-dynamic";
 // else the student's own judgement -- each labelled for what it is (MARKING_LABEL). Nothing is guessed.
 // The answer is an attempt naming its session (416, 417). A due card is reviewed by it, a missed one made or reset.
 // FEEDBACK: immediately, or held until the end of the session when that is the session's mode.
+// SCHOLAR-SQIE-02: recovery { id, mode, question } re-runs the SAME evaluation on the question's passage plus the
+// evidence that recovery found -- re-derived here from the learner's own notes and the approved library, never taken
+// from the request -- under the same checks. Published abstracts are not added: the evaluation reads notes only.
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");
@@ -68,13 +72,17 @@ export async function POST(req: Request) {
   if (r.kind === "text" && findPatientIdentifiers(r.text).length)
     return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
   const policy = await loadIndividualPolicy(ctx.admin);
+  const recoveryAsked = parseRecoveryRequest(body?.recovery, "notes_only", QUESTION_MAX);
+  if (recoveryAsked && !recoveryAsked.ok) return NextResponse.json({ error: recoveryAsked.error }, { status: 400 });
+  const recovery = recoveryAsked?.value ?? null;
+  let recovered: Rederived | null = null;
   const srs = { masteryReps: policy.scholarSrsMasteryReps, masteryDays: policy.scholarSrsMasteryDays, maxIntervalDays: policy.scholarSrsMaxIntervalDays, harderIntervalPercent: policy.scholarSrsHarderIntervalPercent };
 
   // ── marking: code, then (a short answer only) AI evaluation or the student's own judgement ──
   let mark = markResponse(q, r);
   let evaluation: string | null = null, evaluator: { model: string; promptVersion: string } | null = null;
   let evaluationParts: FeedbackParts | null = null;
-  let withheld: Withheld | null = null;
+  let withheld: (Withheld & { recovered?: ReturnType<typeof recoveredReply> }) | null = null;
   if ("needsJudgement" in mark && r.kind === "text") {
     const accepted = (keyOf(q) as { answers: string[] }).answers;
     if (typeof body?.selfGrade === "boolean") mark = { correct: body.selfGrade, score: body.selfGrade ? 1 : 0, marking: "self_graded" };
@@ -83,7 +91,14 @@ export async function POST(req: Request) {
       if (policy.scholarShortAnswerMarking === "ai_then_self") {
         const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate");
         const pre = standing.available ? await aiPreflight(ctx) : null;
-        const passage = standing.available && !pre ? await getPassage(ctx.admin, ctx.userId, q.chunkId) : null;
+        let passage = standing.available && !pre ? await getPassage(ctx.admin, ctx.userId, q.chunkId) : null;
+        if (passage && recovery) {
+          // The question's own words are what recovery searches for; the browser's are not used.
+          recovered = await rederiveRecovery(ctx, policy, { ...recovery, question: q.stem.slice(0, QUESTION_MAX) }, { materialId: q.materialId, sectionId: q.chunkId });
+          if (!recovered.ok && recovered.reason === "unknown") return NextResponse.json({ error: "Those learning resources could not be found. Look for them again." }, { status: 400 });
+          if (!recovered.ok) return NextResponse.json({ needsSelfGrade: true, accepted, reason: RECOVERY_STILL_WITHHELD, label: MARKING_LABEL.self_graded, withheld: { reason: "no_evidence" }, questionId: q.id, attempt: r.text, recovered: recoveredReply(recovered, false) });
+          passage = recoveryPassage(passage, recovered.inputs);
+        }
         if (!standing.available) why = `${standing.message ?? "AI evaluation is not available right now."} Compare your answer yourself.`;
         else if (passage) {
           const ai = scholarAiRunner(ctx, req, "evaluate", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\n${r.text}`, passages: [passage] }));
@@ -101,6 +116,7 @@ export async function POST(req: Request) {
             withheld = e.evaluation.ok ? null : { reason: e.evaluation.reason };
             const o = answerOutcome(withheld?.reason ?? null);
             await recordScholarOutcome(ctx.admin, ai, { operation: "individual_scholar_evaluate", outputKind: "other", outcome: o.outcome, reasons: o.reasons, promptVersion: e.promptVersion });
+            if (recovery && recovered?.ok) await recordRecoveryResult(ctx.admin, recovery.id, e.evaluation.ok);
           }
           if (!refused && e.ok && e.evaluation.ok) {
             // Recorded as ai_evaluation below, with the evaluator model and prompt version.
@@ -117,6 +133,9 @@ export async function POST(req: Request) {
         await updateRevisionSession(ctx.admin, ctx.userId, sessionId, { position: answeredCount + 1 });
         return NextResponse.json({ recorded: true, held: true });
       }
+      // SCHOLAR-SQIE-02: after an explanation from recovered evidence that was still withheld, the withhold says so and
+      // carries what remains unanswered (withheld.recovered); the student's own judgement is still what marks it.
+      if (recovered && withheld) { why = RECOVERY_STILL_WITHHELD; withheld = { ...withheld, recovered: recoveredReply(recovered, false) }; }
       if (!evaluator) return NextResponse.json({ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL.self_graded, ...(withheld ? { withheld, questionId: q.id, attempt: r.text } : {}) });
     }
   }
@@ -137,5 +156,6 @@ export async function POST(req: Request) {
   return NextResponse.json({
     recorded: true,
     feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, evaluation, evaluationParts, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
+    ...(recovered?.ok && evaluator ? { recovered: recoveredReply(recovered, true) } : {}),
   });
 }

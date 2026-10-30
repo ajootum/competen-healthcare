@@ -72,14 +72,14 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max"
   | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown"
   | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days"
-  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents";
+  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
   | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules"
-  | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources" | "scholar_learn_source_modes";
+  | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources" | "scholar_learn_source_modes" | "scholar_recovery_providers";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -95,7 +95,7 @@ export type OptionsPolicyKey = "scholar_institutions" | "professional_evaluation
 /** COMPETEN-PROFESSIONAL-PROFILE-01: an ORDERED choice from a fixed list (form fields, profile sections). */
 export type SequencePolicyKey = "professional_progress_views" | "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages"
   | "professional_goal_fields" | "professional_goal_statuses" | "professional_activity_statuses" | "professional_goal_review_fields"
-  | "professional_self_assessment_fields" | "passport_sections";
+  | "professional_self_assessment_fields" | "passport_sections" | "scholar_recovery_provider_order";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
 export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_profile_ai"
@@ -110,7 +110,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages"
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
-  | "professional_progress_default_period" | "professional_documents_ai";
+  | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -161,6 +161,19 @@ export type ScholarResearchPolicy = {
   /** Per learner per day: fresh research searches, and research-answer AI spend in US cents. */
   dailyMax: number;
   dailyCostCents: number;
+};
+/** SCHOLAR-SQIE-02: where evidence recovery may look. Notes, then the library, then (references only) external sources. */
+export const RECOVERY_MODES = ["notes_only", "notes_and_library", "notes_and_references"] as const;
+export type RecoveryMode = (typeof RECOVERY_MODES)[number];
+export type RecoveryProvider = "pubmed" | "pmc" | "openalex" | "crossref" | "google_scholar_link" | "guidelines";
+export type ScholarRecoveryPolicy = {
+  defaultMode: RecoveryMode;
+  /** Whether a learner may ask for external scholarly sources at all. Default off. */
+  external: "off" | "offer";
+  /** The sources recovery may use, in priority order. Default none. Each must ALSO be Active in the research engine. */
+  providers: RecoveryProvider[];
+  maxResults: number;
+  timeoutMs: number;
 };
 export type ScholarExamPolicy = {
   enabled: boolean;
@@ -1111,6 +1124,61 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: 25, min: 0, max: 500,
     limitReason: "Zero to five dollars. Default: twenty-five cents.",
   },
+  // SCHOLAR-SQIE-02 s5-8 (owner, 30 Oct 2026): EVIDENCE RECOVERY when an answer was withheld or the notes were not enough.
+  // Notes first, then the approved Competen library, then -- only if the learner chose references AND HQ switched it on
+  // AND the Research & Evidence Engine has the source Active -- external scholarly sources. Default: notes + library.
+  {
+    key: "scholar_recovery_default_mode", kind: "choice", product: "Scholar",
+    label: "Finding more learning resources: where to look by default",
+    help: "When Scholar could not fully explain a topic from a learner's notes, where it looks for more evidence unless the learner chooses otherwise. Notes and the approved Competen library never leave Competen. Approved references also searches external scholarly sources, and only when the setting below and the Research & Evidence Engine both allow it.",
+    options: [{ value: "notes_only", label: "My notes only" }, { value: "notes_and_library", label: "My notes + approved Competen library" }, { value: "notes_and_references", label: "My notes + approved references" }],
+    fallback: "notes_and_library",
+    limitReason: "Default: notes and the approved library. External sources still need the setting below and an Active source.",
+  },
+  {
+    key: "scholar_recovery_external", kind: "choice", product: "Scholar",
+    label: "Finding more learning resources: external scholarly sources",
+    help: "Whether a learner may ask Scholar to search external scholarly sources (PubMed, OpenAlex and the others enabled below) for a topic their notes do not cover. Only topic keywords are sent, with names, numbers and dates removed. Never the learner's notes.",
+    options: [{ value: "off", label: "Off" }, { value: "offer", label: "Offer to the learner" }],
+    fallback: "off",
+    limitReason: "Default: off. Each source must also be Active in HQ, AI and Intelligence, Research Sources.",
+  },
+  {
+    key: "scholar_recovery_providers", kind: "set", product: "Scholar",
+    label: "Finding more learning resources: sources Scholar may use",
+    help: "Of the research sources, the ones evidence recovery may use. A source must ALSO be Active in the Research & Evidence Engine before anything is sent to it. Approved guideline publishers are links to the publishers listed for examination research: nothing is fetched from them.",
+    options: [
+      { value: "pubmed", label: "PubMed" }, { value: "pmc", label: "PubMed Central (open-access links)" }, { value: "openalex", label: "OpenAlex" },
+      { value: "crossref", label: "Crossref (DOI verification)" }, { value: "google_scholar_link", label: "Google Scholar (search link only)" }, { value: "guidelines", label: "Approved guideline publishers (links only)" },
+    ],
+    fallback: [],
+    limitReason: "Default: none. Without Crossref, a reference without a PubMed id cannot be verified and is not shown.",
+  },
+  {
+    key: "scholar_recovery_provider_order", kind: "sequence", product: "Scholar",
+    label: "Finding more learning resources: source priority",
+    help: "The order the enabled sources are searched and shown in. Where the Research & Evidence Engine has its own order for Scholar, that order is used.",
+    options: [
+      { value: "pubmed", label: "PubMed" }, { value: "pmc", label: "PubMed Central" }, { value: "openalex", label: "OpenAlex" },
+      { value: "crossref", label: "Crossref" }, { value: "google_scholar_link", label: "Google Scholar link" }, { value: "guidelines", label: "Approved guideline publishers" },
+    ],
+    fallback: ["pubmed", "pmc", "openalex", "crossref", "google_scholar_link", "guidelines"],
+    limitReason: "Only these sources. The notes, then the library, always come first.",
+  },
+  {
+    key: "scholar_recovery_max_results", kind: "int", product: "Scholar", unit: "references",
+    label: "Finding more learning resources: references per search",
+    help: "The most external references one search returns. The Research & Evidence Engine's own limit applies too, whichever is lower.",
+    fallback: 5, min: 1, max: 10,
+    limitReason: "One to ten. Default: five.",
+  },
+  {
+    key: "scholar_recovery_timeout_ms", kind: "int", product: "Scholar", unit: "milliseconds",
+    label: "Finding more learning resources: time allowed per source",
+    help: "How long one external source may take to answer before Scholar carries on without it.",
+    fallback: 6000, min: 1000, max: 15000,
+    limitReason: "One to fifteen seconds. Default: six seconds.",
+  },
   {
     key: "scholar_exam_scanned_pages", kind: "choice", product: "Scholar",
     label: "Scanned examination pages",
@@ -1534,6 +1602,8 @@ export type IndividualPolicy = {
   scholarExams: ScholarExamPolicy;
   /** COMPETEN-RESEARCH-01: the Learn source modes and governed academic research. */
   scholarResearch: ScholarResearchPolicy;
+  /** SCHOLAR-SQIE-02: evidence recovery after a withheld or insufficient answer. */
+  scholarRecovery: ScholarRecoveryPolicy;
   scholarOnboardingFields: ("level" | "institution")[];
   /** P0: the least-reviewed content status Scholar offers. Default "unreviewed": everything, labelled. */
   scholarCatalogueMinStatus: ContentStatusLevel;
@@ -1661,6 +1731,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
     scholarExams: resolveScholarExams(published),
     scholarResearch: resolveScholarResearch(published),
+    scholarRecovery: resolveScholarRecovery(published),
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
     scholarCatalogueMinStatus: clampChoice(policyDef("scholar_catalogue_min_status") as ChoicePolicy, published.get(policyPath("scholar_catalogue_min_status"))) as ContentStatusLevel,
     professionalEvaluation: resolveProfessionalEvaluation(published),
@@ -1862,6 +1933,20 @@ function resolveScholarResearch(published: Map<string, unknown>): ScholarResearc
   const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
   const chosen = clampSet(policyDef("scholar_learn_source_modes") as SetPolicy, published.get(policyPath("scholar_learn_source_modes"))) as LearnSourceMode[];
   return { modes: LEARN_SOURCE_MODES.filter(m => m === "notes" || chosen.includes(m)), dailyMax: int("scholar_research_daily_max"), dailyCostCents: int("scholar_research_daily_cost_cents") };
+}
+
+/** SCHOLAR-SQIE-02. Evidence recovery as configured: the enabled sources, in priority order. */
+function resolveScholarRecovery(published: Map<string, unknown>): ScholarRecoveryPolicy {
+  const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
+  const choice = (key: ChoicePolicyKey) => clampChoice(policyDef(key) as ChoicePolicy, published.get(policyPath(key)));
+  const enabled = clampSet(policyDef("scholar_recovery_providers") as SetPolicy, published.get(policyPath("scholar_recovery_providers")));
+  const order = clampSequence(policyDef("scholar_recovery_provider_order") as SequencePolicy, published.get(policyPath("scholar_recovery_provider_order")));
+  // A source enabled but left out of the order still counts, last.
+  const providers = [...order.filter(p => enabled.includes(p)), ...enabled.filter(p => !order.includes(p))] as RecoveryProvider[];
+  return {
+    defaultMode: choice("scholar_recovery_default_mode") as RecoveryMode, external: choice("scholar_recovery_external") as "off" | "offer",
+    providers, maxResults: int("scholar_recovery_max_results"), timeoutMs: int("scholar_recovery_timeout_ms"),
+  };
 }
 
 /** COMPETEN-RESEARCH-01 ADDENDUM V2: the modes a learner is SHOWN. An inactive mode is never shown as available. */

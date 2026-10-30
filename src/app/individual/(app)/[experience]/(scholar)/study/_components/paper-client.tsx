@@ -10,6 +10,8 @@ import { AiUnavailableNote } from "@/app/individual/_components/ai/AiAvailabilit
 import { FormativeAiLabel } from "./edu-notice";
 import type { FeedbackParts } from "@/lib/individual/scholar/question-intel";
 import { FeedbackPartsView } from "./revision-client";
+import { RecoveryFlow, type ExplainOutcome, type RecoveryRequestBody } from "./evidence-recovery";
+import { RECOVERY_EXPLANATION_LABEL } from "@/lib/individual/scholar/config";
 
 // Studying an examination paper (COMPETEN-SCHOLAR-EXAM-PAPERS-01): attempt a question, then reveal a suggested answer
 // with its evidence; ask a follow-up; turn it into revision. Every call goes to a gate-3 route, which decides; this
@@ -47,6 +49,8 @@ export type AnswerContentView = {
 export type SavedAnswerView = {
   id: string; content: AnswerContentView; evidence: EvidenceView[]; attempt: { option: string | null; text: string | null } | null;
   research: { web?: { state?: string; message?: string | null } } | null; model: string; createdAt: string; revisionQuestionId: string | null;
+  /** SCHOLAR-SQIE-02: written from the learning resources found after a withheld answer. */
+  recovered?: boolean;
 };
 export type EvidenceChoice = { notes: boolean; library: boolean; web: { on: boolean; reason: string | null }; depth: "quick" | "standard" | "deep" };
 
@@ -139,7 +143,7 @@ function AnswerView({ a, onRevise, onDelete, busy }: { a: SavedAnswerView; onRev
   return (
     <div className="mt-4 rounded-xl border border-[var(--cmp-theme-border)] bg-[var(--cmp-app-bg)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-semibold text-amber-900"><span aria-hidden>✦</span>Suggested answer, written by AI from the evidence below. Not an answer key or a mark.</p>
+        <p className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-semibold text-amber-900"><span aria-hidden>✦</span>{a.recovered ? `${RECOVERY_EXPLANATION_LABEL}. Not an answer key or a mark.` : "Suggested answer, written by AI from the evidence below. Not an answer key or a mark."}</p>
         <span className="text-[11.5px] text-gray-500">{new Date(a.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · {a.model}</span>
       </div>
       {attempted && (
@@ -221,18 +225,36 @@ function QuestionCard({ q, saved, choice, onSaved }: { q: PaperQuestionView; sav
   const offCopy = deeper && !deeper.available ? paperAiCopy({ reason: deeper.reason }, !!answer) : null;
   const whyId = `why-${useId().replace(/:/g, "")}`;
   const say = (text: string) => ({ c: { text, next: null }, ai: false });
+  // SCHOLAR-SQIE-02: a withheld answer opens evidence recovery beneath the attempt, which stays exactly as it is.
+  const [recovery, setRecovery] = useState<{ key: number; body: RecoveryRequestBody; withAttempt: boolean } | null>(null);
+  const sourcesNow = () => [choice.notes ? "notes" : null, choice.library ? "library" : null, choice.web.on ? "web" : null].filter(Boolean);
+  const modeNow = (): RecoveryRequestBody["mode"] => (choice.web.on ? "notes_and_references" : choice.library ? "notes_and_library" : "notes_only");
+  const bodyFor = (withAttempt: boolean, extra: Record<string, unknown> = {}) => ({
+    questionId: q.id, attempt: withAttempt ? { option, text: text.trim() || null } : null, sources: sourcesNow(), depth: choice.depth, ...extra,
+  });
   async function reveal(withAttempt: boolean) {
     // The attempt (option and text) is never cleared here: a refusal leaves it exactly as the student left it.
-    setBusy(true); setNotice(null);
-    const sources = [choice.notes ? "notes" : null, choice.library ? "library" : null, choice.web.on ? "web" : null].filter(Boolean);
-    const r = await call("/api/individual/scholar/papers/answer", {
-      questionId: q.id, attempt: withAttempt ? { option, text: text.trim() || null } : null, sources, depth: choice.depth,
-    });
+    setBusy(true); setNotice(null); setRecovery(null);
+    const r = await call("/api/individual/scholar/papers/answer", bodyFor(withAttempt));
     setBusy(false);
     if (!r.ok) { const c = paperAiCopy({ body: r.json }, !!answer); setNotice(c ? { c, ai: true } : say(r.json.error ?? "No answer could be written just now.")); return; }
-    if (r.json.noEvidence || r.json.withheld) { setNotice(say(r.json.message ?? "No answer could be shown.")); return; }
+    if (r.json.noEvidence || r.json.withheld) {
+      setNotice(say(r.json.message ?? "No answer could be shown."));
+      setRecovery(x => ({ key: (x?.key ?? 0) + 1, withAttempt, body: { paperQuestionId: q.id, mode: modeNow(), withheldReason: r.json.withheld?.reason ?? null } }));
+      return;
+    }
     setAnswer({ id: r.json.id, content: r.json.content, evidence: r.json.evidence, attempt: r.json.attempt, research: r.json.research, model: r.json.provenance?.model ?? "", createdAt: new Date().toISOString(), revisionQuestionId: null });
     onSaved();
+  }
+  /** "Explain using approved references": the SAME answer request, with only the recovery's id, mode and question. */
+  async function explainFromRecovery(rec: { id: string; mode: RecoveryRequestBody["mode"]; question: string }): Promise<ExplainOutcome> {
+    const r = await call("/api/individual/scholar/papers/answer", bodyFor(recovery?.withAttempt ?? false, { recovery: rec }));
+    if (!r.ok) return { error: (paperAiCopy({ body: r.json }, !!answer)?.text) ?? r.json.error ?? "No answer could be written just now." };
+    if (r.json.noEvidence || r.json.withheld) return { shown: false, message: r.json.message ?? null, unanswered: r.json.recovered?.unanswered, reading: r.json.recovered?.reading };
+    setNotice(null);
+    setAnswer({ id: r.json.id, content: r.json.content, evidence: r.json.evidence, attempt: r.json.attempt, research: r.json.research, model: r.json.provenance?.model ?? "", createdAt: new Date().toISOString(), revisionQuestionId: null, recovered: true });
+    onSaved();
+    return { shown: true };
   }
   async function revise() {
     if (!answer) return;
@@ -280,6 +302,7 @@ function QuestionCard({ q, saved, choice, onSaved }: { q: PaperQuestionView; sav
           </div>
           {offCopy && <CopyLine id={whyId} c={offCopy} tone="note" />}
           {notice && <CopyLine c={notice.c} tone={notice.ai ? "note" : "alert"} />}
+          {recovery && <RecoveryFlow key={recovery.key} request={recovery.body} explain={aiOff ? undefined : explainFromRecovery} onDismiss={() => setRecovery(null)} />}
           {answer && <AnswerView a={answer} busy={busy} onRevise={revise} onDelete={remove} />}
         </>
       )}

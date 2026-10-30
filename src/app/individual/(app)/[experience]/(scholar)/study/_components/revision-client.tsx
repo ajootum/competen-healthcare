@@ -13,6 +13,8 @@ import {
 } from "@/lib/individual/scholar/config";
 import type { RevisionFeedback, RevisionItemView } from "@/lib/individual/scholar/revision-view";
 import { MakeEvaluation } from "./evaluation-client";
+import { RecoveryFlow, type ExplainOutcome } from "./evidence-recovery";
+import { RECOVERY_EXPLANATION_LABEL } from "@/lib/individual/scholar/config";
 import { FEEDBACK_HEADINGS, GROUNDING_LABEL } from "@/lib/individual/scholar/config";
 import type { FeedbackParts, SourceMode } from "@/lib/individual/scholar/question-intel";
 
@@ -337,14 +339,34 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
   const [order, setOrder] = useState<number[]>(item.options.map((_, i) => i));
   const [back, setBack] = useState<{ back: string; source: { quote: string; citation: string; materialId: string; chunkId: string } } | null>(null);
   const [selfGrade, setSelfGrade] = useState<{ accepted: string[]; reason: string; label: string } | null>(null);
+  // SCHOLAR-SQIE-02: a withheld AI evaluation opens evidence recovery beneath the student's answer, which is kept as typed.
+  const [recovery, setRecovery] = useState<{ key: number; withheldReason: string | null } | null>(null);
+  const [recovered, setRecovered] = useState(false);
 
   async function send(response: unknown, extra: Record<string, unknown> = {}) {
     setBusy(true); setError("");
     const r = await call("/api/individual/scholar/revision/answer", { questionId: item.id, sessionId, response, ...extra });
     setBusy(false);
-    if (r.json.needsSelfGrade) { setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "" }); return; }
+    if (r.json.needsSelfGrade) {
+      setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "" });
+      if (r.json.withheld && item.kind === "short") setRecovery(x => ({ key: (x?.key ?? 0) + 1, withheldReason: r.json.withheld?.reason ?? null }));
+      return;
+    }
     if (!r.ok) { setError(r.json.error ?? "Your answer could not be saved."); return; }
     onAnswered({ questionId: item.id, feedback: r.json.feedback });
+  }
+  /** "Explain using approved references": the SAME evaluation of the same answer, with only the recovery's id, mode and question. */
+  async function explainFromRecovery(rec: { id: string; mode: "notes_only" | "notes_and_library" | "notes_and_references"; question: string }): Promise<ExplainOutcome> {
+    const r = await call("/api/individual/scholar/revision/answer", { questionId: item.id, sessionId, response: { text }, recovery: rec });
+    if (r.json.needsSelfGrade) {
+      setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "" });
+      const rec = r.json.recovered ?? r.json.withheld?.recovered;
+      return { shown: false, message: r.json.reason ?? null, unanswered: rec?.unanswered, reading: rec?.reading };
+    }
+    if (!r.ok) return { error: r.json.error ?? "Your answer could not be checked just now." };
+    setRecovered(!!r.json.recovered?.shown);
+    onAnswered({ questionId: item.id, feedback: r.json.feedback });
+    return { shown: true };
   }
   async function reveal() {
     setBusy(true); setError("");
@@ -369,7 +391,7 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
       </p>
       <p className="mt-1 text-[16px] font-semibold leading-relaxed text-gray-900">{item.stem}</p>
       {answered ? (
-        fb ? <FeedbackPanel f={fb} sessionId={sessionId} questionId={item.id} /> : <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-700">Answer recorded. You will see how it went at the end of the session.</p>
+        fb ? <>{recovered && <p className="mt-3 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{RECOVERY_EXPLANATION_LABEL}</p>}<FeedbackPanel f={fb} sessionId={sessionId} questionId={item.id} /></> : <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-700">Answer recorded. You will see how it went at the end of the session.</p>
       ) : item.kind === "flashcard" ? (
         !back ? <button type="button" className={`${btn} mt-4`} style={{ background: accent }} disabled={busy} onClick={reveal}>Show the answer</button> : (
           <div className="mt-4">
@@ -399,6 +421,10 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
             <button type="button" className={ghost} disabled={busy} onClick={() => send({ text }, { selfGrade: true })}>It says the same</button>
             <button type="button" className={ghost} disabled={busy} onClick={() => send({ text }, { selfGrade: false })}>It does not</button>
           </div>
+          {recovery && (
+            <RecoveryFlow key={recovery.key} onDismiss={() => setRecovery(null)} explain={explainFromRecovery}
+              request={{ question: item.stem.slice(0, 600), mode: "notes_only", materialId: item.materialId, sectionId: item.chunkId, withheldReason: recovery.withheldReason }} />
+          )}
         </div>
       ) : (
         <form className="mt-3" onSubmit={e => { e.preventDefault(); if (ready) void send(responseOf()); }}>

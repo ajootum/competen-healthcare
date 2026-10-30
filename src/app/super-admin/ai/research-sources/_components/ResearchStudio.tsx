@@ -276,7 +276,7 @@ function PolicyEditor({ policy, live, records, fixedRules, disabled, onSave }: {
         <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] text-gray-700">{fixedRules.map(r => <li key={r}>{r}</li>)}</ul>
         <div className="mt-3 flex flex-wrap gap-4">
           {flag(["rules", "abstractsAsEvidence"], "Use permitted abstracts as evidence")}{flag(["rules", "doiVerification"], "Verify DOIs with Crossref")}
-          {flag(["rules", "showFurtherReading"], "Show further reading")}{flag(["rules", "scholarLink"], "Offer the Google Scholar link")}
+          {flag(["rules", "showFurtherReading"], "Show further reading")}{flag(["rules", "scholarLink"], "Offer the Google Scholar link")}{flag(["rules", "openAccessLinks"], "Show PubMed Central open-access links (never fetched)")}
         </div>
         <div className="mt-2 flex flex-wrap gap-3">{num(["rules", "maxEvidence"], "Evidence items (max)")}{num(["rules", "excerptChars"], "Excerpt shown (characters)")}</div>
       </section>

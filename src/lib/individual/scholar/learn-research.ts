@@ -1,7 +1,7 @@
-import { cachedResult, researchKey, researchQuery, runResearch, type ProviderCall, type ResearchResult } from "@/lib/holdings/research/service";
+import { cachedResult, researchKey, researchQuery, runResearch, searchSources, type ProviderCall, type ResearchPlan, type ResearchResult } from "@/lib/holdings/research/service";
 import { loadResearchEngine, planFor, researchOperational, researchUsage, type ResearchEngine } from "@/lib/holdings/research/load";
 import { toEvidenceRecord } from "@/lib/holdings/research/evidence";
-import { PROVIDER_LABEL, type ResearchItem } from "@/lib/holdings/research/providers";
+import { PROVIDER_LABEL, type OpenAccess, type ResearchItem } from "@/lib/holdings/research/providers";
 import type { IndividualContext } from "../guard";
 import type { ScholarResearchPolicy } from "../policy";
 import { LEARN_RESEARCH_OPERATION, type ResearchEvidence } from "./generation";
@@ -52,14 +52,41 @@ export async function scholarResearchOperational(admin: unknown, engine?: Resear
   return researchOperational(engine ?? await loadResearchEngine(admin), "scholar", "learn");
 }
 
+/**
+ * SCHOLAR-SQIE-02 (evidence recovery): a consumer's own, NARROWER choice of what the engine may run for it -- which of
+ * the engine's sources (search, DOI verification, open-access links, the Google Scholar link), fewer results and a
+ * shorter timeout. It can only ever narrow: a source the engine has not Active is still refused by the one gate, a rule
+ * the engine has off stays off, and a narrowing that leaves no search source searches nothing at all.
+ */
+export type ResearchNarrowing = { providers: readonly string[]; maxResults: number; timeoutMs: number };
+
+/** Pure. The plan, narrowed. The engine's own provider order wins where it has one; otherwise the consumer's. */
+export function narrowPlan(plan: ResearchPlan, n: ResearchNarrowing): ResearchPlan {
+  const engineOrder = plan.policy.sources[plan.product]?.providers ?? [];
+  const providers = engineOrder.length ? engineOrder.filter(id => n.providers.includes(id)) : [...n.providers];
+  const p = plan.policy, has = (id: string) => n.providers.includes(id);
+  return {
+    ...plan,
+    policy: {
+      ...p,
+      sources: { ...p.sources, [plan.product]: { ...p.sources[plan.product], providers } },
+      rules: { ...p.rules, doiVerification: p.rules.doiVerification && has("crossref"), openAccessLinks: p.rules.openAccessLinks && has("pmc"), scholarLink: p.rules.scholarLink && has("google_scholar_link") },
+      limits: { ...p.limits, maxResultsPerRequest: Math.max(1, Math.min(p.limits.maxResultsPerRequest, n.maxResults)), timeoutMs: Math.max(1000, Math.min(p.limits.timeoutMs, n.timeoutMs)) },
+    },
+  };
+}
+
 /** The research for one Learn request, within the learner's limits and the engine's configuration. */
 /** `actionId`: the Scholar AI action this research serves, so its usage and cost are attributed to that action's outcome. */
-export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPolicy, input: { question?: string | null; topics: readonly string[]; title?: string | null }, actionId: string | null = null): Promise<LearnResearch> {
+export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPolicy, input: { question?: string | null; topics: readonly string[]; title?: string | null }, actionId: string | null = null, narrow: ResearchNarrowing | null = null): Promise<LearnResearch> {
   const engine = await loadResearchEngine(ctx.admin);
   if (!p.modes.includes("research") || !researchOperational(engine, "scholar", "learn")) return none("off", "Research & Explain is not available on Scholar at the moment.", ["off"]);
   const q = researchQuery(input);
   if (!q.ok) return none("refused", q.reason === "identifier" ? "Research was not run: the topic looks like it identifies a patient." : "There was no topic to research.", [`query_${q.reason}`]);
-  const plan = planFor(engine, "scholar", "learn");
+  const plan = narrow ? narrowPlan(planFor(engine, "scholar", "learn"), narrow) : planFor(engine, "scholar", "learn");
+  // A narrowing that leaves no search source runs nothing. (An EMPTY list must be caught here: searchSources reads an
+  // empty list as "every Active source by priority".)
+  if (narrow && (!plan.policy.sources.scholar.providers.length || !searchSources(plan).length)) return none("off", "No research source is switched on for this.", ["off_narrowed"]);
   const rules = { excerptChars: engine.policy.rules.excerptChars, furtherReading: engine.policy.rules.showFurtherReading, licensing: Object.fromEntries(Object.values(engine.registry).map(r => [r.id, r.licensing])) };
   const key = researchKey(q.query, plan);
   const cached = await readResearchCache(ctx.admin, key, new Date().toISOString());
@@ -97,6 +124,8 @@ export type ExternalReference = {
   kind: "external"; tag: string | null; provider: string; title: string; journal: string | null; year: number | null; authors: string[];
   pmid: string | null; doi: string | null; url: string; evidence: boolean; excerpt: string | null; verified: { pmid: boolean; doi: boolean | null }; retrievedAt: string;
   sourceVersion: string | null; reuse: "private_evidence_excerpt_only" | "metadata_only";
+  /** SCHOLAR-SQIE-02: PubMed Central's open-access link and licence, when it was asked and has one. Never fetched. */
+  openAccess: OpenAccess | null;
 };
 
 /**
@@ -116,6 +145,7 @@ export function externalReferences(r: LearnResearch): ExternalReference[] {
       pmid: rec.pmid, doi: rec.doi, url: rec.url, evidence,
       excerpt: evidence && rec.abstract && max > 0 ? (rec.abstract.length > max ? `${rec.abstract.slice(0, max).replace(/\s+\S*$/, "")}…` : rec.abstract) : null,
       verified: rec.identity, retrievedAt: rec.retrievedAt, sourceVersion: rec.sourceVersion || null, reuse: rec.reuse,
+      openAccess: x.openAccess && !x.openAccess.retracted ? x.openAccess : null,
     };
   });
 }

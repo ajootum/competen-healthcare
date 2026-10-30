@@ -42,6 +42,9 @@ export const CAPABILITIES = {
   abstracts: { label: "Abstracts where permitted", phase: 1, implemented: true },
   doi_verification: { label: "DOI and citation verification", phase: 1, implemented: true },
   external_link: { label: "External search link (no retrieval)", phase: 1, implemented: true },
+  // SCHOLAR-SQIE-02 s6: whether a work has an open-access copy in PubMed Central, under which licence, and its link.
+  // A link and a licence only: the full text itself is never fetched (engine-config FIXED_RULES).
+  open_access: { label: "Open-access full-text link and licence (no retrieval)", phase: 1, implemented: true },
   related_papers: { label: "Related papers", phase: 2, implemented: false },
   evidence_extraction: { label: "Evidence extraction", phase: 2, implemented: false },
   comparison: { label: "Evidence comparison", phase: 2, implemented: false },
@@ -75,7 +78,7 @@ export type ResearchActivity = (typeof RESEARCH_ACTIVITIES)[number];
  * ⚠ THE ADAPTERS THAT EXIST IN CODE. This set is the code side of "Integrated": adding a provider needs an adapter here
  * plus configuration. Phase 2 and Phase 3 sources have none, so none of them can be integrated, approved or called.
  */
-export const ADAPTERS = ["pubmed", "openalex", "crossref", "google_scholar_link"] as const;
+export const ADAPTERS = ["pubmed", "openalex", "crossref", "google_scholar_link", "pmc"] as const;
 export type AdapterId = (typeof ADAPTERS)[number];
 export const hasAdapter = (id: string): id is AdapterId => (ADAPTERS as readonly string[]).includes(id);
 
@@ -137,6 +140,10 @@ const S: Seed[] = [
     licensing: "OpenAlex data is CC0. Abstracts come from its inverted index.", provenance: "OpenAlex work ids, DOIs and metadata.", docsUrl: "https://docs.openalex.org/" },
   { id: "crossref", name: "Crossref", type: "metadata_registry", phase: 1, capabilities: ["doi_verification", "metadata"], products: ["scholar"], activities: ["learn"], priority: 3, rateLimitPerMinute: 300,
     licensing: "Crossref metadata is open for reuse.", provenance: "The DOI's registered title and issue date.", docsUrl: "https://www.crossref.org/documentation/retrieve-metadata/rest-api/" },
+  // SCHOLAR-SQIE-02 s6: PubMed Central's open-access service, asked only about PMIDs PubMed itself returned.
+  { id: "pmc", name: "PubMed Central (open-access links)", type: "metadata_registry", phase: 1, capabilities: ["open_access"], products: ["scholar"], activities: ["learn"], priority: 4, rateLimitPerMinute: 180,
+    licensing: "NCBI terms. Only whether an article is in the PMC open-access subset, its licence as PMC records it, and its PMC link are used. The full text is never fetched or stored.",
+    provenance: "PMCID from the NCBI ID converter, licence from the PMC OA web service.", docsUrl: "https://www.ncbi.nlm.nih.gov/pmc/tools/oa-service/" },
   { id: "google_scholar_link", name: "Google Scholar (external link only)", type: "external_link", phase: 1, capabilities: ["external_link"], products: ["scholar"], activities: ["learn"], priority: 9, rateLimitPerMinute: 0,
     licensing: "A plain link for the learner to follow. Competen never fetches, scrapes or automates Google Scholar.", provenance: "None: nothing is retrieved.", docsUrl: null },
   // ── Phase 2: structures only. No adapter, no call. ──

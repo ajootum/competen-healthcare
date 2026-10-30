@@ -13,6 +13,9 @@ import ClarifyPurpose from "@/app/individual/_components/ai/ClarifyPurpose";
 import { aiReasonCopy, clarifyFrom, type ClarifyPrompt } from "@/lib/individual/ai-availability";
 import { useAiAvailabilityOf } from "@/app/individual/_components/ai/AiAvailabilityContext";
 import { FormativeAiLabel } from "./edu-notice";
+import { RecoveryFlow, type ExplainOutcome, type RecoveryRequestBody } from "./evidence-recovery";
+import { RECOVERY_EXPLANATION_LABEL } from "@/lib/individual/scholar/config";
+import type { ReadingLink } from "@/lib/individual/scholar/evidence-recovery";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -56,8 +59,13 @@ type Reply = {
   artefactId?: string; actionId?: string;
   /** s7: no new AI now; what is saved for these sections. */
   continuity?: { message: string; insufficient: boolean }; savedList?: Reply[];
+  reason?: string;
+  /** SCHOLAR-SQIE-02: an answer asked for from the learning resources found after a withheld one. */
+  recovered?: { shown: boolean; label: string; unanswered: string[]; reading: ReadingLink[] };
 };
-type Card = { id: number; asked?: string; reply: Reply };
+/** `extra` and `target`: the request as it was made, so "Explain using approved references" can make it again. */
+type Card = { id: number; asked?: string; reply: Reply; extra?: Record<string, unknown>; target?: "lesson" | "ask" };
+type Recover = { request: RecoveryRequestBody; explain: (rec: { id: string; mode: RecoveryRequestBody["mode"]; question: string }) => Promise<ExplainOutcome> };
 /** AI operating modes: a clarify question put to the student instead of a refusal, and the request to resend if it is for study. */
 type Pending = { prompt: ClarifyPrompt; target: "lesson" | "ask" | "assistant"; action?: string; extra?: Record<string, unknown>; asked?: string; question?: string };
 
@@ -123,7 +131,7 @@ export function LearnWorkspace(props: {
     if (prompt) { setPending({ prompt, target, action, extra, asked }); return null; }
     if (!r.ok && !r.json.withheld) { setError(r.json.error ?? "Scholar could not answer just now."); return null; }
     const reply = (r.json.continuity ? { ...r.json, savedList: r.json.saved, saved: null, sources: [], references: [] } : r.json) as Reply;
-    const card: Card = { id: ++seq.current, asked, reply };
+    const card: Card = { id: ++seq.current, asked, reply, extra, target };
     if (target === "ask") setAskThread(t => [card, ...t]);
     else setCards(c => ({ ...c, [step.step]: [...(c[step.step] ?? []), card] }));
     if (!r.json.withheld && !r.json.continuity) setProgress(p => ({ ...p, [step.step]: { actions: [...new Set([...(p[step.step]?.actions ?? []), action])], verdict: r.json.verdict?.value ?? p[step.step]?.verdict ?? null } }));
@@ -142,6 +150,24 @@ export function LearnWorkspace(props: {
     if (prompt) { setPending({ prompt, target: "assistant", question }); return; }
     setAssist(list => [{ id: ++seq.current, asked: question, ...(r.ok ? { answer: String(r.json.answer ?? "") } : { error: r.json.error ?? "Your assistant could not answer just now." }) }, ...list]);
   }, [session, step]);
+  // SCHOLAR-SQIE-02: a withheld answer offers evidence recovery beneath it, in the learner's own source mode. "Explain
+  // using approved references" makes the SAME request again (same action, same question) with only the recovery's id,
+  // mode and question; the server finds the evidence again and runs the same checks. Nothing the student typed is cleared.
+  const recoveryMode = (): RecoveryRequestBody["mode"] => (mode === "research" ? "notes_and_references" : mode === "library" ? "notes_and_library" : "notes_only");
+  const recoverFor = (c: Card): Recover | undefined => {
+    const r = c.reply;
+    if (!r.withheld || r.recovered || r.action === "check" || r.action === "clarify" || !step) return undefined;
+    const first = step.sections[0];
+    return {
+      request: { question: (c.asked || step.title || "").slice(0, QUESTION_MAX), mode: recoveryMode(), materialId: first?.materialId ?? null, sectionId: first?.chunkId ?? null, withheldReason: r.reason ?? null },
+      explain: async rec => {
+        const x = await act(r.action, { ...(c.extra ?? {}), recovery: rec }, c.target ?? "lesson", c.asked);
+        if (!x) return { error: "Scholar could not explain this just now. Try again shortly." };
+        if (x.withheld || x.continuity) return { shown: false, message: x.continuity?.message ?? null, unanswered: x.recovered?.unanswered, reading: x.recovered?.reading };
+        return { shown: true };
+      },
+    };
+  };
   // Item 4: a withheld answer's rephrase -- to Ask, with the student's own question back in the box to change.
   const rephrase = useCallback((q: string) => {
     setTab("ask");
@@ -333,7 +359,7 @@ export function LearnWorkspace(props: {
           <div aria-live="polite" className="mt-4 space-y-4">
             {thread.length === 0 && !busy && pending?.target !== "lesson" && <p className="text-[13.5px] text-gray-600">{props.consent ? `Choose ${props.labels[props.startAction]} to begin this step, or ask Scholar anything.` : "Learning needs AI help, which is off."}</p>}
             {thread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }) : undefined}
-              onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} />)}
+              onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} recover={recoverFor(c)} />)}
             {busy && busy !== "ask" && <p className="text-[13px] text-gray-500">{mode === "research" ? "Scholar is reading your notes and searching published research…" : "Scholar is reading your notes…"}</p>}
           </div>
 
@@ -381,7 +407,7 @@ export function LearnWorkspace(props: {
           ) : <p className="mt-2 text-[13px] text-gray-600">Asking is switched off here.</p>}
           {pending?.target === "ask" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-3" onEducation={() => void answerEducation()} />}
           <div aria-live="polite" className="mt-3 space-y-3">
-            {askThread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} compact onRephrase={() => rephrase(c.asked ?? "")} />)}
+            {askThread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} compact onRephrase={() => rephrase(c.asked ?? "")} recover={recoverFor(c)} />)}
           </div>
           {props.consent && step && (
             <div className="mt-4 border-t border-gray-100 pt-3">
@@ -440,7 +466,7 @@ function Withheld({ r, asked, onRephrase }: { r: Reply; asked?: string; onRephra
 }
 
 /** One reply, its four kinds of content kept apart and labelled (owner GO s7). */
-function ReplyCard({ card, labels, compact = false, onFresh, onRephrase }: { card: Card; labels: Record<LearnAction, string>; compact?: boolean; onFresh?: () => void; onRephrase?: () => void }) {
+function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover }: { card: Card; labels: Record<LearnAction, string>; compact?: boolean; onFresh?: () => void; onRephrase?: () => void; recover?: Recover }) {
   const r = card.reply;
   if (r.continuity) {
     return (
@@ -465,6 +491,7 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase }: { car
       <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-500">{name}</p>
       {r.withheld ? <Withheld r={r} asked={card.asked} onRephrase={onRephrase} /> : (
         <>
+          {r.recovered?.shown && <p className="mt-1.5 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{RECOVERY_EXPLANATION_LABEL}</p>}
           {r.verdict && (
             <p className="mt-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[13px] text-violet-950">
               <span className="font-semibold">{r.verdict.label}.</span> {r.verdict.informal}
@@ -498,6 +525,7 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase }: { car
         ) : r.background.withheld ? <p className="mt-2 text-[12.5px] text-gray-600">{r.background.withheld}</p> : null
       )}
       {r.research && <ResearchBlock x={r.research} />}
+      {r.withheld && recover && <RecoveryFlow request={recover.request} explain={recover.explain} />}
       {r.flags && r.flags.length > 0 && <AiFlagList flags={r.flags} />}
       {r.saved && (
         <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-gray-600">
