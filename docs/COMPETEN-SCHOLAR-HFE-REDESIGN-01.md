@@ -25,7 +25,7 @@
 1. **Mobile navigation stays the bottom bar.** The prototype turns the sidebar into a top scroll row under 650 px. CPR-MOB-001 (one `md` edge, `pointer-coarse` touch targets, a bottom bar of at most five) is frozen, so the mobile shell keeps its bottom bar and the prototype's look applies from `md` up.
 2. **Professional is not redesigned.** It shares the new shell structure and heading; its palette, accent and pages are unchanged.
 3. **Prototype copy that would overclaim was adjusted.** Classify is not automatic (analysis runs when the learner asks, with AI help on), so the Library says so. Prototype sample data, scripted AI and the "review notes" bar are prototype-only and not built.
-4. **The prototype's genuine gaps stay governed absences:** OCR/transcription, audio, clinically reviewed shared cases and question banks, OSCE and adaptive exams. They remain in the registry's `planned` list.
+4. **The prototype's genuine gaps stay governed absences:** OCR/transcription, audio, and clinically reviewed shared cases and question banks. They remain in the registry's `planned` list. OSCE practice and adaptive exams were in it until SCHOLAR-PRACTICE-EXAMS-01 (owner, 30 Oct 2026) built them: Adaptive Exams under Revise (`study/revise/adaptive`, transparent rule-based adaptation on the revision engine, a formative practice estimate and never a calibrated score) and OSCE practice in its parallel build. The `osce-adaptive` planned entry is removed.
 
 ## Verification
 

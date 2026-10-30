@@ -167,6 +167,28 @@ export type RevisionDifficulty = (typeof REVISION_DIFFICULTIES)[number];
 export const REVISION_QUANTITY_MAX = 50;
 /** Most AI generation calls one revision session may make to fill its shortfall. */
 export const REVISION_GENERATION_CALLS_MAX = 8;
+// ── ADAPTIVE EXAMS ── SCHOLAR-PRACTICE-EXAMS-01 (owner, 30 Oct 2026) ─────────────────────────────────────────────
+// A formative practice exam on the revision engine whose next question's difficulty follows a stated rule on the
+// student's own answers. Transparent rule-based adaptation only: no item calibration, no ability estimate, no score
+// on any scale. Never an examination, never verification, never competence.
+/** The formats an adaptive exam may use. Flashcards are self-graded recall, not an exam answer, so they are not offered. */
+export const ADAPTIVE_FORMATS = ["mcq", "mrq", "short", "match", "sequence", "structured"] as const satisfies readonly RevisionFormat[];
+export type AdaptiveFormat = (typeof ADAPTIVE_FORMATS)[number];
+/** Questions in one adaptive exam: at least five (the rule needs answers to act on), at most 417's session cap. */
+export const ADAPTIVE_LENGTH_MIN = 5;
+export const ADAPTIVE_LENGTH_MAX = 50;
+/** An optional time limit, in minutes. */
+export const ADAPTIVE_TIME_LIMITS = [10, 15, 20, 30, 45, 60, 90] as const;
+/** Most generation calls one adaptive exam may make for questions at the difficulty it needs. */
+export const ADAPTIVE_GENERATION_CALLS_MAX = REVISION_GENERATION_CALLS_MAX;
+export const ADAPTIVE_TITLE = "Adaptive exam";
+export const ADAPTIVE_HELP = "A practice exam that gets harder or easier as you answer, by a simple stated rule. Formative practice: not an examination.";
+/** The rule, in the words the student sees beside the exam. It is question-intel.ts adaptDifficulty, applied as adaptive.ts says. */
+export const ADAPTIVE_RULE = "Harder after 3 correct in a row; easier after 2 of the last 3 missed. The count starts again after each change, and an answer that waits for your own marking at the end does not move it.";
+/** Said on every report and result of an adaptive exam (owner instruction: no calibrated-testing claim). */
+export const ADAPTIVE_REPORT_LABEL = "Practice estimate from rule-based adaptation — not a calibrated exam score, not a formal examination result, and not verified competence.";
+/** Where migration 720 is absent the exam is kept as a mock-practice session marked adaptive, and its report says so. */
+export const ADAPTIVE_FALLBACK_NOTE = "Kept as a mock-practice session marked adaptive: this environment does not yet record adaptive exams as their own kind. The questions, the rule and this report are the same.";
 // ── STAGE 5A: CLINICAL REASONING ── COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (owner GO 2026-10-25) ───────────────────
 export const CASE_CONTEXTS = ["general", "medical", "surgical", "paediatric", "maternal", "emergency", "critical_care"] as const;
 export type CaseContext = (typeof CASE_CONTEXTS)[number];
