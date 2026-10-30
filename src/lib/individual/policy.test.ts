@@ -130,7 +130,11 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // COMPETEN-RESEARCH-01: notes only. Research also needs the engine operational (HQ Research Sources).
       scholarResearch: { modes: ["notes"], dailyMax: 5, dailyCostCents: 25 },
       // SCHOLAR-SQIE-02: evidence recovery defaults to notes + library, external off, no source enabled.
-      scholarRecovery: { defaultMode: "notes_and_library", external: "off", providers: [], maxResults: 5, timeoutMs: 6000 },
+      // SCHOLAR-SOURCE-QUALITY-01: only PubMed-indexed reviews, guidelines and trials whose title names the topic may explain.
+      scholarRecovery: {
+        defaultMode: "notes_and_library", external: "off", providers: [], maxResults: 5, timeoutMs: 6000, evidenceIndexed: "pubmed_only",
+        evidenceTypes: ["review", "systematic_review", "meta_analysis", "practice_guideline", "guideline", "randomized_controlled_trial", "clinical_trial"], evidenceOnTopic: "title",
+      },
       // P0: label, do not hide -- everything of a chosen catalogue is offered, labelled, by default.
       scholarCatalogueMinStatus: "unreviewed",
       // COMPETEN-PROFESSIONAL-PROFILE-01: free text where nothing is configured, every country, the default statuses,

@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  CONTENT_STATUS_LABEL, RECOVERY_ACTION_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_ORIGIN_LABEL, RECOVERY_PROMPT, RECOVERY_RETRIEVED_LABEL,
-  RECOVERY_STILL_WITHHELD, RECOVERY_UNANSWERED_LABEL,
+  CONTENT_STATUS_LABEL, RECOVERY_ACTION_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL, RECOVERY_ORIGIN_LABEL, RECOVERY_PROMPT,
+  RECOVERY_RETRIEVED_LABEL, RECOVERY_STILL_WITHHELD, RECOVERY_UNANSWERED_LABEL,
 } from "@/lib/individual/scholar/config";
 import type { ReadingLink, RecoveryAction, RecoveryResult } from "@/lib/individual/scholar/evidence-recovery";
 import type { RecoveryMode } from "@/lib/individual/policy";
@@ -34,6 +34,29 @@ function Group({ label, note, children }: { label: string; note?: string; childr
       <ul className="mt-1 space-y-2">{children}</ul>
     </section>
   );
+}
+
+/** External references, one list. Evidence carries its [E n] tag; reading never does, and says why it was not used. */
+function ExternalList({ items }: { items: RecoveryView["evidence"]["external"] }) {
+  return <>{items.map(e => (
+    <li key={e.url} className="text-[13px] text-gray-800">
+      {e.tag && <span className="font-mono font-bold">[{e.tag}] </span>}
+      <a href={e.url} target="_blank" rel="noopener noreferrer" className={`font-semibold underline underline-offset-2 ${focusRing}`}>{e.title}</a>
+      <span className="ml-1 rounded-full border border-gray-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-gray-800">{RECOVERY_ORIGIN_LABEL.external}: {RECOVERY_RETRIEVED_LABEL[e.retrieved]}</span>
+      <p className="text-[12px] text-gray-600">
+        {[e.authors.join(", "), e.journal, e.year, e.provider].filter(Boolean).join(" · ")}
+        {e.pmid ? ` · PMID ${e.pmid}` : ""}{e.doi ? ` · DOI ${e.doi}` : ""}
+      </p>
+      {e.notUsed && <p className="text-[12px] text-gray-700">Reading only: {RECOVERY_NOT_USED_LABEL[e.notUsed]}.</p>}
+      {e.excerpt && <p className="mt-0.5 text-[12.5px] text-gray-700">{e.excerpt}</p>}
+      {e.openAccess && (
+        <p className="mt-0.5 text-[12px]">
+          <a href={e.openAccess.url} target="_blank" rel="noopener noreferrer" className={`underline underline-offset-2 ${focusRing}`}>Open-access copy</a>
+          {e.openAccess.licence ? <span className="text-gray-600"> (licence: {e.openAccess.licence})</span> : null}
+        </p>
+      )}
+    </li>
+  ))}</>;
 }
 
 function ReadingList({ reading }: { reading: readonly ReadingLink[] }) {
@@ -112,26 +135,15 @@ export function EvidenceRecovery({ result, explanation = null, onAction, busy = 
         </Group>
       )}
 
-      {external.length > 0 && (
+      {/* SCHOLAR-SOURCE-QUALITY-01: only references that passed every source-quality rule are shown as evidence. */}
+      {external.some(e => e.evidence) && (
         <Group label={RECOVERY_ORIGIN_LABEL.external} note="Published sources Competen found. Not from your notes and not clinically reviewed. Open the source before relying on it.">
-          {external.map(e => (
-            <li key={e.url} className="text-[13px] text-gray-800">
-              {e.tag && <span className="font-mono font-bold">[{e.tag}] </span>}
-              <a href={e.url} target="_blank" rel="noopener noreferrer" className={`font-semibold underline underline-offset-2 ${focusRing}`}>{e.title}</a>
-              <span className="ml-1 rounded-full border border-gray-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-gray-800">{RECOVERY_ORIGIN_LABEL.external}: {RECOVERY_RETRIEVED_LABEL[e.retrieved]}</span>
-              <p className="text-[12px] text-gray-600">
-                {[e.authors.join(", "), e.journal, e.year, e.provider].filter(Boolean).join(" · ")}
-                {e.pmid ? ` · PMID ${e.pmid}` : ""}{e.doi ? ` · DOI ${e.doi}` : ""}
-              </p>
-              {e.excerpt && <p className="mt-0.5 text-[12.5px] text-gray-700">{e.excerpt}</p>}
-              {e.openAccess && (
-                <p className="mt-0.5 text-[12px]">
-                  <a href={e.openAccess.url} target="_blank" rel="noopener noreferrer" className={`underline underline-offset-2 ${focusRing}`}>Open-access copy</a>
-                  {e.openAccess.licence ? <span className="text-gray-600"> (licence: {e.openAccess.licence})</span> : null}
-                </p>
-              )}
-            </li>
-          ))}
+          <ExternalList items={external.filter(e => e.evidence)} />
+        </Group>
+      )}
+      {external.some(e => !e.evidence) && (
+        <Group label="Published sources to read" note="For you to read. Not used to explain this topic. Open the source before relying on it.">
+          <ExternalList items={external.filter(e => !e.evidence)} />
         </Group>
       )}
 
