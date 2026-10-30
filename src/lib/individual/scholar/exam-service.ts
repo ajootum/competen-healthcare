@@ -9,7 +9,7 @@ import { governedReferences, referenceSource } from "./learn";
 import { loadLearnerCatalogue } from "./competency-view";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "./http";
 import type { ScholarAiActivity } from "./ai-standing";
-import { PAPER_PARSER, leadInFor, linesFromChunks, parsePaper, questionText, type PaperLine } from "./exam-paper";
+import { NOTES_NOT_PAPER, PAPER_PARSER, isNotesNotPaper, leadInFor, linesFromChunks, parsePaper, questionText, revisionFront, type PaperLine } from "./exam-paper";
 import {
   ANSWER_WITHHELD, buildEvidence, matchLibrary, runAnswer, runFollowUp, runGuide, runTranscription, type Evidence, type LibraryEntry,
 } from "./exam-answer";
@@ -119,6 +119,12 @@ export async function preparePaper(ctx: IndividualContext, req: Request, materia
   }
 
   const parsed = parsePaper(lines, { emptyPages: empty, transcribedPages: transcribed });
+  // SCHOLAR-QUESTION-INTELLIGENCE-01: numbered notes are not a paper. Nothing is kept as one; the student is sent to
+  // practice questions written from the material instead (Revise, scoped to it).
+  if (isNotesNotPaper(parsed)) {
+    await audit(ctx, "individual_scholar_exam_paper_declined", "individual_scholar_material", materialId, { reason: "looks_like_notes", questions: parsed.questions.length, parser: PAPER_PARSER });
+    return json(200, { materialId, notesLike: true, message: NOTES_NOT_PAPER });
+  }
   const created = await createExamPaper(ctx.admin, ctx.userId, {
     materialId, attestationVersion: EXAM_ATTESTATION.version, extractor: transcribed.length ? `${PAPER_PARSER}+ai-transcription` : PAPER_PARSER,
     instructions: parsed.instructions, flags: parsed.flags,
@@ -322,7 +328,10 @@ export async function answerToRevision(ctx: IndividualContext, answerId: string)
   if (!q.chunkId) return json(409, { error: "This question was transcribed from a scanned page, so it has no section of your material to revise from yet." });
   const passage = await getPassage(ctx.admin, ctx.userId, q.chunkId);
   if (!passage) return json(404, { error: "The section of the paper this question came from could not be found." });
-  const front = [`Question ${q.number}: ${q.stem}`, ...q.options.map(o => `${o.label}. ${o.text}`)].join("\n").slice(0, 2000);
+  // SCHOLAR-QUESTION-INTELLIGENCE-01: a statement (kept as a "question" by the v1 parser) never becomes a card front.
+  const all = await listExamQuestions(ctx.admin, ctx.userId, q.materialId);
+  const front = revisionFront(q, all.ok ? leadInFor(q, all.data) : null);
+  if (!front) return json(409, { error: "This item reads as a statement from notes, not a question, so it is not made into a revision card. Generate practice questions from the material instead." });
   const back = [a.content.option ? `${a.content.option}. ` : "", stripTags(String(a.content.examAnswer ?? ""))].join("").slice(0, 2000);
   const r = await insertRevisionQuestions(ctx.admin, ctx.userId, {
     passage, kind: "flashcard", model: a.model, provider: a.provider, promptVersion: a.promptVersion,

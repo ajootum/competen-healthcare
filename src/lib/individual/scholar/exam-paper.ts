@@ -34,7 +34,9 @@ export type PaperFlag =
   | { kind: "numbering_gap"; after: string; missing: string }
   | { kind: "no_questions_found" }
   | { kind: "too_many_questions"; kept: number }
-  | { kind: "transcribed_pages"; pages: number[] };
+  | { kind: "transcribed_pages"; pages: number[] }
+  /** SCHOLAR-QUESTION-INTELLIGENCE-01: most numbered lines read as statements, not questions -- notes, not a paper. */
+  | { kind: "looks_like_notes"; statements: number };
 
 export type ParsedQuestion = {
   ordinal: number;
@@ -53,7 +55,10 @@ export type ParsedQuestion = {
 export type ParsedPaper = { instructions: string | null; questions: ParsedQuestion[]; flags: PaperFlag[] };
 
 export const EXAM_QUESTION_MAX = 300;
-export const PAPER_PARSER = "paper-parser-v1";
+// v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): a numbered line is a question only when something says it asks -- a question
+// cue, a "?", marks, options, its parts, a "Question N" label, or a section/paper instruction such as "Answer all
+// questions". A numbered statement ("1. Pyelonephritis: this infection spreads ...") is notes, not a question.
+export const PAPER_PARSER = "paper-parser-v2";
 export const UNREADABLE_MARK = "[UNREADABLE]";
 
 /** One line per printed line, each knowing its page and section. */
@@ -73,12 +78,23 @@ const CHOICE_CUE = /\b(choose|select|circle|tick|best answer|single best|most ap
 const FIGURE_CUE = /\b(figure|fig\.|diagram|image|illustration|graph|chart|table|ecg|electrocardiogram|x-?ray|radiograph|photograph|picture|scan shown|shown (?:above|below))\b/i;
 const INSTRUCTION_CUE = /^(choose|select|answer|tick|circle|write|indicate|match|label|complete|fill in)\b/i;
 const PREAMBLE_CUE = /^(answer|attempt|write|read|do not|candidates?|time allowed|duration|use (?:a|black|blue|only)|all questions|each question|you (?:must|should|may)|marks? (?:are|for)|this (?:paper|examination))\b/i;
-const QUESTION_CUE = /\?|\bmarks?\b|^(describe|explain|list|name|state|define|discuss|outline|compare|calculate|identify|give|what|which|why|how|when|study)\b/i;
+const QUESTION_CUE = /\?|\bmarks?\b|_{3,}|\b(true or false|the following|regarding|concerning|with regard to|in relation to|short notes?)\b|^(describe|explain|list|name|state|define|discuss|outline|compare|contrast|calculate|identify|give|what|which|why|how|when|where|who|study|choose|select|match|label|complete|fill|draw|suggest|justify|evaluate|differentiate|distinguish|classify|interpret|write|mention|enumerate|highlight|briefly|tick|circle|indicate|illustrate|analy[sz]e|assess|demonstrate|examine|summari[sz]e|elaborate|formulate|construct|determine|estimate|predict|recommend|critically)\b/i;
+/** A section heading or paper instruction that says what follows are questions ("Answer ALL questions", "Short notes"). */
+const CONTEXT_CUE = /\b(answer|attempt|questions?|short notes|essays?|marks?|candidates?|choose|select)\b/i;
+/** Below this many statements a material is not called notes: a stray numbered line is not a verdict. */
+const NOTES_MIN_STATEMENTS = 3;
+
+/** Pure. Whether a line of text reads as a question (or an instruction to answer), not a statement. */
+export const questionLike = (text: string): boolean => QUESTION_CUE.test(text.trim());
 const ROMAN_ORDER = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"];
 
 type Open = {
   number: string; section: string | null; instructions: string[]; stem: string[]; options: ExamOption[]; marks: number | null;
   pageFrom: number | null; pageTo: number | null; chunkId: string | null; lowerOptions: boolean; leadIn: boolean;
+  /** Printed as "Question N" / "QN" (or a part of one): a question by its label. */
+  explicit: boolean;
+  /** The paper or its section says what follows are questions to answer. */
+  contextCue: boolean;
 };
 
 /** Pure. The paper's lines → its instructions, questions and flags. `emptyPages`: pages with no readable text. */
@@ -94,37 +110,46 @@ export function parsePaper(lines: readonly PaperLine[], opts: { emptyPages?: rea
   let roman: string | null = null;
   let cur: Open | null = null;
   let afterSection = false;
+  let preambleCue = false, sectionCue = false, awaitingFirst = false, explicitMain = false;
 
   const open = (number: string, text: string, l: PaperLine, leadIn = false) => {
-    cur = { number, section, instructions: [], stem: text ? [text] : [], options: [], marks: null, pageFrom: l.page, pageTo: l.page, chunkId: l.chunkId, lowerOptions: false, leadIn };
+    cur = {
+      number, section, instructions: [], stem: text ? [text] : [], options: [], marks: null, pageFrom: l.page, pageTo: l.page, chunkId: l.chunkId, lowerOptions: false, leadIn,
+      explicit: explicitMain, contextCue: preambleCue || sectionCue,
+    };
     out.push(cur);
+    awaitingFirst = false;
   };
 
   for (const l of lines) {
     const text = l.text;
     if (cur) (cur as Open).pageTo = l.page ?? (cur as Open).pageTo;
 
-    if (SECTION_RE.test(text) && text.length <= 200) { section = text; afterSection = true; continue; }
+    if (SECTION_RE.test(text) && text.length <= 200) { section = text; afterSection = true; sectionCue = CONTEXT_CUE.test(text); awaitingFirst = true; continue; }
     const wasAfterSection = afterSection; afterSection = false;
 
     // A new numbered question: the next number in sequence (or the first), so a numbered list inside a stem is not one.
     const qm = QUESTION_WORD_RE.exec(text) ?? QUESTION_RE.exec(text);
-    if (qm && !out.length && PREAMBLE_CUE.test((qm[2] ?? "").trim())) { preamble.push(text); continue; }
+    if (qm && !out.length && PREAMBLE_CUE.test((qm[2] ?? "").trim())) { preamble.push(text); preambleCue = preambleCue || CONTEXT_CUE.test(text); continue; }
     if (qm) {
       const n = Number(qm[1]);
       const explicit = QUESTION_WORD_RE.test(text);
       // A jump forward (a missing question) is taken only where a question plainly starts -- a new section, or a
       // question cue -- and the gap is flagged. Anything else is read as a list inside the open question.
       const rest = (qm[2] ?? "").trim();
-      const jump = main !== null && n > main + 1 && n <= main + 3 && (wasAfterSection || QUESTION_CUE.test(rest));
+      const jump = main !== null && n > main + 1 && n <= main + 3 && (wasAfterSection || questionLike(rest));
       if (explicit || (main === null ? n >= 1 && n <= 3 : n === main + 1 || jump)) {
         if (main !== null && n > main + 1) flags.push({ kind: "numbering_gap", after: String(main), missing: n - main === 2 ? String(main + 1) : `${main + 1}-${n - 1}` });
-        main = n; part = null; roman = null;
+        main = n; part = null; roman = null; explicitMain = explicit;
         open(String(n), (qm[2] ?? "").trim(), l);
         continue;
       }
     }
 
+    // A line between a section heading and its first question, or before any question, may say what follows
+    // ("Write short notes on the following", "Answer ALL questions").
+    if (awaitingFirst && CONTEXT_CUE.test(text)) sectionCue = true;
+    if (!out.length && CONTEXT_CUE.test(text)) preambleCue = true;
     if (cur && main !== null) {
       const c = cur as Open;
       const choice = CHOICE_CUE.test([...c.instructions, ...c.stem].join(" "));
@@ -165,8 +190,19 @@ export function parsePaper(lines: readonly PaperLine[], opts: { emptyPages?: rea
     preamble.push(text);
   }
 
+  // Which numbered items are questions. Each asks on its own (a cue, a "?", marks, options, a "Question N" label, or
+  // the paper's own instruction), or is a part of one that does, or is the lead-in of parts that do. The rest are
+  // statements -- numbered notes -- and are not questions: counted, never offered as a question to answer.
+  const asks = out.map(o => o.explicit || o.contextCue || o.options.length > 0 || questionLike([...o.instructions, ...o.stem].join(" "))
+    || !!(MARKS_RE.exec(o.stem.join("\n")) ?? MARKS_RE.exec(o.options.map(x => x.text).join(" "))) || o.stem.join(" ").includes(UNREADABLE_MARK));
+  const keep = out.map((o, i) => asks[i]
+    || out.some((a, j) => asks[j] && o.number.startsWith(`${a.number}(`))
+    || (o.leadIn && out.some((d, j) => asks[j] && d.number.startsWith(`${o.number}(`))));
+  const statements = keep.filter(k => !k).length;
+
   const questions: ParsedQuestion[] = [];
-  for (const o of out) {
+  for (const [i, o] of out.entries()) {
+    if (!keep[i]) continue;
     let stem = o.stem.join("\n").trim();
     let marks: number | null = null;
     const mm = MARKS_RE.exec(stem) ?? MARKS_RE.exec(o.options.map(x => x.text).join(" "));
@@ -190,6 +226,7 @@ export function parsePaper(lines: readonly PaperLine[], opts: { emptyPages?: rea
     });
   }
   if (!questions.length) flags.push({ kind: "no_questions_found" });
+  if (statements >= NOTES_MIN_STATEMENTS && statements > questions.length) flags.push({ kind: "looks_like_notes", statements });
   let kept = questions;
   if (questions.length > EXAM_QUESTION_MAX) { kept = questions.slice(0, EXAM_QUESTION_MAX); flags.push({ kind: "too_many_questions", kept: EXAM_QUESTION_MAX }); }
   const instructions = preamble.join("\n").trim().slice(0, 4000) || null;
@@ -213,7 +250,25 @@ export function paperFlagText(f: PaperFlag): string {
     case "no_questions_found": return "No numbered questions were found in this paper. Nothing was guessed. You can still study it as notes.";
     case "too_many_questions": return `Only the first ${f.kept} questions are shown.`;
     case "transcribed_pages": return `Pages ${f.pages.join(", ")} were transcribed by AI from a scan. Check them against the original.`;
+    case "looks_like_notes": return NOTES_NOT_PAPER;
   }
+}
+
+/** What a student reads when a material is notes rather than a paper, with the way on (revise from this material). */
+export const NOTES_NOT_PAPER = "This looks like notes rather than an exam paper: its numbered lines are statements, not questions. Generate practice questions from it instead.";
+
+/** True when a parsed paper is notes rather than a paper: it is then not kept as a paper. */
+export const isNotesNotPaper = (p: Pick<ParsedPaper, "flags">): boolean => p.flags.some(f => f.kind === "looks_like_notes");
+
+/**
+ * Pure. The front of a revision card made from a paper question, or null when it does not read as a question (a
+ * statement kept by the v1 parser): a statement is never put on the front of a card as if it were a question. A part
+ * that does not ask on its own (a sub-part such as "at rest") carries the lead-in that does.
+ */
+export function revisionFront(q: Pick<ParsedQuestion, "number" | "stem" | "options" | "instructions" | "marks">, leadIn: string | null): string | null {
+  const asks = q.options.length > 0 || q.marks !== null || questionLike([q.instructions ?? "", q.stem].join(" ").trim());
+  if (!asks && !(leadIn && questionLike(leadIn))) return null;
+  return [asks ? null : leadIn, `Question ${q.number}: ${q.stem}`, ...q.options.map(o => `${o.label}. ${o.text}`)].filter(Boolean).join("\n").slice(0, 2000);
 }
 
 /** The question an answer is written for: the lead-in of its parent (when it has one), then its own words and options. */

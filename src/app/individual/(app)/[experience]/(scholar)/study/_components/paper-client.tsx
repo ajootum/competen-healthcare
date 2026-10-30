@@ -328,13 +328,22 @@ export function StudyAsPaper({ materialId, attestation, transcribable }: { mater
   const [transcribe, setTranscribe] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notes, setNotes] = useState<string | null>(null);
   async function start() {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setNotes(null);
     const r = await call("/api/individual/scholar/papers", { materialId, attested, transcribe });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "It could not be prepared just now."); return; }
+    // SCHOLAR-QUESTION-INTELLIGENCE-01: numbered notes are not a paper -- practise from them instead.
+    if (r.json.notesLike) { setNotes(String(r.json.message ?? "This looks like notes rather than an exam paper.")); return; }
     router.push(experienceHref("scholar", `study/apply/papers/${materialId}`));
   }
+  if (notes) return (
+    <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+      <p className="text-[14px] text-amber-950">{notes}</p>
+      <Link href={experienceHref("scholar", `study/revise?material=${materialId}`)} className={`${btn} mt-3`} style={{ background: accent }}>Practise questions from this material</Link>
+    </div>
+  );
   return (
     <div>
       <label className="flex items-start gap-3 text-[14px] text-gray-900">
