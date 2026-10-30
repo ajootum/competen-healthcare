@@ -18,6 +18,7 @@ import type { ExamOption, PaperFlag, ParsedQuestion, QuestionFlag } from "./exam
 import { stemKey } from "./question-intel";
 import { servableLibraryVersions, type LibraryPick } from "./library-questions";
 import type { ResearchSource } from "./exam-research";
+import type { OsceItem, OsceSource, OsceStationDraft, OsceTick } from "./osce";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -282,8 +283,11 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   const { error: rtErr } = await admin.from("individual_scholar_revision_set").delete().eq("user_id", userId);
   // EVALUATION-01 (426): the evaluations go too. Absent table: nothing to do.
   const { error: evErr } = await admin.from("individual_scholar_evaluation").delete().eq("user_id", userId);
+  // SCHOLAR-PRACTICE-EXAMS-01 (720): OSCE practice stations go too, and their runs by cascade. Stations written from a
+  // material already went with it. Absent table: nothing to do.
+  const { error: osErr } = await admin.from("individual_scholar_osce_station").delete().eq("user_id", userId);
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr), erased: rows.length };
+  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
@@ -2487,4 +2491,127 @@ export async function resolveFeedbackTarget(admin: any, userId: string, target: 
     const { data } = await admin.from("plat_ai_outcomes").select("activity, output_kind, prompt_version").eq("action_id", ref).eq("product", "scholar").maybeSingle();
     return data ? { kind: data.output_kind, activity: data.activity, promptVersion: data.prompt_version, actionId: ref } : null;
   } catch { return null; }
+}
+
+// ── OSCE PRACTICE (720, SCHOLAR-PRACTICE-EXAMS-01) ── simulated stations and their timed runs, formative only ────────
+//
+// Detected once, as 710 is: one read of the 720 station table keyed on the caller. Absent (42P01, PGRST205): OSCE
+// practice is shown as unavailable with its reason, and nothing else changes. A transient error is "no" for now.
+// Nothing here is an assessment: no row is copied to assessments, competency_verification_* or the estate osce_* tables.
+let osce720: boolean | null = null;
+export async function osceSchema(admin: Admin, userId: string): Promise<boolean> {
+  if (osce720 !== null) return osce720;
+  const { error } = await admin.from("individual_scholar_osce_station").select("id").eq("user_id", userId).limit(1);
+  if (!error) return (osce720 = true);
+  if (isNotProvisioned(error)) return (osce720 = false);
+  return false;
+}
+/** Tests only: forget what was detected. */
+export const resetOsceSchema = () => { osce720 = null; };
+
+export type OsceStationRow = {
+  id: string; title: string; scenario: string; candidateInstructions: string; durationMinutes: number; sections: string[];
+  checklist: OsceItem[]; competencyId: string | null; materialId: string | null; chunkId: string | null;
+  source: OsceSource; templateKey: string | null; contentStatus: string; model: string | null; promptVersion: string | null; createdAt: string;
+};
+const OSCE_STATION_COLS = "id, title, scenario, candidate_instructions, duration_minutes, sections, checklist, competency_id, material_id, chunk_id, source, template_key, content_status, model, prompt_version, created_at";
+const toOsceStation = (r: any): OsceStationRow => ({
+  id: r.id, title: r.title, scenario: r.scenario, candidateInstructions: r.candidate_instructions, durationMinutes: r.duration_minutes,
+  sections: Array.isArray(r.sections) ? r.sections : [], checklist: Array.isArray(r.checklist) ? r.checklist : [], competencyId: r.competency_id,
+  materialId: r.material_id, chunkId: r.chunk_id, source: r.source, templateKey: r.template_key, contentStatus: r.content_status,
+  model: r.model, promptVersion: r.prompt_version, createdAt: r.created_at,
+});
+
+/** One station. A template already copied for this learner is returned, not copied twice (720 unique key). */
+export async function insertOsceStation(admin: Admin, userId: string, d: OsceStationDraft): Promise<{ ok: true; id: string; existing: boolean } | { ok: false; notProvisioned: boolean }> {
+  if (d.templateKey) {
+    const { data: had } = await admin.from("individual_scholar_osce_station").select("id").eq("user_id", userId).eq("template_key", d.templateKey).maybeSingle();
+    if (had?.id) return { ok: true, id: had.id, existing: true };
+  }
+  const { data, error } = await admin.from("individual_scholar_osce_station").insert({
+    user_id: userId, title: d.title, scenario: d.scenario, candidate_instructions: d.candidateInstructions, duration_minutes: d.durationMinutes,
+    sections: d.sections, checklist: d.checklist, competency_id: d.competencyId, material_id: d.materialId, chunk_id: d.chunkId,
+    source: d.source, template_key: d.templateKey, content_status: d.contentStatus, model: d.model, prompt_version: d.promptVersion,
+  }).select("id").single();
+  if (error || !data) return fail(error);
+  return { ok: true, id: data.id, existing: false };
+}
+
+export async function listOsceStations(admin: Admin, userId: string): Promise<Read<OsceStationRow[]>> {
+  const { data, error } = await admin.from("individual_scholar_osce_station").select(OSCE_STATION_COLS).eq("user_id", userId).order("created_at", { ascending: false }).limit(100);
+  if (error) return fail(error);
+  return { ok: true, data: (data ?? []).map(toOsceStation) };
+}
+
+export async function getOsceStation(admin: Admin, userId: string, id: string): Promise<OsceStationRow | null> {
+  if (!isUuid(id)) return null;
+  const { data } = await admin.from("individual_scholar_osce_station").select(OSCE_STATION_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  return data ? toOsceStation(data) : null;
+}
+
+/** Deletes the station and, by cascade (720), every run of it. */
+export async function deleteOsceStation(admin: Admin, userId: string, id: string): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(id)) return "not_found";
+  const { data, error } = await admin.from("individual_scholar_osce_station").delete().eq("user_id", userId).eq("id", id).select("id");
+  if (error) return "failed";
+  return data?.length ? "ok" : "not_found";
+}
+
+export type OsceAttemptRow = {
+  id: string; stationId: string; startedAt: string; finishedAt: string | null; durationSeconds: number | null; timeUp: boolean;
+  responses: Record<string, string>; ticks: OsceTick[] | null; score: number | null; criticalMissed: number | null;
+  marking: "self_graded" | "ai_evaluation" | null; evaluatorModel: string | null; feedback: Record<string, any> | null;
+};
+const OSCE_ATTEMPT_COLS = "id, station_id, started_at, finished_at, duration_seconds, time_up, responses, ticks, score, critical_missed, marking, evaluator_model, feedback";
+const toOsceAttempt = (r: any): OsceAttemptRow => ({
+  id: r.id, stationId: r.station_id, startedAt: r.started_at, finishedAt: r.finished_at, durationSeconds: r.duration_seconds, timeUp: !!r.time_up,
+  responses: r.responses && typeof r.responses === "object" ? r.responses : {}, ticks: Array.isArray(r.ticks) ? r.ticks : null,
+  score: r.score === null || r.score === undefined ? null : Number(r.score), criticalMissed: r.critical_missed, marking: r.marking,
+  evaluatorModel: r.evaluator_model, feedback: r.feedback && typeof r.feedback === "object" ? r.feedback : null,
+});
+
+/** A run begins: the server clock is its start. The station must be the caller's own (composite key, 720). */
+export async function startOsceAttempt(admin: Admin, userId: string, stationId: string): Promise<{ id: string; startedAt: string } | null> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt").insert({ user_id: userId, station_id: stationId }).select("id, started_at").single();
+  return error || !data ? null : { id: data.id, startedAt: data.started_at };
+}
+
+export async function getOsceAttempt(admin: Admin, userId: string, id: string): Promise<OsceAttemptRow | null> {
+  if (!isUuid(id)) return null;
+  const { data } = await admin.from("individual_scholar_osce_attempt").select(OSCE_ATTEMPT_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  return data ? toOsceAttempt(data) : null;
+}
+
+/** The caller's runs, newest first: of one station, or of all. */
+export async function listOsceAttempts(admin: Admin, userId: string, stationId?: string | null, limit = 50): Promise<Read<OsceAttemptRow[]>> {
+  let q = admin.from("individual_scholar_osce_attempt").select(OSCE_ATTEMPT_COLS).eq("user_id", userId);
+  if (stationId) q = q.eq("station_id", stationId);
+  const { data, error } = await q.order("started_at", { ascending: false }).limit(limit);
+  if (error) return fail(error);
+  return { ok: true, data: (data ?? []).map(toOsceAttempt) };
+}
+
+/** A run ends, once: what was written, and how long it took. A run already finished is not changed. */
+export async function finishOsceAttempt(admin: Admin, userId: string, id: string, f: { responses: Record<string, string>; finishedAt: string; durationSeconds: number; timeUp: boolean }): Promise<boolean> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt")
+    .update({ responses: f.responses, finished_at: f.finishedAt, duration_seconds: f.durationSeconds, time_up: f.timeUp })
+    .eq("user_id", userId).eq("id", id).is("finished_at", null).select("id");
+  return !error && !!data?.length;
+}
+
+/** AI feedback on a finished run, kept before the learner confirms their ticks. A marked run is not changed. */
+export async function saveOsceFeedback(admin: Admin, userId: string, id: string, feedback: Record<string, unknown>): Promise<boolean> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt").update({ feedback })
+    .eq("user_id", userId).eq("id", id).not("finished_at", "is", null).is("ticks", null).select("id");
+  return !error && !!data?.length;
+}
+
+/** The self-check, once, on a finished run: ticks, practice score, critical misses and how it was checked (720). */
+export async function markOsceAttempt(admin: Admin, userId: string, id: string, m: {
+  ticks: OsceTick[]; score: number; criticalMissed: number; marking: "self_graded" | "ai_evaluation"; evaluatorModel: string | null; evaluatorPromptVersion: string | null;
+}): Promise<boolean> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt")
+    .update({ ticks: m.ticks, score: m.score, critical_missed: m.criticalMissed, marking: m.marking, evaluator_model: m.evaluatorModel, evaluator_prompt_version: m.evaluatorPromptVersion })
+    .eq("user_id", userId).eq("id", id).not("finished_at", "is", null).is("ticks", null).select("id");
+  return !error && !!data?.length;
 }

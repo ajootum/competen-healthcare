@@ -15,6 +15,10 @@ import {
 } from "./question-intel";
 import { checkRevisionDraft, type RevisionDraft } from "./revision";
 import { blueprintFromDraft, checkPrivateCase } from "./clinical";
+import {
+  OSCE_FEEDBACK_SYSTEM, OSCE_PROMPT_VERSIONS, checkOsceDraft, osceFeedbackPrompt, osceStationPrompt, osceStationSystem, parseOsceFeedback,
+  type OsceItem, type OscePassage,
+} from "./osce";
 
 // ── SOURCE-GROUNDED AI FOR SCHOLAR ── COMPETEN-IND-004 s2, s3 and s5 ───────────────────────────────────
 //
@@ -1095,5 +1099,46 @@ A previous attempt was rejected for: ${feedback}. Write new questions that avoid
   return {
     ok: true as const, check: { kept, dropped }, model, provider, attempts, calls, declaredInsufficient,
     promptVersion: `${PROMPT_VERSIONS[kind]}+${PROMPT_VERSIONS.verify}`,
+  };
+}
+
+// ── OSCE PRACTICE (SCHOLAR-PRACTICE-EXAMS-01, migration 720) ── the two calls, on this engine ──────────────────────
+//
+// A station from the learner's own passages (activity `questions`) and feedback on a run (activity `evaluate`). The
+// prompts and checks are osce.ts, pure: checkOsceDraft quotes every item from its passage and runs the Holdings grounding
+// check and findPatientIdentifiers, and parseOsceFeedback does the same for the feedback. A station that fails is
+// withheld (not retried: a grounding failure is an answer, not an outage), and feedback that fails is not shown.
+
+/** One OSCE practice station written from these passages, checked. `check` null: the call failed. */
+export async function runOsceStation(userId: string, input: { passages: Passage[]; min: number; max: number }, run: AiRun = direct) {
+  const passages: OscePassage[] = input.passages.map(p => ({ chunkId: p.chunkId, content: p.content, citation: passageCitation(p) }));
+  const r = await run({
+    system: osceStationSystem(input.min, input.max),
+    user: osceStationPrompt(passages),
+    tier: "reasoning",
+    maxTokens: 2500,
+    context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_osce_station" },
+  });
+  if (!r.ok) return { ok: false as const, error: r.error };
+  return {
+    ok: true as const, model: r.model, provider: r.provider, promptVersion: OSCE_PROMPT_VERSIONS.station,
+    check: checkOsceDraft(r.text, passages, { min: input.min, max: input.max }, groundingViolations, findPatientIdentifiers),
+  };
+}
+
+/** AI feedback on one finished run: suggested ticks and the five parts, checked against the station and what was written. */
+export async function runOsceFeedback(userId: string, input: { scenario: string; candidateInstructions: string; checklist: OsceItem[]; responses: Record<string, string> }, run: AiRun = direct) {
+  const r = await run({
+    system: OSCE_FEEDBACK_SYSTEM,
+    user: osceFeedbackPrompt(input, input.responses),
+    tier: "reasoning",
+    maxTokens: 1200,
+    context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_osce_feedback" },
+  });
+  if (!r.ok) return { ok: false as const, error: r.error };
+  const grounding = [input.scenario, input.candidateInstructions, ...input.checklist.map(i => i.text), ...input.checklist.map(i => i.quote ?? ""), ...Object.values(input.responses)];
+  return {
+    ok: true as const, model: r.model, provider: r.provider, promptVersion: OSCE_PROMPT_VERSIONS.feedback,
+    feedback: parseOsceFeedback(r.text, input.checklist, grounding, groundingViolations, findPatientIdentifiers),
   };
 }

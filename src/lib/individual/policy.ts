@@ -72,7 +72,8 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max"
   | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown"
   | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days"
-  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms";
+  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms"
+  | "scholar_osce_duration_minutes" | "scholar_osce_checklist_min" | "scholar_osce_checklist_max";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -112,7 +113,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
-  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic";
+  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic"
+  | "scholar_osce";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -201,6 +203,8 @@ export const RECOVERY_EVIDENCE_TYPES = [
   { value: "clinical_trial", label: "Clinical Trial", pubmed: "Clinical Trial" },
 ] as const;
 export type RecoveryEvidenceType = (typeof RECOVERY_EVIDENCE_TYPES)[number]["value"];
+/** SCHOLAR-PRACTICE-EXAMS-01 (720): simulated OSCE practice. Formative, never an observed assessment. */
+export type ScholarOscePolicy = { enabled: boolean; durationMinutes: number; checklistMin: number; checklistMax: number };
 export type ScholarExamPolicy = {
   enabled: boolean;
   sources: ExamEvidenceSource[];
@@ -1125,6 +1129,38 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: 30, min: 0, max: 365,
     limitReason: "Zero to a year. Default: thirty days.",
   },
+  // SCHOLAR-PRACTICE-EXAMS-01 (720): simulated OSCE practice under Apply. Formative practice only -- never an observed
+  // clinical skills assessment, never verified competence. Offered by default because it degrades safely: where 720 is
+  // absent Apply says OSCE practice is not available here yet, and nothing else changes.
+  {
+    key: "scholar_osce", kind: "choice", product: "Scholar",
+    label: "OSCE practice stations",
+    help: "Whether a student may practise simulated OSCE stations alone: a timed scenario, written responses, then a self-check against the station checklist, with optional AI feedback. Never an observed assessment and never verified competence.",
+    options: [{ value: "on", label: "Offered" }, { value: "off", label: "Not offered" }],
+    fallback: "on",
+    limitReason: "Needs migration 720. Default: offered.",
+  },
+  {
+    key: "scholar_osce_duration_minutes", kind: "int", product: "Scholar", unit: "minutes",
+    label: "Default OSCE practice station length",
+    help: "How long a new practice station runs for, unless the station sets its own length. The timer warns at one minute and stops at the end, keeping what was written.",
+    fallback: 8, min: 3, max: 20,
+    limitReason: "Three to twenty minutes (720 allows no other). Default: eight.",
+  },
+  {
+    key: "scholar_osce_checklist_min", kind: "int", product: "Scholar", unit: "items",
+    label: "Fewest checklist items in a station written from notes",
+    help: "A station written by AI from a student's notes is withheld if fewer grounded checklist items than this survive the checks.",
+    fallback: 8, min: 6, max: 14,
+    limitReason: "Six to fourteen (720 allows no other). Never above the most. Default: eight.",
+  },
+  {
+    key: "scholar_osce_checklist_max", kind: "int", product: "Scholar", unit: "items",
+    label: "Most checklist items in a station written from notes",
+    help: "At most this many checklist items are kept from a station written by AI from a student's notes.",
+    fallback: 12, min: 6, max: 14,
+    limitReason: "Six to fourteen (720 allows no other). Default: twelve.",
+  },
   // COMPETEN-RESEARCH-01 (owner direction 2026-10-28): governed academic research for Learn, through the shared
   // Holdings research service (src/lib/holdings/research). OFF until the owner publishes a provider AND the Research &
   // Explain mode: only topic keywords leave (screened for patient identifiers), never a learner's notes or identity.
@@ -1652,6 +1688,8 @@ export type IndividualPolicy = {
   scholarInstitutions: ContextOption[];
   /** COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570). */
   scholarExams: ScholarExamPolicy;
+  /** SCHOLAR-PRACTICE-EXAMS-01 (720). */
+  scholarOsce: ScholarOscePolicy;
   /** COMPETEN-RESEARCH-01: the Learn source modes and governed academic research. */
   scholarResearch: ScholarResearchPolicy;
   /** SCHOLAR-SQIE-02: evidence recovery after a withheld or insufficient answer. */
@@ -1782,6 +1820,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
     scholarExams: resolveScholarExams(published),
+    scholarOsce: resolveScholarOsce(published),
     scholarResearch: resolveScholarResearch(published),
     scholarRecovery: resolveScholarRecovery(published),
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
@@ -1977,6 +2016,18 @@ function resolveScholarExams(published: Map<string, unknown>): ScholarExamPolicy
     webDailyMax: int("scholar_exam_web_daily_max"),
     cacheDays: int("scholar_exam_research_cache_days"),
     scannedPages: choice("scholar_exam_scanned_pages") as "off" | "ai_transcription",
+  };
+}
+
+/** SCHOLAR-PRACTICE-EXAMS-01 (720). The bounds made coherent: the fewest never above the most. */
+function resolveScholarOsce(published: Map<string, unknown>): ScholarOscePolicy {
+  const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
+  const max = int("scholar_osce_checklist_max");
+  return {
+    enabled: clampChoice(policyDef("scholar_osce") as ChoicePolicy, published.get(policyPath("scholar_osce"))) === "on",
+    durationMinutes: int("scholar_osce_duration_minutes"),
+    checklistMin: Math.min(int("scholar_osce_checklist_min"), max),
+    checklistMax: max,
   };
 }
 

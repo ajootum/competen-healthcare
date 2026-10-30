@@ -84,7 +84,7 @@ Command: `echo 'ezhvpgtcqcdsgylrxgdb' | node C:/Users/elish/CompetenBackup/bin/r
 
 ## Gate: how the code fails closed without 720
 
-- OSCE: `src/lib/individual/scholar/osce-store.ts` probes `individual_scholar_osce_station` once per process. A missing relation (`42P01`, `PGRST205`) is remembered as absent. A transient error counts as "not available" for that request only. While absent, the Apply page shows the OSCE entry as unavailable with a plain reason, and every OSCE route answers 409 with that reason. Nothing else in Scholar changes.
+- OSCE: `src/lib/individual/scholar/store.ts` `osceSchema` probes `individual_scholar_osce_station` once per process. A missing relation (`42P01`, `PGRST205`) is remembered as absent. A transient error counts as "not available" for that request only. While absent, the Apply page shows the OSCE entry as unavailable with a plain reason, and every OSCE route answers 409 with that reason. Nothing else in Scholar changes.
 - Adaptive: owned by the Adaptive Exams work. Until 720 is applied the 417 CHECK refuses `mode = 'adaptive'`.
 
 ## Production
@@ -96,3 +96,10 @@ Command: `echo 'ezhvpgtcqcdsgylrxgdb' | node C:/Users/elish/CompetenBackup/bin/r
 4. re-runs the precheck for the post-state: both tables present and `adaptive` in both mode CHECKs.
 
 The release copy is in `RELEASE-2026-10-25/PENDING-24/`.
+
+## Code that uses 720 (OSCE Practice V1, branch `scholar/practice-osce`)
+
+- Policy (`src/lib/individual/policy.ts`): `scholar_osce` on/off (default **on**, because the feature degrades safely without 720), `scholar_osce_duration_minutes` (default 8, 3 to 20), `scholar_osce_checklist_min` / `_max` (default 8 / 12, within 6 to 14, the fewest never above the most).
+- Pure rules: `src/lib/individual/scholar/osce.ts` (checklist validation, template, competency builder, timer, scoring with critical misses, AI prompt and checks, remediation, the no-verification wording check). Store: `store.ts` (the one Scholar write site). AI calls: `generation.ts` `runOsceStation` (activity `questions`) and `runOsceFeedback` (activity `evaluate`).
+- Routes: `src/app/api/individual/scholar/osce/stations` (POST), `stations/[id]` (DELETE), `attempts` (POST start), `attempts/[id]` (POST finish, feedback, mark). Pages: `study/apply/osce` and `study/apply/osce/[stationId]`, with an entry card on Apply.
+- Not done: an `osce_practice` evidence kind in Evaluate/Progress (it would need its own evaluation rules and policy option, so it was left for a separate decision).

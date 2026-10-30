@@ -127,6 +127,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
         domains: ["who.int", "health.go.ug", "nice.org.uk", "nhs.uk", "cdc.gov", "nih.gov", "cochranelibrary.com", "resus.org.uk", "sign.ac.uk"],
         webDailyMax: 10, cacheDays: 30, scannedPages: "off",
       },
+      // SCHOLAR-PRACTICE-EXAMS-01 (720): OSCE practice offered (it degrades safely without 720), 8 minutes, 8 to 12 items.
+      scholarOsce: { enabled: true, durationMinutes: 8, checklistMin: 8, checklistMax: 12 },
       // COMPETEN-RESEARCH-01: notes only. Research also needs the engine operational (HQ Research Sources).
       scholarResearch: { modes: ["notes"], dailyMax: 5, dailyCostCents: 25 },
       // SCHOLAR-SQIE-02: evidence recovery defaults to notes + library, external off, no source enabled.

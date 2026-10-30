@@ -148,7 +148,9 @@ function preflightOrder(src: Src): string[] {
   for (const [file, call] of [[`${API}/explain/route.ts`, "runExplain("], [`${API}/questions/route.ts`, "runQuestions("],
     [`${API}/materials/[id]/analyse/route.ts`, "runAnalysis("], [`${API}/cases/route.ts`, "runCase("],
     [`${API}/revision/sessions/route.ts`, "runRevisionQuestions("], [`${API}/revision/answer/route.ts`, "runEvaluate("],
-    [`${API}/clinical/cases/route.ts`, "runCaseBlueprint("], [`${API}/clinical/sessions/[kind]/[id]/answer/route.ts`, "runCaseReasoning("]] as const) {
+    [`${API}/clinical/cases/route.ts`, "runCaseBlueprint("], [`${API}/clinical/sessions/[kind]/[id]/answer/route.ts`, "runCaseReasoning("],
+    // SCHOLAR-PRACTICE-EXAMS-01 (720): an OSCE station from notes (activity questions) and feedback on a run (evaluate).
+    [`${API}/osce/stations/route.ts`, "runOsceStation("], [`${API}/osce/attempts/[id]/route.ts`, "runOsceFeedback("]] as const) {
     const s = src.get(file) ?? "";
     const p = s.indexOf("await aiPreflight(ctx)"), c = s.indexOf(call);
     if (p < 0 || c < 0 || p > c) bad.push(file);
@@ -933,7 +935,7 @@ function main() {
   const quota = strip(readFileSync("src/lib/ai/quota.ts", "utf8"));
   ok("C5. Scholar AI calls are audited under an action the hourly quota counts",
     /SCHOLAR_AI_AUDIT_ACTION = "ai_assistant_query"/.test(REAL.get(HTTP) ?? "") && /"ai_assistant_query"/.test(quota)
-    && [`${API}/explain/route.ts`, `${API}/questions/route.ts`, `${API}/materials/[id]/analyse/route.ts`, `${API}/cases/route.ts`]
+    && [`${API}/explain/route.ts`, `${API}/questions/route.ts`, `${API}/materials/[id]/analyse/route.ts`, `${API}/cases/route.ts`, `${API}/osce/stations/route.ts`, `${API}/osce/attempts/[id]/route.ts`]
       .every(f => /audit\(ctx, SCHOLAR_AI_AUDIT_ACTION/.test(REAL.get(f) ?? "")));
   ok("C6. every Scholar route handler is behind requireIndividualContext(\"scholar\")", unguardedHandlers(REAL).length === 0, unguardedHandlers(REAL).join(", "));
   // The release gate, gate 3, live, D2 terms and the registry check all live in the foundation's
