@@ -143,7 +143,7 @@ const S: Seed[] = [
   // SCHOLAR-SQIE-02 s6: PubMed Central's open-access service, asked only about PMIDs PubMed itself returned.
   { id: "pmc", name: "PubMed Central (open-access links)", type: "metadata_registry", phase: 1, capabilities: ["open_access"], products: ["scholar"], activities: ["learn"], priority: 4, rateLimitPerMinute: 180,
     licensing: "NCBI terms. Only whether an article is in the PMC open-access subset, its licence as PMC records it, and its PMC link are used. The full text is never fetched or stored.",
-    provenance: "PMCID from the NCBI ID converter, licence from the PMC OA web service.", docsUrl: "https://www.ncbi.nlm.nih.gov/pmc/tools/oa-service/" },
+    provenance: "PMCID from the NCBI ID converter; open-access flag and licence from the per-article metadata of the NLM PMC Cloud Service (the retired OA web service is no longer used).", docsUrl: "https://pmc.ncbi.nlm.nih.gov/tools/cloud/" },
   { id: "google_scholar_link", name: "Google Scholar (external link only)", type: "external_link", phase: 1, capabilities: ["external_link"], products: ["scholar"], activities: ["learn"], priority: 9, rateLimitPerMinute: 0,
     licensing: "A plain link for the learner to follow. Competen never fetches, scrapes or automates Google Scholar.", provenance: "None: nothing is retrieved.", docsUrl: null },
   // ── Phase 2: structures only. No adapter, no call. ──

@@ -102,8 +102,26 @@ export async function saveProvider(admin: any, actor: Actor, id: string, patch: 
 const SYNTHETIC_QUERY = "oxygen therapy";
 /** Crossref's documented test DOI. */
 const TEST_DOI = { doi: "10.5555/12345678", title: "Toward a Unified Theory of High-Energy Metaphysics: Silly String Theory", year: 2008 };
-/** A fixed public PMID for the PubMed Central connectivity check. */
-const TEST_PMID = "23193287";
+/** A fixed public PMID for the PubMed Central connectivity check: PMC1790863, an open-access article (licence "CC BY") in the PMC Cloud Service. */
+const TEST_PMID = "17299597";
+
+/**
+ * The PubMed Central connectivity check. SCHOLAR-SQIE-02: a fixed public PMID, never learner content. The test article is
+ * known to be open access, so the check passes only when the service returns its licence. A 404 (the retired OA web
+ * service), an unreadable answer or a missing licence FAILS: "has no open-access copy" is not a pass for a known
+ * open-access article.
+ */
+export async function checkPmcConnectivity(deps: ProviderDeps): Promise<{ ok: boolean; detail: string }> {
+  const started = Date.now();
+  const m = await pmcOpenAccess(deps, [TEST_PMID]).catch(() => null);
+  const oa = m?.found.get(TEST_PMID) ?? null;
+  const ok = oa !== null && !!oa.licence;
+  const detail = ok ? `answered in ${Date.now() - started} ms (test PMID ${TEST_PMID}: open-access copy, licence ${oa!.licence})`
+    : m === null ? "no answer (the ID converter or the PMC Cloud Service did not respond)"
+    : oa ? "failed: the test article came back open access but without a licence"
+    : "failed: the test article, known to be open access, came back with no open-access copy";
+  return { ok, detail };
+}
 
 /** Connectivity, run by the server, for a source with an adapter in code. See the header for why this is the one exception. */
 export async function runConnectivity(admin: any, actor: Actor, id: string): Promise<Out> {
@@ -124,9 +142,7 @@ export async function runConnectivity(admin: any, actor: Actor, id: string): Pro
     const v = await verifyDoi(deps, TEST_DOI).catch(() => null);
     ok = v !== null; detail = ok ? `answered in ${Date.now() - started} ms (test DOI ${v ? "matched" : "did not match"})` : "no answer";
   } else if (id === "pmc") {
-    // SCHOLAR-SQIE-02: a fixed public PMID, never learner content. Answering at all is what connectivity is.
-    const m = await pmcOpenAccess(deps, [TEST_PMID]).catch(() => null);
-    ok = m !== null; detail = ok ? `answered in ${Date.now() - started} ms (test PMID ${m!.size ? "has" : "has no"} open-access copy)` : "no answer";
+    ({ ok, detail } = await checkPmcConnectivity(deps));
   }
   reg[id] = { ...r, checks: { ...r.checks, connectivity: { at: new Date().toISOString(), by: actor.userId, ok, detail } } };
   const w = await writeRegistry(admin, actor, reg);
