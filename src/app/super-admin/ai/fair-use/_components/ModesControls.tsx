@@ -9,17 +9,17 @@ import { ghost, input, Message, primary, btn } from "./FairUseControls";
 // The write half of "AI operating modes" on /super-admin/ai/fair-use (owner GO SUPERVISED PILOT MODE, 29 Oct 2026).
 // Every control posts to /api/hq/ai-governance, which re-checks the capability and validates the document: a cohort
 // or a person that would be silently ignored is refused, and Supervised Pilot can never be the default. A mode never
-// approves a model. Publishing is audited and the publisher must not be the drafter (640, enforced in the database).
+// approves a model. Publishing is audited. People are typed as emails (or user ids) and stored as user ids.
 
 const MODES = [["strict_production", "Strict Production"], ["supervised_pilot", "Supervised Pilot"], ["clinical_production", "Clinical Production"]] as const;
 const modeLabel = (m: string) => MODES.find(x => x[0] === m)?.[1] ?? m;
 
 type CohortForm = { code: string; label: string; mode: string; userIds: string; sources: string; plans: string; hourly: string };
 type Doc = { defaultMode: string; cohorts: { code: string; label: string; mode: string; userIds: string[]; entitlementSources: string[]; planCodes: string[]; hourlyLimit: number | null }[]; pilotRisk: { rules: any[] }; clarifiableRules: string[] };
-export type ModeProduct = { product: string; published: Doc; draft: Doc | null; hasPublished: boolean; pending: boolean; publishedAt: string | null; ruleIds: string[] };
+export type ModeProduct = { product: string; published: Doc; draft: Doc | null; hasPublished: boolean; pending: boolean; publishedAt: string | null; ruleIds: string[]; people: Record<string, string> };
 export type VersionRow = { id: string; createdAt: string; label: string | null; note: string | null; publishedBy: string | null; when: string };
 
-const toForm = (d: Doc): CohortForm[] => d.cohorts.map(c => ({ code: c.code, label: c.label, mode: c.mode, userIds: c.userIds.join("\n"), sources: c.entitlementSources.join(", "), plans: c.planCodes.join(", "), hourly: c.hourlyLimit ? String(c.hourlyLimit) : "" }));
+const toForm = (d: Doc, people: Record<string, string>): CohortForm[] => d.cohorts.map(c => ({ code: c.code, label: c.label, mode: c.mode, userIds: c.userIds.map(id => people[id.toLowerCase()] ?? id).join("\n"), sources: c.entitlementSources.join(", "), plans: c.planCodes.join(", "), hourly: c.hourlyLimit ? String(c.hourlyLimit) : "" }));
 const lines = (v: string) => v.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
 
 async function post(body: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
@@ -53,7 +53,7 @@ function ProductEditor({ p, onBusy }: { p: ModeProduct; onBusy: (b: boolean) => 
   const router = useRouter();
   const start = p.draft ?? p.published;
   const [defaultMode, setDefaultMode] = useState(start.defaultMode === "clinical_production" ? "clinical_production" : "strict_production");
-  const [cohorts, setCohorts] = useState<CohortForm[]>(toForm(start));
+  const [cohorts, setCohorts] = useState<CohortForm[]>(toForm(start, p.people));
   const [clar, setClar] = useState<string[]>(start.clarifiableRules);
   const [rulesText, setRulesText] = useState(JSON.stringify(start.pilotRisk?.rules ?? [], null, 2));
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -99,7 +99,7 @@ function ProductEditor({ p, onBusy }: { p: ModeProduct; onBusy: (b: boolean) => 
               <label className="text-[12.5px] text-gray-700">Hourly limit (1 to 500, blank = plan)<input inputMode="numeric" value={c.hourly} onChange={set(i, "hourly")} className={`${input} ml-1 w-20`} /></label>
               <button type="button" className={ghost} onClick={() => setCohorts(cs => cs.filter((_, j) => j !== i))}>Remove cohort</button>
             </div>
-            <label className="block text-[12.5px] text-gray-700">People (user ids, one per line)
+            <label className="block text-[12.5px] text-gray-700">People (email or user id, one per line)
               <textarea rows={3} value={c.userIds} onChange={set(i, "userIds")} spellCheck={false} className={`${input} mt-1 block w-full font-mono text-[12px]`} />
             </label>
             <div className="flex flex-wrap gap-2">

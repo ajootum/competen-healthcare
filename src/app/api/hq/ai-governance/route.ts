@@ -3,7 +3,7 @@ import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { currentTraceId } from "@/lib/trace";
 import { publishScope, rollbackVersion, setOverride, wceMissing } from "@/lib/config/workspace-config-write";
 import { MODE_SCOPE, modePath } from "@/lib/ai/operating-mode";
-import { strictDoc, validateModeDoc } from "@/lib/ai/modes-admin";
+import { strictDoc, resolveCohortPeople, validateModeDoc } from "@/lib/ai/modes-admin";
 import { attestProvider, changeRate, createBudget, publishPolicies, RATE_KINDS, runProviderChecks, saveBudgetPolicyDraft, saveModelRoutingDraft, savePolicyDraft, saveProviderRegistration, saveRoutingDraft, setBudgetStatus, setProviderStatus, type RateKind } from "@/lib/ai/fair-use-admin";
 import { BUDGET_CODE } from "@/lib/ai/consumption";
 import { AI_PRODUCTS, type AiProduct } from "@/lib/ai/fair-use-policy";
@@ -66,7 +66,9 @@ export async function POST(req: Request) {
       let doc;
       if (body.action === "strict_now") doc = strictDoc();
       else {
-        const v = validateModeDoc(body.doc);
+        const people = await resolveCohortPeople(ctx.admin, body.doc);
+        if (!people.ok) return refuse(422, people.error);
+        const v = validateModeDoc(people.input);
         if (!v.ok) return refuse(422, v.error);
         doc = v.doc;
       }

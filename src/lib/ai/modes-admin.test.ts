@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { strictDoc, summariseCohortCost, summariseGateDecisions, validateModeDoc } from "./modes-admin";
+import { emailsIn, resolveCohortPeople, strictDoc, summariseCohortCost, summariseGateDecisions, validateModeDoc } from "./modes-admin";
 
 // AI operating modes, HQ side: the pure aggregation and the save-time validation.
 
@@ -70,5 +70,35 @@ describe("validateModeDoc", () => {
     const d = strictDoc();
     expect([d.defaultMode, d.cohorts.length]).toEqual(["strict_production", 0]);
     expect(validateModeDoc(d).ok).toBe(true);
+  });
+});
+
+describe("people by email", () => {
+  const profiles = [{ id: U1, email: "nurse.one@example.com" }, { id: U2, email: "nurse.two@example.com" }];
+  const admin = (fail = false) => ({
+    from: () => ({ select: () => ({ in: async (_c: string, v: string[]) => (fail ? { data: null, error: { message: "x" } } : { data: profiles.filter(p => v.includes(p.email)), error: null }) }) }),
+  });
+  const doc = (userIds: unknown[]) => ({ defaultMode: "strict_production", cohorts: [{ code: "pilot1", label: "Pilot", mode: "supervised_pilot", userIds }] });
+
+  it("finds only emails, lower-cased and once each", () => {
+    expect(emailsIn([" Nurse.One@Example.com", U1, "nurse.one@example.com", "not an email", 3])).toEqual(["nurse.one@example.com"]);
+  });
+
+  it("turns emails into user ids, keeps ids, and the result validates", async () => {
+    const r = await resolveCohortPeople(admin(), doc(["Nurse.One@example.com", U2]));
+    expect(r.ok && r.input.cohorts[0].userIds).toEqual([U1, U2]);
+    expect(r.ok && validateModeDoc(r.input).ok).toBe(true);
+  });
+
+  it("refuses an email with no account, and an unreadable lookup, instead of dropping the person", async () => {
+    const missing = await resolveCohortPeople(admin(), doc(["nurse.one@example.com", "nobody@example.com"]));
+    expect(missing).toMatchObject({ ok: false, error: expect.stringContaining("nobody@example.com") });
+    expect(await resolveCohortPeople(admin(true), doc(["nurse.one@example.com"]))).toMatchObject({ ok: false });
+  });
+
+  it("leaves a document with no emails untouched, without a lookup", async () => {
+    const d = doc([U1]);
+    const r = await resolveCohortPeople({ from: () => { throw new Error("no lookup expected"); } }, d);
+    expect(r.ok && r.input).toBe(d);
   });
 });
