@@ -53,6 +53,8 @@ function ExternalList({ items }: { items: RecoveryView["evidence"]["external"] }
         <p className="mt-0.5 text-[12px]">
           <a href={e.openAccess.url} target="_blank" rel="noopener noreferrer" className={`underline underline-offset-2 ${focusRing}`}>Open-access copy</a>
           {e.openAccess.licence ? <span className="text-gray-600"> (licence: {e.openAccess.licence})</span> : null}
+          {/* PMC Cloud Service terms: acknowledge NLM as the data source, clearly. No PMC logo, no implied endorsement. */}
+          <span className="block text-[11.5px] text-gray-600">Open-access status from PubMed Central, US National Library of Medicine.</span>
         </p>
       )}
     </li>
