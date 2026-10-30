@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ADAPTERS, SEED_REGISTRY, applyEdit, invocableProviders, notInvocable, resolveRegistry, transitionNeeds, type Registry } from "./registry";
+import { ADAPTERS, SEED_REGISTRY, applyEdit, checkEvidence, invocableProviders, notInvocable, resolveRegistry, transitionNeeds, type Registry } from "./registry";
 import { DEFAULT_POLICY, resolveWorkflows, workflowNeeds, workflowOperational } from "./engine-config";
 import { runResearch, type ResearchPlan } from "./service";
 import { researchUsage, summariseResearchUsage } from "./load";
@@ -171,5 +171,28 @@ describe("commissioning GO: cost attribution and retention", () => {
     expect(calls).toEqual(["individual_scholar_research_cache:provider=holdings:%", "individual_scholar_research_cache:expires_at<", "individual_scholar_research_cache:provider=holdings:%", "individual_scholar_research_cache:created_at<", "plat_research_requests:cost_usd=0", "plat_research_requests:created_at<"]);
     const unreadable = { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ in: async () => ({ data: null, error: { message: "down" } }) }) }) }), delete: () => { throw new Error("must not delete"); } }) };
     expect(await pruneResearchRecords(unreadable)).toMatchObject({ ran: false, cache: 0, usage: 0 });
+  });
+});
+
+describe("checkEvidence: what a check rests on, from the record", () => {
+  const reg = resolveRegistry(null);
+  it("fills the free, keyless sources from their records", () => {
+    const pmc = { ...reg.pmc, checks: { connectivity: { at: "2026-10-30T12:00:00Z", by: null, ok: true, detail: "" } } };
+    expect(checkEvidence(pmc, "evaluation")).toMatch(/connectivity check passed on 2026-10-30/);
+    expect(checkEvidence(pmc, "access")).toMatch(/Public service, no API key/);
+    expect(checkEvidence(pmc, "licensing")).toMatch(/full text is never fetched/i);
+    expect(checkEvidence(pmc, "cost")).toMatch(/free public service/);
+    expect(checkEvidence(pmc, "paidApproval")).toMatch(/Not required/);
+    expect(checkEvidence(pmc, "governance")).toMatch(/scholar/);
+    const gs = reg.google_scholar_link;
+    expect(checkEvidence(gs, "evaluation")).toMatch(/plain link/);
+    expect(checkEvidence(gs, "access")).toMatch(/Nothing is fetched/);
+  });
+  it("leaves unsettled facts empty instead of inventing them", () => {
+    expect(checkEvidence(reg.pmc, "evaluation")).toBeNull();
+    const commercial = Object.values(reg).find(r => /commercial/i.test(r.licensing) && r.costPerRequestUsd === 0);
+    if (commercial) { expect(checkEvidence(commercial, "cost")).toBeNull(); expect(checkEvidence(commercial, "paidApproval")).toBeNull(); }
+    const unsettled = Object.values(reg).find(r => /to confirm/i.test(r.licensing));
+    if (unsettled) expect(checkEvidence(unsettled, "licensing")).toBeNull();
   });
 });
