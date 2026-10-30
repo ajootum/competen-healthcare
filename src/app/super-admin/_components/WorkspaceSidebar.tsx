@@ -9,6 +9,7 @@ import RoleSwitcher from "@/components/RoleSwitcher";
 import type { AppRole } from "@/lib/roles";
 import { parentHrefs, pathMatches } from "@/lib/nav/active";
 import { filterHqNav } from "@/lib/hq/nav-filter";
+import { matchNavSubject, navSearchTerms } from "@/lib/hq/nav-search";
 import { isParentOpen, submenuWithOverview } from "@/lib/nav/expand";
 import { HQ_WORKSPACES, OVERVIEW_HREFS, hqWorkspaceForPath, type HqSection, type NavEntry } from "./nav-tables";
 import { setParentOpen, useParentRecords } from "./nav-expand-store";
@@ -142,7 +143,7 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
             ) : matches.map(m => (
               <div key={m.e.key ?? m.e.href}>
                 {row(m.e, OVERVIEW_HREFS.has(m.e.href))}
-                <p className="px-3 pb-1 -mt-0.5 text-[10px] text-slate-500 truncate" data-sb-label>{m.where}</p>
+                <p className="px-3 pb-1 -mt-0.5 text-[10px] text-slate-500 truncate" data-sb-label>{m.where}{m.via?.length ? ` · matches: ${m.via.join(", ")}` : ""}</p>
               </div>
             ))}
           </div>
@@ -252,25 +253,27 @@ function ParentToggle({ id, open, holdsPage, icon, label, status, onToggle, clas
 const flat = (items: NavEntry[]) => items.flatMap(i => [i, ...(i.children ?? [])]);
 
 /**
- * Pure: the sidebar filter. Every row (children included) whose label contains the query, once per destination,
- * with where it lives ("Workspace › Group › Parent"). A row also matches when its workspace, group or parent does,
- * so typing a section name lists what is in it. The input is already the viewer's capability-filtered tables.
+ * The sidebar filter: every row whose label, location, keywords or route words match the query (the shared
+ * matcher in lib/hq/nav-search.ts, the same one Search HQ uses), once each, best match first, with where it
+ * lives ("Workspace › Group › Parent") and, when a keyword carried the match, that keyword in `via`. A row
+ * also matches when its workspace, group or parent does, so typing a section name lists what is in it.
+ * The input is already the viewer's capability-filtered tables, so a page they cannot open never matches.
  */
-export function sidebarMatches(workspaces: { label: string; sections: HqSection[] }[], query: string, limit = 40): { e: NavEntry; where: string }[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-  const out: { e: NavEntry; where: string }[] = [];
+export function sidebarMatches(workspaces: { label: string; sections: HqSection[] }[], query: string, limit = 40): { e: NavEntry; where: string; via?: string[] }[] {
+  const terms = navSearchTerms(query);
+  if (terms.length === 0) return [];
+  const hits: { e: NavEntry; where: string; via?: string[]; rank: number }[] = [];
   const seen = new Set<string>();
-  const has = (s: string | null | undefined) => !!s && s.toLowerCase().includes(q);
   for (const w of workspaces) for (const s of w.sections) for (const i of s.items) {
     const rows: { e: NavEntry; trail: (string | null | undefined)[] }[] = [{ e: i, trail: [w.label, s.plain ? null : s.group] }, ...(i.children ?? []).map(c => ({ e: c, trail: [w.label, s.plain ? null : s.group, i.label] }))];
     for (const r of rows) {
       const href = r.e.href.split("?")[0];
-      if (seen.has(href) || !(has(r.e.label) || r.trail.some(has))) continue;
+      if (seen.has(href)) continue;
+      const hit = matchNavSubject({ label: r.e.label, href: r.e.href, trail: r.trail, keywords: r.e.keywords }, terms);
+      if (!hit) continue;
       seen.add(href);
-      out.push({ e: r.e, where: r.trail.filter(Boolean).join(" › ") });
-      if (out.length >= limit) return out;
+      hits.push({ e: r.e, where: r.trail.filter(Boolean).join(" › "), ...(hit.via.length ? { via: hit.via } : {}), rank: hit.rank });
     }
   }
-  return out;
+  return hits.sort((a, b) => a.rank - b.rank).slice(0, limit).map(h => ({ e: h.e, where: h.where, ...(h.via ? { via: h.via } : {}) }));
 }

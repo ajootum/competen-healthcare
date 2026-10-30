@@ -19,11 +19,14 @@
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 import { canSeeHqLink, type HqViewer } from "./nav-filter";
+import { matchNavSubject, navSearchTerms } from "./nav-search";
 
 /** One destination the launcher may offer. `group` is the sidebar's own heading, kept for context. */
-export type HqDestination = { label: string; href: string; icon: string; group: string };
+export type HqDestination = { label: string; href: string; icon: string; group: string; keywords?: string[] };
+/** A match: the destination plus, when keywords carried it, the keyword(s) to show ("matches: configuration"). */
+export type HqDestinationMatch = HqDestination & { via?: string[] };
 
-type Item = { label: string; href: string; icon: string; kind?: string; children?: Item[] };
+type Item = { label: string; href: string; icon: string; kind?: string; keywords?: string[]; children?: Item[] };
 type Section = { group: string; items: Item[] };
 
 /**
@@ -53,7 +56,7 @@ export function hqSearchCatalogue(
         // The filter, not a re-spelling of it. An unmapped href is hidden by its own default.
         if (!canSeeHqLink(item.href, viewer)) continue;
         seen.add(item.href);
-        out.push({ label: item.label, href: item.href, icon: item.icon, group });
+        out.push({ label: item.label, href: item.href, icon: item.icon, group, ...(item.keywords?.length ? { keywords: item.keywords } : {}) });
       }
     }
   }
@@ -61,21 +64,23 @@ export function hqSearchCatalogue(
 }
 
 /**
- * s15's matching: every whitespace-separated term must appear somewhere in the destination's own
- * words, so "practice incidents" finds a Practice > Incidents entry without the two needing to be
- * adjacent, and "recruitment analytics" behaves the same.
+ * s15's matching, now THE shared matcher (nav-search.ts, also used by the sidebar filter): every term of the
+ * query must appear in the destination's label, where it lives, its keywords or its route words, so
+ * "practice incidents" finds a Practice > Incidents entry, "configuration" finds Individual Policy and
+ * "individual/configuration" finds it by route. Best matches first (label, then location, then keywords,
+ * then route), table order within a rank.
  *
- * ⚠ THE GROUP IS SEARCHABLE, THE HREF IS NOT. A route fragment is not something a person types on
- * purpose, and matching it would make "/super-admin/ai" answer a search for "ai" with every page
- * beneath it -- a launcher answering with a hundred rows is a launcher nobody uses twice.
+ * The corpus is already permission-filtered, so a keyword or route of a page the viewer cannot open is never
+ * a candidate. (Route words used to be excluded so "ai" would not list every page beneath /super-admin/ai;
+ * ranking now keeps label hits first, and the launcher still shows at most `limit` rows.)
  */
-export function matchHqDestinations(catalogue: HqDestination[], query: string, limit = 8): HqDestination[] {
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+export function matchHqDestinations(catalogue: HqDestination[], query: string, limit = 8): HqDestinationMatch[] {
+  const terms = navSearchTerms(query);
   if (terms.length === 0) return [];
-  return catalogue
-    .filter(d => {
-      const haystack = `${d.label} ${d.group}`.toLowerCase();
-      return terms.every(t => haystack.includes(t));
-    })
-    .slice(0, limit);
+  const hits: { d: HqDestinationMatch; rank: number }[] = [];
+  for (const d of catalogue) {
+    const hit = matchNavSubject({ label: d.label, href: d.href, trail: [d.group], keywords: d.keywords }, terms);
+    if (hit) hits.push({ d: hit.via.length ? { ...d, via: hit.via } : d, rank: hit.rank });
+  }
+  return hits.sort((a, b) => a.rank - b.rank).slice(0, limit).map(h => h.d);
 }
