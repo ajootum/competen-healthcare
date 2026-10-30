@@ -4,6 +4,7 @@ import { findPatientIdentifiers } from "./extract";
 import { groundingViolations, passageCitation, type Passage } from "./generation";
 import type { ResearchSource } from "./exam-research";
 import type { PhrasingViolation } from "@/lib/ai/grounding";
+import { feedbackPartsFrom, feedbackText, type FeedbackParts } from "./question-intel";
 
 // ── SUGGESTED ANSWERS TO EXAMINATION QUESTIONS ── COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570) ──────────────────
 //
@@ -24,7 +25,8 @@ import type { PhrasingViolation } from "@/lib/ai/grounding";
 // UNCERTAINTY IS SAID. The model lists what it could not support and what it is unsure of; the check adds anything
 // it finds (a guidance claim citing no current source). Nothing here is an answer key, a mark or competence.
 
-export const ANSWER_PROMPT_VERSION = "exam-answer-v1";
+// v2 (SCHOLAR-SQIE-01): with an attempt, five-part formative feedback on it (attemptFeedback), checked on its own.
+export const ANSWER_PROMPT_VERSION = "exam-answer-v2";
 export const FOLLOW_UP_PROMPT_VERSION = "exam-follow-up-v1";
 export const GUIDE_PROMPT_VERSION = "exam-guide-v1";
 
@@ -90,8 +92,10 @@ export const ANSWER_SYSTEM = [
   "5. List in unsupported every part of the expected answer the evidence does not support, and in uncertainty anything you are unsure of. List in conflicts any claim on which the sources disagree, with the tags of each side.",
   "6. Keep every number, unit and clinical term exactly as the evidence writes it. This is study, not advice about any real patient.",
   "",
+  "7. Only when the student's own attempt is given: attemptFeedback is formative feedback on it, from the evidence only -- right (what it got right), missing (concepts it missed), misconceptions (any mistaken idea in it), why (one sentence on why the suggested answer holds), next (one thing to revise next). Accept clinically equivalent wording. Never give a mark or a score. If the evidence does not let you judge the attempt reliably, attemptFeedback is null and you say so in uncertainty. With no attempt, attemptFeedback is null.",
+  "",
   "Reply with ONE JSON object and nothing else:",
-  '{"option": "B" | null, "examAnswer": "...", "explanation": "...", "optionNotes": [{"label": "A", "note": "..."}], "currentGuidance": "..." | null, "guidanceStatus": "agrees" | "differs" | "no_current_source" | "not_applicable", "conflicts": [{"claim": "...", "tags": ["W1", "N2"]}], "unsupported": ["..."], "uncertainty": ["..."]}',
+  '{"option": "B" | null, "examAnswer": "...", "explanation": "...", "optionNotes": [{"label": "A", "note": "..."}], "currentGuidance": "..." | null, "guidanceStatus": "agrees" | "differs" | "no_current_source" | "not_applicable", "conflicts": [{"claim": "...", "tags": ["W1", "N2"]}], "unsupported": ["..."], "uncertainty": ["..."], "attemptFeedback": {"right": ["..."], "missing": ["..."], "misconceptions": [], "why": "...", "next": "..."} | null}',
   "Keep examAnswer under 150 words and explanation under 250 words.",
 ].join("\n");
 
@@ -116,6 +120,8 @@ export type AnswerContent = {
   uncertainty: string[];
   /** The tags the answer actually cited. */
   cited: string[];
+  /** SCHOLAR-SQIE-01: formative feedback on the student's attempt, when there was one and it passed its own check. */
+  attemptFeedback?: FeedbackParts | null;
 };
 
 export type AnswerCheck =
@@ -135,7 +141,7 @@ const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice
 const strs = (v: unknown, n: number, max: number) => (Array.isArray(v) ? v.map(x => str(x, max)).filter(Boolean).slice(0, n) : []);
 
 /** Pure. The model's JSON → the answer shown, or withheld with the reason. */
-export function checkAnswer(raw: string, evidence: readonly Evidence[], question: string, optionLabels: readonly string[]): AnswerCheck {
+export function checkAnswer(raw: string, evidence: readonly Evidence[], question: string, optionLabels: readonly string[], attempt: string | null = null): AnswerCheck {
   const m = raw.match(/\{[\s\S]*\}/);
   let j: Record<string, unknown>;
   try { j = m ? JSON.parse(m[0]) : null; } catch { return { ok: false, reason: "malformed" }; }
@@ -175,7 +181,20 @@ export function checkAnswer(raw: string, evidence: readonly Evidence[], question
     uncertainty.push("A statement about current guidance cited no current source, so it is not shown.");
   }
   if (!currentGuidance && (guidanceStatus === "agrees" || guidanceStatus === "differs")) guidanceStatus = "no_current_source";
-  return { ok: true, content: { option, examAnswer, explanation, optionNotes, currentGuidance, guidanceStatus, conflicts, unsupported, uncertainty, cited: [...new Set(tags)] } };
+  // SCHOLAR-SQIE-01: feedback on the attempt is checked on its own -- nothing the evidence, the question or the attempt
+  // lacks, nothing identifying, no citation it was not given. Failing, it is not shown and the answer still is.
+  let attemptFeedback: FeedbackParts | null = null;
+  const parts = attempt ? feedbackPartsFrom(j.attemptFeedback) : null;
+  if (parts) {
+    const fb = feedbackText(parts);
+    const fbTags = [...fb.matchAll(TAG_RE)].map(x => `${x[1]}${x[2]}`);
+    const fine = !fbTags.some(t => !known.has(t)) && !findPatientIdentifiers(fb).length
+      && !groundingViolations(fb.replace(TAG_RE, " "), [...evidence.map(e => `${e.title}\n${e.citation}\n${e.text}`), question, attempt ?? ""]).length
+      && !/\b\d+(?:\.\d+)?\s*(?:out of\s*\d+|marks?)\b/i.test(fb); // never a mark
+    if (fine) attemptFeedback = parts;
+    else uncertainty.push("Feedback on your attempt included details the evidence does not support, so it is not shown. Compare your attempt with the suggested answer yourself.");
+  } else if (attempt) uncertainty.push("Your attempt could not be judged reliably against the evidence. Compare it with the suggested answer yourself.");
+  return { ok: true, content: { option, examAnswer, explanation, optionNotes, currentGuidance, guidanceStatus, conflicts, unsupported, uncertainty, cited: [...new Set(tags)], attemptFeedback } };
 }
 
 export const GUIDANCE_STATUS_TEXT: Record<GuidanceStatus, string> = {
@@ -194,7 +213,7 @@ export async function runAnswer(run: ExamAiRun, userId: string, input: { questio
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_exam_answer" },
   });
   if (!r.ok) return { ok: false, error: r.error } as Failure;
-  return { ok: true as const, check: checkAnswer(r.text, input.evidence, input.question, input.optionLabels), model: r.model, provider: r.provider, promptVersion: ANSWER_PROMPT_VERSION };
+  return { ok: true as const, check: checkAnswer(r.text, input.evidence, input.question, input.optionLabels, input.attempt), model: r.model, provider: r.provider, promptVersion: ANSWER_PROMPT_VERSION };
 }
 
 // ── FOLLOW-UP QUESTIONS ── about a saved answer, on the same evidence. Not stored (as Learn's explanations). ───

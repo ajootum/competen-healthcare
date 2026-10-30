@@ -115,6 +115,60 @@ export function verificationPrompt(passage: string, drafts: DraftQuestion[]): st
 
 export type VerificationOutcome = { kept: DraftQuestion[]; rejected: { index: number; detail: string }[] };
 
+// ── THE SAME BLIND CHECK FOR REVISION ITEMS ── SCHOLAR-QUESTION-INTELLIGENCE-01 ─────────────────────────────────
+//
+// The multiple-choice check above, for the two revision kinds it fits: choose-all-that-apply (the passage must
+// support EXACTLY the keyed set) and short answer (no options: the passage alone must answer it, unambiguously, with
+// nothing added in the stem). Same call shape, same activity ("questions"), same fail-closed reading. Flashcards,
+// matching and ordering items have nothing a blind reader adds to their deterministic checks, so they get none.
+
+export const REVISION_VERIFY_SYSTEM = [
+  "You check revision questions that were written from a short study passage. You are NOT told the intended answers.",
+  "For each question, using ONLY the passage (not your own knowledge):",
+  "- supported: for a question with lettered options, the letters of EVERY option the passage supports as correct (an empty list if none); for a question with no options, [].",
+  "- answerable: true only if the passage alone is enough to answer it.",
+  "- stemAddsFacts: true if the question states a clinical fact, finding or number the passage does not contain.",
+  "- ambiguous: true if a careful student could reasonably defend a different answer, or the wording is unclear.",
+  'Reply with JSON ONLY: [{"q": 1, "supported": ["A", "C"], "answerable": true, "stemAddsFacts": false, "ambiguous": false}]',
+].join("\n");
+
+const LETTERS = "ABCDEF";
+export type RevisionVerifyItem = { stem: string; options: string[]; keyed: number[] | null };
+
+export function revisionVerificationPrompt(passage: string, items: readonly RevisionVerifyItem[]): string {
+  const qs = items.map((d, i) => `${i + 1}. ${d.stem}${d.options.length ? `\n${d.options.map((o, j) => `   ${LETTERS[j]}. ${o}`).join("\n")}` : " (short answer, no options)"}`);
+  return `PASSAGE:\n${passage}\n\nQUESTIONS:\n${qs.join("\n\n")}`;
+}
+
+/** Pure. A blind verdict → the indexes of the items it supports. Fails closed, like applyVerification. */
+export function applyRevisionVerification(items: readonly RevisionVerifyItem[], raw: string): { kept: number[]; rejected: { index: number; detail: string }[] } {
+  const out = { kept: [] as number[], rejected: [] as { index: number; detail: string }[] };
+  let parsed: unknown = null;
+  try {
+    const s = raw.replace(/```(?:json)?/gi, "");
+    const a = s.indexOf("["), b = s.lastIndexOf("]");
+    parsed = a >= 0 && b > a ? JSON.parse(s.slice(a, b + 1)) : null;
+  } catch { parsed = null; }
+  const verdicts = Array.isArray(parsed) ? parsed as Record<string, unknown>[] : [];
+  items.forEach((d, i) => {
+    const v = verdicts.find(x => Number(x?.q) === i + 1);
+    if (!v) { out.rejected.push({ index: i, detail: "no verdict" }); return; }
+    const supported = Array.isArray(v.supported)
+      ? [...new Set((v.supported as unknown[]).map(x => LETTERS.indexOf(String(x).trim().toUpperCase().charAt(0))).filter(x => x >= 0 && x < d.options.length))].sort()
+      : [];
+    const keyed = [...new Set(d.keyed ?? [])].sort();
+    const problems = [
+      v.answerable !== true && "not answerable from the passage",
+      v.stemAddsFacts !== false && "the stem adds outside facts",
+      v.ambiguous !== false && "ambiguous",
+      d.options.length > 0 && (supported.length !== keyed.length || supported.some((x, k) => x !== keyed[k])) && `supported ${supported.map(x => LETTERS[x]).join("") || "none"}, keyed ${keyed.map(x => LETTERS[x]).join("")}`,
+    ].filter(Boolean) as string[];
+    if (problems.length) out.rejected.push({ index: i, detail: problems.join("; ") });
+    else out.kept.push(i);
+  });
+  return out;
+}
+
 /** Pure. A blind verdict → the drafts it supports. Fails closed: no readable verdict for a draft rejects it. */
 export function applyVerification(drafts: DraftQuestion[], raw: string): VerificationOutcome {
   const out: VerificationOutcome = { kept: [], rejected: [] };

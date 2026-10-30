@@ -87,9 +87,13 @@ export const PROMPT_VERSIONS = {
   // v3 (Stage 3, carried from the parked Learn branch): rule 3 also forbids counting what a passage lists -- the
   // cause of every withheld plain explanation in a staging run. Every mode builds on it, so they move too.
   explain: "scholar-explain-v3",
-  mcq: "scholar-mcq-v3",
-  case: "scholar-case-v3",
+  // v4 (SCHOLAR-QUESTION-INTELLIGENCE-01): the rubric fields, a spread of cognitive levels, and the guidance block
+  // (concepts, competency, level, difficulty, count, references) after the passage. case moves with it.
+  mcq: "scholar-mcq-v4",
+  case: "scholar-case-v4",
   verify: "scholar-verify-v1",
+  // SCHOLAR-QUESTION-INTELLIGENCE-01: the same blind check for mrq and short revision items (question-quality.ts).
+  verifyRevision: "scholar-verify-revision-v1",
   // COMPETEN-SCHOLAR-01. explain (above) is unchanged. The other modes add an instruction to the same
   // system prompt, so they carry their own version. A case is several linked steps from one passage.
   // v2: "go deeper" is two explicit parts, after the staging acceptance run saw part one drift past the notes
@@ -108,16 +112,20 @@ export const PROMPT_VERSIONS = {
   // v3: Simplify keeps the passages' own names rather than counting them ("two tubes" for "right and left").
   learn: "scholar-learn-v3",
   // COMPETEN-SCHOLAR-REVISION-01 R4: AI evaluation of a short answer (Holdings activity `evaluate`).
-  evaluate: "scholar-evaluate-v1",
+  // v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): five labelled feedback parts, judged against the rubric where there is one.
+  evaluate: "scholar-evaluate-v2",
   // COMPETEN-SCHOLAR-REVISION-01 R2: revision questions of the 416 kinds, one prompt per kind, on the question rules.
   // v2: answers and rationale in the passage's own words; [] when a kind does not fit; a matching item only with three pairs.
-  revision: "scholar-revision-v2",
+  // v3 (SCHOLAR-QUESTION-INTELLIGENCE-01): every item asks (never a statement as a flashcard front), the rubric fields,
+  // the guidance block; mrq and short carry +verifyRevision (generation.ts revisionPromptVersion).
+  revision: "scholar-revision-v3",
   // COMPETEN-SCHOLAR-CLINICAL-REASONING-01: a private case drafted from the notes, and AI feedback on written reasoning.
   // v2: no counting, and no state or change words the passages do not use (the staging runs' refusal reasons).
   // v3 (SCHOLAR-AI-OPT-01 P2): the reply example shows expectedResponse on a free-text decision and says one decision per
   // stage -- the acceptance run's other refused draft had a free-text decision with no expected response.
   caseBlueprint: "scholar-case-blueprint-v3",
-  caseReasoning: "scholar-case-reasoning-v1",
+  // v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): the five feedback parts, clinically equivalent wording accepted.
+  caseReasoning: "scholar-case-reasoning-v2",
 } as const;
 
 // ── STAGE 4: REVISION ── COMPETEN-SCHOLAR-REVISION-01 (owner GO 2026-10-24) ─────────────────────────────────────
@@ -165,6 +173,12 @@ export const PRIVATE_CASE_LABEL = "Practice case written by AI from your notes �
 export const LIBRARY_CASE_LABEL = "Governed library case · clinically approved for this exact version · formative simulation";
 export const MOCK_LABEL = "Mock practice from your own notes: formative revision, not an assessment, and never evidence of competence.";
 export const REVISION_LABEL = "Revision from your notes · formative practice, not an assessment";
+/** SCHOLAR-SQIE-01: what a generated question rests on (question-intel.ts rubric.source), in words. */
+export const GROUNDING_LABEL = { notes: "From your notes", references: "From your notes + approved references" } as const;
+/** SCHOLAR-QUESTION-INTELLIGENCE-01: the five parts of formative feedback (question-intel.ts FeedbackParts). */
+export const FEEDBACK_HEADINGS = {
+  right: "What you got right", missing: "Missing concepts", misconceptions: "Misconceptions", why: "Why the answer holds", next: "What to revise next",
+} as const;
 
 /** Owner D3: the shared personal AI, reached from Learn. Never a Learn answer: shown apart, under these words. */
 export const PERSONAL_AI_LABEL = "Personal AI assistant — general explanation, not checked against your notes, not clinically reviewed";

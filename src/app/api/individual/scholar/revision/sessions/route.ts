@@ -2,7 +2,7 @@
 export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
-import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
+import { answerOutcome, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
 import { outcomeOf } from "@/lib/ai/outcomes";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -19,6 +19,8 @@ import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai
 import { runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/generation";
 import { GENERATING_MODES, keyOf, pickQuestions, planGeneration, type PoolItem } from "@/lib/individual/scholar/revision";
 import { revisionItemView } from "@/lib/individual/scholar/revision-view";
+import { generationContextLoader } from "@/lib/individual/scholar/question-context";
+import { adaptDifficulty, generationDifficulty, isSourceMode, stemKey, type SourceMode } from "@/lib/individual/scholar/question-intel";
 import {
   MOCK_LABEL, PROMPT_VERSIONS, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
   type RevisionDifficulty, type RevisionFormat, type RevisionMode,
@@ -30,7 +32,8 @@ export const dynamic = "force-dynamic";
 
 // /api/individual/scholar/revision/sessions -- COMPETEN-SCHOLAR-REVISION-01 R1, R2 and R4.
 //
-// POST { mode, scope?, formats?, quantity?, difficulty?, feedback?, setId? } starts a revision session.
+// POST { mode, scope?, formats?, quantity?, difficulty?, feedback?, setId?, source? } starts a revision session.
+//   source  "notes" (default) or "notes_and_references" (SCHOLAR-SQIE-01: approved governed references too)
 //   scope   a section, a document, chosen documents, a topic, a competency (Stage 3's own scope), or none: the library
 //   setId   replay a saved set: its stored questions, no AI at all (s8)
 // REUSE FIRST. The session is filled from the student's saved questions (pickQuestions, deterministic). Only a
@@ -103,7 +106,11 @@ export async function POST(req: Request) {
   const formats = pickFormats(body?.formats, policy.scholarRevisionFormats);
   if (!formats.length) return NextResponse.json({ error: "None of those question formats is offered here." }, { status: 400 });
   const quantity = Number.isInteger(body?.quantity) ? Math.min(REVISION_QUANTITY_MAX, Math.max(1, body.quantity)) : policy.scholarRevisionQuantity;
-  const difficulty: RevisionDifficulty = (REVISION_DIFFICULTIES as readonly string[]).includes(body?.difficulty) ? body.difficulty : policy.scholarRevisionDifficulty;
+  const asked: RevisionDifficulty | null = (REVISION_DIFFICULTIES as readonly string[]).includes(body?.difficulty) ? body.difficulty : null;
+  let difficulty: RevisionDifficulty = asked ?? policy.scholarRevisionDifficulty;
+  // SCHOLAR-SQIE-01: where questions come from -- the notes (default), or the notes with approved references.
+  const sourceMode: SourceMode = isSourceMode(body?.source) ? body.source : "notes";
+  const loader = await generationContextLoader(ctx.admin, ctx.userId, policy);
   const kinds = mode === "flashcards" ? (["flashcard"] as RevisionFormat[]) : formats;
   const seed = `${ctx.userId}:${new Date().toISOString().slice(0, 10)}:${mode}`;
 
@@ -118,10 +125,20 @@ export async function POST(req: Request) {
   };
   let pool = await poolOf();
   if (!pool) return NextResponse.json({ error: "Your saved questions could not be read just now." }, { status: 503 });
+  // SCHOLAR-SQIE-01: with no difficulty chosen, the default is the programme level's (else the policy's), stepped up
+  // after three right answers and down after two misses in the last three (question-intel.ts adaptDifficulty). A
+  // default only: a chosen difficulty is always used as chosen, and nothing is withheld by it.
+  if (!asked) {
+    const base = loader.levelDefault ?? generationDifficulty(policy.scholarRevisionDifficulty);
+    const recent = pool.items.filter(p => p.lastAnsweredAt && p.latestCorrect !== null)
+      .sort((a, b) => (b.lastAnsweredAt ?? "").localeCompare(a.lastAnsweredAt ?? "")).map(p => p.latestCorrect as boolean);
+    if (base) difficulty = adaptDifficulty(base, recent);
+  }
   let pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed });
 
   // ── the shortfall: written new only where the mode, the policy and the student's AI allow ──
-  let generated = 0, note: string | null = null;
+  let generated = 0, note: string | null = null, aiCalls = 0, referencesUsed = false;
+  const stems = new Set(pool.questions.map(q => stemKey(q.stem)));
   if (pick.shortfall > 0 && GENERATING_MODES.includes(mode) && scopeSections.length) {
     if (policy.scholarRevisionGeneration === "saved_only") note = "New questions are not written here: this session uses your saved questions only.";
     else {
@@ -146,17 +163,25 @@ export async function POST(req: Request) {
             if (!passage) continue;
             const ai = scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`);
             const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
-            let ids: string[] = [], outcome = "";
+            // SCHOLAR-QUESTION-INTELLIGENCE-01: the section's guidance, the difficulty, and (revision kinds only: an mcq
+            // cannot record a reference) the approved references of mode notes_and_references.
+            const context = await loader.forSection(passage.chunkId, { difficulty: generationDifficulty(difficulty), mode: call.kind === "mcq" ? "notes" : sourceMode });
+            if (context.mode === "notes_and_references") referencesUsed = true;
+            let ids: string[] = [], outcome = "", calls = 0;
             let measured: { accepted: number; rejected: number; reasons: string[]; promptVersion: string | null } | null = null;
             if (call.kind === "mcq") {
               // Each call asks for up to three: the checks drop some, and what is kept beyond this session is saved
               // for the next one (reuse first), never written again.
-              const r = await runQuestions(ctx.userId, "mcq", passage, Math.max(call.count, 3), ai.run);
-              if (r.ok) { const s = await insertQuestions(ctx.admin, ctx.userId, { passage, kind: "mcq", drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId }); ids = s.ids; outcome = `kept:${ids.length}`; measured = { accepted: ids.length, rejected: r.check.dropped.length, reasons: r.check.dropped.map(d => d.reason), promptVersion: r.promptVersion }; }
+              const r = await runQuestions(ctx.userId, "mcq", passage, Math.max(call.count, 3), ai.run, { context, existing: stems });
+              if (r.ok) {
+                calls = r.calls; r.check.kept.forEach(d => stems.add(stemKey(d.stem)));
+                const s = await insertQuestions(ctx.admin, ctx.userId, { passage, kind: "mcq", drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId }); ids = s.ids; outcome = `kept:${ids.length}`; measured = { accepted: ids.length, rejected: r.check.dropped.length, reasons: r.check.dropped.map(d => d.reason), promptVersion: r.promptVersion };
+              }
               else outcome = `error:${r.error}`;
             } else {
-              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, Math.max(call.count, 3), ai.run);
+              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, Math.max(call.count, 3), ai.run, { context, existing: stems });
               if (r.ok) {
+                calls = r.calls; r.kept.forEach(d => stems.add(stemKey(d.stem)));
                 const s = await insertRevisionQuestions(ctx.admin, ctx.userId, { passage, kind: call.kind, drafts: r.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
                 // The reasons items were dropped, counted (never their text): what the checks are refusing.
                 const why = [...new Set(r.dropped)].map(x => `${x}:${r.dropped.filter(y => y === x).length}`).join("/");
@@ -169,9 +194,15 @@ export async function POST(req: Request) {
             // SCHOLAR-AI-OPT-01: one outcome per generation call, codes and counts only.
             await recordScholarOutcome(ctx.admin, ai, {
               operation: call.kind === "mcq" ? "individual_scholar_mcq" : `individual_scholar_revision_${call.kind}`, outputKind: "question",
-              ...(measured ? { outcome: outcomeOf(measured.accepted, measured.rejected), ...measured } : { outcome: "error" as const, reasons: [outcome.replace(/:/g, "_")] }),
+              ...(measured
+                ? { outcome: outcomeOf(measured.accepted, measured.rejected), ...measured, reasons: [...measured.reasons, ...answerOutcome(measured.accepted ? null : "insufficient_grounding").reasons].slice(-20) }
+                : { outcome: "error" as const, reasons: [outcome.replace(/:/g, "_")] }),
             });
-            await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_revision_generate", null, { chunk_id: passage.chunkId, kind: call.kind, asked: call.count, outcome, competency_id: competencyId });
+            await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_revision_generate", null, {
+              chunk_id: passage.chunkId, kind: call.kind, asked: call.count, outcome, competency_id: competencyId,
+              ai_calls: calls, difficulty: context.difficulty, source: context.mode, references: context.references.length,
+            });
+            aiCalls += calls;
             made += ids.length;
           }
           generated += made;
@@ -183,24 +214,29 @@ export async function POST(req: Request) {
     }
   }
 
+  // SCHOLAR-SQIE-02: new questions were asked for and none survived the checks -- typed, so a way on can be offered.
+  const withheld: Withheld | null = aiCalls > 0 && generated === 0 && pick.shortfall > 0 ? { reason: "insufficient_grounding" } : null;
   if (!pick.ids.length) {
     // Continuity with nothing stored: there is no session to "use your saved questions", so say what is true instead.
     const nothingSaved = note ? `${note.replace(/ This session uses your saved questions( only)?\.$/, "").replace(/: this session uses your saved questions only\.$/, ".")} You have no saved questions for this yet, so there is nothing to revise here until new ones can be written. Your cards, saved sets and history are unaffected.` : null;
     return NextResponse.json({
       error: mode === "spaced" ? "Nothing is due for review today." : mode === "weak" ? "Nothing to revise here yet: questions you get wrong show up in Weak areas." : nothingSaved ?? "There are no questions for this yet.",
-      continuity: !!nothingSaved,
+      continuity: !!nothingSaved, ...(withheld ? { withheld } : {}),
     }, { status: 404 });
   }
   const byId = new Map(pool.questions.map(q => [q.id, q]));
   const ordered = pick.ids.map(id => byId.get(id)!).filter(Boolean);
   const made = await createRevisionSession(ctx.admin, ctx.userId, { mode, feedback, questionIds: ordered.map(q => q.id) });
   await audit(ctx, "individual_scholar_revision_started", "individual_scholar_revision_session", made.ok ? made.id : null,
-    { mode, scope: chunkIds ? "scoped" : "library", questions: ordered.length, generated, formats: kinds });
+    { mode, scope: chunkIds ? "scoped" : "library", questions: ordered.length, generated, formats: kinds, ai_calls: aiCalls, difficulty, adapted: !asked, source: sourceMode, references_used: referencesUsed });
+  // Mode notes_and_references with no approved reference linked to these notes: said, never implied.
+  const sourceNote = sourceMode === "notes_and_references" && generated > 0 && !referencesUsed
+    ? "No clinically approved reference is linked to these notes yet, so the new questions are from your notes only." : null;
   return NextResponse.json({
     session: made.ok ? { id: made.id, mode, feedback, total: ordered.length, position: 0 } : null,
     items: ordered.map(revisionItemView), generated, reused: ordered.length - Math.min(generated, ordered.length),
-    label: mode === "mock" ? MOCK_LABEL : null,
-    note: note ?? (made.ok ? null : "Revision sessions are not kept on this environment, so this one cannot be resumed later."),
+    label: mode === "mock" ? MOCK_LABEL : null, difficulty, source: sourceMode, aiCalls, ...(withheld ? { withheld } : {}),
+    note: [note ?? (made.ok ? null : "Revision sessions are not kept on this environment, so this one cannot be resumed later."), sourceNote].filter(Boolean).join(" ") || null,
   });
 }
 

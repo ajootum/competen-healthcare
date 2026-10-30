@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { leadInFor, linesFromChunks, paperFlagText, parsePaper, questionText, UNREADABLE_MARK } from "./exam-paper";
+import { NOTES_NOT_PAPER, isNotesNotPaper, leadInFor, linesFromChunks, paperFlagText, parsePaper, questionLike, questionText, revisionFront, UNREADABLE_MARK } from "./exam-paper";
 
 const chunk = (id: string, page: number, content: string) => ({ id, pageFrom: page, content });
 
@@ -100,6 +100,57 @@ describe("parsePaper: reading an examination paper's structure without guessing"
     const p = parsePaper(linesFromChunks([chunk("x", 1, "1.\nA. One\nB. Two")]));
     expect(p.questions[0].stem).toBe(UNREADABLE_MARK);
     expect(p.questions[0].flags.map(f => f.kind)).toContain("unreadable_text");
+  });
+
+  // SCHOLAR-QUESTION-INTELLIGENCE-01: the reported symptom -- numbered notes read as "Question 1: Pyelonephritis ...".
+  const NOTES = [
+    "Urinary tract infections",
+    "1. Pyelonephritis (kidney infection): This infection spreads from the bladder to one or both kidneys.",
+    "2. Cystitis (bladder infection): The commonest lower urinary tract infection.",
+    "3. Urethritis: Inflammation of the urethra, often with dysuria.",
+    "4. Risk factors include catheters and incomplete emptying.",
+  ].join("\n");
+
+  it("does not read numbered statements in notes as questions, and says the material looks like notes", () => {
+    const p = parsePaper(linesFromChunks([chunk("x", 1, NOTES)]));
+    expect(p.questions).toEqual([]);
+    expect(p.flags).toContainEqual({ kind: "looks_like_notes", statements: 4 });
+    expect(isNotesNotPaper(p)).toBe(true);
+    expect(paperFlagText({ kind: "looks_like_notes", statements: 4 })).toBe(NOTES_NOT_PAPER);
+    expect(NOTES_NOT_PAPER).toMatch(/notes rather than an exam paper/);
+  });
+
+  it("keeps a numbered line as a question when it asks: a cue, a ?, marks, options, a Question label, or the paper's instruction", () => {
+    const p = parsePaper(linesFromChunks([chunk("x", 1, [
+      "1. Pyelonephritis: what organism most often causes it?",
+      "2. The commonest cause of cystitis is",
+      "A. Escherichia coli", "B. Candida",
+      "3. Urethritis (4 marks)",
+      "4. Outline the nursing care of a patient with a catheter.",
+    ].join("\n"))]));
+    expect(p.questions.map(q => q.number)).toEqual(["1", "2", "3", "4"]);
+    expect(isNotesNotPaper(p)).toBe(false);
+    const labelled = parsePaper(linesFromChunks([chunk("x", 1, "Question 1: Pyelonephritis\nQuestion 2: Cystitis")]));
+    expect(labelled.questions.map(q => q.number)).toEqual(["1", "2"]);
+    // "Write short notes on" under a section heading makes the bare topics below it questions.
+    const shortNotes = parsePaper(linesFromChunks([chunk("x", 1, "Section B\nWrite short notes on the following\n1. Pyelonephritis\n2. Cystitis\n3. Urethritis")]));
+    expect(shortNotes.questions.map(q => q.stem)).toEqual(["Pyelonephritis", "Cystitis", "Urethritis"]);
+    expect(isNotesNotPaper(shortNotes)).toBe(false);
+  });
+
+  it("keeps a sub-part that does not ask on its own when its parent does, and a lead-in whose parts ask", () => {
+    const p = parsePaper(linesFromChunks([chunk("x", 1, "1. Mrs K is admitted with loin pain and fever.\n(a) What is the likely diagnosis?\n(b) Explain the care needed\n(i) at rest\n(ii) on discharge")]));
+    expect(p.questions.map(q => q.number)).toEqual(["1", "1(a)", "1(b)", "1(b)(i)", "1(b)(ii)"]);
+  });
+
+  it("never makes a statement the front of a revision card", () => {
+    const statement = { number: "1", stem: "Pyelonephritis (kidney infection): This infection spreads from the bladder to one or both kidneys.", options: [], instructions: null, marks: null };
+    expect(revisionFront(statement, null)).toBeNull();
+    expect(revisionFront({ ...statement, stem: "What is pyelonephritis?" }, null)).toBe("Question 1: What is pyelonephritis?");
+    expect(revisionFront({ number: "1(b)(i)", stem: "at rest", options: [], instructions: null, marks: null }, "Explain the care needed")).toBe("Explain the care needed\nQuestion 1(b)(i): at rest");
+    expect(revisionFront({ number: "2", stem: "The commonest cause is", options: [{ label: "A", text: "E. coli" }], instructions: null, marks: null }, null)).toBe("Question 2: The commonest cause is\nA. E. coli");
+    expect(questionLike("Pyelonephritis (kidney infection): This infection spreads.")).toBe(false);
+    expect(questionLike("Describe the signs of sepsis")).toBe(true);
   });
 
   it("says when no numbered questions were found", () => {

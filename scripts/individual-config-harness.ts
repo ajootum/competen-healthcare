@@ -142,8 +142,9 @@ const CONSUMERS: [K, string, RegExp | null][] = [
   ["assistant", "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId))", /const quota = await checkAiQuota/],
   ["proAssistant", "individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId))", /const quota = await checkAiQuota/],
   // AI-FAIR-USE-01: the generator also takes the metered runner -- the limit is still the policy value.
-  ["questions", "runQuestions(ctx.userId, kind, passage, (await loadIndividualPolicy(ctx.admin)).scholarQuestionsPerRequest, ai.run)", null],
-  ["generation", "checkQuestions(r.text, passage, limit)", /arr\.slice\(0, QUESTIONS_PER_REQUEST\)/],
+  // SCHOLAR-QUESTION-INTELLIGENCE-01: a requested count may narrow it, never widen it past the policy value.
+  ["questions", "const count = Number.isInteger(body?.count) ? Math.min(policy.scholarQuestionsPerRequest, Math.max(1, body.count)) : policy.scholarQuestionsPerRequest;", null],
+  ["generation", "checkQuestions(r.text, passage, limit, QUESTIONS_PER_REQUEST, opts)", /arr\.slice\(0, QUESTIONS_PER_REQUEST\)/],
   ["uploads", "if (count >= maxMaterials)", /MAX_MATERIALS_PER_PERSON/],
   ["passportRoute", "passportAchievementKinds.includes(body.achievement)", null],
   ["progress", "offered.has(a.achievement)", null],

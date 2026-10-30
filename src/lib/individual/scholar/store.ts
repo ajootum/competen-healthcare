@@ -15,6 +15,7 @@ export type MapSource = "ai" | "student" | "reviewer";
 import { STUDY_ACHIEVEMENT, isStudyAchievementKind, studyAchievementsFrom, type ChoiceRow, type StudyAchievement, type StudyAchievementKind } from "./passport-items";
 import { passportEvaluationOf, type PassportEvaluation } from "./passport-evaluations";
 import type { ExamOption, PaperFlag, ParsedQuestion, QuestionFlag } from "./exam-paper";
+import { stemKey } from "./question-intel";
 import type { ResearchSource } from "./exam-research";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
@@ -462,13 +463,20 @@ export async function insertQuestions(admin: Admin, userId: string, input: {
 }): Promise<{ ok: boolean; ids: string[] }> {
   if (!input.drafts.length) return { ok: true, ids: [] };
   if (input.caseId && input.kind !== "case") return { ok: false, ids: [] };
-  const { data, error } = await admin.from("individual_scholar_question").insert(input.drafts.map((d, i) => ({
+  const rows = (withDifficulty: boolean) => input.drafts.map((d, i) => ({
     user_id: userId, material_id: input.passage.materialId, chunk_id: input.passage.chunkId, kind: input.kind,
     stem: d.stem, options: d.options, correct_index: d.correctIndex, rationale: d.rationale, source_quote: d.sourceQuote,
     model: input.model, provider: input.provider, prompt_version: input.promptVersion,
     ...(input.competencyId ? { competency_id: input.competencyId } : {}),
     ...(input.caseId ? { case_id: input.caseId, case_step: i + 1, ...(i === 0 ? { case_title: input.caseTitle ?? null } : {}) } : {}),
-  }))).select("id");
+    // SCHOLAR-QUESTION-INTELLIGENCE-01: its difficulty (416's column, any kind). NOT its rubric: 416's options CHECK
+    // requires answer IS NULL for mcq and case, so their rubric is used at generation and not stored (a CHECK change).
+    ...(withDifficulty && d.difficulty ? { difficulty: d.difficulty } : {}),
+  }));
+  let { data, error } = await admin.from("individual_scholar_question").insert(rows(true).map(r => ({ ...r, user_id: userId }))).select("id");
+  // Where 416 is absent the column is not there: the question is stored exactly as before.
+  if (error && /column|schema cache/i.test(String((error as any)?.message ?? "")) && input.drafts.some(d => d.difficulty))
+    ({ data, error } = await admin.from("individual_scholar_question").insert(rows(false).map(r => ({ ...r, user_id: userId }))).select("id"));
   if (error) return { ok: false, ids: [] };
   return { ok: true, ids: ((data ?? []) as any[]).map(r => r.id) };
 }
@@ -524,6 +532,17 @@ async function questionExtras(admin: Admin, userId: string, ids: string[]): Prom
  * Practice questions and cases (372 kinds). REVISION-01: the 416 kinds are Revision's and are read through
  * revisionPool, so the practice and Apply surfaces, which render four options and one key, never receive them.
  */
+/**
+ * SCHOLAR-QUESTION-INTELLIGENCE-01: the stored stems of one material's questions (every kind), reduced for duplicate
+ * detection (question-intel.ts stemKey). Empty where unreadable: a repeat then costs a duplicate, never a refusal.
+ */
+export async function questionStems(admin: Admin, userId: string, materialId: string): Promise<Set<string>> {
+  if (!isUuid(materialId)) return new Set();
+  const { data, error } = await admin.from("individual_scholar_question").select("stem").eq("user_id", userId).eq("material_id", materialId).limit(2000);
+  if (error) return new Set();
+  return new Set(((data ?? []) as any[]).map(r => stemKey(String(r.stem ?? ""))).filter(Boolean));
+}
+
 export async function listQuestions(admin: Admin, userId: string, opts: { materialId?: string; kind?: QuestionKind } = {}): Promise<Read<QuestionRow[]>> {
   let q = admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId);
   if (opts.materialId) q = q.eq("material_id", opts.materialId);

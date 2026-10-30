@@ -13,6 +13,8 @@ import { keyOf, markResponse, parseResponse, storedResponse } from "@/lib/indivi
 import { citationOf, feedbackView } from "@/lib/individual/scholar/revision-view";
 import { questionLinks } from "@/lib/individual/scholar/revision-links";
 import { MARKING_LABEL } from "@/lib/individual/scholar/config";
+import { rubricOf, type FeedbackParts } from "@/lib/individual/scholar/question-intel";
+import { answerOutcome, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -71,6 +73,8 @@ export async function POST(req: Request) {
   // ── marking: code, then (a short answer only) AI evaluation or the student's own judgement ──
   let mark = markResponse(q, r);
   let evaluation: string | null = null, evaluator: { model: string; promptVersion: string } | null = null;
+  let evaluationParts: FeedbackParts | null = null;
+  let withheld: Withheld | null = null;
   if ("needsJudgement" in mark && r.kind === "text") {
     const accepted = (keyOf(q) as { answers: string[] }).answers;
     if (typeof body?.selfGrade === "boolean") mark = { correct: body.selfGrade, score: body.selfGrade ? 1 : 0, marking: "self_graded" };
@@ -83,16 +87,25 @@ export async function POST(req: Request) {
         if (!standing.available) why = `${standing.message ?? "AI evaluation is not available right now."} Compare your answer yourself.`;
         else if (passage) {
           const ai = scholarAiRunner(ctx, req, "evaluate", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\n${r.text}`, passages: [passage] }));
-          const e = await runEvaluate(ctx.userId, { question: q.stem, accepted, answer: r.text, passage }, ai.run);
+          // SCHOLAR-QUESTION-INTELLIGENCE-01: judged against the question's key points and misconceptions where it has them.
+          const rubric = rubricOf(q.answer);
+          const e = await runEvaluate(ctx.userId, { question: q.stem, accepted, answer: r.text, passage, rubric }, ai.run);
           const refused = ai.refusal();
           await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_evaluate", sessionId, {
             question_id: q.id, outcome: refused ? `refused:${refused.error}` : !e.ok ? `error:${e.error}` : e.evaluation.ok ? `shown:${e.evaluation.verdict}` : `withheld:${e.evaluation.reason}`,
             model: e.ok ? e.model : null, prompt_version: e.ok ? e.promptVersion : null,
           });
+          // SCHOLAR-SQIE-02: a safe withhold (the evaluator could not judge it against the notes) is typed, kept with the
+          // student's answer, and counted apart from an answered evaluation -- codes only, never the answer.
+          if (!refused && e.ok) {
+            withheld = e.evaluation.ok ? null : { reason: e.evaluation.reason };
+            const o = answerOutcome(withheld?.reason ?? null);
+            await recordScholarOutcome(ctx.admin, ai, { operation: "individual_scholar_evaluate", outputKind: "other", outcome: o.outcome, reasons: o.reasons, promptVersion: e.promptVersion });
+          }
           if (!refused && e.ok && e.evaluation.ok) {
             // Recorded as ai_evaluation below, with the evaluator model and prompt version.
             mark = { correct: e.evaluation.verdict === "correct", score: e.evaluation.score, marking: "deterministic" };
-            evaluation = e.evaluation.feedback; evaluator = { model: e.model, promptVersion: e.promptVersion };
+            evaluation = e.evaluation.feedback; evaluationParts = e.evaluation.parts ?? null; evaluator = { model: e.model, promptVersion: e.promptVersion };
           } else why = refused ? "AI evaluation is not available for this right now, so compare your answer yourself." : "The AI could not judge this answer against your notes, so compare it yourself.";
         }
       }
@@ -104,7 +117,7 @@ export async function POST(req: Request) {
         await updateRevisionSession(ctx.admin, ctx.userId, sessionId, { position: answeredCount + 1 });
         return NextResponse.json({ recorded: true, held: true });
       }
-      if (!evaluator) return NextResponse.json({ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL.self_graded });
+      if (!evaluator) return NextResponse.json({ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL.self_graded, ...(withheld ? { withheld, questionId: q.id, attempt: r.text } : {}) });
     }
   }
   if ("needsJudgement" in mark) return NextResponse.json({ error: "This answer could not be marked." }, { status: 400 });
@@ -123,6 +136,6 @@ export async function POST(req: Request) {
   if (feedbackMode === "end" && !finished) return NextResponse.json({ recorded: true, held: true });
   return NextResponse.json({
     recorded: true,
-    feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, evaluation, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
+    feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, evaluation, evaluationParts, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
   });
 }

@@ -5,7 +5,14 @@ import { CONTEXT_PREAMBLE } from "./learner-context";
 import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, type CheckVerdict, type ExplanationDepth, type LearnAction } from "./config";
 import { citeChunk, findPatientIdentifiers } from "./extract";
 import { structureLabel, type CatalogueCompetency } from "./catalogue";
-import { VERIFY_SYSTEM, applyVerification, passageVocabulary, qualityProblems, verificationPrompt, type QualityReason } from "./question-quality";
+import {
+  REVISION_VERIFY_SYSTEM, VERIFY_SYSTEM, applyRevisionVerification, applyVerification, passageVocabulary, qualityProblems, revisionVerificationPrompt, verificationPrompt,
+  type QualityReason, type RevisionVerifyItem,
+} from "./question-quality";
+import {
+  FEEDBACK_FORMAT, NO_CONTEXT, RUBRIC_RULE, difficultyFits, difficultyOf, feedbackText, generationContextBlock, parseFeedbackSections, parseRubric, referenceGrounding, stemKey,
+  type FeedbackParts, type GenerationContext, type Rubric,
+} from "./question-intel";
 import { checkRevisionDraft, type RevisionDraft } from "./revision";
 import { blueprintFromDraft, checkPrivateCase } from "./clinical";
 
@@ -207,6 +214,9 @@ export type DraftQuestion = {
   correctIndex: number;
   rationale: string;
   sourceQuote: string;
+  /** SCHOLAR-QUESTION-INTELLIGENCE-01: its rubric and difficulty, stored in 416's `answer` and `difficulty`. */
+  rubric?: Rubric;
+  difficulty?: 1 | 2 | 3;
 };
 
 const QUESTION_RULES = [
@@ -224,24 +234,35 @@ const QUESTION_RULES = [
   "5. rationale explains in one or two sentences why the correct option is right, in the passage's own terms.",
   "6. Never include a name, NHS number, date of birth or any detail that could identify a real person.",
   "",
-  'Reply with JSON ONLY, no prose and no code fence: [{"stem": "...", "options": ["...", "...", "...", "..."], "correctIndex": 0, "rationale": "...", "sourceQuote": "..."}]',
+  'Reply with JSON ONLY, no prose and no code fence: [{"stem": "...", "options": ["...", "...", "...", "..."], "correctIndex": 0, "rationale": "...", "sourceQuote": "...", "level": "understanding", "objective": "...", "keyPoints": ["..."], "misconceptions": ["..."], "references": []}]',
 ];
 
+// SCHOLAR-QUESTION-INTELLIGENCE-01 (mcq v4, case v4): the rubric fields, a spread of cognitive levels, and the
+// guidance block (concepts, competency, level, difficulty, count) after the passage -- generationContextBlock.
 export const QUESTION_SYSTEM: Record<QuestionKind, string> = {
   mcq: [
     "You write multiple-choice revision questions for a healthcare student, from ONE passage of their own study notes.",
-    `Write up to ${QUESTIONS_PER_REQUEST} questions that test understanding of the passage, not trivia.`,
+    `Write up to ${QUESTIONS_PER_REQUEST} questions that test understanding of the passage, not trivia: where the passage allows, include questions that ask the student to explain, apply or reason with it, not only to recall it.`,
     "",
-    ...QUESTION_RULES,
+    ...QUESTION_RULES.slice(0, -1),
+    RUBRIC_RULE,
+    "",
+    ...QUESTION_RULES.slice(-1),
   ].join("\n"),
   case: [
     "You write short case-style application questions for a healthcare student, from ONE passage of their own study notes.",
     `Write up to ${QUESTIONS_PER_REQUEST} questions. Each stem is a brief educational scenario about 'a patient' (no name, no age, no numbers unless the passage gives them) followed by a question asking the student to APPLY the passage to the scenario.`,
     "The scenario may only describe things the passage itself mentions. If the passage cannot support a scenario, return [].",
     "",
-    ...QUESTION_RULES,
+    ...QUESTION_RULES.slice(0, -1),
+    RUBRIC_RULE,
+    "",
+    ...QUESTION_RULES.slice(-1),
   ].join("\n"),
 };
+
+/** What a generator is checked against besides its passage (question-intel.ts). Optional throughout. */
+export type GenerationOptions = { context?: GenerationContext; existing?: ReadonlySet<string> };
 
 export function questionUserPrompt(passage: Passage): string {
   return `PASSAGE (${passageCitation(passage)}):\n${passage.content}\n\n`
@@ -252,7 +273,7 @@ export function questionUserPrompt(passage: Passage): string {
 const squash = (s: string) => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
 
 
-export type DropReason = "malformed" | "quote_not_in_passage" | "ungrounded" | QualityReason | "failed_verification" | "verification_unavailable";
+export type DropReason = "malformed" | "quote_not_in_passage" | "ungrounded" | QualityReason | "failed_verification" | "verification_unavailable" | "repeat" | "off_difficulty";
 
 /**
  * Pure. SCHOLAR-AI-OPT-01 P2: the words the vocabulary rule refused (unsupported_term), for the audit row. The acceptance
@@ -276,11 +297,14 @@ export type QuestionCheck = {
  * Individual policy value (COMPETEN-CONFIG-002), never above QUESTIONS_PER_REQUEST: it narrows how many are
  * KEPT and leaves the versioned prompt (PROMPT_VERSIONS) untouched.
  */
-export function checkQuestions(raw: string, passage: Passage, limit: number = QUESTIONS_PER_REQUEST, cap: number = QUESTIONS_PER_REQUEST): QuestionCheck {
+export function checkQuestions(raw: string, passage: Passage, limit: number = QUESTIONS_PER_REQUEST, cap: number = QUESTIONS_PER_REQUEST, opts: GenerationOptions = {}): QuestionCheck {
   const out: QuestionCheck = { kept: [], dropped: [] };
   const arr = parseJsonArray(raw);
   if (!arr) { out.dropped.push({ reason: "malformed" }); return out; }
   const source = squash(passage.content);
+  // Notes only: an mcq or case question cannot record a reference (416 keeps their `answer` null), so source mode
+  // notes_and_references is never applied here -- the passage alone grounds it, exactly as before.
+  const seen = new Set(opts.existing ?? []);
   for (const item of arr.slice(0, Math.min(cap, Math.max(1, Math.floor(limit))))) {
     const q = item as Record<string, unknown>;
     const options = Array.isArray(q?.options) ? (q.options as unknown[]).map(o => (typeof o === "string" ? o.trim() : "")) : [];
@@ -300,7 +324,13 @@ export function checkQuestions(raw: string, passage: Passage, limit: number = QU
     const draft: DraftQuestion = { stem, options: options as DraftQuestion["options"], correctIndex: ci, rationale, sourceQuote: quote };
     const problems = qualityProblems(draft, passage.content);
     if (problems.length) { out.dropped.push({ reason: problems[0].reason, detail: problems.map(p => p.detail ? `${p.reason} (${p.detail})` : p.reason).join("; ") }); continue; }
-    out.kept.push(draft);
+    // SCHOLAR-QUESTION-INTELLIGENCE-01: not a repeat of a stored (or an earlier) stem, the difficulty asked for, a rubric.
+    const key = stemKey(stem);
+    if (seen.has(key)) { out.dropped.push({ reason: "repeat" }); continue; }
+    const difficulty = difficultyOf(q);
+    if (!difficultyFits(difficulty, opts.context?.difficulty ?? null)) { out.dropped.push({ reason: "off_difficulty", detail: String(difficulty) }); continue; }
+    seen.add(key);
+    out.kept.push({ ...draft, difficulty, rubric: parseRubric(q, [passage.content], { expectedAnswer: options[ci], difficulty }) });
   }
   return out;
 }
@@ -644,90 +674,145 @@ export { markShortAnswer } from "./revision";
 // the passage, nothing ungrounded, nothing identifying. An item that fails is dropped and counted, never stored. If
 // nothing survives the first attempt, it writes again once.
 
+// SCHOLAR-QUESTION-INTELLIGENCE-01 (revision v3): every item a real question (a flashcard front a question or a
+// term, never a statement), the rubric fields, and the guidance block after the passage. mrq and short items then get
+// the blind check (question-quality.ts REVISION_VERIFY_SYSTEM), on the same activity.
 const REVISION_COMMON = [
   "You write revision items for a healthcare student, from ONE passage of their own study notes, for their own formative revision.",
   "RULES:",
   "1. Every item must be answerable from the passage ALONE. Do not test anything the passage does not state.",
   "2. Do not add any number, dose, value, date, finding or term that is not in the passage. Never write a number the passage does not contain, in digits or words. Do not count things.",
   "3. sourceQuote is ONE sentence copied EXACTLY from the passage that supports the answer.",
-  "4. difficulty is 1 (recall a stated fact), 2 (understand or connect) or 3 (apply or distinguish).",
+  "4. difficulty is 1 (recall a stated fact), 2 (understand or connect) or 3 (apply or distinguish). Where the passage allows, spread the items: not all recall.",
   "5. Never include a name, NHS number, date of birth or any detail that could identify a real person.",
   "6. The rationale and every answer use the passage's own words. Do not explain beyond what the passage says, and do not add any term it does not use.",
+  "7. Every item ASKS something. Never copy a statement from the passage as the question: turn it into a question the statement answers.",
+  RUBRIC_RULE,
   "Reply with a JSON array ONLY, no prose and no code fence. If the passage cannot support an item of this kind, reply [].",
 ];
 export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence", string> = {
-  mrq: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? that says to choose all that apply", "options": [4 to 6 short options built only from the passage\'s words], "correct": [the indexes of EVERY option the passage supports, at least one and not all], "rationale": "...", "sourceQuote": "...", "difficulty": 1}'].join("\n"),
-  short: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? whose answer is a few words from the passage", "accepted": [1 to 4 short answers the passage supports, in its own words], "rationale": "...", "sourceQuote": "...", "difficulty": 1}'].join("\n"),
-  flashcard: [...REVISION_COMMON, 'Each item: {"front": "a term or a short question from the passage", "back": "its answer or meaning, in the passage\'s words", "sourceQuote": "...", "difficulty": 1}'].join("\n"),
+  mrq: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? that says to choose all that apply", "options": [4 to 6 short options built only from the passage\'s words, each a plausible answer, never "all of the above"], "correct": [the indexes of EVERY option the passage supports, at least one and not all], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
+  short: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? whose answer is a few words from the passage", "accepted": [1 to 4 short answers the passage supports, in its own words], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
+  flashcard: [...REVISION_COMMON, 'Each item: {"front": "a short question ending with ?, or a single term (a few words) to recall -- never a sentence or a statement", "back": "its answer or meaning, in the passage\'s words", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   match: [...REVISION_COMMON, 'Each item: {"stem": "what to match, e.g. Match each term to its meaning", "pairs": [{"left": "...", "right": "..."}, {"left": "...", "right": "..."}, {"left": "...", "right": "..."}], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Three to six pairs, each stated by the passage, every left and every right different. Only write one when the passage states at least three such pairs.'].join("\n"),
   sequence: [...REVISION_COMMON, 'Each item: {"stem": "what to put in order, ending with ?", "steps": [3 to 6 steps IN THE ORDER THE PASSAGE GIVES THEM], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Only write one when the passage itself gives an order.'].join("\n"),
 };
 
-/** One call (and one retry): revision items of one kind from one passage, each checked. `run` is the metered runner. */
-export async function runRevisionQuestions(userId: string, kind: keyof typeof REVISION_SYSTEM, passage: Passage, limit: number, run: AiRun = direct) {
+/** The revision kinds the blind check fits (question-quality.ts REVISION_VERIFY_SYSTEM). */
+export const REVISION_VERIFIED_KINDS: readonly (keyof typeof REVISION_SYSTEM)[] = ["mrq", "short"];
+export const revisionPromptVersion = (kind: keyof typeof REVISION_SYSTEM) =>
+  `${PROMPT_VERSIONS.revision}:${kind}${REVISION_VERIFIED_KINDS.includes(kind) ? `+${PROMPT_VERSIONS.verifyRevision}` : ""}`;
+
+/**
+ * One call (and one retry): revision items of one kind from one passage, each checked. `run` is the metered runner.
+ * SCHOLAR-QUESTION-INTELLIGENCE-01: the guidance block after the passage, the extra checks (revision.ts
+ * checkRevisionDraft), and for mrq and short the blind check -- one more call on the same activity, only when an item
+ * survived. `calls` counts the model calls made (main, verify, retry, retry-verify): at most four.
+ */
+export async function runRevisionQuestions(userId: string, kind: keyof typeof REVISION_SYSTEM, passage: Passage, limit: number, run: AiRun = direct, opts: GenerationOptions = {}) {
   const dropped: string[] = [];
   let kept: RevisionDraft[] = [];
-  let model = "", provider = "";
+  let model = "", provider = "", calls = 0;
+  const context = opts.context;
+  const refs = context?.mode === "notes_and_references" ? context.references : [];
+  const verifyPassage = [passage.content, ...referenceGrounding(refs)].join("\n");
   for (let attempt = 1; attempt <= 2 && !kept.length; attempt++) {
+    calls++;
     const r = await run({
       system: REVISION_SYSTEM[kind],
-      user: `${questionUserPrompt(passage)}\n\nWrite up to ${["one", "two", "three"][Math.min(3, Math.max(1, limit)) - 1]} item${limit === 1 ? "" : "s"}.`,
+      user: `${questionUserPrompt(passage)}${generationContextBlock(context ?? NO_CONTEXT, Math.min(3, Math.max(1, limit)))}`,
       tier: "reasoning",
-      maxTokens: 1400,
+      maxTokens: 1800,
       context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_revision_${kind}` },
     }, attempt === 1 ? "main" : "retry");
     if (!r.ok) return { ok: false as const, error: r.error };
     model = r.model; provider = r.provider;
+    // A repeat of a stored stem, or of one kept earlier in this reply, is not stored again.
+    const seen = new Set(opts.existing ?? []);
+    let batch: RevisionDraft[] = [];
     for (const raw of (parseJsonArray(r.text) ?? []).slice(0, limit)) {
-      const c = checkRevisionDraft(kind, raw, passage);
-      if (c.ok) kept.push(c.draft); else dropped.push(c.reason);
+      const c = checkRevisionDraft(kind, raw, passage, { existing: seen, difficulty: context?.difficulty ?? null, references: refs });
+      if (c.ok) { batch.push(c.draft); seen.add(stemKey(c.draft.stem)); } else dropped.push(c.reason);
     }
-    kept = kept.slice(0, limit);
+    if (batch.length && REVISION_VERIFIED_KINDS.includes(kind)) {
+      calls++;
+      const items: RevisionVerifyItem[] = batch.map(d => ({ stem: d.stem, options: d.options, keyed: kind === "mrq" ? (d.answer.correct as number[]) : null }));
+      const v = await run({
+        system: REVISION_VERIFY_SYSTEM,
+        user: revisionVerificationPrompt(verifyPassage, items),
+        tier: "reasoning",
+        maxTokens: 600,
+        context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_revision_${kind}_verify` },
+      }, attempt === 1 ? "verify" : "retry-verify");
+      if (!v.ok) { dropped.push(...batch.map(() => "verification_unavailable")); batch = []; }
+      else {
+        const outcome = applyRevisionVerification(items, v.text);
+        dropped.push(...outcome.rejected.map(() => "failed_verification"));
+        batch = outcome.kept.map(i => batch[i]);
+      }
+    }
+    kept = batch.slice(0, limit);
   }
-  return { ok: true as const, kept, dropped, model, provider, promptVersion: `${PROMPT_VERSIONS.revision}:${kind}` };
+  return { ok: true as const, kept, dropped, model, provider, calls, promptVersion: revisionPromptVersion(kind) };
 }
 
+// SCHOLAR-QUESTION-INTELLIGENCE-01 (evaluate v2): five labelled parts after the verdict (question-intel.ts
+// FEEDBACK_FORMAT), judged against the rubric's key points and misconceptions where the question has them, clinically
+// equivalent wording accepted, and NOT_IN_NOTES when it cannot judge reliably. No marks: the verdict is the mark.
 export const EVALUATE_SYSTEM = [
-  "You mark a healthcare student's short answer to a revision question, for their own formative study.",
-  "Judge the answer ONLY against the passage from their notes and the accepted answers given. Do not use outside knowledge.",
-  "Accept an answer that says the same thing in other words. Do not reward an answer for things the passage does not say.",
+  "You give formative feedback on a healthcare student's short answer to a revision question, for their own study.",
+  "Judge the answer ONLY against the passage from their notes, the accepted answers and the key points given. Do not use outside knowledge.",
+  "Accept an answer that says the same thing in other words, including clinically equivalent wording. Do not reward an answer for things the passage does not say.",
   "Your first line is exactly one of 'VERDICT: correct', 'VERDICT: partly' or 'VERDICT: incorrect'.",
-  "Then, in one to three short sentences: what the answer got right, and what is missing or wrong, using the passage's own words.",
-  "No new facts, numbers, doses, drugs or advice. No patient names. If the passage does not let you judge, reply with exactly NOT_IN_NOTES.",
+  FEEDBACK_FORMAT,
+  "Where common misconceptions are listed, say whether the answer shows one. Never give a mark, a score or a percentage.",
+  "No new facts, numbers, doses, drugs or advice. No patient names. If the passage does not let you judge reliably, reply with exactly NOT_IN_NOTES.",
 ].join("\n");
 
 export type EvaluateVerdict = "correct" | "partly" | "incorrect";
 export type ShortAnswerEvaluation =
-  | { ok: true; verdict: EvaluateVerdict; score: number; feedback: string }
+  | { ok: true; verdict: EvaluateVerdict; score: number; feedback: string; parts?: FeedbackParts }
   | { ok: false; reason: "malformed" | "not_in_notes" | "ungrounded" | "identifier" };
 const VERDICT_SCORE: Record<EvaluateVerdict, number> = { correct: 1, partly: 0.5, incorrect: 0 };
 
-/** Pure. The evaluator's reply, checked: a verdict, and feedback that adds nothing the grounding does not hold. */
+/**
+ * Pure. The evaluator's reply, checked: a verdict, and feedback that adds nothing the grounding does not hold. The five
+ * labelled parts where it wrote them (parts, and feedback as their readable text); the v1 free text otherwise.
+ */
 export function parseEvaluation(raw: string, grounding: readonly string[]): ShortAnswerEvaluation {
   const text = raw.trim();
   if (text.replace(/[^A-Z_]/g, "") === NOT_IN_NOTES) return { ok: false, reason: "not_in_notes" };
   const m = /^\s*\**VERDICT:\s*(correct|partly|incorrect)\**\s*$/im.exec(text);
   if (!m) return { ok: false, reason: "malformed" };
-  const feedback = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim();
-  if (!feedback || feedback.length > 800) return { ok: false, reason: "malformed" };
+  const body = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim();
+  const parts = parseFeedbackSections(body);
+  const feedback = parts ? feedbackText(parts) : body;
+  if (!feedback || feedback.length > (parts ? 2000 : 800)) return { ok: false, reason: "malformed" };
   if (findPatientIdentifiers(feedback).length) return { ok: false, reason: "identifier" };
   if (groundingViolations(feedback, [...grounding]).length) return { ok: false, reason: "ungrounded" };
   const verdict = m[1].toLowerCase() as EvaluateVerdict;
-  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback };
+  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback, ...(parts ? { parts } : {}) };
 }
 
 /** AI evaluation of one short answer. `run` is the metered runner (activity `evaluate`); the caller screened the answer. */
-export async function runEvaluate(userId: string, input: { question: string; accepted: readonly string[]; answer: string; passage: Passage }, run: AiRun = direct) {
+export async function runEvaluate(userId: string, input: { question: string; accepted: readonly string[]; answer: string; passage: Passage; rubric?: Rubric | null }, run: AiRun = direct) {
+  const rubric = input.rubric;
   const r = await run({
     system: EVALUATE_SYSTEM,
-    user: `PASSAGE FROM MY NOTES (${passageCitation(input.passage)}):\n${input.passage.content}\n\nQUESTION: ${input.question}\nACCEPTED ANSWERS: ${input.accepted.join(" | ")}\nMY ANSWER: ${input.answer}`,
+    user: [
+      `PASSAGE FROM MY NOTES (${passageCitation(input.passage)}):\n${input.passage.content}`,
+      `QUESTION: ${input.question}\nACCEPTED ANSWERS: ${input.accepted.join(" | ")}`,
+      rubric?.keyPoints.length ? `KEY POINTS: ${rubric.keyPoints.join(" | ")}` : null,
+      rubric?.misconceptions.length ? `COMMON MISCONCEPTIONS: ${rubric.misconceptions.join(" | ")}` : null,
+      `MY ANSWER: ${input.answer}`,
+    ].filter(Boolean).join("\n\n"),
     tier: "reasoning",
-    maxTokens: 400,
+    maxTokens: 600,
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_evaluate" },
   });
   if (!r.ok) return { ok: false as const, error: r.error };
   return { ok: true as const, model: r.model, provider: r.provider, promptVersion: PROMPT_VERSIONS.evaluate,
-    evaluation: parseEvaluation(r.text, [input.passage.content, ...input.accepted, input.answer, input.question]) };
+    evaluation: parseEvaluation(r.text, [input.passage.content, ...input.accepted, ...(rubric?.keyPoints ?? []), ...(rubric?.misconceptions ?? []), input.answer, input.question]) };
 }
 
 // ── STAGE 5A (CR1-CR3): A PRIVATE CASE FROM THE STUDENT'S NOTES ── written as a draft, made a blueprint by code ──
@@ -803,9 +888,12 @@ export async function runCaseBlueprint(userId: string, input: {
 export const CASE_REASONING_SYSTEM = [
   "You give formative feedback on a healthcare student's written reasoning in a practice case from their own notes.",
   "Judge the answer ONLY against the expected answer and the case facts and passages given. Do not use outside knowledge.",
+  "Accept reasoning that says the same thing in other words, including clinically equivalent wording.",
   "Your first line is exactly one of 'VERDICT: correct', 'VERDICT: partly' or 'VERDICT: incorrect'.",
-  "Then, in two to four short sentences: what the reasoning got right, any misconception, and any finding or step it missed, using the passages' own words.",
-  "No new facts, numbers, doses, drugs or advice. No patient names. If the material does not let you judge, reply with exactly NOT_IN_NOTES.",
+  // SCHOLAR-QUESTION-INTELLIGENCE-01 (case reasoning v2): the same five parts as a revision answer's feedback.
+  FEEDBACK_FORMAT.replace("the passage's own words", "the passages' own words"),
+  "Never give a mark, a score or a percentage.",
+  "No new facts, numbers, doses, drugs or advice. No patient names. If the material does not let you judge reliably, reply with exactly NOT_IN_NOTES.",
 ].join("\n");
 
 /** AI feedback on one written decision (activity `evaluate`). Checked like any evaluation; labelled where shown. */
@@ -943,32 +1031,38 @@ export async function runCase(userId: string, passage: Passage, run: AiRun = dir
  * that the passage supports exactly the keyed option. If nothing survives, regenerate ONCE on the same
  * provider, telling it what was rejected. A grounding failure is never sent to another vendor (client.ts).
  */
-export async function runQuestions(userId: string, kind: QuestionKind, passage: Passage, limit: number = QUESTIONS_PER_REQUEST, run: AiRun = direct) {
+export async function runQuestions(userId: string, kind: QuestionKind, passage: Passage, limit: number = QUESTIONS_PER_REQUEST, run: AiRun = direct, opts: GenerationOptions = {}) {
   const dropped: QuestionCheck["dropped"] = [];
   let kept: DraftQuestion[] = [];
   let model = "", provider = "";
-  let attempts = 0;
+  let attempts = 0, calls = 0;
   let feedback = "";
   let declaredInsufficient = false;
+  // SCHOLAR-QUESTION-INTELLIGENCE-01: the guidance block (concepts, competency, level, difficulty, count). Notes only:
+  // an mcq or case question cannot record a reference, so none is ever offered here (checkQuestions).
+  if (opts.context) opts = { ...opts, context: { ...opts.context, mode: "notes", references: [] } };
+  const guidance = generationContextBlock(opts.context ?? NO_CONTEXT, opts.context ? limit : null);
   while (attempts < 2 && kept.length === 0 && !declaredInsufficient) {
     attempts++;
+    calls++;
     const r = await run({
       system: QUESTION_SYSTEM[kind],
-      user: questionUserPrompt(passage) + (feedback ? `
+      user: questionUserPrompt(passage) + guidance + (feedback ? `
 
 A previous attempt was rejected for: ${feedback}. Write new questions that avoid these problems.` : ""),
       tier: "reasoning",
-      maxTokens: 1400,
+      maxTokens: 1800,
       context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_${kind}` },
     }, attempts === 1 ? "main" : "retry");
     if (!r.ok) return { ok: false, error: r.error } as AiFailure;
     model = r.model; provider = r.provider;
-    const check = checkQuestions(r.text, passage, limit);
+    const check = checkQuestions(r.text, passage, limit, QUESTIONS_PER_REQUEST, opts);
     // SCHOLAR-AI-OPT-01: for case questions, [] is the prompt's own answer for a passage that cannot support a scenario
     // (QUESTION_SYSTEM.case). Not asked again. Multiple-choice questions keep their one retry: [] is not defined there.
     if (kind === "case" && parseJsonArray(r.text)?.length === 0) { declaredInsufficient = true; break; }
     dropped.push(...check.dropped);
     if (check.kept.length) {
+      calls++;
       const v = await run({
         system: VERIFY_SYSTEM,
         user: verificationPrompt(passage.content, check.kept),
@@ -988,7 +1082,7 @@ A previous attempt was rejected for: ${feedback}. Write new questions that avoid
     feedback = [...new Set(dropped.map(d => d.detail ? `${d.reason} (${d.detail})` : d.reason))].slice(0, 6).join("; ");
   }
   return {
-    ok: true as const, check: { kept, dropped }, model, provider, attempts, declaredInsufficient,
+    ok: true as const, check: { kept, dropped }, model, provider, attempts, calls, declaredInsufficient,
     promptVersion: `${PROMPT_VERSIONS[kind]}+${PROMPT_VERSIONS.verify}`,
   };
 }

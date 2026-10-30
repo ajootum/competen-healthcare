@@ -8,6 +8,8 @@ import { paperAiCopy, refusalCopy, type AiReasonCopy } from "@/lib/individual/ai
 import { useAiAvailability } from "@/app/individual/_components/ai/AiAvailabilityContext";
 import { AiUnavailableNote } from "@/app/individual/_components/ai/AiAvailability";
 import { FormativeAiLabel } from "./edu-notice";
+import type { FeedbackParts } from "@/lib/individual/scholar/question-intel";
+import { FeedbackPartsView } from "./revision-client";
 
 // Studying an examination paper (COMPETEN-SCHOLAR-EXAM-PAPERS-01): attempt a question, then reveal a suggested answer
 // with its evidence; ask a follow-up; turn it into revision. Every call goes to a gate-3 route, which decides; this
@@ -40,6 +42,7 @@ export type AnswerContentView = {
   option: string | null; examAnswer: string; explanation: string; optionNotes: { label: string; note: string }[];
   currentGuidance: string | null; guidanceStatus: "agrees" | "differs" | "no_current_source" | "not_applicable";
   conflicts: { claim: string; tags: string[] }[]; unsupported: string[]; uncertainty: string[];
+  attemptFeedback?: FeedbackParts | null;
 };
 export type SavedAnswerView = {
   id: string; content: AnswerContentView; evidence: EvidenceView[]; attempt: { option: string | null; text: string | null } | null;
@@ -145,6 +148,13 @@ function AnswerView({ a, onRevise, onDelete, busy }: { a: SavedAnswerView; onRev
           {/* SCHOLAR-EDU-AI-01 s4: this block is AI feedback on the student's attempt -- labelled once. */}
           <FormativeAiLabel className="mt-1" />
         </>
+      )}
+      {/* SCHOLAR-SQIE-01: formative feedback on the attempt, in five parts, each only where it has something. */}
+      {c.attemptFeedback && (
+        <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">Feedback on your attempt · formative, written by AI from the evidence, not a mark</p>
+          <FeedbackPartsView parts={c.attemptFeedback} />
+        </div>
       )}
       <h4 className="mt-3 text-[13px] font-bold uppercase tracking-[0.12em] text-gray-500">The examination answer</h4>
       {c.option && <p className="mt-1 text-[15px] font-bold text-gray-900">Option {c.option}{a.attempt?.option ? (a.attempt.option === c.option ? " · matches your choice" : ` · you chose ${a.attempt.option}`) : ""}</p>}
@@ -328,13 +338,22 @@ export function StudyAsPaper({ materialId, attestation, transcribable }: { mater
   const [transcribe, setTranscribe] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notes, setNotes] = useState<string | null>(null);
   async function start() {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setNotes(null);
     const r = await call("/api/individual/scholar/papers", { materialId, attested, transcribe });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "It could not be prepared just now."); return; }
+    // SCHOLAR-QUESTION-INTELLIGENCE-01: numbered notes are not a paper -- practise from them instead.
+    if (r.json.notesLike) { setNotes(String(r.json.message ?? "This looks like notes rather than an exam paper.")); return; }
     router.push(experienceHref("scholar", `study/apply/papers/${materialId}`));
   }
+  if (notes) return (
+    <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+      <p className="text-[14px] text-amber-950">{notes}</p>
+      <Link href={experienceHref("scholar", `study/revise?material=${materialId}`)} className={`${btn} mt-3`} style={{ background: accent }}>Practise questions from this material</Link>
+    </div>
+  );
   return (
     <div>
       <label className="flex items-start gap-3 text-[14px] text-gray-900">
