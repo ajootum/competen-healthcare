@@ -35,6 +35,7 @@ import { findLibraryCases } from "@/lib/cases/library";
 import { nonDelivery, recordAiOutcome, sha256Hex, type AiOutcome, type Sufficiency as OutcomeSufficiency } from "@/lib/ai/outcomes";
 import type { IndividualContext } from "../guard";
 import { RECOVERY_MODES, type IndividualPolicy, type RecoveryMode, type RecoveryProvider } from "../policy";
+import { DEFAULT_QUALITY, NOT_USED_REASONS, gateResearch, qualityOf, type EvidenceQuality, type NotUsedReason } from "./source-quality";
 import { RECOVERY_ACTION_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_ORIGIN_LABEL, RECOVERY_PROMPT, RECOVERY_RETRIEVED_LABEL, RETRIEVAL_LIMIT } from "./config";
 import { rankChunks, searchTerms, spreadAcrossMaterials, toTsQuery } from "./retrieval";
 import { listExamPapers, searchCandidates, toPassages } from "./store";
@@ -77,8 +78,13 @@ export type ExternalEvidence = {
   doi: string | null; pmid: string | null; url: string; licence: string | null; retrieved: Retrieved; excerpt: string | null;
   /** Shown references are always verified (a PMID from PubMed or a DOI Crossref confirmed); unverified ones are dropped. */
   verification: "verified";
-  /** May ground an explanation: an abstract and a verified identity. Details-only references are reading, never evidence. */
+  /**
+   * May ground an explanation: an abstract, a verified identity AND Scholar's source-quality rules (indexed, publication
+   * type, on topic). Details-only references and those the rules stopped are reading, never evidence.
+   */
   evidence: boolean;
+  /** Why the engine's evidence was not used to explain (the first source-quality rule it failed). null otherwise. */
+  notUsed: NotUsedReason | null;
   openAccess: { url: string; licence: string | null } | null;
   matched: string[];
 };
@@ -127,7 +133,7 @@ export function parseRecoveryMode(v: unknown, fallback: RecoveryMode): RecoveryM
 /** The external sources that SEARCH (the others verify, link or point). */
 const SEARCH_PROVIDERS: readonly RecoveryProvider[] = ["pubmed", "openalex"];
 
-export type TierPlan = { notes: true; library: boolean; external: boolean; externalReason: ExternalStatus["reason"]; guidelines: boolean };
+export type TierPlan = { notes: true; library: boolean; external: boolean; externalReason: ExternalStatus["reason"]; guidelines: boolean; quality: EvidenceQuality };
 
 /**
  * Pure. Which tiers run, in order. Notes and the approved Competen library always (neither leaves Competen; in notes-only
@@ -142,7 +148,10 @@ export function tierPlan(mode: RecoveryMode, policy: Pick<IndividualPolicy, "sch
   const reason: ExternalStatus["reason"] = !chosen ? "not_chosen" : r.external !== "offer" ? "off"
     : !r.providers.some(p => SEARCH_PROVIDERS.includes(p)) ? "no_source"
       : !engineOperational || !policy.scholarResearch.modes.includes("research") ? "unavailable" : "ran";
-  return { notes: true, library, external: reason === "ran", externalReason: reason, guidelines: chosen && r.external === "offer" && r.providers.includes("guidelines") };
+  return {
+    notes: true, library, external: reason === "ran", externalReason: reason, guidelines: chosen && r.external === "offer" && r.providers.includes("guidelines"),
+    quality: qualityOf(r),
+  };
 }
 
 /** Whether a wider tier than `mode` could run at all, and which mode it is. */
@@ -247,17 +256,26 @@ export function retrievedOf(x: { abstract?: string | null; excerpt?: string | nu
   return "metadata";
 }
 
-/** Pure. The engine's shown references as evidence items: verified only, labelled by what was retrieved. */
-export function externalEvidence(research: LearnResearch, terms: readonly string[]): ExternalEvidence[] {
-  const refs = externalReferences(research);
-  return refs.map((r: ExternalReference) => {
-    const item = research.items.find(i => i.url === r.url);
+// ── PURE: SOURCE QUALITY ── SCHOLAR-SOURCE-QUALITY-01: the ONE gate lives in source-quality.ts (shared with Learn). ──
+export { GENERIC_TOPIC_WORDS, NEVER_EVIDENCE_TYPES, evidenceGate, onTopic, sameTopicWord, specificTerms, typeVerdict } from "./source-quality";
+export { DEFAULT_QUALITY, NOT_USED_REASONS, gateResearch, type EvidenceQuality, type NotUsedReason };
+
+/**
+ * Pure. The engine's shown references as evidence items: verified only, labelled by what was retrieved. Only those that
+ * pass Scholar's source-quality gate are evidence (tagged E1 ... in the order the AI is given them); an item the gate
+ * stopped stays in the list as reading -- untagged, without an excerpt, with the code of the rule it failed.
+ * `keywords`: the question's de-identified key terms (topicKeywords), for the topic check.
+ */
+export function externalEvidence(research: LearnResearch, terms: readonly string[], q: EvidenceQuality = DEFAULT_QUALITY, keywords: readonly string[] = terms): ExternalEvidence[] {
+  const gated = gateResearch(research, keywords, q);
+  return externalReferences(gated).map((r: ExternalReference) => {
+    const item = gated.items.find(i => i.url === r.url);
     // retrievedOf reads the item as the provider gave it: an abstract the engine holds is "abstract", never more.
     const retrieved = retrievedOf({ abstract: item?.abstract ?? null, excerpt: r.excerpt });
     return {
       origin: "external" as const, tag: r.tag, provider: r.provider, title: r.title, authors: r.authors, journal: r.journal, year: r.year,
-      doi: r.doi, pmid: r.pmid, url: r.url, licence: research.licensing[item?.provider ?? ""] ?? null, retrieved, excerpt: r.excerpt,
-      verification: "verified" as const, evidence: r.evidence && retrieved === "abstract",
+      doi: r.doi, pmid: r.pmid, url: r.url, licence: gated.licensing[item?.provider ?? ""] ?? null, retrieved, excerpt: r.excerpt,
+      verification: "verified" as const, evidence: r.evidence && retrieved === "abstract", notUsed: r.notUsed,
       openAccess: r.openAccess ? { url: r.openAccess.url, licence: r.openAccess.licence } : null,
       matched: matchedTerms(`${r.title} ${item?.abstract ?? ""}`, terms),
     };
@@ -396,9 +414,11 @@ export async function runRecovery(input: RecoveryInput, plan: TierPlan, sources:
     if (!k.ok) status = { ran: false, reason: "refused", state: "refused", dropped: 0 };
     else {
       // Fails soft: a source that cannot be reached leaves the notes and library results as they are.
-      research = await sources.external(k.keywords).catch(() => null);
-      external = research ? externalEvidence(research, terms) : [];
-      dropped = research ? research.items.length - external.length : 0;
+      const found = await sources.external(k.keywords).catch(() => null);
+      external = found ? externalEvidence(found, terms, plan.quality, k.keywords) : [];
+      dropped = found ? found.items.length - external.length : 0;
+      // SCHOLAR-SOURCE-QUALITY-01: from here on the research is the GATED one, so the AI is only ever given what passed.
+      research = found ? gateResearch(found, k.keywords, plan.quality) : null;
       const ran = !!research && (research.state === "searched" || research.state === "cached" || research.state === "not_found");
       status = { ran, reason: ran ? "ran" : "unavailable", state: research?.state ?? "failed", dropped };
     }
@@ -447,7 +467,7 @@ export function liveSources(ctx: IndividualContext, policy: IndividualPolicy, re
         ...cases.map(c => ({ origin: "library" as const, kind: "case" as const, itemId: c.versionId, version: c.versionId, code: c.code, title: c.title, outcome: null, text: c.intro ?? "", status: "Clinically approved", approved: true })),
       ].filter(l => l.itemId);
     },
-    external: keywords => learnResearch(ctx, policy.scholarResearch, { question: keywords.join(" "), topics: [], title: null }, recoveryId, recoveryNarrowing(policy.scholarRecovery)),
+    external: keywords => learnResearch(ctx, policy.scholarResearch, { question: keywords.join(" "), topics: [], title: null }, recoveryId, recoveryNarrowing(policy.scholarRecovery), qualityOf(policy.scholarRecovery)),
     guidelines: () => policy.scholarExams.domains.slice(0, 6).map(d => ({ kind: "guideline" as const, label: `Approved guideline publisher: ${d}`, url: `https://${d}/` })),
   };
 }
@@ -564,12 +584,18 @@ export const recoveryKey = (recoveryId: string) => sha256Hex(`${RECOVERY_VERSION
 const SUFFICIENCY_CODE: Record<SufficiencyVerdict["verdict"], OutcomeSufficiency> = { sufficient: "sufficient", partial: "uncertain", insufficient: "insufficient" };
 const reasonCode = (s: string | null) => (s && /^[a-z_]{2,40}$/.test(s) ? `withheld_${s}` : null);
 
+/** Pure. SCHOLAR-SOURCE-QUALITY-01: how many external items each source-quality rule stopped, codes and counts only. */
+export const notUsedCounts = (external: readonly Pick<ExternalEvidence, "notUsed">[]): [NotUsedReason, number][] =>
+  NOT_USED_REASONS.map(c => [c, external.filter(e => e.notUsed === c).length] as [NotUsedReason, number]).filter(([, k]) => k > 0);
+
 /** Best-effort. One outcome row per recovery: no AI was called ("redirected"), output kind "other", codes only. */
 export async function recordRecovery(admin: any, r: Pick<RecoveryResult, "recoveryId" | "mode" | "state" | "sufficiency" | "external" | "evidence">, withheldReason: string | null): Promise<void> {
+  const notUsed = notUsedCounts(r.evidence.external);
   await recordAiOutcome(admin, {
     actionId: r.recoveryId, product: "scholar", activity: "evidence_recovery", operation: RECOVERY_OPERATION, outputKind: "other", outcome: "redirected",
-    reasons: [`recovery_${r.state}`, ...(reasonCode(withheldReason) ? [reasonCode(withheldReason)!] : []), `recovery_external_${r.external.reason}`],
-    sufficiency: SUFFICIENCY_CODE[r.sufficiency.verdict], promptVersion: RECOVERY_VERSION, configVersion: `mode:${r.mode};n:${r.evidence.notes.length};l:${r.evidence.library.length};e:${r.evidence.external.length}`,
+    reasons: [`recovery_${r.state}`, ...(reasonCode(withheldReason) ? [reasonCode(withheldReason)!] : []), `recovery_external_${r.external.reason}`, ...notUsed.map(([c]) => `recovery_not_used_${c}`)],
+    sufficiency: SUFFICIENCY_CODE[r.sufficiency.verdict], promptVersion: RECOVERY_VERSION,
+    configVersion: `mode:${r.mode};n:${r.evidence.notes.length};l:${r.evidence.library.length};e:${r.evidence.external.length}${notUsed.map(([c, k]) => `;${c}:${k}`).join("")}`,
     materialKey: recoveryKey(r.recoveryId),
   });
 }

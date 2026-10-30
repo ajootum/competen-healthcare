@@ -14,7 +14,7 @@ import { aiReasonCopy, clarifyFrom, type ClarifyPrompt } from "@/lib/individual/
 import { useAiAvailabilityOf } from "@/app/individual/_components/ai/AiAvailabilityContext";
 import { FormativeAiLabel } from "./edu-notice";
 import { RecoveryFlow, type ExplainOutcome, type RecoveryRequestBody } from "./evidence-recovery";
-import { RECOVERY_EXPLANATION_LABEL } from "@/lib/individual/scholar/config";
+import { RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL } from "@/lib/individual/scholar/config";
 import type { ReadingLink } from "@/lib/individual/scholar/evidence-recovery";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
@@ -38,7 +38,9 @@ export type StartScope =
 type Source = { tag: string; chunkId: string; materialId: string; materialTitle: string; citation: string };
 type Reference = { tag: string; title: string; code: string | null; outcome: string | null; status: string; approved?: boolean; library?: boolean };
 /** COMPETEN-RESEARCH-01: one external record, exactly as the provider returned it. Untagged = further reading only. */
-type ExternalRef = { tag: string | null; provider: string; title: string; journal: string | null; year: number | null; authors: string[]; pmid: string | null; doi: string | null; url: string; evidence: boolean; excerpt: string | null; verified: { pmid: boolean; doi: boolean | null } };
+type ExternalRef = { tag: string | null; provider: string; title: string; journal: string | null; year: number | null; authors: string[]; pmid: string | null; doi: string | null; url: string; evidence: boolean; excerpt: string | null; verified: { pmid: boolean; doi: boolean | null };
+  /** SCHOLAR-SOURCE-QUALITY-01: why it is reading only (absent on answers saved before it). */
+  notUsed?: keyof typeof RECOVERY_NOT_USED_LABEL | null };
 type ResearchReply = { state: string; label: string; message: string | null; query?: string | null; scholarLink?: string | null; references: ExternalRef[]; text?: string; cited?: number[]; withheld?: string };
 type LearnMode = "notes" | "library" | "research";
 const MODE_KEY = "scholar.learn.mode";
@@ -591,6 +593,7 @@ function ExternalRefLine({ r }: { r: ExternalRef }) {
       <span className="text-gray-700">{r.authors.length ? ` ${r.authors.join(", ")}${r.authors.length >= 3 ? " et al." : ""}.` : ""}{r.journal ? ` ${r.journal}` : ""}{r.year ? ` (${r.year})` : ""}. Found via {r.provider}.</span>
       {ids.length > 0 && <span> {ids.map((i, n) => <span key={i.href}>{n ? " · " : ""}<a href={i.href} target="_blank" rel="noopener noreferrer" className={`underline ${focusRing}`}>{i.label}</a></span>)}</span>}
       {checked && <span className="block text-[11.5px] text-gray-600">Verified: {checked}</span>}
+      {r.notUsed && RECOVERY_NOT_USED_LABEL[r.notUsed] && <span className="block text-[11.5px] text-gray-700">Reading only: {RECOVERY_NOT_USED_LABEL[r.notUsed]}.</span>}
       {r.excerpt && <span className="mt-0.5 block text-[12px] italic text-gray-700">Abstract excerpt: {r.excerpt}</span>}
     </div>
   );

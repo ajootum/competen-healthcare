@@ -79,7 +79,8 @@ export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fi
   | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
   | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules"
-  | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources" | "scholar_learn_source_modes" | "scholar_recovery_providers";
+  | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources" | "scholar_learn_source_modes" | "scholar_recovery_providers"
+  | "scholar_recovery_evidence_types";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -110,7 +111,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages"
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
-  | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external";
+  | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
+  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -174,7 +176,31 @@ export type ScholarRecoveryPolicy = {
   providers: RecoveryProvider[];
   maxResults: number;
   timeoutMs: number;
+  /**
+   * SCHOLAR-SOURCE-QUALITY-01 (owner GO 30 Oct 2026): which external items may GROUND an explanation. An item that
+   * fails stays a reading suggestion, never generation input. pubmed_only: a PMID PubMed itself returned.
+   * any_verified: that or a DOI Crossref confirmed.
+   */
+  evidenceIndexed: "pubmed_only" | "any_verified";
+  /** The PubMed publication types that may ground (codes of RECOVERY_EVIDENCE_TYPES). An item of no known type never does. */
+  evidenceTypes: RecoveryEvidenceType[];
+  /** title: one of the question's specific topic words must be in the item's title. off: no topic check. */
+  evidenceOnTopic: "title" | "off";
 };
+/**
+ * SCHOLAR-SOURCE-QUALITY-01: the PubMed publication types (esummary pubtype, exactly as PubMed writes them) Scholar may
+ * let ground an explanation. The code is what HQ stores, the label is what HQ and the learner read.
+ */
+export const RECOVERY_EVIDENCE_TYPES = [
+  { value: "review", label: "Review", pubmed: "Review" },
+  { value: "systematic_review", label: "Systematic Review", pubmed: "Systematic Review" },
+  { value: "meta_analysis", label: "Meta-Analysis", pubmed: "Meta-Analysis" },
+  { value: "practice_guideline", label: "Practice Guideline", pubmed: "Practice Guideline" },
+  { value: "guideline", label: "Guideline", pubmed: "Guideline" },
+  { value: "randomized_controlled_trial", label: "Randomized Controlled Trial", pubmed: "Randomized Controlled Trial" },
+  { value: "clinical_trial", label: "Clinical Trial", pubmed: "Clinical Trial" },
+] as const;
+export type RecoveryEvidenceType = (typeof RECOVERY_EVIDENCE_TYPES)[number]["value"];
 export type ScholarExamPolicy = {
   enabled: boolean;
   sources: ExamEvidenceSource[];
@@ -1179,6 +1205,32 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: 6000, min: 1000, max: 15000,
     limitReason: "One to fifteen seconds. Default: six seconds.",
   },
+  // SCHOLAR-SOURCE-QUALITY-01 (owner GO 30 Oct 2026): which external references may be used to EXPLAIN. Every reference
+  // found is still shown to the learner as reading; only those passing all three rules are given to the AI.
+  {
+    key: "scholar_recovery_evidence_indexed", kind: "choice", product: "Scholar",
+    label: "Finding more learning resources: which references may be used to explain",
+    help: "Which external references Scholar may use to write an explanation. PubMed-indexed only: the reference has a PubMed id that PubMed itself returned. Any verified reference: also one whose DOI Crossref confirmed (for example from OpenAlex). Every other reference found is still shown to the learner as reading, never used to explain.",
+    options: [{ value: "pubmed_only", label: "PubMed-indexed only" }, { value: "any_verified", label: "Any verified reference" }],
+    fallback: "pubmed_only",
+    limitReason: "Default: PubMed-indexed only. The publication type rule below still applies, and only PubMed records give a type.",
+  },
+  {
+    key: "scholar_recovery_evidence_types", kind: "set", product: "Scholar",
+    label: "Finding more learning resources: publication types that may be used to explain",
+    help: "The kinds of publication, as PubMed lists them, that Scholar may use to write an explanation. Case reports, letters, editorials, comments, news, retractions and preprints are never used. A reference whose type is not known, or is not one chosen here, is shown as reading only.",
+    options: RECOVERY_EVIDENCE_TYPES.map(t => ({ value: t.value, label: t.label })),
+    fallback: RECOVERY_EVIDENCE_TYPES.map(t => t.value),
+    limitReason: "Default: all seven. Choosing none means no external reference is used to explain.",
+  },
+  {
+    key: "scholar_recovery_evidence_on_topic", kind: "choice", product: "Scholar",
+    label: "Finding more learning resources: references must be on the topic",
+    help: "Whether a reference may be used to explain only when its title names the topic of the question (for example pyelonephritis), not just general words such as treatment, management or care. A reference that does not is shown as reading only.",
+    options: [{ value: "title", label: "Topic must be in the title" }, { value: "off", label: "Off" }],
+    fallback: "title",
+    limitReason: "Default: the topic must be in the title.",
+  },
   {
     key: "scholar_exam_scanned_pages", kind: "choice", product: "Scholar",
     label: "Scanned examination pages",
@@ -1946,6 +1998,9 @@ function resolveScholarRecovery(published: Map<string, unknown>): ScholarRecover
   return {
     defaultMode: choice("scholar_recovery_default_mode") as RecoveryMode, external: choice("scholar_recovery_external") as "off" | "offer",
     providers, maxResults: int("scholar_recovery_max_results"), timeoutMs: int("scholar_recovery_timeout_ms"),
+    evidenceIndexed: choice("scholar_recovery_evidence_indexed") as ScholarRecoveryPolicy["evidenceIndexed"],
+    evidenceTypes: clampSet(policyDef("scholar_recovery_evidence_types") as SetPolicy, published.get(policyPath("scholar_recovery_evidence_types"))) as RecoveryEvidenceType[],
+    evidenceOnTopic: choice("scholar_recovery_evidence_on_topic") as ScholarRecoveryPolicy["evidenceOnTopic"],
   };
 }
 

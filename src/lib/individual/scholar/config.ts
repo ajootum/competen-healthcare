@@ -267,6 +267,15 @@ export const RECOVERY_ACTION_LABEL = {
 export const RECOVERY_ORIGIN_LABEL = { notes: "Your notes", library: "Competen library", external: "External reference", ai: "AI explanation" } as const;
 /** What was retrieved for an external reference. "full text" only if full text was retrieved: never today. */
 export const RECOVERY_RETRIEVED_LABEL = { metadata: "details only", abstract: "abstract only", full_text: "full text" } as const;
+/** SCHOLAR-SOURCE-QUALITY-01: why a published source found is reading only, never used to explain. */
+export const RECOVERY_NOT_USED_LABEL = {
+  not_indexed: "not indexed in PubMed",
+  type_unknown: "publication type not known",
+  type_excluded: "not a review, guideline or trial",
+  off_topic: "its title does not name this topic",
+} as const;
+/** Learn Research & Explain: research was found, but none of it met the source rules, so nothing from it explains. */
+export const RESEARCH_READING_ONLY = "The research found did not meet the source rules for explaining (PubMed-indexed reviews, guidelines or trials naming this topic), so it is listed as reading only.";
 export const RECOVERY_UNANSWERED_LABEL = "Not found in any of these sources yet";
 /** An explanation written from recovered evidence, by the same checked AI the learner was using. */
 export const RECOVERY_EXPLANATION_LABEL = "AI explanation from your notes + approved references";

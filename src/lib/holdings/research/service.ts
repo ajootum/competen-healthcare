@@ -26,7 +26,8 @@ import { workflowOperational, type ResearchPolicy, type Workflow } from "./engin
 // ⚠ PRIVACY. researchQuery builds the only text that leaves: a handful of topic keywords. It refuses outright when the
 // source text looks like it identifies a patient. Nothing else of the learner's is ever passed in.
 
-export const RESEARCH_SERVICE_VERSION = "holdings-research-v2";
+// v3 (SCHOLAR-SOURCE-QUALITY-01): PubMed items carry their publication types, so results cached before them are not reused.
+export const RESEARCH_SERVICE_VERSION = "holdings-research-v3";
 export const RESEARCH_MAX_RESULTS = 10;
 const QUERY_WORDS = 8;
 const STOP = new Set(("the and for with from that this what when which into about their there these those have has had been were was are "
@@ -109,6 +110,8 @@ export function mergeItems(lists: readonly (readonly ResearchItem[])[]): Researc
     same.doi ??= i.doi;
     if (!same.pmid && i.pmid) { same.pmid = i.pmid; same.verified.pmid = i.verified.pmid; }
     else if (same.pmid === i.pmid && i.verified.pmid) same.verified.pmid = true;
+    // PubMed's publication types travel with the PubMed record that lent its PMID (SCHOLAR-SOURCE-QUALITY-01).
+    if (!same.pubTypes?.length && i.pubTypes?.length && i.verified.pmid && same.pmid === i.pmid) same.pubTypes = [...i.pubTypes];
   }
   return out;
 }

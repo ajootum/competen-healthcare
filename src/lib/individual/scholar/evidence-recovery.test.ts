@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  assessSufficiency, externalEvidence, generationInputs, keyTermsOf, matchedTerms, parseRecoveryMode, recoveryKey, retrievedOf, runRecovery,
+  assessSufficiency, evidenceGate, externalEvidence, gateResearch, generationInputs, keyTermsOf, matchedTerms, notUsedCounts, onTopic, parseRecoveryMode,
+  recordRecovery, recoveryKey, retrievedOf, runRecovery, sameTopicWord, typeVerdict, type EvidenceQuality,
   suggestedActions, summariseRecovery, tierPlan, topicKeywords, widerMode, restatesOnly, withoutQuestion, type RecoverySources, type RecoveryOutcomeRow,
 } from "./evidence-recovery";
 import { narrowPlan, type LearnResearch } from "./learn-research";
 import type { Passage } from "./generation";
-import { DEFAULT_POLICY, type IndividualPolicy } from "../policy";
-import { parsePmcIdconv, parsePmcOa, type FetchLike, type ResearchItem } from "@/lib/holdings/research/providers";
-import { runResearch, type ResearchPlan } from "@/lib/holdings/research/service";
+import { DEFAULT_POLICY, resolvePolicy, type IndividualPolicy } from "../policy";
+import { parsePmcIdconv, parsePmcOa, pubmedItem, type FetchLike, type ResearchItem } from "@/lib/holdings/research/providers";
+import { mergeItems, runResearch, type ResearchPlan } from "@/lib/holdings/research/service";
 import { SEED_REGISTRY, resolveRegistry, type Registry } from "@/lib/holdings/research/registry";
 import { DEFAULT_POLICY as RESEARCH_DEFAULT, resolveWorkflows } from "@/lib/holdings/research/engine-config";
 
@@ -23,7 +24,7 @@ const OPEN = policyWith({ external: "offer", providers: ["pubmed", "crossref", "
 const passage = (id: string, content: string, materialId = "m1"): Passage => ({ chunkId: id, materialId, materialTitle: "Respiratory notes", ordinal: 1, pageFrom: 3, pageTo: 3, content });
 const item = (over: Partial<ResearchItem>): ResearchItem => ({
   provider: "pubmed", sourceId: "1", pmid: "1", doi: null, title: "Oxygen therapy in COPD", journal: "Thorax", year: 2022, authors: ["Smith A"],
-  url: "https://pubmed.ncbi.nlm.nih.gov/1/", abstract: null, verified: { pmid: true, doi: null }, retrievedAt: "2026-10-30T00:00:00Z", ...over,
+  url: "https://pubmed.ncbi.nlm.nih.gov/1/", abstract: null, verified: { pmid: true, doi: null }, retrievedAt: "2026-10-30T00:00:00Z", pubTypes: ["Journal Article", "Review"], ...over,
 });
 const research = (items: ResearchItem[], evidence: number[], over: Partial<LearnResearch> = {}): LearnResearch => ({
   state: "searched", message: null, query: "oxygen copd", scholarLink: null, items, evidence, calls: [], codes: [], sourceVersions: { pubmed: "pubmed@v1" },
@@ -66,7 +67,7 @@ describe("tierPlan and the sequence: notes, then library, then external only whe
     expect(tierPlan("notes_and_library", OPEN, true)).toMatchObject({ external: false, externalReason: "not_chosen", guidelines: false });
   });
   it("defaults: notes + library, external off, no source enabled", () => {
-    expect(DEFAULT_POLICY.scholarRecovery).toEqual({ defaultMode: "notes_and_library", external: "off", providers: [], maxResults: 5, timeoutMs: 6000 });
+    expect(DEFAULT_POLICY.scholarRecovery).toMatchObject({ defaultMode: "notes_and_library", external: "off", providers: [], maxResults: 5, timeoutMs: 6000 });
   });
   it("modes: the recovery words and Learn's own words; anything else is the fallback", () => {
     expect(parseRecoveryMode("research", "notes_only")).toBe("notes_and_references");
@@ -363,5 +364,136 @@ describe("SQIE D-3: key terms and topic keywords leave out labels, numbering and
   });
   it("keeps a clinical word that is also a command word where it is not one ('mental state')", () => {
     expect(keyTermsOf("State the parts of a mental state examination")).toEqual(["mental", "state", "examination"]);
+  });
+});
+
+// ── SCHOLAR-SOURCE-QUALITY-01 (owner GO 30 Oct 2026): which external items may GROUND an explanation ───────────────
+describe("SCHOLAR-SOURCE-QUALITY-01: PubMed-indexed, allowed publication type, on topic", () => {
+  const Q = "Question 1: antibiotic choice in pyelonephritis";
+  const kw = (() => { const k = topicKeywords(Q); return k.ok ? k.keywords : []; })();
+  const DEFAULTS: EvidenceQuality = DEFAULT_POLICY.scholarRecovery;
+  // The two staging items (30 Oct), and the two PubMed records the rules are about.
+  const ayurveda = item({
+    provider: "openalex", sourceId: "W9", pmid: null, doi: "10.5555/ayur.1", url: "https://doi.org/10.5555/ayur.1", title: "Acute Pyelonephritis management through Ayurveda – A Case Study",
+    verified: { pmid: false, doi: true }, abstract: "A case of acute pyelonephritis treated with Ayurveda.", pubTypes: undefined,
+  });
+  const asb = item({
+    sourceId: "2", pmid: "2", url: "https://pubmed.ncbi.nlm.nih.gov/2/", title: "Clinical Practice Guideline for the Management of Asymptomatic Bacteriuria: 2019 Update by the Infectious Diseases Society of America",
+    abstract: "Asymptomatic bacteriuria should not be screened for or treated in most adults.", pubTypes: ["Journal Article", "Practice Guideline"],
+  });
+  const review = item({
+    sourceId: "3", pmid: "3", url: "https://pubmed.ncbi.nlm.nih.gov/3/", title: "Antibiotic treatment of acute pyelonephritis in adults: a systematic review",
+    abstract: "Fluoroquinolones and beta-lactams for acute pyelonephritis.", pubTypes: ["Journal Article", "Systematic Review", "Review"],
+  });
+  const caseReport = item({
+    sourceId: "4", pmid: "4", url: "https://pubmed.ncbi.nlm.nih.gov/4/", title: "Emphysematous pyelonephritis in a diabetic woman: a case report",
+    abstract: "A woman with emphysematous pyelonephritis.", pubTypes: ["Case Reports", "Journal Article"],
+  });
+  const untyped = item({ sourceId: "5", pmid: "5", url: "https://pubmed.ncbi.nlm.nih.gov/5/", title: "Pyelonephritis outcomes", abstract: "Outcomes of pyelonephritis.", pubTypes: [] });
+
+  it("the question's specific topic word is pyelonephritis; antibiotic and choice are generic", () => {
+    expect(kw).toEqual(["antibiotic", "choice", "pyelonephritis"]);
+    expect(onTopic("Antibiotics for urinary tract infection: choice and treatment", kw)).toBe(false);
+    expect(onTopic("Acute PYELONEPHRITIS in pregnancy", kw)).toBe(true);
+    expect(onTopic("Pyelonephritic scarring", kw)).toBe(true); // stem tolerance
+    expect(sameTopicWord("infections", "infection")).toBe(true);
+    expect(sameTopicWord("bacteriuria", "bacteria")).toBe(false);
+    expect(sameTopicWord("nephritis", "pyelonephritis")).toBe(false);
+    expect(onTopic("Management of patient care", ["management", "care"])).toBe(false); // nothing specific: never on topic
+  });
+  it("the Ayurveda case study (OpenAlex only, a case report) is reading only: not indexed", () => {
+    expect(evidenceGate(ayurveda, kw, DEFAULTS)).toBe("not_indexed");
+  });
+  it("the asymptomatic-bacteriuria guideline for a pyelonephritis question is off topic: reading only", () => {
+    expect(evidenceGate(asb, kw, DEFAULTS)).toBe("off_topic");
+  });
+  it("a PubMed systematic review on pyelonephritis is evidence", () => {
+    expect(evidenceGate(review, kw, DEFAULTS)).toBeNull();
+  });
+  it("a PubMed case report on pyelonephritis is type_excluded, even when it is also a Journal Article", () => {
+    expect(evidenceGate(caseReport, kw, DEFAULTS)).toBe("type_excluded");
+    expect(typeVerdict(["Review", "Case Reports"], DEFAULTS.evidenceTypes)).toBe("type_excluded"); // never-evidence wins
+    expect(typeVerdict(["Journal Article"], DEFAULTS.evidenceTypes)).toBe("type_excluded"); // not an allowed type
+    expect(typeVerdict(["Clinical Trial, Phase III"], DEFAULTS.evidenceTypes)).toBeNull();
+  });
+  it("a PubMed record of no known type is reading only", () => {
+    expect(evidenceGate(untyped, kw, DEFAULTS)).toBe("type_unknown");
+    expect(evidenceGate({ ...untyped, pubTypes: undefined }, kw, DEFAULTS)).toBe("type_unknown");
+  });
+  it("any_verified relaxes ONLY the indexing rule: the type rule still holds for an item with no PubMed type", () => {
+    const any = { ...DEFAULTS, evidenceIndexed: "any_verified" as const };
+    expect(evidenceGate(ayurveda, kw, any)).toBe("type_unknown");
+    expect(evidenceGate({ ...ayurveda, pubTypes: ["Review"] }, kw, any)).toBeNull();
+    expect(evidenceGate({ ...ayurveda, pubTypes: ["Review"] }, kw, DEFAULTS)).toBe("not_indexed");
+  });
+  it("on topic off relaxes ONLY the topic rule", () => {
+    const off = { ...DEFAULTS, evidenceOnTopic: "off" as const };
+    expect(evidenceGate(asb, kw, off)).toBeNull();
+    expect(evidenceGate(caseReport, kw, off)).toBe("type_excluded");
+    expect(evidenceGate(ayurveda, kw, off)).toBe("not_indexed");
+  });
+  it("the allowed types are HQ's: a type left out no longer grounds, and none chosen means nothing does", () => {
+    expect(evidenceGate(review, kw, { ...DEFAULTS, evidenceTypes: ["guideline"] })).toBe("type_excluded");
+    expect(evidenceGate(asb, kw, { ...DEFAULTS, evidenceTypes: [], evidenceOnTopic: "off" })).toBe("type_excluded");
+  });
+  it("defaults with no published value: PubMed only, the seven types, topic in the title", () => {
+    expect(resolvePolicy([]).scholarRecovery).toMatchObject({
+      evidenceIndexed: "pubmed_only", evidenceOnTopic: "title",
+      evidenceTypes: ["review", "systematic_review", "meta_analysis", "practice_guideline", "guideline", "randomized_controlled_trial", "clinical_trial"],
+    });
+    expect(tierPlan("notes_and_references", OPEN, true).quality).toEqual({ evidenceIndexed: "pubmed_only", evidenceTypes: DEFAULTS.evidenceTypes, evidenceOnTopic: "title" });
+  });
+
+  it("through the coordinator: every item stays listed, only the review is evidence (E1) and only it reaches generation", async () => {
+    const all = research([ayurveda, asb, review, caseReport, untyped], [0, 1, 2, 3, 4], { query: "antibiotic choice pyelonephritis" });
+    const f = fakeSources({ research: all });
+    const r = await runRecovery({ question: Q, mode: "notes_and_references" }, tierPlan("notes_and_references", OPEN, true), f.sources, { wider: null });
+    // Evidence first (as Learn lists it), then every item the gate stopped, in the engine's order, with its reason.
+    expect(r.evidence.external.map(e => [e.title.slice(0, 12), e.evidence, e.tag, e.notUsed])).toEqual([
+      ["Antibiotic t", true, "E1", null], ["Acute Pyelon", false, null, "not_indexed"], ["Clinical Pra", false, null, "off_topic"],
+      ["Emphysematou", false, null, "type_excluded"], ["Pyelonephrit", false, null, "type_unknown"],
+    ]);
+    expect(r.evidence.external.filter(e => !e.evidence).every(e => e.excerpt === null)).toBe(true); // reading shows no evidence excerpt
+    expect(r.generation?.research.map(x => x.title)).toEqual([review.title]);
+    expect(r.research?.evidence).toEqual([2]);
+    expect(r.state).toBe("explanation_available");
+  });
+  it("when no item passes: reading and what remains unanswered, no generation input, no Explain action", async () => {
+    const f = fakeSources({ research: research([ayurveda, asb, caseReport], [0, 1, 2]) });
+    const r = await runRecovery({ question: Q, mode: "notes_and_references" }, tierPlan("notes_and_references", OPEN, true), f.sources, { wider: null });
+    expect(r.evidence.external).toHaveLength(3);
+    expect([r.state, r.generation, r.explainable, r.sufficiency.verdict]).toEqual(["reading_only", null, false, "insufficient"]);
+    expect(r.sufficiency.unanswered).toEqual(["antibiotic", "choice", "pyelonephritis"]);
+    expect(r.actions.map(a => a.action)).not.toContain("explain_with_references");
+    expect(r.research?.evidence).toEqual([]);
+  });
+  it("an item demoted to reading stays shown even when the engine shows no further reading", () => {
+    const e = externalEvidence(research([asb], [0], { furtherReading: false }), keyTermsOf(Q), DEFAULTS, kw);
+    expect(e.map(x => [x.evidence, x.notUsed])).toEqual([[false, "off_topic"]]);
+  });
+  it("gateResearch keeps the engine's order of what passed", () => {
+    const g = gateResearch(research([review, asb, { ...review, sourceId: "6", pmid: "6", url: "https://pubmed.ncbi.nlm.nih.gov/6/" }], [0, 1, 2]), kw);
+    expect(g.evidence).toEqual([0, 2]);
+    expect(g.notUsed).toEqual({ 1: "off_topic" });
+    // Idempotent: a second pass (recovery after learnResearch) keeps what the first stopped.
+    expect(gateResearch(g, kw)).toEqual(g);
+  });
+  it("records why items were not used: codes and counts only", async () => {
+    const f = fakeSources({ research: research([ayurveda, asb, review, caseReport, untyped, { ...asb, sourceId: "7", pmid: "7", url: "https://pubmed.ncbi.nlm.nih.gov/7/" }], [0, 1, 2, 3, 4, 5]) });
+    const r = await runRecovery({ question: Q, mode: "notes_and_references" }, tierPlan("notes_and_references", OPEN, true), f.sources, { wider: null });
+    expect(notUsedCounts(r.evidence.external)).toEqual([["not_indexed", 1], ["type_unknown", 1], ["type_excluded", 1], ["off_topic", 2]]);
+    const rows: Record<string, unknown>[] = [];
+    await recordRecovery({ from: () => ({ insert: async (row: Record<string, unknown>) => { rows.push(row); return { error: null }; } }) }, r, null);
+    expect(rows[0].rejection_reasons).toEqual(expect.arrayContaining(["recovery_not_used_not_indexed", "recovery_not_used_type_unknown", "recovery_not_used_type_excluded", "recovery_not_used_off_topic"]));
+    expect(rows[0].config_version).toBe("mode:notes_and_references;n:0;l:0;e:6;not_indexed:1;type_unknown:1;type_excluded:1;off_topic:2");
+    expect(JSON.stringify(rows[0])).not.toMatch(/pyelonephritis|Ayurveda|Bacteriuria/i);
+  });
+  it("PubMed's publication types are parsed from esummary and lent with the PMID when OpenAlex's copy comes first", () => {
+    const p = pubmedItem({ uid: "9", title: "Pyelonephritis: a review", pubtype: ["Journal Article", "Review", 7] }, "2026-10-30T00:00:00Z");
+    expect(p?.pubTypes).toEqual(["Journal Article", "Review"]);
+    expect(pubmedItem({ uid: "9", title: "x" }, "2026-10-30T00:00:00Z")?.pubTypes).toEqual([]);
+    const oa = { ...ayurveda, title: "Pyelonephritis: a review", doi: null, pmid: null };
+    const [merged] = mergeItems([[oa], [p!]]);
+    expect([merged.pmid, merged.verified.pmid, merged.pubTypes]).toEqual(["9", true, ["Journal Article", "Review"]]);
   });
 });

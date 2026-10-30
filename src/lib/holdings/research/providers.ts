@@ -48,6 +48,11 @@ export type ResearchItem = {
    * null: not checked, or not in the open-access subset.
    */
   openAccess?: OpenAccess | null;
+  /**
+   * SCHOLAR-SOURCE-QUALITY-01: PubMed's publication types for the record (esummary pubtype), exactly as PubMed writes
+   * them ("Review", "Case Reports" ...). Only PubMed gives them: absent for every other source = not known.
+   */
+  pubTypes?: string[];
 };
 
 export type OpenAccess = { pmcid: string; licence: string | null; url: string; retracted: boolean };
@@ -120,6 +125,7 @@ export function pubmedItem(r: any, retrievedAt: string): ResearchItem | null { /
     provider: "pubmed", sourceId: pmid, pmid, doi, title, journal: clean(r.fulljournalname || r.source, 200) || null, year: yearOf(r.pubdate ?? r.sortpubdate),
     authors: (Array.isArray(r.authors) ? r.authors : []).slice(0, 3).map((a: any) => clean(a?.name, 80)).filter(Boolean), // eslint-disable-line @typescript-eslint/no-explicit-any
     url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`, abstract: null, verified: { pmid: true, doi: null }, retrievedAt,
+    pubTypes: (Array.isArray(r.pubtype) ? r.pubtype : []).map((t: unknown) => clean(t, 80)).filter(Boolean).slice(0, 12),
   };
 }
 
