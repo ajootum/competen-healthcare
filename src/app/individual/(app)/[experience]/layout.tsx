@@ -195,7 +195,6 @@ export default async function ExperienceLayout({ children, params }: {
             <div className={scholar
               ? "w-full max-w-[1600px] px-4 py-6 md:px-[42px] md:pt-[30px] md:pb-[70px]"
               : "mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8"}>
-              {/* SCHOLAR-EDU-AI-01 s3: the educational-use notice, once per Scholar page. */}
               {scholar && <ScholarEduNotice />}
               {children}
               {scholar && (
