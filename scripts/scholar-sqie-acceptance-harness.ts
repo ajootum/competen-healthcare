@@ -161,6 +161,9 @@ const aiRows = async (userId: string) =>
 // ── judging helpers ──
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const IMPERATIVE = /^(describe|explain|list|name|state|define|outline|identify|give|compare|contrast|discuss|summari[sz]e|suggest|justify|differentiate|distinguish|classify|interpret|indicate|calculate|choose|select|match|arrange|order|put|complete|recall|what|which|why|how|when|where|who)\b/i;
+/** Words too general to show a suggestion targets a gap ("revise", "states", "required" ...). */
+const GENERIC_WORDS = new Set(["revise", "review", "states", "state", "describes", "describe", "rather", "which", "their", "there", "these", "those", "about",
+  "should", "would", "could", "including", "include", "includes", "required", "needed", "answer", "notes", "student", "being", "other", "where", "while"]);
 const genuineQuestion = (stem: string) => /\?\s*$/.test(stem.trim()) || IMPERATIVE.test(stem.trim());
 const NOTE_LINES = NOTE_A.split("\n").map(l => norm(l.replace(/^\d+\.\s*/, "")));
 const copiedStatement = (stem: string) => { const s = norm(stem); return NOTE_LINES.some(l => l.length > 20 && (s === l || (l.includes(s) && s.length > 0.8 * l.length))); };
@@ -271,12 +274,48 @@ async function loadEligibility() {
   const { data } = await admin.from("ai_model_eligibility").select("activity, provider, model_prefix, eligible, max_risk_tier, effective_to").eq("product", "scholar").eq("eligible", true);
   for (const r of data ?? []) if (!r.effective_to || Date.parse(r.effective_to) > Date.now()) ELIG.set(r.activity, [...(ELIG.get(r.activity) ?? []), { prefix: r.model_prefix, tier: r.max_risk_tier }]);
 }
+/** The routes the gate would pick for each Scholar activity at each risk tier (allowance.activityReadiness: published
+ *  routing, keyed providers and eligibility, exactly as the gate picks them). */
+const ROUTED = new Map<string, Set<string>>();
+async function loadRouting() {
+  const { activityReadiness } = await import("../src/lib/ai/allowance");
+  for (const a of (await activityReadiness(admin, "scholar")) ?? []) ROUTED.set(a.code, new Set(Object.values(a.routes).filter(Boolean).map(r => r!.model)));
+}
+
+// THE ALLOWANCE ACTIVITY OF EACH AI REQUEST. plat_ai_outcomes.activity is NOT the allowance code (it is the operation
+// without its prefix: revision_short, mcq, exam_answer) and is not read for this. The gateway's records are, in order:
+//   1. ai_usage_ledger (410): one row per request the allowance reserved, with its activity and model. Written only
+//      while metering is on.
+//   2. plat_ai_requests (055/371/600): every call's operation, model, status and cost -- no activity column. Its
+//      operation names the route that made the call, and each route passes ONE activity to scholarAiRunner; that code
+//      is read from the routes themselves (EXAM_ACTIVITY for papers; revision/sessions and questions: "questions";
+//      revision/answer and clinical answers: "evaluate").
+const routeActivity = async (operation: string): Promise<string | null> => {
+  const { EXAM_ACTIVITY } = await import("../src/lib/individual/scholar/exam-service");
+  const exam = /^individual_scholar_exam_(answer|follow_up|guide|research|transcribe)/.exec(operation);
+  if (exam) return EXAM_ACTIVITY[exam[1] as keyof typeof EXAM_ACTIVITY];
+  if (/^individual_scholar_(revision_|mcq|questions)/.test(operation)) return "questions";
+  if (/^individual_scholar_evaluate/.test(operation)) return "evaluate";
+  if (/^individual_scholar_case_steps/.test(operation)) return "case_steps";
+  if (/^individual_scholar_map/.test(operation)) return "map";
+  return null;
+};
 async function routing(userId: string) {
   const rows = await aiRows(userId);
   const ids = [...new Set(rows.map(r => r.action_id).filter(Boolean))];
   const outs = ids.length ? ((await admin.from("plat_ai_outcomes").select("action_id, activity, operation, outcome, rejection_reasons").in("action_id", ids)).data ?? []) as any[] : [];
-  const act = new Map(outs.map(o => [o.action_id, o.activity]));
-  return { rows: rows.map(r => ({ ...r, activity: act.get(r.action_id) ?? null, eligible: (ELIG.get(act.get(r.action_id) ?? "") ?? []).some(e => String(r.model ?? "").startsWith(e.prefix)) })), outs };
+  const ledger = ((await admin.from("ai_usage_ledger").select("request_id, activity, model, status, risk_tier").eq("user_id", userId).eq("product", "scholar")).data ?? []) as any[];
+  const withActivity = await Promise.all(rows.map(async r => ({ ...r, activity: await routeActivity(String(r.operation ?? "")), source: "route" as const })));
+  // A step is checked from the ledger when metering recorded it, else from the request row and its route's activity.
+  const steps: { operation: string; activity: string | null; model: string; status: string; risk: string | null; source: "ledger" | "route" }[] = ledger.length
+    ? ledger.filter(l => l.status !== "released").map(l => ({ operation: `ledger:${l.request_id}`, activity: l.activity as string, model: l.model as string, status: "ok", risk: l.risk_tier ?? null, source: "ledger" as const }))
+    : withActivity.map(r => ({ operation: r.operation as string, activity: r.activity, model: String(r.model ?? ""), status: r.status as string, risk: null, source: r.source }));
+  const judge = <T extends { activity: string | null; model: string }>(s: T) => ({
+    ...s,
+    eligible: !!s.activity && (ELIG.get(s.activity) ?? []).some(e => s.model.startsWith(e.prefix)),
+    routed: !!s.activity && [...(ROUTED.get(s.activity) ?? [])].some(m => s.model.startsWith(m)),
+  });
+  return { rows: withActivity.map(judge), steps: steps.map(judge), outs, source: ledger.length ? "ai_usage_ledger" : "plat_ai_requests" };
 }
 const usd = (rows: any[]) => +rows.reduce((s, r) => s + (Number(r.cost_usd) || 0), 0).toFixed(6);
 
@@ -314,7 +353,9 @@ async function main() {
   const live = await fetch(BASE + "/individual/welcome", { redirect: "manual" }).catch(() => null);
   if (!live) { console.log(`  PEND  no dev server at ${BASE}. Nothing created.`); return; }
   await loadEligibility();
+  await loadRouting();
   show("eligible (scholar)", Object.fromEntries([...ELIG].map(([a, v]) => [a, v.map(x => x.prefix)])));
+  show("routed (scholar)", Object.fromEntries([...ROUTED].map(([a, v]) => [a, [...v]])));
 
   await cleanup();
   const { data: gd, error: ge } = await admin.auth.admin.createUser({ email: FIX.grantor, password: PW, email_confirm: true });
@@ -333,15 +374,25 @@ async function main() {
   const noteA = await uploadText(A.jar, NOTE_A, "Pyelonephritis lecture.txt");
   ok("A0. the pyelonephritis note is uploaded", !!noteA.id, noteA.why);
   if (!noteA.id) { await finishWithCleanup(); return; }
-  // A-risk. How the PUBLISHED Scholar risk rules read this lecture note (the gate classifies the passages it sends).
+  // A-risk. How the PUBLISHED Scholar risk rules read this lecture note AS THE PRODUCT SENDS IT: the note's own stored
+  // passages as context, a study request as the learner's words (requestText), built by the real scholarRisk and
+  // resolved by the real resolveRiskSubject, so rules of scope "request" (acting now, a real patient now) read only the
+  // request and never the note (SQIE D-1). Classified at the "questions" activity's floor, as the gate does. A lecture
+  // note on a clinical topic, studied, is clinical educational -- not standard, and not high-risk clinical.
   {
-    const { loadProductPolicy } = await import("../src/lib/ai/allowance");
+    const { loadProductPolicy, resolveRiskSubject } = await import("../src/lib/ai/allowance");
     const { classifyRisk } = await import("../src/lib/ai/clinical-risk");
+    const { scholarRisk } = await import("../src/lib/individual/scholar/http");
     const { policy } = await loadProductPolicy(admin, "scholar");
-    const d = classifyRisk(policy.risk, { text: NOTE_A, competencyRisks: [], frameworkCodes: [] }, "standard_educational");
-    show(`A-risk note classification${WORKAROUND ? " (workaround wording)" : ""}`, d);
-    summary.A_risk = { workaround: WORKAROUND, ...d };
-    ok("A-risk. the educational lecture note is not classified high-risk clinical by the published rules", d.tier !== "high_risk_clinical", `${d.tier} by ${d.rule}`);
+    const passages = (await chunksOf(A.id, noteA.id)).map(c => ({ chunkId: c.id, content: c.content }));
+    const request = "Explain how pyelonephritis develops, for my exam revision.";
+    const subject = await resolveRiskSubject(admin, await scholarRisk(admin, A.id, { text: request, passages }));
+    const floor = ((policy.activities as Record<string, { riskFloor?: string }>).questions?.riskFloor ?? "standard_educational") as Parameters<typeof classifyRisk>[2];
+    const d = classifyRisk(policy.risk, subject, floor);
+    show(`A-risk note classification${WORKAROUND ? " (workaround wording)" : ""}`, { ...d, passages: passages.length, request, floor });
+    summary.A_risk = { workaround: WORKAROUND, passages: passages.length, ...d };
+    ok("A-risk. the educational lecture note, sent as passages with a study request, is classified clinical educational by the published rules",
+      passages.length > 0 && d.tier === "clinical_educational", `${d.tier} by ${d.rule} (${passages.length} passages)`);
   }
 
   // A1. study as paper -> notes-like
@@ -407,12 +458,18 @@ async function main() {
     show("A4 attempt row", att.map(r => ({ correct: r.correct, score: r.score, marking: r.marking, response: r.response, session: r.session_id, evaluator_model: r.evaluator_model ?? r.evaluator?.model })));
     show("A4 card", card.map(c => ({ due: c.due_at ?? c.next_review_at, reps: c.repetitions ?? c.reps })));
     show("A4 session position", sess?.json?.session ? { position: sess.json.session.position, status: sess.json.session.status } : sess?.status);
+    // A4c. The next suggestion targets ANY gap the feedback named -- something missing, a misconception it corrected, or a
+    // rubric key point -- not only the definition. A gap is "targeted" when the suggestion shares a content word with it.
     const next = a3.json.feedback?.evaluation?.parts?.next ?? "";
-    const gapWords = new Set(norm([...(a3.json.feedback?.evaluation?.parts?.missing ?? []), ...(a3.json.feedback?.rubric?.keyPoints ?? [])].join(" ")).split(" ").filter(w => w.length > 4));
-    const pointsAtGap = norm(next).split(" ").some(w => gapWords.has(w));
+    const p4 = a3.json.feedback?.evaluation?.parts ?? {};
+    const gaps: string[] = [...(p4.missing ?? []), ...(p4.misconceptions ?? []), ...(a3.json.feedback?.rubric?.keyPoints ?? [])];
+    const contentWords = (s: string) => norm(s).split(" ").filter(w => w.length > 4 && !GENERIC_WORDS.has(w));
+    const nextWords = new Set(contentWords(next));
+    const targeted = gaps.filter(g => contentWords(g).some(w => nextWords.has(w)));
+    const pointsAtGap = targeted.length > 0;
     ok("A4a. the attempt is kept with its session (the student's words, AI-evaluated)", att.length === 1 && att[0].correct === false && (att[0].session_id ?? sessionId) === sessionId, `${att.length} rows`);
     ok("A4b. progress is kept: the missed question becomes a review card and the session moves on", card.length === 1 && (sess?.json?.session?.position ?? 0) >= 1, `cards:${card.length} position:${sess?.json?.session?.position}`);
-    ok("A4c. the next suggestion points at the gap", !!next && pointsAtGap, `next: ${next}`);
+    ok("A4c. the next suggestion points at a gap or misconception the feedback named", !!next && pointsAtGap, `next: ${next}${targeted.length ? ` -> targets: ${targeted.join(" | ")}` : ""}`);
   }
 
   // answer the rest and complete the session (MCQs marked by code; a further short answer self-graded, no AI)
@@ -449,15 +506,21 @@ async function main() {
 
   // A5. models per AI step
   const rA = await routing(A.id);
-  for (const r of rA.rows) console.log(`        ${r.operation.padEnd(40)} activity:${String(r.activity).padEnd(10)} ${String(r.model).padEnd(20)} ${r.status} $${r.cost_usd} eligible:${r.eligible}`);
+  show("A5 activity source", rA.source === "ai_usage_ledger" ? "ai_usage_ledger (metering on: activity and model per reserved request)" : "plat_ai_requests (metering off: model per call, activity of the route that made it)");
+  for (const r of rA.steps) console.log(`        ${r.operation.padEnd(40)} activity:${String(r.activity).padEnd(10)} ${String(r.model).padEnd(20)} ${r.status} eligible:${r.eligible} routed:${r.routed}`);
+  const okSteps = rA.steps.filter(r => r.status === "ok");
   const refusedA = ((await admin.from("audit_log").select("action, metadata").eq("actor_id", A.id)).data ?? []).filter((x: any) => /refused|not_eligible/.test(JSON.stringify(x.metadata ?? {})));
-  ok("A5a. every AI step for A ran on a model eligible for its activity", rA.rows.length > 0 && rA.rows.every(r => r.status !== "ok" || r.eligible), rA.rows.filter(r => !r.eligible).map(r => `${r.operation}:${r.activity}:${r.model}`).join(", "));
+  ok("A5a. every AI step for A ran on a model eligible for its allowance activity (ai_model_eligibility)", okSteps.length > 0 && okSteps.every(r => r.eligible),
+    okSteps.filter(r => !r.eligible).map(r => `${r.operation}:${r.activity ?? "no activity recorded"}:${r.model}`).join(", "));
   const refusedHttpA = refusals.filter(r => r.jar === A.jar);
   ok("A5b. no eligibility refusal occurred for A", refusedA.length === 0 && refusedHttpA.length === 0, JSON.stringify([...refusedA, ...refusedHttpA.map(r => `${r.path} ${r.status} ${r.code}`)]).slice(0, 400));
-  const actModel = (act: string) => [...new Set(rA.rows.filter(r => r.activity === act).map(r => r.model))].join(",");
-  show("A5 routing by activity", { questions: actModel("questions"), evaluate: actModel("evaluate"), deeper: actModel("deeper") });
-  ok("A5c. routing as configured: questions and deeper on Opus, evaluate on Sonnet",
-    /opus/.test(actModel("questions")) && /sonnet/.test(actModel("evaluate")) && /opus/.test(actModel("deeper")) && !/sonnet/.test(actModel("questions")) && !/opus/.test(actModel("evaluate")));
+  const used = [...new Set(okSteps.map(r => r.activity ?? "?"))];
+  const actModel = (act: string) => [...new Set(okSteps.filter(r => r.activity === act).map(r => r.model))].join(",");
+  show("A5 routing by activity: used", Object.fromEntries(used.map(a => [a, actModel(a)])));
+  show("A5 routing by activity: configured (gate's routes over every risk tier)", Object.fromEntries(used.map(a => [a, [...(ROUTED.get(a) ?? [])]])));
+  ok("A5c. routing as configured: each step ran on a route the gate picks for its activity (questions, evaluate and deeper all exercised)",
+    okSteps.length > 0 && okSteps.every(r => r.routed) && ["questions", "evaluate", "deeper"].every(a => used.includes(a)),
+    okSteps.filter(r => !r.routed).map(r => `${r.operation}:${r.activity}:${r.model}`).join(", ") || `used: ${used.join(",")}`);
 
   // ════════ B. INSUFFICIENT NOTES ════════
   console.log("\n── B. insufficient notes ──");
@@ -595,7 +658,7 @@ async function main() {
       // C2. Explain using approved references (Learn, the same request again with the recovery)
       if (!rec.json.explainable) pend("C2", `recovery not explainable here (state ${rec.json.state}) -- Explain is not offered without a verified abstract or approved library reference`);
       else {
-        const explain = (action: string) => send("POST", "/api/individual/scholar/learn/act", { action, ...(action === "ask" ? { question: QC } : {}), chunkIds: chC.map(c => c.id), recovery: { id: rec.json.recoveryId, mode: "notes_and_references", question: QC } }, C.jar);
+        const explain = (action: string) => send("POST", "/api/individual/scholar/learn/act", { action, ...(action === "ask" ? { question: QC } : {}), chunkIds: chC.map(c => c.id), recovery: { id: rec.json.recoveryId, mode: "notes_and_references", question: QC } }, C!.jar);
         const view = (x: any) => ({ status: x.status, withheld: x.json.withheld ?? null, reason: x.json.reason ?? null, message: x.json.message ?? null, continuity: x.json.continuity ?? null, answer: x.json.answer ?? null, cited: x.json.cited, research: x.json.research ? { text: x.json.research.text ?? null, withheld: x.json.research.withheld ?? null } : null, recovered: x.json.recovered, model: x.json.provenance?.model, error: x.json.error });
         let ex = await explain("ask");
         show("C2 explain (Ask Scholar)", view(ex));

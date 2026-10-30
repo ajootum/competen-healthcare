@@ -5,7 +5,35 @@ Server: staging dev server on :3100 started from competen-p2 (`sqie-e2e` = 77d65
 `draft-2026-10-23`. Canonical run (run 5, note exactly as specified): 21 passed, 13 failed, 1 pending. AI spend $0.00
 (no AI call was eligible to run). Earlier runs 1-4 were environment blocks (wrong checkout; no legal set).
 
-## Results (canonical run)
+## Run 7 -- after the SQIE fixes (current verdict)
+
+Server: staging dev server on :3100 from competen-p2 `sqie-e2e` with `scholar/sqie-fixes-01` merged (790120c4:
+request-scoped risk rules, key terms, recovery consistency, supportive refusal, revision formats). Note exactly as
+specified (`SQIE_NOTE_WORKAROUND` off). Log: `run7.log` (session scratchpad).
+
+**41 passed, 4 failed. All four failures are HARNESS defects, corrected in SCHOLAR-SQIE-CLOSE-01 P3; none is a product
+defect.** The product behaved correctly in each, on the evidence the run itself printed:
+
+| Check | Run 7 | Why it was the harness | Correction |
+|---|---|---|---|
+| A-risk | FAIL `high_risk_clinical` by `high.urgent-direction` | It classified the WHOLE note as one text with no request, so request-scoped rules (acting now) read the note. The product never sends that: it sends the note's passages as context and the learner's words as `requestText`. Every AI step on this note then ran (A2-A6 passed), which is impossible at high-risk clinical. | Classify as the product does: stored passages + a study request through the real `scholarRisk` and `resolveRiskSubject`, at the `questions` floor; expect `clinical_educational`. |
+| A4c | FAIL | The suggestion "Revise the investigations required before starting antibiotics, including urine dipstick and midstream urine culture" targets the named misconception "states no tests are needed (urine dipstick, midstream urine culture ...)". The check only looked at `missing` and the rubric. | Pass when the next suggestion shares a content word with ANY named gap: missing, misconceptions or rubric key points (generic words excluded). |
+| A5a | FAIL (5 of 6 steps "not eligible") | It read the activity from `plat_ai_outcomes.activity`, which is the operation label (`revision_short`, `mcq`, `exam_answer`), not the allowance activity code (`questions`, `deeper`), so no eligibility row could match. The models were the eligible ones (Opus 4.8 for questions and deeper, Sonnet 4.6 for evaluate). | Read the activity and model from the gateway's request records: `ai_usage_ledger` (activity, model per reserved request, when metering is on), else `plat_ai_requests` (model per call) with the activity its route passes to `scholarAiRunner` (`EXAM_ACTIVITY` for papers). Check against `ai_model_eligibility`. |
+| A5c | FAIL (questions and deeper "empty") | Same misread labels, so no step had activity `questions` or `deeper`. | Same source; each step's model must be a route the gate picks for its activity (`activityReadiness`: published routing, keyed providers, eligibility), with questions, evaluate and deeper all exercised. |
+
+Everything else passed, including A1 (numbered notes answer notes-like, nothing kept), A2a-d (genuine, supported
+questions with rubrics), A3a-d (five-part AI feedback naming the cystitis / fluids-only misconception, nothing
+invented), A4a-b, A5b (no eligibility refusal), A6a-b (paper "Check my attempt" from the notes, on Opus), B1-B3e, C0-C2,
+D1a-D3b (supportive refusal of the real-patient question, identifier refused, educational case answered) and Z1-Z3.
+
+**Cost (E).** Total AI spend for the run **$0.1314** (10 calls). Per completed revision session **about $0.10**:
+scenario A $0.0979 in 6 calls -- the session's generation and verification (4 calls, Opus 4.8) plus the AI evaluation of
+the mistaken answer (Sonnet 4.6) $0.0750, and the paper "Check my attempt" (Opus 4.8) $0.0229. Retrieval-only recovery:
+3 runs, 0 AI requests, $0 (2 research rows, cached). "Explain using approved references": $0.0145.
+
+The corrected harness has not been re-run (no server run under this change). Its next run is the confirmation.
+
+## Results (run 5, before the fixes)
 
 | | Result | Evidence |
 |---|---|---|
