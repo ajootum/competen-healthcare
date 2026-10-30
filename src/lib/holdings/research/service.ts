@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { findPatientIdentifiers } from "@/lib/privacy/patient-identifiers";
 import {
-  normaliseDoi, researchContact, scholarSearchUrl, searchOpenAlex, searchPubmed, verifyDoi,
+  normaliseDoi, pmcOpenAccess, researchContact, scholarSearchUrl, searchOpenAlex, searchPubmed, verifyDoi,
   type FetchLike, type ProviderDeps, type ResearchItem,
 } from "./providers";
 import { invocableProviders, notInvocable, type Capability, type ProviderRecord, type Registry, type ResearchActivity, type ResearchProduct } from "./registry";
@@ -83,13 +83,17 @@ export function searchSources(plan: ResearchPlan, now?: Date): ProviderRecord[] 
 }
 const verifier = (plan: ResearchPlan, now?: Date) =>
   plan.policy.rules.doiVerification ? invocableProviders(plan.registry, { product: plan.product, activity: plan.activity, capability: "doi_verification", now })[0] ?? null : null;
+/** SCHOLAR-SQIE-02: the open-access link source (PubMed Central), only while Active and the rule is on. */
+const openAccessSource = (plan: ResearchPlan, now?: Date) =>
+  plan.policy.rules.openAccessLinks ? invocableProviders(plan.registry, { product: plan.product, activity: plan.activity, capability: "open_access", now })[0] ?? null : null;
 
 /** Pure. The cache key: the sources (at their versions) and every setting that decides the result, nothing of the learner's. */
 export function researchKey(query: string, plan: ResearchPlan, now?: Date): string {
   const src = searchSources(plan, now).map(r => `${r.id}@${r.version}:${r.depth}:${r.freshnessYears}`);
-  const v = verifier(plan, now);
+  const v = verifier(plan, now), oa = openAccessSource(plan, now);
   const p = plan.policy;
-  return createHash("sha256").update(JSON.stringify([RESEARCH_SERVICE_VERSION, src, v ? `${v.id}@${v.version}` : null, p.rules.abstractsAsEvidence, p.limits.maxResultsPerRequest, plan.workflow?.maxSources ?? 0, query.toLowerCase().trim()])).digest("hex");
+  // An open-access source joins the key only when one is in play, so every key made without one is unchanged.
+  return createHash("sha256").update(JSON.stringify([RESEARCH_SERVICE_VERSION, src, v ? `${v.id}@${v.version}` : null, p.rules.abstractsAsEvidence, p.limits.maxResultsPerRequest, plan.workflow?.maxSources ?? 0, query.toLowerCase().trim(), ...(oa ? [`${oa.id}@${oa.version}`] : [])])).digest("hex");
 }
 
 const titleKey = (t: string) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "").slice(0, 120);
@@ -196,8 +200,17 @@ export async function runResearch(query: string, plan: ResearchPlan, deps: Resea
     if (items.some(i => i.verified.doi === false)) codes.push("dropped_identity");
     items = items.filter(i => i.verified.doi !== false);
   }
+  // SCHOLAR-SQIE-02: PubMed Central's open-access link and licence, for PMIDs PubMed itself returned. A link only: the
+  // full text is never fetched, so it never becomes evidence. A failed lookup leaves the items as they were.
+  const oa = openAccessSource(plan, now());
+  if (oa && items.some(i => i.pmid && i.verified.pmid)) {
+    const found = await call(oa, "open_access", p => pmcOpenAccess(p, items.filter(i => i.pmid && i.verified.pmid).map(i => i.pmid!)));
+    calls.push({ provider: oa.id, calls: 1, failed: found === null ? 1 : 0 });
+    if (found) items.forEach(i => { if (i.pmid && i.verified.pmid) i.openAccess = found.get(i.pmid) ?? null; });
+  }
   // Belt and braces: every field shown later must be what a provider gave, and the link must be the record's own.
   items = items.filter(i => /^https:\/\/(pubmed\.ncbi\.nlm\.nih\.gov|doi\.org|openalex\.org)\//.test(i.url) && (!i.doi || normaliseDoi(i.doi) === i.doi));
+  items.forEach(i => { if (i.openAccess && !/^https:\/\/pmc\.ncbi\.nlm\.nih\.gov\/articles\/PMC\d+\/$/.test(i.openAccess.url)) i.openAccess = null; });
 
   const cacheDays = Math.min(plan.policy.limits.cacheDays, ...sources.map(r => r.cacheDays));
   if (deps.cache) await deps.cache.write(key, items, sources.map(r => r.id).join("+"), cacheDays).catch(() => {});

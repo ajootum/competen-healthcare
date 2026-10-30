@@ -4,7 +4,7 @@ import {
   POLICY_PATH, WORKFLOWS_PATH, WORKFLOW_STATUS, resolveResearchPolicy, resolveWorkflows, workflowNeeds, workflowOperational,
   type ResearchPolicy, type Workflow, type WorkflowStatus,
 } from "./engine-config";
-import { searchOpenAlex, searchPubmed, verifyDoi, researchContact, type ProviderDeps } from "./providers";
+import { pmcOpenAccess, searchOpenAlex, searchPubmed, verifyDoi, researchContact, type ProviderDeps } from "./providers";
 import {
   LIFECYCLE, REGISTRY_PATH, RESEARCH_SCOPE, applyEdit, hasAdapter, resolveRegistry, transitionNeeds,
   type Lifecycle, type ProviderRecord, type Registry,
@@ -102,6 +102,8 @@ export async function saveProvider(admin: any, actor: Actor, id: string, patch: 
 const SYNTHETIC_QUERY = "oxygen therapy";
 /** Crossref's documented test DOI. */
 const TEST_DOI = { doi: "10.5555/12345678", title: "Toward a Unified Theory of High-Energy Metaphysics: Silly String Theory", year: 2008 };
+/** A fixed public PMID for the PubMed Central connectivity check. */
+const TEST_PMID = "23193287";
 
 /** Connectivity, run by the server, for a source with an adapter in code. See the header for why this is the one exception. */
 export async function runConnectivity(admin: any, actor: Actor, id: string): Promise<Out> {
@@ -121,6 +123,10 @@ export async function runConnectivity(admin: any, actor: Actor, id: string): Pro
   } else if (id === "crossref") {
     const v = await verifyDoi(deps, TEST_DOI).catch(() => null);
     ok = v !== null; detail = ok ? `answered in ${Date.now() - started} ms (test DOI ${v ? "matched" : "did not match"})` : "no answer";
+  } else if (id === "pmc") {
+    // SCHOLAR-SQIE-02: a fixed public PMID, never learner content. Answering at all is what connectivity is.
+    const m = await pmcOpenAccess(deps, [TEST_PMID]).catch(() => null);
+    ok = m !== null; detail = ok ? `answered in ${Date.now() - started} ms (test PMID ${m!.size ? "has" : "has no"} open-access copy)` : "no answer";
   }
   reg[id] = { ...r, checks: { ...r.checks, connectivity: { at: new Date().toISOString(), by: actor.userId, ok, detail } } };
   const w = await writeRegistry(admin, actor, reg);

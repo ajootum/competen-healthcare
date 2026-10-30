@@ -5,6 +5,8 @@ import { loadAiAnalytics } from "@/lib/super-admin/ai-analytics";
 import AskPanel from "../_components/AskPanel";
 import QualityCostPanel from "../_components/QualityCostPanel";
 import { loadAiQuality } from "@/lib/ai/outcomes";
+import RecoveryPanel from "../_components/RecoveryPanel";
+import { loadRecoverySummary } from "@/lib/individual/scholar/evidence-recovery";
 import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +32,7 @@ export default async function IntelligenceAnalytics() {
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
   await requireHqCapability("hq.platform.ai.view");
 
-  const [d, quality] = await Promise.all([loadAiAnalytics(admin), loadAiQuality(admin, 14)]);
+  const [d, quality, recovery] = await Promise.all([loadAiAnalytics(admin), loadAiQuality(admin, 14), loadRecoverySummary(admin, 14)]);
   const k = d.kpis;
 
   const kpiCards = [
@@ -75,6 +77,9 @@ export default async function IntelligenceAnalytics() {
 
       {/* COMPETEN-SCHOLAR-AI-OPT-01: cost per ACCEPTED output, rejections and their cost, learner feedback. */}
       <QualityCostPanel q={quality} />
+
+      {/* SCHOLAR-SQIE-02 s8: the safe-withholding rate apart from the answer rate, and what evidence recovery achieved. */}
+      <RecoveryPanel s={recovery} />
 
       {/* Live telemetry generator — every ask records a real plat_ai_requests row
           that immediately feeds the analytics below (reload to see it land). */}

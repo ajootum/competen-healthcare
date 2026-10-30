@@ -26,13 +26,13 @@ export const FIXED_RULES = [
 export type SourcePolicy = { providers: string[]; disciplines: string[]; clinicalApprovedOnly: boolean };
 export type ResearchPolicy = {
   sources: Record<ResearchProduct, SourcePolicy>;
-  rules: { abstractsAsEvidence: boolean; doiVerification: boolean; maxEvidence: number; excerptChars: number; showFurtherReading: boolean; scholarLink: boolean };
+  rules: { abstractsAsEvidence: boolean; doiVerification: boolean; maxEvidence: number; excerptChars: number; showFurtherReading: boolean; scholarLink: boolean; openAccessLinks: boolean };
   limits: { timeoutMs: number; retries: number; maxResultsPerRequest: number; cacheDays: number; retentionDays: number; dailyRequests: number; dailySpendUsd: number };
 };
 
 export const DEFAULT_POLICY: ResearchPolicy = {
   sources: Object.fromEntries(RESEARCH_PRODUCTS.map(p => [p, { providers: [], disciplines: ["healthcare"], clinicalApprovedOnly: true }])) as unknown as Record<ResearchProduct, SourcePolicy>,
-  rules: { abstractsAsEvidence: true, doiVerification: true, maxEvidence: 5, excerptChars: 320, showFurtherReading: true, scholarLink: true },
+  rules: { abstractsAsEvidence: true, doiVerification: true, maxEvidence: 5, excerptChars: 320, showFurtherReading: true, scholarLink: true, openAccessLinks: true },
   limits: { timeoutMs: 6000, retries: 0, maxResultsPerRequest: 5, cacheDays: 30, retentionDays: 30, dailyRequests: 5000, dailySpendUsd: 0 },
 };
 
@@ -52,6 +52,8 @@ export function resolveResearchPolicy(doc: any): ResearchPolicy { // eslint-disa
       abstractsAsEvidence: b(s.rules?.abstractsAsEvidence, d.rules.abstractsAsEvidence), doiVerification: b(s.rules?.doiVerification, d.rules.doiVerification),
       maxEvidence: n(s.rules?.maxEvidence, 1, 10, d.rules.maxEvidence), excerptChars: n(s.rules?.excerptChars, 0, 600, d.rules.excerptChars),
       showFurtherReading: b(s.rules?.showFurtherReading, d.rules.showFurtherReading), scholarLink: b(s.rules?.scholarLink, d.rules.scholarLink),
+      // SCHOLAR-SQIE-02: ask PubMed Central for open-access links (only while its record is Active). Links, never full text.
+      openAccessLinks: b(s.rules?.openAccessLinks, d.rules.openAccessLinks),
     },
     limits: {
       timeoutMs: n(s.limits?.timeoutMs, 1000, 15000, d.limits.timeoutMs), retries: n(s.limits?.retries, 0, 2, d.limits.retries),

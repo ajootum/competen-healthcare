@@ -257,6 +257,18 @@ export const SOURCE_KIND_LABEL = {
 /** COMPETEN-RESEARCH-01: the three Learn modes, as the learner sees them. */
 export const LEARN_MODE_LABEL = { notes: "My notes only", library: "My notes + Competen library", research: "Research & Explain" } as const;
 
+/** SCHOLAR-SQIE-02 s7: evidence recovery, as the learner sees it. No internal activity names, no eligibility terms. */
+export const RECOVERY_PROMPT = "Your notes do not contain enough information to fully explain this topic. Would you like to explore additional learning resources?";
+export const RECOVERY_ACTION_LABEL = {
+  find_resources: "Find learning resources",
+  explain_with_references: "Explain using approved references",
+  continue_with_notes: "Continue with my notes",
+} as const;
+export const RECOVERY_ORIGIN_LABEL = { notes: "Your notes", library: "Competen library", external: "External reference", ai: "AI explanation" } as const;
+/** What was retrieved for an external reference. "full text" only if full text was retrieved: never today. */
+export const RECOVERY_RETRIEVED_LABEL = { metadata: "details only", abstract: "abstract only", full_text: "full text" } as const;
+export const RECOVERY_UNANSWERED_LABEL = "Not found in any of these sources yet";
+
 /**
  * S3: background the AI adds beyond the notes is shown APART from the notes-based answer, under this
  * label, and never counts as coming from them. The notes-only modes (summary, simplify) never show it.

@@ -4,6 +4,7 @@
 //   PubMed E-utilities (NCBI): esearch for PMIDs, esummary for metadata, efetch for abstracts.
 //   OpenAlex: works search, with the abstract when OpenAlex holds one (its data is CC0).
 //   Crossref: one DOI at a time, to verify that the DOI exists and names the same work (title and year).
+//   PubMed Central (SCHOLAR-SQIE-02): for PMIDs PubMed returned, whether an open-access copy exists, its licence and link.
 // Google Scholar is a plain outbound link only (scholarSearchUrl). It is never fetched or scraped.
 //
 // ⚠ SERVER SIDE ONLY, AND ONLY THE QUERY LEAVES. Each call carries the search query (built by service.ts from the
@@ -41,7 +42,15 @@ export type ResearchItem = {
   /** Identity checks: the PMID came from PubMed itself, the DOI was confirmed by Crossref (null = not checked). */
   verified: { pmid: boolean; doi: boolean | null };
   retrievedAt: string;
+  /**
+   * SCHOLAR-SQIE-02 s6: PubMed Central's word that an open-access copy exists, its licence and its link. A LINK the
+   * learner may follow: the full text is never fetched, so this never makes the item full-text evidence. Absent or
+   * null: not checked, or not in the open-access subset.
+   */
+  openAccess?: OpenAccess | null;
 };
+
+export type OpenAccess = { pmcid: string; licence: string | null; url: string; retracted: boolean };
 
 export type FetchLike = (url: string, init?: { signal?: AbortSignal; headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
 export type ProviderDeps = { fetch: FetchLike; timeoutMs: number; contact: { tool: string; email: string }; now: () => Date };
@@ -193,6 +202,54 @@ export async function verifyDoi(deps: ProviderDeps, item: Pick<ResearchItem, "do
   const year = yearOf(m.issued?.["date-parts"]?.[0]?.[0] ?? m.published?.["date-parts"]?.[0]?.[0]);
   if (!sameTitle(title, item.title)) return false;
   return item.year === null || year === null || Math.abs(item.year - year) <= 1;
+}
+
+// ── PubMed Central (open-access links) ── SCHOLAR-SQIE-02 s6 ─────────────────────────────────────────────────────────
+//
+// Two NCBI services, asked only about PMIDs PubMed itself returned: the ID converter (PMID -> PMCID) and the PMC OA web
+// service (is that PMCID in the open-access subset, and under which licence). What comes back is a licence and a link.
+// The article itself is never downloaded: "where the licence permits" is shown to the learner, not exercised by Competen.
+
+const PMC_IDCONV = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/";
+const PMC_OA = "https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi";
+/** At most this many PMCIDs are asked about per request (one OA call each). */
+export const PMC_MAX = 5;
+
+/** Pure. ID converter JSON -> PMCID by PMID. Records the converter could not map are left out. */
+export function parsePmcIdconv(json: unknown): Map<string, string> {
+  const out = new Map<string, string>();
+  const recs = (json as { records?: unknown[] } | null)?.records;
+  for (const r of Array.isArray(recs) ? recs : []) {
+    const x = r as { pmid?: unknown; pmcid?: unknown } | null;
+    const pmid = String(x?.pmid ?? ""), pmcid = String(x?.pmcid ?? "");
+    if (/^\d{1,9}$/.test(pmid) && /^PMC\d{1,10}$/.test(pmcid)) out.set(pmid, pmcid);
+  }
+  return out;
+}
+
+/** Pure. PMC OA service XML -> the record's licence, or null when the article is not in the open-access subset. */
+export function parsePmcOa(xml: string, pmcid: string): OpenAccess | null {
+  if (/<error\b/i.test(xml)) return null;
+  const rec = new RegExp(`<record\\b[^>]*\\bid="${pmcid}"[^>]*>`).exec(xml)?.[0];
+  if (!rec) return null;
+  const licence = /\blicense="([^"]{1,60})"/.exec(rec)?.[1] ?? null;
+  return { pmcid, licence: licence ? decodeXml(licence) : null, url: `https://pmc.ncbi.nlm.nih.gov/articles/${pmcid}/`, retracted: /\bretracted="yes"/i.test(rec) };
+}
+
+/** PMID -> open-access link and licence, for the PMIDs given (at most PMC_MAX). null = the service could not be asked. */
+export async function pmcOpenAccess(deps: ProviderDeps, pmids: readonly string[]): Promise<Map<string, OpenAccess> | null> {
+  const ids = [...new Set(pmids.filter(p => /^\d{1,9}$/.test(p)))].slice(0, PMC_MAX);
+  if (!ids.length) return new Map();
+  const conv = await getJson(deps, `${PMC_IDCONV}?ids=${ids.join(",")}&idtype=pmid&format=json&${ncbi(deps)}`);
+  if (!conv) return null;
+  const map = parsePmcIdconv(conv);
+  const out = new Map<string, OpenAccess>();
+  for (const [pmid, pmcid] of map) {
+    const xml = await getText(deps, `${PMC_OA}?id=${pmcid}`);
+    const oa = xml ? parsePmcOa(xml, pmcid) : null;
+    if (oa) out.set(pmid, oa);
+  }
+  return out;
 }
 
 /** A plain link to the same search on Google Scholar, for the learner to follow. Never fetched by Competen. */
