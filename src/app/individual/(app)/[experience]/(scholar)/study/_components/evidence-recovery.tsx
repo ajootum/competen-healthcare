@@ -1,21 +1,30 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import {
-  CONTENT_STATUS_LABEL, RECOVERY_ACTION_LABEL, RECOVERY_ORIGIN_LABEL, RECOVERY_PROMPT, RECOVERY_RETRIEVED_LABEL, RECOVERY_UNANSWERED_LABEL,
+  CONTENT_STATUS_LABEL, RECOVERY_ACTION_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_ORIGIN_LABEL, RECOVERY_PROMPT, RECOVERY_RETRIEVED_LABEL,
+  RECOVERY_STILL_WITHHELD, RECOVERY_UNANSWERED_LABEL,
 } from "@/lib/individual/scholar/config";
-import type { RecoveryAction, RecoveryResult } from "@/lib/individual/scholar/evidence-recovery";
+import type { ReadingLink, RecoveryAction, RecoveryResult } from "@/lib/individual/scholar/evidence-recovery";
 import type { RecoveryMode } from "@/lib/individual/policy";
 
-// SCHOLAR-SQIE-02 s7 -- EVIDENCE RECOVERY, PRESENTATIONAL ONLY. What POST /api/individual/scholar/evidence/recover
-// returned, grouped by where it came from and labelled by what was retrieved: Your notes / Competen library /
-// External reference (abstract only, full text, or details only) / AI explanation. It never touches the student's
-// attempt, holds no state and calls nothing: the page that uses it decides what each action does.
+// SCHOLAR-SQIE-02 s7 -- EVIDENCE RECOVERY. What POST /api/individual/scholar/evidence/recover returned, grouped by where
+// it came from and labelled by what was retrieved: Your notes / Competen library / External reference (abstract only,
+// full text, or details only) / AI explanation.
+//   EvidenceRecovery  presentational: holds no state and calls nothing.
+//   RecoveryFlow      the panel under a withheld answer: asks for the resources, and runs the three actions --
+//                     Continue with my notes (closes it), Find learning resources (shows the reading; no AI), and
+//                     Explain using approved references (the page's own `explain`, which re-runs the SAME request the
+//                     learner made with only the recovery's id, mode and question; the server finds the evidence again).
+// Neither ever touches the student's attempt: it stays exactly where the page keeps it.
 // CPR-MOB-001: one column, touch targets from pointer-coarse, --cmp-* tokens.
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const btn = `inline-flex items-center rounded-lg px-3 py-1.5 text-[13px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
 export type RecoveryView = Pick<RecoveryResult, "prompt" | "evidence" | "reading" | "sufficiency" | "actions" | "external">;
+/** What the page's explain call came to. `text`: when the page shows the explanation here rather than in its own view. */
+export type ExplainOutcome = { shown: boolean; text?: string | null; message?: string | null; unanswered?: string[]; reading?: ReadingLink[] } | { error: string };
 
 function Group({ label, note, children }: { label: string; note?: string; children: React.ReactNode }) {
   return (
@@ -27,20 +36,39 @@ function Group({ label, note, children }: { label: string; note?: string; childr
   );
 }
 
-export function EvidenceRecovery({ result, explanation = null, onAction, busy = false }: {
+function ReadingList({ reading }: { reading: readonly ReadingLink[] }) {
+  if (!reading.length) return null;
+  return (
+    <Group label="Further reading" note="Links for you to follow. Nothing was read from them.">
+      {reading.map(r => (
+        <li key={r.url} className="text-[13px]">
+          <a href={r.url} target="_blank" rel="noopener noreferrer" className={`underline underline-offset-2 ${focusRing}`}>{r.label}</a>
+        </li>
+      ))}
+    </Group>
+  );
+}
+
+export function EvidenceRecovery({ result, explanation = null, onAction, busy = false, showReading = true, unanswered = null, note = null }: {
   result: RecoveryView;
   /** An explanation the page's own AI activity wrote from this evidence, after its own checks. Shown under its own label. */
   explanation?: { text: string } | null;
   onAction?: (action: RecoveryAction, mode?: RecoveryMode) => void;
   busy?: boolean;
+  /** The reading list, once the learner asked for learning resources. */
+  showReading?: boolean;
+  /** What remains unanswered, when it differs from the first search (after an explanation was still not possible). */
+  unanswered?: readonly string[] | null;
+  note?: string | null;
 }) {
   const { notes, library, external } = result.evidence;
-  const nothing = !notes.length && !library.length && !external.length && !result.reading.length;
+  const nothing = !notes.length && !library.length && !external.length && !(showReading && result.reading.length);
+  const left = unanswered ?? result.sufficiency.unanswered;
   return (
     <div role="region" aria-label="More learning resources" className="mt-3 rounded-[9px] border border-[var(--cmp-app-border)] bg-white px-3 py-3">
       <p className="text-[14px] font-semibold text-gray-900">{RECOVERY_PROMPT}</p>
 
-      {onAction && (
+      {onAction && result.actions.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
           {result.actions.map((a, i) => (
             <button key={a.action} type="button" disabled={busy} onClick={() => onAction(a.action, a.mode)}
@@ -49,6 +77,14 @@ export function EvidenceRecovery({ result, explanation = null, onAction, busy = 
             </button>
           ))}
         </div>
+      )}
+      {note && <p role="status" className="mt-2 rounded-lg bg-[var(--cmp-app-surface)] px-3 py-2 text-[13px] text-gray-800">{note}</p>}
+
+      {explanation && (
+        <section className="mt-3 rounded-lg border-2 border-dashed border-[var(--cmp-app-border)] px-3 py-2">
+          <h4 className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-900">{RECOVERY_EXPLANATION_LABEL}</h4>
+          <p className="mt-1 whitespace-pre-line text-[13.5px] text-gray-900">{explanation.text}</p>
+        </section>
       )}
 
       {notes.length > 0 && (
@@ -70,7 +106,7 @@ export function EvidenceRecovery({ result, explanation = null, onAction, busy = 
               {l.approved
                 ? <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11.5px] font-semibold text-emerald-900"><span aria-hidden>✓</span>{CONTENT_STATUS_LABEL.approved}</span>
                 : <span className="text-gray-600">({l.status || CONTENT_STATUS_LABEL.unreviewed})</span>}
-              {l.kind === "case" && <span className="ml-1 text-[12px] text-gray-600">Library case</span>}
+              {l.kind === "case" && <span className="ml-1 text-[12px] text-gray-600">Library case to practise with</span>}
             </li>
           ))}
         </Group>
@@ -99,29 +135,97 @@ export function EvidenceRecovery({ result, explanation = null, onAction, busy = 
         </Group>
       )}
 
-      {result.reading.length > 0 && (
-        <Group label="Further reading" note="Links for you to follow. Nothing was read from them.">
-          {result.reading.map(r => (
-            <li key={r.url} className="text-[13px]">
-              <a href={r.url} target="_blank" rel="noopener noreferrer" className={`underline underline-offset-2 ${focusRing}`}>{r.label}</a>
-            </li>
-          ))}
-        </Group>
-      )}
-
-      {explanation && (
-        <section className="mt-3 rounded-lg border-2 border-dashed border-[var(--cmp-app-border)] px-3 py-2">
-          <h4 className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-900">{RECOVERY_ORIGIN_LABEL.ai}</h4>
-          <p className="mt-1 whitespace-pre-line text-[13.5px] text-gray-900">{explanation.text}</p>
-        </section>
-      )}
+      {showReading && <ReadingList reading={result.reading} />}
 
       {nothing && <p className="mt-3 text-[13px] text-gray-700">Nothing more was found for this topic in the sources you chose.</p>}
-      {result.sufficiency.unanswered.length > 0 && (
+      {left.length > 0 && (
         <p className="mt-3 text-[12.5px] text-gray-700">
-          <span className="font-semibold">{RECOVERY_UNANSWERED_LABEL}:</span> {result.sufficiency.unanswered.join(", ")}
+          <span className="font-semibold">{RECOVERY_UNANSWERED_LABEL}:</span> {left.join(", ")}
         </p>
       )}
     </div>
+  );
+}
+
+export type RecoveryRequestBody = {
+  question?: string; paperQuestionId?: string; mode: RecoveryMode; materialId?: string | null; sectionId?: string | null; withheldReason?: string | null;
+};
+type Loaded = RecoveryView & { recoveryId: string; mode: RecoveryMode; question: string };
+
+async function post(body: RecoveryRequestBody): Promise<Loaded | { error: string }> {
+  try {
+    const res = await fetch("/api/individual/scholar/evidence/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const json = await res.json().catch(() => ({}));
+    return res.ok ? json as Loaded : { error: typeof json?.error === "string" ? json.error : "More learning resources could not be found just now." };
+  } catch {
+    return { error: "Competen could not be reached. Check your connection and try again." };
+  }
+}
+
+/**
+ * The panel under a withheld answer. `explain` re-runs the page's own request with { recovery: { id, mode, question } }
+ * and says what it came to; without it, Explain using approved references is not offered.
+ */
+export function RecoveryFlow({ request, explain, onDismiss }: {
+  request: RecoveryRequestBody;
+  explain?: (recovery: { id: string; mode: RecoveryMode; question: string }) => Promise<ExplainOutcome>;
+  onDismiss?: () => void;
+}) {
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(true);
+  const [dismissed, setDismissed] = useState(false);
+  const [showReading, setShowReading] = useState(false);
+  const [outcome, setOutcome] = useState<Exclude<ExplainOutcome, { error: string }> | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const asked = useRef(false);
+
+  useEffect(() => {
+    if (asked.current) return;
+    asked.current = true;
+    void (async () => {
+      const r = await post(request);
+      setBusy(false);
+      if ("error" in r) setError(r.error); else setLoaded(r);
+    })();
+  }, [request]);
+
+  if (dismissed) return null;
+  if (busy && !loaded) return <p role="status" className="mt-3 text-[13px] text-gray-600">Looking for more learning resources…</p>;
+  if (error && !loaded) return <p role="status" className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-800">{error}</p>;
+  if (!loaded) return null;
+
+  async function onAction(action: RecoveryAction, wider?: RecoveryMode) {
+    if (!loaded) return;
+    if (action === "continue_with_notes") { setDismissed(true); onDismiss?.(); return; }
+    if (action === "find_resources") {
+      // Reading only: no AI. A wider search the learner may choose is looked up the same way, still without AI.
+      if (wider) {
+        setBusy(true);
+        const r = await post({ ...request, mode: wider });
+        setBusy(false);
+        if (!("error" in r)) setLoaded(r);
+      }
+      setShowReading(true);
+      return;
+    }
+    if (!explain) return;
+    setBusy(true); setNote(null);
+    const r = await explain({ id: loaded.recoveryId, mode: loaded.mode, question: loaded.question });
+    setBusy(false);
+    if ("error" in r) { setNote(r.error); return; }
+    setOutcome(r);
+    if (!r.shown) { setShowReading(true); setNote(r.message || RECOVERY_STILL_WITHHELD); }
+    else if (!r.text) setNote(`${RECOVERY_EXPLANATION_LABEL}: shown with your answer.`);
+  }
+
+  const actions = loaded.actions.filter(a => (a.action === "explain_with_references" ? !!explain && !(outcome && outcome.shown) : true))
+    .filter(a => !(a.action === "find_resources" && showReading && !a.mode))
+    .filter(a => !(a.action === "explain_with_references" && outcome && !outcome.shown));
+  const view: RecoveryView = { ...loaded, actions, reading: outcome?.reading?.length ? outcome.reading : loaded.reading };
+  return (
+    <EvidenceRecovery result={view} onAction={onAction} busy={busy} showReading={showReading} note={note}
+      explanation={outcome?.shown && outcome.text ? { text: outcome.text } : null}
+      unanswered={outcome && !outcome.shown ? outcome.unanswered ?? null : null} />
   );
 }

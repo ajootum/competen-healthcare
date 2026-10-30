@@ -268,6 +268,9 @@ export const RECOVERY_ORIGIN_LABEL = { notes: "Your notes", library: "Competen l
 /** What was retrieved for an external reference. "full text" only if full text was retrieved: never today. */
 export const RECOVERY_RETRIEVED_LABEL = { metadata: "details only", abstract: "abstract only", full_text: "full text" } as const;
 export const RECOVERY_UNANSWERED_LABEL = "Not found in any of these sources yet";
+/** An explanation written from recovered evidence, by the same checked AI the learner was using. */
+export const RECOVERY_EXPLANATION_LABEL = "AI explanation from your notes + approved references";
+export const RECOVERY_STILL_WITHHELD = "Scholar still could not explain this fully from your notes and the approved references, so nothing unsupported was shown.";
 
 /**
  * S3: background the AI adds beyond the notes is shown APART from the notes-based answer, under this

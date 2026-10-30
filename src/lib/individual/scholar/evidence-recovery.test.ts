@@ -43,10 +43,11 @@ function fakeSources(o: { notes?: Passage[]; library?: Awaited<ReturnType<Recove
 }
 
 describe("tierPlan and the sequence: notes, then library, then external only when every gate allows it", () => {
-  it("notes only reads the notes and nothing else", async () => {
+  it("notes only reads the notes and the approved library, and never anything external", async () => {
     const f = fakeSources();
-    await runRecovery({ question: "oxygen therapy in copd", mode: "notes_only" }, tierPlan("notes_only", OPEN, true), f.sources, { wider: null });
-    expect(f.log).toEqual(["notes"]);
+    const r = await runRecovery({ question: "oxygen therapy in copd", mode: "notes_only" }, tierPlan("notes_only", OPEN, true), f.sources, { wider: null });
+    expect(f.log).toEqual(["notes", "library"]);
+    expect(r.external.reason).toBe("not_chosen");
   });
   it("notes + library reads notes then the library, never external", async () => {
     const f = fakeSources();
@@ -73,7 +74,7 @@ describe("tierPlan and the sequence: notes, then library, then external only whe
     expect(parseRecoveryMode("everything", "notes_only")).toBe("notes_only");
   });
   it("offers a wider tier only when one could run", () => {
-    expect(widerMode("notes_only", policyWith(), true)).toBe("notes_and_library");
+    expect(widerMode("notes_only", OPEN, true)).toBeNull(); // notes only is never widened to external sources
     expect(widerMode("notes_and_library", policyWith(), true)).toBeNull();
     expect(widerMode("notes_and_library", OPEN, true)).toBe("notes_and_references");
   });
@@ -161,7 +162,9 @@ describe("the sufficiency decision is deterministic", () => {
     const f = fakeSources({ notes: [passage("c1", "Hypercapnic respiratory failure follows uncontrolled oxygen.")] });
     const all = await runRecovery({ question: "hypercapnic respiratory failure", mode: "notes_only" }, tierPlan("notes_only", OPEN, true), f.sources, { wider: null });
     expect(all.sufficiency).toMatchObject({ verdict: "sufficient", canExplain: true, unanswered: [] });
-    expect(all.state).toBe("explanation_available");
+    // More of the learner's own notes are not approved references: no "Explain using approved references" from them alone.
+    expect(all.explainable).toBe(false);
+    expect(all.generation).toBeNull();
     const g = fakeSources({ notes: [passage("c1", "Respiratory assessment is routine.")] });
     const part = await runRecovery({ question: "hypercapnic respiratory failure", mode: "notes_only" }, tierPlan("notes_only", OPEN, true), g.sources, { wider: null });
     expect(part.sufficiency).toMatchObject({ verdict: "partial", canExplain: true });
@@ -179,7 +182,7 @@ describe("the sufficiency decision is deterministic", () => {
     const r = await runRecovery({ question: "oxygen copd", mode: "notes_and_references" }, tierPlan("notes_and_references", OPEN, true), f.sources, { wider: null });
     expect(r.state).toBe("reading_only");
     expect(r.generation).toBeNull();
-    expect(r.actions.map(a => a.action)).toEqual(["continue_with_notes"]);
+    expect(r.actions.map(a => a.action)).toEqual(["find_resources", "continue_with_notes"]); // reading to show, nothing to explain from
     expect(r.reading.map(x => x.kind)).toEqual(["search_link", "guideline"]);
   });
   it("a library case is practice to read, never the source of an explanation", async () => {
@@ -196,9 +199,9 @@ describe("the sufficiency decision is deterministic", () => {
     expect(r.sufficiency.canExplain).toBe(true);
   });
   it("actions: wider first, explain only with evidence, continue always", () => {
-    const yes = { verdict: "partial" as const, keyTerms: ["a"], covered: ["a"], unanswered: [], canExplain: true };
-    expect(suggestedActions(yes, "notes_and_library").map(a => a.action)).toEqual(["find_resources", "explain_with_references", "continue_with_notes"]);
-    expect(suggestedActions({ ...yes, canExplain: false }, null).map(a => a.action)).toEqual(["continue_with_notes"]);
+    expect(suggestedActions(true, "notes_and_references").map(a => a.action)).toEqual(["find_resources", "explain_with_references", "continue_with_notes"]);
+    expect(suggestedActions(false, null).map(a => a.action)).toEqual(["continue_with_notes"]);
+    expect(suggestedActions(false, null, 2).map(a => a.action)).toEqual(["find_resources", "continue_with_notes"]); // reading to show
   });
   it("explanation inputs: only evidence items, notes by chunk id, approved library as references, verified abstracts as research", () => {
     const r = research([item({ abstract: "Controlled oxygen in COPD." })], [0]);

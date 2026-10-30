@@ -24,9 +24,10 @@ import { externalReferences, learnResearch, researchEvidence, scholarResearchOpe
 import { topicsOfSections } from "@/lib/individual/scholar/store";
 import type { LearnSourceMode } from "@/lib/individual/policy";
 import { withheldNext } from "@/lib/individual/scholar/learn-view";
+import { parseRecoveryRequest, recordRecoveryResult, recoveredReply, rederiveRecovery, type Rederived } from "@/lib/individual/scholar/evidence-recovery";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import {
-  AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, STEP_MAX_SECTIONS,
+  AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, STEP_MAX_SECTIONS,
   isLearnAction, type ExplanationDepth, type LearnAction,
 } from "@/lib/individual/scholar/config";
 
@@ -82,6 +83,11 @@ export async function POST(req: Request) {
   // ADDENDUM V2: an inactive mode is never available -- research only while the engine has it operational.
   if (askedMode === "research" && !(await scholarResearchOperational(ctx.admin))) return NextResponse.json({ error: "Research & Explain is not available on Scholar at the moment." }, { status: 403 });
   const mode: LearnSourceMode = RESEARCH_ACTIONS.includes(action as LearnAction) ? askedMode : "notes";
+  // SCHOLAR-SQIE-02, "Explain using approved references": recovery { id, mode, question }. Only those are read -- never
+  // evidence, ids or text -- and the evidence is found again on the server below. A check or clarification never takes one.
+  const recoveryAsked = isCheck ? null : parseRecoveryRequest(body?.recovery, "notes_only", QUESTION_MAX);
+  if (recoveryAsked && !recoveryAsked.ok) return NextResponse.json({ error: recoveryAsked.error }, { status: 400 });
+  const recovery = recoveryAsked?.value ?? null;
 
   // ── what the student typed: bounded and screened, never stored ──
   const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -127,7 +133,7 @@ export async function POST(req: Request) {
   const linked = policy.scholarLearningObjectives === "outcomes" ? await governedReferences(ctx.admin, ctx.userId, passages.map(p => p.chunkId), refSource) : [];
   // COMPETEN-RESEARCH-01: the library modes add the Competen library entries matching the topic (no external call).
   const topics = mode === "notes" ? [] : [...new Set([...(await topicsOfSections(ctx.admin, ctx.userId, passages.map(p => p.chunkId))).values()].flat())];
-  const references = mode === "notes" ? linked : [...linked, ...libraryReferences([action === "ask" ? question : "", stepTitle ?? "", ...topics].join(" "), refSource, linked)];
+  let references = mode === "notes" ? linked : [...linked, ...libraryReferences([action === "ask" ? question : "", stepTitle ?? "", ...topics].join(" "), refSource, linked)];
   const background = policy.scholarBeyondNotes === "labelled" && mode !== "research";
 
   // ── s8: a saved artefact for exactly this request is returned, not regenerated ──
@@ -135,7 +141,8 @@ export async function POST(req: Request) {
   const oneMaterial = new Set(passages.map(p => p.materialId)).size === 1;
   const storable = isArtefactAction(action) && !hasHistory && oneMaterial;
   const promptVersion = mode === "research" ? learnResearchPromptVersion(action as LearnAction) : learnPromptVersion(action as LearnAction);
-  const key = storable ? artefactKey({ action, depth, chunkIds: passages.map(p => p.chunkId), promptVersion, references, background, mode }) : null;
+  // SCHOLAR-SQIE-02: an explanation from recovered evidence is never a saved artefact, and never served from one.
+  const key = storable && !recovery ? artefactKey({ action, depth, chunkIds: passages.map(p => p.chunkId), promptVersion, references, background, mode }) : null;
   const savedReply = (a: ArtefactRow, extra: Record<string, unknown> = {}) => {
     const byId = new Map(passages!.map(p => [p.chunkId, p]));
     const src = a.sources.map(id => byId.get(id)).filter((p): p is Passage => !!p);
@@ -184,6 +191,21 @@ export async function POST(req: Request) {
 
   // AI-FAIR-USE-01: through the Holdings allowance, the learning action as the activity. A refusal becomes
   // Learning Continuity (s7): said plainly, with what is saved for these sections -- and nothing was sent.
+  // SCHOLAR-SQIE-02: the recovery's evidence, re-derived from the learner's rows, the governed library and the engine
+  // (its cache: the search was already made when the recovery was), added to this step's own passages and references.
+  // Nothing to explain from: said, with what remains unanswered, and no AI call. The request's risk is then classified
+  // on everything the model will read, as for every Learn request.
+  let recovered: Rederived | null = null;
+  if (recovery) {
+    recovered = await rederiveRecovery(ctx, policy, recovery, { materialId: passages[0].materialId, sectionId: passages[0].chunkId });
+    if (!recovered.ok && recovered.reason === "unknown") return NextResponse.json({ error: "Those learning resources could not be found. Look for them again." }, { status: 400 });
+    if (!recovered.ok)
+      return NextResponse.json({ action, step, depth, label: AI_LABEL, kinds: SOURCE_KIND_LABEL, sources: [], passageIds: passages.map(p => p.chunkId), references: [], withheld: true, reason: "no_evidence", message: RECOVERY_STILL_WITHHELD, recovered: recoveredReply(recovered, false) });
+    const own = passages;
+    passages = [...own, ...recovered.inputs.passages.filter(p => !own.some(x => x.chunkId === p.chunkId))].slice(0, STEP_MAX_SECTIONS + RETRIEVAL_LIMIT);
+    const have = references;
+    references = [...have, ...recovered.inputs.references.filter(x => !have.some(y => y.competencyId === x.competencyId))];
+  }
   const risk = await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages, purpose: purposeFrom(body) });
   // COMPETEN-RESEARCH-01, research workflow. DISCOVERY IS NOT GENERATION (commissioning GO, 28 Oct):
   //   (1) the REQUEST's clinical risk is classified as for every Learn request (its prompt and passages). With metering
@@ -205,7 +227,7 @@ export async function POST(req: Request) {
     if (gate) { const w = refusalWords(gate); return continuity(w.message, w.insufficient); }
     research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle }, ai.actionId);
   }
-  const evidence = research ? researchEvidence(research) : [];
+  const evidence = [...(research ? researchEvidence(research) : []), ...(recovered?.ok ? recovered.inputs.research : [])];
   const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence }, ai.run);
   const refusal = ai.refusal();
   if (refusal?.error === "clarify_purpose") return meteredRefusal(refusal)!;
@@ -225,6 +247,7 @@ export async function POST(req: Request) {
           return { outcome: accepted ? (rejected ? "partial" as const : "accepted" as const) : "rejected" as const, accepted, rejected, reasons: [...(r.check.ok ? [] : [r.check.reason]), ...researchCodes] };
         })()),
   });
+  if (recovery && recovered?.ok) await recordRecoveryResult(ctx.admin, recovery.id, r.ok && action !== "check" && r.check.ok);
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn", sessionId, {
     action_id: ai.actionId, purpose: purposeFrom(body),
     action, step, chunk_ids: passages.map(p => p.chunkId), depth, references: references.length, learner_context: learnerContext !== null, recorded,
@@ -246,6 +269,7 @@ export async function POST(req: Request) {
   const sources = passages.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) }));
   const base = { action, step, depth, label: AI_LABEL, provenance: { model: r.model, promptVersion: r.promptVersion }, sources, passageIds: passages.map(p => p.chunkId), actionId: ai.actionId,
     references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL,
+    ...(recovered ? { recovered: recoveredReply(recovered, action !== "check" && r.check.ok) } : {}),
     // COMPETEN-RESEARCH-01: external research, apart from the notes, with the providers' own records. Never mixed in.
     research: research ? {
       state: research.state, label: SOURCE_KIND_LABEL.research, query: research.query, scholarLink: research.scholarLink, references: externalReferences(research),

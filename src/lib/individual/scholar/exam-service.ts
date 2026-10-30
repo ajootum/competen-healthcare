@@ -10,6 +10,8 @@ import { loadLearnerCatalogue } from "./competency-view";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "./http";
 import type { ScholarAiActivity } from "./ai-standing";
 import { answerOutcome, recordScholarOutcome } from "./outcome";
+import { recordRecoveryResult, recoveredReply, rederiveRecovery, type RecoveryRequest } from "./evidence-recovery";
+import { RECOVERY_STILL_WITHHELD } from "./config";
 import { NOTES_NOT_PAPER, PAPER_PARSER, isNotesNotPaper, leadInFor, linesFromChunks, parsePaper, questionText, revisionFront, type PaperLine } from "./exam-paper";
 import {
   ANSWER_WITHHELD, buildEvidence, matchLibrary, runAnswer, runFollowUp, runGuide, runTranscription, type Evidence, type LibraryEntry,
@@ -210,9 +212,29 @@ const fromStored = (s: any): Evidence => ({
   url: s.url ?? null, published: s.published ?? null, retrievedAt: s.retrievedAt ?? null, status: s.status ?? null, chunkId: s.chunkId ?? null, materialId: s.materialId ?? null,
 });
 
+/** SCHOLAR-SQIE-02: the question as evidence recovery searches for it, and its paper (never evidence for its own questions). */
+export async function paperQuestionForRecovery(ctx: IndividualContext, questionId: string): Promise<{ text: string; materialId: string } | null> {
+  const q = await getExamQuestion(ctx.admin, ctx.userId, questionId);
+  if (!q || q.flags.some(f => f.kind === "lead_in")) return null;
+  return { text: (await questionWithContext(ctx, q)).slice(0, 600), materialId: q.materialId };
+}
+
+/** Pure. Recovered evidence merged into the answer's own: each passage and library entry once, abstracts as cited sources. */
+export function mergeRecovered(local: { passages: Awaited<ReturnType<typeof toPassages>>; library: LibraryEntry[] }, web: ResearchSource[], rec: { passages: Awaited<ReturnType<typeof toPassages>>; references: { competencyId?: string; code: string | null; title: string; outcome: string | null }[]; abstracts: { title: string; journal: string | null; year: number | null; url: string; abstract: string; retrievedAt: string }[] }) {
+  const passages = [...local.passages, ...rec.passages.filter(p => !local.passages.some(l => l.chunkId === p.chunkId))];
+  const library = [...local.library, ...rec.references.filter(r => r.competencyId && !local.library.some(l => l.id === r.competencyId))
+    .map(r => ({ id: r.competencyId!, code: r.code, title: r.title, outcome: r.outcome, contentStatus: "approved" }))];
+  const sources = [...web, ...rec.abstracts.filter(a => !web.some(w => w.url === a.url)).map(a => ({
+    url: a.url, title: a.title, publisher: a.journal ?? "Published research (abstract only)", published: a.year ? String(a.year) : null, retrievedAt: a.retrievedAt, excerpt: a.abstract.slice(0, 600),
+  }))];
+  return { passages, library, web: sources };
+}
+
 /** A suggested answer, with its evidence, saved for the student. The attempt (when made first) is kept with it. */
 export async function answerQuestion(ctx: IndividualContext, req: Request, input: {
   questionId: string; attempt: { option?: string | null; text?: string | null } | null; sources: ExamEvidenceSource[] | null; depth: ExamResearchDepth | null;
+  /** SCHOLAR-SQIE-02: explain from a recovery. Only its id and mode are taken; the evidence is found again here. */
+  recovery?: RecoveryRequest | null;
 }): Promise<Out> {
   const policy = await loadIndividualPolicy(ctx.admin);
   const p = policy.scholarExams;
@@ -231,13 +253,20 @@ export async function answerQuestion(ctx: IndividualContext, req: Request, input
   // The student may use less than policy allows, never more.
   const sources = (input.sources?.length ? input.sources.filter(s => p.sources.includes(s)) : p.sources) as ExamEvidenceSource[];
   const depth = input.depth && RESEARCH_DEPTH[input.depth] && RESEARCH_DEPTH[input.depth].maxUses <= RESEARCH_DEPTH[p.depth].maxUses ? input.depth : p.depth;
-  const local = await gatherLocalEvidence(ctx, policy, q, text, sources);
+  let local = await gatherLocalEvidence(ctx, policy, q, text, sources);
   const web = sources.includes("web") ? await webEvidence(ctx, req, policy, text, depth) : { sources: [], state: "off" as const, message: null, searches: 0 };
   if ("status" in web) return web;
-  const evidence = buildEvidence(local.passages, local.library, web.sources);
-  const research = { depth, sources, web: { state: web.state, message: web.message, searches: web.searches } };
   // SCHOLAR-SQIE-02: every withhold is typed (withheld.reason) and carries the question and the attempt back.
   const kept = { questionId: q.id, attempt: input.attempt ?? null };
+  // SCHOLAR-SQIE-02, "Explain using approved references": the recovery's evidence, re-derived HERE for the server's own
+  // question text, the paper itself left out. Nothing the browser sent becomes evidence. No evidence: no AI call.
+  let webSources = web.sources;
+  const rec = input.recovery ? await rederiveRecovery(ctx, policy, { ...input.recovery, question: text.slice(0, 600) }, { materialId: q.materialId, excludeMaterialId: q.materialId }) : null;
+  if (rec && !rec.ok && rec.reason === "unknown") return json(400, { error: "Those learning resources could not be found. Look for them again." });
+  if (rec && !rec.ok) return json(200, { withheld: { reason: "no_evidence" }, ...kept, message: RECOVERY_STILL_WITHHELD, recovered: recoveredReply(rec, false) });
+  if (rec?.ok) { const m = mergeRecovered(local, web.sources, rec.inputs); local = { passages: m.passages, library: m.library }; webSources = m.web; }
+  const evidence = buildEvidence(local.passages, local.library, webSources);
+  const research = { depth, sources, web: { state: web.state, message: web.message, searches: web.searches } };
   if (!evidence.length)
     return json(200, { noEvidence: true, withheld: { reason: "no_evidence" }, ...kept, research, message: "No evidence was found for this question in your notes, the Competen library or web research, so no answer was written. Upload notes that cover it, then try again." });
 
@@ -253,15 +282,17 @@ export async function answerQuestion(ctx: IndividualContext, req: Request, input
   // SCHOLAR-SQIE-02: withheld vs answered, counted apart (codes only). The paper answer stays on its own activity.
   const o = answerOutcome(r.check.ok ? null : r.check.reason);
   await recordScholarOutcome(ctx.admin, ai, { operation: "individual_scholar_exam_answer", outputKind: "explanation", outcome: o.outcome, reasons: o.reasons, promptVersion: r.promptVersion });
+  if (rec?.ok && input.recovery) await recordRecoveryResult(ctx.admin, input.recovery.id, r.check.ok);
+  const recovered = rec ? { recovered: recoveredReply(rec, r.check.ok) } : {};
   const shownEvidence = evidence.map(storedEvidence);
-  if (!r.check.ok) return json(200, { withheld: { reason: r.check.reason }, reason: r.check.reason, ...kept, message: ANSWER_WITHHELD[r.check.reason], evidence: shownEvidence, research });
+  if (!r.check.ok) return json(200, { withheld: { reason: r.check.reason }, reason: r.check.reason, ...kept, message: rec ? RECOVERY_STILL_WITHHELD : ANSWER_WITHHELD[r.check.reason], evidence: shownEvidence, research, ...recovered });
 
   const attempt = input.attempt && (input.attempt.option || input.attempt.text) ? { option: input.attempt.option ?? null, text: input.attempt.text?.slice(0, 3000) ?? null } : null;
   const id = await saveExamAnswer(ctx.admin, ctx.userId, {
     materialId: q.materialId, questionId: q.id, kind: "answer", attempt, content: r.check.content, evidence: shownEvidence, research,
     model: r.model, provider: r.provider, promptVersion: r.promptVersion,
   });
-  return json(200, { id, content: r.check.content, evidence: shownEvidence, research, attempt, provenance: { model: r.model, promptVersion: r.promptVersion }, saved: !!id });
+  return json(200, { id, content: r.check.content, evidence: shownEvidence, research, attempt, provenance: { model: r.model, promptVersion: r.promptVersion }, saved: !!id, ...recovered });
 }
 
 /** A follow-up question about a saved answer, on the same evidence. Not stored. */

@@ -35,7 +35,7 @@ import { findLibraryCases } from "@/lib/cases/library";
 import { nonDelivery, recordAiOutcome, sha256Hex, type AiOutcome, type Sufficiency as OutcomeSufficiency } from "@/lib/ai/outcomes";
 import type { IndividualContext } from "../guard";
 import { RECOVERY_MODES, type IndividualPolicy, type RecoveryMode, type RecoveryProvider } from "../policy";
-import { RECOVERY_ACTION_LABEL, RECOVERY_ORIGIN_LABEL, RECOVERY_PROMPT, RECOVERY_RETRIEVED_LABEL, RETRIEVAL_LIMIT } from "./config";
+import { RECOVERY_ACTION_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_ORIGIN_LABEL, RECOVERY_PROMPT, RECOVERY_RETRIEVED_LABEL, RETRIEVAL_LIMIT } from "./config";
 import { rankChunks, searchTerms, spreadAcrossMaterials, toTsQuery } from "./retrieval";
 import { searchCandidates, toPassages } from "./store";
 import { passageCitation, type GovernedReference, type Passage, type ResearchEvidence } from "./generation";
@@ -108,7 +108,9 @@ export type RecoveryResult = {
   state: RecoveryState;
   actions: { action: RecoveryAction; label: string; mode?: RecoveryMode }[];
   external: ExternalStatus;
-  /** What the caller's own AI activity may be given, only when canExplain. */
+  /** Whether Explain using approved references may be offered (evidence, and an approved reference among it). */
+  explainable: boolean;
+  /** What the caller's own AI activity may be given, only when explainable. */
   generation: GenerationInputs | null;
 };
 
@@ -128,13 +130,14 @@ const SEARCH_PROVIDERS: readonly RecoveryProvider[] = ["pubmed", "openalex"];
 export type TierPlan = { notes: true; library: boolean; external: boolean; externalReason: ExternalStatus["reason"]; guidelines: boolean };
 
 /**
- * Pure. Which tiers run, in order. Notes always. The library unless the learner chose notes only. External only when
- * the learner chose references AND HQ offers it AND a search source is enabled for Scholar AND the engine has research
- * operational (and Learn offers Research & Explain, whose per-learner limits it shares).
+ * Pure. Which tiers run, in order. Notes and the approved Competen library always (neither leaves Competen; in notes-only
+ * mode the library is what "approved references" can mean). External only when the learner chose references AND HQ
+ * offers it AND a search source is enabled for Scholar AND the engine has research operational (and Learn offers
+ * Research & Explain, whose per-learner limits it shares). Notes-only never runs an external tier.
  */
 export function tierPlan(mode: RecoveryMode, policy: Pick<IndividualPolicy, "scholarRecovery" | "scholarResearch">, engineOperational: boolean): TierPlan {
   const r = policy.scholarRecovery;
-  const library = mode !== "notes_only";
+  const library = true;
   const chosen = mode === "notes_and_references";
   const reason: ExternalStatus["reason"] = !chosen ? "not_chosen" : r.external !== "offer" ? "off"
     : !r.providers.some(p => SEARCH_PROVIDERS.includes(p)) ? "no_source"
@@ -144,7 +147,7 @@ export function tierPlan(mode: RecoveryMode, policy: Pick<IndividualPolicy, "sch
 
 /** Whether a wider tier than `mode` could run at all, and which mode it is. */
 export function widerMode(mode: RecoveryMode, policy: Pick<IndividualPolicy, "scholarRecovery" | "scholarResearch">, engineOperational: boolean): RecoveryMode | null {
-  if (mode === "notes_only") return "notes_and_library";
+  // Notes only is the learner's choice: recovery never widens it to external sources.
   if (mode === "notes_and_library") return tierPlan("notes_and_references", policy, engineOperational).external ? "notes_and_references" : null;
   return null;
 }
@@ -257,15 +260,28 @@ export function assessSufficiency(question: string, ev: RecoveryResult["evidence
   return { verdict, keyTerms, covered, unanswered, canExplain };
 }
 
-/** Pure. The recovery's state for tracking: an explanation is possible, there is reading only, or nothing. */
-export const recoveryState = (s: SufficiencyVerdict, reading: number, details: number): RecoveryState =>
-  s.canExplain ? "explanation_available" : reading + details > 0 ? "reading_only" : "unanswered";
+/**
+ * Pure. Whether "Explain using approved references" may be offered: there is evidence AND at least one approved
+ * reference among it -- an approved Competen library entry or a verified external abstract. More of the learner's own
+ * notes alone do not make it a references explanation (the notes were already not enough). In notes-only mode that
+ * means approved library evidence, or nothing.
+ */
+export function explainable(s: SufficiencyVerdict, ev: RecoveryResult["evidence"]): boolean {
+  return s.canExplain && (ev.library.some(l => l.kind === "competency" && l.approved && l.matched.length > 0) || ev.external.some(e => e.evidence));
+}
 
-/** Pure. The actions offered, in order. Continue with my notes is always there. */
-export function suggestedActions(s: SufficiencyVerdict, wider: RecoveryMode | null): RecoveryResult["actions"] {
+/** Pure. The recovery's state for tracking: an explanation is possible, there is reading only, or nothing. */
+export const recoveryState = (canExplain: boolean, reading: number, details: number): RecoveryState =>
+  canExplain ? "explanation_available" : reading + details > 0 ? "reading_only" : "unanswered";
+
+/**
+ * Pure. The actions offered, in order. Find learning resources when there is reading to show or a wider search the
+ * learner may choose; Explain only when explainable; Continue with my notes always.
+ */
+export function suggestedActions(canExplain: boolean, wider: RecoveryMode | null, reading = 0): RecoveryResult["actions"] {
   return [
-    ...(wider ? [{ action: "find_resources" as const, label: RECOVERY_ACTION_LABEL.find_resources, mode: wider }] : []),
-    ...(s.canExplain ? [{ action: "explain_with_references" as const, label: RECOVERY_ACTION_LABEL.explain_with_references }] : []),
+    ...(wider || reading > 0 ? [{ action: "find_resources" as const, label: RECOVERY_ACTION_LABEL.find_resources, ...(wider ? { mode: wider } : {}) }] : []),
+    ...(canExplain ? [{ action: "explain_with_references" as const, label: RECOVERY_ACTION_LABEL.explain_with_references }] : []),
     { action: "continue_with_notes" as const, label: RECOVERY_ACTION_LABEL.continue_with_notes },
   ];
 }
@@ -273,11 +289,11 @@ export function suggestedActions(s: SufficiencyVerdict, wider: RecoveryMode | nu
 /**
  * What the caller's OWN approved AI activity may be given to explain from (runLearn's passages, references and research
  * evidence), only the items that are evidence. It is the caller's activity, risk classification and grounding check
- * that then decide; recovery never calls a model and never names a different activity.
+ * that then decide; recovery never calls a model and never names a different activity. Null unless explainable.
  */
 export type GenerationInputs = { chunkIds: string[]; references: GovernedReference[]; research: ResearchEvidence[] };
 export function generationInputs(r: Pick<RecoveryResult, "evidence" | "sufficiency">, research: LearnResearch | null): GenerationInputs | null {
-  if (!r.sufficiency.canExplain) return null;
+  if (!explainable(r.sufficiency, r.evidence)) return null;
   return {
     chunkIds: r.evidence.notes.filter(n => n.matched.length).map(n => n.chunkId),
     references: r.evidence.library.filter(l => l.approved && l.matched.length && l.kind === "competency")
@@ -295,20 +311,26 @@ export type RecoverySources = {
   external: (keywords: readonly string[]) => Promise<LearnResearch>;
   guidelines: () => ReadingLink[];
 };
-export type RecoveryInput = { question: string; mode: RecoveryMode; materialId?: string | null; sectionId?: string | null };
+export type RecoveryInput = {
+  question: string; mode: RecoveryMode; materialId?: string | null; sectionId?: string | null;
+  /** A material the notes search must leave out: an examination paper is never evidence for its own questions. */
+  excludeMaterialId?: string | null;
+};
+type Internal = { research: LearnResearch | null; passages: Passage[] };
 
 /** The sequence, in order: notes, then the library, then (references only, and only if allowed) external sources. */
-export async function runRecovery(input: RecoveryInput, plan: TierPlan, sources: RecoverySources, opts: { wider: RecoveryMode | null; recoveryId?: string }): Promise<RecoveryResult & { research: LearnResearch | null }> {
+export async function runRecovery(input: RecoveryInput, plan: TierPlan, sources: RecoverySources, opts: { wider: RecoveryMode | null; recoveryId?: string }): Promise<RecoveryResult & Internal> {
   const terms = keyTermsOf(input.question);
-  // 1. Notes. The section and material the learner was on come first when they match.
-  const passages = (await sources.notes(input.question).catch(() => null)) ?? [];
+  // 1. Notes. The section and material the learner was on come first when they match. An excluded material never counts.
+  const passages = ((await sources.notes(input.question).catch(() => null)) ?? []).filter(p => !input.excludeMaterialId || p.materialId !== input.excludeMaterialId);
   const first = (p: Passage) => (p.chunkId === input.sectionId ? 0 : p.materialId === input.materialId ? 1 : 2);
-  const notes: NotesEvidence[] = [...passages].sort((a, b) => first(a) - first(b)).map((p, i) => ({
+  const ordered = [...passages].sort((a, b) => first(a) - first(b));
+  const notes: NotesEvidence[] = ordered.map((p, i) => ({
     origin: "notes", tag: `N${i + 1}`, chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p),
     excerpt: p.content.slice(0, 400), matched: matchedTerms(p.content, terms),
   }));
   // 2. The governed library (no external call).
-  const lib = plan.library ? ((await sources.library(input.question, passages).catch(() => null)) ?? []) : [];
+  const lib = plan.library ? ((await sources.library(input.question, ordered).catch(() => null)) ?? []) : [];
   const library: LibraryEvidence[] = lib.map((l, i) => ({ ...l, tag: `L${i + 1}`, matched: matchedTerms(`${l.title} ${l.text}`, terms) }));
   // 3. External, only now and only if every gate allowed it. Only keywords leave.
   let research: LearnResearch | null = null, external: ExternalEvidence[] = [], dropped = 0;
@@ -331,12 +353,13 @@ export async function runRecovery(input: RecoveryInput, plan: TierPlan, sources:
   ];
   const evidence = { notes, library, external };
   const sufficiency = assessSufficiency(input.question, evidence);
+  const canExplain = explainable(sufficiency, evidence);
   // Reading, not evidence: details-only references and library cases (practice, never an explanation's source).
   const details = external.filter(e => !e.evidence).length + library.filter(l => l.kind === "case").length;
   return {
-    recoveryId: opts.recoveryId ?? randomUUID(), mode: input.mode, prompt: RECOVERY_PROMPT, evidence, reading, sufficiency,
-    state: recoveryState(sufficiency, reading.length, details), actions: suggestedActions(sufficiency, opts.wider), external: status,
-    generation: generationInputs({ evidence, sufficiency }, research), research,
+    recoveryId: opts.recoveryId ?? randomUUID(), mode: input.mode, prompt: RECOVERY_PROMPT, evidence, reading, sufficiency, explainable: canExplain,
+    state: recoveryState(canExplain, reading.length, details), actions: suggestedActions(canExplain, opts.wider, reading.length), external: status,
+    generation: generationInputs({ evidence, sufficiency }, research), research, passages: ordered,
   };
 }
 
@@ -348,7 +371,7 @@ export function liveSources(ctx: IndividualContext, policy: IndividualPolicy, re
       if (!tsq) return [];
       const found = await searchCandidates(ctx.admin, ctx.userId, tsq, null);
       if (!found.ok) return null;
-      return toPassages(ctx.admin, ctx.userId, spreadAcrossMaterials(rankChunks(question, found.data, 40), RETRIEVAL_LIMIT));
+      return toPassages(ctx.admin, ctx.userId, spreadAcrossMaterials(rankChunks(question, found.data, 40), RETRIEVAL_LIMIT + 2));
     },
     async library(question, notes) {
       const learner = await loadLearnerCatalogue(ctx.admin, ctx.userId);
@@ -368,15 +391,109 @@ export function liveSources(ctx: IndividualContext, policy: IndividualPolicy, re
   };
 }
 
+const publicResult = (r: RecoveryResult & Internal): RecoveryResult => {
+  const { research: _r, passages: _p, ...out } = r;
+  void _r; void _p;
+  return out;
+};
+
 /** One recovery for one learner, recorded (codes only). */
 export async function recoverEvidence(ctx: IndividualContext, policy: IndividualPolicy, input: RecoveryInput & { withheldReason?: string | null }): Promise<RecoveryResult> {
   const recoveryId = randomUUID();
   const operational = await scholarResearchOperational(ctx.admin).catch(() => false);
   const plan = tierPlan(input.mode, policy, operational);
-  const { research: _research, ...r } = await runRecovery(input, plan, liveSources(ctx, policy, recoveryId), { wider: widerMode(input.mode, policy, operational), recoveryId });
-  void _research;
+  const r = publicResult(await runRecovery(input, plan, liveSources(ctx, policy, recoveryId), { wider: widerMode(input.mode, policy, operational), recoveryId }));
   await recordRecovery(ctx.admin, r, input.withheldReason ?? null);
   return r;
+}
+
+// ── "EXPLAIN USING APPROVED REFERENCES": THE INPUTS, RE-DERIVED ON THE SERVER ─────────────────────────────────────────
+//
+// A generation route that is asked to explain from a recovery receives ONLY { id, mode, question } from the browser.
+// It never takes evidence text, chunk ids or references from the request: the id must name a recovery this server
+// recorded, and the evidence is found again here, by the same coordinator, from the learner's own rows, the governed
+// library and the engine (whose cache makes an external repeat free). What the route then sends its own model is what
+// this returns -- and its own grounding check runs over it, unchanged.
+
+export type RecoveryRequest = { id: string; mode: RecoveryMode; question: string };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Pure. The optional `recovery` body field of a generation route. null: absent. Otherwise the request, or why it is
+ * refused. Anything else in it (evidence, ids, text) is ignored, never read.
+ */
+export function parseRecoveryRequest(raw: unknown, fallback: RecoveryMode, maxQuestion: number): { ok: true; value: RecoveryRequest } | { ok: false; error: string } | null {
+  if (raw === undefined || raw === null) return null;
+  const x = raw as { id?: unknown; mode?: unknown; question?: unknown };
+  if (typeof raw !== "object" || typeof x.id !== "string" || !UUID.test(x.id)) return { ok: false, error: "That set of learning resources could not be found. Look for them again." };
+  const question = typeof x.question === "string" ? x.question.replace(/\s+/g, " ").trim() : "";
+  if (question.length < 2 || question.length > maxQuestion) return { ok: false, error: `Name the topic in up to ${maxQuestion} characters.` };
+  if (findPatientIdentifiers(question).length) return { ok: false, error: "That looks like it identifies a patient. Remove it and try again." };
+  return { ok: true, value: { id: x.id.toLowerCase(), mode: parseRecoveryMode(x.mode, "notes_only"), question } };
+}
+
+/** Whether this server recorded the recovery (its plat_ai_outcomes row). Unreadable or absent: false -- fail closed. */
+export async function recoveryKnown(admin: any, id: string): Promise<boolean> {
+  if (!UUID.test(id)) return false;
+  try {
+    const { data, error } = await admin.from("plat_ai_outcomes").select("action_id").eq("action_id", id).eq("activity", "evidence_recovery").limit(1);
+    return !error && Array.isArray(data) && data.length > 0;
+  } catch { return false; }
+}
+
+/** A verified external abstract, as a generation route may cite it: the provider's own record, nothing written by AI. */
+export type RecoveredAbstract = { title: string; journal: string | null; year: number | null; url: string; abstract: string; retrievedAt: string };
+export type RecoveredInputs = {
+  result: RecoveryResult;
+  /** The learner's own passages that are evidence (full text, read again from their rows). */
+  passages: Passage[];
+  references: GovernedReference[];
+  research: ResearchEvidence[];
+  abstracts: RecoveredAbstract[];
+};
+export type Rederived = { ok: true; inputs: RecoveredInputs } | { ok: false; reason: "unknown" | "no_evidence"; result: RecoveryResult | null };
+
+/** Pure. The inputs from a coordinator run: only what generationInputs allowed, with the passages and abstracts it names. */
+export function inputsOf(r: RecoveryResult & Internal): Rederived {
+  const g = r.generation;
+  if (!g) return { ok: false, reason: "no_evidence", result: publicResult(r) };
+  const passages = r.passages.filter(p => g.chunkIds.includes(p.chunkId));
+  const abstracts = (r.research?.evidence ?? []).map(i => r.research!.items[i]).filter(i => !!i?.abstract)
+    .map(i => ({ title: i.title, journal: i.journal, year: i.year, url: i.url, abstract: i.abstract!, retrievedAt: i.retrievedAt }));
+  return { ok: true, inputs: { result: publicResult(r), passages, references: g.references, research: g.research, abstracts } };
+}
+
+/**
+ * The generation inputs for a recovery, found again on the server. Refused when the id names no recovery this server
+ * recorded; no_evidence when there is nothing approved to explain from (the route then makes no AI call).
+ */
+export async function rederiveRecovery(ctx: IndividualContext, policy: IndividualPolicy, req: RecoveryRequest, scope: Pick<RecoveryInput, "materialId" | "sectionId" | "excludeMaterialId"> = {}, deps: { known?: typeof recoveryKnown; sources?: RecoverySources; operational?: boolean } = {}): Promise<Rederived> {
+  if (!(await (deps.known ?? recoveryKnown)(ctx.admin, req.id))) return { ok: false, reason: "unknown", result: null };
+  const operational = deps.operational ?? await scholarResearchOperational(ctx.admin).catch(() => false);
+  const plan = tierPlan(req.mode, policy, operational);
+  const r = await runRecovery({ question: req.question, mode: req.mode, ...scope }, plan, deps.sources ?? liveSources(ctx, policy, req.id), { wider: widerMode(req.mode, policy, operational), recoveryId: req.id });
+  return inputsOf(r);
+}
+
+/**
+ * Pure. For an activity that reads ONE passage (the short-answer evaluation): the question's own passage, then the
+ * recovered passages of the learner's notes and the approved library entries, each under its own heading. Every word
+ * is the learner's own notes or approved library text, read on the server; external abstracts are never added here.
+ */
+export function recoveryPassage(own: Passage, inputs: Pick<RecoveredInputs, "passages" | "references">): Passage {
+  const more = inputs.passages.filter(p => p.chunkId !== own.chunkId).map(p => `MORE FROM MY NOTES (${passageCitation(p)}):\n${p.content}`);
+  const library = inputs.references.map(r => `APPROVED COMPETEN LIBRARY: ${[r.code, r.title].filter(Boolean).join(" ")}${r.outcome ? `: ${r.outcome}` : ""}`);
+  return { ...own, content: [own.content, ...more, ...library].join("\n\n") };
+}
+
+/** What a generation route says back about a recovery: shown or not, under which label, and what remains. */
+export function recoveredReply(d: Rederived, shown: boolean) {
+  const result = d.ok ? d.inputs.result : d.result;
+  return {
+    shown, label: RECOVERY_EXPLANATION_LABEL,
+    unanswered: result?.sufficiency.unanswered ?? [], reading: result?.reading ?? [],
+    evidence: result ? { notes: result.evidence.notes.length, library: result.evidence.library.length, external: result.evidence.external.length } : { notes: 0, library: 0, external: 0 },
+  };
 }
 
 // ── TRACKING ──────────────────────────────────────────────────────────────────────────────────────────────────────
