@@ -90,7 +90,12 @@ type RiskTierCode = "standard_educational" | "clinical_educational" | "high_risk
 const RISK: { code: RiskTierCode; label: string }[] = [
   { code: "standard_educational", label: "Standard educational" }, { code: "clinical_educational", label: "Clinical educational" }, { code: "high_risk_clinical", label: "High-risk clinical" },
 ];
-type RuleRow = { id: string; label: string; tier: RiskTierCode; all: string[][]; competencyRisk: string[]; frameworks: string[] };
+// SQIE D-1: which text a rule's terms are matched in (clinical-risk.ts RiskRuleScope). The whole subject is the default.
+type RuleScope = "subject" | "request";
+const SCOPES: { code: RuleScope; label: string }[] = [
+  { code: "subject", label: "Matches the request and the study material" }, { code: "request", label: "Matches the learner's request only" },
+];
+type RuleRow = { id: string; label: string; tier: RiskTierCode; scope?: RuleScope; all: string[][]; competencyRisk: string[]; frameworks: string[] };
 type RiskForm = { minTier: Record<RiskTierCode, string>; rules: RuleRow[] };
 type PolicyForm = {
   includedCau: number; reserveCau: number; windowMinutes: number | null; windowCapCau: number | null;
@@ -232,7 +237,9 @@ const RULE = /^[a-z][a-z0-9_.-]{1,60}$/;
 /**
  * Clinical risk rules (owner D1), no code. A request is classified from its subject: the highest tier any rule gives
  * wins, and a subject no rule recognises is high-risk clinical. Each line of "Matches when" is one group of terms;
- * every line must have a term present. A term ending in * matches any word starting with it.
+ * every line must have a term present. A term ending in * matches any word starting with it. A rule about the
+ * learner's USE (a real patient now) reads the learner's request only, so study material that mentions a patient does
+ * not trip it. A new rule reads everything (the stricter choice).
  */
 function RiskEditor({ risk, onChange }: { risk: RiskForm; onChange: (r: RiskForm) => void }) {
   const [newId, setNewId] = useState("");
@@ -264,6 +271,10 @@ function RiskEditor({ risk, onChange }: { risk: RiskForm; onChange: (r: RiskForm
                 {RISK.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}</select></label>
               <button type="button" className={ghost} onClick={() => onChange({ ...risk, rules: risk.rules.filter((_, j) => j !== i) })}>Remove rule</button>
             </div>
+            <label className="mt-1 block text-[12.5px] text-gray-700">Terms are read in
+              <select aria-label={`${r.id} terms read in`} value={r.scope ?? "subject"} onChange={e => setRule(i, { ...r, scope: e.target.value as RuleScope })} className={`${input} ml-1`}>
+                {SCOPES.map(x => <option key={x.code} value={x.code}>{x.label}</option>)}</select>
+            </label>
             <label className="mt-1 block text-[12.5px] text-gray-700">Matches when (one group of comma-separated terms per line; every line must match)
               <Draft multiline value={r.all.map(g => g.join(", ")).join("\n")} onCommit={v => setRule(i, { ...r, all: v.split("\n").map(splitList).filter(g => g.length) })} className="mt-0.5 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-[13px]" />
             </label>
@@ -278,7 +289,7 @@ function RiskEditor({ risk, onChange }: { risk: RiskForm; onChange: (r: RiskForm
         <label className="text-[12.5px] text-gray-700">New rule id<input value={newId} maxLength={61} onChange={e => setNewId(e.target.value.trim())} className={`${input} ml-1 w-48 font-mono`} /></label>
         <button type="button" className={ghost} disabled={!RULE.test(newId) || risk.rules.some(r => r.id === newId)} onClick={() => {
           // A new rule starts at high risk: it is lowered deliberately, never by default.
-          onChange({ ...risk, rules: [...risk.rules, { id: newId, label: newId, tier: "high_risk_clinical", all: [], competencyRisk: [], frameworks: [] }] });
+          onChange({ ...risk, rules: [...risk.rules, { id: newId, label: newId, tier: "high_risk_clinical", scope: "subject", all: [], competencyRisk: [], frameworks: [] }] });
           setNewId("");
         }}>Add rule</button>
       </div>

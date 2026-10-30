@@ -43,11 +43,22 @@ export const STUDY_REQUEST_RULE = {
 /** The rules that must stay high risk in Scholar (checked, not assumed, by the test and by the emitter). */
 export const SCHOLAR_HIGH_KEPT = ["high.real-patient", "high.administration-now", "high.urgent-direction", "high.personal-safety", "high.identifiable"];
 
+/**
+ * SQIE D-1 (30 Oct 2026): the high-risk rules that describe the learner's USE -- a real patient now, giving now, what to
+ * do now, their own safety -- read the learner's REQUEST only (clinical-risk.ts scope "request"). A lecture note that
+ * says "escalate urgently if the patient is unwell" is study material, not an urgent request about a patient. They stay
+ * high risk. Identifiable patient information is NOT here: it is caught in the notes as well as in the request.
+ */
+export const SCHOLAR_REQUEST_SCOPED = ["high.real-patient", "high.administration-now", "high.urgent-direction", "high.personal-safety"];
+
 /** Pure: the published Scholar risk section with the topic rules made educational and the two rules added. */
 export function withScholarEducational(risk: any): any {
   const rules: any[] = Array.isArray(risk?.rules) ? risk.rules : [];
-  const next = rules.map(r => (r && STUDY_TOPIC_RULES[r.id] ? { ...r, tier: "clinical_educational", label: STUDY_TOPIC_RULES[r.id] } : r));
+  const next = rules.map(r => (r && STUDY_TOPIC_RULES[r.id] ? { ...r, tier: "clinical_educational", label: STUDY_TOPIC_RULES[r.id] }
+    : r && SCHOLAR_REQUEST_SCOPED.includes(r.id) ? { ...r, scope: "request" } : r));
   for (const add of [STUDY_REQUEST_RULE, IDENTIFIABLE_RULE]) if (!next.some(r => r?.id === add.id)) next.push(structuredClone(add));
+  // Identifiable details are caught wherever they are, the notes included: never request-scoped.
+  for (const r of next) if (r?.id === IDENTIFIABLE_RULE.id && r.scope === "request") throw new Error("Refusing: high.identifiable must read the study material too (scope subject).");
   const missing = SCHOLAR_HIGH_KEPT.filter(id => !next.some(r => r?.id === id && r.tier === "high_risk_clinical"));
   if (missing.length) throw new Error(`Refusing: the Scholar policy lacks the high-risk rules ${missing.join(", ")}. Apply the 29 Oct production rules first.`);
   return { ...risk, rules: next };

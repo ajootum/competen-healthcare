@@ -37,7 +37,7 @@ import type { IndividualContext } from "../guard";
 import { RECOVERY_MODES, type IndividualPolicy, type RecoveryMode, type RecoveryProvider } from "../policy";
 import { RECOVERY_ACTION_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_ORIGIN_LABEL, RECOVERY_PROMPT, RECOVERY_RETRIEVED_LABEL, RETRIEVAL_LIMIT } from "./config";
 import { rankChunks, searchTerms, spreadAcrossMaterials, toTsQuery } from "./retrieval";
-import { searchCandidates, toPassages } from "./store";
+import { listExamPapers, searchCandidates, toPassages } from "./store";
 import { passageCitation, type GovernedReference, type Passage, type ResearchEvidence } from "./generation";
 import { governedReferences, libraryReferences, referenceSource } from "./learn";
 import { loadLearnerCatalogue } from "./competency-view";
@@ -197,15 +197,39 @@ export function topicKeywords(question: string, max = 8): { ok: true; keywords: 
       kept.push(bare);
     });
   }
-  const words = searchTerms(kept.join(" ")).filter(w => !/^\d/.test(w) && !TIME_WORDS.test(w) && !MONTH.test(w)).slice(0, max);
+  // SQIE D-3: question labels and command words are not topics either (questionTopicText).
+  const words = searchTerms(questionTopicText(kept.join(" "))).filter(w => !/^\d/.test(w) && !TIME_WORDS.test(w) && !MONTH.test(w)).slice(0, max);
   if (!words.length) return { ok: false, reason: "empty" };
   return { ok: true, keywords: words };
 }
 
 // ── PURE: MATCHING, LABELS AND SUFFICIENCY ────────────────────────────────────────────────────────────────────────
 
-/** The question's key terms, as retrieval reads them. */
-export const keyTermsOf = (question: string) => searchTerms(question);
+// SQIE D-3 (staging 30 Oct): a paper question "Question 1: antibiotic choice in pyelonephritis" gave the key terms
+// question, 1, antibiotic, choice, pyelonephritis -- its numbering searched for, and matched, like a topic.
+/** Question labels and numbering: never a topic, wherever they stand ("Question 1", "(2 marks)", "Part b", "(iii)"). */
+const QUESTION_LABEL = /^(questions?|q\d*[a-z]?|parts?|marks?|answers?|i{1,3}|iv|vi{0,3}|ix|xi{0,2}|\d+[a-z]?)$/i;
+/** Generic command words: never a topic. */
+const COMMAND_WORD = /^(explain|describe|list|outline|discuss|why|how|what|define|identify|briefly)$/i;
+/** Command words that are also clinical words ("mental state"): dropped only where they open a clause ("State two ..."). */
+const LEADING_COMMAND = /^(state|name|give)$/i;
+
+/** Pure. A question without its labels, numbering and command words: the words that say what it is about. */
+export function questionTopicText(question: string): string {
+  return question.split(/(?<=[.!?;:\n()])|(?=[(])/).map(clause => {
+    let lead = true;
+    return clause.split(/(\s+)/).filter(tok => {
+      const w = tok.replace(/^[^\p{L}\d]+|[^\p{L}\d]+$/gu, "");
+      if (!w) return true;
+      const drop = QUESTION_LABEL.test(w) || COMMAND_WORD.test(w) || (lead && LEADING_COMMAND.test(w));
+      if (!drop) lead = false;
+      return !drop;
+    }).join("");
+  }).join(" ");
+}
+
+/** The question's key terms, as retrieval reads them, without labels, numbering or command words (SQIE D-3). */
+export const keyTermsOf = (question: string) => searchTerms(questionTopicText(question));
 const stem = (t: string) => (t.length > 5 ? t.slice(0, 5) : t);
 /** Pure. The key terms a text contains (by prefix, as retrieval ranks). */
 export function matchedTerms(text: string, terms: readonly string[]): string[] {
@@ -253,12 +277,19 @@ export function assessSufficiency(question: string, ev: RecoveryResult["evidence
   const items = [
     ...ev.notes.filter(n => n.matched.length), ...ev.library.filter(l => l.kind === "competency" && l.approved && l.matched.length), ...ev.external.filter(e => e.evidence),
   ];
-  const covered = keyTerms.filter(t => items.some(i => i.matched.includes(t)));
+  // SQIE D-4: ONE derivation. An explanation needs evidence AND an approved reference among it (more of the learner's
+  // own notes alone were already not enough). Without one, nothing is covered: the verdict is insufficient, every key
+  // term remains unanswered, and the state can never read "sufficient" beside "unanswered".
+  const canExplain = items.length > 0 && keyTerms.length > 0 && hasApprovedReference(ev);
+  const covered = canExplain ? keyTerms.filter(t => items.some(i => i.matched.includes(t))) : [];
   const unanswered = keyTerms.filter(t => !covered.includes(t));
-  const canExplain = items.length > 0 && keyTerms.length > 0;
   const verdict = !canExplain ? "insufficient" : covered.length / keyTerms.length >= 0.6 ? "sufficient" : "partial";
   return { verdict, keyTerms, covered, unanswered, canExplain };
 }
+
+/** Pure. An approved reference among the evidence: an approved Competen library entry or a verified external abstract. */
+const hasApprovedReference = (ev: RecoveryResult["evidence"]) =>
+  ev.library.some(l => l.kind === "competency" && l.approved && l.matched.length > 0) || ev.external.some(e => e.evidence);
 
 /**
  * Pure. Whether "Explain using approved references" may be offered: there is evidence AND at least one approved
@@ -267,7 +298,7 @@ export function assessSufficiency(question: string, ev: RecoveryResult["evidence
  * means approved library evidence, or nothing.
  */
 export function explainable(s: SufficiencyVerdict, ev: RecoveryResult["evidence"]): boolean {
-  return s.canExplain && (ev.library.some(l => l.kind === "competency" && l.approved && l.matched.length > 0) || ev.external.some(e => e.evidence));
+  return s.canExplain && hasApprovedReference(ev);
 }
 
 /** Pure. The recovery's state for tracking: an explanation is possible, there is reading only, or nothing. */
@@ -304,6 +335,31 @@ export function generationInputs(r: Pick<RecoveryResult, "evidence" | "sufficien
 
 // ── THE COORDINATOR ───────────────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Pure. SQIE D-4: a passage with the question's own wording (four words or more: a question, not a topic name) taken
+ * out. Shorter wording is left: a topic such as "respiratory failure" is what real notes say.
+ */
+const QUESTION_WORDING_MIN = 4;
+const wordsOf = (s: string) => s.toLowerCase().normalize("NFKD").split(/[^a-z0-9]+/).filter(Boolean);
+export function withoutQuestion(content: string, question: string): string {
+  const q = wordsOf(questionTopicText(question));
+  const c = wordsOf(content);
+  if (q.length < QUESTION_WORDING_MIN) return c.join(" ");
+  const out: string[] = [];
+  for (let i = 0; i < c.length;) {
+    if (q.every((w, k) => c[i + k] === w)) { i += q.length; continue; }
+    out.push(c[i++]);
+  }
+  return out.join(" ");
+}
+
+/**
+ * Pure. SQIE D-4: whether a passage merely restates the question -- the learner's own examination paper, or a heading
+ * -- so that apart from the question's own wording it contains none of the key terms. Such a passage is not evidence.
+ */
+export const restatesOnly = (content: string, question: string, terms: readonly string[]): boolean =>
+  terms.length > 0 && matchedTerms(withoutQuestion(content, question), terms).length === 0;
+
 /** The three readers, injected so the order and the gating can be proven without a database or a network. */
 export type RecoverySources = {
   notes: (question: string) => Promise<Passage[] | null>;
@@ -327,7 +383,7 @@ export async function runRecovery(input: RecoveryInput, plan: TierPlan, sources:
   const ordered = [...passages].sort((a, b) => first(a) - first(b));
   const notes: NotesEvidence[] = ordered.map((p, i) => ({
     origin: "notes", tag: `N${i + 1}`, chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p),
-    excerpt: p.content.slice(0, 400), matched: matchedTerms(p.content, terms),
+    excerpt: p.content.slice(0, 400), matched: restatesOnly(p.content, input.question, terms) ? [] : matchedTerms(p.content, terms),
   }));
   // 2. The governed library (no external call).
   const lib = plan.library ? ((await sources.library(input.question, ordered).catch(() => null)) ?? []) : [];
@@ -369,9 +425,14 @@ export function liveSources(ctx: IndividualContext, policy: IndividualPolicy, re
     async notes(question) {
       const tsq = toTsQuery(question);
       if (!tsq) return [];
-      const found = await searchCandidates(ctx.admin, ctx.userId, tsq, null);
-      if (!found.ok) return null;
-      return toPassages(ctx.admin, ctx.userId, spreadAcrossMaterials(rankChunks(question, found.data, 40), RETRIEVAL_LIMIT + 2));
+      const [found, papers] = await Promise.all([searchCandidates(ctx.admin, ctx.userId, tsq, null), listExamPapers(ctx.admin, ctx.userId)]);
+      // SQIE D-4: a prepared examination paper is the learner's questions, never notes that answer them. Unreadable
+      // papers: no notes evidence at all (fail closed: less evidence, never a paper counted as notes). Where papers are
+      // not provisioned there are none.
+      if (!found.ok || (!papers.ok && !papers.notProvisioned)) return null;
+      const exam = new Set(papers.ok ? papers.data.map(p => p.materialId) : []);
+      const chunks = found.data.filter(c => !exam.has(c.materialId));
+      return toPassages(ctx.admin, ctx.userId, spreadAcrossMaterials(rankChunks(question, chunks, 40), RETRIEVAL_LIMIT + 2));
     },
     async library(question, notes) {
       const learner = await loadLearnerCatalogue(ctx.admin, ctx.userId);

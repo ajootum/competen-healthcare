@@ -68,7 +68,9 @@ export async function runIndividualAssistant(admin: any, r: {
     // A CPD plan has no question: its subject is the task itself.
     risk: (mode, scopes) => {
       const study = studyFor(scopes);
-      return { text: [mode === "cpd_plan" ? "CPD plan" : "", r.question ?? "", r.activity?.title ?? "", r.activity?.notes ?? "", study?.text ?? ""].join("\n"), topicTerms: study?.topicTerms, competencyIds: study?.competencyIds,
+      // SQIE D-1: the person's own words (question, activity) apart from the study material, for request-scoped rules.
+      const request = [mode === "cpd_plan" ? "CPD plan" : "", r.question ?? "", r.activity?.title ?? "", r.activity?.notes ?? ""].join("\n");
+      return { text: [request, study?.text ?? ""].join("\n"), requestText: request, topicTerms: study?.topicTerms, competencyIds: study?.competencyIds,
         actorId: r.userId, purpose: r.purpose ?? null };
     },
     compose: async (mode, scopes) => {
