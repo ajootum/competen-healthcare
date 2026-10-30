@@ -276,11 +276,29 @@ const EXCLUDED: Exclusion[] = [
   },
 ];
 
+/**
+ * Staging-only harnesses named here with their reason. They are outside the no-credential subset by their tier (the
+ * classifier reads them as privileged-live), which is why they cannot sit in EXCLUDED: the coverage control below
+ * holds EXCLUDED to pure/local files. The control checks each one STILL classifies outside pure/local -- one that ever
+ * reads as pure/local must be screened into INCLUDED or EXCLUDED instead.
+ */
+const STAGING_ONLY: Exclusion[] = [
+  {
+    file: "scholar-sqie-acceptance-harness.ts",
+    reason:
+      "SCHOLAR-SQIE-02 s15 end-to-end acceptance. Needs a RUNNING dev server pointed at the staging project "
+      + "(BASE_URL=http://localhost:3100), the staging service-role key, real AI and real PubMed / OpenAlex / Crossref; "
+      + "it creates fixture identities and changes staging settings, restoring both in Z. Refuses any other project.",
+  },
+];
+
 // ── Run ──────────────────────────────────────────────────────────────────────────────────────────
 console.log("\n=== CI acceptance harnesses (no-credential subset) ===\n");
 
 console.log(`Excluded from CI (${EXCLUDED.length}) — printed every run so the list cannot rot unseen:`);
 for (const e of EXCLUDED) console.log(`  - ${e.file}\n      ${e.reason}`);
+console.log(`Staging-only, outside the subset by tier (${STAGING_ONLY.length}):`);
+for (const e of STAGING_ONLY) console.log(`  - ${e.file}\n      ${e.reason}`);
 console.log("");
 
 const failures: string[] = [];
@@ -324,7 +342,14 @@ try {
     console.log(`\n⚠ ${stale.length} listed harness(es) no longer classify as pure/local: ${stale.join(", ")}`);
     console.log("  A harness that gained a database dependency must leave this file.");
   }
-  if (!unaccounted.length && !stale.length) {
+  const tiers = new Map(classified.map(r => [r.file, r.tier]));
+  const misfiled = STAGING_ONLY.map(e => e.file).filter(f => !tiers.has(f) || tiers.get(f) === "pure/local");
+  if (misfiled.length) {
+    coverageBroken = true;
+    console.log(`\n⚠ ${misfiled.length} staging-only harness(es) are missing or now classify as pure/local: ${misfiled.join(", ")}`);
+    console.log("  Remove a deleted one; screen a pure/local one into INCLUDED or EXCLUDED.");
+  }
+  if (!unaccounted.length && !stale.length && !misfiled.length) {
     console.log(`\nCoverage control: all ${pure.size} pure/local harnesses are accounted for.`);
   }
 } catch (err) {

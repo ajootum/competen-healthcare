@@ -12,14 +12,17 @@ import type { ScholarAiActivity } from "./ai-standing";
 import { answerOutcome, recordScholarOutcome } from "./outcome";
 import { recordRecoveryResult, recoveredReply, rederiveRecovery, type RecoveryRequest } from "./evidence-recovery";
 import { RECOVERY_STILL_WITHHELD } from "./config";
-import { NOTES_NOT_PAPER, PAPER_PARSER, isNotesNotPaper, leadInFor, linesFromChunks, parsePaper, questionText, revisionFront, type PaperLine } from "./exam-paper";
+import {
+  NOTES_NOT_PAPER, PAPER_PARSER, isCurrentParser, isNotesNotPaper, judgeLegacyPaper, leadInFor, linesFromChunks, parsePaper, questionText, revisionFront,
+  type LegacyJudgement, type PaperLine,
+} from "./exam-paper";
 import {
   ANSWER_WITHHELD, buildEvidence, matchLibrary, runAnswer, runFollowUp, runGuide, runTranscription, type Evidence, type LibraryEntry,
 } from "./exam-answer";
 import { RESEARCH_DEPTH, RESEARCH_PROMPT_VERSION, researchKey, researchRequest, runResearch, webResearchState, type ResearchSource } from "./exam-research";
 import {
   EXAM_RESEARCH_ENTITY, createExamPaper, getExamAnswer, getExamPaper, getExamQuestion, linkRevision, listExamAnswers, listExamQuestions,
-  readResearchCache, saveExamAnswer, webResearchToday, writeResearchCache, type ExamQuestionRow,
+  readResearchCache, saveExamAnswer, webResearchToday, writeResearchCache, type ExamPaperRow, type ExamQuestionRow,
 } from "./exam-store";
 
 // ── STUDYING AN EXAMINATION PAPER: THE ORCHESTRATION ── COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570) ───────────────
@@ -138,6 +141,25 @@ export async function preparePaper(ctx: IndividualContext, req: Request, materia
     questions: parsed.questions.length, flags: parsed.flags.map(f => f.kind), transcribed_pages: transcribed.length, attestation: EXAM_ATTESTATION.version,
   });
   return json(201, { materialId, questions: parsed.questions.length, flags: parsed.flags });
+}
+
+/**
+ * SCHOLAR-SQIE-CLOSE-01 P0. An opened paper that an earlier parser kept is judged again with today's rules
+ * (judgeLegacyPaper). Read-only: the paper, question and answer rows are never written. When any of its questions are
+ * statements, a codes-only audit records the redirect. Null: the paper was read by the current parser (shown as is).
+ */
+export async function judgeOpenedPaper(ctx: IndividualContext, paper: Pick<ExamPaperRow, "materialId" | "extractor" | "instructions">, questions: readonly ExamQuestionRow[]): Promise<LegacyJudgement | null> {
+  if (isCurrentParser(paper.extractor)) return null;
+  const chunks = await listChunks(ctx.admin, ctx.userId, paper.materialId);
+  const reparsed = chunks.ok && chunks.data.length ? parsePaper(linesFromChunks(chunks.data.map(c => ({ id: c.id, content: c.content, pageFrom: c.pageFrom })))) : null;
+  const j = judgeLegacyPaper(paper, questions, reparsed);
+  if (j.statements > 0) {
+    await audit(ctx, "individual_scholar_exam_paper_legacy_redirected", "individual_scholar_exam_paper", paper.materialId, {
+      outcome: j.notesLike ? "notes_like" : "statements_hidden", statements: j.statements, questions: j.questions,
+      parser: paper.extractor.slice(0, 60), judged_with: PAPER_PARSER, basis: j.basis,
+    });
+  }
+  return j;
 }
 
 /** The question as the model reads it: its lead-in (when it has one), number, instructions, stem and options. */

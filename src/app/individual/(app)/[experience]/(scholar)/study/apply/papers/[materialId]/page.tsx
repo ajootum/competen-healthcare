@@ -8,9 +8,9 @@ import StudyNav from "../../../_components/StudyNav";
 import { countDue, getMaterial } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { FORMATIVE_NOTICE } from "@/lib/individual/scholar/spaces";
-import { QUESTION_FLAG_TEXT, paperFlagText } from "@/lib/individual/scholar/exam-paper";
+import { NOTES_VERDICT, QUESTION_FLAG_TEXT, paperFlagText } from "@/lib/individual/scholar/exam-paper";
 import { RESEARCH_DEPTH, webResearchState } from "@/lib/individual/scholar/exam-research";
-import { LIVE_EXAM_NOTICE } from "@/lib/individual/scholar/exam-service";
+import { LIVE_EXAM_NOTICE, judgeOpenedPaper } from "@/lib/individual/scholar/exam-service";
 import { getExamPaper, listExamAnswers, listExamQuestions } from "@/lib/individual/scholar/exam-store";
 import { PaperActions, PaperStudy, type AnswerContentView, type EvidenceView, type PaperQuestionView, type SavedAnswerView } from "../../../_components/paper-client";
 
@@ -68,6 +68,33 @@ export default async function PaperPage({ params }: { params: Promise<{ experien
     };
   }
   const depths = (Object.keys(RESEARCH_DEPTH) as ("quick" | "standard" | "deep")[]).filter(d => RESEARCH_DEPTH[d].maxUses <= RESEARCH_DEPTH[p.depth].maxUses);
+  // SCHOLAR-SQIE-CLOSE-01 P0: a paper an earlier parser kept is judged again with today's rules, in this response only
+  // (nothing is written to the paper, its questions or its answers). Statements are never offered as questions.
+  const legacy = questions.ok ? await judgeOpenedPaper(ctx, paper.data, questions.data) : null;
+  const statementIds = new Set(legacy?.statementIds ?? []);
+  const asked = views.filter(v => !statementIds.has(v.id));
+  const statementViews = views.filter(v => statementIds.has(v.id));
+  const practise = experienceHref("scholar", `study/revise?material=${materialId}`);
+
+  if (legacy?.notesLike) {
+    return (
+      <>
+        {header(material.data.title)}
+        <section aria-labelledby="legacy-notes-h" className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 p-5">
+          <h2 id="legacy-notes-h" className="text-[16px] font-bold text-amber-950">Notes, not an examination paper</h2>
+          <p className="mt-2 text-[14px] leading-relaxed text-amber-950">{NOTES_VERDICT}</p>
+          <Link href={practise} className={`${primaryBtn} mt-3`} style={{ background: x.accent }}>Practise questions from this material</Link>
+          <details className="mt-4">
+            <summary className={`inline-flex min-h-[44px] cursor-pointer items-center text-[14px] font-semibold text-amber-950 underline underline-offset-2 ${focusRing}`}>Show the original anyway</summary>
+            <p className="mt-2 text-[13.5px] text-amber-950">Shown as it was kept, read-only. Lines marked as from the notes are statements, not questions.</p>
+            {paper.data.instructions && <p className="mt-2 whitespace-pre-line text-[13.5px] text-gray-700">{paper.data.instructions}</p>}
+            <OriginalPaper views={views} statementIds={statementIds} saved={saved} />
+          </details>
+        </section>
+        <PaperActions materialId={materialId} guides={guides} />
+      </>
+    );
+  }
 
   return (
     <>
@@ -94,12 +121,55 @@ export default async function PaperPage({ params }: { params: Promise<{ experien
             <p>Nothing was guessed. You can still study it as notes from <Link href={experienceHref("scholar", `study/${materialId}`)} className="font-semibold underline">the material page</Link>.</p>
           </StatePanel>
         ) : (
-          <PaperStudy questions={views} saved={saved}
+          <PaperStudy questions={asked} saved={saved}
             choice={{ notes: p.sources.includes("notes"), library: p.sources.includes("library"), web: web.on ? { on: true, reason: null } : { on: false, reason: web.reason }, depth: p.depth }}
             webDepths={depths} />
         )}
 
+      {statementViews.length > 0 && (
+        <section aria-labelledby="legacy-lines-h" className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-5">
+          <h2 id="legacy-lines-h" className="text-[16px] font-bold text-amber-950">
+            {statementViews.length === 1 ? "1 numbered line is from the notes, not a question" : `${statementViews.length} numbered lines are from the notes, not questions`}
+          </h2>
+          <p className="mt-2 text-[14px] leading-relaxed text-amber-950">They are statements, so they are not offered as questions to answer. <Link href={practise} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Practise questions from this material</Link> to be tested on them.</p>
+          <details className="mt-3">
+            <summary className={`inline-flex min-h-[44px] cursor-pointer items-center text-[14px] font-semibold text-amber-950 underline underline-offset-2 ${focusRing}`}>Show them anyway</summary>
+            <OriginalPaper views={statementViews} statementIds={statementIds} saved={saved} />
+          </details>
+        </section>
+      )}
+
       <PaperActions materialId={materialId} guides={guides} />
     </>
+  );
+}
+
+const primaryBtn = `inline-flex min-h-[44px] items-center justify-center rounded-[9px] px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 ${focusRing}`;
+
+/** SCHOLAR-SQIE-CLOSE-01 P0: a kept paper shown read-only, each statement labelled as from the notes, with any saved answer. */
+function OriginalPaper({ views, statementIds, saved }: { views: PaperQuestionView[]; statementIds: Set<string>; saved: Record<string, SavedAnswerView> }) {
+  return (
+    <ol className="mt-3 space-y-3">
+      {views.map(q => {
+        const statement = statementIds.has(q.id);
+        const s = saved[q.id];
+        return (
+          <li key={q.id} className="rounded-xl border border-gray-200 bg-white p-4">
+            <p className={`text-[12px] font-bold uppercase tracking-[0.1em] ${statement ? "text-amber-900" : "text-gray-500"}`}>
+              {statement ? `Line ${q.number} · from the notes, not a question` : `Question ${q.number}`}{q.pages ? ` · ${q.pages}` : ""}
+            </p>
+            <p className="mt-1 whitespace-pre-line text-[14px] leading-relaxed text-gray-800">{q.stem}</p>
+            {q.options.length > 0 && <ul className="mt-2 space-y-1 text-[14px] text-gray-800">{q.options.map(o => <li key={o.label}>{o.label}. {o.text}</li>)}</ul>}
+            {s && (
+              <div className="mt-3 rounded-lg bg-[var(--cmp-app-bg)] p-3 text-[13.5px] text-gray-700">
+                <p className="text-[12px] text-gray-500">Your saved answer · {new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                {s.attempt && (s.attempt.option || s.attempt.text) && <p className="mt-1"><span className="font-semibold">Your attempt:</span> {[s.attempt.option, s.attempt.text].filter(Boolean).join(". ")}</p>}
+                {s.content.examAnswer && <p className="mt-1 whitespace-pre-line"><span className="font-semibold">Suggested answer (AI-written):</span> {s.content.examAnswer}</p>}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
