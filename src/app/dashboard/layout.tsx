@@ -109,7 +109,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div data-cmp-theme="platform" className="min-h-screen bg-[var(--cmp-app-bg)] font-[family-name:var(--font-geist-sans)]">
-      <MobileSidebar fullName={profile?.full_name ?? "Nurse"} role={profile?.role ?? "nurse"} isAdmin={profile?.role === "hospital_admin"} unread={unreadCount ?? 0} avatarUrl={profile?.avatar_url ?? null} />
+      <MobileSidebar fullName={profile?.full_name ?? "Nurse"} role={profile?.role ?? "nurse"} isAdmin={profile?.role === "hospital_admin"} unread={unreadCount ?? 0} avatarUrl={profile?.avatar_url ?? null}
+        workspaces={header.workspaces} primary={primaryWorkspace} />
 
       {/* ONE header, one skip link. The PUI-002 roll-out (f053146) left this layout with two GlobalHeaders
           stacked -- identical but for the title, one "Dashboard" and one "Personal Workspace" -- plus two
