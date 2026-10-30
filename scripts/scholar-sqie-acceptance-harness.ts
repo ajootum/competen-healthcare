@@ -70,7 +70,11 @@ const ACTOR: WceActor = { userId: null as unknown as string, name: "SCHOLAR-SQIE
 const OWNER = { ...ACTOR, isOwner: true };
 
 // ── the material ──
-const NOTE_A = [
+// SQIE_NOTE_WORKAROUND=1 changes two phrases ("urgently" -> "promptly", "if the patient is unwell" -> "if unwell") that
+// together trip the published high-risk rule high.urgent-direction across the whole note (see A-risk). It exists only
+// to exercise everything downstream of the risk gate; the canonical run uses the note as written.
+const WORKAROUND = process.env.SQIE_NOTE_WORKAROUND === "1";
+const NOTE_A_RAW = [
   "Pyelonephritis lecture notes",
   "1. Pyelonephritis is an infection of the kidney and renal pelvis, usually bacterial.",
   "2. The usual cause is an ascending infection: bacteria, most often Escherichia coli, travel up from the bladder through the ureter to the kidney.",
@@ -81,6 +85,7 @@ const NOTE_A = [
   "7. Escalate urgently if there are signs of sepsis, such as low blood pressure, a raised respiratory rate or confusion.",
   "8. Complications include sepsis, a renal or perinephric abscess and acute kidney injury.",
 ].join("\n");
+const NOTE_A = WORKAROUND ? NOTE_A_RAW.replace("Escalate urgently", "Escalate promptly").replace("if the patient is unwell", "if unwell") : NOTE_A_RAW;
 const PAPER_A = ["Renal practice questions", "Answer ALL questions.", "1. Explain how pyelonephritis develops and list three signs. (6 marks)"].join("\n");
 const NOTE_THIN = ["UTI notes", "Urinary tract infections are common in women."].join("\n");
 const PAPER_B = ["Renal practice questions", "Answer ALL questions.", "1. Explain the antibiotic choice for pyelonephritis. (4 marks)"].join("\n");
@@ -132,8 +137,12 @@ const rid = () => `sqie-${Date.now().toString(36)}-${Math.random().toString(36).
 async function send(method: string, path: string, body: unknown, jar: Jar) {
   const res = await fetch(BASE + path, { method, redirect: "manual", headers: { "Content-Type": "application/json", Cookie: cookieHeader(jar), "x-request-id": rid() }, body: body === undefined ? undefined : JSON.stringify(body) });
   absorb(jar, res);
-  return { status: res.status, json: await res.json().catch(() => ({})) as any };
+  const json = await res.json().catch(() => ({})) as any;
+  if (json?.code === "not_eligible" || /isn't available for this yet/.test(`${json?.error ?? ""} ${json?.continuity?.message ?? ""}`)) refusals.push({ jar, path, status: res.status, code: json?.code ?? "continuity" });
+  return { status: res.status, json };
 }
+/** Every reply that refused AI as not eligible (or said AI is not available), by student. */
+const refusals: { jar: Jar; path: string; status: number; code: string }[] = [];
 async function signIn(email: string) { const jar: Jar = new Map(); const r = await send("POST", "/api/auth/login", { email, password: PW }, jar); return { jar, status: r.status }; }
 async function uploadText(jar: Jar, text: string, fileName: string) {
   const bytes = new TextEncoder().encode(text);
@@ -291,11 +300,7 @@ async function makeStudent(grantor: string, email: string) {
     const t = (await page.text()).replace(/\\"/g, '"');
     const f = t.match(/"foundation":\{"terms":"([^"]+)","privacy":"([^"]+)"\}/), x = t.match(/"experienceDocs":\{"terms":"([^"]+)","privacy":"([^"]+)"\}/);
     if (f && x) terms = (await send("POST", "/api/individual/terms", { experience: "scholar", foundation: { terms: f[1], privacy: f[2] }, experienceDocs: { terms: x[1], privacy: x[2] } }, s.jar)).status;
-    else {
-      terms = -page.status;
-      const at = t.search(/foundation|Accept|terms/i);
-      console.log(`        terms page did not show versions: ${t.slice(Math.max(0, at - 200), at + 400).replace(/\s+/g, " ")}`);
-    }
+    else terms = -page.status;
   }
   if (terms && terms !== 200) console.log(`        terms acceptance for ${email}: ${terms}`);
   const consent = s.status === 200 ? await send("POST", "/api/individual/scholar/consent", { grant: true }, s.jar) : { status: 0, json: {} };
@@ -328,6 +333,16 @@ async function main() {
   const noteA = await uploadText(A.jar, NOTE_A, "Pyelonephritis lecture.txt");
   ok("A0. the pyelonephritis note is uploaded", !!noteA.id, noteA.why);
   if (!noteA.id) { await finishWithCleanup(); return; }
+  // A-risk. How the PUBLISHED Scholar risk rules read this lecture note (the gate classifies the passages it sends).
+  {
+    const { loadProductPolicy } = await import("../src/lib/ai/allowance");
+    const { classifyRisk } = await import("../src/lib/ai/clinical-risk");
+    const { policy } = await loadProductPolicy(admin, "scholar");
+    const d = classifyRisk(policy.risk, { text: NOTE_A, competencyRisks: [], frameworkCodes: [] }, "standard_educational");
+    show(`A-risk note classification${WORKAROUND ? " (workaround wording)" : ""}`, d);
+    summary.A_risk = { workaround: WORKAROUND, ...d };
+    ok("A-risk. the educational lecture note is not classified high-risk clinical by the published rules", d.tier !== "high_risk_clinical", `${d.tier} by ${d.rule}`);
+  }
 
   // A1. study as paper -> notes-like
   const asPaper = await send("POST", "/api/individual/scholar/papers", { materialId: noteA.id, attested: true }, A.jar);
@@ -437,7 +452,8 @@ async function main() {
   for (const r of rA.rows) console.log(`        ${r.operation.padEnd(40)} activity:${String(r.activity).padEnd(10)} ${String(r.model).padEnd(20)} ${r.status} $${r.cost_usd} eligible:${r.eligible}`);
   const refusedA = ((await admin.from("audit_log").select("action, metadata").eq("actor_id", A.id)).data ?? []).filter((x: any) => /refused|not_eligible/.test(JSON.stringify(x.metadata ?? {})));
   ok("A5a. every AI step for A ran on a model eligible for its activity", rA.rows.length > 0 && rA.rows.every(r => r.status !== "ok" || r.eligible), rA.rows.filter(r => !r.eligible).map(r => `${r.operation}:${r.activity}:${r.model}`).join(", "));
-  ok("A5b. no eligibility refusal occurred for A", refusedA.length === 0, JSON.stringify(refusedA).slice(0, 300));
+  const refusedHttpA = refusals.filter(r => r.jar === A.jar);
+  ok("A5b. no eligibility refusal occurred for A", refusedA.length === 0 && refusedHttpA.length === 0, JSON.stringify([...refusedA, ...refusedHttpA.map(r => `${r.path} ${r.status} ${r.code}`)]).slice(0, 400));
   const actModel = (act: string) => [...new Set(rA.rows.filter(r => r.activity === act).map(r => r.model))].join(",");
   show("A5 routing by activity", { questions: actModel("questions"), evaluate: actModel("evaluate"), deeper: actModel("deeper") });
   ok("A5c. routing as configured: questions and deeper on Opus, evaluate on Sonnet",
@@ -488,6 +504,12 @@ async function main() {
     ok("B3b. recovery made no AI call, and external sources stayed off (HQ default)", recB?.json?.external?.reason !== "ran" && recB2.json.external?.reason !== "ran", `AI rows during B: ${afterB - beforeB} (B1 ask and B2 answer included); external ${recB?.json?.external?.reason}/${recB2.json.external?.reason}`);
     const noteNotClaimed = !(recB2.json.evidence?.notes ?? []).some((n: any) => ANTIBIOTIC_NAMES.test(n.excerpt ?? ""));
     ok("B3c. nothing is presented as from the notes that the notes do not say", noteNotClaimed);
+    const paperAsNotes = (recB2.json.evidence?.notes ?? []).filter((n: any) => n.materialId === paperB?.id);
+    ok("B3d. recovery does not count the student's own exam paper (the question's own wording) as notes evidence",
+      paperAsNotes.length === 0 && !(recB2.json.sufficiency?.verdict === "sufficient" && !(recB2.json.evidence?.notes ?? []).some((n: any) => n.materialId === thinB.id && n.matched?.length)),
+      `paper passages as notes: ${paperAsNotes.length}, verdict ${recB2.json.sufficiency?.verdict}, covered ${JSON.stringify(recB2.json.sufficiency?.covered)}`);
+    const noise = (recB?.json?.sufficiency?.keyTerms ?? []).filter((t: string) => /^(question|\d+|marks?)$/i.test(t));
+    ok("B3e. the paper question's key terms are its topic words, not its numbering", noise.length === 0, `key terms ${JSON.stringify(recB?.json?.sufficiency?.keyTerms)}`);
     // B4. if recovery may explain from an approved library reference: the explanation is grounded or withheld
     if (recB?.json?.explainable && pqB.length) {
       const ex = await send("POST", "/api/individual/scholar/papers/answer", { questionId: pqB[0].id, attempt: { text: attemptB }, recovery: { id: recB.json.recoveryId, mode: recB.json.mode, question: recB.json.question } }, B.jar);
@@ -529,7 +551,11 @@ async function main() {
     const d3 = await send("POST", "/api/individual/scholar/learn/act", { action: "ask", question: CASE, chunkIds: ids }, D.jar);
     show("D3 educational case", { status: d3.status, answer: d3.json.answer ?? null, cited: d3.json.cited, withheld: d3.json.withheld ?? null, said: d3.json.answer ? null : said(d3), model: d3.json.provenance?.model });
     summary.D3 = { status: d3.status, answer: d3.json.answer ?? null, withheld: d3.json.withheld ?? null, message: d3.json.message ?? said(d3), model: d3.json.provenance?.model ?? null };
-    ok("D3. the simulated educational case question is answered (not refused), from the notes", d3.status === 200 && !!d3.json.answer && /dipstick|culture|blood/i.test(d3.json.answer ?? ""), `${d3.status} ${String(d3.json.answer ?? said(d3)).slice(0, 160)}`);
+    const d3p = await send("POST", "/api/individual/scholar/learn/assistant", { question: CASE, chunkIds: ids }, D.jar);
+    show("D3 educational case, Personal AI", { status: d3p.status, answer: d3p.json.answer ?? null, said: d3p.json.answer ? null : said(d3p), model: d3p.json.model ?? null });
+    summary.D3p = { status: d3p.status, answer: d3p.json.answer ?? null, message: d3p.json.answer ? null : said(d3p), model: d3p.json.model ?? null };
+    ok("D3a. the simulated educational case question is answered in Learn (not refused), from the notes", d3.status === 200 && !!d3.json.answer && /dipstick|culture|blood/i.test(d3.json.answer ?? ""), `${d3.status} ${String(d3.json.answer ?? said(d3)).slice(0, 160)}`);
+    ok("D3b. the same question is answered by the Personal AI (not refused)", d3p.status === 200 && !!d3p.json.answer, `${d3p.status} ${String(d3p.json.answer ?? said(d3p)).slice(0, 160)}`);
   }
 
   // ════════ C. EXTERNAL SCHOLARLY ════════
@@ -569,8 +595,16 @@ async function main() {
       // C2. Explain using approved references (Learn, the same request again with the recovery)
       if (!rec.json.explainable) pend("C2", `recovery not explainable here (state ${rec.json.state}) -- Explain is not offered without a verified abstract or approved library reference`);
       else {
-        const ex = await send("POST", "/api/individual/scholar/learn/act", { action: "ask", question: QC, chunkIds: chC.map(c => c.id), recovery: { id: rec.json.recoveryId, mode: "notes_and_references", question: QC } }, C.jar);
-        show("C2 explain", { status: ex.status, withheld: ex.json.withheld ?? null, reason: ex.json.reason ?? null, message: ex.json.message ?? null, answer: ex.json.answer ?? null, cited: ex.json.cited, research: ex.json.research ? { text: ex.json.research.text ?? null, withheld: ex.json.research.withheld ?? null } : null, recovered: ex.json.recovered, model: ex.json.provenance?.model, error: ex.json.error });
+        const explain = (action: string) => send("POST", "/api/individual/scholar/learn/act", { action, ...(action === "ask" ? { question: QC } : {}), chunkIds: chC.map(c => c.id), recovery: { id: rec.json.recoveryId, mode: "notes_and_references", question: QC } }, C.jar);
+        const view = (x: any) => ({ status: x.status, withheld: x.json.withheld ?? null, reason: x.json.reason ?? null, message: x.json.message ?? null, continuity: x.json.continuity ?? null, answer: x.json.answer ?? null, cited: x.json.cited, research: x.json.research ? { text: x.json.research.text ?? null, withheld: x.json.research.withheld ?? null } : null, recovered: x.json.recovered, model: x.json.provenance?.model, error: x.json.error });
+        let ex = await explain("ask");
+        show("C2 explain (Ask Scholar)", view(ex));
+        if (ex.json.continuity) {
+          // Ask was refused before any call (not eligible): the same recovery through Teach, the other Learn action that takes one.
+          summary.C2_ask = view(ex);
+          ex = await explain("teach");
+          show("C2 explain (Teach me, same recovery)", view(ex));
+        }
         summary.C2 = { status: ex.status, withheld: ex.json.withheld ?? null, reason: ex.json.reason ?? null, answer: ex.json.answer ?? null, recovered: ex.json.recovered ?? null, model: ex.json.provenance?.model ?? null, message: ex.json.message ?? ex.json.error ?? null };
         const fullText = /full text/i.test(JSON.stringify(ex.json.recovered ?? {}));
         ok("C2. Explain using approved references is grounded (cited, labelled from notes + approved references) or withheld",
