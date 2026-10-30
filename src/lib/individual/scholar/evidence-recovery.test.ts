@@ -7,7 +7,7 @@ import {
 import { narrowPlan, type LearnResearch } from "./learn-research";
 import type { Passage } from "./generation";
 import { DEFAULT_POLICY, resolvePolicy, type IndividualPolicy } from "../policy";
-import { parsePmcIdconv, parsePmcOa, pubmedItem, type FetchLike, type ResearchItem } from "@/lib/holdings/research/providers";
+import { parsePmcCloudMeta, parsePmcIdconv, parsePmcLatestVersion, pubmedItem, type FetchLike, type ResearchItem } from "@/lib/holdings/research/providers";
 import { mergeItems, runResearch, type ResearchPlan } from "@/lib/holdings/research/service";
 import { SEED_REGISTRY, resolveRegistry, type Registry } from "@/lib/holdings/research/registry";
 import { DEFAULT_POLICY as RESEARCH_DEFAULT, resolveWorkflows } from "@/lib/holdings/research/engine-config";
@@ -295,7 +295,8 @@ const route = (url: string): unknown => {
   if (url.includes("api.crossref.org") && url.includes(encodeURIComponent("10.1000/oxy.2022"))) return { message: { title: ["Controlled oxygen therapy in COPD exacerbations"], issued: { "date-parts": [[2022]] } } };
   if (url.includes("api.crossref.org") && url.includes(encodeURIComponent("10.2000/fake"))) return { message: { title: ["Bananas in the tropics"], issued: { "date-parts": [[2021]] } } };
   if (url.includes("idconv")) return { status: "ok", records: [{ pmid: "111", pmcid: "PMC777" }] };
-  if (url.includes("oa.fcgi")) return `<OA><records><record id="PMC777" citation="x" license="CC BY" retracted="no"><link format="tgz" href="ftp://x"/></record></records></OA>`;
+  if (url.includes("pmc-oa-opendata") && url.includes("list-type=2")) return `<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Prefix>PMC777.</Prefix><CommonPrefixes><Prefix>PMC777.1/</Prefix></CommonPrefixes></ListBucketResult>`;
+  if (url.includes("pmc-oa-opendata") && url.endsWith("PMC777.1/PMC777.1.json")) return { pmcid: "PMC777", version: 1, pmid: 111, is_pmc_openaccess: true, is_manuscript: false, is_retracted: false, license_code: "CC BY" };
   return undefined;
 };
 
@@ -316,10 +317,11 @@ describe("citation verification through the engine (mock fetch)", () => {
 });
 
 describe("PubMed Central: open-access links through the one gate, never full text", () => {
-  it("parses the ID converter and the OA service", () => {
+  it("parses the ID converter, the Cloud Service listing and its metadata", () => {
     expect([...parsePmcIdconv({ records: [{ pmid: "111", pmcid: "PMC777" }, { pmid: "2", status: "error" }] })]).toEqual([["111", "PMC777"]]);
-    expect(parsePmcOa(`<record id="PMC777" license="CC BY-NC" retracted="no">`, "PMC777")).toEqual({ pmcid: "PMC777", licence: "CC BY-NC", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC777/", retracted: false });
-    expect(parsePmcOa(`<OA><error code="idIsNotOpenAccess">x</error></OA>`, "PMC777")).toBeNull();
+    expect(parsePmcCloudMeta({ pmcid: "PMC777", is_pmc_openaccess: true, is_retracted: false, license_code: "CC BY-NC" }, "PMC777")).toEqual({ pmcid: "PMC777", licence: "CC BY-NC", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC777/", retracted: false });
+    expect(parsePmcCloudMeta({ pmcid: "PMC777", is_pmc_openaccess: false }, "PMC777")).toBe(false);
+    expect(parsePmcLatestVersion("<ListBucketResult><CommonPrefixes><Prefix>PMC777.1/</Prefix></CommonPrefixes><CommonPrefixes><Prefix>PMC777.3/</Prefix></CommonPrefixes></ListBucketResult>", "PMC777")).toBe(3);
   });
   it("Active: the PubMed item gets its open-access link; the abstract stays an abstract", async () => {
     const r = await runResearch("oxygen copd", planOf(activeRegistry(["pubmed", "pmc"])), { fetch: fakeFetch(route, []), now: NOW });
@@ -327,10 +329,18 @@ describe("PubMed Central: open-access links through the one gate, never full tex
     const e = externalEvidence(research(r.items, r.evidence), ["oxygen"]);
     expect(e[0]).toMatchObject({ retrieved: "abstract", openAccess: { licence: "CC BY" } });
   });
+  it("Cloud Service down (404): the item gets NO link, is not marked closed, and the outcome carries a reason code", async () => {
+    const down = (url: string): unknown => (url.includes("pmc-oa-opendata") ? undefined : route(url));
+    const r = await runResearch("oxygen copd", planOf(activeRegistry(["pubmed", "pmc"])), { fetch: fakeFetch(down, []), now: NOW });
+    expect(r.items.length).toBeGreaterThan(0);
+    expect(r.items[0].openAccess).toBeUndefined();
+    expect(r.codes).toContain("pmc_failed");
+    expect(r.calls.find(c => c.provider === "pmc")).toMatchObject({ failed: 1 });
+  });
   it("not Active (the default): no request reaches PubMed Central", async () => {
     const log: string[] = [];
     await runResearch("oxygen copd", planOf(activeRegistry(["pubmed"])), { fetch: fakeFetch(route, log), now: NOW });
-    expect(log.some(u => /idconv|oa\.fcgi/.test(u))).toBe(false);
+    expect(log.some(u => /idconv|pmc-oa-opendata|oa\.fcgi/.test(u))).toBe(false);
     expect(SEED_REGISTRY.pmc.status).toBe("configured");
   });
 });

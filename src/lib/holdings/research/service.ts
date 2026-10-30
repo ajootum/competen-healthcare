@@ -209,7 +209,13 @@ export async function runResearch(query: string, plan: ResearchPlan, deps: Resea
   if (oa && items.some(i => i.pmid && i.verified.pmid)) {
     const found = await call(oa, "open_access", p => pmcOpenAccess(p, items.filter(i => i.pmid && i.verified.pmid).map(i => i.pmid!)));
     calls.push({ provider: oa.id, calls: 1, failed: found === null ? 1 : 0 });
-    if (found) items.forEach(i => { if (i.pmid && i.verified.pmid) i.openAccess = found.get(i.pmid) ?? null; });
+    if (found === null && !codes.some(c => c.startsWith(`${oa.id}_`))) codes.push(`${oa.id}_failed`);
+    // Only a clear answer settles an item as having no open-access copy (null). A PMID the service could not answer
+    // for (404, 5xx, timeout, unreadable) is left unset: no link, and not claimed to be closed.
+    if (found) {
+      items.forEach(i => { if (i.pmid && i.verified.pmid && found.settled.has(i.pmid)) i.openAccess = found.found.get(i.pmid) ?? null; });
+      if (found.unknown > 0) codes.push(`${oa.id}_unknown`);
+    }
   }
   // Belt and braces: every field shown later must be what a provider gave, and the link must be the record's own.
   items = items.filter(i => /^https:\/\/(pubmed\.ncbi\.nlm\.nih\.gov|doi\.org|openalex\.org)\//.test(i.url) && (!i.doi || normaliseDoi(i.doi) === i.doi));

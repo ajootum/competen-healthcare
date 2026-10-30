@@ -212,50 +212,100 @@ export async function verifyDoi(deps: ProviderDeps, item: Pick<ResearchItem, "do
 
 // ── PubMed Central (open-access links) ── SCHOLAR-SQIE-02 s6 ─────────────────────────────────────────────────────────
 //
-// Two NCBI services, asked only about PMIDs PubMed itself returned: the ID converter (PMID -> PMCID) and the PMC OA web
-// service (is that PMCID in the open-access subset, and under which licence). What comes back is a licence and a link.
-// The article itself is never downloaded: "where the licence permits" is shown to the learner, not exercised by Competen.
+// Two NCBI services, asked only about PMIDs PubMed itself returned: the ID converter (PMID -> PMCID) and the PMC Cloud
+// Service's per-article metadata (is that PMCID in the open-access dataset, and under which licence). The PMC OA web
+// service this once used was retired by NCBI in August 2026 (oa.fcgi answers 404). What comes back is an open-access
+// flag, a licence and a link to the article's PMC page.
+// ⚠ METADATA ONLY. Only the small `.json` metadata file is read from the Cloud Service. The article's XML, text, PDF and
+// media sit beside it and are NEVER requested: "full text is never fetched" is the engine rule and stays.
+// ⚠ UNKNOWN IS NOT "NOT OPEN ACCESS". A 404, 5xx, timeout or unreadable answer from the Cloud Service means we could
+// not tell: the item gets no link and the caller is told how many were unknown. Only a clear answer (no PMCID, no copy in
+// the dataset, flag false, retracted) settles an item as having no open-access copy.
 
-const PMC_IDCONV = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/";
-const PMC_OA = "https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi";
-/** At most this many PMCIDs are asked about per request (one OA call each). */
+const PMC_IDCONV = "https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/";
+const PMC_CLOUD = "https://pmc-oa-opendata.s3.amazonaws.com";
+const PMC_PAGE = "https://pmc.ncbi.nlm.nih.gov/articles/";
+/** At most this many PMIDs are asked about per request (one listing and one metadata read each). */
 export const PMC_MAX = 5;
 
-/** Pure. ID converter JSON -> PMCID by PMID. Records the converter could not map are left out. */
-export function parsePmcIdconv(json: unknown): Map<string, string> {
-  const out = new Map<string, string>();
+/** Pure. ID converter JSON -> the PMCID by PMID, and every PMID the converter answered about (a record with no PMCID answers "none"). */
+export function parsePmcIdconvFull(json: unknown): { mapped: Map<string, string>; answered: Set<string> } {
+  const mapped = new Map<string, string>(), answered = new Set<string>();
   const recs = (json as { records?: unknown[] } | null)?.records;
   for (const r of Array.isArray(recs) ? recs : []) {
     const x = r as { pmid?: unknown; pmcid?: unknown } | null;
     const pmid = String(x?.pmid ?? ""), pmcid = String(x?.pmcid ?? "");
-    if (/^\d{1,9}$/.test(pmid) && /^PMC\d{1,10}$/.test(pmcid)) out.set(pmid, pmcid);
+    if (!/^\d{1,9}$/.test(pmid)) continue;
+    answered.add(pmid);
+    if (/^PMC\d{1,10}$/.test(pmcid)) mapped.set(pmid, pmcid);
   }
-  return out;
+  return { mapped, answered };
+}
+/** Pure. ID converter JSON -> PMCID by PMID. Records the converter could not map are left out. */
+export const parsePmcIdconv = (json: unknown): Map<string, string> => parsePmcIdconvFull(json).mapped;
+
+/**
+ * Pure. Cloud Service prefix listing (S3 ListObjectsV2 with delimiter "/") -> the highest version of the article.
+ * 0 = the listing is valid and the article has no version in the dataset. null = not a listing we can read.
+ */
+export function parsePmcLatestVersion(xml: string, pmcid: string): number | null {
+  if (!/<ListBucketResult\b/.test(xml) || /<Error\b/.test(xml)) return null;
+  let latest = 0;
+  for (const m of xml.matchAll(new RegExp(`<Prefix>${pmcid}\\.(\\d{1,6})/</Prefix>`, "g"))) latest = Math.max(latest, Number(m[1]));
+  return latest;
 }
 
-/** Pure. PMC OA service XML -> the record's licence, or null when the article is not in the open-access subset. */
-export function parsePmcOa(xml: string, pmcid: string): OpenAccess | null {
-  if (/<error\b/i.test(xml)) return null;
-  const rec = new RegExp(`<record\\b[^>]*\\bid="${pmcid}"[^>]*>`).exec(xml)?.[0];
-  if (!rec) return null;
-  const licence = /\blicense="([^"]{1,60})"/.exec(rec)?.[1] ?? null;
-  return { pmcid, licence: licence ? decodeXml(licence) : null, url: `https://pmc.ncbi.nlm.nih.gov/articles/${pmcid}/`, retracted: /\bretracted="yes"/i.test(rec) };
+/**
+ * Pure. Cloud Service per-article metadata JSON -> the open-access record; false when the article is clearly not an open
+ * copy (flag not true, or retracted); null when the metadata cannot be read or is about another article.
+ * The licence is exactly as PMC records it: a CC code, or "TDM" for an author manuscript. This only ever yields a LINK.
+ */
+export function parsePmcCloudMeta(json: unknown, pmcid: string): OpenAccess | false | null {
+  const m = json as { pmcid?: unknown; is_pmc_openaccess?: unknown; is_retracted?: unknown; license_code?: unknown } | null;
+  if (!m || typeof m !== "object" || m.pmcid !== pmcid || typeof m.is_pmc_openaccess !== "boolean") return null;
+  if (m.is_pmc_openaccess !== true || m.is_retracted === true) return false;
+  const licence = typeof m.license_code === "string" ? m.license_code.replace(/\s+/g, " ").trim().slice(0, 60) : "";
+  return { pmcid, licence: licence || null, url: `${PMC_PAGE}${pmcid}/`, retracted: false };
 }
 
-/** PMID -> open-access link and licence, for the PMIDs given (at most PMC_MAX). null = the service could not be asked. */
-export async function pmcOpenAccess(deps: ProviderDeps, pmids: readonly string[]): Promise<Map<string, OpenAccess> | null> {
+/** One article: the latest version from a prefix listing, then that version's metadata file. false = settled no; null = unknown. */
+async function pmcCloudLookup(deps: ProviderDeps, pmcid: string): Promise<OpenAccess | false | null> {
+  const list = await getRaw(deps, `${PMC_CLOUD}/?list-type=2&delimiter=%2F&prefix=${pmcid}.`);
+  if (!list || list.status !== 200 || list.text === null) return null;
+  const v = parsePmcLatestVersion(list.text, pmcid);
+  if (v === null) return null;
+  if (v === 0) return false;
+  const meta = await getRaw(deps, `${PMC_CLOUD}/${pmcid}.${v}/${pmcid}.${v}.json`);
+  if (!meta || meta.status !== 200) return null;
+  return parsePmcCloudMeta(parse(meta.text), pmcid);
+}
+
+export type PmcResult = {
+  /** PMID -> open-access link and licence, only for articles the Cloud Service says are open access. */
+  found: Map<string, OpenAccess>;
+  /** PMIDs with a clear answer (found, or settled as having no open-access copy). Any other PMID asked about is unknown. */
+  settled: Set<string>;
+  /** How many PMIDs could not be settled (service 404/5xx/timeout/unreadable). They get no link and are not "not open access". */
+  unknown: number;
+};
+
+/** PMID -> open-access link and licence, for the PMIDs given (at most PMC_MAX). null = nothing could be settled at all. */
+export async function pmcOpenAccess(deps: ProviderDeps, pmids: readonly string[]): Promise<PmcResult | null> {
   const ids = [...new Set(pmids.filter(p => /^\d{1,9}$/.test(p)))].slice(0, PMC_MAX);
-  if (!ids.length) return new Map();
-  const conv = await getJson(deps, `${PMC_IDCONV}?ids=${ids.join(",")}&idtype=pmid&format=json&${ncbi(deps)}`);
+  if (!ids.length) return { found: new Map(), settled: new Set(), unknown: 0 };
+  const conv = await getJson(deps, `${PMC_IDCONV}?ids=${ids.join(",")}&format=json&${ncbi(deps)}`);
   if (!conv) return null;
-  const map = parsePmcIdconv(conv);
-  const out = new Map<string, OpenAccess>();
-  for (const [pmid, pmcid] of map) {
-    const xml = await getText(deps, `${PMC_OA}?id=${pmcid}`);
-    const oa = xml ? parsePmcOa(xml, pmcid) : null;
-    if (oa) out.set(pmid, oa);
+  const { mapped, answered } = parsePmcIdconvFull(conv);
+  const found = new Map<string, OpenAccess>(), settled = new Set<string>();
+  for (const p of answered) if (!mapped.has(p) && ids.includes(p)) settled.add(p); // the converter says it is not in PMC
+  const looked = await Promise.all([...mapped].filter(([p]) => ids.includes(p)).map(async ([pmid, pmcid]) => [pmid, await pmcCloudLookup(deps, pmcid)] as const));
+  for (const [pmid, r] of looked) {
+    if (r === null) continue;
+    settled.add(pmid);
+    if (r) found.set(pmid, r);
   }
-  return out;
+  const unknown = ids.length - settled.size;
+  return unknown === ids.length ? null : { found, settled, unknown };
 }
 
 /** A plain link to the same search on Google Scholar, for the learner to follow. Never fetched by Competen. */
