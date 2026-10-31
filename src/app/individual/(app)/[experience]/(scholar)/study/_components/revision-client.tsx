@@ -8,7 +8,7 @@ import { useCallback, useMemo, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
 import {
-  MARKED_AGAINST_NOTES, MOCK_LABEL, REVISION_DIFFICULTIES, REVISION_FORMAT_LABEL, REVISION_MODE_HELP, REVISION_MODE_LABEL,
+  EXTENDED_LABEL, EXTENDED_RESPONSE_MAX, MARKED_AGAINST_NOTES, MOCK_LABEL, TRUE_FALSE_LABEL, REVISION_DIFFICULTIES, REVISION_FORMAT_LABEL, REVISION_MODE_HELP, REVISION_MODE_LABEL,
   type RevisionFormat, type RevisionMode,
 } from "@/lib/individual/scholar/config";
 import type { RevisionFeedback, RevisionItemView } from "@/lib/individual/scholar/revision-view";
@@ -18,6 +18,7 @@ import { RECOVERY_EXPLANATION_LABEL } from "@/lib/individual/scholar/config";
 import { FEEDBACK_HEADINGS, GROUNDING_LABEL } from "@/lib/individual/scholar/config";
 import type { FeedbackParts, SourceMode } from "@/lib/individual/scholar/question-intel";
 import { carry, studyField } from "./study-active";
+import { CLOZE_LABEL } from "@/lib/individual/scholar/cloze";
 import type { RevisePrefill } from "@/lib/individual/scholar/study-carry";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
@@ -347,7 +348,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
   const [matches, setMatches] = useState<string[]>(item.options.map(() => ""));
   const [order, setOrder] = useState<number[]>(item.options.map((_, i) => i));
   const [back, setBack] = useState<{ back: string; source: { quote: string; citation: string; materialId: string; chunkId: string }; card?: { origin: "notes" | "library" | "learner"; originLabel: string } } | null>(null);
-  const [selfGrade, setSelfGrade] = useState<{ accepted: string[]; reason: string; label: string } | null>(null);
+  const [selfGrade, setSelfGrade] = useState<{ accepted: string[]; reason: string; label: string; extended?: { modelAnswer: string; keyPoints: string[]; marks: number } } | null>(null);
   // SCHOLAR-SQIE-CLOSE-01: a structured question's answers, one per part, and the student's own marking of each part.
   const [texts, setTexts] = useState<string[]>((item.parts ?? []).map(() => ""));
   const [partGrade, setPartGrade] = useState<{ reason: string; label: string; parts: PartToGrade[] } | null>(null);
@@ -367,8 +368,8 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
       return;
     }
     if (r.json.needsSelfGrade) {
-      setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "" });
-      if (r.json.withheld && item.kind === "short") setRecovery(x => ({ key: (x?.key ?? 0) + 1, withheldReason: r.json.withheld?.reason ?? null }));
+      setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "", extended: r.json.extended });
+      if (r.json.withheld && (item.kind === "short" || item.kind === "extended")) setRecovery(x => ({ key: (x?.key ?? 0) + 1, withheldReason: r.json.withheld?.reason ?? null }));
       return;
     }
     if (!r.ok) { setError(r.json.error ?? "Your answer could not be saved."); return; }
@@ -378,7 +379,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
   async function explainFromRecovery(rec: { id: string; mode: "notes_only" | "notes_and_library" | "notes_and_references"; question: string }): Promise<ExplainOutcome> {
     const r = await call("/api/individual/scholar/revision/answer", { questionId: item.id, sessionId, response: { text }, recovery: rec });
     if (r.json.needsSelfGrade) {
-      setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "" });
+      setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "", extended: r.json.extended });
       const rec = r.json.recovered ?? r.json.withheld?.recovered;
       return { shown: false, message: r.json.reason ?? null, unanswered: rec?.unanswered, reading: rec?.reading };
     }
@@ -395,8 +396,8 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
     setBack(r.json as typeof back);
   }
   const responseOf = (): unknown => item.kind === "mcq" || item.kind === "case" ? { index: choice } : item.kind === "mrq" ? { indexes: set }
-    : item.kind === "short" ? { text } : item.kind === "match" ? { matches } : item.kind === "sequence" ? { order } : item.kind === "structured" ? { texts } : null;
-  const ready = item.kind === "mcq" || item.kind === "case" ? choice !== null : item.kind === "mrq" ? set.length > 0 : item.kind === "short" ? text.trim().length > 0
+    : item.kind === "short" || item.kind === "cloze" || item.kind === "extended" ? { text } : item.kind === "match" ? { matches } : item.kind === "sequence" ? { order } : item.kind === "structured" ? { texts } : null;
+  const ready = item.kind === "mcq" || item.kind === "case" ? choice !== null : item.kind === "mrq" ? set.length > 0 : item.kind === "short" || item.kind === "cloze" || item.kind === "extended" ? text.trim().length > 0
     : item.kind === "match" ? matches.every(Boolean) : item.kind === "sequence" ? true : item.kind === "structured" ? texts.some(t => t.trim()) : false;
   const partLetter = (i: number) => String.fromCharCode(97 + i);
   const letter = (i: number) => String.fromCharCode(65 + i);
@@ -458,12 +459,24 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
       ) : selfGrade ? (
         <div className="mt-4 rounded-xl border border-gray-200 p-4">
           <p className="text-[13.5px] text-gray-800">{selfGrade.reason}</p>
-          <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-gray-500">The answers your notes support</p>
-          <ul className="mt-1 list-disc pl-5 text-[14px] text-gray-900">{selfGrade.accepted.map(a => <li key={a}>{a}</li>)}</ul>
-          <p className="mt-2 text-[13px] text-gray-700">Your answer: <span className="font-semibold">{text}</span></p>
+          {selfGrade.extended ? (
+            <>
+              {/* SCHOLAR-SQIE-LEARNER-01: an extended answer the AI could not mark: the student compares it with the key points and the model answer. */}
+              <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-gray-500">The points a full answer makes</p>
+              <ul className="mt-1 list-disc pl-5 text-[14px] text-gray-900">{selfGrade.extended.keyPoints.map(k => <li key={k}>{k}</li>)}</ul>
+              <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-gray-500">The model answer from your notes</p>
+              <p className="mt-1 text-[14px] text-gray-900">{selfGrade.extended.modelAnswer}</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-gray-500">The answers your notes support</p>
+              <ul className="mt-1 list-disc pl-5 text-[14px] text-gray-900">{selfGrade.accepted.map(a => <li key={a}>{a}</li>)}</ul>
+            </>
+          )}
+          <p className="mt-2 whitespace-pre-wrap text-[13px] text-gray-700">Your answer: <span className="font-semibold">{text}</span></p>
           <p className="mt-1 text-[12px] text-gray-500">{selfGrade.label}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className={ghost} disabled={busy} onClick={() => send({ text }, { selfGrade: true })}>It says the same</button>
+            <button type="button" className={ghost} disabled={busy} onClick={() => send({ text }, { selfGrade: true })}>{selfGrade.extended ? "It makes these points" : "It says the same"}</button>
             <button type="button" className={ghost} disabled={busy} onClick={() => send({ text }, { selfGrade: false })}>It does not</button>
           </div>
           {recovery && (
@@ -500,6 +513,36 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
               ))}
             </ol>
           )}
+          {item.kind === "cloze" && (
+            // SCHOLAR-COMPANION-01 P1: one blank, one term. Enter checks; "Show the answer" records a miss, honestly.
+            <label className="block text-[13px] font-semibold text-gray-800">The missing word or term (the blank is _____)
+              <input type="text" value={text} onChange={e => setText(e.target.value)} maxLength={200} autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="done"
+                className={`${field} mt-1 block w-full`} />
+            </label>
+          )}
+          {item.kind === "true_false" && (
+            // SCHOLAR-SQIE-LEARNER-01: two large buttons are the whole answer; marked by code.
+            <fieldset disabled={busy}>
+              <legend className="sr-only">True or false</legend>
+              <div className="grid grid-cols-2 gap-3">
+                {(["true", "false"] as const).map(v => (
+                  <button key={v} type="button" className={`${ghost} min-h-[56px] text-[16px]`} onClick={() => void send({ text: v })}>{v === "true" ? "True" : "False"}</button>
+                ))}
+              </div>
+            </fieldset>
+          )}
+          {item.kind === "extended" && (
+            // SCHOLAR-SQIE-LEARNER-01: a paragraph answer, marked by AI against the item's key points (formative).
+            <div>
+              <label className="block text-[13px] font-semibold text-gray-800">Your answer
+                <textarea rows={8} maxLength={EXTENDED_RESPONSE_MAX} value={text} onChange={e => setText(e.target.value)} className={`${field} mt-1 block w-full font-normal`} aria-describedby={`ext-${item.id}`} />
+              </label>
+              <p id={`ext-${item.id}`} className="mt-1 text-[12px] text-gray-600">
+                {text.trim() ? text.trim().split(/\s+/).length : 0} words
+                {item.extended ? ` · marked against ${item.extended.points} key points in your notes, up to ${item.extended.marks} practice marks` : ""}. {EXTENDED_LABEL}
+              </p>
+            </div>
+          )}
           {item.kind === "short" && (
             <label className="block text-[13px] font-semibold text-gray-800">Your answer
               <textarea rows={2} maxLength={1000} value={text} onChange={e => setText(e.target.value)} className={`${field} mt-1 block w-full`} />
@@ -530,12 +573,15 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
               ))}
             </ol>
           )}
-          <button type="submit" className={`${btn} mt-3`} style={{ background: accent }} disabled={!ready || busy}>{busy ? "Checking…" : feedbackMode === "end" ? "Save answer" : "Check answer"}</button>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {item.kind !== "true_false" && <button type="submit" className={btn} style={{ background: accent }} disabled={!ready || busy}>{busy ? "Checking…" : feedbackMode === "end" ? "Save answer" : "Check answer"}</button>}
+            {item.kind === "cloze" && <button type="button" className={ghost} disabled={busy} onClick={() => void send({}, { giveUp: true })}>Show the answer (counts as a miss)</button>}
+          </div>
         </form>
       )}
       {error && <p role="alert" className="mt-2 text-[13px] font-semibold text-red-800">{error}</p>}
       {answered && <button type="button" className={`${ghost} mt-3`} onClick={onNext}>{fb && !fb.correct ? "Try another question" : "Next question"}</button>}
-      <p className="mt-3 text-[11.5px] text-gray-500">{item.label} · {item.citation}</p>
+      <p className="mt-3 text-[11.5px] text-gray-500">{item.kind === "cloze" ? CLOZE_LABEL : item.kind === "true_false" ? TRUE_FALSE_LABEL : item.label} · {item.citation}</p>
     </article>
   );
 }
@@ -591,9 +637,12 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f
     <div aria-live="polite" className={`mt-3 rounded-xl border p-4 ${f.correct ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
       <p className={`text-[14.5px] font-bold ${f.correct ? "text-emerald-900" : "text-red-900"}`}>
         {f.structured ? `${f.structured.practiceMarks.awarded} of ${f.structured.practiceMarks.total} practice marks`
+          : f.extended ? `${f.extended.marks.awarded} of ${f.extended.marks.total} practice marks`
           : f.correct ? `That matches ${basis}.` : f.score !== null && f.score > 0 ? `Partly: ${Math.round(f.score * 100)}% matched ${basis}.` : `That does not match ${basis}.`}
       </p>
       {f.structured && <p className="text-[12px] text-gray-700">{f.structured.practiceMarks.label}</p>}
+      {f.extended && <p className="text-[12px] text-gray-700">{f.extended.marks.label}</p>}
+      {f.rubricNote && <p className="mt-1 text-[12px] text-gray-700">{f.rubricNote}</p>}
       {f.library && <p className="mt-1 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{f.library.label} · version {f.library.versionNo}</p>}
       <p className="text-[12px] text-gray-700"><span className="font-semibold">{f.markingLabel}.</span> {f.marking === "deterministic" ? MARKED_AGAINST_NOTES : ""}</p>
       {f.evaluation && (
@@ -621,6 +670,20 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f
             </li>
           ))}
         </ol>
+      ) : f.extended ? (
+        <div className="mt-2 text-[13.5px] text-gray-900">
+          <p className="font-semibold">The points a full answer makes</p>
+          <ul className="mt-1 space-y-1">
+            {f.extended.points.map(pt => (
+              <li key={pt.text} className="flex gap-2">
+                <span aria-hidden className="w-4 shrink-0 font-bold">{pt.matched === null ? "•" : pt.matched ? "✓" : "✗"}</span>
+                <span>{pt.text}{pt.matched === null ? "" : <span className="sr-only">{pt.matched ? " (your answer made this point)" : " (your answer missed this point)"}</span>}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2"><span className="font-semibold">Model answer from your notes:</span> {f.extended.modelAnswer}</p>
+          <p className="mt-1 text-[12px] text-gray-700">{f.extended.label}</p>
+        </div>
       ) : <p className="mt-2 text-[13.5px] text-gray-900"><span className="font-semibold">{f.library ? "The library answer" : "Your notes"}:</span> {f.answer}</p>}
       {!compact && <p className="mt-1 text-[13.5px] leading-relaxed text-gray-800">{f.rationale}</p>}
       {/* SCHOLAR-QUESTION-INTELLIGENCE-01: after answering -- what it checks, at what level, and its key points. */}

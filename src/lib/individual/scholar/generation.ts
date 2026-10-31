@@ -2,7 +2,7 @@ import { generate, type GenerateArgs, type GenerateResult } from "@/lib/ai/clien
 import { SAFETY_CONTEXT, parseJsonArray, textGroundingViolations, type PhrasingViolation } from "@/lib/ai/grounding";
 import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib/competency/mapping";
 import { CONTEXT_PREAMBLE } from "./learner-context";
-import { CASE_MAX_STEPS, CASE_MIN_STEPS, LEARN_TEACH_LEGACY, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, isTeachingAction, type CheckVerdict, type ClassicLearnAction, type ExplanationDepth, type LearnAction, type TeachingAction } from "./config";
+import { CASE_MAX_STEPS, CASE_MIN_STEPS, EXTENDED_POINTS_MAX, EXTENDED_POINTS_MIN, LEARN_TEACH_LEGACY, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, isTeachingAction, type CheckVerdict, type ClassicLearnAction, type ExplanationDepth, type LearnAction, type TeachingAction } from "./config";
 import { examClaimViolations, highYieldWords, normaliseTeachingMarkdown, teachingBase, teachingInstruction, teachingMaxTokens, type ExamEvidence, type HintLevel } from "./learn-teaching";
 import type { CognitiveLevel } from "./question-intel";
 import { citeChunk, findPatientIdentifiers } from "./extract";
@@ -17,7 +17,9 @@ import {
   parseRubric, planCardLevels, referenceGrounding, stemKey,
   type FeedbackParts, type GenerationContext, type LevelMix, type LevelPlan, type Rubric,
 } from "./question-intel";
-import { checkRevisionDraft, type RevisionDraft } from "./revision";
+import { checkRevisionDraft, objectiveKey, type RevisionDraft } from "./revision";
+import { BLIND_SOLVE_SYSTEM, applyBlindVerification, blindItemOf, blindSolvePrompt, isBlindFormat } from "./blind-verify";
+import { balanceTrueFalse } from "./formats";
 import { blueprintFromDraft, checkPrivateCase } from "./clinical";
 import {
   OSCE_FEEDBACK_SYSTEM, OSCE_PROMPT_VERSIONS, checkOsceDraft, feedbackGroundingCheck, feedbackGroundingText, osceFeedbackPrompt, osceStationPrompt, osceStationSystem, parseOsceFeedback,
@@ -273,7 +275,18 @@ export const QUESTION_SYSTEM: Record<QuestionKind, string> = {
  * What a generator is checked against besides its passage (question-intel.ts). Optional throughout. `levelMix`
  * (flashcards only, SCHOLAR-FLASHCARDS-QA-01): the cognitive-level mix to write to, narrowed to what the passage supports.
  */
-export type GenerationOptions = { context?: GenerationContext; existing?: ReadonlySet<string>; levelMix?: LevelMix };
+export type GenerationOptions = {
+  context?: GenerationContext; existing?: ReadonlySet<string>; levelMix?: LevelMix;
+  /**
+   * SCHOLAR-SQIE-LEARNER-01 (policy scholar_verify_formats): the formats a blind check is run on before an item is stored. Absent: the
+   * behaviour from before the policy (mcq, case, mrq, short). A format not in it is stored on its deterministic checks alone.
+   */
+  verifyFormats?: readonly string[];
+  /** SCHOLAR-SQIE-LEARNER-01: objectiveKey of the objectives this section already tests in this format; a draft that repeats one is not stored. */
+  existingObjectives?: ReadonlySet<string>;
+};
+/** SCHOLAR-SQIE-LEARNER-01: the formats that were always blind-checked: what an absent policy means. */
+export const VERIFY_DEFAULT: readonly string[] = ["mcq", "case", "mrq", "short"];
 
 export function questionUserPrompt(passage: Passage): string {
   return `PASSAGE (${passageCitation(passage)}):\n${passage.content}\n\n`
@@ -316,6 +329,7 @@ export function checkQuestions(raw: string, passage: Passage, limit: number = QU
   // Notes only: an mcq or case question cannot record a reference (416 keeps their `answer` null), so source mode
   // notes_and_references is never applied here -- the passage alone grounds it, exactly as before.
   const seen = new Set(opts.existing ?? []);
+  const objectives = new Set(opts.existingObjectives ?? []);
   for (const item of arr.slice(0, Math.min(cap, Math.max(1, Math.floor(limit))))) {
     const q = item as Record<string, unknown>;
     const options = Array.isArray(q?.options) ? (q.options as unknown[]).map(o => (typeof o === "string" ? o.trim() : "")) : [];
@@ -340,8 +354,12 @@ export function checkQuestions(raw: string, passage: Passage, limit: number = QU
     if (seen.has(key)) { out.dropped.push({ reason: "repeat" }); continue; }
     const difficulty = difficultyOf(q);
     if (!difficultyFits(difficulty, opts.context?.difficulty ?? null)) { out.dropped.push({ reason: "off_difficulty", detail: String(difficulty) }); continue; }
+    const rubric = parseRubric(q, [passage.content], { expectedAnswer: options[ci], difficulty });
+    // SCHOLAR-SQIE-LEARNER-01: not the same learning objective as one this section already tests in this format.
+    if (rubric.objective && objectives.has(objectiveKey(rubric.objective))) { out.dropped.push({ reason: "repeat" }); continue; }
     seen.add(key);
-    out.kept.push({ ...draft, difficulty, rubric: parseRubric(q, [passage.content], { expectedAnswer: options[ci], difficulty }) });
+    if (rubric.objective) objectives.add(objectiveKey(rubric.objective));
+    out.kept.push({ ...draft, difficulty, rubric });
   }
   return out;
 }
@@ -826,7 +844,7 @@ const REVISION_COMMON = [
   RUBRIC_RULE,
   "Reply with a JSON array ONLY, no prose and no code fence. If the passage cannot support an item of this kind, reply [].",
 ];
-export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence" | "structured", string> = {
+export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence" | "structured" | "true_false" | "extended", string> = {
   mrq: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? that says to choose all that apply", "options": [4 to 6 short options built only from the passage\'s words, each a plausible answer, never "all of the above"], "correct": [the indexes of EVERY option the passage supports, at least one and not all], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   short: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? whose answer is a few words from the passage", "accepted": [1 to 4 short answers the passage supports, in its own words], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   // SCHOLAR-FLASHCARDS-QA-01 (flashcard v2, PROMPT_VERSIONS.flashcardMix): a concise one-concept back (never the
@@ -844,14 +862,31 @@ export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "
     'Each item: {"stem": "a short lead-in from the passage that sets up the parts (a statement is allowed here)", "parts": [{"prompt": "part (a): a question ending with ?", "marks": 1, "accepted": [1 to 4 short answers the passage supports, in its own words], "keyPoints": ["..."], "misconceptions": []}, {"prompt": "part (b): a different question ending with ?", "marks": 2, "accepted": ["..."], "keyPoints": ["..."], "misconceptions": []}], "rationale": "...", "sourceQuote": "...", "difficulty": 2, "level": "understanding", "objective": "...", "references": []}.',
     "Two to four parts. Each part asks something DIFFERENT that the passage answers, building from recall to understanding or application where the passage allows. marks is a whole number from 1 to 5: more for a part that needs more of the passage. Write at most one item.",
   ].join("\n"),
+  // SCHOLAR-SQIE-LEARNER-01: true/false -- a statement the passage settles, marked by code (formats.ts). Stored as a `short` item.
+  true_false: [...REVISION_COMMON,
+    'Each item: {"statement": "ONE declarative sentence (never a question) that the passage settles, in the passage\'s own words", "answer": true, "explanation": "one or two sentences from the passage saying why the statement is true or false", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}.',
+    'For true or false, rule 7 does not apply: the statement is a statement. Balance the items: about half should be false. A FALSE statement changes ONE thing the passage says (its opposite, or another term from the passage) using only words the passage uses, so the passage plainly shows it is false, and sourceQuote is the sentence that shows it. A TRUE statement is supported by sourceQuote itself. No double negatives, no "always" or "never" unless the passage says so, and never a statement the passage does not settle.',
+  ].join("\n"),
+  // SCHOLAR-SQIE-LEARNER-01: extended response -- a paragraph answer marked by the formative evaluator against its key points (formats.ts).
+  extended: [...REVISION_COMMON,
+    `Each item: {"stem": "a question ending with ? that needs a short paragraph to answer", "modelAnswer": "a complete answer of two to four sentences, in the passage's own words", "keyPoints": [${EXTENDED_POINTS_MIN} to ${EXTENDED_POINTS_MAX} short points a full answer makes, each a DIFFERENT idea the passage states], "marks": 4, "rationale": "...", "sourceQuote": "...", "difficulty": 2, "level": "understanding", "objective": "...", "misconceptions": [], "references": []}.`,
+    `For an extended response, "keyPoints" has ${EXTENDED_POINTS_MIN} to ${EXTENDED_POINTS_MAX} points (not one to four): the answer is marked by how many it makes. marks is a whole number from 1 to 10. Write at most one item.`,
+  ].join("\n"),
 };
 
 /** The revision kinds the blind check fits (question-quality.ts REVISION_VERIFY_SYSTEM). */
 export const REVISION_VERIFIED_KINDS: readonly (keyof typeof REVISION_SYSTEM)[] = ["mrq", "short"];
-export const revisionPromptVersion = (kind: keyof typeof REVISION_SYSTEM) =>
-  kind === "structured" ? PROMPT_VERSIONS.structured
-    : kind === "flashcard" ? `${PROMPT_VERSIONS.revision}:flashcard+${PROMPT_VERSIONS.flashcardMix}`
-      : `${PROMPT_VERSIONS.revision}:${kind}${REVISION_VERIFIED_KINDS.includes(kind) ? `+${PROMPT_VERSIONS.verifyRevision}` : ""}`;
+/**
+ * The prompt version a new item is stored at. `verified` (default: the kinds that were always blind-checked) adds the check's own
+ * version, so what is stored says whether a blind reader saw it. The version PREFIX (formatPromptVersion) does not change with it.
+ */
+export const revisionPromptVersion = (kind: keyof typeof REVISION_SYSTEM, verified: "default" | "blind" | "revision" | "none" = "default") => {
+  const check = verified === "default" ? (REVISION_VERIFIED_KINDS.includes(kind) ? "revision" : "none") : verified;
+  const suffix = check === "revision" ? `+${PROMPT_VERSIONS.verifyRevision}` : check === "blind" ? `+${PROMPT_VERSIONS.verifyBlind}` : "";
+  return kind === "structured" ? `${PROMPT_VERSIONS.structured}${suffix}`
+    : kind === "flashcard" ? `${PROMPT_VERSIONS.revision}:flashcard+${PROMPT_VERSIONS.flashcardMix}${suffix}`
+      : `${PROMPT_VERSIONS.revision}:${kind}${suffix}`;
+};
 /**
  * The prompt version prefix a stored question of a format was written at: what "already written at this version" reads.
  * SCHOLAR-FLASHCARDS-QA-01: a flashcard's includes the level mix, so a section carded before the mix may be carded again
@@ -874,7 +909,12 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
   const context = opts.context;
   const refs = context?.mode === "notes_and_references" ? context.references : [];
   const verifyPassage = [passage.content, ...referenceGrounding(refs)].join("\n");
-  const asked = kind === "structured" ? 1 : Math.min(3, Math.max(1, limit));
+  const asked = kind === "structured" || kind === "extended" ? 1 : Math.min(3, Math.max(1, limit));
+  // SCHOLAR-SQIE-LEARNER-01: which formats a blind check runs on (policy scholar_verify_formats), and the objectives already tested.
+  const verifyOn = (opts.verifyFormats ?? VERIFY_DEFAULT).includes(kind);
+  const seenObjectives = new Set(opts.existingObjectives ?? []);
+  const objectiveOf = (d: RevisionDraft) => (d.answer.rubric as { objective?: string | null } | undefined)?.objective ?? null;
+  let verifiedAny = false;
   // SCHOLAR-FLASHCARDS-QA-01: flashcards to the level mix, only at the levels this passage can support (the rest fall
   // back to recall and understanding, and why is returned for the audit row): one more line of the guidance block.
   const levelPlan: LevelPlan | null = kind === "flashcard" && opts.levelMix ? planCardLevels(opts.levelMix, asked, { difficulty: context?.difficulty ?? null, passage: passage.content }) : null;
@@ -895,37 +935,48 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
     model = r.model; provider = r.provider;
     // A repeat of a stored stem, or of one kept earlier in this reply, is not stored again.
     const seen = new Set(opts.existing ?? []);
+    const replyObjectives = new Set(seenObjectives);
     let batch: RevisionDraft[] = [];
     // A structured question is one substantial item a call (its prompt asks for at most one).
-    for (const raw of (parseJsonArray(r.text) ?? []).slice(0, kind === "structured" ? 1 : limit)) {
-      const c = checkRevisionDraft(kind, raw, passage, { existing: seen, difficulty: context?.difficulty ?? null, references: refs });
+    for (const raw of (parseJsonArray(r.text) ?? []).slice(0, kind === "structured" || kind === "extended" ? 1 : limit)) {
+      const c = checkRevisionDraft(kind, raw, passage, { existing: seen, difficulty: context?.difficulty ?? null, references: refs, existingObjectives: replyObjectives });
       if (c.ok) {
+        const objective = objectiveOf(c.draft);
+        if (objective) replyObjectives.add(objectiveKey(objective));
         // A card claiming a level this passage cannot support is labelled for what it is (its words unchanged).
         if (levelPlan && capCardLevel(c.draft.answer, levelPlan.passage)) relabelled++;
         batch.push(c.draft); seen.add(stemKey(c.draft.stem));
       } else dropped.push(c.reason);
     }
-    if (batch.length && REVISION_VERIFIED_KINDS.includes(kind)) {
-      calls++;
-      const items: RevisionVerifyItem[] = batch.map(d => ({ stem: d.stem, options: d.options, keyed: kind === "mrq" ? (d.answer.correct as number[]) : null }));
+    // true/false is kept balanced before it costs a blind check (formats.ts balanceTrueFalse).
+    if (kind === "true_false") batch = balanceTrueFalse(batch, limit);
+    if (batch.length && verifyOn && (REVISION_VERIFIED_KINDS.includes(kind) || isBlindFormat(kind))) {
+      calls++; verifiedAny = true;
+      // The same call shape for every format: the reader is given the passage and the items WITHOUT the key.
+      const blind = REVISION_VERIFIED_KINDS.includes(kind) ? null : batch.map(d => blindItemOf(kind as Parameters<typeof blindItemOf>[0], d));
+      const items: RevisionVerifyItem[] = blind ? [] : batch.map(d => ({ stem: d.stem, options: d.options, keyed: kind === "mrq" ? (d.answer.correct as number[]) : null }));
       const v = await run({
-        system: REVISION_VERIFY_SYSTEM,
-        user: revisionVerificationPrompt(verifyPassage, items),
+        system: blind ? BLIND_SOLVE_SYSTEM : REVISION_VERIFY_SYSTEM,
+        user: blind ? blindSolvePrompt(verifyPassage, blind) : revisionVerificationPrompt(verifyPassage, items),
         tier: "reasoning",
         maxTokens: 600,
         context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_revision_${kind}_verify` },
       }, attempt === 1 ? "verify" : "retry-verify");
       if (!v.ok) { dropped.push(...batch.map(() => "verification_unavailable")); batch = []; }
       else {
-        const outcome = applyRevisionVerification(items, v.text);
+        const outcome = blind ? applyBlindVerification(blind, v.text) : applyRevisionVerification(items, v.text);
         dropped.push(...outcome.rejected.map(() => "failed_verification"));
         batch = outcome.kept.map(i => batch[i]);
       }
     }
     kept = batch.slice(0, limit);
+    // Only what survived every check counts as already tested (a draft the blind check dropped may be written again).
+    for (const d of kept) { const o = objectiveOf(d); if (o) seenObjectives.add(objectiveKey(o)); }
   }
   return {
-    ok: true as const, kept, dropped, model, provider, calls, promptVersion: revisionPromptVersion(kind),
+    ok: true as const, kept, dropped, model, provider, calls,
+    // What is stored says whether a blind reader saw it: the version of the check that ran, or none (policy scholar_verify_formats).
+    promptVersion: revisionPromptVersion(kind, !verifiedAny ? "none" : REVISION_VERIFIED_KINDS.includes(kind) ? "revision" : "blind"),
     levelPlan: levelPlan ? { levels: levelPlan.levels, fallback: levelPlan.fallback, relabelled } : null,
   };
 }
@@ -943,9 +994,18 @@ export const EVALUATE_SYSTEM = [
   "No new facts, numbers, doses, drugs or advice. No patient names. If the passage does not let you judge reliably, reply with exactly NOT_IN_NOTES.",
 ].join("\n");
 
+// SCHOLAR-SQIE-LEARNER-01: the same evaluator for an extended response, given the item's key points NUMBERED. It also says which of
+// them the answer makes (a MATCHED line); the score is the share of key points matched (formats.ts extendedMarks), not a number
+// the model wrote. Still formative, still labelled, still withheld when the passage cannot settle it.
+export const EVALUATE_EXTENDED_SYSTEM = [
+  EVALUATE_SYSTEM,
+  "The KEY POINTS are numbered. After the VERDICT line add exactly one line 'MATCHED: ' followed by the numbers of the key points the answer makes (for example 'MATCHED: 1, 3'), or 'MATCHED: none'.",
+  "A key point counts only if the answer says it, in any wording that means the same. Do not count a point the answer only hints at. This is a list of numbers, not a mark: still never give a mark, a score or a percentage.",
+].join("\n");
+
 export type EvaluateVerdict = "correct" | "partly" | "incorrect";
 export type ShortAnswerEvaluation =
-  | { ok: true; verdict: EvaluateVerdict; score: number; feedback: string; parts?: FeedbackParts }
+  | { ok: true; verdict: EvaluateVerdict; score: number; feedback: string; parts?: FeedbackParts; matched?: number[] }
   | { ok: false; reason: "malformed" | "not_in_notes" | "ungrounded" | "identifier" };
 const VERDICT_SCORE: Record<EvaluateVerdict, number> = { correct: 1, partly: 0.5, incorrect: 0 };
 
@@ -953,30 +1013,42 @@ const VERDICT_SCORE: Record<EvaluateVerdict, number> = { correct: 1, partly: 0.5
  * Pure. The evaluator's reply, checked: a verdict, and feedback that adds nothing the grounding does not hold. The five
  * labelled parts where it wrote them (parts, and feedback as their readable text); the v1 free text otherwise.
  */
-export function parseEvaluation(raw: string, grounding: readonly string[]): ShortAnswerEvaluation {
+export function parseEvaluation(raw: string, grounding: readonly string[], opts: { keyPoints?: number } = {}): ShortAnswerEvaluation {
   const text = raw.trim();
   if (text.replace(/[^A-Z_]/g, "") === NOT_IN_NOTES) return { ok: false, reason: "not_in_notes" };
   const m = /^\s*\**VERDICT:\s*(correct|partly|incorrect)\**\s*$/im.exec(text);
   if (!m) return { ok: false, reason: "malformed" };
-  const body = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim();
+  let rest = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim();
+  // An extended response: which numbered key points the answer makes. Required there, and taken out of the feedback text.
+  let matched: number[] | undefined;
+  if (opts.keyPoints) {
+    const mm = /^\s*\**MATCHED\**\s*:\s*(.*)$/im.exec(rest);
+    if (!mm) return { ok: false, reason: "malformed" };
+    const nums = /^\s*(none|n\/a|-)?\s*\.?\s*$/i.test(mm[1]) ? [] : mm[1].split(/[^0-9]+/).filter(Boolean).map(Number);
+    if (nums.some(n => !Number.isInteger(n) || n < 1 || n > opts.keyPoints!)) return { ok: false, reason: "malformed" };
+    matched = [...new Set(nums.map(n => n - 1))].sort((a, b) => a - b);
+    rest = (rest.slice(0, mm.index) + rest.slice(mm.index + mm[0].length)).trim();
+  }
+  const body = rest;
   const parts = parseFeedbackSections(body);
   const feedback = parts ? feedbackText(parts) : body;
   if (!feedback || feedback.length > (parts ? 2000 : 800)) return { ok: false, reason: "malformed" };
   if (findPatientIdentifiers(feedback).length) return { ok: false, reason: "identifier" };
   if (groundingViolations(feedback, [...grounding]).length) return { ok: false, reason: "ungrounded" };
   const verdict = m[1].toLowerCase() as EvaluateVerdict;
-  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback, ...(parts ? { parts } : {}) };
+  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback, ...(parts ? { parts } : {}), ...(matched ? { matched } : {}) };
 }
 
 /** AI evaluation of one short answer. `run` is the metered runner (activity `evaluate`); the caller screened the answer. */
-export async function runEvaluate(userId: string, input: { question: string; accepted: readonly string[]; answer: string; passage: Passage; rubric?: Rubric | null }, run: AiRun = direct) {
+export async function runEvaluate(userId: string, input: { question: string; accepted: readonly string[]; answer: string; passage: Passage; rubric?: Rubric | null; numberedKeyPoints?: readonly string[] }, run: AiRun = direct) {
   const rubric = input.rubric;
+  const numbered = input.numberedKeyPoints?.length ? input.numberedKeyPoints : null;
   const r = await run({
-    system: EVALUATE_SYSTEM,
+    system: numbered ? EVALUATE_EXTENDED_SYSTEM : EVALUATE_SYSTEM,
     user: [
       `PASSAGE FROM MY NOTES (${passageCitation(input.passage)}):\n${input.passage.content}`,
       `QUESTION: ${input.question}\nACCEPTED ANSWERS: ${input.accepted.join(" | ")}`,
-      rubric?.keyPoints.length ? `KEY POINTS: ${rubric.keyPoints.join(" | ")}` : null,
+      numbered ? `KEY POINTS (numbered):\n${numbered.map((k, i) => `${i + 1}. ${k}`).join("\n")}` : rubric?.keyPoints.length ? `KEY POINTS: ${rubric.keyPoints.join(" | ")}` : null,
       rubric?.misconceptions.length ? `COMMON MISCONCEPTIONS: ${rubric.misconceptions.join(" | ")}` : null,
       `MY ANSWER: ${input.answer}`,
     ].filter(Boolean).join("\n\n"),
@@ -985,8 +1057,8 @@ export async function runEvaluate(userId: string, input: { question: string; acc
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_evaluate" },
   });
   if (!r.ok) return { ok: false as const, error: r.error };
-  return { ok: true as const, model: r.model, provider: r.provider, promptVersion: PROMPT_VERSIONS.evaluate,
-    evaluation: parseEvaluation(r.text, [input.passage.content, ...input.accepted, ...(rubric?.keyPoints ?? []), ...(rubric?.misconceptions ?? []), input.answer, input.question]) };
+  return { ok: true as const, model: r.model, provider: r.provider, promptVersion: numbered ? `${PROMPT_VERSIONS.evaluate}+${PROMPT_VERSIONS.evaluateExtended}` : PROMPT_VERSIONS.evaluate,
+    evaluation: parseEvaluation(r.text, [input.passage.content, ...input.accepted, ...(numbered ?? rubric?.keyPoints ?? []), ...(rubric?.misconceptions ?? []), input.answer, input.question], numbered ? { keyPoints: numbered.length } : {}) };
 }
 
 // ── STAGE 5A (CR1-CR3): A PRIVATE CASE FROM THE STUDENT'S NOTES ── written as a draft, made a blueprint by code ──
@@ -1148,7 +1220,9 @@ export function checkCaseTitle(title: string, passage: Passage): string {
   return t;
 }
 
-export async function runCase(userId: string, passage: Passage, run: AiRun = direct) {
+export async function runCase(userId: string, passage: Passage, run: AiRun = direct, opts: { verifyFormats?: readonly string[] } = {}) {
+  // SCHOLAR-SQIE-LEARNER-01 (policy scholar_verify_formats): whether the case's steps are blind-checked. Absent: they always were.
+  const verifyOn = (opts.verifyFormats ?? VERIFY_DEFAULT).includes("case");
   const dropped: QuestionCheck["dropped"] = [];
   let steps: DraftQuestion[] = [];
   let title = CASE_FALLBACK_TITLE;
@@ -1174,7 +1248,9 @@ export async function runCase(userId: string, passage: Passage, run: AiRun = dir
     if (!parsed.steps.length) { declaredInsufficient = true; break; }
     const check = checkQuestions(JSON.stringify(parsed.steps), passage, CASE_MAX_STEPS, CASE_MAX_STEPS);
     dropped.push(...check.dropped);
-    if (check.kept.length >= CASE_MIN_STEPS) {
+    if (check.kept.length >= CASE_MIN_STEPS && !verifyOn) {
+      steps = check.kept; title = checkCaseTitle(parsed.title, passage);
+    } else if (check.kept.length >= CASE_MIN_STEPS) {
       const v = await run({
         system: VERIFY_SYSTEM,
         user: verificationPrompt(passage.content, check.kept),
@@ -1215,6 +1291,8 @@ export async function runQuestions(userId: string, kind: QuestionKind, passage: 
   // SCHOLAR-QUESTION-INTELLIGENCE-01: the guidance block (concepts, competency, level, difficulty, count). Notes only:
   // an mcq or case question cannot record a reference, so none is ever offered here (checkQuestions).
   if (opts.context) opts = { ...opts, context: { ...opts.context, mode: "notes", references: [] } };
+  // SCHOLAR-SQIE-LEARNER-01 (policy scholar_verify_formats): whether this format is blind-checked. Absent: it always was.
+  const verifyOn = (opts.verifyFormats ?? VERIFY_DEFAULT).includes(kind);
   const guidance = generationContextBlock(opts.context ?? NO_CONTEXT, opts.context ? limit : null);
   while (attempts < 2 && kept.length === 0 && !declaredInsufficient) {
     attempts++;
@@ -1235,7 +1313,10 @@ A previous attempt was rejected for: ${feedback}. Write new questions that avoid
     // (QUESTION_SYSTEM.case). Not asked again. Multiple-choice questions keep their one retry: [] is not defined there.
     if (kind === "case" && parseJsonArray(r.text)?.length === 0) { declaredInsufficient = true; break; }
     dropped.push(...check.dropped);
-    if (check.kept.length) {
+    if (check.kept.length && !verifyOn) {
+      // Switched off by policy (scholar_verify_formats): stored on its deterministic checks alone.
+      kept = check.kept;
+    } else if (check.kept.length) {
       calls++;
       const v = await run({
         system: VERIFY_SYSTEM,
@@ -1257,6 +1338,8 @@ A previous attempt was rejected for: ${feedback}. Write new questions that avoid
   }
   return {
     ok: true as const, check: { kept, dropped }, model, provider, attempts, calls, declaredInsufficient,
+    // The version names the prompt and its check as the routes look stored questions up by it (unansweredQuestions): a format
+    // switched off by policy keeps it, and is told apart by its rows' own dropped reasons and the audit row.
     promptVersion: `${PROMPT_VERSIONS[kind]}+${PROMPT_VERSIONS.verify}`,
   };
 }

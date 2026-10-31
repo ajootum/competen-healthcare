@@ -350,7 +350,7 @@ const AI_ROUTES: [string, string, RegExp][] = [
   [`${API}/learn/act/route.ts`, `scholarAiRunner(ctx, req, activity, risk)`,
     /const risk = await scholarRisk\(ctx\.admin, ctx\.userId, \{ text: prompt, passages, purpose: purposeFrom\(body\) \}\);[\s\S]*const ai = scholarAiRunner\([\s\S]*runLearn\([\s\S]*?\}, ai\.run\)[\s\S]*if \(rr\?\.ok && !\(await withinRequestRisk\(ctx\.admin, activity, risk, \[rr\.text\]\)\)\[0\]\) rr = \{ ok: false, reason: "risk_raised" \};/],
   [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runQuestions\([^;]*ai\.run(?:, \{[^;]*\})?\)/],
-  [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run\)/],
+  [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run(?:, \{[^;]*\})?\)/],
   [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }))`, /runAnalysis\([^)]*ai\.run\)/],
   // REVISION-01: a session's new questions (one id per call, `:g1` ...) and a short answer's AI evaluation.
   [`${API}/revision/sessions/route.ts`, "scholarAiRunner(ctx, req, \"questions\", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`)", /runRevisionQuestions\(ctx\.userId, call\.kind, passage, (?:mode === "flashcards" \? call\.count : )?Math\.max\(call\.count, 3\), ai\.run(?:, \{[^;]*\})?\)/],
@@ -563,7 +563,7 @@ const markingHonest = (src: Src) => {
     && /review_status: "private_formative"/.test(store) && /evaluator_model: a\.evaluator\?\.model \?\? null/.test(store)
     && /const marking = evaluator \? "ai_evaluation" as const : mark\.marking;/.test(ans)
     // SCHOLAR-SQIE-02: a withhold is typed and keeps the student's answer -- still the student's own judgement, never marked wrong.
-    && /if \(!evaluator\) return NextResponse\.json\(\{ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL\.self_graded(?:, \.\.\.\(withheld \? \{ withheld, questionId: q\.id, attempt: r\.text \} : \{\}\))? \}\);/.test(ans)
+    && /if \(!evaluator\) return NextResponse\.json\(\{ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL\.self_graded(?:, \.\.\.\(extSpec \? \{ extended: \{[^}]*\} \} : \{\}\))?(?:, \.\.\.\(withheld \? \{ withheld, questionId: q\.id, attempt: r\.text \} : \{\}\))? \}\);/.test(ans)
     && /markingLabel: MARKING_LABEL\[m\.marking\]/.test(view);
 };
 /**
@@ -1332,7 +1332,7 @@ function main() {
     && !libraryFeedbackOwned(plant(LIB_FB, "  if (!e.evaluation.ok) return { ok: false, reason: `withheld:${e.evaluation.reason}` };\n", ""))
     && !libraryFeedbackOwned(plant(`${API}/clinical/sessions/[kind]/[id]/answer/route.ts`, "  if (kind === \"library\" && text", "  void sessionFeedbackContext;\n  if (kind === \"library\" && text")));
   ok("P43. ⚠ K26 goes red when a route stops passing the runner, or a generator calls generate() directly",
-    !meteredEverywhere(plant(`${API}/questions/route.ts`, "count, ai.run, { context, existing })", "count, undefined, { context, existing })"))
+    !meteredEverywhere(plant(`${API}/questions/route.ts`, "count, ai.run, { context, existing, verifyFormats: policy.scholarVerifyFormats })", "count, undefined, { context, existing, verifyFormats: policy.scholarVerifyFormats })"))
     && !meteredEverywhere(plant(GEN, "    const r = await run({\n      system: QUESTION_SYSTEM[kind],", "    const r = await generate({\n      system: QUESTION_SYSTEM[kind],")));
   ok("P44. ⚠ K27 goes red when a draft counts as approved, a saved answer keeps its saved label, or the rendering trusts a status string",
     !referencesGoverned(plant(`${LIB}/learn.ts`, 'approved: c.contentStatus === "approved" }', 'approved: c.contentStatus !== "unreviewed" }'))

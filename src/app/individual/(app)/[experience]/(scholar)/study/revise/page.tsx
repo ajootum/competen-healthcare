@@ -5,11 +5,11 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import {
-  countDue, dueCards, getAdaptiveSet, getRevisionSession, listAdaptiveExams, listMaterials, listRevisionSessions, listRevisionSets, readConsent, revisionInsightRows, revisionPool, sqieSchema, type QuestionRow,
+  countDue, dueCards, getAdaptiveSet, getRevisionSession, listAdaptiveExams, listMaterials, listRevisionSessions, listRevisionSets, mistakeToFixCount, readConsent, revisionInsightRows, revisionPool, sqieSchema, type QuestionRow,
 } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
 import { answerText, buildRevisionInsights } from "@/lib/individual/scholar/revision";
-import { feedbackView, revisionItemView } from "@/lib/individual/scholar/revision-view";
+import { feedbackView, keptAttemptView, revisionItemView } from "@/lib/individual/scholar/revision-view";
 import { loadLearnerCatalogue, competencyLabels } from "@/lib/individual/scholar/competency-view";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
@@ -85,7 +85,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
     const questions = s.data.questionIds.map(id => byId.get(id)).filter((qq): qq is QuestionRow => !!qq);
     const show = s.data.session.feedback === "immediate" || s.data.session.status === "completed";
     const answered = s.data.attempts.filter(a => byId.has(a.questionId)).map(a => ({
-      questionId: a.questionId, ...(show ? { feedback: feedbackView(byId.get(a.questionId)!, { correct: a.correct, score: a.score, marking: a.marking as Marking }) } : {}),
+      questionId: a.questionId, ...(show ? { feedback: feedbackView(byId.get(a.questionId)!, { correct: a.correct, score: a.score, marking: a.marking as Marking, ...keptAttemptView(byId.get(a.questionId)!, a) }) } : {}),
     // 425, owner decision R4: a short answer held unmarked until the end is answered, and kept on resume. Its grading
     // comes with the end of the session (PATCH complete), never before.
     })).concat(s.data.held.filter(h => byId.has(h.questionId)).map(h => ({ questionId: h.questionId, held: true })));
@@ -143,6 +143,9 @@ export default async function Revise({ params, searchParams }: { params: Promise
     );
   }
 
+  // SCHOLAR-COMPANION-01 P1: the mistake notebook's entry (database reads only; absent when the policy is off or unreadable).
+  const toFix = policy.scholarMistakeNotebook === "on" ? await mistakeToFixCount(ctx.admin, ctx.userId) : null;
+
   return (
     <>
       {header}
@@ -154,6 +157,13 @@ export default async function Revise({ params, searchParams }: { params: Promise
             competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote}
             preset={q.material ? { materialId: q.material, difficulty: q.difficulty ?? null } : null}
             scope={q.material ? null : revisePrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) })} />
+
+          {toFix?.ok && (
+            <Link href={withStudy(studyHref("revise/mistakes"), sid)} className={`flex min-h-[44px] items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+              <span className="text-[14.5px] font-semibold text-gray-900">Mistake notebook ({toFix.data} to fix)</span>
+              <span className="text-[12.5px] text-gray-600">Your wrong answers, with the answer and why</span>
+            </Link>
+          )}
 
           {policy.scholarAdaptiveExams === "on" && (
             <section aria-labelledby="adaptive-h" className="rounded-2xl border border-gray-200 bg-white p-5">

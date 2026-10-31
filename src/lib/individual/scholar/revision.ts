@@ -16,10 +16,16 @@ import { createHash } from "node:crypto";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import type { Insufficient, NotMeasured } from "@/lib/competency/progress-model";
 import {
-  REVISION_GENERATION_CALLS_MAX, STRUCTURED_PART_MARKS_MAX, STRUCTURED_PARTS_MAX, STRUCTURED_PARTS_MIN, type RevisionDifficulty, type RevisionFormat, type RevisionMode,
+  EXTENDED_POINTS_MAX, EXTENDED_RESPONSE_MAX, REVISION_GENERATION_CALLS_MAX, STRUCTURED_PART_MARKS_MAX, STRUCTURED_PARTS_MAX, STRUCTURED_PARTS_MIN, type RevisionDifficulty, type RevisionFormat, type RevisionMode,
 } from "./config";
 import { findPatientIdentifiers } from "./extract";
+import { isClozeQuestion, markCloze } from "./cloze";
+import {
+  extendedSpecOf, isExtendedQuestion, isTrueFalseQuestion, marksPerPointOf, markTrueFalse, parseExtendedRaw, parseTrueFalseRaw, truthOf,
+} from "./formats";
+import { misconceptionScore, pickByMisconception, type RecentMiss } from "./misconception";
 import { textGroundingViolations } from "@/lib/ai/grounding";
+import { unsupportedTerms } from "./question-quality";
 import type { Passage } from "./generation";
 import {
   asksQuestion, difficultyFits, difficultyOf, distractorProblem, flashcardDraftProblem, flashcardFrontAsks, keyConsistent, parseRubric, referenceGrounding, rubricOf, stemKey,
@@ -38,7 +44,19 @@ export function markShortAnswer(answer: string, accepted: readonly string[]): tr
   return a && accepted.some(x => normaliseAnswer(x) === a) ? true : null;
 }
 
+/** The formats an AI call writes: every format but cloze, which a rule writes (cloze.ts). true_false and extended are written by AI (formats.ts). */
+export type WrittenFormat = Exclude<RevisionFormat, "cloze">;
 export type RevisionKind = RevisionFormat | "case";
+
+/**
+ * Pure. The format a stored question is offered as: a cloze, true/false or extended item is `short` in the database and its
+ * own format to a session (the stored kinds are the 416/710 ones; answer.format tells the rest apart).
+ */
+export const effectiveKind = (q: { kind: RevisionKind; answer: unknown }): RevisionKind =>
+  isClozeQuestion(q) ? "cloze" : isTrueFalseQuestion(q) ? "true_false" : isExtendedQuestion(q) ? "extended" : q.kind;
+
+/** Pure. The kind a format is stored as (migrations 416/710): cloze, true_false and extended are all `short`. */
+export const storedKind = (f: RevisionKind): RevisionKind => (f === "cloze" || f === "true_false" || f === "extended" ? "short" : f);
 
 /** The parts of a stored question the rules need. QuestionRow (store.ts) is one. */
 export type RevisionQuestion = {
@@ -79,7 +97,14 @@ export function keyOf(q: RevisionQuestion): Key | null {
   switch (q.kind) {
     case "mcq": case "case": return q.correctIndex !== null && q.correctIndex >= 0 && q.correctIndex < q.options.length ? { kind: "choice", index: q.correctIndex } : null;
     case "mrq": { const c = nums(a.correct); return c && c.length && c.every(i => i >= 0 && i < q.options.length) ? { kind: "set", indexes: [...new Set(c)].sort() } : null; }
-    case "short": { const c = strs(a.accepted); return c && c.length ? { kind: "accepted", answers: c } : null; }
+    case "short": case "cloze": case "true_false": case "extended": {
+      const c = strs(a.accepted);
+      if (!c || !c.length) return null;
+      // A true/false key is one of the two values, and an extended item without a sound marking key is not offered.
+      if (isTrueFalseQuestion(q) && truthOf(c[0]) === null) return null;
+      if (isExtendedQuestion(q) && !extendedSpecOf(q.answer)) return null;
+      return { kind: "accepted", answers: c };
+    }
     case "flashcard": return typeof a.back === "string" && a.back ? { kind: "back", text: a.back } : null;
     case "match": { const c = strs(a.matches); return c && c.length === q.options.length ? { kind: "matches", matches: c } : null; }
     case "sequence": { const c = nums(a.order); return c && c.length === q.options.length && new Set(c).size === c.length && c.every(i => i >= 0 && i < c.length) ? { kind: "order", order: c } : null; }
@@ -97,7 +122,10 @@ export function answerText(q: RevisionQuestion): string {
   switch (k.kind) {
     case "choice": return q.options[k.index];
     case "set": return k.indexes.map(i => q.options[i]).join("; ");
-    case "accepted": return k.answers.length > 1 ? `${k.answers[0]} (also accepted: ${k.answers.slice(1).join("; ")})` : k.answers[0];
+    case "accepted":
+      if (isTrueFalseQuestion(q)) return truthOf(k.answers[0]) === "true" ? "True" : "False";
+      if (isExtendedQuestion(q)) return extendedSpecOf(q.answer)?.modelAnswer ?? k.answers[0];
+      return isClozeQuestion(q) ? k.answers[0] : k.answers.length > 1 ? `${k.answers[0]} (also accepted: ${k.answers.slice(1).join("; ")})` : k.answers[0];
     case "back": return k.text;
     case "matches": return q.options.map((p, i) => `${p} → ${k.matches[i]}`).join("; ");
     case "order": return k.order.map(i => q.options[i]).join(" → ");
@@ -115,6 +143,8 @@ export type LearnerItem = {
   choices?: string[];
   /** structured only: each part's prompt and its marks. Never what it accepts or its rubric. */
   parts?: { prompt: string; marks: number }[];
+  /** extended only: the practice marks it carries, how many key points it is marked against (never what they are), and the longest answer. */
+  extended?: { marks: number; points: number; maxChars: number };
 };
 
 /** A deterministic shuffle by seed. Stable for one question, so a resumed session shows the same order. */
@@ -135,7 +165,10 @@ export function learnerItem(q: RevisionQuestion): LearnerItem {
     return { ...base, choices: seededOrder(m.length, `${q.id}:choices`).map(i => m[i]) };
   }
   if (q.kind === "structured") return { ...base, parts: structuredParts(q).map(p => ({ prompt: p.prompt, marks: p.marks })) };
-  return base;
+  // SCHOLAR-COMPANION-01: a cloze item is stored as `short` and shown as its own format (a blank to fill, not a free answer).
+  // SCHOLAR-SQIE-LEARNER-01: so are true/false (two buttons) and extended response (a long answer, marked against key points).
+  if (isExtendedQuestion(q)) { const e = extendedSpecOf(q.answer); return { ...base, kind: "extended", ...(e ? { extended: { marks: e.marks, points: e.keyPoints.length, maxChars: EXTENDED_RESPONSE_MAX } } : {}) }; }
+  return isClozeQuestion(q) ? { ...base, kind: "cloze" } : isTrueFalseQuestion(q) ? { ...base, kind: "true_false" } : base;
 }
 
 // ── AN ANSWER, AND HOW IT IS MARKED ──
@@ -152,7 +185,11 @@ export function parseResponse(q: RevisionQuestion, raw: unknown): Response | nul
   switch (q.kind) {
     case "mcq": case "case": return Number.isInteger(r.index) && (r.index as number) >= 0 && (r.index as number) < n ? { kind: "choice", index: r.index as number } : null;
     case "mrq": { const c = nums(r.indexes); return c && c.length <= n && c.every(i => i >= 0 && i < n) ? { kind: "set", indexes: [...new Set(c)].sort() } : null; }
-    case "short": return typeof r.text === "string" && r.text.trim() && r.text.length <= 1000 ? { kind: "text", text: r.text.trim() } : null;
+    case "short": case "cloze": case "true_false": case "extended": {
+      if (typeof r.text !== "string" || !r.text.trim()) return null;
+      if (isTrueFalseQuestion(q)) { const t = truthOf(r.text); return t ? { kind: "text", text: t } : null; }
+      return r.text.length <= (isExtendedQuestion(q) ? EXTENDED_RESPONSE_MAX : 1000) ? { kind: "text", text: r.text.trim() } : null;
+    }
     case "flashcard": return Number.isInteger(r.quality) && (r.quality as number) >= 0 && (r.quality as number) <= 5 ? { kind: "recall", quality: r.quality as number } : null;
     case "match": { const c = strs(r.matches); return c && c.length === n && c.every(s => s.length <= 500) ? { kind: "matches", matches: c } : null; }
     case "sequence": { const c = nums(r.order); return c && c.length === n && new Set(c).size === n && c.every(i => i >= 0 && i < n) ? { kind: "order", order: c } : null; }
@@ -204,6 +241,12 @@ export function markResponse(q: RevisionQuestion, r: Response): Mark {
     const correct = hits === k.indexes.length && wrong === 0;
     return { correct, score: Math.max(0, (hits - wrong) / k.indexes.length), marking: "deterministic" };
   }
+  // SCHOLAR-SQIE-LEARNER-01: true/false is marked by code against its key. An extended response is never marked by code: it needs
+  // the formative evaluator (against its key points) or the student's own judgement.
+  if (k.kind === "accepted" && r.kind === "text" && isTrueFalseQuestion(q)) { const ok = markTrueFalse(r.text, k.answers); return { correct: ok, score: ok ? 1 : 0, marking: "deterministic" }; }
+  if (k.kind === "accepted" && r.kind === "text" && isExtendedQuestion(q)) return { needsJudgement: true };
+  // SCHOLAR-COMPANION-01: a cloze answer is a single term, so code marks it either way (normalised match, accepted variants).
+  if (k.kind === "accepted" && r.kind === "text" && isClozeQuestion(q)) { const ok = markCloze(r.text, k.answers); return { correct: ok, score: ok ? 1 : 0, marking: "deterministic" }; }
   if (k.kind === "accepted" && r.kind === "text") return markShortAnswer(r.text, k.answers) ? { correct: true, score: 1, marking: "deterministic" } : { needsJudgement: true };
   if (k.kind === "back" && r.kind === "recall") return { correct: r.quality >= 3, score: r.quality / 5, marking: "self_graded" };
   if (k.kind === "matches" && r.kind === "matches") {
@@ -252,7 +295,29 @@ export type DraftChecks = {
   difficulty?: GenerationDifficulty | null;
   /** Mode notes_and_references: the references the item may draw on, and their text as extra grounding. */
   references?: readonly PromptReference[];
+  /**
+   * SCHOLAR-SQIE-LEARNER-01: objectiveKey of the learning objectives already stored for the same section and format. A draft
+   * whose own rubric objective is one of them checks the same thing again, and is not stored ("repeat").
+   */
+  existingObjectives?: ReadonlySet<string>;
 };
+
+/** Pure. A learning objective reduced for comparison: case, punctuation and spacing ignored. */
+export const objectiveKey = (s: string): string => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * Pure. The objectives (objectiveKey) of the stored questions of one section and one format: what the section already tests
+ * in that format. A question with no rubric has none.
+ */
+export function existingObjectives(questions: readonly { chunkId: string; kind: RevisionKind; answer: unknown }[], chunkId: string, format: RevisionKind): Set<string> {
+  const out = new Set<string>();
+  for (const q of questions) {
+    if (q.chunkId !== chunkId || effectiveKind(q) !== format) continue;
+    const o = rubricOf(q.answer)?.objective;
+    if (o && objectiveKey(o)) out.add(objectiveKey(o));
+  }
+  return out;
+}
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 const text = (v: unknown, max: number): string | null => (typeof v === "string" && v.trim() && v.length <= max ? v.trim() : null);
@@ -271,6 +336,8 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   const difficulty = difficultyOf(r);
   let d: RevisionDraft | null = null;
   let structuredRaw: Record<string, unknown>[] = [];
+  // SCHOLAR-SQIE-LEARNER-01: the key points an extended item is marked against (grounded with the rest of it).
+  let extendedPoints: string[] = [];
   if (kind === "mrq") {
     const stem = text(r.stem, 400), options = strs(r.options)?.map(o => o.trim()), correct = nums(r.correct), rationale = text(r.rationale, 1200);
     if (stem && options && options.length >= 4 && options.length <= 6 && options.every(o => o && o.length <= 200) && correct && correct.length >= 1
@@ -282,6 +349,24 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
     const stem = text(r.stem, 400), accepted = strs(r.accepted)?.map(a => a.trim()).filter(Boolean), rationale = text(r.rationale, 1200);
     if (stem && accepted && accepted.length >= 1 && accepted.length <= 8 && accepted.every(a => a.length <= 200) && rationale && quote)
       d = { stem, options: [], answer: { accepted: [...new Set(accepted)] }, rationale, sourceQuote: quote, difficulty };
+  } else if (kind === "true_false") {
+    // A statement the passage settles, true or false. It is a statement, not a question; marked by code.
+    const t = parseTrueFalseRaw(r);
+    if (t && quote) {
+      if (t.statement.includes("?")) return { ok: false, reason: "not_a_question" };
+      d = { stem: t.statement, options: [], answer: { format: "true_false", accepted: [t.truth ? "true" : "false"], statement: t.statement, explanation: t.explanation }, rationale: t.explanation, sourceQuote: quote, difficulty };
+    }
+  } else if (kind === "extended") {
+    // A question answered in a paragraph, marked against 3 to 8 key points; partial credit is whole marks a key point.
+    const e = parseExtendedRaw(r);
+    if (e && quote) {
+      const per = marksPerPointOf(e.marks, e.keyPoints.length);
+      d = {
+        stem: e.stem, options: [], rationale: text(r.rationale, 1200) ?? e.modelAnswer.slice(0, 1200), sourceQuote: quote, difficulty,
+        answer: { format: "extended", accepted: [e.modelAnswer], modelAnswer: e.modelAnswer, marks: per * e.keyPoints.length, partialCredit: { rule: "per_key_point", marksPerPoint: per } },
+      };
+      extendedPoints = e.keyPoints;
+    }
   } else if (kind === "flashcard") {
     const front = text(r.front, 300), back = text(r.back, 600);
     if (front && back && quote) d = { stem: front, options: [], answer: { back }, rationale: text(r.rationale, 1200) ?? back, sourceQuote: quote, difficulty };
@@ -319,7 +404,11 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   if (!d) return { ok: false, reason: "malformed" };
   if (!norm(passage.content).includes(norm(d.sourceQuote))) return { ok: false, reason: "quote_not_in_passage" };
   const partTexts = kind === "structured" ? (d.answer.parts as { prompt: string; accepted: string[] }[]).flatMap(p => [p.prompt, ...p.accepted]) : [];
-  const all = [d.stem, ...d.options, ...Object.values(d.answer).flatMap(v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : typeof v === "string" ? [v] : [])), ...partTexts, d.rationale].join("\n");
+  // The format tag and a true/false key ("true", "false") are not content: only the words an item says are screened.
+  const { format: _format, ...answerBody } = d.answer as Record<string, unknown>;
+  void _format;
+  if (kind === "true_false") delete answerBody.accepted;
+  const all = [d.stem, ...d.options, ...Object.values(answerBody).flatMap(v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : typeof v === "string" ? [v] : [])), ...partTexts, ...extendedPoints, d.rationale].join("\n");
   if (findPatientIdentifiers(all).length) return { ok: false, reason: "identifier" };
   const grounding = [passage.content, ...referenceGrounding(checks.references ?? [])];
   if (groundingViolations(all, grounding).length) return { ok: false, reason: "ungrounded" };
@@ -327,12 +416,18 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   // ── SCHOLAR-QUESTION-INTELLIGENCE-01: the item asks, is new, has real distractors, agrees with itself ──
   // A structured lead-in may set the scene: it is its PARTS that must each ask.
   if (kind === "structured" ? !(d.answer.parts as { prompt: string }[]).every(p => asksQuestion(p.prompt))
-    : kind === "flashcard" ? !flashcardFrontAsks(d.stem) : kind !== "match" && !asksQuestion(d.stem)) return { ok: false, reason: "not_a_question" };
+    : kind === "flashcard" ? !flashcardFrontAsks(d.stem) : kind !== "match" && kind !== "true_false" && !asksQuestion(d.stem)) return { ok: false, reason: "not_a_question" };
   if (kind === "flashcard") { const p = flashcardDraftProblem(d.stem, String(d.answer.back ?? ""), passage.content); if (p) return { ok: false, reason: p }; }
   if (checks.existing?.has(stemKey(d.stem))) return { ok: false, reason: "repeat" };
   if (kind === "mrq" && distractorProblem(d.options)) return { ok: false, reason: "weak_distractors" };
   const expected = expectedOf(kind, d);
-  if (kind !== "match" && kind !== "sequence" && kind !== "structured" && !keyConsistent(expected, `${d.rationale}\n${d.stem}`, d.sourceQuote)) return { ok: false, reason: "inconsistent" };
+  if (kind === "true_false") {
+    // The statement is built from the passage's own terms, and a TRUE one is supported by the quoted sentence itself.
+    const passageText = [passage.content, ...referenceGrounding(checks.references ?? [])].join("\n");
+    if (unsupportedTerms(d.stem, passageText).length) return { ok: false, reason: "ungrounded" };
+    // (It may add the topic's own name, at most two terms, from elsewhere in the passage.)
+    if ((d.answer.accepted as string[])[0] === "true" && unsupportedTerms(d.stem, d.sourceQuote).length > 2) return { ok: false, reason: "inconsistent" };
+  } else if (kind !== "match" && kind !== "sequence" && kind !== "structured" && kind !== "extended" && !keyConsistent(expected, `${d.rationale}\n${d.stem}`, d.sourceQuote)) return { ok: false, reason: "inconsistent" };
   if (!difficultyFits(d.difficulty, checks.difficulty ?? null)) return { ok: false, reason: "off_difficulty" };
   if (kind === "structured") {
     // Each part's rubric is grounded as every revision rubric is: an entry the notes do not hold is left out.
@@ -341,18 +436,28 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
       ...p, rubric: parseRubric(structuredRaw[i], grounding, { expectedAnswer: p.accepted[0], accepted: p.accepted, difficulty: draft.difficulty, references: checks.references }),
     }));
     const rubric = parseRubric(r, grounding, { expectedAnswer: expected || null, difficulty: draft.difficulty, references: checks.references });
+    if (repeatsObjective(rubric.objective, checks)) return { ok: false, reason: "repeat" };
     return { ok: true, draft: { ...draft, answer: { parts, rubric } } };
   }
-  const rubric = parseRubric(r, grounding, {
+  const rubric = parseRubric(kind === "extended" ? { ...r, keyPoints: extendedPoints } : r, grounding, {
     expectedAnswer: expected || null, accepted: kind === "short" ? (d.answer.accepted as string[]) : [], difficulty: d.difficulty, references: checks.references,
+    ...(kind === "extended" ? { maxKeyPoints: EXTENDED_POINTS_MAX } : {}),
   });
+  // An extended item keeps every key point it is marked against: one the rubric screen would drop makes the item unsound.
+  if (kind === "extended" && rubric.keyPoints.length !== extendedPoints.length) return { ok: false, reason: "ungrounded" };
+  if (repeatsObjective(rubric.objective, checks)) return { ok: false, reason: "repeat" };
   return { ok: true, draft: { ...d, answer: { ...d.answer, rubric } } };
 }
+
+/** Pure. The draft's own objective is one this section already tests in this format. */
+const repeatsObjective = (objective: string | null, checks: DraftChecks): boolean => !!objective && !!checks.existingObjectives?.has(objectiveKey(objective));
 
 /** The answer an item expects, in words: what its rubric records and its consistency check reads. */
 function expectedOf(kind: Exclude<RevisionFormat, "mcq">, d: RevisionDraft): string {
   const a = d.answer as Record<string, unknown>;
   if (kind === "short") return String((a.accepted as string[])[0] ?? "");
+  if (kind === "true_false") return String(a.explanation ?? "");
+  if (kind === "extended") return String(a.modelAnswer ?? "");
   if (kind === "flashcard") return String(a.back ?? "");
   if (kind === "mrq") return (a.correct as number[]).map(i => d.options[i]).join("; ");
   if (kind === "match") return d.options.map((o, i) => `${o}: ${(a.matches as string[])[i]}`).join("; ");
@@ -365,6 +470,8 @@ function expectedOf(kind: Exclude<RevisionFormat, "mcq">, d: RevisionDraft): str
 export type PoolItem = {
   id: string; kind: RevisionKind; difficulty: number | null; chunkId: string; createdAt: string;
   latestCorrect: boolean | null; misses: number; lastAnsweredAt: string | null; due: boolean;
+  /** SCHOLAR-SQIE-LEARNER-01: what its rubric lists as common misconceptions, and its topic (misconception.ts). Optional: none is no match. */
+  misconceptions?: readonly string[]; topic?: string | null;
 };
 
 const DIFFICULTY_LEVEL: Record<Exclude<RevisionDifficulty, "any">, number> = { easy: 1, standard: 2, harder: 3 };
@@ -383,7 +490,11 @@ const byFormat = (xs: readonly PoolItem[]): PoolItem[] => {
  * Pure. The questions a session offers, in order, and how many it is short. Deterministic for a seed. Questions of a
  * format the session does not offer are left out; a difficulty is preferred, then filled from the rest.
  */
-export function pickQuestions(input: { mode: RevisionMode; pool: readonly PoolItem[]; quantity: number; formats: readonly RevisionKind[]; difficulty: RevisionDifficulty; seed: string }): { ids: string[]; shortfall: number } {
+export function pickQuestions(input: {
+  mode: RevisionMode; pool: readonly PoolItem[]; quantity: number; formats: readonly RevisionKind[]; difficulty: RevisionDifficulty; seed: string;
+  /** SCHOLAR-SQIE-LEARNER-01: the learner's misses in the last 30 days (misconception.ts recentMisses). Only Weak areas reads them. */
+  recentMisses?: readonly RecentMiss[];
+}): { ids: string[]; shortfall: number } {
   const formats = input.mode === "flashcards" ? ["flashcard"] : input.formats;
   let pool = input.pool.filter(p => formats.includes(p.kind));
   const level = input.difficulty === "any" ? null : DIFFICULTY_LEVEL[input.difficulty];
@@ -393,7 +504,16 @@ export function pickQuestions(input: { mode: RevisionMode; pool: readonly PoolIt
   let ordered: PoolItem[];
   switch (input.mode) {
     case "spaced": ordered = stable(pool.filter(p => p.due)); break;
-    case "weak": ordered = [...pool.filter(weak)].sort((a, b) => b.misses - a.misses || Number(a.latestCorrect) - Number(b.latestCorrect) || a.id.localeCompare(b.id)); break;
+    case "weak": {
+      const missed = [...pool.filter(weak)].sort((a, b) => b.misses - a.misses || Number(a.latestCorrect) - Number(b.latestCorrect) || a.id.localeCompare(b.id));
+      // SCHOLAR-SQIE-LEARNER-01: among the missed, those on a misconception or topic the learner keeps missing come first; then
+      // the questions they have not answered yet (or that are due) on those same misconceptions fill what is left. With no
+      // recent misses this is exactly the order above.
+      const misses = input.recentMisses ?? [];
+      const related = pool.filter(p => !weak(p) && (p.due || p.lastAnsweredAt === null) && misconceptionScore(p, misses) > 0);
+      ordered = [...pickByMisconception(missed, misses, { answeredToo: true }), ...pickByMisconception(related, misses)];
+      break;
+    }
     case "flashcards": ordered = [...stable(pool.filter(p => p.due)), ...stable(pool.filter(p => !p.due && p.lastAnsweredAt === null)), ...stable(pool.filter(p => !p.due && p.lastAnsweredAt !== null))]; break;
     case "today": {
       // SQIE fix D-6: new questions interleaved by format (oldest format first), so a session asked for two formats
@@ -422,19 +542,21 @@ export function pickQuestions(input: { mode: RevisionMode; pool: readonly PoolIt
  * three items a call and REVISION_GENERATION_CALLS_MAX calls, never a section and format that already has questions
  * at this prompt version (identical content is not written twice).
  */
-export function planGeneration(input: { shortfall: number; chunkIds: readonly string[]; formats: readonly RevisionFormat[]; existing: ReadonlySet<string>; perCall?: number }): { chunkId: string; kind: RevisionFormat; count: number }[] {
+export function planGeneration(input: { shortfall: number; chunkIds: readonly string[]; formats: readonly RevisionFormat[]; existing: ReadonlySet<string>; perCall?: number }): { chunkId: string; kind: WrittenFormat; count: number }[] {
   const per = input.perCall ?? 3;
+  // SCHOLAR-COMPANION-01: cloze is written by a rule (cloze-service.ts), never by an AI call, so it is never planned here.
+  const formats = input.formats.filter((f): f is WrittenFormat => f !== "cloze");
   // Every section and format once, interleaved so consecutive calls differ in both.
-  const pairs: { chunkId: string; kind: RevisionFormat }[] = [];
+  const pairs: { chunkId: string; kind: WrittenFormat }[] = [];
   const n = input.chunkIds.length;
-  for (let c = 0; c < n; c++) for (let f = 0; f < input.formats.length; f++) pairs.push({ chunkId: input.chunkIds[(c + f) % n], kind: input.formats[f] });
+  for (let c = 0; c < n; c++) for (let f = 0; f < formats.length; f++) pairs.push({ chunkId: input.chunkIds[(c + f) % n], kind: formats[f] });
   const fresh = pairs.filter(p => !input.existing.has(`${p.chunkId}|${p.kind}`));
-  const out: { chunkId: string; kind: RevisionFormat; count: number }[] = [];
+  const out: { chunkId: string; kind: WrittenFormat; count: number }[] = [];
   let left = input.shortfall;
   // SQIE fix D-6: the shortfall is SHARED across the asked formats. Before, the first format took the whole of a
   // small shortfall (three items), so "short answer and multiple choice" for three questions never wrote a multiple
   // choice item at all. A format with no call yet takes only its share of what is left.
-  const planned = new Set<RevisionFormat>();
+  const planned = new Set<WrittenFormat>();
   for (const p of fresh) {
     if (left <= 0 || out.length >= REVISION_GENERATION_CALLS_MAX) break;
     const waiting = new Set(fresh.filter(x => !planned.has(x.kind)).map(x => x.kind)).size;

@@ -3,10 +3,10 @@ import type { PlanAiLimit } from "./commerce";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
 import {
-  CLASSIC_LEARN_ACTIONS, DEFAULT_UPLOAD_MB, FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, LEARN_ACTIONS, LEARN_ACTION_LABEL, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES,
-  MAX_SESSION_FILES, MAX_SESSION_MB, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, REVISION_FORMATS, REVISION_FORMAT_LABEL, REVISION_MODES, REVISION_MODE_LABEL, REVISION_QUANTITY_MAX, ADAPTIVE_FORMATS, ADAPTIVE_LENGTH_MAX, ADAPTIVE_LENGTH_MIN,
+  CLASSIC_LEARN_ACTIONS, DEFAULT_UPLOAD_MB, FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, LEARN_ACTIONS, LEARN_ACTION_LABEL, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES, MAX_SESSION_FILES, MAX_SESSION_MB, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, REVISION_FORMATS, REVISION_FORMAT_LABEL, REVISION_MODES, REVISION_MODE_LABEL, REVISION_QUANTITY_MAX, ADAPTIVE_FORMATS, ADAPTIVE_LENGTH_MAX, ADAPTIVE_LENGTH_MIN, REVISION_FORMATS_OFF_BY_DEFAULT,
   SESSION_MAX_STEPS, TUTOR_MAX_TURNS, UPLOAD_SESSION_MINUTES, CASE_CONTEXTS, CASE_CONTEXT_LABEL, CASE_ENTRIES, CASE_ENTRY_LABEL, CASE_DIMENSION_LABEL,
   type CaseContext, type CaseEntry,
+  VERIFY_FORMATS, VERIFY_FORMATS_DEFAULT, VERIFY_FORMAT_LABEL, type VerifyFormat,
   type AdaptiveFormat, type ExplanationDepth, type LearnAction, type RevisionDifficulty, type RevisionFormat, type RevisionMode, type UploadFormat,
 } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
@@ -78,7 +78,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
-  | "scholar_revision_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
+  | "scholar_revision_formats" | "scholar_verify_formats" | "scholar_revision_modes" | "scholar_case_contexts" | "scholar_case_entries" | "scholar_case_dimensions"
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
   | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules"
   | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources" | "scholar_learn_source_modes" | "scholar_recovery_providers"
@@ -116,7 +116,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
-  | "scholar_study_sessions" | "scholar_learn_prepare_next";
+  | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -962,8 +962,19 @@ export const POLICIES: readonly PolicyDef[] = [
     label: "Revision question formats",
     help: "Which question formats Revision may generate and offer. Questions already saved in a format that is switched off are kept, and not offered.",
     options: REVISION_FORMATS.map(v => ({ value: v, label: REVISION_FORMAT_LABEL[v] })),
-    fallback: [...REVISION_FORMATS],
-    limitReason: "Only the formats migrations 416 and 710 store. Structured (multi-part) is offered only where 710 is applied. Default: all.",
+    fallback: REVISION_FORMATS.filter(f => !REVISION_FORMATS_OFF_BY_DEFAULT.includes(f)),
+    limitReason: "Only the formats migrations 416 and 710 store. Structured (multi-part) is offered only where 710 is applied. Extended response is marked by AI on every answer, so it is off until ticked. Default: all but extended response.",
+  },
+  {
+    // SCHOLAR-SQIE-LEARNER-01: the formats whose new questions get a second, blind reader (a model that is not told the key and
+    // answers the item; a disagreement or an unreadable verdict drops it). Each ticked format costs one more AI call per batch
+    // written, on the same allowance. The default is exactly what ran before this setting existed.
+    key: "scholar_verify_formats", kind: "set", product: "Scholar",
+    label: "Blind check before storing new questions",
+    help: "Which question formats get a second reader before a new question is stored. The reader sees the passage and the question but not the answer, and the question is kept only if it answers it the same way. Each format ticked here costs one more AI call per batch of questions written. A format that is not ticked is stored on its automatic checks alone.",
+    options: VERIFY_FORMATS.map(v => ({ value: v, label: VERIFY_FORMAT_LABEL[v] })),
+    fallback: [...VERIFY_FORMATS_DEFAULT],
+    limitReason: "Only the formats Scholar can check. Default: multiple choice, case questions, multiple response and short answer, as before.",
   },
   {
     key: "scholar_revision_modes", kind: "set", product: "Scholar",
@@ -1068,6 +1079,15 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "on",
     limitReason: "Decks, hand-written cards, bookmarks and notes need migration 730. Without it, flashcards from notes and the library still work. Default: offered.",
   },
+  // SCHOLAR-COMPANION-01 P1: the mistake notebook reads the learner's own wrong attempts back. Data only, no AI, no cost.
+  {
+    key: "scholar_mistake_notebook", kind: "choice", product: "Scholar",
+    label: "Mistake notebook",
+    help: "Whether Revise and Saved learning link to the student's mistake notebook: their own wrong answers, newest first, grouped by material, with the key and the explanation already stored, and how often each was missed and whether a later answer corrected it. Reads existing answers only: no AI, no new storage. Formative practice only.",
+    options: [{ value: "on", label: "Offer the mistake notebook" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Reads the student's own revision answers (migrations 372 and 416). Costs nothing. Default: offered.",
+  },
   {
     key: "scholar_flashcards_per_generation", kind: "int", product: "Scholar", unit: "cards",
     label: "Most new flashcards written at one time",
@@ -1121,6 +1141,16 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [{ value: "on", label: "Offered" }, { value: "off", label: "Not offered" }],
     fallback: "off",
     limitReason: "Needs migration 740. Without it the setting has no effect and study sessions stay off. Default: not offered.",
+  },
+  // SCHOLAR-COMPANION-01 (780): the study plan. OFF by default, and off in effect while migration 780 is absent
+  // (isStudyPlanOn), so switching it on before 780 is applied changes nothing (CLAUDE.md Database state 3).
+  {
+    key: "scholar_study_plan", kind: "choice", product: "Scholar",
+    label: "Study plan",
+    help: "Whether a student may set an exam date, the time they have each week and their priority topics, and see a plan for the next seven days built from those and from their own practice. The plan is worked out by fixed rules, with no AI, and is a study aid: it is not an assessment of competence.",
+    options: [{ value: "on", label: "Offered" }, { value: "off", label: "Not offered" }],
+    fallback: "off",
+    limitReason: "Needs migration 780. Without it the setting has no effect and the study plan stays off. Default: not offered.",
   },
   {
     key: "scholar_flashcard_exports", kind: "set", product: "Scholar",
@@ -1511,8 +1541,9 @@ export const POLICIES: readonly PolicyDef[] = [
       { value: "coverage", label: "Knowledge coverage" }, { value: "understanding", label: "Understanding" }, { value: "retention", label: "Retention" },
       { value: "application", label: "Application and clinical reasoning" }, { value: "engagement", label: "Learning engagement" }, { value: "confidence", label: "Evidence confidence" },
       { value: "history", label: "Development over time" }, { value: "competencies", label: "By competency framework" },
+      { value: "mastery", label: "Study next and learning progress by topic" },
     ],
-    fallback: ["coverage", "understanding", "retention", "application", "engagement", "confidence", "history", "competencies"],
+    fallback: ["coverage", "understanding", "retention", "application", "engagement", "confidence", "history", "competencies", "mastery"],
     limitReason: "The sections Scholar implements. Recommended next steps are always shown. Default: all.",
   },
   {
@@ -1786,6 +1817,7 @@ export type IndividualPolicy = {
   scholarReferenceCollections: string[];
   /** REVISION-01 (Stage 4). */
   scholarRevisionFormats: RevisionFormat[];
+  scholarVerifyFormats: VerifyFormat[];
   scholarRevisionModes: RevisionMode[];
   scholarRevisionQuantity: number;
   scholarRevisionDifficulty: RevisionDifficulty;
@@ -1800,6 +1832,8 @@ export type IndividualPolicy = {
   scholarAdaptiveFormats: AdaptiveFormat[];
   /** SCHOLAR-FLASHCARDS-01. */
   scholarFlashcards: "on" | "off";
+  /** SCHOLAR-COMPANION-01 P1. */
+  scholarMistakeNotebook: "on" | "off";
   scholarFlashcardsPerGeneration: number;
   scholarFlashcardDeckMax: number;
   /** Always includes notes. */
@@ -1809,6 +1843,8 @@ export type IndividualPolicy = {
   scholarFlashcardLevelMix: "programme" | "recall" | "balanced" | "applied";
   /** SCHOLAR-SESSION-AI-02. Whether connected study sessions are offered. Read it through isStudySessionsOn, which also needs 740. */
   scholarStudySessions: boolean;
+  /** SCHOLAR-COMPANION-01. Whether the study plan is offered. Read it through isStudyPlanOn, which also needs 780. */
+  scholarStudyPlan: boolean;
   /** SCHOLAR-GUIDED-LEARNING-01. Whether Learn may prepare the next lesson ahead (one at most). Default off. */
   scholarLearnPrepareNext: boolean;
   scholarSrsMasteryReps: number;
@@ -1943,6 +1979,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     professionalCatalogues: clampCatalogues(policyDef("professional_catalogues") as CataloguePolicy, published.get(policyPath("professional_catalogues"))),
     scholarReferenceCollections: clampCatalogues(policyDef("scholar_reference_collections") as CataloguePolicy, published.get(policyPath("scholar_reference_collections"))),
     scholarRevisionFormats: clampSet(policyDef("scholar_revision_formats") as SetPolicy, published.get(policyPath("scholar_revision_formats"))) as RevisionFormat[],
+    scholarVerifyFormats: clampSet(policyDef("scholar_verify_formats") as SetPolicy, published.get(policyPath("scholar_verify_formats"))) as VerifyFormat[],
     scholarRevisionModes: clampSet(policyDef("scholar_revision_modes") as SetPolicy, published.get(policyPath("scholar_revision_modes"))) as RevisionMode[],
     scholarRevisionQuantity: int("scholar_revision_quantity"),
     scholarRevisionDifficulty: clampChoice(policyDef("scholar_revision_difficulty") as ChoicePolicy, published.get(policyPath("scholar_revision_difficulty"))) as RevisionDifficulty,
@@ -1956,6 +1993,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarAdaptiveLength: Math.min(int("scholar_adaptive_length"), int("scholar_adaptive_max_length")),
     scholarAdaptiveFormats: clampSet(policyDef("scholar_adaptive_formats") as SetPolicy, published.get(policyPath("scholar_adaptive_formats"))) as AdaptiveFormat[],
     scholarFlashcards: clampChoice(policyDef("scholar_flashcards") as ChoicePolicy, published.get(policyPath("scholar_flashcards"))) as "on" | "off",
+    scholarMistakeNotebook: clampChoice(policyDef("scholar_mistake_notebook") as ChoicePolicy, published.get(policyPath("scholar_mistake_notebook"))) as "on" | "off",
     scholarFlashcardsPerGeneration: int("scholar_flashcards_per_generation"),
     scholarFlashcardDeckMax: int("scholar_flashcard_deck_max"),
     scholarFlashcardSourceModes: (() => { const m = clampSet(policyDef("scholar_flashcard_source_modes") as SetPolicy, published.get(policyPath("scholar_flashcard_source_modes"))) as ("notes" | "notes_and_references")[]; return m.includes("notes") ? m : ["notes" as const, ...m]; })(),
@@ -1963,6 +2001,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarFlashcardExports: clampSet(policyDef("scholar_flashcard_exports") as SetPolicy, published.get(policyPath("scholar_flashcard_exports"))) as ("deck" | "print" | "guide")[],
     scholarFlashcardLevelMix: clampChoice(policyDef("scholar_flashcard_level_mix") as ChoicePolicy, published.get(policyPath("scholar_flashcard_level_mix"))) as "programme" | "recall" | "balanced" | "applied",
     scholarStudySessions: clampChoice(policyDef("scholar_study_sessions") as ChoicePolicy, published.get(policyPath("scholar_study_sessions"))) === "on",
+    scholarStudyPlan: clampChoice(policyDef("scholar_study_plan") as ChoicePolicy, published.get(policyPath("scholar_study_plan"))) === "on",
     scholarLearnPrepareNext: clampChoice(policyDef("scholar_learn_prepare_next") as ChoicePolicy, published.get(policyPath("scholar_learn_prepare_next"))) === "on",
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),
     scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
@@ -2145,6 +2184,13 @@ export const DEFAULT_POLICY: IndividualPolicy = resolvePolicy([]);
  */
 export const isStudySessionsOn = (policy: Pick<IndividualPolicy, "scholarStudySessions">, schema740: boolean): boolean =>
   policy.scholarStudySessions === true && schema740 === true;
+
+/**
+ * SCHOLAR-COMPANION-01. The study plan is on only where HQ switched it on AND migration 780 is present
+ * (store.ts studyPlanSchema). Either missing: off, so the feature fails closed while 780 is absent.
+ */
+export const isStudyPlanOn = (policy: Pick<IndividualPolicy, "scholarStudyPlan">, schema780: boolean): boolean =>
+  policy.scholarStudyPlan === true && schema780 === true;
 
 /** The effective policy now. Fail-soft: anything unreadable is today's constant. */
 export async function loadIndividualPolicy(admin: any): Promise<IndividualPolicy> {
