@@ -203,7 +203,8 @@ describe("the browser never sees a rubric before answering", () => {
     const f = feedbackView(row(c.draft.answer), { correct: false, score: 0, marking: "deterministic" });
     expect(f.rubric).toMatchObject({ level: "Recall", keyPoints: ["Escherichia coli is the commonest cause"] });
     expect(f.nextDifficulty).toBe("easy");
-    expect(revisionPromptVersion("flashcard")).toBe(`${PROMPT_VERSIONS.revision}:flashcard`);
+    // SCHOLAR-FLASHCARDS-QA-01: flashcards carry the level mix version.
+    expect(revisionPromptVersion("flashcard")).toBe(`${PROMPT_VERSIONS.revision}:flashcard+${PROMPT_VERSIONS.flashcardMix}`);
   });
   it("applyRevisionVerification fails closed", () => {
     expect(applyRevisionVerification([{ stem: "s", options: [], keyed: null }], "garbage")).toEqual({ kept: [], rejected: [{ index: 0, detail: "no verdict" }] });

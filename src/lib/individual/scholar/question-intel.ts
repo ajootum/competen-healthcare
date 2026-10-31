@@ -316,5 +316,107 @@ export function levelDefaultDifficulty(programme: string | null, level: string |
   return null;
 }
 
+// ── THE FLASHCARD LEVEL MIX ── SCHOLAR-FLASHCARDS-QA-01 (owner, 31 Oct 2026) ──
+//
+// New flashcards are written to a MIX of cognitive levels (policy scholar_flashcard_level_mix): by programme level
+// (default: the levelDefaultDifficulty rule above), or mostly recall, balanced, or mostly applied. The mix is narrowed
+// to the levels the difficulty allows (DIFFICULTY_RANGE) and to the levels the PASSAGE can support: application needs
+// a passage that says what to do in a situation, clinical reasoning one that also gives a reason or a distinction. A
+// level the passage cannot support is never asked for: its places go to recall and understanding, and why is recorded.
+
+export const FLASHCARD_MIX_CHOICES = ["programme", "recall", "balanced", "applied"] as const;
+export type FlashcardMixChoice = (typeof FLASHCARD_MIX_CHOICES)[number];
+/** Shares in percent, by level. */
+export type LevelMix = Readonly<Record<CognitiveLevel, number>>;
+export const FLASHCARD_LEVEL_MIXES: Readonly<Record<"foundation" | "balanced" | "applied", LevelMix>> = {
+  foundation: { recall: 50, understanding: 35, application: 15, reasoning: 0 },
+  balanced: { recall: 30, understanding: 30, application: 25, reasoning: 15 },
+  applied: { recall: 20, understanding: 25, application: 30, reasoning: 25 },
+};
+/** Pure. The mix a choice stands for: by programme, the programme level's (easier: foundation, harder: applied, else balanced). */
+export function flashcardLevelMix(choice: FlashcardMixChoice, levelDefault: GenerationDifficulty | null): LevelMix {
+  if (choice === "recall") return FLASHCARD_LEVEL_MIXES.foundation;
+  if (choice === "balanced") return FLASHCARD_LEVEL_MIXES.balanced;
+  if (choice === "applied") return FLASHCARD_LEVEL_MIXES.applied;
+  return levelDefault === "easy" ? FLASHCARD_LEVEL_MIXES.foundation : levelDefault === "harder" ? FLASHCARD_LEVEL_MIXES.applied : FLASHCARD_LEVEL_MIXES.balanced;
+}
+
+const ACTION_CUES = /\b(should|must|if|when|first|then|before|after|give|start|stop|call|escalat\w*|monitor\w*|assess\w*|repeat\w*|administer\w*|position\w*|refer\w*|manag\w*|respond\w*|treat\w*|record\w*|report\w*|check\w*|review\w*|prioriti[sz]\w*|act|action)\b/gi;
+const REASON_CUES = /\b(because|therefore|so that|due to|as a result|indicat\w*|suggest\w*|means|whereas|unless|rather than|compared with|instead|risk\w*|caus\w*|leads? to|can worsen|which can|otherwise|in order to)\b/gi;
+const distinctHits = (re: RegExp, s: string) => new Set([...s.matchAll(re)].map(m => m[0].toLowerCase())).size;
+
+/**
+ * Pure. Whether a passage can support application and clinical reasoning cards: application needs at least 40 words and
+ * two different action or situation cues (what to do, when); reasoning needs application, 60 words and two different
+ * reason or distinction cues (because, unless, whereas). `why` names what is missing, as codes for the audit row.
+ */
+export function passageLevelSupport(passage: string): { application: boolean; reasoning: boolean; why: string[] } {
+  const words = passage.split(/\s+/).filter(Boolean).length;
+  const why: string[] = [];
+  const application = words >= 40 && distinctHits(ACTION_CUES, passage) >= 2;
+  if (!application) why.push(words < 40 ? "application:passage_short" : "application:no_action_or_situation");
+  const reasoning = application && words >= 60 && distinctHits(REASON_CUES, passage) >= 2;
+  if (!reasoning) why.push(!application ? "reasoning:no_application" : words < 60 ? "reasoning:passage_short" : "reasoning:no_reason_or_distinction");
+  return { application, reasoning, why };
+}
+
+export type LevelPlan = { levels: Record<CognitiveLevel, number>; supported: CognitiveLevel[]; fallback: string[]; passage: { application: boolean; reasoning: boolean } };
+
+/**
+ * Pure. How many of `count` cards to write at each level: the mix's shares over the levels both the difficulty and the
+ * passage allow, by largest remainder (ties to the lower level). Deterministic. A level left out is recorded in
+ * `fallback` with its reason; its share goes to the levels that remain.
+ */
+export function planCardLevels(mix: LevelMix, count: number, opts: { difficulty: GenerationDifficulty | null; passage: string }): LevelPlan {
+  const support = passageLevelSupport(opts.passage);
+  const range = opts.difficulty ? DIFFICULTY_RANGE[opts.difficulty] : [1, 2, 3];
+  const fallback: string[] = [];
+  const allowed = COGNITIVE_LEVELS.filter(l => {
+    if (mix[l] <= 0) return false;
+    if (l === "application" && !support.application) { fallback.push(...support.why.filter(w => w.startsWith("application:"))); return false; }
+    if (l === "reasoning" && !support.reasoning) { fallback.push(...support.why.filter(w => w.startsWith("reasoning:"))); return false; }
+    if (!range.includes(LEVEL_DIFFICULTY[l])) { fallback.push(`${l}:off_difficulty`); return false; }
+    return true;
+  });
+  // Nothing left (a harder request on a passage that supports no application): understanding, the nearest level.
+  const levels = allowed.length ? allowed : (["understanding"] as CognitiveLevel[]);
+  const total = levels.reduce((s, l) => s + (allowed.length ? mix[l] : 1), 0);
+  const n = Math.max(0, Math.floor(count));
+  const exact = levels.map(l => ({ l, q: (n * (allowed.length ? mix[l] : 1)) / total }));
+  const out: Record<CognitiveLevel, number> = { recall: 0, understanding: 0, application: 0, reasoning: 0 };
+  for (const e of exact) out[e.l] = Math.floor(e.q);
+  let left = n - exact.reduce((s, e) => s + Math.floor(e.q), 0);
+  for (const e of [...exact].sort((a, b) => (b.q - Math.floor(b.q)) - (a.q - Math.floor(a.q)) || COGNITIVE_LEVELS.indexOf(a.l) - COGNITIVE_LEVELS.indexOf(b.l))) {
+    if (left <= 0) break;
+    out[e.l]++; left--;
+  }
+  return { levels: out, supported: levels, fallback: [...new Set(fallback)], passage: { application: support.application, reasoning: support.reasoning } };
+}
+
+const NUM_WORD = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+const LEVEL_ASK: Record<CognitiveLevel, string> = {
+  recall: "recall (a stated fact)", understanding: "understanding (why or how, in the passage's words)",
+  application: "application (what to do in a situation the passage describes)", reasoning: "clinical reasoning (deciding or distinguishing, with the passage's reason)",
+};
+/** Pure. The line added to the guidance block: how many cards at each level, and the sufficiency rule. Words only. */
+export function levelMixLine(plan: LevelPlan): string {
+  const parts = COGNITIVE_LEVELS.filter(l => plan.levels[l] > 0).map(l => `${NUM_WORD[Math.min(10, plan.levels[l])]} ${LEVEL_ASK[l]}`);
+  if (!parts.length) return "";
+  const not = (["application", "reasoning"] as const).filter(l => !plan.passage[l]);
+  return `LEVEL MIX: write ${parts.join(", ")}. Give each card's "level" truthfully.${not.length ? ` Do not write ${not.map(l => LEVEL_LABEL[l].toLowerCase()).join(" or ")} cards: this passage cannot support them.` : ""} If the passage cannot support a card at a level, write a recall or understanding card instead and label it so.`;
+}
+
+/**
+ * Pure. A card whose rubric claims a level the passage cannot support is relabelled to understanding (its words are
+ * unchanged), so the guide's Clinical Application never holds a card the passage could not make one. Returns whether
+ * it was relabelled.
+ */
+export function capCardLevel(answer: Record<string, unknown>, passage: { application: boolean; reasoning: boolean }): boolean {
+  const r = answer.rubric as Record<string, unknown> | undefined;
+  if (!r || (r.level !== "application" && r.level !== "reasoning") || passage[r.level]) return false;
+  r.level = r.level === "reasoning" && passage.application ? "application" : "understanding";
+  return true;
+}
+
 /** Pure. The revision difficulty ("any" included) a session asks generation for. */
 export const generationDifficulty = (d: string | null | undefined): GenerationDifficulty | null => (isGenerationDifficulty(d) ? d : null);

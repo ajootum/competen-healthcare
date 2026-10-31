@@ -89,6 +89,8 @@ export type StudyCard = {
   id: string; front: string; origin: "notes" | "library" | "learner"; originLabel: string; citation: string;
   materialId: string; materialTitle: string; chunkId: string; competency: string | null; topic: string | null;
   editable: boolean; bookmarked: boolean; note: string | null; issue: string | null;
+  /** SCHOLAR-FLASHCARDS-QA-01: the clinically sensitive marker (flashcard-sensitive.ts), or null. Shown with the answer. */
+  sensitive?: { marker: string; reviewed: boolean } | null;
   answered: { recall: "again" | "remembered"; nextReviewAt: string | null } | null;
   /** Only for a card already rated in this session: answers stay on the server until the learner reveals them. */
   back: { text: string; explanation: string | null; quote: string | null } | null;
@@ -188,6 +190,12 @@ export function FlashcardStudy(props: {
             </div>
             <button type="button" onClick={() => go(at + 1)} disabled={at >= cards.length - 1} aria-label="Next card" className={`hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm disabled:opacity-40 sm:inline-flex ${focusRing}`}><Icon d={I.next} /></button>
           </div>
+          {flipped && card.sensitive && (
+            <p role="note" className="mx-auto mt-3 flex max-w-xl items-start gap-2 rounded-xl border px-3 py-2 text-[13px] font-semibold"
+              style={{ background: "var(--cmp-surface-warning)", borderColor: "color-mix(in srgb, var(--cmp-color-warning) 35%, transparent)", color: "var(--cmp-text-warning)" }}>
+              <span aria-hidden className="mt-px">⚠</span><span>{card.sensitive.marker}</span>
+            </p>
+          )}
           <p id="card-help" className="sr-only">Space or Enter reveals the answer. Then press 1 for didn&apos;t remember or 2 for remembered. Arrow keys move between cards.</p>
 
           {card.answered ? (
@@ -364,9 +372,16 @@ function SourceLink({ card }: { card: StudyCard }) {
 // ── THE SIDE COLUMN: DECK OPTIONS, DOWNLOAD, CREATE MORE ──
 
 export type ExportFormat = "deck" | "print" | "guide";
-const EXPORT_LABEL: Record<ExportFormat, string> = { deck: "This deck (flashcards) – PDF", guide: "Revision guide (multi-page) – PDF", print: "Printable cards – PDF" };
-export const exportHref = (format: ExportFormat, decks: readonly string[]) => {
-  const q = new URLSearchParams({ format });
+/** SCHOLAR-FLASHCARDS-QA-01: the five downloads, each a format the policy offers with its variant (guide, layout). */
+export const EXPORT_CHOICES: readonly { key: string; format: ExportFormat; extra?: Readonly<Record<string, string>>; label: string }[] = [
+  { key: "deck", format: "deck", label: "This deck (flashcards) – PDF" },
+  { key: "guide", format: "guide", label: "Revision guide, comprehensive – PDF" },
+  { key: "guide-concise", format: "guide", extra: { guide: "concise" }, label: "Revision guide, concise – PDF" },
+  { key: "print", format: "print", label: "Printable cards, double-sided – PDF" },
+  { key: "print-fold", format: "print", extra: { layout: "fold" }, label: "Printable cards, single-sided foldable – PDF" },
+];
+export const exportHref = (format: ExportFormat, decks: readonly string[], extra: Readonly<Record<string, string>> = {}) => {
+  const q = new URLSearchParams({ format, ...extra });
   for (const d of decks) q.append("deck", d);
   return `/api/individual/scholar/flashcards/export?${q.toString()}`;
 };
@@ -383,7 +398,6 @@ export function DownloadMenu({ decks, formats, label = "Download" }: { decks: re
       .catch(() => { if (live) setReady(false); });
     return () => { live = false; };
   }, []);
-  const order: ExportFormat[] = ["deck", "guide", "print"];
   return (
     <div className="relative">
       <button type="button" className={`${ghost} w-full justify-between`} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen(o => !o)}>
@@ -391,12 +405,12 @@ export function DownloadMenu({ decks, formats, label = "Download" }: { decks: re
       </button>
       {open && (
         <ul className="mt-1 space-y-0.5 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg">
-          {order.filter(f => formats.includes(f)).map(f => (
-            <li key={f}>
+          {EXPORT_CHOICES.filter(x => formats.includes(x.format)).map(x => (
+            <li key={x.key}>
               {ready && decks.length ? (
-                <a href={exportHref(f, decks)} className={`flex min-h-[40px] items-center gap-2 rounded-lg px-2.5 text-[13.5px] font-medium text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}><Icon d={I.doc} size={16} />{EXPORT_LABEL[f]}</a>
+                <a href={exportHref(x.format, decks, x.extra)} className={`flex min-h-[40px] items-center gap-2 rounded-lg px-2.5 text-[13.5px] font-medium text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}><Icon d={I.doc} size={16} />{x.label}</a>
               ) : (
-                <span aria-disabled className="flex min-h-[40px] items-center gap-2 rounded-lg px-2.5 text-[13.5px] text-gray-400"><Icon d={I.doc} size={16} />{EXPORT_LABEL[f]}<span className="ml-auto text-[11.5px]">{ready === null ? "Checking…" : !decks.length ? "Choose a deck" : "Coming in this release"}</span></span>
+                <span aria-disabled className="flex min-h-[40px] items-center gap-2 rounded-lg px-2.5 text-[13.5px] text-gray-400"><Icon d={I.doc} size={16} />{x.label}<span className="ml-auto text-[11.5px]">{ready === null ? "Checking…" : !decks.length ? "Choose a deck" : "Coming in this release"}</span></span>
               )}
             </li>
           ))}

@@ -115,7 +115,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic"
-  | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty";
+  | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1086,6 +1086,20 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Four choices. Default: any (the programme level, adapted to recent answers).",
   },
   {
+    // SCHOLAR-FLASHCARDS-QA-01: the mix of cognitive levels new cards are written to (question-intel.ts
+    // flashcardLevelMix). Only the levels a passage can support are ever asked for; the rest fall back to recall and
+    // understanding, and why is recorded on the generation audit row.
+    key: "scholar_flashcard_level_mix", kind: "choice", product: "Scholar",
+    label: "Mix of new flashcards",
+    help: "The mix of recall, understanding, application and clinical reasoning cards written by AI. By programme level: mostly recall and understanding for enrolled and certificate programmes, balanced for diplomas and degrees, more application and clinical reasoning for master's and doctoral study. Application and reasoning cards are written only where the notes describe a situation and give a reason; otherwise recall and understanding cards are written instead.",
+    options: [
+      { value: "programme", label: "By programme level" }, { value: "recall", label: "Mostly recall and understanding" },
+      { value: "balanced", label: "Balanced" }, { value: "applied", label: "More application and clinical reasoning" },
+    ],
+    fallback: "programme",
+    limitReason: "Four choices. A level the notes cannot support is never asked for. Default: by programme level (balanced where the programme names no level).",
+  },
+  {
     key: "scholar_flashcard_exports", kind: "set", product: "Scholar",
     label: "Flashcard downloads offered",
     help: "Which downloads a student may make from their own cards: a deck of flashcards, printable cards, and a multi-page revision guide. Each is a PDF of the student's own cards only.",
@@ -1751,6 +1765,7 @@ export type IndividualPolicy = {
   scholarFlashcardSourceModes: ("notes" | "notes_and_references")[];
   scholarFlashcardDifficulty: RevisionDifficulty;
   scholarFlashcardExports: ("deck" | "print" | "guide")[];
+  scholarFlashcardLevelMix: "programme" | "recall" | "balanced" | "applied";
   scholarSrsMasteryReps: number;
   scholarSrsMasteryDays: number;
   scholarSrsMaxIntervalDays: number;
@@ -1899,6 +1914,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarFlashcardSourceModes: (() => { const m = clampSet(policyDef("scholar_flashcard_source_modes") as SetPolicy, published.get(policyPath("scholar_flashcard_source_modes"))) as ("notes" | "notes_and_references")[]; return m.includes("notes") ? m : ["notes" as const, ...m]; })(),
     scholarFlashcardDifficulty: clampChoice(policyDef("scholar_flashcard_difficulty") as ChoicePolicy, published.get(policyPath("scholar_flashcard_difficulty"))) as RevisionDifficulty,
     scholarFlashcardExports: clampSet(policyDef("scholar_flashcard_exports") as SetPolicy, published.get(policyPath("scholar_flashcard_exports"))) as ("deck" | "print" | "guide")[],
+    scholarFlashcardLevelMix: clampChoice(policyDef("scholar_flashcard_level_mix") as ChoicePolicy, published.get(policyPath("scholar_flashcard_level_mix"))) as "programme" | "recall" | "balanced" | "applied",
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),
     scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
     scholarSrsMaxIntervalDays: int("scholar_srs_max_interval_days"),

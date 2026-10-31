@@ -10,8 +10,9 @@ import {
   type QualityReason, type RevisionVerifyItem,
 } from "./question-quality";
 import {
-  FEEDBACK_FORMAT, NO_CONTEXT, RUBRIC_RULE, difficultyFits, difficultyOf, feedbackText, generationContextBlock, parseFeedbackSections, parseRubric, referenceGrounding, stemKey,
-  type FeedbackParts, type GenerationContext, type Rubric,
+  FEEDBACK_FORMAT, NO_CONTEXT, RUBRIC_RULE, capCardLevel, difficultyFits, difficultyOf, feedbackText, generationContextBlock, levelMixLine, parseFeedbackSections,
+  parseRubric, planCardLevels, referenceGrounding, stemKey,
+  type FeedbackParts, type GenerationContext, type LevelMix, type LevelPlan, type Rubric,
 } from "./question-intel";
 import { checkRevisionDraft, type RevisionDraft } from "./revision";
 import { blueprintFromDraft, checkPrivateCase } from "./clinical";
@@ -265,8 +266,11 @@ export const QUESTION_SYSTEM: Record<QuestionKind, string> = {
   ].join("\n"),
 };
 
-/** What a generator is checked against besides its passage (question-intel.ts). Optional throughout. */
-export type GenerationOptions = { context?: GenerationContext; existing?: ReadonlySet<string> };
+/**
+ * What a generator is checked against besides its passage (question-intel.ts). Optional throughout. `levelMix`
+ * (flashcards only, SCHOLAR-FLASHCARDS-QA-01): the cognitive-level mix to write to, narrowed to what the passage supports.
+ */
+export type GenerationOptions = { context?: GenerationContext; existing?: ReadonlySet<string>; levelMix?: LevelMix };
 
 export function questionUserPrompt(passage: Passage): string {
   return `PASSAGE (${passageCitation(passage)}):\n${passage.content}\n\n`
@@ -712,10 +716,16 @@ export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "
 export const REVISION_VERIFIED_KINDS: readonly (keyof typeof REVISION_SYSTEM)[] = ["mrq", "short"];
 export const revisionPromptVersion = (kind: keyof typeof REVISION_SYSTEM) =>
   kind === "structured" ? PROMPT_VERSIONS.structured
-    : `${PROMPT_VERSIONS.revision}:${kind}${REVISION_VERIFIED_KINDS.includes(kind) ? `+${PROMPT_VERSIONS.verifyRevision}` : ""}`;
-/** The prompt version prefix a stored question of a format was written at: what "already written at this version" reads. */
+    : kind === "flashcard" ? `${PROMPT_VERSIONS.revision}:flashcard+${PROMPT_VERSIONS.flashcardMix}`
+      : `${PROMPT_VERSIONS.revision}:${kind}${REVISION_VERIFIED_KINDS.includes(kind) ? `+${PROMPT_VERSIONS.verifyRevision}` : ""}`;
+/**
+ * The prompt version prefix a stored question of a format was written at: what "already written at this version" reads.
+ * SCHOLAR-FLASHCARDS-QA-01: a flashcard's includes the level mix, so a section carded before the mix may be carded again
+ * (the cards already there are kept, and a repeat of one is still refused by its stem).
+ */
 export const formatPromptVersion = (kind: string): string =>
-  kind === "mcq" ? PROMPT_VERSIONS.mcq : kind === "structured" ? PROMPT_VERSIONS.structured : `${PROMPT_VERSIONS.revision}:${kind}`;
+  kind === "mcq" ? PROMPT_VERSIONS.mcq : kind === "structured" ? PROMPT_VERSIONS.structured
+    : kind === "flashcard" ? `${PROMPT_VERSIONS.revision}:flashcard+${PROMPT_VERSIONS.flashcardMix}` : `${PROMPT_VERSIONS.revision}:${kind}`;
 
 /**
  * One call (and one retry): revision items of one kind from one passage, each checked. `run` is the metered runner.
@@ -730,11 +740,19 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
   const context = opts.context;
   const refs = context?.mode === "notes_and_references" ? context.references : [];
   const verifyPassage = [passage.content, ...referenceGrounding(refs)].join("\n");
+  const asked = kind === "structured" ? 1 : Math.min(3, Math.max(1, limit));
+  // SCHOLAR-FLASHCARDS-QA-01: flashcards to the level mix, only at the levels this passage can support (the rest fall
+  // back to recall and understanding, and why is returned for the audit row): one more line of the guidance block.
+  const levelPlan: LevelPlan | null = kind === "flashcard" && opts.levelMix ? planCardLevels(opts.levelMix, asked, { difficulty: context?.difficulty ?? null, passage: passage.content }) : null;
+  const mixLine = levelPlan ? levelMixLine(levelPlan) : "";
+  const guidance = generationContextBlock(context ?? NO_CONTEXT, asked);
+  const guidanceWithMix = !mixLine ? guidance : guidance ? `${guidance}\n${mixLine}` : `\n\nGUIDANCE (do not mention it). Every item must still be answerable from the passage ALONE.\n${mixLine}`;
+  let relabelled = 0;
   for (let attempt = 1; attempt <= 2 && !kept.length; attempt++) {
     calls++;
     const r = await run({
       system: REVISION_SYSTEM[kind],
-      user: `${questionUserPrompt(passage)}${generationContextBlock(context ?? NO_CONTEXT, kind === "structured" ? 1 : Math.min(3, Math.max(1, limit)))}`,
+      user: `${questionUserPrompt(passage)}${guidanceWithMix}`,
       tier: "reasoning",
       maxTokens: 1800,
       context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_revision_${kind}` },
@@ -747,7 +765,11 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
     // A structured question is one substantial item a call (its prompt asks for at most one).
     for (const raw of (parseJsonArray(r.text) ?? []).slice(0, kind === "structured" ? 1 : limit)) {
       const c = checkRevisionDraft(kind, raw, passage, { existing: seen, difficulty: context?.difficulty ?? null, references: refs });
-      if (c.ok) { batch.push(c.draft); seen.add(stemKey(c.draft.stem)); } else dropped.push(c.reason);
+      if (c.ok) {
+        // A card claiming a level this passage cannot support is labelled for what it is (its words unchanged).
+        if (levelPlan && capCardLevel(c.draft.answer, levelPlan.passage)) relabelled++;
+        batch.push(c.draft); seen.add(stemKey(c.draft.stem));
+      } else dropped.push(c.reason);
     }
     if (batch.length && REVISION_VERIFIED_KINDS.includes(kind)) {
       calls++;
@@ -768,7 +790,10 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
     }
     kept = batch.slice(0, limit);
   }
-  return { ok: true as const, kept, dropped, model, provider, calls, promptVersion: revisionPromptVersion(kind) };
+  return {
+    ok: true as const, kept, dropped, model, provider, calls, promptVersion: revisionPromptVersion(kind),
+    levelPlan: levelPlan ? { levels: levelPlan.levels, fallback: levelPlan.fallback, relabelled } : null,
+  };
 }
 
 // SCHOLAR-QUESTION-INTELLIGENCE-01 (evaluate v2): five labelled parts after the verdict (question-intel.ts

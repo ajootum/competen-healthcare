@@ -16,7 +16,9 @@ const card = (over: Partial<FlashcardView> & Pick<FlashcardView, "front" | "back
     topic: "Systematic respiratory assessment", objective: null, keyPoints: [], level: "recall", difficulty: 2,
     competency: { id: "00000000-0000-4000-8000-0000000000c1", title: "CFCA: Respiratory Assessment and Monitoring" },
     sources: origin === "notes" ? [{ origin: "notes", label: "Your uploaded notes", citation: `${MAT.title}, page ${n}`, quote: n === 1 ? "A systematic respiratory assessment follows a consistent order so that nothing is missed, from history through inspection, palpation, percussion and auscultation, and is repeated whenever the condition changes." : null, materialId: MAT.id, chunkId: `chunk-${n}`, libraryVersionId: null, referenceIds: [] }]
-      : origin === "library" ? [{ origin: "library", label: "From the Competen library (clinically reviewed)", citation: "Competen library, version 3", quote: null, materialId: null, chunkId: null, libraryVersionId: "lib-v3", referenceIds: [] }]
+      // As flashcards.ts flashcardView builds a library source from 442 (title, code, version, publication date).
+      : origin === "library" ? [{ origin: "library", label: "From the Competen library (clinically reviewed)", citation: "Silent chest in acute asthma, Competen library, version 3", quote: null, materialId: null, chunkId: null, libraryVersionId: "lib-v3", referenceIds: [],
+        reference: { title: "Silent chest in acute asthma", kind: "library", publisher: "Competen library", version: "3", code: "rq-asthma-silent-chest", status: "Clinically approved, published", reviewedAt: "2026-10-12T14:00:00.000Z" } }]
         : [],
     createdAt: "2026-10-28T10:00:00Z", updatedAt: null, contentVersion: 1, version: "revision-flashcard-v3",
     material: MAT, chunkId: `chunk-${n}`,
@@ -57,7 +59,10 @@ export const respiratoryCards = (): FlashcardView[] => {
       keyPoints: ["SpO2 target 94-98% for most adults", "88-92% where hypercapnia is a risk"],
       sources: [
         { origin: "notes", label: "Your uploaded notes", citation: `${MAT.title}, page 4`, quote: "Target saturation for most acutely ill adults is 94 to 98 percent.", materialId: MAT.id, chunkId: "chunk-4", libraryVersionId: null, referenceIds: [] },
-        { origin: "external", label: "Approved references", citation: "Clinically approved references linked to your notes", quote: null, materialId: null, chunkId: null, libraryVersionId: null, referenceIds: ["ref-bts-o2"] },
+        // As flashcard-service.ts referenceCitations builds a governed framework reference from the catalogue.
+        { origin: "external", label: "Approved references", citation: "Respiratory Assessment and Monitoring (CFCA-RAM-02). CFCA Adult Acute Care. version 2.1.0. Competency framework reference in Competen Scholar. Clinically approved",
+          quote: null, materialId: null, chunkId: null, libraryVersionId: null, referenceIds: ["00000000-0000-4000-8000-0000000000c1"],
+          reference: { title: "Respiratory Assessment and Monitoring", kind: "framework", code: "CFCA-RAM-02", publisher: "CFCA Adult Acute Care", version: "2.1.0", status: "Clinically approved", access: "Competency framework reference in Competen Scholar" } },
       ],
     }),
     card({

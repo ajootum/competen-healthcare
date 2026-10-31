@@ -6,13 +6,15 @@
 // unapproved library item (hydrate drops a library copy whose version is no longer published and approved).
 
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { competencyLabels, loadLearnerCatalogue } from "./competency-view";
+import { competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "./competency-view";
+import type { CatalogueCompetency } from "./catalogue";
 import { flashcardRows, flashcardSchema, revisionPool, topicsOfSections } from "./store";
 import {
   buildDecks, flashcardView, recallCardOf, selectCards, topicGaps,
-  type CardSelection, type DeckSummary, type FlashcardView, type PersonalDeck, type TopicGap,
+  type CardSelection, type CitationMeta, type DeckSummary, type FlashcardView, type PersonalDeck, type TopicGap,
 } from "./flashcards";
-import { REVISION_FORMATS } from "./config";
+import { rubricOf } from "./question-intel";
+import { CONTENT_STATUS_LABEL, REVISION_FORMATS } from "./config";
 import { FORMATIVE_NOTICE } from "./spaces";
 
 type Ctx = { admin: any; userId: string }; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -32,9 +34,36 @@ export async function loadFlashcards(ctx: Ctx): Promise<{ ok: true; data: Flashc
   const today = todayOf();
   const cards = rows.data.questions.map(recallCardOf).filter((q): q is NonNullable<typeof q> => !!q);
   const compIds = [...new Set(cards.map(c => c.competencyId).filter((x): x is string => !!x))];
-  const names = compIds.length ? await competencyLabels(ctx.admin, (await loadLearnerCatalogue(ctx.admin, ctx.userId)).competencies, compIds, new Map()) : new Map();
-  const views = cards.map(q => flashcardView(q, { ...rows.data.extras.get(q.id)!, competencyTitle: q.competencyId ? names.get(q.competencyId)?.title ?? null : null }, today));
+  // SCHOLAR-FLASHCARDS-QA-01: the approved references a card's rubric cites, named and placed as the catalogue holds them now.
+  const refIds = [...new Set(cards.flatMap(c => { const r = rubricOf(c.answer); return r?.source === "references" ? r.referenceIds : []; }))];
+  const catalogue = compIds.length || refIds.length ? (await loadLearnerCatalogue(ctx.admin, ctx.userId)).competencies : null;
+  const names = compIds.length || refIds.length ? await competencyLabels(ctx.admin, catalogue, [...new Set([...compIds, ...refIds])], new Map()) : new Map();
+  const references = referenceCitations(refIds, names, catalogue);
+  const views = cards.map(q => flashcardView(q, { ...rows.data.extras.get(q.id)!, competencyTitle: q.competencyId ? names.get(q.competencyId)?.title ?? null : null, references }, today));
   return { ok: true, data: { today, cards: views, decks: buildDecks(views, rows.data.decks), personal: rows.data.decks, schema730: rows.data.schema730 } };
+}
+
+/**
+ * Pure. A governed reference (a competency of the reference catalogue a card's rubric cites) as a citation: its title
+ * and code, the catalogue (framework) and catalogue version it is read from, and its clinical review standing NOW
+ * (395: approval is lost the moment the content changes). No DOI, PMID or URL: the governed catalogue records none,
+ * so none is printed. An id the catalogue no longer holds is not given a citation here (the card says so).
+ */
+export function referenceCitations(ids: readonly string[], names: ReadonlyMap<string, CompetencyLabel>, catalogue: readonly CatalogueCompetency[] | null): Map<string, CitationMeta> {
+  const byId = new Map((catalogue ?? []).map(c => [c.id, c]));
+  const out = new Map<string, CitationMeta>();
+  for (const id of ids) {
+    const n = names.get(id), c = byId.get(id);
+    // competency-view.ts names an id no framework holds any more with a placeholder: that is no citation.
+    if (!n || (!c && !n.catalogue && /no longer in your programme/i.test(n.title))) continue;
+    const status = c?.contentStatus ?? n.contentStatus ?? null;
+    out.set(id, {
+      title: c?.title ?? n.title, kind: "framework", code: c?.code ?? n.code ?? null, publisher: c?.catalogue ?? n.catalogue ?? null,
+      version: c?.catalogueVersion ?? null, status: status ? CONTENT_STATUS_LABEL[status] : null,
+      access: "Competency framework reference in Competen Scholar",
+    });
+  }
+  return out;
 }
 
 /** One card of a selection, exactly as the downloads receive it. */

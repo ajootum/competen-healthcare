@@ -8,6 +8,7 @@ import { countDue, getRevisionSession, listMaterials, readConsent } from "@/lib/
 import { loadFlashcardGaps, loadFlashcards } from "@/lib/individual/scholar/flashcard-service";
 import { REVIEW_STATE_LABEL, filterCards, recallOf, spacedViews, type CardOrigin, type DeckSummary, type FlashcardView, type ReviewState } from "@/lib/individual/scholar/flashcards";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
+import { cardSensitiveFlag } from "@/lib/individual/scholar/flashcard-sensitive";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../_components/chrome";
@@ -36,6 +37,9 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Flashcards" });
 }
+
+/** 2026-10-12T... as 12 October 2026 (UTC), for a library card's clinically reviewed date. */
+const ukDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }); };
 
 type Search = { session?: string; deck?: string; view?: string; q?: string; state?: string; origin?: string; bookmarked?: string; edit?: string; create?: string; made?: string; lib?: string; note?: string };
 
@@ -120,6 +124,8 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
         id: c.id, front: c.front, origin: c.origin, originLabel: c.originLabel, citation: c.sources[0]?.citation ?? c.material.title,
         materialId: c.material.id, materialTitle: c.material.title, chunkId: c.chunkId, competency: c.competency?.title ?? null, topic: c.topic,
         editable: c.editable, bookmarked: c.bookmarked, note: c.note, issue: c.issue,
+        // SCHOLAR-FLASHCARDS-QA-01: flagged, never rewritten (flashcard-sensitive.ts); shown with the answer.
+        sensitive: (() => { const fl = cardSensitiveFlag(c, ukDate); return fl ? { marker: fl.marker, reviewed: fl.reviewed } : null; })(),
         answered: a ? { recall: a.correct ? "remembered" : "again", nextReviewAt: c.review.nextReviewAt } : null,
         back: a ? { text: c.back, explanation: c.explanation, quote: c.sources.find(x => x.origin === "notes")?.quote ?? null } : null,
       };
