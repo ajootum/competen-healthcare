@@ -4,7 +4,7 @@ import { reviewQueue } from "./clinical-review-hq";
 import { CLINICAL_STATE_LABEL, loadClinicalReviews } from "./clinical-review";
 import { contentHashes } from "./review-batch";
 import { checksFor } from "./criteria-checks";
-import { applyLayout, asLayout, byRowOrder, sectionOrder, type LayoutTree } from "./layout-order";
+import { applyLayout, asLayout, byRowOrder, groupByArea, sectionOrder, type LayoutTree } from "./layout-order";
 export { checksFor };
 
 // ── THE CLINICAL REVIEW PACK ── owner, 29 Oct 2026 ─────────────────────────────────────────────────────────────────
@@ -24,6 +24,8 @@ export { checksFor };
 export type PackCriterion = { n: string; text: string; sourceRef: string | null };
 export type PackCompetency = {
   competencyId: string; code: string | null; name: string; domain: string; framework: string;
+  /** FRAMEWORK-DESIGN-STUDIO-02 (760), a framework pack only: the Area of the competency's domain (null: none). */
+  area?: string | null;
   versionId: string | null; fingerprint: string | null; state: string; approvals: number; required: number;
   description: string | null; outcomes: string[];
   groups: { label: string; criteria: PackCriterion[] }[];
@@ -93,6 +95,13 @@ export async function loadFrameworkPack(admin: any, frameworkId: string, by: str
   const lay = await admin.from("frameworks").select("layout_draft, layout_draft_at, component_order").eq("id", frameworkId).maybeSingle();
   const layRow = lay?.error ? null : lay?.data ?? null;
   const draft = asLayout(layRow?.layout_draft), useDraft = opts.layout === "draft" && !!draft;
+  // 760: Areas group the pack. Absent table or column = no Areas, the pack exactly as before.
+  const [ar, da] = await Promise.all([
+    admin.from("framework_areas").select("id, name, sort_order").eq("framework_id", frameworkId),
+    admin.from("framework_domains").select("id, area_id").eq("framework_id", frameworkId),
+  ]);
+  const areasOk = !ar?.error && !da?.error;
+  const areaOf = new Map<string, string | null>(areasOk ? ((da.data ?? []) as any[]).map(x => [x.id, x.area_id ?? null]) : []);
   const allComps = (f.framework_domains ?? []).flatMap((d: any) => d.framework_competencies ?? []);
   const ids: string[] = allComps.map((c: any) => c.id);
   const [components, reviews, hashes, skills] = await Promise.all([
@@ -104,14 +113,16 @@ export async function loadFrameworkPack(admin: any, frameworkId: string, by: str
   const rowsOf = (cid: string) => ((skills.data ?? []) as any[]).filter(k => k.competency_id === cid).sort(byRowOrder);
   const tree: LayoutTree = {
     componentOrder: Array.isArray(layRow?.component_order) ? layRow.component_order : null, registry: Object.keys(components),
-    domains: (f.framework_domains ?? []).map((d: any) => ({ id: d.id, name: d.name ?? "", sortOrder: d.sort_order ?? null,
+    ...(areasOk ? { areas: ((ar.data ?? []) as any[]).map(a => ({ id: a.id, name: a.name ?? "", sortOrder: a.sort_order ?? null })) } : {}),
+    domains: (f.framework_domains ?? []).map((d: any) => ({ id: d.id, name: d.name ?? "", sortOrder: d.sort_order ?? null, ...(areasOk ? { areaId: areaOf.get(d.id) ?? null } : {}),
       competencies: (d.framework_competencies ?? []).map((c: any) => ({ id: c.id, name: c.name ?? "", sortOrder: c.sort_order ?? null,
         criteria: rowsOf(c.id).map(k => ({ id: String(k.id ?? ""), name: k.name ?? "", sortOrder: k.sort_order ?? null, component: k.component_code ?? null })) })) })),
   };
   const shown = applyLayout(tree, useDraft ? draft : null);
   const sections = sectionOrder(tree, useDraft ? draft : null);
   const compRow = new Map<string, any>(allComps.map((c: any) => [c.id, c]));
-  const comps = shown.domains.flatMap(d => d.competencies.map(c => ({ ...compRow.get(c.id), domain: d.name, order: c.criteria.map(k => k.id) })));
+  // Area by Area (in Area order, then the domains with none), each domain in its order. No Areas: the domain order.
+  const comps = groupByArea(shown).flatMap(g => g.domains.flatMap(d => d.competencies.map(c => ({ ...compRow.get(c.id), domain: d.name, area: g.area?.name ?? null, order: c.criteria.map(k => k.id) }))));
   return {
     ...(layRow ? { layout: { shown: useDraft ? ("draft" as const) : ("published" as const), pending: !!draft, savedAt: draft ? layRow.layout_draft_at ?? null : null } } : {}),
     title: "Clinical review pack", scope: `${f.name}${f.code ? ` (${f.code})` : ""} · ${comps.length} competencies`, generatedAt: new Date().toISOString(), generatedBy: by,
@@ -120,7 +131,7 @@ export async function loadFrameworkPack(admin: any, frameworkId: string, by: str
       const criteria = (c.order as string[]).map(id => byId.get(id)).filter(Boolean).map((k: any) => ({ component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null }));
       const r = reviews.get(c.id);
       return {
-        competencyId: c.id, code: c.code ?? null, name: c.name, domain: c.domain, framework: f.name,
+        competencyId: c.id, code: c.code ?? null, name: c.name, domain: c.domain, framework: f.name, ...(areasOk ? { area: c.area } : {}),
         versionId: r?.state === "in_review" || r?.state === "approved" || r?.state === "changes_requested" ? r.versionId : null, fingerprint: hashes.get(c.id) ?? null,
         state: r ? CLINICAL_STATE_LABEL[r.state] : "Clinical state not readable", approvals: r?.approvals ?? 0, required: r?.required ?? 1,
         description: c.description ?? null, outcomes: Array.isArray(c.learning_outcomes) ? c.learning_outcomes : [],
@@ -150,7 +161,7 @@ export async function renderPackDocx(pack: Pack): Promise<Buffer> {
     body.push(new Paragraph({ heading: HeadingLevel.HEADING_1, pageBreakBefore: body.length > 4, spacing: { before: 200, after: 60 },
       border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "0F766E", space: 2 } },
       children: [run(`${c.code ? `${c.code}  ` : ""}${c.name}`, { bold: true, size: 28, color: "0F5E5A" })] }));
-    body.push(p(`${c.domain} · ${c.framework}`, { color: "4B5563" }));
+    body.push(p(`${c.area ? `${c.area} · ` : ""}${c.domain} · ${c.framework}`, { color: "4B5563" }));
     body.push(p(versionLine(c), { size: 18, color: "4B5563", after: 120 }));
     if (c.description) body.push(p(c.description, { after: 100 }));
     if (c.outcomes.length) { body.push(p("Learning outcomes", { bold: true, before: 60 })); for (const o of c.outcomes) body.push(new Paragraph({ bullet: { level: 0 }, children: [run(o)] })); }

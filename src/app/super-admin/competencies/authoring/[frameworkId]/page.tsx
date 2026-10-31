@@ -67,7 +67,9 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
     const tree: LayoutTree = { componentOrder: f.componentOrder ?? null, registry: Object.keys(v.components), domains: domains0.map((d, i) => ({ id: d.id, name: d.name, sortOrder: i, competencies: d.competencies.map((c, j) => ({ id: c.id, name: c.name, sortOrder: j, criteria: c.criteria.map((k, m) => ({ id: k.id!, name: k.text, sortOrder: m, component: k.component })) })) })) };
     const a = applyLayout(tree, f.layoutDraft);
     const dById = new Map(domains0.map(d => [d.id, d]));
-    return a.domains.map(ad => { const d = dById.get(ad.id)!; const cById = new Map(d.competencies.map(c => [c.id, c]));
+    // 760: a draft may move a competency to another domain, so competencies are found framework-wide.
+    const cById = new Map(domains0.flatMap(d => d.competencies.map(c => [c.id, c] as const)));
+    return a.domains.map(ad => { const d = dById.get(ad.id)!;
       return { ...d, competencies: ad.competencies.map(ac => { const c = cById.get(ac.id)!; const kById = new Map(c.criteria.map(k => [k.id!, k])); return { ...c, criteria: ac.criteria.map(ak => kById.get(ak.id)!) }; }) }; });
   })();
   const comps = domains.flatMap(d => d.competencies);

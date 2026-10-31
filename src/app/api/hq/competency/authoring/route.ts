@@ -4,6 +4,7 @@ import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { createCompetency, createCpu, createDomain, createFramework, createPractice, importDraftPackage, isId, renameDomain, setFrameworkIdentity, updateCompetency, updateFramework } from "@/lib/competency/authoring";
 import { submitForReview } from "@/lib/competency/clinical-review";
 import { discardLayout, reorderLayout } from "@/lib/competency/framework-layout";
+import { createArea, deleteArea, moveCompetencyDomain, renameArea, reorderAreas, setDomainArea } from "@/lib/competency/framework-areas";
 import { loadFrameworkForReview, outcomeCounts, previewOf, runSubmission, type ReviewScope } from "@/lib/competency/review-batch";
 import { currentTraceId } from "@/lib/trace";
 
@@ -22,7 +23,12 @@ export const maxDuration = 60;
 // "sections", parentId? (domain for competencies, competency for criteria), component? (the criteria's section, null =
 // not classified), order: ids (codes for sections), every one of that parent, in the new order }. A never-published
 // draft is reordered directly; a published framework saves a layout draft, applied only by an independent publisher.
-// "outcomes" and any cross-parent move are refused (409) as clinical changes. discard_layout { frameworkId }.
+// "outcomes" and a criterion to another section or competency are refused (409) as clinical changes. discard_layout { frameworkId }.
+//
+// FRAMEWORK-DESIGN-STUDIO-02 (760, rulings D1/D3), ORGANISATIONAL, routed like reorder_layout (draft framework: live,
+// published: the layout draft): create_area { frameworkId, name, description? }, rename_area { frameworkId, areaId, name },
+// delete_area { frameworkId, areaId } (empty only), reorder_areas { frameworkId, order }, set_domain_area { frameworkId,
+// domainId, areaId | null }, move_competency_domain { frameworkId, competencyId, domainId, position? }. 409 without 760.
 //
 // ⚠ GATED BY hqApiGate(["hq.quality.competency.author"]) -- the Competency Author. It authors shared content and
 // puts it forward for clinical review. It approves nothing (395, the Clinical Content Reviewer) and publishes nothing
@@ -46,6 +52,12 @@ export async function POST(req: Request) {
     case "create_competency": { const r = await createCompetency(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
     case "update_competency": { const r = await updateCompetency(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
     case "reorder_layout": { const r = await reorderLayout(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "create_area": { const r = await createArea(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
+    case "rename_area": { const r = await renameArea(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "delete_area": { const r = await deleteArea(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "reorder_areas": { const r = await reorderAreas(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "set_domain_area": { const r = await setDomainArea(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "move_competency_domain": { const r = await moveCompetencyDomain(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
     case "discard_layout": { const r = await discardLayout(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
     case "import_draft": { const r = await importDraftPackage(ctx.admin, actor, body.package); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
     case "submit_review": {

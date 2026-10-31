@@ -66,8 +66,36 @@ Reuse the existing infrastructure. No-code first. No parallel systems. Testing p
 |---|---|---|
 | S1 | Server (a): criteria CRUD on drafts; append-mode import; spreadsheet template and parser into a package; draft vs published diff | pending |
 | S2 | UI (a): properties panel, criteria editor, touch drag helper, registry labels, compare view, spreadsheet import page | pending |
-| S3 | Server (b): migration 760 Areas; layout draft extension for organisational cross-parent moves; substantive moves in drafts | pending |
+| S3 | Server (b): migration 760 Areas; layout draft extension for organisational cross-parent moves; substantive moves in drafts | **done 31 Oct** (760 staging x2, server code; substantive moves left to S1 criteria editing and S5, see Log) |
 | S4 | UI (b): Areas in the tree, cross-parent drag, visual framework map | pending |
 | S5/S6 | D2 revision drafts, server (770) and UI | pending |
 
 ## Log
+
+### 31 Oct 2026: S3 done (branch hq/framework-studio-02b, not pushed)
+
+**Migration 760** `760-framework-areas.sql`, sha256 `137d644790ce23940d6c737b3cce19338f1976e13984c4a186a7c76d8f884dad`. Build record `760-build-record.md` (PRECHECK, VERIFY 16/16, plant-fail 4 red, ROLLBACK rehearsed to PRE exactly, re-applied, body diffs). **Application order 750, 751, 752, 760** (it refuses without them). House rules ALL CLEAR. **Staging only. Production does NOT have it** (separate owner GO, owner applies).
+- `framework_areas` (RLS and grants as `framework_domains`), `framework_domains.area_id` (same framework only, set null on delete). Not in the content hash.
+- Layout draft v1 gains `areas`, `domainAreas`, `areaNames`, and a competency listed under another domain of the same framework (= a move). Applied atomically by the redefined 752 trigger. Criteria across sections/competencies and foreign ids still refused.
+- F4: `create_area`, `rename_area`, `delete_area`, `reorder_areas`, `set_domain_area`, `move_competency_domain` are not authorship (DB guard and `NOT_AUTHORSHIP`), but are contribution (640 unchanged).
+
+**API contract for S4** (`POST /api/hq/competency/authoring`, `hq.quality.competency.author`, audit row first, action name = audit action). Draft framework never published: written live (`mode: "direct"`). Published (or ever published): only the layout draft (`mode: "draft"`), learners unchanged until an independent publisher publishes. Without 760: 409, nothing written.
+- `{ action: "create_area", frameworkId, name, description? }` -> 201 `{ ok, mode, id, unchanged, layoutPending }`. 409 duplicate name (case-insensitive). On a published framework the Area row is created EMPTY (inert until a draft places a domain in it).
+- `{ action: "rename_area", frameworkId, areaId, name }` -> published: `areaNames` in the draft.
+- `{ action: "delete_area", frameworkId, areaId }` -> only when no domain is in it, live or in the draft (409 otherwise). It also drops the Area from the draft.
+- `{ action: "reorder_areas", frameworkId, order }` -> order = every Area id, once (422 otherwise).
+- `{ action: "set_domain_area", frameworkId, domainId, areaId | null }`.
+- `{ action: "move_competency_domain", frameworkId, competencyId, domainId, position? }` -> position = 0-based index in the target domain after the move (omitted = last). Same framework only (422 otherwise).
+- 200 shape for all: `{ ok: true, mode: "direct" | "draft", unchanged, layoutPending }`. `reorder_layout` with a competency of another domain now answers 422 ("a move, not a reorder"), no longer 409 clinical.
+- **Reads:** `loadAuthoringView`: `view.areasReady`; per framework `areas` [{id, name, description, sortOrder}] (live, ordered) and per domain `areaId` (live), both absent before 760. The draft overlay is `layoutDraft` (may carry `areas`, `domainAreas`, `areaNames`, moved competencies): render with `applyLayout(tree, layoutDraft)` (tree with `areas` and domain `areaId`) then `groupByArea(...)` from `layout-order.ts` (pure, client-safe). The authoring page now resolves competencies framework-wide, so a moved one renders (fix in `page.tsx`).
+- Pack: framework pack items are ordered Area by Area and carry `area` (name or null), absent before 760. Word copy shows "Area · Domain · Framework". Learner (`foundation.ts`) does not read Areas. Version snapshots add `framework_areas` and domain `area_id` (fallback chain to the 750 and pre-750 selects).
+
+**NUR-CCF steps (after 760 is applied, any author, no SQL).** Never-published draft: live. Published: through the draft layout, then put forward and an independent publisher publishes (as a revision).
+1. `create_area` "Clinical Practice", then `create_area` "Professional Practice" (order: `reorder_areas` if needed).
+2. `set_domain_area` for each of the existing 13 domains -> Clinical Practice.
+3. After the PP package import (owner adds the two components first), `set_domain_area` for the Professional Practice domain -> Professional Practice.
+4. Preview with the review pack (`?view=pack&layout=draft` when published). Competency, criterion and outcome ids are unchanged, so no clinical re-review.
+
+**Checks.** vitest framework-areas (new, 14) + layout-order + framework-layout + review-pack + clinical-review + framework-publication: 64/64. Plant-fail: organisational actions taken out of NOT_AUTHORSHIP and published routed live -> 2 red, restored -> green.
+
+**Not done here.** Substantive moves (criterion to another section or competency) in draft frameworks: content edits belong to S1 criteria editing (competen-fds2a) and, for published frameworks, S5 revision drafts. UI is S4.
