@@ -15,7 +15,7 @@ import { byRowOrder, type SortWrite } from "./layout-order";
 //   move to another section   SUBSTANTIVE (D3): the component tag is in the hash.
 //   or another competency     SUBSTANTIVE (D3): both competencies' fingerprints change. Recorded on both.
 //   move within its section   ORGANISATIONAL: delegated to reorder_layout unchanged (F4: not authorship).
-//   retire / restore          is_active, never a delete (history). See RETIREMENT below.
+//   retire / restore          SUBSTANTIVE (D3): is_active, never a delete (history). See RETIREMENT below.
 //
 // ⚠ AUTHORSHIP FIRST. Every write but an organisational reorder is preceded by its audit row on the competency (cfca_
 // criterion_*), which 395's authorsOf counts as authorship, so whoever wrote or moved a criterion cannot review it.
@@ -23,10 +23,13 @@ import { byRowOrder, type SortWrite } from "./layout-order";
 // ⚠ DRAFT FRAMEWORKS ONLY. A published, in-review, approved or archived framework is refused: changes to a published
 // framework go through a revision draft (D2, slice S5). Shared frameworks only (editableFramework).
 //
-// ⚠ RETIREMENT AND THE FINGERPRINT. competency_content_hash (395/670) hashes every skill row, active or not, so
-// retiring a criterion does NOT change the fingerprint. Retiring one after a competency was put forward would change
-// what assessors see while its approval still reads as current. Until the hash covers retirement (a migration, an
-// owner decision), retire and restore are refused for a competency that has any clinical content version.
+// ⚠ RETIREMENT AND THE FINGERPRINT. Migration 761 makes competency_content_hash cover ACTIVE criteria only, so
+// retiring a criterion changes the fingerprint (the approval goes stale and the competency goes back to clinical
+// review) and restoring it returns the fingerprint to its earlier value. Before 761 the hash covered every row,
+// active or not, so a retirement would change what assessors see while the approval still read as current. So for
+// a competency that has any clinical content version, retire and restore first probe 761's marker
+// (competency_content_hash_covers_retirement) and are refused (409) when it is absent: fail closed. A competency
+// never put forward needs no probe.
 
 type Fail = { ok: false; status: number; error: string };
 type Result<T extends object = object> = ({ ok: true } & T) | Fail;
@@ -136,6 +139,13 @@ async function everPutForward(admin: any, competencyId: string): Promise<boolean
   return (data ?? []).length > 0;
 }
 
+/** Whether the fingerprint covers retirement (the 761 marker). null = unreadable. A missing function = before 761. */
+async function hashCoversRetirement(admin: any): Promise<boolean | null> {
+  const { data, error } = await admin.rpc("competency_content_hash_covers_retirement");
+  if (error) return ["PGRST202", "42883"].includes(String(error?.code ?? "")) ? false : null;
+  return data === true;
+}
+
 async function renumber(admin: any, order: string[], rows: Pick<CriterionRow, "id" | "sort_order">[]): Promise<boolean> {
   const w = await writeSortOrders(admin, denseWrites(order, new Map(rows.map(r => [r.id, r.sort_order]))));
   return w.ok;
@@ -200,9 +210,14 @@ async function setActive(admin: any, actor: Actor, b: any, active: boolean): Pro
   if ((k.is_active !== false) === active) return { ok: true, unchanged: true };
   const put = await everPutForward(admin, at.comp.id);
   if (put === null) return { ok: false, status: 503, error: "The clinical review record could not be read just now. Nothing has changed." };
-  if (put) return { ok: false, status: 409, error: `This competency has been put forward for clinical review, and its fingerprint does not yet cover ${active ? "restoring" : "retiring"} a criterion, so it is not ${active ? "restored" : "retired"} here. Edit the criterion's text, or move it, instead.` };
+  if (put) {
+    const covers = await hashCoversRetirement(admin);
+    if (covers === null) return { ok: false, status: 503, error: "The clinical fingerprint could not be checked just now. Nothing has changed." };
+    if (!covers) return { ok: false, status: 409, error: `This competency has been put forward for clinical review, and its fingerprint does not yet cover ${active ? "restoring" : "retiring"} a criterion, so it is not ${active ? "restored" : "retired"} here. Edit the criterion's text, or move it, instead.` };
+  }
+  // Substantive either way (D3). With 761 the fingerprint changes, so a reviewed competency goes back to clinical review.
   if (!(await authored(admin, actor, active ? "cfca_criterion_restored" : "cfca_criterion_retired", "framework_competency", at.comp.id, at.comp.name,
-    { criterion_id: k.id, substantive: true, framework_id: at.fw.id }))) return NOT_RECORDED;
+    { criterion_id: k.id, substantive: true, clinical_review: put, framework_id: at.fw.id }))) return NOT_RECORDED;
   const { error } = await admin.from("competency_skills").update({ is_active: active }).eq("id", k.id);
   return error ? { ok: false, status: 422, error: `The criterion could not be ${active ? "restored" : "retired"}.` } : { ok: true, unchanged: false };
 }

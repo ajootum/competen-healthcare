@@ -13,7 +13,8 @@ const FW = "00000000-0000-4000-8000-0000000000f1", DOM = "00000000-0000-4000-800
 const C1 = "00000000-0000-4000-8000-0000000000e1", C2 = "00000000-0000-4000-8000-0000000000e2";
 const K1 = "00000000-0000-4000-8000-0000000000a1", K2 = "00000000-0000-4000-8000-0000000000a2", K3 = "00000000-0000-4000-8000-0000000000a3", K4 = "00000000-0000-4000-8000-0000000000a4";
 
-const S: { calls: { table: string; op: string; args: any[] }[]; rows: Record<string, any[]> } = { calls: [], rows: {} };
+// marker: the 761 probe (competency_content_hash_covers_retirement). "absent" = before 761 (PostgREST PGRST202).
+const S: { calls: { table: string; op: string; args: any[] }[]; rows: Record<string, any[]>; marker: "present" | "absent" | "error" } = { calls: [], rows: {}, marker: "present" };
 function fake() {
   const from = (table: string) => {
     const f: [string, any][] = [];
@@ -34,7 +35,14 @@ function fake() {
     q.then = (ok: any, ko: any) => Promise.resolve(done()).then(ok, ko);
     return q;
   };
-  return { from };
+  const rpc = async (fn: string) => {
+    S.calls.push({ table: `rpc:${fn}`, op: "rpc", args: [] });
+    if (fn !== "competency_content_hash_covers_retirement") return { data: null, error: { code: "PGRST202" } };
+    return S.marker === "present" ? { data: true, error: null }
+      : S.marker === "absent" ? { data: null, error: { code: "PGRST202", message: "Could not find the function" } }
+      : { data: null, error: { code: "08006", message: "connection failure" } };
+  };
+  return { from, rpc };
 }
 const writes = () => S.calls.filter(c => ["insert", "update"].includes(c.op));
 const skill = (id: string) => S.rows.competency_skills.find(k => k.id === id);
@@ -42,6 +50,7 @@ const audits = () => S.rows.audit_log.map(a => [a.action, a.entity_id]);
 
 beforeEach(() => {
   S.calls = [];
+  S.marker = "present";
   S.rows = {
     frameworks: [{ id: FW, name: "Example", pub_status: "draft", hospital_id: null }],
     framework_domains: [{ id: DOM, framework_id: FW, name: "Communication" }],
@@ -118,10 +127,46 @@ describe("criteria actions in a draft", () => {
     expect(skill(K2).is_active).toBe(true);
     expect(audits().map(a => a[0])).toEqual(["cfca_criterion_retired", "cfca_criterion_restored"]);
   });
-  it("retire is refused once the competency was put forward (the fingerprint does not cover retirement)", async () => {
+  it("a competency never put forward needs no 761 probe", async () => {
+    S.marker = "absent";
+    expect(await retireCriterion(fake(), ME, { criterionId: K2 })).toMatchObject({ ok: true, unchanged: false });
+    expect(S.calls.some(c => c.op === "rpc")).toBe(false);
+  });
+  it("with 761 a reviewed competency's criterion may be retired and restored: substantive, sent back to clinical review", async () => {
     S.rows.clinical_content_version.push({ id: "v1", competency_id: C1 });
-    expect(await retireCriterion(fake(), ME, { criterionId: K2 })).toMatchObject({ ok: false, status: 409 });
+    expect(await retireCriterion(fake(), ME, { criterionId: K2 })).toMatchObject({ ok: true, unchanged: false });
+    expect(skill(K2).is_active).toBe(false);
+    expect(await restoreCriterion(fake(), ME, { criterionId: K2 })).toMatchObject({ ok: true, unchanged: false });
     expect(skill(K2).is_active).toBe(true);
+    expect(S.rows.audit_log.map(a => [a.action, a.new_value.substantive, a.new_value.clinical_review]))
+      .toEqual([["cfca_criterion_retired", true, true], ["cfca_criterion_restored", true, true]]);
+    // Authorship first: the audit row precedes the write.
+    const i = S.calls.findIndex(c => c.table === "audit_log" && c.op === "insert"), j = S.calls.findIndex(c => c.table === "competency_skills" && c.op === "update");
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(i).toBeLessThan(j);
+  });
+  it("without 761 retire and restore stay refused once the competency was put forward (fail closed, 409)", async () => {
+    S.marker = "absent";
+    S.rows.clinical_content_version.push({ id: "v1", competency_id: C1 });
+    expect(await retireCriterion(fake(), ME, { criterionId: K2 })).toMatchObject({ ok: false, status: 409, error: expect.stringMatching(/fingerprint does not yet cover retiring/) });
+    expect(skill(K2).is_active).toBe(true);
+    skill(K3).is_active = false;
+    expect(await restoreCriterion(fake(), ME, { criterionId: K3 })).toMatchObject({ ok: false, status: 409 });
+    expect(skill(K3).is_active).toBe(false);
+    expect(writes()).toEqual([]);
+  });
+  it("an unreadable 761 probe changes nothing (503)", async () => {
+    S.marker = "error";
+    S.rows.clinical_content_version.push({ id: "v1", competency_id: C1 });
+    expect(await retireCriterion(fake(), ME, { criterionId: K2 })).toMatchObject({ ok: false, status: 503 });
+    expect(skill(K2).is_active).toBe(true);
+    expect(writes()).toEqual([]);
+  });
+  it("a published framework is refused before the probe (draft frameworks only)", async () => {
+    S.rows.frameworks[0].pub_status = "published";
+    S.rows.clinical_content_version.push({ id: "v1", competency_id: C1 });
+    expect(await retireCriterion(fake(), ME, { criterionId: K2 })).toMatchObject({ ok: false, status: 409, error: expect.stringMatching(/revision draft/) });
+    expect(S.calls.some(c => c.op === "rpc")).toBe(false);
   });
   it("move to another section: substantive, recorded, the component changes", async () => {
     const r = await moveCriterion(fake(), ME, { criterionId: K3, component: "knowledge", position: 1 });
