@@ -36,6 +36,7 @@
 // mapping or dependency can appear here.
 
 import { CLINICAL_STATE_LABEL, clinicalNote, loadClinicalReviews, type ClinicalReview, type ClinicalState } from "./clinical-review";
+import { byRowOrder } from "./layout-order";
 
 export const COMPETENCY_LAYERS = ["foundational", "profession", "advanced", "specialty", "context"] as const;
 export type CompetencyLayer = (typeof COMPETENCY_LAYERS)[number];
@@ -153,7 +154,14 @@ export function assembleCatalogue(r: {
   }
   // Each competency once: as a catalogue's own, else as the first catalogue entry that names it.
   const placements: { c: Row; f: Row; entry: Row | null }[] = [];
-  for (const c of r.competencies) {
+  // FRAMEWORK-DESIGN-STUDIO-01: a catalogue's own competencies in its order -- catalogue by catalogue, domain by
+  // domain (sort_order, name, id), then competency by competency within its domain -- never one sort across domains.
+  const fwAt = new Map(r.frameworks.map((f, i) => [f.id, i]));
+  const ownOrder = (a: Row, b: Row) => {
+    const da = dom.get(a.domain_id), db = dom.get(b.domain_id);
+    return (fwAt.get(da?.framework_id) ?? 0) - (fwAt.get(db?.framework_id) ?? 0) || (da && db && da.id !== db.id ? byRowOrder(da, db) : 0) || byRowOrder(a, b);
+  };
+  for (const c of [...r.competencies].sort(ownOrder)) {
     const d = dom.get(c.domain_id); const f = d ? offered.get(d.framework_id) : undefined;
     if (d && f) placements.push({ c, f, entry: null });
   }
@@ -244,9 +252,9 @@ async function readCatalogue(admin: any, allowedFrameworkIds: readonly string[],
   if (frameworks === null) return null;
   if (!frameworks.length) return [];
   const catalogueIds: string[] = frameworks.map((f: Row) => f.id);
-  const ownDomains = await rows(admin.from("framework_domains").select("id, framework_id, name").in("framework_id", catalogueIds));
+  const ownDomains = await rows(admin.from("framework_domains").select("id, framework_id, name, sort_order").in("framework_id", catalogueIds));
   if (ownDomains === null) return null;
-  const COMP = "id, domain_id, name, description, code, practice_id, cpu_id, learning_outcomes, expected_level_id";
+  const COMP = "id, domain_id, name, description, code, practice_id, cpu_id, learning_outcomes, expected_level_id, sort_order";
   const own = ownDomains.length ? await rows(admin.from("framework_competencies").select(COMP)
     .in("domain_id", ownDomains.map((d: Row) => d.id)).order("sort_order")) : [];
   if (own === null) return null;
