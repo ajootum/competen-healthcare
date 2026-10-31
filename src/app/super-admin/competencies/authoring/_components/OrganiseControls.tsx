@@ -62,7 +62,7 @@ export function AreaHeading({ name, count, organise, busy, rowProps, grip, butto
         </form>
       ) : (
         <>
-          <h3 id={headingId} className="min-w-0 flex-1 break-words text-[12.5px] font-bold uppercase tracking-[0.1em] text-gray-800">{name} <span className="font-normal normal-case tracking-normal text-gray-500">· {count} {count === 1 ? "domain" : "domains"}</span></h3>
+          <h3 id={headingId} className="min-w-[9rem] flex-1 break-words text-[12.5px] font-bold uppercase tracking-[0.1em] text-gray-800">{name} <span className="font-normal normal-case tracking-normal text-gray-500">· {count} {count === 1 ? "domain" : "domains"}</span></h3>
           {organise && (
             <span className="flex flex-wrap items-center gap-1">
               <button type="button" className={small} disabled={busy} aria-label={`Rename the Area ${name}`} onClick={() => { setDraft(name); setRenaming(true); }}>Rename</button>
