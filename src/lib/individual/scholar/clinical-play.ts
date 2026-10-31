@@ -13,9 +13,10 @@ import { answeredView, caseClosing, learnerView, resolveOptions, resolveToken, v
 import { applyAnswer } from "@/lib/cases/library";
 import { brokenSafety, caseDebrief, markDecision, type Debrief } from "./clinical";
 import {
-  createPrivateCaseSession, getPrivateCase, getPrivateCaseSession, insertCaseAnswer, updatePrivateCaseSession,
+  createPrivateCaseSession, getPrivateCase, getPrivateCaseSession, insertCaseAnswer, insertCaseReason, updatePrivateCaseSession,
   type CaseAnswerRow, type CaseSessionRow, type PrivateCaseRow,
 } from "./store";
+import { readCaseAttempt, type CaseAttemptView } from "./case-integrity";
 import { MARKING_LABEL } from "./config";
 
 export const newViewSalt = () => randomBytes(24).toString("base64url");
@@ -34,8 +35,12 @@ export type DecisionFeedback = {
 export type PlayView = {
   kind: "private"; sessionId: string; caseId: string; title: string; status: "active" | "completed"; mode: "guided" | "independent";
   view: LearnerView; answered: string[]; feedback: DecisionFeedback[]; debrief: Debrief | null; materialId: string;
-  /** The case's reflection prompt and optional reasoning sections, once it has ended. The learner's own "why" is held by the browser, never stored (435 holds a choice or a written answer, not both). */
+  /** The case's reflection prompt and optional reasoning sections, once it has ended. */
   closing: CaseClosing | null;
+  /** The learner's own "why" for a choice, by decision token: kept beside the answer (810), so it comes back on any device. Empty where 810 is absent (the browser then holds it for this visit only). */
+  reasons: Record<string, string>;
+  /** SCHOLAR-CASE-INTEGRITY-01: the kept record of a finished attempt (810), or null (in progress, or none kept here). */
+  attempt?: CaseAttemptView | null;
 };
 
 const asState = (s: CaseSessionRow, answers: CaseAnswerRow[]) => ({
@@ -61,7 +66,16 @@ function playView(c: PrivateCaseRow, s: CaseSessionRow, answers: CaseAnswerRow[]
     view: learnerView(b, { reachedStageIds: s.reachedStageIds, revealedFactIds: s.revealedFactIds }, s.viewSalt, { hints: s.mode === "guided" }),
     answered: answers.map(a => viewToken(s.viewSalt, "decision", a.decisionPointId)),
     feedback: answers.map(a => feedbackOf(b, s, a)), debrief: s.debrief ?? null, closing: s.status === "completed" ? caseClosing(b) : null,
+    reasons: Object.fromEntries(answers.filter(a => a.reason).map(a => [viewToken(s.viewSalt, "decision", a.decisionPointId), a.reason as string])),
   };
+}
+
+/** A finished private play with its kept record (810): the debrief is the one kept at completion. */
+async function withAttempt(admin: any, userId: string, c: PrivateCaseRow, v: PlayView): Promise<PlayView> {
+  if (v.status !== "completed") return v;
+  const a = await readCaseAttempt(admin, userId, "private", v.sessionId, { contentHash: c.blueprintHash ?? null, current: true });
+  if (!a) return v;
+  return { ...v, attempt: a.view, debrief: a.record?.debrief ? { ...a.record.debrief, objectives: v.debrief?.objectives ?? [] } as Debrief : v.debrief };
 }
 
 async function load(admin: any, userId: string, sessionId: string) {
@@ -88,7 +102,7 @@ export async function privatePlayView(admin: any, userId: string, sessionId: str
   const x = await load(admin, userId, sessionId);
   if (!x) return null;
   await updatePrivateCaseSession(admin, userId, sessionId, {});
-  return playView(x.c, x.session, x.answers);
+  return withAttempt(admin, userId, x.c, playView(x.c, x.session, x.answers));
 }
 
 /** Ask for a finding. Only one a decision on the CURRENT stage permits -- library.ts revealInSession's rule. */
@@ -116,7 +130,7 @@ export type ReasoningJudge = (d: { prompt: string; expected: string; facts: stri
  * is judged by `judge` -- AI reasoning feedback (labelled), or, where that is unavailable, the student reviews it
  * against the expected answer themselves (self-graded, nothing guessed). Then applyAnswer moves the case on.
  */
-export async function answerPrivate(admin: any, userId: string, sessionId: string, args: { decisionToken: string; optionTokens?: string[]; text?: string | null }, judge: ReasoningJudge)
+export async function answerPrivate(admin: any, userId: string, sessionId: string, args: { decisionToken: string; optionTokens?: string[]; text?: string | null; reason?: string | null }, judge: ReasoningJudge)
   : Promise<{ feedback: DecisionFeedback; play: PlayView } | { error: string; status: number }> {
   const x = await load(admin, userId, sessionId);
   if (!x) return { error: "No such session.", status: 404 };
@@ -143,7 +157,11 @@ export async function answerPrivate(admin: any, userId: string, sessionId: strin
     decisionPointId: dpId, chosen: d.kind === "free_text" ? null : chosen, reasoning: text, marking, correct: mark.correct, score: mark.score, safety, aiFeedback, evaluator,
   });
   if (!saved) return { error: "Your answer could not be recorded just now.", status: 500 };
-  const answers: CaseAnswerRow[] = [...x.answers, { decisionPointId: dpId, chosen, reasoning: text, marking, correct: mark.correct, score: mark.score, safety, aiFeedback, evaluatorModel: evaluator?.model ?? null, createdAt: new Date().toISOString() }];
+  // "Explain your choice" (askReason): kept beside the choice it explains (810), after it. Not kept (810 absent, or a
+  // failed write): no error -- the browser still shows it. It never changes the marking.
+  const why = d.kind !== "free_text" && d.askReason === true ? (args.reason ?? "").trim() : "";
+  const reasonKept = why ? await insertCaseReason(admin, userId, sessionId, dpId, why) : false;
+  const answers: CaseAnswerRow[] = [...x.answers, { decisionPointId: dpId, chosen, reasoning: text, marking, correct: mark.correct, score: mark.score, safety, aiFeedback, evaluatorModel: evaluator?.model ?? null, createdAt: new Date().toISOString(), reason: reasonKept ? why.slice(0, 1500) : null }];
   const current = r.completed ? x.session.reachedStageIds[x.session.reachedStageIds.length - 1] : r.reached[r.reached.length - 1];
   const debrief = r.completed ? caseDebrief(x.b, answers.map(a => ({ decisionPointId: a.decisionPointId, chosen: a.chosen, text: a.reasoning, correct: a.correct, safety: a.safety, marking: a.marking })), r.revealed, r.reached) : undefined;
   await updatePrivateCaseSession(admin, userId, sessionId, { reached: r.reached, revealed: r.revealed, current, completed: r.completed, ...(debrief ? { debrief } : {}) });

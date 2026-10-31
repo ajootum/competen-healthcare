@@ -1311,6 +1311,8 @@ export type CaseSessionRow = {
 export type CaseAnswerRow = {
   decisionPointId: string; chosen: string[]; reasoning: string | null; marking: string; correct: boolean | null; score: number | null;
   safety: string[]; aiFeedback: string | null; evaluatorModel: string | null; createdAt: string;
+  /** The learner's reason for a CHOICE, where the case asked (810, individual_scholar_case_reason). null when none, or 810 is absent. */
+  reason?: string | null;
 };
 const CASE_SESSION_COLS = "id, private_case_id, mode, status, view_salt, current_stage_id, reached_stage_ids, revealed_fact_ids, debrief, created_at, last_active_at, completed_at";
 const toCaseSession = (r: any): CaseSessionRow => ({
@@ -1336,9 +1338,12 @@ export async function getPrivateCaseSession(admin: Admin, userId: string, id: st
   const { data: ans } = await admin.from("individual_scholar_case_answer")
     .select("decision_point_id, chosen_option_ids, reasoning, marking, correct, score, safety_criterion_ids, ai_feedback, evaluator_model, created_at")
     .eq("user_id", userId).eq("session_id", id).order("created_at");
+  // 810: the reasons given for choices. Absent (not applied) or unreadable: none, and the case plays as before.
+  const { data: why } = await admin.from("individual_scholar_case_reason").select("decision_point_id, reason").eq("user_id", userId).eq("session_id", id);
+  const reasons = new Map<string, string>(((why ?? []) as any[]).map(r => [r.decision_point_id, r.reason]));
   return {
     session: toCaseSession(data),
-    answers: ((ans ?? []) as any[]).map(a => ({
+    answers: ((ans ?? []) as any[]).map(a => ({ reason: reasons.get(a.decision_point_id) ?? null,
       decisionPointId: a.decision_point_id, chosen: Array.isArray(a.chosen_option_ids) ? a.chosen_option_ids : [], reasoning: a.reasoning ?? null, marking: a.marking,
       correct: a.correct ?? null, score: a.score === null ? null : Number(a.score), safety: Array.isArray(a.safety_criterion_ids) ? a.safety_criterion_ids : [],
       aiFeedback: a.ai_feedback ?? null, evaluatorModel: a.evaluator_model ?? null, createdAt: a.created_at,
@@ -1371,6 +1376,89 @@ export async function updatePrivateCaseSession(admin: Admin, userId: string, id:
   return !error;
 }
 
+/**
+ * 810: the learner's reason for a choice they have just made in a private case (askReason), kept beside the 435 answer.
+ * The database refuses one without that choice, a second one, and any change. Never an error to the learner: false
+ * when it was not kept (810 absent included), and the browser still holds it for the debrief.
+ */
+export async function insertCaseReason(admin: Admin, userId: string, sessionId: string, decisionPointId: string, reason: string): Promise<boolean> {
+  const text = reason.trim().slice(0, 1500);
+  if (!isUuid(sessionId) || !text) return false;
+  const { error } = await admin.from("individual_scholar_case_reason").insert({ session_id: sessionId, user_id: userId, decision_point_id: decisionPointId, reason: text });
+  return !error;
+}
+
+// -- 810: A COMPLETED CASE ATTEMPT, AS IT WAS (SCHOLAR-CASE-INTEGRITY-01) --
+// One immutable snapshot per completed session (private or library), and append-only corrections of its decision
+// results. The database checks the session is the caller's own, completed, and of the case as it is held.
+
+export type CaseAttemptCorrectionRow = {
+  id: string; decisionPointId: string; previousOutcome: string; previousScore: number | null; correctedOutcome: string; correctedScore: number | null;
+  reason: string; basis: string; correctedByKind: string; createdAt: string;
+};
+export type CaseAttemptSnapshotRow = {
+  id: string; kind: "private" | "library"; sessionId: string; caseRef: string; contentHash: string; record: any; rubric: any; rubricHash: string | null;
+  standing: "formative"; completedAt: string; createdAt: string; corrections: CaseAttemptCorrectionRow[];
+};
+const SNAPSHOT_COLS = "id, session_kind, private_session_id, library_session_id, case_ref, content_hash, record, rubric, rubric_hash, standing, completed_at, created_at";
+const toSnapshot = (r: any, corrections: CaseAttemptCorrectionRow[]): CaseAttemptSnapshotRow => ({
+  id: r.id, kind: r.session_kind, sessionId: r.private_session_id ?? r.library_session_id, caseRef: r.case_ref, contentHash: r.content_hash, record: r.record ?? {},
+  rubric: r.rubric ?? null, rubricHash: r.rubric_hash ?? null, standing: "formative", completedAt: r.completed_at, createdAt: r.created_at, corrections,
+});
+
+/** Keep the snapshot of a completed attempt. "exists": one is already kept (idempotent on the session). */
+export async function insertCaseAttemptSnapshot(admin: Admin, userId: string, input: {
+  kind: "private" | "library"; sessionId: string; caseRef: string; contentHash: string; record: unknown; rubric: unknown | null;
+}): Promise<{ ok: true; id: string } | { ok: false; reason: "exists" | "not_provisioned" | "refused" }> {
+  if (!isUuid(input.sessionId)) return { ok: false, reason: "refused" };
+  const { data, error } = await admin.from("individual_scholar_case_attempt_snapshot").insert({
+    user_id: userId, session_kind: input.kind, ...(input.kind === "private" ? { private_session_id: input.sessionId } : { library_session_id: input.sessionId }),
+    case_ref: input.caseRef, content_hash: input.contentHash, record: input.record, rubric: input.rubric ?? null,
+    // completed_at is the session's own: the database guard replaces this placeholder with it.
+    completed_at: new Date().toISOString(),
+  }).select("id").single();
+  if (!error && data) return { ok: true, id: data.id };
+  if (String(error?.code ?? "") === "23505") return { ok: false, reason: "exists" };
+  return { ok: false, reason: isNotProvisioned(error) ? "not_provisioned" : "refused" };
+}
+
+/** The caller's kept snapshot of one session, with its corrections oldest first. data null: none kept. */
+export async function getCaseAttemptSnapshot(admin: Admin, userId: string, kind: "private" | "library", sessionId: string): Promise<Read<CaseAttemptSnapshotRow | null>> {
+  if (!isUuid(sessionId)) return { ok: true, data: null };
+  const { data, error } = await admin.from("individual_scholar_case_attempt_snapshot").select(SNAPSHOT_COLS).eq("user_id", userId)
+    .eq(kind === "private" ? "private_session_id" : "library_session_id", sessionId).maybeSingle();
+  if (error) return fail(error);
+  if (!data) return { ok: true, data: null };
+  const { data: cs, error: cErr } = await admin.from("individual_scholar_case_attempt_correction")
+    .select("id, decision_point_id, previous_outcome, previous_score, corrected_outcome, corrected_score, reason, basis, corrected_by_kind, created_at")
+    .eq("user_id", userId).eq("snapshot_id", data.id).order("created_at");
+  if (cErr) return fail(cErr);
+  return { ok: true, data: toSnapshot(data, ((cs ?? []) as any[]).map(c => ({
+    id: c.id, decisionPointId: c.decision_point_id, previousOutcome: c.previous_outcome, previousScore: c.previous_score === null ? null : Number(c.previous_score),
+    correctedOutcome: c.corrected_outcome, correctedScore: c.corrected_score === null ? null : Number(c.corrected_score), reason: c.reason, basis: c.basis,
+    correctedByKind: c.corrected_by_kind, createdAt: c.created_at,
+  }))) };
+}
+
+/** One correction of one decision result in a learner's kept attempt. previous_* is filled by the database. */
+export async function insertCaseAttemptCorrection(admin: Admin, userId: string, input: {
+  snapshotId: string; decisionPointId: string; correctedOutcome: "correct" | "partial" | "incorrect"; correctedScore: number | null;
+  reason: string; basis: "rubric_error" | "key_error" | "marking_error" | "other"; actorId: string | null;
+}): Promise<{ ok: true; id: string; previousOutcome: string } | { ok: false; reason: "unchanged" | "not_found" | "not_provisioned" | "refused" }> {
+  if (!isUuid(input.snapshotId)) return { ok: false, reason: "not_found" };
+  const { data, error } = await admin.from("individual_scholar_case_attempt_correction").insert({
+    snapshot_id: input.snapshotId, user_id: userId, decision_point_id: input.decisionPointId,
+    previous_outcome: "unmarked", // replaced by the database from the effective result
+    corrected_outcome: input.correctedOutcome, corrected_score: input.correctedScore, reason: input.reason.trim(), basis: input.basis,
+    corrected_by: input.actorId, corrected_by_kind: input.actorId ? "hq_actor" : "system_rule",
+  }).select("id, previous_outcome").single();
+  if (!error && data) return { ok: true, id: data.id, previousOutcome: data.previous_outcome };
+  const m = String(error?.message ?? "");
+  if (/changes nothing/.test(m)) return { ok: false, reason: "unchanged" };
+  if (/not this learner own|not in the attempt/.test(m)) return { ok: false, reason: "not_found" };
+  return { ok: false, reason: isNotProvisioned(error) ? "not_provisioned" : "refused" };
+}
+
 /** Which library version one of the caller's library plays is on (423, read only). null when it is not theirs. */
 export async function librarySessionVersion(admin: Admin, userId: string, sessionId: string): Promise<string | null> {
   if (!isUuid(sessionId)) return null;
@@ -1379,13 +1467,17 @@ export async function librarySessionVersion(admin: Admin, userId: string, sessio
 }
 
 /** The caller's case history: private sessions (435) and library plays (423, read only), newest first. */
-export async function caseHistory(admin: Admin, userId: string, limit = 20): Promise<Read<{ kind: "private" | "library"; id: string; title: string | null; versionId: string | null; status: string; startedAt: string; completedAt: string | null }[]>> {
+export async function caseHistory(admin: Admin, userId: string, limit = 20): Promise<Read<{ kind: "private" | "library"; id: string; title: string | null; versionId: string | null; status: string; startedAt: string; completedAt: string | null; kept: boolean }[]>> {
   const [p, l] = await Promise.all([
     admin.from("individual_scholar_case_session").select("id, status, created_at, completed_at, private_case_id").eq("user_id", userId).order("last_active_at", { ascending: false }).limit(limit),
     admin.from("case_library_session").select("id, status, started_at, completed_at, version_id").eq("user_id", userId).order("started_at", { ascending: false }).limit(limit),
   ]);
   if (p.error && !isNotProvisioned(p.error)) return fail(p.error);
   const privateRows = ((p.data ?? []) as any[]);
+  // 810: which finished attempts have their record kept. Absent: none is said to be.
+  const { data: kept } = await admin.from("individual_scholar_case_attempt_snapshot").select("private_session_id, library_session_id").eq("user_id", userId)
+    .order("completed_at", { ascending: false }).limit(200);
+  const keptIds = new Set(((kept ?? []) as any[]).map(r => r.private_session_id ?? r.library_session_id));
   const titles = new Map<string, string>();
   if (privateRows.length) {
     const { data } = await admin.from("individual_scholar_case").select("id, title").eq("user_id", userId).in("id", [...new Set(privateRows.map(r => r.private_case_id))]);
@@ -1396,8 +1488,8 @@ export async function caseHistory(admin: Admin, userId: string, limit = 20): Pro
   return {
     ok: true,
     data: [
-      ...privateRows.map(r => ({ kind: "private" as const, id: r.id, title: titles.get(r.private_case_id) ?? "Your case", versionId: null, status: r.status, startedAt: r.created_at, completedAt: r.completed_at ?? null })),
-      ...libRows.map(r => ({ kind: "library" as const, id: r.id, title: null, versionId: r.version_id as string, status: r.status === "in_progress" ? "active" : r.status, startedAt: r.started_at, completedAt: r.completed_at ?? null })),
+      ...privateRows.map(r => ({ kind: "private" as const, id: r.id, title: titles.get(r.private_case_id) ?? "Your case", versionId: null, status: r.status, startedAt: r.created_at, completedAt: r.completed_at ?? null, kept: keptIds.has(r.id) })),
+      ...libRows.map(r => ({ kind: "library" as const, id: r.id, title: null, versionId: r.version_id as string, status: r.status === "in_progress" ? "active" : r.status, startedAt: r.started_at, completedAt: r.completed_at ?? null, kept: keptIds.has(r.id) })),
     ].sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, limit),
   };
 }

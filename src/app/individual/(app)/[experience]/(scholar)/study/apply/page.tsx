@@ -119,7 +119,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
                 <ul className="mt-2 space-y-1.5">{history.data.map(h => (
                   <li key={`${h.kind}${h.id}`} className="text-[13.5px]">
                     <Link href={withStudy(`${experienceHref("scholar", "study/apply/case")}?kind=${h.kind}&session=${h.id}`, sid)} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{h.title ?? libTitles.get(h.id) ?? "Library case"}</Link>
-                    <span className="text-[12px] text-gray-500"> · {h.kind === "library" ? "library" : "your case"} · {h.status === "completed" ? "finished" : "in progress"}</span>
+                    <span className="text-[12px] text-gray-500"> · {h.kind === "library" ? "library" : "your case"} · {h.status === "completed" ? (h.kept ? "finished, record kept" : "finished") : "in progress"}</span>
                   </li>
                 ))}</ul>
               )}

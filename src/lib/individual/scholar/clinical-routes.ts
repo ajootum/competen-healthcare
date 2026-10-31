@@ -12,6 +12,7 @@ import { caseSourceKey } from "./clinical";
 import { caseSourcesOf } from "./store";
 import { answerPrivate, privatePlayView, revealPrivate, type ReasoningJudge } from "./clinical-play";
 import { LIBRARY_CASE_LABEL, MARKING_LABEL, PRIVATE_CASE_LABEL } from "./config";
+import { readCaseAttempt } from "./case-integrity";
 
 export type PlayKind = "private" | "library";
 export const isPlayKind = (v: unknown): v is PlayKind => v === "private" || v === "library";
@@ -20,12 +21,32 @@ export const isPlayKind = (v: unknown): v is PlayKind => v === "private" || v ==
 export async function viewPlay(admin: any, userId: string, kind: PlayKind, id: string, hints: boolean) {
   if (kind === "private") { const v = await privatePlayView(admin, userId, id); return v ? { ...v, label: PRIVATE_CASE_LABEL } : null; }
   const v = await caseSessionView(admin, userId, id, { hints });
-  // A library session's AI feedback is the shared delivery's record (424), labelled AI evaluation.
-  return v ? {
+  if (!v) return null;
+  // A library session's AI feedback is the shared delivery's record (424), labelled AI evaluation. Every answered
+  // decision comes back with its answered view (the key, after answering), so a play resumed on another device shows
+  // what this one showed.
+  const ai = new Map((v.feedback ?? []).map(f => [f.decisionToken, f.text]));
+  const answeredViews = v.answeredViews ?? {};
+  return {
     kind: "library" as const, sessionId: v.sessionId, status: v.status === "in_progress" ? "active" : v.status, current: v.current, view: v.view, answered: v.answered,
-    feedback: (v.feedback ?? []).map(f => ({ token: f.decisionToken, marking: "ai_evaluation" as const, markingLabel: MARKING_LABEL.ai_evaluation, answered: null, aiFeedback: f.text })),
+    feedback: v.answered.map(t => ai.has(t)
+      ? { token: t, marking: "ai_evaluation" as const, markingLabel: MARKING_LABEL.ai_evaluation, answered: answeredViews[t] ?? null, aiFeedback: ai.get(t)! }
+      : { token: t, marking: "deterministic" as const, markingLabel: MARKING_LABEL.deterministic, answered: answeredViews[t] ?? null, aiFeedback: null }),
     debrief: null, label: LIBRARY_CASE_LABEL, reasons: v.reasons, closing: v.closing,
-  } : null;
+    // SCHOLAR-CASE-INTEGRITY-01: the kept record of a finished attempt (810), or null.
+    attempt: v.status === "completed" ? (await readCaseAttempt(admin, userId, "library", id))?.view ?? null : null,
+  };
+}
+
+/**
+ * SCHOLAR-CASE-INTEGRITY-01: once a case is finished, its record is kept (810), exactly once, AFTER everything about the
+ * last answer is recorded (a library written answer's AI feedback included), and the finished play carries it.
+ * In progress, or 810 absent: the play unchanged.
+ */
+export async function finishPlay<T extends { status?: string; attempt?: unknown }>(admin: any, userId: string, kind: PlayKind, id: string, play: T): Promise<T> {
+  if (play?.status !== "completed") return play;
+  const a = await readCaseAttempt(admin, userId, kind, id);
+  return a ? { ...play, attempt: a.view } : play;
 }
 
 /** Ask for a finding the current decision permits. */

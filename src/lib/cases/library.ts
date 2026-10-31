@@ -105,12 +105,14 @@ export async function findLibraryCases(admin: any, q: {
   return out;
 }
 
-export type LoadedCase = { versionId: string; approval: { state: "approved"; approvedAt: string | null }; risk: string; current: boolean; blueprint: Blueprint };
+export type LoadedCase = { versionId: string; approval: { state: "approved"; approvedAt: string | null }; risk: string; current: boolean; blueprint: Blueprint;
+  /** The database's own hash of the version content (422): what an attempt record names it by. */
+  contentHash?: string };
 
 /** One library case, SERVER-SIDE ONLY (D-b). Deliverable, or -- for a student resuming that exact version -- labelled. */
 export async function loadLibraryCase(admin: any, versionId: string, opts: { resumeFor?: string } = {}): Promise<LoadedCase | null> {
   if (!UUID.test(versionId) || !(await caseLibraryEnabled(admin))) return null;
-  const { data: v, error } = await admin.from("case_library_version").select("id, state, risk, content").eq("id", versionId).maybeSingle();
+  const { data: v, error } = await admin.from("case_library_version").select("id, state, risk, content, content_hash").eq("id", versionId).maybeSingle();
   if (error || !v) return null;
   const { data: deliverable } = await admin.rpc("case_library_deliverable", { p_version: versionId });
   let current = deliverable === true;
@@ -124,7 +126,7 @@ export async function loadLibraryCase(admin: any, versionId: string, opts: { res
   }
   const { data: ccv } = await admin.from("clinical_content_version").select("id").eq("case_version_id", versionId).eq("content_kind", "case");
   const { data: ds } = ccv?.length ? await admin.from("clinical_review_decision").select("created_at").in("version_id", ccv.map((c: any) => c.id)).eq("decision", "approved").order("created_at", { ascending: false }).limit(1) : { data: [] };
-  return { versionId, approval: { state: "approved", approvedAt: ds?.[0]?.created_at ?? null }, risk: v.risk, current, blueprint: v.content as Blueprint };
+  return { versionId, approval: { state: "approved", approvedAt: ds?.[0]?.created_at ?? null }, risk: v.risk, current, blueprint: v.content as Blueprint, contentHash: v.content_hash };
 }
 
 /** Pure: a variation chosen from the approved rules, deterministically from a seed. Empty when none or disabled. */
@@ -155,6 +157,8 @@ export type SessionView = { sessionId: string; status: string; current: boolean;
   feedback: (AiEvaluationView & { decisionToken: string })[]; debrief: AiEvaluationView | null;
   /** The learner's own "why" for the choices where the case asked, by decision token (kept with the answer). */
   reasons: Record<string, string>;
+  /** Each answered decision as answeredView shows it (the key and rationales, AFTER answering), by decision token: what a resumed play shows again. */
+  answeredViews: Record<string, ReturnType<typeof answeredView>>;
   /** Once the case has ended: its reflection prompt and the optional reasoning sections. null while it is in progress. */
   closing: CaseClosing | null };
 /** What Scholar passes when it records an AI evaluation: the generation's own provider, model and request id. */
@@ -176,7 +180,29 @@ function viewOf(x: { s: SessionRow; c: LoadedCase; b: Blueprint }, hints: boolea
     feedback: (x.s.feedback ?? []).map(f => ({ ...shown(f), decisionToken: viewToken(x.s.view_salt, "decision", f.decisionPointId) })),
     debrief: x.s.debrief ? shown(x.s.debrief) : null,
     reasons: Object.fromEntries(x.s.answers.filter(a => typeof a.reason === "string" && a.reason).map(a => [viewToken(x.s.view_salt, "decision", a.decisionPointId), a.reason as string])),
+    answeredViews: Object.fromEntries(x.s.answers.map(a => [viewToken(x.s.view_salt, "decision", a.decisionPointId), answeredView(x.b, a.decisionPointId, a.chosen ?? [], x.s.view_salt)])),
     closing: x.s.status === "completed" ? caseClosing(x.b) : null };
+}
+
+/**
+ * SCHOLAR-CASE-INTEGRITY-01 (810): what a completed attempt of the caller's own library session was played against and
+ * did, for Scholar's immutable attempt record. SERVER-SIDE ONLY: it carries the blueprint (the variation applied), so
+ * it must never reach a browser. Read only: nothing here writes the session.
+ */
+export type SessionAttemptSource = {
+  versionId: string; contentHash: string | null; current: boolean; status: string; completedAt: string | null; blueprint: Blueprint; variation: Record<string, string>;
+  reached: string[]; revealed: string[]; answers: SessionRow["answers"]; feedback: { decisionPointId: string; text: string; model: string; provider: string; at: string }[];
+  debrief: { text: string; model: string; provider: string; at: string } | null;
+};
+export async function sessionAttemptSource(admin: any, userId: string, sessionId: string): Promise<SessionAttemptSource | null> {
+  const x = await sessionFor(admin, userId, sessionId);
+  if (!x) return null;
+  return {
+    versionId: x.s.version_id, contentHash: x.c.contentHash ?? null, current: x.c.current, status: x.s.status, completedAt: (x.s as any).completed_at ?? null,
+    blueprint: x.b, variation: x.s.variation ?? {}, reached: x.s.reached_stage_ids, revealed: x.s.revealed_fact_ids, answers: x.s.answers,
+    feedback: (x.s.feedback ?? []).map(f => ({ decisionPointId: f.decisionPointId, text: f.text, model: f.model, provider: f.provider, at: f.at })),
+    debrief: x.s.debrief ? { text: x.s.debrief.text, model: x.s.debrief.model, provider: x.s.debrief.provider, at: x.s.debrief.at } : null,
+  };
 }
 
 /** Pure: an AI evaluation entry as the database will accept it (424), or null when it would be refused. */
