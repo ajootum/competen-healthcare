@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import { listResources } from "@/lib/knowledge/educator";
 import { ActionButton } from "../_components/ResearchControls";
+import { StationPreview, StatusChip } from "../_components/KnowledgeStatus";
 
 // /super-admin/research/knowledge-publication -- publication of knowledge resources (COMPETEN-KNOWLEDGE-RESEARCH-01 K3,
 // migration 442). Guarded by hq.quality.knowledge.publish. Publication is a separate act: 442 refuses any version that
@@ -28,9 +29,13 @@ export default async function KnowledgePublicationPage() {
             <li key={r.id} className="space-y-1 py-2">
               <div><span className="font-semibold">{r.title}</span> <code className="text-gray-600">{r.code}</code> · {r.kind} · {r.status}</div>
               {r.versions.filter(v => v.state !== "draft").slice(0, 3).map(v => (
-                <div key={v.id} className="ml-3 flex flex-wrap items-center gap-2">
-                  <span>Version {v.versionNo} · {v.state} · {v.clinical.replace("_", " ")} · {v.origin === "ai_draft" ? "AI draft, educator-reviewed" : "educator-written"}</span>
-                  {v.state === "submitted" && v.clinical === "approved" && <ActionButton endpoint={EP} body={{ action: "publish", versionId: v.id }} label="Publish" done="Published." tone="primary" />}
+                <div key={v.id} className="ml-3 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">Version {v.versionNo}</span><StatusChip status={v.status} />
+                    <span>{v.origin === "ai_draft" ? "AI draft, educator-reviewed" : "educator-written"}</span>
+                    {v.state === "submitted" && v.clinical === "approved" && <ActionButton endpoint={EP} body={{ action: "publish", versionId: v.id }} label="Publish" done="Published. Any earlier published version is now superseded." tone="primary" />}
+                  </div>
+                  {r.kind === "osce_station" && v.status === "approved" && <details><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">View station</summary><StationPreview content={v.content} /></details>}
                 </div>
               ))}
               {r.status === "active" && <ActionButton endpoint={EP} body={{ action: "retire", resourceId: r.id }} label="Retire resource" done="Retired." />}

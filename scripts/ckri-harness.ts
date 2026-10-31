@@ -22,6 +22,7 @@
  *   K1-8  the HQ catalogue lists both capabilities, and governance resolves to govern, not propose
  *   K2-1..4  441: no forbidden column, catalogue sources only, population/floor/no person column/revoked, policy-set disclosure
  *   K3-1..4  442: 422 guard branches unchanged, three facts kept apart, no student reference, needs from reported cells
+ *   K3-5  OSCE-AUTHORING-01: an osce_station (721 kind) is saved only after Scholar's own validateStationContent accepts it
  *   K4-1..4  443: aggregate-only access, independence, integrity fields, datasets are snapshots
  *   K5-1..4  444: AI consent never research consent, lawful basis, ethics or exemption, partner agreements
  */
@@ -36,6 +37,8 @@ const F = {
   m422: "supabase/migrations/422-clinical-cases-on-clinical-approval.sql",
   m443: "supabase/migrations/443-ckri-research-workspace.sql",
   m444: "supabase/migrations/444-ckri-governance-enforcement.sql",
+  // OSCE-AUTHORING-01: 721 widened the 442 kind CHECK to osce_station.
+  m721: "supabase/migrations/721-individual-scholar-osce-definition-versions-library.sql",
   workspace: "src/lib/knowledge/workspace.ts",
   researchRoute: "src/app/api/hq/knowledge/research/route.ts",
   intelRoute: "src/app/api/hq/knowledge/intelligence/route.ts",
@@ -228,6 +231,17 @@ CHECKS.push({ id: "K3-4 a need comes from one reported cell, its evidence copied
   const copied = /new\.evidence := jsonb_build_object\('participants', v_cell\.participants/.test(m) && /new\.raised_by := new\.changed_by;/.test(m);
   return r(cell && copied, `reportedCellOnly=${cell} evidenceCopied=${copied}`);
 }, plant: plantIn(F.m442, "if not found or v_cell.suppressed then", "if not found then") });
+
+// OSCE-AUTHORING-01 (owner, 31 Oct 2026): a station is authored on the 442 path and validated by Scholar's OWN reader.
+CHECKS.push({ id: "K3-5 an OSCE station is saved only when Scholar's own validateStationContent accepts it, before any write", check: s => {
+  const e = tsCode(s.get("src/lib/knowledge/educator.ts") ?? ""), lib = tsCode(s.get(F.libraryQuestions) ?? "");
+  const shared = /import \{[^}]*\bvalidateStationContent\b[^}]*\} from "@\/lib\/individual\/scholar\/osce";/.test(e) && /const v = validateStationContent\(content\);/.test(e) && /validateStationContent\(v\.data\.content\)/.test(lib);
+  const body = (fn: string) => e.slice(e.indexOf(`export async function ${fn}(`), e.indexOf("\n}\n", e.indexOf(`export async function ${fn}(`)));
+  const before = (fn: string, write: string) => { const b = body(fn); const c = b.indexOf("checkedContent("), w = b.indexOf(write); return c > 0 && w > c && /if \(!checked\.ok\) return checked;/.test(b); };
+  const create = before("createResource", `from("ckri_knowledge_resource").insert(`), save = before("saveDraft", `from("ckri_knowledge_version").update(`);
+  const kind = /RESOURCE_KINDS = \["explanation", "revision_question", "targeted_resource", "osce_station"\]/.test(e) && /kind in \('explanation', 'revision_question', 'targeted_resource', 'osce_station'\)/.test(get(s, "m721"));
+  return r(shared && create && save && kind, `sharedValidator=${shared} createChecksFirst=${create} saveChecksFirst=${save} kindKnown=${kind}`);
+}, plant: plantIn("src/lib/knowledge/educator.ts", "const v = validateStationContent(content);", "const v = { ok: true as const };") });
 
 // ── K4 (migration 443) ─────────────────────────────────────────────────────────────────────────────────────
 CHECKS.push({ id: "K4-1 aggregate-only access, agreements for externals, no team before approval, no accounts created", check: s => {

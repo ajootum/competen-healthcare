@@ -13,7 +13,7 @@ import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai
 import { servableOsceStation } from "@/lib/individual/scholar/library-questions";
 import { osceAvailability, resultExtras, stationSnapshot, stationView } from "@/lib/individual/scholar/osce-service";
 import {
-  OSCE_DIFFICULTY_LABEL, OSCE_OFF, OSCE_PRACTICE_LABEL, OSCE_SOURCE_LABEL, OSCE_UNAVAILABLE, formatClock, marksCompared, readFeedbackParts, readSnapshot,
+  LIBRARY_STATION_LABEL, OSCE_DIFFICULTY_LABEL, OSCE_OFF, OSCE_PRACTICE_LABEL, OSCE_SOURCE_LABEL, OSCE_UNAVAILABLE, formatClock, marksCompared, readFeedbackParts, readSnapshot,
   remediation, resultOf, scoreExplanation, scoreSummary, type OsceTick,
 } from "@/lib/individual/scholar/osce";
 import { DeleteStation, OsceRunner, ResultView, type OsceResultView } from "../../../_components/osce-client";
@@ -120,7 +120,7 @@ export default async function OsceStationPage({ params }: { params: Promise<{ ex
             {station.references.length > 0 && (
               <><p className="mt-2 text-[12.5px] font-semibold text-gray-700">Where it came from</p>
                 <ul className="list-disc pl-5 text-[13px]">{station.references.map((r, i) => (
-                  <li key={i}>{r.kind === "notes" ? `Your notes: ${r.citation}` : r.kind === "competency" ? `Competency: ${r.label}` : r.kind === "library" ? `Competen station library, version ${r.versionNo}` : r.url ? <a href={r.url} className="underline" rel="noreferrer" target="_blank">{r.label}</a> : r.label}</li>
+                  <li key={i}>{r.kind === "notes" ? `Your notes: ${r.citation}` : r.kind === "competency" ? `Competency: ${r.label}` : r.kind === "library" ? `${LIBRARY_STATION_LABEL}, version ${r.versionNo}` : r.url ? <a href={r.url} className="underline" rel="noreferrer" target="_blank">{r.label}</a> : r.label}</li>
                 ))}</ul></>
             )}
           </section>

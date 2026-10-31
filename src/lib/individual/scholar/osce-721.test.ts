@@ -8,7 +8,7 @@ import {
   OSCE_GUIDELINES_NOTE, OSCE_PRACTICE_LABEL, OSCE_RECOVERY_NOTE, OSCE_TEMPLATES, OSCE_FEEDBACK_LABEL, TEMPLATE_CONTENT_STATUS, claimsVerification,
   competencyContentStatus, filterStations, libraryContentStatus, marksCompared, osceRecoveryRequest, parseOsceFilter, readDefinition, readSnapshot,
   resultOf, resumeOf, saveAllowed, scoreExplanation, scoreTicks, snapshotOf, stationFacets, stationFromLibrary, stationFromTemplate, validateStationContent,
-  type OsceItem, type OsceSnapshot,
+  type Filterable, type OsceItem, type OsceSnapshot,
 } from "./osce";
 import { loadOsceLibraryStations, servableOsceStation } from "./library-questions";
 import { abandonOsceAttempt, finishOsceAttempt, osceSchema, resetOsceSchema, saveOsceProgress, startOsceAttempt } from "./store";
@@ -177,7 +177,7 @@ describe("5. a competency's content status is shown, never assumed approved", ()
 });
 
 describe("6. station selection: filter and browse", () => {
-  const S = (o: Partial<any>) => ({ title: "Station", topic: null, bodySystem: null, competencyId: null, programmeCode: null, difficulty: null, source: "template", ...o });
+  const S = (o: Partial<any>): Filterable => ({ title: "Station", topic: null, bodySystem: null, competencyId: null, programmeCode: null, difficulty: null, source: "template", ...o });
   const list = [
     S({ title: "Chest", topic: "Respiratory assessment", bodySystem: "Respiratory", difficulty: "introductory", programmeCode: "BSC-N", competencyId: "c1" }),
     S({ title: "Postnatal", topic: "Postnatal check", bodySystem: "Reproductive", difficulty: "advanced", programmeCode: "BSC-M", source: "library" }),
