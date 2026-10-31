@@ -27,3 +27,34 @@ export function shortName(name: string, max = 60): string {
 export function announceMove(name: string, to: number, total: number): string {
   return `Moved ${shortName(name)} to position ${to + 1} of ${total}.`;
 }
+
+// ── FRAMEWORK-DESIGN-STUDIO-02 S2: pointer drag (touch and mouse), replacing native HTML5 drag ─────────────────────
+// Native drag-and-drop does not start on touch screens. A drag now starts on pointerdown on a row's grip, becomes a drag
+// only after the pointer has moved a small distance (so a tap or a scroll is never a drag), and ends on pointerup.
+// A drop counts only inside the list the drag started in (the same `key` as today): never across parents.
+
+/** Pixels the pointer must travel before a press on a grip becomes a drag. */
+export const DRAG_THRESHOLD = 6;
+
+export type PointerDrag = { key: string; index: number; x0: number; y0: number; active: boolean; over: number | null };
+
+/** Pure: a press on the grip of item `index` of list `key`. */
+export const startPointerDrag = (key: string, index: number, x: number, y: number): PointerDrag => ({ key, index, x0: x, y0: y, active: false, over: null });
+
+/** Pure: the drag after the pointer moved to (x, y), over the row `hit` (its list key and index) if any. Becomes active once the threshold is passed. */
+export function movePointerDrag(s: PointerDrag, x: number, y: number, hit: { key: string; index: number } | null, threshold = DRAG_THRESHOLD): PointerDrag {
+  const active = s.active || Math.hypot(x - s.x0, y - s.y0) >= threshold;
+  if (!active) return s;
+  return { ...s, active, over: hit && hit.key === s.key ? hit.index : null };
+}
+
+/** Pure: where a finished drag lands: null for a tap, a drag that never became active, or a drop outside the list or on the starting row. */
+export function dropOf(s: PointerDrag): { from: number; to: number } | null {
+  return s.active && s.over !== null && s.over !== s.index ? { from: s.index, to: s.over } : null;
+}
+
+/** Pure: reads a row's list key and index from its data attributes (strings from the DOM). */
+export function readDropTarget(key: string | undefined, index: string | undefined): { key: string; index: number } | null {
+  const i = Number(index);
+  return key && index !== undefined && index !== "" && Number.isInteger(i) && i >= 0 ? { key, index: i } : null;
+}

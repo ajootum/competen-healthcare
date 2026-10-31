@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { announceMove, moveInArray, shortName, stepTarget } from "./reorder-ui";
+import { announceMove, DRAG_THRESHOLD, dropOf, movePointerDrag, moveInArray, readDropTarget, shortName, startPointerDrag, stepTarget } from "./reorder-ui";
 
 describe("reorder-ui (pure)", () => {
   it("moves an item and leaves the input alone", () => {
@@ -30,5 +30,33 @@ describe("reorder-ui (pure)", () => {
     const s = shortName("w ".repeat(100));
     expect(s.length).toBeLessThanOrEqual(60);
     expect(s.endsWith("…")).toBe(true);
+  });
+});
+
+describe("pointer drag (FDS-02 S2)", () => {
+  it("stays a press until the pointer has moved past the threshold", () => {
+    const s = startPointerDrag("k", 1, 10, 10);
+    expect(movePointerDrag(s, 10 + DRAG_THRESHOLD - 2, 10, { key: "k", index: 3 }).active).toBe(false);
+    expect(dropOf(movePointerDrag(s, 11, 11, { key: "k", index: 3 }))).toBeNull();
+  });
+  it("drops on another row of the same list only", () => {
+    const s = startPointerDrag("k", 1, 0, 0);
+    expect(dropOf(movePointerDrag(s, 0, 30, { key: "k", index: 3 }))).toEqual({ from: 1, to: 3 });
+    expect(dropOf(movePointerDrag(s, 0, 30, { key: "other", index: 3 }))).toBeNull();
+    expect(dropOf(movePointerDrag(s, 0, 30, null))).toBeNull();
+    expect(dropOf(movePointerDrag(s, 0, 30, { key: "k", index: 1 }))).toBeNull();
+  });
+  it("keeps the drag active once started and follows the latest target", () => {
+    let s = movePointerDrag(startPointerDrag("k", 0, 0, 0), 0, 20, { key: "k", index: 2 });
+    s = movePointerDrag(s, 0, 21, null);
+    expect(s.active).toBe(true);
+    expect(dropOf(s)).toBeNull();
+  });
+  it("reads row attributes defensively", () => {
+    expect(readDropTarget("k", "2")).toEqual({ key: "k", index: 2 });
+    expect(readDropTarget(undefined, "2")).toBeNull();
+    expect(readDropTarget("k", "x")).toBeNull();
+    expect(readDropTarget("k", "")).toBeNull();
+    expect(readDropTarget("k", "-1")).toBeNull();
   });
 });
