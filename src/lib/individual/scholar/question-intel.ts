@@ -121,6 +121,8 @@ export type Rubric = {
   misconceptions: string[];
   source: ItemSource;
   referenceIds: string[];
+  /** SCHOLAR-FLASHCARDS-QA-01: the card's topic name (two to six words), where the generator gave one that passed. */
+  topic?: string;
 };
 
 const strs = (v: unknown, n: number, max: number) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map(x => x.trim()).filter(x => x && x.length <= max).slice(0, n) : []);
@@ -147,8 +149,14 @@ export function parseRubric(raw: unknown, grounding: readonly string[], opts: { 
     misconceptions: keep(strs(r.misconceptions, 3, 300)),
     source: referenceIds.length ? "references" : "notes",
     referenceIds,
+    ...(topicOf(r.topic, ok) ? { topic: topicOf(r.topic, ok)! } : {}),
   };
 }
+/** A topic name: a string of one to six words and at most 80 characters, held to the item's own rules. */
+const topicOf = (v: unknown, ok: (t: string) => boolean) => {
+  const t = typeof v === "string" ? v.replace(/\s+/g, " ").trim().replace(/[.:;]+$/, "") : "";
+  return t && t.length <= 80 && t.split(" ").length <= 6 && ok(t) ? t : null;
+};
 
 /** Pure. The difficulty an item is stored with: its own (1-3) where it gave one, otherwise its level's. */
 export const difficultyOf = (raw: unknown): 1 | 2 | 3 => {
@@ -165,6 +173,7 @@ export function rubricOf(answer: unknown): Rubric | null {
     expectedAnswer: typeof r.expectedAnswer === "string" ? r.expectedAnswer : null,
     keyPoints: strs(r.keyPoints, 4, 300), acceptedAlternatives: strs(r.acceptedAlternatives, 8, 300), misconceptions: strs(r.misconceptions, 3, 300),
     source: r.source === "references" ? "references" : "notes", referenceIds: strs(r.referenceIds, 6, 64),
+    ...(typeof r.topic === "string" && r.topic.trim() ? { topic: r.topic.trim().slice(0, 80) } : {}),
   };
 }
 
@@ -196,13 +205,30 @@ export const CARD_BACK_ONE_CONCEPT = { chars: 300, sentences: 2 };
  * words or more, found verbatim in the passage) rather than a recall prompt, or its back is more than one concept
  * (longer than 300 characters or more than two sentences).
  */
-export function flashcardDraftProblem(front: string, back: string, passage: string): "copied" | "multi_concept" | null {
-  const f = flatWords(front);
-  if (f.split(" ").length >= 8 && flatWords(passage).includes(f)) return "copied";
+export function flashcardDraftProblem(front: string, back: string, passage: string): "copied" | "multi_concept" | "back_copied" | "second_fact" | null {
+  const f = flatWords(front), p = flatWords(passage);
+  if (f.split(" ").length >= 8 && p.includes(f)) return "copied";
+  const parts = back.split(/[.!?;]+(?:\s|$)/).map(s => s.trim()).filter(Boolean);
   const sentences = back.split(/[.!?]+(?:\s|$)/).map(s => s.trim()).filter(Boolean).length;
   if (back.length > CARD_BACK_ONE_CONCEPT.chars || sentences > CARD_BACK_ONE_CONCEPT.sentences) return "multi_concept";
+  // SCHOLAR-FLASHCARDS-QA-01 (staging note): a back is a concise ANSWER, not the note's sentence repeated. A back of
+  // twelve words or more found whole in the notes, or any fifteen-word run of it found there, is copied.
+  const b = flatWords(back).split(" ").filter(Boolean);
+  if (b.length >= BACK_COPY.whole && p.includes(b.join(" "))) return "back_copied";
+  for (let i = 0; i + BACK_COPY.run <= b.length; i++) if (p.includes(b.slice(i, i + BACK_COPY.run).join(" "))) return "back_copied";
+  // ... and one concept: a second part that shares no content word with the question or the first part adds an
+  // unrelated fact.
+  if (parts.length >= 2) {
+    const known = new Set([...contentWords(front), ...contentWords(parts[0])]);
+    if (parts.slice(1).some(x => { const w = contentWords(x); return w.length >= 2 && !w.some(t => known.has(t)); })) return "second_fact";
+  }
   return null;
 }
+/** The copy thresholds for a card's back, in words. */
+export const BACK_COPY = { whole: 12, run: 15 } as const;
+const STOP = new Set(["about", "after", "also", "because", "before", "being", "between", "could", "every", "from", "have", "into", "more", "most", "other", "should", "such", "than", "that", "their", "them", "then", "there", "these", "they", "this", "those", "through", "under", "very", "what", "when", "where", "which", "while", "with", "would", "your", "will", "only", "each", "does", "done", "make", "made"]);
+/** Content words: four letters or more, not a small framing word, crudely stemmed (a trailing s, ing or ed off). */
+const contentWords = (s: string) => flatWords(s).split(" ").filter(w => w.length >= 4 && !STOP.has(w)).map(w => w.replace(/(ing|ed|es|s)$/, ""));
 
 /** Pure. A stem reduced for duplicate detection: case, punctuation and small framing words ignored. */
 export function stemKey(stem: string): string {

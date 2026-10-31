@@ -110,12 +110,19 @@ export const topicOf = (c: FlashcardView) => c.topic?.trim() || c.material.title
 export const flagOf = (c: FlashcardView): SensitiveFlag | null => cardSensitiveFlag(c, longDate);
 
 /** Pure. The title of a download: the one deck named, the decks named, else the topic, competency or document chosen, else all cards. */
-export function exportTitle(sel: { decks: readonly { title: string }[]; cards: readonly FlashcardView[] }, by: { topic?: string | null; competencyId?: string | null; materialId?: string | null }): string {
+export function exportTitle(sel: { decks: readonly { title: string }[]; cards: readonly FlashcardView[] }, by: { topic?: string | null; competencyId?: string | null; materialId?: string | null; cardsNamed?: boolean }): string {
   if (sel.decks.length === 1) return sel.decks[0].title;
   if (sel.decks.length > 1) { const t = sel.decks.map(d => d.title).join(" + "); return t.length <= 80 && sel.decks.length <= 3 ? t : `${sel.decks.length} decks`; }
   if (by.topic) return by.topic;
   if (by.competencyId) return sel.cards.find(c => c.competency?.id === by.competencyId)?.competency?.title ?? "Competency cards";
   if (by.materialId) return sel.cards.find(c => c.material.id === by.materialId)?.material.title ?? "Document cards";
+  // SCHOLAR-FLASHCARDS-QA-01 D2: cards chosen one by one are never "All cards": what they share (one topic, one
+  // document, one competency), else "Selected cards (n)".
+  if (by.cardsNamed) {
+    const one = (xs: (string | null | undefined)[]) => { const s = new Set(xs.map(x => x?.trim() || null)); return s.size === 1 ? [...s][0] : null; };
+    return (sel.cards.length && (one(sel.cards.map(c => c.topic)) ?? one(sel.cards.map(c => c.material.title)) ?? one(sel.cards.map(c => c.competency?.title))))
+      || `Selected cards (${sel.cards.length})`;
+  }
   return "All cards";
 }
 
@@ -189,6 +196,33 @@ export function canDo(s: string, verb: "explain" | "recognise" = "explain"): str
   return `I can ${/\d/.test(t) ? "state" : verb} ${lowerLead(t)}`;
 }
 
+const VERB_OF_NOUN: Record<string, string> = {
+  knowledge: "Recall", recall: "Recall", understanding: "Explain", comprehension: "Explain", recognition: "Recognise", awareness: "Recognise",
+  application: "Apply", identification: "Identify", interpretation: "Interpret", ability: "Explain",
+};
+const cap1 = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/**
+ * Pure. An objective in the learner's voice. Rubrics written in the item-writer's voice ("Checks ability to recall
+ * oxygen targets", "Tests whether the student can explain ...", "Assesses understanding of ...") become what the
+ * learner can do ("Recall oxygen targets", "Explain ...", "Explain ..."). Anything else is unchanged. Deterministic.
+ */
+export function learnerObjective(s: string): string {
+  const t = s.trim().replace(/\s+/g, " ");
+  const W = String.raw`(?:checks?|tests?|assess(?:es)?|evaluates?|measures?|examines?|verif(?:y|ies)|confirms?)`;
+  const WHO = String.raw`(?:the\s+)?(?:student|learner|candidate|nurse|user|reader)(?:'s|s'|s)?`;
+  let m = new RegExp(String.raw`^${W}\s+(?:${WHO}\s+)?(?:ability|capacity)\s+to\s+(.+)$`, "i").exec(t);
+  if (m) return cap1(m[1]);
+  m = new RegExp(String.raw`^${W}\s+(?:whether|that|if)\s+(?:${WHO}|you)\s+(can|could|is able to|knows?|understands?|recogni[sz]es?)\s+(.+)$`, "i").exec(t);
+  if (m) return /^(can|could|is able to)$/i.test(m[1]) ? cap1(m[2]) : `${/^know/i.test(m[1]) ? "Recall" : /^understand/i.test(m[1]) ? "Explain" : "Recognise"} ${m[2]}`;
+  m = new RegExp(String.raw`^${W}\s+(?:${WHO}\s+)?(knowledge|recall|understanding|comprehension|recognition|awareness|application|identification|interpretation)\s+(?:of\s+)?(.+)$`, "i").exec(t);
+  if (m) return `${VERB_OF_NOUN[m[1].toLowerCase()]} ${m[2]}`;
+  m = new RegExp(String.raw`^(?:${WHO}\s+)(?:can|should be able to|is able to)\s+(.+)$`, "i").exec(t);
+  if (m) return cap1(m[1]);
+  m = new RegExp(String.raw`^${W}\s+(.+)$`, "i").exec(t);
+  if (m) return `Explain ${m[1]}`;
+  return t;
+}
+
 // ── THE REVISION GUIDE: WHAT GOES IN, FROM THE CARDS ALONE ──
 
 /** One source used: its citation, the sections of it the cards rest on (notes), a short excerpt or note, and how many cards. */
@@ -217,14 +251,18 @@ export function referenceLine(m: CitationMeta): string {
     m.year, ids.length ? ids.join(", ") : null, m.licence, m.access, standing].filter(Boolean).join(". ");
 }
 
+/** The most checklist lines one topic may have (the guide pages them). */
+export const CHECKLIST_MAX_PER_TOPIC = 60;
+
 /** Pure. Everything the guide says, taken from the cards: nothing written, nothing inferred. */
 export function guidePlan(cards: readonly FlashcardView[], variant: GuideVariant = "comprehensive"): GuidePlan {
   const numbered = cards.map((card, i) => ({ n: i + 1, card }));
   const by = new Map<string, FlashcardView[]>();
   for (const c of cards) by.set(topicOf(c), [...(by.get(topicOf(c)) ?? []), c]);
   const topics = [...by].map(([label, cs]) => ({ label, cards: cs }));
+  const objectivesOf = (cs: readonly FlashcardView[]) => uniq(cs.map(c => (c.objective ? learnerObjective(c.objective) : "")).filter(Boolean));
   const keyConcepts = topics.map(t => {
-    const objectives = uniq(t.cards.map(c => c.objective ?? "").filter(Boolean));
+    const objectives = objectivesOf(t.cards);
     const keys = uniq(t.cards.flatMap(c => c.keyPoints));
     const points = keys.length ? keys.slice(0, 12) : uniq(t.cards.map(c => c.explanation ?? "").filter(Boolean)).slice(0, 6);
     return { label: t.label, objectives: objectives.slice(0, 8), points };
@@ -237,11 +275,16 @@ export function guidePlan(cards: readonly FlashcardView[], variant: GuideVariant
   });
   const verify = numbered.flatMap(x => { const flag = flagOf(x.card); return flag ? [{ ...x, flag }] : []; });
   const checklist = topics.map(t => {
-    const objectives = uniq(t.cards.map(c => c.objective ?? "").filter(Boolean));
+    const objectives = objectivesOf(t.cards);
     const keys = uniq(t.cards.flatMap(c => c.keyPoints));
     const verb = objectives.some(o => /^recogni[sz]e\b/i.test(o.trim())) ? "recognise" as const : "explain" as const;
-    const items = objectives.length || keys.length ? uniq([...objectives, ...keys].map(s => canDo(s, verb))) : uniq(t.cards.map(c => `I can answer without looking: ${pdfText(c.front)}`));
-    return { label: t.label, items: items.slice(0, 10) };
+    // Every card counts (staging note): one with neither an objective nor key points -- a card the learner wrote, or
+    // one written before rubrics -- is its own line, "I can answer without looking: <its question>".
+    const bare = t.cards.filter(c => !c.objective && !c.keyPoints.length).map(c => `I can answer without looking: ${pdfText(c.front)}`);
+    const items = uniq([...[...objectives, ...keys].map(s => canDo(s, verb)), ...bare]);
+    // No small cap: the checklist pages like the rest of the guide (each line kept whole). A ceiling only so one
+    // runaway topic cannot fill the document.
+    return { label: t.label, items: items.slice(0, CHECKLIST_MAX_PER_TOPIC) };
   });
   const refs = { notes: new Map<string, GuideReference>(), library: new Map<string, GuideReference>(), framework: new Map<string, GuideReference>(), external: new Map<string, GuideReference>() };
   let ownCards = 0;

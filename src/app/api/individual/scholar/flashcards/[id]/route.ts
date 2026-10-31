@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { deleteLearnerCard, flashcardFronts, isUuid, setFlashcardMark, updateLearnerCard } from "@/lib/individual/scholar/store";
+import { deleteLearnerCard, flashcardFronts, isUuid, ownedQuestionIds, setFlashcardMark, updateLearnerCard } from "@/lib/individual/scholar/store";
 import { flashcardGate } from "@/lib/individual/scholar/flashcard-service";
 import { checkCardNote, checkPersonalCard } from "@/lib/individual/scholar/flashcards";
 import { FEEDBACK_REASONS } from "@/lib/ai/outcomes";
@@ -52,6 +52,10 @@ export async function PATCH(req: Request, ctx2: { params: Promise<{ id: string }
     patch.issue = body.issue;
   }
   if (!Object.keys(patch).length) return NextResponse.json({ error: "Nothing to change." }, { status: 400 });
+  // SCHOLAR-FLASHCARDS-QA-01 D1: only the caller's own card is marked; another learner's is not found (never a 500).
+  const owned = await ownedQuestionIds(ctx.admin, ctx.userId, [id]);
+  if (!owned) return NextResponse.json({ error: "That could not be saved just now." }, { status: 503 });
+  if (!owned.has(id)) return NextResponse.json({ error: "That card could not be found." }, { status: 404 });
   if (!(await setFlashcardMark(ctx.admin, ctx.userId, id, patch))) return NextResponse.json({ error: "That could not be saved just now." }, { status: 500 });
   // Codes only: never a note's words.
   if (patch.issue !== undefined) await audit(ctx, "individual_scholar_flashcard_issue", "individual_scholar_question", id, { issue: patch.issue });

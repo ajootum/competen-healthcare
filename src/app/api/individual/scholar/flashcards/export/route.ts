@@ -55,7 +55,7 @@ export async function GET(req: Request) {
   if (!sel.ok) return NextResponse.json({ error: sel.reason === "off" ? "Flashcards are not offered here." : "Your cards could not be read just now." }, { status: sel.reason === "off" ? 403 : 503 });
   if (!sel.cards.length) return NextResponse.json({ error: "There are no cards in that selection." }, { status: 404 });
   const cards = sel.cards.slice(0, cap);
-  const title = exportTitle(sel, by);
+  const title = exportTitle(sel, { ...by, cardsNamed: u.getAll("card").some(isUuid) });
   const layout = asPrintLayout(u.get("layout"));
   const guide = asGuideVariant(u.get("guide"));
   const opts = { layout, guide };

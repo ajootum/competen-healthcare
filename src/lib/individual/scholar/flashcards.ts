@@ -220,7 +220,9 @@ export function flashcardView(q: QuestionRow, x: CardRowExtras, today: string): 
   const explanation = q.rationale && q.rationale.trim() && q.rationale.trim() !== back.trim() ? q.rationale.trim() : null;
   return {
     id: q.id, front: q.stem, back, explanation, origin, originLabel: ORIGIN_LABEL[origin],
-    topic: x.topics[0] ?? null, objective: rubric?.objective ?? null, keyPoints: rubric?.keyPoints ?? [], level: rubric?.level ?? null,
+    // The section's topic (the learner's correction, else the topic finding), else the topic the card was written with
+    // (SCHOLAR-FLASHCARDS-QA-01), else none -- the downloads then file it under its document.
+    topic: x.topics[0] ?? rubric?.topic ?? null, objective: rubric?.objective ?? null, keyPoints: rubric?.keyPoints ?? [], level: rubric?.level ?? null,
     difficulty: q.difficulty === 1 || q.difficulty === 2 || q.difficulty === 3 ? q.difficulty : null,
     competency: q.competencyId ? { id: q.competencyId, title: x.competencyTitle ?? "A linked competency" } : null,
     sources, createdAt: q.createdAt, updatedAt: x.updatedAt, contentVersion: x.contentVersion,

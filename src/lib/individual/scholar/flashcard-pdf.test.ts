@@ -191,7 +191,9 @@ describe("C: the revision guide", () => {
     expect(inQa.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 10]);
     expect(plan.qa.find(t => t.label === "Escalation")!.applied).toEqual([8, 9]);
     const { all } = await read(await buildFlashcardPdf("guide", input()));
-    for (const c of respiratoryCards()) expect(all.split(norm(pdfText(c.front))).length - 1, c.front).toBe(1);
+    // Within the card sections (Q&A and Clinical Application): the checklist may name a bare card's question as a line.
+    const cardSections = all.slice(all.indexOf("2 Questions and Answers", all.indexOf("Contents") + 200), all.indexOf("4 Points to Verify", all.indexOf("Contents") + 200));
+    for (const c of respiratoryCards()) expect(cardSections.split(norm(pdfText(c.front))).length - 1, c.front).toBe(1);
     expect(all).toContain("Applied in section 3, Clinical Application: Card 8, Card 9.");
     expect(all).toContain("Each card appears once in this guide.");
   });
@@ -250,6 +252,7 @@ describe("C: the revision guide", () => {
     const plan = guidePlan(respiratoryCards());
     expect(plan.checklist.find(c => c.label === "Work of breathing")!.items).toEqual([
       "I can recognise signs of increased work of breathing", "I can recognise tachypnoea and nasal flaring", "I can recognise tracheal tug and recession", "I can recognise accessory muscle use",
+      "I can answer without looking: What does a silent chest suggest in acute asthma?",
     ]);
     expect(plan.checklist.flatMap(c => c.items).every(i => i.startsWith("I can "))).toBe(true);
     const bare = respiratoryCards().map(c => ({ ...c, objective: null, keyPoints: [], explanation: null }));
@@ -320,6 +323,10 @@ describe("names and titles", () => {
     expect(exportTitle({ decks: [], cards }, { topic: "Escalation" })).toBe("Escalation");
     expect(exportTitle({ decks: [], cards }, { competencyId: cards[0].competency!.id })).toBe("CFCA: Respiratory Assessment and Monitoring");
     expect(exportTitle({ decks: [], cards }, {})).toBe("All cards");
+    // D2 (staging): chosen cards are never "All cards": what they share, else "Selected cards (n)".
+    expect(exportTitle({ decks: [], cards: cards.slice(1, 4) }, { cardsNamed: true })).toBe("Respiratory rate and oxygen saturation");
+    expect(exportTitle({ decks: [], cards: [cards[0], cards[4]] }, { cardsNamed: true })).toBe("Respiratory v2");
+    expect(exportTitle({ decks: [], cards: [cards[0], { ...cards[5], material: { id: "m2", title: "Other notes" } }] }, { cardsNamed: true })).toBe("Selected cards (2)");
   });
 });
 
@@ -432,6 +439,13 @@ describe("the export route", () => {
       ["deck", null, null], ["print", "duplex", null], ["print", "fold", null], ["guide", null, "comprehensive"], ["guide", null, "concise"],
     ]);
     expect(JSON.stringify(audits)).not.toContain(myCards[0].front);
+  });
+  it("D2: a download of chosen cards is titled and named by what they share, never 'All cards'", async () => {
+    const qs = [0, 1].map(i => `card=aaaaaaaa-0000-4000-8000-00000000010${i}`).join("&");
+    const r = await get(`format=guide&${qs}`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-disposition")).toContain('filename="Competen-Scholar-Respiratory-v2-revision-guide-');
+    expect((await read(new Uint8Array(await r.arrayBuffer()))).pages[0]).not.toContain("All cards");
   });
   it("naming another learner's card gets nothing", async () => {
     const r = await get("format=deck&card=bbbbbbbb-0000-4000-8000-000000000100");

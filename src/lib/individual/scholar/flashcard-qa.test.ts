@@ -3,11 +3,12 @@ import { CLINICAL_SENSITIVITY_RULES, SENSITIVE_MARKER, cardSensitiveFlag, sensit
 import { citationText, flashcardView, type CardRowExtras, type CitationMeta } from "./flashcards";
 import { referenceCitations } from "./flashcard-service";
 import {
-  FLASHCARD_LEVEL_MIXES, capCardLevel, flashcardLevelMix, levelMixLine, passageLevelSupport, planCardLevels,
+  FLASHCARD_LEVEL_MIXES, capCardLevel, flashcardDraftProblem, parseRubric, flashcardLevelMix, levelMixLine, passageLevelSupport, planCardLevels,
 } from "./question-intel";
-import { formatPromptVersion, revisionPromptVersion, runRevisionQuestions, type Passage } from "./generation";
+import { REVISION_SYSTEM, formatPromptVersion, revisionPromptVersion, runRevisionQuestions, type Passage } from "./generation";
+import { checkRevisionDraft } from "./revision";
 import { PROMPT_VERSIONS } from "./config";
-import { canDo } from "./flashcard-pdf";
+import { canDo, guidePlan, learnerObjective } from "./flashcard-pdf";
 import { respiratoryCards } from "./flashcard-pdf.fixture";
 import type { QuestionRow } from "./store";
 
@@ -175,5 +176,59 @@ describe("item 4: flashcards to a configurable level mix, honouring what the pas
     const r2 = await runRevisionQuestions("u1", "flashcard", passage, 3, run as never);
     expect(prompts[1]).not.toContain("LEVEL MIX");
     expect(r2.ok && r2.levelPlan).toBeNull();
+  });
+});
+
+// ── staging acceptance quality notes (folded into QA-01) ──
+
+describe("staging notes: a back is one concise concept, a topic is kept, an objective speaks to the learner", () => {
+  const NOTE = "Target saturation for most acutely ill adults is ninety four to ninety eight percent in hospital wards. Patients at risk of hypercapnic failure have a lower target. Wash hands before and after every patient contact.";
+  it("a back repeating the note sentence (whole, or a fifteen-word run) is refused as back_copied", () => {
+    expect(flashcardDraftProblem("What saturation target suits most acutely ill adults?", "Target saturation for most acutely ill adults is ninety four to ninety eight percent in hospital wards.", NOTE)).toBe("back_copied");
+    expect(flashcardDraftProblem("What saturation target suits most adults?", "Ninety four to ninety eight percent", NOTE)).toBeNull();
+  });
+  it("a back adding a second unrelated fact is refused as second_fact; a second part on the same concept is kept", () => {
+    expect(flashcardDraftProblem("What saturation target suits most adults?", "Ninety four to ninety eight percent. Wash hands before patient contact.", NOTE)).toBe("second_fact");
+    expect(flashcardDraftProblem("What saturation target suits most adults?", "Ninety four to ninety eight percent; lower where hypercapnic failure is a risk, so saturation targets differ.", NOTE)).toBeNull();
+  });
+  it("checkRevisionDraft refuses them (the quote check stays)", () => {
+    const passage: Passage = { chunkId: "c", materialId: "m", materialTitle: "n", ordinal: 1, pageFrom: 1, pageTo: 1, content: NOTE };
+    const base = { front: "What saturation target suits most adults?", sourceQuote: "Patients at risk of hypercapnic failure have a lower target." };
+    expect(checkRevisionDraft("flashcard", { ...base, back: "Ninety four to ninety eight percent. Wash hands before patient contact." }, passage)).toEqual({ ok: false, reason: "second_fact" });
+    expect(checkRevisionDraft("flashcard", { ...base, back: "Ninety four to ninety eight percent", sourceQuote: "not in the note at all, quite clearly" }, passage)).toEqual({ ok: false, reason: "quote_not_in_passage" });
+  });
+  it("the card's topic is kept from the generator (grounded, at most six words) and used when the section has none", () => {
+    const r = parseRubric({ level: "recall", topic: "Oxygen saturation targets." }, [NOTE], { expectedAnswer: null, difficulty: 1 });
+    expect(r.topic).toBe("Oxygen saturation targets");
+    expect(parseRubric({ level: "recall", topic: "a topic name that is far too long to be one" }, [NOTE], { expectedAnswer: null, difficulty: 1 }).topic).toBeUndefined();
+    const q = { id: "q", materialId: "m", chunkId: "c", kind: "flashcard", stem: "What target?", options: [], correctIndex: null, rationale: "", sourceQuote: "", model: "x", promptVersion: "x",
+      createdAt: "2026-10-30", answer: { back: "94-98%", rubric: { level: "recall", topic: "Oxygen saturation targets" } }, difficulty: 1, materialTitle: "Notes", ordinal: 1, pageFrom: 1, pageTo: 1,
+      unit: "page", latest: null, competencyId: null, caseId: null, caseStep: null, caseTitle: null, library: null } as QuestionRow;
+    const x = { card: null, history: [], topics: [] as string[], competencyTitle: null, mark: null, deckIds: [], contentVersion: 1, updatedAt: null };
+    expect(flashcardView(q, x, "2026-10-31").topic).toBe("Oxygen saturation targets");
+    expect(flashcardView(q, { ...x, topics: ["Section topic"] }, "2026-10-31").topic).toBe("Section topic");
+  });
+  it("objectives in the item-writer's voice become what the learner can do", () => {
+    expect(learnerObjective("Checks ability to recall oxygen saturation targets")).toBe("Recall oxygen saturation targets");
+    expect(learnerObjective("Checks the student's ability to explain why controlled oxygen is used")).toBe("Explain why controlled oxygen is used");
+    expect(learnerObjective("Tests whether the student can recognise a silent chest")).toBe("Recognise a silent chest");
+    expect(learnerObjective("Assesses understanding of the work of breathing")).toBe("Explain the work of breathing");
+    expect(learnerObjective("Checks knowledge of normal respiratory rates")).toBe("Recall normal respiratory rates");
+    expect(learnerObjective("Describe a systematic assessment")).toBe("Describe a systematic assessment");
+    expect(canDo(learnerObjective("Checks ability to recall oxygen saturation targets"))).toBe("I can recall oxygen saturation targets");
+  });
+  it("the checklist has every card (hand-written ones included) and no small cap", () => {
+    const cards = respiratoryCards();
+    const plan = guidePlan(cards);
+    expect(plan.checklist.flatMap(c => c.items)).toContain("I can answer without looking: Why record findings and escalation clearly?");
+    const many = Array.from({ length: 30 }, (_, i) => ({ ...cards[0], id: `k${i}`, keyPoints: [`Key point number ${i} about assessment`] }));
+    expect(guidePlan(many).checklist[0].items.length).toBe(31);
+  });
+  it("the flashcard prompt asks for a concise back, an explanation, a topic and a learner-voice objective", () => {
+    expect(REVISION_SYSTEM.flashcard).toMatch(/one concept, as short as it can be/);
+    expect(REVISION_SYSTEM.flashcard).toMatch(/"rationale"/);
+    expect(REVISION_SYSTEM.flashcard).toMatch(/"topic"/);
+    expect(REVISION_SYSTEM.flashcard).toMatch(/never "Checks \.\.\."/);
+    expect(PROMPT_VERSIONS.flashcardMix).toBe("scholar-flashcard-mix-v2");
   });
 });
