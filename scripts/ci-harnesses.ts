@@ -308,6 +308,15 @@ const STAGING_ONLY: Exclusion[] = [
       + "writes the exported PDFs to a local folder, and keeps one flashcards browser fixture for the coordinator. "
       + "Changes no staging setting (proved in Z). Refuses any other project.",
   },
+  {
+    file: "scholar-sessions-acceptance-harness.ts",
+    reason:
+      "SCHOLAR-SESSION-AI-02 slice D connected study sessions acceptance (renal + respiratory notes). Needs a RUNNING dev "
+      + "server pointed at the staging project (BASE_URL=http://localhost:3100) with migration 740, the staging service-role "
+      + "key, STAGING_DB_URL (verification-table counts) and real AI (one Personal AI ask, one revision session). It creates "
+      + "fixture identities, sets the Individual policy scholar_study_sessions ON for the run and restores the prior value "
+      + "(proved in Z), and keeps one browser fixture with an active connected session for the coordinator. Refuses any other project.",
+  },
 ];
 
 // ── Run ──────────────────────────────────────────────────────────────────────────────────────────
