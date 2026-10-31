@@ -4,7 +4,7 @@ import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { SECTION_TITLE, loadDocumentsConfig, templatesFor } from "@/lib/individual/documents-config";
 import { modelLines } from "@/lib/individual/documents/model";
-import { pdfUnencodable } from "@/lib/individual/documents/pdf";
+import { pdfUndrawable } from "@/lib/individual/documents/pdf";
 import { statusText } from "@/lib/individual/documents/model";
 import { loadDocuments, documentOf } from "@/lib/individual/professional/document-store";
 import { composeDocument } from "@/lib/individual/professional/document-compose";
@@ -129,7 +129,7 @@ export default async function DocumentStudioPage({ params, searchParams }: { par
     const c = await composeDocument(ctx.admin, ctx, doc!, today);
     if ("error" in c) return <Section title={doc!.title}><p role="alert" className="text-[13.5px] font-semibold text-red-700">{c.error}</p></Section>;
     const lines = modelLines(c.model);
-    const odd = pdfUnencodable(lines);
+    const odd = await pdfUndrawable(lines, c.template);
     const offered = templatesFor(c.cfg, c.type);
     const recs = c.catalogue.records.filter(r => (c.type.rules.offerLapsed || r.validity === "current" || r.validity === "not_applicable") && (c.type.rules.offerSelfDeclared || r.trust !== "self_declared"))
       .map(r => ({ key: r.key, title: r.title, subtitle: r.subtitle, sections: r.sections, facts: r.facts, source: r.source, status: statusText(r.trust, r.validity, c.template.labels) }));

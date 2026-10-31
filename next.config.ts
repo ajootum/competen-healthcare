@@ -265,6 +265,16 @@ const nextConfig: NextConfig = {
    */
   poweredByHeader: false,
 
+  /**
+   * The Document Studio's Unicode PDF fonts (src/lib/individual/documents/pdf.ts) are read from disk at
+   * request time, which the file trace cannot see, so they are included explicitly, and only in the two
+   * routes that read them: the export route and the preview page that warns about undrawable characters.
+   */
+  outputFileTracingIncludes: {
+    "/api/individual/professional/document-drafts/export": ["./src/lib/individual/documents/fonts/*.ttf"],
+    "/individual/\\[experience\\]/progress/documents": ["./src/lib/individual/documents/fonts/*.ttf"],
+  },
+
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
