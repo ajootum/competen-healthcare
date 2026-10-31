@@ -15,7 +15,7 @@ import { purposeFrom } from "@/lib/individual/pilot-ai";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, refusalWords, withinRequestRisk, scholarAiRunner, scholarRisk, scholarRiskGate } from "@/lib/individual/scholar/http";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import {
-  RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, describeViolations, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
+  RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_PROMPT_SUFFIX, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, describeViolations, legacyLearnPromptVersions, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
   type Passage, type TutorTurn,
 } from "@/lib/individual/scholar/generation";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
@@ -33,6 +33,9 @@ import {
   AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD, RESEARCH_READING_ONLY, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL,
   isLearnAction, type ExplanationDepth, type LearnAction,
 } from "@/lib/individual/scholar/config";
+import {
+  DUPLICATE_IN_FLIGHT, DUPLICATE_RETRY, DUPLICATE_WITHHELD, LEARN_ENTITY, LEARN_SERVED_ACTION, SALVAGE_NOTE, claimFlight, endFlight, flightActive, later, salvagedCount, salvagedPromptVersion, stageTimer, waitForFlight, type Flight,
+} from "@/lib/individual/scholar/learn-flight";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -56,6 +59,18 @@ export const dynamic = "force-dynamic";
 // student asks for a new one ({ fresh: true }), which replaces it. s7, CONTINUITY: when new AI is not available
 // (the student's standing, or the allowance refusing), the answer says so plainly and returns what is saved for these
 // sections. Nothing claims a new AI answer was made.
+//
+// SCHOLAR-GUIDED-LEARNING-01 (owner, 31 Oct):
+//   { open: true }     OPEN A LESSON: the saved answer if there is one (cached: true), otherwise { open: "generate" } or
+//                      { open: "in_flight" } -- never an AI call, never a standing or allowance read.
+//   { prepare: true }  PREPARE THE NEXT LESSON (teach only, a recorded session, policy scholar_learn_prepare_next on):
+//                      the session's next step after the current one, at most one ahead, only when nothing is saved for
+//                      it and nothing is writing it, and only while the standing and allowance allow it. Same metered
+//                      runner and checks; nothing is recorded as learning; the audit row says prepared: true.
+//   CACHE FIRST: a saved Teach Me under an earlier prompt version (LEARN_TEACH_LEGACY) is still served, with no AI call.
+//   DEDUPE: two identical requests never both call the AI (learn-flight.ts claimFlight); the later one is served the
+//   first one's lesson. TIMINGS: every audit row carries timing_ms by stage. SALVAGE: a Teach Me lesson whose
+//   unsupported parts were left out (generation.ts checkTeachAnswer) carries salvage { removed, note }.
 
 const CANNED: Record<LearnAction | "check", string> = {
   teach: "Teach me this step.", explain: "Explain this.", simplify: "Explain this as simply as possible.", deeper: "Help me understand this in more depth.",
@@ -68,16 +83,24 @@ async function ownPassages(admin: unknown, userId: string, ids: readonly string[
 }
 
 export async function POST(req: Request) {
+  const clock = stageTimer();
   const ctx = await requireIndividualContext("scholar");
   if (isGuardRefusal(ctx)) return ctx;
-  const body = await req.json().catch(() => ({}));
-  const policy = await loadIndividualPolicy(ctx.admin);
+  // Independent: the body and the policy are read together.
+  const [body, policy] = await Promise.all([req.json().catch(() => ({})), loadIndividualPolicy(ctx.admin)]);
+  clock.mark("auth_policy");
 
   // ── the action, as policy allows it ──
   const action = body?.action as string;
   const isCheck = action === "check" || action === "clarify";
   if (!isLearnAction(action) && !isCheck) return NextResponse.json({ error: "Unknown learning action." }, { status: 400 });
   if (isLearnAction(action) && !policy.scholarLearningActions.includes(action)) return NextResponse.json({ error: "That way of learning is not offered here." }, { status: 403 });
+  // SCHOLAR-GUIDED-LEARNING-01: open (no AI ever) and prepare (the next lesson, policy-gated, default off).
+  const prepare = body?.prepare === true, open = body?.open === true && !prepare;
+  const notPrepared = (reason: string, extra: Record<string, unknown> = {}) => NextResponse.json({ prepared: false, reason, ...extra });
+  if (prepare && action !== "teach") return notPrepared("not_teach");
+  if (prepare && !policy.scholarLearnPrepareNext) return notPrepared("off");
+  if (open && !isArtefactAction(action)) return NextResponse.json({ error: "Only a saved kind of explanation can be opened." }, { status: 400 });
   if (isCheck && policy.scholarCheckBehaviour === "off") return NextResponse.json({ error: "Understanding checks are not offered here." }, { status: 403 });
   // COMPETEN-RESEARCH-01: what this request may draw on. Notes only unless the learner chose otherwise, for this request,
   // and policy offers it. A check question and a clarification are always notes only.
@@ -91,6 +114,11 @@ export async function POST(req: Request) {
   const recoveryAsked = isCheck ? null : parseRecoveryRequest(body?.recovery, "notes_only", QUESTION_MAX);
   if (recoveryAsked && !recoveryAsked.ok) return NextResponse.json({ error: recoveryAsked.error }, { status: 400 });
   const recovery = recoveryAsked?.value ?? null;
+  if (prepare && recovery) return notPrepared("recovery");
+  // Independent of the passages: started now, awaited where they are used (no serial wait). A rejection still
+  // surfaces where it is awaited, exactly as before.
+  const prefP = getLearningPreference(ctx.admin, ctx.userId), learnerP = loadLearnerCatalogue(ctx.admin, ctx.userId);
+  prefP.catch(() => {}); learnerP.catch(() => {});
 
   // ── what the student typed: bounded and screened, never stored ──
   const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -108,10 +136,21 @@ export async function POST(req: Request) {
     const s = await getLearningSession(ctx.admin, ctx.userId, sessionId);
     if (!s.ok) return NextResponse.json({ error: "Your session could not be read just now." }, { status: 503 });
     if (!s.data) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const here = s.data.steps.find(x => x.step === step) ?? s.data.steps[0];
+    let here = s.data.steps.find(x => x.step === step) ?? s.data.steps[0];
     if (!here) return NextResponse.json({ error: "This session has nothing left to teach: its materials were deleted." }, { status: 404 });
-    step = here.step; stepIds = here.sections.map(x => x.chunkId); scopeIds = s.data.steps.flatMap(x => x.sections.map(y => y.chunkId)); recorded = true; stepTitle = s.data.session.topic ?? s.data.session.title ?? null;
+    if (prepare) {
+      // At most ONE lesson ahead of where the learner is: the step after the session's current one (where history is
+      // recorded, the current step must be the one named), never further, never the whole sequence.
+      if (policy.scholarLearningHistory === "record" && here.step !== s.data.session.currentStep) return notPrepared("not_current", { step: here.step });
+      const next = s.data.steps.find(x => x.step > here!.step);
+      if (!next) return notPrepared("no_next", { step: here.step });
+      here = next;
+    }
+    // A prepared lesson is not learning: nothing is recorded for it until the learner opens it.
+    step = here.step; stepIds = here.sections.map(x => x.chunkId); scopeIds = s.data.steps.flatMap(x => x.sections.map(y => y.chunkId)); recorded = !prepare; stepTitle = s.data.session.topic ?? s.data.session.title ?? null;
     sessionMaterials = [...new Set(s.data.steps.flatMap(x => x.sections.map(y => y.materialId)))];
+  } else if (prepare) {
+    return notPrepared("no_session");
   } else {
     const ids = Array.isArray(body?.chunkIds) ? [...new Set((body.chunkIds as unknown[]).filter(isUuid))] as string[] : [];
     if (!ids.length) return NextResponse.json({ error: "Choose what to learn from." }, { status: 400 });
@@ -137,6 +176,7 @@ export async function POST(req: Request) {
   const lesson: LessonOutline | null = action === "ask" ? null
     : lessonOutline({ step, sections: passages.map(p => ({ chunkId: p.chunkId, materialId: p.materialId, ordinal: p.ordinal, pageFrom: p.pageFrom, pageTo: p.pageTo, materialTitle: p.materialTitle, unit: p.unit ?? "page" })) },
       await topicsOfSections(ctx.admin, ctx.userId, passages.map(p => p.chunkId)), new Map(passages.map(p => [p.chunkId, sectionProfile(p.content)])));
+  clock.mark("passages_outline");
   const lessonTerms = action === "ask" ? keyTermsOf(question) : lesson ? keyTermsOf(lesson.focus.join(" ")).slice(0, 8) : [];
   let grounding: Grounding = groundingOutcome(lessonTerms, passages);
   const related = { sameMaterial: 0, otherMaterials: 0 };
@@ -165,17 +205,22 @@ export async function POST(req: Request) {
   const wider: RecoveryMode | null = grounding.outcome === "sufficient" ? null : mode === "notes" ? "notes_and_library"
     : mode === "library" ? widerMode("notes_and_library", policy, await scholarResearchOperational(ctx.admin).catch(() => false)) : null;
   const lessonFields = { lesson: lesson ? { title: lesson.title, objective: lesson.objective } : null, grounding: { ...grounding, related, wider } };
+  clock.mark("related");
 
   // ── how to teach it: depth and the governed references (L5 decides each). No AI yet. ──
-  const pref = await getLearningPreference(ctx.admin, ctx.userId);
+  const pref = await prefP;
   const depth: ExplanationDepth = (EXPLANATION_DEPTHS as readonly string[]).includes(body?.depth) ? body.depth : pref?.depth ?? policy.scholarExplanationDepth;
-  const learner = await loadLearnerCatalogue(ctx.admin, ctx.userId);
+  const learner = await learnerP;
   // Stage 3 acceptance item 5: the governed reference source is policy (the CFCA by default), and a saved answer's
   // references are labelled by it as it is now -- "clinically approved" only for content 395 approved as it stands.
   const refSource = await referenceSource(ctx.admin, policy, learner.competencies);
-  const linked = policy.scholarLearningObjectives === "outcomes" ? await governedReferences(ctx.admin, ctx.userId, passages.map(p => p.chunkId), refSource) : [];
   // COMPETEN-RESEARCH-01: the library modes add the Competen library entries matching the topic (no external call).
-  const topics = mode === "notes" ? [] : [...new Set([...(await topicsOfSections(ctx.admin, ctx.userId, passages.map(p => p.chunkId))).values()].flat())];
+  // The two reads are independent, so they run together.
+  const [linked, topicMap] = await Promise.all([
+    policy.scholarLearningObjectives === "outcomes" ? governedReferences(ctx.admin, ctx.userId, passages.map(p => p.chunkId), refSource) : Promise.resolve([]),
+    mode === "notes" ? Promise.resolve(null) : topicsOfSections(ctx.admin, ctx.userId, passages.map(p => p.chunkId)),
+  ]);
+  const topics = topicMap ? [...new Set([...topicMap.values()].flat())] : [];
   let references = mode === "notes" ? linked : [...linked, ...libraryReferences([action === "ask" ? question : "", stepTitle ?? "", ...topics].join(" "), refSource, linked)];
   const background = policy.scholarBeyondNotes === "labelled" && mode !== "research";
 
@@ -186,6 +231,27 @@ export async function POST(req: Request) {
   const promptVersion = mode === "research" ? learnResearchPromptVersion(action as LearnAction) : learnPromptVersion(action as LearnAction);
   // SCHOLAR-SQIE-02: an explanation from recovered evidence is never a saved artefact, and never served from one.
   const key = storable && !recovery ? artefactKey({ action, depth, chunkIds: passages.map(p => p.chunkId), promptVersion, references, background, mode }) : null;
+  // SCHOLAR-GUIDED-LEARNING-01: a lesson saved under an earlier Teach Me version is still this lesson (same structure and
+  // checks), so it is served -- reopening never costs AI because the prompt moved on. Looked up only when the current is absent.
+  const legacyKeys = key ? legacyLearnPromptVersions(action as LearnAction).map(v => artefactKey({ action, depth, chunkIds: passages!.map(p => p.chunkId),
+    promptVersion: mode === "research" ? `${v}${RESEARCH_PROMPT_SUFFIX}` : v, references, background, mode })) : [];
+  const fits = (a: ArtefactRow | null) => !!a && a.sources.every(id => passages!.some(p => p.chunkId === id));
+  const findSaved = async (): Promise<ArtefactRow | null> => {
+    if (!key) return null;
+    const [current, ...older] = await Promise.all([key, ...legacyKeys].map(async k => await findArtefact(ctx.admin, ctx.userId, k)));
+    return [current, ...older].find(fits) ?? null;
+  };
+  // A salvaged lesson says so wherever it is shown: how many parts were left out, never which (generation.ts salvageTeach).
+  const salvageFields = (removed: number | null) => removed ? {
+    salvage: { removed, note: SALVAGE_NOTE },
+    grounding: { ...lessonFields.grounding, outcome: "partial" as const, removed },
+  } : {};
+  // What a served (no AI) lesson leaves in the trail, after the response: reuse, duplicates, timings.
+  // The timings are taken when the reply is ready (time to first content), not when the row is written.
+  const served = (a: ArtefactRow, extra: Record<string, unknown>) => { const timing = clock.snapshot(); later(() => audit(ctx, LEARN_SERVED_ACTION, LEARN_ENTITY, sessionId, {
+    action, step, depth, mode, cached: true, artefact_id: a.id, dedupe_key: key, legacy: a.promptVersion.indexOf(promptVersion) !== 0, open, recorded,
+    salvage_removed: salvagedCount(a.promptVersion), timing_ms: timing, ...extra,
+  })); };
   const savedReply = (a: ArtefactRow, extra: Record<string, unknown> = {}) => {
     const byId = new Map(passages!.map(p => [p.chunkId, p]));
     const src = a.sources.map(id => byId.get(id)).filter((p): p is Passage => !!p);
@@ -199,33 +265,79 @@ export async function POST(req: Request) {
       passageIds: src.map(p => p.chunkId), references: relabelReferences(a.refs, refSource), answer: split.research !== null ? split.main : a.content, cited: src.map((_, i) => i + 1),
       background: a.background ? { text: a.background, label: SUPPLEMENTARY_LABEL } : null, flags: a.flags, verdict: null,
       research: external.length ? { state: "cached", label: SOURCE_KIND_LABEL.research, message: null, references: external, ...(split.research ? { text: split.research } : {}) } : null,
-      saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...lessonFields, ...extra,
+      saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...lessonFields, ...salvageFields(salvagedCount(a.promptVersion)), ...extra,
     };
   };
-  if (key && body?.fresh !== true) {
-    const saved = await findArtefact(ctx.admin, ctx.userId, key);
-    if (saved && saved.sources.every(id => passages!.some(p => p.chunkId === id))) {
-      if (recorded && sessionId && policy.scholarLearningHistory === "record") {
-        await recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action, verdict: null, chunkIds: saved.sources });
-        await updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step });
-      }
-      return NextResponse.json(savedReply(saved));
+  // The learner opened a saved lesson: recorded as before (the two writes are independent, so together).
+  const openedSaved = async (saved: ArtefactRow) => {
+    if (recorded && sessionId && policy.scholarLearningHistory === "record") await Promise.all([
+      recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action, verdict: null, chunkIds: saved.sources }),
+      updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }),
+    ]);
+  };
+  clock.mark("references");
+  // A prepared lesson never replaces a saved one, so `fresh` does not apply to it.
+  if (key && (body?.fresh !== true || prepare)) {
+    const saved = await findSaved();
+    clock.mark("cache");
+    if (saved) {
+      if (prepare) return notPrepared("saved", { step });
+      await openedSaved(saved);
+      served(saved, {});
+      return NextResponse.json(savedReply(saved, { cached: true }));
     }
   }
+  if (prepare && !key) return notPrepared("not_storable", { step });
+  // OPEN: nothing saved, so the client is told to ask for it (or that it is being written) -- no AI, no allowance read.
+  if (open) return NextResponse.json({ action, step, depth, ...lessonFields, cached: false, open: key && (await flightActive(ctx, key)) ? "in_flight" : "generate" });
+  if (prepare && key && (await flightActive(ctx, key))) return notPrepared("in_flight", { step });
 
   // ── s7: continuity -- no new AI where the standing (or the allowance) says no; what is saved stays available ──
   const continuity = async (message: string, insufficient: boolean) => {
     const saved = await listArtefacts(ctx.admin, ctx.userId, { chunkIds: passages!.map(p => p.chunkId) });
     return NextResponse.json({ action, step, ...lessonFields, continuity: { message, insufficient }, saved: saved.ok ? saved.data.slice(0, 5).map(a => savedReply(a)) : [] });
   };
+  // The tutor context is a read the AI call needs and nothing before it decides on: started now, awaited after the gates.
+  const tutorP = loadTutorContext(ctx.admin, ctx.userId, passages.map(p => p.chunkId));
+  tutorP.catch(() => {});
   const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), action as "teach");
-  if (!standing.available) return continuity(standing.message ?? "", standing.insufficient);
+  if (!standing.available) return prepare ? notPrepared("unavailable", { step }) : continuity(standing.message ?? "", standing.insufficient);
   const pre = await aiPreflight(ctx);
   if (pre) {
+    if (prepare) return notPrepared("unavailable", { step });
     if (pre.status === 429) return continuity(((await pre.clone().json().catch(() => ({}))) as { error?: string }).error ?? "Your AI allowance is used up for now.", false);
     return pre;
   }
-  const learnerContext = await loadTutorContext(ctx.admin, ctx.userId, passages.map(p => p.chunkId));
+  clock.mark("standing_preflight");
+
+  // ── SCHOLAR-GUIDED-LEARNING-01: no duplicate generation (learn-flight.ts) ──
+  // The earliest identical request generates; a later one makes no AI call and is served what the first saved.
+  // A claimed flight is closed where the request ends (an end row): written beside the trail on the main path, and
+  // before each refusal. A request that throws leaves its row to age out of the window.
+  let flight: Flight | null = null;
+  const closeFlight = (outcome: string) => (key ? endFlight(ctx, flight, key, sessionId, outcome) : Promise.resolve());
+  if (key) {
+    flight = await claimFlight(ctx, key, { sessionId, step, action, prepared: prepare });
+    if (!flight.claimed) {
+      if (prepare) return notPrepared("in_flight", { step });
+      const waited = await waitForFlight(ctx, key, flight, findSaved);
+      clock.mark("dedupe_wait");
+      if ("saved" in waited) {
+        await openedSaved(waited.saved);
+        served(waited.saved, { duplicate_suppressed: true });
+        return NextResponse.json(savedReply(waited.saved, { cached: true, duplicateSuppressed: true }));
+      }
+      const timing = clock.snapshot();
+      later(() => audit(ctx, LEARN_SERVED_ACTION, LEARN_ENTITY, sessionId, { action, step, depth, mode, cached: false, dedupe_key: key, duplicate_suppressed: true, first: "ended" in waited ? waited.ended : "still_running", timing_ms: timing }));
+      // The first was withheld: said, with nothing re-generated. It failed or was refused: the learner may simply try again.
+      if ("ended" in waited && waited.ended.startsWith("withheld"))
+        return NextResponse.json({ action, step, depth, label: AI_LABEL, kinds: SOURCE_KIND_LABEL, ...lessonFields, sources: [], passageIds: passages.map(p => p.chunkId), references: [], withheld: true, reason: "duplicate", message: DUPLICATE_WITHHELD, duplicateSuppressed: true });
+      return NextResponse.json({ action, step, depth, ...lessonFields, inFlight: !("ended" in waited), retry: true, duplicateSuppressed: true, message: "ended" in waited ? DUPLICATE_RETRY : DUPLICATE_IN_FLIGHT });
+    }
+    clock.mark("dedupe_claim");
+  }
+  const learnerContext = await tutorP;
+  clock.mark("context");
   // SCHOLAR-SESSION-AI-02 slice C (owner D4): an ask in the caller's OWN connected study session (policy on, 740 present)
   // also carries the session block -- database reads only, no AI call, under the learner-context rule (emphasis, never
   // grounding, never cited). Any other session, or the gate off: null, and the ask is exactly as before.
@@ -256,6 +368,7 @@ export async function POST(req: Request) {
     references = [...have, ...recovered.inputs.references.filter(x => !have.some(y => y.competencyId === x.competencyId))];
   }
   const risk = await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages, purpose: purposeFrom(body) });
+  clock.mark("risk");
   // COMPETEN-RESEARCH-01, research workflow. DISCOVERY IS NOT GENERATION (commissioning GO, 28 Oct):
   //   (1) the REQUEST's clinical risk is classified as for every Learn request (its prompt and passages). With metering
   //       OFF the same gate decides BEFORE any search, so a request no model is eligible for is refused before anything
@@ -268,9 +381,13 @@ export async function POST(req: Request) {
   //       a medication instruction) is withheld as risk_raised, on top of the dosing and grounding checks.
   // The runner is built first so the research it pays for carries the same action id as the AI call and its outcome.
   const ai = scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", risk);
+  // SCHOLAR-GUIDED-LEARNING-01: the model call's own time, apart from the checks that follow it.
+  ai.run = clock.wrap("ai", ai.run);
   let research: LearnResearch | null = null;
   if (mode === "research") {
     const gate = await scholarRiskGate(ctx, action as LearnAction, risk);
+    if (gate) await closeFlight("refused");
+    if (gate && prepare) return notPrepared("unavailable", { step });
     // AI operating modes: a clarify question is put to the student, not shown as a refusal. Nothing was sent anywhere.
     if (gate?.error === "clarify_purpose") return meteredRefusal(gate)!;
     if (gate) { const w = refusalWords(gate); return continuity(w.message, w.insufficient); }
@@ -279,8 +396,12 @@ export async function POST(req: Request) {
     research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle }, ai.actionId, null, qualityOf(policy.scholarRecovery));
   }
   const evidence = [...(research ? researchEvidence(research) : []), ...(recovered?.ok ? recovered.inputs.research : [])];
+  clock.mark("research");
   const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence, studyContext: study?.text ?? null }, ai.run);
+  clock.mark("generate");
   const refusal = ai.refusal();
+  if (refusal) await closeFlight("refused");
+  if (refusal && prepare) return notPrepared("unavailable", { step });
   if (refusal?.error === "clarify_purpose") return meteredRefusal(refusal)!;
   if (refusal) { const w = refusalWords(refusal); return continuity(w.message, w.insufficient); }
   // SCHOLAR-AI-OPT-01: the outcome of this one action, codes only. A check question is not an explanation.
@@ -288,35 +409,63 @@ export async function POST(req: Request) {
   let rr = r.ok ? r.research : null;
   if (rr?.ok && !(await withinRequestRisk(ctx.admin, action as LearnAction, risk, [rr.text]))[0]) rr = { ok: false, reason: "risk_raised" };
   const researchCodes = research ? [`research_${research.state}`, ...research.codes, ...(rr ? [rr.ok ? "research_shown" : `research_${rr.reason}`] : [])] : [];
-  await recordScholarOutcome(ctx.admin, ai, {
+  // SCHOLAR-GUIDED-LEARNING-01: a lesson shown with unsupported parts left out (never verified: an outcome "partial").
+  const salvaged = r.ok && action !== "check" && r.check.ok ? r.check.salvaged ?? null : null;
+  // s8: the shown answer is saved for next time (private formative; replaced when the student asks for a new one).
+  // Saved BEFORE the trail is written, so its time is measured and a waiting duplicate finds it at once.
+  let savedNow: "ok" | "not_provisioned" | "failed" | null = null;
+  if (r.ok && action !== "check" && r.check.ok) {
+    const notes = r.check.text, bg = r.background;
+    if (key) savedNow = await saveArtefact(ctx.admin, ctx.userId, {
+      materialId: passages[0].materialId, action, depth, content: rr?.ok ? `${notes}
+
+${RESEARCH_MARKER}
+${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
+      refs: [...references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), ...(research ? externalReferences(research) : [])], dedupeKey: key,
+      model: r.model, promptVersion: salvaged ? salvagedPromptVersion(r.promptVersion, salvaged.removed) : r.promptVersion, chunkIds: passages.map(p => p.chunkId),
+    });
+  }
+  clock.mark("save");
+  const outcomeCode = r.ok ? (action === "check" ? (r.question?.ok ? "shown" : `withheld:${r.question?.reason}`) : r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`;
+  // The writes are independent, so they run together (the flight closes as the artefact is already saved).
+  await Promise.all([closeFlight(outcomeCode), recordScholarOutcome(ctx.admin, ai, {
     operation: `${mode === "research" ? "individual_scholar_learn_research" : "individual_scholar_learn"}:${action}`, outputKind: action === "check" ? "other" : "explanation",
     promptVersion: r.ok ? r.promptVersion : null, configVersion: `depth:${depth}${mode === "notes" ? "" : `;mode:${mode}`}`,
     ...(!r.ok ? { outcome: "error" as const, reasons: [`error_${r.error}`, ...researchCodes] }
       : action === "check" ? (r.question?.ok ? { outcome: "accepted" as const, accepted: 1 } : { outcome: "rejected" as const, rejected: 1, reasons: [r.question?.reason ?? "malformed"] })
         : (() => {
-          const accepted = (r.check.ok ? 1 : 0) + (rr?.ok ? 1 : 0), rejected = (r.check.ok ? 0 : 1) + (rr && !rr.ok ? 1 : 0);
-          return { outcome: accepted ? (rejected ? "partial" as const : "accepted" as const) : "rejected" as const, accepted, rejected, reasons: [...(r.check.ok ? [] : [r.check.reason]), ...researchCodes] };
+          // A salvaged lesson: the lesson accepted, the parts left out rejected -- so "partial", never "accepted".
+          const accepted = (r.check.ok ? 1 : 0) + (rr?.ok ? 1 : 0), rejected = (r.check.ok ? 0 : 1) + (rr && !rr.ok ? 1 : 0) + (salvaged ? 1 : 0);
+          return { outcome: accepted ? (rejected ? "partial" as const : "accepted" as const) : "rejected" as const, accepted, rejected, reasons: [...(r.check.ok ? [] : [r.check.reason]), ...(salvaged ? ["grounding_salvaged"] : []), ...researchCodes] };
         })()),
-  });
-  if (recovery && recovered?.ok) await recordRecoveryResult(ctx.admin, recovery.id, r.ok && action !== "check" && r.check.ok);
-  await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn", sessionId, {
+  }),
+  recovery && recovered?.ok ? recordRecoveryResult(ctx.admin, recovery.id, r.ok && action !== "check" && r.check.ok) : null,
+  audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn", sessionId, {
     action_id: ai.actionId, purpose: purposeFrom(body),
     action, step, chunk_ids: passages.map(p => p.chunkId), depth, references: references.length, learner_context: learnerContext !== null, recorded,
     // SCHOLAR-SESSION-AI-02: which study-session sections reached the prompt (names only, never the text).
     study_context: study ? study.sections : null,
-    outcome: r.ok ? (action === "check" ? (r.question?.ok ? "shown" : `withheld:${r.question?.reason}`) : r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,
+    outcome: outcomeCode,
     // SCHOLAR-AI-OPT-01: what the grounding check refused, in its own words ("the number one"), never the answer text.
     withheld_detail: r.ok && action !== "check" && !r.check.ok && r.check.violations?.length ? describeViolations(r.check.violations) : null,
     flags: r.ok ? r.flags.kept.length : 0, verdict: r.ok ? r.verdict : null, model: r.ok ? r.model : null, prompt_version: r.ok ? r.promptVersion : null,
     ...(mode !== "notes" ? { mode, research: research ? { state: research.state, items: research.items.length, evidence: evidence.length, outcome: rr ? (rr.ok ? "shown" : `withheld:${rr.reason}`) : null } : null } : {}),
-  });
+    // SCHOLAR-GUIDED-LEARNING-01: generated (not cached), whether prepared ahead, the artefact key (for reuse and
+    // prepared-and-viewed), what salvage left out (a count and the rule, never the text), whether it was saved, and timings.
+    cached: false, prepared: prepare, dedupe_key: key, flight_id: flight?.id ?? null, saved: savedNow,
+    salvage_removed: salvaged ? salvaged.removed : null, salvage_detail: salvaged?.violations.length ? describeViolations(salvaged.violations) : null,
+    timing_ms: clock.snapshot(),
+  })]);
+  if (prepare) return NextResponse.json({ prepared: savedNow === "ok", step, reason: savedNow === "ok" ? null : outcomeCode === "shown" ? "not_saved" : outcomeCode, actionId: ai.actionId });
   if (!r.ok) return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
 
   // ── the record: structure only, and only what was shown ──
   const shown = action === "check" ? !!r.question?.ok : r.check.ok;
   if (recorded && sessionId && shown && policy.scholarLearningHistory === "record") {
-    await recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action, verdict: r.verdict, chunkIds: passages.map(p => p.chunkId) });
-    await updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step });
+    await Promise.all([
+      recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action, verdict: r.verdict, chunkIds: passages.map(p => p.chunkId) }),
+      updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }),
+    ]);
   }
 
   const sources = passages.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) }));
@@ -342,17 +491,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ...base, withheld: true, reason: r.check.reason, message: next.why, notInNotes: next.notInNotes, next });
   }
   const b = r.background;
-  // s8: the shown answer is saved for next time (private formative; replaced when the student asks for a new one).
-  let savedNow: "ok" | "not_provisioned" | "failed" | null = null;
-  if (key) savedNow = await saveArtefact(ctx.admin, ctx.userId, {
-    materialId: passages[0].materialId, action, depth, content: rr?.ok ? `${r.check.text}
-
-${RESEARCH_MARKER}
-${rr.text}` : r.check.text, background: b?.ok ? b.text : null, flags: r.flags.kept,
-    refs: [...references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), ...(research ? externalReferences(research) : [])], dedupeKey: key, model: r.model, promptVersion: r.promptVersion, chunkIds: passages.map(p => p.chunkId),
-  });
+  // (s8: saved above, before the trail.) A salvaged lesson says what was left out (a count) and is graded "partial".
   return NextResponse.json({
     ...base,
+    cached: false,
+    ...salvageFields(salvaged ? salvaged.removed : null),
     answer: r.check.text,
     cited: r.check.cited,
     background: !b || (!b.ok && b.reason === "not_this_mode") ? null : b.ok ? { text: b.text, label: SUPPLEMENTARY_LABEL } : { withheld: SUPPLEMENTARY_WITHHELD[b.reason as Exclude<typeof b.reason, "not_this_mode">] },
