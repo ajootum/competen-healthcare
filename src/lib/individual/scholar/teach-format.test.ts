@@ -73,7 +73,7 @@ describe("checkTeachAnswer: part by part, never looser than checkLearnMain", () 
     const r = checkTeachAnswer(GOOD.replace("one shift [S2].", "one shift."), "Teach me", NOTES, []);
     expect(r.dropped.example).toBe(true);
   });
-  it("an ungrounded key point withholds the whole answer, exactly as checkLearnMain would", () => {
+  it("an invented digit in a key point still withholds the whole answer (never salvaged: SCHOLAR-GUIDED-LEARNING-01)", () => {
     const r = checkTeachAnswer(GOOD.replace("small scale before", "small scale of 3 patients before"), "Teach me", NOTES, []);
     expect(r.check).toMatchObject({ ok: false, reason: "ungrounded" });
   });

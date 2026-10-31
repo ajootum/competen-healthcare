@@ -8,7 +8,7 @@
  *       and the page never says "None found yet" / "No topics found"
  *   R2  lessons: <= maxSteps lessons covering >= 40 of 47 sections; lesson 1 holds slide 1 but is not slide 1 alone;
  *       titles are not comma-joined topic lists; each has an objective
- *   R3  teach lesson 1 (one AI call): not withheld; grounding sufficient or partial; prompt version has scholar-learn-teach-v1;
+ *   R3  teach lesson 1 (one AI call): not withheld; grounding sufficient or partial; prompt version has scholar-learn-teach-v1 or v2;
  *       citations map only to the QI slides; nothing from the unrelated note; a partial's uncoveredTerms are absent from the cited text
  *   R4  teach the lesson about the Model for Improvement / PDSA (one AI call): cites a slide that contains it
  *   R5  a genuine gap ("dosage of IV vancomycin", My notes only; one AI call + the AI-free recovery route): insufficient or withheld,
@@ -338,7 +338,7 @@ async function main() {
     const cs = slidesOf(srcs, tags, m);
     ok("R3a", "teach lesson 1 is not withheld and grounding is sufficient or partial", t.status === 200 && !t.json.withheld && !t.json.continuity && (g?.outcome === "sufficient" || g?.outcome === "partial"),
       `status ${t.status}, withheld ${!!t.json.withheld}${t.json.reason ? ` (${t.json.reason})` : ""}${t.json.continuity ? ` continuity: ${t.json.continuity.message}` : ""}, grounding ${g?.outcome}, covered ${JSON.stringify(g?.covered)}, uncovered ${JSON.stringify(g?.uncoveredTerms)}${t.json.error ? ` error ${t.json.error}` : ""}`);
-    ok("R3b", "prompt version contains scholar-learn-teach-v1", String(t.json.provenance?.promptVersion ?? "").includes("scholar-learn-teach-v1"), String(t.json.provenance?.promptVersion));
+    ok("R3b", "prompt version is a structured Teach Me version (scholar-learn-teach-v1 or v2)", /scholar-learn-teach-v[12]b/.test(String(t.json.provenance?.promptVersion ?? "")), String(t.json.provenance?.promptVersion));
     ok("R3c", "structured (overview + key points), every [S n] points at a source", !!parts && !!parts.overview && parts.points.length >= 1 && tagsValid, `overview ${!!parts?.overview}, ${parts?.points.length ?? 0} key points, example ${!!parts?.example}, ${parts?.questions.length ?? 0} check questions, tags ${JSON.stringify(tags)}`);
     ok("R3d", "all sources are QI slides and none is from the unrelated note", onlyQi && noNote, `${srcs.length} sources: slides ${srcs.map(s => m.get(s.chunkId)?.slide).join(",")}`);
     ok("R3e", "if partial, the uncovered terms are absent from the cited passages", partialOk, `outcome ${g?.outcome}, uncovered ${JSON.stringify(g?.uncoveredTerms)}`);

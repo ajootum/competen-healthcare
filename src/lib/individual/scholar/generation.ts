@@ -1,10 +1,10 @@
 import { generate, type GenerateArgs, type GenerateResult } from "@/lib/ai/client";
-import { parseJsonArray, textGroundingViolations, type PhrasingViolation } from "@/lib/ai/grounding";
+import { SAFETY_CONTEXT, parseJsonArray, textGroundingViolations, type PhrasingViolation } from "@/lib/ai/grounding";
 import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib/competency/mapping";
 import { CONTEXT_PREAMBLE } from "./learner-context";
-import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, type CheckVerdict, type ExplanationDepth, type LearnAction } from "./config";
+import { CASE_MAX_STEPS, CASE_MIN_STEPS, LEARN_TEACH_LEGACY, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, type CheckVerdict, type ExplanationDepth, type LearnAction } from "./config";
 import { citeChunk, findPatientIdentifiers } from "./extract";
-import { TEACH_LABEL, TEACH_MAX_QUESTIONS, citedTags, composeTeachAnswer, parseTeachAnswer, questionText } from "./teach-format";
+import { TEACH_LABEL, TEACH_MAX_QUESTIONS, citedTags, composeTeachAnswer, parseTeachAnswer, questionText, type TeachParts } from "./teach-format";
 import { structureLabel, type CatalogueCompetency } from "./catalogue";
 import {
   REVISION_VERIFY_SYSTEM, VERIFY_SYSTEM, applyRevisionVerification, applyVerification, passageVocabulary, qualityProblems, revisionVerificationPrompt, verificationPrompt,
@@ -100,7 +100,7 @@ export function explainUserPrompt(question: string, passages: Passage[]): string
 }
 
 export type ExplainCheck =
-  | { ok: true; text: string; cited: number[] }
+  | { ok: true; text: string; cited: number[]; salvaged?: TeachSalvage }
   | { ok: false; reason: "not_in_notes" | "no_citation" | "bad_citation" | "ungrounded"; violations?: PhrasingViolation[] };
 
 /** Pure. What the model returned → shown, or withheld with the reason. */
@@ -415,6 +415,8 @@ const LEARN_INSTRUCTION: Record<LearnAction | "check" | "clarify", string> = {
     `${TEACH_LABEL.points} then one line per key idea, each starting '- ', building from simple to more detailed, explained rather than just listed, each ending with its citation such as [S1].`,
     `${TEACH_LABEL.example} ONLY if the passages themselves describe a situation, case or application: one or two sentences about 'a patient' or 'the person caring for them' that show an idea at work, using only what the passages say, cited. If the passages describe no such situation, leave the ${TEACH_LABEL.example} line out entirely. Never invent an example.`,
     `${TEACH_LABEL.check} then one or two short open questions, each starting '- ', that the student can answer in a sentence or two from the passages, each ending with '?' and then the tag of the passage that answers it, for example 'Why is this done? [S2]'. Ask them to explain, never to recall a number and never how many of anything.`,
+    // v2 (SCHOLAR-GUIDED-LEARNING-01): production withheld a Just Culture lesson for "the number two".
+    "Never say how many of something there are ('two types', 'three stages', 'both') unless the passages themselves give that number: name the things instead. Every statement must be one the passages support.",
     "Write nothing else in the part from the notes.",
   ].join("\n"),
   explain: "MODE: EXPLAIN THIS. Explain the passages clearly, as a good tutor would, citing as you go.",
@@ -588,34 +590,77 @@ export function checkLearnMain(main: string, asked: string, passages: Passage[],
 
 /**
  * Pure. SCHOLAR-LEARN-FIX-01 L-B: the notes part of a Teach Me answer, checked PART BY PART, never more loosely:
- *   - the overview and key points are checked together by checkLearnMain exactly as any answer is -- failing it, the
- *     whole answer is withheld for that reason;
+ *   - the overview and key points are checked together by checkLearnMain exactly as any answer is;
  *   - the example is checked on its own by checkLearnMain (a given [S n], nothing the passages do not hold): failing it,
  *     the example alone is DROPPED, never shown -- so an unsupported example costs the example, not the lesson;
  *   - each check question must end with given [S n] tags, read as a question, carry no identifier, and add nothing the
  *     passages do not hold (checkCheckQuestion's rules): failing that it is DROPPED. At most TEACH_MAX_QUESTIONS.
+ * SCHOLAR-GUIDED-LEARNING-01 (owner, 31 Oct), SALVAGE: when the overview and key points fail ONLY as ungrounded, each is
+ * checked on its own (salvageTeach): the ones the notes do not support are DROPPED and the rest is shown, when the
+ * overview or at least one key point survives. Never salvaged -- the whole answer is withheld exactly as before -- on a
+ * bad or missing citation, NOT_IN_NOTES, an identifier anywhere in the answer, or a dropped part that carries dosing
+ * language or an invented number in a safety context (a dose, unit, rate, duration, threshold, lab value, age, score,
+ * medication). What is kept passes checkLearnMain as a whole again. It carries `salvaged` (how many parts were left out,
+ * and the rule each broke in its own words, never their text) and is never presented as verified.
  * What is shown is re-written in the canonical form (composeTeachAnswer). An answer with no OVERVIEW or KEY POINTS label
  * is checked as a whole, exactly as before.
  */
+export type TeachSalvage = { removed: number; parts: { overview: boolean; points: number; example: boolean; questions: number }; violations: PhrasingViolation[] };
 export function checkTeachAnswer(main: string, asked: string, passages: Passage[], references: GovernedReference[]): { check: ExplainCheck; dropped: { example: boolean; questions: number } } {
   const parts = parseTeachAnswer(main.trim());
   if (!parts) return { check: checkLearnMain(main, asked, passages, references), dropped: { example: false, questions: 0 } };
   const body = composeTeachAnswer({ ...parts, example: null, questions: [] });
   // "OVERVIEW: NOT_IN_NOTES" is the model saying the passages do not cover it, in the labelled form.
   if (/\bNOT_IN_NOTES\b/.test(main) && !citedTags(body).length) return { check: { ok: false, reason: "not_in_notes" }, dropped: { example: false, questions: 0 } };
-  const check = checkLearnMain(body || main, asked, passages, references);
+  let check = checkLearnMain(body || main, asked, passages, references);
+  let kept = parts, removed: { overview: boolean; points: number; violations: PhrasingViolation[] } = { overview: false, points: 0, violations: [] };
+  if (!check.ok && check.reason === "ungrounded") {
+    const s = salvageTeach(main, parts, asked, passages, references);
+    if (s) ({ check, kept, removed } = s);
+  }
   if (!check.ok) return { check, dropped: { example: false, questions: 0 } };
-  const example = parts.example && checkLearnMain(parts.example, asked, passages, references).ok ? parts.example : null;
-  const questions = parts.questions.filter(q => {
+  const exampleCheck = kept.example ? checkLearnMain(kept.example, asked, passages, references) : null;
+  const example = exampleCheck?.ok ? kept.example : null;
+  let unsupportedQuestions = 0;
+  const questions = kept.questions.filter(q => {
     const tags = citedTags(q), plain = questionText(q);
-    return tags.length > 0 && tags.every(t => t >= 1 && t <= passages.length) && /\?$/.test(plain) && plain.length >= 8 && plain.length <= 300
-      && !/\[[RE]\d+\]/.test(q) && !findPatientIdentifiers(plain).length && !groundingViolations(plain, passages.map(p => p.content)).length;
+    const formed = tags.length > 0 && tags.every(t => t >= 1 && t <= passages.length) && /\?$/.test(plain) && plain.length >= 8 && plain.length <= 300 && !/\[[RE]\d+\]/.test(q);
+    const supported = !findPatientIdentifiers(plain).length && !groundingViolations(plain, passages.map(p => p.content)).length;
+    if (formed && !supported) unsupportedQuestions++;
+    return formed && supported;
   }).slice(0, TEACH_MAX_QUESTIONS);
-  const text = composeTeachAnswer({ ...parts, example, questions });
+  const text = composeTeachAnswer({ ...kept, example, questions });
+  const exampleDropped = !!kept.example && !example;
+  const total = (removed.overview ? 1 : 0) + removed.points + (exampleDropped ? 1 : 0) + unsupportedQuestions;
+  const violations = [...removed.violations, ...(exampleCheck && !exampleCheck.ok ? exampleCheck.violations ?? [] : [])];
   return {
-    check: { ok: true, text, cited: [...new Set([...check.cited, ...citedTags(example ?? ""), ...questions.flatMap(citedTags)])].sort((a, b) => a - b) },
-    dropped: { example: !!parts.example && !example, questions: parts.questions.length - questions.length },
+    check: {
+      ok: true, text, cited: [...new Set([...check.cited, ...citedTags(example ?? ""), ...questions.flatMap(citedTags)])].sort((a, b) => a - b),
+      ...(total ? { salvaged: { removed: total, parts: { overview: removed.overview, points: removed.points, example: exampleDropped, questions: unsupportedQuestions }, violations } } : {}),
+    },
+    dropped: { example: exampleDropped, questions: kept.questions.length - questions.length },
   };
+}
+
+/** The grounding a Learn notes part is checked against: the passages, the governed references' own words, what was asked. */
+const learnGrounding = (passages: Passage[], references: GovernedReference[], asked: string) =>
+  [...passages.map(p => `${passageCitation(p)}\n${p.content}`), ...references.map(x => `${x.code ?? ""} ${x.title} ${x.outcome ?? ""}`), asked];
+
+/** Pure. SCHOLAR-GUIDED-LEARNING-01: the overview and key points one by one, or null where nothing may be salvaged. */
+function salvageTeach(main: string, parts: TeachParts, asked: string, passages: Passage[], references: GovernedReference[]) {
+  if (findPatientIdentifiers(main).length) return null;
+  const grounding = learnGrounding(passages, references, asked);
+  const failing = (t: string) => groundingViolations(t.replace(/\[[SR]\d+\]/g, " "), grounding);
+  const unsafe = (t: string, vs: PhrasingViolation[]) => { const plain = t.replace(/\[[SRE]\d+\]/g, " "); return RESEARCH_DOSING.test(plain) || (vs.some(v => v.kind === "ungrounded_number") && SAFETY_CONTEXT.test(plain)); };
+  const ov = parts.overview.trim() ? failing(parts.overview) : [];
+  const pts = parts.points.map(p => ({ p, vs: failing(p) }));
+  if ((ov.length && unsafe(parts.overview, ov)) || pts.some(x => x.vs.length && unsafe(x.p, x.vs))) return null;
+  const overview = ov.length ? "" : parts.overview;
+  const points = pts.filter(x => !x.vs.length).map(x => x.p);
+  if (!overview.trim() && !points.length) return null;
+  const check = checkLearnMain(composeTeachAnswer({ overview, points, example: null, questions: [] }), asked, passages, references);
+  if (!check.ok) return null;
+  return { check, kept: { ...parts, overview, points }, removed: { overview: ov.length > 0, points: pts.length - points.length, violations: [...ov, ...pts.flatMap(x => x.vs)] } };
 }
 
 export type LearnFlag = { text: string; cited: number[] };
@@ -657,6 +702,9 @@ export function parseVerdict(raw: string): { verdict: CheckVerdict | null; rest:
 
 /** SCHOLAR-LEARN-FIX-01 L-B: Teach Me adds its structured-lesson version, so its saved answers key apart from the free-text ones. */
 export const learnPromptVersion = (action: LearnAction | "check" | "clarify") => `${PROMPT_VERSIONS.learn}:${action}${action === "teach" ? `+${PROMPT_VERSIONS.learnTeach}` : ""}`;
+/** SCHOLAR-GUIDED-LEARNING-01: the earlier Teach Me versions whose saved lessons are still opened with no AI call (LEARN_TEACH_LEGACY). */
+export const legacyLearnPromptVersions = (action: LearnAction | "check" | "clarify"): string[] =>
+  action === "teach" ? LEARN_TEACH_LEGACY.map(v => `${PROMPT_VERSIONS.learn}:teach+${v}`) : [];
 
 export type LearnResult = AiFailure | {
   ok: true; action: LearnAction | "check" | "clarify"; model: string; provider: string; promptVersion: string;
