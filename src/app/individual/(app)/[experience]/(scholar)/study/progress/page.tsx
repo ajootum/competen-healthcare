@@ -309,7 +309,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
               <p className="mt-1 text-[13px] text-gray-600">
                 You can choose to show what you have practised in your Competen Passport, one achievement at a time. It is labelled
                 &ldquo;{EVIDENCE_LABEL.self_directed}&rdquo;. Only the title you give it, the number you answered and when you last studied are shown. Your notes, your answers, whether they were right and anything the AI wrote are never shown.
-                It also appears on Passport links you share from Competen Professional, including links already shared. Removing it takes it off them straight away, and your study history stays as it is.
+                Choosing it only puts it on your Passport. It reaches someone else only if you tick it on a Passport link you share (from the Share page in Scholar, or in Competen Professional), and only on that link: links you made before do not show it. Removing it takes it off your Passport and off any link that carries it, and your study history stays as it is.
               </p>
               {!choices?.ok ? (choices?.notProvisioned
                 ? <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Showing study achievements in your Passport is not available here yet.</p>
@@ -317,7 +317,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                 : eligible.length === 0 && allEligible.length > 0 ? (
                   <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Adding study achievements to your Passport is not offered at the moment. Your study history is unchanged.</p>
                 ) : eligible.length === 0 ? (
-                  <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Nothing to show yet. Answer practice questions or scenarios from a material and it can be shown here.</p>
+                  <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Nothing to show yet. Answer multiple-choice, multiple-response, matching or sequencing questions, or scenarios, from a material and it can be shown here. Written answers marked by the AI or by you stay private feedback and are not counted.</p>
                 ) : <PassportChoices items={eligible} />}
             </section>
 

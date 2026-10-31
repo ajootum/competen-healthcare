@@ -1,5 +1,3 @@
-import type { QuestionKind } from "./generation";
-
 // ── SELF-DIRECTED STUDY IN THE PASSPORT ── COMPETEN-IND-004 s11, owner continuation GO 2026-10-23 item 3 ──
 //
 // The person chooses, one achievement at a time, which of their Scholar study achievements appear in their
@@ -25,14 +23,17 @@ export const STUDY_ACHIEVEMENT_KINDS: readonly StudyAchievementKind[] = ["practi
 
 /**
  * Where each kind's one figure comes from. Two count distinct practice questions answered, by question kind.
+ * Practice questions are mcq plus the code-marked revision kinds (mrq, match, sequence): a CODE-MARKED answer
+ * counts, an AI-marked or self-graded one (short, structured) never does -- those stay formative and out of the
+ * figure (owner-delegated ruling 31 Oct 2026). mcq and case have always been code-marked.
  * revision_reviews (COMPETEN-SCHOLAR-01 S5, migration 391) counts spaced-revision reviews made on the
  * material, from individual_scholar_review -- a count, never the recall grade. All three only grow while
  * the material exists.
  */
-export const STUDY_ACHIEVEMENT: Record<StudyAchievementKind, { questionKind: QuestionKind | null; name: string; one: string; many: string; verb: string }> = {
-  practice_questions: { questionKind: "mcq", name: "Practice questions", one: "practice question", many: "practice questions", verb: "answered from own notes" },
-  practice_scenarios: { questionKind: "case", name: "Practice scenarios", one: "practice scenario", many: "practice scenarios", verb: "answered from own notes" },
-  revision_reviews: { questionKind: null, name: "Revision", one: "revision review", many: "revision reviews", verb: "of own notes" },
+export const STUDY_ACHIEVEMENT: Record<StudyAchievementKind, { questionKinds: readonly string[]; name: string; one: string; many: string; verb: string }> = {
+  practice_questions: { questionKinds: ["mcq", "mrq", "match", "sequence"], name: "Practice questions", one: "practice question", many: "practice questions", verb: "answered from own notes" },
+  practice_scenarios: { questionKinds: ["case"], name: "Practice scenarios", one: "practice scenario", many: "practice scenarios", verb: "answered from own notes" },
+  revision_reviews: { questionKinds: [], name: "Revision", one: "revision review", many: "revision reviews", verb: "of own notes" },
 };
 
 export const isStudyAchievementKind = (v: unknown): v is StudyAchievementKind =>
@@ -71,8 +72,17 @@ export type EligibleAchievement = {
 };
 
 export type ChoiceRow = { itemId?: string; materialId: string; achievement: StudyAchievementKind; label: string; includedAt: string };
-type QuestionRef = { id: string; materialId: string; kind: QuestionKind };
-type AttemptRef = { questionId: string; answeredAt: string };
+type QuestionRef = { id: string; materialId: string; kind: string };
+/** `marking` is the attempt's own (deterministic = marked by code). Absent reads as not code-marked for the revision kinds. */
+type AttemptRef = { questionId: string; answeredAt: string; marking?: string };
+
+/** The revision kinds counted under practice_questions, and only when the answer was marked by code. */
+export const CODE_MARKED_REVISION_KINDS: readonly string[] = ["mrq", "match", "sequence"];
+
+/** Pure: does this answer count toward an achievement? mcq and case always; mrq/match/sequence only when code-marked. */
+export function countsForAchievement(kind: string, marking: string | undefined): boolean {
+  return CODE_MARKED_REVISION_KINDS.includes(kind) ? marking === "deterministic" : true;
+}
 /** One revision review (migration 391): which material, and when. Never the grade. */
 export type ReviewRef = { materialId: string; reviewedAt: string };
 
@@ -86,8 +96,8 @@ function answeredBy(questions: readonly QuestionRef[], attempts: readonly Attemp
   for (const a of attempts) {
     const q = byId.get(a.questionId);
     if (!q) continue;
-    const kind = STUDY_ACHIEVEMENT_KINDS.find(k => STUDY_ACHIEVEMENT[k].questionKind === q.kind);
-    if (!kind) continue;
+    const kind = STUDY_ACHIEVEMENT_KINDS.find(k => STUDY_ACHIEVEMENT[k].questionKinds.includes(q.kind));
+    if (!kind || !countsForAchievement(q.kind, a.marking)) continue;
     const key = `${q.materialId}|${kind}`;
     const s = seen.get(key) ?? { ids: new Set<string>(), last: null };
     s.ids.add(q.id);

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadIndividualPassport } from "../passport";
+import { studyDetail } from "../scholar/passport-items";
 import { loadProfessionalRecord } from "./record";
 import { loadProfessionalLearning } from "./learning";
 import { loadProfessionalProfile } from "./profile-store";
@@ -138,7 +139,7 @@ export async function loadDocumentCatalogue(admin: any, userId: string, profileN
   if (passport.study.ok) for (const s of passport.study.data) if (s.itemId) push({
     key: `study:${s.itemId}`, kind: "study", sections: ["education"], title: s.label, subtitle: "Competen Scholar", from: null, to: null,
     date: s.lastStudied?.slice(0, 10) ?? null, trust: "formative", validity: "not_applicable", source: "Competen Scholar",
-    facts: [{ code: "answered", label: "Practice answered", value: String(s.answered) }],
+    facts: [{ code: "answered", label: "Study", value: studyDetail(s) }],
   });
 
   // Stage 6 evaluations: formative, never verification. Their notes and AI text never travel.
