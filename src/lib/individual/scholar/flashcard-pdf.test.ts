@@ -351,8 +351,9 @@ describe("no AI anywhere in an export", () => {
   it("the PDF assembly reaches no AI module, generation or Scholar AI runner, at any depth", () => {
     const files = [...closure(resolve(PDF))].map(f => f.replace(/\\/g, "/"));
     // QA-01 (c): the clinical educational content review rules (lib/ai/content-review.ts) and the risk-rule matcher they
-    // reuse (lib/ai/clinical-risk.ts) are pure rule code -- no model client -- and are the only lib/ai files allowed.
-    const PURE_AI = /\/lib\/ai\/(content-review|clinical-risk)\.ts$/;
+    // reuse (lib/ai/clinical-risk.ts, with its pure intent features lib/ai/request-intent.ts, SCHOLAR-RISK-01) are pure
+    // rule code -- no model client -- and are the only lib/ai files allowed.
+    const PURE_AI = /\/lib\/ai\/(content-review|clinical-risk|request-intent)\.ts$/;
     expect(files.filter(f => /\/lib\/ai\//.test(f) && !PURE_AI.test(f))).toEqual([]);
     expect(files.some(f => /\/scholar\/(generation|http|edu-ai)\.ts$/.test(f))).toBe(false);
     for (const f of files.filter(x => PURE_AI.test(x))) expect(valueImports(f).map(i => i.spec)).not.toContainEqual(expect.stringMatching(/client|generation|metered|runner/));

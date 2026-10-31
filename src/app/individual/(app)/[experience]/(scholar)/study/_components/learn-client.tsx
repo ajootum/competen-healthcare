@@ -149,6 +149,13 @@ export function LearnWorkspace(props: {
   /** The settings each step's lesson was last taught with (Lesson settings offers to teach it again with new ones). */
   const [taught, setTaught] = useState<Record<number, LessonSettings>>({});
   const seq = useRef(0);
+  // SCHOLAR-RISK-01 clarify-once: once the student says this study session is for study, every later request in it
+  // carries purpose "education", so the question is not asked again. The server honours it only for an ambiguous
+  // request: real-patient evidence is refused whatever the purpose. A new session, or "a patient I'm caring for", ends it.
+  const studyConfirmed = useRef<{ session: string | null; on: boolean }>({ session: null, on: false });
+  const sessionKey = session ? (session.id ?? session.title) : null;
+  const studyBody = useCallback((b: Record<string, unknown>) => (studyConfirmed.current.on && studyConfirmed.current.session === sessionKey ? { ...b, purpose: "education" } : b), [sessionKey]);
+  const confirmStudy = (on: boolean) => { studyConfirmed.current = { session: sessionKey, on }; };
   const started = useRef(false);
   const opened = useRef(false);
   /** A new scope in Manual: its first lesson is still opened once, as it always was. */
@@ -188,7 +195,7 @@ export function LearnWorkspace(props: {
     if (!session || !step) return null;
     setBusy(action); setError(""); setPending(null);
     const s: LessonSettings = { mode: (extra.mode as LearnMode | undefined) ?? mode, depth };
-    const r = await call(ACT_URL, bodyFor(step, action, { mode, depth }, extra));
+    const r = await call(ACT_URL, studyBody(bodyFor(step, action, { mode, depth }, extra)));
     setBusy("");
     const prompt = r.ok ? null : clarifyFrom(r.json);
     if (prompt) { setPending({ prompt, target, action, extra, asked }); return null; }
@@ -196,7 +203,7 @@ export function LearnWorkspace(props: {
     record(step.step, r.json, action, extra, target, asked);
     if (target === "lesson" && action === props.startAction) setTaught(t => ({ ...t, [step.step]: s }));
     return r.json as Reply;
-  }, [session, step, depth, mode, bodyFor, record, props.startAction]);
+  }, [session, step, depth, mode, bodyFor, record, props.startAction, studyBody]);
 
   // SCHOLAR-GUIDED-LEARNING-01: OPEN A LESSON. First open:true -- a saved lesson comes back at once with no AI; only
   // when nothing is saved (or its twin is being written) is the same request sent as a Teach, which the route dedupes.
@@ -209,7 +216,7 @@ export function LearnWorkspace(props: {
     if (!requests.current.begin(k)) return;
     setLoading(l => ({ ...l, [k]: { step: stepNo, mode: s.mode } }));
     setLessonNote(n => { const rest = { ...n }; delete rest[stepNo]; return rest; });
-    const body = bodyFor(st, action, s);
+    const body = studyBody(bodyFor(st, action, s));
     try {
       let r = await call(ACT_URL, { ...body, open: true });
       let phase = lessonPhase("open", r.ok, r.json);
@@ -229,20 +236,20 @@ export function LearnWorkspace(props: {
       requests.current.end(k);
       setLoading(l => { const rest = { ...l }; delete rest[k]; return rest; });
     }
-  }, [session, props.startAction, bodyFor, record, offReason]);
+  }, [session, props.startAction, bodyFor, record, offReason, studyBody]);
   // Owner D3: the step, handed to the shared personal AI (Teach Me). Shown apart under PERSONAL_AI_LABEL, never saved.
   const continueWithAssistant = useCallback(async (question: string, purpose?: "education") => {
     if (!session || !step) return;
     setBusy("assistant"); setPending(null);
-    const r = await call("/api/individual/scholar/learn/assistant", {
+    const r = await call("/api/individual/scholar/learn/assistant", studyBody({
       question, mode: "teach", step: step.step, ...(purpose ? { purpose } : {}),
       ...(session.id ? { sessionId: session.id } : { chunkIds: step.sections.map(x => x.chunkId) }),
-    });
+    }));
     setBusy("");
     const prompt = r.ok ? null : clarifyFrom(r.json);
     if (prompt) { setPending({ prompt, target: "assistant", question }); return; }
     setAssist(list => [{ id: ++seq.current, asked: question, ...(r.ok ? { answer: String(r.json.answer ?? "") } : { error: r.json.error ?? "Your assistant could not answer just now." }) }, ...list]);
-  }, [session, step]);
+  }, [session, step, studyBody]);
   // SCHOLAR-SQIE-02: a withheld answer offers evidence recovery beneath it, in the learner's own source mode. "Explain
   // using approved references" makes the SAME request again (same action, same question) with only the recovery's id,
   // mode and question; the server finds the evidence again and runs the same checks. Nothing the student typed is cleared.
@@ -355,6 +362,7 @@ export function LearnWorkspace(props: {
   async function answerEducation() {
     const p = pending;
     if (!p) return;
+    confirmStudy(true);
     if (p.target === "assistant") { await continueWithAssistant(p.question ?? "", "education"); return; }
     const r = await act(p.action ?? "", { ...p.extra, purpose: "education" }, p.target, p.asked);
     if (!r) return;
@@ -518,7 +526,7 @@ export function LearnWorkspace(props: {
             </div>
           )}
 
-          {pending?.target === "lesson" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-4" onEducation={() => void answerEducation()} />}
+          {pending?.target === "lesson" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-4" onEducation={() => void answerEducation()} onPatient={() => confirmStudy(false)} />}
           <div aria-live="polite" className="mt-4 space-y-4">
             {thread.length === 0 && !busy && !preparing && !lessonMsg && pending?.target !== "lesson" && (
               <p className="text-[13.5px] text-gray-600">{!props.consent ? "Learning needs AI help, which is off."
@@ -645,7 +653,7 @@ export function LearnWorkspace(props: {
               {props.consent && offReason("ask") && <p id="learn-ask-why" className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] leading-relaxed text-gray-700">{aiReasonCopy(offReason("ask")!, "scholar").text}</p>}
             </form>
           ) : <p className="mt-2 text-[13px] text-gray-600">Asking is switched off here.</p>}
-          {pending?.target === "ask" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-3" onEducation={() => void answerEducation()} />}
+          {pending?.target === "ask" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-3" onEducation={() => void answerEducation()} onPatient={() => confirmStudy(false)} />}
           <div aria-live="polite" className="mt-3 space-y-3">
             {askThread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} compact onRephrase={() => rephrase(c.asked ?? "")} recover={recoverFor(c)} />)}
           </div>
@@ -655,7 +663,7 @@ export function LearnWorkspace(props: {
                 {busy === "assistant" ? "Asking your assistant…" : "Continue with your personal assistant"}
               </button>
               <p className="mt-1 text-[12px] text-gray-600">Your general personal AI, given this step&apos;s sections. Its answers are not checked against your notes.</p>
-              {pending?.target === "assistant" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-3" onEducation={() => void answerEducation()} />}
+              {pending?.target === "assistant" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-3" onEducation={() => void answerEducation()} onPatient={() => confirmStudy(false)} />}
               <div aria-live="polite" className="mt-3 space-y-3">
                 {assist.map(a => (
                   <article key={a.id} className="rounded-xl border-2 border-indigo-200 bg-indigo-50/50 p-3">

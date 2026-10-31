@@ -11,7 +11,7 @@
 import { experienceHref, type ExperienceKey } from "./experiences";
 import type { AiStanding } from "@/lib/ai/allowance";
 import type { ConsentStatus } from "./scholar/consent-gate";
-import { SUPPORTIVE_REFUSAL } from "@/lib/ai/operating-mode";
+import { isSupportiveRefusal } from "@/lib/ai/operating-mode";
 import { SCHOLAR_EDU_AI } from "./scholar/config";
 
 export type AiUnavailableReason =
@@ -39,15 +39,15 @@ export function availabilityFromStanding(standing: AiStanding | null, activity: 
   if (!standing.readable) return { available: false, reason: "unreadable" };
   if (!a) return { available: false, reason: "activity_unsupported" };
   if (a.reason === "level_insufficient") return { available: false, reason: "level_insufficient" };
-  // The server words this as NOT_ELIGIBLE_REASON, or as SUPPORTIVE_REFUSAL in a mode that answers the educational part.
-  if (/approved for clinical content/i.test(a.reason ?? "") || a.reason === SUPPORTIVE_REFUSAL) return { available: false, reason: "not_eligible" };
+  // The server words this as NOT_ELIGIBLE_REASON, or as one of the supportive refusals (operating-mode.ts REFUSAL).
+  if (/approved for clinical content/i.test(a.reason ?? "") || isSupportiveRefusal(a.reason)) return { available: false, reason: "not_eligible" };
   if (/subscription/i.test(standing.message ?? "")) return { available: false, reason: "not_entitled" };
   return { available: false, reason: "allowance_exhausted" };
 }
 
 const CODE_TO_REASON: Record<string, AiUnavailableReason> = {
   policy_unpublished: "policy_unpublished", unknown_activity: "activity_unsupported", allowance_exhausted: "allowance_exhausted",
-  level_insufficient: "level_insufficient", not_eligible: "not_eligible", unreadable: "unreadable", not_entitled: "not_entitled",
+  level_insufficient: "level_insufficient", not_eligible: "not_eligible", clinical_restricted: "not_eligible", unreadable: "unreadable", not_entitled: "not_entitled",
   pending_reconciliation: "unreadable",
 };
 
@@ -98,13 +98,13 @@ export function studentAiText(text: string, experience: ExperienceKey = "scholar
 }
 
 /**
- * Pure: the words for a failed AI response, or null if it is not an AI refusal. An operating mode's supportive answer
- * (SUPPORTIVE_REFUSAL, about a real patient's care) is kept as that mode words it; every other refusal gets the shared copy.
+ * Pure: the words for a failed AI response, or null if it is not an AI refusal. A supportive refusal (operating-mode.ts
+ * REFUSAL, worded for its actual reason) is kept as the server words it; every other refusal gets the shared copy.
  */
 export function refusalCopy(body: any, experience: ExperienceKey): AiReasonCopy | null {
   const reason = reasonFromRefusal(body);
   if (!reason) return null;
-  if (reason === "not_eligible" && body?.error === SUPPORTIVE_REFUSAL) return { text: SUPPORTIVE_REFUSAL, next: null };
+  if (reason === "not_eligible" && isSupportiveRefusal(body?.error)) return { text: body.error, next: null };
   return aiReasonCopy(reason, experience);
 }
 
@@ -116,7 +116,7 @@ export function refusalCopy(body: any, experience: ExperienceKey): AiReasonCopy 
 export function paperAiCopy(source: { reason: AiUnavailableReason } | { body: any }, saved: boolean): AiReasonCopy | null {
   const c = "reason" in source ? aiReasonCopy(source.reason, "scholar") : refusalCopy(source.body, "scholar");
   const reason = "reason" in source ? source.reason : reasonFromRefusal(source.body);
-  if (c && reason === "not_eligible" && c.text !== SUPPORTIVE_REFUSAL) return { text: SCHOLAR_EDU_AI.unavailable.paper(saved), next: null };
+  if (c && reason === "not_eligible" && !isSupportiveRefusal(c.text)) return { text: SCHOLAR_EDU_AI.unavailable.paper(saved), next: null };
   return c;
 }
 

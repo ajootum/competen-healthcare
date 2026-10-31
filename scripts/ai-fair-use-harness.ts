@@ -284,7 +284,7 @@ function checkUnmeteredGate(src: Src, allSrc: Src): R {
   // C1 (SCHOLAR-READINESS-02, 28 Oct 2026): the request's subject is classified with the metered path's classifyRisk,
   // and that tier (never the activity floor alone) decides the gate.
   if (!/const risk = classifyRisk\(policy\.risk, await resolveRiskSubject\(admin, subject\), a\.riskFloor as RiskTier\);\n  const floor = risk\.tier;/.test(gate)
-    && !/const verdict = decideRisk\(policy\.risk, await resolveRiskSubject\(admin, subject\), a\.riskFloor as RiskTier, mode, subject\?\.purpose \?\? null\);\n  const risk = verdict\.risk;\n[^\n]*\n  const floor = risk\.tier;/.test(gate)) bad.push("unmeteredGate: the request's subject is not classified (C1)");
+    && !/const verdict = decideRisk\(policy\.risk, await resolveRiskSubject\(admin, subject\), a\.riskFloor as RiskTier, mode, subject\?\.purpose \?\? null\);\n  const risk = verdict\.risk;\n(?:[^\n]*\n){1,6}  const floor = risk\.tier;/.test(gate)) bad.push("unmeteredGate: the request's subject is not classified (C1)");
   if (!/if \(rows === null\) return \{ ok: false, error: "unreadable"/.test(gate)) bad.push("unmeteredGate: unreadable eligibility does not fail closed");
   if (/!standing\.metered && standing\.readable\) return \{ available: true/.test(allSrc.get(STANDING_FILE) ?? "")) bad.push("activityState: not metered still means available");
   return { ok: bad.length === 0, detail: bad.join("; ") };
@@ -298,11 +298,29 @@ function checkSupportiveRefusal(src: Src): R {
   const bad: string[] = [];
   const at = e.indexOf("export const notEligibleMessage");
   const helper = at < 0 ? "" : e.slice(at, e.indexOf(";\n", at));
-  if (!/risk\?\.tier === "high_risk_clinical" \|\| mode\.behaviour\.educationalBoundary \? SUPPORTIVE_REFUSAL : governance/.test(helper)) bad.push("notEligibleMessage: a high-risk refusal is not always supportive");
+  // SCHOLAR-RISK-01 (31 Oct 2026): the supportive words are the ones for the refusal's actual reason (refusalFor), and a
+  // request below high risk gets the availability reason in every mode (never words about a real patient).
+  if (!/risk\?\.tier === "high_risk_clinical" \? refusalFor\(risk\) : governance/.test(helper)) bad.push("notEligibleMessage: a high-risk refusal is not always the supportive words for its reason");
   const core = e.slice(e.indexOf("export async function gateCore"), e.indexOf("\n}\n", e.indexOf("export async function gateCore")));
   if (!/if \(!r\) return \{ ok: false, error: "not_eligible", standing: standing\(notEligibleMessage\(mode, risk, NOT_ELIGIBLE_REASON\)\)/.test(core)) bad.push("gateCore: the not-eligible refusal does not use notEligibleMessage");
   if (!/if \(m\.refused === "not_eligible"\) return \{ ok: false, error: "not_eligible", standing: \{ \.\.\.standing, message: notEligibleMessage\(mode, risk, NOT_ELIGIBLE\) \}/.test(e)) bad.push("runMeteredAi: the not-eligible refusal does not use notEligibleMessage");
-  if ((e.match(/educationalBoundary \? SUPPORTIVE_REFUSAL/g) ?? []).length !== 1) bad.push("a not-eligible message is worded outside notEligibleMessage");
+  if ((e.match(/\? refusalFor\(risk\) : governance/g) ?? []).length !== 1 || /SUPPORTIVE_REFUSAL/.test(e)) bad.push("a not-eligible message is worded outside notEligibleMessage");
+  return { ok: bad.length === 0, detail: bad.join("; ") };
+}
+
+// A20 (SCHOLAR-RISK-01, owner GO 31 Oct 2026): category 4 (real-patient clinical decision support) is refused BEFORE a
+// route is chosen on both paths, so no eligible model (case_steps has a high-risk one) can ever serve it, with the
+// words for its reason.
+function checkRestricted(src: Src): R {
+  const e = strip(src.get(F.engine) ?? "");
+  const bad: string[] = [];
+  const core = e.slice(e.indexOf("export async function gateCore"), e.indexOf("\n}\n", e.indexOf("export async function gateCore")));
+  const rc = core.indexOf('if (verdict.kind === "restricted") return { ok: false, error: "clinical_restricted"');
+  if (rc < 0 || rc > core.indexOf("pickRoute(")) bad.push("gateCore: a restricted request is not refused before routing");
+  if (!/message: refusalFor\(risk\)/.test(core)) bad.push("gateCore: the restricted refusal does not use refusalFor");
+  const run = e.slice(e.indexOf("export async function runMeteredAi"), e.indexOf("\n}\n", e.indexOf("export async function runMeteredAi")));
+  const rm = run.indexOf('if (verdict?.kind === "restricted")');
+  if (rm < 0 || rm > run.indexOf("await meter(")) bad.push("runMeteredAi: a restricted request is not refused before metering");
   return { ok: bad.length === 0, detail: bad.join("; ") };
 }
 
@@ -362,6 +380,7 @@ run("A15. the owner is decided on the server: student routes run no platform wor
 run("A16. standing reflects model eligibility: no evaluated model, not offered", checkStandingEligibility(RAW, withEligibility));
 run("A18. metering OFF: clinical-risk activities still need an eligible model (gate, standing, Scholar availability)", checkUnmeteredGate(RAW, ALL));
 run("A19. (SQIE D-5) a high-risk refusal is always the supportive words, in every mode, on both refusal paths", checkSupportiveRefusal(RAW));
+run("A20. (SCHOLAR-RISK-01) real-patient clinical decision support is refused before routing, on both paths", checkRestricted(RAW));
 run("A17. prepared routing: clinical work on heavy (Opus), never reasoning, and the high-risk three stay OFF on tutoring eligibility", checkHeavyRouting(PROVISIONAL_RISK, PROVISIONAL_ACTIVITIES.scholar));
 console.log("");
 if (HAS_MIG) {
@@ -415,7 +434,9 @@ red("A18 (C1) the unmetered gate called without the subject", checkUnmeteredGate
 red("A18 (C1) the gate deciding on the activity floor only", checkUnmeteredGate(plant("engine", "  const floor = risk.tier;", "  const floor = a.riskFloor as RiskTier;"), ALL));
 red("A18 an unmetered standing that offers everything", checkUnmeteredGate(plant("engine", "return withEligibility(unmetered,", "return (unmetered) || withEligibility(unmetered,"), ALL));
 red("A18 Scholar treating not metered as available", checkUnmeteredGate(RAW, new Map([...ALL, [STANDING_FILE, (ALL.get(STANDING_FILE) ?? "") + "\nif (!standing.metered && standing.readable) return { available: true, message: null, insufficient: false };\n"]])));
-red("A19 a high-risk refusal worded as availability outside an educational mode", checkSupportiveRefusal(plant("engine", `risk?.tier === "high_risk_clinical" || mode.behaviour.educationalBoundary ? SUPPORTIVE_REFUSAL : governance`, `mode.behaviour.educationalBoundary ? SUPPORTIVE_REFUSAL : governance`)));
+red("A19 a high-risk refusal worded as availability", checkSupportiveRefusal(plant("engine", `risk?.tier === "high_risk_clinical" ? refusalFor(risk) : governance`, `governance`)));
+red("A20 a restricted request reaching routing", checkRestricted(plant("engine", `  if (verdict.kind === "restricted") return { ok: false, error: "clinical_restricted"`, `  if (verdict.kind === "restricted_never") return { ok: false, error: "clinical_restricted"`)));
+red("A20 a restricted request metered", checkRestricted(plant("engine", `  if (verdict?.kind === "restricted") {`, `  if (verdict?.kind === "restricted_never") {`)));
 red("A19 gateCore wording its own refusal again", checkSupportiveRefusal(plant("engine", `standing(notEligibleMessage(mode, risk, NOT_ELIGIBLE_REASON))`, `standing(mode.behaviour.educationalBoundary ? SUPPORTIVE_REFUSAL : NOT_ELIGIBLE_REASON)`)));
 red("A17 clinical subjects left on reasoning (Sonnet)", checkHeavyRouting({ ...PROVISIONAL_RISK, minTier: { ...PROVISIONAL_RISK.minTier, clinical_educational: "reasoning" } }, PROVISIONAL_ACTIVITIES.scholar));
 red("A17 case steps with no clinical floor (offered on tutoring eligibility)", checkHeavyRouting(PROVISIONAL_RISK, { ...PROVISIONAL_ACTIVITIES.scholar, case_steps: { ...PROVISIONAL_ACTIVITIES.scholar.case_steps, riskFloor: "standard_educational" } }));

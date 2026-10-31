@@ -95,8 +95,23 @@ type RuleScope = "subject" | "request";
 const SCOPES: { code: RuleScope; label: string }[] = [
   { code: "subject", label: "Matches the request and the study material" }, { code: "request", label: "Matches the learner's request only" },
 ];
-type RuleRow = { id: string; label: string; tier: RiskTierCode; scope?: RuleScope; all: string[][]; competencyRisk: string[]; frameworks: string[] };
-type RiskForm = { minTier: Record<RiskTierCode, string>; rules: RuleRow[] };
+// SCHOLAR-RISK-01: what a refusal by a rule tells the learner (clinical-risk.ts RiskRule.refusal). Empty: by its id.
+type RefusalCode = "" | "real_patient" | "administration" | "emergency" | "personal_safety" | "identifiable" | "clinical_high";
+const REFUSALS: { code: RefusalCode; label: string }[] = [
+  { code: "", label: "By rule id (default)" }, { code: "real_patient", label: "A real patient" }, { code: "administration", label: "Giving a medicine" },
+  { code: "emergency", label: "An emergency now" }, { code: "personal_safety", label: "Personal safety" }, { code: "identifiable", label: "Identifiable details" },
+  { code: "clinical_high", label: "High-risk content" },
+];
+type RuleRow = { id: string; label: string; tier: RiskTierCode; scope?: RuleScope; all: string[][]; competencyRisk: string[]; frameworks: string[]; refusal?: RefusalCode };
+// SCHOLAR-RISK-01: how the policy treats what its rules alone cannot settle (clinical-risk.ts IntentPolicy).
+type UnknownCode = "high_risk" | "clarify" | "educational_if_study_intent";
+const UNKNOWN: { code: UnknownCode; label: string }[] = [
+  { code: "high_risk", label: "Treat as high-risk clinical (default)" }, { code: "clarify", label: "Ask the learner once" },
+  { code: "educational_if_study_intent", label: "Clinical educational when asked as a study question, otherwise ask" },
+];
+type IntentForm = { unknownHandling: UnknownCode; clarifyAmbiguous: boolean; ambiguousRules: string[]; educationalSafeguards: boolean };
+const NO_INTENT_FORM: IntentForm = { unknownHandling: "high_risk", clarifyAmbiguous: false, ambiguousRules: [], educationalSafeguards: false };
+type RiskForm = { minTier: Record<RiskTierCode, string>; rules: RuleRow[]; intent?: IntentForm };
 type PolicyForm = {
   includedCau: number; reserveCau: number; windowMinutes: number | null; windowCapCau: number | null;
   levels: { optimisedBelowPct: number; essentialBelowPct: number }; reset: { rule: string; cycleDays: number };
@@ -278,6 +293,12 @@ function RiskEditor({ risk, onChange }: { risk: RiskForm; onChange: (r: RiskForm
             <label className="mt-1 block text-[12.5px] text-gray-700">Matches when (one group of comma-separated terms per line; every line must match)
               <Draft multiline value={r.all.map(g => g.join(", ")).join("\n")} onCommit={v => setRule(i, { ...r, all: v.split("\n").map(splitList).filter(g => g.length) })} className="mt-0.5 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-[13px]" />
             </label>
+            {r.tier === "high_risk_clinical" && (
+              <label className="mt-1 block text-[12.5px] text-gray-700">A refusal by this rule says
+                <select aria-label={`${r.id} refusal words`} value={r.refusal ?? ""} onChange={e => setRule(i, { ...r, refusal: (e.target.value || undefined) as RefusalCode | undefined })} className={`${input} ml-1`}>
+                  {REFUSALS.map(x => <option key={x.code} value={x.code}>{x.label}</option>)}</select>
+              </label>
+            )}
             <div className="mt-1 flex flex-wrap gap-2">
               <label className="text-[12.5px] text-gray-700">or a competency of risk<Draft value={r.competencyRisk.join(", ")} onCommit={v => setRule(i, { ...r, competencyRisk: splitList(v) })} className={`${input} ml-1 w-32`} /></label>
               <label className="text-[12.5px] text-gray-700">or a framework<Draft value={r.frameworks.join(", ")} onCommit={v => setRule(i, { ...r, frameworks: splitList(v) })} className={`${input} ml-1 w-48`} /></label>
@@ -293,6 +314,35 @@ function RiskEditor({ risk, onChange }: { risk: RiskForm; onChange: (r: RiskForm
           setNewId("");
         }}>Add rule</button>
       </div>
+      <IntentEditor intent={risk.intent ?? NO_INTENT_FORM} highRules={risk.rules.filter(r => r.tier === "high_risk_clinical").map(r => r.id)} onChange={intent => onChange({ ...risk, intent })} />
+    </fieldset>
+  );
+}
+
+/**
+ * SCHOLAR-RISK-01 (owner GO 31 Oct 2026), no code: what the rules alone cannot settle. Real-patient evidence in the
+ * learner's own words is always refused when any of these is on; nothing here can lower it. An ambiguous rule may never
+ * be a real-patient, emergency, identifiable or personal-safety rule (the engine drops it).
+ */
+function IntentEditor({ intent, highRules, onChange }: { intent: IntentForm; highRules: string[]; onChange: (i: IntentForm) => void }) {
+  return (
+    <fieldset className="space-y-2 rounded-lg border border-gray-100 p-2">
+      <legend className="px-1 text-[12.5px] font-semibold text-gray-800">Education-first handling</legend>
+      <label className="block text-[12.5px] text-gray-700">A request no rule recognises
+        <select aria-label="Unrecognised requests" value={intent.unknownHandling} onChange={e => onChange({ ...intent, unknownHandling: e.target.value as UnknownCode })} className={`${input} ml-1`}>
+          {UNKNOWN.map(x => <option key={x.code} value={x.code}>{x.label}</option>)}</select>
+      </label>
+      <label className="flex items-center gap-2 text-[12.5px] text-gray-700">
+        <input type="checkbox" checked={intent.clarifyAmbiguous} onChange={e => onChange({ ...intent, clarifyAmbiguous: e.target.checked })} />
+        Ask the learner once whether an ambiguous clinical request is for study (in every operating mode)
+      </label>
+      <label className="block text-[12.5px] text-gray-700">High-risk rules that only suggest a real person (answered inside study framing, otherwise asked)
+        <Draft value={intent.ambiguousRules.join(", ")} onCommit={v => onChange({ ...intent, ambiguousRules: splitList(v).filter(id => highRules.includes(id)) })} className={`${input} ml-1 w-72 font-mono`} />
+      </label>
+      <label className="flex items-center gap-2 text-[12.5px] text-gray-700">
+        <input type="checkbox" checked={intent.educationalSafeguards} onChange={e => onChange({ ...intent, educationalSafeguards: e.target.checked })} />
+        Add the educational boundary to every clinical answer
+      </label>
     </fieldset>
   );
 }

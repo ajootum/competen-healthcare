@@ -5,7 +5,7 @@ import { activationProblems, allowedHosts, checkEndpoint, credentialEnvName, PRO
 import { generate } from "./client";
 import { AI_PROVIDERS } from "./config";
 import { publishScope, setOverride, type WceActor, type WceResult } from "@/lib/config/workspace-config-write";
-import { RISK_TIERS } from "./clinical-risk";
+import { RISK_TIERS, storedIntent } from "./clinical-risk";
 import { assistantPath, resolveAssistantProfile, validateAssistantProfile, type AssistantProfile } from "./personal-assistant";
 import { BUDGET_CODE, ROUTING_PATH, budgetPath, budgetPeriod, resolveBudgetPolicy, resolveRouting, type BudgetPolicy, type Workflow } from "./consumption";
 import { ACTIVITY_CODE, AI_PRODUCTS, FAIR_USE_SCOPE, fairUsePath, resolvePolicy, type AiProduct, type ProductAiPolicy } from "./fair-use-policy";
@@ -177,7 +177,8 @@ export function settingsFor(product: AiProduct, input: any): Record<string, unkn
       label: a.label, class: a.class, tier: a.tier, minTier: a.minTier, maxOutputTokens: a.maxOutputTokens, capPerPeriod: a.capPerPeriod,
       riskFloor: a.riskFloor, reserveEligible: a.reserveEligible,
     }])),
-    risk: { minTier: p.risk.minTier, rules: p.risk.rules },
+    // SCHOLAR-RISK-01: the intent settings are kept (stored flat), so saving a draft on the HQ page never drops them.
+    risk: { minTier: p.risk.minTier, rules: p.risk.rules, ...storedIntent(p.risk.intent) },
   };
 }
 

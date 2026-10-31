@@ -12,8 +12,10 @@ import type { ClarifyPrompt } from "@/lib/individual/ai-availability";
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 
-export default function ClarifyPurpose({ clarify, busy = false, onEducation, accent, className = "" }: {
+export default function ClarifyPurpose({ clarify, busy = false, onEducation, onPatient, accent, className = "" }: {
   clarify: ClarifyPrompt; busy?: boolean; onEducation: () => void; accent: string; className?: string;
+  /** SCHOLAR-RISK-01: the learner said it is about a patient they are caring for (the caller stops treating the conversation as study). */
+  onPatient?: () => void;
 }) {
   const [patient, setPatient] = useState(false);
   return (
@@ -24,7 +26,7 @@ export default function ClarifyPurpose({ clarify, busy = false, onEducation, acc
           className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:w-full ${focusRing}`}>
           {busy ? "Working…" : clarify.education}
         </button>
-        <button type="button" disabled={busy} onClick={() => setPatient(true)} aria-expanded={patient}
+        <button type="button" disabled={busy} onClick={() => { setPatient(true); onPatient?.(); }} aria-expanded={patient}
           className={`inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:w-full ${focusRing}`}>
           {clarify.patient}
         </button>
