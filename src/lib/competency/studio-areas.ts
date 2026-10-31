@@ -2,6 +2,8 @@
 // Client-safe and profession-agnostic. The server decides (framework-areas.ts, layout-order.ts); these helpers only
 // compute what the screen shows and the optimistic list a move leads to. Nothing here reads or writes data.
 
+import { revisionTags, type RevMark } from "./revision-ui";
+
 export type StudioArea = { id: string; name: string };
 export type AreaGroup<D> = { area: StudioArea | null; domains: D[] };
 
@@ -63,14 +65,15 @@ export const announceAreaMove = (domain: string, area: string | null) => (area ?
 export const announceCompetencyMove = (competency: string, domain: string) => `Moved ${competency} to the domain ${domain}.`;
 
 // ── the framework map ──
-export type MapSource = { id: string; name: string; areaId?: string | null; competencies: { id: string; code: string | null; name: string; status: string; criteria: { active?: boolean; [k: string]: unknown }[] }[] };
-export type MapChip = { id: string; code: string | null; name: string; criteria: number; status: string };
+export type MapSource = { id: string; name: string; areaId?: string | null; competencies: { id: string; code: string | null; name: string; status: string; criteria: { active?: boolean; [k: string]: unknown }[]; rev?: RevMark }[] };
+/** `tags` (S6): what an open revision does to the competency ("Changed", "New", "2 retired"); absent when it does nothing. */
+export type MapChip = { id: string; code: string | null; name: string; criteria: number; status: string; tags?: string[] };
 export type MapDomain = { id: string; name: string; chips: MapChip[] };
 export type MapColumn = { key: string; title: string; unassigned: boolean; domains: MapDomain[] };
 
 /** Pure: the map's columns: one per Area (the Area's name; "Unassigned" for domains with none), each holding domain cards of competency chips. No Areas: one column "Domains". */
 export function mapModel(domains: readonly MapSource[], areas?: readonly StudioArea[] | null): MapColumn[] {
-  const toDomain = (d: MapSource): MapDomain => ({ id: d.id, name: d.name, chips: d.competencies.map(c => ({ id: c.id, code: c.code, name: c.name, criteria: c.criteria.filter(k => k.active !== false).length, status: c.status })) });
+  const toDomain = (d: MapSource): MapDomain => ({ id: d.id, name: d.name, chips: d.competencies.map(c => { const tags = revisionTags(c.rev); return { id: c.id, code: c.code, name: c.name, criteria: c.criteria.filter(k => k.active !== false).length, status: c.status, ...(tags.length ? { tags } : {}) }; }) });
   const groups = groupDomains(domains, areas);
   if (!areas?.length) return [{ key: "all", title: "Domains", unassigned: false, domains: groups[0].domains.map(toDomain) }];
   return groups.map(g => ({ key: g.area?.id ?? "none", title: g.area?.name ?? "Unassigned", unassigned: !g.area, domains: g.domains.map(toDomain) }));
