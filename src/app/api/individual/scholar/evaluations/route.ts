@@ -5,6 +5,7 @@ import { getEvaluation, getRevisionSession, insertEvaluation, isUuid, listEvalua
 import { audit } from "@/lib/individual/scholar/http";
 import { parseScope } from "@/lib/individual/scholar/learn";
 import { configVersion, evaluateScope, parseEvaluationScope } from "@/lib/individual/scholar/evaluation-data";
+import { linkStudy } from "@/lib/individual/scholar/study-context";
 
 // Request-time only: it reads the release gate and the evidence, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -66,6 +67,9 @@ export async function POST(req: Request) {
   });
   if (!made.ok) return NextResponse.json({ error: made.notProvisioned ? "Evaluations are not kept on this environment yet." : "Your evaluation could not be saved just now." }, { status: made.notProvisioned ? 409 : 500 });
   await audit(ctx, "individual_scholar_evaluation_made", "individual_scholar_evaluation", made.id, { method, scope: r.scope.kind, confidence: e.confidence.level, supersedes: supersedesId });
+  // SCHOLAR-SESSION-AI-02: made inside a study session, the learner's own evaluation is linked to it -- a link row only,
+  // never a change to the evaluation, its evidence, verification or the Passport (owner D5). Never fails the evaluation.
+  await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "evaluation", made.id, policy);
   return NextResponse.json({ id: made.id });
 }
 

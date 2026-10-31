@@ -4,6 +4,7 @@ import { createFlashcardDeck, isUuid, ownedQuestionIds } from "@/lib/individual/
 import { flashcardGate } from "@/lib/individual/scholar/flashcard-service";
 import { parseDeckFields } from "@/lib/individual/scholar/flashcards";
 import { audit } from "@/lib/individual/scholar/http";
+import { linkStudy } from "@/lib/individual/scholar/study-context";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -33,5 +34,7 @@ export async function POST(req: Request) {
   const made = await createFlashcardDeck(ctx.admin, ctx.userId, { title: fields.title!, organiseBy: fields.organiseBy ?? "personal", organiseRef: fields.organiseRef ?? null, cardIds });
   if (!made.ok) return NextResponse.json({ error: made.notProvisioned ? "Decks are not available here yet." : "The deck could not be made just now." }, { status: made.notProvisioned ? 409 : 500 });
   await audit(ctx, "individual_scholar_flashcard_deck_made", "individual_scholar_flashcard_deck", made.id, { organise: fields.organiseBy ?? "personal", cards: cardIds.length });
+  // SCHOLAR-SESSION-AI-02: made inside a study session, the deck is linked to it (never failing the deck).
+  await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "flashcard_deck", made.id, gate.policy);
   return NextResponse.json({ id: made.id });
 }

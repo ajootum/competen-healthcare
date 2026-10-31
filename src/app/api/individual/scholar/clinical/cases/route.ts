@@ -10,6 +10,7 @@ import { caseHistory, getPassage, insertPrivateCase, listMaterials, listPrivateC
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { parseScope, resolveScope, scopeText, type LearningScope } from "@/lib/individual/scholar/learn";
+import { linkStudy } from "@/lib/individual/scholar/study-context";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk, routingVersion } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runCaseBlueprint } from "@/lib/individual/scholar/generation";
@@ -157,6 +158,8 @@ export async function POST(req: Request) {
   if (!made.ok) return NextResponse.json({ error: made.notProvisioned ? "Clinical reasoning is not available on this environment yet." : "The case could not be saved just now." }, { status: made.notProvisioned ? 409 : 500 });
   const play = await startPrivatePlay(ctx.admin, ctx.userId, made.id, mode);
   if ("error" in play) return NextResponse.json({ error: play.error }, { status: play.status });
+  // SCHOLAR-SESSION-AI-02: started inside a study session, the case play is linked to it (never failing the case).
+  await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "case_session", play.sessionId, policy);
   return NextResponse.json({ caseId: made.id, play });
 }
 

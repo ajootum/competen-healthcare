@@ -11,6 +11,7 @@ import { generationContextLoader } from "@/lib/individual/scholar/question-conte
 import { adaptiveLibraryCopies, chooseNext, recordServedItem, resolveAdaptiveSections } from "@/lib/individual/scholar/adaptive-service";
 import { blueprintLimits, blueprintOf, blueprintScope, parseBlueprintRequest, startingDifficulty, type AdaptiveBlueprint } from "@/lib/individual/scholar/adaptive";
 import { ADAPTIVE_REPORT_LABEL, ADAPTIVE_RULE } from "@/lib/individual/scholar/config";
+import { linkStudy } from "@/lib/individual/scholar/study-context";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -69,6 +70,8 @@ export async function POST(req: Request) {
   // D4: the first item's source, recorded now that it is the session's item 1 (written before the session existed, so a
   // count from the session's start called it stored).
   await recordServedItem(ctx.admin, ctx.userId, set.id, first.blueprint, 1, first.pick, first.generated);
+  // SCHOLAR-SESSION-AI-02: started inside a study session, the exam is linked to it (never failing the exam).
+  await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "revision_session", made.id, policy);
   await audit(ctx, "individual_scholar_revision_started", "individual_scholar_revision_session", made.id, {
     adaptive: true, mode: made.mode, fallback: made.mode !== "adaptive", scope: a.scope.kind, sections: resolved.sections.length, competencies: resolved.competencyIds.length,
     formats: a.formats, length: a.length, start: start.start, start_from: start.from, feedback: a.feedback, time_limit: a.timeLimitMinutes, library: libraryIds.length,
