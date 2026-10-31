@@ -49,8 +49,9 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
   }
   const editable = f.pubStatus === "draft" || f.pubStatus === "published";
   const fwOpts = v.frameworks.map(x => ({ id: x.id, name: x.name, code: x.code }));
+  const areasOn = v.areasReady === true && !!f.areas;   // 760 is on this environment
   const domains0: StudioDomain[] = f.domains.map(d => ({
-    id: d.id, name: d.name,
+    id: d.id, name: d.name, ...(areasOn ? { areaId: d.areaId ?? null } : {}),
     cpus: d.practices.flatMap(p => p.cpus.map(u => ({ id: u.id, label: `${u.code ?? ""} ${u.name} (${p.name})` }))),
     competencies: d.competencies.map(c => ({
       id: c.id, code: c.code, name: c.name, description: c.description, learningOutcomes: c.learningOutcomes, expectedLevelId: c.expectedLevelId,
@@ -61,16 +62,19 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
   // FRAMEWORK-DESIGN-STUDIO-01: a pending layout draft is what the editor sees and moves from (learners keep the published order).
   const sections = sectionOrder({ componentOrder: f.componentOrder ?? null, registry: Object.keys(v.components) }, f.layoutDraft ?? null);
   const draftApplies = !!f.layoutDraft && f.domains.every(d => d.competencies.every(c => c.criteria.every(k => k.id)));
+  // 760: the Areas as the editor sees them (a pending draft applied: Area order, names, and each domain's Area).
+  let areas: { id: string; name: string }[] = (f.areas ?? []).map(a => ({ id: a.id, name: a.name }));
   const domains: StudioDomain[] = (() => {
     if (!draftApplies) return domains0;
     // sortOrder = the current (already stable) position, so applyLayout keeps the live order wherever the draft is silent.
-    const tree: LayoutTree = { componentOrder: f.componentOrder ?? null, registry: Object.keys(v.components), domains: domains0.map((d, i) => ({ id: d.id, name: d.name, sortOrder: i, competencies: d.competencies.map((c, j) => ({ id: c.id, name: c.name, sortOrder: j, criteria: c.criteria.map((k, m) => ({ id: k.id!, name: k.text, sortOrder: m, component: k.component })) })) })) };
+    const tree: LayoutTree = { componentOrder: f.componentOrder ?? null, registry: Object.keys(v.components), ...(areasOn ? { areas: (f.areas ?? []).map((a, i) => ({ id: a.id, name: a.name, sortOrder: i })) } : {}), domains: domains0.map((d, i) => ({ id: d.id, name: d.name, sortOrder: i, ...(areasOn ? { areaId: d.areaId ?? null } : {}), competencies: d.competencies.map((c, j) => ({ id: c.id, name: c.name, sortOrder: j, criteria: c.criteria.map((k, m) => ({ id: k.id!, name: k.text, sortOrder: m, component: k.component })) })) })) };
     const a = applyLayout(tree, f.layoutDraft);
+    if (areasOn && a.areas) areas = a.areas.map(x => ({ id: x.id, name: x.name }));
     const dById = new Map(domains0.map(d => [d.id, d]));
     // 760: a draft may move a competency to another domain, so competencies are found framework-wide.
     const cById = new Map(domains0.flatMap(d => d.competencies.map(c => [c.id, c] as const)));
     return a.domains.map(ad => { const d = dById.get(ad.id)!;
-      return { ...d, competencies: ad.competencies.map(ac => { const c = cById.get(ac.id)!; const kById = new Map(c.criteria.map(k => [k.id!, k])); return { ...c, criteria: ac.criteria.map(ak => kById.get(ak.id)!) }; }) }; });
+      return { ...d, ...(areasOn ? { areaId: ad.areaId ?? null } : {}), competencies: ad.competencies.map(ac => { const c = cById.get(ac.id)!; const kById = new Map(c.criteria.map(k => [k.id!, k])); return { ...c, criteria: ac.criteria.map(ak => kById.get(ak.id)!) }; }) }; });
   })();
   const comps = domains.flatMap(d => d.competencies);
   const [draftBy] = f.layoutDraft && f.layoutDraftBy
@@ -106,7 +110,7 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
       </div>
 
       {tab === "competencies" ? (
-        <StudioWorkspace frameworkId={f.id} domains={domains} levels={v.levels} components={v.components} editable={editable} initialId={sp.c ?? null} canReorder={editable && v.layoutReady === true} sectionCodes={sections} draftMode={f.pubStatus === "published" || !!f.layoutDraft} />
+        <StudioWorkspace frameworkId={f.id} domains={domains} levels={v.levels} components={v.components} editable={editable} initialId={sp.c ?? null} canReorder={editable && v.layoutReady === true} sectionCodes={sections} draftMode={f.pubStatus === "published" || !!f.layoutDraft} areas={areasOn ? areas : undefined} areasReady={areasOn} />
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
