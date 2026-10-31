@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // SQIE HQ: the aggregate reads behind src/lib/knowledge/question-performance.ts. They sit here, on the HQ plane, because
 // neither the CKRI library (CKRI harness K1-7: names no raw Scholar table) nor the learner's own store (Scholar harness
 // A1: every statement keyed on the caller's user_id) is the place for a read across learners. Only ids, version,
