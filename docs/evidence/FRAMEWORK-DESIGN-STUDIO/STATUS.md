@@ -65,7 +65,7 @@
 |---|---|---|
 | A | 750 (`frameworks.layout_draft` jsonb, `frameworks.component_order` text[]) and 751 (stable outcome ids, evidence `outcome_ids`, backfill, guards, F4 change to the 640 review SoD guard), each staged twice with PRECHECK/VERIFY/ROLLBACK and build records | **done 31 Oct** (staging only, see Log) |
 | B | Server: reorder actions, classification, layout draft, apply on publication as a revision, snapshot ids, tie-break reads, learner per-domain order, F4 audit classification, evidence readers using `outcome_ids` | **done 31 Oct** (code only, see Log) |
-| C | UI: drag and drop with Move up/down on every row, live-region announcements, draft-layout banner and preview in the pack, submit layout, CPR-MOB-001 | pending |
+| C | UI: drag and drop with Move up/down on every row, live-region announcements, draft-layout banner and preview in the pack, submit layout, CPR-MOB-001 | **done 31 Oct** (code only, see Log; browser check is slice D) |
 | D | Tests and harnesses (plant-fail), browser at 375/768/1440, PR | pending |
 
 ## Commands
@@ -76,6 +76,20 @@
 - Harnesses: `npx tsx scripts/<name>.ts`. Relevant: `migration-house-rules`, `plane-boundary`, `hq-nav-registry`, and the competency/verification harnesses (find them under `scripts/`).
 
 ## Log
+
+### 31 Oct 2026: slice C done (Studio UI, code only, not pushed)
+
+**Files.** `StudioWorkspace.tsx` (reorder), new `LayoutDraftBanner.tsx`, `authoring/[frameworkId]/page.tsx`, `_studio/ReviewPackView.tsx`, pure helpers `src/lib/competency/reorder-ui.ts` (+ test, 5/5).
+
+**Behaviour.**
+- Reorder in the explorer: domains, a domain's competencies, a competency's criteria (inside the open section tab) and the framework's sections (collapsible "Section order"). Native drag plus an up and a down button on every row, aria-labelled "Move up: <name>" / "Move down: <name>"; a drop is accepted only inside the list the drag began in (no cross-parent move). Polite live region says "Moved X to position n of m."; focus stays on the moved row's button.
+- Each move posts `reorder_layout` with the full new order of that parent (criteria: that section's ids and `component`). Optimistic, rolled back on any error, the server message (409 included) shown in an alert. One move at a time.
+- Offered only when the framework is draft or published AND `layoutReady` (750/751 present); not offered while the search filter is on (a filtered list has no whole order). In_review/approved/archived: no controls.
+- Published (or a pending draft exists): the editor sees the draft layout applied (`applyLayout`), hint says learners keep the published order. Banner "Draft layout — learners still see the published order" with when/by (profile name), Preview draft layout (`?view=pack&layout=draft`), Discard draft layout (`discard_layout`, confirm), and the note that an independent publisher decides via Publication; submit stays in Overview. Never-published draft: no banner, writes are live.
+- Pack: `?layout=draft` passes `{layout:"draft"}`; ReviewPackView shows "Preview: draft layout, not yet published" inside the printed article. The Word download is still the published order.
+- CPR-MOB-001: pointer-coarse touch sizes on all buttons, md breakpoint untouched; buttons are the touch path where drag is awkward.
+
+**Checks.** eslint clean on changed files; tsc clean for these files. tsc reports 2 errors in `framework-layout.test.ts` (slice B file, TS7023/7024 implicit any on `nest`), not touched here. Not browser-checked (slice D). hq-nav not touched.
 
 ### 31 Oct 2026: slice B done (server code, commits f0b7e126..2a9be4cd, not pushed)
 

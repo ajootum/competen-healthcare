@@ -29,6 +29,7 @@ export function ReviewPackView({ pack, back, wordHref }: { pack: Pack; back: { h
       </div>
       <article id="review-pack" className="rounded-2xl border border-gray-200 bg-white p-6 print:border-0">
         <header className="border-b border-gray-200 pb-3">
+          {pack.layout?.shown === "draft" && <p role="status" className="mb-2 rounded-lg border-2 border-amber-500 bg-amber-100 px-3 py-2 text-[13.5px] font-bold text-amber-950 print:border-amber-700">Preview: draft layout, not yet published</p>}
           <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-teal-800">Competen Holdings</p>
           <h1 className="text-[24px] font-bold text-gray-900">{pack.title}</h1>
           <p className="text-[13px] text-gray-600">{pack.scope}</p>
