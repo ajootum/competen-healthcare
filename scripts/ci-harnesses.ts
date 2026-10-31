@@ -326,6 +326,13 @@ const STAGING_ONLY: Exclusion[] = [
       + "fixture identities, sets the Individual policy scholar_study_sessions ON for the run and restores the prior value "
       + "(proved in Z), and keeps one browser fixture with an active connected session for the coordinator. Refuses any other project.",
   },
+  {
+    file: "framework-studio-acceptance-harness.ts",
+    reason:
+      "FRAMEWORK-DESIGN-STUDIO-02 staging acceptance over HTTP (A1-A7). Needs a RUNNING dev server pointed at the staging project "
+      + "(BASE_URL=http://localhost:3100) serving the Studio branch, staging migrations 750-771, and the staging service-role key. "
+      + "It creates fixture identities (author, clinical reviewer, publisher) and frameworks, kept for the browser check. Refuses any other project.",
+  },
 ];
 
 // ── Run ──────────────────────────────────────────────────────────────────────────────────────────

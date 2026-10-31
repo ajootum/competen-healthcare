@@ -1,0 +1,57 @@
+# FRAMEWORK-DESIGN-STUDIO-02: staging acceptance, 31 Oct 2026
+
+Harness: `scripts/framework-studio-acceptance-harness.ts` (run MVWN6Y3E), over HTTP against the dev server (http://localhost:3100) pointed at STAGING, serving `ec3988bb` of `hq/framework-studio-02a`.
+Staging migrations in force: 750, 751, 752, 760, 761, 770, 771. Production has none of 760-771.
+Real database, real routes. Roles are real HQ appointments: Competency Author, Clinical Content Reviewer (framework scope), Quality Council Member (independent publisher). One pass each.
+
+Result: **36/36 passed.**
+
+| Check | Result | What was asserted | Evidence |
+|---|---|---|---|
+| A1.1 | PASS | create_criterion: 201 and the competency hash changes | status 201; {"ok":true,"id":"bbc9ed13-f734-4ba7-91a0-c38798dd96a7"} |
+| A1.2 | PASS | update_criterion text: ok and the hash changes | status 200; {"ok":true,"unchanged":false} |
+| A1.3 | PASS | update_criterion source reference only: ok and the hash does NOT change (outside the fingerprint) | status 200; {"ok":true,"unchanged":false} |
+| A1.4 | PASS | retire_criterion: ok, is_active false (never deleted), hash changes (761) | status 200; {"ok":true,"unchanged":false}; is_active false |
+| A1.5 | PASS | restore_criterion: ok and the hash returns to its earlier value | status 200; {"ok":true,"unchanged":false} |
+| A1.6 | PASS | move_criterion within its section (reorder): organisational, hash UNCHANGED, order changed | status 200; {"ok":true,"kind":"reorder","substantive":false,"mode":"direct","unchanged":false}; hash same true; order changed true |
+| A1.7 | PASS | move_criterion to another section: substantive, hash changes | status 200; {"ok":true,"kind":"section","substantive":true}; section knowledge |
+| A1.8 | PASS | update_competency description: ok and the hash changes | status 200; {"ok":true} |
+| A2.1 | PASS | create two Areas on a never-published draft: 201, mode direct, both rows exist | 201/201; {"ok":true,"mode":"direct","unchanged":false,"layoutPending":false,"id":"64020e59-892c-44e3-b88b-649b572746c2"}; rows 2 |
+| A2.2 | PASS | set_domain_area x3: direct, A and B in Clinical Practice, C in Professional Practice | 200,200,200; [{"id":"b8b7e962-3771-48a0-b02f-c8e2087f8f07","area_id":"d1d363b2-6dad-4355-8d10-f7be47454e02"},{"id":"575dda61-743b-45fa-bd3a-375660543d08","area_id":"64020e59-892c-44e3-b88b-649b572746c2"},{"id":"be704110-2818-45e0-bf5... |
+| A2.3 | PASS | move_competency_domain on a draft: live (mode direct), same id, new domain, hash UNCHANGED | status 200; {"ok":true,"mode":"direct","unchanged":false,"layoutPending":false}; domain moved true |
+| A3.1 | PASS | template GET: 200 CSV download with every sheet column | status 200; framework_code,area,domain,competency_code,competency_name,description,expected_level_score,risk_category,component,criterion_code,criterion_text,source_ref |
+| A3.2 | PASS | dry-run with one bad row: 200, a row-numbered error (row 4, column component), nothing written | status 200; [{"row":4,"column":"component","message":"Unknown component \"no_such_component\". Use one of: clinical_skills, knowledge, knowledge_application."}] |
+| A3.3 | PASS | importing the bad sheet (dryRun false) is refused 422 and writes nothing | status 422; {"errors":[{"row":4,"column":"component","message":"Unknown component \"no_such_component\". Use one of: clinical_skills, knowledge, knowledge_application."}]} |
+| A3.4 | PASS | dry-run of the good sheet: no errors, 2 competencies and 4 criteria to add, one new domain | status 200; {"adds":{"competencies":2,"criteria":{"byComponent":{"clinical_skills":2,"knowledge":2},"total":4},"domains":["FDS2 sheet domain"]},"errors":[]} |
+| A3.5 | PASS | append import: 201, 2 competencies and 4 criteria added, every existing competency and criterion untouched (ids, text, hash) | status 201; {"ok":true,"competencies":2,"criteria":4,"parents":0,"id":"b9efbe35-b678-49d1-8c42-9b7e6b29b647","resumed":false,"appended":true}; added 2 competencies, 4 criteria; existing unchanged true |
+| A4.1 | PASS | compare_published on a never-published draft: status no_published_version | status 200; {"status":"no_published_version","framework":{"id":"b9efbe35-b678-49d1-8c42-9b7e6b29b647","name":"FDS2 acceptance draft MVWN6Y3E","pubStatus":"draft"}} |
+| A4.0 | PASS | fixture: a framework published once (version snapshot) and returned to draft | {"ok":true,"status":"published"} {"ok":true,"status":"draft"}; versions 1 |
+| A4.2 | PASS | compare_published on the edited draft: compared, shows the rename, the added criterion, the retired criterion and the competency move | edits 200,201,200,200; {"status":"compared","version":{"num":1,"label":"1.0.0","publishedAt":"2026-10-31T16:57:16.318667+00:00","publishedBy":"FDS2 acceptance publisher (synthetic, staging)"},"counts":{"competenciesAdded":0,"competenciesRemoved":0,"competenciesChanged":2,"criteriaAdded":1,"criteriaRetired":1,"criteriaRemoved":0,"criteriaTextChanged":0,"criteriaMoved":0},"changed":[{"n":"Infection ... |
+| A5.0 | PASS | setup: 3 competencies put forward, approved by the reviewer, framework put forward by the author and published by the independent publisher (version 1) | submit 201,201,201; approve 200,200,200; publication submit 200 {"ok":true,"status":"in_review"}; decide 200 {"ok":true,"status":"published","version":"1.0.0"}; {"id":"38b2badb-c97f-42ce-81e0-3aed97da6ce5","name":"FDS2 acceptance published MVWN6Y3E","pub_status":"published","version_num":1,"version_major":1,"version_minor":0,"version_revision":0} |
+| A5.1 | PASS | content edit, new competency (+2 criteria), criterion retire and domain rename each answer mode revision (2xx) | 200,201,201,201,200,200; modes revision,revision,revision,revision,revision,revision; {"ok":true,"id":"34f1e789-07f9-4abb-9c96-d4698863e234","mode":"revision","revisionId":"ccf7dfa0-8962-4ca6-b5a2-77981b2df752"} |
+| A5.2 | PASS | while the revision is open the live tree, the competency hashes and the learner-facing catalogue read are byte-identical | live same true; learner same true; hashes same true; new competency live false |
+| A5.3 | PASS | revision_view: open revision lists G1 changed, G2 changed, the new competency isNew with 2 criteria, and the renamed domain | status 200; [{"id":"NEW","changed":true,"isNew":true,"n":2},{"id":"FDS2A-MVWN6Y3E-G1","changed":true,"isNew":false,"n":5},{"id":"FDS2A-MVWN6Y3E-G2","changed":true,"isNew":false,"n":5}] |
+| A4.3 | PASS | compare_revision: compared; shows the rename (competency and domain), the new competency and the retired criterion | status 200; {"counts":{"competenciesAdded":1,"competenciesRemoved":0,"competenciesChanged":2,"criteriaAdded":2,"criteriaRetired":1,"criteriaRemoved":0,"criteriaTextChanged":0,"criteriaMoved":0},"added":1,"changed":2,"domainsRenamed"... |
+| A5.4 | PASS | review_preview / review_submit (revision): the 3 changed or new competencies are put forward at their PROPOSED hash; the unchanged one is not | preview 200 eligible 3; submit 200 {"submitted":3,"skipped":0,"excluded":0,"stale":0,"failed":0,"not_reached":0}; [["FDS2A-MVWN6Y3E-G4","eligible"],["FDS2A-MVWN6Y3E-G1","eligible"],["FDS2A-MVWN6Y3E-G2","eligible"]] |
+| A5.5 | PASS | the author cannot approve (clinical-review refused 403) and cannot publish (publication decide refused 403) | approve 403 {"error":"You do not hold a position that opens this part of Competen HQ"}; publish 403 {"error":"You do not hold a position that opens this part of Competen HQ"} |
+| A5.6 | PASS | the clinical reviewer approves each proposed version (including the new competency, which is not live yet) | 200 {"ok":true} \| 200 {"ok":true} \| 200 {"ok":true} |
+| A5.7 | PASS | the author puts the revision forward; the independent publisher publishes it (revisionApplied) | submit 200; decide 200 {"ok":true,"status":"published","version":"2.0.0","revisionApplied":true} |
+| A5.8 | PASS | live now equals the revision: G1 reworded, new competency live under the id the API returned (2 criteria), the criterion retired, the domain renamed, hashes equal the proposed hashes | g1 "Airway management (revised)"; new true criteria 2; retired is_active false; domain "FDS2 gov domain B (renamed)"; hashes equal true/true/true |
+| A5.9 | PASS | ids are stable: every competency, criterion and domain id from before the revision still exists | competencies 3, criteria 15 all present: true |
+| A5.10 | PASS | framework_versions: a version 2 snapshot is recorded (label 2.0.0, publisher named) carrying the new competency, its approvals and the renamed domain | versions 1,2; label 2.0.0; in snapshot true; by FDS2 acceptance publisher (synthetic, staging) |
+| A5.11 | PASS | after publication the revision is closed and the learner-facing read now carries the new competency | revision {"revision":null}; learner changed true |
+| A7.1 | PASS | move_competency_domain on the published framework: mode draft, layout pending, live domain, hash and learner read unchanged | status 200; {"ok":true,"mode":"draft","unchanged":false,"layoutPending":true}; live domain unchanged true |
+| A7.2 | PASS | the independent publisher publishes: layoutApplied, same competency id now under the other domain, hash unchanged, layout draft cleared, version 3 recorded | submit 200; decide 200 {"ok":true,"status":"published","version":"2.0.1","layoutApplied":true,"changeKindForced":false}; domain true; versions 3 |
+| A6.1 | PASS | publication without clinical approval of the revision is refused (409, the 466 reason) and applies nothing: live tree, learner read, status, version number and version count unchanged; the revision stays open | edit 200 revision; submit 200; decide 409 This framework cannot be published yet: 1 of its 4 competencies are not clinically approved at their current content. Each needs an independent clinical review of that exact content first.; version 3/3; versions 3/3; revision open true |
+| A5.12 | PASS | a second publisher-is-author attempt is refused both at the route (403) and by the publication rules (the author put it forward and contributed); nothing published | route 403; rules 403 You put this framework forward, so a different publisher must decide it. |
+
+## Fixtures kept for the browser check (synthetic, staging, not removed)
+- Draft framework: http://localhost:3100/super-admin/competencies/authoring/b9efbe35-b678-49d1-8c42-9b7e6b29b647
+- Published framework with an OPEN revision: http://localhost:3100/super-admin/competencies/authoring/38b2badb-c97f-42ce-81e0-3aed97da6ce5
+- Draft that was published once and edited since (Compare with published): http://localhost:3100/super-admin/competencies/authoring/5793a767-7d35-41fd-b813-962664307316
+- Author sign-in: scratchpad file fds2-fixture.txt (credentials never printed). The reviewer and publisher passwords are reset each run and not kept.
+
+## Notes
+- A4 is covered twice: compare_published needs a draft that has a published version, so the fixture publishes a framework once and returns it to draft; compare_revision covers a revision against the live version (A4.3).
+- A5.12 runs the author as publisher twice: through the route (the publish capability gate) and through decidePublication (the independence rules, 640), both on a revision that was put forward by the author.
+- A6.1 leaves that revision open and unreviewed on purpose; it is the open revision the browser fixture shows.
