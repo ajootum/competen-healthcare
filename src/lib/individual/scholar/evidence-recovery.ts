@@ -38,6 +38,7 @@ import { RECOVERY_MODES, type IndividualPolicy, type RecoveryMode, type Recovery
 import { DEFAULT_QUALITY, NOT_USED_REASONS, gateResearch, qualityOf, type EvidenceQuality, type NotUsedReason } from "./source-quality";
 import { RECOVERY_ACTION_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_ORIGIN_LABEL, RECOVERY_PROMPT, RECOVERY_RETRIEVED_LABEL, RETRIEVAL_LIMIT } from "./config";
 import { rankChunks, searchTerms, spreadAcrossMaterials, toTsQuery } from "./retrieval";
+import { termCovered, termIndex } from "./term-match";
 import { listExamPapers, searchCandidates, toPassages } from "./store";
 import { passageCitation, type GovernedReference, type Passage, type ResearchEvidence } from "./generation";
 import { governedReferences, libraryReferences, referenceSource } from "./learn";
@@ -239,11 +240,13 @@ export function questionTopicText(question: string): string {
 
 /** The question's key terms, as retrieval reads them, without labels, numbering or command words (SQIE D-3). */
 export const keyTermsOf = (question: string) => searchTerms(questionTopicText(question));
-const stem = (t: string) => (t.length > 5 ? t.slice(0, 5) : t);
-/** Pure. The key terms a text contains (by prefix, as retrieval ranks). */
+/**
+ * Pure. The key terms a text contains: by prefix, as retrieval ranks, and (SCHOLAR-GUIDED-LEARNING-01) by root, curated
+ * variant and abbreviation (term-match.ts termCovered). Deterministic, no AI. Numbers stay literal.
+ */
 export function matchedTerms(text: string, terms: readonly string[]): string[] {
-  const words = text.toLowerCase().normalize("NFKD").split(/[^a-z0-9]+/);
-  return terms.filter(t => words.some(w => w.startsWith(stem(t))));
+  const ix = termIndex(text);
+  return terms.filter(t => termCovered(t, ix));
 }
 
 /**
