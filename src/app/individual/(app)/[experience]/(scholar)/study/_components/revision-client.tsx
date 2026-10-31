@@ -231,8 +231,8 @@ export function SavedSets({ sets }: { sets: { id: string; title: string; questio
 
 type SessionState = { id: string | null; mode: string; feedback: "immediate" | "end"; status?: string; total: number; position: number };
 /** 425, owner decision R4: a short answer held until the end, then graded by the student against its notes. */
-type HeldGrade = { response: string; accepted: string[]; rationale: string; source: RevisionFeedback["source"]; label: string };
-type Answered = { questionId: string; feedback?: RevisionFeedback; held?: boolean; selfGrade?: HeldGrade };
+export type HeldGrade = { response: string; accepted: string[]; rationale: string; source: RevisionFeedback["source"]; label: string };
+export type Answered = { questionId: string; feedback?: RevisionFeedback; held?: boolean; selfGrade?: HeldGrade };
 type Summary = { answered: number; of: number; correct: number; toGrade?: number; byMarking: Record<string, number> };
 /** SCHOLAR-SQIE-CLOSE-01: a structured part the student marks themselves, with what code or the AI already said of it. */
 type PartToGrade = { prompt: string; marks: number; accepted: string[]; byCode: boolean; ai: { awarded: number; feedback: string | null; label: string } | null };
@@ -330,7 +330,7 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
   );
 }
 
-function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, onNext }: {
+export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, onNext }: {
   item: RevisionItemView; sessionId: string | null; feedbackMode: "immediate" | "end"; answered: Answered | null;
   onAnswered: (a: Answered) => void; onNext: () => void;
 }) {
@@ -341,7 +341,7 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
   const [text, setText] = useState("");
   const [matches, setMatches] = useState<string[]>(item.options.map(() => ""));
   const [order, setOrder] = useState<number[]>(item.options.map((_, i) => i));
-  const [back, setBack] = useState<{ back: string; source: { quote: string; citation: string; materialId: string; chunkId: string } } | null>(null);
+  const [back, setBack] = useState<{ back: string; source: { quote: string; citation: string; materialId: string; chunkId: string }; card?: { origin: "notes" | "library" | "learner"; originLabel: string } } | null>(null);
   const [selfGrade, setSelfGrade] = useState<{ accepted: string[]; reason: string; label: string } | null>(null);
   // SCHOLAR-SQIE-CLOSE-01: a structured question's answers, one per part, and the student's own marking of each part.
   const [texts, setTexts] = useState<string[]>((item.parts ?? []).map(() => ""));
@@ -411,9 +411,11 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
         !back ? <button type="button" className={`${btn} mt-4`} style={{ background: accent }} disabled={busy} onClick={reveal}>Show the answer</button> : (
           <div className="mt-4">
             <div className="rounded-xl bg-gray-50 p-4">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">What your notes say</p>
+              {/* SCHOLAR-FLASHCARDS-01: a card the student wrote, or a library card, says so -- never "your notes". */}
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">{back.card?.origin === "learner" ? "Your card" : back.card?.origin === "library" ? "The Competen library" : "What your notes say"}</p>
               <p className="mt-1 text-[14.5px] font-bold text-gray-900">{back.back}</p>
-              <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={sourceHref(back.source.materialId, back.source.chunkId)} className={`underline ${focusRing}`}>{back.source.citation}</Link></p>
+              {back.card && back.card.origin !== "notes" ? <p className="mt-1 text-[12.5px] text-gray-600">{back.card.originLabel}</p>
+                : <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={sourceHref(back.source.materialId, back.source.chunkId)} className={`underline ${focusRing}`}>{back.source.citation}</Link></p>}
             </div>
             <fieldset className="mt-3" disabled={busy}>
               <legend className="text-[14px] font-semibold text-gray-900">How well did you remember it? (your own judgement)</legend>
@@ -535,7 +537,7 @@ function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, o
 
 /** After an answer: right or not against the notes, how it was marked, the source, and what to do about a mistake. */
 /** At the end of the session: a held short answer beside what the notes accept, the explanation and the source, graded by the student. */
-function GradeAtEnd({ questionId, sessionId, g, onGraded }: { questionId: string; sessionId: string; g: HeldGrade; onGraded: (a: Answered) => void }) {
+export function GradeAtEnd({ questionId, sessionId, g, onGraded }: { questionId: string; sessionId: string; g: HeldGrade; onGraded: (a: Answered) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function grade(selfGrade: boolean) {
@@ -578,7 +580,7 @@ export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackPa
   );
 }
 
-function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string }) {
+export function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string }) {
   const basis = f.library ? "the Competen library answer" : "your notes";
   return (
     <div aria-live="polite" className={`mt-3 rounded-xl border p-4 ${f.correct ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>

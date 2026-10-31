@@ -4,10 +4,10 @@ import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
 import {
   DEFAULT_UPLOAD_MB, FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, LEARN_ACTIONS, LEARN_ACTION_LABEL, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES,
-  MAX_SESSION_FILES, MAX_SESSION_MB, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, REVISION_FORMATS, REVISION_FORMAT_LABEL, REVISION_MODES, REVISION_MODE_LABEL, REVISION_QUANTITY_MAX,
+  MAX_SESSION_FILES, MAX_SESSION_MB, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, REVISION_FORMATS, REVISION_FORMAT_LABEL, REVISION_MODES, REVISION_MODE_LABEL, REVISION_QUANTITY_MAX, ADAPTIVE_FORMATS, ADAPTIVE_LENGTH_MAX, ADAPTIVE_LENGTH_MIN,
   SESSION_MAX_STEPS, TUTOR_MAX_TURNS, UPLOAD_SESSION_MINUTES, CASE_CONTEXTS, CASE_CONTEXT_LABEL, CASE_ENTRIES, CASE_ENTRY_LABEL, CASE_DIMENSION_LABEL,
   type CaseContext, type CaseEntry,
-  type ExplanationDepth, type LearnAction, type RevisionDifficulty, type RevisionFormat, type RevisionMode, type UploadFormat,
+  type AdaptiveFormat, type ExplanationDepth, type LearnAction, type RevisionDifficulty, type RevisionFormat, type RevisionMode, type UploadFormat,
 } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
 import { COUNTRIES } from "../countries";
@@ -72,7 +72,9 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max"
   | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown"
   | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days"
-  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms";
+  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms"
+  | "scholar_osce_duration_minutes" | "scholar_osce_checklist_min" | "scholar_osce_checklist_max"
+  | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -80,7 +82,7 @@ export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fi
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
   | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules"
   | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources" | "scholar_learn_source_modes" | "scholar_recovery_providers"
-  | "scholar_recovery_evidence_types";
+  | "scholar_recovery_evidence_types" | "scholar_adaptive_formats" | "scholar_flashcard_source_modes" | "scholar_flashcard_exports";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -112,7 +114,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
-  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic";
+  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic"
+  | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -201,6 +204,8 @@ export const RECOVERY_EVIDENCE_TYPES = [
   { value: "clinical_trial", label: "Clinical Trial", pubmed: "Clinical Trial" },
 ] as const;
 export type RecoveryEvidenceType = (typeof RECOVERY_EVIDENCE_TYPES)[number]["value"];
+/** SCHOLAR-PRACTICE-EXAMS-01 (720): simulated OSCE practice. Formative, never an observed assessment. */
+export type ScholarOscePolicy = { enabled: boolean; durationMinutes: number; checklistMin: number; checklistMax: number };
 export type ScholarExamPolicy = {
   enabled: boolean;
   sources: ExamEvidenceSource[];
@@ -1005,6 +1010,103 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "on",
     limitReason: "Recommendations come only from recorded answers and reviews, each with its reason.",
   },
+  // ── SCHOLAR-PRACTICE-EXAMS-01: ADAPTIVE EXAMS, on the revision engine ──
+  // What is offered and its defaults. The rule beneath is not a setting: transparent rule-based adaptation (three right
+  // in a row up, two of the last three missed down), formative only, never a calibrated score or an examination.
+  {
+    key: "scholar_adaptive_exams", kind: "choice", product: "Scholar",
+    label: "Adaptive exams",
+    help: "Whether Revise offers adaptive exams: a practice exam whose next question is harder or easier by a stated rule on the student's own answers. Formative practice only.",
+    options: [{ value: "on", label: "Offer adaptive exams" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Rule-based adaptation only. The report always says it is a practice estimate, not a calibrated score, an examination result or verified competence.",
+  },
+  {
+    key: "scholar_adaptive_length", kind: "int", product: "Scholar", unit: "questions",
+    label: "Default length of an adaptive exam",
+    help: "How many questions an adaptive exam has when the student does not choose. Never more than the maximum below.",
+    fallback: 15, min: ADAPTIVE_LENGTH_MIN, max: ADAPTIVE_LENGTH_MAX,
+    limitReason: "Five to fifty: the rule needs answers to act on, and migration 417 holds at most fifty questions in one session.",
+  },
+  {
+    key: "scholar_adaptive_max_length", kind: "int", product: "Scholar", unit: "questions",
+    label: "Longest adaptive exam a student may choose",
+    help: "The most questions a student may choose for one adaptive exam.",
+    fallback: 30, min: ADAPTIVE_LENGTH_MIN, max: ADAPTIVE_LENGTH_MAX,
+    limitReason: "Five to fifty: migration 417 holds at most fifty questions in one session.",
+  },
+  {
+    key: "scholar_adaptive_formats", kind: "set", product: "Scholar",
+    label: "Adaptive exam question formats",
+    help: "Which question formats an adaptive exam may use. Only formats Revision also offers are used. Flashcards are self-graded recall and are never part of an exam.",
+    options: ADAPTIVE_FORMATS.map(v => ({ value: v, label: REVISION_FORMAT_LABEL[v] })),
+    fallback: [...ADAPTIVE_FORMATS],
+    limitReason: "Only the formats migrations 416 and 710 store. Structured (multi-part) needs 710 and feedback after each answer. Default: all of these.",
+  },
+  // ── SCHOLAR-FLASHCARDS-01: FLASHCARDS, on the revision engine (owner, 31 Oct 2026) ──
+  // What is offered and its limits. The rules beneath are not settings: a card is a revision question (416), its schedule
+  // the shared SM-2 (the spaced review settings below apply to cards too), grounding, the identifier screen, dedupe and
+  // the one-concept recall check on every generated card, governed library first, private and formative always.
+  {
+    key: "scholar_flashcards", kind: "choice", product: "Scholar",
+    label: "Flashcards",
+    help: "Whether Revise offers Flashcards: decks of recall cards from the student's own notes, the Competen library and their learning gaps, cards they write themselves, two-button recall on the spaced review schedule, and downloadable decks and revision guides. Formative practice only.",
+    options: [{ value: "on", label: "Offer flashcards" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Decks, hand-written cards, bookmarks and notes need migration 730. Without it, flashcards from notes and the library still work. Default: offered.",
+  },
+  {
+    key: "scholar_flashcards_per_generation", kind: "int", product: "Scholar", unit: "cards",
+    label: "Most new flashcards written at one time",
+    help: "However many cards a student asks for, at most this many new ones are written by AI in one go. Saved and library cards are reused first and do not count.",
+    fallback: 10, min: 1, max: 30,
+    limitReason: "One to thirty, and never more than the revision generation calls allow. Default: ten.",
+  },
+  {
+    key: "scholar_flashcard_deck_max", kind: "int", product: "Scholar", unit: "cards",
+    label: "Most cards in one deck",
+    help: "A deck may hold at most this many cards. One study run takes up to fifty of them, due cards first.",
+    fallback: 200, min: 10, max: 1000,
+    limitReason: "Ten to a thousand. A study run is a revision session, which holds at most fifty cards (migration 417). Default: two hundred.",
+  },
+  {
+    key: "scholar_flashcard_source_modes", kind: "set", product: "Scholar",
+    label: "Where new flashcards may come from",
+    help: "The sources a student may choose for new flashcards: their notes only, or their notes with the clinically approved references linked to them. Governed library cards are always offered first.",
+    options: [{ value: "notes", label: "Notes only" }, { value: "notes_and_references", label: "Notes and approved references" }],
+    fallback: ["notes", "notes_and_references"],
+    limitReason: "Two modes. Notes only is always allowed (an empty choice means notes only). Default: both.",
+  },
+  {
+    key: "scholar_flashcard_difficulty", kind: "choice", product: "Scholar",
+    label: "Default flashcard difficulty",
+    help: "Which cards a study run prefers, and the level new cards are written at, when the student does not choose.",
+    options: [{ value: "any", label: "Any" }, { value: "easy", label: "Easier" }, { value: "standard", label: "Standard" }, { value: "harder", label: "Harder" }],
+    fallback: "any",
+    limitReason: "Four choices. Default: any (the programme level, adapted to recent answers).",
+  },
+  {
+    // SCHOLAR-FLASHCARDS-QA-01: the mix of cognitive levels new cards are written to (question-intel.ts
+    // flashcardLevelMix). Only the levels a passage can support are ever asked for; the rest fall back to recall and
+    // understanding, and why is recorded on the generation audit row.
+    key: "scholar_flashcard_level_mix", kind: "choice", product: "Scholar",
+    label: "Mix of new flashcards",
+    help: "The mix of recall, understanding, application and clinical reasoning cards written by AI. By programme level: mostly recall and understanding for enrolled and certificate programmes, balanced for diplomas and degrees, more application and clinical reasoning for master's and doctoral study. Application and reasoning cards are written only where the notes describe a situation and give a reason; otherwise recall and understanding cards are written instead.",
+    options: [
+      { value: "programme", label: "By programme level" }, { value: "recall", label: "Mostly recall and understanding" },
+      { value: "balanced", label: "Balanced" }, { value: "applied", label: "More application and clinical reasoning" },
+    ],
+    fallback: "programme",
+    limitReason: "Four choices. A level the notes cannot support is never asked for. Default: by programme level (balanced where the programme names no level).",
+  },
+  {
+    key: "scholar_flashcard_exports", kind: "set", product: "Scholar",
+    label: "Flashcard downloads offered",
+    help: "Which downloads a student may make from their own cards: a deck of flashcards, printable cards, and a multi-page revision guide. Each is a PDF of the student's own cards only.",
+    options: [{ value: "deck", label: "This deck (flashcards)" }, { value: "print", label: "Printable cards" }, { value: "guide", label: "Revision guide" }],
+    fallback: ["deck", "print", "guide"],
+    limitReason: "Three formats. Default: all.",
+  },
   {
     key: "scholar_srs_mastery_reps", kind: "int", product: "Scholar", unit: "reviews",
     label: "Spaced review: consecutive good reviews for a long interval",
@@ -1124,6 +1226,38 @@ export const POLICIES: readonly PolicyDef[] = [
     help: "Web research results (public sources only, never a student's material) are reused for this many days, then researched again. Zero turns reuse off.",
     fallback: 30, min: 0, max: 365,
     limitReason: "Zero to a year. Default: thirty days.",
+  },
+  // SCHOLAR-PRACTICE-EXAMS-01 (720): simulated OSCE practice under Apply. Formative practice only -- never an observed
+  // clinical skills assessment, never verified competence. Offered by default because it degrades safely: where 720 is
+  // absent Apply says OSCE practice is not available here yet, and nothing else changes.
+  {
+    key: "scholar_osce", kind: "choice", product: "Scholar",
+    label: "OSCE practice stations",
+    help: "Whether a student may practise simulated OSCE stations alone: a timed scenario, written responses, then a self-check against the station checklist, with optional AI feedback. Never an observed assessment and never verified competence.",
+    options: [{ value: "on", label: "Offered" }, { value: "off", label: "Not offered" }],
+    fallback: "on",
+    limitReason: "Needs migrations 720 and 721. Default: offered.",
+  },
+  {
+    key: "scholar_osce_duration_minutes", kind: "int", product: "Scholar", unit: "minutes",
+    label: "Default OSCE practice station length",
+    help: "How long a new practice station runs for, unless the station sets its own length. The timer warns at one minute and stops at the end, keeping what was written.",
+    fallback: 8, min: 3, max: 20,
+    limitReason: "Three to twenty minutes (720 allows no other). Default: eight.",
+  },
+  {
+    key: "scholar_osce_checklist_min", kind: "int", product: "Scholar", unit: "items",
+    label: "Fewest checklist items in a station written from notes",
+    help: "A station written by AI from a student's notes is withheld if fewer grounded checklist items than this survive the checks.",
+    fallback: 8, min: 1, max: 60,
+    limitReason: "One to sixty (the 721 structural bound). Eight to twelve is the design default, and a clinically justified station may differ. Never above the most. Default: eight.",
+  },
+  {
+    key: "scholar_osce_checklist_max", kind: "int", product: "Scholar", unit: "items",
+    label: "Most checklist items in a station written from notes",
+    help: "At most this many checklist items are kept from a station written by AI from a student's notes.",
+    fallback: 12, min: 1, max: 60,
+    limitReason: "One to sixty (the 721 structural bound). Eight to twelve is the design default. Default: twelve.",
   },
   // COMPETEN-RESEARCH-01 (owner direction 2026-10-28): governed academic research for Learn, through the shared
   // Holdings research service (src/lib/holdings/research). OFF until the owner publishes a provider AND the Research &
@@ -1618,6 +1752,20 @@ export type IndividualPolicy = {
   scholarRevisionGeneration: "generate" | "saved_only";
   scholarShortAnswerMarking: "ai_then_self" | "self";
   scholarRevisionRecommendations: "on" | "off";
+  /** SCHOLAR-PRACTICE-EXAMS-01: adaptive exams. */
+  scholarAdaptiveExams: "on" | "off";
+  scholarAdaptiveLength: number;
+  scholarAdaptiveMaxLength: number;
+  scholarAdaptiveFormats: AdaptiveFormat[];
+  /** SCHOLAR-FLASHCARDS-01. */
+  scholarFlashcards: "on" | "off";
+  scholarFlashcardsPerGeneration: number;
+  scholarFlashcardDeckMax: number;
+  /** Always includes notes. */
+  scholarFlashcardSourceModes: ("notes" | "notes_and_references")[];
+  scholarFlashcardDifficulty: RevisionDifficulty;
+  scholarFlashcardExports: ("deck" | "print" | "guide")[];
+  scholarFlashcardLevelMix: "programme" | "recall" | "balanced" | "applied";
   scholarSrsMasteryReps: number;
   scholarSrsMasteryDays: number;
   scholarSrsMaxIntervalDays: number;
@@ -1652,6 +1800,8 @@ export type IndividualPolicy = {
   scholarInstitutions: ContextOption[];
   /** COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570). */
   scholarExams: ScholarExamPolicy;
+  /** SCHOLAR-PRACTICE-EXAMS-01 (720). */
+  scholarOsce: ScholarOscePolicy;
   /** COMPETEN-RESEARCH-01: the Learn source modes and governed academic research. */
   scholarResearch: ScholarResearchPolicy;
   /** SCHOLAR-SQIE-02: evidence recovery after a withheld or insufficient answer. */
@@ -1753,6 +1903,18 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarRevisionGeneration: clampChoice(policyDef("scholar_revision_generation") as ChoicePolicy, published.get(policyPath("scholar_revision_generation"))) as "generate" | "saved_only",
     scholarShortAnswerMarking: clampChoice(policyDef("scholar_short_answer_marking") as ChoicePolicy, published.get(policyPath("scholar_short_answer_marking"))) as "ai_then_self" | "self",
     scholarRevisionRecommendations: clampChoice(policyDef("scholar_revision_recommendations") as ChoicePolicy, published.get(policyPath("scholar_revision_recommendations"))) as "on" | "off",
+    scholarAdaptiveExams: clampChoice(policyDef("scholar_adaptive_exams") as ChoicePolicy, published.get(policyPath("scholar_adaptive_exams"))) as "on" | "off",
+    scholarAdaptiveMaxLength: int("scholar_adaptive_max_length"),
+    // The default never exceeds the maximum, whatever was published.
+    scholarAdaptiveLength: Math.min(int("scholar_adaptive_length"), int("scholar_adaptive_max_length")),
+    scholarAdaptiveFormats: clampSet(policyDef("scholar_adaptive_formats") as SetPolicy, published.get(policyPath("scholar_adaptive_formats"))) as AdaptiveFormat[],
+    scholarFlashcards: clampChoice(policyDef("scholar_flashcards") as ChoicePolicy, published.get(policyPath("scholar_flashcards"))) as "on" | "off",
+    scholarFlashcardsPerGeneration: int("scholar_flashcards_per_generation"),
+    scholarFlashcardDeckMax: int("scholar_flashcard_deck_max"),
+    scholarFlashcardSourceModes: (() => { const m = clampSet(policyDef("scholar_flashcard_source_modes") as SetPolicy, published.get(policyPath("scholar_flashcard_source_modes"))) as ("notes" | "notes_and_references")[]; return m.includes("notes") ? m : ["notes" as const, ...m]; })(),
+    scholarFlashcardDifficulty: clampChoice(policyDef("scholar_flashcard_difficulty") as ChoicePolicy, published.get(policyPath("scholar_flashcard_difficulty"))) as RevisionDifficulty,
+    scholarFlashcardExports: clampSet(policyDef("scholar_flashcard_exports") as SetPolicy, published.get(policyPath("scholar_flashcard_exports"))) as ("deck" | "print" | "guide")[],
+    scholarFlashcardLevelMix: clampChoice(policyDef("scholar_flashcard_level_mix") as ChoicePolicy, published.get(policyPath("scholar_flashcard_level_mix"))) as "programme" | "recall" | "balanced" | "applied",
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),
     scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
     scholarSrsMaxIntervalDays: int("scholar_srs_max_interval_days"),
@@ -1782,6 +1944,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
     scholarExams: resolveScholarExams(published),
+    scholarOsce: resolveScholarOsce(published),
     scholarResearch: resolveScholarResearch(published),
     scholarRecovery: resolveScholarRecovery(published),
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
@@ -1977,6 +2140,18 @@ function resolveScholarExams(published: Map<string, unknown>): ScholarExamPolicy
     webDailyMax: int("scholar_exam_web_daily_max"),
     cacheDays: int("scholar_exam_research_cache_days"),
     scannedPages: choice("scholar_exam_scanned_pages") as "off" | "ai_transcription",
+  };
+}
+
+/** SCHOLAR-PRACTICE-EXAMS-01 (720). The bounds made coherent: the fewest never above the most. */
+function resolveScholarOsce(published: Map<string, unknown>): ScholarOscePolicy {
+  const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
+  const max = int("scholar_osce_checklist_max");
+  return {
+    enabled: clampChoice(policyDef("scholar_osce") as ChoicePolicy, published.get(policyPath("scholar_osce"))) === "on",
+    durationMinutes: int("scholar_osce_duration_minutes"),
+    checklistMin: Math.min(int("scholar_osce_checklist_min"), max),
+    checklistMax: max,
   };
 }
 

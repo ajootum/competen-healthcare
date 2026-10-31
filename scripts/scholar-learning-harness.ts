@@ -148,7 +148,9 @@ function preflightOrder(src: Src): string[] {
   for (const [file, call] of [[`${API}/explain/route.ts`, "runExplain("], [`${API}/questions/route.ts`, "runQuestions("],
     [`${API}/materials/[id]/analyse/route.ts`, "runAnalysis("], [`${API}/cases/route.ts`, "runCase("],
     [`${API}/revision/sessions/route.ts`, "runRevisionQuestions("], [`${API}/revision/answer/route.ts`, "runEvaluate("],
-    [`${API}/clinical/cases/route.ts`, "runCaseBlueprint("], [`${API}/clinical/sessions/[kind]/[id]/answer/route.ts`, "runCaseReasoning("]] as const) {
+    [`${API}/clinical/cases/route.ts`, "runCaseBlueprint("], [`${API}/clinical/sessions/[kind]/[id]/answer/route.ts`, "runCaseReasoning("],
+    // SCHOLAR-PRACTICE-EXAMS-01 (720): an OSCE station from notes (activity questions) and feedback on a run (evaluate).
+    [`${API}/osce/stations/route.ts`, "runOsceStation("], [`${API}/osce/attempts/[id]/route.ts`, "runOsceFeedback("]] as const) {
     const s = src.get(file) ?? "";
     const p = s.indexOf("await aiPreflight(ctx)"), c = s.indexOf(call);
     if (p < 0 || c < 0 || p > c) bad.push(file);
@@ -351,7 +353,7 @@ const AI_ROUTES: [string, string, RegExp][] = [
   [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run\)/],
   [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }))`, /runAnalysis\([^)]*ai\.run\)/],
   // REVISION-01: a session's new questions (one id per call, `:g1` ...) and a short answer's AI evaluation.
-  [`${API}/revision/sessions/route.ts`, "scholarAiRunner(ctx, req, \"questions\", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`)", /runRevisionQuestions\(ctx\.userId, call\.kind, passage, Math\.max\(call\.count, 3\), ai\.run(?:, \{[^;]*\})?\)/],
+  [`${API}/revision/sessions/route.ts`, "scholarAiRunner(ctx, req, \"questions\", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`)", /runRevisionQuestions\(ctx\.userId, call\.kind, passage, (?:mode === "flashcards" \? call\.count : )?Math\.max\(call\.count, 3\), ai\.run(?:, \{[^;]*\})?\)/],
   [`${API}/revision/answer/route.ts`, "scholarAiRunner(ctx, req, \"evaluate\", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\\n${r.text}`, passages: [passage] }))", /runEvaluate\([^)]*ai\.run\)/],
   // CLINICAL-REASONING-01: a private case drafted from the notes, and AI feedback on a written decision.
   [`${API}/clinical/cases/route.ts`, "scholarAiRunner(ctx, req, \"case_steps\", await scholarRisk(ctx.admin, ctx.userId, { text: resolved.topic, passages, competencyIds }))", /runCaseBlueprint\([\s\S]*?\}, ai\.run\)/],
@@ -543,7 +545,7 @@ const answersServerSide = (src: Src) => {
   return learner.length > 50 && learner.length < 3000 && !/rationale|sourceQuote|correctIndex/.test(learner)
     // SCHOLAR-SQIE-01: plus the grounding label only -- a word from the rubric's source, never the rubric itself.
     // SCHOLAR-SQIE-CLOSE-01: a governed library copy carries its own label and its provenance (resource, version, approval), nothing else.
-    && /return \{\n    \.\.\.learnerItem\(q\), materialId: q\.materialId, materialTitle: q\.materialTitle, chunkId: q\.chunkId, citation: citationOf\(q\),\n    label: q\.library \? LIBRARY_REVISION_LABEL : REVISION_LABEL,\n    grounding: q\.library \? LIBRARY_QUESTION_LABEL : GROUNDING_LABEL\[rubricOf\(q\.answer\)\?\.source \?\? "notes"\],\n    \.\.\.\(q\.library \? \{ library: q\.library \} : \{\}\),\n  \};/.test(view)
+    && /return \{\n    \.\.\.learnerItem\(q\), materialId: q\.materialId, materialTitle: q\.materialTitle, chunkId: q\.chunkId, citation: citationOf\(q\),\n    label: q\.library \? LIBRARY_REVISION_LABEL : REVISION_LABEL,\n    (?: *\n)?    grounding: q\.library \? LIBRARY_QUESTION_LABEL : (?:q\.model === LEARNER_CARD\.model \? LEARNER_CARD_LABEL : )?GROUNDING_LABEL\[rubricOf\(q\.answer\)\?\.source \?\? "notes"\],\n    \.\.\.\(q\.library \? \{ library: q\.library \} : \{\}\),\n  \};/.test(view)
     // Every list of items any of them sends is the learner view, none raw.
     && routes.every(s => /items: \S*\.map\(revisionItemView\)|items=\{questions\.map\(revisionItemView\)\}/.test(s)
       && !/\bitems: (?![A-Z]|\S*\.map\(revisionItemView\))/.test(s) && !/\bitems=\{(?!questions\.map\(revisionItemView\))/.test(s))
@@ -574,9 +576,11 @@ const reuseFirst = (src: Src) => {
   const custom = s.slice(s.indexOf("if (mode === \"custom\") {"), s.indexOf("let chunkIds: string[] | null = null;"));
   const fill = s.indexOf("let pick = pickQuestions("), gen = s.indexOf("runRevisionQuestions(");
   return custom.length > 50 && custom.length < 4000 && !/scholarAiRunner|runQuestions|runRevisionQuestions|aiPreflight/.test(custom)
-    && fill > -1 && gen > fill && /if \(pick\.shortfall > 0 && GENERATING_MODES\.includes\(mode\) && scopeSections\.length\)/.test(s)
+    && fill > -1 && gen > fill && /if \(pick\.shortfall > 0 && GENERATING_MODES\.includes\(mode\) && scopeSections\.length(?: && body\?\.generate !== false)?\)/.test(s)
     && /if \(policy\.scholarRevisionGeneration === "saved_only"\)/.test(s)
-    && /const plan = planGeneration\(\{ shortfall: pick\.shortfall, chunkIds: scopeSections, formats: kinds, existing \}\);/.test(s)
+    && /const plan = planGeneration\(\{ shortfall: (?:pick\.shortfall|Math\.min\(pick\.shortfall, genCap - generated\)), chunkIds: scopeSections, formats: kinds, existing \}\);/.test(s)
+    // SCHOLAR-FLASHCARDS-01: studying a deck or chosen cards is stored cards only -- no AI on that path.
+    && (() => { const d = s.slice(s.indexOf("if (mode === \"flashcards\" && (typeof body?.deck"), s.indexOf("if (mode === \"custom\") {")); return d.length > 50 && !/scholarAiRunner|runQuestions|runRevisionQuestions|aiPreflight/.test(d); })()
     && /export const GENERATING_MODES: readonly RevisionMode\[\] = \["today", "quick", "mock", "flashcards"\];/.test(rev)
     && /const fresh = pairs\.filter\(p => !input\.existing\.has\(`\$\{p\.chunkId\}\|\$\{p\.kind\}`\)\);/.test(rev);
 };
@@ -933,7 +937,7 @@ function main() {
   const quota = strip(readFileSync("src/lib/ai/quota.ts", "utf8"));
   ok("C5. Scholar AI calls are audited under an action the hourly quota counts",
     /SCHOLAR_AI_AUDIT_ACTION = "ai_assistant_query"/.test(REAL.get(HTTP) ?? "") && /"ai_assistant_query"/.test(quota)
-    && [`${API}/explain/route.ts`, `${API}/questions/route.ts`, `${API}/materials/[id]/analyse/route.ts`, `${API}/cases/route.ts`]
+    && [`${API}/explain/route.ts`, `${API}/questions/route.ts`, `${API}/materials/[id]/analyse/route.ts`, `${API}/cases/route.ts`, `${API}/osce/stations/route.ts`, `${API}/osce/attempts/[id]/route.ts`]
       .every(f => /audit\(ctx, SCHOLAR_AI_AUDIT_ACTION/.test(REAL.get(f) ?? "")));
   ok("C6. every Scholar route handler is behind requireIndividualContext(\"scholar\")", unguardedHandlers(REAL).length === 0, unguardedHandlers(REAL).join(", "));
   // The release gate, gate 3, live, D2 terms and the registry check all live in the foundation's
@@ -1258,7 +1262,9 @@ function main() {
     && !markingHonest(plant(`${API}/revision/answer/route.ts`, "const marking = evaluator ? \"ai_evaluation\" as const : mark.marking;", "const marking = mark.marking;")));
   ok("P50. ⚠ K32 goes red when a saved set calls AI, or spaced review writes new questions",
     !reuseFirst(plant(`${API}/revision/sessions/route.ts`, "    await touchRevisionSet(ctx.admin, ctx.userId, set.id);", "    await touchRevisionSet(ctx.admin, ctx.userId, set.id);\n    await aiPreflight(ctx);"))
-    && !reuseFirst(plant(REV, "[\"today\", \"quick\", \"mock\", \"flashcards\"];", "[\"today\", \"quick\", \"mock\", \"flashcards\", \"spaced\"];")));
+    && !reuseFirst(plant(REV, "[\"today\", \"quick\", \"mock\", \"flashcards\"];", "[\"today\", \"quick\", \"mock\", \"flashcards\", \"spaced\"];"))
+    // SCHOLAR-FLASHCARDS-01: and when studying a deck of stored cards calls AI.
+    && !reuseFirst(plant(`${API}/revision/sessions/route.ts`, "    if (deck?.id) await touchFlashcardDeck(ctx.admin, ctx.userId, deck.id);", "    if (deck?.id) await touchFlashcardDeck(ctx.admin, ctx.userId, deck.id);\n    await aiPreflight(ctx);")));
   ok("P51. ⚠ K33 goes red when Scholar writes a library session itself",
     !libraryPlayShared(plant(CLIN_ROUTES, "  const r = await answerInSession(admin, userId, id, args);", "  await admin.from(\"case_library_session\").update({ status: \"completed\" }).eq(\"id\", id);\n  const r = await answerInSession(admin, userId, id, args);")));
   ok("P52. ⚠ K34 goes red when a route sends the blueprint, or the client imports the engine's values",

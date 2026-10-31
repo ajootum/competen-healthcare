@@ -119,6 +119,11 @@ export const PROMPT_VERSIONS = {
   // v3 (SCHOLAR-QUESTION-INTELLIGENCE-01): every item asks (never a statement as a flashcard front), the rubric fields,
   // the guidance block; mrq and short carry +verifyRevision (generation.ts revisionPromptVersion).
   revision: "scholar-revision-v3",
+  // v2 (staging acceptance notes): a concise one-concept back, a short explanation, a topic, a learner-voice objective.
+  // SCHOLAR-FLASHCARDS-QA-01: flashcards are written to a configured mix of recall, understanding, application and
+  // clinical reasoning (policy scholar_flashcard_level_mix), only at the levels the passage can support. A flashcard
+  // is therefore written at "scholar-revision-v3:flashcard+scholar-flashcard-mix-v2" (generation.ts revisionPromptVersion).
+  flashcardMix: "scholar-flashcard-mix-v2",
   // SCHOLAR-SQIE-CLOSE-01 (710): a structured question -- a lead-in and two to four parts, each with its marks and its
   // rubric -- on the revision rules (generation.ts REVISION_SYSTEM.structured). Its own version: a new prompt.
   structured: "scholar-structured-v1",
@@ -167,6 +172,28 @@ export type RevisionDifficulty = (typeof REVISION_DIFFICULTIES)[number];
 export const REVISION_QUANTITY_MAX = 50;
 /** Most AI generation calls one revision session may make to fill its shortfall. */
 export const REVISION_GENERATION_CALLS_MAX = 8;
+// ── ADAPTIVE EXAMS ── SCHOLAR-PRACTICE-EXAMS-01 (owner, 30 Oct 2026) ─────────────────────────────────────────────
+// A formative practice exam on the revision engine whose next question's difficulty follows a stated rule on the
+// student's own answers. Transparent rule-based adaptation only: no item calibration, no ability estimate, no score
+// on any scale. Never an examination, never verification, never competence.
+/** The formats an adaptive exam may use. Flashcards are self-graded recall, not an exam answer, so they are not offered. */
+export const ADAPTIVE_FORMATS = ["mcq", "mrq", "short", "match", "sequence", "structured"] as const satisfies readonly RevisionFormat[];
+export type AdaptiveFormat = (typeof ADAPTIVE_FORMATS)[number];
+/** Questions in one adaptive exam: at least five (the rule needs answers to act on), at most 417's session cap. */
+export const ADAPTIVE_LENGTH_MIN = 5;
+export const ADAPTIVE_LENGTH_MAX = 50;
+/** An optional time limit, in minutes. */
+export const ADAPTIVE_TIME_LIMITS = [10, 15, 20, 30, 45, 60, 90] as const;
+/** Most generation calls one adaptive exam may make for questions at the difficulty it needs. */
+export const ADAPTIVE_GENERATION_CALLS_MAX = REVISION_GENERATION_CALLS_MAX;
+export const ADAPTIVE_TITLE = "Adaptive exam";
+export const ADAPTIVE_HELP = "A practice exam that gets harder or easier as you answer, by a simple stated rule. Formative practice: not an examination.";
+/** The rule, in the words the student sees beside the exam. It is question-intel.ts adaptDifficulty, applied as adaptive.ts says. */
+export const ADAPTIVE_RULE = "Harder after 3 correct in a row; easier after 2 of the last 3 missed. The count starts again after each change, and an answer that waits for your own marking at the end does not move it.";
+/** Said on every report and result of an adaptive exam (owner instruction: no calibrated-testing claim). */
+export const ADAPTIVE_REPORT_LABEL = "Practice estimate from rule-based adaptation — not a calibrated exam score, not a formal examination result, and not verified competence.";
+/** Where migration 720 is absent the exam is kept as a mock-practice session marked adaptive, and its report says so. */
+export const ADAPTIVE_FALLBACK_NOTE = "Kept as a mock-practice session marked adaptive: this environment does not yet record adaptive exams as their own kind. The questions, the rule and this report are the same.";
 // ── STAGE 5A: CLINICAL REASONING ── COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (owner GO 2026-10-25) ───────────────────
 export const CASE_CONTEXTS = ["general", "medical", "surgical", "paediatric", "maternal", "emergency", "critical_care"] as const;
 export type CaseContext = (typeof CASE_CONTEXTS)[number];
@@ -186,6 +213,10 @@ export const LIBRARY_CASE_LABEL = "Governed library case · clinically approved 
 export const MOCK_LABEL = "Mock practice from your own notes: formative revision, not an assessment, and never evidence of competence.";
 export const REVISION_LABEL = "Revision from your notes · formative practice, not an assessment";
 /** SCHOLAR-SQIE-CLOSE-01 C: a question reused from the governed Competen library (442, published and clinically approved). */
+/** SCHOLAR-FLASHCARDS-01 (730): what a hand-written card is bound to. Any other model or provider is AI-written or library. */
+export const LEARNER_CARD = { model: "learner", provider: "learner", promptVersion: "learner:v1" } as const;
+/** SCHOLAR-FLASHCARDS-01: how a hand-written card is labelled wherever it is shown. Never clinically reviewed. */
+export const LEARNER_CARD_LABEL = "Your card · written by you, not clinically reviewed";
 export const LIBRARY_QUESTION_LABEL = "From the Competen library (clinically reviewed)";
 export const LIBRARY_REVISION_LABEL = `${LIBRARY_QUESTION_LABEL} · formative practice, not an assessment`;
 /** SCHOLAR-SQIE-01: what a generated question rests on (question-intel.ts rubric.source), in words. */

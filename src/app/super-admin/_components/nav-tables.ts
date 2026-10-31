@@ -169,7 +169,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     // Migrations 440-444 (COMPETEN-KNOWLEDGE-RESEARCH-01). It shipped with no door at all (HQ-IA-02 H1).
     { key: "knowledge.research", group: "Knowledge Research", items: [
       { key: "knowledge.research.workspace", label: "Research Workspace", href: "/super-admin/research", icon: "🔬", flag: "ckri" },
-      { key: "knowledge.research.educator", label: "Educator Knowledge", href: "/super-admin/research/educator", icon: "🧑‍🏫", flag: "ckri" },
+      { key: "knowledge.research.educator", label: "Educator Knowledge", href: "/super-admin/research/educator", icon: "🧑‍🏫", keywords: ["osce", "station", "checklist"], flag: "ckri" },
       { key: "knowledge.research.governance", label: "Research Governance", href: "/super-admin/research/governance", icon: "⚖️", flag: "ckri" },
       { key: "knowledge.research.intelligence", label: "Research Learning Intelligence", href: "/super-admin/research/intelligence", icon: "📊", keywords: ["learning intelligence"], flag: "ckri" },
       { key: "knowledge.research.oversight", label: "Research Oversight", href: "/super-admin/research/oversight", icon: "🛡️", flag: "ckri" },
@@ -322,7 +322,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     { key: "ai.home", group: "AI & Intelligence", plain: true, items: [
       { key: "ai.overview", label: "AI Home", href: "/super-admin/ai", icon: "🧠" },
       // AI-FAIR-USE-01 (migration 410): prices, allowance units and product AI policies (hq.platform.ai.manage).
-      { key: "ai.fair-use", label: "AI Fair Use", href: "/super-admin/ai/fair-use", icon: "⚖️", keywords: ["fair use","risk rules","model routing","operating modes","pilot cohort","AI readiness","eligibility","provider prices","budgets","allowance"], flag: "ai-fair-use" },
+      { key: "ai.fair-use", label: "AI Fair Use", href: "/super-admin/ai/fair-use", icon: "⚖️", keywords: ["fair use","risk rules","model routing","operating modes","pilot cohort","AI readiness","eligibility","provider prices","budgets","allowance","content review","sensitive"], flag: "ai-fair-use" },
       // COMPETEN-RESEARCH-01 ADDENDUM V2: the Research Sources & Evidence Studio (hq.platform.ai.view, edits need 630).
       { key: "ai.research-sources", label: "Research Sources", href: "/super-admin/ai/research-sources", icon: "📚", keywords: ["research","pubmed","openalex","crossref","pubmed central","google scholar","workflows","sources","evidence"] },
       { key: "ai.operations", label: "1. AI Operations Centre", href: "/super-admin/ai/operations", icon: "⚙️" },

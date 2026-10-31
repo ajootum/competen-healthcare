@@ -32,7 +32,7 @@ export const SCHOLAR_SPACES: readonly ScholarSpace[] = [
   { key: "revise", segment: "study/revise", tab: "Revise", eyebrow: "Recall & retention", title: "Revise",
     intro: "Return to what needs attention, on your schedule." },
   { key: "apply", segment: "study/apply", tab: "Apply", eyebrow: "Clinical reasoning", title: "Apply",
-    intro: "Recognise, interpret, prioritise, decide and explain." },
+    intro: "Recognise, interpret, prioritise, decide and explain.", also: ["study/apply/osce"] },
   { key: "evaluate", segment: "study/evaluate", tab: "Evaluate", eyebrow: "Reflect on your evidence", title: "Evaluate",
     intro: "See what your practice supports, and where evidence is still thin." },
   { key: "progress", segment: "study/progress", tab: "Progress", eyebrow: "Your learning over time", title: "Progress",

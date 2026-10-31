@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadRequiredApprovals, reviewerAppointments } from "@/lib/competency/clinical-review";
+import { stationContentOf, validateStationContent } from "@/lib/individual/scholar/osce";
 import { dbRefusal } from "./governance";
 
 // ── CKRI EDUCATOR KNOWLEDGE IMPROVEMENT ── COMPETEN-KNOWLEDGE-RESEARCH-01 s5 (K3), migration 442 ──────────────────────
@@ -18,19 +19,34 @@ import { dbRefusal } from "./governance";
 type R<T = unknown> = ({ ok: true } & T) | { ok: false; error: string };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE = /^[a-z][a-z0-9_-]{2,60}$/;
-export const RESOURCE_KINDS = ["explanation", "revision_question", "targeted_resource"] as const;
+// OSCE-AUTHORING-01 (owner, 31 Oct 2026): osce_station is the fourth kind (442 widened by 721). It goes through exactly
+// the same educator review, submission, independent clinical approval (395, 640) and publication as the other three.
+export const RESOURCE_KINDS = ["explanation", "revision_question", "targeted_resource", "osce_station"] as const;
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 const refusal = (error: any, fb: string) => dbRefusal({ message: String(error?.message ?? "").replace(/^ckri_knowledge_(submit|review|publish|retire): /, "ckri_knowledge: ") }, fb);
 
 /** Pure: the content of a kind, from form fields. Shape is enforced again by 442 (ckri_knowledge_content_ok). */
 export function contentOf(kind: ResourceKind, f: Record<string, unknown>): Record<string, unknown> {
   const s = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) : "");
+  if (kind === "osce_station") return stationContentOf(f);
   if (kind === "revision_question") {
     const options = Array.isArray(f.options) ? f.options.slice(0, 4).map(o => s(o, 500)) : [];
     return { stem: s(f.stem, 2000), options, correct_index: Number.isInteger(f.correctIndex) ? f.correctIndex : Number(f.correctIndex), rationale: s(f.rationale, 4000) };
   }
   const body = { body: s(f.body, 20000) };
   return kind === "targeted_resource" && Array.isArray(f.links) ? { ...body, links: f.links.slice(0, 20).map(l => s(l, 500)).filter(l => /^https:\/\//.test(l)) } : body;
+}
+
+/**
+ * Pure. The content of a kind, or the plain reason it cannot be saved. An OSCE station is checked by the SAME function
+ * Scholar uses to read a published one (validateStationContent), so what HQ saves is exactly what Scholar accepts, and
+ * 442 (ckri_knowledge_content_ok) checks its shape a third time in the database.
+ */
+export function checkedContent(kind: ResourceKind, f: Record<string, unknown>): { ok: true; content: Record<string, unknown> } | { ok: false; error: string } {
+  const content = contentOf(kind, f);
+  if (kind !== "osce_station") return { ok: true, content };
+  const v = validateStationContent(content);
+  return v.ok ? { ok: true, content } : { ok: false, error: v.reason };
 }
 
 export async function raiseNeed(admin: any, me: string, n: { snapshotId: string; subjectKind: string; subjectRef: string; cohort: string; period: string; summary: string; responseKind: string }): Promise<R<{ id: string }>> {
@@ -54,10 +70,12 @@ export async function moveNeed(admin: any, me: string, id: string, status: strin
 
 export async function createResource(admin: any, me: string, r: { code: string; kind: string; title: string; needId: string | null; fields: Record<string, unknown> }): Promise<R<{ resourceId: string; versionId: string }>> {
   if (!CODE.test(r.code)) return { ok: false, error: "A resource code is lowercase letters, digits, hyphens and underscores." };
-  if (!(RESOURCE_KINDS as readonly string[]).includes(r.kind)) return { ok: false, error: "Choose an explanation, a revision question or a targeted resource." };
+  if (!(RESOURCE_KINDS as readonly string[]).includes(r.kind)) return { ok: false, error: "Choose an explanation, a revision question, a targeted resource or an OSCE station." };
+  const checked = checkedContent(r.kind as ResourceKind, r.fields);
+  if (!checked.ok) return checked;
   const { data: res, error } = await admin.from("ckri_knowledge_resource").insert({ code: r.code, kind: r.kind, title: r.title, created_by: me, need_id: r.needId && UUID.test(r.needId) ? r.needId : null }).select("id").single();
   if (error) return { ok: false, error: dbRefusal(error, "The resource could not be created.") };
-  const { data: v, error: ve } = await admin.from("ckri_knowledge_version").insert({ resource_id: res.id, version_no: 1, content: contentOf(r.kind as ResourceKind, r.fields), origin: "educator", authored_by: [me] }).select("id").single();
+  const { data: v, error: ve } = await admin.from("ckri_knowledge_version").insert({ resource_id: res.id, version_no: 1, content: checked.content, origin: "educator", authored_by: [me] }).select("id").single();
   if (ve) { await admin.from("ckri_knowledge_resource").update({ status: "retired" }).eq("id", res.id); return { ok: false, error: dbRefusal(ve, "The content does not have the shape this kind needs.") }; }
   return { ok: true, resourceId: res.id, versionId: v.id };
 }
@@ -67,15 +85,20 @@ export async function saveDraft(admin: any, me: string, versionId: string, field
   const { data: v } = await admin.from("ckri_knowledge_version").select("id, state, authored_by, ckri_knowledge_resource(kind)").eq("id", versionId).maybeSingle();
   if (!v) return { ok: false, error: "Unknown version." };
   const kind = (v.ckri_knowledge_resource?.kind ?? "explanation") as ResourceKind;
+  if (v.state !== "draft") return { ok: false, error: "Only a draft is edited. Start a new version: the published one stays in use until the new one is approved and published." };
+  const checked = checkedContent(kind, fields);
+  if (!checked.ok) return checked;
   const authors = (v.authored_by ?? []).includes(me) ? v.authored_by : [...(v.authored_by ?? []), me];
-  const { error } = await admin.from("ckri_knowledge_version").update({ content: contentOf(kind, fields), authored_by: authors }).eq("id", versionId);
+  const { error } = await admin.from("ckri_knowledge_version").update({ content: checked.content, authored_by: authors }).eq("id", versionId);
   return error ? { ok: false, error: dbRefusal(error, "The draft could not be saved.") } : { ok: true };
 }
 
 export async function newVersion(admin: any, me: string, resourceId: string): Promise<R<{ versionId: string }>> {
   if (!UUID.test(resourceId)) return { ok: false, error: "Unknown resource." };
-  const { data: last } = await admin.from("ckri_knowledge_version").select("id, version_no, content").eq("resource_id", resourceId).order("version_no", { ascending: false }).limit(1).maybeSingle();
+  const { data: last } = await admin.from("ckri_knowledge_version").select("id, version_no, content, state").eq("resource_id", resourceId).order("version_no", { ascending: false }).limit(1).maybeSingle();
   if (!last) return { ok: false, error: "Unknown resource." };
+  // One open draft at a time: editing a published resource starts ONE new draft, copied from the latest version.
+  if (last.state === "draft") return { ok: false, error: `Version ${last.version_no} is still a draft. Edit that one.` };
   const { data, error } = await admin.from("ckri_knowledge_version").insert({ resource_id: resourceId, version_no: last.version_no + 1, content: last.content, origin: "educator", authored_by: [me], parent_version_id: last.id }).select("id").single();
   return error ? { ok: false, error: dbRefusal(error, "A new version could not be started.") } : { ok: true, versionId: data.id };
 }
@@ -121,7 +144,30 @@ export function clinicalState(state: string, decisions: { decision: string }[], 
   return required !== null && decisions.filter(d => d.decision === "approved").length >= required ? "approved" : "in_review";
 }
 
-export type VersionView = { id: string; versionNo: number; content: Record<string, unknown>; origin: string; state: string; educatorReviewed: boolean; competencies: string[]; clinical: ClinicalState; approvals: number; required: number | null };
+/**
+ * Where a version stands, as one status an author can read at a glance (OSCE-AUTHORING-01): Draft, In clinical review,
+ * Approved (not yet published), Published, Superseded, and the two ends, Rejected and Retired. Pure.
+ */
+export type VersionStatus = "draft" | "in_review" | "approved" | "rejected" | "published" | "superseded" | "retired";
+export const VERSION_STATUS_LABEL: Record<VersionStatus, string> = {
+  draft: "Draft", in_review: "In clinical review", approved: "Approved", rejected: "Rejected in clinical review",
+  published: "Published", superseded: "Superseded", retired: "Retired",
+};
+export const VERSION_STATUS_NOTE: Record<VersionStatus, string> = {
+  draft: "Not clinically reviewed. Never shown to learners.", in_review: "Awaiting independent clinical approval. Not shown to learners.",
+  approved: "Clinically approved, not yet published. Not shown to learners.", rejected: "Rejected in clinical review. Never shown to learners.",
+  published: "The version learners are given.", superseded: "Replaced by a later published version. No longer given to learners.",
+  retired: "Retired. Not shown to learners.",
+};
+export function versionStatus(state: string, clinical: ClinicalState): VersionStatus {
+  if (state === "published" || state === "superseded" || state === "retired") return state;
+  if (state === "draft") return "draft";
+  return clinical === "approved" ? "approved" : clinical === "rejected" ? "rejected" : "in_review";
+}
+/** Pure. Whether learners are given this version: published AND its exact content approved (what Scholar checks again). */
+export const servedToLearners = (v: { state: string; clinical: ClinicalState }) => v.state === "published" && v.clinical === "approved";
+
+export type VersionView = { id: string; versionNo: number; content: Record<string, unknown>; origin: string; state: string; status: VersionStatus; educatorReviewed: boolean; competencies: string[]; clinical: ClinicalState; approvals: number; required: number | null };
 export type ResourceView = { id: string; code: string; kind: ResourceKind; title: string; status: string; need_id: string | null; created_at: string; versions: VersionView[] };
 export type ReviewItem = { versionId: string; title: string; kind: string; origin: string; content: unknown; competencies: string[]; approvals: number; required: number };
 
@@ -143,9 +189,10 @@ export async function listResources(admin: any): Promise<ResourceView[] | null> 
     versions: (vers.data ?? []).filter((v: any) => v.resource_id === r.id).map((v: any) => {
       const review = (ccv.data ?? []).filter((c: any) => c.knowledge_version_id === v.id);
       const ds = (decisions ?? []).filter((d: any) => review.some((c: any) => c.id === d.version_id));
-      return { id: v.id, versionNo: v.version_no, content: v.content, origin: v.origin, state: v.state, educatorReviewed: !!v.educator_reviewed_by && v.educator_reviewed_hash === v.content_hash,
+      const clinical = clinicalState(v.state, ds, review[0]?.required_approvals ?? null);
+      return { id: v.id, versionNo: v.version_no, content: v.content, origin: v.origin, state: v.state, status: versionStatus(v.state, clinical), educatorReviewed: !!v.educator_reviewed_by && v.educator_reviewed_hash === v.content_hash,
         competencies: (links.data ?? []).filter((l: any) => l.version_id === v.id).map((l: any) => l.competency_id),
-        clinical: clinicalState(v.state, ds, review[0]?.required_approvals ?? null), approvals: ds.filter((d: any) => d.decision === "approved").length, required: review[0]?.required_approvals ?? null };
+        clinical, approvals: ds.filter((d: any) => d.decision === "approved").length, required: review[0]?.required_approvals ?? null };
     }),
   }));
 }

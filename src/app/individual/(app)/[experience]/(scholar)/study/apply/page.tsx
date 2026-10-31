@@ -8,6 +8,7 @@ import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from ".
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
 import { ExamPapersSection } from "../_components/papers-section";
+import { OsceEntry } from "../_components/osce-entry";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
 import { QuestionCard } from "../_components/client";
 import { CasePlayer } from "../_components/competency-client";
@@ -88,6 +89,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
       <StudyNav dueCount={due} />
       <BoundaryNotice notice={FORMATIVE_NOTICE} detail="Practice cases are formative simulation, not assessment." />
       <ExamPapersSection admin={ctx.admin} userId={ctx.userId} variant="apply" />
+      <OsceEntry admin={ctx.admin} userId={ctx.userId} />
 
       <div className="mb-8 grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">

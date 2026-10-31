@@ -21,6 +21,10 @@ export const studyHref = (seg = "") => experienceHref("scholar", seg ? `study/${
 /** EVALUATION-01: the Evaluate workspace, or one kept evaluation. Shared by server pages and client components. */
 export const evaluationHref = (id?: string) => (id ? studyHref(`evaluate/${id}`) : studyHref("evaluate"));
 
+/** An adaptive exam (its report or the runner), or the set-up page. Here, not in adaptive-client.tsx: a "use client"
+ * module's exports are client references on the server, and calling one from a Server Component throws (D2, 31 Oct 2026). */
+export const adaptiveHref = (sessionId?: string | null) => `${studyHref("revise/adaptive")}${sessionId ? `?session=${sessionId}` : ""}`;
+
 /** UPLOAD-01 U5: "Your notes are ready", for the materials just uploaded. */
 export const readyHref = (ids: readonly string[]) => `${studyHref("ready")}?ids=${ids.join(",")}`;
 

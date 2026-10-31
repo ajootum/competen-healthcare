@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { validateStationContent, type GovernedStationContent } from "./osce";
+
 // ── GOVERNED LIBRARY QUESTIONS, REUSED BEFORE ANY ARE WRITTEN ── SCHOLAR-SQIE-CLOSE-01 C (owner, 30 Oct 2026) ──────────
 //
 // The governed question library already exists: CKRI knowledge resources of kind revision_question (migration 442), each
@@ -118,20 +120,88 @@ async function approvedVersions(admin: any, versionIds: readonly string[]): Prom
  * Of these library versions, the ones that may still be offered: published, of an active revision_question resource,
  * and clinically approved. A copy of any other is no longer offered. Unreadable: none (fail closed).
  */
-export async function servableLibraryVersions(admin: any, versionIds: readonly string[]): Promise<Map<string, { versionNo: number }>> {
+export async function servableLibraryVersions(admin: any, versionIds: readonly string[]): Promise<Map<string, { versionNo: number; title?: string; code?: string; publishedAt?: string }>> {
   const ids = [...new Set(versionIds)];
   if (!ids.length) return new Map();
   try {
-    const v = await admin.from("ckri_knowledge_version").select("id, resource_id, version_no, state").in("id", ids).eq("state", "published");
+    const v = await admin.from("ckri_knowledge_version").select("id, resource_id, version_no, state, published_at").in("id", ids).eq("state", "published");
     if (v.error || !v.data?.length) return new Map();
-    const r = await admin.from("ckri_knowledge_resource").select("id").in("id", [...new Set((v.data as any[]).map(x => x.resource_id))])
+    const r = await admin.from("ckri_knowledge_resource").select("id, title, code").in("id", [...new Set((v.data as any[]).map(x => x.resource_id))])
       .eq("kind", "revision_question").eq("status", "active");
     if (r.error) return new Map();
-    const active = new Set(((r.data ?? []) as any[]).map(x => x.id));
+    const active = new Map(((r.data ?? []) as any[]).map(x => [x.id, x]));
     const live = (v.data as any[]).filter(x => active.has(x.resource_id));
     const approved = await approvedVersions(admin, live.map(x => x.id));
-    return new Map(live.filter(x => approved.has(x.id)).map(x => [x.id, { versionNo: x.version_no }]));
+    // SCHOLAR-FLASHCARDS-QA-01: the resource's title and code and the version's publication date travel with it, for
+    // the downloads' citations -- each only where 442 holds it.
+    const str = (x: unknown) => (typeof x === "string" && x.trim() ? x.trim() : null);
+    return new Map(live.filter(x => approved.has(x.id)).map(x => {
+      const res = active.get(x.resource_id), title = str(res?.title), code = str(res?.code), publishedAt = str(x.published_at);
+      return [x.id, { versionNo: x.version_no, ...(title ? { title } : {}), ...(code ? { code } : {}), ...(publishedAt ? { publishedAt } : {}) }];
+    }));
   } catch {
     return new Map();
+  }
+}
+
+// ── GOVERNED OSCE PRACTICE STATIONS ── SCHOLAR-OSCE-01 s3 (owner, 31 Oct 2026), migration 721 ──────────────────────
+//
+// The same governed library, one more kind: a CKRI knowledge resource of kind osce_station (442 widened by 721), each
+// version educator-reviewed, clinically approved on its exact content (395, ckri_knowledge_approved) and published
+// (hq.quality.knowledge.publish). Scholar READS them here and nothing else: published + approved only, never a draft,
+// a submitted, a superseded or a retired version, and never a private or learner-written station. The learner's copy is
+// their own individual_scholar_osce_station row (source library), which the 721 trigger refuses unless it is exactly
+// the published, approved content. The demo template is NOT here: it stays a Competen practice template, labelled not
+// clinically reviewed (osce.ts), and is never shown as validated.
+
+export type LibraryStation = {
+  versionId: string; resourceId: string; versionNo: number; title: string; publishedAt: string | null;
+  competencyIds: string[]; content: GovernedStationContent;
+};
+
+/**
+ * The published, clinically approved OSCE practice stations, newest first, at most `limit`. [] when there are none and
+ * when anything cannot be read (721 or 442 absent, an error): OSCE practice then offers its other sources, as before.
+ */
+export async function loadOsceLibraryStations(admin: any, limit = 50): Promise<LibraryStation[]> {
+  try {
+    const resources = await admin.from("ckri_knowledge_resource").select("id, kind, title, status").eq("kind", "osce_station").eq("status", "active").limit(200);
+    if (resources.error || !resources.data?.length) return [];
+    const resource = new Map((resources.data as any[]).map(r => [r.id, r]));
+    const versions = await admin.from("ckri_knowledge_version").select("id, resource_id, version_no, content, state, published_at")
+      .in("resource_id", [...resource.keys()]).eq("state", "published").order("published_at", { ascending: false }).limit(200);
+    if (versions.error || !versions.data?.length) return [];
+    const candidates = (versions.data as any[]).map(v => ({ v, c: validateStationContent(v.content) })).filter(x => x.c.ok).slice(0, limit);
+    const approved = await approvedVersions(admin, candidates.map(x => x.v.id));
+    const live = candidates.filter(x => approved.has(x.v.id));
+    const links = live.length ? await admin.from("ckri_knowledge_version_competency").select("version_id, competency_id").in("version_id", live.map(x => x.v.id)).limit(2000) : { data: [] };
+    const byVersion = new Map<string, string[]>();
+    for (const l of ((links as any).data ?? []) as any[]) byVersion.set(l.version_id, [...(byVersion.get(l.version_id) ?? []), l.competency_id]);
+    return live.map(({ v, c }) => ({
+      versionId: v.id, resourceId: v.resource_id, versionNo: v.version_no, title: String(resource.get(v.resource_id)!.title ?? ""), publishedAt: v.published_at ?? null,
+      competencyIds: byVersion.get(v.id) ?? [], content: (c as { ok: true; content: GovernedStationContent }).content,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** One governed station version, only while it is published, of an active osce_station resource, and approved. Else null. */
+export async function servableOsceStation(admin: any, versionId: string): Promise<LibraryStation | null> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(versionId)) return null;
+  try {
+    const v = await admin.from("ckri_knowledge_version").select("id, resource_id, version_no, content, state, published_at").eq("id", versionId).eq("state", "published").maybeSingle();
+    if (v.error || !v.data) return null;
+    const r = await admin.from("ckri_knowledge_resource").select("id, title").eq("id", v.data.resource_id).eq("kind", "osce_station").eq("status", "active").maybeSingle();
+    if (r.error || !r.data) return null;
+    const c = validateStationContent(v.data.content);
+    if (!c.ok || !(await approvedVersions(admin, [v.data.id])).has(v.data.id)) return null;
+    const links = await admin.from("ckri_knowledge_version_competency").select("competency_id").eq("version_id", v.data.id).limit(200);
+    return {
+      versionId: v.data.id, resourceId: v.data.resource_id, versionNo: v.data.version_no, title: String(r.data.title ?? ""), publishedAt: v.data.published_at ?? null,
+      competencyIds: ((links.data ?? []) as any[]).map(l => l.competency_id), content: c.content,
+    };
+  } catch {
+    return null;
   }
 }

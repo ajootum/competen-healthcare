@@ -8,7 +8,7 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { leadingCompetency } from "@/lib/competency/mapping";
 import {
-  chunkMappings, createRevisionSession, getPassage, getRevisionSet, insertLibraryCopies, insertQuestions, insertRevisionQuestions, isUuid, listMaterials, listRevisionSessions,
+  addDeckCards, chunkMappings, createRevisionSession, flashcardDecks, touchFlashcardDeck, getPassage, getRevisionSet, insertLibraryCopies, insertQuestions, insertRevisionQuestions, isUuid, listMaterials, listRevisionSessions,
   revisionPool, sectionLinks, sqieSchema, topicsOfSections, touchRevisionSet, type QuestionRow,
 } from "@/lib/individual/scholar/store";
 import { loadLibraryQuestions, pickLibraryQuestions, type LibrarySection } from "@/lib/individual/scholar/library-questions";
@@ -20,8 +20,10 @@ import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai
 import { formatPromptVersion, runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/generation";
 import { GENERATING_MODES, keyOf, pickQuestions, planGeneration, type PoolItem } from "@/lib/individual/scholar/revision";
 import { revisionItemView } from "@/lib/individual/scholar/revision-view";
+import { cardsOfDecks, gapFocus, libraryRecallFits, recallCardOf } from "@/lib/individual/scholar/flashcards";
+import { loadFlashcardGaps, loadFlashcards } from "@/lib/individual/scholar/flashcard-service";
 import { generationContextLoader } from "@/lib/individual/scholar/question-context";
-import { adaptDifficulty, generationDifficulty, isSourceMode, stemKey, type SourceMode } from "@/lib/individual/scholar/question-intel";
+import { adaptDifficulty, flashcardLevelMix, generationDifficulty, isSourceMode, stemKey, type SourceMode } from "@/lib/individual/scholar/question-intel";
 import {
   MOCK_LABEL, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
   type RevisionDifficulty, type RevisionFormat, type RevisionMode,
@@ -51,6 +53,18 @@ export const dynamic = "force-dynamic";
 //   STRUCTURED (multi-part) is offered where policy allows it AND 710 is applied, in sessions with feedback after each
 //   answer (a multi-part answer cannot yet be held to the end, so mock and end-of-session sessions leave it out).
 //   Without 710 neither happens: the session is made exactly as before.
+// SCHOLAR-FLASHCARDS-01 (mode flashcards, policy scholar_flashcards):
+//   deck / decks / cardIds  study a deck (a 730 deck id or a deck key), several decks, or chosen cards: stored cards
+//                   only, no AI, due first, at most fifty in one session.
+//                   only "due" (due and new) or "practice" (not remembered last time) narrows it.
+//   scope gaps      cards for the learner's own learning gaps: the sections of what they missed, new cards focused on
+//                   the key points and misconceptions missed (generation CONCEPTS), stored and library cards first.
+//   deckId          generate INTO a deck: the session takes cards not yet in it (stored and library first, then new,
+//                   at most scholar_flashcards_per_generation written), and they are added to the deck (by reference).
+//   generate false  use stored and library cards only.
+//   New cards are written to the level mix of policy scholar_flashcard_level_mix (SCHOLAR-FLASHCARDS-QA-01), only at the
+//   levels the passage supports; the audit row records the mix, the fallbacks and why.
+//   A governed library question whose stem stands alone is studied as a card (flashcards.ts recallCardOf), library first.
 // GET lists the student's recent revision sessions to resume.
 
 const pickFormats = (v: unknown, allowed: readonly RevisionFormat[]): RevisionFormat[] => {
@@ -69,6 +83,29 @@ export async function POST(req: Request) {
   if (!(REVISION_MODES as readonly string[]).includes(mode)) return NextResponse.json({ error: "Unknown way of revising." }, { status: 400 });
   if (!policy.scholarRevisionModes.includes(mode)) return NextResponse.json({ error: "That way of revising is not offered here." }, { status: 403 });
   const feedback: "immediate" | "end" = mode === "mock" ? "end" : body?.feedback === "end" || body?.feedback === "immediate" ? body.feedback : policy.scholarRevisionFeedback;
+
+  // ── SCHOLAR-FLASHCARDS-01: offered by policy, and a deck or chosen cards are studied as they are, with no AI ──
+  if (mode === "flashcards" && policy.scholarFlashcards !== "on") return NextResponse.json({ error: "Flashcards are not offered here." }, { status: 403 });
+  if (mode === "flashcards" && (typeof body?.deck === "string" || Array.isArray(body?.decks) || Array.isArray(body?.cardIds))) {
+    const lib = await loadFlashcards(ctx);
+    if (!lib.ok) return NextResponse.json({ error: "Your cards could not be read just now." }, { status: 503 });
+    const have = new Map(lib.data.cards.map(c => [c.id, c]));
+    let ids = typeof body.deck === "string" ? cardsOfDecks(lib.data.decks, [body.deck])
+      : Array.isArray(body.decks) ? cardsOfDecks(lib.data.decks, (body.decks as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 20))
+        : (body.cardIds as unknown[]).filter((x): x is string => typeof x === "string");
+    ids = ids.filter(id => have.has(id));
+    if (body?.only === "due") ids = ids.filter(id => ["due", "new"].includes(have.get(id)!.review.state));
+    else if (body?.only === "practice") ids = ids.filter(id => have.get(id)!.review.state === "needs_practice");
+    if (!ids.length) return NextResponse.json({ error: body?.only === "due" ? "Nothing here is due for review today." : body?.only === "practice" ? "Nothing here needs more practice right now." : "There are no cards here yet." }, { status: 404 });
+    const items: PoolItem[] = ids.map(id => { const c = have.get(id)!; return { id, kind: "flashcard", difficulty: c.difficulty, chunkId: c.chunkId, createdAt: c.createdAt, latestCorrect: null, misses: 0, lastAnsweredAt: c.review.lastReviewedAt, due: c.review.state === "due" }; });
+    const picked = pickQuestions({ mode, pool: items, quantity: REVISION_QUANTITY_MAX, formats: ["flashcard"], difficulty: "any", seed: `${ctx.userId}:${mode}` });
+    const made = await createRevisionSession(ctx.admin, ctx.userId, { mode, feedback: "immediate", questionIds: picked.ids });
+    if (!made.ok) return NextResponse.json({ error: made.notProvisioned ? "Study sessions are not kept on this environment yet." : "Your study session could not be started just now." }, { status: made.notProvisioned ? 409 : 500 });
+    const deck = typeof body.deck === "string" ? lib.data.decks.find(d => d.key === body.deck || d.id === body.deck) ?? null : null;
+    if (deck?.id) await touchFlashcardDeck(ctx.admin, ctx.userId, deck.id);
+    await audit(ctx, "individual_scholar_revision_started", "individual_scholar_revision_session", made.id, { mode, deck: deck?.kind ?? "cards", only: body?.only ?? null, questions: picked.ids.length, generated: 0 });
+    return NextResponse.json({ session: { id: made.id, mode, feedback: "immediate", total: picked.ids.length, position: 0 }, generated: 0, reused: picked.ids.length, of: ids.length });
+  }
 
   // ── a saved set: its own questions, replayed with no AI ──
   if (mode === "custom") {
@@ -92,7 +129,14 @@ export async function POST(req: Request) {
   // ── the scope: Stage 3's, or the whole library ──
   let chunkIds: string[] | null = null;
   let scopeSections: string[] = [];
-  if (body?.scope && typeof body.scope === "object" && body.scope.kind !== "library") {
+  // SCHOLAR-FLASHCARDS-01: the learner's own learning gaps, as cards: where they missed, and what to focus on.
+  let gapConcepts: Map<string, string[]> | null = null;
+  if (body?.scope?.kind === "gaps") {
+    if (mode !== "flashcards") return NextResponse.json({ error: "Learning gaps are revised as flashcards." }, { status: 400 });
+    const focus = gapFocus(await loadFlashcardGaps(ctx));
+    if (!focus.chunkIds.length) return NextResponse.json({ error: "No learning gaps yet: questions you get wrong, and cards you do not remember, show up here." }, { status: 404 });
+    chunkIds = focus.chunkIds; scopeSections = focus.chunkIds; gapConcepts = focus.concepts;
+  } else if (body?.scope && typeof body.scope === "object" && body.scope.kind !== "library") {
     const scope = parseScope(body);
     if (typeof scope === "string") return NextResponse.json({ error: scope }, { status: 400 });
     if (scope.kind === "topic" && findPatientIdentifiers(scope.topic).length)
@@ -118,30 +162,38 @@ export async function POST(req: Request) {
   if (!formats.length) return NextResponse.json({ error: "None of those question formats is offered here." }, { status: 400 });
   const quantity = Number.isInteger(body?.quantity) ? Math.min(REVISION_QUANTITY_MAX, Math.max(1, body.quantity)) : policy.scholarRevisionQuantity;
   const asked: RevisionDifficulty | null = (REVISION_DIFFICULTIES as readonly string[]).includes(body?.difficulty) ? body.difficulty : null;
-  let difficulty: RevisionDifficulty = asked ?? policy.scholarRevisionDifficulty;
+  let difficulty: RevisionDifficulty = asked ?? (mode === "flashcards" ? policy.scholarFlashcardDifficulty : policy.scholarRevisionDifficulty);
   // SCHOLAR-SQIE-01: where questions come from -- the notes (default), or the notes with approved references.
-  const sourceMode: SourceMode = isSourceMode(body?.source) ? body.source : "notes";
+  const sourceMode: SourceMode = isSourceMode(body?.source) && (mode !== "flashcards" || policy.scholarFlashcardSourceModes.includes(body.source)) ? body.source : "notes";
   const loader = await generationContextLoader(ctx.admin, ctx.userId, policy);
   const kinds = mode === "flashcards" ? (["flashcard"] as RevisionFormat[]) : formats;
   const seed = `${ctx.userId}:${new Date().toISOString().slice(0, 10)}:${mode}`;
 
+  // SCHOLAR-FLASHCARDS-01: generating INTO a deck takes cards not yet in it, and adds them to it (by reference).
+  const targetDeck = mode === "flashcards" && isUuid(body?.deckId) ? (await flashcardDecks(ctx.admin, ctx.userId)).find(d => d.id === body.deckId) ?? null : null;
+  if (isUuid(body?.deckId) && !targetDeck) return NextResponse.json({ error: "That deck could not be found." }, { status: 404 });
+  const inDeck = new Set(targetDeck?.cardIds ?? []);
+  // At most this many new cards are written for one flashcards request (policy). Other modes: the call cap only.
+  const genCap = mode === "flashcards" ? policy.scholarFlashcardsPerGeneration : Number.POSITIVE_INFINITY;
   // Library copies this session reuses: read with the pool wherever they were first filed.
   let libraryIds: string[] = [];
   const poolOf = async () => {
-    const p = await revisionPool(ctx.admin, ctx.userId, { chunkIds, kinds, extraIds: libraryIds });
+    // Flashcards: cards, and governed library questions that stand alone as a recall prompt (recallCardOf).
+    const p = await revisionPool(ctx.admin, ctx.userId, { chunkIds, kinds: mode === "flashcards" ? ["flashcard", "mcq"] : kinds, extraIds: libraryIds });
     if (!p.ok) return null;
-    const items: PoolItem[] = p.data.questions.filter(q => !!keyOf(q)).map(q => {
+    const qs = mode === "flashcards" ? p.data.questions.map(recallCardOf).filter((q): q is QuestionRow => !!q) : p.data.questions;
+    const items: PoolItem[] = qs.filter(q => !!keyOf(q) && !inDeck.has(q.id)).map(q => {
       const s = p.data.stats.get(q.id)!;
       return { id: q.id, kind: q.kind, difficulty: q.difficulty, chunkId: q.chunkId, createdAt: q.createdAt, latestCorrect: s.latestCorrect, misses: s.misses, lastAnsweredAt: s.lastAnsweredAt, due: s.due };
     });
-    return { questions: p.data.questions, items };
+    return { questions: qs, items };
   };
   let pool = await poolOf();
   if (!pool) return NextResponse.json({ error: "Your saved questions could not be read just now." }, { status: 503 });
   // SCHOLAR-SQIE-01: with no difficulty chosen, the default is the programme level's (else the policy's), stepped up
   // after three right answers and down after two misses in the last three (question-intel.ts adaptDifficulty). A
   // default only: a chosen difficulty is always used as chosen, and nothing is withheld by it.
-  if (!asked) {
+  if (!asked && (mode !== "flashcards" || policy.scholarFlashcardDifficulty === "any")) {
     const base = loader.levelDefault ?? generationDifficulty(policy.scholarRevisionDifficulty);
     const recent = pool.items.filter(p => p.lastAnsweredAt && p.latestCorrect !== null)
       .sort((a, b) => (b.lastAnsweredAt ?? "").localeCompare(a.lastAnsweredAt ?? "")).map(p => p.latestCorrect as boolean);
@@ -151,7 +203,7 @@ export async function POST(req: Request) {
 
   // ── SCHOLAR-SQIE-CLOSE-01 C: the shortfall's multiple-choice places from the governed library first, with no AI ──
   let libraryVersions: string[] = [];
-  if (pick.shortfall > 0 && GENERATING_MODES.includes(mode) && kinds.includes("mcq") && scopeSections.length && sqie) {
+  if (pick.shortfall > 0 && GENERATING_MODES.includes(mode) && (kinds.includes("mcq") || mode === "flashcards") && scopeSections.length && sqie) {
     const sections = scopeSections.slice(0, 40);
     const [links, topics] = await Promise.all([sectionLinks(ctx.admin, ctx.userId, sections), topicsOfSections(ctx.admin, ctx.userId, sections)]);
     const libSections: LibrarySection[] = sections
@@ -160,7 +212,8 @@ export async function POST(req: Request) {
     if (libSections.length) {
       const library = await loadLibraryQuestions(ctx.admin, libSections.flatMap(x => x.competencyIds));
       const held = new Set(pool.questions.map(q => q.library?.versionId).filter((v): v is string => !!v));
-      const picks = pickLibraryQuestions({ questions: library, sections: libSections, exclude: held, limit: pick.shortfall });
+      // SCHOLAR-FLASHCARDS-01: as cards, only a library question whose stem stands alone as a recall prompt.
+      const picks = pickLibraryQuestions({ questions: mode === "flashcards" ? library.filter(x => libraryRecallFits(x.stem)) : library, sections: libSections, exclude: held, limit: pick.shortfall });
       const copies = await insertLibraryCopies(ctx.admin, ctx.userId, picks);
       if (copies.ids.length) {
         libraryIds = copies.ids; libraryVersions = picks.map(x => x.question.versionId);
@@ -176,7 +229,7 @@ export async function POST(req: Request) {
   // ── the shortfall: written new only where the mode, the policy and the student's AI allow ──
   let generated = 0, note: string | null = null, aiCalls = 0, referencesUsed = false;
   const stems = new Set(pool.questions.map(q => stemKey(q.stem)));
-  if (pick.shortfall > 0 && GENERATING_MODES.includes(mode) && scopeSections.length) {
+  if (pick.shortfall > 0 && GENERATING_MODES.includes(mode) && scopeSections.length && body?.generate !== false) {
     if (policy.scholarRevisionGeneration === "saved_only") note = "New questions are not written here: this session uses your saved questions only.";
     else {
       const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "questions");
@@ -189,8 +242,8 @@ export async function POST(req: Request) {
         // Rounds: an item the checks drop leaves the session short, so a second round writes for what is still
         // missing -- never a section and format already written, and never more than REVISION_GENERATION_CALLS_MAX calls.
         let i = 0, refused = false;
-        for (let round = 0; round < 2 && pick.shortfall > 0 && i < REVISION_GENERATION_CALLS_MAX && !refused; round++) {
-          const plan = planGeneration({ shortfall: pick.shortfall, chunkIds: scopeSections, formats: kinds, existing });
+        for (let round = 0; round < 2 && pick.shortfall > 0 && generated < genCap && i < REVISION_GENERATION_CALLS_MAX && !refused; round++) {
+          const plan = planGeneration({ shortfall: Math.min(pick.shortfall, genCap - generated), chunkIds: scopeSections, formats: kinds, existing });
           let made = 0;
           for (const call of plan.slice(0, REVISION_GENERATION_CALLS_MAX - i)) {
             existing.add(`${call.chunkId}|${call.kind}`);
@@ -201,9 +254,13 @@ export async function POST(req: Request) {
             const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
             // SCHOLAR-QUESTION-INTELLIGENCE-01: the section's guidance, the difficulty, and (revision kinds only: an mcq
             // cannot record a reference) the approved references of mode notes_and_references.
-            const context = await loader.forSection(passage.chunkId, { difficulty: generationDifficulty(difficulty), mode: call.kind === "mcq" ? "notes" : sourceMode });
+            const sectionContext = await loader.forSection(passage.chunkId, { difficulty: generationDifficulty(difficulty), mode: call.kind === "mcq" ? "notes" : sourceMode });
+            // SCHOLAR-FLASHCARDS-01: cards for a learning gap test what was missed (still only what the passage holds).
+            const focus = gapConcepts?.get(passage.chunkId) ?? [];
+            const context = focus.length ? { ...sectionContext, concepts: [...focus, ...sectionContext.concepts] } : sectionContext;
             if (context.mode === "notes_and_references") referencesUsed = true;
             let ids: string[] = [], outcome = "", calls = 0;
+            let mixPlan: { levels: Record<string, number>; fallback: string[]; relabelled: number } | null = null;
             let measured: { accepted: number; rejected: number; reasons: string[]; promptVersion: string | null } | null = null;
             if (call.kind === "mcq") {
               // Each call asks for up to three: the checks drop some, and what is kept beyond this session is saved
@@ -218,7 +275,10 @@ export async function POST(req: Request) {
               }
               else outcome = `error:${r.error}`;
             } else {
-              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, Math.max(call.count, 3), ai.run, { context, existing: stems });
+              // SCHOLAR-FLASHCARDS-QA-01: flashcards to the policy's level mix (by programme level by default).
+              const levelMix = call.kind === "flashcard" ? flashcardLevelMix(policy.scholarFlashcardLevelMix, loader.levelDefault) : undefined;
+              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, mode === "flashcards" ? call.count : Math.max(call.count, 3), ai.run, { context, existing: stems, levelMix });
+              if (r.ok && r.levelPlan) mixPlan = r.levelPlan;
               if (r.ok) {
                 calls = r.calls; r.kept.forEach(d => stems.add(stemKey(d.stem)));
                 const s = await insertRevisionQuestions(ctx.admin, ctx.userId, { passage, kind: call.kind, drafts: r.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
@@ -240,6 +300,8 @@ export async function POST(req: Request) {
             await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_revision_generate", null, {
               chunk_id: passage.chunkId, kind: call.kind, asked: call.count, outcome, competency_id: competencyId,
               ai_calls: calls, difficulty: context.difficulty, source: context.mode, references: context.references.length,
+              // The level mix asked for, the levels the passage could not support (why), and cards relabelled: codes and counts.
+              ...(mixPlan ? { level_mix: mixPlan.levels, level_fallback: mixPlan.fallback, level_relabelled: mixPlan.relabelled } : {}),
             });
             aiCalls += calls;
             made += ids.length;
@@ -266,6 +328,15 @@ export async function POST(req: Request) {
   const byId = new Map(pool.questions.map(q => [q.id, q]));
   const ordered = pick.ids.map(id => byId.get(id)!).filter(Boolean);
   const made = await createRevisionSession(ctx.admin, ctx.userId, { mode, feedback, questionIds: ordered.map(q => q.id) });
+  // SCHOLAR-FLASHCARDS-01: the cards go into the deck asked for, by reference, up to the deck size limit.
+  let deckNote: string | null = null;
+  if (targetDeck) {
+    const room = Math.max(0, policy.scholarFlashcardDeckMax - targetDeck.cardIds.length);
+    const add = ordered.map(q => q.id).slice(0, room);
+    if (add.length) await addDeckCards(ctx.admin, ctx.userId, targetDeck.id, add);
+    await touchFlashcardDeck(ctx.admin, ctx.userId, targetDeck.id);
+    if (add.length < ordered.length) deckNote = `The deck holds at most ${policy.scholarFlashcardDeckMax} cards, so ${ordered.length - add.length} of these were not added to it.`;
+  }
   // SCHOLAR-SQIE-CLOSE-01: how the session was filled -- saved questions reused, governed library questions reused, new ones written.
   const fromLibrary = ordered.filter(q => q.library && libraryIds.includes(q.id)).length;
   const reused = Math.max(0, ordered.length - Math.min(generated, ordered.length) - fromLibrary);
@@ -278,7 +349,7 @@ export async function POST(req: Request) {
     session: made.ok ? { id: made.id, mode, feedback, total: ordered.length, position: 0 } : null,
     items: ordered.map(revisionItemView), generated, reused, library: fromLibrary,
     label: mode === "mock" ? MOCK_LABEL : null, difficulty, source: sourceMode, aiCalls, ...(withheld ? { withheld } : {}),
-    note: [note ?? (made.ok ? null : "Revision sessions are not kept on this environment, so this one cannot be resumed later."), sourceNote].filter(Boolean).join(" ") || null,
+    note: [note ?? (made.ok ? null : "Revision sessions are not kept on this environment, so this one cannot be resumed later."), sourceNote, deckNote].filter(Boolean).join(" ") || null,
   });
 }
 

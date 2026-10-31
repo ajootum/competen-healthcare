@@ -8,6 +8,7 @@ import { gapList, loadReadiness } from "@/lib/ai/readiness";
 import { attestProvider, changeRate, createBudget, publishPolicies, RATE_KINDS, runProviderChecks, saveBudgetPolicyDraft, saveModelRoutingDraft, savePolicyDraft, saveProviderRegistration, saveRoutingDraft, setBudgetStatus, setProviderStatus, type RateKind } from "@/lib/ai/fair-use-admin";
 import { BUDGET_CODE } from "@/lib/ai/consumption";
 import { AI_PRODUCTS, type AiProduct } from "@/lib/ai/fair-use-policy";
+import { publishContentReview, rollbackContentReview, saveContentReviewDraft } from "@/lib/ai/content-review-admin";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -23,6 +24,10 @@ export const dynamic = "force-dynamic";
 //                                                  pilot publishes and rolls back without the other AI drafts.)
 //       { action: "provider_save", provider } | { action: "provider_check", id } | { action: "provider_attest", id, kind, ... } |
 //       { action: "provider_status", id, status }   (registration: provider-registry.ts. A key is never sent or returned.)
+//       { action: "content_review_save", product, rules } | { action: "content_review_publish", note? } |
+//       { action: "content_review_rollback", versionId }   (clinical educational content review rules: content-review.ts.
+//                                                  Their own CONFIG-002 scope, platform / ai_content_review. They only
+//                                                  flag learner content; they never touch grounding, eligibility or risk.)
 //
 // ⚠ GATED BY hqApiGate(["hq.platform.ai.manage"]) (migration 410, the Platform Director). Rates are append-only
 // history (the 410 guard). Policies go through the CONFIG-002 engine, clamped by the same resolvePolicy the engine
@@ -95,6 +100,30 @@ export async function POST(req: Request) {
       const r = await rollbackVersion(ctx.admin, actor, body.versionId, { scope: MODE_SCOPE, prune: true });
       if (!r.ok) return refuse(r.status, r.error);
       await audit("ai_modes_rolled_back", { to_version: body.versionId, restored: r.restored, pruned: r.pruned });
+      return NextResponse.json({ ok: true });
+    }
+    // ── Clinical educational content review rules (SCHOLAR-FLASHCARDS-QA-01 c, owner GO 31 Oct 2026). Their own scope. ──
+    case "content_review_save": {
+      if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
+      const r = await saveContentReviewDraft(ctx.admin, actor, body.product, body.rules ?? {});
+      if (!r.ok) return refuse(r.status, r.error);
+      await audit("ai_content_review_draft", { product: body.product, rules: Array.isArray(body.rules?.rules) ? body.rules.rules.map((x: { id?: unknown }) => String(x?.id ?? "")).slice(0, 40) : [] });
+      return NextResponse.json({ ok: true });
+    }
+    case "content_review_publish": {
+      if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
+      const note = typeof body.note === "string" ? body.note.slice(0, 500) : null;
+      const r = await publishContentReview(ctx.admin, actor, note);
+      if (!r.ok) return refuse(r.status, r.error);
+      await audit("ai_content_review_published", { version_id: r.version_id ?? null, modules: r.modules, note });
+      return NextResponse.json({ ok: true });
+    }
+    case "content_review_rollback": {
+      if (typeof body.versionId !== "string" || !body.versionId) return refuse(400, "Choose a version.");
+      if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
+      const r = await rollbackContentReview(ctx.admin, actor, body.versionId);
+      if (!r.ok) return refuse(r.status, r.error);
+      await audit("ai_content_review_rolled_back", { to_version: body.versionId, restored: r.restored, pruned: r.pruned });
       return NextResponse.json({ ok: true });
     }
     // ── Budgets (AI-CONSUMPTION-01 s6). Identity and status are rows; policy and routing are CONFIG-002 drafts. ──

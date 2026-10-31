@@ -290,6 +290,24 @@ const STAGING_ONLY: Exclusion[] = [
       + "(BASE_URL=http://localhost:3100), the staging service-role key, real AI and real PubMed / OpenAlex / Crossref; "
       + "it creates fixture identities and changes staging settings, restoring both in Z. Refuses any other project.",
   },
+  {
+    file: "scholar-practice-acceptance-harness.ts",
+    reason:
+      "SCHOLAR-OSCE-01 s11 OSCE practice acceptance + Adaptive Exams (SCHOLAR-PRACTICE-EXAMS-01). Needs a RUNNING dev "
+      + "server pointed at the staging project (BASE_URL=http://localhost:3100) with migrations 720 and 721, the staging "
+      + "service-role key and STAGING_DB_URL (verification-table counts), and real AI (evaluate, questions). It creates "
+      + "fixture identities, moves a run's start back to simulate time up, and keeps one browser fixture for the coordinator. "
+      + "Changes no staging setting (proved in Z). Refuses any other project.",
+  },
+  {
+    file: "scholar-flashcards-acceptance-harness.ts",
+    reason:
+      "SCHOLAR-FLASHCARDS-01 s14 flashcards acceptance (renal + respiratory notes). Needs a RUNNING dev server pointed at "
+      + "the staging project (BASE_URL=http://localhost:3100) with migration 730, the staging service-role key, "
+      + "STAGING_DB_URL (verification-table counts) and real AI (activity questions). It creates fixture identities, "
+      + "writes the exported PDFs to a local folder, and keeps one flashcards browser fixture for the coordinator. "
+      + "Changes no staging setting (proved in Z). Refuses any other project.",
+  },
 ];
 
 // ── Run ──────────────────────────────────────────────────────────────────────────────────────────

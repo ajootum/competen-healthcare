@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import {
-  countDue, dueCards, getRevisionSession, listMaterials, listRevisionSessions, listRevisionSets, readConsent, revisionInsightRows, revisionPool, sqieSchema, type QuestionRow,
+  countDue, dueCards, getAdaptiveSet, getRevisionSession, listAdaptiveExams, listMaterials, listRevisionSessions, listRevisionSets, readConsent, revisionInsightRows, revisionPool, sqieSchema, type QuestionRow,
 } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
 import { answerText, buildRevisionInsights } from "@/lib/individual/scholar/revision";
@@ -12,14 +13,15 @@ import { feedbackView, revisionItemView } from "@/lib/individual/scholar/revisio
 import { loadLearnerCatalogue, competencyLabels } from "@/lib/individual/scholar/competency-view";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
-import { REVISION_FORMATS, REVISION_MODE_LABEL, type Marking, type RevisionMode } from "@/lib/individual/scholar/config";
+import { ADAPTIVE_HELP, ADAPTIVE_RULE, REVISION_FORMATS, REVISION_MODE_LABEL, type Marking, type RevisionMode } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice, EmptyState } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { ExamPapersSection } from "../_components/papers-section";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
 import { CardReview, type CardView } from "../_components/client";
-import { sourceHref, studyHref } from "../_components/question-view";
+import { adaptiveHref, sourceHref, studyHref } from "../_components/question-view";
 import { RevisionRunner, RevisionStart, SavedSets } from "../_components/revision-client";
+import { ReviseNav, flashcardsHref } from "../_components/revise-nav";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -53,11 +55,13 @@ export default async function Revise({ params, searchParams }: { params: Promise
   const { ctx } = page;
   const x = SCHOLAR;
   const q = await searchParams;
-  const due = await countDue(ctx.admin, ctx.userId);
+  const [due, navPolicy] = await Promise.all([countDue(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
+  const reviseNavAdaptive = navPolicy.scholarAdaptiveExams === "on";
   const header = (
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("revise").eyebrow} title="Revise" intro={scholarSpace("revise").intro} />
       <StudyNav dueCount={due} />
+      <ReviseNav current="practice" adaptive={reviseNavAdaptive} row />
       <BoundaryNotice notice={FORMATIVE_NOTICE} />
     </>
   );
@@ -67,6 +71,10 @@ export default async function Revise({ params, searchParams }: { params: Promise
   if (q.session) {
     const [s, pool] = await Promise.all([getRevisionSession(ctx.admin, ctx.userId, q.session), revisionPool(ctx.admin, ctx.userId, { kinds: [...REVISION_FORMATS, "case"] })]);
     if (!s.ok || !pool.ok) return <>{header}<Unreadable what="this revision session" /></>;
+    // SCHOLAR-PRACTICE-EXAMS-01: an adaptive exam runs on its own page (its questions are chosen one at a time).
+    // SCHOLAR-FLASHCARDS-01: a flashcards session runs on the Flashcards page (the card-flipping study view).
+    if (s.data && s.data.session.mode === "flashcards") redirect(flashcardsHref({ session: s.data.session.id }));
+    if (s.data && (s.data.session.mode === "adaptive" || await getAdaptiveSet(ctx.admin, ctx.userId, s.data.session.setId))) redirect(adaptiveHref(s.data.session.id));
     if (!s.data) return <>{header}<StatePanel title="That revision session could not be found" actions={<Link href={studyHref("revise")} className={focusRing}>Back to Revision</Link>}><p>It may have been removed with the materials it used.</p></StatePanel></>;
     const byId = new Map(pool.data.questions.map(qq => [qq.id, qq]));
     const questions = s.data.questionIds.map(id => byId.get(id)).filter((qq): qq is QuestionRow => !!qq);
@@ -86,11 +94,14 @@ export default async function Revise({ params, searchParams }: { params: Promise
   }
 
   // ── the workspace ──
-  const [policy, materials, sets, sessions, rows, cards, learner, consent, sqie] = await Promise.all([
-    loadIndividualPolicy(ctx.admin), listMaterials(ctx.admin, ctx.userId), listRevisionSets(ctx.admin, ctx.userId), listRevisionSessions(ctx.admin, ctx.userId, 5),
+  const [policy, materials, sets, sessions, rows, cards, learner, consent, sqie, exams] = await Promise.all([
+    loadIndividualPolicy(ctx.admin), listMaterials(ctx.admin, ctx.userId), listRevisionSets(ctx.admin, ctx.userId), listRevisionSessions(ctx.admin, ctx.userId, 10),
     revisionInsightRows(ctx.admin, ctx.userId), dueCards(ctx.admin, ctx.userId), loadLearnerCatalogue(ctx.admin, ctx.userId), readConsent(ctx.admin, ctx.userId),
-    sqieSchema(ctx.admin, ctx.userId),
+    sqieSchema(ctx.admin, ctx.userId), listAdaptiveExams(ctx.admin, ctx.userId, 5),
   ]);
+  // SCHOLAR-PRACTICE-EXAMS-01: adaptive exams are resumed from their own card, not from "Carry on".
+  const examIds = new Set(exams.ok ? exams.data.map(x => x.session.id) : []);
+  const examsActive = exams.ok ? exams.data.filter(x => x.session.status === "active") : [];
   // SCHOLAR-SQIE-CLOSE-01: structured (multi-part) is offered only where migration 710 stores it.
   const formats = policy.scholarRevisionFormats.filter(x => x !== "structured" || sqie);
   const status = consent.ok ? consentStatus(consent.data, consentDocuments().published) : null;
@@ -110,7 +121,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
     citation: `${c.question.materialTitle}, ${c.question.ordinal !== null ? citeChunk({ ordinal: c.question.ordinal, pageFrom: c.question.pageFrom, pageTo: c.question.pageTo }, c.question.unit) : "source section"}`,
     href: sourceHref(c.question.materialId, c.question.chunkId),
   })) : [];
-  const active = sessions.ok ? sessions.data.filter(s => s.status === "active") : [];
+  const active = sessions.ok ? sessions.data.filter(s => s.status === "active" && s.mode !== "adaptive" && !examIds.has(s.id)).slice(0, 5) : [];
 
   // HFE-01 Wave 4 (F10): before there is anything to revise, one message and one action -- not a dashboard of zeros.
   const nothingYet = materials.ok && mats.length === 0 && rows.ok && rows.data.attempts.length === 0
@@ -137,6 +148,31 @@ export default async function Revise({ params, searchParams }: { params: Promise
             difficulty={policy.scholarRevisionDifficulty} feedback={policy.scholarRevisionFeedback} materials={mats}
             competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote}
             preset={q.material ? { materialId: q.material, difficulty: q.difficulty ?? null } : null} />
+
+          {policy.scholarAdaptiveExams === "on" && (
+            <section aria-labelledby="adaptive-h" className="rounded-2xl border border-gray-200 bg-white p-5">
+              <h2 id="adaptive-h" className="text-[15px] font-bold text-gray-900">Adaptive exam</h2>
+              <p className="mt-0.5 text-[13px] text-gray-600">{ADAPTIVE_HELP}</p>
+              <p className="mt-2 rounded-lg bg-[var(--cmp-theme-soft)] px-3 py-2 text-[12.5px] text-gray-800"><span className="font-semibold">How it adapts: </span>{ADAPTIVE_RULE}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Link href={adaptiveHref()} className={`inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Set up an adaptive exam</Link>
+                {examsActive.map(e => (
+                  <Link key={e.session.id} href={adaptiveHref(e.session.id)} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`}>Carry on: {e.title} ({e.session.position} answered)</Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {policy.scholarFlashcards === "on" && (
+            <section aria-labelledby="flashcards-h" className="rounded-2xl border border-gray-200 bg-white p-5">
+              <h2 id="flashcards-h" className="text-[15px] font-bold text-gray-900">Flashcards</h2>
+              <p className="mt-0.5 text-[13px] text-gray-600">Recall the answer, flip the card, and say whether you remembered: it comes back sooner or later on your spaced review schedule. From your notes, the Competen library and your learning gaps, or cards you write yourself, in decks you can download.</p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Link href={flashcardsHref()} className={`inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Open Flashcards</Link>
+                <Link href={flashcardsHref({ view: "decks" })} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`}>My Decks</Link>
+              </div>
+            </section>
+          )}
 
           {active.length > 0 && (
             <section aria-labelledby="resume-h" className="rounded-2xl border border-gray-200 bg-white p-5">

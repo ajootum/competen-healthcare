@@ -135,11 +135,6 @@ export const SCHOLAR: ExperienceConfig = {
       summary: "Listen to explanations of your notes on the move.",
       reason: "Text-to-speech of explanations is not built, so nothing can be read aloud yet.",
     },
-    {
-      key: "osce-adaptive", label: "OSCE practice and adaptive exams",
-      summary: "Station practice, and tests that adapt to what you know.",
-      reason: "Neither is built for Scholar yet. Nothing you do in My Learning is recorded as OSCE or exam practice.",
-    },
   ],
 };
 

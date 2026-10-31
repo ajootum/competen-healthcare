@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import { isNotProvisioned } from "../access";
-import { BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
+import { LEARNER_CARD, BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
 import type { Chunk, ExtractionQuality } from "./extract";
 import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
@@ -18,6 +18,9 @@ import type { ExamOption, PaperFlag, ParsedQuestion, QuestionFlag } from "./exam
 import { stemKey } from "./question-intel";
 import { servableLibraryVersions, type LibraryPick } from "./library-questions";
 import type { ResearchSource } from "./exam-research";
+import type { OsceDefinition, OsceItem, OsceSource, OsceStationDraft, OsceTick } from "./osce";
+import { guidanceJson, readDefinition } from "./osce";
+import type { CardRowExtras, PersonalDeck } from "./flashcards";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -282,8 +285,13 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   const { error: rtErr } = await admin.from("individual_scholar_revision_set").delete().eq("user_id", userId);
   // EVALUATION-01 (426): the evaluations go too. Absent table: nothing to do.
   const { error: evErr } = await admin.from("individual_scholar_evaluation").delete().eq("user_id", userId);
+  // SCHOLAR-PRACTICE-EXAMS-01 (720): OSCE practice stations go too, and their runs by cascade. Stations written from a
+  // material already went with it. Absent table: nothing to do.
+  const { error: osErr } = await admin.from("individual_scholar_osce_station").delete().eq("user_id", userId);
+  // SCHOLAR-FLASHCARDS-01 (730): the flashcard decks go too. Their cards and card marks went with the questions. Absent table: nothing to do.
+  const { error: fdErr } = await admin.from("individual_scholar_flashcard_deck").delete().eq("user_id", userId);
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr), erased: rows.length };
+  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
@@ -476,7 +484,11 @@ export type QuestionRow = {
    */
   library?: LibraryProvenance | null;
 };
-export type LibraryProvenance = { resourceId: string; versionId: string; versionNo: number; approval: "clinically_approved" };
+export type LibraryProvenance = {
+  resourceId: string; versionId: string; versionNo: number; approval: "clinically_approved";
+  /** SCHOLAR-FLASHCARDS-QA-01: the resource's own title and code and the version's publication date, where 442 holds them (cited, never invented). */
+  title?: string; code?: string; publishedAt?: string;
+};
 
 const QUESTION_COLS = "id, material_id, chunk_id, kind, stem, options, correct_index, rationale, source_quote, model, prompt_version, created_at";
 
@@ -547,7 +559,10 @@ async function hydrate(admin: Admin, userId: string, rows: any[]): Promise<Quest
       latest: l ? { correct: l.correct, chosenIndex: l.chosen_index, answeredAt: l.answered_at } : null,
       competencyId: extra.get(r.id)?.competency_id ?? null, caseId: extra.get(r.id)?.case_id ?? null,
       caseStep: extra.get(r.id)?.case_step ?? null, caseTitle: extra.get(r.id)?.case_title ?? null,
-      library: library.has(r.id) ? { ...library.get(r.id)!, versionNo: servable.get(library.get(r.id)!.versionId)!.versionNo, approval: "clinically_approved" as const } : null,
+      library: library.has(r.id) ? (() => {
+        const v = servable.get(library.get(r.id)!.versionId)!;
+        return { ...library.get(r.id)!, versionNo: v.versionNo, approval: "clinically_approved" as const, ...(v.title ? { title: v.title } : {}), ...(v.code ? { code: v.code } : {}), ...(v.publishedAt ? { publishedAt: v.publishedAt } : {}) };
+      })() : null,
     };
   });
 }
@@ -835,7 +850,15 @@ export async function recordRevisionAttempt(admin: Admin, userId: string, q: Que
   if (error) return { ok: false, card: null };
   // A flashcard's answer IS its recall grade. Any other question whose card is due is reviewed by the answer: right is
   // a good recall (4), wrong a lapse (1). Otherwise a missed answer makes or resets its card, as practice always has.
-  const { data: card } = await admin.from("individual_scholar_card").select("id, next_review_at, status").eq("user_id", userId).eq("question_id", q.id).maybeSingle();
+  let { data: card } = await admin.from("individual_scholar_card").select("id, next_review_at, status").eq("user_id", userId).eq("question_id", q.id).maybeSingle();
+  // SCHOLAR-FLASHCARDS-01: a recall graded on a card that has no schedule yet (a governed library question studied as a
+  // card, or a flashcard whose card could not be made when it was written) gets its 372 card first, due today, so the
+  // grade is scheduled and logged like every other.
+  if (!card && q.kind === "flashcard" && Number.isInteger(a.quality)) {
+    const made = await admin.from("individual_scholar_card").insert({ user_id: userId, question_id: q.id, material_id: q.materialId, next_review_at: todayIso(), status: "active" })
+      .select("id, next_review_at, status").single();
+    card = made.error ? null : made.data;
+  }
   const quality = q.kind === "flashcard" ? a.quality ?? null : card && card.status === "active" && card.next_review_at <= todayIso() ? (a.correct ? 4 : 1) : null;
   if (card && quality !== null) {
     const r = await reviewCard(admin, userId, card.id, quality, a.srs);
@@ -955,7 +978,8 @@ export async function createRevisionSet(admin: Admin, userId: string, input: {
 export async function listRevisionSets(admin: Admin, userId: string, limit = 30): Promise<Read<RevisionSetRow[]>> {
   const { data, error } = await admin.from("individual_scholar_revision_set").select(REV_SET_COLS).eq("user_id", userId).order("updated_at", { ascending: false }).limit(limit);
   if (error) return fail(error);
-  const sets = (data ?? []) as any[];
+  // SCHOLAR-PRACTICE-EXAMS-01: an adaptive exam's blueprint set is not a saved revision set (it has no questions to replay).
+  const sets = ((data ?? []) as any[]).filter(s => !isAdaptiveScope(s.scope));
   if (!sets.length) return { ok: true, data: [] };
   const { data: items, error: iErr } = await admin.from("individual_scholar_revision_set_item").select("set_id, ordinal, question_id").eq("user_id", userId).in("set_id", sets.map(s => s.id)).order("ordinal");
   if (iErr) return fail(iErr);
@@ -980,6 +1004,108 @@ export async function getRevisionSet(admin: Admin, userId: string, id: string): 
 export async function touchRevisionSet(admin: Admin, userId: string, id: string): Promise<void> {
   const now = new Date().toISOString();
   await admin.from("individual_scholar_revision_set").update({ last_used_at: now, updated_at: now }).eq("user_id", userId).eq("id", id).then((r: unknown) => r, () => {});
+}
+
+// ── ADAPTIVE EXAMS (SCHOLAR-PRACTICE-EXAMS-01) ── on 417 as it stands, and on 720 where it is applied ──────────────────
+//
+// An adaptive exam is a revision session (417) whose questions are added one at a time as they are chosen, naming a
+// revision set (417) whose `scope` holds its blueprint under scope.adaptive (adaptive.ts). The set has no items and is
+// never listed as a saved set. Migration 720 lets a session say mode 'adaptive': detected by the first insert (a CHECK
+// refusal means it is absent), remembered for the process. Without it the session is mode 'mock', and the set's
+// scope.adaptive marker is what makes it adaptive.
+let adaptive720: boolean | null = null;
+const isCheckRefusal = (error: any) => !!error && (String(error.code ?? "") === "23514" || /check constraint/i.test(String(error.message ?? "")));
+/** Tests only: forget what was detected. */
+export const resetAdaptiveSchema = () => { adaptive720 = null; };
+/** Whether a set's scope is an adaptive exam's blueprint (never a saved revision set). */
+export const isAdaptiveScope = (scope: unknown) => !!scope && typeof scope === "object" && !!(scope as Record<string, unknown>).adaptive;
+
+/** The blueprint's set: no items, mode 'mock' (417 allows it), its blueprint in scope.adaptive. Owner-keyed. */
+export async function createAdaptiveSet(admin: Admin, userId: string, input: { title: string; scope: Record<string, unknown>; formats: readonly string[]; quantity: number; difficulty: string; feedback: "immediate" | "end" }): Promise<{ ok: true; id: string } | { ok: false; notProvisioned: boolean }> {
+  // 417's set CHECK names the formats it knew: structured is kept in the blueprint only.
+  const formats = input.formats.filter(f => ["mcq", "case", "mrq", "short", "flashcard", "match", "sequence"].includes(f));
+  const { data, error } = await admin.from("individual_scholar_revision_set").insert({
+    user_id: userId, title: input.title.slice(0, 120) || "Adaptive exam", mode: "mock", scope: input.scope, formats: formats.length ? formats : ["mcq"],
+    quantity: Math.max(1, Math.min(50, input.quantity)), difficulty: input.difficulty, feedback: input.feedback,
+  }).select("id").single();
+  if (error || !data) return { ok: false, notProvisioned: !!error && isNotProvisioned(error) };
+  return { ok: true, id: data.id };
+}
+
+/** A blueprint's set, read by id. null when it is not the caller's or not an adaptive exam's. Owner-keyed. */
+export async function getAdaptiveSet(admin: Admin, userId: string, id: string | null): Promise<{ id: string; title: string; scope: Record<string, unknown>; createdAt: string } | null> {
+  if (!isUuid(id)) return null;
+  const { data, error } = await admin.from("individual_scholar_revision_set").select("id, title, scope, created_at").eq("user_id", userId).eq("id", id).maybeSingle();
+  if (error || !data || !isAdaptiveScope(data.scope)) return null;
+  return { id: data.id, title: data.title, scope: data.scope, createdAt: data.created_at };
+}
+
+/** The blueprint updated (its generation count). Owner-keyed. */
+export async function updateAdaptiveScope(admin: Admin, userId: string, id: string, scope: Record<string, unknown>): Promise<boolean> {
+  const { error } = await admin.from("individual_scholar_revision_set").update({ scope, updated_at: new Date().toISOString() }).eq("user_id", userId).eq("id", id);
+  return !error;
+}
+
+/**
+ * An adaptive exam's session: mode 'adaptive' where 720 allows it, else 'mock'; its length as its total; its first
+ * question as item 1. not_provisioned where 417 is absent.
+ */
+export async function createAdaptiveSession(admin: Admin, userId: string, input: { setId: string; feedback: "immediate" | "end"; total: number; firstQuestionId: string }): Promise<{ ok: true; id: string; mode: "adaptive" | "mock" } | { ok: false; notProvisioned: boolean }> {
+  const insert = (mode: "adaptive" | "mock") => admin.from("individual_scholar_revision_session")
+    .insert({ user_id: userId, set_id: input.setId, mode, feedback: input.feedback, total: Math.max(1, Math.min(50, input.total)) }).select("id").single();
+  let mode: "adaptive" | "mock" = adaptive720 === false ? "mock" : "adaptive";
+  let { data, error } = await insert(mode);
+  if (error && mode === "adaptive" && isCheckRefusal(error)) { adaptive720 = false; mode = "mock"; ({ data, error } = await insert(mode)); }
+  else if (!error && mode === "adaptive") adaptive720 = true;
+  if (error || !data) return { ok: false, notProvisioned: !!error && isNotProvisioned(error) };
+  if (!(await appendAdaptiveItem(admin, userId, data.id, 1, input.firstQuestionId))) {
+    await admin.from("individual_scholar_revision_session").delete().eq("user_id", userId).eq("id", data.id);
+    return { ok: false, notProvisioned: false };
+  }
+  return { ok: true, id: data.id, mode };
+}
+
+/** The next chosen question, as the session's next item. false when it could not be added (a race: taken already). Owner-keyed. */
+export async function appendAdaptiveItem(admin: Admin, userId: string, sessionId: string, ordinal: number, questionId: string): Promise<boolean> {
+  if (ordinal < 1 || ordinal > 50) return false;
+  const { error } = await admin.from("individual_scholar_revision_session_item").insert({ session_id: sessionId, user_id: userId, ordinal, question_id: questionId });
+  return !error;
+}
+
+/** Questions by id, hydrated as every revision read is (a library copy no longer servable is left out). Owner-keyed. */
+export async function questionsByIds(admin: Admin, userId: string, ids: readonly string[]): Promise<Read<QuestionRow[]>> {
+  const want = [...new Set(ids)].filter(isUuid).slice(0, 100);
+  if (!want.length) return { ok: true, data: [] };
+  const { data, error } = await admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId).in("id", want);
+  if (error) return fail(error);
+  return { ok: true, data: await hydrate(admin, userId, data ?? []) };
+}
+
+export type AdaptiveExamRow = { session: RevisionSessionRow; setId: string; title: string; scope: Record<string, unknown>; marked: number; scoreSum: number };
+/** The student's adaptive exams, newest first: each session with its blueprint and its marked answers so far. Owner-keyed. */
+export async function listAdaptiveExams(admin: Admin, userId: string, limit = 20): Promise<Read<AdaptiveExamRow[]>> {
+  const { data: sets, error } = await admin.from("individual_scholar_revision_set").select("id, title, scope").eq("user_id", userId).order("created_at", { ascending: false }).limit(200);
+  if (error) return fail(error);
+  const adaptive = new Map(((sets ?? []) as any[]).filter(s => isAdaptiveScope(s.scope)).map(s => [s.id as string, s]));
+  if (!adaptive.size) return { ok: true, data: [] };
+  const { data: rows, error: sErr } = await admin.from("individual_scholar_revision_session").select(REV_SESSION_COLS).eq("user_id", userId)
+    .in("set_id", [...adaptive.keys()].slice(0, 200)).order("created_at", { ascending: false }).limit(limit);
+  if (sErr) return fail(sErr);
+  const sessions = ((rows ?? []) as any[]).map(toRevSession);
+  const att = sessions.length ? await admin.from("individual_scholar_attempt").select("revision_session_id, correct, score").eq("user_id", userId).in("revision_session_id", sessions.map(s => s.id)).limit(2500) : { data: [], error: null };
+  const by = new Map<string, { marked: number; scoreSum: number }>();
+  for (const a of (att.error ? [] : att.data ?? []) as any[]) {
+    const m = by.get(a.revision_session_id) ?? { marked: 0, scoreSum: 0 };
+    m.marked++; m.scoreSum += a.score === null || a.score === undefined ? (a.correct ? 1 : 0) : Math.max(0, Math.min(1, Number(a.score)));
+    by.set(a.revision_session_id, m);
+  }
+  return {
+    ok: true,
+    data: sessions.filter(s => s.setId && adaptive.has(s.setId)).map(s => {
+      const set = adaptive.get(s.setId!)!;
+      return { session: s, setId: s.setId!, title: set.title, scope: set.scope, marked: by.get(s.id)?.marked ?? 0, scoreSum: by.get(s.id)?.scoreSum ?? 0 };
+    }),
+  };
 }
 
 /** Delete a saved set (its items go with it). Its sessions keep their own snapshot. Owner-keyed. */
@@ -2487,4 +2613,397 @@ export async function resolveFeedbackTarget(admin: any, userId: string, target: 
     const { data } = await admin.from("plat_ai_outcomes").select("activity, output_kind, prompt_version").eq("action_id", ref).eq("product", "scholar").maybeSingle();
     return data ? { kind: data.output_kind, activity: data.activity, promptVersion: data.prompt_version, actionId: ref } : null;
   } catch { return null; }
+}
+
+// ── OSCE PRACTICE (720 + 721, SCHOLAR-PRACTICE-EXAMS-01, SCHOLAR-OSCE-01) ── simulated stations and their runs ─────
+//
+// Detected once, as 710 is: one read of a 721 column of the 720 station table, keyed on the caller. Either migration
+// absent (42P01 table, 42703 or PGRST204 column, PGRST205): OSCE practice is shown as unavailable with its reason, and
+// nothing else changes. 720 and 721 are one unit: the code needs both. A transient error is "no" for now.
+// Nothing here is an assessment: no row is copied to assessments, competency_verification_* or the estate osce_* tables.
+let osce720: boolean | null = null;
+export async function osceSchema(admin: Admin, userId: string): Promise<boolean> {
+  if (osce720 !== null) return osce720;
+  const { error } = await admin.from("individual_scholar_osce_station").select("id, version").eq("user_id", userId).limit(1);
+  if (!error) return (osce720 = true);
+  if (isNotProvisioned(error)) return (osce720 = false);
+  return false;
+}
+/** Tests only: forget what was detected. */
+export const resetOsceSchema = () => { osce720 = null; };
+
+export type OsceStationRow = OsceDefinition & {
+  id: string; title: string; scenario: string; candidateInstructions: string; durationMinutes: number; sections: string[];
+  checklist: OsceItem[]; competencyId: string | null; materialId: string | null; chunkId: string | null;
+  source: OsceSource; templateKey: string | null; contentStatus: string; reviewStatus: string; model: string | null; promptVersion: string | null; createdAt: string;
+  libraryResourceId: string | null; libraryVersionId: string | null;
+};
+const OSCE_STATION_COLS = "id, title, scenario, candidate_instructions, duration_minutes, sections, checklist, competency_id, material_id, chunk_id, source, template_key, content_status, review_status, model, prompt_version, created_at, profession, programme_code, programme_label, topic, body_system, difficulty, learning_outcomes, objectives, expected_activities, guidance, source_references, version, library_resource_id, library_version_id";
+const toOsceStation = (r: any): OsceStationRow => ({
+  ...readDefinition(r),
+  id: r.id, title: r.title, scenario: r.scenario, candidateInstructions: r.candidate_instructions, durationMinutes: r.duration_minutes,
+  sections: Array.isArray(r.sections) ? r.sections : [], checklist: Array.isArray(r.checklist) ? r.checklist : [], competencyId: r.competency_id,
+  materialId: r.material_id, chunkId: r.chunk_id, source: r.source, templateKey: r.template_key, contentStatus: r.content_status, reviewStatus: r.review_status ?? "private_formative",
+  model: r.model, promptVersion: r.prompt_version, createdAt: r.created_at, libraryResourceId: r.library_resource_id ?? null, libraryVersionId: r.library_version_id ?? null,
+});
+
+const listOrNull = (xs: readonly string[]) => (xs.length ? [...xs] : null);
+
+/**
+ * One station. A template, or a governed station version, already copied for this learner is returned, not copied twice
+ * (720 and 721 unique keys). A governed copy is written exactly as published: the 721 trigger refuses anything else.
+ */
+export async function insertOsceStation(admin: Admin, userId: string, d: OsceStationDraft): Promise<{ ok: true; id: string; existing: boolean } | { ok: false; notProvisioned: boolean }> {
+  if (d.templateKey || d.libraryVersionId) {
+    const q = admin.from("individual_scholar_osce_station").select("id").eq("user_id", userId);
+    const { data: had } = await (d.templateKey ? q.eq("template_key", d.templateKey) : q.eq("library_version_id", d.libraryVersionId)).maybeSingle();
+    if (had?.id) return { ok: true, id: had.id, existing: true };
+  }
+  const { data, error } = await admin.from("individual_scholar_osce_station").insert({
+    user_id: userId, title: d.title, scenario: d.scenario, candidate_instructions: d.candidateInstructions, duration_minutes: d.durationMinutes,
+    sections: d.sections, checklist: d.checklist, competency_id: d.competencyId, material_id: d.materialId, chunk_id: d.chunkId,
+    source: d.source, template_key: d.templateKey, content_status: d.contentStatus, model: d.model, prompt_version: d.promptVersion,
+    profession: d.profession, programme_code: d.programmeCode, programme_label: d.programmeLabel, topic: d.topic, body_system: d.bodySystem,
+    difficulty: d.difficulty, learning_outcomes: listOrNull(d.learningOutcomes), objectives: listOrNull(d.objectives),
+    expected_activities: d.exact ? d.exact.expected_activities : listOrNull(d.expectedActivities),
+    guidance: d.exact ? d.exact.guidance : guidanceJson(d.guidance), source_references: d.references.length ? d.references : null, version: d.version,
+    review_status: d.libraryVersionId ? "library_approved" : "private_formative", library_resource_id: d.libraryResourceId, library_version_id: d.libraryVersionId,
+  }).select("id").single();
+  if (error || !data) return fail(error);
+  return { ok: true, id: data.id, existing: false };
+}
+
+export async function listOsceStations(admin: Admin, userId: string): Promise<Read<OsceStationRow[]>> {
+  const { data, error } = await admin.from("individual_scholar_osce_station").select(OSCE_STATION_COLS).eq("user_id", userId).order("created_at", { ascending: false }).limit(200);
+  if (error) return fail(error);
+  return { ok: true, data: (data ?? []).map(toOsceStation) };
+}
+
+export async function getOsceStation(admin: Admin, userId: string, id: string): Promise<OsceStationRow | null> {
+  if (!isUuid(id)) return null;
+  const { data } = await admin.from("individual_scholar_osce_station").select(OSCE_STATION_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  return data ? toOsceStation(data) : null;
+}
+
+/** Deletes the station and, by cascade (720), every run of it. */
+export async function deleteOsceStation(admin: Admin, userId: string, id: string): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(id)) return "not_found";
+  const { data, error } = await admin.from("individual_scholar_osce_station").delete().eq("user_id", userId).eq("id", id).select("id");
+  if (error) return "failed";
+  return data?.length ? "ok" : "not_found";
+}
+
+export type OsceAttemptStatus = "in_progress" | "finished" | "abandoned";
+export type OsceAttemptRow = {
+  id: string; stationId: string; startedAt: string; finishedAt: string | null; durationSeconds: number | null; timeUp: boolean;
+  responses: Record<string, string>; ticks: OsceTick[] | null; score: number | null; criticalMissed: number | null;
+  marking: "self_graded" | "ai_evaluation" | null; evaluatorModel: string | null; feedback: Record<string, any> | null;
+  status: OsceAttemptStatus; stationVersion: number | null; snapshot: Record<string, unknown> | null; lastSavedAt: string | null;
+  gaps: unknown[] | null; revisionSuggestions: unknown[] | null;
+};
+const OSCE_ATTEMPT_COLS = "id, station_id, started_at, finished_at, duration_seconds, time_up, responses, ticks, score, critical_missed, marking, evaluator_model, feedback, status, station_version, station_snapshot, last_saved_at, gaps, revision_suggestions";
+const toOsceAttempt = (r: any): OsceAttemptRow => ({
+  id: r.id, stationId: r.station_id, startedAt: r.started_at, finishedAt: r.finished_at, durationSeconds: r.duration_seconds, timeUp: !!r.time_up,
+  responses: r.responses && typeof r.responses === "object" ? r.responses : {}, ticks: Array.isArray(r.ticks) ? r.ticks : null,
+  score: r.score === null || r.score === undefined ? null : Number(r.score), criticalMissed: r.critical_missed, marking: r.marking,
+  evaluatorModel: r.evaluator_model, feedback: r.feedback && typeof r.feedback === "object" ? r.feedback : null,
+  status: r.status === "abandoned" || r.status === "finished" ? r.status : r.finished_at ? "finished" : "in_progress",
+  stationVersion: Number.isInteger(r.station_version) ? r.station_version : null,
+  snapshot: r.station_snapshot && typeof r.station_snapshot === "object" && !Array.isArray(r.station_snapshot) ? r.station_snapshot : null,
+  lastSavedAt: r.last_saved_at ?? null, gaps: Array.isArray(r.gaps) ? r.gaps : null, revisionSuggestions: Array.isArray(r.revision_suggestions) ? r.revision_suggestions : null,
+});
+
+/** A run begins: the server clock is its start, and the exact station it will be marked against is kept with it (721). */
+export async function startOsceAttempt(admin: Admin, userId: string, stationId: string, s: { version: number; snapshot: Record<string, unknown> }): Promise<{ id: string; startedAt: string } | null> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt")
+    .insert({ user_id: userId, station_id: stationId, station_version: s.version, station_snapshot: s.snapshot }).select("id, started_at").single();
+  return error || !data ? null : { id: data.id, startedAt: data.started_at };
+}
+
+export async function getOsceAttempt(admin: Admin, userId: string, id: string): Promise<OsceAttemptRow | null> {
+  if (!isUuid(id)) return null;
+  const { data } = await admin.from("individual_scholar_osce_attempt").select(OSCE_ATTEMPT_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  return data ? toOsceAttempt(data) : null;
+}
+
+/** The caller's open run of this station, if any (the newest): what a return after navigation or reload resumes. */
+export async function openOsceAttempt(admin: Admin, userId: string, stationId: string): Promise<OsceAttemptRow | null> {
+  const { data } = await admin.from("individual_scholar_osce_attempt").select(OSCE_ATTEMPT_COLS).eq("user_id", userId).eq("station_id", stationId)
+    .eq("status", "in_progress").is("finished_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle();
+  return data ? toOsceAttempt(data) : null;
+}
+
+/** The caller's runs, newest first: of one station, or of all. */
+export async function listOsceAttempts(admin: Admin, userId: string, stationId?: string | null, limit = 50): Promise<Read<OsceAttemptRow[]>> {
+  let q = admin.from("individual_scholar_osce_attempt").select(OSCE_ATTEMPT_COLS).eq("user_id", userId);
+  if (stationId) q = q.eq("station_id", stationId);
+  const { data, error } = await q.order("started_at", { ascending: false }).limit(limit);
+  if (error) return fail(error);
+  return { ok: true, data: (data ?? []).map(toOsceAttempt) };
+}
+
+/** Autosave (721): what is written so far, on an open run only. A finished or abandoned run is never changed by it. */
+export async function saveOsceProgress(admin: Admin, userId: string, id: string, responses: Record<string, string>): Promise<boolean> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt")
+    .update({ responses, last_saved_at: new Date().toISOString() })
+    .eq("user_id", userId).eq("id", id).eq("status", "in_progress").is("finished_at", null).select("id");
+  return !error && !!data?.length;
+}
+
+/** An open run the learner discards (721): kept as abandoned, with what was written, and never marked. */
+export async function abandonOsceAttempt(admin: Admin, userId: string, id: string): Promise<boolean> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt").update({ status: "abandoned" })
+    .eq("user_id", userId).eq("id", id).eq("status", "in_progress").is("finished_at", null).select("id");
+  return !error && !!data?.length;
+}
+
+/** A run ends, once: what was written, and how long it took. A run already finished or abandoned is not changed. */
+export async function finishOsceAttempt(admin: Admin, userId: string, id: string, f: { responses: Record<string, string>; finishedAt: string; durationSeconds: number; timeUp: boolean }): Promise<boolean> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt")
+    .update({ responses: f.responses, finished_at: f.finishedAt, duration_seconds: f.durationSeconds, time_up: f.timeUp, status: "finished", last_saved_at: f.finishedAt })
+    .eq("user_id", userId).eq("id", id).eq("status", "in_progress").is("finished_at", null).select("id");
+  return !error && !!data?.length;
+}
+
+/** AI feedback on a finished run, kept before the learner confirms their ticks. A marked run is not changed. */
+export async function saveOsceFeedback(admin: Admin, userId: string, id: string, feedback: Record<string, unknown>): Promise<boolean> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt").update({ feedback })
+    .eq("user_id", userId).eq("id", id).not("finished_at", "is", null).is("ticks", null).select("id");
+  return !error && !!data?.length;
+}
+
+/** The self-check, once, on a finished run: ticks, practice score, critical misses, how it was checked, gaps and revision suggestions. */
+export async function markOsceAttempt(admin: Admin, userId: string, id: string, m: {
+  ticks: OsceTick[]; score: number; criticalMissed: number; marking: "self_graded" | "ai_evaluation"; evaluatorModel: string | null; evaluatorPromptVersion: string | null;
+  gaps: unknown[]; revisionSuggestions: unknown[];
+}): Promise<boolean> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt")
+    .update({
+      ticks: m.ticks, score: m.score, critical_missed: m.criticalMissed, marking: m.marking, evaluator_model: m.evaluatorModel, evaluator_prompt_version: m.evaluatorPromptVersion,
+      gaps: m.gaps, revision_suggestions: m.revisionSuggestions,
+    })
+    .eq("user_id", userId).eq("id", id).not("finished_at", "is", null).is("ticks", null).select("id");
+  return !error && !!data?.length;
+}
+
+// ── FLASHCARDS (SCHOLAR-FLASHCARDS-01, migration 730) ── the learner's own cards, decks and card marks ─────────────────
+//
+// A flashcard IS an individual_scholar_question (416); its schedule the 372 card, its history the 391 log. 730 adds the
+// card a learner writes by hand (model and provider learner, bound by its CHECK), decks that REFERENCE cards (moving a
+// card never touches its schedule), and per-card marks (bookmark, private note, an issue code). Detected once, as 710
+// and 720 are: one read of the 730 deck table keyed on the caller. Absent: hand-written cards, decks and marks are not
+// offered, and every other flashcard path works as before.
+let flash730: boolean | null = null;
+/** Whether migration 730 is applied on this environment. A transient read error is "no" for now, and asked again. */
+export async function flashcardSchema(admin: Admin, userId: string): Promise<boolean> {
+  if (flash730 !== null) return flash730;
+  const { error } = await admin.from("individual_scholar_flashcard_deck").select("id").eq("user_id", userId).limit(1);
+  if (!error) return (flash730 = true);
+  if (isNotProvisioned(error)) return (flash730 = false);
+  return false;
+}
+/** Tests only: forget what was detected. */
+export const resetFlashcardSchema = () => { flash730 = null; };
+
+/** At most this many cards are read for one learner's flashcard views (newest first). */
+export const FLASHCARD_READ_MAX = 400;
+
+export type FlashcardRows = {
+  /** Flashcards, and governed library copies (recallCardOf decides which of those are cards). Newest first. */
+  questions: QuestionRow[];
+  extras: Map<string, Omit<CardRowExtras, "competencyTitle">>;
+  decks: PersonalDeck[];
+  schema730: boolean;
+};
+
+/** Every flashcard of the learner (and governed library copies), with schedule, review history, topics, marks and decks. */
+export async function flashcardRows(admin: Admin, userId: string): Promise<Read<FlashcardRows>> {
+  const sqie = await sqieSchema(admin, userId);
+  let q = admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId);
+  q = sqie ? q.or("kind.eq.flashcard,library_version_id.not.is.null") : q.eq("kind", "flashcard");
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(FLASHCARD_READ_MAX);
+  if (error) return fail(error);
+  const questions = await hydrate(admin, userId, data ?? []);
+  const ids = questions.map(x => x.id);
+  const schema730 = await flashcardSchema(admin, userId);
+  const extras = new Map<string, Omit<CardRowExtras, "competencyTitle">>(ids.map(id => [id, { card: null, history: [], topics: [], mark: null, deckIds: [], contentVersion: 1, updatedAt: null }]));
+  if (!ids.length) return { ok: true, data: { questions, extras, decks: schema730 ? await flashcardDecks(admin, userId) : [], schema730 } };
+  const [cards, topics] = await Promise.all([
+    admin.from("individual_scholar_card").select("id, question_id, next_review_at, last_reviewed_at, last_quality, reviews, interval_days, ease_factor, status").eq("user_id", userId).in("question_id", ids),
+    topicsOfSections(admin, userId, [...new Set(questions.map(x => x.chunkId))]),
+  ]);
+  if (cards.error) return fail(cards.error);
+  const cardOf = new Map<string, string>();
+  for (const c of (cards.data ?? []) as any[]) {
+    cardOf.set(c.id, c.question_id);
+    extras.get(c.question_id)!.card = {
+      id: c.id, nextReviewAt: c.next_review_at, lastReviewedAt: c.last_reviewed_at ?? null, lastQuality: c.last_quality ?? null, reviews: c.reviews ?? 0,
+      intervalDays: c.interval_days ?? 0, ease: Number(c.ease_factor ?? 2.5), status: c.status,
+    };
+  }
+  for (const x of questions) extras.get(x.id)!.topics = topics.get(x.chunkId) ?? [];
+  if (cardOf.size) {
+    // The 391 log, newest first. Absent (391 not applied): no history, and the page says none is recorded.
+    const rv = await admin.from("individual_scholar_review").select("card_id, quality, reviewed_at, interval_days").eq("user_id", userId).in("card_id", [...cardOf.keys()]).order("reviewed_at", { ascending: false }).limit(4000);
+    for (const r of (rv.error ? [] : rv.data ?? []) as any[]) {
+      const e = extras.get(cardOf.get(r.card_id)!);
+      if (e && e.history.length < 20) e.history.push({ quality: r.quality, at: r.reviewed_at, intervalDays: r.interval_days ?? null });
+    }
+  }
+  let decks: PersonalDeck[] = [];
+  if (schema730) {
+    const [marks, versions, ds] = await Promise.all([
+      admin.from("individual_scholar_flashcard_mark").select("question_id, bookmarked, note, issue").eq("user_id", userId).in("question_id", ids),
+      admin.from("individual_scholar_question").select("id, content_version, content_updated_at").eq("user_id", userId).in("id", ids),
+      flashcardDecks(admin, userId),
+    ]);
+    for (const m of (marks.error ? [] : marks.data ?? []) as any[]) extras.get(m.question_id)!.mark = { bookmarked: !!m.bookmarked, note: m.note ?? null, issue: m.issue ?? null };
+    for (const v of (versions.error ? [] : versions.data ?? []) as any[]) { const e = extras.get(v.id)!; e.contentVersion = v.content_version ?? 1; e.updatedAt = v.content_updated_at ?? null; }
+    decks = ds;
+    for (const d of decks) for (const id of d.cardIds) extras.get(id)?.deckIds.push(d.id);
+  }
+  return { ok: true, data: { questions, extras, decks, schema730 } };
+}
+
+/** The learner's own decks (730), most recently changed first, each with its cards in order. [] where 730 is absent or unreadable. */
+export async function flashcardDecks(admin: Admin, userId: string): Promise<PersonalDeck[]> {
+  const { data, error } = await admin.from("individual_scholar_flashcard_deck").select("id, title, organise_by, organise_ref, created_at, updated_at, last_studied_at").eq("user_id", userId).order("updated_at", { ascending: false }).limit(200);
+  if (error || !data?.length) return [];
+  const items = await admin.from("individual_scholar_flashcard_deck_card").select("deck_id, question_id, position, added_at").eq("user_id", userId).in("deck_id", (data as any[]).map(d => d.id)).order("position").order("added_at").limit(10000);
+  const by = new Map<string, string[]>();
+  for (const i of (items.error ? [] : items.data ?? []) as any[]) by.set(i.deck_id, [...(by.get(i.deck_id) ?? []), i.question_id]);
+  return (data as any[]).map(d => ({
+    id: d.id, title: d.title, organiseBy: d.organise_by, organiseRef: d.organise_ref ?? null, createdAt: d.created_at, updatedAt: d.updated_at,
+    lastStudiedAt: d.last_studied_at ?? null, cardIds: by.get(d.id) ?? [],
+  }));
+}
+
+/** stemKey of each of the learner's flashcard fronts, by card: duplicate detection for a card they write or edit. */
+export async function flashcardFronts(admin: Admin, userId: string): Promise<Map<string, string>> {
+  const { data, error } = await admin.from("individual_scholar_question").select("id, stem").eq("user_id", userId).eq("kind", "flashcard").limit(5000);
+  if (error) return new Map();
+  return new Map(((data ?? []) as any[]).map(r => [r.id as string, stemKey(String(r.stem ?? ""))]));
+}
+
+/**
+ * A card the learner writes by hand (730): filed under one of their materials and a section of it (the first section
+ * where none is named), with its 372 card due today. No AI, no notes quote, private_formative: 730 binds it so.
+ */
+export async function insertLearnerCard(admin: Admin, userId: string, input: { materialId: string; chunkId?: string | null; front: string; back: string; competencyId?: string | null }): Promise<{ ok: true; id: string; chunkId: string } | { ok: false; error: "not_found" | "not_provisioned" | "failed" }> {
+  if (!isUuid(input.materialId) || (input.chunkId && !isUuid(input.chunkId))) return { ok: false, error: "not_found" };
+  let sq = admin.from("individual_scholar_chunk").select("id").eq("user_id", userId).eq("material_id", input.materialId);
+  if (input.chunkId) sq = sq.eq("id", input.chunkId);
+  const { data: chunk } = await sq.order("ordinal").limit(1).maybeSingle();
+  if (!chunk) return { ok: false, error: "not_found" };
+  const { data, error } = await admin.from("individual_scholar_question").insert({
+    user_id: userId, material_id: input.materialId, chunk_id: chunk.id, kind: "flashcard", stem: input.front, options: [], correct_index: null,
+    answer: { back: input.back }, review_status: "private_formative", rationale: "", source_quote: "",
+    model: LEARNER_CARD.model, provider: LEARNER_CARD.provider, prompt_version: LEARNER_CARD.promptVersion,
+    ...(input.competencyId ? { competency_id: input.competencyId } : {}),
+  }).select("id").single();
+  if (error || !data) return { ok: false, error: error && isSchemaRefusal(error) ? "not_provisioned" : "failed" };
+  await admin.from("individual_scholar_card").insert({ user_id: userId, question_id: data.id, material_id: input.materialId, next_review_at: todayIso(), status: "active" })
+    .then((r: unknown) => r, () => {});
+  return { ok: true, id: data.id, chunkId: chunk.id };
+}
+
+/** Edit a hand-written card: its front and back, its content version one up. Its schedule and history are untouched. */
+export async function updateLearnerCard(admin: Admin, userId: string, id: string, input: { front: string; back: string }): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(id)) return "not_found";
+  const { data: row } = await admin.from("individual_scholar_question").select("id, content_version").eq("user_id", userId).eq("id", id).eq("model", LEARNER_CARD.model).maybeSingle();
+  if (!row) return "not_found";
+  const { error } = await admin.from("individual_scholar_question").update({
+    stem: input.front, answer: { back: input.back }, content_version: (row.content_version ?? 1) + 1, content_updated_at: new Date().toISOString(),
+  }).eq("user_id", userId).eq("id", id).eq("model", LEARNER_CARD.model);
+  return error ? "failed" : "ok";
+}
+
+/** Remove a hand-written card, with its schedule, history, deck places and marks (cascade). Only the learner's own. */
+export async function deleteLearnerCard(admin: Admin, userId: string, id: string): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(id)) return "not_found";
+  const { data, error } = await admin.from("individual_scholar_question").delete().eq("user_id", userId).eq("id", id).eq("model", LEARNER_CARD.model).select("id");
+  if (error) return "failed";
+  return data?.length ? "ok" : "not_found";
+}
+
+/** A new deck, optionally organised by module, topic, document or competency, with its first cards in order. */
+export async function createFlashcardDeck(admin: Admin, userId: string, input: { title: string; organiseBy: PersonalDeck["organiseBy"]; organiseRef: string | null; cardIds: readonly string[] }): Promise<{ ok: true; id: string } | { ok: false; notProvisioned: boolean }> {
+  const { data, error } = await admin.from("individual_scholar_flashcard_deck").insert({
+    user_id: userId, title: input.title, organise_by: input.organiseBy, organise_ref: input.organiseBy === "personal" ? null : input.organiseRef,
+  }).select("id").single();
+  if (error || !data) return { ok: false, notProvisioned: !!error && isNotProvisioned(error) };
+  if (input.cardIds.length && !(await addDeckCards(admin, userId, data.id, input.cardIds))) {
+    await admin.from("individual_scholar_flashcard_deck").delete().eq("user_id", userId).eq("id", data.id);
+    return { ok: false, notProvisioned: false };
+  }
+  return { ok: true, id: data.id };
+}
+
+/** Rename a deck, or change how it is organised. */
+export async function updateFlashcardDeck(admin: Admin, userId: string, id: string, patch: { title?: string; organiseBy?: PersonalDeck["organiseBy"]; organiseRef?: string | null }): Promise<boolean> {
+  if (!isUuid(id)) return false;
+  const { data, error } = await admin.from("individual_scholar_flashcard_deck").update({
+    ...(patch.title !== undefined ? { title: patch.title } : {}),
+    ...(patch.organiseBy !== undefined ? { organise_by: patch.organiseBy, organise_ref: patch.organiseBy === "personal" ? null : patch.organiseRef ?? null } : {}),
+    updated_at: new Date().toISOString(),
+  }).eq("user_id", userId).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
+/** Remove a deck. Its cards, their schedules and their history stay. */
+export async function deleteFlashcardDeck(admin: Admin, userId: string, id: string): Promise<boolean> {
+  if (!isUuid(id)) return false;
+  const { data, error } = await admin.from("individual_scholar_flashcard_deck").delete().eq("user_id", userId).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
+/** Add cards to a deck after its last card. A card already in it stays where it is. The schedule is never copied. */
+/**
+ * SCHOLAR-FLASHCARDS-QA-01 D1: which of these question ids are the caller's own (keyed on user_id). Read BEFORE a mark
+ * or a deck place is written, so another learner's card is a plain 404 rather than a foreign-key refusal (500). null:
+ * unreadable (the caller answers 503; nothing is written).
+ */
+export async function ownedQuestionIds(admin: Admin, userId: string, ids: readonly string[]): Promise<Set<string> | null> {
+  const want = [...new Set(ids)].filter(isUuid);
+  if (!want.length) return new Set();
+  const { data, error } = await admin.from("individual_scholar_question").select("id").eq("user_id", userId).in("id", want);
+  if (error) return null;
+  return new Set(((data ?? []) as any[]).map(r => r.id as string));
+}
+
+export async function addDeckCards(admin: Admin, userId: string, deckId: string, cardIds: readonly string[]): Promise<boolean> {
+  const ids = [...new Set(cardIds)].filter(isUuid);
+  if (!isUuid(deckId) || !ids.length) return false;
+  const { data: last } = await admin.from("individual_scholar_flashcard_deck_card").select("position").eq("user_id", userId).eq("deck_id", deckId).order("position", { ascending: false }).limit(1).maybeSingle();
+  const start = (last?.position ?? 0) + 1;
+  const { error } = await admin.from("individual_scholar_flashcard_deck_card").upsert(ids.map((question_id, i) => ({ deck_id: deckId, user_id: userId, question_id, position: start + i })), { onConflict: "deck_id,question_id", ignoreDuplicates: true });
+  if (!error) await admin.from("individual_scholar_flashcard_deck").update({ updated_at: new Date().toISOString() }).eq("user_id", userId).eq("id", deckId);
+  return !error;
+}
+
+/** Take cards out of a deck. The cards, their schedules and their history stay. */
+export async function removeDeckCards(admin: Admin, userId: string, deckId: string, cardIds: readonly string[]): Promise<boolean> {
+  const ids = [...new Set(cardIds)].filter(isUuid);
+  if (!isUuid(deckId) || !ids.length) return false;
+  const { error } = await admin.from("individual_scholar_flashcard_deck_card").delete().eq("user_id", userId).eq("deck_id", deckId).in("question_id", ids);
+  return !error;
+}
+
+/** A deck was studied: its last study time. */
+export async function touchFlashcardDeck(admin: Admin, userId: string, id: string): Promise<void> {
+  if (!isUuid(id)) return;
+  await admin.from("individual_scholar_flashcard_deck").update({ last_studied_at: new Date().toISOString() }).eq("user_id", userId).eq("id", id).then((r: unknown) => r, () => {});
+}
+
+/** A card mark: bookmark, private note, or an issue code (with its time). Only what is given is changed. */
+export async function setFlashcardMark(admin: Admin, userId: string, questionId: string, patch: { bookmarked?: boolean; note?: string | null; issue?: string | null }): Promise<boolean> {
+  if (!isUuid(questionId)) return false;
+  const now = new Date().toISOString();
+  const { error } = await admin.from("individual_scholar_flashcard_mark").upsert({
+    user_id: userId, question_id: questionId, updated_at: now,
+    ...(patch.bookmarked !== undefined ? { bookmarked: patch.bookmarked } : {}),
+    ...(patch.note !== undefined ? { note: patch.note } : {}),
+    ...(patch.issue !== undefined ? { issue: patch.issue, issue_at: patch.issue ? now : null } : {}),
+  }, { onConflict: "user_id,question_id" });
+  return !error;
 }
