@@ -21,6 +21,7 @@ import { formativeFeedback, withFormative } from "@/lib/individual/scholar/writt
 import { CLOZE_REVEALED_TEXT, isClozeQuestion } from "@/lib/individual/scholar/cloze";
 import { extendedMarks, extendedSpecOf, isExtendedQuestion } from "@/lib/individual/scholar/formats";
 import { rubricSnapshotOf, withRubricSnapshot } from "@/lib/individual/scholar/rubric-snapshot";
+import { keepAttemptSnapshot } from "@/lib/individual/scholar/attempt-integrity";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -190,11 +191,14 @@ export async function POST(req: Request) {
   const formative = marking === "ai_evaluation" ? formativeFeedback([{ part: null, feedback: evaluation, parts: evaluationParts }], evaluator) : null;
   // SCHOLAR-SQIE-LEARNER-01: the key points an extended answer made, then the rubric snapshot, then the feedback (which yields first if the size is tight).
   const answered = extendedMatched && stored.response ? { ...stored.response, matched: extendedMatched } : stored.response;
+  const kept = withFormative(withRubricSnapshot(answered, rubricSnapshotOf(q)), formative);
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
-    chosenIndex: stored.chosenIndex, response: withFormative(withRubricSnapshot(answered, rubricSnapshotOf(q)), formative), correct: mark.correct, score: mark.score, marking, evaluator, sessionId,
+    chosenIndex: stored.chosenIndex, response: kept, correct: mark.correct, score: mark.score, marking, evaluator, sessionId,
     quality: r.kind === "recall" ? r.quality : null, srs,
   });
   if (!saved.ok) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });
+  // SCHOLAR-CONTINUITY-01 (791): what this answer was assessed against, kept beside it. Never fails the answer.
+  await keepAttemptSnapshot(ctx, q, { attempt: saved.attempt, chosenIndex: stored.chosenIndex, response: kept, correct: mark.correct, score: mark.score, marking });
   if (held && sessionId) await clearHeldAnswer(ctx.admin, ctx.userId, sessionId, q.id);
   else if (sessionId) await updateRevisionSession(ctx.admin, ctx.userId, sessionId, { position: answeredCount + 1 });
 
@@ -278,11 +282,14 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
   const stored = storedResponse(r);
   // SCHOLAR-WRITTEN-FEEDBACK-01: how each part was marked, and (AI-evaluated only) the formative feedback on each AI part.
   const formative = marking === "ai_evaluation" ? formativeFeedback(final.flatMap((x, i) => x.by === "ai" ? [{ part: i + 1, feedback: x.feedback ?? null, parts: x.parts ?? null }] : []), evaluator) : null;
+  const kept = withFormative(withRubricSnapshot({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by) }, rubricSnapshotOf(q)), formative);
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
-    chosenIndex: null, response: withFormative(withRubricSnapshot({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by) }, rubricSnapshotOf(q)), formative), correct: m.correct, score: m.score, marking,
+    chosenIndex: null, response: kept, correct: m.correct, score: m.score, marking,
     evaluator: marking === "ai_evaluation" ? evaluator : null, sessionId, srs,
   });
   if (!saved.ok) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });
+  // SCHOLAR-CONTINUITY-01 (791): what this answer was assessed against, kept beside it. Never fails the answer.
+  await keepAttemptSnapshot(ctx, q, { attempt: saved.attempt, chosenIndex: null, response: kept, correct: m.correct, score: m.score, marking });
   if (sessionId) await updateRevisionSession(ctx.admin, ctx.userId, sessionId, { position: answeredCount + 1 });
   return NextResponse.json({
     recorded: true,

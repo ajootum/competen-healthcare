@@ -74,7 +74,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
 
   // ── one session: run it, or resume it where the student left it ──
   if (q.session) {
-    const [s, pool] = await Promise.all([getRevisionSession(ctx.admin, ctx.userId, q.session), revisionPool(ctx.admin, ctx.userId, { kinds: [...REVISION_FORMATS, "case"] })]);
+    const [s, pool] = await Promise.all([getRevisionSession(ctx.admin, ctx.userId, q.session, { integrity: true }), revisionPool(ctx.admin, ctx.userId, { kinds: [...REVISION_FORMATS, "case"] })]);
     if (!s.ok || !pool.ok) return <>{header}<Unreadable what="this revision session" /></>;
     // SCHOLAR-PRACTICE-EXAMS-01: an adaptive exam runs on its own page (its questions are chosen one at a time).
     // SCHOLAR-FLASHCARDS-01: a flashcards session runs on the Flashcards page (the card-flipping study view).

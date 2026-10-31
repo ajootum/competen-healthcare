@@ -39,6 +39,12 @@ export type GenerateArgs = {
   /** COMPETEN-SCHOLAR-EXAM-PAPERS-01. Anthropic only: PDF documents the model reads (transcribing scanned pages). */
   documents?: readonly { mediaType: "application/pdf"; data: string }[];
   /**
+   * SCHOLAR-CONTINUITY-01 item 5. Anthropic only: whether the system block is marked for prompt caching (default true, as
+   * before). A caller whose system text carries one person's own data passes false: a cache entry is an exact prefix shared
+   * across the organisation, so a per-person block would only pay the cache-write premium and never be reused.
+   */
+  cacheSystem?: boolean;
+  /**
    * SCHOLAR-PAI-EXPERIENCE-01. Streaming, optional: each piece of answer text as the provider produces it. Called only
    * once every gate has passed (this function runs after them), and never changes the result: generate() still returns
    * the whole answer, its usage and its outcome, and the engine settles exactly as it does without it. The Anthropic
@@ -87,7 +93,7 @@ type AdapterResult =
 type AdapterArgs = {
   system: string; user: string; model: string; maxTokens: number; key: string;
   webSearch?: GenerateArgs["webSearch"]; documents?: GenerateArgs["documents"];
-  onText?: (text: string) => void;
+  onText?: (text: string) => void; cacheSystem?: boolean;
 };
 
 /** The web search tool version a model supports: the dynamic-filtering one on 4.6 and later, the basic one before. */
@@ -130,7 +136,7 @@ async function anthropicAdapter(a: AdapterArgs): Promise<AdapterResult> {
   const stream = _anthropic.messages.stream({
     model: a.model,
     max_tokens: a.maxTokens,
-    system: [{ type: "text", text: a.system, cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: a.system, ...(a.cacheSystem === false ? {} : { cache_control: { type: "ephemeral" as const } }) }],
     messages: [{ role: "user", content: a.documents?.length ? content : a.user }],
     ...(a.webSearch ? { tools: [{ type: webSearchToolType(a.model), name: "web_search", max_uses: a.webSearch.maxUses, allowed_domains: [...a.webSearch.allowedDomains] } as Anthropic.ToolUnion] } : {}),
   });
@@ -277,7 +283,7 @@ const FAILOVER_ELIGIBLE: ReadonlyArray<"failed"> = ["failed"];
  * Returns the text plus which vendor and model produced it. Never throws.
  */
 export async function generate(
-  { system, user, tier = "reasoning", maxTokens = 1500, context, route, webSearch, documents, onText, onStart }: GenerateArgs,
+  { system, user, tier = "reasoning", maxTokens = 1500, context, route, webSearch, documents, onText, onStart, cacheSystem }: GenerateArgs,
 ): Promise<GenerateResult> {
   const status = aiStatus();
   // A routed request names its provider and model. Its key is still the environment's (never configuration's), and a
@@ -315,7 +321,7 @@ export async function generate(
   try { onStart?.(); } catch { /* timing only */ }
   const t0 = Date.now();
   try {
-    const args = { system, user, model, maxTokens, key, webSearch, documents, onText: text };
+    const args = { system, user, model, maxTokens, key, webSearch, documents, onText: text, cacheSystem };
     const result = registered ? await compatibleAdapter(route!.endpoint!, args) : await ADAPTERS[provider as AiProvider](args);
     const latencyMs = Date.now() - t0;
 
