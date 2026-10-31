@@ -2,6 +2,8 @@
 import { loadRequiredApprovals, reviewerAppointments } from "@/lib/competency/clinical-review";
 import { stationContentOf, validateStationContent } from "@/lib/individual/scholar/osce";
 import { dbRefusal } from "./governance";
+import { findSimilar, type SimilarMatch } from "./question-similarity";
+import { normaliseSource, sourceRefusal } from "./question-source";
 
 // ── CKRI EDUCATOR KNOWLEDGE IMPROVEMENT ── COMPETEN-KNOWLEDGE-RESEARCH-01 s5 (K3), migration 442 ──────────────────────
 //
@@ -31,7 +33,9 @@ export function contentOf(kind: ResourceKind, f: Record<string, unknown>): Recor
   if (kind === "osce_station") return stationContentOf(f);
   if (kind === "revision_question") {
     const options = Array.isArray(f.options) ? f.options.slice(0, 4).map(o => s(o, 500)) : [];
-    return { stem: s(f.stem, 2000), options, correct_index: Number.isInteger(f.correctIndex) ? f.correctIndex : Number(f.correctIndex), rationale: s(f.rationale, 4000) };
+    // SQIE-COMPLETE-01: the optional source-rights declaration rides inside the content (no migration: 442 ignores extra keys).
+    const source = normaliseSource(f.source);
+    return { stem: s(f.stem, 2000), options, correct_index: Number.isInteger(f.correctIndex) ? f.correctIndex : Number(f.correctIndex), rationale: s(f.rationale, 4000), ...(source ? { source } : {}) };
   }
   const body = { body: s(f.body, 20000) };
   return kind === "targeted_resource" && Array.isArray(f.links) ? { ...body, links: f.links.slice(0, 20).map(l => s(l, 500)).filter(l => /^https:\/\//.test(l)) } : body;
@@ -118,15 +122,60 @@ export async function reviewDraft(admin: any, me: string, versionId: string): Pr
   return error ? { ok: false, error: refusal(error, "The review could not be recorded.") } : { ok: true };
 }
 
-export async function submitDraft(admin: any, me: string, versionId: string): Promise<R<{ reviewVersionId: string; required: number }>> {
-  const { data: v } = await admin.from("ckri_knowledge_version").select("risk").eq("id", versionId).maybeSingle();
+/** A revision question in the library, as the duplicate check reads it: the latest version of each active resource. */
+export type PoolItem = { id: string; resourceId: string; code: string; title: string; versionNo: number; state: string; content: unknown };
+
+/** The latest version of every active revision_question resource (bounded). null when it cannot be read. */
+export async function loadQuestionPool(admin: any): Promise<PoolItem[] | null> {
+  const res = await admin.from("ckri_knowledge_resource").select("id, code, title").eq("kind", "revision_question").eq("status", "active").limit(1000);
+  if (res.error) return null;
+  const ids = (res.data ?? []).map((r: any) => r.id);
+  if (!ids.length) return [];
+  const vers = await admin.from("ckri_knowledge_version").select("id, resource_id, version_no, state, content").in("resource_id", ids).order("version_no", { ascending: false }).limit(3000);
+  if (vers.error) return null;
+  const byRes = new Map<string, any>((res.data ?? []).map((r: any) => [r.id, r]));
+  const latest = new Map<string, any>();
+  for (const v of vers.data ?? []) if (!latest.has(v.resource_id)) latest.set(v.resource_id, v);
+  return [...latest.values()].map(v => ({ id: v.id, resourceId: v.resource_id, code: byRes.get(v.resource_id)?.code ?? "", title: byRes.get(v.resource_id)?.title ?? "", versionNo: v.version_no, state: v.state, content: v.content }));
+}
+
+/** Pure. The pool items resembling this content at SIMILAR or above, never the question's own resource. */
+export function duplicatesOf(content: unknown, pool: readonly PoolItem[], ownResourceId: string | null): (SimilarMatch & { item: PoolItem })[] {
+  const others = pool.filter(p => p.resourceId !== ownResourceId);
+  const byId = new Map(others.map(p => [p.id, p]));
+  return findSimilar(content, others.map(p => ({ id: p.id, content: p.content }))).map(m => ({ ...m, item: byId.get(m.id)! }));
+}
+
+/**
+ * Submission. A revision question must have a complete, reusable source declaration (question-source.ts) and, where a
+ * LIKELY duplicate exists in the library, the educator must have confirmed they checked it (`duplicatesChecked`). The
+ * duplicate check never blocks on its own: it asks for the confirmation. 442 decides everything else.
+ */
+export async function submitDraft(admin: any, me: string, versionId: string, opts: { duplicatesChecked?: boolean } = {}): Promise<R<{ reviewVersionId: string; required: number }>> {
+  const { data: v } = await admin.from("ckri_knowledge_version").select("risk, content, resource_id, ckri_knowledge_resource(kind)").eq("id", versionId).maybeSingle();
   if (!v) return { ok: false, error: "Unknown version." };
+  if (v.ckri_knowledge_resource?.kind === "revision_question") {
+    const why = sourceRefusal(v.content);
+    if (why) return { ok: false, error: why };
+    if (!opts.duplicatesChecked) {
+      const pool = await loadQuestionPool(admin);
+      const likely = pool ? duplicatesOf(v.content, pool, v.resource_id).filter(d => d.band === "likely_duplicate") : [];
+      if (likely.length) return { ok: false, error: `Possible duplicate of ${likely.slice(0, 3).map(d => d.item.code).join(", ")}. Open it, then confirm "I checked these are not duplicates" and submit again.` };
+    }
+  }
   const required = (await loadRequiredApprovals(admin))[v.risk === "high" ? "high" : "standard"];
   const { data, error } = await admin.rpc("ckri_knowledge_submit", { p_version: versionId, p_submitter: me, p_required: required });
   return error ? { ok: false, error: refusal(error, "The resource could not be submitted.") } : { ok: true, reviewVersionId: data as string, required };
 }
 
 export async function publishVersion(admin: any, me: string, versionId: string): Promise<R> {
+  // SQIE-COMPLETE-01: rights are an application-layer gate (the database enforces independence and exact-content approval,
+  // not licences). A revision question whose declared source is incomplete, non-commercial or unrecognised is not published.
+  const { data: v } = await admin.from("ckri_knowledge_version").select("content, ckri_knowledge_resource(kind)").eq("id", versionId).maybeSingle();
+  if (v?.ckri_knowledge_resource?.kind === "revision_question") {
+    const why = sourceRefusal(v.content);
+    if (why) return { ok: false, error: why };
+  }
   const { error } = await admin.rpc("ckri_knowledge_publish", { p_version: versionId, p_publisher: me });
   return error ? { ok: false, error: refusal(error, "The resource could not be published.") } : { ok: true };
 }

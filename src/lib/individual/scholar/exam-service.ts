@@ -153,6 +153,11 @@ export async function judgeOpenedPaper(ctx: IndividualContext, paper: Pick<ExamP
   const chunks = await listChunks(ctx.admin, ctx.userId, paper.materialId);
   const reparsed = chunks.ok && chunks.data.length ? parsePaper(linesFromChunks(chunks.data.map(c => ({ id: c.id, content: c.content, pageFrom: c.pageFrom })))) : null;
   const j = judgeLegacyPaper(paper, questions, reparsed);
+  // SQIE-COMPLETE-01: EVERY legacy recheck leaves one codes-only row, clean or redirected, so coverage is measurable
+  // (checked versus redirected). The redirect audit below keeps its own semantics and is still written only for statements.
+  await audit(ctx, "individual_scholar_exam_paper_legacy_checked", "individual_scholar_exam_paper", paper.materialId, {
+    result: j.statements > 0 ? "redirected" : "clean", statements: j.statements, questions: j.questions, parser: paper.extractor.slice(0, 60), judged_with: PAPER_PARSER,
+  });
   if (j.statements > 0) {
     await audit(ctx, "individual_scholar_exam_paper_legacy_redirected", "individual_scholar_exam_paper", paper.materialId, {
       outcome: j.notesLike ? "notes_like" : "statements_hidden", statements: j.statements, questions: j.questions,

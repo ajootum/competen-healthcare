@@ -4,6 +4,8 @@ import { candidacyStatus, offerPrivateCase, withdrawCaseCandidate } from "@/lib/
 import type { Blueprint } from "@/lib/cases/blueprint";
 import { getPassage, getPrivateCase, listQuestions } from "@/lib/individual/scholar/store";
 import { audit } from "@/lib/individual/scholar/http";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { OFFERING_OFF } from "@/lib/cases/offering-switch";
 import { caseSourceKey, privateCaseSnapshot, s4CaseBlueprint, verbatimCheck } from "@/lib/individual/scholar/clinical";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -38,6 +40,8 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
   const ctx = await requireIndividualContext("scholar");
   if (isGuardRefusal(ctx)) return ctx;
   const id = (await ctx2.params).id;
+  // The offer side has its own switch (scholar_case_contribution). Withdrawing below is never gated.
+  if ((await loadIndividualPolicy(ctx.admin)).scholarCaseContribution === "off") return NextResponse.json({ error: OFFERING_OFF }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const kind = body?.kind === "s4" ? "s4" : "case";
   const status = await candidacyStatus(ctx.admin, ctx.userId);

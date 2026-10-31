@@ -6,6 +6,7 @@ import { loadRequiredApprovals } from "@/lib/competency/clinical-review";
 import { BLUEPRINT_SCHEMA, blueprintCompetencies, classificationProblems, professionsOf, validateBlueprint, type Blueprint, type CompetencyVersion } from "./blueprint";
 import { screenBlueprint, SCREEN_LABEL } from "./screen";
 import { loadCasePolicy } from "./policy";
+import { STAGE_CATEGORIES } from "./categories";
 
 // ── C2: THE EDUCATOR CASE REVIEW STUDIO, AND C3 ON THE HQ SIDE ── COMPETEN-HOLDINGS-AI-CONSUMPTION-01 s8-s9 ──────────
 //
@@ -450,14 +451,32 @@ export async function caseDetail(admin: any, caseId: string): Promise<{ case: { 
 
 // ── AI drafting, on the platform's budget ─────────────────────────────────────────────────────────────────
 
-const AUTHOR_SYSTEM = `You draft clinical teaching cases for nurse and allied-health educators, as ONE JSON object in the schema case-blueprint/1.
+/** Pure: the profession words for a prompt: the case's own professions when known, otherwise the health professions generally. */
+export function professionPhrase(labels: readonly string[]): string {
+  const names = [...new Set(labels.map(l => l.trim()).filter(Boolean))].slice(0, 5);
+  return names.length ? names.join(", ") : "the health professions";
+}
+
+/**
+ * Pure: the system prompt for an educator's AI draft. Profession-neutral: it names the case's profession(s) from the
+ * catalogue terms the educator chose (metadata.professionTermIds) and otherwise speaks of the health professions.
+ */
+export function authorSystem(professionLabels: readonly string[] = []): string {
+  const who = professionPhrase(professionLabels);
+  return `You draft clinical teaching cases for educators in ${who}, as ONE JSON object in the schema case-blueprint/1.
+Write for ${professionLabels.length ? `learners in ${who}` : "learners in whichever health profession the educator's description names"}; use that profession's own terms and scope of practice, and do not assume nursing.
 Use only synthetic, coarse patient details (an age band such as "60-69", never a name, a date, a place or a number that identifies anyone).
-Every finding goes in "facts" with its value, kind, revealedAt ("start", a stage id, or "request") and safetyCritical.
-Stages list their reveals and decisionPointIds. Each decision point has a stageId, a prompt, kind single, multiple or free_text, a dimension
+Every finding goes in "facts" with its value, kind (history, observation, examination, investigation, result or context), revealedAt ("start", a stage id, or "request") and safetyCritical.
+Stages list their reveals and decisionPointIds. Each stage may carry an optional "category" from: ${STAGE_CATEGORIES.join(", ")}. Use these in that order where clinically sensible, only the ones that fit, and never force a stage into one.
+Each decision point has a stageId, a prompt, kind single, multiple or free_text, a dimension
 (recognition, interpretation, prioritisation, decision, reassessment or escalation), options with id, text, correct and rationale, and permittedReveals.
+Where it helps the learner think, set "askReason": true on a single or multiple choice decision so the learner is asked to explain the choice (it never changes the marking).
 Progression transitions name a from stage, onOptions or isDefault, a to stage, and consequenceFactIds. Option transitions only from a stage with one single-choice decision.
 Add safetyCriteria (decisionPointId, mustSelect or mustNotSelect), a debrief, learningObjectives (text, competencyIds as given), references the educator can verify,
-and metadata {level, complexity 1-5, risk standard or high}. Return the JSON object only. An educator will check every fact before any clinical review.`;
+and metadata {level, complexity 1-5, risk standard or high}.
+Optionally add "differentials" ([{label, reasoning}]), "managementPrinciples" (short statements) and "expectedReasoning" (what a strong line of reasoning covers), shown to the learner only as the case unfolds or at its end.
+Return the JSON object only. An educator will check every fact before any clinical review.`;
+}
 
 /** Pure: the first JSON object in a model's text, or null. */
 export function extractJson(text: string): any | null {
@@ -470,7 +489,7 @@ export function extractJson(text: string): any | null {
  * Draft a case with AI for an educator to read. Workflow case.educator_develop: the server resolves the platform (or
  * an authorised institution) budget. The draft is returned, never stored, and is labelled an AI draft.
  */
-export async function draftCaseWithAi(admin: any, educatorId: string, args: { brief: string; competencyIds: string[]; level: string; risk: string; requestKey: string })
+export async function draftCaseWithAi(admin: any, educatorId: string, args: { brief: string; competencyIds: string[]; level: string; risk: string; requestKey: string; professionTermIds?: string[] })
   : Promise<R<{ content: Blueprint; problems: string[]; screen: string[] }>> {
   const brief = (args.brief ?? "").trim();
   if (brief.length < 20 || brief.length > 4000) return { ok: false, error: "Describe the case you want in a few sentences." };
@@ -478,10 +497,14 @@ export async function draftCaseWithAi(admin: any, educatorId: string, args: { br
   const owner = await resolveOwner(admin, "case.educator_develop", "scholar", { userId: educatorId });
   if ("refused" in owner) return { ok: false, error: owner.message };
   const competencyIds = (args.competencyIds ?? []).filter(id => UUID.test(id)).slice(0, 20);
+  // The profession(s) the educator chose, from the catalogue (never typed): their words go into the prompt, their ids into the draft.
+  const askedProfessions = (args.professionTermIds ?? []).filter(id => UUID.test(id)).slice(0, 5);
+  const terms = askedProfessions.length ? await admin.from("taxonomy_terms").select("id, value").in("id", askedProfessions) : { data: [], error: null };
+  const professionTerms: { id: string; value: string }[] = terms.error ? [] : (terms.data ?? []).filter((t: any) => typeof t?.value === "string");
   const requestId = `case.author:${createHash("sha256").update(`${educatorId}:${args.requestKey}`).digest("hex").slice(0, 40)}`;
   const r = await runOwnedAi(admin, {
     owner, product: "scholar", activity: "case_author", requestId,
-    generate: { system: AUTHOR_SYSTEM, user: `Level: ${args.level}. Risk: ${args.risk}. Competency ids for learningObjectives: ${JSON.stringify(competencyIds)}.\n\nThe case:\n${brief}`,
+    generate: { system: authorSystem(professionTerms.map(t => t.value)), user: `Level: ${args.level}. Risk: ${args.risk}. Competency ids for learningObjectives: ${JSON.stringify(competencyIds)}.\n\nThe case:\n${brief}`,
       tier: "reasoning", maxTokens: 3000, context: { userId: educatorId, operation: "case.educator_develop" } },
     risk: { text: brief, competencyIds },
   });
@@ -489,7 +512,7 @@ export async function draftCaseWithAi(admin: any, educatorId: string, args: { br
   if (!r.ok) return { ok: false, error: "error" in r && (r as any).error === "not_configured" ? "AI is not configured on this environment." : "The AI draft could not be made just now." };
   const o = extractJson((r as any).text ?? "");
   if (!o) return { ok: false, error: "The AI did not return a case. Nothing was charged beyond the request itself." };
-  const content = { ...o, schema: BLUEPRINT_SCHEMA, metadata: { ...(o.metadata ?? {}), professionTermId: null, professionTermIds: [], specialtyTermIds: [], cfcaDomainIds: [], cpuIds: [], proficiencyLevelIds: [],
+  const content = { ...o, schema: BLUEPRINT_SCHEMA, metadata: { ...(o.metadata ?? {}), professionTermId: professionTerms[0]?.id ?? null, professionTermIds: professionTerms.map(t => t.id), specialtyTermIds: [], cfcaDomainIds: [], cpuIds: [], proficiencyLevelIds: [],
     provenance: { kind: "educator", rights: "educator_original", note: "AI draft (case.educator_develop), not yet checked by an educator" } } } as Blueprint;
   return { ok: true, content, problems: validateBlueprint(content, "library"), screen: screenBlueprint(content).map(k => SCREEN_LABEL[k]) };
 }

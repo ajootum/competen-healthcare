@@ -6,6 +6,7 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { getPassage, getPrivateCase, getPrivateCaseSession } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
+import { REASONING_CAPS } from "@/lib/cases/categories";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRequestId, scholarRisk } from "@/lib/individual/scholar/http";
 import { libraryReasoningFeedback } from "@/lib/individual/scholar/clinical-library-feedback";
 import { MARKING_LABEL } from "@/lib/individual/scholar/config";
@@ -35,6 +36,11 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
   const optionTokens = Array.isArray(body?.optionTokens) ? (body.optionTokens as unknown[]).filter((t): t is string => typeof t === "string" && t.length <= 64).slice(0, 20) : undefined;
   const text = typeof body?.text === "string" ? body.text.trim().slice(0, 4000) : null;
   if (text && findPatientIdentifiers(text).length) return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
+  // "Explain your choice" (decision.askReason): a LIBRARY play keeps the learner's reason beside the choice (screened for
+  // patient identifiers like any text). A PRIVATE play does not send it at all: 435 holds a choice or a written answer on a
+  // row, never both, so the reason stays in the learner's browser for the debrief. Marking is on the choice either way.
+  const reason = kind === "library" && typeof body?.reason === "string" ? body.reason.trim().slice(0, REASONING_CAPS.reason) : null;
+  if (reason && findPatientIdentifiers(reason).length) return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
   const policy = await loadIndividualPolicy(ctx.admin);
 
   // AI reasoning feedback on a written answer, for a private case: or the student's own review.
@@ -56,7 +62,7 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
     return { kind: "ai", correct: e.evaluation.verdict === "correct", score: e.evaluation.score, feedback: e.evaluation.feedback, evaluator: { model: e.model, promptVersion: e.promptVersion } };
   };
 
-  const r = await answerPlay(ctx.admin, ctx.userId, kind, id, { decisionToken: body.decisionToken, optionTokens, text }, judge, body?.hints === true);
+  const r = await answerPlay(ctx.admin, ctx.userId, kind, id, { decisionToken: body.decisionToken, optionTokens, text, reason }, judge, body?.hints === true);
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: (r as { status?: number }).status ?? 400 });
   // A written decision in a LIBRARY case: live AI feedback on the student's own budget (case.live_with_stored), from the
   // narrow server-side context library.ts gives (never the blueprint), recorded by the shared delivery (424). Where it

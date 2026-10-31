@@ -357,6 +357,26 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
     why: "the change log of that shape. Same subject as above: the format, not a person.",
   },
   {
+    table: "individual_scholar_question",
+    columns: ["id", "library_version_id"],
+    count: true,
+    why:
+      "SQIE-COMPLETE-01 (owner GO 31 Oct 2026). Aggregate per library version counts only (SQIE item quality); no learner " +
+      "identity or content read. Two columns: the copy's id and which governed library version it copies (710). `user_id`, " +
+      "`stem`, `options`, `correct_index`, `rationale`, `source_quote` and every other column are outside this plane. A copy is " +
+      "unique per learner and version, so a count of copies is a count of learners holding the item without reading who. " +
+      "Read by question-performance.ts for the HQ question catalogue; nothing is returned to the page but counts.",
+  },
+  {
+    table: "individual_scholar_attempt",
+    columns: ["question_id", "correct", "answered_at"],
+    count: true,
+    why:
+      "SQIE-COMPLETE-01. Aggregate per library version counts only (SQIE item quality); no learner identity or content read. " +
+      "`question_id` joins an attempt to the copy (never to a person), `correct` is the % correct, `answered_at` is the last-used " +
+      "date. `user_id`, `chosen_index`, `response`, `score` and the evaluator columns are outside this plane.",
+  },
+  {
     table: "practice_practitioner_identity",
     // ⚠ `user_id` ADDED 2026-08-18 AS A JOIN KEY AND NOTHING ELSE (CPR-PD-004). The roster shows a
     // practitioner NUMBER beside a name it already holds from profiles, and without this column the two

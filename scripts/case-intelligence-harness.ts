@@ -191,7 +191,7 @@ red("K3 on a ledger write in an offer", k3({ ...c1c4, "src/lib/cases/candidates.
 red("K4 on an AI de-identification verdict", k4(cand.replace("const eligible = j.reasons.length === 0;", "const eligible = j.reasons.length === 0 || (args as any).aiScreen?.deidentified === true;")));
 red("K5 on a browser-chosen budget", k5(route.replace("str(body.brief, 4000)", "str(body.brief, 4000), budget: body.budget"), studio));
 red("K5 on a browser-chosen workflow", k5(route, studio.replace(`resolveOwner(admin, "case.educator_develop"`, `resolveOwner(admin, args.workflow as any`)));
-red("K6 on a search without the deliverable check", k6(lib.replace(`const { data: ok, error: dErr } = await admin.rpc("case_library_deliverable", { p_version: v.id });`, "const ok = true, dErr = null;")));
+red("K6 on a search without the deliverable check", k6(lib.replace(`const { data: ok, error: dErr } = await admin.rpc("case_library_deliverable", { p_version: r.versionId });`, "const ok = true, dErr = null;")));
 red("K7 on a student route loading the full case", k7({ ...everyFile, "src/app/api/individual/case/route.ts": `import { loadLibraryCase } from "@/lib/cases/library";\n` }));
 red("K8 without the backstop", k8(sql.replace(/v_kinds := case_identifier_kinds\(new\.snapshot::text\);\n    if cardinality\(v_kinds\) > 0 then/, "v_kinds := case_identifier_kinds(new.snapshot::text);\n    if false then")));
 red("K8 without the permission check", k8(sql.replace("if new.user_id is null or not found or g.status <> 'granted' then", "if false then")));

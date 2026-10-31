@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash } from "node:crypto";
 import {
-  answeredView, blueprintCompetencies, learnerView, nextStage, professionsOf, resolveOptions, resolveToken, safetyEvents, variationWithinBounds, viewToken, visibleFacts,
-  type Blueprint, type LearnerView,
+  answeredView, blueprintCompetencies, caseClosing, endsOnReaching, learnerView, nextStage, professionsOf, resolveOptions, resolveToken, safetyEvents, variationWithinBounds, viewToken, visibleFacts,
+  type Blueprint, type CaseClosing, type LearnerView,
 } from "./blueprint";
+import { REASONING_CAPS } from "./categories";
 import { caseLibraryEnabled, loadCasePolicy } from "./policy";
+import { RANK_POOL, rankLibraryCases, type RankGaps } from "./ranking";
 
 // ── C4: COST-OPTIMISED CASE DELIVERY ── COMPETEN-HOLDINGS-AI-CONSUMPTION-01 s10, IND-004 D-a to D-e, migrations 422-423 ──
 //
@@ -33,6 +35,8 @@ const missing = (e: any) => /does not exist|schema cache|could not find/i.test(e
 export type LibraryOffer = {
   versionId: string; caseId: string; code: string; title: string; intro: string | null; level: string; risk: string;
   competencyIds: string[]; specialtyTermIds: string[];
+  /** Why this case is offered for this learner (rankLibraryCases): short reasons, never the blueprint. Empty when nothing in particular. */
+  why?: string[];
 };
 export const caseSessionRecord = (sessionId: string) => ({ type: "case_library_session", ref: sessionId });
 
@@ -52,10 +56,16 @@ export function caseMatches(v: { content: any; level: string; competencyIds: str
   return true;
 }
 
-/** Search the governed library. Published AND approved for the exact version, or nothing (D-d). null = unreadable. */
+/**
+ * Search the governed library. Published AND approved for the exact version, or nothing (D-d). null = unreadable.
+ * The filter is caseMatches, unchanged; what passed is then RANKED (ranking.ts: competency, topic, the learner's
+ * gaps, level) and only the best are checked for delivery, so the offer limit never cuts off the most relevant case.
+ */
 export async function findLibraryCases(admin: any, q: {
   competencyIds?: string[]; topic?: string; level?: string; context?: { professionTermId?: string | null; specialtyTermIds?: string[] };
   excludeVersionIds?: string[]; limit?: number;
+  /** Ranking only (never a filter): the learner's gaps from their latest evaluation, and the level their work is pitched at. */
+  gaps?: RankGaps | null; learnerLevel?: string | null;
 } = {}): Promise<LibraryOffer[] | null> {
   if (!(await caseLibraryEnabled(admin))) return [];
   const policy = await loadCasePolicy(admin);
@@ -71,18 +81,26 @@ export async function findLibraryCases(admin: any, q: {
   ]);
   if (lErr || cErr) return null;
   const caseOf = new Map<string, any>((cases ?? []).map((c: any) => [c.id, c]));
-  const out: LibraryOffer[] = [];
-  for (const v of versions ?? []) {
-    if (out.length >= limit) break;
+  const fit: (LibraryOffer & { objectives: string[]; summary: string | null })[] = [];
+  for (const v of versions ?? []) {                                       // newest first: the order ties keep
     if (!ids.includes(v.id) || caseOf.get(v.case_id)?.status !== "active") continue;
     const competencyIds = (links ?? []).filter((l: any) => l.version_id === v.id).map((l: any) => l.competency_id);
     if (!caseMatches({ content: v.content, level: v.level, competencyIds }, q)) continue;
-    const { data: ok, error: dErr } = await admin.rpc("case_library_deliverable", { p_version: v.id });
+    fit.push({ versionId: v.id, caseId: v.case_id, code: caseOf.get(v.case_id).code, title: v.content?.title ?? "Clinical case",
+      intro: v.content?.learnerIntro ?? v.content?.patient?.presentingComplaint ?? null, level: v.level, risk: v.risk, competencyIds,
+      specialtyTermIds: Array.isArray(v.content?.metadata?.specialtyTermIds) ? v.content.metadata.specialtyTermIds : [],
+      objectives: (v.content?.learningObjectives ?? []).map((l: any) => l?.text).filter((t: unknown): t is string => typeof t === "string"), summary: v.content?.summary ?? null });
+  }
+  const ranked = rankLibraryCases(fit, { topic: q.topic, competencyIds: q.competencyIds, gaps: q.gaps, level: q.learnerLevel }).slice(0, Math.max(RANK_POOL, limit));
+  const out: LibraryOffer[] = [];
+  for (const r of ranked) {
+    if (out.length >= limit) break;
+    const { data: ok, error: dErr } = await admin.rpc("case_library_deliverable", { p_version: r.versionId });
     if (dErr) return null;
     if (ok !== true) continue;
-    out.push({ versionId: v.id, caseId: v.case_id, code: caseOf.get(v.case_id).code, title: v.content?.title ?? "Clinical case",
-      intro: v.content?.learnerIntro ?? v.content?.patient?.presentingComplaint ?? null, level: v.level, risk: v.risk, competencyIds,
-      specialtyTermIds: Array.isArray(v.content?.metadata?.specialtyTermIds) ? v.content.metadata.specialtyTermIds : [] });
+    const { objectives: _o, summary: _s, score: _sc, why, ...offer } = r;     // nothing of the blueprint but the title and opening
+    void _o; void _s; void _sc;
+    out.push({ ...offer, why });
   }
   return out;
 }
@@ -129,12 +147,16 @@ export function applyVariation(b: Blueprint, variation: Record<string, string>):
 
 type AiEntry = { kind: "ai_evaluation"; provider: string; model: string; modelVersion?: string | null; policyVersion?: string | null; requestId: string; text: string; at: string };
 type SessionRow = { id: string; user_id: string; version_id: string; view_salt: string; variation: Record<string, string>; reached_stage_ids: string[];
-  revealed_fact_ids: string[]; answers: { decisionPointId: string; chosen: string[]; text?: string; at: string; safety: number }[]; safety_events: number; status: string;
+  revealed_fact_ids: string[]; answers: { decisionPointId: string; chosen: string[]; text?: string; reason?: string; at: string; safety: number }[]; safety_events: number; status: string;
   feedback?: (AiEntry & { decisionPointId: string })[]; debrief?: AiEntry | null };
 /** What a learner is shown of an AI evaluation: always labelled as one, with the model that wrote it. */
 export type AiEvaluationView = { label: "AI evaluation"; text: string; provider: string; model: string; at: string };
 export type SessionView = { sessionId: string; status: string; current: boolean; view: LearnerView; answered: string[];
-  feedback: (AiEvaluationView & { decisionToken: string })[]; debrief: AiEvaluationView | null };
+  feedback: (AiEvaluationView & { decisionToken: string })[]; debrief: AiEvaluationView | null;
+  /** The learner's own "why" for the choices where the case asked, by decision token (kept with the answer). */
+  reasons: Record<string, string>;
+  /** Once the case has ended: its reflection prompt and the optional reasoning sections. null while it is in progress. */
+  closing: CaseClosing | null };
 /** What Scholar passes when it records an AI evaluation: the generation's own provider, model and request id. */
 export type AiEvaluation = { provider: string; model: string; modelVersion?: string | null; policyVersion?: string | null; requestId: string; text: string };
 
@@ -152,7 +174,9 @@ function viewOf(x: { s: SessionRow; c: LoadedCase; b: Blueprint }, hints: boolea
   const shown = (e: AiEntry): AiEvaluationView => ({ label: "AI evaluation", text: e.text, provider: e.provider, model: e.model, at: e.at });
   return { sessionId: x.s.id, status: x.s.status, current: x.c.current, view, answered: x.s.answers.map(a => viewToken(x.s.view_salt, "decision", a.decisionPointId)),
     feedback: (x.s.feedback ?? []).map(f => ({ ...shown(f), decisionToken: viewToken(x.s.view_salt, "decision", f.decisionPointId) })),
-    debrief: x.s.debrief ? shown(x.s.debrief) : null };
+    debrief: x.s.debrief ? shown(x.s.debrief) : null,
+    reasons: Object.fromEntries(x.s.answers.filter(a => typeof a.reason === "string" && a.reason).map(a => [viewToken(x.s.view_salt, "decision", a.decisionPointId), a.reason as string])),
+    closing: x.s.status === "completed" ? caseClosing(x.b) : null };
 }
 
 /** Pure: an AI evaluation entry as the database will accept it (424), or null when it would be refused. */
@@ -276,7 +300,7 @@ export async function revealInSession(admin: any, userId: string, sessionId: str
 }
 
 /** Pure: apply one answer to a session's state, by the blueprint's own rules. */
-export function applyAnswer(b: Blueprint, s: Pick<SessionRow, "reached_stage_ids" | "revealed_fact_ids" | "answers">, dpId: string, chosen: string[], text: string | null, at: string)
+export function applyAnswer(b: Blueprint, s: Pick<SessionRow, "reached_stage_ids" | "revealed_fact_ids" | "answers">, dpId: string, chosen: string[], text: string | null, at: string, reason: string | null = null)
   : { error: string } | { reached: string[]; revealed: string[]; answers: SessionRow["answers"]; completed: boolean; safety: number } {
   const stage = s.reached_stage_ids[s.reached_stage_ids.length - 1];
   const d = b.decisionPoints.find(x => x.id === dpId);
@@ -286,7 +310,9 @@ export function applyAnswer(b: Blueprint, s: Pick<SessionRow, "reached_stage_ids
   if (d.kind === "multiple" && chosen.length < 1) return { error: "Choose at least one option." };
   if (d.kind === "free_text" && !(text ?? "").trim()) return { error: "Write your answer." };
   const events = d.kind === "free_text" ? [] : safetyEvents(b, d.id, chosen);
-  const answers = [...s.answers, { decisionPointId: d.id, chosen: d.kind === "free_text" ? [] : chosen, ...(d.kind === "free_text" ? { text: (text ?? "").slice(0, 4000) } : {}), at, safety: events.length }];
+  // "Explain your choice": kept beside the choice when the decision asks for it. It never changes the marking.
+  const why = d.kind !== "free_text" && d.askReason === true && (reason ?? "").trim() ? (reason ?? "").trim().slice(0, REASONING_CAPS.reason) : null;
+  const answers = [...s.answers, { decisionPointId: d.id, chosen: d.kind === "free_text" ? [] : chosen, ...(d.kind === "free_text" ? { text: (text ?? "").slice(0, 4000) } : {}), ...(why ? { reason: why } : {}), at, safety: events.length }];
   const stageDps = b.decisionPoints.filter(x => x.stageId === stage);
   let reached = [...s.reached_stage_ids], revealed = [...s.revealed_fact_ids], completed = false;
   if (stageDps.every(x => answers.some(a => a.decisionPointId === x.id))) {
@@ -294,13 +320,13 @@ export function applyAnswer(b: Blueprint, s: Pick<SessionRow, "reached_stage_ids
     const branchOn = stageDps.length === 1 && stageDps[0].kind === "single" ? answers.find(a => a.decisionPointId === stageDps[0].id)!.chosen : [];
     const nx = nextStage(b, stage, branchOn);
     revealed = [...new Set([...revealed, ...nx.consequenceFactIds])];
-    if (nx.stageId) reached = [...reached, nx.stageId]; else completed = true;
+    if (nx.stageId) { reached = [...reached, nx.stageId]; if (endsOnReaching(b, nx.stageId)) completed = true; } else completed = true;
   }
   return { reached, revealed, answers, completed, safety: events.length };
 }
 
 /** Answer a decision. Deterministic: the key, the safety criteria and the progression are the blueprint's. */
-export async function answerInSession(admin: any, userId: string, sessionId: string, args: { decisionToken: string; optionTokens?: string[]; text?: string | null })
+export async function answerInSession(admin: any, userId: string, sessionId: string, args: { decisionToken: string; optionTokens?: string[]; text?: string | null; reason?: string | null })
   : Promise<{ answered: ReturnType<typeof answeredView>; session: SessionView } | { error: string }> {
   const x = await sessionFor(admin, userId, sessionId);
   if (!x) return { error: "No such session." };
@@ -310,7 +336,7 @@ export async function answerInSession(admin: any, userId: string, sessionId: str
   const d = x.b.decisionPoints.find(p => p.id === dpId)!;
   const chosen = d.kind === "free_text" ? [] : resolveOptions(x.b, x.s.view_salt, dpId, args.optionTokens ?? []);
   if (chosen === null) return { error: "Choose from this decision's options." };
-  const r = applyAnswer(x.b, x.s, dpId, chosen, args.text ?? null, new Date().toISOString());
+  const r = applyAnswer(x.b, x.s, dpId, chosen, args.text ?? null, new Date().toISOString(), args.reason ?? null);
   if ("error" in r) return r;
   const { data: s, error } = await admin.from("case_library_session").update({
     reached_stage_ids: r.reached, revealed_fact_ids: r.revealed, answers: r.answers, safety_events: x.s.safety_events + r.safety,

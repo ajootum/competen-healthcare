@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     case "version_new": r = await newVersion(ctx.admin, me, str(body.resourceId, 40)); break;
     case "competencies_set": r = await setCompetencies(ctx.admin, str(body.versionId, 40), Array.isArray(body.competencyIds) ? body.competencyIds.map((x: unknown) => str(x, 40)) : str(body.competencyIds ?? body.note, 2000).split(/[\s,]+/)); break;
     case "review": r = await reviewDraft(ctx.admin, me, str(body.versionId, 40)); break;
-    case "submit": r = await submitDraft(ctx.admin, me, str(body.versionId, 40)); break;
+    case "submit": r = await submitDraft(ctx.admin, me, str(body.versionId, 40), { duplicatesChecked: body.duplicatesChecked === true }); break;
     case "publish": r = await publishVersion(ctx.admin, me, str(body.versionId, 40)); break;
     case "retire": r = await retireResource(ctx.admin, str(body.resourceId, 40)); break;
   }
