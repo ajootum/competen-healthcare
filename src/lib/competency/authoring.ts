@@ -90,15 +90,22 @@ export async function authored(admin: any, actor: Actor, action: string, entityT
 export const NOT_RECORDED: Fail = { ok: false, status: 503, error: "The authorship record could not be written, so nothing was changed. Try again shortly." };
 
 /** A shared framework the curator may edit now, or why not. */
-export async function editableFramework(admin: any, frameworkId: string): Promise<Result<{ fw: { id: string; name: string; pub_status: string } }>> {
+export async function editableFramework(admin: any, frameworkId: string): Promise<Result<{ fw: { id: string; name: string; pub_status: string; governed?: boolean } }>> {
   if (!isId(frameworkId)) return { ok: false, status: 400, error: "Choose a framework." };
-  const { data: fw, error } = await admin.from("frameworks").select("id, name, pub_status, hospital_id").eq("id", frameworkId).maybeSingle();
+  const { data: fw, error } = await admin.from("frameworks").select("id, name, pub_status, hospital_id, competency_layer").eq("id", frameworkId).maybeSingle();
   if (error) return { ok: false, status: 503, error: "The framework could not be read just now. Nothing has changed." };
   if (!fw || fw.hospital_id !== null) return { ok: false, status: 404, error: "That is not a shared framework." };
   const status = fw.pub_status ?? "draft";
   if (!EDITABLE.has(status)) return { ok: false, status: 409, error: status === "archived" ? "This framework is archived and is not edited." : "This framework is under governance review. Its content is what the approver is looking at, so it is not edited until it is published or returned to draft." };
-  return { ok: true, fw: { id: fw.id, name: fw.name, pub_status: status } };
+  return { ok: true, fw: { id: fw.id, name: fw.name, pub_status: status, governed: typeof fw.competency_layer === "string" && fw.competency_layer.length > 0 } };
 }
+
+/**
+ * FRAMEWORK-DESIGN-STUDIO-02 S5 (D2, migration 770): content of a PUBLISHED, centrally governed framework changes only in
+ * its revision draft (framework-revision.ts, which the route tries first). Reaching a live write here is refused.
+ */
+export const REVISION_ONLY: Fail = { ok: false, status: 409, error: "Changes to a published framework go through its revision draft. Nothing has changed." };
+const revisionOnly = (fw: { pub_status: string; governed?: boolean }) => fw.pub_status === "published" && !!fw.governed;
 
 export async function frameworkOfDomain(admin: any, domainId: string) {
   if (!isId(domainId)) return null;
@@ -251,7 +258,7 @@ export async function createCpu(admin: any, actor: Actor, b: any): Promise<Resul
 }
 
 /** The CPU a competency may name: a CPU of a practice in the SAME framework. Returns its practice, or why not. */
-async function cpuFor(admin: any, frameworkId: string, cpuId: unknown): Promise<{ ok: true; practiceId: string | null; cpuId: string | null } | { ok: false; error: string }> {
+export async function cpuFor(admin: any, frameworkId: string, cpuId: unknown): Promise<{ ok: true; practiceId: string | null; cpuId: string | null } | { ok: false; error: string }> {
   if (cpuId == null || cpuId === "") return { ok: true, practiceId: null, cpuId: null };
   if (!isId(cpuId)) return { ok: false, error: "That CPU is not valid." };
   const { data } = await admin.from("clinical_practice_units").select("id, practice_id").eq("id", cpuId).maybeSingle();
@@ -260,13 +267,14 @@ async function cpuFor(admin: any, frameworkId: string, cpuId: unknown): Promise<
   return { ok: true, practiceId: pr.id, cpuId: data.id };
 }
 
-const competencyRow = (v: CompetencyInput) => ({ code: v.code, name: v.name, description: v.description, learning_outcomes: v.learningOutcomes, expected_level_id: v.expectedLevelId, risk_category: v.riskCategory });
+export const competencyRow = (v: CompetencyInput) => ({ code: v.code, name: v.name, description: v.description, learning_outcomes: v.learningOutcomes, expected_level_id: v.expectedLevelId, risk_category: v.riskCategory });
 
 export async function createCompetency(admin: any, actor: Actor, b: any): Promise<Result<{ id: string }>> {
   const d = await frameworkOfDomain(admin, b?.domainId);
   if (!d) return { ok: false, status: 404, error: "That domain does not exist." };
   const g = await editableFramework(admin, d.framework_id);
   if (!g.ok) return g;
+  if (revisionOnly(g.fw)) return REVISION_ONLY;
   const p = parseCompetency(b);
   if (!p.ok) return { ok: false, status: 422, error: p.error };
   const taken = await competencyCodeTaken(admin, p.value.code, null);
@@ -289,6 +297,7 @@ export async function updateCompetency(admin: any, actor: Actor, b: any): Promis
   if (!d) return { ok: false, status: 404, error: "That competency's domain does not exist." };
   const g = await editableFramework(admin, d.framework_id);
   if (!g.ok) return g;
+  if (revisionOnly(g.fw)) return REVISION_ONLY;
   const p = parseCompetency(b);
   if (!p.ok) return { ok: false, status: 422, error: p.error };
   const taken = await competencyCodeTaken(admin, p.value.code, c.id);

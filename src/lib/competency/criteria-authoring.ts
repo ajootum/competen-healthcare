@@ -89,6 +89,13 @@ export function classifyMove(from: { competencyId: string; component: string | n
   return c && s ? "section_and_competency" : c ? "competency" : s ? "section" : "reorder";
 }
 
+/** Pure: the published assessment methods that pin a criterion (690 criterionId), by name. */
+export function pinningMethods(methods: readonly { content: any; name: string | null }[], criterionId: string): string[] {
+  const id = criterionId.toLowerCase();
+  return methods.filter(m => [...(m.content?.criteria ?? []), ...(m.content?.checklist ?? [])].some((x: any) => typeof x?.criterionId === "string" && x.criterionId.toLowerCase() === id))
+    .map(m => m.name ?? "an assessment method");
+}
+
 // ── Reads ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 type Place = { fw: { id: string; name: string; pub_status: string }; comp: { id: string; name: string } };
@@ -125,7 +132,7 @@ async function activeComponents(admin: any): Promise<Set<string> | null> {
   if (error) return null;
   return new Set((data ?? []).filter((r: any) => r.is_active !== false).map((r: any) => r.code));
 }
-async function checkComponent(admin: any, code: unknown): Promise<Fail | string> {
+export async function checkComponent(admin: any, code: unknown): Promise<Fail | string> {
   const reg = await activeComponents(admin);
   if (!reg) return { ok: false, status: 503, error: "The assessment components could not be read just now. Nothing has changed." };
   if (typeof code !== "string" || !reg.has(code)) return { ok: false, status: 422, error: "Choose an active assessment component (section) for the criterion." };
@@ -149,6 +156,13 @@ async function hashCoversRetirement(admin: any): Promise<boolean | null> {
 async function renumber(admin: any, order: string[], rows: Pick<CriterionRow, "id" | "sort_order">[]): Promise<boolean> {
   const w = await writeSortOrders(admin, denseWrites(order, new Map(rows.map(r => [r.id, r.sort_order]))));
   return w.ok;
+}
+
+/** The published assessment methods that pin this criterion. null = unreadable. Before 690: none. */
+export async function pinnedByActiveMethod(admin: any, criterionId: string): Promise<string[] | null> {
+  const { data, error } = await admin.from("competency_verification_method_version").select("content, competency_verification_method(name)").eq("state", "published").limit(1000);
+  if (error) return missingTable(error) || ["42703", "PGRST200"].includes(String(error?.code ?? "")) ? [] : null;
+  return pinningMethods((data ?? []).map((m: any) => ({ content: m.content, name: m.competency_verification_method?.name ?? null })), criterionId);
 }
 
 // ── Actions (POST /api/hq/competency/authoring) ─────────────────────────────────────────────────────────────────
@@ -208,6 +222,12 @@ async function setActive(admin: any, actor: Actor, b: any, active: boolean): Pro
   const at = await draftCompetency(admin, k.competency_id);
   if (!at.ok) return at;
   if ((k.is_active !== false) === active) return { ok: true, unchanged: true };
+  if (!active) {
+    // FDS-02 (coordinator, D3): a criterion a PUBLISHED assessment method pins (690 criterionId) is not retired under it.
+    const pins = await pinnedByActiveMethod(admin, k.id);
+    if (pins === null) return { ok: false, status: 503, error: "The assessment methods could not be checked just now. Nothing has changed." };
+    if (pins.length) return { ok: false, status: 409, error: `This criterion is used by the published assessment method ${pins.join(", ")}. Remove it from the method first.` };
+  }
   const put = await everPutForward(admin, at.comp.id);
   if (put === null) return { ok: false, status: 503, error: "The clinical review record could not be read just now. Nothing has changed." };
   if (put) {

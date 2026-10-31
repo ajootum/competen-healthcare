@@ -125,6 +125,11 @@ export async function transitionFramework(
     const m = /out of date, (.*?)\. Nothing/.exec(updateErr.message);
     return { ok: false, code: 409, error: `The pending layout is out of date${m ? ` (${m[1]})` : ""}, so nothing was published. Discard it or save the layout again, then put the framework forward again.` };
   }
+  // Migration 770: an open revision draft that can no longer be applied refuses the publication whole.
+  if (updateErr && /framework revision at publication|framework revision: it was applied/i.test(updateErr.message ?? "")) {
+    const m = /can no longer be applied, (.*?)\. Nothing/.exec(updateErr.message);
+    return { ok: false, code: 409, error: `The revision draft can no longer be applied${m ? ` (${m[1]})` : ""}, so nothing was published. Discard it and start again, then put the framework forward again.` };
+  }
   if (updateErr) return { ok: false, error: updateErr.message, code: 500 };
 
   let warning: string | undefined;

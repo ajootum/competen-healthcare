@@ -8,6 +8,7 @@ import { loadFrameworkDiff } from "@/lib/competency/framework-diff";
 import { discardLayout, reorderLayout } from "@/lib/competency/framework-layout";
 import { createArea, deleteArea, moveCompetencyDomain, renameArea, reorderAreas, setDomainArea } from "@/lib/competency/framework-areas";
 import { loadFrameworkForReview, outcomeCounts, previewOf, runSubmission, type ReviewScope } from "@/lib/competency/review-batch";
+import { discardRevision, loadRevision, loadRevisionDiff, loadRevisionForReview, revisionReviews, routeToRevision, submitRevisionVersion } from "@/lib/competency/framework-revision";
 import { currentTraceId } from "@/lib/trace";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
@@ -40,6 +41,12 @@ export const maxDuration = 60;
 //   import_draft { package, mode?: "append" }   append: new competencies into an existing DRAFT, nothing existing touched
 //   compare_published { frameworkId }           read only: the draft against its last published version (framework-diff.ts)
 //
+// FRAMEWORK-DESIGN-STUDIO-02 S5 (D2, migration 770): on a PUBLISHED, centrally governed framework every content action
+// above (update_competency, create_competency and the five criteria actions) is saved into its revision draft, invisible
+// to learners and assessors until clinically reviewed and independently published (framework-revision.ts). 409 without
+// 770, nothing written. Also: discard_revision { frameworkId }, revision_view { frameworkId }, compare_revision
+// { frameworkId }, and submit_review / review_preview / review_submit with revision: true (the PROPOSED content).
+//
 // ⚠ GATED BY hqApiGate(["hq.quality.competency.author"]) -- the Competency Author. It authors shared content and
 // puts it forward for clinical review. It approves nothing (395, the Clinical Content Reviewer) and publishes nothing
 // (the governed framework lifecycle). Every write is preceded by its authorship row (src/lib/competency/authoring.ts).
@@ -51,6 +58,9 @@ export async function POST(req: Request) {
   if (isHqRefusal(ctx)) return ctx;
   const body = await req.json().catch(() => ({}));
   const actor = { userId: ctx.userId, name: ctx.fullName ?? null };
+  // D2: a content action on a published governed framework goes into its revision draft (null = not such a framework).
+  const rv = await routeToRevision(ctx.admin, actor, body?.action, body);
+  if (rv) return rv.ok ? NextResponse.json(rv, { status: body.action.startsWith("create_") ? 201 : 200 }) : refuse(rv.status, rv.error);
   switch (body?.action) {
     case "create_framework": { const r = await createFramework(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
     case "update_framework": { const r = await updateFramework(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
@@ -80,10 +90,37 @@ export async function POST(req: Request) {
       const r = await loadFrameworkDiff(ctx.admin, body.frameworkId);
       return "error" in r ? refuse(r.status, r.error) : NextResponse.json(r);
     }
+    case "discard_revision": { const r = await discardRevision(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "compare_revision": {
+      if (!isId(body.frameworkId)) return refuse(400, "Choose a framework.");
+      const r = await loadRevisionDiff(ctx.admin, body.frameworkId);
+      return "ok" in r ? refuse(r.status, r.error) : NextResponse.json(r);
+    }
+    case "revision_view": {
+      if (!isId(body.frameworkId)) return refuse(400, "Choose a framework.");
+      const r = await loadRevision(ctx.admin, body.frameworkId);
+      if (r && "ok" in r) return refuse(r.status, r.error);
+      if (!r) return NextResponse.json({ revision: null });
+      const proposed = new Map([...r.hashes].map(([id, h]) => [id, h.proposed]));
+      const reviews = await revisionReviews(ctx.admin, r.comps.map(c => c.competency_id), proposed);
+      return NextResponse.json({ revision: { id: r.head.id, createdBy: r.head.created_by, createdAt: r.head.created_at, updatedAt: r.head.updated_at,
+        competencies: r.comps.map(c => ({ id: c.competency_id, isNew: !c.origin_competency_id, domainId: c.domain_id, sortOrder: c.sort_order, code: c.code, name: c.name,
+          description: c.description, learningOutcomes: c.learning_outcomes, expectedLevelId: c.expected_level_id, riskCategory: c.risk_category, practiceId: c.practice_id, cpuId: c.cpu_id,
+          proposedHash: r.hashes.get(c.competency_id)?.proposed ?? null, liveHash: r.hashes.get(c.competency_id)?.live ?? null,
+          changed: (r.hashes.get(c.competency_id)?.proposed ?? null) !== (r.hashes.get(c.competency_id)?.live ?? null),
+          clinical: reviews?.get(c.competency_id) ?? null,
+          criteria: r.crits.filter(k => k.competency_id === c.competency_id).sort((a, b) => a.sort_order - b.sort_order)
+            .map(k => ({ id: k.skill_id, isNew: !k.origin_skill_id, text: k.name, component: k.component_code, sourceRef: k.source_ref, sortOrder: k.sort_order, active: k.is_active })) })) } });
+    }
     case "submit_review": {
       // Draft -> Submit for Review. The curator becomes the submitter (and is already an author), so the 395 trigger
       // refuses any decision they make on it. Shared frameworks only: 395 refuses anything else.
       if (!isId(body.competencyId)) return refuse(400, "Choose a competency.");
+      if (body.revision === true) {
+        if (!isId(body.frameworkId)) return refuse(400, "Choose a framework.");
+        const r = await submitRevisionVersion(ctx.admin, body.frameworkId, body.competencyId, ctx.userId);
+        return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(409, r.error);
+      }
       const r = await submitForReview(ctx.admin, body.competencyId, ctx.userId);
       return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(409, r.error);
     }
@@ -92,7 +129,7 @@ export async function POST(req: Request) {
       if (!isId(body.frameworkId)) return refuse(400, "Choose a framework.");
       const scope = parseScope(body.scope);
       if (!scope) return refuse(400, "Choose the framework, a domain, or the competencies to put forward.");
-      const f = await loadFrameworkForReview(ctx.admin, body.frameworkId);
+      const f = body.revision === true ? await loadRevisionForReview(ctx.admin, body.frameworkId) : await loadFrameworkForReview(ctx.admin, body.frameworkId);
       if ("error" in f) return refuse(f.status, f.error);
       const pv = previewOf(f.fw, scope, f.hashes);
       return "error" in pv ? refuse(422, pv.error) : NextResponse.json(pv);
@@ -102,16 +139,27 @@ export async function POST(req: Request) {
       if (!isId(body.frameworkId)) return refuse(400, "Choose a framework.");
       const items = Array.isArray(body.items) ? body.items.filter((i: any) => isId(i?.competencyId)).slice(0, 500) : [];
       if (!items.length) return refuse(400, "Nothing to put forward.");
-      const f = await loadFrameworkForReview(ctx.admin, body.frameworkId);
+      const revision = body.revision === true;
+      const f = revision ? await loadRevisionForReview(ctx.admin, body.frameworkId) : await loadFrameworkForReview(ctx.admin, body.frameworkId);
       if ("error" in f) return refuse(f.status, f.error);
-      const inFw = new Map(f.fw.domains.flatMap(d => d.competencies.map(c => [c.id, c] as const)));
+      const inFw = new Map((f.fw.domains as { competencies: { id: string; code: string | null; name: string }[] }[]).flatMap(d => d.competencies.map(c => [c.id, c] as const)));
       if (items.some((i: any) => !inFw.has(i.competencyId))) return refuse(422, "Some items are not in this framework. Nothing was put forward.");
       const results = await runSubmission(ctx.admin, ctx.userId, f.fw.pubStatus,
-        items.map((i: any) => ({ competencyId: i.competencyId, code: inFw.get(i.competencyId)!.code, name: inFw.get(i.competencyId)!.name, hash: typeof i.hash === "string" ? i.hash : null })));
+        items.map((i: any) => ({ competencyId: i.competencyId, code: inFw.get(i.competencyId)!.code, name: inFw.get(i.competencyId)!.name, hash: typeof i.hash === "string" ? i.hash : null })),
+        revision ? {
+          // The PROPOSED content, read again per item, and put forward on the revision (770).
+          read: async (id: string) => {
+            const g = await loadRevisionForReview(ctx.admin, body.frameworkId);
+            if ("error" in g) return null;
+            const c = (g.fw.domains as any[]).flatMap(d => d.competencies).find((x: any) => x.id === id);
+            return { hash: g.hashes.get(id) ?? null, review: c?.clinical ?? null };
+          },
+          submit: (admin: any, id: string, by: string) => submitRevisionVersion(admin, body.frameworkId, id, by),
+        } : {});
       const counts = outcomeCounts(results);
       await ctx.admin.from("audit_log").insert({ trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: actor.name,
         action: "cfca_review_batch_submitted", entity_type: "framework", entity_id: f.fw.id, entity_name: f.fw.name,
-        new_value: { counts, items: results.map(r => ({ competency_id: r.competencyId, outcome: r.outcome, version_id: r.versionId ?? null })) } }).then((x: unknown) => x, () => {});
+        new_value: { counts, ...(revision ? { revision_id: (f as any).revisionId } : {}), items: results.map(r => ({ competency_id: r.competencyId, outcome: r.outcome, version_id: r.versionId ?? null })) } }).then((x: unknown) => x, () => {});
       return NextResponse.json({ results, counts });
     }
     default: return refuse(400, "Unknown action");

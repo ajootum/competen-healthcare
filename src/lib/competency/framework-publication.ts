@@ -4,6 +4,7 @@ import { isHoldingsGoverned, transitionFramework, versionLabel, type VersionLabe
 import { loadClinicalReviews } from "./clinical-review";
 import { isId } from "./authoring";
 import { contentUnchangedSinceLastVersion, layoutPublishCheck, pendingLayout } from "./framework-layout";
+import { revisionForPublication } from "./framework-revision";
 
 // ── HOLDINGS FRAMEWORK PUBLICATION ── migration 467, owner COMPETENCY FRAMEWORKS: CENTRAL GOVERNANCE (26 Oct 2026) ──
 //
@@ -145,7 +146,7 @@ export async function submitForPublication(admin: any, actor: Actor, b: any): Pr
 }
 
 /** The independent publication decision: publish (466 still applies) or return with a reason. */
-export async function decidePublication(admin: any, actor: Actor, b: any): Promise<Result<{ status: string; version?: string; warning?: string; layoutApplied?: boolean; changeKindForced?: boolean }>> {
+export async function decidePublication(admin: any, actor: Actor, b: any): Promise<Result<{ status: string; version?: string; warning?: string; layoutApplied?: boolean; changeKindForced?: boolean; revisionApplied?: boolean }>> {
   const g = await governed(admin, b?.frameworkId);
   if (!g.ok) return g;
   const fw = g.fw, status = fw.pub_status ?? "draft";
@@ -156,6 +157,11 @@ export async function decidePublication(admin: any, actor: Actor, b: any): Promi
 
   const ids = await contentEntityIds(admin, fw.id);
   if (!ids) return { ok: false, status: 503, error: "The authorship trail could not be read, so nothing was decided." };
+  // FRAMEWORK-DESIGN-STUDIO-02 S5 (D2, 770): an open revision draft is applied IN the publication statement. Its new
+  // competencies are content of this framework too, so their authors are contributors (as 640 reads them once applied).
+  const rev = await revisionForPublication(admin, fw.id);
+  if (rev && "ok" in rev) return { ok: false, status: rev.status, error: "The revision draft could not be read just now, so nothing was decided." };
+  if (rev) ids.push(...rev.newIds);
   const { data: trail, error: tErr } = await admin.from("audit_log").select("actor_id, action").in("entity_id", ids).limit(5000);
   if (tErr) return { ok: false, status: 503, error: "The authorship trail could not be read, so nothing was decided." };
   const conflict = publisherConflict(actor.userId, req.submitted_by, contributorsOf(trail ?? []));
@@ -190,18 +196,23 @@ export async function decidePublication(admin: any, actor: Actor, b: any): Promi
     if (!chk.ready) return { ok: false, status: 409, error: "Publishing a new layout is not set up on this environment yet (migration 752), so nothing was published. Discard the pending layout to publish the content alone." };
     if (chk.problem) return { ok: false, status: 409, error: `The pending layout is out of date (${chk.problem}), so nothing was published. Discard it or save the layout again, then put the framework forward again.` };
   }
-  const k = publicationKind(first, chosen, { pending: !!lay, only: !!lay && !first && (await contentUnchangedSinceLastVersion(admin, fw.id)) });
+  if (rev && b.decision === "publish") {
+    if (req.submitted_at && Date.parse(rev.updatedAt) > Date.parse(req.submitted_at))
+      return { ok: false, status: 409, error: "The revision draft was changed after this framework was put forward. It must be put forward again, so the decision is on what will be published." };
+    if (rev.problem) return { ok: false, status: 409, error: `The revision draft can no longer be applied (${rev.problem}), so nothing was published. Discard it and start again, then put the framework forward again.` };
+  }
+  const k = publicationKind(first, chosen, { pending: !!lay, only: !!lay && !rev && !first && (await contentUnchangedSinceLastVersion(admin, fw.id)) });
   if (!k.ok) return { ok: false, status: 400, error: k.error };
   const kind = k.kind;
   const next = nextVersion({ major: fw.version_major ?? 1, minor: fw.version_minor ?? 0, revision: fw.version_revision ?? 0 }, kind, first);
-  const applied = !!lay;
+  const applied = !!lay, revised = !!rev;
   const r = await transitionFramework(admin, fw.id, "publish", { id: actor.userId, name: actor.name }, { holdings: true, nextVersion: next, note: reason });
   if (!r.ok) return { ok: false, status: r.code ?? 500, error: r.error ?? "That could not be published. Nothing has changed." };
   const warning = r.warning;
   await admin.from("content_approvals").update({ ...decided, status: "approved" }).eq("id", req.id);
   const label = versionLabel(next ?? { major: fw.version_major ?? 1, minor: fw.version_minor ?? 0, revision: fw.version_revision ?? 0 });
-  await audit(admin, actor, fw, "approve_content", { version: label, change: kind, note: reason, ...(applied ? { layout_applied: true, change_forced: k.forced } : {}) });
-  return { ok: true, status: "published", version: label, warning, ...(applied ? { layoutApplied: true, changeKindForced: k.forced } : {}) };
+  await audit(admin, actor, fw, "approve_content", { version: label, change: kind, note: reason, ...(applied ? { layout_applied: true, change_forced: k.forced } : {}), ...(revised ? { revision_id: rev!.id } : {}) });
+  return { ok: true, status: "published", version: label, warning, ...(applied ? { layoutApplied: true, changeKindForced: k.forced } : {}), ...(revised ? { revisionApplied: true } : {}) };
 }
 
 /** Withdraw a published framework from use. Its versions stay on record. */
