@@ -19,7 +19,10 @@ import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRun
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { formatPromptVersion, runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/generation";
 import { linkStudy } from "@/lib/individual/scholar/study-context";
-import { GENERATING_MODES, keyOf, pickQuestions, planGeneration, type PoolItem } from "@/lib/individual/scholar/revision";
+import { GENERATING_MODES, effectiveKind, existingObjectives, keyOf, pickQuestions, planGeneration, type PoolItem } from "@/lib/individual/scholar/revision";
+import { missOf, recentMisses, signalsOf } from "@/lib/individual/scholar/misconception";
+import { writeClozeItems } from "@/lib/individual/scholar/cloze-service";
+import { isClozeQuestion } from "@/lib/individual/scholar/cloze";
 import { revisionItemView } from "@/lib/individual/scholar/revision-view";
 import { cardsOfDecks, gapFocus, libraryRecallFits, recallCardOf } from "@/lib/individual/scholar/flashcards";
 import { loadFlashcardGaps, loadFlashcards } from "@/lib/individual/scholar/flashcard-service";
@@ -188,9 +191,11 @@ export async function POST(req: Request) {
     const qs = mode === "flashcards" ? p.data.questions.map(recallCardOf).filter((q): q is QuestionRow => !!q) : p.data.questions;
     const items: PoolItem[] = qs.filter(q => !!keyOf(q) && !inDeck.has(q.id)).map(q => {
       const s = p.data.stats.get(q.id)!;
-      return { id: q.id, kind: q.kind, difficulty: q.difficulty, chunkId: q.chunkId, createdAt: q.createdAt, latestCorrect: s.latestCorrect, misses: s.misses, lastAnsweredAt: s.lastAnsweredAt, due: s.due };
+      // SCHOLAR-SQIE-LEARNER-01: what its rubric lists as misconceptions and its topic, for the preference in Weak areas.
+      return { id: q.id, kind: effectiveKind(q), difficulty: q.difficulty, chunkId: q.chunkId, createdAt: q.createdAt, latestCorrect: s.latestCorrect, misses: s.misses, lastAnsweredAt: s.lastAnsweredAt, due: s.due, ...signalsOf(q) };
     });
-    return { questions: qs, items };
+    // The learner's misses in the last 30 days, with what each missed item's rubric lists (misconception.ts).
+    return { questions: qs, items, misses: recentMisses(qs.flatMap(q => missOf(q, p.data.stats.get(q.id)?.lastMissAt)), new Date().toISOString()) };
   };
   let pool = await poolOf();
   if (!pool) return NextResponse.json({ error: "Your saved questions could not be read just now." }, { status: 503 });
@@ -203,7 +208,24 @@ export async function POST(req: Request) {
       .sort((a, b) => (b.lastAnsweredAt ?? "").localeCompare(a.lastAnsweredAt ?? "")).map(p => p.latestCorrect as boolean);
     if (base) difficulty = adaptDifficulty(base, recent);
   }
-  let pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed });
+  let pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed, recentMisses: pool.misses });
+
+  // ── SCHOLAR-COMPANION-01 P1: cloze items, written by a rule from the learner's own notes (cloze.ts). No AI, no allowance. ──
+  // Only when cloze was asked for by name: a default session never gains new cloze items it was not asked for.
+  let clozeWritten = 0;
+  if (GENERATING_MODES.includes(mode) && kinds.includes("cloze") && scopeSections.length && Array.isArray(body?.formats) && body.formats.includes("cloze")) {
+    const have = pool.questions.filter(isClozeQuestion).length;
+    const need = Math.min(20, Math.max(0, Math.ceil(quantity / kinds.length) - have));
+    if (need > 0) {
+      const w = await writeClozeItems(ctx.admin, ctx.userId, { chunkIds: scopeSections, questions: pool.questions, need });
+      clozeWritten = w.written;
+      if (w.written) {
+        pool = (await poolOf()) ?? pool;
+        pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed, recentMisses: pool.misses });
+      }
+      await audit(ctx, "individual_scholar_revision_cloze", "individual_scholar_revision_session", null, { asked: need, written: w.written, sections: Math.min(scopeSections.length, 30), rule: "cloze:v1" });
+    }
+  }
 
   // ── SCHOLAR-SQIE-CLOSE-01 C: the shortfall's multiple-choice places from the governed library first, with no AI ──
   let libraryVersions: string[] = [];
@@ -222,7 +244,7 @@ export async function POST(req: Request) {
       if (copies.ids.length) {
         libraryIds = copies.ids; libraryVersions = picks.map(x => x.question.versionId);
         pool = (await poolOf()) ?? pool;
-        pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed });
+        pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed, recentMisses: pool.misses });
       }
       await audit(ctx, "individual_scholar_revision_library", "individual_scholar_revision_session", null, {
         offered: library.length, picked: picks.length, copied: copies.copied, reused: copies.ids.length, versions: libraryVersions,
@@ -242,12 +264,13 @@ export async function POST(req: Request) {
       else if (pre) note = ((await pre.clone().json().catch(() => ({}))) as { error?: string }).error ?? "New questions could not be written just now. This session uses your saved questions.";
       else {
         // Identical content is not written twice: a section and format that already has questions at this prompt version is skipped.
-        const existing = new Set(pool.questions.filter(q => q.promptVersion.startsWith(formatPromptVersion(q.kind))).map(q => `${q.chunkId}|${q.kind}`));
+        // SCHOLAR-SQIE-LEARNER-01: by the format a question is offered as (cloze, true/false and extended are stored as `short`).
+        const existing = new Set(pool.questions.filter(q => q.promptVersion.startsWith(formatPromptVersion(effectiveKind(q)))).map(q => `${q.chunkId}|${effectiveKind(q)}`));
         // Rounds: an item the checks drop leaves the session short, so a second round writes for what is still
         // missing -- never a section and format already written, and never more than REVISION_GENERATION_CALLS_MAX calls.
         let i = 0, refused = false;
         for (let round = 0; round < 2 && pick.shortfall > 0 && generated < genCap && i < REVISION_GENERATION_CALLS_MAX && !refused; round++) {
-          const plan = planGeneration({ shortfall: Math.min(pick.shortfall, genCap - generated), chunkIds: scopeSections, formats: kinds, existing });
+                    const plan = planGeneration({ shortfall: Math.min(pick.shortfall, genCap - generated), chunkIds: scopeSections, formats: kinds, existing });
           let made = 0;
           for (const call of plan.slice(0, REVISION_GENERATION_CALLS_MAX - i)) {
             existing.add(`${call.chunkId}|${call.kind}`);
@@ -269,7 +292,7 @@ export async function POST(req: Request) {
             if (call.kind === "mcq") {
               // Each call asks for up to three: the checks drop some, and what is kept beyond this session is saved
               // for the next one (reuse first), never written again.
-              const r = await runQuestions(ctx.userId, "mcq", passage, Math.max(call.count, 3), ai.run, { context, existing: stems });
+              const r = await runQuestions(ctx.userId, "mcq", passage, Math.max(call.count, 3), ai.run, { context, existing: stems, verifyFormats: policy.scholarVerifyFormats, existingObjectives: existingObjectives(pool.questions, call.chunkId, "mcq") });
               if (r.ok) {
                 calls = r.calls; r.check.kept.forEach(d => stems.add(stemKey(d.stem)));
                 const s = await insertQuestions(ctx.admin, ctx.userId, { passage, kind: "mcq", drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId }); ids = s.ids;
@@ -281,7 +304,7 @@ export async function POST(req: Request) {
             } else {
               // SCHOLAR-FLASHCARDS-QA-01: flashcards to the policy's level mix (by programme level by default).
               const levelMix = call.kind === "flashcard" ? flashcardLevelMix(policy.scholarFlashcardLevelMix, loader.levelDefault) : undefined;
-              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, mode === "flashcards" ? call.count : Math.max(call.count, 3), ai.run, { context, existing: stems, levelMix });
+              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, mode === "flashcards" ? call.count : Math.max(call.count, 3), ai.run, { context, existing: stems, levelMix, verifyFormats: policy.scholarVerifyFormats, existingObjectives: existingObjectives(pool.questions, call.chunkId, call.kind) });
               if (r.ok && r.levelPlan) mixPlan = r.levelPlan;
               if (r.ok) {
                 calls = r.calls; r.kept.forEach(d => stems.add(stemKey(d.stem)));
@@ -313,7 +336,7 @@ export async function POST(req: Request) {
           generated += made;
           if (!made) break;
           pool = (await poolOf()) ?? pool;
-          pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed });
+          pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed, recentMisses: pool.misses });
         }
       }
     }
@@ -346,7 +369,7 @@ export async function POST(req: Request) {
   const fromLibrary = ordered.filter(q => q.library && libraryIds.includes(q.id)).length;
   const reused = Math.max(0, ordered.length - Math.min(generated, ordered.length) - fromLibrary);
   await audit(ctx, "individual_scholar_revision_started", "individual_scholar_revision_session", made.ok ? made.id : null,
-    { mode, scope: chunkIds ? "scoped" : "library", questions: ordered.length, generated, reused, library: fromLibrary, library_versions: libraryVersions, formats: kinds, ai_calls: aiCalls, difficulty, adapted: !asked, source: sourceMode, references_used: referencesUsed });
+    { mode, scope: chunkIds ? "scoped" : "library", questions: ordered.length, generated, cloze_written: clozeWritten, reused, library: fromLibrary, library_versions: libraryVersions, formats: kinds, ai_calls: aiCalls, difficulty, adapted: !asked, source: sourceMode, references_used: referencesUsed });
   // Mode notes_and_references with no approved reference linked to these notes: said, never implied.
   const sourceNote = sourceMode === "notes_and_references" && generated > 0 && !referencesUsed
     ? "No clinically approved reference is linked to these notes yet, so the new questions are from your notes only." : null;

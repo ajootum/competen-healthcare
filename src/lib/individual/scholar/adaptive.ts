@@ -23,6 +23,7 @@ import {
   DIFFICULTY_RANGE, GENERATION_DIFFICULTIES, LEVEL_LABEL, adaptDifficulty, isGenerationDifficulty, isSourceMode,
   type CognitiveLevel, type GenerationDifficulty, type SourceMode,
 } from "./question-intel";
+import { pickByMisconception, type RecentMiss } from "./misconception";
 import type { RevisionKind } from "./revision";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -208,7 +209,11 @@ export const nextDifficulty = (start: GenerationDifficulty, outcomes: readonly (
 
 // ── THE NEXT QUESTION ──
 
-export type Candidate = { id: string; kind: RevisionKind; difficulty: number | null; library: boolean; createdAt: string; lastAnsweredAt: string | null };
+export type Candidate = {
+  id: string; kind: RevisionKind; difficulty: number | null; library: boolean; createdAt: string; lastAnsweredAt: string | null;
+  /** SCHOLAR-SQIE-LEARNER-01: its rubric's misconceptions, its topic and its section, and whether its card is due (misconception.ts). */
+  misconceptions?: readonly string[]; topic?: string | null; chunkId?: string | null; due?: boolean;
+};
 export type NextPick = { id: string; from: "library" | "stored" | "generated"; match: "exact" | "range" | "nearest"; level: 1 | 2 | 3 };
 
 /**
@@ -220,7 +225,11 @@ export type NextPick = { id: string; from: "library" | "stored" | "generated"; m
  * `fresh` (ids just written for this difficulty) count as a match when their difficulty is one the request allowed.
  * A library question records no difficulty, so it counts as standard.
  */
-export function selectNext(input: { target: GenerationDifficulty; pool: readonly Candidate[]; exclude: ReadonlySet<string>; formats: readonly RevisionKind[]; lastKind: RevisionKind | null; fresh?: ReadonlySet<string> }): { exact: NextPick | null; nearest: NextPick | null } {
+export function selectNext(input: {
+  target: GenerationDifficulty; pool: readonly Candidate[]; exclude: ReadonlySet<string>; formats: readonly RevisionKind[]; lastKind: RevisionKind | null; fresh?: ReadonlySet<string>;
+  /** SCHOLAR-SQIE-LEARNER-01: the learner's misses in the last 30 days. An unanswered or due item on one of their misconceptions or topics is preferred, then the rotation. */
+  recentMisses?: readonly RecentMiss[];
+}): { exact: NextPick | null; nearest: NextPick | null } {
   const want = LEVEL_OF[input.target];
   const eligible = input.pool.filter(c => !input.exclude.has(c.id) && input.formats.includes(c.kind));
   const order = (a: Candidate, b: Candidate) =>
@@ -229,7 +238,7 @@ export function selectNext(input: { target: GenerationDifficulty; pool: readonly
     || (a.lastAnsweredAt ?? "").localeCompare(b.lastAnsweredAt ?? "")
     || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
   const pick = (c: Candidate | undefined, match: NextPick["match"]): NextPick | null => c ? { id: c.id, from: c.library ? "library" : input.fresh?.has(c.id) ? "generated" : "stored", match, level: levelOfItem(c.difficulty) } : null;
-  const at = (lvl: number, library: boolean) => eligible.filter(c => c.library === library && levelOfItem(c.difficulty) === lvl).sort(order)[0];
+  const at = (lvl: number, library: boolean) => pickByMisconception(eligible.filter(c => c.library === library && levelOfItem(c.difficulty) === lvl).sort(order), input.recentMisses ?? [])[0];
   const exact = pick(at(want, true), "exact") ?? pick(at(want, false), "exact")
     ?? pick(eligible.filter(c => input.fresh?.has(c.id) && DIFFICULTY_RANGE[input.target].includes(levelOfItem(c.difficulty))).sort(order)[0], "range");
   if (exact) return { exact, nearest: null };

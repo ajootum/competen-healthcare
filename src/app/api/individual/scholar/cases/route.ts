@@ -12,6 +12,7 @@ import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS } from "@/lib/individua
 import { REPEAT_REJECTED, caseReadiness } from "@/lib/individual/scholar/sufficiency";
 import { noCalls, recordScholarOutcome } from "@/lib/individual/scholar/outcome";
 import { materialKey, priorRejection } from "@/lib/ai/outcomes";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -73,7 +74,8 @@ export async function POST(req: Request) {
   // AI-FAIR-USE-01: every call through the Holdings allowance (activity case_steps). A refusal is shown as the
   // engine words it, and nothing was sent, so nothing is audited as an AI query.
   const ai = scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }));
-  const r = await runCase(ctx.userId, passage, ai.run);
+  // SCHOLAR-SQIE-LEARNER-01: whether the case's steps get the blind check is the policy's (scholar_verify_formats).
+  const r = await runCase(ctx.userId, passage, ai.run, { verifyFormats: (await loadIndividualPolicy(ctx.admin)).scholarVerifyFormats });
   const refused = meteredRefusal(ai.refusal());
   if (refused) return refused;
   const outcome = { operation: OPERATION, outputKind: "case" as const, sufficiency: readiness.outcome, promptVersion, configVersion, materialKey: key };

@@ -94,6 +94,11 @@ export const PROMPT_VERSIONS = {
   verify: "scholar-verify-v1",
   // SCHOLAR-QUESTION-INTELLIGENCE-01: the same blind check for mrq and short revision items (question-quality.ts).
   verifyRevision: "scholar-verify-revision-v1",
+  // SCHOLAR-SQIE-LEARNER-01: the blind SOLVE for the other formats (structured, match, sequence, flashcard, true_false, extended),
+  // where policy scholar_verify_formats names them: the reader answers without the key and the answer is compared (blind-verify.ts).
+  verifyBlind: "scholar-verify-blind-v1",
+  // SCHOLAR-SQIE-LEARNER-01: extended-response marking: the evaluator also lists which numbered key points the answer makes.
+  evaluateExtended: "scholar-evaluate-extended-v1",
   // COMPETEN-SCHOLAR-01. explain (above) is unchanged. The other modes add an instruction to the same
   // system prompt, so they carry their own version. A case is several linked steps from one passage.
   // v2: "go deeper" is two explicit parts, after the staging acceptance run saw part one drift past the notes
@@ -151,12 +156,38 @@ export const PROMPT_VERSIONS = {
 // such. Every AI-written question is private_formative (migration 416 makes nothing else storable).
 // SCHOLAR-SQIE-CLOSE-01: structured (multi-part) is stored only where migration 710 is applied (store.ts sqieSchema).
 // Where it is absent it is never offered, whatever the policy says.
-export const REVISION_FORMATS = ["mcq", "mrq", "short", "flashcard", "match", "sequence", "structured"] as const;
+// SCHOLAR-COMPANION-01 P1: cloze (fill in the blank) is a FORMAT of the stored `short` kind (answer.format = 'cloze', written by
+// a rule, cloze.ts), not a kind of its own: no migration. Anywhere a format meets the database it is read as `short`.
+// SCHOLAR-SQIE-LEARNER-01 (owner GO 31 Oct 2026): true_false and extended are formats of the stored `short` kind in the same way
+// (answer.format = 'true_false' | 'extended', formats.ts): no migration. true_false is marked by code, extended by the
+// existing formative evaluator against its stored key points.
+export const REVISION_FORMATS = ["mcq", "mrq", "short", "flashcard", "match", "sequence", "structured", "cloze", "true_false", "extended"] as const;
 export type RevisionFormat = (typeof REVISION_FORMATS)[number];
 export const REVISION_FORMAT_LABEL: Record<RevisionFormat, string> = {
   mcq: "Multiple choice", mrq: "Multiple response", short: "Short answer", flashcard: "Flashcards", match: "Matching", sequence: "Sequencing",
-  structured: "Structured (multi-part)",
+  structured: "Structured (multi-part)", cloze: "Fill in the blank (cloze)", true_false: "True or false", extended: "Extended response (AI feedback)",
 };
+/** Formats whose default is OFF in the policy fallback: extended spends AI marking allowance on every answer, so the owner ticks it. */
+export const REVISION_FORMATS_OFF_BY_DEFAULT: readonly RevisionFormat[] = ["extended"];
+/**
+ * SCHOLAR-SQIE-LEARNER-01: the question formats a blind check (a second reader who is not told the key) may be run on
+ * before an item is stored (policy scholar_verify_formats). `case` is the multiple-choice case set.
+ */
+export const VERIFY_FORMATS = ["mcq", "case", "mrq", "short", "structured", "match", "sequence", "flashcard", "true_false", "extended"] as const;
+export type VerifyFormat = (typeof VERIFY_FORMATS)[number];
+export const VERIFY_FORMAT_LABEL: Record<VerifyFormat, string> = {
+  mcq: "Multiple choice", case: "Case questions", mrq: "Multiple response", short: "Short answer", structured: "Structured (multi-part)", match: "Matching", sequence: "Sequencing",
+  flashcard: "Flashcards", true_false: "True or false", extended: "Extended response",
+};
+/** The checks that ran before this change: multiple choice, case, multiple response and short answer. The policy fallback. */
+export const VERIFY_FORMATS_DEFAULT: readonly VerifyFormat[] = ["mcq", "case", "mrq", "short"];
+/** Extended response: most practice marks one answer may carry, key points an answer is marked against, and the longest answer (characters). */
+export const EXTENDED_MARKS_MAX = 10;
+export const EXTENDED_POINTS_MIN = 3;
+export const EXTENDED_POINTS_MAX = 8;
+export const EXTENDED_RESPONSE_MAX = 3000;
+export const EXTENDED_LABEL = "Extended response: marked by AI against the key points in your notes. Formative practice marks only: not an assessment and not a grade.";
+export const TRUE_FALSE_LABEL = "True or false, written from a sentence in your notes. Marked by code.";
 /** SCHOLAR-GUIDED-LEARNING-01: earlier Teach Me versions whose saved lessons are still opened (same structure and checks). */
 export const LEARN_TEACH_LEGACY: readonly string[] = ["scholar-learn-teach-v1"];
 /** SCHOLAR-SQIE-CLOSE-01: a structured question has 2 to 4 parts of 1 to 5 marks each (migration 710 CHECK). */

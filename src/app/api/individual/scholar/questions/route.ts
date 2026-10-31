@@ -62,7 +62,7 @@ export async function POST(req: Request) {
   const difficulty = generationDifficulty(body?.difficulty) ?? loader.levelDefault;
   const context = await loader.forSection(passage.chunkId, { difficulty, mode: "notes" });
   const ai = scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }));
-  const r = await runQuestions(ctx.userId, kind, passage, count, ai.run, { context, existing });
+  const r = await runQuestions(ctx.userId, kind, passage, count, ai.run, { context, existing, verifyFormats: policy.scholarVerifyFormats });
   const refused = meteredRefusal(ai.refusal());
   if (refused) return refused;
   const operation = `individual_scholar_${kind}`;

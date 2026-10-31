@@ -7,9 +7,12 @@
 // question's feedback is part by part, with its practice marks (formative).
 
 import { citeChunk } from "./extract";
-import { FORMATIVE_FEEDBACK_LABEL, LEARNER_CARD, LEARNER_CARD_LABEL, LIBRARY_QUESTION_LABEL, LIBRARY_REVISION_LABEL, MARKING_LABEL, NOT_COMPETENCE_LABEL, PRACTICE_MARKS_LABEL, REVISION_LABEL, type Marking } from "./config";
+import { EXTENDED_LABEL, FORMATIVE_FEEDBACK_LABEL, LEARNER_CARD, LEARNER_CARD_LABEL, LIBRARY_QUESTION_LABEL, LIBRARY_REVISION_LABEL, MARKING_LABEL, NOT_COMPETENCE_LABEL, PRACTICE_MARKS_LABEL, REVISION_LABEL, type Marking } from "./config";
 import { answerText, keyOf, learnerItem, practiceMarks, structuredParts, type LearnerItem, type PartResult } from "./revision";
 import type { LibraryProvenance, QuestionRow } from "./store";
+import { extendedMarks, extendedSpecOf, isExtendedQuestion, storedMatched } from "./formats";
+import { applySnapshot, rubricChanged, snapshotOf, type RubricSnapshot } from "./rubric-snapshot";
+import { formativeOf, formativeText, storedPartResults } from "./written-feedback";
 import { GENERATION_DIFFICULTIES as STEPS, GROUNDING_LABEL, LEVEL_LABEL, rubricOf, type FeedbackParts, type GenerationDifficulty } from "./question-intel";
 
 export type RevisionItemView = LearnerItem & {
@@ -60,12 +63,40 @@ export type RevisionFeedback = {
   practises?: { competency: string; outcome: string | null; label: string } | null;
   /** SCHOLAR-SQIE-CLOSE-01: a governed library question (its provenance). Its source is the library, not the notes. */
   library?: LibraryProvenance & { label: string };
+  /**
+   * SCHOLAR-SQIE-LEARNER-01: an extended response, against its key points. `matched` is null where the answer was not AI-evaluated
+   * (marked by the student, or an older attempt): the marks are then the stored share of the total, and no point is ticked.
+   */
+  extended?: { marks: { awarded: number; total: number; label: string }; modelAnswer: string; points: { text: string; matched: boolean | null }[]; label: string };
+  /** SCHOLAR-SQIE-LEARNER-01: the attempt was marked against a guide the question no longer has; what is shown is the guide at the time. */
+  rubricNote?: string;
   /** SCHOLAR-SQIE-CLOSE-01: a structured question, part by part, and its practice marks (formative). */
   structured?: { parts: StructuredPartFeedback[]; practiceMarks: { awarded: number; total: number; label: string } };
 };
 
+/**
+ * Pure. What an attempt kept that feedback shown again reads (SCHOLAR-WRITTEN-FEEDBACK-01, SCHOLAR-SQIE-LEARNER-01): the rubric
+ * snapshot it was marked against, the key points an extended answer made, and -- for an AI-evaluated answer only -- the formative
+ * feedback it was shown. Spread into feedbackView's second argument. Nothing for a code-marked or self-graded answer but its snapshot.
+ */
+export function keptAttemptView(q: QuestionRow, a: { response?: Record<string, unknown> | null; marking: string }) {
+  const snapshot = snapshotOf(a.response);
+  const parts = structuredParts(applySnapshot(q, snapshot));
+  if (parts.length) { const structured = storedPartResults(a.response, a.marking, parts.length); return { snapshot, ...(structured ? { structured } : {}) }; }
+  const spec = isExtendedQuestion(q) ? extendedSpecOf(applySnapshot(q, snapshot).answer) : null;
+  const whole = formativeOf(a.response, a.marking)?.items.find(i => i.part === null);
+  return { snapshot, extendedMatched: spec ? storedMatched(a.response, a.marking, spec.keyPoints.length) : null, ...(whole ? { evaluation: formativeText(whole), evaluationParts: whole.parts } : {}) };
+}
+
 /** Pure. What a student sees after answering one question. */
-export function feedbackView(q: QuestionRow, m: { correct: boolean; score: number | null; marking: Marking; evaluation?: string | null; evaluationParts?: FeedbackParts | null; card?: RevisionFeedback["card"]; nextReviewAt?: string | null; link?: { competency: string; outcome: string | null } | null; structured?: readonly PartResult[] | null }): RevisionFeedback {
+export function feedbackView(row: QuestionRow, m: {
+  correct: boolean; score: number | null; marking: Marking; evaluation?: string | null; evaluationParts?: FeedbackParts | null; card?: RevisionFeedback["card"]; nextReviewAt?: string | null;
+  link?: { competency: string; outcome: string | null } | null; structured?: readonly PartResult[] | null;
+  /** SCHOLAR-SQIE-LEARNER-01: the rubric snapshot kept on the attempt (rubric-snapshot.ts), and the key points an extended answer made. */
+  snapshot?: RubricSnapshot | null; extendedMatched?: readonly number[] | null;
+}): RevisionFeedback {
+  // The question as it read when the attempt was marked, where the attempt kept a snapshot of its guide; otherwise the row itself.
+  const q = applySnapshot(row, m.snapshot ?? null);
   const k = keyOf(q);
   const rubric = rubricOf(q.answer);
   const parts = structuredParts(q);
@@ -86,6 +117,17 @@ export function feedbackView(q: QuestionRow, m: { correct: boolean; score: numbe
       practiceMarks: { awarded, total, label: PRACTICE_MARKS_LABEL },
     };
   }
+  let extended: RevisionFeedback["extended"];
+  const spec = isExtendedQuestion(q) ? extendedSpecOf(q.answer) : null;
+  if (spec) {
+    const total = spec.keyPoints.length * spec.marksPerPoint;
+    const made = m.extendedMatched ? extendedMarks(spec, m.extendedMatched) : null;
+    extended = {
+      marks: { awarded: made ? made.awarded : Math.round((m.score ?? 0) * total), total, label: PRACTICE_MARKS_LABEL },
+      modelAnswer: spec.modelAnswer, label: EXTENDED_LABEL,
+      points: spec.keyPoints.map((text, i) => ({ text, matched: made ? made.matched.includes(i) : null })),
+    };
+  }
   return {
     rubric: rubric ? { objective: rubric.objective, level: LEVEL_LABEL[rubric.level], keyPoints: rubric.keyPoints, grounding: q.library ? LIBRARY_QUESTION_LABEL : GROUNDING_LABEL[rubric.source] } : null,
     nextDifficulty: STEPS[Math.max(0, Math.min(2, (q.difficulty ?? 2) - 1 + (m.correct ? 1 : -1)))],
@@ -98,5 +140,7 @@ export function feedbackView(q: QuestionRow, m: { correct: boolean; score: numbe
     practises: m.link ? { ...m.link, label: NOT_COMPETENCE_LABEL } : null,
     ...(q.library ? { library: { ...q.library, label: LIBRARY_QUESTION_LABEL } } : {}),
     ...(structured ? { structured } : {}),
+    ...(extended ? { extended } : {}),
+    ...(rubricChanged(row, m.snapshot ?? null) ? { rubricNote: "This question's marking guide has been updated since you answered. What is shown here is the guide your answer was marked against." } : {}),
   };
 }

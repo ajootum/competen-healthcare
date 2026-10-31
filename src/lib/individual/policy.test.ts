@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CAREER_CATEGORIES, DEFAULT_MILESTONE_CATEGORIES } from "./professional/progress-policy";
-import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, individualQuotaRefusal, isStudySessionsOn, loadIndividualPolicy, meetsMinStatus, policyDef, policyPath, resolvePolicy, validateDraft, type IntPolicy } from "./policy";
+import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, individualQuotaRefusal, isStudyPlanOn, isStudySessionsOn, loadIndividualPolicy, meetsMinStatus, policyDef, policyPath, resolvePolicy, validateDraft, type IntPolicy } from "./policy";
 import { publishScope, rollbackVersion, setOverride } from "@/lib/config/workspace-config-write";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX, parseShare } from "./professional/share";
@@ -95,16 +95,18 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       passportAchievementKinds: [...STUDY_ACHIEVEMENT_KINDS],
       // S1: no catalogue reaches a person until HQ chooses one.
       scholarCatalogues: [], professionalCatalogues: [], scholarReferenceCollections: [],
-      scholarRevisionFormats: ["mcq", "mrq", "short", "flashcard", "match", "sequence", "structured"], scholarRevisionModes: ["today", "quick", "spaced", "weak", "mock", "flashcards", "custom"],
+      scholarRevisionFormats: ["mcq", "mrq", "short", "flashcard", "match", "sequence", "structured", "cloze", "true_false"], scholarVerifyFormats: ["mcq", "case", "mrq", "short"], scholarRevisionModes: ["today", "quick", "spaced", "weak", "mock", "flashcards", "custom"],
       scholarRevisionQuantity: 10, scholarRevisionDifficulty: "any", scholarRevisionFeedback: "immediate", scholarRevisionGeneration: "generate", scholarShortAnswerMarking: "self",
       scholarRevisionRecommendations: "on",
       // SCHOLAR-PRACTICE-EXAMS-01: adaptive exams on, 15 questions, at most 30, every adaptive format (no flashcards).
       scholarAdaptiveExams: "on", scholarAdaptiveLength: 15, scholarAdaptiveMaxLength: 30, scholarAdaptiveFormats: ["mcq", "mrq", "short", "match", "sequence", "structured"],
       // SCHOLAR-FLASHCARDS-01: offered, ten new cards at a time, 200 a deck, both source modes, any difficulty, every download.
-      scholarFlashcards: "on", scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
+      scholarFlashcards: "on", scholarMistakeNotebook: "on", scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
       // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
       scholarStudySessions: false,
+      // SCHOLAR-COMPANION-01: the study plan OFF until HQ switches it on (and 780 is applied).
+      scholarStudyPlan: false,
       // SCHOLAR-GUIDED-LEARNING-01: no lesson is prepared ahead until HQ switches it on.
       scholarLearnPrepareNext: false,
       scholarSrsMasteryReps: 5, scholarSrsMasteryDays: 60, scholarSrsMaxIntervalDays: 3650, scholarSrsHarderIntervalPercent: 100,
@@ -123,7 +125,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarEvaluationFreshQuantity: 10,
       scholarEvaluationRecommendations: "on",
       // PROGRESS-01 (Stage 8): every section, by week over 8 periods, every next-step rule, 5 steps, evaluations offered to the Passport.
-      scholarProgressSections: ["coverage", "understanding", "retention", "application", "engagement", "confidence", "history", "competencies"],
+      scholarProgressSections: ["coverage", "understanding", "retention", "application", "engagement", "confidence", "history", "competencies", "mastery"],
       scholarProgressPeriod: "week",
       scholarProgressPeriods: 8,
       scholarProgressNextRules: ["teach", "spaced", "case", "evaluate", "classify", "advance"],
@@ -200,6 +202,19 @@ it("SCHOLAR-GUIDED-LEARNING-01: prepare-next defaults off and resolves on only f
     expect(validateDraft("scholar_study_sessions", "maybe").ok).toBe(false);
     const on = resolvePolicy([{ config_path: path, published: { value: "on" } }]);
     expect([isStudySessionsOn(on, true), isStudySessionsOn(on, false), isStudySessionsOn(DEFAULT_POLICY, true), isStudySessionsOn(DEFAULT_POLICY, false)])
+      .toEqual([true, false, false, false]);
+  });
+
+  it("SCHOLAR-COMPANION-01: the study plan defaults off, resolves on only from a published on, and needs 780 too", () => {
+    const path = policyPath("scholar_study_plan");
+    expect(DEFAULT_POLICY.scholarStudyPlan).toBe(false);
+    expect(resolvePolicy([{ config_path: path, published: { value: "on" } }]).scholarStudyPlan).toBe(true);
+    expect(resolvePolicy([{ config_path: path, published: { value: "yes" } }]).scholarStudyPlan).toBe(false);
+    expect(resolvePolicy([{ config_path: path, published: { value: true } }]).scholarStudyPlan).toBe(false);
+    expect(validateDraft("scholar_study_plan", "on")).toMatchObject({ ok: true, settings: { value: "on" } });
+    expect(validateDraft("scholar_study_plan", "maybe").ok).toBe(false);
+    const on = resolvePolicy([{ config_path: path, published: { value: "on" } }]);
+    expect([isStudyPlanOn(on, true), isStudyPlanOn(on, false), isStudyPlanOn(DEFAULT_POLICY, true), isStudyPlanOn(DEFAULT_POLICY, false)])
       .toEqual([true, false, false, false]);
   });
 

@@ -28,7 +28,8 @@ import { resolveScope } from "./learn";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "./http";
 import { activityState, getScholarAiStanding } from "./ai-standing";
 import { formatPromptVersion, runQuestions, runRevisionQuestions } from "./generation";
-import { keyOf, planGeneration } from "./revision";
+import { effectiveKind, existingObjectives, keyOf, planGeneration } from "./revision";
+import { missOf, recentMisses, signalsOf, type RecentMiss } from "./misconception";
 import { generationContextLoader } from "./question-context";
 import { answerOutcome, recordScholarOutcome } from "./outcome";
 import { rubricOf, stemKey, type GenerationDifficulty } from "./question-intel";
@@ -157,13 +158,20 @@ export function currentQuestion(st: AdaptiveState): QuestionRow | null {
 
 // ── THE NEXT QUESTION ──
 
-async function candidates(admin: any, userId: string, bp: AdaptiveBlueprint): Promise<{ questions: QuestionRow[]; pool: Candidate[] } | null> {
+async function candidates(admin: any, userId: string, bp: AdaptiveBlueprint): Promise<{ questions: QuestionRow[]; pool: Candidate[]; misses: RecentMiss[] } | null> {
   const p = await revisionPool(admin, userId, { chunkIds: bp.scope.kind === "library" ? null : bp.sections, kinds: bp.formats, extraIds: bp.libraryIds });
   if (!p.ok) return null;
   const questions = p.data.questions.filter(q => !!keyOf(q));
+  // SCHOLAR-SQIE-LEARNER-01: a cloze, true/false or extended item is stored as `short` but is not the short answer the exam offered.
+  // The learner's misses in the last 30 days steer the next pick (misconception.ts).
+  const missRows: RecentMiss[] = questions.flatMap(q => missOf(q, p.data.stats.get(q.id)?.lastMissAt));
   return {
     questions,
-    pool: questions.map(q => ({ id: q.id, kind: q.kind, difficulty: q.difficulty, library: !!q.library, createdAt: q.createdAt, lastAnsweredAt: p.data.stats.get(q.id)?.lastAnsweredAt ?? null })),
+    misses: recentMisses(missRows, new Date().toISOString()),
+    pool: questions.map(q => ({
+      id: q.id, kind: effectiveKind(q), difficulty: q.difficulty, library: !!q.library, createdAt: q.createdAt, lastAnsweredAt: p.data.stats.get(q.id)?.lastAnsweredAt ?? null,
+      ...signalsOf(q), chunkId: q.chunkId, due: p.data.stats.get(q.id)?.due ?? false,
+    })),
   };
 }
 
@@ -179,7 +187,7 @@ export async function chooseNext(ctx: IndividualContext, req: Request, policy: I
   const exclude = new Set(input.questionIds);
   let found = await candidates(ctx.admin, ctx.userId, input.blueprint);
   if (!found) return { ok: false };
-  const first = selectNext({ target, pool: found.pool, exclude, formats: input.blueprint.formats, lastKind: input.lastKind });
+  const first = selectNext({ target, pool: found.pool, exclude, formats: input.blueprint.formats, lastKind: input.lastKind, recentMisses: found.misses });
   if (first.exact) return { ok: true, pick: first.exact, target, note: null, blueprint: input.blueprint, generated: [] };
   // No unused question at the target: write a batch (within the exam's call limit). Only when that is not possible is the
   // nearest difficulty offered.
@@ -187,7 +195,7 @@ export async function chooseNext(ctx: IndividualContext, req: Request, policy: I
   let nearest = first.nearest;
   if (gen.ids.length) {
     found = (await candidates(ctx.admin, ctx.userId, gen.blueprint)) ?? found;
-    const again = selectNext({ target, pool: found.pool, exclude, formats: gen.blueprint.formats, lastKind: input.lastKind, fresh: new Set(gen.ids) });
+    const again = selectNext({ target, pool: found.pool, exclude, formats: gen.blueprint.formats, lastKind: input.lastKind, fresh: new Set(gen.ids), recentMisses: found.misses });
     if (again.exact) return { ok: true, pick: again.exact, target, note: null, blueprint: gen.blueprint, generated: gen.ids };
     nearest = again.nearest ?? nearest;
   }
@@ -207,7 +215,7 @@ async function generateForTarget(ctx: IndividualContext, req: Request, policy: I
   // D3: a section and format is skipped only while it still has an UNUSED question at this difficulty and prompt version.
   // Questions this exam has already served do not count, so the exam can go on. Identical stems are still never written
   // twice (`existing` stems below).
-  const existing = unusedCoverage(pool.map(q => ({ id: q.id, chunkId: q.chunkId, kind: q.kind, difficulty: q.difficulty, current: q.promptVersion.startsWith(formatPromptVersion(q.kind)) })), used, target);
+  const existing = unusedCoverage(pool.map(q => ({ id: q.id, chunkId: q.chunkId, kind: effectiveKind(q), difficulty: q.difficulty, current: q.promptVersion.startsWith(formatPromptVersion(effectiveKind(q))) })), used, target);
   const call = planGeneration({ shortfall: 3, chunkIds: bp.sections, formats: formatRotation(bp.formats, lastKind), existing })[0];
   if (!call) return none("every section and format already has questions at this difficulty");
   const passage = await getPassage(ctx.admin, ctx.userId, call.chunkId);
@@ -222,7 +230,7 @@ async function generateForTarget(ctx: IndividualContext, req: Request, policy: I
   let ids: string[] = [], outcome = "", calls = 0;
   let measured: { accepted: number; rejected: number; reasons: string[]; promptVersion: string | null } | null = null;
   if (call.kind === "mcq") {
-    const r = await runQuestions(ctx.userId, "mcq", passage, 3, ai.run, { context, existing: stems });
+    const r = await runQuestions(ctx.userId, "mcq", passage, 3, ai.run, { context, existing: stems, verifyFormats: policy.scholarVerifyFormats, existingObjectives: existingObjectives(pool, passage.chunkId, "mcq") });
     if (r.ok) {
       calls = r.calls;
       const s = await insertQuestions(ctx.admin, ctx.userId, { passage, kind: "mcq", drafts: r.check.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
@@ -231,7 +239,7 @@ async function generateForTarget(ctx: IndividualContext, req: Request, policy: I
       measured = { accepted: ids.length, rejected: r.check.dropped.length, reasons: r.check.dropped.map(d => d.reason), promptVersion: r.promptVersion };
     } else outcome = `error:${r.error}`;
   } else {
-    const r = await runRevisionQuestions(ctx.userId, call.kind, passage, 3, ai.run, { context, existing: stems });
+    const r = await runRevisionQuestions(ctx.userId, call.kind, passage, 3, ai.run, { context, existing: stems, verifyFormats: policy.scholarVerifyFormats, existingObjectives: existingObjectives(pool, passage.chunkId, call.kind) });
     if (r.ok) {
       calls = r.calls;
       const s = await insertRevisionQuestions(ctx.admin, ctx.userId, { passage, kind: call.kind, drafts: r.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
