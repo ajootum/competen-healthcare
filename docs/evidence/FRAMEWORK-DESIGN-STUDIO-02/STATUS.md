@@ -68,7 +68,7 @@ Reuse the existing infrastructure. No-code first. No parallel systems. Testing p
 | S2 | UI (a): properties panel, criteria editor, touch drag helper, registry labels, compare view, spreadsheet import page | DONE (built, unpushed, not browser-walked) |
 | S3 | Server (b): migration 760 Areas; layout draft extension for organisational cross-parent moves; substantive moves in drafts | **done 31 Oct** (760 staging x2, server code; substantive moves left to S1 criteria editing and S5, see Log) |
 | S4 | UI (b): Areas in the tree, cross-parent drag, visual framework map | **done 31 Oct** (not browser-verified, see Log) |
-| S5 | D2 revision drafts, server + migration 770 | **done 31 Oct** (770 staging x2, VERIFY 17/17, rollback rehearsed; production NOT applied) |
+| S5 | D2 revision drafts, server + migrations 770, 771 | **done 31 Oct** (770 staging x2, VERIFY 17/17; 771 structure staging x2, VERIFY 13/13; rollbacks rehearsed; production NOT applied) |
 | S6 | D2 revision drafts, UI | **done 31 Oct** (built, tsc/eslint clean, not browser-walked) |
 
 ## Log
@@ -210,6 +210,29 @@ Tests: 5 new or extended vitest files, plus review-pack and the authoring suites
 - Organisational changes (Areas, domain Area, competency to another domain, reorders) keep the layout draft. A NEW revision competency is not moved between domains (404).
 
 **Checks.** vitest 76/76 (framework-revision 12 new), plant red/green; competency-foundation harness 33/33; tsc and eslint clean; house rules ALL CLEAR. Not browser-walked.
+
+### 31 Oct 2026: S5 extension, migration 771 (branch hq/framework-studio-02a, not pushed)
+
+Closes the S5 open item (D3: ALL changes to a published framework pass through the revision). **Migration 771** `771-framework-revision-structure.sql`, sha256 `53e7bcaf59bfd007f5e22a4a6b6e6e7537934a08d769aa3ab535add2ea52106d`. Record `771-build-record.md`. Order 750, 751, 752, 760, 761, 770, 771. **Staging only (x2, VERIFY 13/13, plant red, rollback rehearsed to PRE exactly, re-applied); production needs owner GO.** 466/640/751/752/760/761/770 guarantees hold (table in the record).
+- The framework name and description, new domains (pre-allocated id, Area optional) and domain renames, new or renamed practices and CPUs go into the same revision and are applied by the same publication statement (refused publication applies nothing). Not in the content hash: **organisational for review** (no clinical re-review, not authorship), but **contribution** (the editor cannot publish).
+- Drafts unchanged (live). Without 771 every structure action on a published governed framework is refused (409, nothing written).
+
+**API contract additions for S6** (`POST /api/hq/competency/authoring`, `hq.quality.competency.author`). On a revised framework (published, shared, CFCA) these bodies are unchanged and answer `mode: "revision"`; the first one opens the revision:
+- `update_framework { frameworkId, name, description? }` -> `{ ok, unchanged, mode, revisionId? }`. Sending the live label again clears the proposal.
+- `create_domain { frameworkId, name, code?, areaId? }` -> 201 `{ ok, id, mode, revisionId }`. `id` is the final domain id. `areaId` = a live Area of the framework (422 otherwise). Placed after every domain.
+- `rename_domain { domainId, name, code? }` -> `{ ok, unchanged, mode, revisionId? }`. `domainId` live or new.
+- `create_practice { domainId, name, code, description? }` -> 201 `{ ok, id, mode, revisionId }` (domain live or new).
+- `rename_practice { practiceId, name, code, description? }` (**new action**, drafts live) -> `{ ok, unchanged, mode, revisionId? }`.
+- `create_cpu { practiceId, name, code, description?, riskCategory?, complexity?, reassessmentMonths? }` -> 201 `{ ok, id, mode, revisionId }` (practice live or new).
+- `rename_cpu { cpuId, name, code, description? }` (**new action**, drafts live; risk not changed) -> `{ ok, unchanged, mode, revisionId? }`.
+- `update_competency` / `create_competency` may name a NEW CPU of the revision (`cpuId`) and `create_competency` a NEW domain (`domainId`).
+- `move_competency_domain { frameworkId, competencyId, domainId }` for a NEW revision competency -> `{ ok, mode: "revision", unchanged, layoutPending: false, revisionId }`, to the end of a live or new domain (`position` -> 422). A published competency into a NEW domain -> 409 (publish the revision first). Every other move: the layout draft, unchanged.
+- `revision_view` adds `framework: { name, description } | null` (null = label unchanged), `domains: [{ id, isNew, name, code, areaId (new only), sortOrder (new only) }]`, `practices: [{ id, isNew, domainId (new only), name, description, code }]`, `cpus: [{ id, isNew, practiceId (new only), name, description, code, riskCategory, complexity, reassessmentMonths (new only) }]`. Render the rest from the live tree.
+- `compare_revision`: `diff.framework[]` (label), `diff.domains.renamed` and `.added` now include the revision's structure.
+- Review: `review_preview` / `review_submit` with `revision: true` list new competencies under new domains; the reviewer queue places them by the revision domain.
+- Errors: 409 "...not set up on this environment yet (migration 771)...". The STATUS S2 note on update_framework/create_domain/practices/CPUs saving live on published frameworks no longer applies once 771 is present.
+
+**Checks.** vitest framework-revision 21/21 (9 new) + 6 related files 67/67, plant 6 red then green; competency-foundation harness 33/33; tsc and eslint clean; house rules ALL CLEAR. Not browser-walked.
 
 ### 31 Oct 2026: S6 done (branch hq/framework-studio-02a, not pushed)
 
