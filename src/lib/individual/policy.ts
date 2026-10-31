@@ -115,7 +115,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic"
-  | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix";
+  | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
+  | "scholar_study_sessions";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1099,6 +1100,16 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "programme",
     limitReason: "Four choices. A level the notes cannot support is never asked for. Default: by programme level (balanced where the programme names no level).",
   },
+  // SCHOLAR-SESSION-AI-02 (740): connected study sessions. OFF by default, and off in effect while migration 740 is
+  // absent (isStudySessionsOn), so switching it on before 740 is applied changes nothing (CLAUDE.md Database state 3).
+  {
+    key: "scholar_study_sessions", kind: "choice", product: "Scholar",
+    label: "Connected study sessions",
+    help: "Whether a student may start a study session that carries one focus (a topic, a document or a learning objective) across Learn, Revise, Apply and Evaluate, resume it on any device, and ask the Personal AI with that session in mind. Formative only: nothing in a study session is assessment evidence or verified competence.",
+    options: [{ value: "on", label: "Offered" }, { value: "off", label: "Not offered" }],
+    fallback: "off",
+    limitReason: "Needs migration 740. Without it the setting has no effect and study sessions stay off. Default: not offered.",
+  },
   {
     key: "scholar_flashcard_exports", kind: "set", product: "Scholar",
     label: "Flashcard downloads offered",
@@ -1766,6 +1777,8 @@ export type IndividualPolicy = {
   scholarFlashcardDifficulty: RevisionDifficulty;
   scholarFlashcardExports: ("deck" | "print" | "guide")[];
   scholarFlashcardLevelMix: "programme" | "recall" | "balanced" | "applied";
+  /** SCHOLAR-SESSION-AI-02. Whether connected study sessions are offered. Read it through isStudySessionsOn, which also needs 740. */
+  scholarStudySessions: boolean;
   scholarSrsMasteryReps: number;
   scholarSrsMasteryDays: number;
   scholarSrsMaxIntervalDays: number;
@@ -1915,6 +1928,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarFlashcardDifficulty: clampChoice(policyDef("scholar_flashcard_difficulty") as ChoicePolicy, published.get(policyPath("scholar_flashcard_difficulty"))) as RevisionDifficulty,
     scholarFlashcardExports: clampSet(policyDef("scholar_flashcard_exports") as SetPolicy, published.get(policyPath("scholar_flashcard_exports"))) as ("deck" | "print" | "guide")[],
     scholarFlashcardLevelMix: clampChoice(policyDef("scholar_flashcard_level_mix") as ChoicePolicy, published.get(policyPath("scholar_flashcard_level_mix"))) as "programme" | "recall" | "balanced" | "applied",
+    scholarStudySessions: clampChoice(policyDef("scholar_study_sessions") as ChoicePolicy, published.get(policyPath("scholar_study_sessions"))) === "on",
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),
     scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
     scholarSrsMaxIntervalDays: int("scholar_srs_max_interval_days"),
@@ -2088,6 +2102,13 @@ function resolveProfessionalEvaluation(published: Map<string, any>): Professiona
 }
 
 export const DEFAULT_POLICY: IndividualPolicy = resolvePolicy([]);
+
+/**
+ * SCHOLAR-SESSION-AI-02. Connected study sessions are on only where HQ switched them on AND migration 740 is present
+ * (store.ts studySessionSchema). Either missing: off, so the feature fails closed while 740 is absent.
+ */
+export const isStudySessionsOn = (policy: Pick<IndividualPolicy, "scholarStudySessions">, schema740: boolean): boolean =>
+  policy.scholarStudySessions === true && schema740 === true;
 
 /** The effective policy now. Fail-soft: anything unreadable is today's constant. */
 export async function loadIndividualPolicy(admin: any): Promise<IndividualPolicy> {

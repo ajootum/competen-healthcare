@@ -21,6 +21,7 @@ import type { ResearchSource } from "./exam-research";
 import type { OsceDefinition, OsceItem, OsceSource, OsceStationDraft, OsceTick } from "./osce";
 import { guidanceJson, readDefinition } from "./osce";
 import type { CardRowExtras, PersonalDeck } from "./flashcards";
+import { isStudyLinkKind, isStudySpace, studyFields, type StudyFieldsInput, type StudyLinkKind, type StudySpace } from "./study-session";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -1653,13 +1654,21 @@ const toSession = (r: any): LearningSessionRow => ({
 });
 const SESSION_COLS = "id, scope_kind, title, topic, competency_id, current_step, status, created_at, last_active_at";
 
-/** A new session with its steps. "not_provisioned" where 414 is absent: the workspace then teaches without history. */
+/**
+ * A new session with its steps. "not_provisioned" where 414 is absent: the workspace then teaches without history.
+ * SCHOLAR-SESSION-AI-02 (740): connected, objectiveOutcome and objectiveText make it a study session. Left out, the row
+ * is written exactly as before (no 740 column named, so it works where 740 is absent). Asked for where 740 is absent:
+ * "study_not_provisioned", and nothing is written. Free text is screened by the caller first, as the topic is.
+ */
 export async function createLearningSession(admin: Admin, userId: string, input: {
   scopeKind: LearningSessionRow["scopeKind"]; title: string; topic: string | null; competencyId: string | null; steps: LearningStep[];
-}): Promise<{ ok: true; id: string } | { ok: false; error: "not_provisioned" | "failed" }> {
+} & StudyFieldsInput): Promise<{ ok: true; id: string } | { ok: false; error: "not_provisioned" | "study_not_provisioned" | "failed" }> {
+  const study = studyFields(input, input.competencyId);
+  if (study && !(await studySessionSchema(admin, userId))) return { ok: false, error: "study_not_provisioned" };
   const { data, error } = await admin.from("individual_scholar_learning_session").insert({
-    user_id: userId, scope_kind: input.scopeKind, title: input.title.slice(0, 160), topic: input.topic, competency_id: input.competencyId,
+    user_id: userId, scope_kind: input.scopeKind, title: input.title.slice(0, 160), topic: input.topic, competency_id: input.competencyId, ...(study ?? {}),
   }).select("id").single();
+  if (error && study && isMissingColumn(error)) { markStudyAbsent(); return { ok: false, error: "study_not_provisioned" }; }
   if (error) return { ok: false, error: isNotProvisioned(error) ? "not_provisioned" : "failed" };
   const rows = input.steps.flatMap(s => s.sections.map(x => ({ session_id: data.id, user_id: userId, step: s.step, chunk_id: x.chunkId, material_id: x.materialId })));
   const { error: sErr } = rows.length ? await admin.from("individual_scholar_learning_step").insert(rows.map(r => ({ ...r, user_id: userId }))) : { error: null };
@@ -1699,6 +1708,125 @@ export async function updateLearningSession(admin: Admin, userId: string, id: st
     .eq("user_id", userId).eq("id", id).select("id");
   if (error) return "failed";
   return (data ?? []).length ? "ok" : "not_found";
+}
+
+// ── CONNECTED STUDY SESSIONS (740, SCHOLAR-SESSION-AI-02) ── a Learn session carried across the four spaces ─────────
+//
+// Owner D1: a study session IS a 414 Learn session with connected true. 740 adds connected, last_space, objective_outcome
+// (held to competency_id) and objective_text, and individual_scholar_study_link, which says that one of the learner's
+// own activities belongs to the session. Detected once, as 710, 720 and 730 are: one read of the four 740 columns and
+// one of the link table, keyed on the caller. Absent (42703 or PGRST204 column, 42P01 or PGRST205 table): every
+// function here answers null, [] or "unavailable", never throws, and the policy gate (isStudySessionsOn) is off.
+// A link row is written only after the ref is proved to be the caller's own, in the matching table: 740 has no foreign
+// key to the activity tables, so that check is here. Nothing here writes assessment, verification or Passport rows (D5).
+let study740: boolean | null = null;
+const isMissingColumn = (error: any) => ["PGRST204", "42703"].includes(String(error?.code ?? ""));
+/** Whether migration 740 is applied on this environment. A transient read error is "no" for now, and asked again. */
+export async function studySessionSchema(admin: Admin, userId: string): Promise<boolean> {
+  if (study740 !== null) return study740;
+  try {
+    const { error } = await admin.from("individual_scholar_learning_session").select("connected, last_space, objective_outcome, objective_text").eq("user_id", userId).limit(1);
+    if (error) { if (isNotProvisioned(error)) study740 = false; return false; }
+    const { error: lErr } = await admin.from("individual_scholar_study_link").select("id").eq("user_id", userId).limit(1);
+    if (!lErr) return (study740 = true);
+    if (isNotProvisioned(lErr)) study740 = false;
+    return false;
+  } catch { return false; }
+}
+/** A 740 column or table was missing on a later call: 740 is treated as absent from now on in this process. */
+const markStudyAbsent = () => { study740 = false; };
+/** Tests only: forget what was detected. */
+export const resetStudySessionSchema = () => { study740 = null; };
+
+export type StudySessionRow = LearningSessionRow & { connected: true; lastSpace: StudySpace | null; objectiveOutcome: string | null; objectiveText: string | null };
+const STUDY_SESSION_COLS = `${SESSION_COLS}, connected, last_space, objective_outcome, objective_text`;
+const toStudySession = (r: any): StudySessionRow => ({
+  ...toSession(r), connected: true, lastSpace: isStudySpace(r.last_space) ? r.last_space : null,
+  objectiveOutcome: r.objective_outcome ?? null, objectiveText: r.objective_text ?? null,
+});
+
+/** One of the caller's CONNECTED sessions, or null: not a uuid, not theirs, not connected, unreadable, or 740 absent. */
+export async function getConnectedSession(admin: Admin, userId: string, id: string): Promise<StudySessionRow | null> {
+  if (!isUuid(id) || !(await studySessionSchema(admin, userId))) return null;
+  try {
+    const { data, error } = await admin.from("individual_scholar_learning_session").select(STUDY_SESSION_COLS)
+      .eq("user_id", userId).eq("id", id).eq("connected", true).maybeSingle();
+    if (error) { if (isNotProvisioned(error)) markStudyAbsent(); return null; }
+    return data ? toStudySession(data) : null;
+  } catch { return null; }
+}
+
+/** The caller's most recently used active connected session, for "Continue your study session". Null where none. */
+export async function latestConnectedSession(admin: Admin, userId: string): Promise<StudySessionRow | null> {
+  if (!(await studySessionSchema(admin, userId))) return null;
+  try {
+    const { data, error } = await admin.from("individual_scholar_learning_session").select(STUDY_SESSION_COLS)
+      .eq("user_id", userId).eq("connected", true).eq("status", "active").order("last_active_at", { ascending: false }).limit(1).maybeSingle();
+    if (error) { if (isNotProvisioned(error)) markStudyAbsent(); return null; }
+    return data ? toStudySession(data) : null;
+  } catch { return null; }
+}
+
+/** Record the space the learner is in, on their own connected session (and when it was last used). No AI. */
+export async function setLastSpace(admin: Admin, userId: string, id: string, space: StudySpace): Promise<"ok" | "not_found" | "unavailable"> {
+  if (!isUuid(id) || !isStudySpace(space)) return "not_found";
+  if (!(await studySessionSchema(admin, userId))) return "unavailable";
+  try {
+    const { data, error } = await admin.from("individual_scholar_learning_session")
+      .update({ last_space: space, last_active_at: new Date().toISOString() })
+      .eq("user_id", userId).eq("id", id).eq("connected", true).select("id");
+    if (error) { if (isNotProvisioned(error)) markStudyAbsent(); return "unavailable"; }
+    return (data ?? []).length ? "ok" : "not_found";
+  } catch { return "unavailable"; }
+}
+
+/** Whether ref is the caller's own activity of this kind. One literal, caller-keyed read per kind (harness A1). */
+async function ownsStudyRef(admin: Admin, userId: string, kind: StudyLinkKind, refId: string): Promise<boolean> {
+  let q: any;
+  switch (kind) {
+    case "revision_session": q = admin.from("individual_scholar_revision_session").select("id").eq("user_id", userId).eq("id", refId); break;
+    case "osce_attempt": q = admin.from("individual_scholar_osce_attempt").select("id").eq("user_id", userId).eq("id", refId); break;
+    case "flashcard_deck": q = admin.from("individual_scholar_flashcard_deck").select("id").eq("user_id", userId).eq("id", refId); break;
+    case "case_session": q = admin.from("individual_scholar_case_session").select("id").eq("user_id", userId).eq("id", refId); break;
+    case "evaluation": q = admin.from("individual_scholar_evaluation").select("id").eq("user_id", userId).eq("id", refId); break;
+    // An exam paper's key is its material (570).
+    case "exam_paper": q = admin.from("individual_scholar_exam_paper").select("material_id").eq("user_id", userId).eq("material_id", refId); break;
+    default: return false;
+  }
+  const { data, error } = await q.maybeSingle();
+  return !error && !!data;
+}
+
+/**
+ * Link one of the caller's own activities to one of their own connected sessions. Idempotent on (session, kind, ref):
+ * linking twice is "ok" and leaves one row. "not_found" (non-disclosing) where the session is not the caller's
+ * connected session or the ref is not the caller's own activity of that kind. "unavailable" where 740 is absent.
+ */
+export async function addStudyLink(admin: Admin, userId: string, input: { sessionId: string; kind: StudyLinkKind; refId: string }): Promise<"ok" | "not_found" | "unavailable" | "failed"> {
+  if (!isUuid(input.sessionId) || !isUuid(input.refId) || !isStudyLinkKind(input.kind)) return "not_found";
+  if (!(await studySessionSchema(admin, userId))) return "unavailable";
+  try {
+    if (!(await getConnectedSession(admin, userId, input.sessionId))) return "not_found";
+    if (!(await ownsStudyRef(admin, userId, input.kind, input.refId))) return "not_found";
+    const { error } = await admin.from("individual_scholar_study_link")
+      .upsert({ session_id: input.sessionId, user_id: userId, kind: input.kind, ref_id: input.refId }, { onConflict: "session_id,kind,ref_id", ignoreDuplicates: true });
+    if (error) { if (isNotProvisioned(error)) { markStudyAbsent(); return "unavailable"; } return "failed"; }
+    return "ok";
+  } catch { return "failed"; }
+}
+
+export type StudyLinkRow = { kind: StudyLinkKind; refId: string; createdAt: string };
+
+/** The activities linked to one of the caller's sessions, oldest first. [] where none; null where 740 is absent or unreadable. */
+export async function listStudyLinks(admin: Admin, userId: string, sessionId: string): Promise<StudyLinkRow[] | null> {
+  if (!isUuid(sessionId)) return [];
+  if (!(await studySessionSchema(admin, userId))) return null;
+  try {
+    const { data, error } = await admin.from("individual_scholar_study_link").select("kind, ref_id, created_at")
+      .eq("user_id", userId).eq("session_id", sessionId).order("created_at").limit(500);
+    if (error) { if (isNotProvisioned(error)) markStudyAbsent(); return null; }
+    return ((data ?? []) as any[]).filter(r => isStudyLinkKind(r.kind)).map(r => ({ kind: r.kind, refId: r.ref_id, createdAt: r.created_at }));
+  } catch { return null; }
 }
 
 /** One learning action, with the sections it used and, for a clarification, the informal verdict. Structure only. */

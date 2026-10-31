@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CAREER_CATEGORIES, DEFAULT_MILESTONE_CATEGORIES } from "./professional/progress-policy";
-import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, individualQuotaRefusal, loadIndividualPolicy, meetsMinStatus, policyDef, policyPath, resolvePolicy, validateDraft, type IntPolicy } from "./policy";
+import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, individualQuotaRefusal, isStudySessionsOn, loadIndividualPolicy, meetsMinStatus, policyDef, policyPath, resolvePolicy, validateDraft, type IntPolicy } from "./policy";
 import { publishScope, rollbackVersion, setOverride } from "@/lib/config/workspace-config-write";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX, parseShare } from "./professional/share";
@@ -103,6 +103,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // SCHOLAR-FLASHCARDS-01: offered, ten new cards at a time, 200 a deck, both source modes, any difficulty, every download.
       scholarFlashcards: "on", scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
+      // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
+      scholarStudySessions: false,
       scholarSrsMasteryReps: 5, scholarSrsMasteryDays: 60, scholarSrsMaxIntervalDays: 3650, scholarSrsHarderIntervalPercent: 100,
       scholarCaseContexts: ["general", "medical", "surgical", "paediatric", "maternal", "emergency", "critical_care"], scholarCaseEntries: ["notes", "competency", "library", "surprise"],
       scholarCaseDimensions: ["recognition", "interpretation", "prioritisation", "decision", "reassessment", "escalation"], scholarCaseGeneration: "generate", scholarCaseMode: "guided",
@@ -181,6 +183,19 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       },
     });
     expect(DEFAULT_POLICY.professionalProfile.jurisdictions.length).toBe(COUNTRIES.length);
+  });
+
+  it("SCHOLAR-SESSION-AI-02: study sessions default off, resolve on only from a published on, and need 740 too", () => {
+    const path = policyPath("scholar_study_sessions");
+    expect(DEFAULT_POLICY.scholarStudySessions).toBe(false);
+    expect(resolvePolicy([{ config_path: path, published: { value: "on" } }]).scholarStudySessions).toBe(true);
+    expect(resolvePolicy([{ config_path: path, published: { value: "yes" } }]).scholarStudySessions).toBe(false);
+    expect(resolvePolicy([{ config_path: path, published: { value: true } }]).scholarStudySessions).toBe(false);
+    expect(validateDraft("scholar_study_sessions", "on")).toMatchObject({ ok: true, settings: { value: "on" } });
+    expect(validateDraft("scholar_study_sessions", "maybe").ok).toBe(false);
+    const on = resolvePolicy([{ config_path: path, published: { value: "on" } }]);
+    expect([isStudySessionsOn(on, true), isStudySessionsOn(on, false), isStudySessionsOn(DEFAULT_POLICY, true), isStudySessionsOn(DEFAULT_POLICY, false)])
+      .toEqual([true, false, false, false]);
   });
 
   it("P0: the content-status minimum is one listed value, defaults to everything, and filters only when raised", () => {
