@@ -168,10 +168,78 @@ const ORDINARY_ONE = /\b(?:one of|one another|no one|each one|every one|any one|
 
 const onlyOrdinaryOne = (output: string) => !/\bone\b/.test(normalise(output).replace(ORDINARY_ONE, " "));
 
+// A third and fourth adjustment (SCHOLAR-GUIDED-LEARNING-01, owner, 31 Oct 2026). Production withheld a whole Just
+// Culture lesson for "the number two": an ordinary STRUCTURING count ("two types of error") that the notes did not
+// spell out. So, for study text only:
+//   (a) A spelled-out small cardinal that only structures an explanation -- "two types", "three key steps", "four main
+//       stages" -- is not read as a quantity. It must be followed (one optional qualifier between) by a noun on the
+//       closed STRUCTURE_NOUN list, AND its sentence must carry nothing on SAFETY_CONTEXT: no digit, unit, dose, rate,
+//       frequency, duration, threshold, percentage, lab value, age, score or medication word. Every occurrence of the
+//       word must qualify, or it is checked exactly as before. Digits are never excused. Ordinals (first, second) were
+//       never number words here and are unchanged.
+//   (b) STRICTER, not looser: "twice" and "thrice" are frequencies, and were not checked at all. They now need the
+//       notes to say so ("twice", or "two times").
+//   (c) A finding word ("reduced", "improved", "significant") is supported when the notes hold the SAME ROOT in another
+//       form ("reduction", "improvement", "significance") -- one strip of a closed suffix list, a root of at least five
+//       letters, so "abnormal" never supports "normal". Only for the closed ROOT_MARKERS list, whose other forms mean the
+//       same finding: "positive" (position), "raised" (raise a concern), "normal" and the rest stay literal, as do the
+//       multi-word markers.
+// Numbers, months and identifiers otherwise stay literal. The Practice verifier above is unchanged.
+const SMALL_CARDINAL = "(?:one|two|three|four|five|six|seven|eight|nine|ten)";
+const STRUCTURE_QUALIFIER = "(?:main|key|core|basic|broad|distinct|different|important|common|related|separate|major|essential|general|linked|connected|complementary)";
+const STRUCTURE_NOUN = "(?:types?|kinds?|sorts?|steps?|stages?|phases?|parts?|ways?|categories|category|components?|elements?|principles?|aspects?|factors?|approach(?:es)?|groups?|areas?|questions?|ideas?|features?|models?|roles?|domains?|pillars?|sections?|examples?|reasons?|goals?|aims?|objectives?|strateg(?:y|ies)|methods?|dimensions?|themes?|concepts?|layers?|tiers?|perspectives?|views?|purposes?|barriers?|benefits?|challenges?|options?|choices?|skills?)";
+const STRUCTURE_COUNT = new RegExp(`\\b${SMALL_CARDINAL}\\s+(?:${STRUCTURE_QUALIFIER}\\s+)?${STRUCTURE_NOUN}\\b`, "g");
+/** Anything that makes a number in a sentence safety-critical. Present: the sentence's number words stay strict. */
+export const SAFETY_CONTEXT = /\d|%|\b(?:mg|mcg|micrograms?|milligrams?|grams?|g|kg|ml|millilitres?|milliliters?|litres?|liters?|l\/min|mmol|iu|units?|dose[sd]?|dosage|dosing|tablets?|capsules?|pills?|drops?|puffs?|sachets?|injections?|infusions?|medications?|medicines?|drugs?|prescri\w*|administ\w*|titrat\w*|bolus|regimens?|daily|hourly|weekly|nightly|times|per|every|twice|thrice|hours?|hrs?|minutes?|mins?|seconds?|secs?|days?|weeks?|months?|years?|yrs?|rate|rates|bpm|breaths?|beats?|percent|percentage|threshold|thresholds|above|below|exceeds?|greater|less|fewer|more than|at least|at most|up to|range|levels?|results?|readings?|scores?|scale|grade|aged?|old|spo2|sao2|o2|oxygen|temperature|pressure|mmhg|saturation|glucose|potassium|sodium|ha?emoglobin|creatinine|lab|labs|blood|fluids?|volume|weight|stools?|feeds?|meals?|nappies|voids?)\b/i;
+
+/** Pure. Whether every use of `word` in the output is a structuring count in a sentence with no safety context. */
+function onlyStructuringCount(output: string, word: string): boolean {
+  const re = new RegExp(`\\b${word}\\b`, "g");
+  for (const sentence of normalise(output).split(/(?<=[.!?;:])\s+|\n+/)) {
+    const uses = (sentence.match(re) ?? []).length;
+    if (!uses) continue;
+    if (SAFETY_CONTEXT.test(sentence)) return false;
+    const structural = [...sentence.matchAll(STRUCTURE_COUNT)].filter(m => new RegExp(`^${word}\\b`).test(m[0])).length;
+    if (structural < uses) return false;
+  }
+  return true;
+}
+
+const FREQUENCY_WORDS: Record<string, RegExp> = { twice: /\b(?:twice|two times|2 times)\b/, thrice: /\b(?:thrice|three times|3 times)\b/ };
+
+const ROOT_MARKERS = new Set(["significant", "improved", "improving", "worsened", "worsening", "deteriorated", "responded", "responding",
+  "tolerated", "recurrent", "recurrence", "relapse", "relapsed", "reduced", "elevated", "examination", "examined", "inconclusive", "tender", "tenderness"]);
+const FINDING_SUFFIXES = ["ations", "ation", "itions", "ition", "tions", "tion", "ions", "ion", "ments", "ment", "ness", "ities", "ity", "ances", "ance", "ants", "ant", "ences", "ence", "ingly", "ings", "ing", "edly", "ed", "ly", "es", "al", "ous", "ive", "s", "e", "d"];
+/** Pure. A word's root: up to two strips of the longest closed suffix that leave at least five letters. */
+export function findingRoot(word: string): string {
+  let w = word.toLowerCase();
+  for (let i = 0; i < 2; i++) {
+    const s = FINDING_SUFFIXES.find(x => w.endsWith(x) && w.length - x.length >= 5);
+    if (!s) break;
+    w = w.slice(0, -s.length);
+  }
+  return w;
+}
+
 export function textGroundingViolations(output: string, grounding: string[]): PhrasingViolation[] {
-  return verifyGrounded(output, [], grounding).filter(v =>
+  const payload = normalise(grounding.join(" \n "));
+  let roots: Set<string> | null = null;
+  const sameRoot = (marker: string) => {
+    roots ??= new Set(payload.split(/[^a-z]+/).filter(w => w.length >= 5).map(findingRoot));
+    // One root may run one letter further than the other (elevat-ed, eleva-tion). "severe" and "extensive" are not
+    // listed: "several" and "extension" share their roots.
+    const m = findingRoot(marker);
+    return [...roots].some(r => r === m || (Math.abs(r.length - m.length) === 1 && (r.startsWith(m) || m.startsWith(r))));
+  };
+  const out = verifyGrounded(output, [], grounding).filter(v =>
     !(v.kind === "ungrounded_month" && v.token === "may")
-    && !(v.kind === "ungrounded_number" && v.token === "one" && onlyOrdinaryOne(output)));
+    && !(v.kind === "ungrounded_number" && v.token === "one" && onlyOrdinaryOne(output))
+    && !(v.kind === "ungrounded_number" && /^[a-z]+$/.test(v.token) && onlyStructuringCount(output, v.token))
+    && !(v.kind === "asserted_finding" && ROOT_MARKERS.has(v.token) && sameRoot(v.token)));
+  const body = normalise(output);
+  for (const [word, supported] of Object.entries(FREQUENCY_WORDS))
+    if (new RegExp(`\\b${word}\\b`).test(body) && !supported.test(payload)) out.push({ kind: "ungrounded_number", token: word });
+  return out;
 }
 
 /** Pure. The first JSON array in a model reply, or null. Code fences and leading prose are tolerated. */

@@ -62,3 +62,44 @@ describe("the number check and the ordinary word 'one'", () => {
       .toEqual([{ kind: "ungrounded_number", token: "one" }]);
   });
 });
+
+// SCHOLAR-GUIDED-LEARNING-01 (owner, 31 Oct): a structuring count passes, a safety-critical number stays strict.
+describe("the number check and ordinary structuring counts", () => {
+  const JC = ["Just Culture distinguishes human error from at-risk behaviour and reckless behaviour. Errors are reported without blame."];
+  it("'two types of error', 'three key steps', 'first/second' and 'one of' pass when the notes give no number", () => {
+    expect(numbers("There are two types of error in a just culture.", JC)).toEqual([]);
+    expect(numbers("The approach has three key steps. First, report. Second, learn.", JC)).toEqual([]);
+    expect(numbers("One of the aims is learning, and there are two main ways to report.", JC)).toEqual([]);
+  });
+  it("control: a count attached to a dose, unit, frequency, duration or a gas term stays strict", () => {
+    expect(numbers("Give two tablets.", JC).map(v => v.token)).toEqual(["two"]);
+    expect(numbers("The patient had two doses.", JC).map(v => v.token)).toEqual(["two"]);
+    expect(numbers("Give 2 mg.", JC).map(v => v.token)).toEqual(["2"]);
+    expect(numbers("Give it twice daily.", JC).map(v => v.token)).toEqual(["twice"]);
+    expect(numbers("Wait two hours.", JC).map(v => v.token)).toEqual(["two"]);
+    expect(numbers("Check the SpO2 two times.", JC).map(v => v.token)).toContain("two");
+  });
+  it("control: a structural phrase in a sentence with a safety word, or a second non-structural use, stays strict", () => {
+    expect(numbers("There are two types of medication error.", JC).map(v => v.token)).toEqual(["two"]);
+    expect(numbers("There are two types of error, and two patients were harmed.", JC).map(v => v.token)).toEqual(["two"]);
+  });
+  it("'twice' is supported only when the notes say it", () => {
+    expect(numbers("Turn the patient twice.", ["Turn the patient twice a shift."])).toEqual([]);
+    expect(numbers("Turn the patient twice.", ["Turn the patient regularly."]).map(v => v.token)).toEqual(["twice"]);
+  });
+});
+
+describe("the finding check and morphological variants", () => {
+  const findings = (out: string, src: string[]) => textGroundingViolations(out, src).filter(v => v.kind === "asserted_finding").map(v => v.token);
+  it("a listed finding word is supported by the same root in the notes", () => {
+    expect(findings("Errors were reduced.", ["A reduction in errors followed."])).toEqual([]);
+    expect(findings("Care improved.", ["The improvement in care was clear."])).toEqual([]);
+    expect(findings("This was significant.", ["Its significance is discussed."])).toEqual([]);
+  });
+  it("control: a different word, or a word off the list, stays strict", () => {
+    expect(findings("The result was normal.", ["An abnormal result needs review."])).toEqual(["normal"]);
+    expect(findings("The test was positive.", ["The position of the patient matters."])).toEqual(["positive"]);
+    expect(findings("Levels were raised.", ["Staff raise concerns."])).toEqual(["raised"]);
+    expect(findings("Errors were reduced.", ["Errors are reported."])).toEqual(["reduced"]);
+  });
+});
