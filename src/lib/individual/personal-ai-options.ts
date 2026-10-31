@@ -13,7 +13,7 @@ export const DEPTHS = ["quick", "standard", "deep"] as const;
 export type PersonalAiDepth = (typeof DEPTHS)[number];
 export const DEPTH_LABEL: Record<PersonalAiDepth, string> = { quick: "Quick", standard: "Standard", deep: "Deep" };
 /** The output ceiling each depth asks for. The published activity's maxOutputTokens caps it (personal-ai.ts). */
-export const DEPTH_MAX_TOKENS: Record<PersonalAiDepth, number> = { quick: 450, standard: 900, deep: 1600 };
+export const DEPTH_MAX_TOKENS: Record<PersonalAiDepth, number> = { quick: 450, standard: 1100, deep: 1600 };
 
 export const FOLLOW_UPS = ["simplify", "expand", "practise"] as const;
 export type FollowUpKind = (typeof FOLLOW_UPS)[number];

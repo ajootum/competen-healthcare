@@ -188,11 +188,11 @@ describe("depth", () => {
     expect(parseDepth({ depth: 3 })).toBeNull();
   });
 
-  it("asks quick 450 / standard 900 / deep 1600, capped by the published activity's maxOutputTokens (read, never changed)", async () => {
-    expect(DEPTH_MAX_TOKENS).toEqual({ quick: 450, standard: 900, deep: 1600 });
+  it("asks quick 450 / standard 1100 / deep 1600, capped by the published activity's maxOutputTokens (read, never changed)", async () => {
+    expect(DEPTH_MAX_TOKENS).toEqual({ quick: 450, standard: 1100, deep: 1600 });
     const a = admin({ policy: POLICY({ teach: 1500, ask: 900 }) });
     expect(await depthMaxTokens(a, "teach", "quick")).toBe(450);
-    expect(await depthMaxTokens(a, "teach", "standard")).toBe(900);
+    expect(await depthMaxTokens(a, "teach", "standard")).toBe(1100);
     expect(await depthMaxTokens(a, "teach", "deep")).toBe(1500);
     expect(await depthMaxTokens(a, "ask", "deep")).toBe(900);
     // An activity that states no maxOutputTokens gets the policy default (800, fair-use-policy.ts).

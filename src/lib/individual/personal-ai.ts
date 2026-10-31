@@ -56,7 +56,7 @@ export function assistantSystemPrompt(experience: ExperienceKey, mode: Assistant
 // SCHOLAR-PAI-EXPERIENCE-01: how much to write. Depth never changes the risk tier, the model or a safeguard.
 const DEPTH_INSTRUCTION: Record<PersonalAiDepth, string> = {
   quick: "Depth: quick. About 120 words: the direct answer and the few points that matter most. No practice block.",
-  standard: "Depth: standard. About 250 to 350 words before the practice block.",
+  standard: "Depth: standard. About 250 to 300 words before the practice block (a table counts toward this). Always leave room to finish with the practice block.",
   deep: "Depth: deep. Up to about 700 words before the practice block: build the explanation fully, with the mechanism, a worked example and common pitfalls.",
 };
 // A follow-up's kind is the ONLY thing the learner chooses: each maps to this fixed instruction, never to their text.
