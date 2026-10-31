@@ -10,6 +10,7 @@ import { materialTopics, relatedMaterials } from "@/lib/individual/scholar/libra
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { PageHeader, StatePanel, Unreadable, focusRing, primaryBtn, secondaryBtn } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { AiBadge, ContentStatusTag, ExplainPanel } from "../_components/client";
 import { AnalysePanel, LayerTag } from "../_components/competency-client";
 import { OrganiseMaterial } from "../_components/library-client";
@@ -37,12 +38,15 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const MAX_SHOWN = 10;
 
-export default async function ReadyPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ ids?: string }> }) {
+export default async function ReadyPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ ids?: string; study?: string | string[] }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
-  const ids = [...new Set(((await searchParams).ids ?? "").split(",").filter(isUuid))].slice(0, MAX_SHOWN);
+  const sp = await searchParams;
+  // SCHOLAR-SESSION-AI-02: with a valid ?study= the session bar is shown (database reads only; not a stage, so last_space is untouched).
+  const study = await loadStudy(ctx.admin, ctx.userId, sp.study, null);
+  const ids = [...new Set((sp.ids ?? "").split(",").filter(isUuid))].slice(0, MAX_SHOWN);
 
   const [found, consent, due, learner, collections, library, all] = await Promise.all([
     Promise.all(ids.map(id => getMaterial(ctx.admin, ctx.userId, id))),
@@ -57,7 +61,7 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
     return (
       <>
         <PageHeader accent={x.accent} eyebrow="My Learning" title="Your notes are ready" />
-        <StudyNav dueCount={due} />
+        <StudyNav dueCount={due} study={study?.bar ?? null} />
         <StatePanel title={found.some(r => !r.ok) ? "Your materials could not be read just now" : "There is nothing to show here"}
           actions={<Link href={experienceHref("scholar", "study")} className={secondaryBtn}>Go to My Learning</Link>}>
           <p>{found.some(r => !r.ok) ? "This is not the same as them being gone. Try again shortly." : "Upload your notes in My Learning, and this page shows what Scholar found in them."}</p>
@@ -94,7 +98,7 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
     <>
       <PageHeader accent={x.accent} eyebrow="My Learning" title="Your notes are ready"
         intro={materials.length === 1 ? "Scholar has read your material. Here is what it found, what it could not do, and where to go next." : `Scholar has read ${materials.length} materials. Here is what it found in each, what it could not do, and where to go next.`} />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
 
       <div className="space-y-6">
         {cards.map(({ m, analysis, mapped, competencies, labels, topics, related }) => {
