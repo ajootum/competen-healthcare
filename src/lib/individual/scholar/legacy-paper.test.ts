@@ -120,32 +120,38 @@ describe("judgeOpenedPaper: read-only, audited by codes", () => {
     const { ctx, log, audits } = fakeAdmin(NOTES);
     const j = await judgeOpenedPaper(ctx, { materialId: "m1", extractor: V1, instructions: "Urinary tract infections" }, v1Rows(NOTES));
     expect(j?.notesLike).toBe(true);
-    expect(writes(log)).toEqual(["WRITE:audit_log.insert"]);
-    expect(log.filter(l => l.startsWith("from:"))).toEqual(["from:individual_scholar_chunk", "from:audit_log"]);
-    expect(audits[0]).toMatchObject({ action: "individual_scholar_exam_paper_legacy_redirected", entity_type: "individual_scholar_exam_paper", entity_id: "m1" });
-    expect(audits[0].new_value).toEqual({ outcome: "notes_like", statements: 4, questions: 0, parser: V1, judged_with: PAPER_PARSER, basis: "material_text" });
+    expect(writes(log)).toEqual(["WRITE:audit_log.insert", "WRITE:audit_log.insert"]);
+    expect(log.filter(l => l.startsWith("from:"))).toEqual(["from:individual_scholar_chunk", "from:audit_log", "from:audit_log"]);
+    // SQIE-COMPLETE-01: every recheck is counted (checked), and the redirect keeps its own row.
+    expect(audits[0]).toMatchObject({ action: "individual_scholar_exam_paper_legacy_checked", entity_type: "individual_scholar_exam_paper", entity_id: "m1" });
+    expect(audits[0].new_value).toEqual({ result: "redirected", statements: 4, questions: 0, parser: V1, judged_with: PAPER_PARSER });
+    expect(audits[1]).toMatchObject({ action: "individual_scholar_exam_paper_legacy_redirected", entity_type: "individual_scholar_exam_paper", entity_id: "m1" });
+    expect(audits[1].new_value).toEqual({ outcome: "notes_like", statements: 4, questions: 0, parser: V1, judged_with: PAPER_PARSER, basis: "material_text" });
     // Codes and counts only: no stem, no material text.
-    expect(JSON.stringify(audits[0].new_value)).not.toMatch(/Pyelonephritis|bladder/);
+    expect(JSON.stringify(audits.map(a => a.new_value))).not.toMatch(/Pyelonephritis|bladder/);
   });
-  it("v1 real questions: shown normally, nothing written, nothing audited", async () => {
-    const { ctx, log } = fakeAdmin(PAPER);
+  it("v1 real questions: shown normally, nothing written but the codes-only 'checked: clean' row (no redirect audit)", async () => {
+    const { ctx, log, audits } = fakeAdmin(PAPER);
     const j = await judgeOpenedPaper(ctx, { materialId: "m1", extractor: V1, instructions: null }, v1Rows(PAPER));
     expect(j).toMatchObject({ notesLike: false, statementIds: [] });
-    expect(writes(log)).toEqual([]);
+    expect(writes(log)).toEqual(["WRITE:audit_log.insert"]);
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({ action: "individual_scholar_exam_paper_legacy_checked" });
+    expect(audits[0].new_value).toMatchObject({ result: "clean", statements: 0 });
   });
   it("mixed: only the real questions remain questions; the redirect is audited as statements hidden", async () => {
     const { ctx, log, audits } = fakeAdmin(MIXED);
     const j = await judgeOpenedPaper(ctx, { materialId: "m1", extractor: V1, instructions: null }, v1Rows(MIXED));
     expect(j).toMatchObject({ notesLike: false, statementIds: ["q1", "q3"] });
-    expect(writes(log)).toEqual(["WRITE:audit_log.insert"]);
-    expect(audits[0].new_value).toMatchObject({ outcome: "statements_hidden", statements: 2, questions: 2 });
+    expect(writes(log)).toEqual(["WRITE:audit_log.insert", "WRITE:audit_log.insert"]);
+    expect(audits[1].new_value).toMatchObject({ outcome: "statements_hidden", statements: 2, questions: 2 });
   });
   it("material text unreadable: judged from the stored rows, still nothing written to the paper", async () => {
     const { ctx, log, audits } = fakeAdmin(null);
     const j = await judgeOpenedPaper(ctx, { materialId: "m1", extractor: V1, instructions: null }, v1Rows(NOTES));
     expect(j).toMatchObject({ notesLike: true, basis: "stored_questions" });
-    expect(writes(log)).toEqual(["WRITE:audit_log.insert"]);
-    expect(audits).toHaveLength(1);
+    expect(writes(log)).toEqual(["WRITE:audit_log.insert", "WRITE:audit_log.insert"]);
+    expect(audits).toHaveLength(2);
   });
   it("a current-parser paper is unchanged: no read, no judgement, no write", async () => {
     const { ctx, log } = fakeAdmin(NOTES);

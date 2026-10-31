@@ -170,6 +170,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     { key: "knowledge.research", group: "Knowledge Research", items: [
       { key: "knowledge.research.workspace", label: "Research Workspace", href: "/super-admin/research", icon: "🔬", flag: "ckri" },
       { key: "knowledge.research.educator", label: "Educator Knowledge", href: "/super-admin/research/educator", icon: "🧑‍🏫", keywords: ["osce", "station", "checklist"], flag: "ckri" },
+      { key: "knowledge.research.questions", label: "Question Library", href: "/super-admin/research/questions", icon: "❓", keywords: ["question catalogue", "duplicates", "revision questions", "item quality"], flag: "ckri" },
       { key: "knowledge.research.governance", label: "Research Governance", href: "/super-admin/research/governance", icon: "⚖️", flag: "ckri" },
       { key: "knowledge.research.intelligence", label: "Research Learning Intelligence", href: "/super-admin/research/intelligence", icon: "📊", keywords: ["learning intelligence"], flag: "ckri" },
       { key: "knowledge.research.oversight", label: "Research Oversight", href: "/super-admin/research/oversight", icon: "🛡️", flag: "ckri" },

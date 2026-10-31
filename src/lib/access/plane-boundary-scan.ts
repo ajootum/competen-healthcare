@@ -84,7 +84,10 @@ export type ModuleFacts = {
  * anything new in the same commit that introduces it. A prefix is the cheapest possible table
  * classifier and it goes wrong the first time the plane grows a second family.
  */
-export const PLANE_TABLE_PREFIXES = ["practice_", "mos_", "pd_"] as const;
+// SQIE-COMPLETE-01: the two Scholar tables the HQ question catalogue reads in aggregate. They are named in full (not as an
+// `individual_scholar_` family prefix) so that ONLY these two are judged here: a prefix is the cheapest classifier, and a
+// whole-family prefix would surface every Individual read in the closure, which is a separate decision.
+export const PLANE_TABLE_PREFIXES = ["practice_", "mos_", "pd_", "individual_scholar_question", "individual_scholar_attempt"] as const;
 
 const matchesPrefix = (table: string, prefix: string | readonly string[]): boolean =>
   typeof prefix === "string" ? table.startsWith(prefix) : prefix.some(p => table.startsWith(p));
