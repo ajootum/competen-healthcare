@@ -97,13 +97,14 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
   const reorderLists = reorderable && !query; // a filtered list has no whole order to move within
 
   // After a move the same item keeps the keyboard focus (on its button, or the other one if it reached an end).
+  // The buttons are disabled while a move saves, so the focus waits until they are enabled again.
   useEffect(() => {
-    const want = focusNext.current; if (!want) return;
+    const want = focusNext.current; if (!want || busy) return;
     focusNext.current = null;
     const [k, id, dir] = want.split("\u0001");
     const btns = [...(root.current?.querySelectorAll<HTMLButtonElement>("[data-mv]") ?? [])].filter(b => b.dataset.mv?.startsWith(`${k}\u0001${id}\u0001`));
     (btns.find(b => b.dataset.mv === want && !b.disabled) ?? btns.find(b => !b.disabled && !b.dataset.mv?.endsWith(dir)))?.focus();
-  }, [view]);
+  }, [view, busy]);
 
   async function move(g: Group, from: number, to: number, focusDir?: "up" | "down") {
     if (busy || from === to || from < 0 || to < 0 || from >= g.ids.length || to >= g.ids.length) return;
