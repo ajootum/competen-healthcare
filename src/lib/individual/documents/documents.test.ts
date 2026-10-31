@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
+import { PDFDict, PDFDocument, PDFName } from "pdf-lib";
 import { extractText, getDocumentProxy } from "unpdf";
 import { DEFAULT_DOCUMENTS, DEFAULT_LABELS, checkDocumentsDraft, labelHonest, templatesFor, type DocType } from "../documents-config";
 import { buildDocModel, emptyDraft, modelHash, modelLines, parseDraft, type DraftContent } from "./model";
 import { renderDocx } from "./docx";
-import { pdfSafe, renderPdf } from "./pdf";
+import { pdfSafe, pdfUndrawable, renderPdf } from "./pdf";
 import { SAMPLE_PERSON, SAMPLE_RECORDS } from "./sample";
 
 // COMPETEN-PROFESSIONAL-PROGRESS-01 PR7: one model, two exports with the same content; only chosen records; owner meaning.
@@ -120,4 +121,38 @@ describe("PR7 s10.3: governed templates", () => {
     const unknownTemplate = { ...DEFAULT_DOCUMENTS, types: [{ ...cv, templates: ["nope"] }] };
     expect(checkDocumentsDraft(unknownTemplate).ok).toBe(false);
   });
+});
+
+describe("PR7 s10.6: characters outside Windows-1252 print in the PDF", () => {
+  const embedsFont = async (buf: Buffer) => (await PDFDocument.load(buf)).context.enumerateIndirectObjects().some(([, o]) => o instanceof PDFDict && o.has(PDFName.of("FontFile2")));
+  const person = { ...SAMPLE_PERSON, name: "Zoë Łukasz Ńkósí-Οδυσσέας" };
+  const SUMMARY = "Анна Ковальчук trains ward staff. SpO₂ ≥ 94% → escalate. Ψ and μg doses. 中文 notes.";
+  const uni = (face: "sans" | "serif") => {
+    const t0 = templatesFor(DEFAULT_DOCUMENTS, cv)[0];
+    const t = { ...t0, type: { ...t0.type, face } };
+    return { t, m: buildDocModel({ type: cv, template: t, title: "Мой CV", draft: draft({ summary: SUMMARY }), records, person, today: "2026-10-26" }) };
+  };
+
+  for (const face of ["sans", "serif"] as const) it(`${face}: names, Greek, Cyrillic and symbols print; only what DejaVu lacks is "?"`, async () => {
+    const { t, m } = uni(face);
+    const pdf = await renderPdf(m, t, new Date("2026-10-26T00:00:00Z"));
+    const pt = norm(await pdfText(pdf)).replace(/\s/g, "");
+    for (const s of ["Zoë", "Łukasz", "Ńkósí-Οδυσσέας", "АннаКовальчук", "SpO₂≥94%→escalate", "Ψ", "μg"]) expect(pt).toContain(s.replace(/\s/g, ""));
+    expect(pt).toContain("??notes"); // 中文: no glyph in DejaVu
+    expect(await embedsFont(pdf)).toBe(true);
+    expect(await pdfUndrawable(modelLines(m), t)).toEqual(["中", "文"]);
+  }, 30000);
+
+  it("a Windows-1252 document keeps the standard fonts: nothing embedded, nothing to warn about", async () => {
+    const m = model(), t = templatesFor(DEFAULT_DOCUMENTS, cv)[0];
+    const pdf = await renderPdf(m, t);
+    expect(await embedsFont(pdf)).toBe(false);
+    expect(pdf.length).toBeLessThan(20000);
+    expect(await pdfUndrawable(modelLines(m), t)).toEqual([]);
+  });
+
+  it("the embedded fonts are subset, not whole", async () => {
+    const { t, m } = uni("sans");
+    expect((await renderPdf(m, t)).length).toBeLessThan(250000); // DejaVu Sans alone is 757 KB
+  }, 30000);
 });
