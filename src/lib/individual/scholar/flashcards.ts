@@ -18,6 +18,7 @@ import { LEARNER_CARD, LEARNER_CARD_LABEL, LIBRARY_QUESTION_LABEL } from "./conf
 import { flashcardFrontAsks, rubricOf, stemKey, type CognitiveLevel } from "./question-intel";
 import { scheduleReview, type SrsParams } from "./revision";
 import { citationOf } from "./revision-view";
+import type { SensitiveFlag } from "./flashcard-sensitive";
 
 // ── A CARD THE LEARNER WRITES (730) ──
 
@@ -119,11 +120,39 @@ export const ORIGIN_LABEL: Record<CardOrigin, string> = {
 };
 export const originOf = (q: QuestionRow): CardOrigin => (q.library ? "library" : isLearnerCard(q) ? "learner" : "notes");
 
-/** One source a card rests on. notes: the section of the learner's notes, with its quote. library: the governed version. external: approved references. */
+/**
+ * SCHOLAR-FLASHCARDS-QA-01: what identifies a cited work, and how to reach it -- every field only where the record it
+ * comes from holds it (442 library version, the governed reference catalogue, a research record). Never invented: a
+ * field the record does not hold is absent, and the downloads print only what is present.
+ */
+export type CitationMeta = {
+  title: string;
+  /** What it is: a Competen library item, a governed competency framework reference, or an external work. */
+  kind: "library" | "framework" | "external";
+  publisher?: string | null; year?: string | null; version?: string | null; code?: string | null;
+  doi?: string | null; pmid?: string | null; url?: string | null;
+  /** Licence, or access such as "abstract only", where the record says. */
+  licence?: string | null; access?: string | null;
+  /** Its review standing as it is NOW (e.g. "Clinically approved"), and the date of that standing where recorded. */
+  status?: string | null; reviewedAt?: string | null;
+};
+
+/** One source a card rests on. notes: the section of the learner's notes, with its quote. library: the governed version. external: one approved reference. */
 export type CardSource = {
   origin: "notes" | "library" | "external"; label: string; citation: string; quote: string | null;
   materialId: string | null; chunkId: string | null; libraryVersionId: string | null; referenceIds: string[];
+  /** Library and external: the cited work's metadata, where recorded. Notes are cited by document and section. */
+  reference?: CitationMeta | null;
 };
+
+/** Pure. A cited work in one line: title, code, publisher, version, year, identifiers, licence, standing -- what is recorded. */
+export function citationText(m: CitationMeta): string {
+  const ids = [m.doi ? `doi:${m.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")}` : null, m.pmid ? `PMID ${m.pmid}` : null, m.url].filter(Boolean);
+  return [
+    `${m.title}${m.code ? ` (${m.code})` : ""}`, m.publisher, m.version ? `version ${m.version}` : null, m.year,
+    ids.length ? ids.join(", ") : null, m.licence, m.access, m.status ? `${m.status}${m.reviewedAt ? ` ${m.reviewedAt.slice(0, 10)}` : ""}` : null,
+  ].filter(Boolean).join(". ");
+}
 export type ReviewState = "new" | "due" | "needs_practice" | "remembered";
 export const REVIEW_STATE_LABEL: Record<ReviewState, string> = { new: "Not studied yet", due: "Due today", needs_practice: "Needs more practice", remembered: "Remembered" };
 export type CardReview = {
@@ -141,6 +170,9 @@ export type FlashcardView = {
   createdAt: string; updatedAt: string | null; contentVersion: number; version: string;
   material: { id: string; title: string }; chunkId: string;
   review: CardReview; bookmarked: boolean; note: string | null; issue: string | null; deckIds: string[]; editable: boolean;
+  /** SCHOLAR-FLASHCARDS-QA-01 (c): the clinical educational content review flag, computed with the PUBLISHED rules by
+   *  flashcard-service.ts applyContentReview. Absent: computed from the built-in defaults where it is read. */
+  sensitive?: SensitiveFlag | null;
 };
 
 export type CardRowExtras = {
@@ -149,6 +181,8 @@ export type CardRowExtras = {
   topics: string[]; competencyTitle: string | null;
   mark: { bookmarked: boolean; note: string | null; issue: string | null } | null;
   deckIds: string[]; contentVersion: number; updatedAt: string | null;
+  /** SCHOLAR-FLASHCARDS-QA-01: the governed references a card's rubric cites, by id, as the catalogue holds them now. */
+  references?: ReadonlyMap<string, CitationMeta>;
 };
 
 /** Pure. Where a card stands: new (never reviewed), due, needing more practice (last not remembered), or remembered. */
@@ -164,17 +198,35 @@ export function flashcardView(q: QuestionRow, x: CardRowExtras, today: string): 
   const rubric = rubricOf(q.answer);
   const back = String(((q.answer ?? {}) as Record<string, unknown>).back ?? "");
   const sources: CardSource[] = [];
-  if (origin === "library" && q.library)
-    sources.push({ origin: "library", label: LIBRARY_QUESTION_LABEL, citation: citationOf(q), quote: null, materialId: null, chunkId: null, libraryVersionId: q.library.versionId, referenceIds: [] });
+  if (origin === "library" && q.library) {
+    const l = q.library;
+    // SCHOLAR-FLASHCARDS-QA-01: the item and its version as 442 records them; the date is the version's publication,
+    // which 442 allows only after clinical approval of that exact content.
+    const reference: CitationMeta = {
+      title: l.title ?? "Competen library question", kind: "library", publisher: "Competen library", version: String(l.versionNo), code: l.code ?? null,
+      status: "Clinically approved, published", reviewedAt: l.publishedAt ?? null,
+    };
+    sources.push({ origin: "library", label: LIBRARY_QUESTION_LABEL, citation: l.title ? `${l.title}, ${citationOf(q)}` : citationOf(q), quote: null, materialId: null, chunkId: null, libraryVersionId: l.versionId, referenceIds: [], reference });
+  }
   if (origin === "notes") {
     sources.push({ origin: "notes", label: "Your uploaded notes", citation: citationOf(q), quote: q.sourceQuote || null, materialId: q.materialId, chunkId: q.chunkId, libraryVersionId: null, referenceIds: [] });
-    if (rubric?.source === "references" && rubric.referenceIds.length)
-      sources.push({ origin: "external", label: "Approved references", citation: "Clinically approved references linked to your notes", quote: null, materialId: null, chunkId: null, libraryVersionId: null, referenceIds: rubric.referenceIds });
+    // One source per approved reference the rubric cites, with what the catalogue records of it now. One the catalogue
+    // no longer holds is said so, never given a title it does not have.
+    if (rubric?.source === "references")
+      for (const id of rubric.referenceIds) {
+        const reference = x.references?.get(id) ?? null;
+        sources.push({
+          origin: "external", label: "Approved references", citation: reference ? citationText(reference) : "An approved reference linked to your notes (its record is not available now)",
+          quote: null, materialId: null, chunkId: null, libraryVersionId: null, referenceIds: [id], reference,
+        });
+      }
   }
   const explanation = q.rationale && q.rationale.trim() && q.rationale.trim() !== back.trim() ? q.rationale.trim() : null;
   return {
     id: q.id, front: q.stem, back, explanation, origin, originLabel: ORIGIN_LABEL[origin],
-    topic: x.topics[0] ?? null, objective: rubric?.objective ?? null, keyPoints: rubric?.keyPoints ?? [], level: rubric?.level ?? null,
+    // The section's topic (the learner's correction, else the topic finding), else the topic the card was written with
+    // (SCHOLAR-FLASHCARDS-QA-01), else none -- the downloads then file it under its document.
+    topic: x.topics[0] ?? rubric?.topic ?? null, objective: rubric?.objective ?? null, keyPoints: rubric?.keyPoints ?? [], level: rubric?.level ?? null,
     difficulty: q.difficulty === 1 || q.difficulty === 2 || q.difficulty === 3 ? q.difficulty : null,
     competency: q.competencyId ? { id: q.competencyId, title: x.competencyTitle ?? "A linked competency" } : null,
     sources, createdAt: q.createdAt, updatedAt: x.updatedAt, contentVersion: x.contentVersion,

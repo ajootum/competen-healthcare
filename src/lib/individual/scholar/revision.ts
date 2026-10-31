@@ -240,7 +240,9 @@ export type DraftReason =
   // explanation disagree, or it is not the difficulty asked for.
   | "not_a_question" | "repeat" | "weak_distractors" | "inconsistent" | "off_difficulty"
   // SCHOLAR-FLASHCARDS-01: a card front copied from the notes rather than a recall prompt, or a back of more than one concept.
-  | "copied" | "multi_concept";
+  | "copied" | "multi_concept"
+  // SCHOLAR-FLASHCARDS-QA-01: a back that repeats the note sentence, or adds a second unrelated fact.
+  | "back_copied" | "second_fact";
 
 /** What a revision item is checked against besides its passage. All optional: none is the 416 check exactly. */
 export type DraftChecks = {

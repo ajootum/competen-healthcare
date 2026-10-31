@@ -120,19 +120,25 @@ async function approvedVersions(admin: any, versionIds: readonly string[]): Prom
  * Of these library versions, the ones that may still be offered: published, of an active revision_question resource,
  * and clinically approved. A copy of any other is no longer offered. Unreadable: none (fail closed).
  */
-export async function servableLibraryVersions(admin: any, versionIds: readonly string[]): Promise<Map<string, { versionNo: number }>> {
+export async function servableLibraryVersions(admin: any, versionIds: readonly string[]): Promise<Map<string, { versionNo: number; title?: string; code?: string; publishedAt?: string }>> {
   const ids = [...new Set(versionIds)];
   if (!ids.length) return new Map();
   try {
-    const v = await admin.from("ckri_knowledge_version").select("id, resource_id, version_no, state").in("id", ids).eq("state", "published");
+    const v = await admin.from("ckri_knowledge_version").select("id, resource_id, version_no, state, published_at").in("id", ids).eq("state", "published");
     if (v.error || !v.data?.length) return new Map();
-    const r = await admin.from("ckri_knowledge_resource").select("id").in("id", [...new Set((v.data as any[]).map(x => x.resource_id))])
+    const r = await admin.from("ckri_knowledge_resource").select("id, title, code").in("id", [...new Set((v.data as any[]).map(x => x.resource_id))])
       .eq("kind", "revision_question").eq("status", "active");
     if (r.error) return new Map();
-    const active = new Set(((r.data ?? []) as any[]).map(x => x.id));
+    const active = new Map(((r.data ?? []) as any[]).map(x => [x.id, x]));
     const live = (v.data as any[]).filter(x => active.has(x.resource_id));
     const approved = await approvedVersions(admin, live.map(x => x.id));
-    return new Map(live.filter(x => approved.has(x.id)).map(x => [x.id, { versionNo: x.version_no }]));
+    // SCHOLAR-FLASHCARDS-QA-01: the resource's title and code and the version's publication date travel with it, for
+    // the downloads' citations -- each only where 442 holds it.
+    const str = (x: unknown) => (typeof x === "string" && x.trim() ? x.trim() : null);
+    return new Map(live.filter(x => approved.has(x.id)).map(x => {
+      const res = active.get(x.resource_id), title = str(res?.title), code = str(res?.code), publishedAt = str(x.published_at);
+      return [x.id, { versionNo: x.version_no, ...(title ? { title } : {}), ...(code ? { code } : {}), ...(publishedAt ? { publishedAt } : {}) }];
+    }));
   } catch {
     return new Map();
   }

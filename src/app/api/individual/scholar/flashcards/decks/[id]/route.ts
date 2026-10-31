@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { addDeckCards, deleteFlashcardDeck, flashcardDecks, isUuid, removeDeckCards, updateFlashcardDeck } from "@/lib/individual/scholar/store";
+import { addDeckCards, deleteFlashcardDeck, flashcardDecks, isUuid, ownedQuestionIds, removeDeckCards, updateFlashcardDeck } from "@/lib/individual/scholar/store";
 import { flashcardGate } from "@/lib/individual/scholar/flashcard-service";
 import { parseDeckFields } from "@/lib/individual/scholar/flashcards";
 import { audit } from "@/lib/individual/scholar/http";
@@ -32,10 +32,18 @@ export async function PATCH(req: Request, ctx2: { params: Promise<{ id: string }
 
   const fields = parseDeckFields(body, false);
   if (!fields.ok) return NextResponse.json({ error: fields.message }, { status: fields.identifier ? 422 : 400 });
+  // SCHOLAR-FLASHCARDS-QA-01 D1: every card named to add must be the caller's own, checked before anything is written.
+  // One that is not is not found (never a foreign-key 500), and nothing changes.
+  const toAdd = ids(body?.add);
+  if (toAdd.length) {
+    const owned = await ownedQuestionIds(ctx.admin, ctx.userId, toAdd);
+    if (!owned) return NextResponse.json({ error: "Those cards could not be added just now." }, { status: 503 });
+    if (toAdd.some(c => !owned.has(c))) return NextResponse.json({ error: "One or more of those cards could not be found." }, { status: 404 });
+  }
   if ((fields.title !== undefined || fields.organiseBy !== undefined) && !(await updateFlashcardDeck(ctx.admin, ctx.userId, id, fields)))
     return NextResponse.json({ error: "The deck could not be changed just now." }, { status: 500 });
 
-  const add = ids(body?.add).filter(c => !deck.cardIds.includes(c));
+  const add = toAdd.filter(c => !deck.cardIds.includes(c));
   if (add.length) {
     if (deck.cardIds.length + add.length > max) return NextResponse.json({ error: `A deck holds at most ${max} cards. This one has ${deck.cardIds.length}.` }, { status: 400 });
     if (!(await addDeckCards(ctx.admin, ctx.userId, id, add))) return NextResponse.json({ error: "Those cards could not be added just now." }, { status: 500 });

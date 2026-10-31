@@ -119,6 +119,11 @@ export const PROMPT_VERSIONS = {
   // v3 (SCHOLAR-QUESTION-INTELLIGENCE-01): every item asks (never a statement as a flashcard front), the rubric fields,
   // the guidance block; mrq and short carry +verifyRevision (generation.ts revisionPromptVersion).
   revision: "scholar-revision-v3",
+  // v2 (staging acceptance notes): a concise one-concept back, a short explanation, a topic, a learner-voice objective.
+  // SCHOLAR-FLASHCARDS-QA-01: flashcards are written to a configured mix of recall, understanding, application and
+  // clinical reasoning (policy scholar_flashcard_level_mix), only at the levels the passage can support. A flashcard
+  // is therefore written at "scholar-revision-v3:flashcard+scholar-flashcard-mix-v2" (generation.ts revisionPromptVersion).
+  flashcardMix: "scholar-flashcard-mix-v2",
   // SCHOLAR-SQIE-CLOSE-01 (710): a structured question -- a lead-in and two to four parts, each with its marks and its
   // rubric -- on the revision rules (generation.ts REVISION_SYSTEM.structured). Its own version: a new prompt.
   structured: "scholar-structured-v1",

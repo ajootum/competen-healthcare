@@ -14,13 +14,25 @@ import { flashcardsHref } from "./revise-nav";
 // answer route every revision answer uses, which schedules it on the existing SM-2 and logs it (391). Flipping and
 // rating never call AI. Then the action row (add note, bookmark, view source, report issue, and edit for a card the
 // learner wrote), and the Source & Learning Link panel. Deck Options, Create More Flashcards and the Download menu
-// sit in the side column, which stacks below the card under xl. Touch targets grow on coarse pointers (CPR-MOB-001).
+// sit in the side column, which drops below the card when the content area cannot hold both (page.tsx, by available
+// width: a container query, never a viewport breakpoint). Touch targets grow on coarse pointers (CPR-MOB-001).
+// SCHOLAR-FLASHCARDS-QA-01 (staging browser check): only the one md viewport edge here; everything else wraps by the
+// width it has. In a study session the header is one line and the card with its two buttons is brought into view on
+// start and on previous / next (and only then), so on a phone the card and both buttons fit the first screen.
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const ghost = `inline-flex min-h-[40px] items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 const primary = `inline-flex min-h-[40px] items-center justify-center gap-2 rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 const field = `rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 const indigo = "var(--cmp-role-indigo-strong)";
+
+// SCHOLAR-FLASHCARDS-QA-01: the Flashcards page layout, by the content area's own width (Tailwind container queries on
+// the @container wrapper in page.tsx), never a viewport breakpoint. Card column at least 22rem, Deck Options at least
+// 16rem: under 39rem they stack. The 11.5rem Revise column appears from 56rem. Exported for the layout test.
+export const FLASHCARDS_GRID = "grid grid-cols-1 items-start gap-4 @min-[39rem]:grid-cols-[minmax(22rem,1fr)_minmax(16rem,20rem)] @min-[56rem]:grid-cols-[11.5rem_minmax(22rem,1fr)_16rem]";
+export const FLASHCARDS_NAV = "min-w-0 col-span-full @min-[56rem]:col-span-1 @min-[56rem]:col-start-1 @min-[56rem]:row-start-1";
+export const FLASHCARDS_MAIN = "min-w-0 space-y-4 @min-[56rem]:col-start-2 @min-[56rem]:row-start-1";
+export const FLASHCARDS_SIDE = "min-w-0 space-y-4 @min-[56rem]:col-start-3 @min-[56rem]:row-start-1";
 
 async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok: boolean; status: number; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
   try {
@@ -59,17 +71,27 @@ const when = (iso: string | null) => {
 
 // ── THE DECK HEADER ──
 
-export function DeckHeader({ title, cards, lastRevised, position, total, answered, glyph }: { title: string; cards: number; lastRevised: string | null; position?: number; total?: number; answered?: number; glyph?: string }) {
+export function DeckHeader({ title, cards, lastRevised, position, total, answered, glyph, compact = false }: { title: string; cards: number; lastRevised: string | null; position?: number; total?: number; answered?: number; glyph?: string; compact?: boolean }) {
   const pct = total ? Math.round(((answered ?? 0) / total) * 100) : null;
+  // A study session (focus mode): ONE line -- the deck's name, where you are and the progress -- so the card is near the top.
+  if (compact && total) return (
+    <div data-testid="deck-header-compact" className="flex min-w-0 items-center gap-3">
+      <h1 className="min-w-0 flex-1 truncate text-[16px] font-bold text-gray-900 md:text-[18px]" title={`Flashcards: ${title}`}>Flashcards: {title}</h1>
+      <p className="shrink-0 text-[13px] font-semibold text-gray-700 tabular-nums" aria-live="polite">Card {position} of {total}</p>
+      <div className="h-1.5 w-16 shrink-0 rounded-full bg-gray-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct ?? 0} aria-label="Cards rated in this session">
+        <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, background: "var(--cmp-role-progress-accent)" }} />
+      </div>
+    </div>
+  );
   return (
-    <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-      <span aria-hidden className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--cmp-role-indigo-soft)] text-[20px] font-bold text-[var(--cmp-role-indigo-ink)] sm:h-14 sm:w-14">{glyph ?? title.slice(0, 1).toUpperCase()}</span>
-      <div className="min-w-0 flex-1">
-        <h1 className="text-[19px] font-bold leading-tight text-gray-900 sm:text-[22px]">Flashcards: {title}</h1>
+    <div className="flex flex-wrap items-center gap-3 md:gap-4">
+      <span aria-hidden className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--cmp-role-indigo-soft)] text-[20px] font-bold text-[var(--cmp-role-indigo-ink)] md:h-14 md:w-14">{glyph ?? title.slice(0, 1).toUpperCase()}</span>
+      <div className="min-w-[12rem] flex-1">
+        <h1 className="text-[19px] font-bold leading-tight text-gray-900 md:text-[22px]">Flashcards: {title}</h1>
         <p className="mt-0.5 text-[13px] text-gray-600">Deck · {cards} card{cards === 1 ? "" : "s"} · Last revised: {when(lastRevised)}</p>
       </div>
       {total ? (
-        <div className="w-full text-right sm:w-44" aria-live="polite">
+        <div className="min-w-[11rem] grow basis-44 text-right" aria-live="polite">
           <p className="text-[13.5px] font-semibold text-gray-700 tabular-nums">Card {position} of {total}</p>
           <div className="mt-1 flex items-center gap-2">
             <div className="h-1.5 flex-1 rounded-full bg-gray-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct ?? 0} aria-label="Cards rated in this session">
@@ -89,6 +111,8 @@ export type StudyCard = {
   id: string; front: string; origin: "notes" | "library" | "learner"; originLabel: string; citation: string;
   materialId: string; materialTitle: string; chunkId: string; competency: string | null; topic: string | null;
   editable: boolean; bookmarked: boolean; note: string | null; issue: string | null;
+  /** SCHOLAR-FLASHCARDS-QA-01: the clinically sensitive marker (flashcard-sensitive.ts), or null. Shown with the answer. */
+  sensitive?: { marker: string; reviewed: boolean } | null;
   answered: { recall: "again" | "remembered"; nextReviewAt: string | null } | null;
   /** Only for a card already rated in this session: answers stay on the server until the learner reveals them. */
   back: { text: string; explanation: string | null; quote: string | null } | null;
@@ -110,7 +134,21 @@ export function FlashcardStudy(props: {
   const answered = cards.filter(c => c.answered).length;
   const update = (id: string, patch: Partial<StudyCard>) => setCards(cs => cs.map(c => (c.id === id ? { ...c, ...patch } : c)));
 
-  const go = useCallback((n: number) => { setAt(Math.max(0, Math.min(cards.length - 1, n))); setFlipped(false); setPanel(""); setError(""); setStatus(""); }, [cards.length]);
+  // The card and its two buttons: scrolled into view on session start and on previous / next, only when not already
+  // fully visible below the sticky header and above the phone's bottom bar. The learner's own scrolling is left alone.
+  const focusRef = useRef<HTMLDivElement>(null);
+  const bringIntoView = useCallback(() => {
+    const el = focusRef.current;
+    if (!el || typeof window === "undefined") return;
+    const r = el.getBoundingClientRect(), header = 56, bottomBar = 56;
+    if (r.top < header || r.bottom > window.innerHeight - bottomBar)
+      el.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }, []);
+  useEffect(() => { bringIntoView(); }, [bringIntoView]);
+  const go = useCallback((n: number) => {
+    setAt(Math.max(0, Math.min(cards.length - 1, n))); setFlipped(false); setPanel(""); setError(""); setStatus("");
+    requestAnimationFrame(bringIntoView);
+  }, [cards.length, bringIntoView]);
 
   const reveal = useCallback(async () => {
     if (!card || busy) return;
@@ -163,8 +201,8 @@ export function FlashcardStudy(props: {
   const remembered = cards.filter(c => c.answered?.recall === "remembered").length;
 
   return (
-    <section aria-label="Study flashcards" className="rounded-3xl border border-gray-200 bg-white p-4 sm:p-6">
-      <DeckHeader title={props.deckTitle} cards={props.deckCards} lastRevised={props.lastRevised} position={at + 1} total={cards.length} answered={answered} />
+    <section aria-label="Study flashcards" className="rounded-3xl border border-gray-200 bg-white p-4 md:p-6">
+      <DeckHeader compact={!(finished || (allDone && props.completed))} title={props.deckTitle} cards={props.deckCards} lastRevised={props.lastRevised} position={at + 1} total={cards.length} answered={answered} />
 
       {finished || (allDone && props.completed) ? (
         <div className="mt-6 space-y-3 rounded-2xl bg-[var(--cmp-surface-success)] p-5">
@@ -177,17 +215,20 @@ export function FlashcardStudy(props: {
         </div>
       ) : (
         <>
-          <div className="mt-4 flex items-center gap-2 sm:mt-6 sm:gap-4">
-            <button type="button" onClick={() => go(at - 1)} disabled={at === 0} aria-label="Previous card" className={`hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm disabled:opacity-40 sm:inline-flex ${focusRing}`}><Icon d={I.prev} /></button>
-            <div className="min-w-0 flex-1 [perspective:1400px]">
+          <div ref={focusRef} data-testid="card-focus" className="mx-auto mt-4 w-full max-w-[40rem] scroll-mt-[4.5rem] md:scroll-mt-[6rem]">
+            <div className="w-full [perspective:1400px]">
               <button type="button" onClick={() => void reveal()} aria-label={flipped ? "Show the question again" : "Reveal the answer"} aria-describedby="card-help"
-                className={`relative block min-h-[220px] w-full rounded-3xl text-left transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:transition-none sm:min-h-[280px] ${focusRing} ${flipped ? "[transform:rotateY(180deg)]" : ""}`}>
+                className={`relative block min-h-[220px] w-full rounded-3xl text-left transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:transition-none md:min-h-[280px] ${focusRing} ${flipped ? "[transform:rotateY(180deg)]" : ""}`}>
                 <CardFace side="front" title="Question" badge="Q" text={card.front} hidden={flipped} footer={busy && !card.back ? "Showing the answer…" : "Tap to reveal answer"} />
                 <CardFace side="back" title="Answer" badge="A" text={card.back?.text ?? ""} hidden={!flipped} explanation={card.back?.explanation ?? null} footer="Tap to see the question" />
               </button>
             </div>
-            <button type="button" onClick={() => go(at + 1)} disabled={at >= cards.length - 1} aria-label="Next card" className={`hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm disabled:opacity-40 sm:inline-flex ${focusRing}`}><Icon d={I.next} /></button>
-          </div>
+          {flipped && card.sensitive && (
+            <p role="note" className="mx-auto mt-3 flex max-w-xl items-start gap-2 rounded-xl border px-3 py-2 text-[13px] font-semibold"
+              style={{ background: "var(--cmp-surface-warning)", borderColor: "color-mix(in srgb, var(--cmp-color-warning) 35%, transparent)", color: "var(--cmp-text-warning)" }}>
+              <span aria-hidden className="mt-px">⚠</span><span>{card.sensitive.marker}</span>
+            </p>
+          )}
           <p id="card-help" className="sr-only">Space or Enter reveals the answer. Then press 1 for didn&apos;t remember or 2 for remembered. Arrow keys move between cards.</p>
 
           {card.answered ? (
@@ -210,16 +251,17 @@ export function FlashcardStudy(props: {
               </button>
             </div>
           )}
-          {/* Phone: previous and next under the buttons, so they stay within reach. */}
-          <div className="mt-3 flex justify-between sm:hidden">
-            <button type="button" onClick={() => go(at - 1)} disabled={at === 0} className={ghost}><Icon d={I.prev} />Previous</button>
-            <button type="button" onClick={() => go(at + 1)} disabled={at >= cards.length - 1} className={ghost}>Next<Icon d={I.next} /></button>
+          </div>
+          {/* Previous and next under the buttons at every width, so they stay within reach and the card keeps the column. */}
+          <div className="mx-auto mt-3 flex max-w-[40rem] justify-between">
+            <button type="button" onClick={() => go(at - 1)} disabled={at === 0} aria-label="Previous card" className={ghost}><Icon d={I.prev} />Previous</button>
+            <button type="button" onClick={() => go(at + 1)} disabled={at >= cards.length - 1} aria-label="Next card" className={ghost}>Next<Icon d={I.next} /></button>
           </div>
           {status && <p role="status" className="mt-2 text-center text-[13px] text-gray-700">{status}</p>}
           {error && <p role="alert" className="mt-2 text-center text-[13.5px] font-semibold text-red-800">{error}</p>}
           {allDone && <div className="mt-4 text-center"><button type="button" className={primary} style={{ background: indigo }} onClick={finish}>Finish and see how it went</button></div>}
 
-          <div className="mx-auto mt-4 grid max-w-xl grid-cols-2 gap-1 sm:grid-cols-4">
+          <div className="mx-auto mt-4 grid max-w-xl grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-1">
             <ActionButton icon={I.note} label={card.note ? "Your note" : "Add note"} on={panel === "note"} disabled={!props.marksOn} onClick={() => setPanel(p => (p === "note" ? "" : "note"))} />
             <ActionButton icon={I.bookmark} label={card.bookmarked ? "Bookmarked" : "Bookmark"} on={card.bookmarked} disabled={!props.marksOn}
               onClick={async () => { const r = await call(`/api/individual/scholar/flashcards/${card.id}`, { bookmarked: !card.bookmarked }, "PATCH"); if (r.ok) update(card.id, { bookmarked: !card.bookmarked }); else setError(r.json.error ?? "That could not be saved."); }} />
@@ -253,13 +295,13 @@ export function FlashcardStudy(props: {
 
 function CardFace({ side, title, badge, text, hidden, footer, explanation = null }: { side: "front" | "back"; title: string; badge: string; text: string; hidden: boolean; footer: string; explanation?: string | null }) {
   return (
-    <span aria-hidden={hidden} className={`absolute inset-0 flex flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white p-5 shadow-[0_6px_24px_rgba(17,24,39,0.08)] [backface-visibility:hidden] sm:p-7 ${side === "back" ? "[transform:rotateY(180deg)]" : ""}`}>
+    <span aria-hidden={hidden} className={`absolute inset-0 flex flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white p-5 shadow-[0_6px_24px_rgba(17,24,39,0.08)] [backface-visibility:hidden] md:p-7 ${side === "back" ? "[transform:rotateY(180deg)]" : ""}`}>
       <span aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-28 w-56 rotate-[-8deg] rounded-[50%] bg-[var(--cmp-role-indigo-soft)]" />
       <span className="relative flex items-center gap-3">
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--cmp-role-indigo-soft)] text-[17px] font-extrabold text-[var(--cmp-role-indigo-ink)]">{badge}</span>
         <span className="text-[15px] font-bold text-[var(--cmp-role-indigo-ink)]">{title}</span>
       </span>
-      <span className={`relative mt-3 block flex-1 overflow-y-auto font-semibold leading-snug text-gray-900 ${side === "front" ? "text-[20px] sm:text-[27px]" : "text-[18px] sm:text-[22px]"}`} aria-live={side === "back" ? "polite" : undefined}>
+      <span className={`relative mt-3 block flex-1 overflow-y-auto font-semibold leading-snug text-gray-900 ${side === "front" ? "text-[20px] md:text-[27px]" : "text-[18px] md:text-[22px]"}`} aria-live={side === "back" ? "polite" : undefined}>
         {text}
         {explanation && <span className="mt-3 block text-[14px] font-normal leading-relaxed text-gray-700">{explanation}</span>}
       </span>
@@ -313,7 +355,7 @@ function IssuePanel({ card, onSaved }: { card: StudyCard; onSaved: (issue: strin
     <form onSubmit={save} className="mt-3 rounded-2xl border border-gray-200 p-4">
       <fieldset>
         <legend className="text-[13px] font-semibold text-gray-800">What is wrong with this card?</legend>
-        <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+        <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-1.5">
           {ISSUE_CODES.map(c => <label key={c.value} className="inline-flex items-center gap-2 text-[13.5px]"><input type="radio" name="issue" checked={code === c.value} onChange={() => setCode(c.value)} />{c.label}</label>)}
           {card.issue && <label className="inline-flex items-center gap-2 text-[13.5px]"><input type="radio" name="issue" checked={code === ""} onChange={() => setCode("")} />Withdraw my report</label>}
         </div>
@@ -364,9 +406,16 @@ function SourceLink({ card }: { card: StudyCard }) {
 // ── THE SIDE COLUMN: DECK OPTIONS, DOWNLOAD, CREATE MORE ──
 
 export type ExportFormat = "deck" | "print" | "guide";
-const EXPORT_LABEL: Record<ExportFormat, string> = { deck: "This deck (flashcards) – PDF", guide: "Revision guide (multi-page) – PDF", print: "Printable cards – PDF" };
-export const exportHref = (format: ExportFormat, decks: readonly string[]) => {
-  const q = new URLSearchParams({ format });
+/** SCHOLAR-FLASHCARDS-QA-01: the five downloads, each a format the policy offers with its variant (guide, layout). */
+export const EXPORT_CHOICES: readonly { key: string; format: ExportFormat; extra?: Readonly<Record<string, string>>; label: string }[] = [
+  { key: "deck", format: "deck", label: "This deck (flashcards) – PDF" },
+  { key: "guide", format: "guide", label: "Revision guide, comprehensive – PDF" },
+  { key: "guide-concise", format: "guide", extra: { guide: "concise" }, label: "Revision guide, concise – PDF" },
+  { key: "print", format: "print", label: "Printable cards, double-sided – PDF" },
+  { key: "print-fold", format: "print", extra: { layout: "fold" }, label: "Printable cards, single-sided foldable – PDF" },
+];
+export const exportHref = (format: ExportFormat, decks: readonly string[], extra: Readonly<Record<string, string>> = {}) => {
+  const q = new URLSearchParams({ format, ...extra });
   for (const d of decks) q.append("deck", d);
   return `/api/individual/scholar/flashcards/export?${q.toString()}`;
 };
@@ -383,7 +432,6 @@ export function DownloadMenu({ decks, formats, label = "Download" }: { decks: re
       .catch(() => { if (live) setReady(false); });
     return () => { live = false; };
   }, []);
-  const order: ExportFormat[] = ["deck", "guide", "print"];
   return (
     <div className="relative">
       <button type="button" className={`${ghost} w-full justify-between`} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen(o => !o)}>
@@ -391,12 +439,12 @@ export function DownloadMenu({ decks, formats, label = "Download" }: { decks: re
       </button>
       {open && (
         <ul className="mt-1 space-y-0.5 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg">
-          {order.filter(f => formats.includes(f)).map(f => (
-            <li key={f}>
+          {EXPORT_CHOICES.filter(x => formats.includes(x.format)).map(x => (
+            <li key={x.key}>
               {ready && decks.length ? (
-                <a href={exportHref(f, decks)} className={`flex min-h-[40px] items-center gap-2 rounded-lg px-2.5 text-[13.5px] font-medium text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}><Icon d={I.doc} size={16} />{EXPORT_LABEL[f]}</a>
+                <a href={exportHref(x.format, decks, x.extra)} className={`flex min-h-[40px] items-center gap-2 rounded-lg px-2.5 text-[13.5px] font-medium text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}><Icon d={I.doc} size={16} />{x.label}</a>
               ) : (
-                <span aria-disabled className="flex min-h-[40px] items-center gap-2 rounded-lg px-2.5 text-[13.5px] text-gray-400"><Icon d={I.doc} size={16} />{EXPORT_LABEL[f]}<span className="ml-auto text-[11.5px]">{ready === null ? "Checking…" : !decks.length ? "Choose a deck" : "Coming in this release"}</span></span>
+                <span aria-disabled className="flex min-h-[40px] items-center gap-2 rounded-lg px-2.5 text-[13.5px] text-gray-400"><Icon d={I.doc} size={16} />{x.label}<span className="ml-auto text-[11.5px]">{ready === null ? "Checking…" : !decks.length ? "Choose a deck" : "Coming in this release"}</span></span>
               )}
             </li>
           ))}
@@ -420,7 +468,7 @@ export function DeckOptions({ deck, exports }: { deck: { key: string; id: string
   }
   const row = `flex min-h-[44px] w-full items-center gap-3 rounded-xl px-2 text-left text-[14.5px] text-gray-900 hover:bg-gray-50 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
   return (
-    <section aria-labelledby="deck-options-h" className="rounded-3xl border border-gray-200 bg-white p-4 sm:p-5">
+    <section aria-labelledby="deck-options-h" className="rounded-3xl border border-gray-200 bg-white p-4 md:p-5">
       <h2 id="deck-options-h" className="text-[17px] font-bold text-gray-900">Deck Options</h2>
       <p className="text-[12.5px] text-gray-600">{deck.title}</p>
       <ul className="mt-2 space-y-0.5">
@@ -464,7 +512,7 @@ export function CreateMore(props: {
       className={`flex min-h-[44px] w-full items-center gap-3 rounded-xl px-2 text-left text-[14.5px] text-gray-900 hover:bg-gray-50 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${open === k ? "bg-gray-50" : ""}`}><Icon d={icon} />{label}</button></li>
   );
   return (
-    <section aria-labelledby="create-more-h" className="rounded-3xl border border-gray-200 bg-white p-4 sm:p-5">
+    <section aria-labelledby="create-more-h" className="rounded-3xl border border-gray-200 bg-white p-4 md:p-5">
       <h2 id="create-more-h" className="inline-flex items-center gap-2 text-[17px] font-bold text-gray-900"><span style={{ color: indigo }}><Icon d={I.spark} /></span>Create More Flashcards</h2>
       {props.aiNote && <p className="mt-1 text-[12.5px] text-gray-600">{props.aiNote}</p>}
       <ul className="mt-2 space-y-0.5">
@@ -590,7 +638,7 @@ export function DeckList({ decks, marksOn, exports, editId }: { decks: DeckRow[]
       {groups.filter(([, ds]) => ds.length).map(([label, ds]) => (
         <div key={label}>
           <h3 className="mb-1.5 text-[12.5px] font-bold uppercase tracking-[0.12em] text-gray-500">{label}</h3>
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <ul className="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-2">
             {ds.map(d => (
               <li key={d.key} className="rounded-2xl border border-gray-200 bg-white p-3">
                 <div className="flex items-start gap-2">
@@ -808,7 +856,7 @@ export function DeckStart({ deck, perState }: { deck: { key: string; title: stri
   );
   return (
     <div className="mt-5 space-y-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2">
         {stat("Due today", perState.due, "var(--cmp-role-revision-strong)")}{stat("Not studied yet", perState.fresh)}{stat("Needs more practice", perState.needsPractice, "var(--cmp-text-error)")}{stat("Remembered", perState.remembered, "var(--cmp-text-success)")}
       </div>
       <div className="flex flex-wrap gap-2">
@@ -828,9 +876,9 @@ export function HowItWorks() {
     { icon: I.cal, title: "Revise smarter", text: "Cards are scheduled using spaced repetition to strengthen memory" },
   ];
   return (
-    <section aria-labelledby="how-h" className="rounded-3xl border border-gray-200 bg-white p-4 sm:p-6">
+    <section aria-labelledby="how-h" className="rounded-3xl border border-gray-200 bg-white p-4 md:p-6">
       <h2 id="how-h" className="inline-flex items-center gap-2 text-[17px] font-bold text-gray-900"><span style={{ color: indigo }}><Icon d={<><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>} /></span>How it works</h2>
-      <ol className="mt-3 grid gap-4 sm:grid-cols-3">
+      <ol className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4">
         {steps.map((s, i) => (
           <li key={s.title} className="flex gap-3">
             <span aria-hidden className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--cmp-role-indigo-soft)] text-[var(--cmp-role-indigo-ink)]"><Icon d={s.icon} /></span>

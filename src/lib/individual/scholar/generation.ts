@@ -10,8 +10,9 @@ import {
   type QualityReason, type RevisionVerifyItem,
 } from "./question-quality";
 import {
-  FEEDBACK_FORMAT, NO_CONTEXT, RUBRIC_RULE, difficultyFits, difficultyOf, feedbackText, generationContextBlock, parseFeedbackSections, parseRubric, referenceGrounding, stemKey,
-  type FeedbackParts, type GenerationContext, type Rubric,
+  FEEDBACK_FORMAT, NO_CONTEXT, RUBRIC_RULE, capCardLevel, difficultyFits, difficultyOf, feedbackText, generationContextBlock, levelMixLine, parseFeedbackSections,
+  parseRubric, planCardLevels, referenceGrounding, stemKey,
+  type FeedbackParts, type GenerationContext, type LevelMix, type LevelPlan, type Rubric,
 } from "./question-intel";
 import { checkRevisionDraft, type RevisionDraft } from "./revision";
 import { blueprintFromDraft, checkPrivateCase } from "./clinical";
@@ -265,8 +266,11 @@ export const QUESTION_SYSTEM: Record<QuestionKind, string> = {
   ].join("\n"),
 };
 
-/** What a generator is checked against besides its passage (question-intel.ts). Optional throughout. */
-export type GenerationOptions = { context?: GenerationContext; existing?: ReadonlySet<string> };
+/**
+ * What a generator is checked against besides its passage (question-intel.ts). Optional throughout. `levelMix`
+ * (flashcards only, SCHOLAR-FLASHCARDS-QA-01): the cognitive-level mix to write to, narrowed to what the passage supports.
+ */
+export type GenerationOptions = { context?: GenerationContext; existing?: ReadonlySet<string>; levelMix?: LevelMix };
 
 export function questionUserPrompt(passage: Passage): string {
   return `PASSAGE (${passageCitation(passage)}):\n${passage.content}\n\n`
@@ -697,7 +701,13 @@ const REVISION_COMMON = [
 export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence" | "structured", string> = {
   mrq: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? that says to choose all that apply", "options": [4 to 6 short options built only from the passage\'s words, each a plausible answer, never "all of the above"], "correct": [the indexes of EVERY option the passage supports, at least one and not all], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   short: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? whose answer is a few words from the passage", "accepted": [1 to 4 short answers the passage supports, in its own words], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
-  flashcard: [...REVISION_COMMON, 'Each item: {"front": "a short question ending with ?, or a single term (a few words) to recall -- never a sentence or a statement", "back": "its answer or meaning, in the passage\'s words", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
+  // SCHOLAR-FLASHCARDS-QA-01 (flashcard v2, PROMPT_VERSIONS.flashcardMix): a concise one-concept back (never the
+  // note's sentence repeated, never a second fact), a short explanation only where the passage gives a reason, a topic
+  // name, and the objective in the learner's voice. Checked in code: question-intel.ts flashcardDraftProblem, parseRubric.
+  flashcard: [...REVISION_COMMON,
+    'Each item: {"front": "a short question ending with ?, or a single term (a few words) to recall -- never a sentence or a statement", "back": "the answer to the front ONLY: one concept, as short as it can be (a few words, at most two short sentences), using the passage\'s terms but never repeating a passage sentence whole and never adding a second fact", "rationale": "one short sentence on why the answer holds, from the passage -- or \\"\\" when the passage gives no reason", "topic": "the topic the card belongs to, two to five words: one of the CONCEPTS given where one fits, otherwise the passage\'s own words", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}',
+    'For flashcards, "objective" is written TO the learner as what they will be able to do, starting with a verb ("Explain why ...", "Recognise ...", "State ..."), never "Checks ...", "Tests ..." or "The student ...".',
+  ].join("\n"),
   match: [...REVISION_COMMON, 'Each item: {"stem": "what to match, e.g. Match each term to its meaning", "pairs": [{"left": "...", "right": "..."}, {"left": "...", "right": "..."}, {"left": "...", "right": "..."}], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Three to six pairs, each stated by the passage, every left and every right different. Only write one when the passage states at least three such pairs.'].join("\n"),
   sequence: [...REVISION_COMMON, 'Each item: {"stem": "what to put in order, ending with ?", "steps": [3 to 6 steps IN THE ORDER THE PASSAGE GIVES THEM], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Only write one when the passage itself gives an order.'].join("\n"),
   // SCHOLAR-SQIE-CLOSE-01 (structured v1, migration 710): a lead-in and two to four parts, each its own question with
@@ -712,10 +722,16 @@ export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "
 export const REVISION_VERIFIED_KINDS: readonly (keyof typeof REVISION_SYSTEM)[] = ["mrq", "short"];
 export const revisionPromptVersion = (kind: keyof typeof REVISION_SYSTEM) =>
   kind === "structured" ? PROMPT_VERSIONS.structured
-    : `${PROMPT_VERSIONS.revision}:${kind}${REVISION_VERIFIED_KINDS.includes(kind) ? `+${PROMPT_VERSIONS.verifyRevision}` : ""}`;
-/** The prompt version prefix a stored question of a format was written at: what "already written at this version" reads. */
+    : kind === "flashcard" ? `${PROMPT_VERSIONS.revision}:flashcard+${PROMPT_VERSIONS.flashcardMix}`
+      : `${PROMPT_VERSIONS.revision}:${kind}${REVISION_VERIFIED_KINDS.includes(kind) ? `+${PROMPT_VERSIONS.verifyRevision}` : ""}`;
+/**
+ * The prompt version prefix a stored question of a format was written at: what "already written at this version" reads.
+ * SCHOLAR-FLASHCARDS-QA-01: a flashcard's includes the level mix, so a section carded before the mix may be carded again
+ * (the cards already there are kept, and a repeat of one is still refused by its stem).
+ */
 export const formatPromptVersion = (kind: string): string =>
-  kind === "mcq" ? PROMPT_VERSIONS.mcq : kind === "structured" ? PROMPT_VERSIONS.structured : `${PROMPT_VERSIONS.revision}:${kind}`;
+  kind === "mcq" ? PROMPT_VERSIONS.mcq : kind === "structured" ? PROMPT_VERSIONS.structured
+    : kind === "flashcard" ? `${PROMPT_VERSIONS.revision}:flashcard+${PROMPT_VERSIONS.flashcardMix}` : `${PROMPT_VERSIONS.revision}:${kind}`;
 
 /**
  * One call (and one retry): revision items of one kind from one passage, each checked. `run` is the metered runner.
@@ -730,11 +746,19 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
   const context = opts.context;
   const refs = context?.mode === "notes_and_references" ? context.references : [];
   const verifyPassage = [passage.content, ...referenceGrounding(refs)].join("\n");
+  const asked = kind === "structured" ? 1 : Math.min(3, Math.max(1, limit));
+  // SCHOLAR-FLASHCARDS-QA-01: flashcards to the level mix, only at the levels this passage can support (the rest fall
+  // back to recall and understanding, and why is returned for the audit row): one more line of the guidance block.
+  const levelPlan: LevelPlan | null = kind === "flashcard" && opts.levelMix ? planCardLevels(opts.levelMix, asked, { difficulty: context?.difficulty ?? null, passage: passage.content }) : null;
+  const mixLine = levelPlan ? levelMixLine(levelPlan) : "";
+  const guidance = generationContextBlock(context ?? NO_CONTEXT, asked);
+  const guidanceWithMix = !mixLine ? guidance : guidance ? `${guidance}\n${mixLine}` : `\n\nGUIDANCE (do not mention it). Every item must still be answerable from the passage ALONE.\n${mixLine}`;
+  let relabelled = 0;
   for (let attempt = 1; attempt <= 2 && !kept.length; attempt++) {
     calls++;
     const r = await run({
       system: REVISION_SYSTEM[kind],
-      user: `${questionUserPrompt(passage)}${generationContextBlock(context ?? NO_CONTEXT, kind === "structured" ? 1 : Math.min(3, Math.max(1, limit)))}`,
+      user: `${questionUserPrompt(passage)}${guidanceWithMix}`,
       tier: "reasoning",
       maxTokens: 1800,
       context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_revision_${kind}` },
@@ -747,7 +771,11 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
     // A structured question is one substantial item a call (its prompt asks for at most one).
     for (const raw of (parseJsonArray(r.text) ?? []).slice(0, kind === "structured" ? 1 : limit)) {
       const c = checkRevisionDraft(kind, raw, passage, { existing: seen, difficulty: context?.difficulty ?? null, references: refs });
-      if (c.ok) { batch.push(c.draft); seen.add(stemKey(c.draft.stem)); } else dropped.push(c.reason);
+      if (c.ok) {
+        // A card claiming a level this passage cannot support is labelled for what it is (its words unchanged).
+        if (levelPlan && capCardLevel(c.draft.answer, levelPlan.passage)) relabelled++;
+        batch.push(c.draft); seen.add(stemKey(c.draft.stem));
+      } else dropped.push(c.reason);
     }
     if (batch.length && REVISION_VERIFIED_KINDS.includes(kind)) {
       calls++;
@@ -768,7 +796,10 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
     }
     kept = batch.slice(0, limit);
   }
-  return { ok: true as const, kept, dropped, model, provider, calls, promptVersion: revisionPromptVersion(kind) };
+  return {
+    ok: true as const, kept, dropped, model, provider, calls, promptVersion: revisionPromptVersion(kind),
+    levelPlan: levelPlan ? { levels: levelPlan.levels, fallback: levelPlan.fallback, relabelled } : null,
+  };
 }
 
 // SCHOLAR-QUESTION-INTELLIGENCE-01 (evaluate v2): five labelled parts after the verdict (question-intel.ts

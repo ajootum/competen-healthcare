@@ -23,7 +23,7 @@ import { revisionItemView } from "@/lib/individual/scholar/revision-view";
 import { cardsOfDecks, gapFocus, libraryRecallFits, recallCardOf } from "@/lib/individual/scholar/flashcards";
 import { loadFlashcardGaps, loadFlashcards } from "@/lib/individual/scholar/flashcard-service";
 import { generationContextLoader } from "@/lib/individual/scholar/question-context";
-import { adaptDifficulty, generationDifficulty, isSourceMode, stemKey, type SourceMode } from "@/lib/individual/scholar/question-intel";
+import { adaptDifficulty, flashcardLevelMix, generationDifficulty, isSourceMode, stemKey, type SourceMode } from "@/lib/individual/scholar/question-intel";
 import {
   MOCK_LABEL, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
   type RevisionDifficulty, type RevisionFormat, type RevisionMode,
@@ -62,6 +62,8 @@ export const dynamic = "force-dynamic";
 //   deckId          generate INTO a deck: the session takes cards not yet in it (stored and library first, then new,
 //                   at most scholar_flashcards_per_generation written), and they are added to the deck (by reference).
 //   generate false  use stored and library cards only.
+//   New cards are written to the level mix of policy scholar_flashcard_level_mix (SCHOLAR-FLASHCARDS-QA-01), only at the
+//   levels the passage supports; the audit row records the mix, the fallbacks and why.
 //   A governed library question whose stem stands alone is studied as a card (flashcards.ts recallCardOf), library first.
 // GET lists the student's recent revision sessions to resume.
 
@@ -258,6 +260,7 @@ export async function POST(req: Request) {
             const context = focus.length ? { ...sectionContext, concepts: [...focus, ...sectionContext.concepts] } : sectionContext;
             if (context.mode === "notes_and_references") referencesUsed = true;
             let ids: string[] = [], outcome = "", calls = 0;
+            let mixPlan: { levels: Record<string, number>; fallback: string[]; relabelled: number } | null = null;
             let measured: { accepted: number; rejected: number; reasons: string[]; promptVersion: string | null } | null = null;
             if (call.kind === "mcq") {
               // Each call asks for up to three: the checks drop some, and what is kept beyond this session is saved
@@ -272,7 +275,10 @@ export async function POST(req: Request) {
               }
               else outcome = `error:${r.error}`;
             } else {
-              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, mode === "flashcards" ? call.count : Math.max(call.count, 3), ai.run, { context, existing: stems });
+              // SCHOLAR-FLASHCARDS-QA-01: flashcards to the policy's level mix (by programme level by default).
+              const levelMix = call.kind === "flashcard" ? flashcardLevelMix(policy.scholarFlashcardLevelMix, loader.levelDefault) : undefined;
+              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, mode === "flashcards" ? call.count : Math.max(call.count, 3), ai.run, { context, existing: stems, levelMix });
+              if (r.ok && r.levelPlan) mixPlan = r.levelPlan;
               if (r.ok) {
                 calls = r.calls; r.kept.forEach(d => stems.add(stemKey(d.stem)));
                 const s = await insertRevisionQuestions(ctx.admin, ctx.userId, { passage, kind: call.kind, drafts: r.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
@@ -294,6 +300,8 @@ export async function POST(req: Request) {
             await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_revision_generate", null, {
               chunk_id: passage.chunkId, kind: call.kind, asked: call.count, outcome, competency_id: competencyId,
               ai_calls: calls, difficulty: context.difficulty, source: context.mode, references: context.references.length,
+              // The level mix asked for, the levels the passage could not support (why), and cards relabelled: codes and counts.
+              ...(mixPlan ? { level_mix: mixPlan.levels, level_fallback: mixPlan.fallback, level_relabelled: mixPlan.relabelled } : {}),
             });
             aiCalls += calls;
             made += ids.length;

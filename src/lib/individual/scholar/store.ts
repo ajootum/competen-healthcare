@@ -484,7 +484,11 @@ export type QuestionRow = {
    */
   library?: LibraryProvenance | null;
 };
-export type LibraryProvenance = { resourceId: string; versionId: string; versionNo: number; approval: "clinically_approved" };
+export type LibraryProvenance = {
+  resourceId: string; versionId: string; versionNo: number; approval: "clinically_approved";
+  /** SCHOLAR-FLASHCARDS-QA-01: the resource's own title and code and the version's publication date, where 442 holds them (cited, never invented). */
+  title?: string; code?: string; publishedAt?: string;
+};
 
 const QUESTION_COLS = "id, material_id, chunk_id, kind, stem, options, correct_index, rationale, source_quote, model, prompt_version, created_at";
 
@@ -555,7 +559,10 @@ async function hydrate(admin: Admin, userId: string, rows: any[]): Promise<Quest
       latest: l ? { correct: l.correct, chosenIndex: l.chosen_index, answeredAt: l.answered_at } : null,
       competencyId: extra.get(r.id)?.competency_id ?? null, caseId: extra.get(r.id)?.case_id ?? null,
       caseStep: extra.get(r.id)?.case_step ?? null, caseTitle: extra.get(r.id)?.case_title ?? null,
-      library: library.has(r.id) ? { ...library.get(r.id)!, versionNo: servable.get(library.get(r.id)!.versionId)!.versionNo, approval: "clinically_approved" as const } : null,
+      library: library.has(r.id) ? (() => {
+        const v = servable.get(library.get(r.id)!.versionId)!;
+        return { ...library.get(r.id)!, versionNo: v.versionNo, approval: "clinically_approved" as const, ...(v.title ? { title: v.title } : {}), ...(v.code ? { code: v.code } : {}), ...(v.publishedAt ? { publishedAt: v.publishedAt } : {}) };
+      })() : null,
     };
   });
 }
@@ -2951,6 +2958,19 @@ export async function deleteFlashcardDeck(admin: Admin, userId: string, id: stri
 }
 
 /** Add cards to a deck after its last card. A card already in it stays where it is. The schedule is never copied. */
+/**
+ * SCHOLAR-FLASHCARDS-QA-01 D1: which of these question ids are the caller's own (keyed on user_id). Read BEFORE a mark
+ * or a deck place is written, so another learner's card is a plain 404 rather than a foreign-key refusal (500). null:
+ * unreadable (the caller answers 503; nothing is written).
+ */
+export async function ownedQuestionIds(admin: Admin, userId: string, ids: readonly string[]): Promise<Set<string> | null> {
+  const want = [...new Set(ids)].filter(isUuid);
+  if (!want.length) return new Set();
+  const { data, error } = await admin.from("individual_scholar_question").select("id").eq("user_id", userId).in("id", want);
+  if (error) return null;
+  return new Set(((data ?? []) as any[]).map(r => r.id as string));
+}
+
 export async function addDeckCards(admin: Admin, userId: string, deckId: string, cardIds: readonly string[]): Promise<boolean> {
   const ids = [...new Set(cardIds)].filter(isUuid);
   if (!isUuid(deckId) || !ids.length) return false;

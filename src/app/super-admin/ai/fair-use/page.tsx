@@ -12,6 +12,8 @@ import { loadModeVersions, loadModes, loadPilotMetrics } from "@/lib/ai/modes-ad
 import { gapList, loadReadiness } from "@/lib/ai/readiness";
 import { ReadinessSection } from "./_components/ReadinessSection";
 import { ModesSection } from "./_components/ModesSection";
+import { ContentReviewEditor, ContentReviewPublish } from "./_components/ContentReviewControls";
+import { loadContentReviewVersions, loadContentReviewViews } from "@/lib/ai/content-review-admin";
 import { AI_PROVIDERS, availableProviders, primaryProvider, providerModels } from "@/lib/ai/config";
 
 // /super-admin/ai/fair-use -- COMPETEN-AI-FAIR-USE-01 s12. Holdings AI usage governance, no code.
@@ -32,7 +34,7 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB",
 export default async function FairUsePage() {
   const ctx = await requireHqCapability("hq.platform.ai.manage");
   const [rates, policies, on, evaluations, budgets, drafts, modelRouting, registry, modes, modeVersions] = await Promise.all([loadRates(ctx.admin), loadPolicies(ctx.admin), aiFairUseEnabled(ctx.admin), loadEvaluations(ctx.admin), loadBudgets(ctx.admin), pendingDrafts(ctx.admin), loadModelRoutingView(ctx.admin), loadProviderRegistryView(ctx.admin), loadModes(ctx.admin), loadModeVersions(ctx.admin)]);
-  const [metrics, readiness] = await Promise.all([loadPilotMetrics(ctx.admin, 30, modes), loadReadiness(ctx.admin)]);
+  const [metrics, readiness, review, reviewVersions] = await Promise.all([loadPilotMetrics(ctx.admin, 30, modes), loadReadiness(ctx.admin), loadContentReviewViews(ctx.admin), loadContentReviewVersions(ctx.admin)]);
   // SCHOLAR-EDU-AI-01: shown beside both publish buttons, so nothing is published without seeing what students cannot use.
   const scholarGaps = gapList(readiness.find(r => r.product === "scholar")?.rows ?? null);
   // The product's published risk rule ids: the choices for "clarifiable rules" (ids only, never rule text).
@@ -252,6 +254,37 @@ export default async function FairUsePage() {
           <ReadinessSection readiness={readiness} />
 
           <ModesSection modes={modes} versions={modeVersions} ruleIds={ruleIds} metrics={metrics} gaps={scholarGaps} />
+
+          {/* SCHOLAR-FLASHCARDS-QA-01 (c): HQ-configurable rules that FLAG potentially sensitive educational content. */}
+          <section aria-labelledby="cr-h" className="rounded-xl border border-gray-200 bg-white p-5">
+            <h2 id="cr-h" className="text-[16px] font-bold text-gray-900">Clinical educational content review rules</h2>
+            <p className="mt-1 text-[13px] text-gray-600">
+              Rules that flag potentially sensitive educational content -- a dose, a target, a paediatric rate, an emergency step -- so learners are
+              told to check it against current local guidelines. They only flag: they never block or change content, never decide whether it is
+              clinically correct, and do not affect grounding, model eligibility, risk tiers or privacy. Used today by Scholar flashcards, their
+              downloads and revision guides. They publish and roll back on their own, apart from the other AI policies. Nothing published: the built-in rules apply.
+            </p>
+            <p className="mt-1 text-[12.5px] text-gray-600">No separate drafter and publisher control exists for this scope; publishing is recorded with the version and audited.</p>
+            {review === null ? (
+              <p role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">The rules could not be read just now (or the configuration engine, migration 076, is not applied here). The built-in rules apply.</p>
+            ) : (
+              <div className="mt-3 space-y-4">
+                {review.map(v => {
+                  const doc = v.draft ?? v.published;
+                  return (
+                    <div key={v.product} className="rounded-lg border border-gray-200 p-4">
+                      <h3 className="text-[15px] font-bold capitalize text-gray-900">{v.product}</h3>
+                      <p className="mt-1 text-[13px] text-gray-800">In force: <strong>{v.hasPublished ? `${v.published.rules.length} published rule${v.published.rules.length === 1 ? "" : "s"}` : "the built-in rules (nothing published)"}</strong>{v.publishedAt ? ` · published ${fmt(v.publishedAt)}` : ""}{v.pending ? " · an unpublished draft is waiting" : ""}.</p>
+                      <div className="mt-2"><ContentReviewEditor key={`${v.product}-${v.publishedAt ?? "d"}-${v.pending}`} product={v.product} hasDraft={!!v.draft && v.pending}
+                        doc={{ rules: doc.rules, units: doc.units, exclusions: doc.exclusions, markers: doc.markers }} /></div>
+                    </div>
+                  );
+                })}
+                <ContentReviewPublish pending={review.filter(v => v.pending).length}
+                  versions={reviewVersions === null ? null : reviewVersions.map(r => ({ ...r, when: fmt(r.createdAt).replace(/ UTC$/, "") }))} />
+              </div>
+            )}
+          </section>
 
           <section aria-labelledby="pub-h" className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 id="pub-h" className="text-[16px] font-bold text-gray-900">Publish</h2>

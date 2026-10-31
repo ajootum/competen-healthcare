@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal, type IndividualContext } from "@/lib/individual/guard";
 import { isUuid } from "@/lib/individual/scholar/store";
-import { flashcardGate, loadCardSelection } from "@/lib/individual/scholar/flashcard-service";
-import { buildFlashcardPdf, exportFilename, exportTitle, FLASHCARD_EXPORT_FORMATS, type FlashcardExportFormat } from "@/lib/individual/scholar/flashcard-pdf";
+import { applyContentReview, flashcardGate, loadCardSelection } from "@/lib/individual/scholar/flashcard-service";
+import { asGuideVariant, asPrintLayout, buildFlashcardPdf, longDate, exportFilename, exportTitle, FLASHCARD_EXPORT_FORMATS, type FlashcardExportFormat } from "@/lib/individual/scholar/flashcard-pdf";
 import { currentTraceId } from "@/lib/trace";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
@@ -10,10 +10,12 @@ export const dynamic = "force-dynamic";
 
 // /api/individual/scholar/flashcards/export -- SCHOLAR-FLASHCARDS-01 s8-12 (owner, 31 Oct 2026).
 //
-// GET  ?format=deck|print|guide &deck=<id or key>... &card=<id>... &topic= &competency= &material= [&layout=single]
+// GET  ?format=deck|print|guide &deck=<id or key>... &card=<id>... &topic= &competency= &material=
+//      [&layout=duplex|fold] [&guide=comprehensive|concise]
 //      One PDF of the caller's OWN cards the selection names (loadCardSelection: keyed on the caller, never anyone
 //      else's), built by flashcard-pdf.ts. Streamed back to the caller as an attachment, no-store: never stored,
-//      linked or shared. print is double-sided (long-edge flip) unless layout=single.
+//      linked or shared. print is double-sided (long-edge flip) unless layout=fold (single-sided foldable; the older
+//      layout=single still means fold). guide is comprehensive unless guide=concise (SCHOLAR-FLASHCARDS-QA-01).
 // HEAD the same checks without building: the Download menu's probe.
 //
 // ⚠ NO AI. Nothing here, nor in flashcard-pdf.ts, calls a model: every word is already on the learner's cards
@@ -52,19 +54,22 @@ export async function GET(req: Request) {
   });
   if (!sel.ok) return NextResponse.json({ error: sel.reason === "off" ? "Flashcards are not offered here." : "Your cards could not be read just now." }, { status: sel.reason === "off" ? 403 : 503 });
   if (!sel.cards.length) return NextResponse.json({ error: "There are no cards in that selection." }, { status: 404 });
-  const cards = sel.cards.slice(0, cap);
-  const title = exportTitle(sel, by);
-  const layout = format === "print" && u.get("layout") === "single" ? "single" : "duplex";
-  const file = await buildFlashcardPdf(format, { cards, title, generatedAt: sel.generatedAt, omitted: sel.cards.length - cards.length }, { layout });
+  // The clinical educational content review rules as published on the AI Fair Use page (defaults where none are).
+  const cards = await applyContentReview(ctx, sel.cards.slice(0, cap), longDate);
+  const title = exportTitle(sel, { ...by, cardsNamed: u.getAll("card").some(isUuid) });
+  const layout = asPrintLayout(u.get("layout"));
+  const guide = asGuideVariant(u.get("guide"));
+  const opts = { layout, guide };
+  const file = await buildFlashcardPdf(format, { cards, title, generatedAt: sel.generatedAt, omitted: sel.cards.length - cards.length }, opts);
   // Codes and counts only: never a card's words or a deck's name.
   await ctx.admin.from("audit_log").insert({
     trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.profile?.fullName ?? null,
     action: "individual_scholar_flashcard_export", entity_type: "individual_scholar_question", entity_id: null,
-    new_value: { format, layout: format === "print" ? layout : null, cards: cards.length, omitted: sel.cards.length - cards.length, decks: sel.decks.length },
+    new_value: { format, layout: format === "print" ? layout : null, guide: format === "guide" ? guide : null, cards: cards.length, omitted: sel.cards.length - cards.length, decks: sel.decks.length },
   }).then((r: unknown) => r, () => {});
   return new NextResponse(new Uint8Array(file), { headers: {
     "Content-Type": "application/pdf",
-    "Content-Disposition": `attachment; filename="${exportFilename(title, format, sel.generatedAt)}"`,
+    "Content-Disposition": `attachment; filename="${exportFilename(title, format, sel.generatedAt, opts)}"`,
     "Content-Length": String(file.byteLength),
     "Cache-Control": "no-store, private",
     "X-Content-Type-Options": "nosniff",

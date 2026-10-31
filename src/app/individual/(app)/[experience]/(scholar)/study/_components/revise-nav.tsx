@@ -23,8 +23,12 @@ const ICON: Record<ReviseNavKey, React.ReactNode> = {
   decks: <><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 14l2 2 4-4" /></>,
 };
 
-/** `row`: one row at every width (the Revise and Adaptive pages, whose own layout has no side column for it). */
-export function ReviseNav({ current, adaptive, row = false }: { current: ReviseNavKey; adaptive: boolean; row?: boolean }) {
+/**
+ * `row`: one row at every width (the Revise and Adaptive pages, whose own layout has no side column for it).
+ * `container` (SCHOLAR-FLASHCARDS-QA-01): a row until the CONTENT AREA (the nearest @container) is 56rem wide, then a
+ * column -- by the width it has, not the viewport, since the shell sidebar takes its share first.
+ */
+export function ReviseNav({ current, adaptive, row = false, container = false }: { current: ReviseNavKey; adaptive: boolean; row?: boolean; container?: boolean }) {
   const items: { key: ReviseNavKey; label: string; href: string }[] = [
     { key: "practice", label: "Practice Questions", href: studyHref("revise") },
     { key: "flashcards", label: "Flashcards", href: flashcardsHref() },
@@ -33,9 +37,9 @@ export function ReviseNav({ current, adaptive, row = false }: { current: ReviseN
     { key: "decks", label: "My Decks", href: flashcardsHref({ view: "decks" }) },
   ];
   return (
-    <nav aria-label="Revise" className={row ? "-mx-4 mb-4 overflow-x-auto px-4" : "-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0"}>
-      {!row && <p className="hidden px-3 pb-2 text-[18px] font-bold text-gray-900 md:block">Revise</p>}
-      <ul className={row ? "flex min-w-max gap-1.5" : "flex min-w-max gap-1.5 md:min-w-0 md:flex-col md:gap-1"}>
+    <nav aria-label="Revise" className={row ? "-mx-4 mb-4 overflow-x-auto px-4" : container ? "overflow-x-auto @min-[56rem]:overflow-visible" : "-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0"}>
+      {!row && <p className={container ? "hidden px-3 pb-2 text-[18px] font-bold text-gray-900 @min-[56rem]:block" : "hidden px-3 pb-2 text-[18px] font-bold text-gray-900 md:block"}>Revise</p>}
+      <ul className={row ? "flex min-w-max gap-1.5" : container ? "flex min-w-max gap-1.5 @min-[56rem]:min-w-0 @min-[56rem]:flex-col @min-[56rem]:gap-1" : "flex min-w-max gap-1.5 md:min-w-0 md:flex-col md:gap-1"}>
         {items.map(i => {
           const on = i.key === current;
           return (
