@@ -4,7 +4,7 @@ import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { loadIndividualPolicy, shownLearnModes } from "@/lib/individual/policy";
 import { scholarResearchOperational } from "@/lib/individual/scholar/learn-research";
-import { countDue, getLearningPreference, getLearningSession, getRevisionSession, isUuid, learningEvents, listMaterials, readConsent, type MaterialRow } from "@/lib/individual/scholar/store";
+import { countDue, getLearningPosition, getLearningPreference, getLearningSession, getRevisionSession, isUuid, learningEvents, listMaterials, readConsent, type MaterialRow } from "@/lib/individual/scholar/store";
 import { sectionProfiles, sessionTopics } from "@/lib/individual/scholar/learn";
 import { offeredActions, sessionView } from "@/lib/individual/scholar/learn-view";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
@@ -12,6 +12,7 @@ import { LEARN_ACTION_LABEL, type LearnAction } from "@/lib/individual/scholar/c
 import { PageHeader, StatePanel, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { scholarSpace } from "@/lib/individual/scholar/spaces";
+import type { ServerPosition } from "@/lib/individual/scholar/learn-position";
 import { LearnWorkspace, type StartScope } from "../_components/learn-client";
 import { learnLanding, parseSearchParams, searchLibrary, topicDetail, displaySessionTitle } from "@/lib/individual/scholar/learn-search";
 import { ContinueLearning, LearnSearchBox, MyTopics, RecentlyAdded, SearchResults, TopicDetail, learnHref } from "../_components/learn-landing";
@@ -78,16 +79,17 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
   const sessionId = q.session ?? (study && !startAsked ? study.session.id : undefined);
 
   // A session to resume: the student's own, with what was done at each step.
-  let resume: { session: ReturnType<typeof sessionView>; progress: Record<number, { actions: string[]; verdict: string | null }> } | null = null;
+  let resume: { session: ReturnType<typeof sessionView>; progress: Record<number, { actions: string[]; verdict: string | null }>; position: ServerPosition | null } | null = null;
   if (sessionId && isUuid(sessionId)) {
     const r = await getLearningSession(ctx.admin, ctx.userId, sessionId);
     if (r.ok && r.data) {
       const chunkIds = r.data.steps.flatMap(s => s.sections.map(y => y.chunkId));
-      const [events, topics, profiles] = await Promise.all([learningEvents(ctx.admin, ctx.userId, sessionId), sessionTopics(ctx.admin, ctx.userId, chunkIds), sectionProfiles(ctx.admin, ctx.userId, chunkIds)]);
+      // SCHOLAR-CONTINUITY-01 (790): where the learner stopped on any device. Absent or unreadable: this device's copy only.
+      const [events, topics, profiles, position] = await Promise.all([learningEvents(ctx.admin, ctx.userId, sessionId), sessionTopics(ctx.admin, ctx.userId, chunkIds), sectionProfiles(ctx.admin, ctx.userId, chunkIds), getLearningPosition(ctx.admin, ctx.userId, sessionId)]);
       const progress: Record<number, { actions: string[]; verdict: string | null }> = {};
       for (const e of events.ok ? events.data : []) { const p = (progress[e.step] ??= { actions: [], verdict: null }); if (!p.actions.includes(e.action)) p.actions.push(e.action); if (e.verdict) p.verdict = e.verdict; }
       const s = r.data.session;
-      resume = { session: sessionView({ id: s.id, recorded: true, title: displaySessionTitle(s.title), scopeKind: s.scopeKind, currentStep: Math.min(s.currentStep, Math.max(0, r.data.steps.length - 1)), status: s.status, coverage: null, steps: r.data.steps, topics, profiles }), progress };
+      resume = { session: sessionView({ id: s.id, recorded: true, title: displaySessionTitle(s.title), scopeKind: s.scopeKind, currentStep: Math.min(s.currentStep, Math.max(0, r.data.steps.length - 1)), status: s.status, coverage: null, steps: r.data.steps, topics, profiles }), progress, position: position.ok ? position.data : null };
     }
   }
   const ids = (v?: string) => (v ?? "").split(",").filter(isUuid).slice(0, 10);
@@ -131,7 +133,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
         </>
       ) : (
         <LearnWorkspace
-          initial={resume?.session ?? null} initialProgress={resume?.progress ?? {}} start={start}
+          initial={resume?.session ?? null} initialProgress={resume?.progress ?? {}} initialPosition={resume?.position ?? null} start={start}
           actions={offered.actions} startAction={startAction} labels={LEARN_ACTION_LABEL}
           consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? null : "Your AI help setting could not be read just now."}
           checks={policy.scholarCheckBehaviour} depth={pref?.depth ?? policy.scholarExplanationDepth} maxTurns={policy.scholarTutorTurns}

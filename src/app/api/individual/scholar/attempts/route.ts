@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { getQuestion, recordAttempt } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
+import { keepAttemptSnapshot } from "@/lib/individual/scholar/attempt-integrity";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -27,6 +28,8 @@ export async function POST(req: Request) {
 
   const r = await recordAttempt(ctx.admin, ctx.userId, q, chosen);
   if (!r.ok) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });
+  // SCHOLAR-CONTINUITY-01 (791): what this answer was assessed against, kept beside it. Never fails the answer.
+  await keepAttemptSnapshot(ctx, q, { attempt: r.attempt, chosenIndex: chosen, response: null, correct: r.correct, score: null, marking: "deterministic" });
   return NextResponse.json({
     correct: r.correct,
     correctIndex: q.correctIndex,

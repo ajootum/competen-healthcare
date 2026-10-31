@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 // No AI in either. Owner-keyed: another person's session id answers 404.
 
 async function load(ctx: { admin: unknown; userId: string }, id: string) {
-  const s = await getRevisionSession(ctx.admin, ctx.userId, id);
+  const s = await getRevisionSession(ctx.admin, ctx.userId, id, { integrity: true });
   if (!s.ok) return { error: NextResponse.json({ error: "Your revision session could not be read just now." }, { status: 503 }) };
   if (!s.data) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
   const pool = await revisionPool(ctx.admin, ctx.userId, { kinds: [...REVISION_FORMATS, "case"] });
