@@ -13,8 +13,10 @@ const primary = `${btn} bg-teal-700 text-white hover:bg-teal-800`;
 const ghost = `${btn} border border-gray-300 bg-white text-gray-800 hover:bg-gray-50`;
 const input = "w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-[13px] text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700 pointer-coarse:min-h-[var(--cmp-touch-min)]";
 const label = "block text-[12.5px] font-semibold text-gray-700";
+/** The shared control styles, for the Studio panels that sit beside these forms. */
+export const ui = { btn, primary, ghost, input, label };
 
-function useSend() {
+export function useSend() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -30,7 +32,7 @@ function useSend() {
   return { busy, msg, send };
 }
 
-function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
+export function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
   if (!msg) return null;
   return <p role={msg.ok ? "status" : "alert"} className={`text-[12.5px] font-medium ${msg.ok ? "text-green-800" : "text-red-700"}`}>{msg.text}</p>;
 }

@@ -12,6 +12,9 @@ import { ReviewPackView } from "../../_studio/ReviewPackView";
 import { loadFrameworkPack } from "@/lib/competency/review-pack";
 import { applyLayout, sectionOrder, type LayoutTree } from "@/lib/competency/layout-order";
 import { LayoutDraftBanner } from "../_components/LayoutDraftBanner";
+import CompareView from "../_components/CompareView";
+import SheetImport from "../_components/SheetImport";
+import { loadFrameworkDiff, type DiffResponse } from "@/lib/competency/framework-diff";
 
 // /super-admin/competencies/authoring/[frameworkId] -- CFCA-STUDIO-UX-02: one framework, focused. Competencies (explorer
 // and a single active editor) and Overview & governance (structure, clinical review in numbers, publication kept
@@ -75,8 +78,12 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
     ? await Promise.all([Promise.resolve(ctx.admin.from("profiles").select("full_name").eq("id", f.layoutDraftBy).maybeSingle()).then((r: { data?: { full_name?: string | null } | null }) => r?.data?.full_name ?? null, () => null)])
     : [null];
   const n = (s: string) => comps.filter(c => c.status === s).length;
-  const criteria = comps.reduce((s, c) => s + c.criteria.length, 0);
-  const tab = sp.tab === "overview" ? "overview" : "competencies";
+  const criteria = comps.reduce((s, c) => s + c.criteria.filter(k => k.active !== false).length, 0);
+  const tab = sp.tab === "overview" ? "overview" : sp.tab === "compare" ? "compare" : "competencies";
+  // FRAMEWORK-DESIGN-STUDIO-02 S2: the draft against the last published version, read only the moment the tab is opened.
+  const diff: DiffResponse | { status: number; error: string } | null = tab === "compare" ? await loadFrameworkDiff(ctx.admin, f.id) : null;
+  const compNames = Object.fromEntries(comps.map(c => [c.id, c.name]));
+  const levelNames = Object.fromEntries(v.levels.map(l => [l.id, `${l.score}: ${l.label}`]));
   const meta = [f.code, f.layer ? `${f.layer[0].toUpperCase()}${f.layer.slice(1)} layer` : "No layer", v.professions.find(p => p.id === f.professionTermId)?.value].filter(Boolean);
 
   return (
@@ -100,11 +107,16 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
 
       <div role="tablist" aria-label="Framework views" className="flex gap-6 border-b border-gray-200">
         <Link role="tab" aria-selected={tab === "competencies"} href="?tab=competencies" className={tabCls(tab === "competencies")}>Competencies <span className="text-gray-500">{comps.length}</span></Link>
+        <Link role="tab" aria-selected={tab === "compare"} href="?tab=compare" className={tabCls(tab === "compare")}>Compare with published</Link>
         <Link role="tab" aria-selected={tab === "overview"} href="?tab=overview" className={tabCls(tab === "overview")}>Overview &amp; governance</Link>
       </div>
 
       {tab === "competencies" ? (
-        <StudioWorkspace frameworkId={f.id} domains={domains} levels={v.levels} components={v.components} editable={editable} initialId={sp.c ?? null} canReorder={editable && v.layoutReady === true} sectionCodes={sections} draftMode={f.pubStatus === "published" || !!f.layoutDraft} />
+        <StudioWorkspace frameworkId={f.id} domains={domains} levels={v.levels} components={v.components} editable={editable} initialId={sp.c ?? null} canReorder={editable && v.layoutReady === true} sectionCodes={sections} draftMode={f.pubStatus === "published" || !!f.layoutDraft} pubStatus={f.pubStatus} />
+      ) : tab === "compare" ? (
+        diff && "status" in diff && typeof diff.status === "number"
+          ? <p role="alert" className="rounded-lg border border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)] px-3 py-2 text-[13px] text-[var(--cmp-text-critical)]">{"error" in diff ? diff.error : "The comparison could not be read just now."}</p>
+          : diff && <CompareView result={diff as DiffResponse} components={v.components} names={compNames} levels={levelNames} back="?tab=competencies" />
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -173,6 +185,11 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
                 </details>
               ))}
               <div className="mt-3"><NewDomain frameworkId={f.id} /></div>
+              {f.pubStatus === "draft" && f.code && (
+                <details className="mt-3"><summary className="cursor-pointer text-[13px] font-semibold text-gray-800">Add competencies from a spreadsheet</summary>
+                  <div className="mt-2"><SheetImport frameworkCode={f.code} componentLabels={v.components} /></div>
+                </details>
+              )}
             </section>
           )}
         </>

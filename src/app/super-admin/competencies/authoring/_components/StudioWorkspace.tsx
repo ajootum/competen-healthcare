@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { arrange } from "@/lib/competency/layout-order";
-import { criterionLabel, criterionPrefixes } from "@/lib/competency/criterion-labels";
-import { announceMove, moveInArray, shortName, stepTarget } from "@/lib/competency/reorder-ui";
-import { CompetencyEditor, SubmitReview } from "./AuthoringControls";
+import { announceMove, dropOf, movePointerDrag, moveInArray, readDropTarget, shortName, startPointerDrag, stepTarget, type PointerDrag } from "@/lib/competency/reorder-ui";
+import { SubmitReview } from "./AuthoringControls";
+import PropertiesPanel from "./PropertiesPanel";
 import { ReviewButton } from "./ReviewDialog";
 
 // CFCA-STUDIO-UX-02, the Competencies tab of one framework: a compact searchable explorer (domains, competencies,
@@ -15,14 +15,18 @@ import { ReviewButton } from "./ReviewDialog";
 //
 // FRAMEWORK-DESIGN-STUDIO-01 slice C: the order of domains, of a domain's competencies, of a competency's criteria
 // (within one section) and of the sections can be changed by drag and drop or by Move up / Move down on every row.
-// Only a move inside the same parent is offered: a move to another parent is a clinical change and is not here. Each
-// move posts reorder_layout with the full new order of that parent; the server decides (and may answer 409).
+// Only a move inside the same parent is offered here (a criterion to another section or competency is "Move to..." in the
+// properties panel). Each move posts reorder_layout with the full new order of that parent; the server decides (and may
+// answer 409).
+//
+// FRAMEWORK-DESIGN-STUDIO-02 S2: dragging is by pointer events on a row's grip (touch and mouse, no library); the arrow
+// buttons and the live region stay. The selected competency's fields and criteria are edited in PropertiesPanel.
 
 export type StudioStatus = "eligible" | "in_review" | "approved" | "changes_requested" | "framework_locked" | "unreadable";
 export type StudioCompetency = {
   id: string; code: string | null; name: string; description: string | null; learningOutcomes: string[]; expectedLevelId: string | null;
   riskCategory: string; sortOrder: number; cpuId: string | null; status: StudioStatus; statusText: string;
-  criteria: { id?: string; component: string | null; text: string; sourceRef: string | null }[];
+  criteria: { id?: string; component: string | null; text: string; sourceRef: string | null; active?: boolean }[];
 };
 export type StudioDomain = { id: string; name: string; competencies: StudioCompetency[]; cpus: { id: string; label: string }[] };
 
@@ -43,24 +47,29 @@ type View = { domains: StudioDomain[]; sections: string[] };
 type Group = {
   key: string; level: "domains" | "competencies" | "criteria" | "sections"; parentId?: string; component?: string | null;
   ids: string[]; names: string[]; apply: (v: View, ids: string[]) => View;
+  /** The order to send when the list shown is only part of the parent (retired criteria keep their slots). */
+  expand?: (ids: string[]) => string[];
 };
-/** What a row needs to be reorderable: native drag props and the Move up / Move down pair. */
+/** What a row needs to be reorderable: its drop-target attributes, a grip to drag by, and the Move up / Move down pair. */
 export type Reorder = {
   on: boolean;
-  row: (g: Group, i: number) => React.HTMLAttributes<HTMLElement> & { draggable?: boolean };
+  row: (g: Group, i: number) => { "data-drop-key": string; "data-drop-index": number; className?: string };
+  grip: (g: Group, i: number, className?: string) => React.ReactNode;
   buttons: (g: Group, i: number) => React.ReactNode;
   criteriaGroup: (c: StudioCompetency, component: string | null) => Group;
 };
 
 const sameKeyFor = (group: Group, i: number) => `${group.key}|${group.ids[i]}`;
 
-export default function StudioWorkspace({ frameworkId, domains: domainsIn, levels, components, editable, initialId, canReorder = false, sectionCodes, draftMode = false }: {
+export default function StudioWorkspace({ frameworkId, domains: domainsIn, levels, components, editable, initialId, canReorder = false, sectionCodes, draftMode = false, pubStatus = "draft" }: {
   frameworkId: string; domains: StudioDomain[]; levels: { id: string; score: number; label: string }[];
   components: Record<string, string>; editable: boolean; initialId: string | null;
   /** The order can be changed: the framework is editable and 750/751 are on this environment (the server decides again). */
   canReorder?: boolean; sectionCodes?: string[];
   /** A framework that has been published: a move is saved as a draft layout and learners keep the published order. */
   draftMode?: boolean;
+  /** Criteria are added, edited, retired and moved in a DRAFT framework only (S1); anything else goes through a revision draft. */
+  pubStatus?: string;
 }) {
   const router = useRouter();
   const sections0 = sectionCodes ?? Object.keys(components);
@@ -77,6 +86,7 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
   const query = q.trim().toLowerCase();
   const match = (c: StudioCompetency) => !query || c.name.toLowerCase().includes(query) || (c.code ?? "").toLowerCase().includes(query);
   const cur = all.find(x => x.c.id === active) ?? null;
+  const targets = useMemo(() => all.map(x => ({ id: x.c.id, label: `${x.d.name}: ${x.c.code ? `${x.c.code} ` : ""}${x.c.name}` })), [all]);
 
   function choose(id: string) {
     setActive(id);
@@ -91,7 +101,7 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
   const [say, setSay] = useState("");
   const [fail, setFail] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
-  const drag = useRef<{ key: string; index: number } | null>(null);
+  const drag = useRef<PointerDrag | null>(null);
   const focusNext = useRef<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const reorderable = canReorder && editable;
@@ -118,7 +128,7 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
     try {
       const res = await fetch(AUTHORING, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reorder_layout", frameworkId, level: g.level, ...(g.parentId ? { parentId: g.parentId } : {}), ...(g.level === "criteria" ? { component: g.component ?? null } : {}), order: ids }),
+        body: JSON.stringify({ action: "reorder_layout", frameworkId, level: g.level, ...(g.parentId ? { parentId: g.parentId } : {}), ...(g.level === "criteria" ? { component: g.component ?? null } : {}), order: g.expand ? g.expand(ids) : ids }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) { setView(before); setFail(j?.error ?? "That order could not be saved. Nothing has changed."); setSay(""); return; }
@@ -128,16 +138,32 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
 
   const rx: Reorder = {
     on: reorderable,
-    row: (g, i) => ({
-      draggable: true,
-      onDragStart: (e: React.DragEvent) => { e.stopPropagation(); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", g.ids[i]); } catch { /* some browsers */ } drag.current = { key: g.key, index: i }; },
-      // A drop is allowed only inside the list the drag started in: never across parents.
-      onDragOver: (e: React.DragEvent) => { if (drag.current?.key !== g.key) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; if (over !== sameKeyFor(g, i)) setOver(sameKeyFor(g, i)); },
-      onDragLeave: () => setOver(o => (o === sameKeyFor(g, i) ? null : o)),
-      onDrop: (e: React.DragEvent) => { const from = drag.current; drag.current = null; setOver(null); if (!from || from.key !== g.key) return; e.preventDefault(); e.stopPropagation(); void move(g, from.index, i); },
-      onDragEnd: () => { drag.current = null; setOver(null); },
-      className: over === sameKeyFor(g, i) ? overCls : undefined,
-    }),
+    // A drop is allowed only inside the list the drag started in: never across parents.
+    row: (g, i) => ({ "data-drop-key": g.key, "data-drop-index": i, className: over === sameKeyFor(g, i) ? overCls : undefined }),
+    grip: (g, i, className = "") => (
+      <span aria-hidden title="Drag to reorder" data-grip className={`inline-flex shrink-0 cursor-grab touch-none select-none items-center justify-center text-gray-400 active:cursor-grabbing pointer-coarse:h-[var(--cmp-touch-min)] pointer-coarse:w-[var(--cmp-touch-min)] ${className}`}
+        onPointerDown={e => {
+          if (busy || (e.pointerType === "mouse" && e.button !== 0)) return;
+          e.stopPropagation();
+          try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+          drag.current = startPointerDrag(g.key, i, e.clientX, e.clientY);
+        }}
+        onPointerMove={e => {
+          const st = drag.current; if (!st) return;
+          const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-drop-key]");
+          const next = movePointerDrag(st, e.clientX, e.clientY, readDropTarget(el?.dataset.dropKey, el?.dataset.dropIndex));
+          drag.current = next;
+          const id = next.active && next.over !== null ? g.ids[next.over] : undefined;
+          setOver(id ? `${g.key}|${id}` : null);
+        }}
+        onPointerUp={e => {
+          const st = drag.current; drag.current = null; setOver(null);
+          try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+          const d = st ? dropOf(st) : null;
+          if (d) void move(g, d.from, d.to);
+        }}
+        onPointerCancel={() => { drag.current = null; setOver(null); }}>⠿</span>
+    ),
     buttons: (g, i) => {
       const up = stepTarget(i, -1, g.ids.length), down = stepTarget(i, 1, g.ids.length), name = shortName(g.names[i]);
       return (
@@ -148,16 +174,19 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
       );
     },
     criteriaGroup: (c, component) => {
-      const list = c.criteria.filter(k => (k.component ?? null) === component && k.id);
+      const sec = c.criteria.filter(k => (k.component ?? null) === component && k.id);
+      const list = sec.filter(k => k.active !== false);
       return {
         key: `criteria:${c.id}:${component ?? ""}`, level: "criteria", parentId: c.id, component,
         ids: list.map(k => k.id!), names: list.map(k => k.text),
+        // The server wants the whole section: retired criteria stay where they are.
+        expand: ids => { const q = [...ids]; return sec.map(k => (k.active === false ? k.id! : q.shift()!)); },
         apply: (v, ids) => ({
           ...v, domains: v.domains.map(d => ({ ...d, competencies: d.competencies.map(x => {
             if (x.id !== c.id) return x;
             const byId = new Map(x.criteria.map(k => [k.id, k])), queue = [...ids];
             // The section's criteria take the section's own slots; other sections do not move.
-            return { ...x, criteria: x.criteria.map(k => ((k.component ?? null) === component && k.id ? byId.get(queue.shift())! : k)) };
+            return { ...x, criteria: x.criteria.map(k => ((k.component ?? null) === component && k.id && k.active !== false ? byId.get(queue.shift())! : k)) };
           }) })),
         }),
       };
@@ -196,7 +225,7 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
             return (
               <div key={d.id}>
                 <div {...(reorderLists ? rx.row(domainGroup, di) : {})} className={`flex items-center gap-1 pr-2 hover:bg-gray-50 ${reorderLists && over === sameKeyFor(domainGroup, di) ? overCls : ""}`}>
-                  {reorderLists && <span aria-hidden title="Drag to reorder" className="cursor-grab select-none pl-2 text-gray-400">⠿</span>}
+                  {reorderLists && rx.grip(domainGroup, di, "pl-2")}
                   <button type="button" aria-expanded={isOpen} onClick={() => setOpen(s => toggle(s, d.id))}
                     className="flex min-w-0 flex-1 items-center justify-between px-2 py-2.5 text-left text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)]">
                     <span className="min-w-0"><span aria-hidden className="mr-1.5 inline-block w-3 text-gray-500">{isOpen ? "▾" : "▸"}</span>{d.name}</span>
@@ -209,11 +238,11 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
                   return (
                     <div key={c.id} {...(reorderLists ? rx.row(cg, ci) : {})}
                       className={`mx-2 mb-1 flex items-start gap-2 rounded-lg px-2 py-2 ${c.id === active ? "border-l-4 border-teal-700 bg-teal-50/70" : "hover:bg-gray-50"} ${reorderLists && over === sameKeyFor(cg, ci) ? overCls : ""}`}>
-                      {reorderLists && <span aria-hidden title="Drag to reorder" className="mt-1 cursor-grab select-none text-gray-400">⠿</span>}
+                      {reorderLists && rx.grip(cg, ci, "mt-1")}
                       <input type="checkbox" aria-label={`Select ${c.name}`} className="mt-1" checked={picked.has(c.id)} onChange={() => setPicked(s => toggle(s, c.id))} />
                       <button type="button" onClick={() => choose(c.id)} aria-current={c.id === active ? "true" : undefined} className="min-w-0 flex-1 text-left">
                         <span className="block text-[13.5px] text-gray-900">{c.name}</span>
-                        <span className="block font-mono text-[11.5px] text-gray-500">{c.code ?? "no code"} · {c.criteria.length} criteria</span>
+                        <span className="block font-mono text-[11.5px] text-gray-500">{c.code ?? "no code"} · {c.criteria.filter(k => k.active !== false).length} criteria</span>
                       </button>
                       <span title={CHIP[c.status][0]} aria-label={CHIP[c.status][0]} className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${DOT[c.status]}`} />
                       {reorderLists && rx.buttons(cg, ci)}
@@ -230,7 +259,7 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
               <ol className="mt-1 space-y-1 pb-1">
                 {view.sections.map((code, i) => (
                   <li key={code} {...rx.row(sectionGroup, i)} className={`flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-gray-50 ${over === sameKeyFor(sectionGroup, i) ? overCls : ""}`}>
-                    <span aria-hidden title="Drag to reorder" className="cursor-grab select-none text-gray-400">⠿</span>
+                    {rx.grip(sectionGroup, i)}
                     <span className="min-w-0 flex-1 text-[13px] text-gray-900">{components[code] ?? code}</span>
                     {rx.buttons(sectionGroup, i)}
                   </li>
@@ -260,58 +289,18 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
               </div>
               <h2 className="mt-1 text-[20px] font-bold text-gray-900">{cur.c.name}</h2>
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[12.5px] text-gray-600">{cur.c.statusText} · {cur.c.criteria.length} source criteria</p>
+                <p className="text-[12.5px] text-gray-600">{cur.c.statusText} · {cur.c.criteria.filter(k => k.active !== false).length} source criteria</p>
                 <ReviewButton frameworkId={frameworkId} scope={{ kind: "domain", domainId: cur.d.id }} label="Review this domain →" className={link} disabled={!editable} />
               </div>
             </div>
             <div className="space-y-5 p-5">
-              <Criteria key={cur.c.id} comp={cur.c} components={components} sections={view.sections} rx={rx} />
-              {editable ? (
-                <details className="rounded-xl border border-gray-200 p-4" open={false}>
-                  <summary className="cursor-pointer text-[14px] font-semibold text-gray-900">Edit name, description, outcomes, level and risk</summary>
-                  <p className="mt-1 text-[12.5px] text-gray-600">Saving changes the content version. A reviewed or pending version then needs review again.</p>
-                  <div className="mt-3"><CompetencyEditor key={cur.c.id} c={cur.c} levels={levels} approved={cur.c.status === "approved"} cpus={cur.d.cpus} /></div>
-                </details>
-              ) : <p className="text-[13px] text-gray-600">The framework is under governance review or archived, so its content and its order are not edited here.</p>}
+              <PropertiesPanel key={cur.c.id} comp={cur.c} domain={cur.d} levels={levels} components={components} sections={view.sections} targets={targets} rx={rx}
+                editable={editable} criteriaEditable={editable && pubStatus === "draft"} />
               {editable && (cur.c.status === "eligible" || cur.c.status === "changes_requested") && <SubmitReview competencyId={cur.c.id} />}
             </div>
           </>
         )}
       </section>
-    </div>
-  );
-}
-
-function Criteria({ comp, components, sections, rx }: { comp: StudioCompetency; components: Record<string, string>; sections: string[]; rx: Reorder }) {
-  const criteria = comp.criteria;
-  // Section tabs follow the framework's section order (sections), then "Not classified".
-  const codes = [...sections.filter(k => k in components && criteria.some(c => c.component === k)), ...(criteria.some(c => !c.component) ? [""] : [])];
-  const [tab, setTab] = useState(codes[0] ?? "");
-  if (!criteria.length) return <p className="text-[13px] text-gray-600">No assessment criteria are recorded for this competency.</p>;
-  const shown = criteria.filter(c => (c.component ?? "") === tab);
-  const g = rx.on && shown.length > 1 && shown.every(c => c.id) ? rx.criteriaGroup(comp, tab || null) : null;
-  const prefixes = criterionPrefixes(components);
-  return (
-    <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-[15px] font-bold text-gray-900">Assessment criteria</h3><span className="text-[12px] text-gray-500">One section at a time · source wording{g ? " · reorder within this section" : ""}</span></div>
-      <div role="tablist" aria-label="Assessment components" className="mt-2 flex flex-wrap gap-2">
-        {codes.map(code => {
-          const n = criteria.filter(c => (c.component ?? "") === code).length;
-          return <button key={code || "none"} role="tab" type="button" aria-selected={tab === code} onClick={() => setTab(code)}
-            className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${tab === code ? "border-teal-900 bg-teal-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}>
-            {code ? components[code] ?? code : "Not classified"} {n}</button>;
-        })}
-      </div>
-      <ol role="tabpanel" className="mt-3 space-y-2">
-        {shown.map((c, i) => (
-          <li key={c.id ?? i} title={c.sourceRef ?? undefined} {...(g ? rx.row(g, i) : {})} className={`flex items-start gap-2 rounded-lg ${g ? rx.row(g, i).className ?? "" : ""}`}>
-            {g && <span aria-hidden title="Drag to reorder" className="mt-1.5 cursor-grab select-none text-gray-400">⠿</span>}
-            <span className="mt-0.5 inline-flex h-7 min-w-9 items-center justify-center rounded-md bg-teal-50 px-1.5 font-mono text-[11.5px] font-semibold text-teal-900">{criterionLabel(prefixes, tab, i)}</span>
-            <span className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-[13.5px] text-gray-900">{c.text}</span>
-            {g && <span className="mt-0.5">{rx.buttons(g, i)}</span>}
-          </li>
-        ))}
-      </ol>
     </div>
   );
 }
