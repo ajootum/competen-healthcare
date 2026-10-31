@@ -32,7 +32,7 @@ const url = process.env.STAGING_SUPABASE_URL ?? "", key = process.env.STAGING_SE
 const verdict = judgeTarget(url);
 if (!verdict.ok || !key) { console.error(`REFUSING: STAGING_SUPABASE_URL is not a confirmed non-production project (${verdict.ok ? "no key" : verdict.reason}).`); process.exit(1); }
 assertSafeTarget(url, "STAGING_SUPABASE_URL");
-const admin: any = createClient(url, key, { auth: { persistSession: false } });
+export const admin: any = createClient(url, key, { auth: { persistSession: false } });
 
 const OUT = "C:\\Users\\elish\\AppData\\Local\\Temp\\claude\\C--Users-elish-Documents-Competen\\a8637d9f-8e17-4384-a425-178c29a6d626\\scratchpad\\fds-browser-fixture.txt";
 const AUTHOR = { email: "harness-fds-author@competen.test", name: "FDS fixture author (synthetic, staging)" };
@@ -43,8 +43,8 @@ const FW = [
 ] as const;
 const BASE = "http://localhost:3100/super-admin/competencies/authoring";
 
-const newPassword = () => `${randomBytes(18).toString("base64url")}-Aa1!`;
-async function findUser(email: string) {
+export const newPassword = () => `${randomBytes(18).toString("base64url")}-Aa1!`;
+export async function findUser(email: string) {
   for (let page = 1; page <= 20; page++) {
     const { data } = await admin.auth.admin.listUsers({ page, perPage: 200 });
     const hit = (data?.users ?? []).find((u: any) => u.email === email);
@@ -57,7 +57,7 @@ function savedPassword(): string | null {
   if (!existsSync(OUT)) return null;
   return /^password: (.+)$/m.exec(readFileSync(OUT, "utf8"))?.[1]?.trim() ?? null;
 }
-async function ensureUser(who: { email: string; name: string }, wantPassword: string | null) {
+export async function ensureUser(who: { email: string; name: string }, wantPassword: string | null) {
   let u = await findUser(who.email);
   let password = wantPassword;
   if (!u) {
@@ -176,4 +176,5 @@ async function main() {
   ].join("\n"));
   console.log(`fixture ready: author ${AUTHOR.email} (${roles.join(", ")}); draft ${ids.draft}; published ${ids.published}; details in the scratchpad file`);
 }
-main().catch(e => { console.error(e instanceof Error ? e.message : e); process.exit(1); });
+// Run as a script; the FDS-02 acceptance harness imports the helpers above without running this.
+if (/fds-browser-fixture.ts$/.test(process.argv[1] ?? "")) main().catch(e => { console.error(e instanceof Error ? e.message : e); process.exit(1); });

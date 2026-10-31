@@ -19,6 +19,9 @@ export type QueueItem = {
   /** CFCA-STUDIO-P1 (670): the criteria by component. Live rows, shown only for a CURRENT version (its hash, which
    *  covers each criterion and its component, still matches), so they are exactly what is being approved. */
   criteria?: { component: string | null; text: string; sourceRef: string | null }[];
+  /** FDS-02 S5 (770): the version is the content PROPOSED in an open revision draft of a published framework (isNew: a
+   *  competency the revision adds). Its criteria are the revision's. Learners still read the published content. */
+  revision?: { id: string; isNew: boolean };
 };
 
 const rows = async (p: PromiseLike<any>) => { try { const r = await p; return r?.error ? null : (r?.data ?? []); } catch { return null; } };
@@ -34,18 +37,20 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
   // Migration 640: independence covers every version of a competency, so a resubmission naming somebody else is
   // still not this reviewer's to decide. The trigger refuses it either way. This keeps it out of the queue.
   const mine = (v: any) => v.submitted_by === reviewerId || (v.authored_by ?? []).includes(reviewerId);
-  const ownCompetencies = new Set(versions.filter((v: any) => v.competency_id && mine(v)).map((v: any) => v.competency_id));
-  const independent = versions.filter((v: any) => !mine(v) && !(v.competency_id && ownCompetencies.has(v.competency_id)));
+  // 770: a version of a NEW competency of a revision names it by proposed_competency_id until it is published.
+  const subject = (v: any): string | null => v.competency_id ?? v.proposed_competency_id ?? null;
+  const ownCompetencies = new Set(versions.filter((v: any) => subject(v) && mine(v)).map((v: any) => subject(v)));
+  const independent = versions.filter((v: any) => !mine(v) && !(subject(v) && ownCompetencies.has(subject(v))));
   // Migration 422: a case version has no competency_id. The competency path reads competency versions only, so one
   // case in review never makes the whole queue unreadable. Cases are listed below, by their own rule.
-  const open = independent.filter((v: any) => v.competency_id);
+  const open = independent.filter((v: any) => subject(v));
   const cases = independent.filter((v: any) => !v.competency_id && v.case_version_id);
   // Migration 690: a method version has neither. Independence covers EVERY version of the same method (author, editor or
   // submitter of any), so the method rows are read first. They are read apart: an unreadable method row costs only the
   // method items, never the competencies and cases beside them.
   const methods = await methodCandidates(admin, reviewerId, versions, mine);
   if (!open.length && !cases.length && !methods.length) return { appointments, items: [] };
-  const compIds = [...new Set(open.map((v: any) => v.competency_id))] as string[];
+  const compIds = [...new Set(open.map((v: any) => subject(v)))] as string[];
   const caseVersionIds = cases.map((v: any) => v.case_version_id);
   const [decisions, hashes, caseRows, links] = await Promise.all([
     rows(admin.from("clinical_review_decision").select("version_id, reviewer_id, decision").in("version_id", [...open, ...cases, ...methods.map(m => m.v)].map((v: any) => v.id))),
@@ -54,6 +59,10 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
     caseVersionIds.length ? rows(admin.from("case_library_version_competency").select("version_id, competency_id").in("version_id", caseVersionIds)) : Promise.resolve([]),
   ]);
   if (decisions === null || hashes === null || caseRows === null || links === null) return null;
+  // 770: what open revision drafts propose for these competencies (none before 770, or when unreadable: then a revision
+  // version is simply not listed, never shown as current).
+  const proposals: any[] = compIds.length ? await (async () => { try { const r = await admin.rpc("framework_revision_open_hashes", { p_ids: compIds }); return r.error ? [] : r.data ?? []; } catch { return []; } })() : [];
+  const proposal = new Map<string, any>(proposals.map((p: any) => [p.competency_id, p]));
   const methodApplies = (v: any) => { const a = v.content_snapshot?.content?.applicability ?? {};
     const list = (x: any) => (Array.isArray(x) ? x.filter((y: any) => typeof y === "string") : []) as string[];
     return { frameworkIds: list(a.frameworkIds), competencyIds: list(a.competencyIds) }; };
@@ -61,8 +70,18 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
   const allComp = [...new Set([...compIds, ...links.map((l: any) => l.competency_id), ...methodComp])];
   const comps = allComp.length ? await rows(admin.from("framework_competencies").select("id, name, domain_id").in("id", allComp)) : [];
   if (comps === null) return null;
-  const doms = await rows(admin.from("framework_domains").select("id, name, framework_id").in("id", [...new Set(comps.map((c: any) => c.domain_id))]));
+  const doms = await rows(admin.from("framework_domains").select("id, name, framework_id").in("id", [...new Set([...comps.map((c: any) => c.domain_id), ...proposals.map((p: any) => p.domain_id)])]));
   if (doms === null) return null;
+  // 771: a new competency may be proposed in a NEW domain of its revision, which has no live row yet. Its framework is the
+  // revision's (framework_revision_open_hashes says which), its name the revision's. Unreadable or before 771: not listed.
+  const missing = [...new Set(proposals.filter((p: any) => p.is_new && p.domain_id && !doms.some((d: any) => d.id === p.domain_id)).map((p: any) => p.domain_id as string))];
+  if (missing.length) {
+    const nd = await (async () => { try { const r = await admin.from("framework_revision_domain").select("domain_id, name, revision_id").in("domain_id", missing).is("origin_domain_id", null); return r.error ? [] : r.data ?? []; } catch { return []; } })();
+    for (const d of nd as any[]) {
+      const p = proposals.find((x: any) => x.domain_id === d.domain_id && x.revision_id === d.revision_id);
+      if (p) doms.push({ id: d.domain_id, name: d.name, framework_id: p.framework_id });
+    }
+  }
   const fws = await rows(admin.from("frameworks").select("id, name, profession_term_id, specialty_term_id").in("id", [...new Set([...doms.map((d: any) => d.framework_id), ...methodFw])]).is("hospital_id", null));
   if (fws === null) return null;
   const hash = new Map<string, string>(hashes.map((h: any) => [h.competency_id, h.content_hash]));
@@ -72,8 +91,11 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
     const ds = decisions.filter((d: any) => d.version_id === v.id);
     if (ds.some((d: any) => d.decision === "rejected" || d.reviewer_id === reviewerId)) continue;
     const approvals = ds.filter((d: any) => d.decision === "approved").length;
-    if (approvals >= v.required_approvals || hash.get(v.competency_id) !== v.content_hash) continue;
-    const c = comp.get(v.competency_id), d = c ? dom.get(c.domain_id) : null, f = d ? fw.get(d.framework_id) : null;
+    const id = subject(v) as string, prop = proposal.get(id);
+    const viaProposal = hash.get(id) !== v.content_hash && prop?.proposed_hash === v.content_hash;
+    if (approvals >= v.required_approvals || (hash.get(id) !== v.content_hash && !viaProposal)) continue;
+    const c = comp.get(id) ?? (prop?.is_new ? { id, name: v.content_snapshot?.name ?? "New competency", domain_id: prop.domain_id } : null);
+    const d = c ? dom.get(c.domain_id) : null, f = d ? fw.get(d.framework_id) : null;
     if (!c || !d || !f) continue;
     const covering = appointments.find(a => scopeCovers(a.scopes, { domainId: d.id, frameworkId: f.id, professionTermId: f.profession_term_id, specialtyTermId: f.specialty_term_id }));
     if (!covering) continue;
@@ -82,6 +104,7 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
       versionId: v.id, competencyId: c.id, title: s.name ?? c.name, home: f.name, domain: d.name, required: v.required_approvals, approvals,
       risk: v.risk_basis ?? null, submittedAt: v.created_at, appointmentId: covering.id, kind: "competency",
       snapshot: { description: s.description ?? null, outcomes: Array.isArray(s.learning_outcomes) ? s.learning_outcomes : [], skills: Array.isArray(s.skills) ? s.skills : [], risk: s.risk_category ?? null },
+      ...(viaProposal ? { revision: { id: prop.revision_id, isNew: !!prop.is_new } } : {}),
     });
   }
   // Cases (422): current (the case version's hash still matches), and in scope only if ONE appointment's scopes cover
@@ -134,13 +157,18 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
       });
     } catch { /* one unreadable method row never makes the queue unreadable */ }
   }
-  const ids = items.filter(i => i.kind === "competency").map(i => i.competencyId);
+  const ids = items.filter(i => i.kind === "competency" && !i.revision).map(i => i.competencyId);
   if (ids.length) {
     const read = (cols: string) => admin.from("competency_skills").select(cols).in("competency_id", ids).order("sort_order").limit(20000);
     let r = await read("competency_id, name, sort_order, component_code, source_ref");
     if (r.error) r = await read("competency_id, name, sort_order");
     for (const it of items) if (it.kind === "competency") it.criteria = ((r.data ?? []) as any[]).filter(k => k.competency_id === it.competencyId)
       .map(k => ({ component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null }));
+  }
+  // 770: a proposed version shows the criteria the revision proposes (active ones, the ones its hash covers).
+  for (const it of items) if (it.kind === "competency" && it.revision) {
+    const r = await rows(admin.from("framework_revision_criterion").select("name, sort_order, component_code, source_ref, is_active").eq("revision_id", it.revision.id).eq("competency_id", it.competencyId).order("sort_order").limit(2000));
+    it.criteria = (r ?? []).filter((k: any) => k.is_active !== false).map((k: any) => ({ component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null }));
   }
   return { appointments, items };
 }

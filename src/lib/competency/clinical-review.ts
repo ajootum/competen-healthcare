@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { activeGrants, appointmentInTerm, narrowToScope } from "@/lib/hq/spaces";
+import { ORGANISATIONAL_ACTIONS } from "./layout-order";
 
 // ── COMPETEN HOLDINGS CLINICAL-CONTENT APPROVAL ── migration 395, owner decisions D2 and D3 ─────────────────
 //
@@ -115,13 +116,24 @@ export function reviewRisk(competencyRisk: string | null | undefined, cpuRisk: s
   return competencyRisk === "high" || cpuRisk === "high" ? "high" : "standard";
 }
 
+/** 771: audit actions of the structure of a published framework proposed in its revision draft (framework-revision.ts). */
+export const REVISION_STRUCTURE_ACTIONS = ["cfca_revision_framework_updated", "cfca_revision_domain_created", "cfca_revision_domain_renamed",
+  "cfca_revision_practice_created", "cfca_revision_practice_renamed", "cfca_revision_cpu_created", "cfca_revision_cpu_renamed"] as const;
+
 // Audit actions that record governance of content rather than authorship of it.
 const NOT_AUTHORSHIP = new Set(["submit_review", "approve_content", "reject_content", "publish", "archive", "revert",
   "catalogue_entry_add", "catalogue_entry_status", "catalogue_entry_remove", "catalogue_entry_review", "clinical_review_submitted", "clinical_review_decided",
   "clinical_scope_added", "clinical_scope_ended", "framework_specialty_set",
   // FRAMEWORK-DESIGN-STUDIO-01 F4 (751): a presentation-only reorder is not authorship, so it does not bar clinical review.
   // It still counts as contribution for publication (framework-publication.ts GOVERNANCE leaves it out).
-  "reorder_layout"]);
+  "reorder_layout",
+  // FRAMEWORK-DESIGN-STUDIO-02 (760, ruling D3): organisational changes (Areas, a domain's Area, a competency to another
+  // domain) are not authorship either. The 760 clinical_review_decision_sod_guard names the same six.
+  ...ORGANISATIONAL_ACTIONS,
+  // FRAMEWORK-DESIGN-STUDIO-02 S5 (771, ruling D3): the structure of a published framework proposed in its revision
+  // (label, domains, practices, CPUs) is not in the content hash, so it is organisational too. The 771 SoD guard names
+  // the same seven. Contribution for publication still (framework-publication.ts GOVERNANCE leaves them out).
+  ...REVISION_STRUCTURE_ACTIONS]);
 
 /** Pure: who authored or materially edited a competency, from its audit trail and the person putting it forward. */
 export function authorsOf(submitter: string, audit: readonly { actor_id: string | null; action: string }[]): string[] {

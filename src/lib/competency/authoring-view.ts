@@ -12,8 +12,8 @@ export type AuthoringCompetency = {
   /** CFCA-STUDIO-P1 (670): its skills / assessment criteria, in order, each with its component (null = not classified). */
   criteria: AuthoringCriterion[];
 };
-/** id: the competency_skills row (FRAMEWORK-DESIGN-STUDIO-01, for reordering). */
-export type AuthoringCriterion = { id?: string; component: string | null; text: string; sourceRef: string | null };
+/** id: the competency_skills row (FRAMEWORK-DESIGN-STUDIO-01, for reordering). active false: retired (FRAMEWORK-DESIGN-STUDIO-02 S1), kept for history. */
+export type AuthoringCriterion = { id?: string; component: string | null; text: string; sourceRef: string | null; active?: boolean };
 export type AuthoringPractice = { id: string; code: string | null; name: string; cpus: { id: string; code: string | null; name: string; riskCategory: string; complexity: number }[] };
 export type AuthoringFramework = {
   id: string; code: string | null; name: string; description: string | null; layer: string | null; pubStatus: string; versionNum: number;
@@ -22,7 +22,11 @@ export type AuthoringFramework = {
    *  draft of a published framework (null: none) renders through layout-order.ts applyLayout. componentOrder null = the
    *  registry order. All null before 750. */
   layoutDraft?: LayoutV1 | null; layoutDraftBy?: string | null; layoutDraftAt?: string | null; componentOrder?: string[] | null;
-  domains: { id: string; code: string | null; name: string; sortOrder: number; practices: AuthoringPractice[]; competencies: AuthoringCompetency[] }[];
+  /** FRAMEWORK-DESIGN-STUDIO-02 (760): the framework's Areas, live, in order (absent before 760). A pending layout draft
+   *  may reorder (areas), rename (areaNames) and re-place (domainAreas) them: render with applyLayout + groupByArea. */
+  areas?: { id: string; name: string; description: string | null; sortOrder: number }[];
+  /** areaId: 760, the domain's live Area (null: none, absent before 760). */
+  domains: { id: string; code: string | null; name: string; sortOrder: number; areaId?: string | null; practices: AuthoringPractice[]; competencies: AuthoringCompetency[] }[];
 };
 export type AuthoringView = {
   frameworks: AuthoringFramework[];
@@ -32,6 +36,8 @@ export type AuthoringView = {
   clinicalReadable: boolean;
   /** FRAMEWORK-DESIGN-STUDIO-01: 750 and 751 are on this environment, so reordering is offered. */
   layoutReady?: boolean;
+  /** FRAMEWORK-DESIGN-STUDIO-02: 760 is on this environment, so Areas and moves between domains are offered. */
+  areasReady?: boolean;
   /** The assessment component names (660), by code. */
   components: Record<string, string>;
 };
@@ -60,14 +66,23 @@ export async function loadAuthoringView(admin: any): Promise<AuthoringView | nul
       fwIds.length ? admin.from("frameworks").select("id, layout_draft, layout_draft_by, layout_draft_at, component_order").in("id", fwIds) : Promise.resolve({ data: [], error: null }),
       admin.from("framework_competencies").select("id, learning_outcome_ids").limit(0),
     ]);
+    // 760: absent table or column reads as "Areas not set up", never as a failure of the page.
+    const [areaRows, domainAreas] = fwIds.length ? await Promise.all([
+      admin.from("framework_areas").select("id, framework_id, name, description, sort_order").in("framework_id", fwIds),
+      admin.from("framework_domains").select("id, area_id").in("framework_id", fwIds),
+    ]) : await Promise.all([admin.from("framework_areas").select("id").limit(0), admin.from("framework_domains").select("id, area_id").limit(0)]);
+    const areasOk = !areaRows?.error && !domainAreas?.error;
+    const areaOf = new Map<string, string | null>(areasOk ? ((domainAreas.data ?? []) as any[]).map(r => [r.id, r.area_id ?? null]) : []);
     const lay = new Map<string, any>(layouts.error ? [] : (layouts.data ?? []).map((r: any) => [r.id, r]));
     const frameworks: AuthoringFramework[] = (fws ?? []).map((f: any) => ({
       id: f.id, code: f.code ?? null, name: f.name, description: f.description ?? null, layer: f.competency_layer ?? null, pubStatus: f.pub_status ?? "draft", versionNum: f.version_num ?? 0,
       professionTermId: f.profession_term_id ?? null, specialtyTermId: f.specialty_term_id ?? null, parentFrameworkId: f.parent_framework_id ?? null,
       layoutDraft: asLayout(lay.get(f.id)?.layout_draft), layoutDraftBy: lay.get(f.id)?.layout_draft_by ?? null, layoutDraftAt: lay.get(f.id)?.layout_draft_at ?? null,
       componentOrder: Array.isArray(lay.get(f.id)?.component_order) ? lay.get(f.id).component_order : null,
+      ...(areasOk ? { areas: ((areaRows.data ?? []) as any[]).filter(a => a.framework_id === f.id).sort(byRowOrder)
+        .map(a => ({ id: a.id, name: a.name, description: a.description ?? null, sortOrder: a.sort_order ?? 0 })) } : {}),
       domains: [...(f.framework_domains ?? [])].sort(byRowOrder).map((d: any) => ({
-        id: d.id, code: d.code ?? null, name: d.name, sortOrder: d.sort_order,
+        id: d.id, code: d.code ?? null, name: d.name, sortOrder: d.sort_order, ...(areasOk ? { areaId: areaOf.get(d.id) ?? null } : {}),
         practices: (d.practices ?? []).map((p: any) => ({ id: p.id, code: p.code ?? null, name: p.name,
           cpus: (p.clinical_practice_units ?? []).map((u: any) => ({ id: u.id, code: u.code ?? null, name: u.name, riskCategory: u.risk_category ?? "standard", complexity: u.complexity ?? 2 })) })),
         competencies: [...(d.framework_competencies ?? [])].sort(byRowOrder).map((c: any) => ({
@@ -80,7 +95,7 @@ export async function loadAuthoringView(admin: any): Promise<AuthoringView | nul
       })),
     }));
     return {
-      frameworks, clinicalReadable: reviews !== null, layoutReady: !layouts.error && !outcomeIds?.error,
+      frameworks, clinicalReadable: reviews !== null, layoutReady: !layouts.error && !outcomeIds?.error, areasReady: areasOk && !layouts.error && !outcomeIds?.error,
       levels: (lv.data ?? []).map((l: any) => ({ id: l.id, score: l.score, label: l.label })),
       professions, specialties,
       components: Object.fromEntries(((comps?.data ?? []) as any[]).map(c => [c.code, c.label])),
@@ -93,8 +108,8 @@ async function loadCriteria(admin: any, ids: string[]): Promise<Map<string, Auth
   const out = new Map<string, AuthoringCriterion[]>();
   if (!ids.length) return out;
   const read = (cols: string) => admin.from("competency_skills").select(cols).in("competency_id", ids).order("sort_order").limit(20000);
-  let r = await read("id, competency_id, name, sort_order, component_code, source_ref");
-  if (r.error) r = await read("id, competency_id, name, sort_order");
-  for (const k of ([...(r.data ?? [])] as any[]).sort(byRowOrder)) out.set(k.competency_id, [...(out.get(k.competency_id) ?? []), { id: k.id, component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null }]);
+  let r = await read("id, competency_id, name, sort_order, is_active, component_code, source_ref");
+  if (r.error) r = await read("id, competency_id, name, sort_order, is_active");
+  for (const k of ([...(r.data ?? [])] as any[]).sort(byRowOrder)) out.set(k.competency_id, [...(out.get(k.competency_id) ?? []), { id: k.id, component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null, active: k.is_active !== false }]);
   return out;
 }

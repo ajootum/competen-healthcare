@@ -43,9 +43,9 @@ describe("classifyReorder", () => {
   it("learning outcome order is clinical, and refused", () => {
     expect(classifyReorder(tree(), null, { level: "outcomes", parentId: "c1", order: ["x"] })).toMatchObject({ ok: false, clinical: true });
   });
-  it("a cross-parent move is clinical, and refused", () => {
+  it("a cross-parent move is refused by reorder (a criterion: clinical)", () => {
     // a competency into another domain
-    expect(classifyReorder(tree(), null, { level: "competencies", parentId: "d2", order: ["c1"] })).toMatchObject({ ok: false, clinical: true });
+    expect(classifyReorder(tree(), null, { level: "competencies", parentId: "d2", order: ["c1"] })).toMatchObject({ ok: false, clinical: false }); // 760: a move, not a reorder
     // a criterion into another section of the same competency
     expect(classifyReorder(tree(), null, { level: "criteria", parentId: "c1", component: "knowledge", order: ["k2", "k1"] })).toMatchObject({ ok: false, clinical: true });
     // a criterion into another competency

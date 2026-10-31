@@ -12,6 +12,12 @@ import { ReviewPackView } from "../../_studio/ReviewPackView";
 import { loadFrameworkPack } from "@/lib/competency/review-pack";
 import { applyLayout, sectionOrder, type LayoutTree } from "@/lib/competency/layout-order";
 import { LayoutDraftBanner } from "../_components/LayoutDraftBanner";
+import CompareView from "../_components/CompareView";
+import SheetImport from "../_components/SheetImport";
+import { loadFrameworkDiff, type DiffResponse } from "@/lib/competency/framework-diff";
+import { loadRevisionComparison, loadRevisionState, type RevisionDiffResponse } from "@/lib/competency/revision-view";
+import { overlayDomains, revisionCounts, revisionSummary } from "@/lib/competency/revision-ui";
+import { RevisionBanner, RevisionIntro } from "../_components/RevisionBanner";
 
 // /super-admin/competencies/authoring/[frameworkId] -- CFCA-STUDIO-UX-02: one framework, focused. Competencies (explorer
 // and a single active editor) and Overview & governance (structure, clinical review in numbers, publication kept
@@ -26,14 +32,15 @@ const STATUS: Record<string, string> = { draft: "Draft framework", in_review: "I
 const PUB: Record<string, string> = { draft: "Not published", in_review: "Awaiting a publication decision", approved: "Approved, not yet published", published: "Published", archived: "Archived" };
 const tabCls = (on: boolean) => `border-b-2 px-1 pb-2 text-[14.5px] font-semibold ${on ? "border-teal-700 text-teal-800" : "border-transparent text-gray-600 hover:text-gray-900"}`;
 
-export default async function FrameworkStudioPage({ params, searchParams }: { params: Promise<{ frameworkId: string }>; searchParams: Promise<{ tab?: string; c?: string; view?: string; layout?: string }> }) {
+export default async function FrameworkStudioPage({ params, searchParams }: { params: Promise<{ frameworkId: string }>; searchParams: Promise<{ tab?: string; c?: string; view?: string; layout?: string; revision?: string }> }) {
   const ctx = await requireHqCapability("hq.quality.competency.author");
   const [{ frameworkId }, sp] = await Promise.all([params, searchParams]);
   // The paper copy of this framework for its authors (owner, 29 Oct 2026).
   if (sp.view === "pack") {
-    const pack = await loadFrameworkPack(ctx.admin, frameworkId, ctx.fullName ?? null, sp.layout === "draft" ? { layout: "draft" } : {});
+    // FRAMEWORK-DESIGN-STUDIO-02 S6: ?revision=1 previews the proposed content of the open revision draft, bannered "Revision - not published".
+    const pack = await loadFrameworkPack(ctx.admin, frameworkId, ctx.fullName ?? null, sp.revision === "1" ? { revision: true } : sp.layout === "draft" ? { layout: "draft" } : {});
     return pack ? <ReviewPackView pack={pack} back={{ href: `/super-admin/competencies/authoring/${frameworkId}`, label: "Back to the framework" }} wordHref={`/api/hq/competency/review-pack?frameworkId=${frameworkId}`} />
-      : <p role="alert" className="text-[13.5px] text-[var(--cmp-text-critical)]">That framework could not be read just now.</p>;
+      : <p role="alert" className="text-[13.5px] text-[var(--cmp-text-critical)]">{sp.revision === "1" ? "The revision draft could not be read just now, or this framework has none open." : "That framework could not be read just now."}</p>;
   }
   const v = await loadAuthoringView(ctx.admin);
   const f = v?.frameworks.find(x => x.id === frameworkId) ?? null;
@@ -48,9 +55,15 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
     );
   }
   const editable = f.pubStatus === "draft" || f.pubStatus === "published";
+  // FRAMEWORK-DESIGN-STUDIO-02 S6 (D2): a published, centrally governed framework is changed through its revision draft.
+  const revised = f.pubStatus === "published" && !!f.layer;
+  const rs = revised ? await loadRevisionState(ctx.admin, f.id) : null;
+  const revisionsOn = !!rs && rs.ready && !("error" in rs);
+  const openRev = rs && rs.ready && "revision" in rs ? rs.revision : null;
   const fwOpts = v.frameworks.map(x => ({ id: x.id, name: x.name, code: x.code }));
+  const areasOn = v.areasReady === true && !!f.areas;   // 760 is on this environment
   const domains0: StudioDomain[] = f.domains.map(d => ({
-    id: d.id, name: d.name,
+    id: d.id, name: d.name, ...(areasOn ? { areaId: d.areaId ?? null } : {}),
     cpus: d.practices.flatMap(p => p.cpus.map(u => ({ id: u.id, label: `${u.code ?? ""} ${u.name} (${p.name})` }))),
     competencies: d.competencies.map(c => ({
       id: c.id, code: c.code, name: c.name, description: c.description, learningOutcomes: c.learningOutcomes, expectedLevelId: c.expectedLevelId,
@@ -61,22 +74,42 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
   // FRAMEWORK-DESIGN-STUDIO-01: a pending layout draft is what the editor sees and moves from (learners keep the published order).
   const sections = sectionOrder({ componentOrder: f.componentOrder ?? null, registry: Object.keys(v.components) }, f.layoutDraft ?? null);
   const draftApplies = !!f.layoutDraft && f.domains.every(d => d.competencies.every(c => c.criteria.every(k => k.id)));
-  const domains: StudioDomain[] = (() => {
+  // 760: the Areas as the editor sees them (a pending draft applied: Area order, names, and each domain's Area).
+  let areas: { id: string; name: string }[] = (f.areas ?? []).map(a => ({ id: a.id, name: a.name }));
+  const domainsLaid: StudioDomain[] = (() => {
     if (!draftApplies) return domains0;
     // sortOrder = the current (already stable) position, so applyLayout keeps the live order wherever the draft is silent.
-    const tree: LayoutTree = { componentOrder: f.componentOrder ?? null, registry: Object.keys(v.components), domains: domains0.map((d, i) => ({ id: d.id, name: d.name, sortOrder: i, competencies: d.competencies.map((c, j) => ({ id: c.id, name: c.name, sortOrder: j, criteria: c.criteria.map((k, m) => ({ id: k.id!, name: k.text, sortOrder: m, component: k.component })) })) })) };
+    const tree: LayoutTree = { componentOrder: f.componentOrder ?? null, registry: Object.keys(v.components), ...(areasOn ? { areas: (f.areas ?? []).map((a, i) => ({ id: a.id, name: a.name, sortOrder: i })) } : {}), domains: domains0.map((d, i) => ({ id: d.id, name: d.name, sortOrder: i, ...(areasOn ? { areaId: d.areaId ?? null } : {}), competencies: d.competencies.map((c, j) => ({ id: c.id, name: c.name, sortOrder: j, criteria: c.criteria.map((k, m) => ({ id: k.id!, name: k.text, sortOrder: m, component: k.component })) })) })) };
     const a = applyLayout(tree, f.layoutDraft);
+    if (areasOn && a.areas) areas = a.areas.map(x => ({ id: x.id, name: x.name }));
     const dById = new Map(domains0.map(d => [d.id, d]));
-    return a.domains.map(ad => { const d = dById.get(ad.id)!; const cById = new Map(d.competencies.map(c => [c.id, c]));
-      return { ...d, competencies: ad.competencies.map(ac => { const c = cById.get(ac.id)!; const kById = new Map(c.criteria.map(k => [k.id!, k])); return { ...c, criteria: ac.criteria.map(ak => kById.get(ak.id)!) }; }) }; });
+    // 760: a draft may move a competency to another domain, so competencies are found framework-wide.
+    const cById = new Map(domains0.flatMap(d => d.competencies.map(c => [c.id, c] as const)));
+    return a.domains.map(ad => { const d = dById.get(ad.id)!;
+      return { ...d, ...(areasOn ? { areaId: ad.areaId ?? null } : {}), competencies: ad.competencies.map(ac => { const c = cById.get(ac.id)!; const kById = new Map(c.criteria.map(k => [k.id!, k])); return { ...c, criteria: ac.criteria.map(ak => kById.get(ak.id)!) }; }) }; });
   })();
+  // The open revision laid over what the editor sees: proposed values, marks, new competencies, the review state at the PROPOSED content.
+  const domains: StudioDomain[] = overlayDomains(domainsLaid, openRev, clinical => {
+    const c = (clinical ?? null) as Parameters<typeof eligibilityOf>[0];
+    return { status: eligibilityOf(c, f.pubStatus), statusText: c ? `${CLINICAL_STATE_LABEL[c.state]}. ${clinicalNote(c)}` : "Clinical state not readable" };
+  });
   const comps = domains.flatMap(d => d.competencies);
-  const [draftBy] = f.layoutDraft && f.layoutDraftBy
-    ? await Promise.all([Promise.resolve(ctx.admin.from("profiles").select("full_name").eq("id", f.layoutDraftBy).maybeSingle()).then((r: { data?: { full_name?: string | null } | null }) => r?.data?.full_name ?? null, () => null)])
-    : [null];
+  const revCounts = revisionCounts(comps.flatMap(c => (c.rev ? [c.rev] : [])));
+  const nameOf = (id: string | null | undefined): Promise<string | null> => id
+    ? Promise.resolve(ctx.admin.from("profiles").select("full_name").eq("id", id).maybeSingle()).then((r: { data?: { full_name?: string | null } | null }) => r?.data?.full_name ?? null, () => null)
+    : Promise.resolve(null);
+  const [draftBy, revBy] = await Promise.all([f.layoutDraft ? nameOf(f.layoutDraftBy) : Promise.resolve(null), openRev ? nameOf(openRev.createdBy) : Promise.resolve(null)]);
   const n = (s: string) => comps.filter(c => c.status === s).length;
-  const criteria = comps.reduce((s, c) => s + c.criteria.length, 0);
-  const tab = sp.tab === "overview" ? "overview" : "competencies";
+  const criteria = comps.reduce((s, c) => s + c.criteria.filter(k => k.active !== false).length, 0);
+  const tab = sp.tab === "overview" ? "overview" : sp.tab === "compare" ? "compare" : "competencies";
+  // FRAMEWORK-DESIGN-STUDIO-02 S2: the draft against the last published version, read only the moment the tab is opened.
+  // With an open revision draft, the comparison is the revision against the published version (compare_revision).
+  const diff: DiffResponse | RevisionDiffResponse | { status: number; error: string } | null = tab !== "compare" ? null
+    : openRev ? await loadRevisionComparison(ctx.admin, f.id)
+    : revised && revisionsOn ? ({ status: "no_revision", framework: { id: f.id, name: f.name, pubStatus: f.pubStatus } } as const)
+    : await loadFrameworkDiff(ctx.admin, f.id);
+  const compNames = Object.fromEntries(comps.map(c => [c.id, c.name]));
+  const levelNames = Object.fromEntries(v.levels.map(l => [l.id, `${l.score}: ${l.label}`]));
   const meta = [f.code, f.layer ? `${f.layer[0].toUpperCase()}${f.layer.slice(1)} layer` : "No layer", v.professions.find(p => p.id === f.professionTermId)?.value].filter(Boolean);
 
   return (
@@ -91,20 +124,38 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
         <div className="flex flex-wrap gap-2">
           <Link href="?view=pack" className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50">Review pack</Link>
           {tab === "competencies" && <Link href="?tab=overview" className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50">Framework overview</Link>}
-          <ReviewButton frameworkId={f.id} scope={{ kind: "framework" }} label="Put forward for review" disabled={!editable || !comps.length} />
+          <ReviewButton frameworkId={f.id} scope={{ kind: "framework" }} revision={!!openRev} label={openRev ? "Put forward the revision for review" : "Put forward for review"} disabled={!editable || !comps.length || (revised && !revisionsOn)} />
         </div>
       </header>
       {!v.clinicalReadable && <p role="alert" className="text-[13px] font-semibold text-amber-900">Clinical review states could not be read just now, so none is shown and nothing can be put forward.</p>}
+
+      {revised && (rs && rs.ready && "error" in rs
+        ? <p role="alert" className="rounded-lg border border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)] px-3 py-2 text-[13px] text-[var(--cmp-text-critical)]">{rs.error}</p>
+        : openRev
+          ? <RevisionBanner frameworkId={f.id} summary={revisionSummary(revCounts)} updatedAt={openRev.updatedAt} by={revBy} editable={editable} hasCompetencies={comps.some(c => !!c.rev)} />
+          : <RevisionIntro ready={revisionsOn} />)}
 
       {f.layoutDraft && <LayoutDraftBanner frameworkId={f.id} savedAt={f.layoutDraftAt ?? null} by={draftBy} editable={editable} />}
 
       <div role="tablist" aria-label="Framework views" className="flex gap-6 border-b border-gray-200">
         <Link role="tab" aria-selected={tab === "competencies"} href="?tab=competencies" className={tabCls(tab === "competencies")}>Competencies <span className="text-gray-500">{comps.length}</span></Link>
+        <Link role="tab" aria-selected={tab === "compare"} href="?tab=compare" className={tabCls(tab === "compare")}>{openRev ? "Compare revision with published" : "Compare with published"}</Link>
         <Link role="tab" aria-selected={tab === "overview"} href="?tab=overview" className={tabCls(tab === "overview")}>Overview &amp; governance</Link>
       </div>
 
       {tab === "competencies" ? (
-        <StudioWorkspace frameworkId={f.id} domains={domains} levels={v.levels} components={v.components} editable={editable} initialId={sp.c ?? null} canReorder={editable && v.layoutReady === true} sectionCodes={sections} draftMode={f.pubStatus === "published" || !!f.layoutDraft} />
+        <StudioWorkspace frameworkId={f.id} domains={domains} levels={v.levels} components={v.components} editable={editable && !(revised && !revisionsOn)} initialId={sp.c ?? null} canReorder={editable && v.layoutReady === true} sectionCodes={sections} draftMode={f.pubStatus === "published" || !!f.layoutDraft} pubStatus={f.pubStatus} areas={areasOn ? areas : undefined} areasReady={areasOn}
+          revision={revised ? { ready: revisionsOn, open: !!openRev } : undefined} revisionKey={openRev?.updatedAt ?? ""} />
+      ) : tab === "compare" ? (
+        diff && "status" in diff && typeof diff.status === "number"
+          ? <p role="alert" className="rounded-lg border border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)] px-3 py-2 text-[13px] text-[var(--cmp-text-critical)]">{"error" in diff ? diff.error : "The comparison could not be read just now."}</p>
+          : diff && diff.status === "no_revision"
+            ? <section aria-label="Compare revision with published" className="rounded-2xl border border-gray-200 bg-white p-5">
+                <h2 className="text-[15px] font-bold text-gray-900">No open revision draft</h2>
+                <p className="mt-1 max-w-2xl text-[13.5px] text-gray-700">{f.name} is published and nothing has been changed since. The first content change you make opens a revision draft, and this page then shows it against the published version.</p>
+                <p className="mt-3 text-[13px]"><Link href="?tab=competencies" className="font-semibold text-teal-800 hover:underline">Back to the competencies →</Link></p>
+              </section>
+            : diff && <CompareView result={diff as DiffResponse} components={v.components} names={compNames} levels={levelNames} back="?tab=competencies" revision={!!openRev} />
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -139,7 +190,7 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
                 </div>
                 <div className="mt-4 h-2 rounded-full bg-gray-100" aria-hidden><div className="h-2 rounded-full bg-teal-700" style={{ width: `${comps.length ? (100 * n("approved")) / comps.length : 0}%` }} /></div>
                 <p className="mt-2 text-[12.5px] text-gray-600">{n("approved")} of {comps.length} clinically approved at their current content. Each competency is reviewed independently against its exact content version.</p>
-                <div className="mt-4"><ReviewButton frameworkId={f.id} scope={{ kind: "framework" }} label="Preview framework submission" className="w-full rounded-lg bg-teal-700 px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-teal-800 disabled:opacity-50" disabled={!editable || !comps.length} /></div>
+                <div className="mt-4"><ReviewButton frameworkId={f.id} scope={{ kind: "framework" }} revision={!!openRev} label={openRev ? "Preview revision submission" : "Preview framework submission"} className="w-full rounded-lg bg-teal-700 px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-teal-800 disabled:opacity-50" disabled={!editable || !comps.length || (revised && !revisionsOn)} /></div>
               </section>
               <section aria-labelledby="pb-h" className="rounded-2xl border border-gray-200 bg-white p-5">
                 <h2 id="pb-h" className="text-[15px] font-bold text-gray-900">Publication stays separate</h2>
@@ -173,6 +224,11 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
                 </details>
               ))}
               <div className="mt-3"><NewDomain frameworkId={f.id} /></div>
+              {f.pubStatus === "draft" && f.code && (
+                <details className="mt-3"><summary className="cursor-pointer text-[13px] font-semibold text-gray-800">Add competencies from a spreadsheet</summary>
+                  <div className="mt-2"><SheetImport frameworkCode={f.code} componentLabels={v.components} /></div>
+                </details>
+              )}
             </section>
           )}
         </>

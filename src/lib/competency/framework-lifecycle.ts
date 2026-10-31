@@ -76,6 +76,11 @@ const SNAPSHOT_COLS = `
         )
       `;
 
+// FRAMEWORK-DESIGN-STUDIO-02 (760): a version also records its Areas and each domain's Area, so the organisation of a
+// version can be rebuilt. Before 760 the select falls back to SNAPSHOT_COLS, exactly as before.
+const SNAPSHOT_COLS_760 = SNAPSHOT_COLS
+  .replace("framework_domains(\n          id, name, code, sort_order,", "framework_areas(id, name, description, sort_order),\n        framework_domains(\n          id, name, code, sort_order, area_id,");
+
 export async function transitionFramework(
   admin: any,
   frameworkId: string,
@@ -120,6 +125,11 @@ export async function transitionFramework(
     const m = /out of date, (.*?)\. Nothing/.exec(updateErr.message);
     return { ok: false, code: 409, error: `The pending layout is out of date${m ? ` (${m[1]})` : ""}, so nothing was published. Discard it or save the layout again, then put the framework forward again.` };
   }
+  // Migration 770: an open revision draft that can no longer be applied refuses the publication whole.
+  if (updateErr && /framework revision at publication|framework revision: it was applied/i.test(updateErr.message ?? "")) {
+    const m = /can no longer be applied, (.*?)\. Nothing/.exec(updateErr.message);
+    return { ok: false, code: 409, error: `The revision draft can no longer be applied${m ? ` (${m[1]})` : ""}, so nothing was published. Discard it and start again, then put the framework forward again.` };
+  }
   if (updateErr) return { ok: false, error: updateErr.message, code: 500 };
 
   let warning: string | undefined;
@@ -131,7 +141,8 @@ export async function transitionFramework(
     // Additive: before 750/751 those columns are absent and the snapshot is exactly what it was. Old snapshots are
     // never touched.
     const snap = (cols: string) => admin.from("frameworks").select(cols).eq("id", frameworkId).single();
-    let { data: fullFw, error: snapErr } = await snap(SNAPSHOT_COLS);
+    let { data: fullFw, error: snapErr } = await snap(SNAPSHOT_COLS_760);
+    if (snapErr) ({ data: fullFw, error: snapErr } = await snap(SNAPSHOT_COLS));
     if (snapErr) ({ data: fullFw, error: snapErr } = await snap(SNAPSHOT_COLS_BEFORE_750));
 
     if (fullFw) {

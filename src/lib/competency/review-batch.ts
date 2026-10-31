@@ -85,17 +85,23 @@ export async function contentHashes(admin: any, ids: readonly string[]): Promise
  */
 export async function runSubmission(admin: any, actorId: string, frameworkStatus: string,
   items: { competencyId: string; code: string | null; name: string; hash: string | null }[],
-  opts: { budgetMs?: number; now?: () => number; submit?: typeof submitForReview } = {}): Promise<OutcomeItem[]> {
+  opts: { budgetMs?: number; now?: () => number; submit?: typeof submitForReview;
+    /** FDS-02 S5 (770): read the hash and clinical state an item is put forward at (a revision reads its PROPOSED content). */
+    read?: (competencyId: string) => Promise<{ hash: string | null; review: ClinicalReview | null } | null> } = {}): Promise<OutcomeItem[]> {
   const now = opts.now ?? Date.now, started = now(), budget = opts.budgetMs ?? 40_000, submit = opts.submit ?? submitForReview;
+  const read = opts.read ?? (async (id: string) => {
+    const [hashes, reviews] = await Promise.all([contentHashes(admin, [id]), loadClinicalReviews(admin, [id])]);
+    return hashes === null || reviews === null ? null : { hash: hashes.get(id) ?? null, review: reviews.get(id) ?? null };
+  });
   const out: OutcomeItem[] = [];
   for (const it of items) {
     const base = { competencyId: it.competencyId, code: it.code, name: it.name };
     if (now() - started > budget) { out.push({ ...base, outcome: "not_reached", reason: "Not reached in this pass. Continue to put it forward." }); continue; }
     // The boundary check: the exact content the preview showed, and the existing rule, read again now.
-    const [hashes, reviews] = await Promise.all([contentHashes(admin, [it.competencyId]), loadClinicalReviews(admin, [it.competencyId])]);
-    if (hashes === null || reviews === null) { out.push({ ...base, outcome: "failed", reason: "Its content or clinical state could not be read just now. Try again." }); continue; }
-    if (!it.hash || hashes.get(it.competencyId) !== it.hash) { out.push({ ...base, outcome: "stale", reason: "The content changed since the preview. Preview again to put the current version forward." }); continue; }
-    const e = eligibilityOf(reviews.get(it.competencyId) ?? null, frameworkStatus);
+    const now_ = await read(it.competencyId);
+    if (now_ === null) { out.push({ ...base, outcome: "failed", reason: "Its content or clinical state could not be read just now. Try again." }); continue; }
+    if (!it.hash || now_.hash !== it.hash) { out.push({ ...base, outcome: "stale", reason: "The content changed since the preview. Preview again to put the current version forward." }); continue; }
+    const e = eligibilityOf(now_.review, frameworkStatus);
     if (e !== "eligible") { out.push({ ...base, outcome: OUTCOME_OF[e] ?? "excluded", reason: ELIGIBILITY_REASON[e] }); continue; }
     const r = await submit(admin, it.competencyId, actorId);
     if (r.ok) out.push({ ...base, outcome: "submitted", reason: `Put forward. ${r.required} independent approval${r.required === 1 ? "" : "s"} needed.`, versionId: r.versionId, required: r.required });
