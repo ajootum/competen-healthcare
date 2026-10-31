@@ -405,7 +405,9 @@ export function LearnWorkspace(props: {
   const canCheck = offerCheck && !check && !busy && !offReason("check");
   // A verdict this visit or recorded before (progress): the check is done.
   const checked = !!progress[step?.step ?? -1]?.verdict || thread.some(c => !!c.reply.verdict);
-  const panel = (name: typeof tab) => (tab === name ? "block" : "hidden md:block");
+  // Three columns only when the content area is wide enough (a container query, not a new viewport breakpoint): on a
+  // tablet beside the app sidebar the 240px + 300px columns left the lesson too narrow and pushed Ask Scholar off-screen.
+  const panel = (name: typeof tab) => (tab === name ? "block" : "hidden @min-[66rem]:block");
   // SCHOLAR-GUIDED-LEARNING-01: the lesson as the learner meets it.
   const group = groupActions(props.actions, props.startAction);
   const preparing = Object.values(loading).find(l => l.step === step?.step) ?? null;
@@ -444,7 +446,7 @@ export function LearnWorkspace(props: {
   );
 
   return (
-    <div>
+    <div className="@container">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-[17px] font-bold text-gray-900">{session.title}</h2>
         <p className="text-[12.5px] text-gray-600">
@@ -460,14 +462,14 @@ export function LearnWorkspace(props: {
       )}
       {error && <p role="alert" className="mb-3 text-[13.5px] font-medium text-red-700">{error}</p>}
 
-      <div role="tablist" aria-label="Workspace" className="mb-3 flex gap-2 md:hidden">
+      <div role="tablist" aria-label="Workspace" className="mb-3 flex gap-2 @min-[66rem]:hidden">
         {(["lesson", "sources", "ask"] as const).map(t => (
           <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
             className={`${chip} ${tab === t ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800"}`}>{t === "lesson" ? "Lesson" : t === "sources" ? "Sources" : "Ask Scholar"}</button>
         ))}
       </div>
 
-      <div className="md:grid md:grid-cols-[240px_minmax(0,1fr)_300px] md:items-start md:gap-5">
+      <div className="@min-[66rem]:grid @min-[66rem]:grid-cols-[240px_minmax(0,1fr)_300px] @min-[66rem]:items-start @min-[66rem]:gap-5">
         {/* ── SOURCES: the suggested steps and the student's own sections ── */}
         <aside aria-label="Steps and sources" className={`${panel("sources")} rounded-2xl border border-gray-200 bg-white p-4`}>
           <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">Suggested steps</p>
