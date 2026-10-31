@@ -56,7 +56,7 @@ describe("which slides may be read", () => {
 
   // The control can fail: a planner that also sends a slide that HAD text is caught by the same check.
   const onlyEmpty = (planner: typeof planPictureSlides) => {
-    const cases = [{ emptyUnits: [33, 38] }, { emptyUnits: [2], triedUnits: [5] }, { emptyUnits: [], slidesWithSections: [1, 2] }];
+    const cases: { emptyUnits: number[]; triedUnits?: number[]; slidesWithSections?: number[] }[] = [{ emptyUnits: [33, 38] }, { emptyUnits: [2], triedUnits: [5] }, { emptyUnits: [], slidesWithSections: [1, 2] }];
     return cases.every(c => planner(c).slides.every(s => c.emptyUnits.includes(s) && !(c.triedUnits ?? []).includes(s)));
   };
   it("the empty-slides-only check passes the real planner and goes red on a planted one", () => {
