@@ -2,7 +2,9 @@ import { generate, type GenerateArgs, type GenerateResult } from "@/lib/ai/clien
 import { SAFETY_CONTEXT, parseJsonArray, textGroundingViolations, type PhrasingViolation } from "@/lib/ai/grounding";
 import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib/competency/mapping";
 import { CONTEXT_PREAMBLE } from "./learner-context";
-import { CASE_MAX_STEPS, CASE_MIN_STEPS, LEARN_TEACH_LEGACY, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, type CheckVerdict, type ExplanationDepth, type LearnAction } from "./config";
+import { CASE_MAX_STEPS, CASE_MIN_STEPS, LEARN_TEACH_LEGACY, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, isTeachingAction, type CheckVerdict, type ClassicLearnAction, type ExplanationDepth, type LearnAction, type TeachingAction } from "./config";
+import { examClaimViolations, highYieldWords, normaliseTeachingMarkdown, teachingBase, teachingInstruction, teachingMaxTokens, type ExamEvidence, type HintLevel } from "./learn-teaching";
+import type { CognitiveLevel } from "./question-intel";
 import { citeChunk, findPatientIdentifiers } from "./extract";
 import { TEACH_LABEL, TEACH_MAX_QUESTIONS, citedTags, composeTeachAnswer, parseTeachAnswer, questionText, type TeachParts } from "./teach-format";
 import { structureLabel, type CatalogueCompetency } from "./catalogue";
@@ -406,7 +408,7 @@ const BACKGROUND_ACTIONS: readonly LearnAction[] = ["teach", "deeper", "examples
 /** COMPETEN-RESEARCH-01: the actions that may carry a research part. A check question and a clarification never do. */
 export const RESEARCH_ACTIONS: readonly (LearnAction | "check" | "clarify")[] = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask"];
 
-const LEARN_INSTRUCTION: Record<LearnAction | "check" | "clarify", string> = {
+const LEARN_INSTRUCTION: Record<ClassicLearnAction | "check" | "clarify", string> = {
   // SCHOLAR-LEARN-FIX-01 L-B (PROMPT_VERSIONS.learnTeach): a structured lesson, parsed and checked part by part
   // (checkTeachAnswer). The labels are teach-format.ts TEACH_LABEL.
   teach: [
@@ -520,19 +522,32 @@ function researchUnits(t: string): { text: string; words: number; cited: boolean
   return out;
 }
 
+const NO_COUNT_LAST = "LAST, before you reply: if any sentence says how many of something there are (two, three, both, a couple, a few), rewrite it without the count, unless the passages themselves give that number.";
+const REFERENCES_RULE = "GOVERNED REFERENCES, tagged [R1], [R2] ...: competencies and learning outcomes from the student's programme catalogue that these passages are linked to. You may cite one as [R n] only to say what the student is working towards. Never use them as a source of clinical facts.";
+const FLAG_RULE = `Optional, last: if a passage says something that contradicts another passage, or that looks unclear, outdated or possibly unsafe to act on, add a line that reads exactly ${FLAG_MARKER} and then one line per concern starting '- ', citing the passage concerned. Do not correct it with outside facts: say only what to check, against their course materials or with a supervisor. Leave this out when there is nothing to flag.`;
+/** SCHOLAR-COMPANION-01 P1: what a teaching action needs beyond the request text (learn-teaching.ts). */
+export type TeachingContext = { level?: CognitiveLevel; hintLevel?: HintLevel; examEvidence?: ExamEvidence | null };
+
 /** The system prompt for one learning action: EXPLAIN_SYSTEM's rules, the action, the depth, and what may follow. */
-export function learnSystem(action: LearnAction | "check" | "clarify", opts: { depth: ExplanationDepth; background: boolean; references: boolean; research?: boolean }): string {
+export function learnSystem(action: LearnAction | "check" | "clarify", opts: { depth: ExplanationDepth; background: boolean; references: boolean; research?: boolean; teaching?: TeachingContext }): string {
+  // SCHOLAR-COMPANION-01 P1: the six teaching actions have their own wording (learn-teaching.ts) on the same rules and checks.
+  if (isTeachingAction(action)) {
+    const t = opts.teaching ?? {};
+    const parts = [teachingBase(EXPLAIN_SYSTEM), "", teachingInstruction(action, { level: t.level, hintLevel: t.hintLevel, examEvidence: t.examEvidence ?? null, depthWords: highYieldWords(DEPTH_WORDS[opts.depth]) }), NO_COUNT_LAST];
+    if (opts.references) parts.push(REFERENCES_RULE);
+    // A question or a hint is not the place for a flag; a judgement or a summary may carry one.
+    if (action === "mistake" || action === "teach_back" || action === "high_yield") parts.push(FLAG_RULE);
+    return parts.join("\n");
+  }
   const parts = [EXPLAIN_SYSTEM, "", LEARN_INSTRUCTION[action]];
   if (action !== "check") parts.push(`Keep the part from the notes under ${DEPTH_WORDS[opts.depth]} words${opts.depth === "brief" ? ", and keep it short" : ""}.`);
   // v2: the staging journey saw Simplify withheld twice for "two" -- a count the notes did not contain. Said last,
   // where it is read just before writing.
-  if (action !== "check") parts.push("LAST, before you reply: if any sentence says how many of something there are (two, three, both, a couple, a few), rewrite it without the count, unless the passages themselves give that number.");
-  if (opts.references && action !== "check")
-    parts.push("GOVERNED REFERENCES, tagged [R1], [R2] ...: competencies and learning outcomes from the student's programme catalogue that these passages are linked to. You may cite one as [R n] only to say what the student is working towards. Never use them as a source of clinical facts.");
+  if (action !== "check") parts.push(NO_COUNT_LAST);
+  if (opts.references && action !== "check") parts.push(REFERENCES_RULE);
   if (opts.background && BACKGROUND_ACTIONS.includes(action as LearnAction))
     parts.push(`Optional: general background that is NOT in the passages, after a line that reads exactly ${SUPPLEMENTARY_MARKER} -- under 100 words, general principles only, with no numbers, units, doses, drug names, values or thresholds, no citation tags, and no advice about any patient.`);
-  if (action !== "check")
-    parts.push(`Optional, last: if a passage says something that contradicts another passage, or that looks unclear, outdated or possibly unsafe to act on, add a line that reads exactly ${FLAG_MARKER} and then one line per concern starting '- ', citing the passage concerned. Do not correct it with outside facts: say only what to check, against their course materials or with a supervisor. Leave this out when there is nothing to flag.`);
+  if (action !== "check") parts.push(FLAG_RULE);
   // COMPETEN-RESEARCH-01: said last, where it is read just before writing. The rules above govern the notes part.
   if (opts.research && RESEARCH_ACTIONS.includes(action)) parts.push(researchInstruction(DEPTH_WORDS[opts.depth]));
   return parts.join("\n");
@@ -642,6 +657,17 @@ export function checkTeachAnswer(main: string, asked: string, passages: Passage[
   };
 }
 
+/**
+ * Pure. SCHOLAR-COMPANION-01 P1: a teaching answer is checked exactly as any Learn answer (checkLearnMain: a given [S n],
+ * nothing the passages, the references and what the student typed do not hold), after numbered markers become bullets.
+ * High-yield also may not claim anything about exams that the computed evidence does not allow (examClaimViolations).
+ */
+export function checkTeachingAnswer(action: TeachingAction, main: string, asked: string, passages: Passage[], references: GovernedReference[], examEvidence: ExamEvidence | null = null): ExplainCheck {
+  const c = checkLearnMain(normaliseTeachingMarkdown(main), asked, passages, references);
+  if (c.ok && action === "high_yield" && examClaimViolations(c.text, examEvidence).length) return { ok: false, reason: "ungrounded" };
+  return c;
+}
+
 /** The grounding a Learn notes part is checked against: the passages, the governed references' own words, what was asked. */
 const learnGrounding = (passages: Passage[], references: GovernedReference[], asked: string) =>
   [...passages.map(p => `${passageCitation(p)}\n${p.content}`), ...references.map(x => `${x.code ?? ""} ${x.title} ${x.outcome ?? ""}`), asked];
@@ -701,7 +727,7 @@ export function parseVerdict(raw: string): { verdict: CheckVerdict | null; rest:
 }
 
 /** SCHOLAR-LEARN-FIX-01 L-B: Teach Me adds its structured-lesson version, so its saved answers key apart from the free-text ones. */
-export const learnPromptVersion = (action: LearnAction | "check" | "clarify") => `${PROMPT_VERSIONS.learn}:${action}${action === "teach" ? `+${PROMPT_VERSIONS.learnTeach}` : ""}`;
+export const learnPromptVersion = (action: LearnAction | "check" | "clarify") => `${PROMPT_VERSIONS.learn}:${action}${action === "teach" ? `+${PROMPT_VERSIONS.learnTeach}` : isTeachingAction(action) ? `+${PROMPT_VERSIONS.teaching}` : ""}`;
 /** SCHOLAR-GUIDED-LEARNING-01: the earlier Teach Me versions whose saved lessons are still opened with no AI call (LEARN_TEACH_LEGACY). */
 export const legacyLearnPromptVersions = (action: LearnAction | "check" | "clarify"): string[] =>
   action === "teach" ? LEARN_TEACH_LEGACY.map(v => `${PROMPT_VERSIONS.learn}:teach+${v}`) : [];
@@ -731,14 +757,16 @@ export async function runLearn(userId: string, args: {
   depth: ExplanationDepth; background: boolean; history: TutorTurn[]; learnerContext: string | null; research?: readonly ResearchEvidence[];
   /** SCHOLAR-SESSION-AI-02 (D4): the study-session block, for an ask in the caller's own connected session only. */
   studyContext?: string | null;
+  /** SCHOLAR-COMPANION-01 P1: the rung, the hint level or the exam evidence of a teaching action. */
+  teaching?: TeachingContext;
 }, run: AiRun = direct): Promise<LearnResult> {
   const research = args.research?.length && RESEARCH_ACTIONS.includes(args.action) ? args.research : [];
   const studyContext = args.action === "ask" ? args.studyContext ?? null : null;
   const r = await run({
-    system: learnSystem(args.action, { depth: args.depth, background: args.background, references: args.references.length > 0, research: research.length > 0 }),
+    system: learnSystem(args.action, { depth: args.depth, background: args.background, references: args.references.length > 0, research: research.length > 0, teaching: args.teaching }),
     user: learnUserPrompt(args.question, args.passages, args.references, args.history, args.learnerContext, research, studyContext),
     tier: "reasoning",
-    maxTokens: args.action === "check" ? 200 : (args.depth === "detailed" ? 1100 : 800) + (research.length ? 500 : 0),
+    maxTokens: args.action === "check" ? 200 : isTeachingAction(args.action) ? teachingMaxTokens(args.action, args.depth) : (args.depth === "detailed" ? 1100 : 800) + (research.length ? 500 : 0),
     context: { userId, attribution: { scope: "person" }, operation: research.length ? LEARN_RESEARCH_OPERATION : "individual_scholar_learn" },
   });
   if (!r.ok) return { ok: false, error: r.error };
@@ -748,13 +776,15 @@ export async function runLearn(userId: string, args: {
     const question = checkCheckQuestion(r.text, args.passages);
     return { ...base, check: { ok: false, reason: "not_in_notes" }, background: null, flags: { kept: [], dropped: 0 }, verdict: null, question, research: null };
   }
-  const { verdict, rest } = args.action === "clarify" ? parseVerdict(r.text) : { verdict: null, rest: r.text };
+  const { verdict, rest } = args.action === "clarify" || args.action === "teach_back" ? parseVerdict(r.text) : { verdict: null, rest: r.text };
   const split = splitLearnAnswer(rest);
   const asked = [args.question, ...args.history.map(t => t.text)].join("\n");
   const mayBackground = args.background && BACKGROUND_ACTIONS.includes(args.action as LearnAction);
   return {
     ...base,
-    check: args.action === "teach" ? checkTeachAnswer(split.main, asked, args.passages, args.references).check : checkLearnMain(split.main, asked, args.passages, args.references),
+    check: args.action === "teach" ? checkTeachAnswer(split.main, asked, args.passages, args.references).check
+      : isTeachingAction(args.action) ? checkTeachingAnswer(args.action, split.main, asked, args.passages, args.references, args.teaching?.examEvidence ?? null)
+        : checkLearnMain(split.main, asked, args.passages, args.references),
     background: split.background === null ? null : mayBackground ? checkBackgroundText(split.background) : { ok: false, reason: "not_this_mode" },
     flags: checkFlags(split.flags, args.passages),
     verdict, question: null,

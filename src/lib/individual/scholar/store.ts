@@ -2619,6 +2619,13 @@ export async function listExamQuestions(admin: Admin, userId: string, materialId
   return { ok: true, data: ((data ?? []) as any[]).map(toExamQuestion) };
 }
 
+/** SCHOLAR-COMPANION-01 P1: the newest past-paper question stems of ALL the caller's papers (capped), for High-yield's term-overlap count. */
+export async function listExamQuestionStems(admin: Admin, userId: string, limit: number): Promise<Read<{ materialId: string; stem: string }[]>> {
+  const { data, error } = await admin.from("individual_scholar_exam_question").select("material_id, stem").eq("user_id", userId).order("created_at", { ascending: false }).limit(limit);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(r => ({ materialId: r.material_id, stem: r.stem })) };
+}
+
 export async function getExamQuestion(admin: Admin, userId: string, id: string): Promise<ExamQuestionRow | null> {
   const { data } = await admin.from("individual_scholar_exam_question").select(EXAM_QUESTION_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
   return data ? toExamQuestion(data) : null;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { getLearningPreference, setLearningPreference } from "@/lib/individual/scholar/store";
-import { EXPLANATION_DEPTHS, isLearnAction } from "@/lib/individual/scholar/config";
+import { EXPLANATION_DEPTHS, isClassicLearnAction } from "@/lib/individual/scholar/config";
 import { audit } from "@/lib/individual/scholar/http";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -22,7 +22,8 @@ export async function PUT(req: Request) {
   if (isGuardRefusal(ctx)) return ctx;
   const body = await req.json().catch(() => ({}));
   const depth = (EXPLANATION_DEPTHS as readonly string[]).includes(body?.depth) ? body.depth : null;
-  const defaultAction = isLearnAction(body?.defaultAction) ? body.defaultAction : null;
+  // The starting-action CHECK (migration 414) lists the seven original actions only.
+  const defaultAction = isClassicLearnAction(body?.defaultAction) ? body.defaultAction : null;
   if (!depth || !defaultAction) return NextResponse.json({ error: "Choose a depth and a starting action." }, { status: 400 });
   const r = await setLearningPreference(ctx.admin, ctx.userId, { depth, defaultAction });
   if (r === "not_provisioned") return NextResponse.json({ error: "Learning preferences are not available here yet." }, { status: 409 });
