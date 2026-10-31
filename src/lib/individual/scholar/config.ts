@@ -111,6 +111,10 @@ export const PROMPT_VERSIONS = {
   // system prompt and checks as explain (generation.ts). v2: a last no-counting reminder (staging, Simplify).
   // v3: Simplify keeps the passages' own names rather than counting them ("two tubes" for "right and left").
   learn: "scholar-learn-v3",
+  // SCHOLAR-LEARN-FIX-01 L-B: Teach Me is a STRUCTURED lesson -- overview, cited key points, an example only where the
+  // passages support one, and a one-or-two question understanding check (teach-format.ts). Teach carries this on top of
+  // `learn` (generation.ts learnPromptVersion), so a Teach Me answer saved in the old free-text form is never reused.
+  learnTeach: "scholar-learn-teach-v1",
   // COMPETEN-SCHOLAR-REVISION-01 R4: AI evaluation of a short answer (Holdings activity `evaluate`).
   // v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): five labelled feedback parts, judged against the rubric where there is one.
   evaluate: "scholar-evaluate-v2",
@@ -300,6 +304,10 @@ export const SOURCE_KIND_LABEL = {
   /** COMPETEN-RESEARCH-01: Research & Explain, apart from the notes. */
   research: "External research: from published abstracts Competen found (PubMed, OpenAlex). Not from your notes and not clinically reviewed. Open the source before relying on it",
 } as const;
+/** SCHOLAR-LEARN-FIX-01 L-B: a partly grounded lesson -- taught from what the notes support, then the gaps, named. */
+export const LEARN_NOT_COVERED_LABEL = "Not covered in your notes";
+export const LEARN_NOT_COVERED_NOTE = "The explanation above uses only what your notes support. Scholar did not explain these.";
+export const LEARN_WIDER_LABEL = "Explore wider sources";
 /** COMPETEN-RESEARCH-01: the three Learn modes, as the learner sees them. */
 export const LEARN_MODE_LABEL = { notes: "My notes only", library: "My notes + Competen library", research: "Research & Explain" } as const;
 

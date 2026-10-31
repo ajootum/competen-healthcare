@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  assessSufficiency, evidenceGate, externalEvidence, gateResearch, generationInputs, keyTermsOf, matchedTerms, notUsedCounts, onTopic, parseRecoveryMode,
+  assessSufficiency, groundingOutcome, relatedSections, OTHER_MATERIAL_MIN_SHARE, evidenceGate, externalEvidence, gateResearch, generationInputs, keyTermsOf, matchedTerms, notUsedCounts, onTopic, parseRecoveryMode,
   recordRecovery, recoveryKey, retrievedOf, runRecovery, sameTopicWord, typeVerdict, type EvidenceQuality,
   suggestedActions, summariseRecovery, tierPlan, topicKeywords, widerMode, restatesOnly, withoutQuestion, type RecoverySources, type RecoveryOutcomeRow,
 } from "./evidence-recovery";
@@ -159,13 +159,14 @@ describe("the sufficiency decision is deterministic", () => {
     expect(s).toMatchObject({ verdict: "insufficient", canExplain: false });
     expect(s.unanswered).toEqual(keyTermsOf("hypercapnic respiratory failure"));
   });
-  it("SQIE D-4: notes alone are not an approved reference: insufficient, all unanswered, never sufficient beside unanswered", async () => {
+  it("SQIE D-4 as adjusted (SCHOLAR-LEARN-FIX-01): notes alone are not an approved reference, but what they contain is covered", async () => {
     const f = fakeSources({ notes: [passage("c1", "Hypercapnic respiratory failure follows uncontrolled oxygen.")] });
     const all = await runRecovery({ question: "hypercapnic respiratory failure", mode: "notes_only" }, tierPlan("notes_only", OPEN, true), f.sources, { wider: null });
     // The notes are still shown, with what they mention; they just cannot ground an explanation on their own.
     expect(all.evidence.notes[0].matched).toEqual(["hypercapnic", "respiratory", "failure"]);
-    expect(all.sufficiency).toMatchObject({ verdict: "insufficient", canExplain: false, covered: [], unanswered: ["hypercapnic", "respiratory", "failure"] });
-    expect([all.explainable, all.state, all.generation]).toEqual([false, "unanswered", null]);
+    // Was: insufficient, covered [], every term unanswered, state unanswered -- the opposite of the notes on screen.
+    expect(all.sufficiency).toMatchObject({ verdict: "sufficient", canExplain: false, covered: ["hypercapnic", "respiratory", "failure"], unanswered: [] });
+    expect([all.explainable, all.state, all.generation]).toEqual([false, "reading_only", null]);
   });
   it("notes with an approved library reference: sufficient when most key terms are covered, else partial with what remains", async () => {
     const lib = (title: string) => [{ origin: "library" as const, kind: "competency" as const, itemId: "k1", version: "1", code: "R1", title, outcome: null, text: title, status: "Clinically approved", approved: true }];
@@ -216,8 +217,8 @@ describe("the sufficiency decision is deterministic", () => {
     const r = await runRecovery({ question: "oxygen copd", mode: "notes_and_references" }, tierPlan("notes_and_references", OPEN, true), f.sources, { wider: null });
     expect(r.external).toMatchObject({ ran: false, reason: "unavailable" });
     expect(r.evidence.notes.map(n => n.matched)).toEqual([["oxygen", "copd"]]);
-    // SQIE D-4: notes alone are not an approved reference, so the state and the verdict agree: nothing to explain from.
-    expect([r.sufficiency.verdict, r.sufficiency.canExplain, r.state]).toEqual(["insufficient", false, "reading_only"]);
+    // SQIE D-4 as adjusted (SCHOLAR-LEARN-FIX-01): the notes cover the terms (verdict), yet alone they are no approved reference (canExplain).
+    expect([r.sufficiency.verdict, r.sufficiency.canExplain, r.state]).toEqual(["sufficient", false, "reading_only"]);
   });
   it("actions: wider first, explain only with evidence, continue always", () => {
     expect(suggestedActions(true, "notes_and_references").map(a => a.action)).toEqual(["find_resources", "explain_with_references", "continue_with_notes"]);
@@ -505,5 +506,57 @@ describe("SCHOLAR-SOURCE-QUALITY-01: PubMed-indexed, allowed publication type, o
     const oa = { ...ayurveda, title: "Pyelonephritis: a review", doi: null, pmid: null };
     const [merged] = mergeItems([[oa], [p!]]);
     expect([merged.pmid, merged.verified.pmid, merged.pubTypes]).toEqual(["9", true, ["Journal Article", "Review"]]);
+  });
+});
+// ── SCHOLAR-LEARN-FIX-01 L-A: three grounding outcomes, accurate coverage, recovery scoped to the selected material ──
+describe("SCHOLAR-LEARN-FIX-01: what the evidence covers is what it contains", () => {
+  it("a term a shown note contains is covered, never unanswered (production listed every term beside notes that held them)", async () => {
+    const f = fakeSources({ notes: [passage("c1", "Quality improvement uses small tests of change."), passage("c2", "Patient safety culture.")] });
+    const r = await runRecovery({ question: "quality improvement patient safety science", mode: "notes_only", scopeMaterialIds: ["m1"] }, tierPlan("notes_only", OPEN, true), f.sources, { wider: null });
+    expect(r.sufficiency).toMatchObject({ verdict: "sufficient", covered: ["quality", "improvement", "patient", "safety"], unanswered: ["science"] });
+    for (const t of r.sufficiency.unanswered) expect(r.evidence.notes.some(n => n.matched.includes(t))).toBe(false);
+    // D-4 kept for the wider tiers: notes alone never make "Explain using approved references".
+    expect([r.sufficiency.canExplain, r.explainable, r.generation, r.state]).toEqual([false, false, null, "reading_only"]);
+  });
+  it("three outcomes from key-term coverage: sufficient, partial with the uncovered terms, insufficient", () => {
+    const p = (content: string) => ({ content });
+    expect(groundingOutcome(["model", "improvement", "cycle"], [p("The model for improvement runs in a cycle.")])).toEqual({ outcome: "sufficient", keyTerms: ["model", "improvement", "cycle"], covered: ["model", "improvement", "cycle"], uncoveredTerms: [] });
+    expect(groundingOutcome(["model", "improvement", "cycle"], [p("A model is used.")])).toMatchObject({ outcome: "partial", covered: ["model"], uncoveredTerms: ["improvement", "cycle"] });
+    expect(groundingOutcome(["sepsis"], [p("A model is used.")])).toMatchObject({ outcome: "insufficient", uncoveredTerms: ["sepsis"] });
+    expect(groundingOutcome(["sepsis"], [])).toMatchObject({ outcome: "insufficient" });
+  });
+});
+
+describe("SCHOLAR-LEARN-FIX-01: related sections for a thin lesson", () => {
+  const c = (id: string, materialId: string, content: string, ordinal = 1) => ({ id, materialId, ordinal, content, pageFrom: 1, pageTo: 1 });
+  const terms = ["driver", "diagram", "aim", "change"];
+  const pool = [c("own", "qi", "Driver diagram"), c("q2", "qi", "Each primary driver links to the aim.", 2), c("q3", "qi", "Unrelated slide.", 3),
+    c("o1", "other", "A driver diagram links the aim to change ideas."), c("o2", "other", "Change management."), c("p1", "paper", "Driver diagram aim change question.")];
+  const base = { have: ["own"], terms, covered: ["driver", "diagram"], materialIds: ["qi"], limit: 5 };
+  it("takes the same material's sections that add an uncovered term, and no other upload in My notes only", () => {
+    expect(relatedSections(pool, { ...base, others: false }).map(x => x.id)).toEqual(["q2"]);
+  });
+  it("in a wider mode, another upload only when it holds most of the key terms; never an excluded paper; same material first", () => {
+    expect(OTHER_MATERIAL_MIN_SHARE).toBe(0.6);
+    expect(relatedSections(pool, { ...base, others: true, exclude: new Set(["paper"]) }).map(x => x.id)).toEqual(["q2", "o1"]);
+  });
+});
+
+describe("SCHOLAR-LEARN-FIX-01: recovery in My notes only stays in the selected material", () => {
+  const notes = [passage("a", "Driver diagram aim.", "qi"), passage("b", "Driver diagram in deterioration notes.", "deterioration")];
+  it("notes only: the reader is asked for the session's materials, and another material is never shown", async () => {
+    const asked: unknown[] = [];
+    const f = fakeSources({ notes });
+    const read = f.sources.notes;
+    f.sources.notes = async (q, scope) => { asked.push(scope); return read(q, scope); };
+    const r = await runRecovery({ question: "driver diagram", mode: "notes_only", scopeMaterialIds: ["qi"] }, tierPlan("notes_only", OPEN, true), f.sources, { wider: null });
+    expect(asked).toEqual([{ materialIds: ["qi"] }]);
+    expect(r.evidence.notes.map(n => n.materialId)).toEqual(["qi"]);
+  });
+  it("a wider mode the learner chose may show other materials, the selected one first; unscoped callers are unchanged", async () => {
+    const wide = await runRecovery({ question: "driver diagram", mode: "notes_and_library", scopeMaterialIds: ["qi"] }, tierPlan("notes_and_library", OPEN, true), fakeSources({ notes: [...notes].reverse() }).sources, { wider: null });
+    expect(wide.evidence.notes.map(n => n.materialId)).toEqual(["qi", "deterioration"]);
+    const plain = await runRecovery({ question: "driver diagram", mode: "notes_only" }, tierPlan("notes_only", OPEN, true), fakeSources({ notes }).sources, { wider: null });
+    expect(plain.evidence.notes).toHaveLength(2);
   });
 });

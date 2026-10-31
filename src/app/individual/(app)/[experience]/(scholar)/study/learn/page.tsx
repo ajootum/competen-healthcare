@@ -5,7 +5,7 @@ import { experienceModulePage, gatedMetadata } from "../../../../../_components/
 import { loadIndividualPolicy, shownLearnModes } from "@/lib/individual/policy";
 import { scholarResearchOperational } from "@/lib/individual/scholar/learn-research";
 import { countDue, getLearningPreference, getLearningSession, getRevisionSession, isUuid, learningEvents, listMaterials, readConsent, type MaterialRow } from "@/lib/individual/scholar/store";
-import { sessionTopics } from "@/lib/individual/scholar/learn";
+import { sectionProfiles, sessionTopics } from "@/lib/individual/scholar/learn";
 import { offeredActions, sessionView } from "@/lib/individual/scholar/learn-view";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { LEARN_ACTION_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
@@ -69,11 +69,12 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
   if (q.session && isUuid(q.session)) {
     const r = await getLearningSession(ctx.admin, ctx.userId, q.session);
     if (r.ok && r.data) {
-      const [events, topics] = await Promise.all([learningEvents(ctx.admin, ctx.userId, q.session), sessionTopics(ctx.admin, ctx.userId, r.data.steps.flatMap(s => s.sections.map(y => y.chunkId)))]);
+      const chunkIds = r.data.steps.flatMap(s => s.sections.map(y => y.chunkId));
+      const [events, topics, profiles] = await Promise.all([learningEvents(ctx.admin, ctx.userId, q.session), sessionTopics(ctx.admin, ctx.userId, chunkIds), sectionProfiles(ctx.admin, ctx.userId, chunkIds)]);
       const progress: Record<number, { actions: string[]; verdict: string | null }> = {};
       for (const e of events.ok ? events.data : []) { const p = (progress[e.step] ??= { actions: [], verdict: null }); if (!p.actions.includes(e.action)) p.actions.push(e.action); if (e.verdict) p.verdict = e.verdict; }
       const s = r.data.session;
-      resume = { session: sessionView({ id: s.id, recorded: true, title: displaySessionTitle(s.title), scopeKind: s.scopeKind, currentStep: Math.min(s.currentStep, Math.max(0, r.data.steps.length - 1)), status: s.status, coverage: null, steps: r.data.steps, topics }), progress };
+      resume = { session: sessionView({ id: s.id, recorded: true, title: displaySessionTitle(s.title), scopeKind: s.scopeKind, currentStep: Math.min(s.currentStep, Math.max(0, r.data.steps.length - 1)), status: s.status, coverage: null, steps: r.data.steps, topics, profiles }), progress };
     }
   }
   const ids = (v?: string) => (v ?? "").split(",").filter(isUuid).slice(0, 10);

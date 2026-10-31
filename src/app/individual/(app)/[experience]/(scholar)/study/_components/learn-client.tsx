@@ -14,8 +14,9 @@ import { aiReasonCopy, clarifyFrom, type ClarifyPrompt } from "@/lib/individual/
 import { useAiAvailabilityOf } from "@/app/individual/_components/ai/AiAvailabilityContext";
 import { FormativeAiLabel } from "./edu-notice";
 import { RecoveryFlow, type ExplainOutcome, type RecoveryRequestBody } from "./evidence-recovery";
-import { RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL } from "@/lib/individual/scholar/config";
+import { LEARN_NOT_COVERED_LABEL, LEARN_NOT_COVERED_NOTE, LEARN_WIDER_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL } from "@/lib/individual/scholar/config";
 import type { ReadingLink } from "@/lib/individual/scholar/evidence-recovery";
+import { citationSegments, citedTags, parseTeachAnswer, questionText, replyState, type LearnGrounding } from "@/lib/individual/scholar/teach-format";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -35,7 +36,8 @@ export type StartScope =
   | { kind: "topic"; topic: string } | { kind: "competency"; competencyId: string }
   | { kind: "sources"; materialIds: string[]; chunkIds: string[]; topics: string[]; topic?: string };
 
-type Source = { tag: string; chunkId: string; materialId: string; materialTitle: string; citation: string };
+/** `excerpt`: the start of the section, shown only behind "View sources" (absent on some older replies). */
+type Source = { tag: string; chunkId: string; materialId: string; materialTitle: string; citation: string; excerpt?: string };
 type Reference = { tag: string; title: string; code: string | null; outcome: string | null; status: string; approved?: boolean; library?: boolean };
 /** COMPETEN-RESEARCH-01: one external record, exactly as the provider returned it. Untagged = further reading only. */
 type ExternalRef = { tag: string | null; provider: string; title: string; journal: string | null; year: number | null; authors: string[]; pmid: string | null; doi: string | null; url: string; evidence: boolean; excerpt: string | null; verified: { pmid: boolean; doi: boolean | null };
@@ -64,6 +66,9 @@ type Reply = {
   reason?: string;
   /** SCHOLAR-SQIE-02: an answer asked for from the learning resources found after a withheld one. */
   recovered?: { shown: boolean; label: string; unanswered: string[]; reading: ReadingLink[] };
+  /** SCHOLAR-LEARN-FIX-01: the lesson this answer teaches, and how well its passages hold the lesson's key terms (absent on older replies). */
+  lesson?: { title: string; objective: string } | null;
+  grounding?: (LearnGrounding & { related?: { sameMaterial: number; otherMaterials: number } }) | null;
 };
 /** `extra` and `target`: the request as it was made, so "Explain using approved references" can make it again. */
 type Card = { id: number; asked?: string; reply: Reply; extra?: Record<string, unknown>; target?: "lesson" | "ask" };
@@ -119,6 +124,11 @@ export function LearnWorkspace(props: {
   // SCHOLAR-EDU-AI-01 s6: an action whose activity the standing says is not available is shown disabled, with why.
   const aiOf = useAiAvailabilityOf();
   const offReason = (a: string) => { const v = aiOf(a); return v && !v.available ? v.reason : null; };
+  // The latest shown Teach Me answer's check questions that cite only this step's own sections (see startCheck).
+  const ownIds = new Set(step?.sections.map(x => x.chunkId) ?? []);
+  const answerable = (r: Reply, q: string) => { const tags = citedTags(q); return tags.length > 0 && tags.every(n => ownIds.has(r.sources.find(s => s.tag === `S${n}`)?.chunkId ?? "")); };
+  const lastTeach = [...(cards[step?.step ?? -1] ?? [])].reverse().find(c => c.reply.action === "teach" && !!c.reply.answer && !c.reply.withheld);
+  const teachQuestions = lastTeach ? (parseTeachAnswer(lastTeach.reply.answer!)?.questions ?? []).filter(q => answerable(lastTeach.reply, q)) : [];
 
   const act = useCallback(async (action: string, extra: Record<string, unknown> = {}, target: "lesson" | "ask" = "lesson", asked?: string) => {
     if (!session || !step) return null;
@@ -159,9 +169,23 @@ export function LearnWorkspace(props: {
   const recoverFor = (c: Card): Recover | undefined => {
     const r = c.reply;
     if (!r.withheld || r.recovered || r.action === "check" || r.action === "clarify" || !step) return undefined;
+    return recovery(c, recoveryMode(), c.asked || step.title || "", r.reason ?? null);
+  };
+  // SCHOLAR-LEARN-FIX-01 L-B: a partly grounded answer that WAS shown offers the next wider tier the server named
+  // (grounding.wider), for the terms the notes did not cover -- the same evidence recovery, asked for by the learner.
+  const widerFor = (c: Card): Recover | undefined => {
+    const r = c.reply, g = r.grounding;
+    if (replyState(r) !== "partial" || !g?.wider || r.recovered || !step) return undefined;
+    return recovery(c, g.wider as RecoveryRequestBody["mode"], g.uncoveredTerms.join(" "), null);
+  };
+  const recovery = (c: Card, recMode: RecoveryRequestBody["mode"], question: string, withheldReason: string | null): Recover | undefined => {
+    const r = c.reply;
+    if (!step || !session) return undefined;
     const first = step.sections[0];
     return {
-      request: { question: (c.asked || step.title || "").slice(0, QUESTION_MAX), mode: recoveryMode(), materialId: first?.materialId ?? null, sectionId: first?.chunkId ?? null, withheldReason: r.reason ?? null },
+      // SCHOLAR-LEARN-FIX-01: the session's selected materials scope My notes only (a recorded session by id, read on the server).
+      request: { question: question.slice(0, QUESTION_MAX), mode: recMode, materialId: first?.materialId ?? null, sectionId: first?.chunkId ?? null, withheldReason,
+        ...(session.id ? { sessionId: session.id } : { materialIds: [...new Set(session.steps.flatMap(s => s.sections.map(x => x.materialId)))].slice(0, 10) }) },
       explain: async rec => {
         const x = await act(r.action, { ...(c.extra ?? {}), recovery: rec }, c.target ?? "lesson", c.asked);
         if (!x) return { error: "Scholar could not explain this just now. Try again shortly." };
@@ -228,7 +252,16 @@ export function LearnWorkspace(props: {
     else if (p.action === "check" && r.checkQuestion) setCheck({ question: r.checkQuestion, answer: "" });
     else if (p.action === "clarify" && !r.error && !r.continuity) setCheck(null);
   }
-  async function startCheck() {
+  // SCHOLAR-LEARN-FIX-01 L-B: Check my understanding answers a question the Teach Me answer already wrote and the engine
+  // checked (teach-format.ts), when it cites only this step's own sections -- the clarification is judged against exactly
+  // those. Otherwise the existing check action writes one. Either way the answer goes to clarify, which records the verdict.
+  async function startCheck(q?: string) {
+    const own = q ?? teachQuestions[0];
+    if (own) {
+      setCheck({ question: questionText(own), answer: "" });
+      setTimeout(() => document.getElementById("check-answer")?.focus(), 0);
+      return;
+    }
     const r = await act("check");
     if (r?.checkQuestion) setCheck({ question: r.checkQuestion, answer: "" });
   }
@@ -258,6 +291,10 @@ export function LearnWorkspace(props: {
   const last = idx === session.steps.length - 1;
   const thread = cards[step?.step ?? -1] ?? [];
   const offerCheck = props.checks !== "off" && props.consent && thread.some(c => c.reply.answer && c.reply.action !== "clarify");
+  const canCheck = offerCheck && !check && !busy && !offReason("check");
+  // A verdict this visit or recorded before (progress): the check is done, so Continue leads.
+  const checked = !!progress[step?.step ?? -1]?.verdict || thread.some(c => !!c.reply.verdict);
+  const continueFirst = thread.length > 0 && (checked || !offerCheck);
   const panel = (name: typeof tab) => (tab === name ? "block" : "hidden md:block");
 
   return (
@@ -318,16 +355,31 @@ export function LearnWorkspace(props: {
         {/* ── THE LESSON: the guided cycle, any action, the informal check ── */}
         <section aria-labelledby="lesson-h" className={`${panel("lesson")} rounded-2xl border border-gray-200 bg-white p-4 sm:p-5`}>
           <p className="text-[12px] font-bold uppercase tracking-[0.12em]" style={{ color: accent }}>Step {idx + 1} of {session.steps.length}</p>
-          <h3 id="lesson-h" className="text-[16px] font-bold text-gray-900">{step?.title}</h3>
-          <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Ways of learning">
-            {props.actions.filter(a => a !== "ask").map(a => (
+          <h3 id="lesson-h" className="break-words text-[17px] font-bold text-gray-900">{step?.title || lastTeach?.reply.lesson?.title || `Step ${idx + 1}`}</h3>
+          {/* SCHOLAR-LEARN-FIX-01 L-B: the lesson's objective (learn.lessonOutline, no AI). An older reply's or session's missing one is simply not shown. */}
+          {(step?.objective || lastTeach?.reply.lesson?.objective) && (
+            <p className="mt-1 break-words text-[14px] leading-relaxed text-gray-700"><span className="font-semibold text-gray-900">In this lesson: </span>{step?.objective || lastTeach?.reply.lesson?.objective}</p>
+          )}
+          {/* The primary way in (Teach Me by default) and, visually secondary, the other ways. Defaults stay: nothing must be chosen to go on. */}
+          {props.actions.includes(props.startAction) && (
+            <div className="mt-3">
+              <button type="button" disabled={!!busy || !props.consent || !!offReason(props.startAction)} aria-describedby={offReason(props.startAction) ? "learn-ai-why" : undefined} onClick={() => act(props.startAction)}
+                className={btn} style={{ background: accent }}>
+                {busy === props.startAction ? "Working…" : props.labels[props.startAction]}
+              </button>
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="More ways to learn">
+            <span className="w-full text-[12px] font-semibold text-gray-600 md:w-auto">More ways to learn:</span>
+            {props.actions.filter(a => a !== "ask" && a !== props.startAction).map(a => (
               <button key={a} type="button" disabled={!!busy || !props.consent || !!offReason(a)} aria-describedby={offReason(a) ? "learn-ai-why" : undefined} onClick={() => act(a)}
-                className={`${chip} ${a === "teach" ? "border-transparent text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`} style={a === "teach" ? { background: accent } : undefined}>
+                className={`${chip} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>
                 {busy === a ? "Working…" : props.labels[a]}
               </button>
             ))}
-            <label className="ml-auto inline-flex items-center gap-1.5 text-[12.5px] text-gray-700">Depth
-              <select value={depth} onChange={e => setDepth(e.target.value as typeof depth)} className={`rounded-lg border border-gray-300 px-2 py-1 text-[13px] ${focusRing}`}>
+            {props.actions.includes("ask") && <button type="button" onClick={() => rephrase("")} className={`${chip} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>{props.labels.ask}</button>}
+            <label className="inline-flex items-center gap-1.5 text-[12.5px] text-gray-700 md:ml-auto">Depth
+              <select value={depth} onChange={e => setDepth(e.target.value as typeof depth)} className={`rounded-lg border border-gray-300 px-2 py-1 text-[13px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
                 <option value="brief">Brief</option><option value="standard">Standard</option><option value="detailed">Detailed</option>
               </select>
             </label>
@@ -361,7 +413,8 @@ export function LearnWorkspace(props: {
           <div aria-live="polite" className="mt-4 space-y-4">
             {thread.length === 0 && !busy && pending?.target !== "lesson" && <p className="text-[13.5px] text-gray-600">{props.consent ? `Choose ${props.labels[props.startAction]} to begin this step, or ask Scholar anything.` : "Learning needs AI help, which is off."}</p>}
             {thread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }) : undefined}
-              onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} recover={recoverFor(c)} />)}
+              onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} recover={recoverFor(c)} wider={widerFor(c)}
+              onAnswer={canCheck && c === lastTeach ? q => void startCheck(q) : undefined} canAnswer={q => answerable(c.reply, q)} />)}
             {busy && busy !== "ask" && <p className="text-[13px] text-gray-500">{mode === "research" ? "Scholar is reading your notes and searching published research…" : "Scholar is reading your notes…"}</p>}
           </div>
 
@@ -380,16 +433,18 @@ export function LearnWorkspace(props: {
             </form>
           )}
 
+          {/* SCHOLAR-LEARN-FIX-01 L-B: Teach, then Check my understanding (primary once there is something to check), then
+              Continue (primary once checked, or when no check is offered). Continue is always there: checking is never required. */}
           <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
             {offerCheck && !check && (
-              <button type="button" className={props.checks === "prompt" ? btn : ghost} style={props.checks === "prompt" ? { background: accent } : undefined} disabled={!!busy || !!offReason("check")} aria-describedby={offReason("check") ? "learn-check-why" : undefined} onClick={startCheck}>
-                {busy === "check" ? "Writing a check…" : "Check my understanding"}
+              <button type="button" className={checked ? ghost : btn} style={checked ? undefined : { background: accent }} disabled={!!busy || !!offReason("check")} aria-describedby={offReason("check") ? "learn-check-why" : undefined} onClick={() => void startCheck()}>
+                {busy === "check" ? "Writing a check…" : checked ? "Check again" : "Check my understanding"}
               </button>
             )}
             {offerCheck && !check && offReason("check") && <p id="learn-check-why" className="order-last w-full text-[12.5px] text-gray-600">{aiReasonCopy(offReason("check")!, "scholar").text}</p>}
+            {!last ? <button type="button" className={continueFirst ? btn : ghost} style={continueFirst ? { background: accent } : undefined} onClick={() => goTo(session.steps[idx + 1].step, thread.length ? null : "skip")}>{thread.length ? "Continue to the next lesson" : "Skip this step"}</button>
+              : session.status !== "completed" && <button type="button" className={continueFirst ? btn : ghost} style={continueFirst ? { background: accent } : undefined} onClick={finish}>Finish session</button>}
             {idx > 0 && <button type="button" className={ghost} onClick={() => goTo(session.steps[idx - 1].step, "revisit")}>Previous step</button>}
-            {!last ? <button type="button" className={ghost} onClick={() => goTo(session.steps[idx + 1].step, thread.length ? null : "skip")}>{thread.length ? "Continue" : "Skip this step"}</button>
-              : session.status !== "completed" && <button type="button" className={ghost} onClick={finish}>Finish session</button>}
             {session.status === "completed" && <span className="text-[13px] font-semibold text-emerald-800">Session completed. You can still revisit any step.</span>}
           </div>
         </section>
@@ -468,7 +523,11 @@ function Withheld({ r, asked, onRephrase }: { r: Reply; asked?: string; onRephra
 }
 
 /** One reply, its four kinds of content kept apart and labelled (owner GO s7). */
-function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover }: { card: Card; labels: Record<LearnAction, string>; compact?: boolean; onFresh?: () => void; onRephrase?: () => void; recover?: Recover }) {
+function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer }: {
+  card: Card; labels: Record<LearnAction, string>; compact?: boolean; onFresh?: () => void; onRephrase?: () => void; recover?: Recover;
+  /** SCHOLAR-LEARN-FIX-01 L-B: the wider tier offered under a partly grounded answer; answering one of its check questions. */
+  wider?: Recover; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean;
+}) {
   const r = card.reply;
   if (r.continuity) {
     return (
@@ -504,17 +563,11 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
           )}
           <div className="mt-2"><AiBadge /></div>
           <p className="mt-2 text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>
-          <div className="mt-1 whitespace-pre-wrap text-[14.5px] leading-relaxed text-gray-800">{r.answer}</div>
+          {r.answer && <AnswerBody text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} />}
+          {replyState(r) === "partial" && r.grounding && <NotCovered terms={r.grounding.uncoveredTerms} wider={wider} />}
         </>
       )}
-      {r.sources.length > 0 && !r.next && (
-        <ul className="mt-2 space-y-0.5">
-          {r.sources.filter((_, i) => !r.answer || cited.has(i + 1)).map(s => (
-            <li key={s.tag} className="text-[12.5px] text-gray-700"><span className="font-mono font-bold" style={{ color: accent }}>[{s.tag}]</span>{" "}
-              <Link href={sourceHref(s.materialId, s.chunkId)} className={`underline underline-offset-2 ${focusRing}`}>{s.citation}</Link></li>
-          ))}
-        </ul>
-      )}
+      {r.sources.length > 0 && !r.next && <SourcesDisclosure sources={r.sources.filter((_, i) => !r.answer || cited.has(i + 1))} />}
       {!r.withheld && r.references.length > 0 && r.answer && /\[R\d+\]/.test(r.answer) && (
         <GovernedReferenceList refs={r.references.filter(x => r.answer!.includes(`[${x.tag}]`))} />
       )}
@@ -541,6 +594,103 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
         <AiFeedback kind="explanation" target={r.artefactId ? "artefact" : "action"} refId={r.artefactId ?? r.actionId} />
       )}
     </article>
+  );
+}
+
+/** SCHOLAR-LEARN-FIX-01 L-B: an [S n] citation, inline, as a link to that section of the learner's own notes. */
+function CiteLink({ n, sources }: { n: number; sources: Source[] }) {
+  const s = sources.find(x => x.tag === `S${n}`);
+  if (!s) return <span className="font-mono text-[12.5px]">[S{n}]</span>;
+  return (
+    <Link href={sourceHref(s.materialId, s.chunkId)} title={s.citation} aria-label={`Source ${s.tag}: ${s.citation}`}
+      className={`rounded font-mono text-[12.5px] font-bold underline underline-offset-2 pointer-coarse:px-1 pointer-coarse:py-1 ${focusRing}`} style={{ color: accent }}>[{s.tag}]</Link>
+  );
+}
+function Cited({ text, sources }: { text: string; sources: Source[] }) {
+  return <>{citationSegments(text).map((x, i) => ("tag" in x ? <CiteLink key={i} n={x.tag} sources={sources} /> : <span key={i}>{x.text}</span>))}</>;
+}
+
+/**
+ * The notes part of an answer. A Teach Me answer in the structured form (teach-format.ts) is shown as its parts: the
+ * overview, the key points, an example from the notes (only when the engine kept one) and the understanding check.
+ * Anything else -- every other action, and a Teach Me answer saved before the structure -- is shown as written. Either
+ * way each [S n] is a link to its section.
+ */
+function AnswerBody({ text, action, sources, onAnswer, canAnswer }: { text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean }) {
+  const parts = action === "teach" ? parseTeachAnswer(text) : null;
+  if (!parts) return <div className="mt-1 whitespace-pre-wrap break-words text-[14.5px] leading-relaxed text-gray-800"><Cited text={text} sources={sources} /></div>;
+  const sub = "text-[12px] font-bold uppercase tracking-[0.1em]";
+  return (
+    <div className="mt-1 space-y-3 break-words text-[14.5px] leading-relaxed text-gray-800">
+      {parts.overview && <p className="text-[15px] text-gray-900"><Cited text={parts.overview} sources={sources} /></p>}
+      {parts.points.length > 0 && (
+        <div>
+          <h4 className={`${sub} text-gray-600`}>Key points</h4>
+          <ul className="mt-1 list-disc space-y-1.5 pl-5">{parts.points.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul>
+        </div>
+      )}
+      {parts.example && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+          <h4 className={`${sub} text-gray-600`}>Example from your notes</h4>
+          <p className="mt-0.5"><Cited text={parts.example} sources={sources} /></p>
+        </div>
+      )}
+      {parts.questions.length > 0 && (
+        <div className="rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2">
+          <h4 className={`${sub} text-violet-900`}>Check your understanding</h4>
+          <ul className="mt-1 space-y-2">
+            {parts.questions.map((q, i) => (
+              <li key={i} className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1"><Cited text={q} sources={sources} /></span>
+                {onAnswer && canAnswer?.(q) && (
+                  <button type="button" onClick={() => onAnswer(q)} className={`${chip} border-violet-300 bg-white text-violet-950 hover:bg-violet-50`}>Answer this</button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[12px] text-gray-600">{INFORMAL_CHECK_LABEL}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A partly grounded lesson: after what the notes support, the terms they did not cover, and the next wider tier if offered. */
+function NotCovered({ terms, wider }: { terms: string[]; wider?: Recover }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2.5">
+      <p className="break-words text-[14px] text-gray-900"><span className="font-semibold">{LEARN_NOT_COVERED_LABEL}:</span> {terms.join(", ")}.</p>
+      <p className="mt-0.5 text-[12.5px] text-gray-700">{LEARN_NOT_COVERED_NOTE}</p>
+      {wider && !open && (
+        <button type="button" onClick={() => setOpen(true)} className={`${chip} mt-2 border-gray-300 bg-white text-gray-900 hover:bg-gray-50`}>{LEARN_WIDER_LABEL}</button>
+      )}
+      {wider && open && <RecoveryFlow request={wider.request} explain={wider.explain} onDismiss={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+/**
+ * The sources an answer cites, collapsed by default: a native disclosure, so it opens from the keyboard and is announced
+ * as expandable. Each source keeps its link to the original section; its excerpt is shown only here.
+ */
+function SourcesDisclosure({ sources }: { sources: Source[] }) {
+  if (!sources.length) return null;
+  return (
+    <details className="group mt-3 rounded-lg border border-gray-200">
+      <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
+        <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>View sources ({sources.length})
+      </summary>
+      <ul className="space-y-2.5 border-t border-gray-200 px-3 py-2.5">
+        {sources.map(s => (
+          <li key={s.tag} className="break-words text-[12.5px] text-gray-700">
+            <span className="font-mono font-bold" style={{ color: accent }}>[{s.tag}]</span>{" "}
+            <Link href={sourceHref(s.materialId, s.chunkId)} className={`underline underline-offset-2 ${focusRing}`}>{s.citation}</Link>
+            {s.excerpt && <p className="mt-1 whitespace-pre-wrap border-l-2 border-gray-200 pl-2 text-[12.5px] leading-relaxed text-gray-700">{s.excerpt}{s.excerpt.length >= 400 ? "…" : ""}</p>}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

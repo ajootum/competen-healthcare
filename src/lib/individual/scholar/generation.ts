@@ -4,6 +4,7 @@ import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib
 import { CONTEXT_PREAMBLE } from "./learner-context";
 import { CASE_MAX_STEPS, CASE_MIN_STEPS, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, type CheckVerdict, type ExplanationDepth, type LearnAction } from "./config";
 import { citeChunk, findPatientIdentifiers } from "./extract";
+import { TEACH_LABEL, TEACH_MAX_QUESTIONS, citedTags, composeTeachAnswer, parseTeachAnswer, questionText } from "./teach-format";
 import { structureLabel, type CatalogueCompetency } from "./catalogue";
 import {
   REVISION_VERIFY_SYSTEM, VERIFY_SYSTEM, applyRevisionVerification, applyVerification, passageVocabulary, qualityProblems, revisionVerificationPrompt, verificationPrompt,
@@ -406,7 +407,16 @@ const BACKGROUND_ACTIONS: readonly LearnAction[] = ["teach", "deeper", "examples
 export const RESEARCH_ACTIONS: readonly (LearnAction | "check" | "clarify")[] = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask"];
 
 const LEARN_INSTRUCTION: Record<LearnAction | "check" | "clarify", string> = {
-  teach: "MODE: TEACH ME, one step of a guided lesson. First INTRODUCE the idea of these passages in one or two sentences: what it is and why it matters, from the passages. Then EXPLAIN it clearly, building from simple to more detailed, citing as you go. Teach, do not just list.",
+  // SCHOLAR-LEARN-FIX-01 L-B (PROMPT_VERSIONS.learnTeach): a structured lesson, parsed and checked part by part
+  // (checkTeachAnswer). The labels are teach-format.ts TEACH_LABEL.
+  teach: [
+    "MODE: TEACH ME, one lesson of a guided course. Reply in exactly these labelled parts, each label at the start of its own line:",
+    `${TEACH_LABEL.overview} one or two sentences introducing the idea of these passages: what it is and why it matters, from the passages, cited.`,
+    `${TEACH_LABEL.points} then one line per key idea, each starting '- ', building from simple to more detailed, explained rather than just listed, each ending with its citation such as [S1].`,
+    `${TEACH_LABEL.example} ONLY if the passages themselves describe a situation, case or application: one or two sentences about 'a patient' or 'the person caring for them' that show an idea at work, using only what the passages say, cited. If the passages describe no such situation, leave the ${TEACH_LABEL.example} line out entirely. Never invent an example.`,
+    `${TEACH_LABEL.check} then one or two short open questions, each starting '- ', that the student can answer in a sentence or two from the passages, each ending with '?' and then the tag of the passage that answers it, for example 'Why is this done? [S2]'. Ask them to explain, never to recall a number and never how many of anything.`,
+    "Write nothing else in the part from the notes.",
+  ].join("\n"),
   explain: "MODE: EXPLAIN THIS. Explain the passages clearly, as a good tutor would, citing as you go.",
   simplify: "MODE: SIMPLIFY. Explain as simply as you can, for someone meeting the topic for the first time: short sentences and everyday words. Keep every technical term exactly and say what it means using the passages. Keep the passages' own names for things -- write 'the right and left main bronchi', never 'two tubes': simpler words, never a count instead of the names. Notes only.",
   deeper: "MODE: GO DEEPER. Explain how the ideas in the passages connect, the reasoning and mechanisms behind them, and what a student should understand rather than memorise, citing as you go. If a point is not in the passages, it does not belong here.",
@@ -573,6 +583,38 @@ export function checkLearnMain(main: string, asked: string, passages: Passage[],
   return { ok: true, text, cited: [...new Set(s)].sort((a, b) => a - b) };
 }
 
+/**
+ * Pure. SCHOLAR-LEARN-FIX-01 L-B: the notes part of a Teach Me answer, checked PART BY PART, never more loosely:
+ *   - the overview and key points are checked together by checkLearnMain exactly as any answer is -- failing it, the
+ *     whole answer is withheld for that reason;
+ *   - the example is checked on its own by checkLearnMain (a given [S n], nothing the passages do not hold): failing it,
+ *     the example alone is DROPPED, never shown -- so an unsupported example costs the example, not the lesson;
+ *   - each check question must end with given [S n] tags, read as a question, carry no identifier, and add nothing the
+ *     passages do not hold (checkCheckQuestion's rules): failing that it is DROPPED. At most TEACH_MAX_QUESTIONS.
+ * What is shown is re-written in the canonical form (composeTeachAnswer). An answer with no OVERVIEW or KEY POINTS label
+ * is checked as a whole, exactly as before.
+ */
+export function checkTeachAnswer(main: string, asked: string, passages: Passage[], references: GovernedReference[]): { check: ExplainCheck; dropped: { example: boolean; questions: number } } {
+  const parts = parseTeachAnswer(main.trim());
+  if (!parts) return { check: checkLearnMain(main, asked, passages, references), dropped: { example: false, questions: 0 } };
+  const body = composeTeachAnswer({ ...parts, example: null, questions: [] });
+  // "OVERVIEW: NOT_IN_NOTES" is the model saying the passages do not cover it, in the labelled form.
+  if (/\bNOT_IN_NOTES\b/.test(main) && !citedTags(body).length) return { check: { ok: false, reason: "not_in_notes" }, dropped: { example: false, questions: 0 } };
+  const check = checkLearnMain(body || main, asked, passages, references);
+  if (!check.ok) return { check, dropped: { example: false, questions: 0 } };
+  const example = parts.example && checkLearnMain(parts.example, asked, passages, references).ok ? parts.example : null;
+  const questions = parts.questions.filter(q => {
+    const tags = citedTags(q), plain = questionText(q);
+    return tags.length > 0 && tags.every(t => t >= 1 && t <= passages.length) && /\?$/.test(plain) && plain.length >= 8 && plain.length <= 300
+      && !/\[[RE]\d+\]/.test(q) && !findPatientIdentifiers(plain).length && !groundingViolations(plain, passages.map(p => p.content)).length;
+  }).slice(0, TEACH_MAX_QUESTIONS);
+  const text = composeTeachAnswer({ ...parts, example, questions });
+  return {
+    check: { ok: true, text, cited: [...new Set([...check.cited, ...citedTags(example ?? ""), ...questions.flatMap(citedTags)])].sort((a, b) => a - b) },
+    dropped: { example: !!parts.example && !example, questions: parts.questions.length - questions.length },
+  };
+}
+
 export type LearnFlag = { text: string; cited: number[] };
 
 /** Pure. The AI's flags: each line must cite a given passage and add nothing the passages do not hold. Others are dropped. */
@@ -610,7 +652,8 @@ export function parseVerdict(raw: string): { verdict: CheckVerdict | null; rest:
   return { verdict, rest: (raw.slice(0, m.index) + raw.slice(m.index + m[0].length)).trim() };
 }
 
-export const learnPromptVersion = (action: LearnAction | "check" | "clarify") => `${PROMPT_VERSIONS.learn}:${action}`;
+/** SCHOLAR-LEARN-FIX-01 L-B: Teach Me adds its structured-lesson version, so its saved answers key apart from the free-text ones. */
+export const learnPromptVersion = (action: LearnAction | "check" | "clarify") => `${PROMPT_VERSIONS.learn}:${action}${action === "teach" ? `+${PROMPT_VERSIONS.learnTeach}` : ""}`;
 
 export type LearnResult = AiFailure | {
   ok: true; action: LearnAction | "check" | "clarify"; model: string; provider: string; promptVersion: string;
@@ -656,7 +699,7 @@ export async function runLearn(userId: string, args: {
   const mayBackground = args.background && BACKGROUND_ACTIONS.includes(args.action as LearnAction);
   return {
     ...base,
-    check: checkLearnMain(split.main, asked, args.passages, args.references),
+    check: args.action === "teach" ? checkTeachAnswer(split.main, asked, args.passages, args.references).check : checkLearnMain(split.main, asked, args.passages, args.references),
     background: split.background === null ? null : mayBackground ? checkBackgroundText(split.background) : { ok: false, reason: "not_this_mode" },
     flags: checkFlags(split.flags, args.passages),
     verdict, question: null,

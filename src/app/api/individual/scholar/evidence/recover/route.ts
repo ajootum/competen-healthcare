@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { isUuid } from "@/lib/individual/scholar/store";
+import { getLearningSession, isUuid } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { QUESTION_MAX } from "@/lib/individual/scholar/config";
 import { audit } from "@/lib/individual/scholar/http";
@@ -13,7 +13,9 @@ export const dynamic = "force-dynamic";
 
 // POST /api/individual/scholar/evidence/recover -- SCHOLAR-SQIE-02 s5-8 (evidence recovery).
 //
-// Body { question, materialId?, sectionId?, mode?, withheldReason?, paperQuestionId? }. mode: notes_only |
+// Body { question, materialId?, sectionId?, mode?, withheldReason?, paperQuestionId?, sessionId?, materialIds? }.
+// SCHOLAR-LEARN-FIX-01: from Learn, sessionId (a recorded session: its materials, read on the server by the learner's id)
+// or materialIds (a session the browser holds) scope My notes only to the selected materials. mode: notes_only |
 // notes_and_library | notes_and_references (Learn's notes | library | research are read the same); absent: HQ's default.
 // With paperQuestionId (a question of an examination paper) the question is the server's own text for it, and the paper
 // itself is never searched as evidence. Searches the learner's own notes, then the approved Competen library, then --
@@ -37,13 +39,26 @@ export async function POST(req: Request) {
   const mode = parseRecoveryMode(body?.mode, policy.scholarRecovery.defaultMode);
   const withheldReason = typeof body?.withheldReason === "string" ? body.withheldReason.slice(0, 40) : null;
 
+  // SCHOLAR-LEARN-FIX-01: the selected materials of a Learn session. A recorded session's are its own steps' (an unreadable
+  // or unknown session scopes to nothing more than the material named); a browser-held one sends its material ids,
+  // each only ever matched against the learner's own rows. A paper question is never scoped (its paper is excluded).
+  let scopeMaterialIds: string[] | null = null;
+  if (!paper && isUuid(body?.sessionId)) {
+    const s = await getLearningSession(ctx.admin, ctx.userId, body.sessionId);
+    scopeMaterialIds = s.ok && s.data ? [...new Set(s.data.steps.flatMap(x => x.sections.map(y => y.materialId)))] : null;
+    if (!scopeMaterialIds?.length) scopeMaterialIds = isUuid(body?.materialId) ? [body.materialId] : null;
+  } else if (!paper && Array.isArray(body?.materialIds)) {
+    const ids = [...new Set((body.materialIds as unknown[]).filter(isUuid))].slice(0, 10) as string[];
+    scopeMaterialIds = ids.length ? ids : null;
+  }
+
   const r = await recoverEvidence(ctx, policy, {
-    question, mode, withheldReason,
+    question, mode, withheldReason, scopeMaterialIds,
     materialId: paper?.materialId ?? (isUuid(body?.materialId) ? body.materialId : null), sectionId: isUuid(body?.sectionId) ? body.sectionId : null,
     excludeMaterialId: paper?.materialId ?? null,
   });
   await audit(ctx, "scholar_evidence_recovery", "individual_scholar_evidence_recovery", null, {
-    recovery_id: r.recoveryId, question_chars: question.length, mode, state: r.state, verdict: r.sufficiency.verdict, paper: !!paper,
+    recovery_id: r.recoveryId, question_chars: question.length, mode, state: r.state, verdict: r.sufficiency.verdict, paper: !!paper, scoped: scopeMaterialIds?.length ?? 0,
     notes: r.evidence.notes.length, library: r.evidence.library.length, external: r.evidence.external.length, reading: r.reading.length,
     external_status: r.external.reason, external_dropped: r.external.dropped,
   });
