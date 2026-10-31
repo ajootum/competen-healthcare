@@ -13,7 +13,11 @@ import ClarifyPurpose from "@/app/individual/_components/ai/ClarifyPurpose";
 import { aiReasonCopy, clarifyFrom, type ClarifyPrompt } from "@/lib/individual/ai-availability";
 import { useAiAvailabilityOf } from "@/app/individual/_components/ai/AiAvailabilityContext";
 import { FormativeAiLabel } from "./edu-notice";
-import { RecoveryFlow, type ExplainOutcome, type RecoveryRequestBody } from "./evidence-recovery";
+import { RecoveryFlow, type Expansion, type ExplainOutcome, type RecoveryRequestBody } from "./evidence-recovery";
+import {
+  EXPANSION_LABEL, GUIDED_KEY, LessonRequests, expansionChoices, groupActions, guidedValue, isGuided, isOpenable, lessonKey, lessonPhase, preparingText, shouldAutoTeach,
+  type LearnMode, type LessonSettings,
+} from "@/lib/individual/scholar/guided-learn";
 import { LEARN_NOT_COVERED_LABEL, LEARN_NOT_COVERED_NOTE, LEARN_WIDER_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL } from "@/lib/individual/scholar/config";
 import type { ReadingLink } from "@/lib/individual/scholar/evidence-recovery";
 import { STUDY_EVENT } from "./study-active";
@@ -45,10 +49,13 @@ type ExternalRef = { tag: string | null; provider: string; title: string; journa
   /** SCHOLAR-SOURCE-QUALITY-01: why it is reading only (absent on answers saved before it). */
   notUsed?: keyof typeof RECOVERY_NOT_USED_LABEL | null };
 type ResearchReply = { state: string; label: string; message: string | null; query?: string | null; scholarLink?: string | null; references: ExternalRef[]; text?: string; cited?: number[]; withheld?: string };
-type LearnMode = "notes" | "library" | "research";
 const MODE_KEY = "scholar.learn.mode";
 const noSubscribe = () => () => {};
 const rememberedMode = (): string | null => { try { return window.localStorage.getItem(MODE_KEY); } catch { return null; } };
+// SCHOLAR-GUIDED-LEARNING-01: Guided (the default) or Manual, on this device (guided-learn.ts says why not the 414 row).
+const rememberedGuided = (): string | null => { try { return window.localStorage.getItem(GUIDED_KEY); } catch { return null; } };
+const ACT_URL = "/api/individual/scholar/learn/act";
+const requestId = () => { try { return crypto.randomUUID(); } catch { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; } };
 /** Stage 3 acceptance item 4: an answer withheld as unsupported -- why, and next steps from the notes only. */
 type WithheldNext = { why: string; notInNotes: boolean; nearest: { tag: string; chunkId: string; materialId: string; citation: string }[]; rephrase: boolean; background: { text: string; label: string } | null };
 type Reply = {
@@ -70,6 +77,9 @@ type Reply = {
   /** SCHOLAR-LEARN-FIX-01: the lesson this answer teaches, and how well its passages hold the lesson's key terms (absent on older replies). */
   lesson?: { title: string; objective: string } | null;
   grounding?: (LearnGrounding & { related?: { sameMaterial: number; otherMaterials: number } }) | null;
+  /** SCHOLAR-GUIDED-LEARNING-01: a lesson shown with its unsupported statements left out (a count, never which). */
+  salvage?: { removed: number; note: string } | null;
+  cached?: boolean;
 };
 /** `extra` and `target`: the request as it was made, so "Explain using approved references" can make it again. */
 type Card = { id: number; asked?: string; reply: Reply; extra?: Record<string, unknown>; target?: "lesson" | "ask" };
@@ -77,9 +87,9 @@ type Recover = { request: RecoveryRequestBody; explain: (rec: { id: string; mode
 /** AI operating modes: a clarify question put to the student instead of a refusal, and the request to resend if it is for study. */
 type Pending = { prompt: ClarifyPrompt; target: "lesson" | "ask" | "assistant"; action?: string; extra?: Record<string, unknown>; asked?: string; question?: string };
 
-async function call(url: string, body: unknown, method = "POST"): Promise<{ ok: boolean; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
+async function call(url: string, body: unknown, method = "POST", headers: Record<string, string> = {}): Promise<{ ok: boolean; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
   try {
-    const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
     return { ok: res.ok, json: await res.json().catch(() => ({})) };
   } catch {
     return { ok: false, json: { error: "Competen could not be reached. Check your connection and try again." } };
@@ -100,6 +110,8 @@ export function LearnWorkspace(props: {
   objectiveText?: string;
   /** SCHOLAR-SESSION-AI-02: opened from the study session bar's Ask: the Ask panel first. */
   openAsk?: boolean;
+  /** SCHOLAR-GUIDED-LEARNING-01: policy scholar_learn_prepare_next (default off). Off: no prepare request is ever made. */
+  prepareNext?: boolean;
 }) {
   const [session, setSession] = useState<SessionView | null>(props.initial);
   const [note, setNote] = useState<string | null>(null);
@@ -124,38 +136,100 @@ export function LearnWorkspace(props: {
   // Owner D3: the shared personal AI on this step. Its own thread, never mixed into a Learn answer, never saved.
   const [assist, setAssist] = useState<{ id: number; asked: string; answer?: string; error?: string }[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
+  // SCHOLAR-GUIDED-LEARNING-01: Guided by default (opening a lesson teaches it); Manual is the learner's own choice.
+  const rememberedG = useSyncExternalStore(noSubscribe, rememberedGuided, () => null);
+  const [chosenGuided, setChosenGuided] = useState<boolean | null>(null);
+  const guided = chosenGuided ?? isGuided(rememberedG);
+  const setGuided = (on: boolean) => { setChosenGuided(on); try { window.localStorage.setItem(GUIDED_KEY, guidedValue(on)); } catch { /* this visit only */ } };
+  const requests = useRef(new LessonRequests());
+  /** Lessons being opened or written, by lesson key: the progress line shows for the step the learner is on. */
+  const [loading, setLoading] = useState<Record<string, { step: number; mode: LearnMode }>>({});
+  /** A lesson that could not be opened (or a duplicate twin asked to wait): said plainly, with Try again. */
+  const [lessonNote, setLessonNote] = useState<Record<number, { message: string; settings: LessonSettings }>>({});
+  /** The settings each step's lesson was last taught with (Lesson settings offers to teach it again with new ones). */
+  const [taught, setTaught] = useState<Record<number, LessonSettings>>({});
   const seq = useRef(0);
   const started = useRef(false);
   const opened = useRef(false);
+  /** A new scope in Manual: its first lesson is still opened once, as it always was. */
+  const firstLesson = useRef(false);
   const step = session?.steps.find(s => s.step === at) ?? session?.steps[0] ?? null;
   // SCHOLAR-EDU-AI-01 s6: an action whose activity the standing says is not available is shown disabled, with why.
   const aiOf = useAiAvailabilityOf();
-  const offReason = (a: string) => { const v = aiOf(a); return v && !v.available ? v.reason : null; };
+  const offReason = useCallback((a: string) => { const v = aiOf(a); return v && !v.available ? v.reason : null; }, [aiOf]);
   // The latest shown Teach Me answer's check questions that cite only this step's own sections (see startCheck).
   const ownIds = new Set(step?.sections.map(x => x.chunkId) ?? []);
   const answerable = (r: Reply, q: string) => { const tags = citedTags(q); return tags.length > 0 && tags.every(n => ownIds.has(r.sources.find(s => s.tag === `S${n}`)?.chunkId ?? "")); };
   const lastTeach = [...(cards[step?.step ?? -1] ?? [])].reverse().find(c => c.reply.action === "teach" && !!c.reply.answer && !c.reply.withheld);
   const teachQuestions = lastTeach ? (parseTeachAnswer(lastTeach.reply.answer!)?.questions ?? []).filter(q => answerable(lastTeach.reply, q)) : [];
 
+  // One request body for every Learn action: the step, its depth and (beyond notes) its Learn-from mode, and the
+  // session by id (or, held in the browser, its sections).
+  const bodyFor = useCallback((st: NonNullable<typeof step>, action: string, s: LessonSettings, extra: Record<string, unknown> = {}) => {
+    if (!session) return {};
+    const scopeIds = session.steps.flatMap(x => x.sections.map(y => y.chunkId));
+    return {
+      action, step: st.step, depth: s.depth, ...(s.mode !== "notes" && action !== "check" && action !== "clarify" ? { mode: s.mode } : {}), ...extra,
+      ...(session.id ? { sessionId: session.id } : { chunkIds: action === "ask" ? scopeIds : st.sections.map(x => x.chunkId) }),
+    };
+  }, [session]);
+  // A reply into its own step's thread (or the Ask thread), and the step's progress. A reply that arrives after the
+  // learner moved on still belongs to the step it teaches, so going back shows it (no second AI call).
+  const record = useCallback((stepNo: number, json: Record<string, any>, action: string, extra: Record<string, unknown> | undefined, target: "lesson" | "ask", asked?: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const reply = (json.continuity ? { ...json, savedList: json.saved, saved: null, sources: [], references: [] } : json) as Reply;
+    const card: Card = { id: ++seq.current, asked, reply, extra, target };
+    if (target === "ask") setAskThread(t => [card, ...t]);
+    else setCards(c => ({ ...c, [stepNo]: [...(c[stepNo] ?? []), card] }));
+    if (!json.withheld && !json.continuity) setProgress(p => ({ ...p, [stepNo]: { actions: [...new Set([...(p[stepNo]?.actions ?? []), action])], verdict: json.verdict?.value ?? p[stepNo]?.verdict ?? null } }));
+    return reply;
+  }, []);
+
   const act = useCallback(async (action: string, extra: Record<string, unknown> = {}, target: "lesson" | "ask" = "lesson", asked?: string) => {
     if (!session || !step) return null;
     setBusy(action); setError(""); setPending(null);
-    const scopeIds = session.steps.flatMap(s => s.sections.map(x => x.chunkId));
-    const r = await call("/api/individual/scholar/learn/act", {
-      action, step: step.step, depth, ...(mode !== "notes" && action !== "check" && action !== "clarify" ? { mode } : {}), ...extra,
-      ...(session.id ? { sessionId: session.id } : { chunkIds: action === "ask" ? scopeIds : step.sections.map(x => x.chunkId) }),
-    });
+    const s: LessonSettings = { mode: (extra.mode as LearnMode | undefined) ?? mode, depth };
+    const r = await call(ACT_URL, bodyFor(step, action, { mode, depth }, extra));
     setBusy("");
     const prompt = r.ok ? null : clarifyFrom(r.json);
     if (prompt) { setPending({ prompt, target, action, extra, asked }); return null; }
     if (!r.ok && !r.json.withheld) { setError(r.json.error ?? "Scholar could not answer just now."); return null; }
-    const reply = (r.json.continuity ? { ...r.json, savedList: r.json.saved, saved: null, sources: [], references: [] } : r.json) as Reply;
-    const card: Card = { id: ++seq.current, asked, reply, extra, target };
-    if (target === "ask") setAskThread(t => [card, ...t]);
-    else setCards(c => ({ ...c, [step.step]: [...(c[step.step] ?? []), card] }));
-    if (!r.json.withheld && !r.json.continuity) setProgress(p => ({ ...p, [step.step]: { actions: [...new Set([...(p[step.step]?.actions ?? []), action])], verdict: r.json.verdict?.value ?? p[step.step]?.verdict ?? null } }));
+    record(step.step, r.json, action, extra, target, asked);
+    if (target === "lesson" && action === props.startAction) setTaught(t => ({ ...t, [step.step]: s }));
     return r.json as Reply;
-  }, [session, step, depth, mode]);
+  }, [session, step, depth, mode, bodyFor, record, props.startAction]);
+
+  // SCHOLAR-GUIDED-LEARNING-01: OPEN A LESSON. First open:true -- a saved lesson comes back at once with no AI; only
+  // when nothing is saved (or its twin is being written) is the same request sent as a Teach, which the route dedupes.
+  // One request per lesson key at a time; a reply for a lesson the learner has left goes to its own step, quietly.
+  const teachLesson = useCallback(async (stepNo: number, s: LessonSettings) => {
+    if (!session) return;
+    const st = session.steps.find(x => x.step === stepNo);
+    if (!st) return;
+    const action = props.startAction, k = lessonKey(session.id ?? session.title, stepNo, action, s);
+    if (!requests.current.begin(k)) return;
+    setLoading(l => ({ ...l, [k]: { step: stepNo, mode: s.mode } }));
+    setLessonNote(n => { const rest = { ...n }; delete rest[stepNo]; return rest; });
+    const body = bodyFor(st, action, s);
+    try {
+      let r = await call(ACT_URL, { ...body, open: true });
+      let phase = lessonPhase("open", r.ok, r.json);
+      if (phase.kind === "generate") {
+        // The learner moved on while it was being opened: nothing is written for a lesson they skipped past.
+        if (!requests.current.isCurrent(k)) { requests.current.release(k); return; }
+        // AI not available now: nothing is generated; the lesson's "Not available yet" line says why.
+        if (offReason(action)) return;
+        r = await call(ACT_URL, body);
+        phase = lessonPhase("generate", r.ok, r.json);
+      }
+      const prompt = r.ok ? null : clarifyFrom(r.json);
+      if (prompt) { if (requests.current.isCurrent(k)) setPending({ prompt, target: "lesson", action, extra: {} }); return; }
+      if (phase.kind === "error" || phase.kind === "retry") { setLessonNote(n => ({ ...n, [stepNo]: { message: phase.message, settings: s } })); return; }
+      if (phase.kind === "show") { record(stepNo, r.json, action, {}, "lesson"); setTaught(t => ({ ...t, [stepNo]: s })); }
+    } finally {
+      requests.current.end(k);
+      setLoading(l => { const rest = { ...l }; delete rest[k]; return rest; });
+    }
+  }, [session, props.startAction, bodyFor, record, offReason]);
   // Owner D3: the step, handed to the shared personal AI (Teach Me). Shown apart under PERSONAL_AI_LABEL, never saved.
   const continueWithAssistant = useCallback(async (question: string, purpose?: "education") => {
     if (!session || !step) return;
@@ -234,8 +308,34 @@ export function LearnWorkspace(props: {
   useEffect(() => {
     if (opened.current || !session || !props.start || !props.consent) return;
     opened.current = true;
-    void act(props.startAction);
-  }, [session, props.start, props.consent, props.startAction, act]);
+    // Guided: the lesson effect below opens every lesson. Manual: it opens this first one only, as before (saved first now).
+    firstLesson.current = true;
+  }, [session, props.start, props.consent]);
+  // SCHOLAR-GUIDED-LEARNING-01: GUIDED BY DEFAULT. Opening a lesson -- the first load, a resume, a step chosen, Next
+  // lesson -- opens it (saved -> shown with no AI) and, if nothing is saved, teaches it. Never twice by itself, never
+  // over a lesson already in the thread, never in Manual, and never the next lesson: moving on is the learner's act.
+  // The preference is read from the device here (not only from state), so a Manual learner's first render cannot teach.
+  const stepNo = step?.step ?? null;
+  useEffect(() => {
+    if (!session || stepNo === null) return;
+    const s: LessonSettings = { mode, depth };
+    const k = lessonKey(session.id ?? session.title, stepNo, props.startAction, s);
+    const has = (cards[stepNo] ?? []).some(c => c.target !== "ask" && c.reply.action === props.startAction);
+    if (!shouldAutoTeach({ guided: firstLesson.current || (chosenGuided ?? isGuided(rememberedGuided())), consent: props.consent, startAction: props.startAction, actions: props.actions,
+      hasLesson: has, asked: requests.current.wasAsked(k), inFlight: requests.current.pending(k) })) return;
+    firstLesson.current = false;
+    void teachLesson(stepNo, s);
+  }, [session, stepNo, mode, depth, cards, chosenGuided, props.consent, props.startAction, props.actions, teachLesson]);
+  // Prepare-next (policy scholar_learn_prepare_next, default OFF: then no request is made at all). Once a lesson is
+  // shown, the NEXT one only -- never further -- once per lesson key, with its own request id. The route decides the rest.
+  useEffect(() => {
+    if (!props.prepareNext || !props.consent || !session?.id || stepNo === null) return;
+    const i = session.steps.findIndex(x => x.step === stepNo);
+    if (i < 0 || i >= session.steps.length - 1) return;
+    if (!(cards[stepNo] ?? []).some(c => c.target !== "ask" && c.reply.action === "teach" && !!c.reply.answer && !c.reply.withheld)) return;
+    if (!requests.current.claimPrepare(lessonKey(session.id, stepNo, "teach", { mode, depth }))) return;
+    void call(ACT_URL, { action: "teach", sessionId: session.id, step: stepNo, depth, ...(mode !== "notes" ? { mode } : {}), prepare: true }, "POST", { "x-request-id": requestId() });
+  }, [props.prepareNext, props.consent, session, stepNo, cards, mode, depth]);
   // A resumed session: recorded as a resume, and waiting for the student (nothing is generated unasked).
   useEffect(() => {
     if (props.initial?.id && !opened.current) { opened.current = true; void call(`/api/individual/scholar/learn/sessions/${props.initial.id}`, { move: "resume", currentStep: props.initial.currentStep }, "PATCH"); }
@@ -243,6 +343,7 @@ export function LearnWorkspace(props: {
 
   async function goTo(next: number, move: "skip" | "revisit" | null) {
     if (!session) return;
+    requests.current.focus(null); // a reply still on its way for the lesson being left is no longer the current one
     setAt(next); setCheck(null); setPending(null); setTab("lesson");
     if (session.id) await call(`/api/individual/scholar/learn/sessions/${session.id}`, { currentStep: next, ...(move ? { move } : {}) }, "PATCH");
   }
@@ -302,10 +403,45 @@ export function LearnWorkspace(props: {
   const thread = cards[step?.step ?? -1] ?? [];
   const offerCheck = props.checks !== "off" && props.consent && thread.some(c => c.reply.answer && c.reply.action !== "clarify");
   const canCheck = offerCheck && !check && !busy && !offReason("check");
-  // A verdict this visit or recorded before (progress): the check is done, so Continue leads.
+  // A verdict this visit or recorded before (progress): the check is done.
   const checked = !!progress[step?.step ?? -1]?.verdict || thread.some(c => !!c.reply.verdict);
-  const continueFirst = thread.length > 0 && (checked || !offerCheck);
   const panel = (name: typeof tab) => (tab === name ? "block" : "hidden md:block");
+  // SCHOLAR-GUIDED-LEARNING-01: the lesson as the learner meets it.
+  const group = groupActions(props.actions, props.startAction);
+  const preparing = Object.values(loading).find(l => l.step === step?.step) ?? null;
+  const hasLesson = thread.some(c => c.target !== "ask" && c.reply.action === props.startAction);
+  const showPrimary = !!group.primary && (!guided || (!hasLesson && !preparing));
+  const lessonMsg = step ? lessonNote[step.step] : undefined;
+  const taughtWith = step ? taught[step.step] : undefined;
+  const settingsChanged = !!taughtWith && (taughtWith.mode !== mode || taughtWith.depth !== depth);
+  const busyHere = !!busy || !!preparing;
+  // Wider Learn-from modes the learner may choose, beneath a lesson the notes could not fully support. Choosing one
+  // switches Learn from (remembered like the selector) and teaches the lesson again from it. Never chosen for them.
+  const expansionsFor = (c: Card): Expansion[] => {
+    const r = c.reply;
+    if (!step || c.target === "ask" || !isOpenable(r.action) || !props.consent) return [];
+    if (!(r.withheld || r.salvage || replyState(r) === "partial")) return [];
+    return expansionChoices(mode, modes).map(m => ({
+      label: EXPANSION_LABEL[m],
+      onChoose: () => { setMode(m); if (r.action === props.startAction) void teachLesson(step.step, { mode: m, depth }); else void act(r.action, { mode: m }); },
+    }));
+  };
+  // The check, answered where its question is: under the lesson's own question, or (a written check) after the lesson.
+  const checkInline = !!check && !!lastTeach && teachQuestions.some(q => questionText(q) === check.question);
+  const checkForm = () => check && (
+    <form onSubmit={submitCheck} className="mt-2 rounded-xl border border-violet-200 bg-white p-3">
+      {!checkInline && <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-violet-900">Check your understanding</p>}
+      {!checkInline && <p className="mt-1 text-[14.5px] font-semibold text-gray-900">{check.question}</p>}
+      <label htmlFor="check-answer" className={`${checkInline ? "" : "mt-2 "}block text-[12.5px] font-semibold text-gray-700`}>Your answer</label>
+      <textarea id="check-answer" rows={3} maxLength={QUESTION_MAX} value={check.answer} onChange={e => setCheck({ ...check, answer: e.target.value })}
+        className={`mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} />
+      <p className="mt-1 text-[12px] text-gray-600">{INFORMAL_CHECK_LABEL}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="submit" className={btn} style={{ background: accent }} disabled={!!busy || !check.answer.trim()}>{busy === "clarify" ? "Checking…" : "Check my answer"}</button>
+        <button type="button" className={ghost} onClick={() => setCheck(null)}>Skip the check</button>
+      </div>
+    </form>
+  );
 
   return (
     <div>
@@ -362,37 +498,81 @@ export function LearnWorkspace(props: {
           )}
         </aside>
 
-        {/* ── THE LESSON: the guided cycle, any action, the informal check ── */}
+        {/* ── THE LESSON: the explanation first; the other ways to learn, the settings and the check after it ── */}
         <section aria-labelledby="lesson-h" className={`${panel("lesson")} rounded-2xl border border-gray-200 bg-white p-4 sm:p-5`}>
-          <p className="text-[12px] font-bold uppercase tracking-[0.12em]" style={{ color: accent }}>Step {idx + 1} of {session.steps.length}</p>
-          <h3 id="lesson-h" className="break-words text-[17px] font-bold text-gray-900">{step?.title || lastTeach?.reply.lesson?.title || `Step ${idx + 1}`}</h3>
+          <p className="text-[12px] font-bold uppercase tracking-[0.12em]" style={{ color: accent }}>Lesson {idx + 1} of {session.steps.length}</p>
+          <h3 id="lesson-h" className="break-words text-[17px] font-bold text-gray-900">{step?.title || lastTeach?.reply.lesson?.title || `Lesson ${idx + 1}`}</h3>
           {/* SCHOLAR-LEARN-FIX-01 L-B: the lesson's objective (learn.lessonOutline, no AI). An older reply's or session's missing one is simply not shown. */}
           {(step?.objective || lastTeach?.reply.lesson?.objective) && (
             <p className="mt-1 break-words text-[14px] leading-relaxed text-gray-700"><span className="font-semibold text-gray-900">In this lesson: </span>{step?.objective || lastTeach?.reply.lesson?.objective}</p>
           )}
-          {/* The primary way in (Teach Me by default) and, visually secondary, the other ways. Defaults stay: nothing must be chosen to go on. */}
-          {props.actions.includes(props.startAction) && (
+          {/* Manual: the starting action, as before. Guided: only when nothing has been taught here yet (it failed, or AI was off). */}
+          {showPrimary && group.primary && (
             <div className="mt-3">
-              <button type="button" disabled={!!busy || !props.consent || !!offReason(props.startAction)} aria-describedby={offReason(props.startAction) ? "learn-ai-why" : undefined} onClick={() => act(props.startAction)}
+              <button type="button" disabled={busyHere || !props.consent || !!offReason(group.primary)} aria-describedby={offReason(group.primary) ? "learn-ai-why" : undefined} onClick={() => step && (guided ? void teachLesson(step.step, { mode, depth }) : void act(group.primary!))}
                 className={btn} style={{ background: accent }}>
-                {busy === props.startAction ? "Working…" : props.labels[props.startAction]}
+                {busy === group.primary ? "Working…" : props.labels[group.primary as LearnAction]}
               </button>
             </div>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="More ways to learn">
-            <span className="w-full text-[12px] font-semibold text-gray-600 md:w-auto">More ways to learn:</span>
-            {props.actions.filter(a => a !== "ask" && a !== props.startAction).map(a => (
-              <button key={a} type="button" disabled={!!busy || !props.consent || !!offReason(a)} aria-describedby={offReason(a) ? "learn-ai-why" : undefined} onClick={() => act(a)}
-                className={`${chip} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>
-                {busy === a ? "Working…" : props.labels[a]}
+
+          {pending?.target === "lesson" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-4" onEducation={() => void answerEducation()} />}
+          <div aria-live="polite" className="mt-4 space-y-4">
+            {thread.length === 0 && !busy && !preparing && !lessonMsg && pending?.target !== "lesson" && (
+              <p className="text-[13.5px] text-gray-600">{!props.consent ? "Learning needs AI help, which is off."
+                : guided && group.primary ? "This lesson has not been taught yet." : `Choose ${props.labels[props.startAction]} to begin this lesson, or ask Scholar anything.`}</p>
+            )}
+            {thread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }) : undefined}
+              onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} recover={recoverFor(c)} wider={widerFor(c)} expansions={expansionsFor(c)}
+              onAnswer={canCheck && c === lastTeach ? q => void startCheck(q) : undefined} canAnswer={q => answerable(c.reply, q)}
+              renderCheck={c === lastTeach && checkInline ? q => (questionText(q) === check?.question ? checkForm() : null) : undefined} />)}
+            {preparing && (
+              <div role="status" className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <span aria-hidden="true" className="mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full motion-safe:animate-pulse" style={{ background: accent }} />
+                <span className="min-w-0">
+                  <span className="block text-[14px] font-semibold text-gray-900">{preparingText(preparing.mode)}</span>
+                  {step?.title && <span className="block break-words text-[13px] text-gray-700">{step.title}</span>}
+                </span>
+              </div>
+            )}
+            {lessonMsg && !preparing && (
+              <div role="status" className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[13.5px] text-gray-800">
+                <p>{lessonMsg.message}</p>
+                {step && <button type="button" className={`${ghost} mt-2`} disabled={busyHere} onClick={() => void teachLesson(step.step, lessonMsg.settings)}>Try again</button>}
+              </div>
+            )}
+            {busy && busy !== "ask" && busy !== "clarify" && <p role="status" className="text-[13px] text-gray-500">{mode === "research" ? "Scholar is reading your notes and searching published research…" : "Scholar is reading your notes…"}</p>}
+          </div>
+
+          {check && !checkInline && <div className="mt-4">{checkForm()}</div>}
+          {/* The check, informal and never required: from the lesson's own questions, or one Scholar writes. */}
+          {offerCheck && !check && (
+            <div className="mt-4">
+              <button type="button" className={ghost} disabled={busyHere || !!offReason("check")} aria-describedby={offReason("check") ? "learn-check-why" : undefined} onClick={() => void startCheck()}>
+                {busy === "check" ? "Writing a check…" : checked ? "Check again" : "Check my understanding"}
               </button>
-            ))}
-            {props.actions.includes("ask") && <button type="button" onClick={() => rephrase("")} className={`${chip} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>{props.labels.ask}</button>}
-            <label className="inline-flex items-center gap-1.5 text-[12.5px] text-gray-700 md:ml-auto">Depth
-              <select value={depth} onChange={e => setDepth(e.target.value as typeof depth)} className={`rounded-lg border border-gray-300 px-2 py-1 text-[13px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
-                <option value="brief">Brief</option><option value="standard">Standard</option><option value="detailed">Detailed</option>
-              </select>
-            </label>
+              {offReason("check") && <p id="learn-check-why" className="mt-1 text-[12.5px] text-gray-600">{aiReasonCopy(offReason("check")!, "scholar").text}</p>}
+            </div>
+          )}
+
+          {/* More learning options (Simplify, Go deeper, Examples, Summarise...), behind one disclosure; Ask Scholar stays in view. */}
+          <div className="mt-4 flex flex-wrap items-start gap-2">
+            {group.more.length > 0 && (
+              <details className="group min-w-0 flex-1 basis-[220px] rounded-xl border border-gray-200">
+                <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
+                  <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>More learning options
+                </summary>
+                <div className="flex flex-wrap gap-2 border-t border-gray-200 px-3 py-2.5" role="group" aria-label="More learning options">
+                  {group.more.map(a => (
+                    <button key={a} type="button" disabled={busyHere || !props.consent || !!offReason(a)} aria-describedby={offReason(a) ? "learn-ai-why" : undefined} onClick={() => act(a)}
+                      className={`${chip} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>
+                      {busy === a ? "Working…" : props.labels[a as LearnAction]}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            )}
+            {group.ask && <button type="button" onClick={() => rephrase("")} className={`${chip} min-h-[44px] border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>{props.labels.ask}</button>}
           </div>
           {(() => {
             const off = props.actions.filter(a => a !== "ask" && offReason(a));
@@ -403,59 +583,50 @@ export function LearnWorkspace(props: {
             );
           })()}
 
-          {modes.length > 1 && (
-            <fieldset className="mt-3 rounded-xl border border-gray-200 px-3 py-2">
-              <legend className="px-1 text-[12px] font-bold text-gray-700">Learn from</legend>
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Learn from">
-                {modes.map(m => (
-                  <button key={m} type="button" role="radio" aria-checked={mode === m} disabled={!!busy} onClick={() => setMode(m)}
-                    className={`${chip} ${mode === m ? "border-transparent text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`} style={mode === m ? { background: accent } : undefined}>
-                    {LEARN_MODE_LABEL[m]}
-                  </button>
-                ))}
-              </div>
-              {mode === "research" && <p className="mt-1.5 text-[12px] text-gray-600">Scholar searches published research (PubMed, OpenAlex) for this topic. Only a few topic words are sent, never your notes or who you are. What it finds is shown apart from your notes, with its real source.</p>}
-              {mode === "library" && <p className="mt-1.5 text-[12px] text-gray-600">Adds the Competen library entries that match this topic, labelled as library.</p>}
-            </fieldset>
-          )}
+          {/* Lesson settings: secondary, collapsed, and still in force for every request. */}
+          <details className="group mt-3 rounded-xl border border-gray-200">
+            <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
+              <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>Lesson settings
+              <span className="min-w-0 truncate text-[12px] font-normal text-gray-600">· {LEARN_MODE_LABEL[mode]} · {depth === "brief" ? "Brief" : depth === "detailed" ? "Detailed" : "Standard"}</span>
+            </summary>
+            <div className="space-y-3 border-t border-gray-200 px-3 py-3">
+              <label className="flex items-start gap-2 text-[13.5px] text-gray-900">
+                <input type="checkbox" checked={guided} onChange={e => setGuided(e.target.checked)} className={`mt-0.5 h-4 w-4 pointer-coarse:h-5 pointer-coarse:w-5 ${focusRing}`} />
+                <span><span className="font-semibold">Teach each lesson automatically</span>
+                  <span className="block text-[12px] text-gray-600">Off: choose {props.labels[props.startAction]} for each lesson yourself. Saved on this device. Scholar never moves to the next lesson for you.</span></span>
+              </label>
+              <label className="flex flex-wrap items-center gap-1.5 text-[13px] text-gray-700">Depth
+                <select value={depth} onChange={e => setDepth(e.target.value as typeof depth)} className={`rounded-lg border border-gray-300 px-2 py-1 text-[13px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+                  <option value="brief">Brief</option><option value="standard">Standard</option><option value="detailed">Detailed</option>
+                </select>
+              </label>
+              {modes.length > 1 && (
+                <fieldset className="rounded-xl border border-gray-200 px-3 py-2">
+                  <legend className="px-1 text-[12px] font-bold text-gray-700">Learn from</legend>
+                  <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Learn from">
+                    {modes.map(m => (
+                      <button key={m} type="button" role="radio" aria-checked={mode === m} disabled={busyHere} onClick={() => setMode(m)}
+                        className={`${chip} ${mode === m ? "border-transparent text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`} style={mode === m ? { background: accent } : undefined}>
+                        {LEARN_MODE_LABEL[m]}
+                      </button>
+                    ))}
+                  </div>
+                  {mode === "research" && <p className="mt-1.5 text-[12px] text-gray-600">Scholar searches published research (PubMed, OpenAlex) for this topic. Only a few topic words are sent, never your notes or who you are. What it finds is shown apart from your notes, with its real source.</p>}
+                  {mode === "library" && <p className="mt-1.5 text-[12px] text-gray-600">Adds the Competen library entries that match this topic, labelled as library.</p>}
+                </fieldset>
+              )}
+              {settingsChanged && step && group.primary && props.consent && (
+                <button type="button" className={ghost} disabled={busyHere || !!offReason(group.primary)} onClick={() => void teachLesson(step.step, { mode, depth })}>Teach this lesson again with these settings</button>
+              )}
+            </div>
+          </details>
 
-          {pending?.target === "lesson" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-4" onEducation={() => void answerEducation()} />}
-          <div aria-live="polite" className="mt-4 space-y-4">
-            {thread.length === 0 && !busy && pending?.target !== "lesson" && <p className="text-[13.5px] text-gray-600">{props.consent ? `Choose ${props.labels[props.startAction]} to begin this step, or ask Scholar anything.` : "Learning needs AI help, which is off."}</p>}
-            {thread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }) : undefined}
-              onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} recover={recoverFor(c)} wider={widerFor(c)}
-              onAnswer={canCheck && c === lastTeach ? q => void startCheck(q) : undefined} canAnswer={q => answerable(c.reply, q)} />)}
-            {busy && busy !== "ask" && <p className="text-[13px] text-gray-500">{mode === "research" ? "Scholar is reading your notes and searching published research…" : "Scholar is reading your notes…"}</p>}
-          </div>
-
-          {check && (
-            <form onSubmit={submitCheck} className="mt-4 rounded-xl border border-violet-200 bg-violet-50/60 p-4">
-              <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-violet-900">Check your understanding</p>
-              <p className="mt-1 text-[14.5px] font-semibold text-gray-900">{check.question}</p>
-              <label htmlFor="check-answer" className="mt-2 block text-[12.5px] font-semibold text-gray-700">Your answer</label>
-              <textarea id="check-answer" rows={3} maxLength={QUESTION_MAX} value={check.answer} onChange={e => setCheck({ ...check, answer: e.target.value })}
-                className={`mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} />
-              <p className="mt-1 text-[12px] text-gray-600">{INFORMAL_CHECK_LABEL}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button type="submit" className={btn} style={{ background: accent }} disabled={!!busy || !check.answer.trim()}>{busy === "clarify" ? "Checking…" : "Check my answer"}</button>
-                <button type="button" className={ghost} onClick={() => setCheck(null)}>Skip the check</button>
-              </div>
-            </form>
-          )}
-
-          {/* SCHOLAR-LEARN-FIX-01 L-B: Teach, then Check my understanding (primary once there is something to check), then
-              Continue (primary once checked, or when no check is offered). Continue is always there: checking is never required. */}
-          <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
-            {offerCheck && !check && (
-              <button type="button" className={checked ? ghost : btn} style={checked ? undefined : { background: accent }} disabled={!!busy || !!offReason("check")} aria-describedby={offReason("check") ? "learn-check-why" : undefined} onClick={() => void startCheck()}>
-                {busy === "check" ? "Writing a check…" : checked ? "Check again" : "Check my understanding"}
-              </button>
-            )}
-            {offerCheck && !check && offReason("check") && <p id="learn-check-why" className="order-last w-full text-[12.5px] text-gray-600">{aiReasonCopy(offReason("check")!, "scholar").text}</p>}
-            {!last ? <button type="button" className={continueFirst ? btn : ghost} style={continueFirst ? { background: accent } : undefined} onClick={() => goTo(session.steps[idx + 1].step, thread.length ? null : "skip")}>{thread.length ? "Continue to the next lesson" : "Skip this step"}</button>
-              : session.status !== "completed" && <button type="button" className={continueFirst ? btn : ghost} style={continueFirst ? { background: accent } : undefined} onClick={finish}>Finish session</button>}
-            {idx > 0 && <button type="button" className={ghost} onClick={() => goTo(session.steps[idx - 1].step, "revisit")}>Previous step</button>}
-            {session.status === "completed" && <span className="text-[13px] font-semibold text-emerald-800">Session completed. You can still revisit any step.</span>}
+          {/* Next lesson: the one primary action at the end (kept in reach above the phone tab bar). Never automatic. */}
+          <div className="sticky bottom-[calc(70px_+_env(safe-area-inset-bottom))] z-10 mt-5 flex flex-wrap items-center gap-2 border-t border-gray-100 bg-white py-3 md:static md:pb-0 md:pt-4">
+            {idx > 0 && <button type="button" className={ghost} onClick={() => goTo(session.steps[idx - 1].step, "revisit")}>Previous</button>}
+            {session.status === "completed" && <span className="text-[13px] font-semibold text-emerald-800">Session completed. You can still revisit any lesson.</span>}
+            {!last ? <button type="button" className={`${btn} ml-auto`} style={{ background: accent }} onClick={() => goTo(session.steps[idx + 1].step, thread.length ? null : "skip")}>Next lesson</button>
+              : session.status !== "completed" && <button type="button" className={`${btn} ml-auto`} style={{ background: accent }} onClick={finish}>Finish session</button>}
           </div>
         </section>
 
@@ -533,10 +704,12 @@ function Withheld({ r, asked, onRephrase }: { r: Reply; asked?: string; onRephra
 }
 
 /** One reply, its four kinds of content kept apart and labelled (owner GO s7). */
-function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer }: {
+function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer, expansions = [], renderCheck }: {
   card: Card; labels: Record<LearnAction, string>; compact?: boolean; onFresh?: () => void; onRephrase?: () => void; recover?: Recover;
   /** SCHOLAR-LEARN-FIX-01 L-B: the wider tier offered under a partly grounded answer; answering one of its check questions. */
   wider?: Recover; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean;
+  /** SCHOLAR-GUIDED-LEARNING-01: wider Learn-from modes the learner may choose; the inline check under a lesson question. */
+  expansions?: Expansion[]; renderCheck?: (q: string) => React.ReactNode;
 }) {
   const r = card.reply;
   if (r.continuity) {
@@ -573,8 +746,15 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
           )}
           <div className="mt-2"><AiBadge /></div>
           <p className="mt-2 text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>
-          {r.answer && <AnswerBody text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} />}
-          {replyState(r) === "partial" && r.grounding && <NotCovered terms={r.grounding.uncoveredTerms} wider={wider} />}
+          {r.answer && <AnswerBody text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} renderCheck={renderCheck} />}
+          {/* SCHOLAR-GUIDED-LEARNING-01: a salvaged lesson -- shown, and said calmly what was left out (a count, never which). */}
+          {r.salvage && (
+            <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5">
+              <p className="text-[13.5px] text-gray-900">{r.salvage.note}</p>
+              {replyState(r) !== "partial" && <ExpansionRow expansions={expansions} />}
+            </div>
+          )}
+          {replyState(r) === "partial" && r.grounding && <NotCovered terms={r.grounding.uncoveredTerms} wider={wider} expansions={expansions} />}
         </>
       )}
       {r.sources.length > 0 && !r.next && <SourcesDisclosure sources={r.sources.filter((_, i) => !r.answer || cited.has(i + 1))} />}
@@ -590,7 +770,8 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
         ) : r.background.withheld ? <p className="mt-2 text-[12.5px] text-gray-600">{r.background.withheld}</p> : null
       )}
       {r.research && <ResearchBlock x={r.research} />}
-      {r.withheld && recover && <RecoveryFlow request={recover.request} explain={recover.explain} />}
+      {r.withheld && recover && <RecoveryFlow request={recover.request} explain={recover.explain} expansions={expansions} />}
+      {r.withheld && !recover && <ExpansionRow expansions={expansions} />}
       {r.flags && r.flags.length > 0 && <AiFlagList flags={r.flags} />}
       {r.saved && (
         <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-gray-600">
@@ -626,7 +807,7 @@ function Cited({ text, sources }: { text: string; sources: Source[] }) {
  * Anything else -- every other action, and a Teach Me answer saved before the structure -- is shown as written. Either
  * way each [S n] is a link to its section.
  */
-function AnswerBody({ text, action, sources, onAnswer, canAnswer }: { text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean }) {
+function AnswerBody({ text, action, sources, onAnswer, canAnswer, renderCheck }: { text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean; renderCheck?: (q: string) => React.ReactNode }) {
   const parts = action === "teach" ? parseTeachAnswer(text) : null;
   if (!parts) return <div className="mt-1 whitespace-pre-wrap break-words text-[14.5px] leading-relaxed text-gray-800"><Cited text={text} sources={sources} /></div>;
   const sub = "text-[12px] font-bold uppercase tracking-[0.1em]";
@@ -655,6 +836,7 @@ function AnswerBody({ text, action, sources, onAnswer, canAnswer }: { text: stri
                 {onAnswer && canAnswer?.(q) && (
                   <button type="button" onClick={() => onAnswer(q)} className={`${chip} border-violet-300 bg-white text-violet-950 hover:bg-violet-50`}>Answer this</button>
                 )}
+                {renderCheck && <div className="w-full">{renderCheck(q)}</div>}
               </li>
             ))}
           </ul>
@@ -666,16 +848,33 @@ function AnswerBody({ text, action, sources, onAnswer, canAnswer }: { text: stri
 }
 
 /** A partly grounded lesson: after what the notes support, the terms they did not cover, and the next wider tier if offered. */
-function NotCovered({ terms, wider }: { terms: string[]; wider?: Recover }) {
+function NotCovered({ terms, wider, expansions = [] }: { terms: string[]; wider?: Recover; expansions?: Expansion[] }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2.5">
       <p className="break-words text-[14px] text-gray-900"><span className="font-semibold">{LEARN_NOT_COVERED_LABEL}:</span> {terms.join(", ")}.</p>
       <p className="mt-0.5 text-[12.5px] text-gray-700">{LEARN_NOT_COVERED_NOTE}</p>
+      <ExpansionRow expansions={expansions} />
       {wider && !open && (
         <button type="button" onClick={() => setOpen(true)} className={`${chip} mt-2 border-gray-300 bg-white text-gray-900 hover:bg-gray-50`}>{LEARN_WIDER_LABEL}</button>
       )}
       {wider && open && <RecoveryFlow request={wider.request} explain={wider.explain} onDismiss={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+/**
+ * SCHOLAR-GUIDED-LEARNING-01: the wider Learn-from modes the learner may choose for this lesson, as plain buttons.
+ * Nothing when none is offered: the page never asks a question it cannot answer.
+ */
+function ExpansionRow({ expansions }: { expansions: Expansion[] }) {
+  if (!expansions.length) return null;
+  return (
+    <div className="mt-2">
+      <p className="text-[12.5px] text-gray-700">You can learn this lesson from wider sources:</p>
+      <div className="mt-1.5 flex flex-wrap gap-2" role="group" aria-label="Learn from wider sources">
+        {expansions.map(x => <button key={x.label} type="button" onClick={x.onChoose} className={`${chip} border-gray-900 bg-white text-gray-900 hover:bg-gray-50`}>{x.label}</button>)}
+      </div>
     </div>
   );
 }

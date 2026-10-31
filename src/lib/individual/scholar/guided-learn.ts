@@ -52,6 +52,8 @@ export class LessonRequests {
   pending(key: string) { return this.inFlight.has(key); }
   /** Asked for during this visit (whatever came of it): never asked for again unless the learner asks. */
   wasAsked(key: string) { return this.asked.has(key); }
+  /** The learner left before anything was written: not asked after all, so coming back opens it again. */
+  release(key: string) { this.inFlight.delete(key); this.asked.delete(key); }
   /** Prepare-next: at most once per lesson key. */
   claimPrepare(key: string): boolean {
     if (this.prepared.has(key)) return false;

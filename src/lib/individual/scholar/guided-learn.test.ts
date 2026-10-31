@@ -26,6 +26,12 @@ describe("lesson requests: one in flight per lesson, stale replies ignored, no l
     q.focus(null);
     expect(q.isCurrent(b)).toBe(false);
   });
+  it("a lesson left before it was written is opened again on return", () => {
+    const q = new LessonRequests(), a = lessonKey("s1", 0, "teach", S);
+    q.begin(a); q.release(a);
+    expect(q.wasAsked(a)).toBe(false);
+    expect(q.begin(a)).toBe(true);
+  });
   it("mode and depth are part of the lesson", () => {
     expect(lessonKey("s", 2, "teach", S)).not.toBe(lessonKey("s", 2, "teach", { ...S, mode: "library" }));
     expect(lessonKey("s", 2, "teach", S)).not.toBe(lessonKey("s", 2, "teach", { ...S, depth: "brief" }));
