@@ -3,6 +3,7 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { eraseAllMaterial } from "@/lib/individual/scholar/store";
 import { withdrawCasesOf } from "@/lib/individual/scholar/clinical-routes";
 import { audit } from "@/lib/individual/scholar/http";
+import { withdrawAllQuestionOffers } from "@/lib/question-offers/offers";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -19,8 +20,10 @@ export async function POST(req: Request) {
   if (body?.confirm !== "ERASE") return NextResponse.json({ error: "Confirm the erasure." }, { status: 400 });
   // CLINICAL-REASONING-01 C-e: every case offered from them is withdrawn from the shared library first.
   const withdrawn = await withdrawCasesOf(ctx.admin, ctx.userId, null);
+  // SQIE-LIBRARY-EXPANSION-01 (802): and every question offered to the Competen library and not yet taken in.
+  const offers = await withdrawAllQuestionOffers(ctx.admin, ctx.userId);
   const r = await eraseAllMaterial(ctx.admin, ctx.userId);
   if (!r.ok) return NextResponse.json({ error: "Your material could not be erased just now. Try again shortly." }, { status: 500 });
-  await audit(ctx, "individual_scholar_material_erased_all", "individual_scholar_material", null, { erased: r.erased, case_candidates_withdrawn: withdrawn.withdrawn, case_withdrawals_failed: withdrawn.failed });
+  await audit(ctx, "individual_scholar_material_erased_all", "individual_scholar_material", null, { erased: r.erased, case_candidates_withdrawn: withdrawn.withdrawn, case_withdrawals_failed: withdrawn.failed, question_offers_withdrawn: offers.withdrawn, question_offer_withdrawals_failed: offers.failed });
   return NextResponse.json({ ok: true, erased: r.erased });
 }

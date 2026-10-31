@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { currentTraceId } from "@/lib/trace";
 import { CKRI_OFF, ckriEnabled } from "@/lib/knowledge/governance";
-import { createResource, moveNeed, newVersion, publishVersion, raiseNeed, retireResource, reviewDraft, saveDraft, setCompetencies, submitDraft } from "@/lib/knowledge/educator";
+import { createResource, moveNeed, newVersion, publishVersion, raiseNeed, retireResource, retireVersion, reviewDraft, saveDraft, setCompetencies, submitDraft } from "@/lib/knowledge/educator";
+import { declineLearnerOffer, takeLearnerOffer } from "@/lib/knowledge/learner-offers";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -11,12 +12,13 @@ export const dynamic = "force-dynamic";
 // POST /api/hq/knowledge/educator -- COMPETEN-KNOWLEDGE-RESEARCH-01 s5 (K3), migration 442.
 //   hq.learning.ckri.educator     (Knowledge Educator)       need_raise, need_move, resource_create, draft_save,
 //                                                            version_new, competencies_set, review, submit
-//   hq.quality.knowledge.publish  (Quality Council Member)   publish, retire
+//                                                            offer_take, offer_decline (learner offers, 802)
+//   hq.quality.knowledge.publish  (Quality Council Member)   publish, retire, retire_version (one version, 801)
 // Clinical approval is NOT here: it is /api/hq/clinical-review (hq.quality.clinical.approve) and the 442 trigger.
 // ⚠ NOTHING THE BROWSER SENDS PICKS AN AUTHOR, A REVIEWER, AN ORIGIN, A STATE OR EVIDENCE. Every action is audited.
 
-const EDUCATOR = ["need_raise", "need_move", "resource_create", "draft_save", "version_new", "competencies_set", "review", "submit"] as const;
-const PUBLISH = ["publish", "retire"] as const;
+const EDUCATOR = ["need_raise", "need_move", "resource_create", "draft_save", "version_new", "competencies_set", "review", "submit", "offer_take", "offer_decline"] as const;
+const PUBLISH = ["publish", "retire", "retire_version"] as const;
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 export async function POST(req: Request) {
@@ -41,12 +43,16 @@ export async function POST(req: Request) {
     case "submit": r = await submitDraft(ctx.admin, me, str(body.versionId, 40), { duplicatesChecked: body.duplicatesChecked === true }); break;
     case "publish": r = await publishVersion(ctx.admin, me, str(body.versionId, 40)); break;
     case "retire": r = await retireResource(ctx.admin, str(body.resourceId, 40)); break;
+    case "retire_version": r = await retireVersion(ctx.admin, me, str(body.versionId, 40), str(body.note ?? body.reason, 500)); break;
+    case "offer_take": r = await takeLearnerOffer(ctx.admin, me, str(body.offerId, 40), { code: str(body.code, 61), title: str(body.title) }); break;
+    case "offer_decline": r = await declineLearnerOffer(ctx.admin, me, str(body.offerId, 40), str(body.note ?? body.reason, 500)); break;
   }
   if (!r?.ok) return NextResponse.json({ error: r?.error ?? "That could not be done." }, { status: 409 });
   await ctx.admin.from("audit_log").insert({
     trace_id: await currentTraceId(), actor_id: me, actor_name: ctx.fullName ?? null, action: `ckri_${action}`,
-    entity_type: action.startsWith("need") ? "ckri_learning_need" : "ckri_knowledge_version",
-    entity_id: r.id ?? r.versionId ?? (str(body.versionId, 40) || str(body.needId, 40) || str(body.resourceId, 40) || null), new_value: { action },
+    entity_type: action.startsWith("need") ? "ckri_learning_need" : action.startsWith("offer") ? "question_contribution_offer" : "ckri_knowledge_version",
+    entity_id: r.id ?? (action.startsWith("offer") ? str(body.offerId, 40) : null) ?? r.versionId ?? (str(body.versionId, 40) || str(body.needId, 40) || str(body.resourceId, 40) || null),
+    new_value: { action, ...(action === "retire_version" ? { reason: str(body.note ?? body.reason, 500) } : {}), ...(action === "offer_take" && r.versionId ? { versionId: r.versionId } : {}) },
   }).then((x: unknown) => x, () => {});
   return NextResponse.json(r);
 }

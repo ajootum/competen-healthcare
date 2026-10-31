@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { clinicalState, versionStatus, type VersionStatus } from "./educator";
-import { libraryContentOf } from "./question-content";
+import { libraryContentOf, type LibraryDisplay } from "./question-content";
 import { findDuplicatePairs, type SimilarPair } from "./question-similarity";
 import { sourceOf, type QuestionSource } from "./question-source";
 
@@ -15,6 +15,8 @@ export type TrailEntry = { role: "author" | "educator_review" | "submitted" | "c
 export type CatalogueVersion = {
   id: string; versionNo: number; state: string; status: VersionStatus; origin: string; aiProvenance: { model?: string; prompt_version?: string } | null;
   content: unknown; stem: string; options: string[]; correctIndex: number | null; rationale: string; source: QuestionSource | null;
+  /** SQIE-LIBRARY-EXPANSION-01 (800): the format, the key in words, the marking rule and the rubric. */
+  format: string; formatLabel: string; keyText: string; marking: string; rubric: LibraryDisplay["rubric"];
   competencyIds: string[]; approvals: number; required: number | null; educatorReviewed: boolean;
   createdAt: string; submittedAt: string | null; publishedAt: string | null; trail: TrailEntry[];
 };
@@ -28,7 +30,8 @@ export type Catalogue = { items: CatalogueItem[]; competencyNames: Map<string, s
 /** Pure. The topic of a resource: its title (educators title a question by its topic). */
 export const topicsOf = (title: string): string[] => [title.trim()].filter(Boolean);
 
-export const STATUS_FILTERS = ["draft", "submitted", "reviewed", "approved", "published", "superseded", "retired"] as const;
+// SQIE-LIBRARY-EXPANSION-01 (801): "active" = learners are given a version now (published, approved, resource active).
+export const STATUS_FILTERS = ["active", "draft", "submitted", "reviewed", "approved", "published", "superseded", "retired"] as const;
 export type StatusFilter = (typeof STATUS_FILTERS)[number];
 export type CatalogueFilters = { q?: string; status?: string; origin?: string; competency?: string; topic?: string; duplicates?: boolean };
 
@@ -53,7 +56,8 @@ export function filterCatalogue(items: readonly CatalogueItem[], f: CatalogueFil
   const topic = (f.topic ?? "").trim().toLowerCase();
   return items.filter(i => {
     if (q && !(i.code.toLowerCase().includes(q) || i.title.toLowerCase().includes(q) || i.versions.some(v => v.stem.toLowerCase().includes(q)))) return false;
-    if (f.status && !(versionStatuses(i.latest) as string[]).includes(f.status) && !(f.status === "published" && i.served)) return false;
+    if (f.status === "active") { if (!i.served || i.resourceStatus !== "active") return false; }
+    else if (f.status && !(versionStatuses(i.latest) as string[]).includes(f.status) && !(f.status === "published" && i.served)) return false;
     if (f.origin && !i.versions.some(v => v.origin === f.origin)) return false;
     if (f.competency && !i.competencyIds.includes(f.competency)) return false;
     if (topic && !i.topics.some(t => t.toLowerCase().includes(topic))) return false;
@@ -109,6 +113,7 @@ export async function loadCatalogue(admin: any): Promise<Catalogue | null> {
       return {
         id: v.id, versionNo: v.version_no, state: v.state, status: versionStatus(v.state, clinical), origin: v.origin, aiProvenance: v.ai_provenance ?? null,
         content: v.content, stem: c?.stem ?? "", options: c?.options ?? [], correctIndex: c?.correctIndex ?? null, rationale: c?.rationale ?? "", source: sourceOf(v.content),
+        format: c?.format ?? "mcq", formatLabel: c?.formatLabel ?? "Single best answer", keyText: c?.keyText ?? "", marking: c?.marking ?? "Not recorded", rubric: c?.rubric ?? null,
         competencyIds: (links.data ?? []).filter((l: any) => l.version_id === v.id).map((l: any) => l.competency_id),
         approvals: ds.filter((d: any) => d.decision === "approved").length, required,
         educatorReviewed: !!v.educator_reviewed_by && v.educator_reviewed_hash === v.content_hash,
@@ -116,7 +121,8 @@ export async function loadCatalogue(admin: any): Promise<Catalogue | null> {
       };
     });
     if (!versions.length) return null;
-    const served = versions.find(v => v.status === "published") ?? null;
+    // A retired version (801) is never served, and a retired resource serves nothing.
+    const served = r.status === "active" ? versions.find(v => v.status === "published") ?? null : null;
     return { resourceId: r.id, code: r.code, title: r.title, resourceStatus: r.status, createdAt: r.created_at, versions, latest: versions[0], served,
       competencyIds: [...new Set(versions.flatMap(v => v.competencyIds))], topics: topicsOf(r.title) };
   }).filter((x: CatalogueItem | null): x is CatalogueItem => !!x);

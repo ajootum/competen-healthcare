@@ -73,7 +73,8 @@ describe("publishVersion enforces rights on the application layer", () => {
 
 const ver = (id: string, status: CatalogueVersion["status"], over: Partial<CatalogueVersion> = {}): CatalogueVersion => ({
   id, versionNo: 1, state: "draft", status, origin: "educator", aiProvenance: null, content: {}, stem: `stem of ${id}`, options: [], correctIndex: 0, rationale: "", source: null,
-  competencyIds: [], approvals: 0, required: null, educatorReviewed: false, createdAt: "", submittedAt: null, publishedAt: null, trail: [], ...over,
+  competencyIds: [], approvals: 0, required: null, educatorReviewed: false, createdAt: "", submittedAt: null, publishedAt: null, trail: [],
+  format: "mcq", formatLabel: "Single best answer", keyText: "", marking: "", rubric: null, ...over,
 });
 const item = (code: string, latest: CatalogueVersion, extra: Partial<CatalogueItem> = {}): CatalogueItem => ({
   resourceId: `r-${code}`, code, title: `Title ${code}`, resourceStatus: "active", createdAt: "", versions: [latest], latest, served: null, competencyIds: [], topics: [`Title ${code}`], ...extra,
@@ -104,5 +105,19 @@ describe("catalogue filters", () => {
   it("versionStatuses maps the seven filter statuses", () => {
     expect(versionStatuses({ status: "approved", educatorReviewed: true })).toEqual(["reviewed", "approved"]);
     expect(versionStatuses({ status: "superseded", educatorReviewed: false })).toEqual(["superseded"]);
+  });
+});
+
+// SQIE-LIBRARY-EXPANSION-01 (801): "active" = learners are given a version now. A retired version is never served.
+describe("the catalogue's active filter after a single version is retired", () => {
+  it("an item is active only while it serves a published version of an active resource", () => {
+    const pub = ver("v1", "published", { state: "published" }), ret = ver("v2", "retired", { state: "retired" });
+    const serving = item("serving", pub, { served: pub });
+    const retiredOnly = item("retired-only", ret, { versions: [ret], served: null });
+    const retiredResource = item("gone", pub, { served: pub, resourceStatus: "retired" });
+    const got = filterCatalogue([serving, retiredOnly, retiredResource], { status: "active" }, new Set()).map(i => i.code);
+    expect(got).toEqual(["serving"]);
+    expect(filterCatalogue([serving, retiredOnly], { status: "retired" }, new Set()).map(i => i.code)).toEqual(["retired-only"]);
+    expect(versionStatuses(ret)).toEqual(["retired"]);
   });
 });

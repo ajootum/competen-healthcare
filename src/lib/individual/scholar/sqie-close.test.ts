@@ -257,6 +257,24 @@ describe("library reuse: which governed questions a section is offered, in what 
     expect(libraryContent({ stem: "s", options: ["a", "b", "c", "d"], correct_index: 4, rationale: "r" })).toBeNull();
   });
 
+  it("SQIE-LIBRARY-EXPANSION-01: offers every format, never a retired version (801), and carries the exact learner copy", async () => {
+    const mrq = { format: "mrq", stem: "Which happen in the alveoli? Choose all.", options: ["Gas exchange", "Surfactant release", "Digestion", "Filtration"], answerKey: { correct: [0, 1] }, marking: "deterministic", rationale: "Alveoli exchange gas and release surfactant." };
+    const legacy = { stem: "Where does gas exchange happen?", options: ["alveoli", "trachea", "bronchi", "bronchioles"], correct_index: 0, rationale: "Bronchioles end in alveoli." };
+    const a = fakeAdmin({
+      ckri_knowledge_version_competency: ["live-mrq", "retired-v1", "live-v2"].map(v => ({ version_id: v, competency_id: "k1" })),
+      ckri_knowledge_version: [
+        { id: "live-mrq", resource_id: "r1", version_no: 1, content: mrq, state: "published", published_at: "2026-10-01" },
+        { id: "retired-v1", resource_id: "r2", version_no: 1, content: legacy, state: "retired", published_at: "2026-09-01" },
+        { id: "live-v2", resource_id: "r2", version_no: 2, content: legacy, state: "published", published_at: "2026-10-02" },
+      ],
+      ckri_knowledge_resource: [{ id: "r1", kind: "revision_question", title: "Alveoli", status: "active" }, { id: "r2", kind: "revision_question", title: "Gas exchange", status: "active" }],
+    }, { rpc: () => true });
+    const got = await loadLibraryQuestions(a, ["k1"]);
+    expect(got.map(q => q.versionId).sort()).toEqual(["live-mrq", "live-v2"]);
+    expect(got.find(q => q.versionId === "live-mrq")?.copy).toMatchObject({ kind: "mrq", correctIndex: null, answer: { correct: [0, 1], marking: "deterministic" } });
+    expect(got.find(q => q.versionId === "live-v2")?.copy).toMatchObject({ kind: "mcq", correctIndex: 0, answer: null });
+  });
+
   it("a learner copy names its provenance, is labelled as the library's, and cites no quote from the notes", async () => {
     resetSqieSchema();
     const a = fakeAdmin({ individual_scholar_question: [], individual_scholar_chunk: [{ id: "c1", user_id: "u1", material_id: "m1" }] });

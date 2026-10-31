@@ -9,6 +9,8 @@ import { ActionButton, FieldsForm } from "../_components/ResearchControls";
 import { EditDraft, NewResource, SubmitDraft } from "../_components/KnowledgeControls";
 import { SnapshotView } from "../_components/SnapshotView";
 import { StationPreview, StatusChip } from "../_components/KnowledgeStatus";
+import { fieldsFromQuestionContent } from "@/lib/knowledge/question-format";
+import { listLearnerOffers } from "@/lib/knowledge/learner-offers";
 
 // /super-admin/research/educator -- CKRI educator knowledge improvement (COMPETEN-KNOWLEDGE-RESEARCH-01 K3, migration 442).
 // Guarded by hq.learning.ckri.educator. Only the measures the published policy releases to educators, as suppressed
@@ -24,7 +26,7 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
   const ctx = await requireHqCapability("hq.learning.ckri.educator");
   const sp = await searchParams;
   const [on, policy] = await Promise.all([ckriEnabled(ctx.admin), loadCkriPolicy(ctx.admin)]);
-  const [snaps, needs, resources] = await Promise.all([listSnapshots(ctx.admin, policy.educatorMeasures), listNeeds(ctx.admin), listResources(ctx.admin)]);
+  const [snaps, needs, resources, offers] = await Promise.all([listSnapshots(ctx.admin, policy.educatorMeasures), listNeeds(ctx.admin), listResources(ctx.admin), listLearnerOffers(ctx.admin)]);
   const open = sp.snapshot && /^[0-9a-f-]{36}$/i.test(sp.snapshot) ? await readSnapshot(ctx.admin, sp.snapshot, policy.educatorMeasures) : null;
   // SQIE-COMPLETE-01: possible duplicates of each draft revision question, shown before it is submitted.
   const pool = resources?.some(r => r.kind === "revision_question" && r.versions.some(v => v.state === "draft")) ? await loadQuestionPool(ctx.admin) : null;
@@ -78,6 +80,33 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
         )}
       </section>
 
+      {/* SQIE-LIBRARY-EXPANSION-01 (802): questions learners offered, one at a time, under their separate permission. */}
+      <section className={card} aria-labelledby="lo-h">
+        <h2 id="lo-h" className="text-[15px] font-bold text-gray-900">Learner offers</h2>
+        <p className="mb-2 text-[12.5px] text-gray-600">Questions learners chose to offer, screened for patient details and for text copied from their notes. The learner is never named. Taking one makes a draft: it still needs your review of its exact content, independent clinical approval and publication. Nothing is approved automatically.</p>
+        {offers === null ? <p role="alert" className="text-[13px] text-[var(--cmp-text-critical)]">Learner offers could not be read.</p>
+          : offers.length === 0 ? <p className="text-[13px] text-gray-600">No learner offers.</p> : (
+          <ul className="divide-y divide-gray-100 text-[13px]">{offers.map(o => (
+            <li key={o.id} className="space-y-1 py-2">
+              <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{o.formatLabel}</span>
+                <span className="rounded border border-gray-300 px-1.5 py-0.5 text-[11.5px]">{o.status === "offered" ? "Waiting" : o.status === "taken" ? "Taken as a draft" : "Published from this offer"}</span>
+                <span className="text-gray-600">{o.aiWritten ? "AI-written in the learner's Scholar, not clinically reviewed" : "Written by the learner's study tools, not clinically reviewed"} · rights attested: {o.attestation.replace("_", " ")} · offered {o.offeredAt.slice(0, 10)}</span></div>
+              <p className="whitespace-pre-wrap font-medium text-gray-900">{o.stem}</p>
+              <p><span className="font-semibold text-gray-700">Key: </span>{o.keyText || "none readable"}</p>
+              <p><span className="font-semibold text-gray-700">Explanation: </span>{o.rationale}</p>
+              {o.sourceQuote && <p><span className="font-semibold text-gray-700">Quoted passage (the learner confirmed their rights to it): </span>{o.sourceQuote}</p>}
+              {o.status === "offered" && <div className="flex flex-wrap items-start gap-3">
+                <details><summary className="cursor-pointer font-semibold text-teal-800">Take as a library draft</summary>
+                  <FieldsForm action="offer_take" endpoint={EP} extra={{ offerId: o.id }} submit="Take as a draft" done="Taken. The draft is in Knowledge resources below: review it, name its competencies and submit it."
+                    fields={[{ name: "title", label: "Title (its topic)", required: true }, { name: "code", label: "Resource code (optional)" }]} /></details>
+                <ActionButton endpoint={EP} body={{ action: "offer_decline", offerId: o.id }} label="Decline" done="Declined. Its content was removed." note="Reason (required)" />
+              </div>}
+              {o.takenResourceId && <a className="font-semibold text-teal-800 underline" href={`#res-${o.takenResourceId}`}>Open the draft</a>}
+            </li>
+          ))}</ul>
+        )}
+      </section>
+
       <section className={card} aria-labelledby="r-h">
         <h2 id="r-h" className="text-[15px] font-bold text-gray-900">Knowledge resources</h2>
         <details className="mb-2"><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">New resource</summary><div className="mt-2"><NewResource /></div></details>
@@ -91,10 +120,10 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
               <p className="text-[12.5px] text-gray-700">{served ? `Learners are given version ${served.versionNo}, the published, clinically approved one. A newer draft reaches them only once it is approved and published.` : "Learners are given nothing yet: no version is both clinically approved and published."}</p>
               {r.versions.slice(0, 3).map(v => (
                 <div key={v.id} className="ml-3 space-y-1 border-l border-gray-200 pl-3">
-                  <div className="flex flex-wrap items-center gap-1.5"><span className="font-semibold">Version {v.versionNo}</span><StatusChip status={v.status} /><span>{v.origin === "ai_draft" ? "AI draft" : "Written by an educator"} · {v.educatorReviewed ? "educator-reviewed" : "not yet educator-reviewed"}{v.required !== null ? ` · ${v.approvals} of ${v.required} clinical approvals` : ""} · {v.competencies.length} competencies</span></div>
+                  <div className="flex flex-wrap items-center gap-1.5"><span className="font-semibold">Version {v.versionNo}</span><StatusChip status={v.status} /><span>{v.origin === "ai_draft" ? "AI draft" : v.origin === "learner_contribution" ? "Drafted from a learner offer" : "Written by an educator"} · {v.educatorReviewed ? "educator-reviewed" : "not yet educator-reviewed"}{v.required !== null ? ` · ${v.approvals} of ${v.required} clinical approvals` : ""} · {v.competencies.length} competencies</span></div>
                   {r.kind === "osce_station" && v.state !== "draft" && <details><summary className="cursor-pointer font-semibold text-teal-800">View station</summary><StationPreview content={v.content} /></details>}
                   {v.state === "draft" && <div className="flex flex-wrap gap-2">
-                    <details><summary className="cursor-pointer font-semibold text-teal-800">Edit</summary><EditDraft versionId={v.id} kind={r.kind} initial={v.content} /></details>
+                    <details><summary className="cursor-pointer font-semibold text-teal-800">Edit</summary><EditDraft versionId={v.id} kind={r.kind} initial={v.content} {...(r.kind === "revision_question" ? { questionFields: fieldsFromQuestionContent(v.content) } : {})} /></details>
                     <ActionButton endpoint={EP} body={{ action: "competencies_set", versionId: v.id }} label="Set competencies" done="Saved." note="CFCA competency ids" />
                     <ActionButton endpoint={EP} body={{ action: "review", versionId: v.id }} label="I have reviewed this content" done="Educator review recorded." />
                     {r.kind === "revision_question" && pool

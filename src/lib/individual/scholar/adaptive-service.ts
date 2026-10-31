@@ -22,7 +22,7 @@ import {
   insertRevisionQuestions, listMappings, listMaterials, questionsByIds, revisionPool, sectionLinks, topicsOfSections, updateAdaptiveScope, updateRevisionSession,
   type HeldAnswer, type QuestionRow, type RevisionSessionRow, type SessionAttempt,
 } from "./store";
-import { loadLibraryQuestions, pickLibraryQuestions, type LibrarySection } from "./library-questions";
+import { formatOfLibrary, loadLibraryQuestions, pickLibraryQuestions, type LibrarySection } from "./library-questions";
 import { competencyLabels, loadLearnerCatalogue } from "./competency-view";
 import { resolveScope } from "./learn";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "./http";
@@ -98,7 +98,8 @@ export async function adaptiveLibraryCopies(ctx: IndividualContext, sections: re
     .filter(x => x.competencyIds.length);
   if (!libSections.length) return [];
   const library = await loadLibraryQuestions(ctx.admin, libSections.flatMap(x => x.competencyIds));
-  const picks = pickLibraryQuestions({ questions: library, sections: libSections, exclude: new Set(), limit: Math.min(BLUEPRINT_LIBRARY_MAX, length) });
+  // SQIE-LIBRARY-EXPANSION-01: an adaptive exam is single best answer questions, so only those formats are reused here.
+  const picks = pickLibraryQuestions({ questions: library.filter(q => formatOfLibrary(q) === "mcq"), sections: libSections, exclude: new Set(), limit: Math.min(BLUEPRINT_LIBRARY_MAX, length) });
   const copies = await insertLibraryCopies(ctx.admin, ctx.userId, picks);
   await audit(ctx, "individual_scholar_revision_library", "individual_scholar_revision_session", null, {
     adaptive: true, offered: library.length, picked: picks.length, copied: copies.copied, reused: copies.ids.length, versions: picks.map(p => p.question.versionId),

@@ -20,7 +20,7 @@ export default async function KnowledgePublicationPage() {
       <header>
         <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-teal-800">Competen Holdings · Knowledge &amp; Research Intelligence</p>
         <h1 className="text-xl font-bold text-gray-900">Knowledge publication</h1>
-        <p className="mt-1 text-sm text-gray-600">Only a clinically approved version can be published. Publishing supersedes the earlier published version.</p>
+        <p className="mt-1 text-sm text-gray-600">Only a clinically approved version can be published. Publishing supersedes the earlier published version. Retiring one version keeps the resource and every earlier record; retiring the resource retires all of it.</p>
       </header>
       {!resources ? <p role="alert" className="text-[13px] text-[var(--cmp-text-critical)]">Resources could not be read (or migration 442 is not applied here).</p>
         : resources.length === 0 ? <p className="text-[13px] text-gray-600">No resources yet.</p> : (
@@ -32,8 +32,10 @@ export default async function KnowledgePublicationPage() {
                 <div key={v.id} className="ml-3 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold">Version {v.versionNo}</span><StatusChip status={v.status} />
-                    <span>{v.origin === "ai_draft" ? "AI draft, educator-reviewed" : "educator-written"}</span>
+                    <span>{v.origin === "ai_draft" ? "AI draft, educator-reviewed" : v.origin === "learner_contribution" ? "drafted from a learner offer, educator-reviewed" : "educator-written"}</span>
                     {v.state === "submitted" && v.clinical === "approved" && <ActionButton endpoint={EP} body={{ action: "publish", versionId: v.id }} label="Publish" done="Published. Any earlier published version is now superseded." tone="primary" />}
+                    {/* SQIE-LIBRARY-EXPANSION-01 (801): one version, with a reason. The resource stays active and history stays. */}
+                    {v.state === "published" && r.status === "active" && <ActionButton endpoint={EP} body={{ action: "retire_version", versionId: v.id }} label="Retire this version" note="Reason (10 to 500 characters)" done="Retired. Learners are no longer given this version; until a newer one is published they are given none of this resource." />}
                   </div>
                   {r.kind === "osce_station" && v.status === "approved" && <details><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">View station</summary><StationPreview content={v.content} /></details>}
                 </div>

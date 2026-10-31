@@ -8,19 +8,22 @@ import { loadLibraryPerformance, type VersionPerformance, MIN_ATTEMPTS } from "@
 import { BAND_LABEL } from "@/lib/knowledge/question-similarity";
 import { SOURCE_KIND_LABEL, looksCited, sourceRefusal } from "@/lib/knowledge/question-source";
 import { StatusChip } from "../_components/KnowledgeStatus";
+import { ActionButton } from "../_components/ResearchControls";
 
 // /super-admin/research/questions -- the HQ question library catalogue (SQIE-COMPLETE-01, owner GO 31 Oct 2026).
 // A read model over the CKRI knowledge library (migration 442): search and filter the revision questions, open one to see
 // every version, its answer key, provenance, rights, review trail, possible duplicates and aggregate performance.
-// Same right as the educator page (hq.learning.ckri.educator). It writes nothing: editing, review, publication and
-// retirement stay on the educator, knowledge-review and knowledge-publication pages. Performance is AGGREGATE COUNTS
+// Same right as the educator page (hq.learning.ckri.educator). It writes nothing itself: editing, review and publication stay
+// on the educator, knowledge-review and knowledge-publication pages. SQIE-LIBRARY-EXPANSION-01 (801): a holder of
+// hq.quality.knowledge.publish may retire ONE published version here, with a reason (the API and the database check again). Performance is AGGREGATE COUNTS
 // per library version (question-performance.ts): no learner identity and no learner content.
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Question library" };
 const card = "rounded-xl border border-gray-200 bg-white p-4";
 const field = "block w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-[13px]";
-const ORIGIN: Record<string, string> = { educator: "Educator-written", ai_draft: "AI draft, educator-reviewed" };
+const ORIGIN: Record<string, string> = { educator: "Educator-written", ai_draft: "AI draft, educator-reviewed", learner_contribution: "Drafted from a learner offer (learner not named)" };
+const EP = "/api/hq/knowledge/educator";
 const ROLE: Record<string, string> = { author: "Written by", educator_review: "Educator review", submitted: "Submitted by", clinical_approved: "Clinically approved by", clinical_rejected: "Rejected by", published: "Published by" };
 const when = (t: string | null) => (t ? new Date(t).toISOString().slice(0, 10) : "date not recorded");
 const pick = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -37,8 +40,8 @@ function Perf({ p, measured }: { p: VersionPerformance | undefined; measured: bo
   );
 }
 
-function Detail({ item, names, matches, perf, perfMeasured }: {
-  item: CatalogueItem; names: Map<string, string>; matches: { item: CatalogueItem; score: number; band: "likely_duplicate" | "similar" }[]; perf: Map<string, VersionPerformance>; perfMeasured: boolean;
+function Detail({ item, names, matches, perf, perfMeasured, canRetire }: {
+  item: CatalogueItem; names: Map<string, string>; matches: { item: CatalogueItem; score: number; band: "likely_duplicate" | "similar" }[]; perf: Map<string, VersionPerformance>; perfMeasured: boolean; canRetire: boolean;
 }) {
   return (
     <section className={`${card} space-y-4`} aria-labelledby="d-h">
@@ -50,30 +53,33 @@ function Detail({ item, names, matches, perf, perfMeasured }: {
           <Link className="underline" href="/super-admin/research/knowledge-publication">Publish or retire resource</Link>
         </div>
       </div>
-      <p className="text-[12.5px] text-gray-700">Only a whole resource can be retired: there is no action that retires a single published version. Publishing a newer version supersedes the earlier one.</p>
+      <p className="text-[12.5px] text-gray-700">Publishing a newer version supersedes the earlier one. A single published version can be retired with a reason: the resource stays active, learners are no longer given that version, and every earlier attempt, rubric and review record stays.{item.resourceStatus === "active" && !item.served ? <strong> Learners are given no version of this question now: a newer version must be approved and published.</strong> : null}</p>
       {matches.length > 0 && (
         <div role="note" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-950">
           <p className="font-semibold">Possible duplicates in the library</p>
           <ul className="ml-4 list-disc">{matches.map(m => <li key={m.item.resourceId}><Link className="underline" href={`?r=${m.item.resourceId}`}>{m.item.title}</Link> <code>{m.item.code}</code> · {BAND_LABEL[m.band]} ({Math.round(m.score * 100)}%)</li>)}</ul>
         </div>
       )}
-      {item.versions.map(v => <VersionCard key={v.id} v={v} names={names} perf={perf.get(v.id)} perfMeasured={perfMeasured} />)}
+      {item.versions.map(v => <VersionCard key={v.id} v={v} names={names} perf={perf.get(v.id)} perfMeasured={perfMeasured} canRetire={canRetire && item.resourceStatus === "active"} />)}
     </section>
   );
 }
 
-function VersionCard({ v, names, perf, perfMeasured }: { v: CatalogueVersion; names: Map<string, string>; perf: VersionPerformance | undefined; perfMeasured: boolean }) {
+function VersionCard({ v, names, perf, perfMeasured, canRetire }: { v: CatalogueVersion; names: Map<string, string>; perf: VersionPerformance | undefined; perfMeasured: boolean; canRetire: boolean }) {
   const rights = sourceRefusal(v.content);
   const cited = !v.source || v.source.kind === "own_writing" ? looksCited(`${v.stem} ${v.rationale}`) : false;
   return (
     <article className="space-y-2 rounded-lg border border-gray-200 p-3 text-[13px]">
       <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">Version {v.versionNo}</span><StatusChip status={v.status} /><span className="text-gray-600">{ORIGIN[v.origin] ?? v.origin}{v.required !== null ? ` · ${v.approvals} of ${v.required} clinical approvals` : ""}</span></div>
       <p className="whitespace-pre-wrap font-medium text-gray-900">{v.stem || "(no readable stem)"}</p>
+      <p><span className="font-semibold text-gray-700">Format: </span>{v.formatLabel} · <span className="font-semibold text-gray-700">Marking: </span>{v.marking}</p>
       <ol className="space-y-1">{v.options.map((o, i) => (
         <li key={i} className={`rounded border px-2 py-1 ${i === v.correctIndex ? "border-teal-600 bg-teal-50 text-teal-950" : "border-gray-200"}`}>
           <span className="mr-1 font-semibold">{String.fromCharCode(65 + i)}.</span>{o}{i === v.correctIndex && <strong className="ml-2">Correct answer (key)</strong>}
         </li>))}</ol>
-      {v.correctIndex === null && <p role="alert" className="text-[var(--cmp-text-critical)]">No valid answer key is stored on this version.</p>}
+      {v.format === "mcq" && v.correctIndex === null && <p role="alert" className="text-[var(--cmp-text-critical)]">No valid answer key is stored on this version.</p>}
+      {v.format !== "mcq" && <p><span className="font-semibold text-gray-700">Answer key: </span>{v.keyText || <strong className="text-[var(--cmp-text-critical)]">No valid answer key is stored on this version.</strong>}</p>}
+      <p><span className="font-semibold text-gray-700">Rubric: </span>{v.rubric ? [v.rubric.level ?? "level not set", v.rubric.objective, v.rubric.keyPoints.length ? "key points: " + v.rubric.keyPoints.join("; ") : null, v.rubric.misconceptions.length ? "misconceptions: " + v.rubric.misconceptions.join("; ") : null].filter(Boolean).join(" · ") : "None recorded"}</p>
       <p><span className="font-semibold text-gray-700">Rationale: </span><span className="whitespace-pre-wrap">{v.rationale || "none"}</span></p>
       <p><span className="font-semibold text-gray-700">Competencies: </span>{v.competencyIds.length ? v.competencyIds.map(c => names.get(c) ?? c).join(", ") : "none set"}</p>
       <p><span className="font-semibold text-gray-700">Provenance: </span>{ORIGIN[v.origin] ?? v.origin}{v.aiProvenance ? ` · model ${v.aiProvenance.model ?? "unknown"}, prompt ${v.aiProvenance.prompt_version ?? "unknown"}` : ""}</p>
@@ -86,6 +92,7 @@ function VersionCard({ v, names, perf, perfMeasured }: { v: CatalogueVersion; na
       <div><p className="font-semibold text-gray-700">Review and approval trail</p>
         <ul className="ml-4 list-disc">{v.trail.map((t, i) => <li key={i}>{ROLE[t.role]} {t.name} · {when(t.at)}{t.comment ? ` · “${t.comment}”` : ""}</li>)}</ul></div>
       <p><span className="font-semibold text-gray-700">Performance (aggregate): </span><Perf p={perf} measured={perfMeasured} /></p>
+      {canRetire && v.state === "published" && <ActionButton endpoint={EP} body={{ action: "retire_version", versionId: v.id }} label="Retire this version" note="Reason (10 to 500 characters)" done="Retired. Learners are no longer given this version; every earlier attempt and record stays. Until a newer version is published, learners are given none." />}
     </article>
   );
 }
@@ -100,7 +107,7 @@ export default async function QuestionLibraryPage({ searchParams }: { searchPara
     <header>
       <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-teal-800">Competen Holdings · Knowledge &amp; Research Intelligence</p>
       <h1 className="text-xl font-bold text-gray-900">Question library</h1>
-      <p className="mt-1 text-sm text-gray-600">Every revision question in the governed library: status, answer key, provenance, rights, review trail, possible duplicates and aggregate performance. Read only; actions are on the educator, review and publication pages.</p>
+      <p className="mt-1 text-sm text-gray-600">Every revision question in the governed library, in every format: status, answer key, rubric, marking rule, provenance, rights, review trail, possible duplicates and aggregate performance. Actions are on the educator, review and publication pages; a publisher can retire a single version here.</p>
     </header>
   );
   if (!cat) return <div className="max-w-5xl space-y-6">{header}<p role="alert" className="text-[13px] text-[var(--cmp-text-critical)]">The library could not be read (or migration 442 is not applied here).</p></div>;
@@ -123,13 +130,13 @@ export default async function QuestionLibraryPage({ searchParams }: { searchPara
       <form method="get" className={`${card} grid gap-3 md:grid-cols-3`} aria-label="Search and filter the question library">
         <label className="text-[12.5px] md:col-span-2">Search stem text or code<input name="q" defaultValue={f.q ?? ""} className={field} /></label>
         <label className="text-[12.5px]">Topic<input name="topic" defaultValue={f.topic ?? ""} className={field} /></label>
-        <label className="text-[12.5px]">Status<select name="status" defaultValue={f.status ?? ""} className={field}><option value="">Any</option>{STATUS_FILTERS.map(s => <option key={s} value={s}>{s === "submitted" ? "Submitted (in clinical review)" : s === "reviewed" ? "Educator-reviewed" : s[0].toUpperCase() + s.slice(1)}</option>)}</select></label>
-        <label className="text-[12.5px]">Origin<select name="origin" defaultValue={f.origin ?? ""} className={field}><option value="">Any</option><option value="educator">Educator-written</option><option value="ai_draft">AI draft</option></select></label>
+        <label className="text-[12.5px]">Status<select name="status" defaultValue={f.status ?? ""} className={field}><option value="">Any</option>{STATUS_FILTERS.map(s => <option key={s} value={s}>{s === "submitted" ? "Submitted (in clinical review)" : s === "reviewed" ? "Educator-reviewed" : s === "active" ? "Active (given to learners now)" : s[0].toUpperCase() + s.slice(1)}</option>)}</select></label>
+        <label className="text-[12.5px]">Origin<select name="origin" defaultValue={f.origin ?? ""} className={field}><option value="">Any</option><option value="educator">Educator-written</option><option value="ai_draft">AI draft</option><option value="learner_contribution">From a learner offer</option></select></label>
         <label className="text-[12.5px]">Competency<select name="competency" defaultValue={f.competency ?? ""} className={field}><option value="">Any</option>{competencies.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></label>
         <label className="text-[12.5px]">Duplicates<select name="dup" defaultValue={f.duplicates ? "1" : ""} className={field}><option value="">Any</option><option value="1">Has possible duplicates</option></select></label>
         <div className="flex items-end gap-3 md:col-span-2"><button type="submit" className="min-h-9 rounded-lg bg-teal-700 px-4 py-1.5 text-[13px] font-semibold text-white pointer-coarse:min-h-[var(--cmp-touch-min)]">Apply</button><Link href="?" className="text-[13px] font-semibold text-teal-800 underline">Clear</Link></div>
       </form>
-      {open && <Detail item={open} names={cat.competencyNames} matches={matches} perf={perf.byVersion} perfMeasured={perf.measured} />}
+      {open && <Detail item={open} names={cat.competencyNames} matches={matches} perf={perf.byVersion} perfMeasured={perf.measured} canRetire={ctx.capabilities.includes("hq.quality.knowledge.publish")} />}
       {openId && !open && <p role="alert" className="text-[13px] text-[var(--cmp-text-critical)]">That question is not in the library.</p>}
       <section className={card} aria-labelledby="l-h">
         <h2 id="l-h" className="text-[15px] font-bold text-gray-900">{rows.length} of {cat.items.length} question{cat.items.length === 1 ? "" : "s"}</h2>
@@ -143,7 +150,7 @@ export default async function QuestionLibraryPage({ searchParams }: { searchPara
                 <div className="min-w-0 space-y-0.5">
                   <Link className="font-semibold text-teal-800 underline" href={`?r=${i.resourceId}`}>{i.title}</Link> <code className="text-gray-600">{i.code}</code>
                   <p className="line-clamp-2 text-gray-700">{i.latest.stem}</p>
-                  <p className="text-[12px] text-gray-600">Version {i.latest.versionNo} of {i.versions.length} · {ORIGIN[i.latest.origin] ?? i.latest.origin} · {i.latest.source ? SOURCE_KIND_LABEL[i.latest.source.kind] : "source not declared"}{i.resourceStatus === "retired" ? " · resource retired" : ""}</p>
+                  <p className="text-[12px] text-gray-600">{i.latest.formatLabel} · Version {i.latest.versionNo} of {i.versions.length} · {ORIGIN[i.latest.origin] ?? i.latest.origin} · {i.latest.source ? SOURCE_KIND_LABEL[i.latest.source.kind] : "source not declared"}{i.resourceStatus === "retired" ? " · resource retired" : ""}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <StatusChip status={i.latest.status} />

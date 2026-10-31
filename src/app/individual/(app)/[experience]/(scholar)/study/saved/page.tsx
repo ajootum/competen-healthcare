@@ -12,6 +12,10 @@ import { AiFlagList, GovernedReferenceList } from "../_components/learn-kinds";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { referenceSource, relabelReferences } from "@/lib/individual/scholar/learn";
+import { effectiveKind } from "@/lib/individual/scholar/revision";
+import { LIBRARY_FORMAT_LABEL, type LibraryFormat } from "@/lib/individual/scholar/library-format";
+import { QUESTION_OFFER_ATTESTATION, QUESTION_OFFER_ATTESTATION_VERSION, myQuestionOffers, questionOfferingOn, questionOfferingStatus } from "@/lib/question-offers/offers";
+import { QuestionOfferPanel } from "../_components/question-offer-client";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -52,6 +56,13 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
   for (const a of artefacts.ok ? artefacts.data : []) byMaterial.set(a.materialId, [...(byMaterial.get(a.materialId) ?? []), a]);
   const qs = questions.ok ? questions.data : [];
   const caseCount = qs.filter(q => q.kind === "case").length, practiceCount = qs.length - caseCount;
+  // SQIE-LIBRARY-EXPANSION-01 (802): the learner's own practice questions they may offer, one at a time, under their separate
+  // permission. Read only where it can matter (switch on, or something of theirs to withdraw). Unavailable without 802.
+  const [offerStatus, myOffers] = await Promise.all([questionOfferingStatus(ctx.admin, ctx.userId), myQuestionOffers(ctx.admin, ctx.userId)]);
+  const offerable = qs.filter(q => q.kind !== "case" && !q.library).slice(0, 30).map(q => {
+    const f = effectiveKind(q) as LibraryFormat;
+    return { id: q.id, stem: q.stem, formatLabel: LIBRARY_FORMAT_LABEL[f] ?? "Practice question", hasQuote: !!q.sourceQuote?.trim() };
+  });
 
   return (
     <>
@@ -80,6 +91,12 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
           <span className="text-[14.5px] font-semibold text-gray-900">Mistake notebook ({toFix.data} to fix)</span>
           <span className="text-[12.5px] text-gray-600">Your wrong answers, with the answer and why</span>
         </Link>
+      )}
+
+      {offerStatus && (
+        <QuestionOfferPanel offering={questionOfferingOn(policy)} available={offerStatus.available} granted={offerStatus.granted && offerStatus.current}
+          attestationVersion={QUESTION_OFFER_ATTESTATION_VERSION} text={QUESTION_OFFER_ATTESTATION[QUESTION_OFFER_ATTESTATION_VERSION]}
+          questions={offerable} offers={(myOffers ?? []).map(o => ({ id: o.id, questionId: o.questionId, status: o.status, formatLabel: o.formatLabel }))} />
       )}
 
       <section aria-labelledby="explanations-h">
