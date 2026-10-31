@@ -3,10 +3,10 @@ import Link from "next/link";
 import { requireHqCapability } from "@/lib/hq/context";
 import { ckriEnabled, loadCkriPolicy } from "@/lib/knowledge/governance";
 import { listSnapshots, readSnapshot } from "@/lib/knowledge/intelligence";
-import { listNeeds, listResources, servedToLearners } from "@/lib/knowledge/educator";
+import { duplicatesOf, listNeeds, listResources, loadQuestionPool, servedToLearners } from "@/lib/knowledge/educator";
 import { MEASURES } from "@/lib/knowledge/data-contracts";
 import { ActionButton, FieldsForm } from "../_components/ResearchControls";
-import { EditDraft, NewResource } from "../_components/KnowledgeControls";
+import { EditDraft, NewResource, SubmitDraft } from "../_components/KnowledgeControls";
 import { SnapshotView } from "../_components/SnapshotView";
 import { StationPreview, StatusChip } from "../_components/KnowledgeStatus";
 
@@ -26,6 +26,8 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
   const [on, policy] = await Promise.all([ckriEnabled(ctx.admin), loadCkriPolicy(ctx.admin)]);
   const [snaps, needs, resources] = await Promise.all([listSnapshots(ctx.admin, policy.educatorMeasures), listNeeds(ctx.admin), listResources(ctx.admin)]);
   const open = sp.snapshot && /^[0-9a-f-]{36}$/i.test(sp.snapshot) ? await readSnapshot(ctx.admin, sp.snapshot, policy.educatorMeasures) : null;
+  // SQIE-COMPLETE-01: possible duplicates of each draft revision question, shown before it is submitted.
+  const pool = resources?.some(r => r.kind === "revision_question" && r.versions.some(v => v.state === "draft")) ? await loadQuestionPool(ctx.admin) : null;
   const reported = open?.cells.filter(c => !c.suppressed) ?? [];
   return (
     <div className="max-w-5xl space-y-6">
@@ -84,7 +86,7 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
           <ul className="divide-y divide-gray-100 text-[13px]">{resources.map(r => {
             const served = r.versions.find(servedToLearners);
             return (
-            <li key={r.id} className="space-y-1 py-2">
+            <li key={r.id} id={`res-${r.id}`} className="space-y-1 py-2">
               <div><span className="font-semibold">{r.title}</span> <code className="text-gray-600">{r.code}</code> · {KIND[r.kind] ?? r.kind} · {r.status}</div>
               <p className="text-[12.5px] text-gray-700">{served ? `Learners are given version ${served.versionNo}, the published, clinically approved one. A newer draft reaches them only once it is approved and published.` : "Learners are given nothing yet: no version is both clinically approved and published."}</p>
               {r.versions.slice(0, 3).map(v => (
@@ -95,7 +97,9 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
                     <details><summary className="cursor-pointer font-semibold text-teal-800">Edit</summary><EditDraft versionId={v.id} kind={r.kind} initial={v.content} /></details>
                     <ActionButton endpoint={EP} body={{ action: "competencies_set", versionId: v.id }} label="Set competencies" done="Saved." note="CFCA competency ids" />
                     <ActionButton endpoint={EP} body={{ action: "review", versionId: v.id }} label="I have reviewed this content" done="Educator review recorded." />
-                    <ActionButton endpoint={EP} body={{ action: "submit", versionId: v.id }} label="Submit for clinical review" done="Submitted." tone="primary" />
+                    {r.kind === "revision_question" && pool
+                      ? <SubmitDraft versionId={v.id} duplicates={duplicatesOf(v.content, pool, r.id).map(d => ({ code: d.item.code, title: d.item.title, band: d.band, score: d.score, href: `/super-admin/research/questions?r=${d.item.resourceId}` }))} />
+                      : <ActionButton endpoint={EP} body={{ action: "submit", versionId: v.id }} label="Submit for clinical review" done="Submitted." tone="primary" />}
                   </div>}
                   {v.state !== "draft" && v.versionNo === r.versions[0].versionNo && r.status === "active" && <ActionButton endpoint={EP} body={{ action: "version_new", resourceId: r.id }} label={v.state === "published" ? "Edit as a new version" : "Start a new version"} done="New draft started. The published version stays in use until this one is approved and published." />}
                 </div>

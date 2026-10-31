@@ -101,7 +101,12 @@ export function adaptivePrefill(scope: StudyScope | null, have: StudyChoices): {
  * Apply's clinical reasoning start: Apply from the section (the existing ?section= preset) for a one-section session,
  * otherwise a case from the session's competency, otherwise from its first material.
  */
-export type CasePrefill = { chunkId: string; from: "teach" } | { entry: "competency"; competencyId: string } | { entry: "notes"; materialId: string };
+/** Where Apply was opened from (?from=): Learn, Teach me, Revision or the study journey. Anything else is Teach me. */
+export const CASE_FROM = ["learn", "teach", "revision", "journey"] as const;
+export type CaseFrom = (typeof CASE_FROM)[number];
+export const parseCaseFrom = (raw: unknown): CaseFrom => (typeof raw === "string" && (CASE_FROM as readonly string[]).includes(raw) ? raw as CaseFrom : "teach");
+
+export type CasePrefill = { chunkId: string; from: CaseFrom } | { entry: "competency"; competencyId: string } | { entry: "notes"; materialId: string };
 export function casePrefill(scope: StudyScope | null, have: StudyChoices): CasePrefill | null {
   if (!scope) return null;
   if (scope.kind === "section" && scope.chunkIds[0]) return { chunkId: scope.chunkIds[0], from: "teach" };

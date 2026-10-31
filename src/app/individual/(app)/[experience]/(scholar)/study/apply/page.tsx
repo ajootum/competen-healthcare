@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
-import { casePrefill, withStudy } from "@/lib/individual/scholar/study-carry";
+import { casePrefill, parseCaseFrom, withStudy } from "@/lib/individual/scholar/study-carry";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
@@ -19,6 +19,7 @@ import { caseHistory, listMaterials, listPrivateCases, readConsent } from "@/lib
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { ATTESTATION_TEXT, caseLibraryEnabled, loadCasePolicy } from "@/lib/cases/policy";
 import { candidacyStatus, myCaseOffers } from "@/lib/cases/candidates";
+import { offeringOn } from "@/lib/cases/offering-switch";
 import { caseSessionView } from "@/lib/cases/library";
 import { consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
@@ -71,7 +72,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
   // start opens on the session's focus: Apply from its section, else its competency, else its first material.
   const study = await loadStudy(ctx.admin, ctx.userId, sp.study, "apply", policy);
   const sid = study?.session.id ?? null;
-  const preset = sp.section && /^[0-9a-f-]{36}$/i.test(sp.section) ? { chunkId: sp.section, from: sp.from === "revision" ? "revision" as const : "teach" as const }
+  const preset = sp.section && /^[0-9a-f-]{36}$/i.test(sp.section) ? { chunkId: sp.section, from: parseCaseFrom(sp.from) }
     : casePrefill(study?.scope ?? null, { materialIds: (materials.ok ? materials.data : []).filter(m => m.chunkCount > 0).map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) });
 
   // COMPETEN-SCHOLAR-01 S4: steps of one case play together, in order. Where 388 is absent no question has
@@ -104,7 +105,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
             materials={(materials.ok ? materials.data : []).filter(m => m.chunkCount > 0).map(m => ({ id: m.id, title: m.title }))}
             competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote} preset={preset} />
           {libraryOn && candidacy && casePolicy && (
-            <CaseOfferPanel libraryOn={libraryOn} granted={candidacy.granted && candidacy.current} attestationVersion={casePolicy.attestationVersion}
+            <CaseOfferPanel libraryOn={libraryOn} offering={offeringOn(libraryOn, policy)} granted={candidacy.granted && candidacy.current} attestationVersion={casePolicy.attestationVersion}
               text={ATTESTATION_TEXT[casePolicy.attestationVersion] ?? null} cases={privateCases.ok ? privateCases.data.map(c => ({ id: c.id, title: c.title })) : []}
               offers={(offers ?? []).map(o => ({ sourceKey: o.sourceKey, status: o.status, reasons: o.reasons }))} />
           )}

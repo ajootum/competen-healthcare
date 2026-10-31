@@ -105,6 +105,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
       // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
       scholarStudySessions: false,
+      // SCHOLAR-INTELLIGENCE-COMPLETE-01: case contribution follows the case library switch until HQ sets it off.
+      scholarCaseContribution: "on",
       // SCHOLAR-COMPANION-01: the study plan OFF until HQ switches it on (and 780 is applied).
       scholarStudyPlan: false,
       // SCHOLAR-GUIDED-LEARNING-01: no lesson is prepared ahead until HQ switches it on.

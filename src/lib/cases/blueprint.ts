@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash } from "node:crypto";
+import { REASONING_CAPS, STAGE_CATEGORIES, STAGE_CATEGORY_LABEL, isStageCategory, type StageCategory } from "./categories";
+
+export { STAGE_CATEGORIES, STAGE_CATEGORY_LABEL, type StageCategory };
 
 // ── THE CLINICAL CASE BLUEPRINT ── COMPETEN-SCHOLAR-CLINICAL-REASONING-01 CR2-CR5/5B and AI-CONSUMPTION-01 C3/CI5 ─
 //
@@ -35,7 +38,7 @@ export const DEFAULT_DIMENSIONS = ["recognition", "interpretation", "prioritisat
 
 export type CaseFact = {
   id: string;
-  kind: "history" | "observation" | "examination" | "result" | "context";
+  kind: "history" | "observation" | "examination" | "investigation" | "result" | "context";
   label: string; value: string; unit?: string | null;
   revealedAt: string;            // "start", a stage id whose reaching reveals it, or "request": only when asked for or a consequence
   safetyCritical: boolean;       // must not be missed, never varies
@@ -54,8 +57,9 @@ export type DecisionPoint = {
   expectedResponse?: string | null;        // free_text, server-side only
   rubric?: RubricCriterion[];              // free_text, server-side only
   sourceRefs?: string[];                   // B8: private only -- opaque references to the student's own sections
+  askReason?: boolean;                     // optional: after choosing, the learner is asked to explain the choice. Marking stays on the choice.
 };
-export type Stage = { id: string; title: string; reveals: string[]; decisionPointIds: string[]; narrativeHint?: string | null };
+export type Stage = { id: string; title: string; reveals: string[]; decisionPointIds: string[]; narrativeHint?: string | null; category?: StageCategory | null };
 export type Transition = { from: string; onOptions?: string[]; isDefault?: boolean; to: string; consequenceFactIds: string[] };
 export type SafetyCriterion = { id: string; text: string; decisionPointId: string; mustSelect?: string[]; mustNotSelect?: string[] };
 /** A recorded learning outcome of a competency (framework_competencies.learning_outcomes, by position), never a copy of it. */
@@ -68,6 +72,10 @@ export type Blueprint = {
   title: string;
   summary?: string | null;                 // B2: catalogue and educator text, server-side only
   learnerIntro?: string | null;            // B2: the spoiler-free opening a learner sees
+  /** Optional reasoning sections. Differentials (labels) and management principles reach a learner only as their stage is reached/finished; all of them in the debrief. */
+  differentials?: { label: string; reasoning: string }[] | null;
+  managementPrinciples?: string[] | null;
+  expectedReasoning?: string | null;       // debrief only
   patient?: { ageBand: string; sex?: "female" | "male" | "unspecified"; setting: string; presentingComplaint: string; background: string[] } | null;
   facts: CaseFact[];
   stages: Stage[];
@@ -152,6 +160,8 @@ export function validateBlueprint(b: any, profile: Profile, dimensions: readonly
   }
   for (const s of stages) {
     if (!ID.test(s?.id ?? "") || !str(s?.title, 120)) p.push(`stage ${s?.id ?? "?"}: id and title are required`);
+    if (s?.category !== undefined && s?.category !== null && !isStageCategory(s.category)) p.push(`stage ${s?.id ?? "?"}: category must be one of ${STAGE_CATEGORIES.join(", ")}`);
+    if (s?.category === "reflection" && s?.narrativeHint != null && (typeof s.narrativeHint !== "string" || s.narrativeHint.length > 1000)) p.push(`stage ${s?.id ?? "?"}: a reflection stage's prompt (narrativeHint) is up to 1000 characters`);
     for (const r of arr(s?.reveals)) if (!factIds.has(r)) p.push(`stage ${s?.id}: reveals unknown fact ${r}`);
     for (const d of arr(s?.decisionPointIds)) if (!dpIds.has(d)) p.push(`stage ${s?.id}: names unknown decision point ${d}`);
     // A transition names options by id, so within one stage an option id means one option.
@@ -180,8 +190,20 @@ export function validateBlueprint(b: any, profile: Profile, dimensions: readonly
     for (const r of arr(d?.permittedReveals)) if (!factIds.has(r)) p.push(`decision ${d?.id}: permits revealing unknown fact ${r}`);
     for (const c of arr(d?.rubric)) if ((profile === "library" || c?.dimension !== undefined) && !dimensions.includes(c?.dimension)) p.push(`decision ${d?.id}: rubric criterion ${c?.id} needs a reasoning dimension`);
     if (d?.hint !== undefined && d?.hint !== null && !str(d.hint, 500)) p.push(`decision ${d?.id}: a hint, when given, up to 500 characters`);
+    if (d?.askReason !== undefined && d?.askReason !== null && typeof d.askReason !== "boolean") p.push(`decision ${d?.id}: askReason is true or false`);
     if (arr(d?.sourceRefs).length && profile === "library") p.push(`decision ${d?.id}: sourceRefs belong to a private case only`);
   }
+  // Optional reasoning sections (all optional, unknown shapes refused, never required).
+  if (b.differentials !== undefined && b.differentials !== null) {
+    if (!Array.isArray(b.differentials) || b.differentials.length > REASONING_CAPS.differentials) p.push(`differentials: a list of up to ${REASONING_CAPS.differentials}`);
+    else for (const x of b.differentials) if (!str(x?.label, REASONING_CAPS.differentialLabel) || !str(x?.reasoning, REASONING_CAPS.differentialReasoning))
+      p.push(`differentials: each needs a label (up to ${REASONING_CAPS.differentialLabel} characters) and its reasoning (up to ${REASONING_CAPS.differentialReasoning})`);
+  }
+  if (b.managementPrinciples !== undefined && b.managementPrinciples !== null) {
+    if (!Array.isArray(b.managementPrinciples) || b.managementPrinciples.length > REASONING_CAPS.managementPrinciples || !b.managementPrinciples.every((x: unknown) => str(x, REASONING_CAPS.managementPrinciple)))
+      p.push(`managementPrinciples: up to ${REASONING_CAPS.managementPrinciples} statements of up to ${REASONING_CAPS.managementPrinciple} characters`);
+  }
+  if (b.expectedReasoning !== undefined && b.expectedReasoning !== null && !str(b.expectedReasoning, REASONING_CAPS.expectedReasoning)) p.push(`expectedReasoning, when given, up to ${REASONING_CAPS.expectedReasoning} characters`);
   const optionIds = new Set(dps.flatMap(d => arr(d?.options).map((o: any) => o?.id)));
   const defaults = new Map<string, number>();
   for (const t of trans) {
@@ -332,9 +354,50 @@ export type LearnerView = {
   title: string; intro: string | null;
   patient: Blueprint["patient"];
   facts: { token: string; label: string; value: string; unit: string | null }[];
-  stages: { token: string; title: string; decisionPoints: { token: string; prompt: string; kind: DecisionPoint["kind"]; options: { token: string; text: string }[];
-    canReveal: { token: string; label: string }[]; hint: string | null }[] }[];
+  stages: { token: string; title: string; category: StageCategory | null; categoryLabel: string | null; guidance: StageGuidance | null;
+    decisionPoints: { token: string; prompt: string; kind: DecisionPoint["kind"]; askReason: boolean; options: { token: string; text: string }[];
+      canReveal: { token: string; label: string }[]; hint: string | null }[] }[];
 };
+
+/** What a stage's own category adds once the learner is there: differentials as they are weighed, principles once management is behind them. */
+export type StageGuidance = { differentials?: { label: string; reasoning?: string }[]; managementPrinciples?: string[] };
+
+/**
+ * Pure: the optional guidance a reached stage carries. A differentials stage shows its differentials' labels on reaching
+ * it and their reasoning once the learner has moved on; a management stage shows the principles once it is finished
+ * (a later stage reached). The final stage's guidance is in the closing, so nothing here answers a decision early.
+ */
+export function stageGuidance(b: Blueprint, st: Stage, reachedStageIds: readonly string[]): StageGuidance | null {
+  const done = reachedStageIds.indexOf(st.id) >= 0 && reachedStageIds.indexOf(st.id) < reachedStageIds.length - 1;
+  if (st.category === "differentials" && Array.isArray(b.differentials) && b.differentials.length)
+    return { differentials: b.differentials.map(d => (done ? { label: d.label, reasoning: d.reasoning } : { label: d.label })) };
+  if (st.category === "management" && done && Array.isArray(b.managementPrinciples) && b.managementPrinciples.length) return { managementPrinciples: [...b.managementPrinciples] };
+  return null;
+}
+
+/** Pure: a reflection stage that asks nothing (no decision) ends the case on being reached. */
+export const endsOnReaching = (b: Blueprint, stageId: string): boolean => {
+  const st = b.stages.find(x => x.id === stageId);
+  return !!st && st.category === "reflection" && !b.decisionPoints.some(d => d.stageId === st.id);
+};
+
+/** What a learner sees when a case ends: everything the optional reasoning sections hold, and the case's own reflection prompt. */
+export type CaseClosing = {
+  reflectionPrompt: string | null;
+  differentials: { label: string; reasoning: string }[];
+  managementPrinciples: string[];
+  expectedReasoning: string | null;
+};
+/** Pure: the closing of a case, from the blueprint only. Empty fields where the author wrote none. */
+export function caseClosing(b: Blueprint): CaseClosing {
+  const reflection = b.stages.find(s => s.category === "reflection" && typeof s.narrativeHint === "string" && s.narrativeHint.trim());
+  return {
+    reflectionPrompt: reflection?.narrativeHint?.trim() ?? null,
+    differentials: Array.isArray(b.differentials) ? b.differentials.map(d => ({ label: d.label, reasoning: d.reasoning })) : [],
+    managementPrinciples: Array.isArray(b.managementPrinciples) ? [...b.managementPrinciples] : [],
+    expectedReasoning: typeof b.expectedReasoning === "string" && b.expectedReasoning.trim() ? b.expectedReasoning.trim() : null,
+  };
+}
 
 /**
  * Pure: the only learner projection of a blueprint. Only the stages REACHED, in order, and their decision points --
@@ -350,8 +413,10 @@ export function learnerView(b: Blueprint, s: ViewState, salt: string, opts: { hi
     facts: b.facts.filter(f => visible.has(f.id)).map(f => ({ token: viewToken(salt, "fact", f.id), label: f.label, value: f.value, unit: f.unit ?? null })),
     stages: b.stages.filter(st => reached.has(st.id)).map(st => ({
       token: viewToken(salt, "stage", st.id), title: st.title,
+      category: isStageCategory(st.category) ? st.category : null, categoryLabel: isStageCategory(st.category) ? STAGE_CATEGORY_LABEL[st.category] : null,
+      guidance: stageGuidance(b, st, s.reachedStageIds),
       decisionPoints: b.decisionPoints.filter(d => d.stageId === st.id).map(d => ({
-        token: viewToken(salt, "decision", d.id), prompt: d.prompt, kind: d.kind,
+        token: viewToken(salt, "decision", d.id), prompt: d.prompt, kind: d.kind, askReason: d.askReason === true && d.kind !== "free_text",
         options: d.options.map(o => ({ token: viewToken(salt, "option", optionKey(d.id, o.id)), text: o.text })),
         canReveal: d.permittedReveals.filter(r => !visible.has(r)).map(r => ({ token: viewToken(salt, "fact", r), label: label(r) })),
         hint: opts.hints ? d.hint ?? null : null,

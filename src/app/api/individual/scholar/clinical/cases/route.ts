@@ -11,6 +11,7 @@ import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { parseScope, resolveScope, scopeText, type LearningScope } from "@/lib/individual/scholar/learn";
 import { linkStudy } from "@/lib/individual/scholar/study-context";
+import { latestGaps } from "@/lib/individual/scholar/case-ranking-context";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk, routingVersion } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runCaseBlueprint } from "@/lib/individual/scholar/generation";
@@ -81,7 +82,8 @@ export async function POST(req: Request) {
   // ── CI6: a governed library case first, with no AI and no charge ──
   const libraryOn = await caseLibraryEnabled(ctx.admin);
   if (body?.generateAnyway !== true && libraryOn && (await loadCasePolicy(ctx.admin)).reuseFirst) {
-    const offers = await findLibraryCases(ctx.admin, { competencyIds: competencyIds.length ? competencyIds : undefined, topic: resolved.topic ?? undefined });
+    // Ranked by relevance (cases/ranking.ts): the competencies and topic asked for, and the gaps in the learner's latest evaluation.
+    const offers = await findLibraryCases(ctx.admin, { competencyIds: competencyIds.length ? competencyIds : undefined, topic: resolved.topic ?? undefined, gaps: await latestGaps(ctx.admin, ctx.userId) });
     if (offers?.length) return NextResponse.json({ offers, note: "Clinically approved cases from the case library fit what you asked for. Playing one uses no AI. You can still have one written from your notes." });
   }
 

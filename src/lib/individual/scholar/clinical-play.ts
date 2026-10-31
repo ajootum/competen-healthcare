@@ -9,7 +9,7 @@
 // ⚠ A DECISION IS KEPT AS MADE. Each answer is an append-only row (435). Progress is what applyAnswer says.
 
 import { randomBytes } from "node:crypto";
-import { answeredView, learnerView, resolveOptions, resolveToken, viewToken, type Blueprint, type LearnerView } from "@/lib/cases/blueprint";
+import { answeredView, caseClosing, learnerView, resolveOptions, resolveToken, viewToken, type Blueprint, type CaseClosing, type LearnerView } from "@/lib/cases/blueprint";
 import { applyAnswer } from "@/lib/cases/library";
 import { brokenSafety, caseDebrief, markDecision, type Debrief } from "./clinical";
 import {
@@ -34,6 +34,8 @@ export type DecisionFeedback = {
 export type PlayView = {
   kind: "private"; sessionId: string; caseId: string; title: string; status: "active" | "completed"; mode: "guided" | "independent";
   view: LearnerView; answered: string[]; feedback: DecisionFeedback[]; debrief: Debrief | null; materialId: string;
+  /** The case's reflection prompt and optional reasoning sections, once it has ended. The learner's own "why" is held by the browser, never stored (435 holds a choice or a written answer, not both). */
+  closing: CaseClosing | null;
 };
 
 const asState = (s: CaseSessionRow, answers: CaseAnswerRow[]) => ({
@@ -58,7 +60,7 @@ function playView(c: PrivateCaseRow, s: CaseSessionRow, answers: CaseAnswerRow[]
     kind: "private", sessionId: s.id, caseId: c.id, title: b.title, status: s.status, mode: s.mode, materialId: c.materialId,
     view: learnerView(b, { reachedStageIds: s.reachedStageIds, revealedFactIds: s.revealedFactIds }, s.viewSalt, { hints: s.mode === "guided" }),
     answered: answers.map(a => viewToken(s.viewSalt, "decision", a.decisionPointId)),
-    feedback: answers.map(a => feedbackOf(b, s, a)), debrief: s.debrief ?? null,
+    feedback: answers.map(a => feedbackOf(b, s, a)), debrief: s.debrief ?? null, closing: s.status === "completed" ? caseClosing(b) : null,
   };
 }
 

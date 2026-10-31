@@ -1892,7 +1892,12 @@ async function ownsStudyRef(admin: Admin, userId: string, kind: StudyLinkKind, r
     case "revision_session": q = admin.from("individual_scholar_revision_session").select("id").eq("user_id", userId).eq("id", refId); break;
     case "osce_attempt": q = admin.from("individual_scholar_osce_attempt").select("id").eq("user_id", userId).eq("id", refId); break;
     case "flashcard_deck": q = admin.from("individual_scholar_flashcard_deck").select("id").eq("user_id", userId).eq("id", refId); break;
-    case "case_session": q = admin.from("individual_scholar_case_session").select("id").eq("user_id", userId).eq("id", refId); break;
+    case "case_session": {
+      // The learner's own private case session, or (SCHOLAR-INTELLIGENCE-COMPLETE-01) their own governed library play.
+      const own = await admin.from("individual_scholar_case_session").select("id").eq("user_id", userId).eq("id", refId).maybeSingle();
+      if (!own.error && own.data) return true;
+      return (await librarySessionVersion(admin, userId, refId)) !== null;
+    }
     case "evaluation": q = admin.from("individual_scholar_evaluation").select("id").eq("user_id", userId).eq("id", refId); break;
     // An exam paper's key is its material (570).
     case "exam_paper": q = admin.from("individual_scholar_exam_paper").select("material_id").eq("user_id", userId).eq("material_id", refId); break;

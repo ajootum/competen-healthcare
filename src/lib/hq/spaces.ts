@@ -261,6 +261,8 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/research/intelligence", capability: "hq.quality.research.govern" },
   // Migration 442 (K3). Each its own right: educators, the 395 reviewer, the publisher.
   { prefix: "/super-admin/research/educator",     capability: "hq.learning.ckri.educator" },
+  // SQIE-COMPLETE-01: the question library catalogue is the educator's read of the same library (no new right, no write).
+  { prefix: "/super-admin/research/questions",    capability: "hq.learning.ckri.educator" },
   { prefix: "/super-admin/research/knowledge-review", capability: "hq.quality.clinical.approve" },
   { prefix: "/super-admin/research/knowledge-publication", capability: "hq.quality.knowledge.publish" },
   // Migration 443 (K4). Oversight and review before the workspace: the first matching prefix wins.

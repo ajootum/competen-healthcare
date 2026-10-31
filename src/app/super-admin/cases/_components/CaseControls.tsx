@@ -86,14 +86,14 @@ export function CreateCase() {
 }
 
 /** Draft a case with AI, on the platform's budget. The draft is shown for reading. Nothing is saved until you create it. */
-export function AiDraft({ competencies }: { competencies: { id: string; label: string }[] }) {
+export function AiDraft({ competencies, professions = [] }: { competencies: { id: string; label: string }[]; professions?: { id: string; label: string }[] }) {
   const { busy, msg, problems, send } = useCaseSend();
   const router = useRouter();
   const [brief, setBrief] = useState(""), [level, setLevel] = useState("intermediate"), [risk, setRisk] = useState("standard");
-  const [picked, setPicked] = useState<string[]>([]), [draft, setDraft] = useState<any>(null), [code, setCode] = useState("");
+  const [picked, setPicked] = useState<string[]>([]), [pickedProf, setPickedProf] = useState<string[]>([]), [draft, setDraft] = useState<any>(null), [code, setCode] = useState("");
   return (
     <div className="space-y-3">
-      <form className="space-y-2" onSubmit={e => { e.preventDefault(); setDraft(null); send({ action: "ai_draft", brief, level, risk, competencyIds: picked, requestKey: crypto.randomUUID() }, "AI draft ready. Read every finding before you use it.", j => setDraft(j.content)); }}>
+      <form className="space-y-2" onSubmit={e => { e.preventDefault(); setDraft(null); send({ action: "ai_draft", brief, level, risk, competencyIds: picked, professionTermIds: pickedProf, requestKey: crypto.randomUUID() }, "AI draft ready. Read every finding before you use it.", j => setDraft(j.content)); }}>
         <label className="block text-[12.5px] text-gray-700">What should the case teach? (no patient details)
           <textarea className={`${input} mt-1 block w-full`} rows={4} value={brief} onChange={e => setBrief(e.target.value)} required minLength={20} maxLength={4000} />
         </label>
@@ -101,6 +101,11 @@ export function AiDraft({ competencies }: { competencies: { id: string; label: s
           <label className="text-[12.5px] text-gray-700">Level <select className={input} value={level} onChange={e => setLevel(e.target.value)}><option value="foundation">Foundation</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></label>
           <label className="text-[12.5px] text-gray-700">Risk <select className={input} value={risk} onChange={e => setRisk(e.target.value)}><option value="standard">Standard</option><option value="high">High</option></select></label>
         </div>
+        {professions.length > 0 && (
+          <fieldset className="max-h-32 overflow-y-auto rounded-lg border border-gray-200 p-2"><legend className="px-1 text-[12px] text-gray-600">Profession(s) the case is for (optional: the draft is written for them)</legend>
+            {professions.map(p => <label key={p.id} className="block text-[12.5px]"><input type="checkbox" className="mr-2" checked={pickedProf.includes(p.id)} onChange={e => setPickedProf(c => e.target.checked ? [...c, p.id] : c.filter(x => x !== p.id))} />{p.label}</label>)}
+          </fieldset>
+        )}
         <fieldset className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2"><legend className="px-1 text-[12px] text-gray-600">CFCA competencies it serves</legend>
           {competencies.map(c => <label key={c.id} className="block text-[12.5px]"><input type="checkbox" className="mr-2" checked={picked.includes(c.id)} onChange={e => setPicked(p => e.target.checked ? [...p, c.id] : p.filter(x => x !== c.id))} />{c.label}</label>)}
         </fieldset>
