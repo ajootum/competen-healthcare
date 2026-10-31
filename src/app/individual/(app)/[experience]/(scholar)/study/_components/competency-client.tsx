@@ -90,17 +90,40 @@ export function ProgrammeChooser({ programmes, current }: { programmes: Programm
 
 // ── FIND TOPICS AND COMPETENCIES ───────────────────────────────────────────────────────────────────
 
-export function AnalysePanel({ materialId, consent, sections, analysed, programmeLabel, absence = null }: {
+export function AnalysePanel({ materialId, consent, sections, analysed, programmeLabel, absence = null, relinkable = 0 }: {
   materialId: string; consent: boolean; sections: number; analysed: number; programmeLabel: string | null;
   /** UPLOAD-01 R1: why no competency will be suggested (no programme, or no usable catalogue). Said, never blank. */
   absence?: string | null;
+  /** SCHOLAR-UPLOAD-FIX: analysed sections not yet linked to the programme now chosen (its catalogue non-empty). */
+  relinkable?: number;
 }) {
   const router = useRouter();
   const [done, setDone] = useState(analysed);
   const [running, setRunning] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [linked, setLinked] = useState(0);
   const [error, setError] = useState("");
   const started = useRef(false);
   const remaining = Math.max(0, sections - done);
+  // The server count (refreshed after each batch) is the truth; `linked` only words the result of this visit.
+  const toLink = relinkable;
+
+  // Learner-initiated only: sections analysed before this programme was chosen, sent for competency mapping in batches.
+  async function relink() {
+    if (linking || running) return;
+    setLinking(true); setError("");
+    let n = linked;
+    for (;;) {
+      const r = await send(`/api/individual/scholar/materials/${materialId}/analyse`, { relink: true });
+      if (!r.ok) { setError(r.json.error ?? "Linking stopped."); break; }
+      n += r.json.relinked ?? 0;
+      setLinked(n);
+      if (!r.json.relinked || !r.json.remaining) break;
+      router.refresh();
+    }
+    setLinking(false);
+    router.refresh();
+  }
 
   async function run() {
     if (running) return;
@@ -114,6 +137,8 @@ export function AnalysePanel({ materialId, consent, sections, analysed, programm
       setDone(n);
       left = typeof r.json.remaining === "number" ? r.json.remaining : 0;
       if (!r.json.analysed) break;
+      // SCHOLAR-UPLOAD-FIX: the topics found so far appear as each batch is saved, not only at the end.
+      if (left > 0) router.refresh();
     }
     setRunning(false);
     router.refresh();
@@ -132,7 +157,7 @@ export function AnalysePanel({ materialId, consent, sections, analysed, programm
         {programmeLabel && !absence
           ? <>Scholar finds the concepts in each section and suggests which competencies of <span className="font-semibold">{programmeLabel}</span> it supports.</>
           : absence
-            ? <>Scholar finds the concepts in each section. {absence}</>
+            ? <>Scholar finds the concepts in each section. {absence} Linking can be run from here once a framework is published for your programme.</>
             : <>Scholar finds the concepts in each section. Choose your programme in My Learning to also see which competencies your notes support.</>}
       </p>
       <p className="mt-2 text-[13.5px] text-gray-800" aria-live="polite">
@@ -147,6 +172,79 @@ export function AnalysePanel({ materialId, consent, sections, analysed, programm
       ) : (
         <p className="mt-2 text-[13px] text-gray-600">Turn on AI help in My Learning to find topics.</p>
       )}
+      {consent && !absence && programmeLabel && (toLink > 0 || linked > 0) && (
+        <div className="mt-3">
+          <p className="text-[13.5px] text-gray-800" aria-live="polite">
+            {toLink > 0
+              ? `${toLink} section${toLink === 1 ? " was" : "s were"} analysed before you chose ${programmeLabel}, so ${toLink === 1 ? "it is" : "they are"} not linked to its competencies yet.`
+              : `${linked} section${linked === 1 ? "" : "s"} linked to ${programmeLabel}. Accept or reject each suggestion below.`}
+          </p>
+          {toLink > 0 && (
+            <button type="button" className={`${ghost} mt-2`} disabled={linking || running} onClick={relink}>
+              {linking ? "Linking…" : "Link to your programme's competencies"}
+            </button>
+          )}
+        </div>
+      )}
+      {error && <p role="alert" className="mt-2 text-[13.5px] font-medium text-red-700">{error}</p>}
+    </section>
+  );
+}
+
+// ── PICTURE-ONLY SLIDES, READ BY AI ON REQUEST ── SCHOLAR-UPLOAD-FIX (slide-reading.ts decides everything) ──────────
+
+const SKIP_TEXT: Record<string, string> = {
+  no_picture: "no picture Scholar could find",
+  unsupported: "its picture is a kind Scholar cannot send (only PNG and JPEG pictures can be read)",
+  too_large: "its pictures are too large to send",
+  patient_identifier: "it appears to identify a patient, so it was not kept",
+  no_text: "no text could be read from its picture",
+};
+
+export function PictureSlides({ materialId, slides, beyondCap, consent }: { materialId: string; slides: number; beyondCap: number; consent: boolean }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [read, setRead] = useState<number[]>([]);
+  const [skipped, setSkipped] = useState<{ slide: number; reason: string }[]>([]);
+  const [error, setError] = useState("");
+  async function run() {
+    if (busy) return;
+    setBusy(true); setError("");
+    const r1: number[] = [], s1: { slide: number; reason: string }[] = [];
+    for (;;) {
+      const r = await send(`/api/individual/scholar/materials/${materialId}/slides`, {});
+      if (!r.ok) { setError(r.json.error ?? "Reading the slides stopped."); break; }
+      r1.push(...(r.json.read ?? [])); s1.push(...(r.json.skipped ?? []));
+      setRead([...r1]); setSkipped([...s1]);
+      if (!r.json.remaining || !((r.json.read ?? []).length + (r.json.skipped ?? []).length)) break;
+    }
+    setBusy(false);
+    router.refresh();
+  }
+  const finished = read.length + skipped.length > 0 && !busy;
+  if (!slides && !finished) return null;
+  return (
+    <section aria-labelledby="pictures-h" className="mb-6 rounded-2xl border border-gray-200 bg-white p-4">
+      <h2 id="pictures-h" className="text-[15px] font-bold text-gray-900">Picture-only slides</h2>
+      <p className="mt-1 text-[13.5px] text-gray-700">
+        Scholar can ask AI to read the text in the pictures on {slides === 1 ? "the slide" : "the slides"} that held no text. What it reads is labelled on each section, for you to check against the slide.
+        {beyondCap > 0 ? ` At most 10 slides of one material are read this way, so ${beyondCap} will stay unread.` : ""}
+      </p>
+      {consent ? (
+        slides > 0 && (
+          <button type="button" className={`${ghost} mt-3`} disabled={busy} onClick={run}>
+            {busy ? `Reading slides… ${read.length + skipped.length} of ${slides}` : `Read the ${slides} picture-only slide${slides === 1 ? "" : "s"} with AI`}
+          </button>
+        )
+      ) : <p className="mt-2 text-[13px] text-gray-600">Turn on AI help in My Learning to have them read.</p>}
+      <div aria-live="polite">
+        {read.length > 0 && <p className="mt-2 text-[13.5px] text-gray-800">Read by AI: slide{read.length === 1 ? "" : "s"} {[...read].sort((a, b) => a - b).join(", ")}. {finished ? "Their topics can now be found under Topics and competencies." : ""}</p>}
+        {skipped.length > 0 && (
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-[13px] text-gray-700">
+            {skipped.map(s => <li key={s.slide}>Slide {s.slide} not read: {SKIP_TEXT[s.reason] ?? "it could not be read"}.</li>)}
+          </ul>
+        )}
+      </div>
       {error && <p role="alert" className="mt-2 text-[13.5px] font-medium text-red-700">{error}</p>}
     </section>
   );

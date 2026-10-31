@@ -110,7 +110,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations"
-  | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages"
+  | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages" | "scholar_material_image_slides"
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
@@ -1374,6 +1374,16 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Off by default: page images are sent to the AI provider, an owner decision.",
   },
   {
+    // SCHOLAR-UPLOAD-FIX: the same transcription runner as scanned examination pages, for a PowerPoint's picture-only
+    // slides (slide-reading.ts). Learner-initiated, capped per material, labelled on every section it adds.
+    key: "scholar_material_image_slides", kind: "choice", product: "Scholar",
+    label: "Picture-only slides in study notes",
+    help: "A PowerPoint slide that is only a picture has no text to read. Off: the material says which slides could not be read, and nothing is guessed. AI transcription: the student may ask, with their AI consent, for up to 10 such slides per material to be sent to the existing AI provider to transcribe. Each transcribed slide is screened for patient identifiers (a slide with one is not kept) and labelled as read by AI, to be checked against the slide.",
+    options: [{ value: "off", label: "Say which slides could not be read" }, { value: "ai_transcription", label: "AI transcription on request (existing provider)" }],
+    fallback: "off",
+    limitReason: "Off by default: slide images (which may be clinical photographs) are sent to the AI provider, an owner decision.",
+  },
+  {
     key: "scholar_case_mode", kind: "choice", product: "Scholar",
     label: "Default way of playing a case",
     help: "Guided shows the case's governed hints; independent does not. A student may choose either.",
@@ -1800,6 +1810,8 @@ export type IndividualPolicy = {
   scholarInstitutions: ContextOption[];
   /** COMPETEN-SCHOLAR-EXAM-PAPERS-01 (570). */
   scholarExams: ScholarExamPolicy;
+  /** SCHOLAR-UPLOAD-FIX: picture-only PowerPoint slides read by AI on the learner's request. Off by default. */
+  scholarMaterialImageSlides: "off" | "ai_transcription";
   /** SCHOLAR-PRACTICE-EXAMS-01 (720). */
   scholarOsce: ScholarOscePolicy;
   /** COMPETEN-RESEARCH-01: the Learn source modes and governed academic research. */
@@ -1944,6 +1956,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarProgrammeLevels: clampLevels(policyDef("scholar_programme_levels") as LevelsPolicy, published.get(policyPath("scholar_programme_levels"))),
     scholarInstitutions: clampOptions(policyDef("scholar_institutions") as OptionsPolicy, published.get(policyPath("scholar_institutions"))),
     scholarExams: resolveScholarExams(published),
+    scholarMaterialImageSlides: clampChoice(policyDef("scholar_material_image_slides") as ChoicePolicy, published.get(policyPath("scholar_material_image_slides"))) as "off" | "ai_transcription",
     scholarOsce: resolveScholarOsce(published),
     scholarResearch: resolveScholarResearch(published),
     scholarRecovery: resolveScholarRecovery(published),
