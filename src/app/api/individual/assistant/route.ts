@@ -15,6 +15,8 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { isExperienceKey } from "@/lib/individual/experiences";
 import { cleanQuestion, QUESTION_MAX } from "@/lib/individual/assistant";
 import { pilotQuotaRefusal, purposeFrom } from "@/lib/individual/pilot-ai";
+import { parseDepth, parseFollowUp } from "@/lib/individual/personal-ai-options";
+import { personalAiFlight, personalAiResponse } from "@/lib/individual/personal-ai-stream";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -43,8 +45,18 @@ export const dynamic = "force-dynamic";
 
 // No GET: the assistant page reads aiStatus() on the server, and an unguarded GET would be an Individual
 // entry point that answered while the release gate is off.
+//
+// SCHOLAR-PAI-EXPERIENCE-01 (Scholar only; Professional is unchanged and its options are ignored):
+//   { depth?: "quick" | "standard" | "deep" } -- default standard. Changes length and the output ceiling, nothing else.
+//   { followUp?: { kind: "simplify" | "expand" | "practise", previousQuestion, previousAnswer } } -- the earlier question
+//     is the request's question (screened, quota-counted and risk-classified exactly as a fresh one); the earlier answer
+//     is quoted model text, screened for identifiers and never classified.
+//   { stream: true } -- the answer as NDJSON once it is being written (personal-ai-stream.ts). Every refusal before the
+//     first text, the clarify 409 and the restricted 422 included, is the same JSON as without it.
+// The audit row gains depth, follow_up and timing_ms { gate, context, ttft, total } (no text).
 
 export async function POST(req: Request) {
+  const flight = personalAiFlight();
   const body = await req.json().catch(() => ({}));
   const experience = body?.experience;
   const known = isExperienceKey(experience);
@@ -55,7 +67,13 @@ export async function POST(req: Request) {
   if (isGuardRefusal(ctx)) return ctx;
   if (!known) return NextResponse.json({ error: "Unknown experience" }, { status: 400 });
 
-  const question = cleanQuestion(body?.question);
+  const scholar = experience === "scholar";
+  flight.want(scholar && body?.stream === true);
+  const depth = scholar ? parseDepth(body) : "standard";
+  const followUp = scholar ? parseFollowUp(body) : undefined;
+  if (!depth) return NextResponse.json({ error: "Choose quick, standard or deep." }, { status: 400 });
+  if (followUp === null) return NextResponse.json({ error: "That follow-up could not be read. Ask your question again." }, { status: 400 });
+  const question = cleanQuestion(followUp ? followUp.previousQuestion : body?.question);
   const purpose = purposeFrom(body);
   if (!question) return NextResponse.json({ error: `Ask a question of up to ${QUESTION_MAX} characters.` }, { status: 400 });
 
@@ -70,24 +88,38 @@ export async function POST(req: Request) {
   }
   if (!aiStatus().configured) return NextResponse.json({ error: "Personal AI is not available yet." }, { status: 503 });
 
-  const out = await runIndividualAssistant(ctx.admin, {
+  const requestId = requestIdFor(ctx.userId, req.headers.get("x-request-id"));
+  type Out = Awaited<ReturnType<typeof runIndividualAssistant>>;
+  const failure = (out: Extract<Out, { ok: false; kind: "generation" }>) => ({
+    status: out.result.error === "not_configured" ? 503 : 502,
+    error: out.result.error === "refusal" ? "The assistant declined to answer that question." : "The assistant could not answer just now. Try again shortly.",
+  });
+  const recordAnswer = async (out: Extract<Out, { ok: true }>) => {
+    await ctx.admin.from("audit_log").insert({
+      trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.profile.fullName,
+      action: "ai_assistant_query", entity_type: "individual_assistant", entity_id: null,
+      new_value: { experience, mode: out.mode, question_chars: question.length, model: out.model, purpose, scopes_read: out.scopesRead,
+        ...(scholar ? { depth, follow_up: followUp?.kind ?? null, streamed: flight.streamed } : {}), timing_ms: flight.timing() },
+    }).then((r: unknown) => r, () => {});
+  };
+
+  return personalAiResponse(flight, async () => await runIndividualAssistant(ctx.admin, {
     userId: ctx.userId, fullName: ctx.profile.fullName, live: ctx.live, experience,
     mode: typeof body?.mode === "string" ? body.mode as AssistantMode : null, question,
-    requestId: requestIdFor(ctx.userId, req.headers.get("x-request-id")), purpose,
+    requestId, purpose, depth, followUp, hooks: flight.hooks,
+  }), {
+    json: async out => {
+      if (!out.ok && out.kind === "invalid") return NextResponse.json({ error: out.error }, { status: out.status });
+      if (!out.ok && out.kind === "metered") { const m = meteredRefusalBody(out.refusal); return NextResponse.json(m.body, { status: m.status }); }
+      if (!out.ok) { const f = failure(out); return NextResponse.json({ error: f.error }, { status: f.status }); }
+      await recordAnswer(out);
+      return NextResponse.json({ answer: out.answer, mode: out.mode });
+    },
+    // Text was already sent: the answer ended (audited as before), or failed after it began (the browser discards it).
+    finish: async out => {
+      if (out.ok) { await recordAnswer(out); return { type: "done", mode: out.mode, timing: flight.timing() }; }
+      if (out.kind === "generation") return { type: "error", code: out.result.error, message: failure(out).error };
+      return { type: "error", code: "failed", message: "The assistant could not answer just now. Try again shortly." };
+    },
   });
-  if (!out.ok && out.kind === "invalid") return NextResponse.json({ error: out.error }, { status: out.status });
-  if (!out.ok && out.kind === "metered") { const m = meteredRefusalBody(out.refusal); return NextResponse.json(m.body, { status: m.status }); }
-  if (!out.ok) {
-    const status = out.result.error === "not_configured" ? 503 : 502;
-    const msg = out.result.error === "refusal" ? "The assistant declined to answer that question." : "The assistant could not answer just now. Try again shortly.";
-    return NextResponse.json({ error: msg }, { status });
-  }
-
-  await ctx.admin.from("audit_log").insert({
-    trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.profile.fullName,
-    action: "ai_assistant_query", entity_type: "individual_assistant", entity_id: null,
-    new_value: { experience, mode: out.mode, question_chars: question.length, model: out.model, purpose, scopes_read: out.scopesRead },
-  }).then((r: unknown) => r, () => {});
-
-  return NextResponse.json({ answer: out.answer, mode: out.mode });
 }

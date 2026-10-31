@@ -3,7 +3,7 @@ import type { PlanAiLimit } from "./commerce";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
 import {
-  DEFAULT_UPLOAD_MB, FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, LEARN_ACTIONS, LEARN_ACTION_LABEL, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES,
+  CLASSIC_LEARN_ACTIONS, DEFAULT_UPLOAD_MB, FORMAT_LABEL, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS, LEARN_ACTIONS, LEARN_ACTION_LABEL, MAX_MATERIALS_PER_PERSON, MAX_PDF_PAGES, MAX_PPTX_SLIDES,
   MAX_SESSION_FILES, MAX_SESSION_MB, MAX_UPLOAD_BYTES, QUESTIONS_PER_REQUEST, REVISION_FORMATS, REVISION_FORMAT_LABEL, REVISION_MODES, REVISION_MODE_LABEL, REVISION_QUANTITY_MAX, ADAPTIVE_FORMATS, ADAPTIVE_LENGTH_MAX, ADAPTIVE_LENGTH_MIN,
   SESSION_MAX_STEPS, TUTOR_MAX_TURNS, UPLOAD_SESSION_MINUTES, CASE_CONTEXTS, CASE_CONTEXT_LABEL, CASE_ENTRIES, CASE_ENTRY_LABEL, CASE_DIMENSION_LABEL,
   type CaseContext, type CaseEntry,
@@ -114,7 +114,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
-  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic"
+  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_case_contribution";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
@@ -190,6 +190,8 @@ export type ScholarRecoveryPolicy = {
   evidenceTypes: RecoveryEvidenceType[];
   /** title: one of the question's specific topic words must be in the item's title. off: no topic check. */
   evidenceOnTopic: "title" | "off";
+  /** SCHOLAR-PAI-RESEARCH-01: the share of a question's key terms the evidence must cover to count as sufficient (0.5, 0.6 or 0.7). */
+  sufficiency: number;
 };
 /**
  * SCHOLAR-SOURCE-QUALITY-01: the PubMed publication types (esummary pubtype, exactly as PubMed writes them) Scholar may
@@ -877,13 +879,13 @@ export const POLICIES: readonly PolicyDef[] = [
     help: "Which ways of learning the Learn workspace offers. An action switched off is not shown and is refused if asked for.",
     options: LEARN_ACTIONS.map(v => ({ value: v, label: LEARN_ACTION_LABEL[v] })),
     fallback: [...LEARN_ACTIONS],
-    limitReason: "Only the seven actions Scholar implements. Default: all.",
+    limitReason: "Only the thirteen actions Scholar implements (the seven original ones and the six teaching ones). Default: all. A published set lists its actions explicitly, so a new action is off until it is ticked here.",
   },
   {
     key: "scholar_default_action", kind: "choice", product: "Scholar",
     label: "The learning action a session starts with",
     help: "What Start learning opens with. A student can switch at any time.",
-    options: LEARN_ACTIONS.map(v => ({ value: v, label: LEARN_ACTION_LABEL[v] })),
+    options: CLASSIC_LEARN_ACTIONS.map(v => ({ value: v, label: LEARN_ACTION_LABEL[v] })),
     fallback: "teach",
     limitReason: "One of the learning actions. Default: Teach me. If it is switched off, the first action that is on is used.",
   },
@@ -1385,6 +1387,14 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [{ value: "title", label: "Topic must be in the title" }, { value: "off", label: "Off" }],
     fallback: "title",
     limitReason: "Default: the topic must be in the title.",
+  },
+  {
+    key: "scholar_recovery_sufficiency", kind: "choice", product: "Scholar",
+    label: "Finding more learning resources: how much of a question the notes must cover",
+    help: "The share of a question's key terms that the evidence found must contain before Scholar treats the notes as enough to explain from. Below it, the answer teaches the part the notes support and names what they do not cover. Lower is more permissive, higher is stricter.",
+    options: [{ value: "0.5", label: "Half of the key terms" }, { value: "0.6", label: "Six in ten key terms (default)" }, { value: "0.7", label: "Seven in ten key terms" }],
+    fallback: "0.6",
+    limitReason: "One of 0.5, 0.6 or 0.7. Default: 0.6.",
   },
   {
     key: "scholar_exam_scanned_pages", kind: "choice", product: "Scholar",
@@ -2234,6 +2244,7 @@ function resolveScholarRecovery(published: Map<string, unknown>): ScholarRecover
     evidenceIndexed: choice("scholar_recovery_evidence_indexed") as ScholarRecoveryPolicy["evidenceIndexed"],
     evidenceTypes: clampSet(policyDef("scholar_recovery_evidence_types") as SetPolicy, published.get(policyPath("scholar_recovery_evidence_types"))) as RecoveryEvidenceType[],
     evidenceOnTopic: choice("scholar_recovery_evidence_on_topic") as ScholarRecoveryPolicy["evidenceOnTopic"],
+    sufficiency: Number(choice("scholar_recovery_sufficiency")),
   };
 }
 
