@@ -92,8 +92,10 @@ describe("the wiring, as written", () => {
     const s = read("src/app/api/individual/scholar/revision/answer/route.ts");
     expect(s.match(/const formative = marking === "ai_evaluation" \? formativeFeedback\(/g)?.length).toBe(2);
     // SCHOLAR-SQIE-LEARNER-01: the rubric snapshot goes on first, so the feedback is what yields when the size is tight.
-    expect(s).toContain("response: withFormative(withRubricSnapshot(answered, rubricSnapshotOf(q)), formative)");
-    expect(s).toContain("response: withFormative(withRubricSnapshot({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by) }, rubricSnapshotOf(q)), formative)");
+    // SCHOLAR-CONTINUITY-01: the same response is stored on the attempt and kept in its 791 snapshot.
+    expect(s).toContain("const kept = withFormative(withRubricSnapshot(answered, rubricSnapshotOf(q)), formative);");
+    expect(s).toContain("const kept = withFormative(withRubricSnapshot({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by) }, rubricSnapshotOf(q)), formative);");
+    expect(s.match(/response: kept, correct:/g)?.length).toBe(4); // two attempts and their two snapshots
   });
   it("the session review shows it again, read back through formativeOf", () => {
     const s = read("src/app/api/individual/scholar/revision/sessions/[id]/route.ts");

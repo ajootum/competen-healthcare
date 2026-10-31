@@ -12,6 +12,7 @@ import { answerText, keyOf, learnerItem, practiceMarks, structuredParts, type Le
 import type { LibraryProvenance, QuestionRow } from "./store";
 import { extendedMarks, extendedSpecOf, isExtendedQuestion, storedMatched } from "./formats";
 import { applySnapshot, rubricChanged, snapshotOf, type RubricSnapshot } from "./rubric-snapshot";
+import { CORRECTION_BASIS_LABEL, QUESTION_CHANGED_NOTE, applyAssessedSnapshot, effectiveResult, outcomeOf, questionChanged, type AttemptIntegrity, type Outcome } from "./attempt-snapshot";
 import { formativeOf, formativeText, storedPartResults } from "./written-feedback";
 import { GENERATION_DIFFICULTIES as STEPS, GROUNDING_LABEL, LEVEL_LABEL, rubricOf, type FeedbackParts, type GenerationDifficulty } from "./question-intel";
 
@@ -72,6 +73,13 @@ export type RevisionFeedback = {
   rubricNote?: string;
   /** SCHOLAR-SQIE-CLOSE-01: a structured question, part by part, and its practice marks (formative). */
   structured?: { parts: StructuredPartFeedback[]; practiceMarks: { awarded: number; total: number; label: string } };
+  /**
+   * SCHOLAR-CONTINUITY-01 (791): the question has changed since it was answered. `asAnswered` is the stem and options as they
+   * were shown (the key, rationale and answer above are the ones at the time too).
+   */
+  questionChanged?: { note: string; asAnswered: { stem: string; options: string[] } };
+  /** SCHOLAR-CONTINUITY-01 (791): the result was corrected. `correct` and `score` above are the effective result; the original is kept here. */
+  corrections?: { original: { correct: boolean; score: number | null; outcome: Outcome }; entries: { at: string; reason: string; basis: string; from: Outcome; to: Outcome }[] };
 };
 
 /**
@@ -79,7 +87,15 @@ export type RevisionFeedback = {
  * snapshot it was marked against, the key points an extended answer made, and -- for an AI-evaluated answer only -- the formative
  * feedback it was shown. Spread into feedbackView's second argument. Nothing for a code-marked or self-graded answer but its snapshot.
  */
-export function keptAttemptView(q: QuestionRow, a: { response?: Record<string, unknown> | null; marking: string }) {
+export function keptAttemptView(q: QuestionRow, a: { response?: Record<string, unknown> | null; marking: string; integrity?: AttemptIntegrity | null }) {
+  // SCHOLAR-CONTINUITY-01 (791): read against the question as it was answered, where its snapshot was kept.
+  const assessed = a.integrity ?? null;
+  if (assessed?.snapshot) q = applyAssessedSnapshot(q, assessed.snapshot);
+  const kept = keptView(q, a);
+  return assessed ? { ...kept, assessed } : kept;
+}
+
+function keptView(q: QuestionRow, a: { response?: Record<string, unknown> | null; marking: string }) {
   const snapshot = snapshotOf(a.response);
   const parts = structuredParts(applySnapshot(q, snapshot));
   if (parts.length) { const structured = storedPartResults(a.response, a.marking, parts.length); return { snapshot, ...(structured ? { structured } : {}) }; }
@@ -94,7 +110,17 @@ export function feedbackView(row: QuestionRow, m: {
   link?: { competency: string; outcome: string | null } | null; structured?: readonly PartResult[] | null;
   /** SCHOLAR-SQIE-LEARNER-01: the rubric snapshot kept on the attempt (rubric-snapshot.ts), and the key points an extended answer made. */
   snapshot?: RubricSnapshot | null; extendedMatched?: readonly number[] | null;
+  /** SCHOLAR-CONTINUITY-01 (791): what the attempt was assessed against (its snapshot) and any corrections of its result. */
+  assessed?: AttemptIntegrity | null;
 }): RevisionFeedback {
+  // SCHOLAR-CONTINUITY-01: the question as it was presented when answered (791 snapshot), where it has changed since.
+  const live = row;
+  const changed = !!m.assessed?.snapshot && questionChanged(live, m.assessed.snapshot);
+  row = applyAssessedSnapshot(row, m.assessed?.snapshot ?? null);
+  // The effective result: the latest correction, else the original. The original stays visible beside it.
+  const original = { correct: m.correct, score: m.score, outcome: outcomeOf(m.correct, m.score) };
+  const eff = m.assessed?.corrections.length ? effectiveResult(original, m.assessed.corrections) : null;
+  if (eff) m = { ...m, correct: eff.correct, score: eff.score };
   // The question as it read when the attempt was marked, where the attempt kept a snapshot of its guide; otherwise the row itself.
   const q = applySnapshot(row, m.snapshot ?? null);
   const k = keyOf(q);
@@ -141,6 +167,8 @@ export function feedbackView(row: QuestionRow, m: {
     ...(q.library ? { library: { ...q.library, label: LIBRARY_QUESTION_LABEL } } : {}),
     ...(structured ? { structured } : {}),
     ...(extended ? { extended } : {}),
-    ...(rubricChanged(row, m.snapshot ?? null) ? { rubricNote: "This question's marking guide has been updated since you answered. What is shown here is the guide your answer was marked against." } : {}),
+    ...(!changed && rubricChanged(row, m.snapshot ?? null) ? { rubricNote: "This question's marking guide has been updated since you answered. What is shown here is the guide your answer was marked against." } : {}),
+    ...(changed ? { questionChanged: { note: QUESTION_CHANGED_NOTE, asAnswered: { stem: row.stem, options: [...row.options] } } } : {}),
+    ...(eff && m.assessed ? { corrections: { original, entries: m.assessed.corrections.map(c => ({ at: c.createdAt, reason: c.reason, basis: CORRECTION_BASIS_LABEL[c.basis], from: c.previousOutcome, to: c.correctedOutcome })) } } : {}),
   };
 }
