@@ -7,7 +7,7 @@
 // question's feedback is part by part, with its practice marks (formative).
 
 import { citeChunk } from "./extract";
-import { LIBRARY_QUESTION_LABEL, LIBRARY_REVISION_LABEL, MARKING_LABEL, NOT_COMPETENCE_LABEL, PRACTICE_MARKS_LABEL, REVISION_LABEL, type Marking } from "./config";
+import { LEARNER_CARD, LEARNER_CARD_LABEL, LIBRARY_QUESTION_LABEL, LIBRARY_REVISION_LABEL, MARKING_LABEL, NOT_COMPETENCE_LABEL, PRACTICE_MARKS_LABEL, REVISION_LABEL, type Marking } from "./config";
 import { answerText, keyOf, learnerItem, practiceMarks, structuredParts, type LearnerItem, type PartResult } from "./revision";
 import type { LibraryProvenance, QuestionRow } from "./store";
 import { GENERATION_DIFFICULTIES as STEPS, GROUNDING_LABEL, LEVEL_LABEL, rubricOf, type FeedbackParts, type GenerationDifficulty } from "./question-intel";
@@ -32,7 +32,8 @@ export function revisionItemView(q: QuestionRow): RevisionItemView {
   return {
     ...learnerItem(q), materialId: q.materialId, materialTitle: q.materialTitle, chunkId: q.chunkId, citation: citationOf(q),
     label: q.library ? LIBRARY_REVISION_LABEL : REVISION_LABEL,
-    grounding: q.library ? LIBRARY_QUESTION_LABEL : GROUNDING_LABEL[rubricOf(q.answer)?.source ?? "notes"],
+    // SCHOLAR-FLASHCARDS-01: a hand-written card rests on no notes and no library: it says it is the learner's own.
+    grounding: q.library ? LIBRARY_QUESTION_LABEL : q.model === LEARNER_CARD.model ? LEARNER_CARD_LABEL : GROUNDING_LABEL[rubricOf(q.answer)?.source ?? "notes"],
     ...(q.library ? { library: q.library } : {}),
   };
 }

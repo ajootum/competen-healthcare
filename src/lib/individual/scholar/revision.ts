@@ -22,7 +22,7 @@ import { findPatientIdentifiers } from "./extract";
 import { textGroundingViolations } from "@/lib/ai/grounding";
 import type { Passage } from "./generation";
 import {
-  asksQuestion, difficultyFits, difficultyOf, distractorProblem, flashcardFrontAsks, keyConsistent, parseRubric, referenceGrounding, rubricOf, stemKey,
+  asksQuestion, difficultyFits, difficultyOf, distractorProblem, flashcardDraftProblem, flashcardFrontAsks, keyConsistent, parseRubric, referenceGrounding, rubricOf, stemKey,
   type FeedbackParts, type GenerationDifficulty, type PromptReference, type Rubric,
 } from "./question-intel";
 
@@ -238,7 +238,9 @@ export type DraftReason =
   | "malformed" | "quote_not_in_passage" | "ungrounded" | "identifier" | "duplicate"
   // SCHOLAR-QUESTION-INTELLIGENCE-01: it asks nothing, repeats a stored question, has give-away options, its key and
   // explanation disagree, or it is not the difficulty asked for.
-  | "not_a_question" | "repeat" | "weak_distractors" | "inconsistent" | "off_difficulty";
+  | "not_a_question" | "repeat" | "weak_distractors" | "inconsistent" | "off_difficulty"
+  // SCHOLAR-FLASHCARDS-01: a card front copied from the notes rather than a recall prompt, or a back of more than one concept.
+  | "copied" | "multi_concept";
 
 /** What a revision item is checked against besides its passage. All optional: none is the 416 check exactly. */
 export type DraftChecks = {
@@ -324,6 +326,7 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   // A structured lead-in may set the scene: it is its PARTS that must each ask.
   if (kind === "structured" ? !(d.answer.parts as { prompt: string }[]).every(p => asksQuestion(p.prompt))
     : kind === "flashcard" ? !flashcardFrontAsks(d.stem) : kind !== "match" && !asksQuestion(d.stem)) return { ok: false, reason: "not_a_question" };
+  if (kind === "flashcard") { const p = flashcardDraftProblem(d.stem, String(d.answer.back ?? ""), passage.content); if (p) return { ok: false, reason: p }; }
   if (checks.existing?.has(stemKey(d.stem))) return { ok: false, reason: "repeat" };
   if (kind === "mrq" && distractorProblem(d.options)) return { ok: false, reason: "weak_distractors" };
   const expected = expectedOf(kind, d);

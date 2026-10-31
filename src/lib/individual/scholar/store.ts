@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import { isNotProvisioned } from "../access";
-import { BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
+import { LEARNER_CARD, BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
 import type { Chunk, ExtractionQuality } from "./extract";
 import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
@@ -20,6 +20,7 @@ import { servableLibraryVersions, type LibraryPick } from "./library-questions";
 import type { ResearchSource } from "./exam-research";
 import type { OsceDefinition, OsceItem, OsceSource, OsceStationDraft, OsceTick } from "./osce";
 import { guidanceJson, readDefinition } from "./osce";
+import type { CardRowExtras, PersonalDeck } from "./flashcards";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -287,8 +288,10 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   // SCHOLAR-PRACTICE-EXAMS-01 (720): OSCE practice stations go too, and their runs by cascade. Stations written from a
   // material already went with it. Absent table: nothing to do.
   const { error: osErr } = await admin.from("individual_scholar_osce_station").delete().eq("user_id", userId);
+  // SCHOLAR-FLASHCARDS-01 (730): the flashcard decks go too. Their cards and card marks went with the questions. Absent table: nothing to do.
+  const { error: fdErr } = await admin.from("individual_scholar_flashcard_deck").delete().eq("user_id", userId);
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr), erased: rows.length };
+  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
@@ -840,7 +843,15 @@ export async function recordRevisionAttempt(admin: Admin, userId: string, q: Que
   if (error) return { ok: false, card: null };
   // A flashcard's answer IS its recall grade. Any other question whose card is due is reviewed by the answer: right is
   // a good recall (4), wrong a lapse (1). Otherwise a missed answer makes or resets its card, as practice always has.
-  const { data: card } = await admin.from("individual_scholar_card").select("id, next_review_at, status").eq("user_id", userId).eq("question_id", q.id).maybeSingle();
+  let { data: card } = await admin.from("individual_scholar_card").select("id, next_review_at, status").eq("user_id", userId).eq("question_id", q.id).maybeSingle();
+  // SCHOLAR-FLASHCARDS-01: a recall graded on a card that has no schedule yet (a governed library question studied as a
+  // card, or a flashcard whose card could not be made when it was written) gets its 372 card first, due today, so the
+  // grade is scheduled and logged like every other.
+  if (!card && q.kind === "flashcard" && Number.isInteger(a.quality)) {
+    const made = await admin.from("individual_scholar_card").insert({ user_id: userId, question_id: q.id, material_id: q.materialId, next_review_at: todayIso(), status: "active" })
+      .select("id, next_review_at, status").single();
+    card = made.error ? null : made.data;
+  }
   const quality = q.kind === "flashcard" ? a.quality ?? null : card && card.status === "active" && card.next_review_at <= todayIso() ? (a.correct ? 4 : 1) : null;
   if (card && quality !== null) {
     const r = await reviewCard(admin, userId, card.id, quality, a.srs);
@@ -2766,4 +2777,213 @@ export async function markOsceAttempt(admin: Admin, userId: string, id: string, 
     })
     .eq("user_id", userId).eq("id", id).not("finished_at", "is", null).is("ticks", null).select("id");
   return !error && !!data?.length;
+}
+
+// ── FLASHCARDS (SCHOLAR-FLASHCARDS-01, migration 730) ── the learner's own cards, decks and card marks ─────────────────
+//
+// A flashcard IS an individual_scholar_question (416); its schedule the 372 card, its history the 391 log. 730 adds the
+// card a learner writes by hand (model and provider learner, bound by its CHECK), decks that REFERENCE cards (moving a
+// card never touches its schedule), and per-card marks (bookmark, private note, an issue code). Detected once, as 710
+// and 720 are: one read of the 730 deck table keyed on the caller. Absent: hand-written cards, decks and marks are not
+// offered, and every other flashcard path works as before.
+let flash730: boolean | null = null;
+/** Whether migration 730 is applied on this environment. A transient read error is "no" for now, and asked again. */
+export async function flashcardSchema(admin: Admin, userId: string): Promise<boolean> {
+  if (flash730 !== null) return flash730;
+  const { error } = await admin.from("individual_scholar_flashcard_deck").select("id").eq("user_id", userId).limit(1);
+  if (!error) return (flash730 = true);
+  if (isNotProvisioned(error)) return (flash730 = false);
+  return false;
+}
+/** Tests only: forget what was detected. */
+export const resetFlashcardSchema = () => { flash730 = null; };
+
+/** At most this many cards are read for one learner's flashcard views (newest first). */
+export const FLASHCARD_READ_MAX = 400;
+
+export type FlashcardRows = {
+  /** Flashcards, and governed library copies (recallCardOf decides which of those are cards). Newest first. */
+  questions: QuestionRow[];
+  extras: Map<string, Omit<CardRowExtras, "competencyTitle">>;
+  decks: PersonalDeck[];
+  schema730: boolean;
+};
+
+/** Every flashcard of the learner (and governed library copies), with schedule, review history, topics, marks and decks. */
+export async function flashcardRows(admin: Admin, userId: string): Promise<Read<FlashcardRows>> {
+  const sqie = await sqieSchema(admin, userId);
+  let q = admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId);
+  q = sqie ? q.or("kind.eq.flashcard,library_version_id.not.is.null") : q.eq("kind", "flashcard");
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(FLASHCARD_READ_MAX);
+  if (error) return fail(error);
+  const questions = await hydrate(admin, userId, data ?? []);
+  const ids = questions.map(x => x.id);
+  const schema730 = await flashcardSchema(admin, userId);
+  const extras = new Map<string, Omit<CardRowExtras, "competencyTitle">>(ids.map(id => [id, { card: null, history: [], topics: [], mark: null, deckIds: [], contentVersion: 1, updatedAt: null }]));
+  if (!ids.length) return { ok: true, data: { questions, extras, decks: schema730 ? await flashcardDecks(admin, userId) : [], schema730 } };
+  const [cards, topics] = await Promise.all([
+    admin.from("individual_scholar_card").select("id, question_id, next_review_at, last_reviewed_at, last_quality, reviews, interval_days, ease_factor, status").eq("user_id", userId).in("question_id", ids),
+    topicsOfSections(admin, userId, [...new Set(questions.map(x => x.chunkId))]),
+  ]);
+  if (cards.error) return fail(cards.error);
+  const cardOf = new Map<string, string>();
+  for (const c of (cards.data ?? []) as any[]) {
+    cardOf.set(c.id, c.question_id);
+    extras.get(c.question_id)!.card = {
+      id: c.id, nextReviewAt: c.next_review_at, lastReviewedAt: c.last_reviewed_at ?? null, lastQuality: c.last_quality ?? null, reviews: c.reviews ?? 0,
+      intervalDays: c.interval_days ?? 0, ease: Number(c.ease_factor ?? 2.5), status: c.status,
+    };
+  }
+  for (const x of questions) extras.get(x.id)!.topics = topics.get(x.chunkId) ?? [];
+  if (cardOf.size) {
+    // The 391 log, newest first. Absent (391 not applied): no history, and the page says none is recorded.
+    const rv = await admin.from("individual_scholar_review").select("card_id, quality, reviewed_at, interval_days").eq("user_id", userId).in("card_id", [...cardOf.keys()]).order("reviewed_at", { ascending: false }).limit(4000);
+    for (const r of (rv.error ? [] : rv.data ?? []) as any[]) {
+      const e = extras.get(cardOf.get(r.card_id)!);
+      if (e && e.history.length < 20) e.history.push({ quality: r.quality, at: r.reviewed_at, intervalDays: r.interval_days ?? null });
+    }
+  }
+  let decks: PersonalDeck[] = [];
+  if (schema730) {
+    const [marks, versions, ds] = await Promise.all([
+      admin.from("individual_scholar_flashcard_mark").select("question_id, bookmarked, note, issue").eq("user_id", userId).in("question_id", ids),
+      admin.from("individual_scholar_question").select("id, content_version, content_updated_at").eq("user_id", userId).in("id", ids),
+      flashcardDecks(admin, userId),
+    ]);
+    for (const m of (marks.error ? [] : marks.data ?? []) as any[]) extras.get(m.question_id)!.mark = { bookmarked: !!m.bookmarked, note: m.note ?? null, issue: m.issue ?? null };
+    for (const v of (versions.error ? [] : versions.data ?? []) as any[]) { const e = extras.get(v.id)!; e.contentVersion = v.content_version ?? 1; e.updatedAt = v.content_updated_at ?? null; }
+    decks = ds;
+    for (const d of decks) for (const id of d.cardIds) extras.get(id)?.deckIds.push(d.id);
+  }
+  return { ok: true, data: { questions, extras, decks, schema730 } };
+}
+
+/** The learner's own decks (730), most recently changed first, each with its cards in order. [] where 730 is absent or unreadable. */
+export async function flashcardDecks(admin: Admin, userId: string): Promise<PersonalDeck[]> {
+  const { data, error } = await admin.from("individual_scholar_flashcard_deck").select("id, title, organise_by, organise_ref, created_at, updated_at, last_studied_at").eq("user_id", userId).order("updated_at", { ascending: false }).limit(200);
+  if (error || !data?.length) return [];
+  const items = await admin.from("individual_scholar_flashcard_deck_card").select("deck_id, question_id, position, added_at").eq("user_id", userId).in("deck_id", (data as any[]).map(d => d.id)).order("position").order("added_at").limit(10000);
+  const by = new Map<string, string[]>();
+  for (const i of (items.error ? [] : items.data ?? []) as any[]) by.set(i.deck_id, [...(by.get(i.deck_id) ?? []), i.question_id]);
+  return (data as any[]).map(d => ({
+    id: d.id, title: d.title, organiseBy: d.organise_by, organiseRef: d.organise_ref ?? null, createdAt: d.created_at, updatedAt: d.updated_at,
+    lastStudiedAt: d.last_studied_at ?? null, cardIds: by.get(d.id) ?? [],
+  }));
+}
+
+/** stemKey of each of the learner's flashcard fronts, by card: duplicate detection for a card they write or edit. */
+export async function flashcardFronts(admin: Admin, userId: string): Promise<Map<string, string>> {
+  const { data, error } = await admin.from("individual_scholar_question").select("id, stem").eq("user_id", userId).eq("kind", "flashcard").limit(5000);
+  if (error) return new Map();
+  return new Map(((data ?? []) as any[]).map(r => [r.id as string, stemKey(String(r.stem ?? ""))]));
+}
+
+/**
+ * A card the learner writes by hand (730): filed under one of their materials and a section of it (the first section
+ * where none is named), with its 372 card due today. No AI, no notes quote, private_formative: 730 binds it so.
+ */
+export async function insertLearnerCard(admin: Admin, userId: string, input: { materialId: string; chunkId?: string | null; front: string; back: string; competencyId?: string | null }): Promise<{ ok: true; id: string; chunkId: string } | { ok: false; error: "not_found" | "not_provisioned" | "failed" }> {
+  if (!isUuid(input.materialId) || (input.chunkId && !isUuid(input.chunkId))) return { ok: false, error: "not_found" };
+  let sq = admin.from("individual_scholar_chunk").select("id").eq("user_id", userId).eq("material_id", input.materialId);
+  if (input.chunkId) sq = sq.eq("id", input.chunkId);
+  const { data: chunk } = await sq.order("ordinal").limit(1).maybeSingle();
+  if (!chunk) return { ok: false, error: "not_found" };
+  const { data, error } = await admin.from("individual_scholar_question").insert({
+    user_id: userId, material_id: input.materialId, chunk_id: chunk.id, kind: "flashcard", stem: input.front, options: [], correct_index: null,
+    answer: { back: input.back }, review_status: "private_formative", rationale: "", source_quote: "",
+    model: LEARNER_CARD.model, provider: LEARNER_CARD.provider, prompt_version: LEARNER_CARD.promptVersion,
+    ...(input.competencyId ? { competency_id: input.competencyId } : {}),
+  }).select("id").single();
+  if (error || !data) return { ok: false, error: error && isSchemaRefusal(error) ? "not_provisioned" : "failed" };
+  await admin.from("individual_scholar_card").insert({ user_id: userId, question_id: data.id, material_id: input.materialId, next_review_at: todayIso(), status: "active" })
+    .then((r: unknown) => r, () => {});
+  return { ok: true, id: data.id, chunkId: chunk.id };
+}
+
+/** Edit a hand-written card: its front and back, its content version one up. Its schedule and history are untouched. */
+export async function updateLearnerCard(admin: Admin, userId: string, id: string, input: { front: string; back: string }): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(id)) return "not_found";
+  const { data: row } = await admin.from("individual_scholar_question").select("id, content_version").eq("user_id", userId).eq("id", id).eq("model", LEARNER_CARD.model).maybeSingle();
+  if (!row) return "not_found";
+  const { error } = await admin.from("individual_scholar_question").update({
+    stem: input.front, answer: { back: input.back }, content_version: (row.content_version ?? 1) + 1, content_updated_at: new Date().toISOString(),
+  }).eq("user_id", userId).eq("id", id).eq("model", LEARNER_CARD.model);
+  return error ? "failed" : "ok";
+}
+
+/** Remove a hand-written card, with its schedule, history, deck places and marks (cascade). Only the learner's own. */
+export async function deleteLearnerCard(admin: Admin, userId: string, id: string): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(id)) return "not_found";
+  const { data, error } = await admin.from("individual_scholar_question").delete().eq("user_id", userId).eq("id", id).eq("model", LEARNER_CARD.model).select("id");
+  if (error) return "failed";
+  return data?.length ? "ok" : "not_found";
+}
+
+/** A new deck, optionally organised by module, topic, document or competency, with its first cards in order. */
+export async function createFlashcardDeck(admin: Admin, userId: string, input: { title: string; organiseBy: PersonalDeck["organiseBy"]; organiseRef: string | null; cardIds: readonly string[] }): Promise<{ ok: true; id: string } | { ok: false; notProvisioned: boolean }> {
+  const { data, error } = await admin.from("individual_scholar_flashcard_deck").insert({
+    user_id: userId, title: input.title, organise_by: input.organiseBy, organise_ref: input.organiseBy === "personal" ? null : input.organiseRef,
+  }).select("id").single();
+  if (error || !data) return { ok: false, notProvisioned: !!error && isNotProvisioned(error) };
+  if (input.cardIds.length && !(await addDeckCards(admin, userId, data.id, input.cardIds))) {
+    await admin.from("individual_scholar_flashcard_deck").delete().eq("user_id", userId).eq("id", data.id);
+    return { ok: false, notProvisioned: false };
+  }
+  return { ok: true, id: data.id };
+}
+
+/** Rename a deck, or change how it is organised. */
+export async function updateFlashcardDeck(admin: Admin, userId: string, id: string, patch: { title?: string; organiseBy?: PersonalDeck["organiseBy"]; organiseRef?: string | null }): Promise<boolean> {
+  if (!isUuid(id)) return false;
+  const { data, error } = await admin.from("individual_scholar_flashcard_deck").update({
+    ...(patch.title !== undefined ? { title: patch.title } : {}),
+    ...(patch.organiseBy !== undefined ? { organise_by: patch.organiseBy, organise_ref: patch.organiseBy === "personal" ? null : patch.organiseRef ?? null } : {}),
+    updated_at: new Date().toISOString(),
+  }).eq("user_id", userId).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
+/** Remove a deck. Its cards, their schedules and their history stay. */
+export async function deleteFlashcardDeck(admin: Admin, userId: string, id: string): Promise<boolean> {
+  if (!isUuid(id)) return false;
+  const { data, error } = await admin.from("individual_scholar_flashcard_deck").delete().eq("user_id", userId).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
+/** Add cards to a deck after its last card. A card already in it stays where it is. The schedule is never copied. */
+export async function addDeckCards(admin: Admin, userId: string, deckId: string, cardIds: readonly string[]): Promise<boolean> {
+  const ids = [...new Set(cardIds)].filter(isUuid);
+  if (!isUuid(deckId) || !ids.length) return false;
+  const { data: last } = await admin.from("individual_scholar_flashcard_deck_card").select("position").eq("user_id", userId).eq("deck_id", deckId).order("position", { ascending: false }).limit(1).maybeSingle();
+  const start = (last?.position ?? 0) + 1;
+  const { error } = await admin.from("individual_scholar_flashcard_deck_card").upsert(ids.map((question_id, i) => ({ deck_id: deckId, user_id: userId, question_id, position: start + i })), { onConflict: "deck_id,question_id", ignoreDuplicates: true });
+  if (!error) await admin.from("individual_scholar_flashcard_deck").update({ updated_at: new Date().toISOString() }).eq("user_id", userId).eq("id", deckId);
+  return !error;
+}
+
+/** Take cards out of a deck. The cards, their schedules and their history stay. */
+export async function removeDeckCards(admin: Admin, userId: string, deckId: string, cardIds: readonly string[]): Promise<boolean> {
+  const ids = [...new Set(cardIds)].filter(isUuid);
+  if (!isUuid(deckId) || !ids.length) return false;
+  const { error } = await admin.from("individual_scholar_flashcard_deck_card").delete().eq("user_id", userId).eq("deck_id", deckId).in("question_id", ids);
+  return !error;
+}
+
+/** A deck was studied: its last study time. */
+export async function touchFlashcardDeck(admin: Admin, userId: string, id: string): Promise<void> {
+  if (!isUuid(id)) return;
+  await admin.from("individual_scholar_flashcard_deck").update({ last_studied_at: new Date().toISOString() }).eq("user_id", userId).eq("id", id).then((r: unknown) => r, () => {});
+}
+
+/** A card mark: bookmark, private note, or an issue code (with its time). Only what is given is changed. */
+export async function setFlashcardMark(admin: Admin, userId: string, questionId: string, patch: { bookmarked?: boolean; note?: string | null; issue?: string | null }): Promise<boolean> {
+  if (!isUuid(questionId)) return false;
+  const now = new Date().toISOString();
+  const { error } = await admin.from("individual_scholar_flashcard_mark").upsert({
+    user_id: userId, question_id: questionId, updated_at: now,
+    ...(patch.bookmarked !== undefined ? { bookmarked: patch.bookmarked } : {}),
+    ...(patch.note !== undefined ? { note: patch.note } : {}),
+    ...(patch.issue !== undefined ? { issue: patch.issue, issue_at: patch.issue ? now : null } : {}),
+  }, { onConflict: "user_id,question_id" });
+  return !error;
 }

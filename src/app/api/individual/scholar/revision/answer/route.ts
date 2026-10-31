@@ -16,6 +16,7 @@ import { MARKING_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD } from "@/lib/indi
 import { parseRecoveryRequest, recordRecoveryResult, recoveredReply, recoveryPassage, rederiveRecovery, type Rederived } from "@/lib/individual/scholar/evidence-recovery";
 import { rubricOf, type FeedbackParts } from "@/lib/individual/scholar/question-intel";
 import { answerOutcome, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
+import { ORIGIN_LABEL, originOf, recallCardOf } from "@/lib/individual/scholar/flashcards";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -43,8 +44,9 @@ export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");
   if (isGuardRefusal(ctx)) return ctx;
   const body = await req.json().catch(() => ({}));
-  const q = await getQuestion(ctx.admin, ctx.userId, body?.questionId);
-  if (!q || !keyOf(q)) return NextResponse.json({ error: "That question could not be found." }, { status: 404 });
+  const found = await getQuestion(ctx.admin, ctx.userId, body?.questionId);
+  if (!found || !keyOf(found)) return NextResponse.json({ error: "That question could not be found." }, { status: 404 });
+  let q: QuestionRow = found;
 
   // ── the session, if any: the question must be in it, and answered once ──
   let sessionId: string | null = null, feedbackMode: "immediate" | "end" = "immediate", answeredCount = 0, finished = false, holding = false;
@@ -54,6 +56,13 @@ export async function POST(req: Request) {
     if (!s.ok) return NextResponse.json({ error: "Your revision session could not be read just now." }, { status: 503 });
     if (!s.data || !s.data.questionIds.includes(q.id)) return NextResponse.json({ error: "That question is not in this session." }, { status: 404 });
     if (s.data.attempts.some(a => a.questionId === q.id)) return NextResponse.json({ error: "You have already answered this one in this session." }, { status: 409 });
+    // SCHOLAR-FLASHCARDS-01: in a flashcards session every item is a card. A governed library question offered as one
+    // (flashcards.ts recallCardOf) is recalled and self-graded as a card: front its stem, back its approved answer.
+    if (s.data.session.mode === "flashcards") {
+      const card = recallCardOf(q);
+      if (!card) return NextResponse.json({ error: "That card could not be found." }, { status: 404 });
+      q = card;
+    }
     sessionId = s.data.session.id; feedbackMode = s.data.session.feedback; answeredCount = s.data.attempts.length + s.data.held.length;
     finished = s.data.session.status === "completed"; holding = s.data.holding;
     held = s.data.held.find(h => h.questionId === q.id)?.response ?? null;
@@ -67,7 +76,12 @@ export async function POST(req: Request) {
   // ── a flashcard's back, to grade recall against. Not an answer, so nothing is recorded ──
   if (body?.reveal === true) {
     if (q.kind !== "flashcard") return NextResponse.json({ error: "Only a flashcard is revealed before answering." }, { status: 400 });
-    return NextResponse.json({ back: feedbackView(q, { correct: true, score: null, marking: "self_graded" }).answer, source: { quote: q.sourceQuote, citation: citationOf(q), materialId: q.materialId, chunkId: q.chunkId } });
+    // SCHOLAR-FLASHCARDS-01: where the card comes from (notes, library, or the learner's own), and its explanation.
+    const origin = originOf(q);
+    return NextResponse.json({
+      back: feedbackView(q, { correct: true, score: null, marking: "self_graded" }).answer, source: { quote: q.sourceQuote, citation: citationOf(q), materialId: q.materialId, chunkId: q.chunkId },
+      card: { origin, originLabel: ORIGIN_LABEL[origin], explanation: q.rationale && q.rationale.trim() !== feedbackView(q, { correct: true, score: null, marking: "self_graded" }).answer.trim() ? q.rationale : null },
+    });
   }
 
   // ── SCHOLAR-SQIE-CLOSE-01: a structured question, part by part ──

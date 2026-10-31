@@ -208,6 +208,10 @@ export const LIBRARY_CASE_LABEL = "Governed library case · clinically approved 
 export const MOCK_LABEL = "Mock practice from your own notes: formative revision, not an assessment, and never evidence of competence.";
 export const REVISION_LABEL = "Revision from your notes · formative practice, not an assessment";
 /** SCHOLAR-SQIE-CLOSE-01 C: a question reused from the governed Competen library (442, published and clinically approved). */
+/** SCHOLAR-FLASHCARDS-01 (730): what a hand-written card is bound to. Any other model or provider is AI-written or library. */
+export const LEARNER_CARD = { model: "learner", provider: "learner", promptVersion: "learner:v1" } as const;
+/** SCHOLAR-FLASHCARDS-01: how a hand-written card is labelled wherever it is shown. Never clinically reviewed. */
+export const LEARNER_CARD_LABEL = "Your card · written by you, not clinically reviewed";
 export const LIBRARY_QUESTION_LABEL = "From the Competen library (clinically reviewed)";
 export const LIBRARY_REVISION_LABEL = `${LIBRARY_QUESTION_LABEL} · formative practice, not an assessment`;
 /** SCHOLAR-SQIE-01: what a generated question rests on (question-intel.ts rubric.source), in words. */
