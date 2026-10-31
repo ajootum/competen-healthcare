@@ -107,7 +107,8 @@ export const longDate = (iso: string) => { const d = new Date(iso); return Numbe
 export const topicOf = (c: FlashcardView) => c.topic?.trim() || c.material.title;
 
 /** Pure. A card's clinically sensitive flag (flashcard-sensitive.ts), dates as the downloads write them. */
-export const flagOf = (c: FlashcardView): SensitiveFlag | null => cardSensitiveFlag(c, longDate);
+/** A card's flag as the route computed it with the PUBLISHED review rules (flashcard-service.ts applyContentReview), else by the defaults. */
+export const flagOf = (c: FlashcardView): SensitiveFlag | null => (c.sensitive !== undefined ? c.sensitive : cardSensitiveFlag(c, { formatDate: longDate }));
 
 /** Pure. The title of a download: the one deck named, the decks named, else the topic, competency or document chosen, else all cards. */
 export function exportTitle(sel: { decks: readonly { title: string }[]; cards: readonly FlashcardView[] }, by: { topic?: string | null; competencyId?: string | null; materialId?: string | null; cardsNamed?: boolean }): string {
@@ -209,7 +210,7 @@ const cap1 = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export function learnerObjective(s: string): string {
   const t = s.trim().replace(/\s+/g, " ");
   const W = String.raw`(?:checks?|tests?|assess(?:es)?|evaluates?|measures?|examines?|verif(?:y|ies)|confirms?)`;
-  const WHO = String.raw`(?:the\s+)?(?:student|learner|candidate|nurse|user|reader)(?:'s|s'|s)?`;
+  const WHO = String.raw`(?:the\s+)?(?:student|learner|candidate|user|reader)(?:'s|s'|s)?`;
   let m = new RegExp(String.raw`^${W}\s+(?:${WHO}\s+)?(?:ability|capacity)\s+to\s+(.+)$`, "i").exec(t);
   if (m) return cap1(m[1]);
   m = new RegExp(String.raw`^${W}\s+(?:whether|that|if)\s+(?:${WHO}|you)\s+(can|could|is able to|knows?|understands?|recogni[sz]es?)\s+(.+)$`, "i").exec(t);
@@ -540,7 +541,7 @@ function qaBlock(fl: Flow, c: FlashcardView, n: number, o: { header?: string; bo
   const front = wrapAll(c.front, f.bold, fs, inner);
   const back = wrapAll(c.back, f.regular, bs, inner);
   let expl = o.short ? [] : wrapAll(c.explanation, f.italic, 9.5, inner - 6);
-  const mark = flag ? wrapAll(flag.marker, f.bold, ms, inner - 14) : [];
+  const mark = flag?.marker ? wrapAll(flag.marker, f.bold, ms, inner - 14) : [];
   const src = wrapAll(`Source: ${sourceLine(c)}`, f.regular, 8, inner);
   const head = o.boxed ? lead(9) + 6 : 0;
   const measure = () => head + 2 * pad + lead(9) + 4 + front.length * lead(fs) + 10 + lead(9) + 4 + back.length * lead(bs)
@@ -616,7 +617,7 @@ function originSummary(cards: readonly FlashcardView[]): string {
 const topicList = (cards: readonly FlashcardView[]) => { const t = uniq(cards.map(topicOf)); return t.length > 6 ? `${t.slice(0, 6).join(", ")} and ${t.length - 6} more` : t.join(", "); };
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 const sensitiveNote = (cards: readonly FlashcardView[]) => {
-  const n = cards.filter(c => flagOf(c)).length;
+  const n = cards.filter(c => flagOf(c)?.marker).length;
   return n ? `${plural(n, "card")} ${n === 1 ? "is" : "are"} marked clinically sensitive (a value, target or threshold, or emergency assessment): check ${n === 1 ? "it" : "them"} against current local guidelines.` : null;
 };
 
@@ -681,8 +682,12 @@ function drawFit(p: PDFPage, fit: Fit, x: number, top: number, h: number) {
 }
 
 /** Printed card faces: a print marker short enough for a card (the full one is in the deck and the guide). */
-const PRINT_MARKER = "Check current local guidelines: clinically sensitive value";
-const PRINT_MARKER_TAIL = { notes: "not clinically reviewed", learner: "not clinically reviewed", library: "clinically reviewed" } as const;
+
+/** The card's marker on a printed face: at most two lines, the second cut with an ellipsis if it runs on. */
+function markerLines(marker: string, font: PDFFont, size: number, w: number): string[] {
+  const ls = wrap(pdfText(marker), font, size, w);
+  return ls.length <= 2 ? ls : [ls[0], clip(ls.slice(1).join(" "), font, size, w)];
+}
 
 /**
  * One face of a printed card. Head: Q or A and the card number (the same number on both faces). Foot: on the question,
@@ -698,11 +703,11 @@ function printFace(p: PDFPage, f: Fonts, c: FlashcardView, n: number, side: "Q" 
   const num = `#${n}`;
   const nx = x + w - pad - f.bold.widthOfTextAtSize(num, 9);
   p.drawText(num, { x: nx, y: top - 10.5, size: 9, font: f.bold, color: C.faint });
-  if (flag) warnIcon(p, f, nx - 13, top - 12, 9);
+  if (flag?.marker) warnIcon(p, f, nx - 13, top - 12, 9);
   const foot: { text: string; color: RGB; font: PDFFont }[] = side === "Q"
     ? [{ text: topicOf(c), color: C.faint, font: f.regular }, { text: ORIGIN_SHORT[c.origin], color: C.muted, font: f.bold }]
     : [
-      ...(flag ? wrap(pdfText(`${PRINT_MARKER}; ${flag.reviewed ? PRINT_MARKER_TAIL.library : PRINT_MARKER_TAIL[c.origin]}.`), f.bold, fsz, w - 2 * pad).slice(0, 2).map(t => ({ text: t, color: C.warn, font: f.bold })) : []),
+      ...(flag?.marker ? markerLines(flag.marker, f.bold, fsz, w - 2 * pad).map(t => ({ text: t, color: C.warn, font: f.bold })) : []),
       { text: uniq(c.sources.map(s => s.citation)).join("; ") || (c.origin === "learner" ? "Written by you" : "No source recorded"), color: C.faint, font: f.regular },
       { text: ORIGIN_SHORT[c.origin], color: C.muted, font: f.bold },
     ];
@@ -864,9 +869,9 @@ async function buildGuide(input: FlashcardPdfInput, variant: GuideVariant, trace
       plan.clinical.forEach((x, i) => qaBlock(fl, x.card, x.n, { boxed: true, header: `Scenario ${i + 1} · Card ${x.n}` }));
     } }] : []),
     ...(plan.verify.length ? [{ title: "Points to Verify", draw: () => {
-      fl.keepText("These cards state a clinically sensitive value (a number, target, threshold or dose) or cover emergency respiratory assessment, paediatric respiratory rates, oxygen saturation targets or COPD deterioration. They were found by a fixed rule and are unchanged. Check each against current local guidelines before relying on it.", { size: 9.5, color: C.muted, after: 6 });
+      fl.keepText("These cards matched the clinical educational content review rules: they state a clinically sensitive value (a number, target, threshold or dose) or cover a clinically sensitive topic. The rules only flag: the cards are unchanged and have not been judged right or wrong. Check each against current local guidelines before relying on it.", { size: 9.5, color: C.muted, after: 6 });
       for (const v of plan.verify) {
-        const standing = v.flag.reviewed ? v.flag.marker : `${ORIGIN_SHORT[v.card.origin]}.`;
+        const standing = v.flag.reviewed && v.flag.marker ? v.flag.marker : `${ORIGIN_SHORT[v.card.origin]}.`;
         fl.bullet(`Card ${v.n} · ${topicOf(v.card)}: ${v.flag.labels.join("; ")}${v.flag.values.length ? ` (${v.flag.values.join(", ")})` : ""}. ${standing}`, { box: true });
       }
     } }] : []),

@@ -44,8 +44,8 @@ describe("item 3: clinically sensitive content is flagged, never rewritten", () 
     expect(flags[5]!.marker).toBe("Clinically reviewed (published 2026-10-12). Clinically sensitive value: local guidelines may differ, check them.");
     expect(flags[2]!.values).toEqual(["30-40 breaths/min", "20-30", "15-20"]);
   });
-  it("the term lists are one named constant (no suitable policy key exists: see the TODO)", () => {
-    expect(CLINICAL_SENSITIVITY_RULES.map(r => r.code)).toEqual(["paediatric_rr", "oxygen_target", "emergency_resp", "copd_deterioration"]);
+  it("the built-in rules are the HQ content review defaults (content-review.ts), applied when nothing is published", () => {
+    expect(CLINICAL_SENSITIVITY_RULES.map(r => r.id)).toEqual(["paediatric_rr", "oxygen_target", "emergency_resp", "copd_deterioration", "numeric_value"]);
   });
 });
 

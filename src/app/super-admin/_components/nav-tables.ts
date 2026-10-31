@@ -322,7 +322,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     { key: "ai.home", group: "AI & Intelligence", plain: true, items: [
       { key: "ai.overview", label: "AI Home", href: "/super-admin/ai", icon: "🧠" },
       // AI-FAIR-USE-01 (migration 410): prices, allowance units and product AI policies (hq.platform.ai.manage).
-      { key: "ai.fair-use", label: "AI Fair Use", href: "/super-admin/ai/fair-use", icon: "⚖️", keywords: ["fair use","risk rules","model routing","operating modes","pilot cohort","AI readiness","eligibility","provider prices","budgets","allowance"], flag: "ai-fair-use" },
+      { key: "ai.fair-use", label: "AI Fair Use", href: "/super-admin/ai/fair-use", icon: "⚖️", keywords: ["fair use","risk rules","model routing","operating modes","pilot cohort","AI readiness","eligibility","provider prices","budgets","allowance","content review","sensitive"], flag: "ai-fair-use" },
       // COMPETEN-RESEARCH-01 ADDENDUM V2: the Research Sources & Evidence Studio (hq.platform.ai.view, edits need 630).
       { key: "ai.research-sources", label: "Research Sources", href: "/super-admin/ai/research-sources", icon: "📚", keywords: ["research","pubmed","openalex","crossref","pubmed central","google scholar","workflows","sources","evidence"] },
       { key: "ai.operations", label: "1. AI Operations Centre", href: "/super-admin/ai/operations", icon: "⚙️" },

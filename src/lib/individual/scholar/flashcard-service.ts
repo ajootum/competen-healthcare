@@ -15,6 +15,8 @@ import {
 } from "./flashcards";
 import { rubricOf } from "./question-intel";
 import { CONTENT_STATUS_LABEL, REVISION_FORMATS } from "./config";
+import { loadContentReviewPolicy } from "@/lib/ai/content-review";
+import { cardSensitiveFlag } from "./flashcard-sensitive";
 import { FORMATIVE_NOTICE } from "./spaces";
 
 type Ctx = { admin: any; userId: string }; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -64,6 +66,18 @@ export function referenceCitations(ids: readonly string[], names: ReadonlyMap<st
     });
   }
   return out;
+}
+
+/**
+ * SCHOLAR-FLASHCARDS-QA-01 (c): each card's clinical educational content review flag, by the rules PUBLISHED on the AI
+ * Fair Use page (the built-in defaults where none are), for the learner's programme profession. Flags only: the
+ * cards' words are unchanged. `formatDate` writes a library card's reviewed date as the surface shows dates.
+ */
+export async function applyContentReview<T extends FlashcardView>(ctx: Ctx, cards: readonly T[], formatDate: (iso: string) => string): Promise<T[]> {
+  if (!cards.length) return [...cards];
+  const [policy, learner] = await Promise.all([loadContentReviewPolicy(ctx.admin, "scholar"), loadLearnerCatalogue(ctx.admin, ctx.userId).catch(() => null)]);
+  const professions = learner?.programme?.profession ? [learner.programme.profession] : null;
+  return cards.map(c => ({ ...c, sensitive: cardSensitiveFlag(c, { policy, professions, formatDate }) }));
 }
 
 /** One card of a selection, exactly as the downloads receive it. */

@@ -155,7 +155,7 @@ describe("B: printable cards", () => {
     expect(pages[0].split(ORIGIN_SHORT.notes).length - 1).toBe(10);
     expect(pages[1]).toContain(ORIGIN_SHORT.library);
     expect(pages[1]).toContain(ORIGIN_SHORT.learner);
-    expect(pages[0]).toContain("Check current local guidelines: clinically sensitive value");
+    expect(pages[0]).toContain("Check against current local guidelines: clinically sensitive value");
   });
 });
 
@@ -350,7 +350,12 @@ function closure(file: string, seen = new Set<string>()) {
 describe("no AI anywhere in an export", () => {
   it("the PDF assembly reaches no AI module, generation or Scholar AI runner, at any depth", () => {
     const files = [...closure(resolve(PDF))].map(f => f.replace(/\\/g, "/"));
-    expect(files.some(f => /\/lib\/ai\/|\/scholar\/(generation|http|edu-ai)\.ts$/.test(f))).toBe(false);
+    // QA-01 (c): the clinical educational content review rules (lib/ai/content-review.ts) and the risk-rule matcher they
+    // reuse (lib/ai/clinical-risk.ts) are pure rule code -- no model client -- and are the only lib/ai files allowed.
+    const PURE_AI = /\/lib\/ai\/(content-review|clinical-risk)\.ts$/;
+    expect(files.filter(f => /\/lib\/ai\//.test(f) && !PURE_AI.test(f))).toEqual([]);
+    expect(files.some(f => /\/scholar\/(generation|http|edu-ai)\.ts$/.test(f))).toBe(false);
+    for (const f of files.filter(x => PURE_AI.test(x))) expect(valueImports(f).map(i => i.spec)).not.toContainEqual(expect.stringMatching(/client|generation|metered|runner/));
   });
   it("the route imports no AI module and names no AI function", () => {
     for (const i of valueImports(resolve(ROUTE))) {
@@ -461,6 +466,13 @@ describe("the export route", () => {
     expect(head.headers.get("content-type")).toContain("json");
     expect((await (await route()).HEAD(new Request("http://x/api/individual/scholar/flashcards/export?format=deck"))).status).toBe(204);
     expect((await get("format=pptx")).status).toBe(400);
+  });
+  it("QA-01 (c): the download flags by the PUBLISHED content review rules (defaults when none are published)", async () => {
+    const marker = norm(pdfText(SENSITIVE_MARKER));
+    expect((await read(new Uint8Array(await (await get("format=deck")).arrayBuffer()))).all).toContain(marker);
+    // HQ publishes a rule set that names nothing these cards say: no marker.
+    db.tables.workspace_config_overrides.push({ scope_type: "platform", scope_ref: "ai_content_review", config_path: "ai.content_review.scholar", published: { rules: [{ id: "only_insulin", label: "Insulin", all: [["insulin"]], action: "flag" }] }, updated_at: "2026-10-31" });
+    expect((await read(new Uint8Array(await (await get("format=deck")).arrayBuffer()))).all).not.toContain(marker);
   });
   it("flashcards off: refused", async () => {
     seed({ scholar_flashcards: "off" });

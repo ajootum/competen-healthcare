@@ -18,6 +18,7 @@ import { LEARNER_CARD, LEARNER_CARD_LABEL, LIBRARY_QUESTION_LABEL } from "./conf
 import { flashcardFrontAsks, rubricOf, stemKey, type CognitiveLevel } from "./question-intel";
 import { scheduleReview, type SrsParams } from "./revision";
 import { citationOf } from "./revision-view";
+import type { SensitiveFlag } from "./flashcard-sensitive";
 
 // ── A CARD THE LEARNER WRITES (730) ──
 
@@ -169,6 +170,9 @@ export type FlashcardView = {
   createdAt: string; updatedAt: string | null; contentVersion: number; version: string;
   material: { id: string; title: string }; chunkId: string;
   review: CardReview; bookmarked: boolean; note: string | null; issue: string | null; deckIds: string[]; editable: boolean;
+  /** SCHOLAR-FLASHCARDS-QA-01 (c): the clinical educational content review flag, computed with the PUBLISHED rules by
+   *  flashcard-service.ts applyContentReview. Absent: computed from the built-in defaults where it is read. */
+  sensitive?: SensitiveFlag | null;
 };
 
 export type CardRowExtras = {

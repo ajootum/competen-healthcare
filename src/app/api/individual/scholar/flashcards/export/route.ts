@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal, type IndividualContext } from "@/lib/individual/guard";
 import { isUuid } from "@/lib/individual/scholar/store";
-import { flashcardGate, loadCardSelection } from "@/lib/individual/scholar/flashcard-service";
-import { asGuideVariant, asPrintLayout, buildFlashcardPdf, exportFilename, exportTitle, FLASHCARD_EXPORT_FORMATS, type FlashcardExportFormat } from "@/lib/individual/scholar/flashcard-pdf";
+import { applyContentReview, flashcardGate, loadCardSelection } from "@/lib/individual/scholar/flashcard-service";
+import { asGuideVariant, asPrintLayout, buildFlashcardPdf, longDate, exportFilename, exportTitle, FLASHCARD_EXPORT_FORMATS, type FlashcardExportFormat } from "@/lib/individual/scholar/flashcard-pdf";
 import { currentTraceId } from "@/lib/trace";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
@@ -54,7 +54,8 @@ export async function GET(req: Request) {
   });
   if (!sel.ok) return NextResponse.json({ error: sel.reason === "off" ? "Flashcards are not offered here." : "Your cards could not be read just now." }, { status: sel.reason === "off" ? 403 : 503 });
   if (!sel.cards.length) return NextResponse.json({ error: "There are no cards in that selection." }, { status: 404 });
-  const cards = sel.cards.slice(0, cap);
+  // The clinical educational content review rules as published on the AI Fair Use page (defaults where none are).
+  const cards = await applyContentReview(ctx, sel.cards.slice(0, cap), longDate);
   const title = exportTitle(sel, { ...by, cardsNamed: u.getAll("card").some(isUuid) });
   const layout = asPrintLayout(u.get("layout"));
   const guide = asGuideVariant(u.get("guide"));
