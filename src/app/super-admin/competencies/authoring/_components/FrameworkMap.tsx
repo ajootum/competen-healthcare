@@ -36,6 +36,7 @@ export function FrameworkMap({ domains, areas, activeId, onSelect, status }: {
                                     <span className="min-w-0 flex-1">
                                       <span className="block break-words text-[13px] text-gray-900">{c.name}</span>
                                       <span className="block break-words font-mono text-[11.5px] text-gray-600">{c.code ?? "no code"} · {c.criteria} {c.criteria === 1 ? "criterion" : "criteria"} · {status[c.status]?.label ?? c.status}</span>
+                                      {c.tags && <span className="block break-words text-[11.5px] font-semibold text-amber-900">Revision: {c.tags.join(", ")}</span>}
                                     </span>
                                   </button>
                                 </li>

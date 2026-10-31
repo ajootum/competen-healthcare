@@ -69,7 +69,7 @@ Reuse the existing infrastructure. No-code first. No parallel systems. Testing p
 | S3 | Server (b): migration 760 Areas; layout draft extension for organisational cross-parent moves; substantive moves in drafts | **done 31 Oct** (760 staging x2, server code; substantive moves left to S1 criteria editing and S5, see Log) |
 | S4 | UI (b): Areas in the tree, cross-parent drag, visual framework map | **done 31 Oct** (not browser-verified, see Log) |
 | S5 | D2 revision drafts, server + migration 770 | **done 31 Oct** (770 staging x2, VERIFY 17/17, rollback rehearsed; production NOT applied) |
-| S6 | D2 revision drafts, UI | pending |
+| S6 | D2 revision drafts, UI | **done 31 Oct** (built, tsc/eslint clean, not browser-walked) |
 
 ## Log
 
@@ -210,4 +210,18 @@ Tests: 5 new or extended vitest files, plus review-pack and the authoring suites
 - Organisational changes (Areas, domain Area, competency to another domain, reorders) keep the layout draft. A NEW revision competency is not moved between domains (404).
 
 **Checks.** vitest 76/76 (framework-revision 12 new), plant red/green; competency-foundation harness 33/33; tsc and eslint clean; house rules ALL CLEAR. Not browser-walked.
+
+### 31 Oct 2026: S6 done (branch hq/framework-studio-02a, not pushed)
+
+**Built (UI over the S5 API, no migration, no change to 770, framework-revision.ts or the route).**
+- **Editing on a published framework** is enabled again: criteria controls and the details form save as before and the server routes them into the revision (first edit opens it). Revised = published and a layer set. Without 770 (or an unreadable revision) the workspace is read only with the reason; a published framework with no layer keeps the old "cannot be revised here" note.
+- **Revision banner** (RevisionBanner.tsx): "Revision draft - not visible to learners or assessors until reviewed and published", counts (changed / new competencies, criteria added, reworded, retired, restored), last saved and opened by, Compare with published, Preview revision pack, Put forward for clinical review (review_preview / review_submit with revision:true), Discard revision (confirm, discard_revision), and the independent-publisher note linking Overview & governance and Framework publication. With no revision open, a calm note says the first edit opens one.
+- **Overlay**: revision-ui.ts `overlayDomains` lays the proposed values over the live tree (layout draft applied first). Held competencies carry a mark (Changed / New / n added / reworded / retired / restored) in the explorer, the Map chips, the header and the panel; criteria carry New / Reworded / Restored / Retired "in the revision"; review state is the server's state at the PROPOSED content. Toggle "Revision (proposed)" / "Show published version" renders the published values read only (a new competency has none).
+- **Compare tab**: with an open revision it is "Compare revision with published" (loadRevisionComparison: compare_revision diff + the published version label; CompareView `revision` labels "Revision:"). Published with no revision: "No open revision draft". Drafts keep draft-vs-published.
+- **Review pack**: `?view=pack&revision=1` (loadFrameworkPack `revision: true`): proposed content, proposed fingerprints and states, red "Revision - not published" banner, per-competency revision line, no Word download (the docx route builds the published pack). No open revision: no pack.
+- **Rules kept**: a new revision competency is not reordered or moved between domains (no live row, server 404); a criteria reorder inside a competency the revision holds is sent as move_criterion { criterionId, position } (saved in the revision), otherwise reorder_layout as before; checkboxes for "Review selected" are disabled for competencies not in the revision; "Put forward for clinical review" per competency posts submit_review with revision:true.
+- **CPR-MOB-001**: no new breakpoints; pointer-coarse min sizes on every new control; wrapped/min-w-0 text. Not measured in a browser.
+- **Files.** New: revision-ui.ts (+ test 12), revision-view.ts, RevisionBanner.tsx. Edited: StudioWorkspace, PropertiesPanel, FrameworkMap, ReviewDialog (`revision` prop), CompareView, [frameworkId]/page.tsx, studio-areas.ts (chip tags), review-pack.ts, ReviewPackView.tsx.
+- **Checks.** tsc whole project and eslint on changed files clean; vitest revision-ui, studio-areas, review-pack 27/27. Not browser-walked (needs the authenticated staging stack with 770).
+- **Open for the owner/coordinator.** (1) The Word route does not know revisions, so it is not offered on a revision pack. (2) `position` for move_criterion is counted over the whole section including retired criteria (as placeCriterion is fed), assumed from the S5 code, not run. (3) The "Put forward for publication" button stays on Overview & governance (SubmitForPublication revision=true already exists); it is not duplicated in the banner.
 

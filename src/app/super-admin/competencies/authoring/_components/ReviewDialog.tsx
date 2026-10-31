@@ -35,17 +35,19 @@ async function post(body: unknown): Promise<{ ok: boolean; json: any }> {
   return { ok: r.ok, json: await r.json().catch(() => ({})) };
 }
 
-export function ReviewButton({ frameworkId, scope, label, className, disabled }: { frameworkId: string; scope: Scope; label: string; className?: string; disabled?: boolean }) {
+/** `revision`: put forward the PROPOSED content of the open revision draft of a published framework (S6), not the published content. */
+export function ReviewButton({ frameworkId, scope, label, className, disabled, revision = false }: { frameworkId: string; scope: Scope; label: string; className?: string; disabled?: boolean; revision?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" className={className ?? primary} disabled={disabled} onClick={() => setOpen(true)}>{label}</button>
-      {open && <ReviewDialog frameworkId={frameworkId} scope={scope} onClose={() => setOpen(false)} />}
+      {open && <ReviewDialog frameworkId={frameworkId} scope={scope} revision={revision} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function ReviewDialog({ frameworkId, scope, onClose }: { frameworkId: string; scope: Scope; onClose: () => void }) {
+function ReviewDialog({ frameworkId, scope, revision, onClose }: { frameworkId: string; scope: Scope; revision: boolean; onClose: () => void }) {
+  const rv = revision ? { revision: true } : {};
   const router = useRouter();
   const [stage, setStage] = useState<"loading" | "preview" | "running" | "done" | "error">("loading");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -56,14 +58,14 @@ function ReviewDialog({ frameworkId, scope, onClose }: { frameworkId: string; sc
 
   async function load(s: Scope) {
     setStage("loading"); setError(null); setAck(false);
-    const r = await post({ action: "review_preview", frameworkId, scope: s }).catch(() => ({ ok: false, json: {} }));
+    const r = await post({ action: "review_preview", frameworkId, scope: s, ...rv }).catch(() => ({ ok: false, json: {} }));
     if (!r.ok) { setError(r.json?.error ?? "The preview could not be prepared just now."); setStage("error"); return; }
     setPreview(r.json); setStage("preview");
   }
   // The first preview, once, when the dialog opens (state is set when the answer arrives, never synchronously here).
   useEffect(() => {
     let live = true;
-    post({ action: "review_preview", frameworkId, scope }).catch(() => ({ ok: false, json: {} as any })).then(r => {
+    post({ action: "review_preview", frameworkId, scope, ...rv }).catch(() => ({ ok: false, json: {} as any })).then(r => {
       if (!live) return;
       if (!r.ok) { setError(r.json?.error ?? "The preview could not be prepared just now."); setStage("error"); return; }
       setPreview(r.json); setStage("preview");
@@ -84,7 +86,7 @@ function ReviewDialog({ frameworkId, scope, onClose }: { frameworkId: string; sc
     let pending = queue;
     // Continue across passes: the server pauses before its time limit and returns what it did not reach.
     for (let pass = 0; pending.length && pass < 20; pass++) {
-      const r = await post({ action: "review_submit", frameworkId, items: pending }).catch(() => ({ ok: false, json: {} }));
+      const r = await post({ action: "review_submit", frameworkId, items: pending, ...rv }).catch(() => ({ ok: false, json: {} }));
       if (!r.ok) {
         for (const p of pending) { const i = preview.items.find(x => x.competencyId === p.competencyId)!; all.push({ competencyId: i.competencyId, code: i.code, name: i.name, outcome: "failed", reason: r.json?.error ?? "The request failed. Retry to try again." }); }
         break;
@@ -108,7 +110,7 @@ function ReviewDialog({ frameworkId, scope, onClose }: { frameworkId: string; sc
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-teal-950/40 p-4">
       <div ref={panel} role="dialog" aria-modal="true" aria-labelledby="rv-title" tabIndex={-1} className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-xl">
         <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-6 py-4">
-          <h2 id="rv-title" className="text-[18px] font-bold text-gray-900">{stage === "done" ? "Submission complete" : stage === "running" ? "Putting content forward" : "Preview clinical review submission"}</h2>
+          <h2 id="rv-title" className="text-[18px] font-bold text-gray-900">{stage === "done" ? "Submission complete" : stage === "running" ? "Putting content forward" : revision ? "Preview clinical review submission (revision draft)" : "Preview clinical review submission"}</h2>
           <button type="button" aria-label="Close" className={ghost} disabled={stage === "running"} onClick={onClose}>×</button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
@@ -123,7 +125,7 @@ function ReviewDialog({ frameworkId, scope, onClose }: { frameworkId: string; sc
                 ))}
               </div>
               <p className="mt-3 rounded-lg border border-teal-100 bg-teal-50/60 px-3 py-2 text-[12.5px] text-teal-950">
-                Each eligible competency gets its own request for its exact content version. Content already in review is skipped. Independent review and publication stay separate: nothing is approved or published here.
+                Each eligible competency gets its own request for its exact content version. Content already in review is skipped. Independent review and publication stay separate: nothing is approved or published here.{revision ? " This is the proposed content of the revision draft: learners and assessors keep the published version." : ""}
               </p>
               {(preview.counts.withChecks ?? 0) > 0 && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-950">Outstanding points: {preview.counts.withChecks} competenc{preview.counts.withChecks === 1 ? "y has" : "ies have"} points worth checking before review, listed below. They do not block submission; the reviewer sees them too.</p>}
               <ItemTable rows={preview.items.map(i => ({ id: i.competencyId, code: i.code, name: i.name, badge: i.eligibility, reason: [i.eligibility === "eligible" ? "" : i.reason, i.checks?.length ? `Worth checking: ${i.checks.join(" ")}` : ""].filter(Boolean).join(" ") }))} head="Eligibility" />

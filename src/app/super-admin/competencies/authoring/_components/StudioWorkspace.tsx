@@ -10,6 +10,8 @@ import { ReviewButton } from "./ReviewDialog";
 import { announceAreaMove, announceCompetencyMove, dropAction, expandOrder, groupDomains, moveCompetency, setDomainArea, type DragSource, type DropTarget, type OrgAction, type StudioArea } from "@/lib/competency/studio-areas";
 import { AddAreaForm, AreaHeading, MoveSelect } from "./OrganiseControls";
 import { FrameworkMap } from "./FrameworkMap";
+import { SubmitRevisionReview } from "./RevisionBanner";
+import { movedPosition, revisionTags, type CritMark, type PublishedFields, type RevMark } from "@/lib/competency/revision-ui";
 
 // CFCA-STUDIO-UX-02, the Competencies tab of one framework: a compact searchable explorer (domains, competencies,
 // selection) beside ONE active competency. Its fields are edited with the existing CompetencyEditor (the same governed
@@ -32,12 +34,23 @@ import { FrameworkMap } from "./FrameworkMap";
 // "Move to..." and Move. Areas are created, renamed, deleted (empty) and reordered here. A Map view shows the same data
 // as Areas > domains > competency chips. Pieces live in studio-areas.ts, OrganiseControls.tsx and FrameworkMap.tsx; the
 // server decides every move (published frameworks: layout draft).
+//
+// FRAMEWORK-DESIGN-STUDIO-02 S6 (D2): on a published framework the competencies the OPEN REVISION holds arrive here with the
+// proposed values already laid over them (revision-ui.ts overlayDomains), a `rev` mark (Changed / New / n retired) and the
+// published values in `published`. The explorer tags them, the properties panel edits the proposed values (the server saves
+// every edit into the revision), and "Show published version" renders the published values read only. A NEW competency is
+// not reordered or moved between domains here (it has no live row: the server answers 404), and a criteria reorder inside a
+// competency the revision holds is a move_criterion (saved in the revision), not a reorder_layout.
 
 export type StudioStatus = "eligible" | "in_review" | "approved" | "changes_requested" | "framework_locked" | "unreadable";
 export type StudioCompetency = {
   id: string; code: string | null; name: string; description: string | null; learningOutcomes: string[]; expectedLevelId: string | null;
   riskCategory: string; sortOrder: number; cpuId: string | null; status: StudioStatus; statusText: string;
-  criteria: { id?: string; component: string | null; text: string; sourceRef: string | null; active?: boolean }[];
+  criteria: { id?: string; component: string | null; text: string; sourceRef: string | null; active?: boolean; /** S6: what the open revision does to this criterion. */ mark?: CritMark }[];
+  /** S6: what the open revision does to this competency (absent: the revision does not hold it). */
+  rev?: RevMark;
+  /** S6: the published values of a competency the revision holds (null: it is new). */
+  published?: PublishedFields | null;
 };
 export type StudioDomain = { id: string; name: string; competencies: StudioCompetency[]; cpus: { id: string; label: string }[]; /** 760: the domain's Area (null: none). */ areaId?: string | null };
 
@@ -75,7 +88,7 @@ export type Reorder = {
 
 const sameKeyFor = (group: Group, i: number) => `${group.key}|${group.ids[i]}`;
 
-export default function StudioWorkspace({ frameworkId, domains: domainsIn, levels, components, editable, initialId, canReorder = false, sectionCodes, draftMode = false, pubStatus = "draft", areas: areasIn, areasReady = false }: {
+export default function StudioWorkspace({ frameworkId, domains: domainsIn, levels, components, editable, initialId, canReorder = false, sectionCodes, draftMode = false, pubStatus = "draft", areas: areasIn, areasReady = false, revision, revisionKey = "" }: {
   frameworkId: string; domains: StudioDomain[]; levels: { id: string; score: number; label: string }[];
   components: Record<string, string>; editable: boolean; initialId: string | null;
   /** The order can be changed: the framework is editable and 750/751 are on this environment (the server decides again). */
@@ -86,6 +99,10 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
   pubStatus?: string;
   /** S4 (760): the framework's Areas as the editor sees them (draft applied); areasReady = 760 is on this environment. */
   areas?: StudioArea[]; areasReady?: boolean;
+  /** S6: a published, centrally governed framework. `ready` = 770 is on this environment, `open` = a revision draft exists. */
+  revision?: { ready: boolean; open: boolean };
+  /** S6: changes when the revision is saved, so the panel's forms start from the saved values. */
+  revisionKey?: string;
 }) {
   const router = useRouter();
   const sections0 = sectionCodes ?? Object.keys(components);
@@ -100,6 +117,8 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<"tree" | "map">("tree");
+  const [showPublished, setShowPublished] = useState(false);
+  const revOpen = !!revision?.open;
   const query = q.trim().toLowerCase();
   const match = (c: StudioCompetency) => !query || c.name.toLowerCase().includes(query) || (c.code ?? "").toLowerCase().includes(query);
   const cur = all.find(x => x.c.id === active) ?? null;
@@ -200,6 +219,11 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
         ids: list.map(k => k.id!), names: list.map(k => k.text),
         // The server wants the whole section: retired criteria stay where they are.
         expand: ids => { const q = [...ids]; return sec.map(k => (k.active === false ? k.id! : q.shift()!)); },
+        // S6: inside a competency the open revision holds, a reorder is saved in the revision (move_criterion), one criterion to a place.
+        ...(c.rev ? { post: (ids: string[]) => {
+          const q = [...ids], full = sec.map(k => (k.active === false ? k.id! : q.shift()!)), mv = movedPosition(list.map(k => k.id!), ids, full);
+          return mv ? { action: "move_criterion", criterionId: mv.id, position: mv.position } : { action: "reorder_layout", frameworkId, level: "criteria", parentId: c.id, component, order: full };
+        } } : {}),
         apply: (v, ids) => ({
           ...v, domains: v.domains.map(d => ({ ...d, competencies: d.competencies.map(x => {
             if (x.id !== c.id) return x;
@@ -286,7 +310,7 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
   }
   const areaOptions = (current: string | null) => [...view.areas.filter(a => a.id !== current).map(a => ({ value: a.id, label: a.name })), ...(current ? [{ value: "__none", label: "No Area (Unassigned)" }] : [])];
   const compGroup = (d: StudioDomain): Group => ({
-    key: `competencies:${d.id}`, level: "competencies", parentId: d.id, ids: d.competencies.map(c => c.id), names: d.competencies.map(c => c.name),
+    key: `competencies:${d.id}`, level: "competencies", parentId: d.id, ids: d.competencies.filter(c => c.rev?.state !== "new").map(c => c.id), names: d.competencies.filter(c => c.rev?.state !== "new").map(c => c.name),
     apply: (v, ids) => ({ ...v, domains: v.domains.map(x => (x.id === d.id ? { ...x, competencies: arrange(x.competencies, ids, c => c.id) } : x)) }),
   });
   const sectionGroup: Group = {
@@ -350,21 +374,24 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
                     onMove={v => void organiseMove({ action: "set_domain_area", domainId: d.id, areaId: v === "__none" ? null : v })} />
                 )}
                 {isOpen && comps.map(c => {
-                  const ci = d.competencies.findIndex(x => x.id === c.id);
+                  const isNew = c.rev?.state === "new";             // S6: a new revision competency has no live row to reorder or move
+                  const ci = isNew ? -1 : d.competencies.findIndex(x => x.id === c.id);
+                  const tags = revisionTags(c.rev);
                   return (
                     <Fragment key={c.id}>
-                    <div {...(reorderLists ? rx.row(cg, ci) : {})}
-                      className={`mx-2 mb-1 flex items-start gap-2 rounded-lg px-2 py-2 ${c.id === active ? "border-l-4 border-teal-700 bg-teal-50/70" : "hover:bg-gray-50"} ${reorderLists && over === sameKeyFor(cg, ci) ? overCls : ""}`}>
-                      {reorderLists && rx.grip(cg, ci, "mt-1")}
-                      <input type="checkbox" aria-label={`Select ${c.name}`} className="mt-1" checked={picked.has(c.id)} onChange={() => setPicked(s => toggle(s, c.id))} />
+                    <div {...(reorderLists && !isNew ? rx.row(cg, ci) : {})}
+                      className={`mx-2 mb-1 flex items-start gap-2 rounded-lg px-2 py-2 ${c.id === active ? "border-l-4 border-teal-700 bg-teal-50/70" : "hover:bg-gray-50"} ${reorderLists && !isNew && over === sameKeyFor(cg, ci) ? overCls : ""}`}>
+                      {reorderLists && !isNew && rx.grip(cg, ci, "mt-1")}
+                      <input type="checkbox" aria-label={revOpen && !c.rev ? `${c.name} is not in the revision draft` : `Select ${c.name}`} className="mt-1" checked={picked.has(c.id)} disabled={revOpen && !c.rev} onChange={() => setPicked(s => toggle(s, c.id))} />
                       <button type="button" onClick={() => choose(c.id)} aria-current={c.id === active ? "true" : undefined} className="min-w-0 flex-1 text-left">
                         <span className="block text-[13.5px] text-gray-900">{c.name}</span>
                         <span className="block font-mono text-[11.5px] text-gray-500">{c.code ?? "no code"} · {c.criteria.filter(k => k.active !== false).length} criteria</span>
+                        {tags.length > 0 && <span className="mt-0.5 flex flex-wrap gap-1">{tags.map(t => <span key={t} className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">{t}</span>)}</span>}
                       </button>
                       <span title={CHIP[c.status][0]} aria-label={CHIP[c.status][0]} className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${DOT[c.status]}`} />
-                      {reorderLists && rx.buttons(cg, ci)}
+                      {reorderLists && !isNew && rx.buttons(cg, ci)}
                     </div>
-                    {organiseLists && c.id === active && domains.length > 1 && (
+                    {organiseLists && c.id === active && !isNew && domains.length > 1 && (
                       <MoveSelect className="mx-3 mb-1" label={`Move ${c.name} to domain…`} busy={busy} options={domains.filter(x => x.id !== d.id).map(x => ({ value: x.id, label: x.name }))}
                         onMove={v => void organiseMove({ action: "move_competency_domain", competencyId: c.id, domainId: v })} />
                     )}
@@ -410,32 +437,59 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
           </p>
           <div className="mt-2 flex items-center justify-between">
             <span className="text-[12.5px] text-gray-700">{picked.size} selected</span>
-            <ReviewButton frameworkId={frameworkId} scope={{ kind: "competencies", ids: [...picked] }} label="Review selected →" className={link} disabled={!picked.size || !editable} />
+            <ReviewButton frameworkId={frameworkId} scope={{ kind: "competencies", ids: [...picked] }} revision={revOpen} label="Review selected →" className={link} disabled={!picked.size || !editable} />
           </div>
         </div>
       </aside>
 
       <section aria-label="Competency" className="min-w-0 rounded-2xl border border-gray-200 bg-white">
-        {!cur ? <p className="p-6 text-[13.5px] text-gray-600">This framework has no competency yet. Add one from Overview &amp; governance.</p> : (
+        {!cur ? <p className="p-6 text-[13.5px] text-gray-600">This framework has no competency yet. Add one from Overview &amp; governance.</p> : (() => {
+          // S6: "Show published version" renders the published values of a competency the revision holds, read only.
+          const pub = showPublished && !!cur.c.rev && !!cur.c.published;
+          const shown: StudioCompetency = pub ? { ...cur.c, ...cur.c.published!, rev: undefined } : cur.c;
+          const revisable = !!revision && revision.ready;
+          const criteriaOk = editable && !pub && (pubStatus === "draft" || revisable);
+          const lock = pub ? "You are looking at the published version, read only. Switch back to the revision to edit."
+            : criteriaOk ? null
+            : revision && !revision.ready ? "Revision drafts are not available on this environment right now (see the note at the top of the page), so a published framework is not changed here."
+            : !editable ? "This framework is under governance review or archived, so nothing here is edited."
+            : "Criteria are changed in a draft framework or, once published, in a revision draft. This published framework cannot be revised here.";
+          return (
           <>
             <div className="border-b border-gray-100 p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-teal-800">{cur.d.name} / <span className="font-mono">{cur.c.code ?? "no code"}</span></p>
-                <span className={`rounded-md px-2 py-0.5 text-[12px] font-semibold ${CHIP[cur.c.status][1]}`}>{CHIP[cur.c.status][0]}</span>
+                <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-teal-800">{cur.d.name} / <span className="font-mono">{shown.code ?? "no code"}</span></p>
+                <span className="flex flex-wrap items-center gap-1.5">
+                  {!pub && revisionTags(cur.c.rev).map(t => <span key={t} className="rounded-md bg-amber-50 px-2 py-0.5 text-[12px] font-semibold text-amber-900">{t}</span>)}
+                  <span className={`rounded-md px-2 py-0.5 text-[12px] font-semibold ${CHIP[cur.c.status][1]}`}>{CHIP[cur.c.status][0]}</span>
+                </span>
               </div>
-              <h2 className="mt-1 text-[20px] font-bold text-gray-900">{cur.c.name}</h2>
+              <h2 className="mt-1 text-[20px] font-bold text-gray-900">{shown.name}</h2>
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[12.5px] text-gray-600">{cur.c.statusText} · {cur.c.criteria.filter(k => k.active !== false).length} source criteria</p>
-                <ReviewButton frameworkId={frameworkId} scope={{ kind: "domain", domainId: cur.d.id }} label="Review this domain →" className={link} disabled={!editable} />
+                <p className="text-[12.5px] text-gray-600">{cur.c.statusText} · {shown.criteria.filter(k => k.active !== false).length} source criteria</p>
+                <ReviewButton frameworkId={frameworkId} scope={{ kind: "domain", domainId: cur.d.id }} revision={revOpen} label={revOpen ? "Review this domain's revision →" : "Review this domain →"} className={link} disabled={!editable} />
               </div>
+              {revOpen && cur.c.rev && (
+                <div role="group" aria-label="Which version to show" className="mt-3 flex flex-wrap gap-2">
+                  {([[false, "Revision (proposed)"], [true, "Show published version"]] as const).map(([v, l]) => (
+                    <button key={String(v)} type="button" aria-pressed={showPublished === v} disabled={v && !cur.c.published} onClick={() => setShowPublished(v)}
+                      className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${showPublished === v ? "border-amber-700 bg-amber-100 text-amber-950" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}>{l}</button>
+                  ))}
+                  {!cur.c.published && <span className="self-center text-[12px] text-gray-600">New competency: nothing is published yet.</span>}
+                </div>
+              )}
             </div>
             <div className="space-y-5 p-5">
-              <PropertiesPanel key={cur.c.id} comp={cur.c} domain={cur.d} levels={levels} components={components} sections={view.sections} targets={targets} rx={rx}
-                editable={editable} criteriaEditable={editable && pubStatus === "draft"} />
-              {editable && (cur.c.status === "eligible" || cur.c.status === "changes_requested") && <SubmitReview competencyId={cur.c.id} />}
+              <PropertiesPanel key={`${cur.c.id}:${pub ? "pub" : "rev"}:${revisionKey}`} comp={shown} domain={cur.d} levels={levels} components={components} sections={view.sections} targets={targets} rx={rx}
+                editable={editable && !pub} criteriaEditable={criteriaOk} lock={lock} revised={!!revision} />
+              {editable && !pub && (cur.c.status === "eligible" || cur.c.status === "changes_requested") && (
+                revOpen ? (cur.c.rev ? <SubmitRevisionReview competencyId={cur.c.id} frameworkId={frameworkId} /> : null)
+                  : <SubmitReview competencyId={cur.c.id} />
+              )}
             </div>
           </>
-        )}
+          );
+        })()}
       </section>
       </>)}
     </div>

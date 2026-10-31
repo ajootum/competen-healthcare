@@ -9,10 +9,15 @@ import type { Reorder, StudioCompetency, StudioDomain } from "./StudioWorkspace"
 // FRAMEWORK-DESIGN-STUDIO-02 S2: the unified properties panel of the selected competency. Its fields (the existing
 // update_competency form) and its criteria, grouped by section, with inline edit, add, retire / restore and move, in
 // the same place as the reorder handles. Every write is the governed S1 API (criteria actions on a DRAFT framework only);
-// the server decides, and its refusal is shown as it is. Published and in-review frameworks: controls are disabled.
+// the server decides, and its refusal is shown as it is. In-review and archived frameworks: controls are disabled.
+//
+// FRAMEWORK-DESIGN-STUDIO-02 S6 (D2): on a PUBLISHED framework the same controls are enabled again. The server routes every
+// content edit into the open revision draft (opening it on the first edit), so the values shown here are the PROPOSED ones
+// (StudioWorkspace overlays the revision) and each change carries a mark. "Show published version" renders the published
+// values instead, read only.
 
 export const REVIEW_AGAIN = "This change needs clinical review again";
-export const REVISION_NOTE = "Changes to a published framework go through a revision draft (coming next).";
+export const REVISION_SAVED = "Saved to the revision draft. Learners and assessors keep the published version until the revision is clinically reviewed and published.";
 const AUTHORING_SUBJECT = "Assessment methods & evidence";
 const VERIFICATION = "/super-admin/verification-studio";
 
@@ -22,6 +27,8 @@ type Mode = null | "edit" | "move" | "retire" | "restore";
 
 const small = "text-[12.5px] font-semibold text-teal-800 hover:underline disabled:opacity-50 disabled:no-underline pointer-coarse:min-h-[var(--cmp-touch-min)]";
 const note = "text-[12px] font-medium text-amber-900";
+const markCls: Record<string, string> = { new: "bg-teal-50 text-teal-900", reworded: "bg-amber-50 text-amber-900", restored: "bg-teal-50 text-teal-900", retired: "bg-red-50 text-red-900" };
+const markText: Record<string, string> = { new: "New", reworded: "Reworded", restored: "Restored", retired: "Retired" };
 
 function CriterionRow({ k, label, comp, code, on, rx, g, i, targets, components, sections }: {
   k: Criterion; label: string | null; comp: StudioCompetency; code: string; on: boolean; rx: Reorder; g: ReturnType<Reorder["criteriaGroup"]> | null; i: number;
@@ -45,9 +52,10 @@ function CriterionRow({ k, label, comp, code, on, rx, g, i, targets, components,
         {g && !retired && rx.grip(g, i)}
         <span className="mt-0.5 inline-flex h-7 min-w-9 shrink-0 items-center justify-center rounded-md bg-teal-50 px-1.5 font-mono text-[11.5px] font-semibold text-teal-900">{retired ? "off" : label}</span>
         <div className="min-w-0 flex-1">
+          {k.mark && <span className={`mb-0.5 mr-1.5 inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${markCls[k.mark]}`}>{markText[k.mark]} in the revision</span>}
           <p className={`whitespace-pre-wrap break-words text-[13.5px] ${retired ? "text-gray-500 line-through" : "text-gray-900"}`}>{k.text}</p>
           {k.sourceRef && <p className="mt-0.5 break-words font-mono text-[11.5px] text-gray-500">{k.sourceRef}</p>}
-          {retired && <p className="mt-0.5 text-[12px] text-gray-600">Retired. Kept for history and evidence.</p>}
+          {retired && <p className="mt-0.5 text-[12px] text-gray-600">{k.mark === "retired" ? "Retired in the revision. It stays in the published version until the revision is published." : "Retired. Kept for history and evidence."}</p>}
         </div>
         {g && !retired && <span className="mt-0.5">{rx.buttons(g, i)}</span>}
       </div>
@@ -122,13 +130,17 @@ function AddCriterion({ comp, code, label, on }: { comp: StudioCompetency; code:
   );
 }
 
-export default function PropertiesPanel({ comp, domain, levels, components, sections, targets, rx, editable, criteriaEditable }: {
+export default function PropertiesPanel({ comp, domain, levels, components, sections, targets, rx, editable, criteriaEditable, lock = null, revised = false }: {
   comp: StudioCompetency; domain: StudioDomain; levels: { id: string; score: number; label: string }[];
   components: Record<string, string>; sections: string[]; targets: MoveTarget[]; rx: Reorder;
   /** The competency's own fields can be saved (as before: a draft or a published framework). */
   editable: boolean;
   /** Criteria can be added, edited, retired and moved: a DRAFT framework only. */
   criteriaEditable: boolean;
+  /** Why the criteria cannot be changed, said above the panel (null: nothing to say). */
+  lock?: string | null;
+  /** A published framework with revision drafts: saves go to the revision draft. */
+  revised?: boolean;
 }) {
   const prefixes = criterionPrefixes(components);
   const all = comp.criteria;
@@ -138,11 +150,18 @@ export default function PropertiesPanel({ comp, domain, levels, components, sect
 
   return (
     <section aria-label="Properties" className="min-w-0 space-y-5">
-      {!criteriaEditable && <p role="note" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] font-medium text-amber-950">{editable ? REVISION_NOTE : `${REVISION_NOTE} This framework is under governance review or archived, so nothing here is edited.`}</p>}
+      {lock && <p role="note" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] font-medium text-amber-950">{lock}</p>}
+      {comp.rev && (
+        <p role="note" className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-[12.5px] text-amber-950">
+          <strong>{comp.rev.state === "new" ? "New in the revision." : comp.rev.state === "changed" ? "Changed in the revision." : "Opened in the revision."}</strong>{" "}
+          {comp.rev.state === "new" ? "This competency has no published version yet." : comp.rev.state === "touched" ? "Its content is the same as the published version so far." : "The values below are the proposed ones."}
+          {comp.published && comp.rev.state !== "touched" ? " Use Show published version to see what is published." : ""}
+        </p>
+      )}
 
       <details className="rounded-xl border border-gray-200 p-4" open>
         <summary className="cursor-pointer text-[14px] font-semibold text-gray-900">Details: name, code, description, outcomes, level and risk</summary>
-        <p className="mt-1 text-[12.5px] text-gray-600">Saving changes the content version. A reviewed or pending version then needs review again.</p>
+        <p className="mt-1 text-[12.5px] text-gray-600">{revised ? "Saving writes to the revision draft, not to the published framework. A reviewed or pending version then needs review again." : "Saving changes the content version. A reviewed or pending version then needs review again."}</p>
         <fieldset disabled={!editable} className="m-0 mt-3 min-w-0 border-0 p-0">
           <CompetencyEditor key={comp.id} c={comp} levels={levels} approved={comp.status === "approved"} cpus={domain.cpus} />
         </fieldset>
