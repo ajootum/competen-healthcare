@@ -32,8 +32,10 @@ import { findPatientIdentifiers, PII_LABEL } from "@/lib/privacy/patient-identif
 
 export type AssistantMode = "teach" | "ask" | "development" | "cpd_plan" | "reflection";
 /** `own_learning` (Scholar): the person's own recorded programme, level and Scholar progress. `own_development` (Scholar): their own
- *  Professional needs and plan, a cross-experience read that is OFF unless the published profile lists it (the owner decides). */
-export type DataScope = "passport" | "professional_record" | "study_context" | "own_learning" | "own_development";
+ *  Professional needs and plan, a cross-experience read that is OFF unless the published profile lists it (the owner decides).
+ *  `study_session` (Scholar, SCHOLAR-SESSION-AI-02 D4): the compact block about the person's own connected study session, when a study
+ *  id is passed. Authorised but OFF unless the published profile lists it (the owner decides in HQ AI config). */
+export type DataScope = "passport" | "professional_record" | "study_context" | "own_learning" | "own_development" | "study_session";
 
 /** The modes each product's assistant can ever offer, and the allowance activity each one is metered as. */
 export const PRODUCT_MODES: Record<AiProduct, readonly AssistantMode[]> = { scholar: ["teach", "ask"], professional: ["development", "cpd_plan", "reflection"] };
@@ -42,12 +44,12 @@ export const MODE_LABEL: Record<AssistantMode, string> = {
   teach: "Teach me", ask: "Ask about my material", development: "Professional development", cpd_plan: "Plan my CPD", reflection: "Draft a reflection",
 };
 /** The data each product's assistant is AUTHORISED to read. A profile can narrow this, never widen it. */
-export const AUTHORISED_SCOPES: Record<AiProduct, readonly DataScope[]> = { scholar: ["passport", "study_context", "own_learning", "own_development"], professional: ["passport", "professional_record"] };
+export const AUTHORISED_SCOPES: Record<AiProduct, readonly DataScope[]> = { scholar: ["passport", "study_context", "own_learning", "own_development", "study_session"], professional: ["passport", "professional_record"] };
 
 export type AssistantProfile = { defaultMode: AssistantMode; modes: AssistantMode[]; scopes: DataScope[] };
 export const assistantPath = (p: AiProduct) => `ai.assistant.${p}`;
 export const DEFAULT_PROFILE: Record<AiProduct, AssistantProfile> = {
-  // own_development is authorised but NOT in the default: the owner publishes it to switch the cross-experience read on.
+  // own_development and study_session are authorised but NOT in the default: the owner publishes them to switch them on.
   scholar: { defaultMode: "teach", modes: ["teach", "ask"], scopes: ["passport", "study_context", "own_learning"] },
   professional: { defaultMode: "development", modes: ["development", "cpd_plan", "reflection"], scopes: ["passport", "professional_record"] },
 };

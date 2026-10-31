@@ -4,6 +4,7 @@ import { finishOsceAttempt, getOsceStation, openOsceAttempt, startOsceAttempt } 
 import { servableOsceStation } from "@/lib/individual/scholar/library-questions";
 import { checklistView, osceGate, stationSnapshot } from "@/lib/individual/scholar/osce-service";
 import { finishRun, readSnapshot, resumeOf, snapshotOf } from "@/lib/individual/scholar/osce";
+import { linkStudy } from "@/lib/individual/scholar/study-context";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -20,6 +21,9 @@ export const dynamic = "force-dynamic";
 //
 // A new run keeps the exact station it will be marked against (721 station_version + station_snapshot). A governed
 // station is started only while its version is still published and clinically approved.
+//
+// SCHOLAR-SESSION-AI-02: { studySessionId? } -- a run started (or resumed) inside the caller's own study session is
+// linked to it. Best effort: a link that cannot be made never stops the run. Formative only (owner D5).
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");
   if (isGuardRefusal(ctx)) return ctx;
@@ -36,6 +40,7 @@ export async function POST(req: Request) {
     const now = Math.max(Date.now(), started);
     const r = resumeOf(started, snap.durationMinutes, now);
     if (r.state === "running") {
+      await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "osce_attempt", open.id);
       return NextResponse.json({
         attemptId: open.id, startedAt: open.startedAt, durationMinutes: snap.durationMinutes, serverNow: new Date(now).toISOString(),
         responses: open.responses, lastSavedAt: open.lastSavedAt, resumed: true,
@@ -52,5 +57,6 @@ export async function POST(req: Request) {
   const snap = stationSnapshot(station);
   const a = await startOsceAttempt(ctx.admin, ctx.userId, station.id, { version: snap.version, snapshot: snapshotOf(snap) });
   if (!a) return NextResponse.json({ error: "The station could not be started just now." }, { status: 500 });
+  await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "osce_attempt", a.id);
   return NextResponse.json({ attemptId: a.id, startedAt: a.startedAt, durationMinutes: snap.durationMinutes, serverNow: new Date().toISOString(), responses: {}, resumed: false });
 }

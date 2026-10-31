@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { countDue } from "@/lib/individual/scholar/store";
@@ -21,19 +22,19 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Clinical case" });
 }
 
-export default async function CasePage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ kind?: string; session?: string; hints?: string }> }) {
+export default async function CasePage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ kind?: string; session?: string; hints?: string; study?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const q = await searchParams;
-  const due = await countDue(ctx.admin, ctx.userId);
+  const [due, study] = await Promise.all([countDue(ctx.admin, ctx.userId), loadStudy(ctx.admin, ctx.userId, q.study, "apply")]);
   const hints = q.hints === "1" || q.kind === "private";
   const play = isPlayKind(q.kind) && q.session ? await viewPlay(ctx.admin, ctx.userId, q.kind, q.session, hints) : null;
   return (
     <>
       <PageHeader accent={SCHOLAR.accent} eyebrow="My Learning" title="Clinical case"
         intro="Assess, interpret, prioritise, decide and explain. The case shows you what you have reached; ask for what you need to know." />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
       {play ? <CasePlayer initial={play as unknown as Play} hints={hints} /> : (
         <StatePanel title="That case could not be found" actions={<Link href={experienceHref("scholar", "study/apply")} className={focusRing}>Back to Apply</Link>}>
           <p>It may have been removed with the materials it was written from, or it is not available here.</p>

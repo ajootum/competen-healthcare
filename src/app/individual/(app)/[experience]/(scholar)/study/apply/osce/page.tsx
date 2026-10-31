@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
+import { osceFilterPrefill, withStudy } from "@/lib/individual/scholar/study-carry";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../_components/chrome";
@@ -38,13 +40,20 @@ export default async function OscePractice({ params, searchParams }: { params: P
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
-  const filter = parseOsceFilter(await searchParams);
+  const sp = await searchParams;
+  const asked = parseOsceFilter(sp);
   const [due, availability] = await Promise.all([countDue(ctx.admin, ctx.userId), osceAvailability(ctx.admin, ctx.userId)]);
+  // SCHOLAR-SESSION-AI-02: inside a study session the station list opens filtered to its competency (else its topic),
+  // only while the learner has set no filter of their own (?all=1 shows every station). Database reads only.
+  const study = await loadStudy(ctx.admin, ctx.userId, sp.study, "apply");
+  const sid = study?.session.id ?? null;
+  const own = !!(asked.q || asked.competency || asked.programme || asked.difficulty || asked.source) || sp.all === "1";
+  const filter = study && !own ? { ...asked, ...osceFilterPrefill(study.scope) } : asked;
   const head = (
     <>
-      <p className="mb-2 text-[13px]"><Link href={experienceHref("scholar", "study/apply")} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>← Apply</Link></p>
+      <p className="mb-2 text-[13px]"><Link href={withStudy(experienceHref("scholar", "study/apply"), sid)} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>← Apply</Link></p>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("apply").eyebrow} title="OSCE practice" intro="Timed practice stations you do on your own, then check against the station checklist." />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
       <p className="mb-2 text-[13px] font-semibold text-[var(--cmp-app-text-secondary)]">{OSCE_PRACTICE_LABEL}</p>
       <BoundaryNotice notice={FORMATIVE_NOTICE} />
     </>
@@ -89,6 +98,7 @@ export default async function OscePractice({ params, searchParams }: { params: P
           <h2 id="osce-list-h" className="text-[16px] font-bold text-gray-900">Your stations</h2>
           {all.length > 0 && (
             <form method="get" role="search" aria-label="Filter your stations" className="mt-2 grid gap-2 md:grid-cols-2">
+              {sid && <input type="hidden" name="study" value={sid} />}
               <label className="text-[12.5px] font-semibold text-gray-700">Topic or body system
                 <input name="q" defaultValue={filter.q ?? ""} list="osce-topics" className={`mt-0.5 block w-full ${field}`} />
                 <datalist id="osce-topics">{facets.topics.map(t => <option key={t} value={t} />)}</datalist>
@@ -115,7 +125,7 @@ export default async function OscePractice({ params, searchParams }: { params: P
               </label>
               <div className="flex items-end gap-2">
                 <button type="submit" className={`inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Filter</button>
-                {filtered && <Link href={experienceHref("scholar", "study/apply/osce")} className={`text-[13px] font-semibold underline underline-offset-2 ${focusRing}`}>Clear</Link>}
+                {filtered && <Link href={withStudy(`${experienceHref("scholar", "study/apply/osce")}${sid ? "?all=1" : ""}`, sid)} className={`text-[13px] font-semibold underline underline-offset-2 ${focusRing}`}>Clear</Link>}
               </div>
             </form>
           )}
@@ -129,7 +139,7 @@ export default async function OscePractice({ params, searchParams }: { params: P
                 const open = mine.some(r => r.status === "in_progress" && !r.finishedAt);
                 return (
                   <li key={s.id} className="py-3">
-                    <Link href={experienceHref("scholar", `study/apply/osce/${s.id}`)} className={`text-[15px] font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>{s.title}</Link>
+                    <Link href={withStudy(experienceHref("scholar", `study/apply/osce/${s.id}`), sid)} className={`text-[15px] font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>{s.title}</Link>
                     <p className="text-[12.5px] text-gray-600">{[s.topic, s.bodySystem, s.difficulty ? OSCE_DIFFICULTY_LABEL[s.difficulty] : null, s.programmeLabel].filter(Boolean).join(" · ") || "Topic not recorded"}</p>
                     <p className="text-[12.5px] text-gray-600">{OSCE_SOURCE_LABEL[s.source]} · {s.contentStatus} · {s.durationMinutes} min · {s.checklist.length} items · version {s.version}</p>
                     <p className="text-[12.5px] text-gray-600">{open ? "A run is in progress: open it to carry on" : mine.length ? `${mine.length} run${mine.length === 1 ? "" : "s"}` : "Not practised yet"}{last ? ` · last: ${scoreSummary({ points: (last.score ?? 0) * s.checklist.length, outOf: s.checklist.length, criticalMissed: last.criticalMissed ?? 0 })}` : ""}</p>

@@ -22,6 +22,8 @@ import { CardReview, type CardView } from "../_components/client";
 import { adaptiveHref, sourceHref, studyHref } from "../_components/question-view";
 import { RevisionRunner, RevisionStart, SavedSets } from "../_components/revision-client";
 import { ReviseNav, flashcardsHref } from "../_components/revise-nav";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
+import { revisePrefill, withStudy } from "@/lib/individual/scholar/study-carry";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -49,7 +51,7 @@ function evaluationIntent(q: { evaluate?: string; evscope?: string }): { method:
   } catch { return null; }
 }
 
-export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string; material?: string; difficulty?: string }> }) {
+export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string; material?: string; difficulty?: string; study?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
@@ -57,11 +59,14 @@ export default async function Revise({ params, searchParams }: { params: Promise
   const q = await searchParams;
   const [due, navPolicy] = await Promise.all([countDue(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
   const reviseNavAdaptive = navPolicy.scholarAdaptiveExams === "on";
+  // SCHOLAR-SESSION-AI-02: the open study session (database reads only): its bar, carried links, and "what to revise" chosen.
+  const study = await loadStudy(ctx.admin, ctx.userId, q.study, "revise", navPolicy);
+  const sid = study?.session.id ?? null;
   const header = (
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("revise").eyebrow} title="Revise" intro={scholarSpace("revise").intro} />
-      <StudyNav dueCount={due} />
-      <ReviseNav current="practice" adaptive={reviseNavAdaptive} row />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
+      <ReviseNav current="practice" adaptive={reviseNavAdaptive} row studyId={sid} />
       <BoundaryNotice notice={FORMATIVE_NOTICE} />
     </>
   );
@@ -147,7 +152,8 @@ export default async function Revise({ params, searchParams }: { params: Promise
           <RevisionStart modes={policy.scholarRevisionModes} formats={formats} quantity={policy.scholarRevisionQuantity}
             difficulty={policy.scholarRevisionDifficulty} feedback={policy.scholarRevisionFeedback} materials={mats}
             competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote}
-            preset={q.material ? { materialId: q.material, difficulty: q.difficulty ?? null } : null} />
+            preset={q.material ? { materialId: q.material, difficulty: q.difficulty ?? null } : null}
+            scope={q.material ? null : revisePrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) })} />
 
           {policy.scholarAdaptiveExams === "on" && (
             <section aria-labelledby="adaptive-h" className="rounded-2xl border border-gray-200 bg-white p-5">
@@ -155,7 +161,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
               <p className="mt-0.5 text-[13px] text-gray-600">{ADAPTIVE_HELP}</p>
               <p className="mt-2 rounded-lg bg-[var(--cmp-theme-soft)] px-3 py-2 text-[12.5px] text-gray-800"><span className="font-semibold">How it adapts: </span>{ADAPTIVE_RULE}</p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <Link href={adaptiveHref()} className={`inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Set up an adaptive exam</Link>
+                <Link href={withStudy(adaptiveHref(), sid)} className={`inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Set up an adaptive exam</Link>
                 {examsActive.map(e => (
                   <Link key={e.session.id} href={adaptiveHref(e.session.id)} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`}>Carry on: {e.title} ({e.session.position} answered)</Link>
                 ))}
@@ -168,7 +174,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
               <h2 id="flashcards-h" className="text-[15px] font-bold text-gray-900">Flashcards</h2>
               <p className="mt-0.5 text-[13px] text-gray-600">Recall the answer, flip the card, and say whether you remembered: it comes back sooner or later on your spaced review schedule. From your notes, the Competen library and your learning gaps, or cards you write yourself, in decks you can download.</p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <Link href={flashcardsHref()} className={`inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Open Flashcards</Link>
+                <Link href={withStudy(flashcardsHref(), sid)} className={`inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Open Flashcards</Link>
                 <Link href={flashcardsHref({ view: "decks" })} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`}>My Decks</Link>
               </div>
             </section>

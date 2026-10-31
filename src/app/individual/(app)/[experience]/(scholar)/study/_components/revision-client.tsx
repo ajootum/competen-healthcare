@@ -17,6 +17,8 @@ import { RecoveryFlow, type ExplainOutcome } from "./evidence-recovery";
 import { RECOVERY_EXPLANATION_LABEL } from "@/lib/individual/scholar/config";
 import { FEEDBACK_HEADINGS, GROUNDING_LABEL } from "@/lib/individual/scholar/config";
 import type { FeedbackParts, SourceMode } from "@/lib/individual/scholar/question-intel";
+import { carry, studyField } from "./study-active";
+import type { RevisePrefill } from "@/lib/individual/scholar/study-carry";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
 // Revise -> Answer -> Understand mistakes -> Reinforce -> Revisit -> Improve. Every answer goes to
@@ -55,6 +57,8 @@ export function RevisionStart(props: {
   materials: { id: string; title: string }[]; competencies: { id: string; title: string }[]; aiNote: string | null;
   /** PROGRESS-01 P4: a next step opens Revision on its material (and difficulty), with "choose" open. */
   preset?: { materialId?: string | null; difficulty?: string | null } | null;
+  /** SCHOLAR-SESSION-AI-02: the open study session's focus, chosen in "what to revise" (the learner may change it). */
+  scope?: RevisePrefill | null;
 }) {
   const router = useRouter();
   const presetMaterial = props.preset?.materialId && props.materials.some(m => m.id === props.preset!.materialId) ? props.preset.materialId : null;
@@ -63,11 +67,12 @@ export function RevisionStart(props: {
   const [note, setNote] = useState("");
   // Learning Continuity: new questions are not available, which is a state to explain, not an error.
   const [continuity, setContinuity] = useState("");
-  const [open, setOpen] = useState(!!presetMaterial);
-  const [scopeKind, setScopeKind] = useState<"library" | "documents" | "topic" | "competency">(presetMaterial ? "documents" : "library");
-  const [chosen, setChosen] = useState<string[]>(presetMaterial ? [presetMaterial] : []);
-  const [topic, setTopic] = useState("");
-  const [competency, setCompetency] = useState("");
+  const sc = presetMaterial ? null : props.scope ?? null;
+  const [open, setOpen] = useState(!!presetMaterial || !!sc);
+  const [scopeKind, setScopeKind] = useState<"library" | "documents" | "topic" | "competency">(presetMaterial ? "documents" : sc?.kind ?? "library");
+  const [chosen, setChosen] = useState<string[]>(presetMaterial ? [presetMaterial] : sc?.kind === "documents" ? sc.materialIds : []);
+  const [topic, setTopic] = useState(sc?.kind === "topic" ? sc.topic : "");
+  const [competency, setCompetency] = useState(sc?.kind === "competency" ? sc.competencyId : "");
   const [formats, setFormats] = useState<RevisionFormat[]>(props.formats);
   const [quantity, setQuantity] = useState(props.quantity);
   const [difficulty, setDifficulty] = useState(props.preset?.difficulty && ["any", "easy", "standard", "harder"].includes(props.preset.difficulty) ? props.preset.difficulty : props.difficulty);
@@ -81,11 +86,11 @@ export function RevisionStart(props: {
     const scope = !custom || scopeKind === "library" ? { kind: "library" }
       : scopeKind === "documents" ? { kind: "documents", materialIds: chosen }
         : scopeKind === "topic" ? { kind: "topic", topic } : { kind: "competency", competencyId: competency };
-    const r = await call("/api/individual/scholar/revision/sessions", { mode: m, scope, ...(custom ? { formats, quantity, difficulty, feedback, source } : {}) });
+    const r = await call("/api/individual/scholar/revision/sessions", { mode: m, scope, ...(custom ? { formats, quantity, difficulty, feedback, source } : {}), ...studyField() });
     setBusy("");
     if (!r.ok && r.json.continuity) { setContinuity(r.json.error ?? "New questions are not available right now."); return; }
     if (!r.ok) { setError(r.json.error ?? "Revision could not start just now."); return; }
-    if (r.json.session?.id) router.push(revisionHref(r.json.session.id));
+    if (r.json.session?.id) router.push(carry(revisionHref(r.json.session.id)));
     // A session this environment could not keep (417 absent): run here, for this sitting only.
     else { setNote(r.json.note ?? ""); setUnsaved({ items: r.json.items ?? [], label: r.json.label ?? null }); }
   }, [router, scopeKind, chosen, topic, competency, formats, quantity, difficulty, feedback, source]);
@@ -196,10 +201,10 @@ export function SavedSets({ sets }: { sets: { id: string; title: string; questio
   const [error, setError] = useState("");
   async function replay(id: string) {
     setBusy(id); setError("");
-    const r = await call("/api/individual/scholar/revision/sessions", { mode: "custom", setId: id });
+    const r = await call("/api/individual/scholar/revision/sessions", { mode: "custom", setId: id, ...studyField() });
     setBusy("");
     if (!r.ok) { setError(r.json.error ?? "That set could not be started."); return; }
-    if (r.json.session?.id) router.push(revisionHref(r.json.session.id));
+    if (r.json.session?.id) router.push(carry(revisionHref(r.json.session.id)));
   }
   async function remove(id: string) {
     setBusy(`d${id}`); setError("");

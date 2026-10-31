@@ -2,12 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { SCHOLAR_SPACES, spaceOfPath, type ScholarSpaceKey } from "@/lib/individual/scholar/spaces";
+import { withStudy, type StudyBarView } from "@/lib/individual/scholar/study-carry";
+import { StudySessionBar } from "./study-session-bar";
+import { STUDY_EVENT, setActiveStudy } from "./study-active";
 
 // My Learning's learning spaces: Library, Learn, Revise, Apply, Evaluate and Progress (spaces.ts). Upload,
 // classification and a material's own study start in the Library. Every tab is a real link to a real page,
 // open at any time: the spaces are a guide, never a sequence. Scrolls sideways on a narrow screen.
+// SCHOLAR-SESSION-AI-02 slice B: with a connected study session open (`study`, resolved by the server), every tab
+// carries ?study=<id> (withStudy) and the StudySessionBar sits under the tabs. Without one, nothing here changes.
+// A session started on this page by Learn arrives as a STUDY_EVENT (learn-client.tsx) and is shown the same way.
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 
@@ -31,17 +38,26 @@ function ActivityChip({ space }: { space: ScholarSpaceKey }) {
   );
 }
 
-export default function StudyNav({ dueCount }: { dueCount?: number | null }) {
+export default function StudyNav({ dueCount, study = null }: { dueCount?: number | null; study?: StudyBarView | null }) {
   const pathname = usePathname() ?? "";
   const current = spaceOfPath(pathname);
+  const [started, setStarted] = useState<StudyBarView | null>(null);
+  const bar = study ?? started;
+  useEffect(() => { setActiveStudy(bar?.id ?? null); }, [bar?.id]);
+  useEffect(() => {
+    const on = (e: Event) => { const d = (e as CustomEvent<StudyBarView>).detail; if (d && typeof d.id === "string") setStarted(d); };
+    window.addEventListener(STUDY_EVENT, on);
+    return () => window.removeEventListener(STUDY_EVENT, on);
+  }, []);
   return (
+    <>
     <nav aria-label="Learning spaces" className="sticky top-14 z-20 -mx-4 mb-6 overflow-x-auto bg-gray-50/95 px-4 backdrop-blur md:static md:mx-0 md:mt-[23px] md:bg-transparent md:px-0 md:backdrop-blur-none">
       <ul className="flex min-w-max gap-[15px] border-b border-gray-200 md:gap-5">
         {SCHOLAR_SPACES.map(s => {
           const on = current === s.key;
           return (
             <li key={s.key}>
-              <Link href={experienceHref("scholar", s.segment)} aria-current={on ? "page" : undefined}
+              <Link href={withStudy(experienceHref("scholar", s.segment), bar?.id)} aria-current={on ? "page" : undefined}
                 className={`-mb-px inline-flex min-h-[48px] items-center gap-2 border-b-[3px] px-0.5 text-[15px] font-semibold ${focusRing} ${on ? "" : "border-transparent text-gray-600 hover:text-gray-900"}`}
                 style={on ? { borderColor: SCHOLAR.accent, color: SCHOLAR.accent } : undefined}>
                 <ActivityChip space={s.key} />
@@ -58,5 +74,7 @@ export default function StudyNav({ dueCount }: { dueCount?: number | null }) {
         })}
       </ul>
     </nav>
+    {bar && <StudySessionBar bar={bar} />}
+    </>
   );
 }

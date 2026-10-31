@@ -6,6 +6,7 @@ import { isUuid } from "@/lib/individual/scholar/store";
 import { audit } from "@/lib/individual/scholar/http";
 import { startPrivatePlay } from "@/lib/individual/scholar/clinical-play";
 import { viewPlay } from "@/lib/individual/scholar/clinical-routes";
+import { linkStudy } from "@/lib/individual/scholar/study-context";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -26,6 +27,9 @@ export async function POST(req: Request) {
     const p = await startPrivatePlay(ctx.admin, ctx.userId, body.caseId, mode);
     if ("error" in p) return NextResponse.json({ error: p.error }, { status: p.status });
     await audit(ctx, "individual_scholar_case_started", "individual_scholar_case_session", p.sessionId, { kind: "private", mode });
+    // SCHOLAR-SESSION-AI-02: replayed inside a study session, the play is linked to it. A library play lives in the
+    // shared case library, not in the learner's own case sessions, so it is not linked.
+    await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "case_session", p.sessionId, policy);
     return NextResponse.json({ kind: "private", play: p });
   }
   if (isUuid(body?.versionId)) {

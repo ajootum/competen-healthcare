@@ -16,6 +16,7 @@ import { FormativeAiLabel } from "./edu-notice";
 import { RecoveryFlow, type ExplainOutcome, type RecoveryRequestBody } from "./evidence-recovery";
 import { LEARN_NOT_COVERED_LABEL, LEARN_NOT_COVERED_NOTE, LEARN_WIDER_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL } from "@/lib/individual/scholar/config";
 import type { ReadingLink } from "@/lib/individual/scholar/evidence-recovery";
+import { STUDY_EVENT } from "./study-active";
 import { citationSegments, citedTags, parseTeachAnswer, questionText, replyState, type LearnGrounding } from "@/lib/individual/scholar/teach-format";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
@@ -93,6 +94,12 @@ export function LearnWorkspace(props: {
   standingMessage?: string | null;
   /** COMPETEN-RESEARCH-01: the Learn modes policy offers. "notes" is always first and the default. */
   modes?: LearnMode[];
+  /** SCHOLAR-SESSION-AI-02: start the scope as a connected study session (the server decides whether it may). */
+  connect?: boolean;
+  /** SCHOLAR-SESSION-AI-02: the learner's own typed objective for a study session whose focus has no competency outcome (D2). */
+  objectiveText?: string;
+  /** SCHOLAR-SESSION-AI-02: opened from the study session bar's Ask: the Ask panel first. */
+  openAsk?: boolean;
 }) {
   const [session, setSession] = useState<SessionView | null>(props.initial);
   const [note, setNote] = useState<string | null>(null);
@@ -109,7 +116,7 @@ export function LearnWorkspace(props: {
   const pick = (chosen ?? remembered) as LearnMode | null;
   const mode: LearnMode = pick && modes.includes(pick) ? pick : "notes";
   const setMode = (m: LearnMode) => { setChosen(m); try { window.localStorage.setItem(MODE_KEY, m); } catch { /* not remembered */ } };
-  const [tab, setTab] = useState<"lesson" | "sources" | "ask">("lesson");
+  const [tab, setTab] = useState<"lesson" | "sources" | "ask">(props.openAsk ? "ask" : "lesson");
   const [progress, setProgress] = useState(props.initialProgress);
   const [check, setCheck] = useState<{ question: string; answer: string } | null>(null);
   const [ask, setAsk] = useState("");
@@ -207,11 +214,14 @@ export function LearnWorkspace(props: {
     started.current = true;
     (async () => {
       setBusy("start");
-      const r = await call("/api/individual/scholar/learn/sessions", { scope: props.start });
+      const r = await call("/api/individual/scholar/learn/sessions", { scope: props.start, ...(props.connect ? { connected: true, ...(props.objectiveText ? { objectiveText: props.objectiveText } : {}) } : {}) });
       setBusy("");
       if (!r.ok) { setError(r.json.error ?? "This session could not be started."); return; }
       // SCH-LEARN-UX-01: the address becomes the session's, so a reload or a return resumes it instead of starting again.
-      if (r.json.session?.id) try { window.history.replaceState(null, "", `${window.location.pathname}?session=${r.json.session.id}`); } catch { /* the address stays */ }
+      // SCHOLAR-SESSION-AI-02: a study session also carries ?study=, and the tab bar shows its session bar at once.
+      const study = r.json.study?.id && r.json.study.id === r.json.session?.id ? r.json.study : null;
+      if (r.json.session?.id) try { window.history.replaceState(null, "", `${window.location.pathname}?session=${r.json.session.id}${study ? `&study=${study.id}` : ""}`); } catch { /* the address stays */ }
+      if (study) try { window.dispatchEvent(new CustomEvent(STUDY_EVENT, { detail: study })); } catch { /* the bar shows on the next page */ }
       if (r.json.resumed) {
         // Already being learned: carried on where it was left, recorded as a resume, nothing generated unasked.
         opened.current = true;
@@ -220,7 +230,7 @@ export function LearnWorkspace(props: {
       }
       setSession(r.json.session); setNote(r.json.note ?? null); setAt(r.json.resumed ? r.json.session.currentStep : 0);
     })();
-  }, [props.start, session]);
+  }, [props.start, props.connect, props.objectiveText, session]);
   useEffect(() => {
     if (opened.current || !session || !props.start || !props.consent) return;
     opened.current = true;

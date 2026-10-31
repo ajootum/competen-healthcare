@@ -18,6 +18,7 @@ import { parseScope, resolveScope } from "@/lib/individual/scholar/learn";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { formatPromptVersion, runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/generation";
+import { linkStudy } from "@/lib/individual/scholar/study-context";
 import { GENERATING_MODES, keyOf, pickQuestions, planGeneration, type PoolItem } from "@/lib/individual/scholar/revision";
 import { revisionItemView } from "@/lib/individual/scholar/revision-view";
 import { cardsOfDecks, gapFocus, libraryRecallFits, recallCardOf } from "@/lib/individual/scholar/flashcards";
@@ -103,6 +104,8 @@ export async function POST(req: Request) {
     if (!made.ok) return NextResponse.json({ error: made.notProvisioned ? "Study sessions are not kept on this environment yet." : "Your study session could not be started just now." }, { status: made.notProvisioned ? 409 : 500 });
     const deck = typeof body.deck === "string" ? lib.data.decks.find(d => d.key === body.deck || d.id === body.deck) ?? null : null;
     if (deck?.id) await touchFlashcardDeck(ctx.admin, ctx.userId, deck.id);
+    // SCHOLAR-SESSION-AI-02: started inside a study session, it is linked to it (never failing the session).
+    await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "revision_session", made.id, policy);
     await audit(ctx, "individual_scholar_revision_started", "individual_scholar_revision_session", made.id, { mode, deck: deck?.kind ?? "cards", only: body?.only ?? null, questions: picked.ids.length, generated: 0 });
     return NextResponse.json({ session: { id: made.id, mode, feedback: "immediate", total: picked.ids.length, position: 0 }, generated: 0, reused: picked.ids.length, of: ids.length });
   }
@@ -118,6 +121,7 @@ export async function POST(req: Request) {
     if (!ordered.length) return NextResponse.json({ error: "The questions in this set are no longer stored (their materials were removed)." }, { status: 404 });
     const made = await createRevisionSession(ctx.admin, ctx.userId, { mode, feedback: set.feedback, setId: set.id, questionIds: ordered.map(q => q.id) });
     await touchRevisionSet(ctx.admin, ctx.userId, set.id);
+    if (made.ok) await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "revision_session", made.id, policy);
     await audit(ctx, "individual_scholar_revision_started", "individual_scholar_revision_session", made.ok ? made.id : null, { mode, set: true, questions: ordered.length, generated: 0 });
     return NextResponse.json({
       session: made.ok ? { id: made.id, mode, feedback: set.feedback, total: ordered.length, position: 0 } : null,
@@ -328,6 +332,7 @@ export async function POST(req: Request) {
   const byId = new Map(pool.questions.map(q => [q.id, q]));
   const ordered = pick.ids.map(id => byId.get(id)!).filter(Boolean);
   const made = await createRevisionSession(ctx.admin, ctx.userId, { mode, feedback, questionIds: ordered.map(q => q.id) });
+  if (made.ok) await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "revision_session", made.id, policy);
   // SCHOLAR-FLASHCARDS-01: the cards go into the deck asked for, by reference, up to the deck size limit.
   let deckNote: string | null = null;
   if (targetDeck) {

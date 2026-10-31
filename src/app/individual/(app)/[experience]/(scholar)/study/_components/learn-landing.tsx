@@ -5,6 +5,7 @@ import {
   type CompetencyRef, type DocumentHit, type SearchParams, type SearchResult, type SearchTab, type SectionHit, type SessionHit, type TopicHit,
 } from "@/lib/individual/scholar/learn-search";
 import { MAX_SCOPE_MATERIALS } from "@/lib/individual/scholar/learn";
+import { OBJECTIVE_TEXT_MAX } from "@/lib/individual/scholar/study-session";
 import { BookmarkedTopics, SelectionBar, TopicTools } from "./learn-search-client";
 
 // SCH-LEARN-UX-01: the search-first, topic-centred Learn page (owner s3-s5, s10). Server-rendered: one page of each
@@ -29,10 +30,13 @@ export const learnHref = (q: Record<string, string | number | null | undefined>)
   return s ? `${LEARN}?${s}` : LEARN;
 };
 const topicView = (name: string) => learnHref({ topicView: name });
+// SCHOLAR-SESSION-AI-02 slice B: "Study this" starts (or reopens) a connected study session on the same scope through
+// the same Learn start (?study=new), shown only where study sessions are on. Without it this page is unchanged.
+const studyLink = `${link} inline-flex min-h-[44px] items-center text-[13.5px]`;
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 /** The universal search (owner s3): "Search my library" is the default and uses no AI; "Teach me this topic" starts Learn. */
-export function LearnSearchBox({ q = "" }: { q?: string }) {
+export function LearnSearchBox({ q = "", studyOn = false }: { q?: string; studyOn?: boolean }) {
   return (
     <section aria-labelledby="learn-search-h" className={`${card} mb-5`}>
       <form action={LEARN} method="get" role="search">
@@ -41,9 +45,17 @@ export function LearnSearchBox({ q = "" }: { q?: string }) {
         <input id="learn-q" name="q" type="search" defaultValue={q} maxLength={200} autoComplete="off"
           placeholder="Search your notes, topics, clinical concepts or ask Scholar a question..."
           className={`mt-3 block min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-[15px] text-gray-900 ${focusRing}`} />
+        {studyOn && (
+          <div className="mt-3">
+            <label htmlFor="learn-obj" className="block text-[13px] font-semibold text-gray-700">What do you want to be able to do? <span className="font-normal text-gray-500">(optional, used by Study this topic)</span></label>
+            <input id="learn-obj" name="obj" type="text" maxLength={OBJECTIVE_TEXT_MAX} autoComplete="off" placeholder="For example: explain how to recognise and escalate respiratory distress"
+              className={`mt-1 block min-h-[44px] w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-[14px] text-gray-900 ${focusRing}`} />
+          </div>
+        )}
         <div className="mt-3 flex flex-wrap gap-2.5">
           <button type="submit" className={primary} style={{ background: accent }}>Search my library</button>
           <button type="submit" name="teach" value="1" className={ghost}>Teach me this topic</button>
+          {studyOn && <button type="submit" name="study" value="new" className={ghost}>Study this topic</button>}
         </div>
         <p className="mt-2 text-[12.5px] text-gray-500">Searching uses no AI and works even when AI help is off or your allowance is used up. Teach me starts a lesson from your own notes.</p>
       </form>
@@ -76,13 +88,20 @@ function SessionCard({ s }: { s: SessionHit }) {
 }
 
 /** Continue Learning (owner s3): the three most recent sessions, then "View all learning sessions". */
-export function ContinueLearning({ sessions, total }: { sessions: SessionHit[] | null; total: number | null }) {
+export function ContinueLearning({ sessions, total, study = null }: { sessions: SessionHit[] | null; total: number | null; study?: { title: string; space: string; href: string } | null }) {
   return (
     <section aria-labelledby="continue-h" className={`${card} mb-5`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="continue-h" className={h2}>Continue learning</h2>
         {sessions && (total ?? 0) > 0 && <Link href={learnHref({ tab: "sessions" })} className={`${link} text-[13.5px]`} style={{ color: accent }}>View all learning sessions{total ? ` (${total})` : ""}</Link>}
       </div>
+      {/* SCHOLAR-SESSION-AI-02: the open study session first, reopened in the stage it was last in. */}
+      {study && (
+        <p className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--cmp-theme-border)] bg-[var(--cmp-theme-soft)] px-4 py-2.5 text-[13.5px] text-gray-800">
+          <span className="min-w-0"><span className="font-semibold">Your study session: </span>{study.title}<span className="text-gray-600"> · last in {study.space}</span></span>
+          <Link href={study.href} className={studyLink} style={{ color: accent }}>Continue your study session →</Link>
+        </p>
+      )}
       {sessions === null ? <p className="mt-2 text-[13.5px] text-gray-600">Learning history is not available here, so sessions cannot be resumed.</p>
         : sessions.length === 0 ? <p className="mt-2 text-[13.5px] text-gray-600">No sessions yet. Search above, choose a topic below, or start from a document.</p>
           : <ul className="mt-3 grid gap-3 md:grid-cols-3">{sessions.map(s => <SessionCard key={s.id} s={s} />)}</ul>}
@@ -127,7 +146,7 @@ export function MyTopics({ groups, total }: { groups: { subject: string | null; 
 export type RecentDoc = DocumentHit & { status: string };
 
 /** Recently Added (owner s3): a few documents, then the Library, which manages them. */
-export function RecentlyAdded({ docs }: { docs: RecentDoc[] | null }) {
+export function RecentlyAdded({ docs, studyOn = false }: { docs: RecentDoc[] | null; studyOn?: boolean }) {
   return (
     <section aria-labelledby="recent-h" className={card}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -144,7 +163,10 @@ export function RecentlyAdded({ docs }: { docs: RecentDoc[] | null }) {
                     <span className="block truncate text-[14.5px] font-semibold text-gray-900">{d.title}</span>
                     <span className="text-[12.5px] text-gray-600">{[d.format, `added ${shortDate(d.addedAt)}`, d.status, d.topics[0] ? `topic: ${d.topics[0]}` : null].filter(Boolean).join(" · ")}</span>
                   </span>
-                  <Link href={learnHref({ material: d.id })} className={`${link} inline-flex min-h-[44px] items-center text-[13.5px]`} style={{ color: accent }}>Learn from it<span className="sr-only"> {d.title}</span> →</Link>
+                  <span className="flex flex-wrap items-center gap-x-4">
+                    {studyOn && <Link href={learnHref({ material: d.id, study: "new" })} className={studyLink} style={{ color: accent }}>Study this<span className="sr-only"> {d.title}</span></Link>}
+                    <Link href={learnHref({ material: d.id })} className={`${link} inline-flex min-h-[44px] items-center text-[13.5px]`} style={{ color: accent }}>Learn from it<span className="sr-only"> {d.title}</span> →</Link>
+                  </span>
                 </li>
               ))}
             </ul>
@@ -370,6 +392,7 @@ function Filters({ p, subjects }: { p: SearchParams; subjects: { id: string; nam
 /** One topic (owner s3): its sources and sections, what to do with it, and -- apart -- the competencies they are linked to. */
 export function TopicDetail(props: {
   name: string; subject: string | null; documents: DocumentHit[]; sections: SectionHit[]; page: number; total: number; competencies: CompetencyRef[];
+  studyOn?: boolean;
 }) {
   const pages = Math.max(1, Math.ceil(props.total / PAGE_SIZE));
   return (
@@ -380,6 +403,7 @@ export function TopicDetail(props: {
         <p className="mt-0.5 text-[13.5px] text-gray-600">{plural(props.total, "section")} in {plural(props.documents.length, "document")} of your notes.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2.5">
           <Link href={learnHref({ t: props.name })} className={primary} style={{ background: accent }}>Teach me this topic</Link>
+          {props.studyOn && <Link href={learnHref({ t: props.name, study: "new" })} className={ghost}>Study this topic</Link>}
           <TopicTools name={props.name} />
         </div>
       </div>
@@ -388,6 +412,11 @@ export function TopicDetail(props: {
           <h3 className={h2}>Linked competencies</h3>
           <p className="mt-0.5 text-[12.5px] text-gray-500">Governed competencies your sections on this topic are linked to. They are separate from your own topics and are not changed by renaming.</p>
           <div className="mt-2"><Competencies list={props.competencies} /></div>
+          {props.studyOn && (
+            <ul className="mt-1 flex flex-wrap gap-x-4">
+              {props.competencies.map(c => <li key={c.id}><Link href={learnHref({ competency: c.id, study: "new" })} className={studyLink} style={{ color: accent }}>Study {c.code ? `${c.code} ` : ""}{c.title}</Link></li>)}
+            </ul>
+          )}
         </div>
       )}
       <form id={FORM_ID} action={LEARN} method="get" className={card}>

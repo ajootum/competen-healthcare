@@ -6,6 +6,7 @@ import { countDue, listArtefacts, listLearningSessions, listMaterials, listQuest
 import { AI_LABEL, LEARN_ACTION_LABEL, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { sourceHref } from "../_components/question-view";
 import { AiFlagList, GovernedReferenceList } from "../_components/learn-kinds";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -27,11 +28,13 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Saved learning" });
 }
 
-export default async function SavedPage({ params }: { params: Promise<{ experience: string }> }) {
+export default async function SavedPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ study?: string | string[] }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
+  // SCHOLAR-SESSION-AI-02: with a valid ?study= the session bar is shown (database reads only; not a stage, so last_space is untouched).
+  const study = await loadStudy(ctx.admin, ctx.userId, (await searchParams).study, null);
   const [artefacts, materials, questions, due, sessions] = await Promise.all([
     listArtefacts(ctx.admin, ctx.userId), listMaterials(ctx.admin, ctx.userId), listQuestions(ctx.admin, ctx.userId),
     countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, 10),
@@ -51,7 +54,7 @@ export default async function SavedPage({ params }: { params: Promise<{ experien
     <>
       <PageHeader accent={x.accent} eyebrow="Kept for you" title="Saved learning"
         intro="Everything your study has produced, kept for you. Opening it never uses AI, so it is always available." />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
 
       <section aria-labelledby="kept-h" className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <h2 id="kept-h" className="sr-only">What is kept</h2>

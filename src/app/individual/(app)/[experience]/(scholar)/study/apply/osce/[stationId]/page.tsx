@@ -2,6 +2,8 @@ import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
+import { withStudy } from "@/lib/individual/scholar/study-carry";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../../_components/chrome";
@@ -34,17 +36,19 @@ export async function generateMetadata(): Promise<Metadata> {
 const MARKING_WORDS = { self_graded: "your own marks", ai_evaluation: "your marks, with AI suggestions you confirmed (not verified)" } as const;
 const dt = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
-export default async function OsceStationPage({ params }: { params: Promise<{ experience: string; stationId: string }> }) {
+export default async function OsceStationPage({ params, searchParams }: { params: Promise<{ experience: string; stationId: string }>; searchParams: Promise<{ study?: string }> }) {
   const { experience, stationId } = await params;
   const page = await experienceModulePage(experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
   const [due, availability] = await Promise.all([countDue(ctx.admin, ctx.userId), osceAvailability(ctx.admin, ctx.userId)]);
-  const back = <p className="mb-2 text-[13px]"><Link href={experienceHref("scholar", "study/apply/osce")} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>← OSCE practice</Link></p>;
+  // SCHOLAR-SESSION-AI-02: the open study session (database reads only); a run started here is linked to it.
+  const study = await loadStudy(ctx.admin, ctx.userId, (await searchParams).study, "apply");
+  const back = <p className="mb-2 text-[13px]"><Link href={withStudy(experienceHref("scholar", "study/apply/osce"), study?.session.id)} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>← OSCE practice</Link></p>;
   if (availability.state !== "on") {
     return (
-      <>{back}<PageHeader accent={x.accent} eyebrow="OSCE practice" title="Practice station" /><StudyNav dueCount={due} />
+      <>{back}<PageHeader accent={x.accent} eyebrow="OSCE practice" title="Practice station" /><StudyNav dueCount={due} study={study?.bar ?? null} />
         <StatePanel title="OSCE practice is not available"><p>{availability.state === "off" ? OSCE_OFF : OSCE_UNAVAILABLE}</p></StatePanel></>
     );
   }
@@ -91,7 +95,7 @@ export default async function OsceStationPage({ params }: { params: Promise<{ ex
     <>
       {back}
       <PageHeader accent={x.accent} eyebrow="OSCE practice" title={station.title} intro={`${station.durationMinutes} minutes · ${station.checklist.length} checklist items · version ${station.version}`} />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
       <BoundaryNotice notice={FORMATIVE_NOTICE} detail={OSCE_PRACTICE_LABEL} />
       {!stillPublished && <p role="status" className="mb-4 rounded-xl border border-amber-400 bg-amber-50 px-3 py-2 text-[13.5px] text-amber-900">This station&rsquo;s library version is no longer published, so it cannot be practised again. Your earlier runs are kept below.</p>}
 

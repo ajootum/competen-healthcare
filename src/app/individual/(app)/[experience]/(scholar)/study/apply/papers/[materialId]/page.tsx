@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../../_components/chrome";
@@ -25,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Examination paper" });
 }
 
-export default async function PaperPage({ params }: { params: Promise<{ experience: string; materialId: string }> }) {
+export default async function PaperPage({ params, searchParams }: { params: Promise<{ experience: string; materialId: string }>; searchParams: Promise<{ study?: string }> }) {
   const { experience, materialId } = await params;
   const page = await experienceModulePage(experience, "study");
   if (!page) return null;
@@ -34,11 +35,13 @@ export default async function PaperPage({ params }: { params: Promise<{ experien
   const [material, paper, due, policy] = await Promise.all([
     getMaterial(ctx.admin, ctx.userId, materialId), getExamPaper(ctx.admin, ctx.userId, materialId), countDue(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin),
   ]);
+  // SCHOLAR-SESSION-AI-02: an open study session is carried by the tabs (database reads only).
+  const study = await loadStudy(ctx.admin, ctx.userId, (await searchParams).study, "apply", policy);
   const header = (title: string) => (
     <>
       <p className="mb-2 text-[13px]"><Link href={experienceHref("scholar", "study/apply")} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>← Apply</Link></p>
       <PageHeader accent={x.accent} eyebrow="Examination paper" title={title} intro="Attempt each question, then reveal a suggested answer with its evidence." />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
     </>
   );
   if (!paper.ok) {
