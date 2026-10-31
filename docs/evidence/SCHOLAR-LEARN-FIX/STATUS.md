@@ -52,7 +52,7 @@
 | Slice | Scope | State |
 |---|---|---|
 | L-A | Server root causes: `planSteps`, deterministic titles and objectives, Teach retrieval within the selected material, three-outcome sufficiency, recovery scoping and accurate covered/unanswered | **done** 31 Oct (32fe4802, fd7ee490; unpushed) |
-| L-B | UI: Teach, then Check, then Continue; View sources disclosure; inline citations; structured Teach prompt (prompt version bump) | pending |
+| L-B | UI: Teach, then Check, then Continue; View sources disclosure; inline citations; structured Teach prompt (prompt version bump) | **done** 31 Oct (3272346b, ab0a3bfe; unpushed) |
 | L-C | Staging regression with the QI pptx (sonnet) | pending |
 
 ## Token rules
@@ -88,3 +88,28 @@
 - New: QI-shaped deck (47 sections, title merged, all covered, <= 8, runs kept together, deterministic, capacity overflow contiguous), titles/objectives, sessionView objective, three-way grounding, covered-never-unanswered, relatedSections thresholds, recovery scoping.
 
 **Not done / for later slices**: no prompt text changed (no version bump; L-B owns prompts and the partial/insufficient rendering). `learn/assistant` still slices step ids to `STEP_MAX_SECTIONS` (personal AI, out of scope). Sentence-casing is heuristic (a Title-Case word stays capitalised unless the notes write it in lower case). Not exercised against a database or staging (L-C).
+
+### 31 Oct - L-B done (prompt + UI; 2 commits 3272346b + ab0a3bfe, not pushed; no migration; act/route.ts untouched)
+
+**Prompt**
+- `PROMPT_VERSIONS.learnTeach = "scholar-learn-teach-v1"`; `learnPromptVersion("teach")` = `scholar-learn-v3:teach+scholar-learn-teach-v1` (research: `...+research-v2`). Other actions unchanged (`scholar-learn-v3:<action>`). Old free-text Teach artefacts are no longer served by key (new key); still listed by continuity and render as written.
+- Teach reply = labelled parts: `OVERVIEW:` / `KEY POINTS:` (`- ` lines, cited) / `EXAMPLE:` (only when the passages describe a situation; never invented) / `CHECK YOUR UNDERSTANDING:` (1-2 questions ending `? [S n]`).
+- `generation.checkTeachAnswer` (teach only, in `runLearn`): overview + key points through `checkLearnMain` unchanged (fail = whole answer withheld, same reasons); the example checked alone by `checkLearnMain`, DROPPED if it fails; each question must cite given [S n], end in `?`, 8-300 chars, no [R]/[E], no identifier, pass `groundingViolations` on the passages, else DROPPED; max 2. `OVERVIEW: NOT_IN_NOTES` -> `not_in_notes`. Unlabelled answers checked whole as before. Shown/saved text is the canonical form (`teach-format.composeTeachAnswer`).
+
+**UI** (`learn-client.tsx`; pure helpers in `src/lib/individual/scholar/teach-format.ts`)
+- Step header: lesson title (`step.title`, fallback reply `lesson.title`, then "Step n") + "In this lesson: <objective>" (omitted when missing). Step list shows lesson titles (from L-A).
+- Teach Me (policy start action) = primary button; Explain / Simplify / Go deeper / Examples / Summarise / Ask Scholar + Depth = secondary "More ways to learn". Defaults unchanged.
+- Answers: [S n] are inline links (`aria-label "Source Sn: <citation>"`) to the section; structured Teach shows Overview / Key points / "Example from your notes" / "Check your understanding" (+ "Answer this"). Cited sources + excerpts behind native `<details>` "View sources (n)", collapsed by default.
+- `replyState`: shown + sufficient (or no grounding, or check/clarify) -> `teach`; shown + partial/insufficient with uncoveredTerms -> `partial` = teaching, then "Not covered in your notes: <terms>." + "Explore wider sources" (only when `grounding.wider`; opens the existing RecoveryFlow in that mode for the uncovered terms); withheld -> `recovery` (existing Withheld + RecoveryFlow, unchanged); continuity unchanged. No "This isn't in your notes" banner on a shown answer.
+- Footer: "Check my understanding" primary after an answer (uses a Teach question citing only the step's own sections -> `clarify`, verdict recorded as before; otherwise the `check` action), then "Continue to the next lesson" / "Finish session" becomes primary once a verdict exists (or no check offered). Continue is always available. Only `md:` breakpoint used; `pointer-coarse` touch sizes; break-words on long titles/citations/excerpts.
+
+**Tests**: `teach-format.test.ts` 15/15 (parse/compose round-trip, old-format null, citation segments, example/question drop rules, ungrounded key point withholds, bad tag, max 2, unstructured whole-check, prompt + version, replyState mapping); learn, learn-integration, learn-research, learn-research-quality green; scholar-learning harness 160/0; tsc clean (needs `NODE_OPTIONS=--max-old-space-size=8192`); eslint clean on changed files. Not exercised in a browser (L-C).
+
+**L-C should assert** (staging, QI pptx)
+1. Teach on lesson 1 (title slide merged): shown, structured (Overview + Key points), every [S n] a working link, provenance `scholar-learn-v3:teach+scholar-learn-teach-v1`; no example unless the slides describe a situation; 0-2 check questions, each citing a step source.
+2. "View sources (n)" collapsed by default; opens with Enter/Space; excerpts only inside it.
+3. A partial lesson: teaching shown first, then "Not covered in your notes: ..." with only terms absent from the shown passages; no "This isn't in your notes" banner; "Explore wider sources" (notes mode) opens recovery in notes_and_library.
+4. A withheld answer: existing recovery, covered/unanswered consistent with what is shown; no other material's sections in My notes only.
+5. Check my understanding -> answer -> verdict (understood/partly/not_yet) shown and recorded (414 event action clarify with verdict); step list shows the verdict; Continue works with and without checking.
+6. A resumed old session renders with its stored steps (titles/objectives recomputed), old saved Teach answers render as plain text with citation links.
+7. 375px: no horizontal scroll on the lesson, sources disclosure and Not-covered block; touch targets >= --cmp-touch-min on coarse pointer.
