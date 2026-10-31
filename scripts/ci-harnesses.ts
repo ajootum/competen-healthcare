@@ -300,6 +300,15 @@ const STAGING_ONLY: Exclusion[] = [
       + "Changes no staging setting (proved in Z). Refuses any other project.",
   },
   {
+    file: "scholar-learn-qi-regression-harness.ts",
+    reason:
+      "SCHOLAR-LEARN-FIX-01 L-C staging regression of the Quality Improvement PowerPoint (topics wording, lesson plan, grounded Teach, "
+      + "genuine gap, check understanding, picture-only slides, old-shaped session). Needs a RUNNING dev server pointed at the staging "
+      + "project (BASE_URL=http://localhost:3100), the staging service-role key, the local QI .pptx and real AI (map, learn, transcribe). "
+      + "It creates a fixture identity (kept as a browser fixture), sets scholar_material_image_slides for one case and restores it "
+      + "(proved in Z). Refuses any other project.",
+  },
+  {
     file: "scholar-flashcards-acceptance-harness.ts",
     reason:
       "SCHOLAR-FLASHCARDS-01 s14 flashcards acceptance (renal + respiratory notes). Needs a RUNNING dev server pointed at "

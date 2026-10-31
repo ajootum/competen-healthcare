@@ -163,6 +163,8 @@ export function EvidenceRecovery({ result, explanation = null, onAction, busy = 
 
 export type RecoveryRequestBody = {
   question?: string; paperQuestionId?: string; mode: RecoveryMode; materialId?: string | null; sectionId?: string | null; withheldReason?: string | null;
+  /** SCHOLAR-LEARN-FIX-01: a Learn session's selected materials (recorded: its id; held in the browser: its material ids). */
+  sessionId?: string | null; materialIds?: string[];
 };
 type Loaded = RecoveryView & { recoveryId: string; mode: RecoveryMode; question: string };
 

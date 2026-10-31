@@ -6,7 +6,7 @@ import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import {
-  findArtefact, getLearningPreference, getLearningSession, getPassage, isUuid, listArtefacts, recordLearningEvent, saveArtefact, searchCandidates, toPassages, updateLearningSession,
+  findArtefact, getLearningPreference, getLearningSession, getPassage, isUuid, listArtefacts, listExamPapers, recordLearningEvent, saveArtefact, searchCandidates, toPassages, updateLearningSession,
   type ArtefactRow,
 } from "@/lib/individual/scholar/store";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
@@ -19,17 +19,18 @@ import {
   type Passage, type TutorTurn,
 } from "@/lib/individual/scholar/generation";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
-import { artefactKey, governedReferences, isArtefactAction, libraryReferences, referenceSource, relabelReferences } from "@/lib/individual/scholar/learn";
+import { LESSON_MAX_SECTIONS, TEACH_THIN_CHARS, artefactKey, governedReferences, isArtefactAction, lessonOutline, libraryReferences, referenceSource, relabelReferences, sectionProfile, type LessonOutline } from "@/lib/individual/scholar/learn";
 import { externalReferences, learnResearch, researchEvidence, scholarResearchOperational, type LearnResearch } from "@/lib/individual/scholar/learn-research";
 import { qualityOf } from "@/lib/individual/scholar/source-quality";
 import { topicsOfSections } from "@/lib/individual/scholar/store";
 import type { LearnSourceMode } from "@/lib/individual/policy";
 import { withheldNext } from "@/lib/individual/scholar/learn-view";
-import { parseRecoveryRequest, recordRecoveryResult, recoveredReply, rederiveRecovery, type Rederived } from "@/lib/individual/scholar/evidence-recovery";
+import { groundingOutcome, keyTermsOf, parseRecoveryRequest, recordRecoveryResult, recoveredReply, rederiveRecovery, relatedSections, widerMode, type Grounding, type Rederived } from "@/lib/individual/scholar/evidence-recovery";
+import type { RecoveryMode } from "@/lib/individual/policy";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { studySessionBlock } from "@/lib/individual/scholar/study-context";
 import {
-  AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD, RESEARCH_READING_ONLY, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, STEP_MAX_SECTIONS,
+  AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD, RESEARCH_READING_ONLY, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL,
   isLearnAction, type ExplanationDepth, type LearnAction,
 } from "@/lib/individual/scholar/config";
 
@@ -102,7 +103,7 @@ export async function POST(req: Request) {
   // ── the passages: the step's own sections, by the caller's id ──
   const sessionId = isUuid(body?.sessionId) ? body.sessionId as string : null;
   let stepIds: string[] = [], scopeIds: string[] = [], step = Number.isInteger(body?.step) ? Number(body.step) : 0;
-  let recorded = false, stepTitle: string | null = null;
+  let recorded = false, stepTitle: string | null = null, sessionMaterials: string[] = [];
   if (sessionId) {
     const s = await getLearningSession(ctx.admin, ctx.userId, sessionId);
     if (!s.ok) return NextResponse.json({ error: "Your session could not be read just now." }, { status: 503 });
@@ -110,10 +111,11 @@ export async function POST(req: Request) {
     const here = s.data.steps.find(x => x.step === step) ?? s.data.steps[0];
     if (!here) return NextResponse.json({ error: "This session has nothing left to teach: its materials were deleted." }, { status: 404 });
     step = here.step; stepIds = here.sections.map(x => x.chunkId); scopeIds = s.data.steps.flatMap(x => x.sections.map(y => y.chunkId)); recorded = true; stepTitle = s.data.session.topic ?? s.data.session.title ?? null;
+    sessionMaterials = [...new Set(s.data.steps.flatMap(x => x.sections.map(y => y.materialId)))];
   } else {
     const ids = Array.isArray(body?.chunkIds) ? [...new Set((body.chunkIds as unknown[]).filter(isUuid))] as string[] : [];
     if (!ids.length) return NextResponse.json({ error: "Choose what to learn from." }, { status: 400 });
-    scopeIds = ids.slice(0, 60); stepIds = scopeIds.slice(0, STEP_MAX_SECTIONS);
+    scopeIds = ids.slice(0, 60); stepIds = scopeIds.slice(0, LESSON_MAX_SECTIONS);
   }
   let passages: Passage[] | null;
   if (action === "ask") {
@@ -124,6 +126,45 @@ export async function POST(req: Request) {
     passages = ranked.length ? await toPassages(ctx.admin, ctx.userId, ranked) : await ownPassages(ctx.admin, ctx.userId, stepIds);
   } else passages = await ownPassages(ctx.admin, ctx.userId, stepIds);
   if (!passages?.length) return NextResponse.json({ error: "That section could not be found." }, { status: 404 });
+  if (!sessionMaterials.length) sessionMaterials = [...new Set(passages.map(p => p.materialId))];
+
+  // ── SCHOLAR-LEARN-FIX-01: the lesson, its key terms and how well its passages hold them (no AI) ──
+  // The lesson's title and objective come from its own sections' headings and topics (learn.lessonOutline). A thin or
+  // partly grounded lesson is given the most relevant OTHER sections of the session's own material(s) -- and, only in a
+  // source mode wider than My notes only, another upload that holds most of its key terms (relatedSections) -- up to
+  // RETRIEVAL_LIMIT, after its own sections, so its [S n] tags come first. Ask already searches the session. Not for an
+  // explanation from recovery, which brings its own evidence. Every read is keyed on the learner's id.
+  const lesson: LessonOutline | null = action === "ask" ? null
+    : lessonOutline({ step, sections: passages.map(p => ({ chunkId: p.chunkId, materialId: p.materialId, ordinal: p.ordinal, pageFrom: p.pageFrom, pageTo: p.pageTo, materialTitle: p.materialTitle, unit: p.unit ?? "page" })) },
+      await topicsOfSections(ctx.admin, ctx.userId, passages.map(p => p.chunkId)), new Map(passages.map(p => [p.chunkId, sectionProfile(p.content)])));
+  const lessonTerms = action === "ask" ? keyTermsOf(question) : lesson ? keyTermsOf(lesson.focus.join(" ")).slice(0, 8) : [];
+  let grounding: Grounding = groundingOutcome(lessonTerms, passages);
+  const related = { sameMaterial: 0, otherMaterials: 0 };
+  const thin = passages.reduce((n, p) => n + p.content.length, 0) < TEACH_THIN_CHARS;
+  if (isArtefactAction(action) && !recovery && lessonTerms.length && (thin || grounding.outcome !== "sufficient")) {
+    const tsq = toTsQuery(lessonTerms.join(" "));
+    const others = RESEARCH_ACTIONS.includes(action as LearnAction) && askedMode !== "notes";
+    const [same, wide, papers] = tsq ? await Promise.all([
+      searchCandidates(ctx.admin, ctx.userId, tsq, { materialIds: sessionMaterials }),
+      others ? searchCandidates(ctx.admin, ctx.userId, tsq, null) : Promise.resolve(null),
+      others ? listExamPapers(ctx.admin, ctx.userId) : Promise.resolve(null),
+    ]) : [null, null, null];
+    // An unreadable paper list: no other uploads at all (an examination paper is never notes that answer it).
+    const exclude = papers?.ok ? new Set(papers.data.map(p => p.materialId)) : null;
+    const pool = [...(same?.ok ? same.data : []), ...(wide?.ok && exclude ? wide.data : [])];
+    const picked = relatedSections(pool, { have: passages.map(p => p.chunkId), terms: lessonTerms, covered: grounding.covered, materialIds: sessionMaterials, others: others && !!exclude, exclude: exclude ?? undefined, limit: RETRIEVAL_LIMIT });
+    if (picked.length) {
+      passages = [...passages, ...(await toPassages(ctx.admin, ctx.userId, picked))];
+      related.sameMaterial = picked.filter(c => sessionMaterials.includes(c.materialId)).length;
+      related.otherMaterials = picked.length - related.sameMaterial;
+      grounding = groundingOutcome(lessonTerms, passages);
+    }
+  }
+  // What L-B renders: sufficient -> teach; partial -> teach what is supported, name uncoveredTerms, offer `wider`;
+  // insufficient -> the existing evidence recovery. `wider` is the next recovery mode the learner may choose.
+  const wider: RecoveryMode | null = grounding.outcome === "sufficient" ? null : mode === "notes" ? "notes_and_library"
+    : mode === "library" ? widerMode("notes_and_library", policy, await scholarResearchOperational(ctx.admin).catch(() => false)) : null;
+  const lessonFields = { lesson: lesson ? { title: lesson.title, objective: lesson.objective } : null, grounding: { ...grounding, related, wider } };
 
   // ── how to teach it: depth and the governed references (L5 decides each). No AI yet. ──
   const pref = await getLearningPreference(ctx.admin, ctx.userId);
@@ -158,7 +199,7 @@ export async function POST(req: Request) {
       passageIds: src.map(p => p.chunkId), references: relabelReferences(a.refs, refSource), answer: split.research !== null ? split.main : a.content, cited: src.map((_, i) => i + 1),
       background: a.background ? { text: a.background, label: SUPPLEMENTARY_LABEL } : null, flags: a.flags, verdict: null,
       research: external.length ? { state: "cached", label: SOURCE_KIND_LABEL.research, message: null, references: external, ...(split.research ? { text: split.research } : {}) } : null,
-      saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...extra,
+      saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...lessonFields, ...extra,
     };
   };
   if (key && body?.fresh !== true) {
@@ -175,7 +216,7 @@ export async function POST(req: Request) {
   // ── s7: continuity -- no new AI where the standing (or the allowance) says no; what is saved stays available ──
   const continuity = async (message: string, insufficient: boolean) => {
     const saved = await listArtefacts(ctx.admin, ctx.userId, { chunkIds: passages!.map(p => p.chunkId) });
-    return NextResponse.json({ action, step, continuity: { message, insufficient }, saved: saved.ok ? saved.data.slice(0, 5).map(a => savedReply(a)) : [] });
+    return NextResponse.json({ action, step, ...lessonFields, continuity: { message, insufficient }, saved: saved.ok ? saved.data.slice(0, 5).map(a => savedReply(a)) : [] });
   };
   const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), action as "teach");
   if (!standing.available) return continuity(standing.message ?? "", standing.insufficient);
@@ -205,12 +246,12 @@ export async function POST(req: Request) {
   // on everything the model will read, as for every Learn request.
   let recovered: Rederived | null = null;
   if (recovery) {
-    recovered = await rederiveRecovery(ctx, policy, recovery, { materialId: passages[0].materialId, sectionId: passages[0].chunkId });
+    recovered = await rederiveRecovery(ctx, policy, recovery, { materialId: passages[0].materialId, sectionId: passages[0].chunkId, scopeMaterialIds: sessionMaterials });
     if (!recovered.ok && recovered.reason === "unknown") return NextResponse.json({ error: "Those learning resources could not be found. Look for them again." }, { status: 400 });
     if (!recovered.ok)
-      return NextResponse.json({ action, step, depth, label: AI_LABEL, kinds: SOURCE_KIND_LABEL, sources: [], passageIds: passages.map(p => p.chunkId), references: [], withheld: true, reason: "no_evidence", message: RECOVERY_STILL_WITHHELD, recovered: recoveredReply(recovered, false) });
+      return NextResponse.json({ action, step, depth, label: AI_LABEL, kinds: SOURCE_KIND_LABEL, ...lessonFields, sources: [], passageIds: passages.map(p => p.chunkId), references: [], withheld: true, reason: "no_evidence", message: RECOVERY_STILL_WITHHELD, recovered: recoveredReply(recovered, false) });
     const own = passages;
-    passages = [...own, ...recovered.inputs.passages.filter(p => !own.some(x => x.chunkId === p.chunkId))].slice(0, STEP_MAX_SECTIONS + RETRIEVAL_LIMIT);
+    passages = [...own, ...recovered.inputs.passages.filter(p => !own.some(x => x.chunkId === p.chunkId))].slice(0, LESSON_MAX_SECTIONS + RETRIEVAL_LIMIT);
     const have = references;
     references = [...have, ...recovered.inputs.references.filter(x => !have.some(y => y.competencyId === x.competencyId))];
   }
@@ -280,7 +321,7 @@ export async function POST(req: Request) {
 
   const sources = passages.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) }));
   const base = { action, step, depth, label: AI_LABEL, provenance: { model: r.model, promptVersion: r.promptVersion }, sources, passageIds: passages.map(p => p.chunkId), actionId: ai.actionId,
-    references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL,
+    references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL, ...lessonFields,
     ...(recovered ? { recovered: recoveredReply(recovered, action !== "check" && r.check.ok) } : {}),
     // COMPETEN-RESEARCH-01: external research, apart from the notes, with the providers' own records. Never mixed in.
     research: research ? {

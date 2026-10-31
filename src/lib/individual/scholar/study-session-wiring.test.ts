@@ -101,7 +101,7 @@ describe("runLearn: the block is emphasis under CONTEXT_PREAMBLE, for an ask onl
     expect(none.r.promptVersion).toBe(`${PROMPT_VERSIONS.learn}:ask`);
     const teach = await call("teach", "MY STUDY SESSION: x");
     expect(teach.user).not.toContain("MY STUDY SESSION");
-    expect(teach.r.promptVersion).toBe(`${PROMPT_VERSIONS.learn}:teach`);
+    expect(teach.r.promptVersion).toBe(`${PROMPT_VERSIONS.learn}:teach+${PROMPT_VERSIONS.learnTeach}`);
   });
 });
 

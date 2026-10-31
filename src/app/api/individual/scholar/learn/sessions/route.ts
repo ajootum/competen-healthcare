@@ -4,7 +4,7 @@ import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { activeSessionsTitled, createLearningSession, getConnectedSession, getLearningSession, learningEvents, listLearningSessions, sessionStepSummaries } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
-import { parseScope, planSteps, resolveScope, scopeText, sessionTopics, storedScopeKind } from "@/lib/individual/scholar/learn";
+import { LESSON_MAX_SECTIONS, parseScope, planSteps, resolveScope, scopeText, sectionProfiles, sessionTopics, storedScopeKind } from "@/lib/individual/scholar/learn";
 import { displaySessionTitle, sessionTitle } from "@/lib/individual/scholar/learn-search";
 import { sessionView } from "@/lib/individual/scholar/learn-view";
 import { audit } from "@/lib/individual/scholar/http";
@@ -57,8 +57,11 @@ export async function POST(req: Request) {
   const resolved = await resolveScope(ctx.admin, ctx.userId, scope, { competencyTitle });
   if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
 
-  const topics = await sessionTopics(ctx.admin, ctx.userId, resolved.sections.map(s => s.chunkId));
-  const plan = planSteps(resolved.sections, topics, policy.scholarSessionMaxSteps);
+  // SCHOLAR-LEARN-FIX-01: the planner reads each section's heading and size; no lesson plan can hold more than
+  // maxSteps x LESSON_MAX_SECTIONS sections, so only those are read (coverage still counts every section resolved).
+  const planned = resolved.sections.slice(0, policy.scholarSessionMaxSteps * LESSON_MAX_SECTIONS).map(s => s.chunkId);
+  const [topics, profiles] = await Promise.all([sessionTopics(ctx.admin, ctx.userId, resolved.sections.map(s => s.chunkId)), sectionProfiles(ctx.admin, ctx.userId, planned)]);
+  const plan = planSteps(resolved.sections, topics, policy.scholarSessionMaxSteps, profiles);
   const kind = storedScopeKind(scope, resolved.sections);
   const title = sessionTitle({ kind, sections: plan.steps.flatMap(s => s.sections), topics, topic: kind === "topic" ? resolved.topic : null, competencyTitle });
   let id: string | null = null, recorded = false, note: string | null = null;
@@ -67,7 +70,7 @@ export async function POST(req: Request) {
     if (same) {
       await audit(ctx, "individual_scholar_learning_resumed", "individual_scholar_learning_session", same.session.id, { scope: kind, reason: "same_scope" });
       return NextResponse.json({
-        session: sessionView({ id: same.session.id, recorded: true, title: displaySessionTitle(same.session.title), scopeKind: same.session.scopeKind, currentStep: Math.min(same.session.currentStep, Math.max(0, same.steps.length - 1)), status: same.session.status, coverage: null, steps: same.steps, topics: await sessionTopics(ctx.admin, ctx.userId, same.steps.flatMap(s => s.sections.map(x => x.chunkId))) }),
+        session: sessionView({ id: same.session.id, recorded: true, title: displaySessionTitle(same.session.title), scopeKind: same.session.scopeKind, currentStep: Math.min(same.session.currentStep, Math.max(0, same.steps.length - 1)), status: same.session.status, coverage: null, steps: same.steps, topics: await sessionTopics(ctx.admin, ctx.userId, same.steps.flatMap(s => s.sections.map(x => x.chunkId))), profiles }),
         progress: same.progress, resumed: true,
         note: "You were already learning this, so Scholar carried on with that session where you left it.",
         ...(connect ? { study: (await loadStudy(ctx.admin, ctx.userId, same.session.id, "learn", policy))?.bar ?? null } : {}),
@@ -84,7 +87,7 @@ export async function POST(req: Request) {
   await audit(ctx, "individual_scholar_learning_started", "individual_scholar_learning_session", id,
     { scope: kind, steps: plan.steps.length, sections: plan.coverage.sections, of: plan.coverage.of, recorded });
   return NextResponse.json({
-    session: sessionView({ id, recorded, title, scopeKind: kind, currentStep: 0, status: "active", coverage: plan.coverage, steps: plan.steps, topics }),
+    session: sessionView({ id, recorded, title, scopeKind: kind, currentStep: 0, status: "active", coverage: plan.coverage, steps: plan.steps, topics, profiles }),
     note,
     ...(connect && id ? { study: (await loadStudy(ctx.admin, ctx.userId, id, "learn", policy))?.bar ?? null } : {}),
   });

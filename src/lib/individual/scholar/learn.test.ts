@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { artefactKey, isArtefactAction, planSteps, stepTitle } from "./learn";
+import { LESSON_MAX_CHARS, LESSON_MAX_SECTIONS, LESSON_THIN_CHARS, artefactKey, isArtefactAction, lessonOutline, planSteps, sectionHeading, sectionProfile, stepTitle } from "./learn";
 import { activityState, getScholarAiStanding, type AiStanding } from "./ai-standing";
-import { offeredActions } from "./learn-view";
+import { offeredActions, sessionView } from "./learn-view";
 import { buildLearnerContext } from "./learner-context";
-import { STEP_MAX_SECTIONS } from "./config";
 import {
   checkCheckQuestion, checkFlags, checkLearnMain, learnSystem, parseVerdict, splitLearnAnswer, FLAG_MARKER, SUPPLEMENTARY_MARKER,
   type GovernedReference, type Passage,
@@ -23,23 +22,116 @@ const REFS: GovernedReference[] = [{ title: "Oxygen therapy", code: null, outcom
 
 describe("L3: the suggested steps (no AI)", () => {
   const sections = [sec("a1", "a", 1), sec("a2", "a", 2), sec("a3", "a", 3), sec("a4", "a", 4), sec("b1", "b", 1)];
-  it("groups consecutive sections of one material, up to the step size, never across materials", () => {
+  it("groups consecutive sections of one material into balanced lessons, never across materials", () => {
     const { steps, coverage } = planSteps(sections, new Map(), 10);
-    expect(steps.map(s => s.sections.map(x => x.chunkId))).toEqual([["a1", "a2", "a3"], ["a4"], ["b1"]]);
-    expect(steps.every(s => s.sections.length <= STEP_MAX_SECTIONS)).toBe(true);
+    // SCHOLAR-LEARN-FIX-01: four ordinary sections make two balanced lessons (was 3 + 1 at the old step size).
+    expect(steps.map(s => s.sections.map(x => x.chunkId))).toEqual([["a1", "a2"], ["a3", "a4"], ["b1"]]);
+    expect(steps.every(s => s.sections.length <= LESSON_MAX_SECTIONS && new Set(s.sections.map(x => x.materialId)).size === 1)).toBe(true);
     expect(coverage).toEqual({ sections: 5, of: 5 });
   });
-  it("starts a new step where the topics change, and states coverage when the steps are capped", () => {
+  it("cuts where the topics change, and covers everything it can when the steps are capped", () => {
     const topics = new Map([["a1", ["Airway"]], ["a2", ["airway", "Larynx"]], ["a3", ["Gas exchange"]], ["a4", ["gas exchange"]]]);
     expect(planSteps(sections, topics, 10).steps.map(s => s.sections.map(x => x.chunkId))).toEqual([["a1", "a2"], ["a3", "a4"], ["b1"]]);
+    // SCHOLAR-LEARN-FIX-01: capped at two, the lessons hold all five sections (was 4 of 5: a step size of 3 truncated).
     const capped = planSteps(sections, topics, 2);
-    expect(capped.steps).toHaveLength(2);
-    expect(capped.coverage).toEqual({ sections: 4, of: 5 });
+    expect(capped.steps.map(s => s.sections.map(x => x.chunkId))).toEqual([["a1", "a2", "a3", "a4"], ["b1"]]);
+    expect(capped.coverage).toEqual({ sections: 5, of: 5 });
   });
   it("names a step by its topics, or by where it is in the notes", () => {
     const [first] = planSteps([sec("a1", "a", 1)], new Map(), 5).steps;
-    expect(stepTitle(first, new Map([["a1", ["Airway", "airway", "Larynx"]]]))).toBe("Airway, Larynx");
+    // SCHOLAR-LEARN-FIX-01: the top two topics phrased as a title (was "Airway, Larynx").
+    expect(stepTitle(first, new Map([["a1", ["Airway", "airway", "Larynx"]]]))).toBe("Airway and larynx");
     expect(stepTitle(first, new Map())).toBe("A, page 1");
+  });
+});
+
+// SCHOLAR-LEARN-FIX-01 L-A. A deck shaped like production's "Quality Improvement Science and Methods" (47 sections,
+// a 64-character title slide, an agenda, runs of slides under one heading, a 23-character divider, a short last slide
+// of a run). Production gave 8 steps over 9 of its 47 sections, step 1 the title slide alone.
+const DECK: [string, number][] = [
+  ["Improving care: science and methods", 64], ["Objectives", 154], ["What is quality in care?", 350], ["Dimensions of care quality", 241],
+  ["Dimensions of care quality", 672], ["What is improvement?", 357], ["Patient safety", 396], ["Error", 189], ["Adverse event", 238], ["Near miss", 200],
+  ["Harm and systems", 462], ["Harm and systems thinking", 492], ["", 372], ["Systems: a framework", 196], ["Systems thinking", 588], ["A systemic problem", 346],
+  ["Layers of defence", 190], ["Attribution error", 292], ["Attribution error", 563], ["Fair culture", 410], ["Fair culture", 496], ["Fair culture", 554],
+  ["Improvement model", 1051], ["Improvement model", 1051], ["Improvement model", 1010], ["Measures", 577], ["", 921], ["", 1035],
+  ["Tools for safety", 23], ["Tools", 177], ["Cause and effect diagram", 415], ["Cause and effect diagram", 254],
+  ["Driver diagram", 283], ["Driver diagram", 322], ["Driver diagram", 265], ["Driver diagram", 243],
+  ["Failure modes analysis", 497], ["Failure modes analysis", 287], ["Failure modes analysis", 462], ["Failure modes analysis", 41],
+  ["Study worksheet", 383], ["Study worksheet", 319], ["Study worksheet", 804], ["Study worksheet", 471], ["Study worksheet", 460], ["Study worksheet", 566], ["Study worksheet", 542],
+];
+const deckSecs = DECK.map((_, i) => ({ chunkId: `s${i + 1}`, materialId: "qi", ordinal: i + 1, pageFrom: i + 1, pageTo: i + 1, materialTitle: "QI", unit: "slide" as const }));
+const deckText = (heading: string, chars: number) => {
+  const body = heading ? `${heading}\n` : "Every system is perfectly designed to get the results it gets.\n";
+  return (body + "the improvement of care and its measures is described here in more words. ".repeat(40)).slice(0, chars);
+};
+const deckProfiles = new Map(DECK.map(([h, n], i) => [`s${i + 1}`, sectionProfile(deckText(h, n))]));
+
+describe("SCHOLAR-LEARN-FIX-01: lessons, not slides", () => {
+  const plan = planSteps(deckSecs, new Map(), 8, deckProfiles);
+  const ids = plan.steps.map(s => s.sections.map(x => x.chunkId));
+  it("covers the whole deck in at most maxSteps lessons, in document order, each lesson contiguous", () => {
+    expect(plan.steps.length).toBeLessThanOrEqual(8);
+    expect(plan.coverage).toEqual({ sections: 47, of: 47 });
+    expect(ids.flat()).toEqual(deckSecs.map(s => s.chunkId));
+    expect(plan.steps.map(s => s.step)).toEqual(plan.steps.map((_, i) => i));
+  });
+  it("never makes a thin title, agenda or divider slide a lesson of its own", () => {
+    expect(ids[0].slice(0, 3)).toEqual(["s1", "s2", "s3"]);
+    for (const s of plan.steps) expect(s.sections.reduce((n, x) => n + deckProfiles.get(x.chunkId)!.chars, 0)).toBeGreaterThanOrEqual(LESSON_THIN_CHARS);
+    // The divider ("Tools for safety", 23 characters) leads into what follows; the short last slide of a run stays with its run.
+    expect(ids.findIndex(l => l.includes("s29"))).toBe(ids.findIndex(l => l.includes("s30")));
+    expect(ids.findIndex(l => l.includes("s40"))).toBe(ids.findIndex(l => l.includes("s39")));
+  });
+  it("keeps a run of slides under one heading together, and balances the lessons", () => {
+    const together = (from: number, to: number) => new Set(Array.from({ length: to - from + 1 }, (_, i) => ids.findIndex(l => l.includes(`s${from + i}`)))).size === 1;
+    expect([together(20, 22), together(23, 25), together(33, 36), together(41, 47)]).toEqual([true, true, true, true]);
+    expect(plan.steps.every(s => s.sections.length <= LESSON_MAX_SECTIONS)).toBe(true);
+  });
+  it("is deterministic", () => {
+    expect(planSteps(deckSecs, new Map(), 8, deckProfiles)).toEqual(plan);
+  });
+  it("beyond capacity: one contiguous run from the start, and coverage says how much", () => {
+    const many = Array.from({ length: 300 }, (_, i) => sec(`x${i}`, "x", i + 1));
+    const big = new Map(many.map(s => [s.chunkId, { heading: null, chars: 1200 }]));
+    const r = planSteps(many, new Map(), 3, big);
+    expect(r.steps.length).toBe(3);
+    expect(r.steps.flatMap(s => s.sections.map(x => x.chunkId))).toEqual(many.slice(0, r.coverage.sections).map(s => s.chunkId));
+    expect(r.coverage.of).toBe(300);
+    expect(r.coverage.sections).toBe(18); // 3 lessons x 7200 characters
+    expect(r.steps.every(s => s.sections.reduce((n, x) => n + big.get(x.chunkId)!.chars, 0) <= LESSON_MAX_CHARS)).toBe(true);
+  });
+});
+
+describe("SCHOLAR-LEARN-FIX-01: lesson titles and objectives (deterministic, no AI)", () => {
+  const step = (...xs: [string, string][]) => ({
+    step: { step: 0, sections: xs.map(([id], i) => sec(id, "m", i + 1)) },
+    profiles: new Map(xs.map(([id, text]) => [id, sectionProfile(text)])),
+  });
+  it("titles a lesson by the heading carrying most of its text, sentence-cased where the notes write the words so", () => {
+    const { step: s, profiles } = step(["o", "Objectives\nBy the end you will know the model."], ["m1", "Model For Improvement\nThe model for improvement asks three questions."], ["m2", "Model For Improvement\nEach change is tested in a cycle."], ["d", "Measures\nOutcome measures."]);
+    const o = lessonOutline(s, new Map(), profiles);
+    expect(o.title).toBe("Model for improvement");
+    expect(o.objective).toBe("Describe model for improvement, including measures.");
+  });
+  it("never titles a lesson Objectives, keeps acronyms, drops a bracketed citation, and stays within 80 characters", () => {
+    expect(lessonOutline(step(["a", "Agenda\nToday."]).step, new Map([["a", ["Quality improvement", "Patient safety"]]]), step(["a", "Agenda\nToday."]).profiles).title).toBe("Quality improvement and patient safety");
+    const f = step(["f", "Failure Modes and Effects Analysis (FMEA)\nfailure modes are listed with their effects and analysis."]);
+    expect(lessonOutline(f.step, new Map(), f.profiles).title).toBe("Failure modes and effects analysis (FMEA)");
+    const c = step(["c", "Just Culture (Leape, 2000)\nA just culture separates error from blame."]);
+    expect(lessonOutline(c.step, new Map(), c.profiles)).toMatchObject({ title: "Just culture", objective: "Explain just culture." });
+    const long = step(["l", `Interprofessional approaches to recognising and escalating deteriorating adult patients\n${"x".repeat(200)}`]);
+    expect(lessonOutline(long.step, new Map(), long.profiles).title.length).toBeLessThanOrEqual(80);
+  });
+  it("phrases a question heading as an objective, and a sentence is never a heading", () => {
+    const q = step(["q", "What is Quality in Healthcare?\nquality in healthcare is safe, timely and effective care."]);
+    expect(lessonOutline(q.step, new Map(), q.profiles)).toMatchObject({ title: "What is quality in healthcare?", objective: "Explain what quality in healthcare is." });
+    expect(sectionHeading("Every system is perfectly designed to achieve the results it gets.\nMore.")).toBeNull();
+    expect(sectionHeading("Speaker notes:\nx")).toBeNull();
+  });
+  it("sessionView exposes each lesson's title and objective", () => {
+    const { step: s, profiles } = step(["m1", "Model For Improvement\nThe model for improvement."]);
+    expect(sessionView({ id: null, recorded: false, title: "t", scopeKind: "document", currentStep: 0, status: "active", coverage: null, steps: [s], topics: new Map(), profiles }).steps[0])
+      .toMatchObject({ title: "Model for improvement", objective: "Describe model for improvement." });
   });
 });
 
