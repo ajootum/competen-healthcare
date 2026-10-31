@@ -13,7 +13,7 @@ import {
   OSCE_PRACTICE_LABEL, formatClock, readFeedbackParts, timerAnnouncement, timerState,
   type OsceFeedbackParts, type OsceGap, type OsceGuidance, type OsceMark, type OsceRemedy, type OsceResult,
 } from "@/lib/individual/scholar/osce";
-import type { OsceStationView } from "@/lib/individual/scholar/osce-service";
+import type { OsceChecklistView, OsceStationView } from "@/lib/individual/scholar/osce-service";
 
 // OSCE PRACTICE -- SCHOLAR-PRACTICE-EXAMS-01 (720) and SCHOLAR-OSCE-01 (721), the learner's side. Create a station (the
 // Competen station library, a practice template, a competency, or from notes), then run it in a focused workspace: the
@@ -168,11 +168,14 @@ export type OsceResultView = {
 };
 type SaveState = { state: "idle" | "saving" | "saved" | "failed"; at: string | null; note?: string };
 
-export function OsceRunner({ station, aiNote, pending, hasOpenRun }: {
-  station: OsceStationView; aiNote: string | null; pending: { attemptId: string; timeUp: boolean } | null; hasOpenRun: boolean;
+export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpenRun }: {
+  /** The checklist only for a finished run not yet marked; otherwise null, and it comes with the finish reply. */
+  station: OsceStationView; checklist: OsceChecklistView | null; aiNote: string | null; pending: { attemptId: string; timeUp: boolean } | null; hasOpenRun: boolean;
 }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>(pending ? "check" : "brief");
+  const [checklist, setChecklist] = useState<OsceChecklistView | null>(given);
+  const items = checklist ?? [];
   const [attemptId, setAttemptId] = useState(pending?.attemptId ?? "");
   const [startMs, setStartMs] = useState(0);
   const [now, setNow] = useState(0);
@@ -205,7 +208,7 @@ export function OsceRunner({ station, aiNote, pending, hasOpenRun }: {
     setResumed(!!r.json.resumed);
     const kept = (r.json.responses ?? {}) as Record<string, string>;
     setResponses(kept); latest.current = kept; dirty.current = false;
-    if (r.json.finished) { setTimeUp(!!r.json.timeUp); setPhase("check"); return; }
+    if (r.json.finished) { setChecklist(r.json.checklist ?? null); setTimeUp(!!r.json.timeUp); setPhase("check"); return; }
     // The server's start, on this device's clock: the offset between the two is taken once, here.
     const offset = Date.now() - Date.parse(r.json.serverNow);
     const s = Date.parse(r.json.startedAt) + offset;
@@ -226,7 +229,7 @@ export function OsceRunner({ station, aiNote, pending, hasOpenRun }: {
     setSave(s => ({ ...s, state: "saving" }));
     const r = await call(url, { action: "save", responses: latest.current }, "POST", keepalive);
     if (r.ok) { setSave({ state: "saved", at: r.json.savedAt ?? new Date().toISOString() }); return; }
-    if (r.json.closed) { setTimeUp(!!r.json.timeUp); setPhase("check"); return; }
+    if (r.json.closed) { setChecklist(r.json.checklist ?? null); setTimeUp(!!r.json.timeUp); setPhase("check"); return; }
     dirty.current = true;
     setSave(s => ({ state: "failed", at: s.at, note: r.json.error ?? "Not saved just now. Keep writing: it will try again." }));
   }, [attemptId, url]);
@@ -261,7 +264,7 @@ export function OsceRunner({ station, aiNote, pending, hasOpenRun }: {
     finishing.current = false;
     if (!r.ok) { setError(r.json.error ?? "What you wrote could not be saved."); return; }
     dirty.current = false;
-    setTimeUp(!!r.json.timeUp); setPhase("check");
+    setChecklist(r.json.checklist ?? null); setTimeUp(!!r.json.timeUp); setPhase("check");
   }
 
   async function abandon() {
@@ -302,7 +305,7 @@ export function OsceRunner({ station, aiNote, pending, hasOpenRun }: {
 
   async function mark() {
     setBusy(true); setError("");
-    const r = await call(url, { action: "mark", useAi: useAi && !!feedback, ticks: station.checklist.map(i => ({ itemId: i.id, mark: ticks[i.id] })) });
+    const r = await call(url, { action: "mark", useAi: useAi && !!feedback, ticks: items.map(i => ({ itemId: i.id, mark: ticks[i.id] })) });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "Your marks could not be saved."); return; }
     setResult({ ...(r.json as OsceResultView), feedback: feedback?.parts ?? null });
@@ -310,7 +313,7 @@ export function OsceRunner({ station, aiNote, pending, hasOpenRun }: {
     router.refresh();
   }
 
-  const unmarked = station.checklist.filter(i => !ticks[i.id]).length;
+  const unmarked = items.filter(i => !ticks[i.id]).length;
   const suggestedOf = (id: string) => feedback?.suggested.find(s => s.itemId === id)?.mark ?? null;
 
   return (
@@ -370,8 +373,9 @@ export function OsceRunner({ station, aiNote, pending, hasOpenRun }: {
             <button type="button" onClick={askFeedback} disabled={busy} className={ghost}>{busy ? "Reading…" : "Ask for AI feedback on what I wrote"}</button>
           )}
           {feedback && <FeedbackPanel parts={feedback.parts} />}
+          {!checklist && <p role="alert" className="text-[13.5px] font-semibold text-amber-900">The checklist could not be loaded. Reload the page: your run is kept.</p>}
           <ol className="space-y-3">
-            {station.checklist.map((item, n) => (
+            {items.map((item, n) => (
               <li key={item.id} className={`rounded-xl border p-3 ${item.critical ? "border-l-4 border-red-300 border-l-red-700" : "border-gray-200"}`}>
                 <fieldset>
                   <legend className="text-[14px] text-gray-900">
@@ -392,7 +396,7 @@ export function OsceRunner({ station, aiNote, pending, hasOpenRun }: {
               </li>
             ))}
           </ol>
-          <button type="button" onClick={mark} disabled={busy || unmarked > 0} className={btn} style={{ background: accent }}>
+          <button type="button" onClick={mark} disabled={busy || unmarked > 0 || !items.length} className={btn} style={{ background: accent }}>
             {unmarked > 0 ? `Mark every item (${unmarked} left)` : busy ? "Saving…" : "Save my marks"}
           </button>
         </div>
@@ -401,7 +405,7 @@ export function OsceRunner({ station, aiNote, pending, hasOpenRun }: {
       {phase === "done" && result && (
         <div className="mt-3 space-y-4">
           <ResultView r={result} />
-          <button type="button" onClick={() => { setPhase("brief"); setTicks({}); setFeedback(null); setUseAi(false); setResult(null); setResumed(false); }} className={ghost}>Practise this station again</button>
+          <button type="button" onClick={() => { setPhase("brief"); setChecklist(null); setTicks({}); setFeedback(null); setUseAi(false); setResult(null); setResumed(false); }} className={ghost}>Practise this station again</button>
         </div>
       )}
 
@@ -453,7 +457,7 @@ export function ResultView({ r }: { r: OsceResultView }) {
         </details>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))] gap-3">
         <div>
           <p className="font-semibold text-gray-900">Strengths</p>
           {r.result.strengths.length ? <ul className="mt-1 list-disc pl-5 text-[13.5px]">{r.result.strengths.map(s => <li key={s}>{s}</li>)}</ul> : <p className="text-[13.5px] text-gray-600">No item marked done this time.</p>}

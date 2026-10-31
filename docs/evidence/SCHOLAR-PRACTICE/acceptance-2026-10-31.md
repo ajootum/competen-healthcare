@@ -78,3 +78,53 @@ No staging setting was changed (OSCE and adaptive exams are on by default); the 
 byte-for-byte as before (Z1). Fixtures removed (Z2). Kept on purpose for the coordinator's browser check:
 `harness-osce-browser@competen.test` with one respiratory template station; its password is only in the local
 fixture file, never printed or committed. Remove it with `OSCE_REMOVE_BROWSER_FIXTURE=1` (same command).
+
+## Defects fixed (31 Oct 2026, branch `scholar/practice-exams-01`, no migration)
+
+Tests: `src/lib/individual/scholar/practice-defects.test.ts` (22). Each fix is decided by its test, and each test shows
+the old behaviour failing where it can.
+
+- **D1 fixed.** OSCE feedback has its own grounding check, `feedbackGroundingCheck` (`osce.ts`), wired at
+  `generation.ts:1143` with `feedbackGroundingText` (the station: scenario, task, checklist, quotes, outcomes, expected
+  activities, guidance; and the learner's responses). It is the Holdings check with three closed, exact excusals, each
+  only when EVERY use of the word is the meta use: a number word that counts (never followed within three words by a
+  unit, duration, dose or rate), "marked critical / marked as done|partly|missed", and "rather than a (general) normal
+  value / range". Digits are never excused. Pass / fail / competence wording (`claimsVerification`) and identifiers are
+  refused as before. The Practice and Scholar text checks are unchanged. Test: the two staging replays that were withheld
+  for `two` and for `marked` + `normal` are withheld by the old check and shown by the new one; an invented SpO2 target
+  (94-98%), "ninety four percent", "two litres", "every four hours", "within the normal range", "marked distress", "you
+  passed" and "you are competent" are still withheld. Not measured: which tokens withheld runs 1 and 2 (their replies were
+  not kept), so only the three measured collisions are excused.
+- **D2 fixed.** `adaptiveHref` moved from the `"use client"` module to `_components/question-view.ts:26` (plain module,
+  next to `studyHref`); `revise/adaptive/page.tsx`, `revise/page.tsx` and `adaptive-client.tsx` import it from there. Test:
+  a scan of every Scholar server module for a lower-case (non-component, non-type) import from a `"use client"` module
+  finds none, and goes red on the old import. Found by the same scan outside Scholar (not changed here): Professional
+  server pages import the string `inputCls` from the `"use client"` `_components/professional/forms.tsx`.
+- **D3 fixed.** `adaptive-service.ts:210` builds the generation coverage with `unusedCoverage` (`adaptive.ts:251`): only
+  questions NOT yet served in this exam, at the target difficulty and current prompt version, cover a section/format.
+  Order unchanged: library, stored, one generation call (within `ADAPTIVE_GENERATION_CALLS_MAX`), then the nearest
+  difficulty. Test: an mcq-only, one-section, 5-item exam (2 kept per call, as staging) reaches 5 with the path
+  standard > standard > standard > harder > harder; with the old coverage it stops at 2, as in run 2.
+- **D4 fixed.** Provenance is recorded per served item when it becomes the session's item: `recordServed`
+  (`adaptive.ts:260`) appends one letter per ordinal to the blueprint (`served`: l library, g written by this exam's own
+  calls, s stored) and keeps the ids this exam wrote but has not served (`pending`, at most 12, trimmed before sections
+  under the 4000-byte scope bound). Recorded at `revision/adaptive/route.ts:71` (item 1, after the session exists) and
+  `next/route.ts:67`; the report reads it (`adaptive-service.ts:301`). Exams started before the fix fall back to the
+  question's age against the exam's SET-UP (the set's creation), not the session's start. Test: run 3 exam 1's shape (the
+  first question written before the session, the rest from batches) reports 5 generated; library and stored keep theirs;
+  the record survives `blueprintOf`/`blueprintScope`.
+- **Low fixed.** `stationView` (`osce-service.ts:38`) no longer carries the checklist; `checklistView` gives it only for a
+  finished run: the finish reply (`attempts/[id]/route.ts:89`), the time-up replies (`:53`, `:62`,
+  `attempts/route.ts:47`) and the page for a finished run not yet marked (`[stationId]/page.tsx:105`). Guidance stays
+  after marking only. Test: the brief view has no checklist, critical flag or guidance; the wiring is checked.
+- **Point 12 follow-ups (coordinator).** The station page lays out by the main area's own width, not a viewport edge
+  (`[stationId]/page.tsx:101`: flex-wrap, work column `flex: 3 1 20rem`, aside `flex: 2 1 14rem`), so at 768px (517px
+  main) the aside wraps below and the checklist takes the full width; phones stay single-column; the sticky timer is
+  unchanged. The result's strengths/gaps pair wraps by width too (`osce-client.tsx:460`). The station list shows
+  "Simulated practice — not an observed clinical skills assessment and not verified competence" once, visible, above
+  the formative notice (`apply/osce/page.tsx:48`). Not re-checked in a browser here.
+
+Checks: vitest (src/lib/individual, src/lib/knowledge, src/app/individual) 83 files / 1052 tests pass; tsc clean; eslint
+clean on the touched files; `scripts/ci-harnesses.ts` ALL GREEN 67/67 (5 excluded by record); scholar-learning-harness
+160/0; individual-config-harness 47/0; individual-foundation-harness 74/0; ckri-harness 26/26 (real green, planted red).
+Staging was not touched; the staging acceptance harness was not re-run.

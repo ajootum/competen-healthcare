@@ -16,7 +16,7 @@ import {
 import { checkRevisionDraft, type RevisionDraft } from "./revision";
 import { blueprintFromDraft, checkPrivateCase } from "./clinical";
 import {
-  OSCE_FEEDBACK_SYSTEM, OSCE_PROMPT_VERSIONS, checkOsceDraft, osceFeedbackPrompt, osceStationPrompt, osceStationSystem, parseOsceFeedback,
+  OSCE_FEEDBACK_SYSTEM, OSCE_PROMPT_VERSIONS, checkOsceDraft, feedbackGroundingCheck, feedbackGroundingText, osceFeedbackPrompt, osceStationPrompt, osceStationSystem, parseOsceFeedback,
   type OsceGuidance, type OsceItem, type OscePassage,
 } from "./osce";
 
@@ -1136,10 +1136,10 @@ export async function runOsceFeedback(userId: string, input: { scenario: string;
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_osce_feedback" },
   });
   if (!r.ok) return { ok: false as const, error: r.error };
-  const grounding = [input.scenario, input.candidateInstructions, ...input.checklist.map(i => i.text), ...input.checklist.map(i => i.quote ?? ""), ...input.checklist.map(i => i.outcome ?? ""),
-    ...(input.expectedActivities ?? []), ...(input.guidance?.suggestedResponses ?? []), input.guidance?.assessmentGuidance ?? "", ...Object.values(input.responses)].filter(Boolean);
+  // D1 (staging acceptance, 31 Oct 2026): feedback has its own grounding check (osce.ts feedbackGroundingCheck): the
+  // Holdings check with three closed excusals for words that describe the writing, not a patient.
   return {
     ok: true as const, model: r.model, provider: r.provider, promptVersion: OSCE_PROMPT_VERSIONS.feedback,
-    feedback: parseOsceFeedback(r.text, input.checklist, grounding, groundingViolations, findPatientIdentifiers),
+    feedback: parseOsceFeedback(r.text, input.checklist, feedbackGroundingText(input), feedbackGroundingCheck(groundingViolations), findPatientIdentifiers),
   };
 }

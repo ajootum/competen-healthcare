@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
-import { studyHref } from "./question-view";
+import { adaptiveHref, studyHref } from "./question-view";
 import { FeedbackPanel, GradeAtEnd, QuestionRunner, type Answered, type HeldGrade } from "./revision-client";
 import {
   ADAPTIVE_LENGTH_MIN, ADAPTIVE_TIME_LIMITS, GROUNDING_LABEL, REVISION_FORMAT_LABEL, type AdaptiveFormat,
@@ -33,8 +33,6 @@ async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok:
     return { ok: false, status: 0, json: { error: "Competen could not be reached. Check your connection and try again." } };
   }
 }
-
-export const adaptiveHref = (sessionId?: string | null) => `${studyHref("revise/adaptive")}${sessionId ? `?session=${sessionId}` : ""}`;
 
 /** The rule, as the student reads it beside every exam. */
 export function RuleNote({ rule, className = "" }: { rule: string; className?: string }) {

@@ -34,9 +34,9 @@ import { answerOutcome, recordScholarOutcome } from "./outcome";
 import { rubricOf, stemKey, type GenerationDifficulty } from "./question-intel";
 import { ADAPTIVE_GENERATION_CALLS_MAX } from "./config";
 import {
-  BLUEPRINT_LIBRARY_MAX, BLUEPRINT_SECTIONS_MAX, BLUEPRINT_COMPETENCIES_MAX, LEVEL_OF, adaptationOutcomes, blueprintOf, blueprintScope, buildAdaptiveReport,
-  cognitiveOf, formatRotation, nextDifficulty, selectNext,
-  type AdaptiveBlueprint, type AdaptiveReport, type AdaptiveScope, type Candidate, type NextPick, type ReportItem, type StopReason,
+  BLUEPRINT_LIBRARY_MAX, BLUEPRINT_SECTIONS_MAX, BLUEPRINT_COMPETENCIES_MAX, adaptationOutcomes, blueprintOf, blueprintScope, buildAdaptiveReport,
+  cognitiveOf, formatRotation, itemSource, nextDifficulty, recordServed, selectNext, servedSources, unusedCoverage,
+  type AdaptiveBlueprint, type AdaptiveReport, type AdaptiveScope, type Candidate, type NextPick, type ReportItem, type ServedSource, type StopReason,
 } from "./adaptive";
 
 // ── WHAT THE EXAM COVERS ──
@@ -110,6 +110,8 @@ export async function adaptiveLibraryCopies(ctx: IndividualContext, sections: re
 export type AdaptiveState = {
   session: RevisionSessionRow; setId: string; setTitle: string; blueprint: AdaptiveBlueprint; fallback: boolean;
   questionIds: string[]; attempts: SessionAttempt[]; held: HeldAnswer[]; questions: Map<string, QuestionRow>;
+  /** D4: each served item's source as recorded when it was chosen (blueprint.served), and when the exam was set up. */
+  provenance: Map<string, ServedSource>; setUpAt: string;
 };
 
 /** An adaptive exam of the caller's: its session, blueprint, items and answers. null: not theirs, or not an adaptive exam. */
@@ -129,6 +131,7 @@ export async function loadAdaptive(admin: any, userId: string, sessionId: string
       session: s.data.session, setId: set.id, setTitle: set.title, blueprint, fallback: s.data.session.mode !== "adaptive",
       // A question removed with its material leaves the exam; the rest stay in order.
       questionIds: s.data.questionIds.filter(id => questions.has(id)), attempts: s.data.attempts, held: s.data.held, questions,
+      provenance: servedSources(blueprint.served, s.data.questionIds), setUpAt: set.createdAt,
     },
   };
 }
@@ -171,26 +174,28 @@ async function candidates(admin: any, userId: string, bp: AdaptiveBlueprint): Pr
  */
 export async function chooseNext(ctx: IndividualContext, req: Request, policy: IndividualPolicy, input: {
   setId: string; blueprint: AdaptiveBlueprint; questionIds: readonly string[]; outcomes: readonly (boolean | null)[]; lastKind: QuestionRow["kind"] | null;
-}): Promise<{ ok: true; pick: NextPick | null; target: GenerationDifficulty; note: string | null; blueprint: AdaptiveBlueprint } | { ok: false }> {
+}): Promise<{ ok: true; pick: NextPick | null; target: GenerationDifficulty; note: string | null; blueprint: AdaptiveBlueprint; generated: string[] } | { ok: false }> {
   const target = nextDifficulty(input.blueprint.start, input.outcomes);
   const exclude = new Set(input.questionIds);
   let found = await candidates(ctx.admin, ctx.userId, input.blueprint);
   if (!found) return { ok: false };
   const first = selectNext({ target, pool: found.pool, exclude, formats: input.blueprint.formats, lastKind: input.lastKind });
-  if (first.exact) return { ok: true, pick: first.exact, target, note: null, blueprint: input.blueprint };
-  const gen = await generateForTarget(ctx, req, policy, input.setId, input.blueprint, found.questions, target, input.lastKind);
+  if (first.exact) return { ok: true, pick: first.exact, target, note: null, blueprint: input.blueprint, generated: [] };
+  // No unused question at the target: write a batch (within the exam's call limit). Only when that is not possible is the
+  // nearest difficulty offered.
+  const gen = await generateForTarget(ctx, req, policy, input.setId, input.blueprint, found.questions, exclude, target, input.lastKind);
   let nearest = first.nearest;
   if (gen.ids.length) {
     found = (await candidates(ctx.admin, ctx.userId, gen.blueprint)) ?? found;
     const again = selectNext({ target, pool: found.pool, exclude, formats: gen.blueprint.formats, lastKind: input.lastKind, fresh: new Set(gen.ids) });
-    if (again.exact) return { ok: true, pick: again.exact, target, note: null, blueprint: gen.blueprint };
+    if (again.exact) return { ok: true, pick: again.exact, target, note: null, blueprint: gen.blueprint, generated: gen.ids };
     nearest = again.nearest ?? nearest;
   }
-  return { ok: true, pick: nearest, target, note: nearest ? `No ${target === "easy" ? "easier" : target === "harder" ? "harder" : "standard"} question was available${gen.note ? ` (${gen.note.replace(/\.$/, "")})` : ""}, so this one is the nearest difficulty there is.` : gen.note, blueprint: gen.blueprint };
+  return { ok: true, pick: nearest, target, note: nearest ? `No ${target === "easy" ? "easier" : target === "harder" ? "harder" : "standard"} question was available${gen.note ? ` (${gen.note.replace(/\.$/, "")})` : ""}, so this one is the nearest difficulty there is.` : gen.note, blueprint: gen.blueprint, generated: gen.ids };
 }
 
 /** One generation call for a small batch at the target difficulty. Counted against the exam's own limit. */
-async function generateForTarget(ctx: IndividualContext, req: Request, policy: IndividualPolicy, setId: string, bp: AdaptiveBlueprint, pool: readonly QuestionRow[], target: GenerationDifficulty, lastKind: QuestionRow["kind"] | null): Promise<{ ids: string[]; note: string | null; blueprint: AdaptiveBlueprint }> {
+async function generateForTarget(ctx: IndividualContext, req: Request, policy: IndividualPolicy, setId: string, bp: AdaptiveBlueprint, pool: readonly QuestionRow[], used: ReadonlySet<string>, target: GenerationDifficulty, lastKind: QuestionRow["kind"] | null): Promise<{ ids: string[]; note: string | null; blueprint: AdaptiveBlueprint }> {
   const none = (note: string | null) => ({ ids: [], note, blueprint: bp });
   if (!bp.sections.length) return none(null);
   if (policy.scholarRevisionGeneration === "saved_only") return none("new questions are not written here");
@@ -199,8 +204,10 @@ async function generateForTarget(ctx: IndividualContext, req: Request, policy: I
   if (!standing.available) return none(standing.message ?? "new AI help is not available right now");
   const pre = await aiPreflight(ctx);
   if (pre) return none(((await pre.clone().json().catch(() => ({}))) as { error?: string }).error ?? "new questions could not be written just now");
-  // Identical content is not written twice: a section, format and difficulty that already has questions at this prompt version is skipped.
-  const existing = new Set(pool.filter(q => q.promptVersion.startsWith(formatPromptVersion(q.kind)) && (q.difficulty ?? 2) === LEVEL_OF[target]).map(q => `${q.chunkId}|${q.kind}`));
+  // D3: a section and format is skipped only while it still has an UNUSED question at this difficulty and prompt version.
+  // Questions this exam has already served do not count, so the exam can go on. Identical stems are still never written
+  // twice (`existing` stems below).
+  const existing = unusedCoverage(pool.map(q => ({ id: q.id, chunkId: q.chunkId, kind: q.kind, difficulty: q.difficulty, current: q.promptVersion.startsWith(formatPromptVersion(q.kind)) })), used, target);
   const call = planGeneration({ shortfall: 3, chunkIds: bp.sections, formats: formatRotation(bp.formats, lastKind), existing })[0];
   if (!call) return none("every section and format already has questions at this difficulty");
   const passage = await getPassage(ctx.admin, ctx.userId, call.chunkId);
@@ -248,6 +255,13 @@ async function generateForTarget(ctx: IndividualContext, req: Request, policy: I
   return { ids, note: ids.length ? null : "no new question passed the checks", blueprint: next };
 }
 
+/** D4: the served item's source recorded on the blueprint, once the item is the session's (adaptive.ts recordServed). */
+export async function recordServedItem(admin: any, userId: string, setId: string, bp: AdaptiveBlueprint, ordinal: number, pick: NextPick, generated: readonly string[]): Promise<AdaptiveBlueprint> {
+  const next = recordServed(bp, ordinal, pick, generated);
+  await updateAdaptiveScope(admin, userId, setId, blueprintScope(next));
+  return next;
+}
+
 /** The next question added as the exam's next item. false: another request added one first (the caller reloads). */
 export const addItem = (admin: any, userId: string, sessionId: string, ordinal: number, questionId: string) => appendAdaptiveItem(admin, userId, sessionId, ordinal, questionId);
 
@@ -283,7 +297,8 @@ export async function adaptiveReport(admin: any, userId: string, st: AdaptiveSta
     return {
       questionId: q.id, kind: q.kind, stem: q.stem, difficulty: q.difficulty, cognitive: cognitiveOf(rubric?.level ?? null, q.difficulty),
       chunkId: q.chunkId, materialId: q.materialId, materialTitle: q.materialTitle, topic: topics.get(q.chunkId)?.[0] ?? null, competencyId: compOf.get(q.id) ?? null,
-      library: !!q.library, generated: !q.library && q.createdAt >= st.session.createdAt,
+      // D4: counted from the source recorded when each item was served, not from the session's start.
+      ...(src => ({ library: src === "library", generated: src === "generated" }))(itemSource(st.provenance.get(q.id), { library: !!q.library, createdAt: q.createdAt }, st.setUpAt)),
       ...outcomes[st.questionIds.indexOf(q.id)] ?? { outcome: "unanswered" as const },
       keyPoints: rubric?.keyPoints ?? [], misconceptions: rubric?.misconceptions ?? [],
     };

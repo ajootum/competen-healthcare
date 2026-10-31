@@ -9,7 +9,7 @@ import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRun
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runOsceFeedback } from "@/lib/individual/scholar/generation";
 import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
-import { osceGate, resultExtras, stationSnapshot } from "@/lib/individual/scholar/osce-service";
+import { checklistView, osceGate, resultExtras, stationSnapshot } from "@/lib/individual/scholar/osce-service";
 import {
   OSCE_FEEDBACK_WITHHELD, finishRun, marksCompared, normaliseResponses, readSnapshot, remediation, resultOf, saveAllowed, scoreExplanation, scoreSummary, scoreTicks,
   type OsceTick,
@@ -50,7 +50,7 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
   const snap = readSnapshot(attempt.snapshot, stationSnapshot(station));
 
   if (body?.action === "save") {
-    if (attempt.status !== "in_progress" || attempt.finishedAt) return NextResponse.json({ error: "This run is no longer open.", closed: true }, { status: 409 });
+    if (attempt.status !== "in_progress" || attempt.finishedAt) return NextResponse.json({ error: "This run is no longer open.", closed: true, ...(attempt.finishedAt ? { checklist: checklistView(snap.checklist) } : {}) }, { status: 409 });
     const responses = normaliseResponses(body?.responses, snap.sections);
     if (findPatientIdentifiers(Object.values(responses).join("\n")).length)
       return NextResponse.json({ error: "Something you wrote looks like it identifies a patient, so it was not saved. Remove it and carry on.", identifier: true }, { status: 422 });
@@ -59,7 +59,7 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
       const now = Math.max(Date.now(), started);
       const run = finishRun(started, now, snap.durationMinutes);
       await finishOsceAttempt(ctx.admin, ctx.userId, attempt.id, { responses: attempt.responses, finishedAt: new Date(now).toISOString(), durationSeconds: run.durationSeconds, timeUp: true });
-      return NextResponse.json({ error: "Time was up, so the run was finished with what was last saved.", closed: true, timeUp: true }, { status: 409 });
+      return NextResponse.json({ error: "Time was up, so the run was finished with what was last saved.", closed: true, timeUp: true, checklist: checklistView(snap.checklist) }, { status: 409 });
     }
     if (!(await saveOsceProgress(ctx.admin, ctx.userId, attempt.id, responses))) return NextResponse.json({ error: "Not saved just now. Keep writing: it will try again." }, { status: 500 });
     return NextResponse.json({ saved: true, savedAt: new Date().toISOString() });
@@ -85,7 +85,8 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
       responses, finishedAt: new Date(finished).toISOString(), durationSeconds: run.durationSeconds, timeUp: run.timeUp || body?.timeUp === true,
     });
     if (!ok) return NextResponse.json({ error: "What you wrote could not be saved. Copy it somewhere safe and try again." }, { status: 500 });
-    return NextResponse.json({ finished: true, durationSeconds: run.durationSeconds, timeUp: run.timeUp || body?.timeUp === true });
+    // The checklist reaches the browser only now, with the run finished (never in the brief or during the run).
+    return NextResponse.json({ finished: true, durationSeconds: run.durationSeconds, timeUp: run.timeUp || body?.timeUp === true, checklist: checklistView(snap.checklist) });
   }
 
   if (body?.action === "feedback") {

@@ -16,8 +16,8 @@ import { ADAPTIVE_FALLBACK_NOTE, ADAPTIVE_HELP, ADAPTIVE_REPORT_LABEL, ADAPTIVE_
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../_components/chrome";
 import StudyNav from "../../_components/StudyNav";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
-import { studyHref } from "../../_components/question-view";
-import { AdaptiveReportView, AdaptiveRunner, AdaptiveStart, adaptiveHref, type ReviewRow } from "../../_components/adaptive-client";
+import { adaptiveHref, studyHref } from "../../_components/question-view";
+import { AdaptiveReportView, AdaptiveRunner, AdaptiveStart, type ReviewRow } from "../../_components/adaptive-client";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { finishOsceAttempt, getOsceStation, openOsceAttempt, startOsceAttempt } from "@/lib/individual/scholar/store";
 import { servableOsceStation } from "@/lib/individual/scholar/library-questions";
-import { osceGate, stationSnapshot } from "@/lib/individual/scholar/osce-service";
+import { checklistView, osceGate, stationSnapshot } from "@/lib/individual/scholar/osce-service";
 import { finishRun, readSnapshot, resumeOf, snapshotOf } from "@/lib/individual/scholar/osce";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     const run = finishRun(started, now, snap.durationMinutes);
     const ok = await finishOsceAttempt(ctx.admin, ctx.userId, open.id, { responses: open.responses, finishedAt: new Date(now).toISOString(), durationSeconds: run.durationSeconds, timeUp: true });
     if (!ok) return NextResponse.json({ error: "Your earlier run could not be closed just now. Your writing is still saved. Try again shortly." }, { status: 500 });
-    return NextResponse.json({ attemptId: open.id, resumed: true, finished: true, timeUp: true, responses: open.responses });
+    return NextResponse.json({ attemptId: open.id, resumed: true, finished: true, timeUp: true, responses: open.responses, checklist: checklistView(snap.checklist) });
   }
 
   if (station.source === "library" && !(station.libraryVersionId && (await servableOsceStation(ctx.admin, station.libraryVersionId))))

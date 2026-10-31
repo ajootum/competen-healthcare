@@ -30,19 +30,24 @@ export async function osceGate(admin: any, userId: string): Promise<ScholarOsceP
 
 /**
  * What the browser is given of a station for the BRIEF and the run: the definition a candidate may see (profession,
- * programme, topic, objectives, instructions, scenario, duration, sections) and the checklist for the self-check.
- * Guidance and expected activities are NOT here: they are given only after a run (resultExtras), never before or during.
- * The checklist given is the one the run is marked against: the attempt snapshot where there is one.
+ * programme, topic, objectives, instructions, scenario, duration, sections). The CHECKLIST is not here either (staging
+ * acceptance, 31 Oct 2026: the brief carried every item and its critical flag in the page payload while the copy says it
+ * is shown after the station): it is given only once the run has finished (checklistView, from the finish reply, or the
+ * page for a finished run not yet marked). Guidance and expected activities are given only after marking (resultExtras).
  */
-export function stationView(s: OsceStationRow, checklist: readonly OsceItem[] = s.checklist) {
+export function stationView(s: OsceStationRow) {
   return {
     id: s.id, title: s.title, scenario: s.scenario, candidateInstructions: s.candidateInstructions, durationMinutes: s.durationMinutes,
     sections: s.sections, source: s.source, contentStatus: s.contentStatus, version: s.version,
     profession: s.profession, programmeLabel: s.programmeLabel, topic: s.topic, bodySystem: s.bodySystem, difficulty: s.difficulty, objectives: s.objectives,
-    checklist: checklist.map((i: OsceItem) => ({ id: i.id, text: i.text, critical: i.critical, outcome: i.outcome ?? null, quote: i.quote ?? null })),
   };
 }
 export type OsceStationView = ReturnType<typeof stationView>;
+
+/** The checklist for the self-check: the one the run is marked against (its snapshot). Only for a FINISHED run. */
+export const checklistView = (checklist: readonly OsceItem[]) =>
+  checklist.map((i: OsceItem) => ({ id: i.id, text: i.text, critical: i.critical, outcome: i.outcome ?? null, quote: i.quote ?? null }));
+export type OsceChecklistView = ReturnType<typeof checklistView>;
 
 /** The station's snapshot fallback: what a run started before 721 (no snapshot) is marked against. */
 export const stationSnapshot = (s: OsceStationRow): OsceSnapshot => ({

@@ -7,7 +7,7 @@ import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { isUuid } from "@/lib/individual/scholar/store";
 import { audit } from "@/lib/individual/scholar/http";
 import { revisionItemView } from "@/lib/individual/scholar/revision-view";
-import { addItem, adaptiveReport, chooseNext, currentQuestion, finishAdaptive, loadAdaptive, stateOutcomes, type AdaptiveState } from "@/lib/individual/scholar/adaptive-service";
+import { addItem, adaptiveReport, chooseNext, currentQuestion, finishAdaptive, loadAdaptive, recordServedItem, stateOutcomes, type AdaptiveState } from "@/lib/individual/scholar/adaptive-service";
 import { adaptationOutcomes, deadlineOf, nextDifficulty, stopReason } from "@/lib/individual/scholar/adaptive";
 import { ADAPTIVE_RULE } from "@/lib/individual/scholar/config";
 
@@ -63,6 +63,8 @@ export async function POST(req: Request) {
     if (!next.ok) return NextResponse.json({ error: "Your saved questions could not be read just now." }, { status: 503 });
     if (!next.pick) return done(await finishAdaptive(ctx, { ...st, blueprint: next.blueprint }, "exhausted"));
     if (await addItem(ctx.admin, ctx.userId, st.session.id, st.questionIds.length + 1, next.pick.id)) {
+      // D4: its source recorded at selection (library, written by this exam, or stored), on the blueprint.
+      await recordServedItem(ctx.admin, ctx.userId, st.setId, next.blueprint, st.questionIds.length + 1, next.pick, next.generated);
       await audit(ctx, "individual_scholar_adaptive_next", "individual_scholar_revision_session", st.session.id, {
         number: st.questionIds.length + 1, target: next.target, from: next.pick.from, match: next.pick.match, level: next.pick.level,
       });

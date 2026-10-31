@@ -11,7 +11,7 @@ import { FORMATIVE_NOTICE } from "@/lib/individual/scholar/spaces";
 import { consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { servableOsceStation } from "@/lib/individual/scholar/library-questions";
-import { osceAvailability, resultExtras, stationSnapshot, stationView } from "@/lib/individual/scholar/osce-service";
+import { checklistView, osceAvailability, resultExtras, stationSnapshot, stationView } from "@/lib/individual/scholar/osce-service";
 import {
   LIBRARY_STATION_LABEL, OSCE_DIFFICULTY_LABEL, OSCE_OFF, OSCE_PRACTICE_LABEL, OSCE_SOURCE_LABEL, OSCE_UNAVAILABLE, formatClock, marksCompared, readFeedbackParts, readSnapshot,
   remediation, resultOf, scoreExplanation, scoreSummary, type OsceTick,
@@ -95,10 +95,14 @@ export default async function OsceStationPage({ params }: { params: Promise<{ ex
       <BoundaryNotice notice={FORMATIVE_NOTICE} detail={OSCE_PRACTICE_LABEL} />
       {!stillPublished && <p role="status" className="mb-4 rounded-xl border border-amber-400 bg-amber-50 px-3 py-2 text-[13.5px] text-amber-900">This station&rsquo;s library version is no longer published, so it cannot be practised again. Your earlier runs are kept below.</p>}
 
-      <div className="grid gap-5 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="space-y-5">
+      {/* Two columns only where the MAIN AREA has room for both (a 20rem work column beside a 14rem aside), not at a
+          viewport edge: on a 768px tablet the shell sidebar leaves about 517px, so the aside wraps below the run and the
+          checklist keeps the full width (coordinator browser check, 31 Oct 2026). CPR-MOB-001 keeps its single md edge. */}
+      <div className="flex flex-wrap items-start gap-5">
+        <div className="min-w-0 flex-[3_1_20rem] space-y-5">
           {stillPublished || pending || openRun ? (
-            <OsceRunner key={pending?.id ?? openRun?.id ?? "new"} station={stationView(station, pendingSnap?.checklist ?? (openRun ? readSnapshot(openRun.snapshot, fallback).checklist : station.checklist))}
+            <OsceRunner key={pending?.id ?? openRun?.id ?? "new"} station={stationView(station)}
+              checklist={pendingSnap ? checklistView(pendingSnap.checklist) : null}
               aiNote={aiNote} pending={pending ? { attemptId: pending.id, timeUp: pending.timeUp } : null} hasOpenRun={!!openRun} />
           ) : null}
           {last && (
@@ -108,7 +112,7 @@ export default async function OsceStationPage({ params }: { params: Promise<{ ex
             </section>
           )}
         </div>
-        <aside aria-labelledby="osce-about-h" className="space-y-4">
+        <aside aria-labelledby="osce-about-h" className="min-w-0 flex-[2_1_14rem] space-y-4">
           <section className="rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4">
             <h2 id="osce-about-h" className="text-[14px] font-bold text-gray-900">About this station</h2>
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]">

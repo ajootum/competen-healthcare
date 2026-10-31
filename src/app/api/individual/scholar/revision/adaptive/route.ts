@@ -8,7 +8,7 @@ import { createAdaptiveSession, createAdaptiveSet, deleteRevisionSet, listAdapti
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
 import { generationContextLoader } from "@/lib/individual/scholar/question-context";
-import { adaptiveLibraryCopies, chooseNext, resolveAdaptiveSections } from "@/lib/individual/scholar/adaptive-service";
+import { adaptiveLibraryCopies, chooseNext, recordServedItem, resolveAdaptiveSections } from "@/lib/individual/scholar/adaptive-service";
 import { blueprintLimits, blueprintOf, blueprintScope, parseBlueprintRequest, startingDifficulty, type AdaptiveBlueprint } from "@/lib/individual/scholar/adaptive";
 import { ADAPTIVE_REPORT_LABEL, ADAPTIVE_RULE } from "@/lib/individual/scholar/config";
 
@@ -66,6 +66,9 @@ export async function POST(req: Request) {
   }
   const made = await createAdaptiveSession(ctx.admin, ctx.userId, { setId: set.id, feedback: a.feedback, total: a.length, firstQuestionId: first.pick.id });
   if (!made.ok) { await deleteRevisionSet(ctx.admin, ctx.userId, set.id); return NextResponse.json({ error: made.notProvisioned ? "Adaptive exams are not available here yet: revision sessions are not installed on this environment." : "The exam could not be started just now." }, { status: made.notProvisioned ? 404 : 503 }); }
+  // D4: the first item's source, recorded now that it is the session's item 1 (written before the session existed, so a
+  // count from the session's start called it stored).
+  await recordServedItem(ctx.admin, ctx.userId, set.id, first.blueprint, 1, first.pick, first.generated);
   await audit(ctx, "individual_scholar_revision_started", "individual_scholar_revision_session", made.id, {
     adaptive: true, mode: made.mode, fallback: made.mode !== "adaptive", scope: a.scope.kind, sections: resolved.sections.length, competencies: resolved.competencyIds.length,
     formats: a.formats, length: a.length, start: start.start, start_from: start.from, feedback: a.feedback, time_limit: a.timeLimitMinutes, library: libraryIds.length,

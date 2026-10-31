@@ -719,6 +719,62 @@ export function osceFeedbackPrompt(station: { scenario: string; candidateInstruc
   ].join("\n\n");
 }
 
+/**
+ * Pure. The texts OSCE feedback may draw its facts from: the station (scenario, task, checklist, the items' quotes and
+ * outcomes, expected activities, guidance) and what the learner wrote. Nothing else grounds it.
+ */
+export function feedbackGroundingText(input: { scenario: string; candidateInstructions: string; checklist: readonly OsceItem[]; responses: Record<string, string>; guidance?: OsceGuidance | null; expectedActivities?: readonly string[] }): string[] {
+  return [input.scenario, input.candidateInstructions, ...input.checklist.map(i => i.text), ...input.checklist.map(i => i.quote ?? ""), ...input.checklist.map(i => i.outcome ?? ""),
+    ...(input.expectedActivities ?? []), ...(input.guidance?.suggestedResponses ?? []), input.guidance?.assessmentGuidance ?? "", ...Object.values(input.responses)].filter(Boolean);
+}
+
+// ── THE FEEDBACK'S OWN GROUNDING CHECK ── D1, staging acceptance 31 Oct 2026 ──
+//
+// The Holdings check (src/lib/ai/grounding.ts) was built for prose that states facts about a PATIENT: there, "marked",
+// "normal" and a spelled-out "two" are a severity, a test result and a count nobody recorded. Formative feedback states
+// facts about the learner's WRITING against the station: that an item is "marked critical", that the guidance asks for
+// the prescribed target "rather than a general normal value", that "the two most time-sensitive measurements" were
+// missed. Read as patient facts, these withheld 4 of 7 accurate replies on staging. This check is the Holdings check
+// with three closed, exact excusals, each applied only when EVERY use of the word in the feedback is the meta use:
+//   1. a number word COUNTING things, never one followed (within three words) by a quantity -- a unit, a duration, a
+//      dose, a rate: "two litres", "every four hours", "five minutes" still need that number in the station or the
+//      writing. Digits are never excused: an SpO2 target of 94-98% that is not in the station is withheld.
+//   2. "marked" as the checklist's own marking: "marked critical", "marked as done / partly / missed". "Marked distress"
+//      is still a severity.
+//   3. "normal" naming a reference value set against the station's target: "rather than a (general) normal value".
+//      "Within the normal range" and "breath sounds normal" are still findings.
+// Pass, fail and competence wording is refused before this (claimsVerification), identifiers too. Every other number,
+// month and finding rule applies as written. The Practice and Scholar text checks are unchanged.
+
+const QUANTITY_AFTER = new Set([
+  "l", "litre", "litres", "liter", "liters", "ml", "millilitres", "mg", "mcg", "microgram", "micrograms", "g", "gram", "grams", "kg", "mmol", "mmhg", "kpa",
+  "second", "seconds", "sec", "secs", "minute", "minutes", "min", "mins", "hour", "hours", "hr", "hrs", "h", "hourly", "day", "days", "daily", "week", "weeks",
+  "month", "months", "year", "years", "breath", "breaths", "beat", "beats", "bpm", "percent", "per", "%", "times", "dose", "doses", "tablet", "tablets",
+  "puff", "puffs", "unit", "units", "drop", "drops", "metre", "metres", "meter", "meters", "cm", "mm", "degrees", "l/min",
+]);
+const COUNT_WORDS: readonly string[] = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+const MARKED_META = /\bmarked\s+(?:as\s+)?(?:an?\s+)?(?:critical|done|partly|missed)\b/g;
+const NORMAL_META = /\b(?:rather than|instead of|than|not|versus|vs\.?)\s+(?:[a-z-]+\s+){0,2}normal\s+(?:value|values|range|ranges|number|numbers|figure|figures)\b/g;
+
+const lowerText = (s: string) => s.toLowerCase().replace(/[‐-―]/g, "-");
+/** Whether every use of `word` in `text` counts things: none is followed, within three words, by a quantity. */
+function onlyCounts(text: string, word: string): boolean {
+  const toks = lowerText(text).replace(/(\d)%/g, "$1 %").split(/[^a-z0-9%/]+/).filter(Boolean);
+  return toks.every((t, i) => t !== word || !toks.slice(i + 1, i + 4).some(n => QUANTITY_AFTER.has(n)));
+}
+const onlyMeta = (text: string, word: string, meta: RegExp) => !new RegExp(`\\b${word}\\b`).test(lowerText(text).replace(meta, " "));
+
+/** Pure. The OSCE feedback grounding check: `base` (the Holdings text check) with the three excusals above. */
+export function feedbackGroundingCheck(base: GroundingCheck): GroundingCheck {
+  return (text, grounding) => base(text, grounding).filter(raw => {
+    const v = raw as { kind?: string; token?: string };
+    if (v.kind === "ungrounded_number" && v.token && COUNT_WORDS.includes(v.token)) return !onlyCounts(text, v.token);
+    if (v.kind === "asserted_finding" && v.token === "marked") return !onlyMeta(text, "marked", MARKED_META);
+    if (v.kind === "asserted_finding" && v.token === "normal") return !onlyMeta(text, "normal", NORMAL_META);
+    return true;
+  });
+}
+
 export type OsceFeedbackParts = {
   understanding: string[]; missingSteps: string[]; reasoningGaps: string[]; safety: string[]; improvements: string[]; revisionTopics: string[];
 };

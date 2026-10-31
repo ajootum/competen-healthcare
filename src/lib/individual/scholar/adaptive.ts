@@ -70,7 +70,21 @@ export type AdaptiveBlueprint = {
   calls: number;
   /** Why it stopped, once it has. */
   stopped?: StopReason;
+  /**
+   * D4 (staging acceptance, 31 Oct 2026): where each served item came from, recorded when it was chosen, one letter per
+   * ordinal: l the governed library, g written by THIS exam's own generation calls, s already stored. Absent on exams
+   * started before the fix (the report then falls back to the question's age against the exam's set-up).
+   */
+  served?: string;
+  /** Questions this exam's generation calls wrote that it has not served yet (newest kept, at most PENDING_MAX). */
+  pending?: string[];
 };
+
+/** At most this many written-but-not-yet-served ids are kept (the scope has a 4000-byte bound). */
+export const PENDING_MAX = 12;
+export type ServedSource = "library" | "generated" | "stored";
+const SOURCE_LETTER: Record<ServedSource, string> = { library: "l", generated: "g", stored: "s" };
+const LETTER_SOURCE: Record<string, ServedSource> = { l: "library", g: "generated", s: "stored" };
 
 export type BlueprintRequest = Pick<AdaptiveBlueprint, "title" | "scope" | "formats" | "length" | "feedback" | "timeLimitMinutes" | "source"> & { start: GenerationDifficulty | null };
 export type BlueprintLimits = { defaultLength: number; maxLength: number; formats: readonly AdaptiveFormat[]; defaultFeedback: "immediate" | "end" };
@@ -152,12 +166,16 @@ export function blueprintOf(scope: unknown): AdaptiveBlueprint | null {
     sections: uuids(a.sections, BLUEPRINT_SECTIONS_MAX), competencyIds: uuids(a.competencyIds, BLUEPRINT_COMPETENCIES_MAX),
     libraryIds: uuids(a.libraryIds, BLUEPRINT_LIBRARY_MAX), calls: Number.isInteger(a.calls) ? Math.max(0, a.calls as number) : 0,
     ...(a.stopped === "length" || a.stopped === "time" || a.stopped === "exhausted" || a.stopped === "ended" ? { stopped: a.stopped } : {}),
+    ...(typeof a.served === "string" && /^[lgs?]{0,50}$/.test(a.served) ? { served: a.served } : {}),
+    ...(Array.isArray(a.pending) ? { pending: uuids(a.pending, PENDING_MAX) } : {}),
   };
 }
 
 /** Pure. The set scope that holds a blueprint, kept within 417's 4000-byte bound (sections trimmed first). */
 export function blueprintScope(b: AdaptiveBlueprint): { adaptive: AdaptiveBlueprint } {
   let out = { ...b };
+  // The provenance memo goes first: an unserved written id dropped here is only reported as stored if served later.
+  while (JSON.stringify({ adaptive: out }).length > 3800 && out.pending?.length) out = { ...out, pending: out.pending.slice(1) };
   while (JSON.stringify({ adaptive: out }).length > 3800 && out.sections.length > 1) out = { ...out, sections: out.sections.slice(0, out.sections.length - 5) };
   return { adaptive: out };
 }
@@ -222,6 +240,45 @@ export function selectNext(input: { target: GenerationDifficulty; pool: readonly
     if (nearest) break;
   }
   return { exact: null, nearest };
+}
+
+/**
+ * Pure. D3 (staging acceptance, 31 Oct 2026): the section|format pairs that already have an UNUSED question at the target
+ * difficulty -- not yet served in THIS exam, at the current prompt version -- which generation skips as covered. Before
+ * the fix every stored question counted, so once a pair had any question (even one this exam had already asked) nothing
+ * new was written, and an mcq-only exam on one section stopped at 2 of 5.
+ */
+export function unusedCoverage(pool: readonly { id: string; chunkId: string; kind: string; difficulty: number | null; current: boolean }[], used: ReadonlySet<string>, target: GenerationDifficulty): Set<string> {
+  return new Set(pool.filter(q => q.current && !used.has(q.id) && levelOfItem(q.difficulty) === LEVEL_OF[target]).map(q => `${q.chunkId}|${q.kind}`));
+}
+
+/**
+ * Pure. D4: the blueprint after item `ordinal` was served -- its source letter recorded at the moment it was chosen (library,
+ * written by this exam -- now or by an earlier call of it -- or stored), and the ids this exam wrote but has not served
+ * kept for the next pick. `generated` is what this pick's own generation call wrote.
+ */
+export function recordServed(bp: AdaptiveBlueprint, ordinal: number, pick: Pick<NextPick, "id" | "from">, generated: readonly string[] = []): AdaptiveBlueprint {
+  const written = [...new Set([...(bp.pending ?? []), ...generated])];
+  const source: ServedSource = pick.from === "library" ? "library" : pick.from === "generated" || written.includes(pick.id) ? "generated" : "stored";
+  const at = Math.max(1, Math.min(50, ordinal));
+  return {
+    ...bp,
+    served: (bp.served ?? "").slice(0, at - 1).padEnd(at - 1, "?") + SOURCE_LETTER[source],
+    pending: written.filter(id => id !== pick.id).slice(-PENDING_MAX),
+  };
+}
+
+/** Pure. Each served question's recorded source, by id, from the session's items in ordinal order. */
+export function servedSources(served: string | undefined, questionIds: readonly string[]): Map<string, ServedSource> {
+  const out = new Map<string, ServedSource>();
+  questionIds.forEach((id, i) => { const s = LETTER_SOURCE[served?.[i] ?? ""]; if (s) out.set(id, s); });
+  return out;
+}
+
+/** Pure. An item's source for the report: as recorded when served, else (an exam from before D4) its age against the set-up. */
+export function itemSource(recorded: ServedSource | undefined, q: { library: boolean; createdAt: string }, setUpAt: string): ServedSource {
+  if (recorded) return recorded;
+  return q.library ? "library" : q.createdAt >= setUpAt ? "generated" : "stored";
 }
 
 /** Pure. The formats to write in, starting after the last question's format so consecutive questions differ. */

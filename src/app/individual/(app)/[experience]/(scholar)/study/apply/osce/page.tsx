@@ -45,7 +45,8 @@ export default async function OscePractice({ params, searchParams }: { params: P
       <p className="mb-2 text-[13px]"><Link href={experienceHref("scholar", "study/apply")} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>← Apply</Link></p>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("apply").eyebrow} title="OSCE practice" intro="Timed practice stations you do on your own, then check against the station checklist." />
       <StudyNav dueCount={due} />
-      <BoundaryNotice notice={FORMATIVE_NOTICE} detail={OSCE_PRACTICE_LABEL} />
+      <p className="mb-2 text-[13px] font-semibold text-[var(--cmp-app-text-secondary)]">{OSCE_PRACTICE_LABEL}</p>
+      <BoundaryNotice notice={FORMATIVE_NOTICE} />
     </>
   );
   if (availability.state !== "on") {

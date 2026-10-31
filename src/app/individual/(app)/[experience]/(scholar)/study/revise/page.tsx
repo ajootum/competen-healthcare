@@ -19,9 +19,8 @@ import StudyNav from "../_components/StudyNav";
 import { ExamPapersSection } from "../_components/papers-section";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
 import { CardReview, type CardView } from "../_components/client";
-import { sourceHref, studyHref } from "../_components/question-view";
+import { adaptiveHref, sourceHref, studyHref } from "../_components/question-view";
 import { RevisionRunner, RevisionStart, SavedSets } from "../_components/revision-client";
-import { adaptiveHref } from "../_components/adaptive-client";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
