@@ -16,6 +16,8 @@ import { LearnWorkspace, type StartScope } from "../_components/learn-client";
 import { learnLanding, parseSearchParams, searchLibrary, topicDetail, displaySessionTitle } from "@/lib/individual/scholar/learn-search";
 import { ContinueLearning, LearnSearchBox, MyTopics, RecentlyAdded, SearchResults, TopicDetail, learnHref } from "../_components/learn-landing";
 import { getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
+import { continueStudy, loadStudy, studySessionsOn } from "@/lib/individual/scholar/study-context";
+import { STUDY_SPACE_LABEL, stageHref } from "@/lib/individual/scholar/study-carry";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -34,12 +36,16 @@ export const dynamic = "force-dynamic";
 // (?topicView=) shows its results on this page. Searching uses no AI. "Teach me" -- a typed topic (?q=&teach=1), a
 // topic (?t=), or sources ticked in the results (?m=, ?s=, ?t=, with what was searched as ?about=) -- starts one
 // session through the same workspace and the same Learn engine.
+//
+// SCHOLAR-SESSION-AI-02 slice B (only where study sessions are on): ?study=new with any start above starts it as a
+// connected study session ("Study this"); ?study=<id> is the caller's own open study session (its bar, and with no
+// other start it reopens that session); &panel=ask opens the Ask panel first. A foreign or unknown id is ignored.
 
 export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Learn" });
 }
 
-type Search = Record<string, string | string[] | undefined> & { session?: string; materials?: string; material?: string; section?: string; competency?: string; topic?: string; revision?: string; action?: string };
+type Search = Record<string, string | string[] | undefined> & { session?: string; materials?: string; material?: string; section?: string; competency?: string; topic?: string; revision?: string; action?: string; study?: string; panel?: string };
 const many = (v: string | string[] | undefined) => (Array.isArray(v) ? v : typeof v === "string" ? [v] : []);
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
@@ -64,12 +70,18 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
   const fromRevision = q.revision && isUuid(q.revision) ? await getRevisionSession(ctx.admin, ctx.userId, q.revision) : null;
   const backToRevision = fromRevision?.ok && fromRevision.data ? `${experienceHref("scholar", "study/revise")}?session=${fromRevision.data.session.id}` : null;
 
+  // SCHOLAR-SESSION-AI-02: the open study session (database reads only), and whether "Study this" may start one.
+  const study = await loadStudy(ctx.admin, ctx.userId, q.study, "learn", policy);
+  const studyOn = await studySessionsOn(ctx.admin, ctx.userId, policy);
+  const startAsked = !!(q.m || q.s || q.t || q.teach || q.section || q.material || q.materials || q.competency || q.topic);
+  const sessionId = q.session ?? (study && !startAsked ? study.session.id : undefined);
+
   // A session to resume: the student's own, with what was done at each step.
   let resume: { session: ReturnType<typeof sessionView>; progress: Record<number, { actions: string[]; verdict: string | null }> } | null = null;
-  if (q.session && isUuid(q.session)) {
-    const r = await getLearningSession(ctx.admin, ctx.userId, q.session);
+  if (sessionId && isUuid(sessionId)) {
+    const r = await getLearningSession(ctx.admin, ctx.userId, sessionId);
     if (r.ok && r.data) {
-      const [events, topics] = await Promise.all([learningEvents(ctx.admin, ctx.userId, q.session), sessionTopics(ctx.admin, ctx.userId, r.data.steps.flatMap(s => s.sections.map(y => y.chunkId)))]);
+      const [events, topics] = await Promise.all([learningEvents(ctx.admin, ctx.userId, sessionId),sessionTopics(ctx.admin, ctx.userId, r.data.steps.flatMap(s => s.sections.map(y => y.chunkId)))]);
       const progress: Record<number, { actions: string[]; verdict: string | null }> = {};
       for (const e of events.ok ? events.data : []) { const p = (progress[e.step] ??= { actions: [], verdict: null }); if (!p.actions.includes(e.action)) p.actions.push(e.action); if (e.verdict) p.verdict = e.verdict; }
       const s = r.data.session;
@@ -80,7 +92,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
   // SCH-LEARN-UX-01: sources ticked in the search results, a topic, or a typed topic to be taught.
   const picked = { m: many(q.m).filter(isUuid).slice(0, 10), s: many(q.s).filter(isUuid).slice(0, 24), t: many(q.t).map(x => x.trim()).filter(x => x.length >= 2).slice(0, 10) };
   const about = one(q.about).replace(/\s+/g, " ").trim().slice(0, 120);
-  const typedTopic = one(q.teach) === "1" ? one(q.q).replace(/\s+/g, " ").trim().slice(0, 120) : "";
+  const typedTopic = one(q.teach) === "1" || (one(q.study) === "new" && one(q.q)) ? one(q.q).replace(/\s+/g, " ").trim().slice(0, 120) : "";
   const start: StartScope | null = resume ? null
     : picked.m.length || picked.s.length || picked.t.length ? { kind: "sources", materialIds: picked.m, chunkIds: picked.s, topics: picked.t, ...(about.length >= 2 ? { topic: about } : {}) }
     : typedTopic.length >= 2 ? { kind: "topic", topic: typedTopic }
@@ -94,19 +106,19 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
   return (
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("learn").eyebrow} title="Learn" intro={scholarSpace("learn").intro} />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
       {backToRevision && (
         <p className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[13.5px] text-gray-800">
           You came here from a revision session. <Link href={backToRevision} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Back to your revision</Link> -- it carries on where you left it.
         </p>
       )}
-      {q.session && !resume ? (
+      {sessionId && !resume ? (
         <StatePanel title="That session could not be found" actions={<Link href={experienceHref("scholar", "study/learn")} className={secondaryBtn}>Start learning</Link>}>
           <p>It may have been removed with the materials it used.</p>
         </StatePanel>
       ) : !resume && !start ? (
         <>
-          <Discover admin={ctx.admin} userId={ctx.userId} q={q} library={library.ok ? library.data : null} />
+          <Discover admin={ctx.admin} userId={ctx.userId} q={q} library={library.ok ? library.data : null} studyOn={studyOn} />
           {/* COMPETEN-SCHOLAR-EXAM-PAPERS-01: a past paper is learned from in Apply, question by question, with evidence. */}
           {policy.scholarExams.enabled && (
             <p className="mt-5 text-[13.5px] text-gray-600">
@@ -121,7 +133,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
           actions={offered.actions} startAction={startAction} labels={LEARN_ACTION_LABEL}
           consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? null : "Your AI help setting could not be read just now."}
           checks={policy.scholarCheckBehaviour} depth={pref?.depth ?? policy.scholarExplanationDepth} maxTurns={policy.scholarTutorTurns}
-          materials={materials} standingMessage={standingMessage} modes={shownLearnModes(policy.scholarResearch, policy.scholarResearch.modes.includes("research") && await scholarResearchOperational(ctx.admin))}
+          materials={materials} standingMessage={standingMessage} connect={studyOn && one(q.study) === "new" && !!start} openAsk={q.panel === "ask"} modes={shownLearnModes(policy.scholarResearch, policy.scholarResearch.modes.includes("research") && await scholarResearchOperational(ctx.admin))}
         />
       )}
     </>
@@ -132,35 +144,35 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
  * SCH-LEARN-UX-01: what Learn shows with nothing to start or resume -- a topic, a search's results, or the landing.
  * Reads only, no AI. `library` null: the materials could not be read (said so, never shown as empty).
  */
-async function Discover({ admin, userId, q, library }: { admin: unknown; userId: string; q: Search; library: MaterialRow[] | null }) {
+async function Discover({ admin, userId, q, library, studyOn }: { admin: unknown; userId: string; q: Search; library: MaterialRow[] | null; studyOn: boolean }) {
   const name = one(q.topicView).trim().slice(0, 200);
   if (name) {
     const page = Math.max(1, Math.min(200, Math.floor(Number(one(q.page)) || 1)));
     const t = await topicDetail(admin, userId, name, page, library ?? []);
     return (
       <>
-        <LearnSearchBox />
+        <LearnSearchBox studyOn={studyOn} />
         {t === "unreadable" ? <StatePanel title="Your topics could not be read just now"><p>Try again shortly. Your notes and sessions are unchanged.</p></StatePanel>
           : t === null ? (
             <StatePanel title="That topic is not in your notes" actions={<Link href={learnHref({ tab: "topics" })} className={secondaryBtn}>See your topics</Link>}>
               <p>It may have been renamed. Search for it, or choose from your topics.</p>
             </StatePanel>
-          ) : <TopicDetail name={t.name} subject={t.subject} documents={t.documents} sections={t.sections} page={page} total={t.total} competencies={t.competencies} />}
+          ) : <TopicDetail name={t.name} subject={t.subject} documents={t.documents} sections={t.sections} page={page} total={t.total} competencies={t.competencies} studyOn={studyOn} />}
       </>
     );
   }
   const params = parseSearchParams(q);
   if (params.q || one(q.tab)) {
     const r = await searchLibrary(admin, userId, params, library ?? []);
-    return (<><LearnSearchBox q={params.q} /><SearchResults r={r} /></>);
+    return (<><LearnSearchBox q={params.q} studyOn={studyOn} /><SearchResults r={r} /></>);
   }
-  const l = await learnLanding(admin, userId, library);
+  const [l, cont] = await Promise.all([learnLanding(admin, userId, library), studyOn ? continueStudy(admin, userId) : null]);
   return (
     <>
-      <LearnSearchBox />
-      <ContinueLearning sessions={l.sessions} total={l.sessionTotal} />
+      <LearnSearchBox studyOn={studyOn} />
+      <ContinueLearning sessions={l.sessions} total={l.sessionTotal} study={cont ? { title: cont.title, space: STUDY_SPACE_LABEL[cont.space], href: stageHref(cont.space, cont.id) } : null} />
       <MyTopics groups={l.topicGroups} total={l.topicTotal} />
-      <RecentlyAdded docs={l.recent} />
+      <RecentlyAdded docs={l.recent} studyOn={studyOn} />
     </>
   );
 }

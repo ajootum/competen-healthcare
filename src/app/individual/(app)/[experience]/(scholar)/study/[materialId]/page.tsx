@@ -19,6 +19,7 @@ import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/
 import { getExamPaper } from "@/lib/individual/scholar/exam-store";
 import { EXAM_ATTESTATION, LIVE_EXAM_NOTICE } from "@/lib/individual/scholar/exam-service";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { loadStudy, studySessionsOn } from "@/lib/individual/scholar/study-context";
 import { StudyAsPaper } from "../_components/paper-client";
 import { FoundInMaterial } from "../_components/classify-client";
 import { competenciesFound, topicsOf } from "@/lib/individual/scholar/classify-view";
@@ -39,7 +40,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Material" });
 }
 
-export default async function MaterialPage({ params }: { params: Promise<{ experience: string; materialId: string }> }) {
+export default async function MaterialPage({ params, searchParams }: { params: Promise<{ experience: string; materialId: string }>; searchParams: Promise<{ study?: string }> }) {
   const { experience, materialId } = await params;
   const page = await experienceModulePage(experience, "study");
   if (!page) return null;
@@ -107,6 +108,8 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
   const consentOn = status === "on";
   const [paper, policy] = await Promise.all([getExamPaper(ctx.admin, ctx.userId, m.id), loadIndividualPolicy(ctx.admin)]);
   const paperOn = policy.scholarExams.enabled && paper.ok;
+  // SCHOLAR-SESSION-AI-02: an open study session is carried by the tabs; "Study this" starts one on this material.
+  const [study, studyOn] = await Promise.all([loadStudy(ctx.admin, ctx.userId, (await searchParams).study, null, policy), studySessionsOn(ctx.admin, ctx.userId, policy)]);
   const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
   const byChunk = new Map<string, ReturnType<typeof questionView>[]>();
   let caseCount = 0;
@@ -124,13 +127,14 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
       <p className="mb-2 text-[13px]"><Link href={experienceHref("scholar", "study")} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>← My Learning</Link></p>
       <PageHeader accent={x.accent} eyebrow="Your material" title={m.title}
         intro={`${unit === "section" ? (m.mimeType === "text/plain" ? "Text (cited by section)" : "Word document (cited by section, because a Word file has no fixed pages)") : `${FORMAT_LABEL[FORMAT_OF[m.mimeType]]}, ${m.pageCount} ${unit}${m.pageCount === 1 ? "" : "s"}`} · ${m.chunkCount} section${m.chunkCount === 1 ? "" : "s"} · ${m.fileName}${stamp ? ` · uploaded while studying ${stamp}` : ""}`} />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
       {quality && (
         <p className={`mb-4 rounded-xl px-4 py-2.5 text-[13.5px] ${quality.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "border border-gray-200 bg-white text-gray-700"}`}>{quality.text}</p>
       )}
 
       <div className="mb-6 flex flex-wrap items-start gap-3">
         <Link href={experienceHref("scholar", `study/learn?material=${m.id}`)} className={secondaryBtn}>Teach me this material</Link>
+        {studyOn && <Link href={experienceHref("scholar", `study/learn?material=${m.id}&study=new`)} className={secondaryBtn}>Study this</Link>}
         <a href={`/api/individual/scholar/materials/${m.id}`} className={secondaryBtn}>Download original</a>
         <DeleteMaterial id={m.id} title={m.title} />
       </div>

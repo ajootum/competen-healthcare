@@ -7,6 +7,8 @@ import HomeNotices from "../../../../../_components/HomeNotices";
 import { JourneyButton, linkBtn } from "./shell-pieces";
 import { LibraryRows } from "./library-list";
 import { libraryRow } from "./library-rows";
+import { continueStudy } from "@/lib/individual/scholar/study-context";
+import { stageHref } from "@/lib/individual/scholar/study-carry";
 
 // THE SCHOLAR HOME -- the study space (Scholar HFE redesign, 2026-10-26; COMPETEN-IND-003 s2(1) and s3).
 //
@@ -22,8 +24,9 @@ const secondary = `inline-flex min-h-[44px] items-center justify-center rounded-
 export default async function ScholarHome({ ctx, other }: { ctx: IndividualContext; other: ExperienceKey | undefined }) {
   const x = SCHOLAR;
   const firstName = ctx.profile.fullName?.split(" ")[0] ?? null;
-  const [materials, due, sessions] = await Promise.all([
-    listMaterials(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, 1),
+  // SCHOLAR-SESSION-AI-02: an open study session takes the Continue slot, reopened in its last stage (null where off).
+  const [materials, due, sessions, study] = await Promise.all([
+    listMaterials(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, 1), continueStudy(ctx.admin, ctx.userId),
   ]);
   const none = materials.ok && materials.data.length === 0;
   const resume = sessions.ok ? sessions.data.find(s => s.status === "active") ?? null : null;
@@ -42,12 +45,14 @@ export default async function ScholarHome({ ctx, other }: { ctx: IndividualConte
           <h2 id="hero-h" className="mt-3 text-[28px] font-bold leading-tight tracking-[-0.02em] text-gray-900">A little understanding.<br />A stronger next decision.</h2>
           <p className="mt-2 max-w-[600px] text-[15px] text-gray-600">
             {none ? "Start with your own notes. No programme or competency selection is required."
+              : study ? `Continue your study session “${study.title}”, where you left it.`
               : resume ? `Continue “${resume.title}”, with your source alongside you.`
                 : "Learn from your own material, with your source alongside you."}
           </p>
           <div className="mt-4 flex flex-wrap gap-2.5">
             {none
               ? <Link href={`${experienceHref("scholar", "study")}#upload`} className={primary} style={{ background: x.accent }}>Upload your first material</Link>
+              : study ? <Link href={stageHref(study.space, study.id)} className={primary} style={{ background: x.accent }}>Continue your study session →</Link>
               : <Link href={experienceHref("scholar", resume ? `study/learn?session=${resume.id}` : "study/learn")} className={primary} style={{ background: x.accent }}>Continue learning →</Link>}
             <Link href={experienceHref("scholar", "study")} className={secondary}>Explore my library</Link>
           </div>
