@@ -100,19 +100,19 @@ export async function editableFramework(admin: any, frameworkId: string): Promis
   return { ok: true, fw: { id: fw.id, name: fw.name, pub_status: status } };
 }
 
-async function frameworkOfDomain(admin: any, domainId: string) {
+export async function frameworkOfDomain(admin: any, domainId: string) {
   if (!isId(domainId)) return null;
   const { data } = await admin.from("framework_domains").select("id, framework_id, name").eq("id", domainId).maybeSingle();
   return data ?? null;
 }
-async function domainOfCompetency(admin: any, competencyId: string) {
+export async function domainOfCompetency(admin: any, competencyId: string) {
   if (!isId(competencyId)) return null;
   const { data } = await admin.from("framework_competencies").select("id, domain_id, name, code").eq("id", competencyId).maybeSingle();
   return data ?? null;
 }
 
 /** A code already used by another competency of a SHARED framework (codes are how content travels). */
-async function competencyCodeTaken(admin: any, code: string, exceptId: string | null): Promise<boolean | null> {
+export async function competencyCodeTaken(admin: any, code: string, exceptId: string | null): Promise<boolean | null> {
   const { data, error } = await admin.from("framework_competencies").select("id, framework_domains!inner(frameworks!inner(hospital_id))").eq("code", code).is("framework_domains.frameworks.hospital_id", null).limit(5);
   if (error) return null;
   return (data ?? []).some((r: any) => r.id !== exceptId);
@@ -320,7 +320,8 @@ export type PackageCriterion = { component: string; text: string; sourceRef?: st
 export type PackageParent = { framework: string; competency: string; frameworkId?: string };
 export type DraftPackage = {
   framework: { code: string; name: string; description: string | null; layer: string; professionTermId?: string | null; specialtyTermId?: string | null; profession?: string };
-  domains: { name: string; competencies: { code: string; name: string; description: string | null; learningOutcomes: string[]; expectedLevel: { score: number } | null; riskCategory: string;
+  /** area: the Area the domain sits in (FRAMEWORK-DESIGN-STUDIO-02 D1). Carried through, not yet written (S3 adds Areas). */
+  domains: { name: string; area?: string | null; competencies: { code: string; name: string; description: string | null; learningOutcomes: string[]; expectedLevel: { score: number } | null; riskCategory: string;
     criteria?: PackageCriterion[]; parents?: PackageParent[] }[] }[];
   provenance: Record<string, unknown>;
 };
@@ -343,15 +344,15 @@ export function checkCriteria(c: any): string | null {
   return null;
 }
 
-/** Pure: a package is whole and valid, or the first reason it is not. Nothing is written for a bad package. */
-export function checkPackage(pkg: any): Ok<DraftPackage> | Bad {
-  const f = parseFramework(pkg?.framework);
-  if (!f.ok) return f;
+
+/** Pure: a package's domains and competencies are whole and valid, or the first reason they are not. */
+export function checkPackageBody(pkg: any): Bad | null {
   const domains = Array.isArray(pkg?.domains) ? pkg.domains : [];
   if (!domains.length || domains.length > 40) return { ok: false, error: "A package has 1 to 40 domains." };
   const codes = new Set<string>();
   for (const d of domains) {
     if (text(d?.name).length < 2) return { ok: false, error: "Every domain has a name." };
+    if (d?.area != null && (typeof d.area !== "string" || text(d.area).length > 200)) return { ok: false, error: "A domain's area is a name of at most 200 characters." };
     const comps = Array.isArray(d?.competencies) ? d.competencies : [];
     if (comps.length > 200) return { ok: false, error: "At most 200 competencies in one domain." };
     for (const c of comps) {
@@ -365,10 +366,62 @@ export function checkPackage(pkg: any): Ok<DraftPackage> | Bad {
     }
   }
   if (pkg?.provenance != null && (typeof pkg.provenance !== "object" || JSON.stringify(pkg.provenance).length > 8000)) return { ok: false, error: "The provenance is a small object." };
+  return null;
+}
+
+/** Pure: a package is whole and valid, or the first reason it is not. Nothing is written for a bad package. */
+export function checkPackage(pkg: any): Ok<DraftPackage> | Bad {
+  const f = parseFramework(pkg?.framework);
+  if (!f.ok) return f;
+  const body = checkPackageBody(pkg);
+  if (body) return body;
   return { ok: true, value: pkg as DraftPackage };
 }
 
-export async function importDraftPackage(admin: any, actor: Actor, raw: any): Promise<Result<{ id: string; competencies: number; criteria: number; parents: number; resumed: boolean }>> {
+type ImportResult = Result<{ id: string; competencies: number; criteria: number; parents: number; resumed: boolean; appended?: boolean }>;
+type Refs = { levels: Map<number, string>; comps: string[]; parentIds: Map<string, string> };
+type Have = { domains: Map<string, string>; comps: Map<string, string>; skills: Map<string, number>; deps: Map<string, number> };
+const parentKey = (x: PackageParent) => `${text(x.framework)}\u0000${text(x.competency)}\u0000${isId(x.frameworkId) ? x.frameworkId : ""}`;
+
+/**
+ * Everything a package names on THIS environment -- expected levels by score, assessment components, parent
+ * competencies -- resolved BEFORE anything is written, so a package that names an unknown one changes nothing.
+ */
+async function resolveRefs(admin: any, p: DraftPackage): Promise<Refs | Fail> {
+  const scores = [...new Set(p.domains.flatMap(d => d.competencies.map(c => c.expectedLevel?.score)).filter((s): s is number => typeof s === "number"))];
+  const levels = new Map<number, string>();
+  if (scores.length) {
+    const { data: lv, error: lErr } = await admin.from("scoring_levels").select("id, score, scoring_scales!inner(is_default)").eq("scoring_scales.is_default", true).in("score", scores);
+    if (lErr) return { ok: false, status: 503, error: "The expected levels could not be read just now. Nothing has changed." };
+    for (const l of lv ?? []) levels.set(l.score, l.id);
+    const missing = scores.filter(s => !levels.has(s));
+    if (missing.length) return { ok: false, status: 422, error: `The default scale has no level with score ${missing.join(", ")}.` };
+  }
+  const all = p.domains.flatMap(d => d.competencies);
+  const comps = [...new Set(all.flatMap(c => (c.criteria ?? []).map(k => k.component)))];
+  if (comps.length) {
+    const { data: reg, error: rErr } = await admin.from("competency_assessment_component").select("code, is_active").in("code", comps);
+    if (rErr) return { ok: false, status: 503, error: "The assessment components could not be read just now (migration 660). Nothing has changed." };
+    const live = new Set((reg ?? []).filter((r: any) => r.is_active !== false).map((r: any) => r.code));
+    const unknown = comps.filter(c => !live.has(c));
+    if (unknown.length) return { ok: false, status: 422, error: `Unknown or retired assessment component: ${unknown.join(", ")}.` };
+  }
+  const parentIds = new Map<string, string>();
+  for (const k of new Set(all.flatMap(c => (c.parents ?? []).map(parentKey)))) {
+    const [fw, name, fwId] = k.split("\u0000");
+    let q = admin.from("framework_competencies").select("id, framework_domains!inner(framework_id, frameworks!inner(name, hospital_id))")
+      .eq("name", name).eq("framework_domains.frameworks.name", fw).is("framework_domains.frameworks.hospital_id", null);
+    if (fwId) q = q.eq("framework_domains.framework_id", fwId);
+    const { data: hit, error: hErr } = await q.limit(2);
+    if (hErr) return { ok: false, status: 503, error: "The parent competencies could not be read just now. Nothing has changed." };
+    if ((hit ?? []).length !== 1) return { ok: false, status: 422, error: `The parent "${name}" in ${fw} was ${hit?.length ? "found more than once" : "not found"} among shared frameworks. Nothing has changed.` };
+    parentIds.set(k, hit[0].id);
+  }
+  return { levels, comps, parentIds };
+}
+
+export async function importDraftPackage(admin: any, actor: Actor, raw: any, opts: { mode?: "resume" | "append" } = {}): Promise<ImportResult> {
+  if (opts.mode === "append" || raw?.mode === "append") return appendToDraft(admin, actor, raw);
   // A profession named by its value is resolved here, before anything is checked or written.
   let pkg = raw;
   if (raw?.framework && !raw.framework.professionTermId && typeof raw.framework.profession === "string" && raw.framework.profession.trim()) {
@@ -388,7 +441,7 @@ export async function importDraftPackage(admin: any, actor: Actor, raw: any): Pr
   // refused unless the framework is still a draft and holds nothing the package does not name, so it never merges
   // into a framework someone has edited or put forward.
   const existing = same?.[0] ?? null;
-  const have = { domains: new Map<string, string>(), comps: new Map<string, string>(), skills: new Map<string, number>(), deps: new Map<string, number>() };
+  const have: Have = { domains: new Map<string, string>(), comps: new Map<string, string>(), skills: new Map<string, number>(), deps: new Map<string, number>() };
   if (existing) {
     if ((existing.pub_status ?? "draft") !== "draft") return { ok: false, status: 409, error: `A shared framework with the code ${p.framework.code.toUpperCase()} already exists and is no longer a draft. Edit it instead of importing again.` };
     const { data: ds, error: dErr } = await admin.from("framework_domains").select("id, name").eq("framework_id", existing.id);
@@ -398,7 +451,7 @@ export async function importDraftPackage(admin: any, actor: Actor, raw: any): Pr
     if (cErr) return { ok: false, status: 503, error: "The existing draft could not be read just now. Nothing has changed." };
     const named = new Set(p.domains.flatMap(d => d.competencies.map(c => String(c.code).toUpperCase())));
     const foreign = (cs ?? []).filter((c: any) => !named.has(String(c.code ?? "").toUpperCase()));
-    if (foreign.length) return { ok: false, status: 409, error: `The draft ${p.framework.code.toUpperCase()} holds ${foreign.length} competenc${foreign.length === 1 ? "y" : "ies"} this package does not name, so it is not continued. Edit it on the authoring page instead.` };
+    if (foreign.length) return { ok: false, status: 409, error: `The draft ${p.framework.code.toUpperCase()} holds ${foreign.length} competenc${foreign.length === 1 ? "y" : "ies"} this package does not name, so it is not continued. Edit it on the authoring page instead, or add new competencies with an append import.` };
     for (const c of cs ?? []) have.comps.set(String(c.code).toUpperCase(), c.id);
     const ids = [...have.comps.values()];
     if (ids.length) {
@@ -416,39 +469,8 @@ export async function importDraftPackage(admin: any, actor: Actor, raw: any): Pr
     const t = await competencyCodeTaken(admin, String(c.code).toUpperCase(), null);
     if (t !== false) return { ok: false, status: t === null ? 503 : 409, error: t === null ? "Competency codes could not be checked just now. Nothing has changed." : `A shared competency with the code ${String(c.code).toUpperCase()} already exists.` };
   }
-  // The expected level, by score on THIS environment's default scale.
-  const scores = [...new Set(p.domains.flatMap(d => d.competencies.map(c => c.expectedLevel?.score)).filter((s): s is number => typeof s === "number"))];
-  const levels = new Map<number, string>();
-  if (scores.length) {
-    const { data: lv, error: lErr } = await admin.from("scoring_levels").select("id, score, scoring_scales!inner(is_default)").eq("scoring_scales.is_default", true).in("score", scores);
-    if (lErr) return { ok: false, status: 503, error: "The expected levels could not be read just now. Nothing has changed." };
-    for (const l of lv ?? []) levels.set(l.score, l.id);
-    const missing = scores.filter(s => !levels.has(s));
-    if (missing.length) return { ok: false, status: 422, error: `The default scale has no level with score ${missing.join(", ")}.` };
-  }
-  // Components and parents are resolved BEFORE anything is written, so a package that names an unknown one
-  // changes nothing.
-  const all = p.domains.flatMap(d => d.competencies);
-  const comps = [...new Set(all.flatMap(c => (c.criteria ?? []).map(k => k.component)))];
-  if (comps.length) {
-    const { data: reg, error: rErr } = await admin.from("competency_assessment_component").select("code, is_active").in("code", comps);
-    if (rErr) return { ok: false, status: 503, error: "The assessment components could not be read just now (migration 660). Nothing has changed." };
-    const live = new Set((reg ?? []).filter((r: any) => r.is_active !== false).map((r: any) => r.code));
-    const unknown = comps.filter(c => !live.has(c));
-    if (unknown.length) return { ok: false, status: 422, error: `Unknown or retired assessment component: ${unknown.join(", ")}.` };
-  }
-  const parentKey = (x: PackageParent) => `${text(x.framework)}\u0000${text(x.competency)}\u0000${isId(x.frameworkId) ? x.frameworkId : ""}`;
-  const parentIds = new Map<string, string>();
-  for (const k of new Set(all.flatMap(c => (c.parents ?? []).map(parentKey)))) {
-    const [fw, name, fwId] = k.split("\u0000");
-    let q = admin.from("framework_competencies").select("id, framework_domains!inner(framework_id, frameworks!inner(name, hospital_id))")
-      .eq("name", name).eq("framework_domains.frameworks.name", fw).is("framework_domains.frameworks.hospital_id", null);
-    if (fwId) q = q.eq("framework_domains.framework_id", fwId);
-    const { data: hit, error: hErr } = await q.limit(2);
-    if (hErr) return { ok: false, status: 503, error: "The parent competencies could not be read just now. Nothing has changed." };
-    if ((hit ?? []).length !== 1) return { ok: false, status: 422, error: `The parent "${name}" in ${fw} was ${hit?.length ? "found more than once" : "not found"} among shared frameworks. Nothing has changed.` };
-    parentIds.set(k, hit[0].id);
-  }
+  const refs = await resolveRefs(admin, p);
+  if ("ok" in refs) return refs;
 
   let frameworkId: string;
   if (existing) {
@@ -461,26 +483,35 @@ export async function importDraftPackage(admin: any, actor: Actor, raw: any): Pr
     // The package's provenance, on the framework's authorship trail (never in its content).
     await authored(admin, actor, "cfca_draft_imported", "framework", created.id, p.framework.name, { provenance: p.provenance ?? null, domains: p.domains.length });
   }
-  // One request has a time limit. The import pauses cleanly between competencies well before it, and the same
-  // package pasted again continues from there.
+  const w = await writePackage(admin, actor, frameworkId, p, have, refs, {
+    stopped: "The framework is a draft: paste the same package again to continue.",
+    paused: n => `Paused to stay within the time limit, with ${n} more competenc${n === 1 ? "y" : "ies"} imported. The draft is safe and complete so far: paste the same package again to continue.`,
+  });
+  return w.ok ? { ...w, id: frameworkId, resumed: !!existing } : w;
+}
+
+/** The domains, competencies, criteria and parent links of a checked package, each competency after its authorship row. */
+async function writePackage(admin: any, actor: Actor, frameworkId: string, p: DraftPackage, have: Have, refs: Refs,
+  say: { stopped: string; paused: (n: number, codes: string[]) => string }): Promise<Result<{ competencies: number; criteria: number; parents: number }>> {
+  // One request has a time limit. The import pauses cleanly between competencies well before it.
   const started = Date.now(), BUDGET_MS = 40_000;
   let n = 0, nCriteria = 0, nParents = 0;
+  const added: string[] = [];
   for (const d of p.domains) {
     let domainId = have.domains.get(d.name);
     if (!domainId) {
       const dom = await createDomain(admin, actor, { frameworkId, name: d.name });
-      if (!dom.ok) return { ok: false, status: dom.status, error: `Stopped at domain "${d.name}": ${dom.error} The framework is a draft: paste the same package again to continue.` };
+      if (!dom.ok) return { ok: false, status: dom.status, error: `Stopped at domain "${d.name}": ${dom.error} ${say.stopped}` };
       domainId = dom.id; have.domains.set(d.name, dom.id);
     }
     for (const c of d.competencies) {
-      if (Date.now() - started > BUDGET_MS)
-        return { ok: false, status: 503, error: `Paused to stay within the time limit, with ${n} more competenc${n === 1 ? "y" : "ies"} imported. The draft is safe and complete so far: paste the same package again to continue.` };
+      if (Date.now() - started > BUDGET_MS) return { ok: false, status: 503, error: say.paused(n, added) };
       const code = String(c.code).toUpperCase();
       let compId = have.comps.get(code);
       if (!compId) {
-        const r = await createCompetency(admin, actor, { ...c, domainId, expectedLevelId: c.expectedLevel ? levels.get(c.expectedLevel.score) : null });
-        if (!r.ok) return { ok: false, status: r.status, error: `Stopped at ${c.code}: ${r.error} The framework is a draft: paste the same package again to continue.` };
-        compId = r.id; n++;
+        const r = await createCompetency(admin, actor, { ...c, domainId, expectedLevelId: c.expectedLevel ? refs.levels.get(c.expectedLevel.score) : null });
+        if (!r.ok) return { ok: false, status: r.status, error: `Stopped at ${c.code}: ${r.error} ${say.stopped}` };
+        compId = r.id; n++; added.push(code);
       }
       const r = { id: compId };
       const allCriteria = c.criteria ?? [], allParents = [...new Set((c.parents ?? []).map(parentKey))];
@@ -492,7 +523,7 @@ export async function importDraftPackage(admin: any, actor: Actor, raw: any): Pr
       const criteria = hasK ? [] : allCriteria, parents = hasP ? [] : allParents;
       if (criteria.length || parents.length) {
         if (!(await authored(admin, actor, "cfca_criteria_imported", "framework_competency", r.id, c.name, {
-          criteria: criteria.length, by_component: Object.fromEntries(comps.map(k => [k, criteria.filter(x => x.component === k).length])), parents: parents.map(k => parentIds.get(k)),
+          criteria: criteria.length, by_component: Object.fromEntries(refs.comps.map(k => [k, criteria.filter(x => x.component === k).length])), parents: parents.map(k => refs.parentIds.get(k)),
         }))) return { ...NOT_RECORDED, error: `Stopped at ${c.code}: ${NOT_RECORDED.error}` };
       }
       if (criteria.length) {
@@ -504,7 +535,7 @@ export async function importDraftPackage(admin: any, actor: Actor, raw: any): Pr
       }
       if (parents.length) {
         const { error: dErr } = await admin.from("competency_dependencies").insert(parents.map(k => ({
-          hospital_id: null, source_competency_id: r.id, target_competency_id: parentIds.get(k), dependency_type: "inherited",
+          hospital_id: null, source_competency_id: r.id, target_competency_id: refs.parentIds.get(k), dependency_type: "inherited",
           notes: "Extends this competency (draft import).", created_by: actor.userId, created_by_name: actor.name,
         })));
         if (dErr) return { ok: false, status: 422, error: `Stopped at ${c.code}: its parent links could not be saved. The framework is a draft: finish it on the authoring page.` };
@@ -512,5 +543,88 @@ export async function importDraftPackage(admin: any, actor: Actor, raw: any): Pr
       }
     }
   }
-  return { ok: true, id: frameworkId, competencies: n, criteria: nCriteria, parents: nParents, resumed: !!existing };
+  return { ok: true, competencies: n, criteria: nCriteria, parents: nParents };
+}
+
+// ── APPEND (FRAMEWORK-DESIGN-STUDIO-02 S1) ── new competencies into an existing DRAFT, nothing existing touched ──────
+//
+// The package names the framework by its code and lists ONLY new competencies (and, if needed, new domains). Its
+// framework identity comes from the framework itself, so it is never re-declared. Existing competencies are neither
+// required nor read for change: they are counted, never written. Refused whole when the framework is not a draft or
+// any listed code already exists on a shared framework. Every competency gets the same authorship rows as any import.
+
+export type AppendPlan = {
+  framework: { id: string; code: string; name: string };
+  package: DraftPackage;
+  /** Competencies already in the draft: untouched. */
+  unchanged: number;
+  /** The draft's domains: a package domain of the same name is reused. */
+  existingDomains: { id: string; name: string }[];
+  /** Domain names the package adds (the rest are existing domains, matched by name). */
+  newDomains: string[];
+  /** Why the package cannot be appended (empty = it can). code names the competency where there is one. */
+  problems: { code: string | null; message: string }[];
+};
+
+/** Read-only: what an append would do, and why it could not. Used by the preview and by the append itself. */
+export async function planAppend(admin: any, raw: any): Promise<Fail | AppendPlan> {
+  const code = text(raw?.framework?.code).toUpperCase();
+  if (!CODE.test(code)) return { ok: false, status: 422, error: "Name the framework to add to by its code." };
+  const { data: fws, error } = await admin.from("frameworks").select("id, code, name, description, pub_status, competency_layer").eq("code", code).is("hospital_id", null).limit(1);
+  if (error) return { ok: false, status: 503, error: "Frameworks could not be read just now. Nothing has changed." };
+  const fw = fws?.[0];
+  if (!fw) return { ok: false, status: 404, error: `No shared framework has the code ${code}.` };
+  if ((fw.pub_status ?? "draft") !== "draft") return { ok: false, status: 409, error: `${code} is not a draft, so nothing is appended to it. Changes to a published framework go through a revision draft.` };
+  const body = checkPackageBody(raw);
+  if (body) return { ok: false, status: 422, error: body.error };
+  const pkg: DraftPackage = { ...raw, framework: { code, name: fw.name, description: fw.description ?? null, layer: fw.competency_layer ?? "" } };
+  const listed = pkg.domains.flatMap(d => d.competencies.map(c => String(c.code).toUpperCase()));
+  if (!listed.length) return { ok: false, status: 422, error: "The package lists no new competencies." };
+  const { data: ds, error: dErr } = await admin.from("framework_domains").select("id, name").eq("framework_id", fw.id);
+  if (dErr) return { ok: false, status: 503, error: "The draft could not be read just now. Nothing has changed." };
+  const domainIds = (ds ?? []).map((d: any) => d.id);
+  const { data: cs, error: cErr } = domainIds.length ? await admin.from("framework_competencies").select("id").in("domain_id", domainIds) : { data: [], error: null };
+  if (cErr) return { ok: false, status: 503, error: "The draft could not be read just now. Nothing has changed." };
+  const names = new Set((ds ?? []).map((d: any) => d.name));
+  const problems: AppendPlan["problems"] = [];
+  for (const c of listed) {
+    const t = await competencyCodeTaken(admin, c, null);
+    if (t === null) return { ok: false, status: 503, error: "Competency codes could not be checked just now. Nothing has changed." };
+    if (t) problems.push({ code: c, message: `A shared competency with the code ${c} already exists. An append adds only new competencies.` });
+  }
+  return {
+    framework: { id: fw.id, code, name: fw.name }, package: pkg, unchanged: (cs ?? []).length,
+    newDomains: [...new Set(pkg.domains.map(d => d.name).filter(n => !names.has(n)))], problems,
+    existingDomains: (ds ?? []).map((d: any) => ({ id: d.id, name: d.name })),
+  };
+}
+
+async function appendToDraft(admin: any, actor: Actor, raw: any): Promise<ImportResult> {
+  const plan = await planAppend(admin, raw);
+  if ("ok" in plan) return plan;
+  if (plan.problems.length) return { ok: false, status: 409, error: `${plan.problems.map(x => x.message).join(" ")} Nothing has changed.` };
+  const p = plan.package;
+  const refs = await resolveRefs(admin, p);
+  if ("ok" in refs) return refs;
+  const have: Have = { domains: new Map(plan.existingDomains.map(d => [d.name, d.id])), comps: new Map(), skills: new Map(), deps: new Map() };
+  await authored(admin, actor, "cfca_draft_import_appended", "framework", plan.framework.id, plan.framework.name, {
+    provenance: p.provenance ?? null, adds: p.domains.reduce((n, d) => n + d.competencies.length, 0), new_domains: plan.newDomains, unchanged: plan.unchanged,
+  });
+  const w = await writePackage(admin, actor, plan.framework.id, p, have, refs, {
+    stopped: "The framework is a draft: what was added before it is kept.",
+    paused: (n, codes) => `Paused to stay within the time limit, with ${n} competenc${n === 1 ? "y" : "ies"} added${codes.length ? ` (${codes.join(", ")})` : ""}. The draft is safe: append the rest in a package without these codes.`,
+  });
+  return w.ok ? { ...w, id: plan.framework.id, resumed: false, appended: true } : w;
+}
+
+/** Read-only: planAppend plus the environment references (levels, components, parents), all as problems. */
+export async function previewAppend(admin: any, raw: any): Promise<Fail | AppendPlan> {
+  const plan = await planAppend(admin, raw);
+  if ("ok" in plan) return plan;
+  const refs = await resolveRefs(admin, plan.package);
+  if ("ok" in refs) {
+    if (refs.status === 503) return refs;
+    return { ...plan, problems: [...plan.problems, { code: null, message: refs.error }] };
+  }
+  return plan;
 }

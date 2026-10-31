@@ -301,3 +301,35 @@ describe("Competency Studio: identity, CPU and publication (owner COMPLETE PRODU
     expect(r.error).toMatch(/3 of its 8 competencies are not clinically approved/);
   });
 });
+
+describe("FRAMEWORK-DESIGN-STUDIO-02 S1: append import into an existing DRAFT", () => {
+  const pkg = (codes: string[], domain = "Clinical reasoning") => ({
+    framework: { code: "CF-FOUND" }, provenance: { source: "test" },
+    domains: [{ name: domain, area: "Clinical Practice", competencies: codes.map(code => ({ code, name: `Competency ${code}`, description: null, learningOutcomes: [], expectedLevel: { score: 3 }, riskCategory: "standard",
+      criteria: [{ component: "knowledge", text: "Knows the thing well" }] })) }],
+  });
+  beforeEach(() => { S.rows.competency_assessment_component = [{ code: "knowledge", is_active: true }]; });
+
+  it("adds only the new competencies; existing ones are neither required nor touched; domains reused by name", async () => {
+    const r = await importDraftPackage(fake(), ME, pkg(["CF-CR-002"]), { mode: "append" });
+    expect(r).toMatchObject({ ok: true, id: FW, competencies: 1, criteria: 1, appended: true, resumed: false });
+    expect(writes().some(w => w.table === "framework_competencies" && w.op === "update")).toBe(false);
+    expect(writes().some(w => w.table === "framework_domains")).toBe(false);
+    expect(S.rows.framework_competencies.find(c => c.id === COMP)).toEqual({ id: COMP, domain_id: DOM, name: "Gathers information", code: "CF-CR-001", sort_order: 1 });
+    expect(S.rows.audit_log.map(a => a.action)).toEqual(["cfca_draft_import_appended", "cfca_competency_created", "cfca_criteria_imported"]);
+    expect(writes().some(w => w.table === "frameworks")).toBe(false);
+  });
+  it("a new domain is created; a code that already exists anywhere refuses the whole package", async () => {
+    expect(await importDraftPackage(fake(), ME, { ...pkg(["CF-CR-001", "CF-NEW-001"]), mode: "append" })).toMatchObject({ ok: false, status: 409, error: expect.stringMatching(/CF-CR-001/) });
+    expect(writes()).toEqual([]);
+    expect(await importDraftPackage(fake(), ME, pkg(["CF-NEW-001"], "Professional practice"), { mode: "append" })).toMatchObject({ ok: true, competencies: 1 });
+    expect(S.rows.framework_domains.map(d => d.name)).toEqual(["Clinical reasoning", "Professional practice"]);
+  });
+  it("refused when the framework is not a draft, or lists nothing new", async () => {
+    S.rows.frameworks[0].pub_status = "published";
+    expect(await importDraftPackage(fake(), ME, pkg(["CF-CR-002"]), { mode: "append" })).toMatchObject({ ok: false, status: 409, error: expect.stringMatching(/revision draft/) });
+    S.rows.frameworks[0].pub_status = "draft";
+    expect(await importDraftPackage(fake(), ME, pkg([]), { mode: "append" })).toMatchObject({ ok: false, status: 422 });
+    expect(writes()).toEqual([]);
+  });
+});
