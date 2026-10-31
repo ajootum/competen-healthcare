@@ -7,7 +7,8 @@ import type { Chunk, ExtractionQuality } from "./extract";
 import { planChunkInsertion, type NewChunk } from "./slide-images";
 import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
-import { SRS_DEFAULTS, scheduleReview, type RevisionDraft, type RevisionKind, type SrsParams } from "./revision";
+import { SRS_DEFAULTS, scheduleReview, storedKind, type RevisionDraft, type RevisionKind, type SrsParams } from "./revision";
+import { MISTAKES_ROW_CAP, toFixIds, type AttemptMark, type MistakeAttempt, type MistakeQuestion } from "./mistakes";
 import type { ProgressAttempt, ProgressCard, ProgressMaterial, ProgressQuestion } from "./progress";
 import { isLayer, type Layer, type ProgrammeConfig } from "./catalogue";
 import { mappingStates, type LiveMapping, type MappingDecision, type MappingState, type MappingSubject, type SubjectAnalysis } from "@/lib/competency/mapping";
@@ -42,7 +43,7 @@ import { isStudyLinkKind, isStudySpace, studyFields, type StudyFieldsInput, type
 // ⚠ UNREADABLE IS NOT EMPTY. A read that fails returns { ok: false } and the page says it could not be
 // read. A table that does not exist yet (372 not applied) is reported as not provisioned.
 
-type Admin = any;
+export type Admin = any;
 
 // ── MIGRATION 710 (SCHOLAR-SQIE-CLOSE-01) ── detected once, and Scholar keeps working without it ──────────────────
 //
@@ -733,13 +734,16 @@ export async function reviewRows(admin: Admin, userId: string): Promise<Read<{ m
 // are the attempts that name it. Every statement is keyed on the caller's user id. Where 416 or 417 is absent the
 // reads say not provisioned and the workspace offers what exists without them.
 
-export type PoolStats = { misses: number; latestCorrect: boolean | null; lastAnsweredAt: string | null; due: boolean };
+export type PoolStats = { misses: number; latestCorrect: boolean | null; lastAnsweredAt: string | null; due: boolean; lastMissAt?: string | null };
 
 /** Questions of the chosen kinds within some sections (or the whole library when none are named), with their stats. */
 export async function revisionPool(admin: Admin, userId: string, opts: { chunkIds?: readonly string[] | null; kinds: readonly RevisionKind[]; extraIds?: readonly string[] }): Promise<Read<{ questions: QuestionRow[]; stats: Map<string, PoolStats> }>> {
   const extra = (opts.extraIds ?? []).filter(isUuid).slice(0, 50);
   if (!opts.kinds.length || (opts.chunkIds && !opts.chunkIds.length && !extra.length)) return { ok: true, data: { questions: [], stats: new Map() } };
-  let q = admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId).in("kind", [...opts.kinds]);
+  // SCHOLAR-COMPANION-01: cloze is a format of the stored `short` kind (cloze.ts), so it is read as short.
+  // SCHOLAR-SQIE-LEARNER-01: so are true/false and extended response (formats.ts).
+  const dbKinds = [...new Set(opts.kinds.map(k => (k === "cloze" || k === "true_false" || k === "extended" ? "short" : k)))];
+  let q = admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId).in("kind", dbKinds);
   // SCHOLAR-SQIE-CLOSE-01: library copies this session reuses, wherever they were first filed, beside the sections.
   if (opts.chunkIds && extra.length) q = q.or(`chunk_id.in.(${[...opts.chunkIds].slice(0, 200).join(",")}),id.in.(${extra.join(",")})`);
   else if (opts.chunkIds) q = q.in("chunk_id", [...opts.chunkIds].slice(0, 200));
@@ -747,7 +751,7 @@ export async function revisionPool(admin: Admin, userId: string, opts: { chunkId
   if (error) return fail(error);
   const questions = await hydrate(admin, userId, data ?? []);
   const ids = questions.map(x => x.id);
-  const stats = new Map<string, PoolStats>(ids.map(id => [id, { misses: 0, latestCorrect: null, lastAnsweredAt: null, due: false }]));
+  const stats = new Map<string, PoolStats>(ids.map(id => [id, { misses: 0, latestCorrect: null, lastAnsweredAt: null, due: false, lastMissAt: null }]));
   if (ids.length) {
     const [att, cards] = await Promise.all([
       admin.from("individual_scholar_attempt").select("question_id, correct, answered_at").eq("user_id", userId).in("question_id", ids).order("answered_at", { ascending: false }).limit(5000),
@@ -756,7 +760,7 @@ export async function revisionPool(admin: Admin, userId: string, opts: { chunkId
     for (const a of (att.data ?? []) as any[]) {
       const s = stats.get(a.question_id)!;
       if (s.lastAnsweredAt === null) { s.lastAnsweredAt = a.answered_at; s.latestCorrect = a.correct; }
-      if (!a.correct) s.misses++;
+      if (!a.correct) { s.misses++; if (!s.lastMissAt) s.lastMissAt = a.answered_at; }
     }
     for (const c of (cards.data ?? []) as any[]) if (c.status === "active" && c.next_review_at <= todayIso()) stats.get(c.question_id)!.due = true;
   }
@@ -772,7 +776,7 @@ export async function insertRevisionQuestions(admin: Admin, userId: string, inpu
 }): Promise<{ ok: boolean; ids: string[]; notProvisioned?: boolean }> {
   if (!input.drafts.length) return { ok: true, ids: [] };
   const { data, error } = await admin.from("individual_scholar_question").insert(input.drafts.map(d => ({
-    user_id: userId, material_id: input.passage.materialId, chunk_id: input.passage.chunkId, kind: input.kind,
+    user_id: userId, material_id: input.passage.materialId, chunk_id: input.passage.chunkId, kind: storedKind(input.kind),
     stem: d.stem, options: d.options, correct_index: null, answer: d.answer, difficulty: d.difficulty, review_status: "private_formative",
     rationale: d.rationale, source_quote: d.sourceQuote, model: input.model, provider: input.provider, prompt_version: input.promptVersion,
     ...(input.competencyId ? { competency_id: input.competencyId } : {}),
@@ -1172,6 +1176,58 @@ export async function revisionInsightRows(admin: Admin, userId: string): Promise
       reviews: reviews.ok ? reviews.data : null,
       cards: ((cards.data ?? []) as any[]).map(c => ({ nextReviewAt: c.next_review_at, status: c.status })),
     },
+  };
+}
+
+// ── MISTAKE NOTEBOOK ── SCHOLAR-COMPANION-01 P1 ── the learner's own wrong attempts, read back (mistakes.ts) ──────────
+//
+// READS ONLY, the caller's own rows, hard-capped: the latest MISTAKES_ROW_CAP wrong attempts, then the attempt history of
+// just those questions (at most ten rows each on average) to say how often each was missed and whether it was corrected.
+// No table, column or write is added: a mistake IS an attempt (372, 416).
+
+async function mistakeAttempts(admin: Admin, userId: string): Promise<Read<{ wrong: MistakeAttempt[]; history: AttemptMark[]; capped: boolean }>> {
+  const base = (cols: string) => admin.from("individual_scholar_attempt").select(cols).eq("user_id", userId).eq("correct", false);
+  // 416 columns first; where they are absent the 372 ones are read (every answer then a choice marked by code).
+  let w = await base("question_id, chosen_index, response, correct, score, marking, answered_at").order("answered_at", { ascending: false }).limit(MISTAKES_ROW_CAP);
+  if (w.error) w = await base("question_id, chosen_index, correct, answered_at").order("answered_at", { ascending: false }).limit(MISTAKES_ROW_CAP);
+  if (w.error) return fail(w.error);
+  const rows = (w.data ?? []) as any[];
+  const wrong: MistakeAttempt[] = rows.map(a => ({
+    questionId: a.question_id, correct: a.correct === true, answeredAt: a.answered_at, chosenIndex: a.chosen_index ?? null,
+    response: a.response && typeof a.response === "object" ? a.response : null, marking: a.marking ?? "deterministic", score: a.score === null || a.score === undefined ? null : Number(a.score),
+  }));
+  const ids = [...new Set(wrong.map(a => a.questionId))];
+  if (!ids.length) return { ok: true, data: { wrong, history: [], capped: false } };
+  const h = await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at").eq("user_id", userId).in("question_id", ids)
+    .order("answered_at", { ascending: false }).limit(MISTAKES_ROW_CAP * 10);
+  if (h.error) return fail(h.error);
+  return {
+    ok: true,
+    data: { wrong, history: ((h.data ?? []) as any[]).map(a => ({ questionId: a.question_id, correct: a.correct === true, answeredAt: a.answered_at })), capped: rows.length >= MISTAKES_ROW_CAP },
+  };
+}
+
+/** How many questions are still to fix (their latest attempt was wrong), within the same cap as the notebook. Owner-keyed. */
+export async function mistakeToFixCount(admin: Admin, userId: string): Promise<Read<number>> {
+  const r = await mistakeAttempts(admin, userId);
+  return r.ok ? { ok: true, data: toFixIds(r.data.history).size } : r;
+}
+
+/** Everything the notebook page groups (mistakes.ts buildMistakeNotebook): wrong attempts, history, the questions, their materials' titles and topics. */
+export async function mistakeNotebookRows(admin: Admin, userId: string): Promise<Read<{
+  wrong: MistakeAttempt[]; history: AttemptMark[]; capped: boolean; questions: Map<string, MistakeQuestion>; titles: Map<string, string>; topics: Map<string, string[]>;
+}>> {
+  const a = await mistakeAttempts(admin, userId);
+  if (!a.ok) return a;
+  const ids = [...new Set(a.data.wrong.map(x => x.questionId))];
+  if (!ids.length) return { ok: true, data: { ...a.data, questions: new Map(), titles: new Map(), topics: new Map() } };
+  const { data, error } = await admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId).in("id", ids);
+  if (error) return fail(error);
+  const rows = await hydrate(admin, userId, data ?? []);
+  const topics = await topicsOfSections(admin, userId, [...new Set(rows.map(q => q.chunkId))]);
+  return {
+    ok: true,
+    data: { ...a.data, questions: new Map(rows.map(q => [q.id, q as MistakeQuestion])), titles: new Map(rows.map(q => [q.materialId, q.materialTitle])), topics },
   };
 }
 
@@ -2286,6 +2342,67 @@ export async function competencyProgressRows(admin: Admin, userId: string): Prom
   };
 }
 
+// ── MASTERY: THE EVIDENCE ROWS (SCHOLAR-COMPANION-01 P1) ─────────────────────────────────────────────
+
+/** Raw rows for src/lib/individual/scholar/mastery-data.ts. Bounded: the newest `maxRows` of each source within `sinceIso`. */
+export type MasteryRaw = {
+  questions: { id: string; chunkId: string; materialId: string; kind: string; difficulty: number | null; competencyId: string | null; level: string | null; topic: string | null }[];
+  attempts: { questionId: string; correct: boolean | null; score: number | null; marking: "deterministic" | "ai_evaluation" | "self_graded"; answeredAt: string }[];
+  reviews: { cardId: string; quality: number; reviewedAt: string }[];
+  cards: { id: string; questionId: string; materialId: string; status: string; nextReviewAt: string }[];
+  osce: { stationId: string; score: number; marking: "self_graded" | "ai_evaluation"; at: string }[];
+  stations: { id: string; competencyId: string | null; materialId: string | null; chunkId: string | null }[];
+  /** A source hit `maxRows`: older rows exist that were not read. */
+  truncated: boolean;
+};
+
+/**
+ * One bounded read of the caller's learning evidence: attempts and spaced reviews in the window (newest `maxRows` each),
+ * the cards (to place a review and to know what is due), finished OSCE practice runs with a score, and the questions
+ * (id, section, material, level, topic only -- never the key or the stem). A source whose migration is absent reads as
+ * none; a source that fails to read fails the whole read (unreadable is not empty).
+ */
+export async function masteryEvidence(admin: Admin, userId: string, o: { sinceIso: string; maxRows: number }): Promise<Read<MasteryRaw>> {
+  const soft = async (q: PromiseLike<{ data: unknown; error: any }>) => { const r = await q; return r.error && isNotProvisioned(r.error) ? { data: [], error: null } : r; };
+  const base = "id, chunk_id, material_id, kind";
+  // 416/388/710 columns may be absent: fall back to the 372 columns, as the other readers here do.
+  let q: { data: any; error: any } = await admin.from("individual_scholar_question")
+    .select(`${base}, difficulty, competency_id, rubric_level:answer->rubric->>level, rubric_topic:answer->rubric->>topic`).eq("user_id", userId).limit(5000);
+  if (q.error) q = await admin.from("individual_scholar_question").select(`${base}, difficulty, competency_id`).eq("user_id", userId).limit(5000);
+  if (q.error) q = await admin.from("individual_scholar_question").select(base).eq("user_id", userId).limit(5000);
+  let a: { data: any; error: any } = await admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at")
+    .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
+  if (a.error) a = await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at")
+    .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
+  const [rv, cards, osce, stations] = await Promise.all([
+    soft(admin.from("individual_scholar_review").select("card_id, quality, reviewed_at").eq("user_id", userId).gte("reviewed_at", o.sinceIso).order("reviewed_at", { ascending: false }).limit(o.maxRows)),
+    admin.from("individual_scholar_card").select("id, question_id, material_id, status, next_review_at").eq("user_id", userId).limit(5000),
+    soft(admin.from("individual_scholar_osce_attempt").select("station_id, score, marking, finished_at").eq("user_id", userId).eq("status", "finished")
+      .not("score", "is", null).gte("finished_at", o.sinceIso).order("finished_at", { ascending: false }).limit(Math.min(o.maxRows, 200))),
+    soft(admin.from("individual_scholar_osce_station").select("id, competency_id, material_id, chunk_id").eq("user_id", userId).limit(500)),
+  ]);
+  const err = [q, a, rv, cards, osce, stations].find(r => r.error)?.error;
+  if (err) return fail(err);
+  return {
+    ok: true,
+    data: {
+      questions: ((q.data ?? []) as any[]).map(r => ({
+        id: r.id, chunkId: r.chunk_id, materialId: r.material_id, kind: r.kind, difficulty: r.difficulty ?? null, competencyId: r.competency_id ?? null,
+        level: typeof r.rubric_level === "string" ? r.rubric_level : null, topic: typeof r.rubric_topic === "string" && r.rubric_topic.trim() ? r.rubric_topic.trim() : null,
+      })),
+      attempts: ((a.data ?? []) as any[]).map(r => ({
+        questionId: r.question_id, correct: r.correct ?? null, score: r.score === null || r.score === undefined ? null : Number(r.score),
+        marking: r.marking ?? "deterministic", answeredAt: r.answered_at,
+      })),
+      reviews: ((rv.data ?? []) as any[]).map(r => ({ cardId: r.card_id, quality: r.quality, reviewedAt: r.reviewed_at })),
+      cards: ((cards.data ?? []) as any[]).map(r => ({ id: r.id, questionId: r.question_id, materialId: r.material_id, status: r.status, nextReviewAt: r.next_review_at })),
+      osce: ((osce.data ?? []) as any[]).map(r => ({ stationId: r.station_id, score: Number(r.score), marking: r.marking === "ai_evaluation" ? "ai_evaluation" : "self_graded", at: r.finished_at })),
+      stations: ((stations.data ?? []) as any[]).map(r => ({ id: r.id, competencyId: r.competency_id ?? null, materialId: r.material_id ?? null, chunkId: r.chunk_id ?? null })),
+      truncated: ((a.data ?? []) as any[]).length >= o.maxRows || ((rv.data ?? []) as any[]).length >= o.maxRows,
+    },
+  };
+}
+
 // ── PASSPORT: THE ACHIEVEMENTS THE PERSON CHOSE TO SHOW (migration 375) ──────────────────────────────
 //
 // The row is the choice (passport-items.ts). Including writes one row, removing deletes that one row, and
@@ -3268,4 +3385,69 @@ export async function setFlashcardMark(admin: Admin, userId: string, questionId:
     ...(patch.issue !== undefined ? { issue: patch.issue, issue_at: patch.issue ? now : null } : {}),
   }, { onConflict: "user_id,question_id" });
   return !error;
+}
+
+// ── STUDY PLAN SETTINGS (780, SCHOLAR-COMPANION-01) ── what the learner typed, one row each ─────────────────────────
+//
+// individual_scholar_study_plan holds the exam date and name, the study time, a goal and up to ten priority topics. The
+// plan itself is computed from them by study-plan.ts and never stored. Detected once, as 710, 740 and 730 are: one read
+// of the table keyed on the caller. Absent (42P01 or PGRST205): get answers { ok: false, notProvisioned: true } and save
+// refuses with "not_provisioned", and the policy gate (scholar_study_plan, default off) is off in effect. Nothing here is
+// assessment, verification or a Passport row.
+let plan780: boolean | null = null;
+const STUDY_PLAN_COLS = "exam_date, exam_label, weekly_minutes, days_per_week, goal, priorities, updated_at";
+export type StudyPlanRow = { examDate: string | null; examLabel: string | null; weeklyMinutes: number; daysPerWeek: number; goal: string | null; priorities: string[]; updatedAt: string };
+const toStudyPlan = (r: any): StudyPlanRow => ({
+  examDate: r.exam_date ?? null, examLabel: r.exam_label ?? null, weeklyMinutes: Number(r.weekly_minutes), daysPerWeek: Number(r.days_per_week),
+  goal: r.goal ?? null, priorities: Array.isArray(r.priorities) ? r.priorities.filter((x: unknown): x is string => typeof x === "string") : [], updatedAt: r.updated_at,
+});
+/** Whether migration 780 is applied on this environment. A transient read error is "no" for now, and asked again. */
+export async function studyPlanSchema(admin: Admin, userId: string): Promise<boolean> {
+  if (plan780 !== null) return plan780;
+  try {
+    const { error } = await admin.from("individual_scholar_study_plan").select("user_id").eq("user_id", userId).limit(1);
+    if (!error) return (plan780 = true);
+    if (isNotProvisioned(error)) plan780 = false;
+    return false;
+  } catch { return false; }
+}
+/** Tests only: forget what was detected. */
+export const resetStudyPlanSchema = () => { plan780 = null; };
+
+/** The caller's study plan settings: the row, or null with none. Not provisioned (780 absent) and unreadable are told apart from "none". */
+export async function getStudyPlan(admin: Admin, userId: string): Promise<Read<StudyPlanRow | null>> {
+  if (plan780 === false) return { ok: false, notProvisioned: true };
+  try {
+    const { data, error } = await admin.from("individual_scholar_study_plan").select(STUDY_PLAN_COLS).eq("user_id", userId).maybeSingle();
+    if (error) { if (isNotProvisioned(error)) plan780 = false; return fail(error); }
+    plan780 = true;
+    return { ok: true, data: data ? toStudyPlan(data) : null };
+  } catch { return { ok: false, notProvisioned: false }; }
+}
+
+/** Save (insert or replace) the caller's settings. The values were validated by cleanStudyPlanInput; the table's CHECKs hold them too. */
+export async function saveStudyPlan(
+  admin: Admin, userId: string,
+  v: { examDate: string | null; examLabel: string | null; weeklyMinutes: number; daysPerWeek: number; goal: string | null; priorities: readonly string[] },
+): Promise<{ ok: true; plan: StudyPlanRow } | { ok: false; error: "not_provisioned" | "failed" }> {
+  if (plan780 === false) return { ok: false, error: "not_provisioned" };
+  try {
+    const { data, error } = await admin.from("individual_scholar_study_plan").upsert({
+      user_id: userId, exam_date: v.examDate, exam_label: v.examLabel, weekly_minutes: v.weeklyMinutes, days_per_week: v.daysPerWeek,
+      goal: v.goal, priorities: [...v.priorities], updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" }).select(STUDY_PLAN_COLS).single();
+    if (error || !data) { if (isNotProvisioned(error)) { plan780 = false; return { ok: false, error: "not_provisioned" }; } return { ok: false, error: "failed" }; }
+    plan780 = true;
+    return { ok: true, plan: toStudyPlan(data) };
+  } catch { return { ok: false, error: "failed" }; }
+}
+
+/** Remove the caller's study plan settings. */
+export async function clearStudyPlan(admin: Admin, userId: string): Promise<"ok" | "not_provisioned" | "failed"> {
+  if (plan780 === false) return "not_provisioned";
+  try {
+    const { error } = await admin.from("individual_scholar_study_plan").delete().eq("user_id", userId);
+    if (error) { if (isNotProvisioned(error)) { plan780 = false; return "not_provisioned"; } return "failed"; }
+    return "ok";
+  } catch { return "failed"; }
 }

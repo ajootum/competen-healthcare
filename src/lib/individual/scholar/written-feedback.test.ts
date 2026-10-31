@@ -91,12 +91,13 @@ describe("the wiring, as written", () => {
   it("the answer route keeps feedback only on an ai_evaluation attempt, short and structured alike", () => {
     const s = read("src/app/api/individual/scholar/revision/answer/route.ts");
     expect(s.match(/const formative = marking === "ai_evaluation" \? formativeFeedback\(/g)?.length).toBe(2);
-    expect(s).toContain("response: withFormative(stored.response, formative)");
-    expect(s).toContain("response: withFormative({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by) }, formative)");
+    // SCHOLAR-SQIE-LEARNER-01: the rubric snapshot goes on first, so the feedback is what yields when the size is tight.
+    expect(s).toContain("response: withFormative(withRubricSnapshot(answered, rubricSnapshotOf(q)), formative)");
+    expect(s).toContain("response: withFormative(withRubricSnapshot({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by) }, rubricSnapshotOf(q)), formative)");
   });
   it("the session review shows it again, read back through formativeOf", () => {
     const s = read("src/app/api/individual/scholar/revision/sessions/[id]/route.ts");
-    expect(s).toContain("...keptFeedback(q, a)");
-    expect(s).toMatch(/formativeOf\(a\.response, a\.marking\)/);
+    expect(s).toContain("...keptAttemptView(q, a)");
+    expect(read("src/lib/individual/scholar/revision-view.ts")).toMatch(/formativeOf\(a\.response, a\.marking\)/);
   });
 });

@@ -2,12 +2,12 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
-import { countDue, listArtefacts, listLearningSessions, listMaterials, listQuestions, type ArtefactRow } from "@/lib/individual/scholar/store";
+import { countDue, listArtefacts, listLearningSessions, listMaterials, listQuestions, mistakeToFixCount, type ArtefactRow } from "@/lib/individual/scholar/store";
 import { AI_LABEL, LEARN_ACTION_LABEL, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
-import { sourceHref } from "../_components/question-view";
+import { sourceHref, studyHref } from "../_components/question-view";
 import { AiFlagList, GovernedReferenceList } from "../_components/learn-kinds";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
@@ -35,14 +35,17 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
   const x = SCHOLAR;
   // SCHOLAR-SESSION-AI-02: with a valid ?study= the session bar is shown (database reads only; not a stage, so last_space is untouched).
   const study = await loadStudy(ctx.admin, ctx.userId, (await searchParams).study, null);
-  const [artefacts, materials, questions, due, sessions] = await Promise.all([
+  const policy = await loadIndividualPolicy(ctx.admin);
+  const [artefacts, materials, questions, due, sessions, toFix] = await Promise.all([
     listArtefacts(ctx.admin, ctx.userId), listMaterials(ctx.admin, ctx.userId), listQuestions(ctx.admin, ctx.userId),
     countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, 10),
+    // SCHOLAR-COMPANION-01 P1: the mistake notebook's entry (database reads only; absent when the policy is off or unreadable).
+    policy.scholarMistakeNotebook === "on" ? mistakeToFixCount(ctx.admin, ctx.userId) : Promise.resolve(null),
   ]);
   // Stage 3 acceptance items 3 and 5: a saved answer's references are labelled by the reference source as it is now,
   // never by the label saved with them. Read only when there is something to label.
   const refSource = artefacts.ok && artefacts.data.some(a => a.refs.length)
-    ? await referenceSource(ctx.admin, await loadIndividualPolicy(ctx.admin), (await loadLearnerCatalogue(ctx.admin, ctx.userId)).competencies)
+    ? await referenceSource(ctx.admin, policy, (await loadLearnerCatalogue(ctx.admin, ctx.userId)).competencies)
     : { collections: true as const, catalogue: [] };
   const titles = new Map((materials.ok ? materials.data : []).map(m => [m.id, m.title]));
   const byMaterial = new Map<string, ArtefactRow[]>();
@@ -71,6 +74,13 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
           </Link>
         ))}
       </section>
+
+      {toFix?.ok && (
+        <Link href={studyHref("revise/mistakes")} className={`mb-6 flex min-h-[44px] items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+          <span className="text-[14.5px] font-semibold text-gray-900">Mistake notebook ({toFix.data} to fix)</span>
+          <span className="text-[12.5px] text-gray-600">Your wrong answers, with the answer and why</span>
+        </Link>
+      )}
 
       <section aria-labelledby="explanations-h">
         <h2 id="explanations-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Saved explanations and summaries</h2>

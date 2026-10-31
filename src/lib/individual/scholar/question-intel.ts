@@ -133,7 +133,7 @@ const str = (v: unknown, max: number) => (typeof v === "string" && v.trim() && v
  * lacks, nothing identifying -- and one that fails is left out (the item is not dropped for its rubric). A reference
  * tag that was not given is ignored: a reference is never invented.
  */
-export function parseRubric(raw: unknown, grounding: readonly string[], opts: { expectedAnswer: string | null; accepted?: readonly string[]; difficulty: 1 | 2 | 3; references?: readonly PromptReference[] }): Rubric {
+export function parseRubric(raw: unknown, grounding: readonly string[], opts: { expectedAnswer: string | null; accepted?: readonly string[]; difficulty: 1 | 2 | 3; references?: readonly PromptReference[]; maxKeyPoints?: number }): Rubric {
   const r = (raw ?? {}) as Record<string, unknown>;
   const ok = (t: string) => !findPatientIdentifiers(t).length && !textGroundingViolations(t, [...grounding]).length;
   const keep = (xs: string[]) => xs.filter(ok);
@@ -144,7 +144,7 @@ export function parseRubric(raw: unknown, grounding: readonly string[], opts: { 
     objective: objective && ok(objective) ? objective : null,
     level: isCognitiveLevel(r.level) ? r.level : DIFFICULTY_LEVEL[opts.difficulty],
     expectedAnswer: opts.expectedAnswer ? opts.expectedAnswer.slice(0, 600) : null,
-    keyPoints: keep(strs(r.keyPoints, 4, 300)),
+    keyPoints: keep(strs(r.keyPoints, opts.maxKeyPoints ?? 4, 300)),
     acceptedAlternatives: [...new Set(opts.accepted ?? [])].slice(0, 8),
     misconceptions: keep(strs(r.misconceptions, 3, 300)),
     source: referenceIds.length ? "references" : "notes",
@@ -171,7 +171,7 @@ export function rubricOf(answer: unknown): Rubric | null {
   return {
     objective: typeof r.objective === "string" ? r.objective : null, level: r.level,
     expectedAnswer: typeof r.expectedAnswer === "string" ? r.expectedAnswer : null,
-    keyPoints: strs(r.keyPoints, 4, 300), acceptedAlternatives: strs(r.acceptedAlternatives, 8, 300), misconceptions: strs(r.misconceptions, 3, 300),
+    keyPoints: strs(r.keyPoints, 8, 300), acceptedAlternatives: strs(r.acceptedAlternatives, 8, 300), misconceptions: strs(r.misconceptions, 3, 300),
     source: r.source === "references" ? "references" : "notes", referenceIds: strs(r.referenceIds, 6, 64),
     ...(typeof r.topic === "string" && r.topic.trim() ? { topic: r.topic.trim().slice(0, 80) } : {}),
   };

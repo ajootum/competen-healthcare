@@ -12,7 +12,7 @@ import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai
 import { generationContextLoader } from "@/lib/individual/scholar/question-context";
 import { adaptiveReport, currentQuestion, loadAdaptive, stateOutcomes } from "@/lib/individual/scholar/adaptive-service";
 import { adaptationOutcomes, blueprintLimits, blueprintOf, deadlineOf, nextDifficulty } from "@/lib/individual/scholar/adaptive";
-import { feedbackView, revisionItemView } from "@/lib/individual/scholar/revision-view";
+import { feedbackView, keptAttemptView, revisionItemView } from "@/lib/individual/scholar/revision-view";
 import { keyOf } from "@/lib/individual/scholar/revision";
 import { ADAPTIVE_FALLBACK_NOTE, ADAPTIVE_HELP, ADAPTIVE_REPORT_LABEL, ADAPTIVE_RULE, MARKING_LABEL, type Marking } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../_components/chrome";
@@ -80,7 +80,7 @@ export default async function AdaptiveExam({ params, searchParams }: { params: P
     const review: ReviewRow[] = st.questionIds.map((id, i) => {
       const qq = st.questions.get(id)!;
       const a = att.get(id);
-      if (a) return { n: i + 1, questionId: id, stem: qq.stem, feedback: feedbackView(qq, { correct: a.correct, score: a.score, marking: a.marking as Marking }) };
+      if (a) return { n: i + 1, questionId: id, stem: qq.stem, feedback: feedbackView(qq, { correct: a.correct, score: a.score, marking: a.marking as Marking, ...keptAttemptView(qq, a) }) };
       if (held.has(id)) {
         // 425, owner decision R4: a short answer held unmarked until the end, graded now by the student against the notes.
         const f = feedbackView(qq, { correct: false, score: null, marking: "self_graded" });

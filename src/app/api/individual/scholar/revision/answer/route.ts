@@ -18,6 +18,9 @@ import { rubricOf, type FeedbackParts } from "@/lib/individual/scholar/question-
 import { answerOutcome, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
 import { ORIGIN_LABEL, originOf, recallCardOf } from "@/lib/individual/scholar/flashcards";
 import { formativeFeedback, withFormative } from "@/lib/individual/scholar/written-feedback";
+import { CLOZE_REVEALED_TEXT, isClozeQuestion } from "@/lib/individual/scholar/cloze";
+import { extendedMarks, extendedSpecOf, isExtendedQuestion } from "@/lib/individual/scholar/formats";
+import { rubricSnapshotOf, withRubricSnapshot } from "@/lib/individual/scholar/rubric-snapshot";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -37,6 +40,12 @@ export const dynamic = "force-dynamic";
 // SCHOLAR-SQIE-02: recovery { id, mode, question } re-runs the SAME evaluation on the question's passage plus the
 // evidence that recovery found -- re-derived here from the learner's own notes and the approved library, never taken
 // from the request -- under the same checks. Published abstracts are not added: the evaluation reads notes only.
+// SCHOLAR-SQIE-LEARNER-01: true/false is marked by code. An EXTENDED response is marked by the same evaluator (activity `evaluate`)
+// against its numbered key points: the score is the share of key points it says the answer makes, the practice marks are whole
+// marks a point, all labelled formative. Where the evaluator is unavailable or cannot judge, the student marks it against the model answer.
+// Every attempt that carries a `response` also keeps a compact snapshot of the rubric it was marked against under response.rubric
+// (rubric-snapshot.ts), so feedback shown again is read against that guide, not whatever the question says later. A choice (mcq,
+// case) is stored in chosen_index, which 416 does not allow beside a response, so those keep the 416 shape.
 // SCHOLAR-SQIE-CLOSE-01 (710): a STRUCTURED question { response: { texts: [one per part] }, selfGrades? } is marked part by
 // part -- blank or matching what the part accepts by code, otherwise by the same evaluation (activity `evaluate`, one
 // metered call per part, the part's rubric), otherwise by the student -- and its practice marks are formative.
@@ -92,6 +101,10 @@ export async function POST(req: Request) {
     return answerStructured(ctx, req, body, q, sessionId, answeredCount);
   }
 
+  // SCHOLAR-COMPANION-01 P1: a cloze item the learner chose to see the answer to is recorded as a miss, labelled as such --
+  // a revealed answer is never a recalled one, and it feeds the same SM-2 lapse as any other miss.
+  const gaveUp = !held && isClozeQuestion(q) && body?.giveUp === true;
+  if (gaveUp) body.response = { text: CLOZE_REVEALED_TEXT };
   const r = held ? { kind: "text" as const, text: held.text } : parseResponse(q, body?.response);
   if (!r) return NextResponse.json({ error: "Answer the question first." }, { status: 400 });
   if (r.kind === "text" && findPatientIdentifiers(r.text).length)
@@ -105,8 +118,11 @@ export async function POST(req: Request) {
 
   // ── marking: code, then (a short answer only) AI evaluation or the student's own judgement ──
   let mark = markResponse(q, r);
+  if (gaveUp) mark = { correct: false, score: 0, marking: "deterministic" };
   let evaluation: string | null = null, evaluator: { model: string; promptVersion: string } | null = null;
   let evaluationParts: FeedbackParts | null = null;
+  const extSpec = isExtendedQuestion(q) ? extendedSpecOf(q.answer) : null;
+  let extendedMatched: number[] | null = null;
   let withheld: (Withheld & { recovered?: ReturnType<typeof recoveredReply> }) | null = null;
   if ("needsJudgement" in mark && r.kind === "text") {
     const accepted = (keyOf(q) as { answers: string[] }).answers;
@@ -129,7 +145,7 @@ export async function POST(req: Request) {
           const ai = scholarAiRunner(ctx, req, "evaluate", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\n${r.text}`, passages: [passage] }));
           // SCHOLAR-QUESTION-INTELLIGENCE-01: judged against the question's key points and misconceptions where it has them.
           const rubric = rubricOf(q.answer);
-          const e = await runEvaluate(ctx.userId, { question: q.stem, accepted, answer: r.text, passage, rubric }, ai.run);
+          const e = await runEvaluate(ctx.userId, { question: q.stem, accepted, answer: r.text, passage, rubric, ...(extSpec ? { numberedKeyPoints: extSpec.keyPoints } : {}) }, ai.run);
           const refused = ai.refusal();
           await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_evaluate", sessionId, {
             question_id: q.id, outcome: refused ? `refused:${refused.error}` : !e.ok ? `error:${e.error}` : e.evaluation.ok ? `shown:${e.evaluation.verdict}` : `withheld:${e.evaluation.reason}`,
@@ -145,7 +161,8 @@ export async function POST(req: Request) {
           }
           if (!refused && e.ok && e.evaluation.ok) {
             // Recorded as ai_evaluation below, with the evaluator model and prompt version.
-            mark = { correct: e.evaluation.verdict === "correct", score: e.evaluation.score, marking: "deterministic" };
+            if (extSpec && e.evaluation.matched) { const xm = extendedMarks(extSpec, e.evaluation.matched); extendedMatched = xm.matched; mark = { correct: xm.correct, score: xm.score, marking: "deterministic" }; }
+            else mark = { correct: e.evaluation.verdict === "correct", score: e.evaluation.score, marking: "deterministic" };
             evaluation = e.evaluation.feedback; evaluationParts = e.evaluation.parts ?? null; evaluator = { model: e.model, promptVersion: e.promptVersion };
           } else why = refused ? "AI evaluation is not available for this right now, so compare your answer yourself." : "The AI could not judge this answer against your notes, so compare it yourself.";
         }
@@ -161,7 +178,7 @@ export async function POST(req: Request) {
       // SCHOLAR-SQIE-02: after an explanation from recovered evidence that was still withheld, the withhold says so and
       // carries what remains unanswered (withheld.recovered); the student's own judgement is still what marks it.
       if (recovered && withheld) { why = RECOVERY_STILL_WITHHELD; withheld = { ...withheld, recovered: recoveredReply(recovered, false) }; }
-      if (!evaluator) return NextResponse.json({ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL.self_graded, ...(withheld ? { withheld, questionId: q.id, attempt: r.text } : {}) });
+      if (!evaluator) return NextResponse.json({ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL.self_graded, ...(extSpec ? { extended: { modelAnswer: extSpec.modelAnswer, keyPoints: extSpec.keyPoints, marks: extSpec.marks } } : {}), ...(withheld ? { withheld, questionId: q.id, attempt: r.text } : {}) });
     }
   }
   if ("needsJudgement" in mark) return NextResponse.json({ error: "This answer could not be marked." }, { status: 400 });
@@ -171,8 +188,10 @@ export async function POST(req: Request) {
   const stored = storedResponse(r);
   // SCHOLAR-WRITTEN-FEEDBACK-01: an AI-evaluated answer keeps the formative feedback it was shown, on its own response.
   const formative = marking === "ai_evaluation" ? formativeFeedback([{ part: null, feedback: evaluation, parts: evaluationParts }], evaluator) : null;
+  // SCHOLAR-SQIE-LEARNER-01: the key points an extended answer made, then the rubric snapshot, then the feedback (which yields first if the size is tight).
+  const answered = extendedMatched && stored.response ? { ...stored.response, matched: extendedMatched } : stored.response;
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
-    chosenIndex: stored.chosenIndex, response: withFormative(stored.response, formative), correct: mark.correct, score: mark.score, marking, evaluator, sessionId,
+    chosenIndex: stored.chosenIndex, response: withFormative(withRubricSnapshot(answered, rubricSnapshotOf(q)), formative), correct: mark.correct, score: mark.score, marking, evaluator, sessionId,
     quality: r.kind === "recall" ? r.quality : null, srs,
   });
   if (!saved.ok) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });
@@ -182,7 +201,7 @@ export async function POST(req: Request) {
   if (feedbackMode === "end" && !finished) return NextResponse.json({ recorded: true, held: true });
   return NextResponse.json({
     recorded: true,
-    feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, evaluation, evaluationParts, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
+    feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, evaluation, evaluationParts, extendedMatched, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
     ...(recovered?.ok && evaluator ? { recovered: recoveredReply(recovered, true) } : {}),
   });
 }
@@ -260,7 +279,7 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
   // SCHOLAR-WRITTEN-FEEDBACK-01: how each part was marked, and (AI-evaluated only) the formative feedback on each AI part.
   const formative = marking === "ai_evaluation" ? formativeFeedback(final.flatMap((x, i) => x.by === "ai" ? [{ part: i + 1, feedback: x.feedback ?? null, parts: x.parts ?? null }] : []), evaluator) : null;
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
-    chosenIndex: null, response: withFormative({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by) }, formative), correct: m.correct, score: m.score, marking,
+    chosenIndex: null, response: withFormative(withRubricSnapshot({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by) }, rubricSnapshotOf(q)), formative), correct: m.correct, score: m.score, marking,
     evaluator: marking === "ai_evaluation" ? evaluator : null, sessionId, srs,
   });
   if (!saved.ok) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });
