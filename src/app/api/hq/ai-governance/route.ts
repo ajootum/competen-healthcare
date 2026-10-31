@@ -8,6 +8,7 @@ import { gapList, loadReadiness } from "@/lib/ai/readiness";
 import { attestProvider, changeRate, createBudget, publishPolicies, RATE_KINDS, runProviderChecks, saveBudgetPolicyDraft, saveModelRoutingDraft, savePolicyDraft, saveProviderRegistration, saveRoutingDraft, setBudgetStatus, setProviderStatus, type RateKind } from "@/lib/ai/fair-use-admin";
 import { BUDGET_CODE } from "@/lib/ai/consumption";
 import { AI_PRODUCTS, type AiProduct } from "@/lib/ai/fair-use-policy";
+import { saveAssistantProfileDraft } from "@/lib/ai/fair-use-admin";
 import { publishContentReview, rollbackContentReview, saveContentReviewDraft } from "@/lib/ai/content-review-admin";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
@@ -16,6 +17,8 @@ export const dynamic = "force-dynamic";
 // POST /api/hq/ai-governance -- COMPETEN-AI-FAIR-USE-01 s12.
 //
 // Body: { action: "rate", kind: "price" | "fx" | "basis" | "eligibility", ...fields } | { action: "policy", product, settings } |
+//       { action: "assistant_profile", product, profile: { defaultMode, modes, scopes } }   (Personal AI profile draft, ai.assistant.<product>:
+//                                                  strictly validated against the product's AUTHORISED scopes and modes; publishes via "publish") |
 //       { action: "publish", note? } | { action: "budget_create", code, ownerType, product, label, institutionRef?, fundingRef? } |
 //       { action: "budget_status", budgetId, status } | { action: "budget_policy", code, settings } | { action: "routing", settings } |
 //       { action: "model_routing", settings }   (providers, models, primary and alternatives: never a credential) |
@@ -59,6 +62,14 @@ export async function POST(req: Request) {
       if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
       const r = await savePolicyDraft(ctx.admin, actor, body.product as AiProduct, body.settings ?? {});
       return r.ok ? NextResponse.json({ ok: true }) : refuse(r.status, r.error);
+    }
+    // ── Personal AI profile draft (ai.assistant.<product>). Strictly validated; publishes with the other AI policies. ──
+    case "assistant_profile": {
+      if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
+      const r = await saveAssistantProfileDraft(ctx.admin, actor, body.product, body.profile);
+      if (!r.ok) return refuse(r.status, r.error);
+      await audit("ai_assistant_profile_draft", { product: body.product, defaultMode: body.profile?.defaultMode, modes: body.profile?.modes, scopes: body.profile?.scopes });
+      return NextResponse.json({ ok: true });
     }
     case "publish": {
       if (await wceMissing(ctx.admin)) return refuse(409, "The configuration engine is not available on this environment (migration 076).");
