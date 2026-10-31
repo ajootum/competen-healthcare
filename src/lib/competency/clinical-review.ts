@@ -118,7 +118,10 @@ export function reviewRisk(competencyRisk: string | null | undefined, cpuRisk: s
 // Audit actions that record governance of content rather than authorship of it.
 const NOT_AUTHORSHIP = new Set(["submit_review", "approve_content", "reject_content", "publish", "archive", "revert",
   "catalogue_entry_add", "catalogue_entry_status", "catalogue_entry_remove", "catalogue_entry_review", "clinical_review_submitted", "clinical_review_decided",
-  "clinical_scope_added", "clinical_scope_ended", "framework_specialty_set"]);
+  "clinical_scope_added", "clinical_scope_ended", "framework_specialty_set",
+  // FRAMEWORK-DESIGN-STUDIO-01 F4 (751): a presentation-only reorder is not authorship, so it does not bar clinical review.
+  // It still counts as contribution for publication (framework-publication.ts GOVERNANCE leaves it out).
+  "reorder_layout"]);
 
 /** Pure: who authored or materially edited a competency, from its audit trail and the person putting it forward. */
 export function authorsOf(submitter: string, audit: readonly { actor_id: string | null; action: string }[]): string[] {
