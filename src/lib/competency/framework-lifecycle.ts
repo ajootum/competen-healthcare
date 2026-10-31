@@ -76,6 +76,11 @@ const SNAPSHOT_COLS = `
         )
       `;
 
+// FRAMEWORK-DESIGN-STUDIO-02 (760): a version also records its Areas and each domain's Area, so the organisation of a
+// version can be rebuilt. Before 760 the select falls back to SNAPSHOT_COLS, exactly as before.
+const SNAPSHOT_COLS_760 = SNAPSHOT_COLS
+  .replace("framework_domains(\n          id, name, code, sort_order,", "framework_areas(id, name, description, sort_order),\n        framework_domains(\n          id, name, code, sort_order, area_id,");
+
 export async function transitionFramework(
   admin: any,
   frameworkId: string,
@@ -131,7 +136,8 @@ export async function transitionFramework(
     // Additive: before 750/751 those columns are absent and the snapshot is exactly what it was. Old snapshots are
     // never touched.
     const snap = (cols: string) => admin.from("frameworks").select(cols).eq("id", frameworkId).single();
-    let { data: fullFw, error: snapErr } = await snap(SNAPSHOT_COLS);
+    let { data: fullFw, error: snapErr } = await snap(SNAPSHOT_COLS_760);
+    if (snapErr) ({ data: fullFw, error: snapErr } = await snap(SNAPSHOT_COLS));
     if (snapErr) ({ data: fullFw, error: snapErr } = await snap(SNAPSHOT_COLS_BEFORE_750));
 
     if (fullFw) {

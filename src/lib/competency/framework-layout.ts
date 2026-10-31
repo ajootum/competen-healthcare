@@ -102,7 +102,7 @@ export async function reorderLayout(admin: any, actor: Actor, b: any): Promise<R
   const c = classifyReorder(L.tree, direct ? null : L.state.layout, { level: b.level, parentId: b.parentId ?? null, component: b.component ?? null, order: b.order });
   if (!c.ok) return { ok: false, status: c.clinical ? 409 : 422, error: c.error };
   if (c.unchanged) return { ok: true, mode: direct ? "direct" : "draft", unchanged: true, layoutPending: !!L.state.layout };
-  const detail = { level: b.level, parent_id: b.parentId ?? null, component: b.component ?? null, order: c.patch.key === "componentOrder" ? c.patch.codes : c.patch.ids, mode: direct ? "direct" : "draft" };
+  const detail = { level: b.level, parent_id: b.parentId ?? null, component: b.component ?? null, order: "codes" in c.patch ? c.patch.codes : "ids" in c.patch ? c.patch.ids : null, mode: direct ? "direct" : "draft" };
   if (!(await authored(admin, actor, "reorder_layout", "framework", g.fw.id, g.fw.name, detail))) return NOT_RECORDED;
   if (direct) {
     const plan = densePlan(L.tree, mergeLayout(null, c.patch));

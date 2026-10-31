@@ -7,8 +7,12 @@
 // render a pending layout with exactly the rules the server applies.
 //
 //   within the same parent      presentation only: a reorder (this module)
-//   to another parent           a CLINICAL change (ruling 2): a competency to another domain, a criterion to another
-//                               section or competency. Refused here, never expressible in a layout draft (750 guard)
+//   a competency to another     ORGANISATIONAL (FRAMEWORK-DESIGN-STUDIO-02 ruling D3, migration 760): a move, not a
+//   domain of the framework     reorder (classifyMove). Listed under its new domain in the layout draft
+//   a domain to another Area    ORGANISATIONAL (D1/D3, 760): domainAreas. Areas are ordered (areas) and renamed
+//                               (areaNames) the same way. None of it is in the content hash
+//   a criterion to another      SUBSTANTIVE (ruling 2, D3): refused here, never expressible in a layout draft (750
+//   section or competency       and 760 guards). It goes through revision drafts (S5)
 //   learning outcomes           a CLINICAL change (ruling 1): their order is in the hash. Refused here, changed only
 //                               by editing the competency (update_competency), which sends it back to clinical review
 //
@@ -18,21 +22,36 @@
 export type LayoutV1 = {
   v: 1;
   domains?: string[];
+  /** domain id -> competency ids in order. 760: an id may be a competency of ANOTHER domain of the same framework,
+   *  which moves it here. Each competency is listed at most once across all domains. */
   competencies?: Record<string, string[]>;
   criteria?: Record<string, string[]>;
   componentOrder?: string[] | null;
+  /** 760: Area ids in order (partial allowed). */
+  areas?: string[];
+  /** 760: domain id -> its Area id, or null for none. */
+  domainAreas?: Record<string, string | null>;
+  /** 760: Area id -> its new name. */
+  areaNames?: Record<string, string>;
 };
 
 export type TreeCriterion = { id: string; name: string; sortOrder: number | null; component: string | null };
 export type TreeCompetency = { id: string; name: string; sortOrder: number | null; criteria: TreeCriterion[] };
-export type TreeDomain = { id: string; name: string; sortOrder: number | null; competencies: TreeCompetency[] };
-/** A framework's structure. componentOrder is the framework's live section order (null: the registry's). */
-export type LayoutTree = { domains: TreeDomain[]; componentOrder: string[] | null; registry: string[] };
+/** areaId: 760, the domain's Area (null: none, undefined: Areas not read). */
+export type TreeDomain = { id: string; name: string; sortOrder: number | null; competencies: TreeCompetency[]; areaId?: string | null };
+export type TreeArea = { id: string; name: string; sortOrder: number | null };
+/** A framework's structure. componentOrder is the framework's live section order (null: the registry's). areas: 760. */
+export type LayoutTree = { domains: TreeDomain[]; componentOrder: string[] | null; registry: string[]; areas?: TreeArea[] };
 
 export type ReorderLevel = "domains" | "competencies" | "criteria" | "sections" | "outcomes";
 export type ReorderRequest = { level: ReorderLevel; parentId?: string | null; component?: string | null; order: string[] };
 export type LayoutPatch =
   | { key: "domains"; ids: string[] }
+  /** 760: competencyId moves to domainId, whose whole new order is ids. */
+  | { key: "move"; competencyId: string; domainId: string; ids: string[] }
+  | { key: "areas"; ids: string[] }
+  | { key: "domainArea"; domainId: string; areaId: string | null }
+  | { key: "areaName"; areaId: string; name: string }
   | { key: "competencies"; parentId: string; ids: string[] }
   | { key: "criteria"; parentId: string; ids: string[] }
   | { key: "componentOrder"; codes: string[] };
@@ -52,7 +71,7 @@ export function byOrder(a: { sortOrder?: number | null; name?: string | null; id
 export const byRowOrder = (a: any, b: any) => byOrder({ sortOrder: a?.sort_order, name: a?.name, id: String(a?.id ?? "") }, { sortOrder: b?.sort_order, name: b?.name, id: String(b?.id ?? "") });
 /** Pure: the live tree in its stable order. */
 export function sortTree(t: LayoutTree): LayoutTree {
-  return { ...t, domains: [...t.domains].sort(byOrder).map(d => ({ ...d, competencies: [...d.competencies].sort(byOrder).map(c => ({ ...c, criteria: [...c.criteria].sort(byOrder) })) })) };
+  return { ...t, ...(t.areas ? { areas: [...t.areas].sort(byOrder) } : {}), domains: [...t.domains].sort(byOrder).map(d => ({ ...d, competencies: [...d.competencies].sort(byOrder).map(c => ({ ...c, criteria: [...c.criteria].sort(byOrder) })) })) };
 }
 
 /** Pure: `named` first (only ids that exist, each once), then everything else in its current order. */
@@ -75,13 +94,27 @@ export function sectionOrder(t: Pick<LayoutTree, "componentOrder" | "registry">,
 export function applyLayout(t: LayoutTree, layout?: LayoutV1 | null): LayoutTree {
   const s = sortTree(t);
   if (!layout) return s;
+  // 760: a competency listed under another domain of this framework moves there. Any domain list may name any
+  // competency of the framework (the first list naming it wins), and a domain keeps what no list names.
+  const pool = new Map(s.domains.flatMap(d => d.competencies.map(c => [c.id, c] as const)));
+  const domainIds = new Set(s.domains.map(d => d.id));
+  const listedIn = new Map<string, string>();
+  for (const [d, ids] of Object.entries(layout.competencies ?? {})) if (domainIds.has(d)) for (const id of ids ?? []) if (pool.has(id) && !listedIn.has(id)) listedIn.set(id, d);
+  const areaIds = new Set((s.areas ?? []).map(a => a.id));
   return {
     ...s,
     componentOrder: layout.componentOrder !== undefined ? layout.componentOrder : s.componentOrder,
-    domains: arrange(s.domains, layout.domains, d => d.id).map(d => ({
-      ...d,
-      competencies: arrange(d.competencies, layout.competencies?.[d.id], c => c.id).map(c => ({ ...c, criteria: arrange(c.criteria, layout.criteria?.[c.id], k => k.id) })),
-    })),
+    ...(s.areas ? { areas: arrange(s.areas, layout.areas, a => a.id).map(a => (layout.areaNames?.[a.id] ? { ...a, name: layout.areaNames[a.id] } : a)) } : {}),
+    domains: arrange(s.domains, layout.domains, d => d.id).map(d => {
+      const named = (layout.competencies?.[d.id] ?? []).filter(id => listedIn.get(id) === d.id).map(id => pool.get(id)!);
+      const kept = d.competencies.filter(c => !listedIn.has(c.id));
+      const placed = layout.domainAreas && d.id in layout.domainAreas ? layout.domainAreas[d.id] : undefined;
+      return {
+        ...d,
+        ...(placed !== undefined && (placed === null || !s.areas || areaIds.has(placed)) ? { areaId: placed } : {}),
+        competencies: [...new Set([...named, ...kept])].map(c => ({ ...c, criteria: arrange(c.criteria, layout.criteria?.[c.id], k => k.id) })),
+      };
+    }),
   };
 }
 
@@ -109,7 +142,8 @@ export function classifyReorder(t: LayoutTree, layout: LayoutV1 | null, r: Reord
     if (!d) return { ok: false, clinical: false, error: "Choose a domain of this framework." };
     const ids = d.competencies.map(c => c.id);
     const elsewhere = cur.domains.some(o => o.id !== d.id && o.competencies.some(c => order.includes(c.id)));
-    if (elsewhere) return { ok: false, clinical: true, error: `Moving a competency to another domain is a clinical change, not a reorder. ${CLINICAL_EDIT_PATH}` };
+    // 760 (ruling D3): organisational, but a move, not a reorder.
+    if (elsewhere) return { ok: false, clinical: false, error: "Moving a competency to another domain is a move, not a reorder. Use Move to domain." };
     if (!isPermutation(order, ids)) return { ok: false, clinical: false, error: "List every competency of this domain, each once, in the new order." };
     return { ok: true, patch: { key: "competencies", parentId: d.id, ids: order }, unchanged: same(order, ids) };
   }
@@ -142,6 +176,14 @@ export function classifyReorder(t: LayoutTree, layout: LayoutV1 | null, r: Reord
 export function mergeLayout(layout: LayoutV1 | null, p: LayoutPatch): LayoutV1 {
   const l: LayoutV1 = { v: 1, ...(layout ?? {}) };
   if (p.key === "domains") return { ...l, domains: p.ids };
+  if (p.key === "move") {
+    // The competency is listed once: under its new domain, and taken out of every other list.
+    const comps = Object.fromEntries(Object.entries(l.competencies ?? {}).map(([d, ids]) => [d, d === p.domainId ? ids : ids.filter(id => id !== p.competencyId)]));
+    return { ...l, competencies: { ...comps, [p.domainId]: p.ids } };
+  }
+  if (p.key === "areas") return { ...l, areas: p.ids };
+  if (p.key === "domainArea") return { ...l, domainAreas: { ...(l.domainAreas ?? {}), [p.domainId]: p.areaId } };
+  if (p.key === "areaName") return { ...l, areaNames: { ...(l.areaNames ?? {}), [p.areaId]: p.name } };
   if (p.key === "competencies") return { ...l, competencies: { ...(l.competencies ?? {}), [p.parentId]: p.ids } };
   if (p.key === "criteria") return { ...l, criteria: { ...(l.criteria ?? {}), [p.parentId]: p.ids } };
   return { ...l, componentOrder: p.codes };
@@ -153,16 +195,55 @@ export function pruneLayout(t: LayoutTree, layout: LayoutV1 | null): LayoutV1 | 
   const s = sortTree(t), a = applyLayout(t, layout);
   const out: LayoutV1 = { v: 1 };
   if (layout.domains && !same(a.domains.map(d => d.id), s.domains.map(d => d.id))) out.domains = a.domains.map(d => d.id);
+  const liveComp = new Map(s.domains.flatMap(d => d.competencies.map(c => [c.id, c] as const)));
   for (const d of a.domains) {
     const live = s.domains.find(x => x.id === d.id)!;
+    // A domain list stays while it differs from the live domain: a reorder, or a competency moved in or out (760).
     if (layout.competencies?.[d.id] && !same(d.competencies.map(c => c.id), live.competencies.map(c => c.id))) out.competencies = { ...(out.competencies ?? {}), [d.id]: d.competencies.map(c => c.id) };
+    if (s.areas && layout.domainAreas && d.id in layout.domainAreas && (d.areaId ?? null) !== (live.areaId ?? null)) out.domainAreas = { ...(out.domainAreas ?? {}), [d.id]: d.areaId ?? null };
     for (const c of d.competencies) {
-      const lc = live.competencies.find(x => x.id === c.id)!;
+      const lc = liveComp.get(c.id)!;
       if (layout.criteria?.[c.id] && !same(c.criteria.map(k => k.id), lc.criteria.map(k => k.id))) out.criteria = { ...(out.criteria ?? {}), [c.id]: c.criteria.map(k => k.id) };
     }
   }
   if (layout.componentOrder && !same(sectionOrder(t, layout), sectionOrder(t, null))) out.componentOrder = layout.componentOrder;
+  if (s.areas && a.areas) {
+    if (layout.areas && !same(a.areas.map(x => x.id), s.areas.map(x => x.id))) out.areas = a.areas.map(x => x.id);
+    for (const ar of a.areas) {
+      const live = s.areas.find(x => x.id === ar.id)!;
+      if (layout.areaNames?.[ar.id] && ar.name !== live.name) out.areaNames = { ...(out.areaNames ?? {}), [ar.id]: ar.name };
+    }
+  } else {
+    // A tree read without Areas (reorder_layout, or before 760) cannot judge them: they are kept exactly as they are.
+    if (layout.areas) out.areas = layout.areas;
+    if (layout.areaNames) out.areaNames = layout.areaNames;
+    if (layout.domainAreas) out.domainAreas = layout.domainAreas;
+  }
   return Object.keys(out).length > 1 ? out : null;
+}
+
+export type MoveRequest = { competencyId: string; domainId: string; position?: number | null };
+/**
+ * Pure (760, ruling D3): a competency to another domain of the SAME framework is organisational. position is the
+ * 0-based index in the target domain after the move (omitted or past the end: last). Within its own domain it is a
+ * plain reorder. The result is a layout patch built on the pending draft.
+ */
+export function classifyMove(t: LayoutTree, layout: LayoutV1 | null, r: MoveRequest): Classified {
+  const cur = applyLayout(t, layout);
+  const from = cur.domains.find(d => d.competencies.some(c => c.id === r?.competencyId));
+  if (!from) return { ok: false, clinical: false, error: "Choose a competency of this framework." };
+  const to = cur.domains.find(d => d.id === r?.domainId);
+  if (!to) return { ok: false, clinical: false, error: "Choose a domain of this framework. A competency moves only within its framework." };
+  const rest = to.competencies.map(c => c.id).filter(id => id !== r.competencyId);
+  const at = Number.isInteger(r.position) && (r.position as number) >= 0 ? Math.min(r.position as number, rest.length) : rest.length;
+  const ids = [...rest.slice(0, at), r.competencyId, ...rest.slice(at)];
+  return { ok: true, patch: { key: "move", competencyId: r.competencyId, domainId: to.id, ids }, unchanged: from.id === to.id && same(ids, to.competencies.map(c => c.id)) };
+}
+
+/** Pure (760): an Area name as stored -- trimmed, inner whitespace collapsed, 2 to 120 characters. null = not valid. */
+export function areaName(v: unknown): string | null {
+  const n = typeof v === "string" ? v.trim().replace(/\s+/g, " ") : "";
+  return n.length >= 2 && n.length <= 120 ? n : null;
 }
 
 export type SortWrite = { table: "framework_domains" | "framework_competencies" | "competency_skills"; id: string; from: number | null; to: number };
@@ -186,4 +267,24 @@ export function densePlan(t: LayoutTree, layout: LayoutV1): { writes: SortWrite[
 /** Pure: a stored value as a v1 layout, or null. The database guard (750) is the authority on its validity. */
 export function asLayout(v: unknown): LayoutV1 | null {
   return v && typeof v === "object" && (v as { v?: unknown }).v === 1 ? (v as LayoutV1) : null;
+}
+
+/**
+ * 760, F4: the organisational audit actions. Like reorder_layout they count as CONTRIBUTION for publication (the 640
+ * guard and framework-publication.ts GOVERNANCE leave them out) but NOT as authorship for clinical review
+ * (clinical-review.ts NOT_AUTHORSHIP and the 760 clinical_review_decision_sod_guard name them).
+ */
+export const ORGANISATIONAL_ACTIONS = ["create_area", "rename_area", "delete_area", "reorder_areas", "set_domain_area", "move_competency_domain"] as const;
+
+/**
+ * Pure (760): the domains grouped by Area, in Area order, each group's domains in domain order, then the domains with
+ * no Area (area null). No Areas read or none defined: one group, area null, every domain. Run it on applyLayout's
+ * result to show a pending draft.
+ */
+export function groupByArea(t: Pick<LayoutTree, "domains" | "areas">): { area: TreeArea | null; domains: TreeDomain[] }[] {
+  const areas = t.areas ?? [];
+  const known = new Set(areas.map(a => a.id));
+  const groups = areas.map(a => ({ area: a as TreeArea | null, domains: t.domains.filter(d => d.areaId === a.id) }));
+  const none = t.domains.filter(d => !d.areaId || !known.has(d.areaId));
+  return [...groups, ...(none.length || !groups.length ? [{ area: null, domains: none }] : [])];
 }

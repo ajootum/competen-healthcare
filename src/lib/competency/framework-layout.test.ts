@@ -120,9 +120,9 @@ describe("routing: draft vs published", () => {
     expect(await discardLayout(fake(), AUTHOR, { frameworkId: FW })).toEqual({ ok: true, discarded: true });
     expect(T.frameworks[0].layout_draft).toBeNull();
   });
-  it("cross-parent and outcome reorders are refused as clinical, and write nothing", async () => {
+  it("cross-parent and outcome reorders are refused, and write nothing", async () => {
     const r = await reorderLayout(fake(), AUTHOR, { frameworkId: FW, level: "competencies", parentId: D2, order: [C1] });
-    expect(r).toMatchObject({ ok: false, status: 409 });
+    expect(r).toMatchObject({ ok: false, status: 422 }); // 760 (D3): a competency to another domain is a move (move_competency_domain), not a reorder
     expect(await reorderLayout(fake(), AUTHOR, { frameworkId: FW, level: "outcomes", parentId: C1, order: ["x"] })).toMatchObject({ ok: false, status: 409 });
     expect(T.audit_log).toEqual([]);
   });

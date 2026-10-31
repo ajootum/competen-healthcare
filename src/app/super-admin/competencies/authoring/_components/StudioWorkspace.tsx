@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { arrange } from "@/lib/competency/layout-order";
 import { announceMove, dropOf, movePointerDrag, moveInArray, readDropTarget, shortName, startPointerDrag, stepTarget, type PointerDrag } from "@/lib/competency/reorder-ui";
 import { SubmitReview } from "./AuthoringControls";
 import PropertiesPanel from "./PropertiesPanel";
 import { ReviewButton } from "./ReviewDialog";
+import { announceAreaMove, announceCompetencyMove, dropAction, expandOrder, groupDomains, moveCompetency, setDomainArea, type DragSource, type DropTarget, type OrgAction, type StudioArea } from "@/lib/competency/studio-areas";
+import { AddAreaForm, AreaHeading, MoveSelect } from "./OrganiseControls";
+import { FrameworkMap } from "./FrameworkMap";
 
 // CFCA-STUDIO-UX-02, the Competencies tab of one framework: a compact searchable explorer (domains, competencies,
 // selection) beside ONE active competency. Its fields are edited with the existing CompetencyEditor (the same governed
@@ -15,12 +18,20 @@ import { ReviewButton } from "./ReviewDialog";
 //
 // FRAMEWORK-DESIGN-STUDIO-01 slice C: the order of domains, of a domain's competencies, of a competency's criteria
 // (within one section) and of the sections can be changed by drag and drop or by Move up / Move down on every row.
-// Only a move inside the same parent is offered here (a criterion to another section or competency is "Move to..." in the
-// properties panel). Each move posts reorder_layout with the full new order of that parent; the server decides (and may
-// answer 409).
+// Only reorders inside the same parent and the organisational moves below cross parents; a criterion to another section
+// or competency is "Move to..." in the properties panel. Each reorder posts reorder_layout with the full new order of
+// that parent; the server decides (and may answer 409).
 //
 // FRAMEWORK-DESIGN-STUDIO-02 S2: dragging is by pointer events on a row's grip (touch and mouse, no library); the arrow
 // buttons and the live region stay. The selected competency's fields and criteria are edited in PropertiesPanel.
+//
+// FRAMEWORK-DESIGN-STUDIO-02 S4: the tree is framework > Area > domain > competency (a domain with no Area sits under
+// "Unassigned"; a framework with no Area is the flat tree it always was). Organisational moves, which change no meaning
+// and need no clinical re-review, are the only moves across parents: a domain to another Area, a competency to another
+// domain, by dragging (the same S2 pointer drag: released over an Area / domain block outside its own list) or by
+// "Move to..." and Move. Areas are created, renamed, deleted (empty) and reordered here. A Map view shows the same data
+// as Areas > domains > competency chips. Pieces live in studio-areas.ts, OrganiseControls.tsx and FrameworkMap.tsx; the
+// server decides every move (published frameworks: layout draft).
 
 export type StudioStatus = "eligible" | "in_review" | "approved" | "changes_requested" | "framework_locked" | "unreadable";
 export type StudioCompetency = {
@@ -28,7 +39,7 @@ export type StudioCompetency = {
   riskCategory: string; sortOrder: number; cpuId: string | null; status: StudioStatus; statusText: string;
   criteria: { id?: string; component: string | null; text: string; sourceRef: string | null; active?: boolean }[];
 };
-export type StudioDomain = { id: string; name: string; competencies: StudioCompetency[]; cpus: { id: string; label: string }[] };
+export type StudioDomain = { id: string; name: string; competencies: StudioCompetency[]; cpus: { id: string; label: string }[]; /** 760: the domain's Area (null: none). */ areaId?: string | null };
 
 const DOT: Record<StudioStatus, string> = {
   eligible: "bg-teal-600", in_review: "bg-blue-600", approved: "bg-violet-600", changes_requested: "bg-amber-500", framework_locked: "bg-gray-400", unreadable: "bg-red-500",
@@ -37,18 +48,21 @@ const CHIP: Record<StudioStatus, [string, string]> = {
   eligible: ["Ready for review", "bg-teal-50 text-teal-900"], in_review: ["In review", "bg-blue-50 text-blue-900"], approved: ["Reviewed", "bg-violet-50 text-violet-900"],
   changes_requested: ["Needs attention", "bg-amber-50 text-amber-900"], framework_locked: ["Locked", "bg-gray-100 text-gray-800"], unreadable: ["State unreadable", "bg-red-50 text-red-900"],
 };
+const MAP_STATUS: Record<string, { label: string; dot: string }> = Object.fromEntries((Object.keys(CHIP) as StudioStatus[]).map(k => [k, { label: CHIP[k][0], dot: DOT[k] }]));
 const link = "text-[13px] font-semibold text-teal-800 hover:underline disabled:opacity-50";
 const AUTHORING = "/api/hq/competency/authoring";
 const mvBtn = "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-gray-300 bg-white text-[12px] leading-none text-gray-800 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700 disabled:opacity-40 pointer-coarse:h-[var(--cmp-touch-min)] pointer-coarse:w-[var(--cmp-touch-min)]";
 const overCls = "outline outline-2 outline-teal-600";
 
-type View = { domains: StudioDomain[]; sections: string[] };
+type View = { domains: StudioDomain[]; sections: string[]; areas: StudioArea[] };
 /** One list that can be reordered: what the server needs to name it, and how the local view takes the new order. */
 type Group = {
-  key: string; level: "domains" | "competencies" | "criteria" | "sections"; parentId?: string; component?: string | null;
+  key: string; level: "domains" | "competencies" | "criteria" | "sections" | "areas"; parentId?: string; component?: string | null;
   ids: string[]; names: string[]; apply: (v: View, ids: string[]) => View;
-  /** The order to send when the list shown is only part of the parent (retired criteria keep their slots). */
+  /** The order to send when the list shown is only part of the parent (retired criteria keep their slots, a domain list inside one Area). */
   expand?: (ids: string[]) => string[];
+  /** S4: a request other than reorder_layout (reorder_areas). */
+  post?: (ids: string[]) => Record<string, unknown>;
 };
 /** What a row needs to be reorderable: its drop-target attributes, a grip to drag by, and the Move up / Move down pair. */
 export type Reorder = {
@@ -61,7 +75,7 @@ export type Reorder = {
 
 const sameKeyFor = (group: Group, i: number) => `${group.key}|${group.ids[i]}`;
 
-export default function StudioWorkspace({ frameworkId, domains: domainsIn, levels, components, editable, initialId, canReorder = false, sectionCodes, draftMode = false, pubStatus = "draft" }: {
+export default function StudioWorkspace({ frameworkId, domains: domainsIn, levels, components, editable, initialId, canReorder = false, sectionCodes, draftMode = false, pubStatus = "draft", areas: areasIn, areasReady = false }: {
   frameworkId: string; domains: StudioDomain[]; levels: { id: string; score: number; label: string }[];
   components: Record<string, string>; editable: boolean; initialId: string | null;
   /** The order can be changed: the framework is editable and 750/751 are on this environment (the server decides again). */
@@ -70,19 +84,22 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
   draftMode?: boolean;
   /** Criteria are added, edited, retired and moved in a DRAFT framework only (S1); anything else goes through a revision draft. */
   pubStatus?: string;
+  /** S4 (760): the framework's Areas as the editor sees them (draft applied); areasReady = 760 is on this environment. */
+  areas?: StudioArea[]; areasReady?: boolean;
 }) {
   const router = useRouter();
   const sections0 = sectionCodes ?? Object.keys(components);
-  const [view, setView] = useState<View>({ domains: domainsIn, sections: sections0 });
-  const [seen, setSeen] = useState({ d: domainsIn, s: sectionCodes });
+  const [view, setView] = useState<View>({ domains: domainsIn, sections: sections0, areas: areasIn ?? [] });
+  const [seen, setSeen] = useState({ d: domainsIn, s: sectionCodes, a: areasIn });
   // New props (after router.refresh) replace the local view; until then the optimistic view stands.
-  if (seen.d !== domainsIn || seen.s !== sectionCodes) { setSeen({ d: domainsIn, s: sectionCodes }); setView({ domains: domainsIn, sections: sections0 }); }
+  if (seen.d !== domainsIn || seen.s !== sectionCodes || seen.a !== areasIn) { setSeen({ d: domainsIn, s: sectionCodes, a: areasIn }); setView({ domains: domainsIn, sections: sections0, areas: areasIn ?? [] }); }
   const domains = view.domains;
   const all = useMemo(() => domains.flatMap(d => d.competencies.map(c => ({ c, d }))), [domains]);
   const [active, setActive] = useState<string | null>(initialId && all.some(x => x.c.id === initialId) ? initialId : all[0]?.c.id ?? null);
   const [open, setOpen] = useState<Set<string>>(() => new Set(all.find(x => x.c.id === (initialId ?? all[0]?.c.id))?.d.id ? [all.find(x => x.c.id === (initialId ?? all[0]?.c.id))!.d.id] : []));
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [mode, setMode] = useState<"tree" | "map">("tree");
   const query = q.trim().toLowerCase();
   const match = (c: StudioCompetency) => !query || c.name.toLowerCase().includes(query) || (c.code ?? "").toLowerCase().includes(query);
   const cur = all.find(x => x.c.id === active) ?? null;
@@ -128,7 +145,7 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
     try {
       const res = await fetch(AUTHORING, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reorder_layout", frameworkId, level: g.level, ...(g.parentId ? { parentId: g.parentId } : {}), ...(g.level === "criteria" ? { component: g.component ?? null } : {}), order: g.expand ? g.expand(ids) : ids }),
+        body: JSON.stringify(g.post ? g.post(ids) : { action: "reorder_layout", frameworkId, level: g.level, ...(g.parentId ? { parentId: g.parentId } : {}), ...(g.level === "criteria" ? { component: g.component ?? null } : {}), order: g.expand ? g.expand(ids) : ids }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) { setView(before); setFail(j?.error ?? "That order could not be saved. Nothing has changed."); setSay(""); return; }
@@ -138,7 +155,7 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
 
   const rx: Reorder = {
     on: reorderable,
-    // A drop is allowed only inside the list the drag started in: never across parents.
+    // A reorder drop is only inside the list the drag started in; across parents only the S4 organisational moves (crossTarget).
     row: (g, i) => ({ "data-drop-key": g.key, "data-drop-index": i, className: over === sameKeyFor(g, i) ? overCls : undefined }),
     grip: (g, i, className = "") => (
       <span aria-hidden title="Drag to reorder" data-grip className={`inline-flex shrink-0 cursor-grab touch-none select-none items-center justify-center text-gray-400 active:cursor-grabbing pointer-coarse:h-[var(--cmp-touch-min)] pointer-coarse:w-[var(--cmp-touch-min)] ${className}`}
@@ -150,17 +167,19 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
         }}
         onPointerMove={e => {
           const st = drag.current; if (!st) return;
-          const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-drop-key]");
+          const hit = document.elementFromPoint(e.clientX, e.clientY), el = hit?.closest<HTMLElement>("[data-drop-key]");
           const next = movePointerDrag(st, e.clientX, e.clientY, readDropTarget(el?.dataset.dropKey, el?.dataset.dropIndex));
           drag.current = next;
           const id = next.active && next.over !== null ? g.ids[next.over] : undefined;
-          setOver(id ? `${g.key}|${id}` : null);
+          // Not over a row of its own list: an Area / domain block it may be moved into (S4), if any.
+          setOver(id ? `${g.key}|${id}` : crossTarget(next, hit)?.tag ?? null);
         }}
         onPointerUp={e => {
           const st = drag.current; drag.current = null; setOver(null);
           try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
           const d = st ? dropOf(st) : null;
           if (d) void move(g, d.from, d.to);
+          else if (st) { const x = crossTarget(st, document.elementFromPoint(e.clientX, e.clientY)); if (x) void organiseMove(x.action); }
         }}
         onPointerCancel={() => { drag.current = null; setOver(null); }}>⠿</span>
     ),
@@ -192,10 +211,80 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
       };
     },
   };
-  const domainGroup: Group = {
-    key: "domains", level: "domains", ids: domains.map(d => d.id), names: domains.map(d => d.name),
-    apply: (v, ids) => ({ ...v, domains: arrange(v.domains, ids, d => d.id) }),
+  // ── S4: Areas and organisational moves (no clinical re-review: the server keeps them outside the clinical fingerprint) ──
+  const organise = areasReady && reorderable;           // 760 is on this environment and the framework is editable
+  const organiseLists = organise && !query;
+  const hasAreas = areasReady && view.areas.length > 0;
+  const groups = useMemo(() => groupDomains(domains, hasAreas ? view.areas : undefined), [domains, view.areas, hasAreas]);
+  /** A domain list is one Area's domains (or all domains when there are no Areas); the order sent is the whole framework's. */
+  const domainGroupOf = (grp: { area: StudioArea | null; domains: StudioDomain[] }): Group => {
+    const ids = grp.domains.map(d => d.id);
+    return {
+      key: hasAreas ? `domains:${grp.area?.id ?? "none"}` : "domains", level: "domains", ids, names: grp.domains.map(d => d.name),
+      expand: next => expandOrder(domains.map(d => d.id), ids, next),
+      apply: (v, next) => ({ ...v, domains: arrange(v.domains, expandOrder(v.domains.map(d => d.id), ids, next), d => d.id) }),
+    };
   };
+  const areaGroup: Group = {
+    key: "areas", level: "areas", ids: view.areas.map(a => a.id), names: view.areas.map(a => a.name),
+    apply: (v, ids) => ({ ...v, areas: arrange(v.areas, ids, a => a.id) }),
+    post: ids => ({ action: "reorder_areas", frameworkId, order: ids }),
+  };
+  /** One organisational request: optimistic when `apply` is given, put back if the server refuses. */
+  async function act(body: Record<string, unknown>, said: string, apply?: (v: View) => View): Promise<boolean> {
+    if (busy) return false;
+    const before = view;
+    setFail(null);
+    if (apply) setView(apply(before));
+    setSaving(true);
+    try {
+      const res = await fetch(AUTHORING, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, frameworkId }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setView(before); setFail(j?.error ?? "That could not be saved. Nothing has changed."); setSay(""); return false; }
+      setSay(`${said}${draftMode ? " Saved to the draft layout. Learners keep the published structure." : ""}`);
+      startRefresh(() => router.refresh());
+      return true;
+    } catch { setView(before); setFail("That could not be saved. Check your connection. Nothing has changed."); setSay(""); return false; } finally { setSaving(false); }
+  }
+  function organiseMove(a: OrgAction) {
+    if (a.action === "set_domain_area") {
+      const name = domains.find(d => d.id === a.domainId)?.name ?? "The domain";
+      return act(a, announceAreaMove(name, view.areas.find(x => x.id === a.areaId)?.name ?? null), v => ({ ...v, domains: setDomainArea(v.domains, a.domainId, a.areaId) }));
+    }
+    const name = all.find(x => x.c.id === a.competencyId)?.c.name ?? "The competency";
+    setOpen(s => new Set(s).add(a.domainId));
+    return act(a, announceCompetencyMove(name, domains.find(d => d.id === a.domainId)?.name ?? "the domain"), v => ({ ...v, domains: moveCompetency(v.domains, a.competencyId, a.domainId) }));
+  }
+  /** What the pointer drag `d` carries, read from the list it started in. */
+  function dragSource(d: PointerDrag | null): DragSource | null {
+    if (!d) return null;
+    if (d.key.startsWith("competencies:")) {
+      const domainId = d.key.slice("competencies:".length), c = view.domains.find(x => x.id === domainId)?.competencies[d.index];
+      return c ? { kind: "competency", id: c.id, domainId } : null;
+    }
+    if (d.key.startsWith("domains")) {
+      const grp = groups.find(g => domainGroupOf(g).key === d.key), dom = grp?.domains[d.index];
+      return dom ? { kind: "domain", id: dom.id, areaId: grp?.area?.id ?? null } : null;
+    }
+    return null;
+  }
+  /** The organisational move for an active drag released at `hit` outside its own list: a competency onto a domain block
+   *  (data-drop-domain), a domain onto an Area block (data-drop-area, "none" = Unassigned). Null when there is none. */
+  function crossTarget(d: PointerDrag, hit: Element | null): { action: OrgAction; tag: string } | null {
+    if (!organiseLists || !d.active) return null;
+    const src = dragSource(d); if (!src) return null;
+    let t: DropTarget | null = null, tag = "";
+    if (src.kind === "competency") {
+      const id = hit?.closest<HTMLElement>("[data-drop-domain]")?.dataset.dropDomain;
+      if (id) { t = { kind: "domain", domainId: id }; tag = `dom|${id}`; }
+    } else {
+      const id = hit?.closest<HTMLElement>("[data-drop-area]")?.dataset.dropArea;
+      if (id) { t = { kind: "area", areaId: id === "none" ? null : id }; tag = `area|${id}`; }
+    }
+    const action = t ? dropAction(src, t) : null;
+    return action ? { action, tag } : null;
+  }
+  const areaOptions = (current: string | null) => [...view.areas.filter(a => a.id !== current).map(a => ({ value: a.id, label: a.name })), ...(current ? [{ value: "__none", label: "No Area (Unassigned)" }] : [])];
   const compGroup = (d: StudioDomain): Group => ({
     key: `competencies:${d.id}`, level: "competencies", parentId: d.id, ids: d.competencies.map(c => c.id), names: d.competencies.map(c => c.name),
     apply: (v, ids) => ({ ...v, domains: v.domains.map(x => (x.id === d.id ? { ...x, competencies: arrange(x.competencies, ids, c => c.id) } : x)) }),
@@ -208,35 +297,63 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
   return (
     <div className="grid gap-5 md:grid-cols-[minmax(15rem,20rem)_minmax(0,1fr)]" ref={root}>
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{say}</p>
+      <div role="group" aria-label="Framework view" className="flex gap-2 md:col-span-2">
+        {(["tree", "map"] as const).map(m => (
+          <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}
+            className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700 pointer-coarse:min-h-[var(--cmp-touch-min)] ${mode === m ? "border-teal-900 bg-teal-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}>{m === "tree" ? "Tree" : "Map"}</button>
+        ))}
+      </div>
+      {mode === "map" ? (
+        <div className="min-w-0 md:col-span-2">
+          <FrameworkMap domains={domains} areas={hasAreas ? view.areas : undefined} activeId={active} status={MAP_STATUS}
+            onSelect={id => { choose(id); const d = domains.find(x => x.competencies.some(c => c.id === id)); if (d) setOpen(s => new Set(s).add(d.id)); setMode("tree"); setSay(`Opened ${all.find(x => x.c.id === id)?.c.name ?? "the competency"} in the editor.`); }} />
+        </div>
+      ) : (<>
       <aside aria-label="Competency explorer" className="flex max-h-[calc(100vh-12rem)] flex-col rounded-2xl border border-gray-200 bg-white md:sticky md:top-4">
         <div className="border-b border-gray-100 p-4">
           <div className="flex items-baseline justify-between"><h2 className="text-[15px] font-bold text-gray-900">Competency explorer</h2><span className="text-[12px] text-gray-500">{domains.length} domains</span></div>
           <label className="sr-only" htmlFor="cx-q">Find a competency or code</label>
           <input id="cx-q" value={q} onChange={e => setQ(e.target.value)} placeholder="Find a competency or code…" className="mt-3 block w-full rounded-lg border border-gray-300 px-3 py-2 text-[13.5px] pointer-coarse:min-h-[var(--cmp-touch-min)]" />
           {reorderable && <p className="mt-2 text-[11.5px] text-gray-600">{query ? "Clear the search to reorder domains and competencies." : "Drag a row, or use the arrow buttons, to change the order."}{draftMode ? " Learners keep the published order until a draft layout is published." : ""}</p>}
+          {organiseLists && <p className="mt-1 text-[11.5px] text-gray-600">Drag a domain onto an Area, or a competency onto a domain, or use Move to… and Move. These are organisational moves: no clinical re-review.</p>}
           {fail && <p role="alert" className="mt-2 text-[12.5px] font-medium text-red-700">{fail}</p>}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto py-1">
-          {domains.map((d, di) => {
+          {organiseLists && (
+            <details className="mx-2 mb-1 rounded-lg border border-gray-200 px-2 py-1">
+              <summary className="cursor-pointer py-1 text-[13px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)]">{hasAreas ? "Add an Area" : "Group domains into Areas"}</summary>
+              <p className="mb-1 text-[11.5px] text-gray-600">An Area groups domains, for example Clinical Practice. It is organisational: no competency, criterion or outcome changes.</p>
+              <div className="pb-1"><AddAreaForm busy={busy} onCreate={name => act({ action: "create_area", name }, `Added the Area ${name}.`)} /></div>
+            </details>
+          )}
+          {groups.map((grp, gi) => {
+            const dg = domainGroupOf(grp);
+            const areaId = grp.area?.id ?? null, aTag = `area|${areaId ?? "none"}`;
+            const rendered = grp.domains.map((d, di) => {
             const comps = d.competencies.filter(match);
             if (query && !comps.length) return null;
             const isOpen = query ? true : open.has(d.id);
             const cg = compGroup(d);
             return (
-              <div key={d.id}>
-                <div {...(reorderLists ? rx.row(domainGroup, di) : {})} className={`flex items-center gap-1 pr-2 hover:bg-gray-50 ${reorderLists && over === sameKeyFor(domainGroup, di) ? overCls : ""}`}>
-                  {reorderLists && rx.grip(domainGroup, di, "pl-2")}
+              <div key={d.id} {...(organiseLists ? { "data-drop-domain": d.id } : {})} className={over === `dom|${d.id}` ? overCls : undefined}>
+                <div {...(reorderLists ? rx.row(dg, di) : {})} className={`flex items-center gap-1 pr-2 hover:bg-gray-50 ${reorderLists && over === sameKeyFor(dg, di) ? overCls : ""}`}>
+                  {reorderLists && rx.grip(dg, di, "pl-2")}
                   <button type="button" aria-expanded={isOpen} onClick={() => setOpen(s => toggle(s, d.id))}
                     className="flex min-w-0 flex-1 items-center justify-between px-2 py-2.5 text-left text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)]">
                     <span className="min-w-0"><span aria-hidden className="mr-1.5 inline-block w-3 text-gray-500">{isOpen ? "▾" : "▸"}</span>{d.name}</span>
                     <span className="ml-2 text-[12px] font-normal text-gray-500">{d.competencies.length}</span>
                   </button>
-                  {reorderLists && rx.buttons(domainGroup, di)}
+                  {reorderLists && rx.buttons(dg, di)}
                 </div>
+                {isOpen && organiseLists && hasAreas && (
+                  <MoveSelect className="mx-3 mb-1" label={`Move ${d.name} to Area…`} busy={busy} options={areaOptions(areaId)}
+                    onMove={v => void organiseMove({ action: "set_domain_area", domainId: d.id, areaId: v === "__none" ? null : v })} />
+                )}
                 {isOpen && comps.map(c => {
                   const ci = d.competencies.findIndex(x => x.id === c.id);
                   return (
-                    <div key={c.id} {...(reorderLists ? rx.row(cg, ci) : {})}
+                    <Fragment key={c.id}>
+                    <div {...(reorderLists ? rx.row(cg, ci) : {})}
                       className={`mx-2 mb-1 flex items-start gap-2 rounded-lg px-2 py-2 ${c.id === active ? "border-l-4 border-teal-700 bg-teal-50/70" : "hover:bg-gray-50"} ${reorderLists && over === sameKeyFor(cg, ci) ? overCls : ""}`}>
                       {reorderLists && rx.grip(cg, ci, "mt-1")}
                       <input type="checkbox" aria-label={`Select ${c.name}`} className="mt-1" checked={picked.has(c.id)} onChange={() => setPicked(s => toggle(s, c.id))} />
@@ -247,9 +364,28 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
                       <span title={CHIP[c.status][0]} aria-label={CHIP[c.status][0]} className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${DOT[c.status]}`} />
                       {reorderLists && rx.buttons(cg, ci)}
                     </div>
+                    {organiseLists && c.id === active && domains.length > 1 && (
+                      <MoveSelect className="mx-3 mb-1" label={`Move ${c.name} to domain…`} busy={busy} options={domains.filter(x => x.id !== d.id).map(x => ({ value: x.id, label: x.name }))}
+                        onMove={v => void organiseMove({ action: "move_competency_domain", competencyId: c.id, domainId: v })} />
+                    )}
+                    </Fragment>
                   );
                 })}
               </div>
+            );
+            });
+            if (!hasAreas) return <Fragment key="all">{rendered}</Fragment>;
+            if (query && rendered.every(x => x === null)) return null;
+            const hid = `area-h-${areaId ?? "none"}`;
+            return (
+              <section key={areaId ?? "none"} aria-labelledby={hid} {...(organiseLists ? { "data-drop-area": areaId ?? "none" } : {})} className={`mb-1 ${over === aTag ? overCls : ""}`}>
+                <AreaHeading headingId={hid} name={grp.area?.name ?? "Unassigned"} count={grp.domains.length} busy={busy}
+                  organise={organiseLists && !!grp.area} rowProps={organiseLists && grp.area ? rx.row(areaGroup, gi) : undefined} grip={organiseLists && grp.area ? rx.grip(areaGroup, gi) : undefined} buttons={organiseLists && grp.area ? rx.buttons(areaGroup, gi) : undefined}
+                  onRename={name => act({ action: "rename_area", areaId, name }, `Renamed the Area to ${name}.`, v => ({ ...v, areas: v.areas.map(a => (a.id === areaId ? { ...a, name } : a)) }))}
+                  onDelete={() => { if (areaId && window.confirm(`Delete the empty Area ${grp.area!.name}?`)) void act({ action: "delete_area", areaId }, `Deleted the Area ${grp.area!.name}.`, v => ({ ...v, areas: v.areas.filter(a => a.id !== areaId) })); }} />
+                {rendered}
+                {!grp.domains.length && <p className="px-3 py-2 text-[12px] text-gray-600">No domain in this Area. {organiseLists ? "Drag a domain here, or use Move to Area on a domain." : ""}</p>}
+              </section>
             );
           })}
           {reorderable && view.sections.length > 1 && (
@@ -301,6 +437,7 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
           </>
         )}
       </section>
+      </>)}
     </div>
   );
 }

@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 // FRAMEWORK-DESIGN-STUDIO-01 slice C: a published framework's pending layout draft. Reordering a published framework
 // never changes what learners see: it is saved as a draft layout, previewed here, and published as a revision by an
 // independent publisher through Framework publication (ruling 3). Discarding drops the draft and leaves the live order.
+// FRAMEWORK-DESIGN-STUDIO-02 S4: the same draft carries organisational moves: Area order, names and placement, a domain
+// moved to another Area, a competency moved to another domain. None of it is clinical content.
 
 const btn = "inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-[13px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)]";
 
@@ -29,8 +31,9 @@ export function LayoutDraftBanner({ frameworkId, savedAt, by, editable }: { fram
 
   return (
     <section aria-label="Draft layout" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
-      <p className="text-[14px] font-bold">Draft layout — learners still see the published order</p>
-      <p className="mt-1 text-[13px]">{when || by ? `Saved${when ? ` ${when}` : ""}${by ? ` by ${by}` : ""}. ` : ""}Publishing it needs an independent publisher: put it forward for publication from Overview &amp; governance as a revision, and the publisher decides on <Link href="/super-admin/competencies/publication" className="font-semibold underline">Framework publication</Link>. Whoever reordered it cannot publish it.</p>
+      <p className="text-[14px] font-bold">Draft layout — learners still see the published structure</p>
+      <p className="mt-1 text-[13px]">This draft holds organisational changes only: the order of domains, competencies and criteria, Area names, order and placement, domains moved between Areas and competencies moved between domains. They change no clinical content, so no clinical re-review is needed. </p>
+      <p className="mt-1 text-[13px]">{when || by ? `Saved${when ? ` ${when}` : ""}${by ? ` by ${by}` : ""}. ` : ""}Publishing it needs an independent publisher: put it forward for publication from Overview &amp; governance as a revision, and the publisher decides on <Link href="/super-admin/competencies/publication" className="font-semibold underline">Framework publication</Link>. Whoever changed it cannot publish it.</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Link href="?view=pack&layout=draft" className={`${btn} border-amber-400 bg-white text-amber-950 hover:bg-amber-100`}>Preview draft layout</Link>
         <button type="button" onClick={discard} disabled={busy || !editable} className={`${btn} border-amber-400 bg-white text-amber-950 hover:bg-amber-100`}>Discard draft layout</button>
