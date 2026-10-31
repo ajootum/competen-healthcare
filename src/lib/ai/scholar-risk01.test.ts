@@ -204,3 +204,16 @@ describe("the gate, end to end (metering off, Strict Production)", () => {
     expect(JSON.stringify(audit)).not.toMatch(/potassium|bed 4/);
   });
 });
+
+describe("the HQ page keeps the intent settings (no code)", () => {
+  it("saving a draft from the resolved policy (as the editor sends it) keeps them, flat; defaults store nothing", async () => {
+    const { settingsFor } = await import("./fair-use-admin");
+    const { resolvePolicy } = await import("./fair-use-policy");
+    const resolved = resolvePolicy("scholar", { risk: withScholarRisk01(PROD) }, "x");
+    const stored: any = settingsFor("scholar", resolved);
+    expect(stored.risk).toMatchObject({ unknownHandling: "educational_if_study_intent", clarifyAmbiguous: true, ambiguousRules: ["high.administration-now"], educationalSafeguards: true });
+    expect(resolveRiskPolicy(stored.risk).intent).toEqual(after.intent);
+    expect(stored.risk.rules.find((r: any) => r.id === "high.real-patient").refusal).toBe("real_patient");
+    expect(Object.keys((settingsFor("professional", resolvePolicy("professional", { risk: PROD }, "x")) as any).risk)).toEqual(["minTier", "rules"]);
+  });
+});

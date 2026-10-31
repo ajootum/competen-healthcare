@@ -87,6 +87,9 @@ export type UnknownHandling = "high_risk" | "clarify" | "educational_if_study_in
 export const UNKNOWN_HANDLING: readonly UnknownHandling[] = ["high_risk", "clarify", "educational_if_study_intent"];
 export type IntentPolicy = { unknownHandling: UnknownHandling; clarifyAmbiguous: boolean; ambiguousRules: string[]; educationalSafeguards: boolean };
 export const NO_INTENT: IntentPolicy = { unknownHandling: "high_risk", clarifyAmbiguous: false, ambiguousRules: [], educationalSafeguards: false };
+/** Pure: the intent settings as stored (flat on the risk section), or nothing when they are the defaults. */
+export const storedIntent = (i: IntentPolicy | undefined): Partial<IntentPolicy> =>
+  !i || JSON.stringify(i) === JSON.stringify(NO_INTENT) ? {} : { unknownHandling: i.unknownHandling, clarifyAmbiguous: i.clarifyAmbiguous, ambiguousRules: [...i.ambiguousRules], educationalSafeguards: i.educationalSafeguards };
 /** Pure: whether the intent layer runs for a policy. */
 export const intentActive = (i: IntentPolicy | undefined) => !!i && (i.unknownHandling !== "high_risk" || i.clarifyAmbiguous || i.ambiguousRules.length > 0);
 
@@ -145,7 +148,9 @@ export function resolveRiskPolicy(s: any): RiskPolicy {
 
 /** Pure: the intent settings of a risk section. Anything malformed is the default; an ambiguous rule must exist, be high
  *  risk, and not be evidence of a real person now. */
-export function resolveIntent(s: any, rules: readonly RiskRule[]): IntentPolicy {
+export function resolveIntent(raw: any, rules: readonly RiskRule[]): IntentPolicy {
+  // Stored flat on the risk section; a resolved policy sent back from the HQ editor carries them under `intent`.
+  const s = raw?.intent && typeof raw.intent === "object" ? { ...raw, ...raw.intent } : raw;
   const unknownHandling: UnknownHandling = (UNKNOWN_HANDLING as readonly string[]).includes(s?.unknownHandling) ? s.unknownHandling : "high_risk";
   const ambiguousRules = (Array.isArray(s?.ambiguousRules) ? s.ambiguousRules : []).filter((id: unknown) => {
     const r = typeof id === "string" ? rules.find(x => x.id === id) : undefined;
