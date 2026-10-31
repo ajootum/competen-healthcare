@@ -631,6 +631,36 @@ export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackPa
   );
 }
 
+const OUTCOME_WORD = { correct: "correct", partial: "partly correct", incorrect: "not correct" } as const;
+const shortDate = (iso: string) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "an earlier date"; };
+
+/** SCHOLAR-CONTINUITY-01 (791): the question as it was answered, where it has changed since, and any correction of the result -- the original beside it. */
+function AttemptRecordNotes({ f }: { f: RevisionFeedback }) {
+  if (!f.questionChanged && !f.corrections) return null;
+  return (
+    <div className="mt-2 space-y-2">
+      {f.questionChanged && (
+        <div className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-[13px] text-gray-900">
+          <p className="font-semibold">{f.questionChanged.note}</p>
+          <p className="mt-1">{f.questionChanged.asAnswered.stem}</p>
+          {f.questionChanged.asAnswered.options.length > 0 && <ol className="mt-1 list-[upper-alpha] pl-5">{f.questionChanged.asAnswered.options.map((o, i) => <li key={i}>{o}</li>)}</ol>}
+        </div>
+      )}
+      {f.corrections && (
+        <div className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-[13px] text-gray-900">
+          <p className="font-semibold">This result was corrected.</p>
+          <ul className="mt-1 space-y-1">
+            {f.corrections.entries.map((c, i) => (
+              <li key={i}><span className="font-semibold">{c.basis}</span> ({shortDate(c.at)}): {OUTCOME_WORD[c.from]} changed to {OUTCOME_WORD[c.to]}. {c.reason}</li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[12px] text-gray-700">Original result, kept as it was: {OUTCOME_WORD[f.corrections.original.outcome]}{f.corrections.original.score !== null ? ` (${Math.round(f.corrections.original.score * 100)}%)` : ""}.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string }) {
   const basis = f.library ? "the Competen library answer" : "your notes";
   return (
@@ -643,7 +673,8 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f
       {f.structured && <p className="text-[12px] text-gray-700">{f.structured.practiceMarks.label}</p>}
       {f.extended && <p className="text-[12px] text-gray-700">{f.extended.marks.label}</p>}
       {f.rubricNote && <p className="mt-1 text-[12px] text-gray-700">{f.rubricNote}</p>}
-      {f.library && <p className="mt-1 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{f.library.label} · version {f.library.versionNo}</p>}
+      <AttemptRecordNotes f={f} />
+      {f.library &&<p className="mt-1 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{f.library.label} · version {f.library.versionNo}</p>}
       <p className="text-[12px] text-gray-700"><span className="font-semibold">{f.markingLabel}.</span> {f.marking === "deterministic" ? MARKED_AGAINST_NOTES : ""}</p>
       {f.evaluation && (
         <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">

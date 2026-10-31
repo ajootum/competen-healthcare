@@ -118,7 +118,7 @@ export type AdaptiveState = {
 
 /** An adaptive exam of the caller's: its session, blueprint, items and answers. null: not theirs, or not an adaptive exam. */
 export async function loadAdaptive(admin: any, userId: string, sessionId: string): Promise<{ ok: true; data: AdaptiveState | null } | { ok: false }> {
-  const s = await getRevisionSession(admin, userId, sessionId);
+  const s = await getRevisionSession(admin, userId, sessionId, { integrity: true });
   if (!s.ok) return { ok: false };
   if (!s.data) return { ok: true, data: null };
   const set = await getAdaptiveSet(admin, userId, s.data.session.setId);

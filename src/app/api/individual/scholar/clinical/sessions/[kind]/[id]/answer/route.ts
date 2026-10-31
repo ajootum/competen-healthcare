@@ -12,7 +12,7 @@ import { libraryReasoningFeedback } from "@/lib/individual/scholar/clinical-libr
 import { MARKING_LABEL } from "@/lib/individual/scholar/config";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runCaseReasoning } from "@/lib/individual/scholar/generation";
-import { answerPlay, isPlayKind } from "@/lib/individual/scholar/clinical-routes";
+import { answerPlay, finishPlay, isPlayKind } from "@/lib/individual/scholar/clinical-routes";
 import type { ReasoningJudge } from "@/lib/individual/scholar/clinical-play";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -24,7 +24,8 @@ export const dynamic = "force-dynamic";
 // (screened for patient identifiers first) gets AI reasoning feedback through the Holdings allowance (activity
 // evaluate, with its risk) where policy and the student's AI allow and the feedback passes its check -- labelled as AI
 // evaluation -- or else the student reviews it against what a good answer contains (self-graded). Nothing is guessed.
-// The decision is recorded as made (append-only), and the case moves on by its own progression.
+// The decision is recorded as made (append-only), and the case moves on by its own progression. When the case is
+// finished, its record is kept once (810, SCHOLAR-CASE-INTEGRITY-01), after everything about the last answer is recorded.
 
 export async function POST(req: Request, ctx2: { params: Promise<{ kind: string; id: string }> }) {
   const ctx = await requireIndividualContext("scholar");
@@ -36,10 +37,11 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
   const optionTokens = Array.isArray(body?.optionTokens) ? (body.optionTokens as unknown[]).filter((t): t is string => typeof t === "string" && t.length <= 64).slice(0, 20) : undefined;
   const text = typeof body?.text === "string" ? body.text.trim().slice(0, 4000) : null;
   if (text && findPatientIdentifiers(text).length) return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
-  // "Explain your choice" (decision.askReason): a LIBRARY play keeps the learner's reason beside the choice (screened for
-  // patient identifiers like any text). A PRIVATE play does not send it at all: 435 holds a choice or a written answer on a
-  // row, never both, so the reason stays in the learner's browser for the debrief. Marking is on the choice either way.
-  const reason = kind === "library" && typeof body?.reason === "string" ? body.reason.trim().slice(0, REASONING_CAPS.reason) : null;
+  // "Explain your choice" (decision.askReason): kept beside the choice (screened for patient identifiers like any text) --
+  // a LIBRARY play on its answer (423), a PRIVATE play in its own row beside the 435 answer (810: 435 holds a choice or a
+  // written answer on a row, never both, and that CHECK is unchanged). Without 810 a private reason stays in the
+  // learner's browser for the debrief, with no error. Marking is on the choice either way.
+  const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, REASONING_CAPS.reason) : null;
   if (reason && findPatientIdentifiers(reason).length) return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
   const policy = await loadIndividualPolicy(ctx.admin);
 
@@ -71,7 +73,7 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
     && activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate").available && !(await aiPreflight(ctx))) {
     const f = await libraryReasoningFeedback(ctx.admin, { userId: ctx.userId, sessionId: id, decisionToken: body.decisionToken, requestId: `${scholarRequestId(ctx, req)}:feedback` });
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reasoning", id, { kind, outcome: f.ok ? "recorded" : f.reason, model: f.ok ? f.model : null });
-    if (f.ok) return NextResponse.json({ ...r, feedback: { ...r.feedback, marking: "ai_evaluation", markingLabel: MARKING_LABEL.ai_evaluation, aiFeedback: f.text } });
+    if (f.ok) return NextResponse.json({ ...r, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play), feedback: { ...r.feedback, marking: "ai_evaluation", markingLabel: MARKING_LABEL.ai_evaluation, aiFeedback: f.text } });
   }
-  return NextResponse.json(r);
+  return NextResponse.json({ ...r, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play) });
 }

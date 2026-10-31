@@ -23,6 +23,7 @@ import {
   DWELL_MS, createJourney, journeyKey, journeyStep, lessonStatus, parseSavedJourney, readCount, savedJourney, shouldSendPosition, startJourney,
   type JourneyEffect, type JourneyEvent, type JourneyState,
 } from "@/lib/individual/scholar/learn-journey";
+import { DEVICE_KEY, PositionSync, mergeResume, newDeviceId, type PositionDraft, type PositionPut, type ServerPosition, type SyncResult } from "@/lib/individual/scholar/learn-position";
 import { LEARN_NOT_COVERED_LABEL, LEARN_NOT_COVERED_NOTE, LEARN_WIDER_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL } from "@/lib/individual/scholar/config";
 import type { ReadingLink } from "@/lib/individual/scholar/evidence-recovery";
 import { STUDY_EVENT, carry } from "./study-active";
@@ -117,11 +118,46 @@ async function call(url: string, body: unknown, method = "POST", headers: Record
   }
 }
 const readSavedJourney = (id: string, count: number) => { try { return parseSavedJourney(window.localStorage.getItem(journeyKey(id)), count); } catch { return null; } };
+
+// ── SCHOLAR-CONTINUITY-01 (790): THE POSITION ON THE SERVER, ACROSS DEVICES (learn-position.ts) ──
+const positionUrl = (sessionId: string) => `/api/individual/scholar/learn/sessions/${sessionId}/position`;
+/** The server position of a session, or null (none, not provisioned, or not reachable: this device's copy is used). */
+async function fetchPosition(sessionId: string): Promise<ServerPosition | null> {
+  try { const res = await fetch(positionUrl(sessionId), { method: "GET" }); const j = res.ok ? await res.json() : null; return j?.position ?? null; } catch { return null; }
+}
+/** One write. 400/404: dropped (not retried). Not reached: null (sent again on the next move). */
+async function sendPosition(sessionId: string, p: PositionPut, keepalive: boolean): Promise<SyncResult> {
+  try {
+    const res = await fetch(positionUrl(sessionId), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p), keepalive });
+    if (!res.ok) return res.status === 400 || res.status === 404 ? { provisioned: true, accepted: false, position: null } : null;
+    const j = await res.json().catch(() => ({}));
+    return { provisioned: j.provisioned !== false, accepted: j.accepted === true, position: j.position ?? null };
+  } catch { return null; }
+}
+/** This browser's device id (kept), or a fresh one for this visit where storage is blocked. */
+function deviceIdOf(): string {
+  try {
+    const v = window.localStorage.getItem(DEVICE_KEY);
+    if (v && /^[A-Za-z0-9_-]{8,64}$/.test(v)) return v;
+    const id = newDeviceId(); window.localStorage.setItem(DEVICE_KEY, id); return id;
+  } catch { return newDeviceId(); }
+}
+/** 0-100: how far through the lesson the reading band (35% down the screen) is. Read only when a write is made. */
+function offsetIn(stepNo: number): number | null {
+  try {
+    const el = document.getElementById(lessonDomId(stepNo));
+    const r = el?.getBoundingClientRect();
+    if (!r || r.height <= 0) return null;
+    return Math.max(0, Math.min(100, Math.round(((window.innerHeight * 0.35 - r.top) / r.height) * 100)));
+  } catch { return null; }
+}
 /** A flashcard's starting words from the lesson's own text: [S n] tags removed, within the card limits. The learner edits them. */
 const plain = (s: string, max: number) => s.replace(/\s*\[[SRE]\d+\]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
 
 export function LearnWorkspace(props: {
   initial: SessionView | null; initialProgress: Record<number, { actions: string[]; verdict: string | null }>; start: StartScope | null;
+  /** SCHOLAR-CONTINUITY-01 (790): where the learner stopped on any device (null: none, or 790 absent). */
+  initialPosition?: ServerPosition | null;
   actions: LearnAction[]; startAction: LearnAction; labels: Record<LearnAction, string>; consent: boolean; offMessage: string | null;
   checks: "offer" | "prompt" | "off"; depth: "brief" | "standard" | "detailed"; maxTurns: number; materials: { id: string; title: string }[];
   /** s7: when new AI is limited, the plain message from the student's standing. Saved learning stays available. */
@@ -212,12 +248,25 @@ export function LearnWorkspace(props: {
   /** The learner has scrolled, typed or clicked: until then a lesson merely in view never moves the saved position. */
   const engaged = useRef(false);
   const column = useRef<HTMLDivElement>(null);
+  // SCHOLAR-CONTINUITY-01 (790): the server position seen, the latest learning mark, and the writer (learn-position.ts).
+  const serverPos = useRef<ServerPosition | null>(props.initialPosition ?? null);
+  const lastDone = useRef<{ activity: string; at: string } | null>(null);
+  const syncRef = useRef<PositionSync | null>(null);
+  const sessionRef = useRef(session);
+  const practiceRef = useRef(practiceOpen);
+  useEffect(() => { sessionRef.current = session; }, [session]);
   const dispatch = useCallback((e: JourneyEvent) => {
     const s = jRef.current;
     if (!s) return;
     const r = journeyStep(s, e, { prepareNext: !!props.prepareNext && props.consent });
     if (r.state !== s) { jRef.current = r.state; setJourney(r.state); }
     for (const f of r.effects) fxRef.current(f);
+    // A learning mark (an activity done, a check answered, a practice question answered) is a meaningful event: written at once.
+    if (e.type === "activity" || e.type === "verdict") {
+      const stepNo = sessionRef.current?.steps[e.index]?.step;
+      if (stepNo !== undefined) lastDone.current = { activity: `${e.type === "verdict" ? "checked" : e.kind}:${stepNo}`, at: new Date().toISOString() };
+      if (engaged.current) syncRef.current?.event("activity");
+    }
   }, [props.prepareNext, props.consent]);
   const indexOf = useCallback((stepNo: number) => session?.steps.findIndex(x => x.step === stepNo) ?? -1, [session]);
 
@@ -477,6 +526,8 @@ export function LearnWorkspace(props: {
         opened.current = true; resumed.current = true;
         setProgress(r.json.progress ?? {});
         void call(`/api/individual/scholar/learn/sessions/${r.json.session.id}`, { move: "resume", currentStep: r.json.session.currentStep }, "PATCH");
+        // SCHOLAR-CONTINUITY-01: where it was left on any device, before the journey opens.
+        serverPos.current = await fetchPosition(r.json.session.id);
       }
       setSession(r.json.resumed ? r.json.session : { ...r.json.session, currentStep: r.json.session.steps?.[0]?.step ?? 0 }); setNote(r.json.note ?? null);
     })();
@@ -499,8 +550,11 @@ export function LearnWorkspace(props: {
     const count = session.steps.length;
     const serverIdx = Math.max(0, session.steps.findIndex(x => x.step === session.currentStep));
     const saved = session.id ? readSavedJourney(session.id, count) : null;
-    const current = resumed.current ? saved?.anchor ?? serverIdx : 0;
-    const j = createJourney({ count, current, revealedUpTo: saved?.revealedUpTo, progress: session.steps.map(x => progress[x.step]), activities: saved?.activities });
+    // SCHOLAR-CONTINUITY-01: this device's copy merged with the server position (learn-position.ts mergeResume): the later wins.
+    const merged = resumed.current ? mergeResume({ steps: session.steps.map(x => x.step), fallback: serverIdx, local: saved, server: serverPos.current }) : null;
+    const current = merged ? merged.anchor : 0;
+    const j = createJourney({ count, current, revealedUpTo: merged ? merged.revealedUpTo : saved?.revealedUpTo, progress: session.steps.map(x => progress[x.step]), activities: saved?.activities });
+    if (merged?.practiceOpen != null) { const p = merged.practiceOpen; setPracticeOpen(m => ({ ...m, [p]: true })); }
     serverAt.current = serverIdx; anchor.current = current;
     if (resumed.current && current > 0) setBanner(current); else engaged.current = true;
     const r = startJourney(j, !resumed.current || (chosenGuided ?? isGuided(rememberedGuided())));
@@ -539,6 +593,44 @@ export function LearnWorkspace(props: {
     try { window.localStorage.setItem(journeyKey(sessionId), JSON.stringify(savedJourney(s, new Date(), anchor.current))); } catch { /* this visit only */ }
   }, [sessionId]);
   useEffect(() => { if (journey) persist(); }, [journey, persist]);
+  // SCHOLAR-CONTINUITY-01 (790): the position on the server, written on meaningful moves only (learn-position.ts PositionSync):
+  // a lesson after its dwell, a jump, Continue, a learning mark -- at once; scrolling -- at most every 15 s; leaving the page
+  // (hidden, pagehide) -- what is unsent, with keepalive. Never before the learner engages. 790 absent: nothing is written.
+  const syncSession = session?.id ?? null;
+  useEffect(() => {
+    if (!syncSession) return;
+    const read = (): PositionDraft | null => {
+      const s = sessionRef.current, j = jRef.current;
+      if (!s || !j) return null;
+      const at = s.steps[anchor.current] ?? s.steps[j.current];
+      if (!at) return null;
+      const far = s.steps[Math.max(j.revealedUpTo, anchor.current)] ?? at;
+      const practice = !!practiceRef.current[at.step];
+      return {
+        step: at.step, furthestStep: Math.max(far.step, at.step), cardId: `lesson-${at.step}${practice ? ":practice" : ""}`, sectionChunkId: at.sections[0]?.chunkId ?? null,
+        offsetHint: offsetIn(at.step), lastCompletedActivity: lastDone.current?.activity ?? null, lastCompletedAt: lastDone.current?.at ?? null,
+        unfinished: practice ? { v: 1, practiceOpen: at.step } : null,
+      };
+    };
+    const sync = new PositionSync({ deviceId: deviceIdOf(), read, send: (p, o) => sendPosition(syncSession, p, o.keepalive) });
+    sync.adopt(serverPos.current);
+    syncRef.current = sync;
+    const onVisibility = () => { if (document.visibilityState === "hidden") sync.hide(); };
+    const onHide = () => sync.hide();
+    const onScroll = () => { if (engaged.current) sync.touch(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onHide);
+    document.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("scroll", onScroll, { capture: true });
+      sync.hide(); sync.disable();
+      if (syncRef.current === sync) syncRef.current = null;
+    };
+  }, [syncSession]);
+  // A practice panel opened or closed changes where the learner is in the lesson: written with the next write.
+  useEffect(() => { practiceRef.current = practiceOpen; if (engaged.current) syncRef.current?.touch(); }, [practiceOpen]);
   // The server's current_step follows the lesson in view after DWELL_MS (back as well as on: it is where the learner
   // is, so another device resumes there). Never sent before the learner engages, never for the same lesson twice.
   const cur = journey?.current ?? null;
@@ -550,6 +642,7 @@ export function LearnWorkspace(props: {
       if (!st) return;
       serverAt.current = cur; anchor.current = cur; persist();
       void call(`/api/individual/scholar/learn/sessions/${session.id}`, { currentStep: st.step }, "PATCH");
+      syncRef.current?.event("lesson");
     }, DWELL_MS);
     return () => clearTimeout(t);
   }, [cur, session, persist]);
@@ -564,6 +657,7 @@ export function LearnWorkspace(props: {
     const move = i > j.current ? "skip" : i < j.current ? "revisit" : null;
     dispatch({ type: "jumpTo", index: i });
     if (session.id) void call(`/api/individual/scholar/learn/sessions/${session.id}`, { currentStep: st.step, ...(move ? { move } : {}) }, "PATCH");
+    syncRef.current?.event("jump");
   }, [session, dispatch]);
   /** Continue to the next lesson: the learner's own choice. Guided, it is taught; Manual, it opens saved only. */
   const continueOn = useCallback(() => {
@@ -574,6 +668,7 @@ export function LearnWorkspace(props: {
     engaged.current = true; anchor.current = i; serverAt.current = i; setBanner(null);
     dispatch({ type: "chooseContinue", guided });
     if (session.id) void call(`/api/individual/scholar/learn/sessions/${session.id}`, { currentStep: session.steps[i].step, ...(hadThread ? {} : { move: "skip" }) }, "PATCH");
+    syncRef.current?.event("continue");
   }, [session, dispatch, guided]);
   async function finish() {
     if (session?.id) await call(`/api/individual/scholar/learn/sessions/${session.id}`, { status: "completed" }, "PATCH");

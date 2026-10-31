@@ -784,6 +784,9 @@ export async function runLearn(userId: string, args: {
     system: learnSystem(args.action, { depth: args.depth, background: args.background, references: args.references.length > 0, research: research.length > 0, teaching: args.teaching }),
     user: learnUserPrompt(args.question, args.passages, args.references, args.history, args.learnerContext, research, studyContext),
     tier: "reasoning",
+    // SCHOLAR-CONTINUITY-01 item 5: High-yield with exam evidence carries the learner's own past-paper count in its system text,
+    // so that block is not marked for caching. Every other Learn system block is the same for every learner and stays marked.
+    ...(args.teaching?.examEvidence && args.teaching.examEvidence.questions > 0 ? { cacheSystem: false } : {}),
     maxTokens: args.action === "check" ? 200 : isTeachingAction(args.action) ? teachingMaxTokens(args.action, args.depth) : (args.depth === "detailed" ? 1100 : 800) + (research.length ? 500 : 0),
     context: { userId, attribution: { scope: "person" }, operation: research.length ? LEARN_RESEARCH_OPERATION : "individual_scholar_learn" },
   });

@@ -25,6 +25,8 @@ import type { OsceDefinition, OsceItem, OsceSource, OsceStationDraft, OsceTick }
 import { guidanceJson, readDefinition } from "./osce";
 import type { CardRowExtras, PersonalDeck } from "./flashcards";
 import { isStudyLinkKind, isStudySpace, studyFields, type StudyFieldsInput, type StudyLinkKind, type StudySpace } from "./study-session";
+import { positionFromRow, type PositionPut, type ServerPosition } from "./learn-position";
+import { correctionFromRow, snapshotFromRow, snapshotInsertRow, type AttemptIntegrity, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -642,11 +644,13 @@ export async function getQuestion(admin: Admin, userId: string, id: string): Pro
  * due today, and an existing card is put back to the start of its schedule by SM-2 itself (quality 1 is
  * a lapse), not by a rule of this file's own.
  */
-export async function recordAttempt(admin: Admin, userId: string, q: QuestionRow, chosenIndex: number): Promise<{ ok: boolean; correct: boolean; card: "created" | "reset" | null }> {
+export async function recordAttempt(admin: Admin, userId: string, q: QuestionRow, chosenIndex: number): Promise<{ ok: boolean; correct: boolean; card: "created" | "reset" | null; attempt?: { id: string; answeredAt: string } }> {
   const correct = chosenIndex === q.correctIndex;
-  const { error } = await admin.from("individual_scholar_attempt").insert({ user_id: userId, question_id: q.id, chosen_index: chosenIndex, correct });
+  const { data: made, error } = await admin.from("individual_scholar_attempt").insert({ user_id: userId, question_id: q.id, chosen_index: chosenIndex, correct }).select("id, answered_at").single();
   if (error) return { ok: false, correct, card: null };
-  if (correct) return { ok: true, correct, card: null };
+  // SCHOLAR-CONTINUITY-01 (791): the attempt's id, so its snapshot can be kept beside it.
+  const attempt = made?.id ? { id: String(made.id), answeredAt: String(made.answered_at ?? new Date().toISOString()) } : undefined;
+  if (correct) return { ok: true, correct, card: null, attempt };
 
   const { data: existing } = await admin.from("individual_scholar_card").select("id, ease_factor, interval_days, repetitions")
     .eq("user_id", userId).eq("question_id", q.id).maybeSingle();
@@ -654,14 +658,14 @@ export async function recordAttempt(admin: Admin, userId: string, q: QuestionRow
     const { error: cErr } = await admin.from("individual_scholar_card").insert({
       user_id: userId, question_id: q.id, material_id: q.materialId, next_review_at: todayIso(), status: "active",
     });
-    return { ok: !cErr, correct, card: cErr ? null : "created" };
+    return { ok: !cErr, correct, card: cErr ? null : "created", attempt };
   }
   const next = sm2({ ease: Number(existing.ease_factor ?? 2.5), interval: existing.interval_days ?? 0, reps: existing.repetitions ?? 0 }, 1);
   const { error: uErr } = await admin.from("individual_scholar_card").update({
     ease_factor: next.ease, interval_days: next.interval, repetitions: next.reps, status: "active",
     next_review_at: todayIso(), updated_at: new Date().toISOString(),
   }).eq("user_id", userId).eq("id", existing.id);
-  return { ok: !uErr, correct, card: uErr ? null : "reset" };
+  return { ok: !uErr, correct, card: uErr ? null : "reset", attempt };
 }
 
 // ── REVISE: CARDS ──────────────────────────────────────────────────────────────────────────────────
@@ -861,13 +865,20 @@ export async function recordRevisionAttempt(admin: Admin, userId: string, q: Que
   chosenIndex: number | null; response: Record<string, unknown> | null; correct: boolean; score: number | null;
   marking: "deterministic" | "self_graded" | "ai_evaluation"; evaluator?: { model: string; promptVersion: string } | null; sessionId: string | null;
   quality?: number | null; srs?: SrsParams;
-}): Promise<{ ok: boolean; card: "created" | "reset" | "reviewed" | null; nextReviewAt?: string }> {
-  const { error } = await admin.from("individual_scholar_attempt").insert({
+}): Promise<{ ok: boolean; card: "created" | "reset" | "reviewed" | null; nextReviewAt?: string; attempt?: { id: string; answeredAt: string } }> {
+  const { data: made, error } = await admin.from("individual_scholar_attempt").insert({
     user_id: userId, question_id: q.id, chosen_index: a.chosenIndex, response: a.response, correct: a.correct, score: a.score,
     marking: a.marking, evaluator_model: a.evaluator?.model ?? null, evaluator_prompt_version: a.evaluator?.promptVersion ?? null,
     revision_session_id: a.sessionId,
-  });
+  }).select("id, answered_at").single();
   if (error) return { ok: false, card: null };
+  // SCHOLAR-CONTINUITY-01 (791): the attempt's id, so its snapshot can be kept beside it.
+  const attempt = made?.id ? { id: String(made.id), answeredAt: String(made.answered_at ?? new Date().toISOString()) } : undefined;
+  return { ...(await revisionAttemptCard(admin, userId, q, a)), attempt };
+}
+
+/** The card a revision answer reviews, makes or resets (recordRevisionAttempt, after the attempt is stored). */
+async function revisionAttemptCard(admin: Admin, userId: string, q: QuestionRow, a: { correct: boolean; quality?: number | null; srs?: SrsParams }): Promise<{ ok: boolean; card: "created" | "reset" | "reviewed" | null; nextReviewAt?: string }> {
   // A flashcard's answer IS its recall grade. Any other question whose card is due is reviewed by the answer: right is
   // a good recall (4), wrong a lapse (1). Otherwise a missed answer makes or resets its card, as practice always has.
   let { data: card } = await admin.from("individual_scholar_card").select("id, next_review_at, status").eq("user_id", userId).eq("question_id", q.id).maybeSingle();
@@ -911,7 +922,11 @@ export async function createRevisionSession(admin: Admin, userId: string, input:
 }
 
 /** `response` is the stored answer (416): the student's own words, and on an ai_evaluation attempt its formative feedback (written-feedback.ts). */
-export type SessionAttempt = { questionId: string; correct: boolean; score: number | null; marking: string; answeredAt: string; response?: Record<string, unknown> | null };
+export type SessionAttempt = {
+  questionId: string; correct: boolean; score: number | null; marking: string; answeredAt: string; response?: Record<string, unknown> | null;
+  /** SCHOLAR-CONTINUITY-01: the attempt's id, and (791, read only where asked for) its snapshot and corrections. */
+  id?: string; integrity?: AttemptIntegrity | null;
+};
 /** 425: a short answer held, unmarked, until the end of its session (end-of-session feedback and Mock). */
 export type HeldAnswer = { questionId: string; response: { text: string } };
 
@@ -920,7 +935,7 @@ export type HeldAnswer = { questionId: string; response: { text: string } };
  * the end. `holding` is false where 425 is absent: nothing can be held there, and the caller says so. null when it
  * is not the caller's.
  */
-export async function getRevisionSession(admin: Admin, userId: string, id: string): Promise<Read<{ session: RevisionSessionRow; questionIds: string[]; attempts: SessionAttempt[]; held: HeldAnswer[]; holding: boolean } | null>> {
+export async function getRevisionSession(admin: Admin, userId: string, id: string, opts: { integrity?: boolean } = {}): Promise<Read<{ session: RevisionSessionRow; questionIds: string[]; attempts: SessionAttempt[]; held: HeldAnswer[]; holding: boolean } | null>> {
   if (!isUuid(id)) return { ok: true, data: null };
   const { data: s, error } = await admin.from("individual_scholar_revision_session").select(REV_SESSION_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
   if (error) return fail(error);
@@ -928,17 +943,20 @@ export async function getRevisionSession(admin: Admin, userId: string, id: strin
   const itemsOf = (cols: string) => admin.from("individual_scholar_revision_session_item").select(cols).eq("user_id", userId).eq("session_id", id).order("ordinal");
   const [first, att] = await Promise.all([
     itemsOf("ordinal, question_id, held_response"),
-    admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at, response").eq("user_id", userId).eq("revision_session_id", id).order("answered_at"),
+    admin.from("individual_scholar_attempt").select("id, question_id, correct, score, marking, answered_at, response").eq("user_id", userId).eq("revision_session_id", id).order("answered_at"),
   ]);
   let items = first, holding = true;
   if (first.error && isNotProvisioned(first.error)) { items = await itemsOf("ordinal, question_id"); holding = false; }
   if (items.error || att.error) return fail(items.error ?? att.error);
   const rows = (items.data ?? []) as any[];
+  const attRows = (att.data ?? []) as any[];
+  // SCHOLAR-CONTINUITY-01 (791): feedback shown again reads what each answer was assessed against, where asked for.
+  const integrity = opts.integrity ? await attemptIntegrity(admin, userId, attRows.map(a => a.id)) : null;
   return {
     ok: true,
     data: {
       session: toRevSession(s), questionIds: rows.map(r => r.question_id),
-      attempts: ((att.data ?? []) as any[]).map(a => ({ questionId: a.question_id, correct: a.correct, score: a.score === null ? null : Number(a.score), marking: a.marking, answeredAt: a.answered_at, response: a.response && typeof a.response === "object" ? a.response : null })),
+      attempts: attRows.map(a => ({ id: a.id, questionId: a.question_id, correct: a.correct, score: a.score === null ? null : Number(a.score), marking: a.marking, answeredAt: a.answered_at, response: a.response && typeof a.response === "object" ? a.response : null, ...(integrity ? { integrity: integrity.get(a.id) ?? null } : {}) })),
       held: rows.filter(r => typeof r.held_response?.text === "string").map(r => ({ questionId: r.question_id, response: { text: r.held_response.text } })),
       holding,
     },
@@ -1316,6 +1334,8 @@ export type CaseSessionRow = {
 export type CaseAnswerRow = {
   decisionPointId: string; chosen: string[]; reasoning: string | null; marking: string; correct: boolean | null; score: number | null;
   safety: string[]; aiFeedback: string | null; evaluatorModel: string | null; createdAt: string;
+  /** The learner's reason for a CHOICE, where the case asked (810, individual_scholar_case_reason). null when none, or 810 is absent. */
+  reason?: string | null;
 };
 const CASE_SESSION_COLS = "id, private_case_id, mode, status, view_salt, current_stage_id, reached_stage_ids, revealed_fact_ids, debrief, created_at, last_active_at, completed_at";
 const toCaseSession = (r: any): CaseSessionRow => ({
@@ -1341,9 +1361,12 @@ export async function getPrivateCaseSession(admin: Admin, userId: string, id: st
   const { data: ans } = await admin.from("individual_scholar_case_answer")
     .select("decision_point_id, chosen_option_ids, reasoning, marking, correct, score, safety_criterion_ids, ai_feedback, evaluator_model, created_at")
     .eq("user_id", userId).eq("session_id", id).order("created_at");
+  // 810: the reasons given for choices. Absent (not applied) or unreadable: none, and the case plays as before.
+  const { data: why } = await admin.from("individual_scholar_case_reason").select("decision_point_id, reason").eq("user_id", userId).eq("session_id", id);
+  const reasons = new Map<string, string>(((why ?? []) as any[]).map(r => [r.decision_point_id, r.reason]));
   return {
     session: toCaseSession(data),
-    answers: ((ans ?? []) as any[]).map(a => ({
+    answers: ((ans ?? []) as any[]).map(a => ({ reason: reasons.get(a.decision_point_id) ?? null,
       decisionPointId: a.decision_point_id, chosen: Array.isArray(a.chosen_option_ids) ? a.chosen_option_ids : [], reasoning: a.reasoning ?? null, marking: a.marking,
       correct: a.correct ?? null, score: a.score === null ? null : Number(a.score), safety: Array.isArray(a.safety_criterion_ids) ? a.safety_criterion_ids : [],
       aiFeedback: a.ai_feedback ?? null, evaluatorModel: a.evaluator_model ?? null, createdAt: a.created_at,
@@ -1376,6 +1399,89 @@ export async function updatePrivateCaseSession(admin: Admin, userId: string, id:
   return !error;
 }
 
+/**
+ * 810: the learner's reason for a choice they have just made in a private case (askReason), kept beside the 435 answer.
+ * The database refuses one without that choice, a second one, and any change. Never an error to the learner: false
+ * when it was not kept (810 absent included), and the browser still holds it for the debrief.
+ */
+export async function insertCaseReason(admin: Admin, userId: string, sessionId: string, decisionPointId: string, reason: string): Promise<boolean> {
+  const text = reason.trim().slice(0, 1500);
+  if (!isUuid(sessionId) || !text) return false;
+  const { error } = await admin.from("individual_scholar_case_reason").insert({ session_id: sessionId, user_id: userId, decision_point_id: decisionPointId, reason: text });
+  return !error;
+}
+
+// -- 810: A COMPLETED CASE ATTEMPT, AS IT WAS (SCHOLAR-CASE-INTEGRITY-01) --
+// One immutable snapshot per completed session (private or library), and append-only corrections of its decision
+// results. The database checks the session is the caller's own, completed, and of the case as it is held.
+
+export type CaseAttemptCorrectionRow = {
+  id: string; decisionPointId: string; previousOutcome: string; previousScore: number | null; correctedOutcome: string; correctedScore: number | null;
+  reason: string; basis: string; correctedByKind: string; createdAt: string;
+};
+export type CaseAttemptSnapshotRow = {
+  id: string; kind: "private" | "library"; sessionId: string; caseRef: string; contentHash: string; record: any; rubric: any; rubricHash: string | null;
+  standing: "formative"; completedAt: string; createdAt: string; corrections: CaseAttemptCorrectionRow[];
+};
+const SNAPSHOT_COLS = "id, session_kind, private_session_id, library_session_id, case_ref, content_hash, record, rubric, rubric_hash, standing, completed_at, created_at";
+const toSnapshot = (r: any, corrections: CaseAttemptCorrectionRow[]): CaseAttemptSnapshotRow => ({
+  id: r.id, kind: r.session_kind, sessionId: r.private_session_id ?? r.library_session_id, caseRef: r.case_ref, contentHash: r.content_hash, record: r.record ?? {},
+  rubric: r.rubric ?? null, rubricHash: r.rubric_hash ?? null, standing: "formative", completedAt: r.completed_at, createdAt: r.created_at, corrections,
+});
+
+/** Keep the snapshot of a completed attempt. "exists": one is already kept (idempotent on the session). */
+export async function insertCaseAttemptSnapshot(admin: Admin, userId: string, input: {
+  kind: "private" | "library"; sessionId: string; caseRef: string; contentHash: string; record: unknown; rubric: unknown | null;
+}): Promise<{ ok: true; id: string } | { ok: false; reason: "exists" | "not_provisioned" | "refused" }> {
+  if (!isUuid(input.sessionId)) return { ok: false, reason: "refused" };
+  const { data, error } = await admin.from("individual_scholar_case_attempt_snapshot").insert({
+    user_id: userId, session_kind: input.kind, ...(input.kind === "private" ? { private_session_id: input.sessionId } : { library_session_id: input.sessionId }),
+    case_ref: input.caseRef, content_hash: input.contentHash, record: input.record, rubric: input.rubric ?? null,
+    // completed_at is the session's own: the database guard replaces this placeholder with it.
+    completed_at: new Date().toISOString(),
+  }).select("id").single();
+  if (!error && data) return { ok: true, id: data.id };
+  if (String(error?.code ?? "") === "23505") return { ok: false, reason: "exists" };
+  return { ok: false, reason: isNotProvisioned(error) ? "not_provisioned" : "refused" };
+}
+
+/** The caller's kept snapshot of one session, with its corrections oldest first. data null: none kept. */
+export async function getCaseAttemptSnapshot(admin: Admin, userId: string, kind: "private" | "library", sessionId: string): Promise<Read<CaseAttemptSnapshotRow | null>> {
+  if (!isUuid(sessionId)) return { ok: true, data: null };
+  const { data, error } = await admin.from("individual_scholar_case_attempt_snapshot").select(SNAPSHOT_COLS).eq("user_id", userId)
+    .eq(kind === "private" ? "private_session_id" : "library_session_id", sessionId).maybeSingle();
+  if (error) return fail(error);
+  if (!data) return { ok: true, data: null };
+  const { data: cs, error: cErr } = await admin.from("individual_scholar_case_attempt_correction")
+    .select("id, decision_point_id, previous_outcome, previous_score, corrected_outcome, corrected_score, reason, basis, corrected_by_kind, created_at")
+    .eq("user_id", userId).eq("snapshot_id", data.id).order("created_at");
+  if (cErr) return fail(cErr);
+  return { ok: true, data: toSnapshot(data, ((cs ?? []) as any[]).map(c => ({
+    id: c.id, decisionPointId: c.decision_point_id, previousOutcome: c.previous_outcome, previousScore: c.previous_score === null ? null : Number(c.previous_score),
+    correctedOutcome: c.corrected_outcome, correctedScore: c.corrected_score === null ? null : Number(c.corrected_score), reason: c.reason, basis: c.basis,
+    correctedByKind: c.corrected_by_kind, createdAt: c.created_at,
+  }))) };
+}
+
+/** One correction of one decision result in a learner's kept attempt. previous_* is filled by the database. */
+export async function insertCaseAttemptCorrection(admin: Admin, userId: string, input: {
+  snapshotId: string; decisionPointId: string; correctedOutcome: "correct" | "partial" | "incorrect"; correctedScore: number | null;
+  reason: string; basis: "rubric_error" | "key_error" | "marking_error" | "other"; actorId: string | null;
+}): Promise<{ ok: true; id: string; previousOutcome: string } | { ok: false; reason: "unchanged" | "not_found" | "not_provisioned" | "refused" }> {
+  if (!isUuid(input.snapshotId)) return { ok: false, reason: "not_found" };
+  const { data, error } = await admin.from("individual_scholar_case_attempt_correction").insert({
+    snapshot_id: input.snapshotId, user_id: userId, decision_point_id: input.decisionPointId,
+    previous_outcome: "unmarked", // replaced by the database from the effective result
+    corrected_outcome: input.correctedOutcome, corrected_score: input.correctedScore, reason: input.reason.trim(), basis: input.basis,
+    corrected_by: input.actorId, corrected_by_kind: input.actorId ? "hq_actor" : "system_rule",
+  }).select("id, previous_outcome").single();
+  if (!error && data) return { ok: true, id: data.id, previousOutcome: data.previous_outcome };
+  const m = String(error?.message ?? "");
+  if (/changes nothing/.test(m)) return { ok: false, reason: "unchanged" };
+  if (/not this learner own|not in the attempt/.test(m)) return { ok: false, reason: "not_found" };
+  return { ok: false, reason: isNotProvisioned(error) ? "not_provisioned" : "refused" };
+}
+
 /** Which library version one of the caller's library plays is on (423, read only). null when it is not theirs. */
 export async function librarySessionVersion(admin: Admin, userId: string, sessionId: string): Promise<string | null> {
   if (!isUuid(sessionId)) return null;
@@ -1384,13 +1490,17 @@ export async function librarySessionVersion(admin: Admin, userId: string, sessio
 }
 
 /** The caller's case history: private sessions (435) and library plays (423, read only), newest first. */
-export async function caseHistory(admin: Admin, userId: string, limit = 20): Promise<Read<{ kind: "private" | "library"; id: string; title: string | null; versionId: string | null; status: string; startedAt: string; completedAt: string | null }[]>> {
+export async function caseHistory(admin: Admin, userId: string, limit = 20): Promise<Read<{ kind: "private" | "library"; id: string; title: string | null; versionId: string | null; status: string; startedAt: string; completedAt: string | null; kept: boolean }[]>> {
   const [p, l] = await Promise.all([
     admin.from("individual_scholar_case_session").select("id, status, created_at, completed_at, private_case_id").eq("user_id", userId).order("last_active_at", { ascending: false }).limit(limit),
     admin.from("case_library_session").select("id, status, started_at, completed_at, version_id").eq("user_id", userId).order("started_at", { ascending: false }).limit(limit),
   ]);
   if (p.error && !isNotProvisioned(p.error)) return fail(p.error);
   const privateRows = ((p.data ?? []) as any[]);
+  // 810: which finished attempts have their record kept. Absent: none is said to be.
+  const { data: kept } = await admin.from("individual_scholar_case_attempt_snapshot").select("private_session_id, library_session_id").eq("user_id", userId)
+    .order("completed_at", { ascending: false }).limit(200);
+  const keptIds = new Set(((kept ?? []) as any[]).map(r => r.private_session_id ?? r.library_session_id));
   const titles = new Map<string, string>();
   if (privateRows.length) {
     const { data } = await admin.from("individual_scholar_case").select("id, title").eq("user_id", userId).in("id", [...new Set(privateRows.map(r => r.private_case_id))]);
@@ -1401,8 +1511,8 @@ export async function caseHistory(admin: Admin, userId: string, limit = 20): Pro
   return {
     ok: true,
     data: [
-      ...privateRows.map(r => ({ kind: "private" as const, id: r.id, title: titles.get(r.private_case_id) ?? "Your case", versionId: null, status: r.status, startedAt: r.created_at, completedAt: r.completed_at ?? null })),
-      ...libRows.map(r => ({ kind: "library" as const, id: r.id, title: null, versionId: r.version_id as string, status: r.status === "in_progress" ? "active" : r.status, startedAt: r.started_at, completedAt: r.completed_at ?? null })),
+      ...privateRows.map(r => ({ kind: "private" as const, id: r.id, title: titles.get(r.private_case_id) ?? "Your case", versionId: null, status: r.status, startedAt: r.created_at, completedAt: r.completed_at ?? null, kept: keptIds.has(r.id) })),
+      ...libRows.map(r => ({ kind: "library" as const, id: r.id, title: null, versionId: r.version_id as string, status: r.status === "in_progress" ? "active" : r.status, startedAt: r.started_at, completedAt: r.completed_at ?? null, kept: keptIds.has(r.id) })),
     ].sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, limit),
   };
 }
@@ -3455,4 +3565,110 @@ export async function clearStudyPlan(admin: Admin, userId: string): Promise<"ok"
     if (error) { if (isNotProvisioned(error)) { plan780 = false; return "not_provisioned"; } return "failed"; }
     return "ok";
   } catch { return "failed"; }
+}
+
+// ── SCHOLAR-CONTINUITY-01: THE LEARNING POSITION (790) AND ATTEMPT SNAPSHOTS AND CORRECTIONS (791) ─────────────────────
+//
+// 790: one position per learner and Learn session, written ONLY through individual_scholar_learning_position_put, which
+// applies the stale-write rule (learn-position.ts mirrors it). 791: one immutable snapshot per attempt and an append-only
+// trail of corrections. Every statement is keyed on the caller's own user_id. Where 790 or 791 is absent the reads say
+// not provisioned and the writes are skipped: Learn stays device-only, and an answer is recorded exactly as before.
+
+let position790: boolean | null = null;
+let snapshot791: boolean | null = null;
+/** Tests only: forget what was detected. */
+export const resetContinuitySchema = () => { position790 = null; snapshot791 = null; };
+const isMissingRpc = (error: any) => isNotProvisioned(error) || String(error?.code ?? "") === "42883";
+
+/** The caller's position in one of their Learn sessions, or null (none yet). notProvisioned where 790 is absent. */
+export async function getLearningPosition(admin: Admin, userId: string, sessionId: string): Promise<Read<ServerPosition | null>> {
+  if (position790 === false) return { ok: false, notProvisioned: true };
+  if (!isUuid(sessionId)) return { ok: true, data: null };
+  const { data, error } = await admin.from("individual_scholar_learning_position").select("*").eq("user_id", userId).eq("session_id", sessionId).maybeSingle();
+  if (error) { if (isNotProvisioned(error)) position790 = false; return fail(error); }
+  position790 = true;
+  return { ok: true, data: data ? positionFromRow(data) : null };
+}
+
+/**
+ * One position write for one of the caller's sessions, under 790's stale-write rule. not_found: the session is not the
+ * caller's (the composite foreign key refuses it). invalid: a 790 CHECK refused it.
+ */
+export async function putLearningPosition(admin: Admin, userId: string, sessionId: string, p: PositionPut): Promise<
+  { ok: true; accepted: boolean; reason: string; position: ServerPosition | null } | { ok: false; error: "not_provisioned" | "not_found" | "invalid" | "failed" }> {
+  if (position790 === false) return { ok: false, error: "not_provisioned" };
+  if (!isUuid(sessionId)) return { ok: false, error: "not_found" };
+  try {
+    const { data, error } = await admin.rpc("individual_scholar_learning_position_put", {
+      p_user_id: userId, p_session_id: sessionId, p_device_id: p.deviceId, p_client_seq: p.clientSeq, p_base_revision: p.baseRevision,
+      p_client_updated_at: p.clientUpdatedAt, p_step: p.step, p_furthest_step: p.furthestStep, p_card_id: p.cardId, p_section_chunk_id: p.sectionChunkId,
+      p_offset_hint: p.offsetHint, p_last_completed_activity: p.lastCompletedActivity, p_last_completed_at: p.lastCompletedAt, p_unfinished: p.unfinished,
+    });
+    if (error) {
+      if (isMissingRpc(error)) { position790 = false; return { ok: false, error: "not_provisioned" }; }
+      const code = String(error.code ?? "");
+      return { ok: false, error: code === "23503" ? "not_found" : code === "23514" ? "invalid" : "failed" };
+    }
+    position790 = true;
+    return { ok: true, accepted: data?.accepted === true, reason: String(data?.reason ?? ""), position: positionFromRow(data?.position) };
+  } catch { return { ok: false, error: "failed" }; }
+}
+
+/** The 730 content_version of the caller's own question (1 where 730 is absent or it was never edited). */
+export async function questionContentVersion(admin: Admin, userId: string, questionId: string): Promise<number> {
+  if (!isUuid(questionId)) return 1;
+  const { data, error } = await admin.from("individual_scholar_question").select("content_version").eq("user_id", userId).eq("id", questionId).maybeSingle();
+  return error || !Number.isInteger(data?.content_version) ? 1 : data.content_version;
+}
+
+/** Keep one attempt's snapshot (791). absent: 791 is not applied (nothing is kept, nothing is wrong). failed: anything else. */
+export async function insertAttemptSnapshot(admin: Admin, userId: string, s: AttemptSnapshotRow): Promise<"ok" | "absent" | "failed"> {
+  if (snapshot791 === false) return "absent";
+  try {
+    const { error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...snapshotInsertRow(s), user_id: userId });
+    if (error) { if (isNotProvisioned(error)) { snapshot791 = false; return "absent"; } return "failed"; }
+    snapshot791 = true;
+    return "ok";
+  } catch { return "failed"; }
+}
+
+/** What the caller's attempts were assessed against, and their corrections (oldest first). Empty where 791 is absent or unreadable. */
+export async function attemptIntegrity(admin: Admin, userId: string, attemptIds: readonly string[]): Promise<Map<string, AttemptIntegrity>> {
+  const ids = [...new Set(attemptIds)].filter(isUuid).slice(0, 200);
+  const out = new Map<string, AttemptIntegrity>();
+  if (!ids.length || snapshot791 === false) return out;
+  const [snaps, corr] = await Promise.all([
+    admin.from("individual_scholar_attempt_snapshot").select("*").eq("user_id", userId).in("attempt_id", ids),
+    admin.from("individual_scholar_attempt_correction").select("id, attempt_id, previous_score, previous_outcome, corrected_score, corrected_outcome, reason, basis, corrected_by_kind, created_at")
+      .eq("user_id", userId).in("attempt_id", ids).order("created_at"),
+  ]);
+  if (snaps.error && isNotProvisioned(snaps.error)) { snapshot791 = false; return out; }
+  const at = (id: string) => { let v = out.get(id); if (!v) { v = { snapshot: null, corrections: [] }; out.set(id, v); } return v; };
+  for (const r of (snaps.error ? [] : snaps.data ?? []) as any[]) { const s = snapshotFromRow(r); if (s) at(s.attemptId).snapshot = s; }
+  for (const r of (corr.error ? [] : corr.data ?? []) as any[]) { const c = correctionFromRow(r); if (c) at(c.attemptId).corrections.push(c); }
+  return out;
+}
+
+/**
+ * Append one correction to one of the learner's attempts (791). The trigger fills previous_* from the effective result and
+ * refuses a correction that changes nothing. `userId` is the learner the attempt belongs to (the HQ caller resolves it).
+ */
+export async function insertAttemptCorrection(admin: Admin, userId: string, c: {
+  attemptId: string; correctedScore: number | null; correctedOutcome: Outcome; reason: string; basis: CorrectionBasis; correctedBy: string | null;
+}): Promise<{ ok: true; correction: CorrectionRow } | { ok: false; error: "not_provisioned" | "not_found" | "invalid" | "unchanged" | "failed" }> {
+  if (!isUuid(c.attemptId)) return { ok: false, error: "not_found" };
+  try {
+    // previous_* is filled by the 791 trigger from the effective result; the value sent here is overwritten.
+    const { data, error } = await admin.from("individual_scholar_attempt_correction").insert({
+      attempt_id: c.attemptId, user_id: userId, previous_outcome: c.correctedOutcome, corrected_score: c.correctedScore, corrected_outcome: c.correctedOutcome,
+      reason: c.reason, basis: c.basis, corrected_by: c.correctedBy, corrected_by_kind: c.correctedBy ? "hq_actor" : "system_rule",
+    }).select("id, attempt_id, previous_score, previous_outcome, corrected_score, corrected_outcome, reason, basis, corrected_by_kind, created_at").single();
+    if (error) {
+      if (isNotProvisioned(error)) return { ok: false, error: "not_provisioned" };
+      const msg = String(error.message ?? ""), code = String(error.code ?? "");
+      return { ok: false, error: /not this learner own/.test(msg) || code === "23503" ? "not_found" : /changes nothing/.test(msg) ? "unchanged" : code === "23514" ? "invalid" : "failed" };
+    }
+    const row = correctionFromRow(data);
+    return row ? { ok: true, correction: row } : { ok: false, error: "failed" };
+  } catch { return { ok: false, error: "failed" }; }
 }
