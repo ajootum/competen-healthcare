@@ -17,7 +17,7 @@
 
 import { isStudySessionsOn, loadIndividualPolicy, type IndividualPolicy } from "@/lib/individual/policy";
 import {
-  addStudyLink, getConnectedSession, getLearningSession, getOsceAttempt, latestConnectedSession, learningEvents, listStudyLinks, revisionPool, setLastSpace, studySessionSchema, topicsOfSections,
+  addStudyLink, getConnectedSession, getLearningSession, getOsceAttempt, latestConnectedSession, learningEvents, listStudyLinks, recentWrittenFeedback, revisionPool, setLastSpace, studySessionSchema, topicsOfSections,
   type StudySessionRow,
 } from "./store";
 import { REVISION_FORMATS } from "./config";
@@ -85,7 +85,8 @@ const desc = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
 
 /**
  * The study-session block for the Personal AI (owner D4), from the caller's own connected session and the records of
- * it: its steps and their topics, missed questions in its sections, its "not yet" checks, the OSCE runs linked to it.
+ * it: its steps and their topics, missed questions in its sections, its "not yet" checks, the OSCE runs linked to it,
+ * and the formative AI feedback kept on written answers in its sections (SCHOLAR-WRITTEN-FEEDBACK-01).
  * Every read is a store.ts call keyed on the caller. Nothing Professional, employer, estate or another learner's.
  * `competencyTitle` names the session's competency from the catalogue the caller already read (no read here).
  */
@@ -135,11 +136,26 @@ export async function studySessionBlock(admin: Admin, userId: string, raw: unkno
       return [{ id: a.id, station, at: a.finishedAt ?? a.startedAt, gaps, suggestions }];
     });
 
-    const stagesTouched = studyStages(session, steps.length, links).filter(s => s.mark !== "none").map(s => s.label);
+    // SCHOLAR-WRITTEN-FEEDBACK-01: formative AI feedback kept on the learner's written answers in the session's sections.
+    const writtenQs = pool?.ok ? pool.data.questions.filter(q => q.kind === "short" || q.kind === "structured") : [];
+    const kept = writtenQs.length ? await recentWrittenFeedback(admin, userId, writtenQs.map(q => q.id)) : null;
+    const qById = new Map(writtenQs.map(q => [q.id, q]));
+    const written: NonNullable<StudySessionContextInput["written"]> = (kept?.ok ? kept.data : []).flatMap(a => {
+      const q = qById.get(a.questionId);
+      if (!q) return [];
+      const items = a.formative.items;
+      return [{
+        id: a.id, stem: q.stem, topic: topicOf(q.chunkId), at: a.answeredAt,
+        missing: items.flatMap(i => i.parts?.missing ?? []), misconceptions: items.flatMap(i => i.parts?.misconceptions ?? []),
+        next: items.map(i => i.parts?.next ?? null).find(Boolean) ?? null, summary: items.map(i => i.summary).find(Boolean) ?? null,
+      }];
+    });
+
+    const stagesTouched =studyStages(session, steps.length, links).filter(s => s.mark !== "none").map(s => s.label);
     const competency = session.competencyId ? opts.competencyTitle?.(session.competencyId) ?? null : null;
     return buildStudySessionContext({
       focus: { title: displaySessionTitle(session.title), objective: session.objectiveOutcome ?? session.objectiveText ?? null, competencies: competency ? [competency] : [] },
-      sources: [...byMaterial.values()], missed, mistakes, unsure, osce,
+      sources: [...byMaterial.values()], missed, mistakes, unsure, osce, written,
       progress: { stepsDone: Math.min(session.currentStep, steps.length), stepsTotal: steps.length, completed: session.status === "completed", stagesTouched },
     });
   } catch { return null; }

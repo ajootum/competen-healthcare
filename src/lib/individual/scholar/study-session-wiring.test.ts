@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = vi.hoisted(() => ({
   studySessionSchema: vi.fn(), getConnectedSession: vi.fn(), getLearningSession: vi.fn(), listStudyLinks: vi.fn(), learningEvents: vi.fn(),
-  topicsOfSections: vi.fn(), revisionPool: vi.fn(), getOsceAttempt: vi.fn(), setLastSpace: vi.fn(), addStudyLink: vi.fn(), latestConnectedSession: vi.fn(),
+  topicsOfSections: vi.fn(), revisionPool: vi.fn(), getOsceAttempt: vi.fn(), setLastSpace: vi.fn(), addStudyLink: vi.fn(), latestConnectedSession: vi.fn(), recentWrittenFeedback: vi.fn(),
 }));
 vi.mock("./store", () => store);
 vi.mock("./learn-search", () => ({ displaySessionTitle: (t: string) => t }));
@@ -62,6 +62,17 @@ describe("studySessionBlock: the caller's own connected session only", () => {
     for (const f of [store.getConnectedSession, store.getLearningSession, store.listStudyLinks, store.learningEvents]) expect(f).toHaveBeenCalledWith({}, U, S);
     expect(store.revisionPool).toHaveBeenCalledWith({}, U, expect.objectContaining({ chunkIds: [C] }));
     expect(store.getOsceAttempt).toHaveBeenCalledWith({}, U, O);
+  });
+  it("adds the formative AI feedback kept on the caller's own written answers in the session's sections", async () => {
+    store.revisionPool.mockResolvedValue({ ok: true, data: {
+      questions: [{ id: "q2", chunkId: C, kind: "short", stem: "Why does oliguria matter?", answer: null }, { id: "q3", chunkId: C, kind: "mcq", stem: "Pick one", answer: null }],
+      stats: new Map(),
+    } });
+    store.recentWrittenFeedback.mockResolvedValue({ ok: true, data: [{ id: "a1", questionId: "q2", answeredAt: "2026-10-31T11:00:00Z",
+      formative: { kind: "ai_formative", model: "m", promptVersion: "p", items: [{ part: null, summary: null, parts: { right: [], missing: ["Urine output threshold"], misconceptions: [], why: null, next: "Revise staging" } }] } }] });
+    const r = await studySessionBlock({}, U, S, { policy: ON });
+    expect(store.recentWrittenFeedback).toHaveBeenCalledWith({}, U, ["q2"]);
+    expect(r?.text).toContain('Formative AI feedback on my written answer on Staging to "Why does oliguria matter?": missing Urine output threshold. revise next Revise staging');
   });
   it("null, with nothing else read, for a session that is not the caller's own connected one", async () => {
     store.getConnectedSession.mockResolvedValue(null);
