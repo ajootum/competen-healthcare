@@ -53,6 +53,29 @@ async function approvalRefs(admin: any, ids: string[]): Promise<Record<string, {
   return out;
 }
 
+const SNAPSHOT_COLS_BEFORE_750 = `
+        name, library, description, code, competency_layer, profession_term_id, specialty_term_id, parent_framework_id,
+        version_major, version_minor, version_revision, review_date,
+        framework_domains(
+          name, code, sort_order,
+          framework_competencies(
+            id, code, name, description, sort_order, learning_outcomes, expected_level_id, risk_category, practice_id, cpu_id,
+            competency_skills(name, sort_order)
+          )
+        )
+      `;
+const SNAPSHOT_COLS = `
+        name, library, description, code, competency_layer, profession_term_id, specialty_term_id, parent_framework_id,
+        version_major, version_minor, version_revision, review_date, component_order,
+        framework_domains(
+          id, name, code, sort_order,
+          framework_competencies(
+            id, code, name, description, sort_order, learning_outcomes, learning_outcome_ids, expected_level_id, risk_category, practice_id, cpu_id,
+            competency_skills(id, name, sort_order, component_code)
+          )
+        )
+      `;
+
 export async function transitionFramework(
   admin: any,
   frameworkId: string,
@@ -98,21 +121,13 @@ export async function transitionFramework(
   if (action === "publish") {
     // The version records what was published and on what authority: identity, the governed version label, every field
     // the 395 hash covers, and (for a CFCA framework) the content hash and approved 395 version of each competency.
-    const { data: fullFw, error: snapErr } = await admin
-      .from("frameworks")
-      .select(`
-        name, library, description, code, competency_layer, profession_term_id, specialty_term_id, parent_framework_id,
-        version_major, version_minor, version_revision, review_date,
-        framework_domains(
-          name, code, sort_order,
-          framework_competencies(
-            id, code, name, description, sort_order, learning_outcomes, expected_level_id, risk_category, practice_id, cpu_id,
-            competency_skills(name, sort_order)
-          )
-        )
-      `)
-      .eq("id", frameworkId)
-      .single();
+    // FRAMEWORK-DESIGN-STUDIO-01 (750/751): the snapshot also carries the domain and criterion ids, each criterion's
+    // section, the framework's section order and the stable outcome ids, so a version's exact order can be rebuilt.
+    // Additive: before 750/751 those columns are absent and the snapshot is exactly what it was. Old snapshots are
+    // never touched.
+    const snap = (cols: string) => admin.from("frameworks").select(cols).eq("id", frameworkId).single();
+    let { data: fullFw, error: snapErr } = await snap(SNAPSHOT_COLS);
+    if (snapErr) ({ data: fullFw, error: snapErr } = await snap(SNAPSHOT_COLS_BEFORE_750));
 
     if (fullFw) {
       // A controlled catalogue (migration 394) publishes what it NAMES, with each content status, so the
