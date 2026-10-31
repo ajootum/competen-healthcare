@@ -21,7 +21,7 @@ describe("flashcards layout: by available width, one md viewport edge", () => {
   it("the page grid sits in an @container and switches on the container's width, not the viewport's", () => {
     expect(page).toMatch(/className="@container"/);
     expect(page).toMatch(/className=\{FLASHCARDS_GRID\}/);
-    expect(page).toMatch(/<ReviseNav [^>]*container \/>/);
+    expect(page).toMatch(/<ReviseNav [^>]*container[^>]*\/>/);
     const grid = constant("FLASHCARDS_GRID");
     expect(grid).toMatch(/^grid grid-cols-1 /);
     expect(grid).toContain("@min-[39rem]:grid-cols-[minmax(22rem,1fr)_minmax(16rem,20rem)]");
