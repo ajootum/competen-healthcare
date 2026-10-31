@@ -169,7 +169,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     // Migrations 440-444 (COMPETEN-KNOWLEDGE-RESEARCH-01). It shipped with no door at all (HQ-IA-02 H1).
     { key: "knowledge.research", group: "Knowledge Research", items: [
       { key: "knowledge.research.workspace", label: "Research Workspace", href: "/super-admin/research", icon: "🔬", flag: "ckri" },
-      { key: "knowledge.research.educator", label: "Educator Knowledge", href: "/super-admin/research/educator", icon: "🧑‍🏫", flag: "ckri" },
+      { key: "knowledge.research.educator", label: "Educator Knowledge", href: "/super-admin/research/educator", icon: "🧑‍🏫", keywords: ["osce", "station", "checklist"], flag: "ckri" },
       { key: "knowledge.research.governance", label: "Research Governance", href: "/super-admin/research/governance", icon: "⚖️", flag: "ckri" },
       { key: "knowledge.research.intelligence", label: "Research Learning Intelligence", href: "/super-admin/research/intelligence", icon: "📊", keywords: ["learning intelligence"], flag: "ckri" },
       { key: "knowledge.research.oversight", label: "Research Oversight", href: "/super-admin/research/oversight", icon: "🛡️", flag: "ckri" },

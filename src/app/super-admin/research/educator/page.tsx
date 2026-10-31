@@ -3,11 +3,12 @@ import Link from "next/link";
 import { requireHqCapability } from "@/lib/hq/context";
 import { ckriEnabled, loadCkriPolicy } from "@/lib/knowledge/governance";
 import { listSnapshots, readSnapshot } from "@/lib/knowledge/intelligence";
-import { listNeeds, listResources } from "@/lib/knowledge/educator";
+import { listNeeds, listResources, servedToLearners } from "@/lib/knowledge/educator";
 import { MEASURES } from "@/lib/knowledge/data-contracts";
 import { ActionButton, FieldsForm } from "../_components/ResearchControls";
 import { EditDraft, NewResource } from "../_components/KnowledgeControls";
 import { SnapshotView } from "../_components/SnapshotView";
+import { StationPreview, StatusChip } from "../_components/KnowledgeStatus";
 
 // /super-admin/research/educator -- CKRI educator knowledge improvement (COMPETEN-KNOWLEDGE-RESEARCH-01 K3, migration 442).
 // Guarded by hq.learning.ckri.educator. Only the measures the published policy releases to educators, as suppressed
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Educator knowledge" };
 const card = "rounded-xl border border-gray-200 bg-white p-4";
 const EP = "/api/hq/knowledge/educator";
-const CLINICAL: Record<string, string> = { draft: "Draft", in_review: "In clinical review", approved: "Clinically approved", rejected: "Rejected in clinical review" };
+const KIND: Record<string, string> = { explanation: "Explanation", revision_question: "Revision question", targeted_resource: "Targeted resource", osce_station: "OSCE practice station" };
 
 export default async function EducatorKnowledgePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const ctx = await requireHqCapability("hq.learning.ckri.educator");
@@ -80,23 +81,27 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
         <details className="mb-2"><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">New resource</summary><div className="mt-2"><NewResource /></div></details>
         {!resources ? <p role="alert" className="text-[13px] text-[var(--cmp-text-critical)]">Resources could not be read.</p>
           : resources.length === 0 ? <p className="text-[13px] text-gray-600">None yet.</p> : (
-          <ul className="divide-y divide-gray-100 text-[13px]">{resources.map(r => (
+          <ul className="divide-y divide-gray-100 text-[13px]">{resources.map(r => {
+            const served = r.versions.find(servedToLearners);
+            return (
             <li key={r.id} className="space-y-1 py-2">
-              <div><span className="font-semibold">{r.title}</span> <code className="text-gray-600">{r.code}</code> · {r.kind} · {r.status}</div>
+              <div><span className="font-semibold">{r.title}</span> <code className="text-gray-600">{r.code}</code> · {KIND[r.kind] ?? r.kind} · {r.status}</div>
+              <p className="text-[12.5px] text-gray-700">{served ? `Learners are given version ${served.versionNo}, the published, clinically approved one. A newer draft reaches them only once it is approved and published.` : "Learners are given nothing yet: no version is both clinically approved and published."}</p>
               {r.versions.slice(0, 3).map(v => (
                 <div key={v.id} className="ml-3 space-y-1 border-l border-gray-200 pl-3">
-                  <div>Version {v.versionNo} · {v.origin === "ai_draft" ? "AI draft" : "Written by an educator"} · {v.educatorReviewed ? "educator-reviewed" : "not yet educator-reviewed"} · {CLINICAL[v.clinical]}{v.required !== null ? ` (${v.approvals} of ${v.required})` : ""} · {v.state} · {v.competencies.length} competencies</div>
+                  <div className="flex flex-wrap items-center gap-1.5"><span className="font-semibold">Version {v.versionNo}</span><StatusChip status={v.status} /><span>{v.origin === "ai_draft" ? "AI draft" : "Written by an educator"} · {v.educatorReviewed ? "educator-reviewed" : "not yet educator-reviewed"}{v.required !== null ? ` · ${v.approvals} of ${v.required} clinical approvals` : ""} · {v.competencies.length} competencies</span></div>
+                  {r.kind === "osce_station" && v.state !== "draft" && <details><summary className="cursor-pointer font-semibold text-teal-800">View station</summary><StationPreview content={v.content} /></details>}
                   {v.state === "draft" && <div className="flex flex-wrap gap-2">
                     <details><summary className="cursor-pointer font-semibold text-teal-800">Edit</summary><EditDraft versionId={v.id} kind={r.kind} initial={v.content} /></details>
                     <ActionButton endpoint={EP} body={{ action: "competencies_set", versionId: v.id }} label="Set competencies" done="Saved." note="CFCA competency ids" />
                     <ActionButton endpoint={EP} body={{ action: "review", versionId: v.id }} label="I have reviewed this content" done="Educator review recorded." />
                     <ActionButton endpoint={EP} body={{ action: "submit", versionId: v.id }} label="Submit for clinical review" done="Submitted." tone="primary" />
                   </div>}
-                  {v.state !== "draft" && v.versionNo === r.versions[0].versionNo && <ActionButton endpoint={EP} body={{ action: "version_new", resourceId: r.id }} label="Start a new version" done="New draft started." />}
+                  {v.state !== "draft" && v.versionNo === r.versions[0].versionNo && r.status === "active" && <ActionButton endpoint={EP} body={{ action: "version_new", resourceId: r.id }} label={v.state === "published" ? "Edit as a new version" : "Start a new version"} done="New draft started. The published version stays in use until this one is approved and published." />}
                 </div>
               ))}
             </li>
-          ))}</ul>
+          ); })}</ul>
         )}
       </section>
     </div>

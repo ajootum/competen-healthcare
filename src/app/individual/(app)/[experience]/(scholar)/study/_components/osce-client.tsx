@@ -9,7 +9,7 @@ import { studyHref } from "./question-view";
 import { FormativeAiLabel } from "./edu-notice";
 import { RecoveryFlow, type RecoveryRequestBody } from "./evidence-recovery";
 import {
-  DEFAULT_OSCE_SECTIONS, OSCE_AUTOSAVE, OSCE_DIFFICULTY_LABEL, OSCE_FEEDBACK_LABEL, OSCE_FEEDBACK_PARTS, OSCE_GUIDELINES_NOTE, OSCE_MARKS, OSCE_MARK_LABEL,
+  DEFAULT_OSCE_SECTIONS, LIBRARY_STATION_LABEL, OSCE_AUTOSAVE, OSCE_DIFFICULTY_LABEL, OSCE_FEEDBACK_LABEL, OSCE_FEEDBACK_PARTS, OSCE_GUIDELINES_NOTE, OSCE_MARKS, OSCE_MARK_LABEL,
   OSCE_PRACTICE_LABEL, formatClock, readFeedbackParts, timerAnnouncement, timerState,
   type OsceFeedbackParts, type OsceGap, type OsceGuidance, type OsceMark, type OsceRemedy, type OsceResult,
 } from "@/lib/individual/scholar/osce";
@@ -87,7 +87,7 @@ export function OsceCreate(props: {
     router.push(osceHref(r.json.id));
   }
   const choices: { v: Source; label: string; note: string | null; disabled: boolean }[] = [
-    { v: "library", label: "Competen station library", note: props.library.length ? "Published stations, clinically reviewed and approved. No AI." : "No clinically approved station has been published yet.", disabled: !props.library.length },
+    { v: "library", label: LIBRARY_STATION_LABEL, note: props.library.length ? "Published stations, clinically reviewed and approved. No AI." : "No clinically approved station has been published yet.", disabled: !props.library.length },
     { v: "template", label: "Practice template", note: "Competen practice template, not clinically reviewed. No AI.", disabled: !props.templates.length },
     { v: "competency", label: "From a competency", note: props.competencyNote ?? "Checklist built from the competency's learning outcomes. Its content status is shown. No AI.", disabled: !props.competencies.length },
     { v: "ai", label: "Generate from my notes", note: props.aiNote ?? "Written by AI from one of your materials, each item checked against your notes.", disabled: !props.materials.length || !!props.aiNote },

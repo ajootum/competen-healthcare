@@ -37,12 +37,14 @@ export const DEFAULT_OSCE_SECTIONS: readonly string[] = ["Introduction and conse
 export const OSCE_PROMPT_VERSIONS = { station: "scholar-osce-station-v1", feedback: "scholar-osce-feedback-v2" } as const;
 
 export type OsceSource = "template" | "competency" | "ai" | "own" | "library";
+/** OSCE-AUTHORING-01 (owner, 31 Oct 2026): a governed station is said to be from the library AND clinically reviewed. */
+export const LIBRARY_STATION_LABEL = "From the Competen library (clinically reviewed)";
 export const OSCE_SOURCE_LABEL: Record<OsceSource, string> = {
   template: "Competen practice template",
   competency: "Built from a competency's learning outcomes",
   ai: "Written by AI from your notes",
   own: "Written by you",
-  library: "Competen station library",
+  library: LIBRARY_STATION_LABEL,
 };
 export const OSCE_SOURCES: readonly OsceSource[] = ["library", "template", "competency", "ai", "own"];
 
@@ -190,38 +192,180 @@ export type GovernedStationContent = {
   raw: { scenario: string; candidate_instructions: string; checklist: unknown; expected_activities: unknown; guidance: unknown };
 };
 
-/** Pure. A governed station's content, validated as 721 accepts it, or the plain reason it cannot be used. */
-export function validateStationContent(c: unknown): { ok: true; content: GovernedStationContent } | { ok: false; reason: string } {
+// ── THE STORED FORM, MEASURED AS POSTGRES MEASURES IT ── (OSCE-AUTHORING-01) ────────────────────────────────────
+//
+// Several bounds are byte bounds on jsonb text (octet_length(x::text)): the whole version content (442: 32000), and on
+// the learner's copy (720/721: checklist 64000, objectives 12000, activities and outcomes 24000, references 16000,
+// sections 1000). Postgres prints jsonb as {"k": v, "k2": v2} and [a, b], so the bytes are measured the same way here,
+// and a station HQ saves is never one the database, or the learner's copy of it, would refuse.
+
+/** Pure. The text Postgres prints for a jsonb value. Postgres orders object keys differently; the length is the same. */
+export function pgJsonText(v: unknown): string {
+  if (v === null || v === undefined) return "null";
+  if (Array.isArray(v)) return `[${v.map(pgJsonText).join(", ")}]`;
+  if (typeof v === "object") return `{${Object.entries(v as Record<string, unknown>).filter(([, x]) => x !== undefined).map(([k, x]) => `${JSON.stringify(k)}: ${pgJsonText(x)}`).join(", ")}}`;
+  return JSON.stringify(v) ?? "null";
+}
+export const pgJsonBytes = (v: unknown) => new TextEncoder().encode(pgJsonText(v)).length;
+export const OSCE_STORED_MAX_BYTES = { content: 32000, checklist: 64000, objectives: 12000, expectedActivities: 24000, learningOutcomes: 24000, references: 16000, sections: 1000 } as const;
+/** Postgres counts characters (code points) and btrim strips spaces only. */
+const chars = (s: string) => [...s].length;
+const pgTrim = (s: string) => s.replace(/^ +| +$/g, "");
+type Refusal = { ok: false; reason: string };
+const no = (reason: string): Refusal => ({ ok: false, reason });
+
+/**
+ * Pure. A governed station's content, validated as the database accepts it (442 ckri_knowledge_content_ok widened by 721,
+ * the 442 version size, and the 720/721 bounds of the learner's copy), or the plain reason it cannot be used.
+ *
+ * ONE FUNCTION, TWO SIDES (OSCE-AUTHORING-01): HQ authoring saves a station only when this accepts it
+ * (src/lib/knowledge/educator.ts checkedContent), and Scholar offers a published one only when this accepts it
+ * (library-questions.ts). A key stored as JSON null is NOT absent to Postgres (p -> 'k' is then a jsonb null, which the
+ * shape check refuses), so it is refused here too: an optional field is omitted, never null.
+ */
+export function validateStationContent(c: unknown): { ok: true; content: GovernedStationContent } | Refusal {
   const o = (c ?? {}) as Record<string, unknown>;
-  if (!c || typeof c !== "object" || Array.isArray(c)) return { ok: false, reason: "The station content is not an object." };
-  if (typeof o.scenario !== "string" || o.scenario.trim().length < 20 || o.scenario.trim().length > OSCE_TEXT_MAX.scenario) return { ok: false, reason: "The scenario must be 20 to 4000 characters." };
-  if (typeof o.candidate_instructions !== "string" || o.candidate_instructions.trim().length < 10 || o.candidate_instructions.trim().length > OSCE_TEXT_MAX.instructions) return { ok: false, reason: "The candidate instructions must be 10 to 2000 characters." };
+  if (!c || typeof c !== "object" || Array.isArray(c)) return no("The station content is not an object.");
+  const has = (k: string) => o[k] !== undefined;
+  const text = (k: string, min: number, max: number) => typeof o[k] === "string" && (o[k] as string).trim().length >= min && chars(pgTrim(o[k] as string)) <= max && chars(pgTrim(o[k] as string)) >= min;
+  if (!text("scenario", 20, OSCE_TEXT_MAX.scenario)) return no("The scenario must be 20 to 4000 characters.");
+  if (!text("candidate_instructions", 10, OSCE_TEXT_MAX.instructions)) return no("The candidate instructions must be 10 to 2000 characters.");
   const d = o.duration_minutes;
-  if (typeof d !== "number" || !Number.isInteger(d) || d < OSCE_BOUNDS.durationMin || d > OSCE_BOUNDS.durationMax) return { ok: false, reason: "The duration must be a whole number of minutes from 3 to 20." };
+  if (typeof d !== "number" || !Number.isInteger(d) || d < OSCE_BOUNDS.durationMin || d > OSCE_BOUNDS.durationMax) return no("The duration must be a whole number of minutes from 3 to 20.");
+  if (Array.isArray(o.checklist) && o.checklist.some(r => r && typeof r === "object" && typeof (r as Record<string, unknown>).text === "string" && chars(((r as Record<string, unknown>).text as string).replace(/\s+/g, " ").trim()) > OSCE_TEXT_MAX.item))
+    return no(`A checklist item is longer than ${OSCE_TEXT_MAX.item} characters.`);
   const list = validateChecklist(o.checklist);
   if (!list.ok) return list;
   // The copy keeps the stored checklist exactly, so it must already be in the cleaned form (no padding to trim away).
-  const exact = (o.checklist as Record<string, unknown>[]).every((r, i) => r.id === list.items[i].id && r.text === list.items[i].text);
-  if (!exact) return { ok: false, reason: "Each checklist item's id and text must be stored without extra spaces." };
-  if (o.sections !== undefined && o.sections !== null) {
-    if (!Array.isArray(o.sections) || o.sections.length < 1 || o.sections.length > OSCE_BOUNDS.sectionsMax || o.sections.some(s => typeof s !== "string" || !s.trim())) return { ok: false, reason: "Sections must be 1 to 6 headings." };
+  const exact = (o.checklist as Record<string, unknown>[]).every((r, i) => r.id === list.items[i].id && r.text === list.items[i].text && (r.outcome === undefined || r.outcome === list.items[i].outcome));
+  if (!exact) return no("Each checklist item's id, text and outcome must be stored without extra spaces.");
+  if (pgJsonBytes(o.checklist) > OSCE_STORED_MAX_BYTES.checklist) return no("The checklist is too long to store.");
+  if (has("sections")) {
+    if (!Array.isArray(o.sections) || o.sections.length < 1 || o.sections.length > OSCE_BOUNDS.sectionsMax || o.sections.some(s => typeof s !== "string" || !s.trim() || chars(s.trim()) > OSCE_TEXT_MAX.section)) return no(`Response sections must be 1 to ${OSCE_BOUNDS.sectionsMax} headings of up to ${OSCE_TEXT_MAX.section} characters, or none for the defaults.`);
+    if (pgJsonBytes(normaliseSections(o.sections)) > OSCE_STORED_MAX_BYTES.sections) return no("The response sections are too long to store.");
   }
-  for (const k of ["objectives", "expected_activities", "learning_outcomes"] as const)
-    if (o[k] !== undefined && o[k] !== null && (!Array.isArray(o[k]) || (o[k] as unknown[]).some(s => typeof s !== "string" || !s))) return { ok: false, reason: `${k.replace(/_/g, " ")} must be a list of text.` };
-  if (o.references !== undefined && o.references !== null && (!Array.isArray(o.references) || (o.references as unknown[]).some(r => !r || typeof r !== "object" || Array.isArray(r)))) return { ok: false, reason: "References must be a list of objects." };
-  if (o.guidance !== undefined && o.guidance !== null && (typeof o.guidance !== "object" || Array.isArray(o.guidance))) return { ok: false, reason: "Guidance must be an object." };
-  if (o.difficulty !== undefined && o.difficulty !== null && !isOsceDifficulty(o.difficulty)) return { ok: false, reason: "Difficulty must be introductory, intermediate or advanced." };
+  const lists = [["objectives", "Objectives", 30, OSCE_STORED_MAX_BYTES.objectives], ["expected_activities", "Expected candidate activities", 60, OSCE_STORED_MAX_BYTES.expectedActivities],
+    ["learning_outcomes", "Learning outcomes", 60, OSCE_STORED_MAX_BYTES.learningOutcomes]] as const;
+  for (const [k, label, n, bytes] of lists) {
+    if (!has(k)) continue;
+    const v = o[k];
+    if (!Array.isArray(v) || v.some(s => typeof s !== "string" || !s.trim())) return no(`${label} must be a list of text, each entry non-empty.`);
+    if (v.length > n) return no(`${label}: at most ${n} entries (this has ${v.length}).`);
+    if (v.some(s => chars((s as string).replace(/\s+/g, " ").trim()) > OSCE_TEXT_MAX.list)) return no(`${label}: each entry is at most ${OSCE_TEXT_MAX.list} characters.`);
+    if (pgJsonBytes(v) > bytes) return no(`${label} are too long to store.`);
+  }
+  if (has("references")) {
+    const v = o.references;
+    if (!Array.isArray(v) || v.length > 40 || v.some(r => !r || typeof r !== "object" || Array.isArray(r))) return no("References must be a list of at most 40 references.");
+    for (const r of v as Record<string, unknown>[]) {
+      if (r.kind !== undefined && r.kind !== "reference") return no("A station reference is a label, with an optional https link.");
+      if (typeof r.label !== "string" || !r.label.trim() || chars(r.label.trim()) > 300) return no("Each reference needs a label of up to 300 characters.");
+      if (r.url !== undefined && (typeof r.url !== "string" || !/^https:\/\/[^\s]+$/.test(r.url) || r.url.length > 500)) return no("A reference link must start with https:// and have no spaces.");
+    }
+  }
+  if (has("guidance")) {
+    const g = o.guidance as Record<string, unknown>;
+    if (!g || typeof g !== "object" || Array.isArray(g)) return no("Guidance must be an object.");
+    const sr = g.suggested_responses;
+    if (sr !== undefined && (!Array.isArray(sr) || sr.length > 30 || sr.some(s => typeof s !== "string" || !s.trim() || chars(s.trim()) > OSCE_TEXT_MAX.guidance))) return no(`Suggested responses: at most 30, each up to ${OSCE_TEXT_MAX.guidance} characters.`);
+    const ag = g.assessment_guidance;
+    if (ag !== undefined && ag !== null && (typeof ag !== "string" || chars(ag.trim()) > OSCE_TEXT_MAX.guidance)) return no(`Scoring guidance is at most ${OSCE_TEXT_MAX.guidance} characters.`);
+  }
+  if (has("difficulty") && !isOsceDifficulty(o.difficulty)) return no("Difficulty must be introductory, intermediate or advanced.");
+  for (const [k, label, max] of [["profession", "Profession", 80], ["programme_code", "Programme code", 80], ["programme_label", "Programme", 200], ["topic", "Topic", 160], ["body_system", "Body system", 80]] as const)
+    if (has(k) && (typeof o[k] !== "string" || !(o[k] as string).trim() || chars(pgTrim(o[k] as string)) > max)) return no(`${label}: up to ${max} characters, or leave it out.`);
+  if (pgJsonBytes(o) > OSCE_STORED_MAX_BYTES.content) return no(`The station is too long to store (${pgJsonBytes(o)} of ${OSCE_STORED_MAX_BYTES.content} bytes). Shorten the guidance, scenario or checklist.`);
+  const refs = readReferences(o.references).filter(r => r.kind === "reference");
+  const LIB_REF = { kind: "library", resourceId: "00000000-0000-0000-0000-000000000000", versionId: "00000000-0000-0000-0000-000000000000", versionNo: 100000 };
+  if (pgJsonBytes([LIB_REF, ...refs]) > OSCE_STORED_MAX_BYTES.references) return no("The references are too long to store.");
+  const scenario = o.scenario as string, candidateInstructions = o.candidate_instructions as string;
   return {
     ok: true,
     content: {
-      scenario: o.scenario, candidateInstructions: o.candidate_instructions, durationMinutes: d, checklist: list.items,
+      scenario, candidateInstructions, durationMinutes: d, checklist: list.items,
       sections: Array.isArray(o.sections) ? normaliseSections(o.sections) : null, definition: readDefinition(o),
-      raw: { scenario: o.scenario, candidate_instructions: o.candidate_instructions, checklist: o.checklist, expected_activities: o.expected_activities ?? null, guidance: o.guidance ?? null },
+      raw: { scenario, candidate_instructions: candidateInstructions, checklist: o.checklist, expected_activities: o.expected_activities ?? null, guidance: o.guidance ?? null },
     },
   };
 }
 
 export const libraryContentStatus = (versionNo: number) => `Clinically approved Competen station, version ${versionNo}`;
+
+// ── AUTHORING A GOVERNED STATION ── OSCE-AUTHORING-01 (owner, 31 Oct 2026) ─────────────────────────────────────────
+//
+// The HQ knowledge-library editor (src/app/super-admin/research/_components/OsceStationEditor.tsx) sends these form
+// fields. stationContentOf turns them into the stored snake_case content, which validateStationContent then checks,
+// in the browser as the author types and again on the server before any write. Text is tidied (line endings, outer
+// spaces), never shortened: anything too long is refused with its reason, not silently cut. An empty optional field is
+// OMITTED (a JSON null would be refused by the database).
+
+export type StationReferenceField = { label: string; url?: string };
+export type StationItemField = { id: string; text: string; critical: boolean; outcome?: string };
+export type StationFields = {
+  scenario: string; candidateInstructions: string; durationMinutes: number | string; sections: string[]; checklist: StationItemField[];
+  profession: string; programmeCode: string; programmeLabel: string; topic: string; bodySystem: string; difficulty: string;
+  learningOutcomes: string[]; objectives: string[]; expectedActivities: string[];
+  suggestedResponses: string[]; assessmentGuidance: string; references: StationReferenceField[];
+};
+
+const para = (v: unknown) => (typeof v === "string" ? v.replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n").trim() : "");
+const one = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "");
+const lines = (v: unknown): string[] => (Array.isArray(v) ? v : typeof v === "string" ? v.split("\n") : []).map(one).filter(Boolean);
+
+/** Pure. The stored content of a governed station from the HQ editor's fields (see the note above). */
+export function stationContentOf(f: Record<string, unknown>): Record<string, unknown> {
+  const dRaw = f.durationMinutes;
+  const duration = typeof dRaw === "number" ? dRaw : typeof dRaw === "string" && dRaw.trim() !== "" ? Number(dRaw) : null;
+  const out: Record<string, unknown> = {
+    scenario: para(f.scenario), candidate_instructions: para(f.candidateInstructions), duration_minutes: duration,
+    checklist: (Array.isArray(f.checklist) ? f.checklist : []).map(r => {
+      const o = (r ?? {}) as Record<string, unknown>;
+      const item: Record<string, unknown> = { id: typeof o.id === "string" ? o.id.trim() : "", text: one(o.text), critical: o.critical === true };
+      const outcome = one(o.outcome);
+      if (outcome) item.outcome = outcome;
+      return item;
+    }),
+  };
+  const put = (k: string, v: unknown) => { if (v !== "" && !(Array.isArray(v) && v.length === 0)) out[k] = v; };
+  put("sections", lines(f.sections));
+  put("objectives", lines(f.objectives));
+  put("expected_activities", lines(f.expectedActivities));
+  put("learning_outcomes", lines(f.learningOutcomes));
+  put("profession", one(f.profession));
+  put("programme_code", one(f.programmeCode));
+  put("programme_label", one(f.programmeLabel));
+  put("topic", one(f.topic));
+  put("body_system", one(f.bodySystem));
+  put("difficulty", one(f.difficulty));
+  put("references", (Array.isArray(f.references) ? f.references : []).map(r => {
+    const o = (r ?? {}) as Record<string, unknown>;
+    const url = typeof o.url === "string" ? o.url.trim() : "";
+    return { kind: "reference", label: one(o.label), ...(url ? { url } : {}) };
+  }).filter(r => r.label || r.url));
+  const suggested = lines(f.suggestedResponses), assessment = para(f.assessmentGuidance);
+  if (suggested.length || assessment) out.guidance = { ...(suggested.length ? { suggested_responses: suggested } : {}), ...(assessment ? { assessment_guidance: assessment } : {}) };
+  return out;
+}
+
+/** Pure. The editor's fields from stored content (a draft being edited, or a new version copied from the published one). */
+export function stationFieldsOf(c: unknown): StationFields {
+  const o = (c && typeof c === "object" && !Array.isArray(c) ? c : {}) as Record<string, unknown>;
+  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  const arr = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  const g = (o.guidance && typeof o.guidance === "object" && !Array.isArray(o.guidance) ? o.guidance : {}) as Record<string, unknown>;
+  return {
+    scenario: s(o.scenario), candidateInstructions: s(o.candidate_instructions), durationMinutes: typeof o.duration_minutes === "number" ? o.duration_minutes : 8,
+    sections: arr(o.sections),
+    checklist: (Array.isArray(o.checklist) ? o.checklist : []).map((r, i) => {
+      const x = (r ?? {}) as Record<string, unknown>;
+      return { id: typeof x.id === "string" && x.id ? x.id : `item-${i + 1}`, text: s(x.text), critical: x.critical === true, ...(typeof x.outcome === "string" && x.outcome ? { outcome: x.outcome } : {}) };
+    }),
+    profession: s(o.profession), programmeCode: s(o.programme_code), programmeLabel: s(o.programme_label), topic: s(o.topic), bodySystem: s(o.body_system),
+    difficulty: s(o.difficulty), learningOutcomes: arr(o.learning_outcomes), objectives: arr(o.objectives), expectedActivities: arr(o.expected_activities),
+    suggestedResponses: arr(g.suggested_responses), assessmentGuidance: s(g.assessment_guidance),
+    references: (Array.isArray(o.references) ? o.references : []).map(r => { const x = (r ?? {}) as Record<string, unknown>; return { label: s(x.label), ...(typeof x.url === "string" && x.url ? { url: x.url } : {}) }; }),
+  };
+}
 
 /** Pure. The learner's copy of a governed station, exactly as published (the 721 guard checks it again). */
 export function stationFromLibrary(lib: { resourceId: string; versionId: string; versionNo: number; title: string; content: GovernedStationContent }): OsceStationDraft {
