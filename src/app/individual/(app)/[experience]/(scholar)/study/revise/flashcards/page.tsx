@@ -18,6 +18,7 @@ import { studyHref } from "../../_components/question-view";
 import { ReviseNav, flashcardsHref, type ReviseNavKey } from "../../_components/revise-nav";
 import {
   CardBrowser, CreateMore, DeckHeader, DeckList, DeckOptions, DeckStart, FlashcardStudy, HowItWorks,
+  FLASHCARDS_GRID, FLASHCARDS_MAIN, FLASHCARDS_NAV, FLASHCARDS_SIDE,
   type CardRow, type DeckRow, type ExportFormat, type StudyCard,
 } from "../../_components/flashcards-client";
 
@@ -62,9 +63,14 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
   const shell = (main: React.ReactNode, side: React.ReactNode, notice = true) => (
     <>
       {top}
-      <div className="grid gap-5 md:grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[200px_minmax(0,1fr)_320px]">
-        <ReviseNav current={navKey} adaptive={policy.scholarAdaptiveExams === "on"} />
-        <div className="min-w-0 space-y-4">
+      {/* SCHOLAR-FLASHCARDS-QA-01: laid out by the width the content area HAS (a container query), not the viewport:
+          the shell sidebar takes its share first. Narrow: the Revise nav one row, then the card, then Deck Options.
+          From 39rem the card column (22rem and up) and Deck Options (16rem and up) sit side by side; from 56rem the nav
+          is its own column too. CPR-MOB-001's single md viewport edge is untouched. */}
+      <div data-testid="flashcards-shell" className="@container">
+      <div className={FLASHCARDS_GRID}>
+        <div className={FLASHCARDS_NAV}><ReviseNav current={navKey} adaptive={policy.scholarAdaptiveExams === "on"} container /></div>
+        <div className={FLASHCARDS_MAIN}>
           <nav aria-label="Breadcrumb" className="text-[13.5px] text-gray-600">
             <ol className="flex flex-wrap items-center gap-1.5">
               <li><Link href={studyHref("revise")} className={`hover:underline ${focusRing}`}>Revise</Link></li>
@@ -76,7 +82,8 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
           {main}
           {notice && <BoundaryNotice notice={FORMATIVE_NOTICE} />}
         </div>
-        <aside aria-label="Deck options and new flashcards" className="min-w-0 space-y-4 md:col-start-2 xl:col-start-auto">{side}</aside>
+        <aside aria-label="Deck options and new flashcards" className={FLASHCARDS_SIDE}>{side}</aside>
+      </div>
       </div>
     </>
   );
@@ -180,7 +187,7 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
     return shell(
       <section aria-labelledby="hist-h" className="space-y-4">
         <h2 id="hist-h" className="text-[18px] font-bold text-gray-900">Revision History</h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2">
           {count("Due today", v.due.length, "due")}{count("Needs more practice", v.needsPractice.length, "needs_practice")}{count("Remembered", v.remembered.length, "remembered")}{count("Not studied yet", v.fresh.length, "new")}
         </div>
         <p className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[14px] text-gray-800">
@@ -210,13 +217,13 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
           {v.history.length === 0 ? <p className="mt-1 text-[13.5px] text-gray-700">No reviews recorded yet.</p> : (
             <table className="mt-2 w-full text-[13px]">
               <caption className="sr-only">Your most recent card reviews, newest first</caption>
-              <thead><tr className="text-left text-[12px] text-gray-500"><th scope="col" className="font-semibold">Card</th><th scope="col" className="font-semibold">You said</th><th scope="col" className="font-semibold">When</th><th scope="col" className="hidden font-semibold sm:table-cell">Next in</th></tr></thead>
+              <thead><tr className="text-left text-[12px] text-gray-500"><th scope="col" className="font-semibold">Card</th><th scope="col" className="font-semibold">You said</th><th scope="col" className="font-semibold">When</th><th scope="col" className="hidden font-semibold md:table-cell">Next in</th></tr></thead>
               <tbody>{v.history.map((h, i) => (
                 <tr key={`${h.cardId}-${i}`} className="border-t border-gray-100 align-top">
                   <td className="py-1.5 pr-2 text-gray-900">{h.front}</td>
                   <td className="py-1.5 pr-2">{recallOf(h.quality) === "remembered" ? "Remembered" : "Didn't remember"}</td>
                   <td className="py-1.5 pr-2 tabular-nums">{new Date(h.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</td>
-                  <td className="hidden py-1.5 tabular-nums sm:table-cell">{h.intervalDays === null ? "Not recorded" : `${h.intervalDays} day${h.intervalDays === 1 ? "" : "s"}`}</td>
+                  <td className="hidden py-1.5 tabular-nums md:table-cell">{h.intervalDays === null ? "Not recorded" : `${h.intervalDays} day${h.intervalDays === 1 ? "" : "s"}`}</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -230,7 +237,7 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
   // ── the deck: its header, where it stands, and study ──
   return shell(
     <>
-      <section aria-label={`Deck ${deck.title}`} className="rounded-3xl border border-gray-200 bg-white p-4 sm:p-6">
+      <section aria-label={`Deck ${deck.title}`} className="rounded-3xl border border-gray-200 bg-white p-4 md:p-6">
         <DeckHeader title={deck.title} cards={deck.total} lastRevised={deck.lastStudiedAt} glyph={glyphOf(deck.title)} />
         {deck.subtitle && <p className="mt-1 text-[12.5px] text-gray-500">{deck.subtitle}</p>}
         {cards.length === 0 ? (
