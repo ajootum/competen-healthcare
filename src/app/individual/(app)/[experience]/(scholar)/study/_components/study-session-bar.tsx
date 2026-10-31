@@ -23,7 +23,7 @@ function Mark({ s }: { s: StudyStage }) {
   // The mark is never colour alone: a filled circle with a tick, a dot, or an empty ring, and its words for screen readers.
   return (
     <span aria-hidden className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
-      style={s.mark === "done" ? { background: accent, borderColor: accent, color: "#fff" } : s.mark === "started" ? { borderColor: accent, color: accent } : { borderColor: "var(--cmp-app-border, #d1d5db)" }}>
+      style={s.mark === "done" ? { background: accent, borderColor: accent, color: "#fff" } : s.mark === "started" ? { borderColor: accent, color: accent } : { borderColor: "var(--cmp-app-border)" }}>
       {s.mark === "done" ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg>
         : s.mark === "started" ? <span className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} /> : null}
     </span>
@@ -34,7 +34,7 @@ function Chip({ s, id, current }: { s: StudyStage; id: string; current: boolean 
   return (
     <Link href={stageHref(s.space, id)} aria-current={current ? "page" : undefined}
       className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${current ? "bg-[var(--cmp-theme-soft)]" : "bg-white hover:bg-gray-50"}`}
-      style={current ? { borderColor: accent, color: accent } : { borderColor: "var(--cmp-app-border, #e5e7eb)", color: "#374151" }}>
+      style={current ? { borderColor: accent, color: accent } : { borderColor: "var(--cmp-app-border)", color: "var(--cmp-app-text-secondary)" }}>
       <Mark s={s} />{s.label}<span className="sr-only">: {s.detail}</span>
     </Link>
   );
@@ -60,7 +60,7 @@ export function StudySessionBar({ bar }: { bar: StudyBarView }) {
   }
 
   return (
-    <section aria-label="Study session" data-testid="study-session-bar" className="mb-5 rounded-2xl border bg-white px-3 py-2.5 md:px-4 md:py-3" style={{ borderColor: "var(--cmp-theme-border, #d1d5db)" }}>
+    <section aria-label="Study session" data-testid="study-session-bar" className="mb-5 rounded-2xl border bg-white px-3 py-2.5 md:px-4 md:py-3" style={{ borderColor: "var(--cmp-theme-border)" }}>
       <div className="relative flex min-w-0 items-center gap-2 md:items-start md:gap-4">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>Study session{bar.status === "completed" ? " · ended" : ""}</p>
