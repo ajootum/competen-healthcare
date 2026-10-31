@@ -66,7 +66,7 @@
 | Slice | Scope | State |
 |---|---|---|
 | G-A | Server: stage timings, salvage partial grounding, prepare-next endpoint (policy default off), dedupe, cache-first; owner additions 5 (numerical grounding) and 6 (semantic support) | done 31 Oct, local commits, not pushed (see Log) |
-| G-B | UI: auto-teach on select and Next, More learning options, inline check, Manual preference (existing 414 preference if it fits), resume | pending |
+| G-B | UI: auto-teach on select and Next, More learning options, inline check, Manual preference (existing 414 preference if it fits), resume | done 31 Oct, local commits, not pushed (see Log) |
 | G-C | Staging acceptance: QI deck, lessons 1-4 (sonnet); browser at 375/768/1440 (coordinator) | pending |
 
 ## Token rules
@@ -150,3 +150,51 @@
 - Prepare-next stays OFF.
 - G-C staging should read `timing_ms` to locate the ~20 s outside the model call.
 - A sub-millisecond race remains, where DB timestamps can disagree with commit order (stated in learn-flight.ts).
+
+### 31 Oct -- G-B UI slice (branch scholar/guided-learning-01, not pushed)
+
+Commits 760bc887, 2cdf3e24, e26aeb8d. No migration and no server change; the page passes one boolean. No safeguard touched.
+
+**Delivered**
+1. **Guided by default** (`learn-client.tsx` teachLesson + effect). Initial load, resume, a step click and Next lesson send `open:true`. A saved lesson is shown with zero AI. `open:"generate"|"in_flight"` sends the same body without `open` (the route dedupes). No Teach me click.
+   - One request per lesson key (scope|step|action|mode|depth, `guided-learn.ts` LessonRequests). A key is asked once per visit, so a withheld or failed lesson never loops.
+   - A learner who moves on before the open returns: nothing is generated for the skipped lesson. It is released, so coming back opens it. A reply that arrives late goes to its own step's thread, never as the current lesson.
+   - Progress line: "Preparing this lesson from your notes…" (or notes + library / published research), plus the lesson title. No percentages.
+   - Never auto-advances. When AI is not available, open still runs (saved lessons are shown) but nothing is generated.
+2. **Manual preference.** The 414 `default_action` is CHECK-constrained to a learn action, so "manual" cannot be stored there without a migration. It is kept in **localStorage `scholar.learn.guided`** ("manual" = Manual; anything else = guided).
+   - Toggle "Teach each lesson automatically" (on by default) in Lesson settings.
+   - Manual = the previous behaviour: Teach me button, a new scope's first lesson opened once (now saved-first), resume waits.
+3. **Prepare-next.** The page passes `prepareNext={policy.scholarLearnPrepareNext}`.
+   - Off (default): no prepare request is ever made.
+   - On: after a teach lesson is shown on a recorded session, and it is not the last, one `prepare:true` call per lesson key, with its own `x-request-id`.
+4. **Layout**
+   - The explanation leads: inline [S n] links, View sources (n) kept.
+   - Check questions are answered inline, under the lesson's own question. Clarify records the verdict, informal. A written check (check action) is answered below the lesson.
+   - "Next lesson" is the single primary button. Below md it is sticky above the phone tab bar (same offset as learn-search-client); from md it is static. Previous is ghost; "Finish session" on the last lesson.
+   - "More learning options" disclosure holds every non-primary action: Explain, Simplify, Go deeper, Give examples, Summarise, and Teach me when another action is the learner's start. Ask Scholar stays visible beside it and in the Ask panel.
+   - "Lesson settings" disclosure holds the guided toggle, Depth and Learn from. "Teach this lesson again with these settings" appears when they differ from the lesson shown.
+5. **Salvage.** `salvage.note` is shown calmly under the lesson, with the expansion buttons where wider modes are offered.
+6. **Source expansion.** Under a withheld, salvaged or partial lesson: "Use my notes + Competen library" / "Research & Explain".
+   - Only from the page's `modes` (shownLearnModes, so research only when operational), and only wider than the current mode.
+   - Clicking one switches Learn from (localStorage, like the selector) and teaches the lesson again.
+   - The recovery panel shows them too. It asks its question only when it offers something to answer it with; otherwise it shows `RECOVERY_PROMPT_PLAIN` (no "?").
+   - `suggestedActions`/`widerMode` are unchanged: recovery itself never widens.
+7. **Continuity.** Server unchanged: current_step resume, open-from-saved records the event, check verdicts recorded as before.
+
+**Verification**
+- vitest `guided-learn.test.ts` 18/18: dedupe, release, stale, prepare-once, auto-teach rules, open-to-generate phases, grouping, expansion choice, prompt wording, preference.
+- Also learn-research-quality and evidence-recovery: 91 tests in all, all pass.
+- scholar-learning-harness 163/0. tsc clean (8 GB heap). eslint clean on the changed files.
+- **Browser not run** (G-C).
+
+**G-C should assert** (staging, QI deck)
+- Lesson 1 shows "Preparing this lesson…" and then the lesson, with no click. Network: `open:true`, then one teach POST.
+- Reopen or reload: exactly one `open:true` with `cached:true`, no teach POST. There is a `scholar_learn_served` audit row and no new `plat_ai_requests` row.
+- Next lesson: lesson 2 opens and teaches, never without the click. Lesson 3 is not generated while on lesson 2 (prepare OFF: no `prepare:true` request at all).
+- Rapid double-click of a step, or switching step 2 to 3 to 2: at most one teach POST per lesson. Zero `scholar_learn_inflight` duplicates.
+- Manual (untick the toggle, reload): no request until Teach me. The toggle persists across a reload.
+- Salvaged lesson (Just Culture): the lesson, the note "Some statements were left out…", and expansion buttons where library/research are offered.
+- Notes-only withheld: the panel shows expansion buttons, or the plain wording with no "?" when none are offered. A click switches Learn from and re-teaches.
+- Check: "Answer this" opens the box under that question. Submitting records the verdict, and the step shows understood / partly / not yet.
+- 375 / 768 / 1440: no horizontal scroll. On a phone the sticky Next lesson sits above the bottom tab bar. Touch targets OK with pointer-coarse.
+- Read `timing_ms` for time to first content.
