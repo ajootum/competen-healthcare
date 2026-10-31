@@ -1,6 +1,7 @@
 import { EXPERIENCES, type ExperienceKey } from "./experiences";
 import type { IndividualPassport } from "./passport";
 import { summariseOwn } from "./professional/passport-records";
+import { DIAGRAM_FORMAT_GUIDE } from "./scholar/answer-format";
 
 // ── THE PERSONAL AI, COMPETEN INDIVIDUAL'S ENTRY POINT ── COMPETEN-IND-003 s2(6) ───────────────────────
 //
@@ -51,6 +52,44 @@ const SHARED_RULES = [
 
 export function systemPrompt(experience: ExperienceKey): string {
   return [...PERSONA[experience], ...SHARED_RULES].join("\n");
+}
+
+// ── SCHOLAR-PAI-EXPERIENCE-01: THE SCHOLAR PERSONAL AI WRITES STRUCTURED TEXT ──────────────────────────────────────
+//
+// ONLY the Scholar Personal AI (personal-ai.ts assistantSystemPrompt for Scholar) swaps the plain-text rule for the
+// format Scholar's renderer parses (src/lib/individual/scholar/answer-format.ts). Every other rule stays, word for
+// word, in its place; systemPrompt() above -- what Professional and every other caller reads -- is unchanged. No
+// citation tags by default: the Personal AI page (route A) hands over no study material, so there is nothing honest to cite.
+// SCHOLAR-PAI-RESEARCH-01: ONLY the Learn-step route (route B) numbers the passages it hands over ([S1], [S2], personal-ai-sources.ts),
+// and ONLY there (`passages: true`) does the prompt allow [S n] tags, separate notes from background, and say what the notes
+// did not cover. Without it the prompt is exactly what it was.
+const PLAIN_TEXT_RULE = SHARED_RULES[2];
+const SCHOLAR_FORMAT_RULES = [
+  "- Format: the answer is shown by a renderer that reads ONLY this markdown: '## ' headings, '### ' sub-headings, '- ' bullets, '1. ' numbered steps, **bold** for key terms, and pipe tables (a header row, then a |---|---| row). No italics, links, images, code, HTML, emoji, citation tags or any other markdown.",
+  "- Callouts: a line '> [!CAUTION]', '> [!KEY]', '> [!SUMMARY]', '> [!MEMORY]', '> [!EXAMPLE]' or '> [!RECORD]', then its lines, each starting '> '. CAUTION for a safety point, KEY for the core idea, MEMORY for a memory aid, EXAMPLE for a worked example, RECORD only for facts taken from the person's Competen record in the user message, SUMMARY for the closing summary.",
+  "- Shape: lead with the direct answer in one or two sentences, then the structure. Be concise: short sections, no padding, no repetition. A question that compares two or more things gets a table. End the explanation with a one-line key summary in a > [!SUMMARY] callout.",
+  "- Practice: after a substantive explanation at standard or deep depth, end with a practice block -- a line ```practice, then ONE compact JSON object on one line, then a line ```. The object: {\"flashcard\":{\"front\":\"...\",\"back\":\"...\"},\"mcq\":{\"stem\":\"...\",\"options\":[\"...\",\"...\",\"...\",\"...\"],\"answer\":0,\"explanation\":\"...\"},\"reasoning\":{\"scenario\":\"...\",\"question\":\"...\",\"model_answer\":\"...\"}}. The flashcard front is a question. The mcq has exactly four options, answer is the 0-based index of the correct one, and explanation always says why it is correct. The reasoning scenario is a fictional educational case, never advice about a real patient. Leave the block out at quick depth, and for refusals, clarifications, and questions about study planning, admin or careers.",
+];
+
+// SCHOLAR-PAI-RESEARCH-01 (route B only): the same format with the source tags allowed, and the rules that keep the learner's
+// notes apart from the AI's general background. Learn's conventions: [S n] their notes, "BEYOND THE NOTES" for background,
+// "Not covered in your notes" for the gaps; and, like Learn, a partly covered question is answered in part, never refused whole.
+const GROUNDED_FORMAT_RULES = SCHOLAR_FORMAT_RULES.map((r, i) => i === 0
+  ? r.replace("emoji, citation tags or any other markdown.", "emoji or any other markdown, and no tags except the source tags [S1], [S2] and so on described below.")
+  : r);
+const NOTES_RULES = [
+  "- Source tags: the study material in the user message is numbered [S1], [S2] and so on. End a sentence that uses a passage with that passage's tag, for example [S2]. Cite only tags you were given, never invent a tag, and never tag something the passages do not say.",
+  "- Notes versus background: what the passages support is shown as coming from their notes, and is cited. Anything else you add -- general knowledge, definitions, mechanisms or examples the passages do not contain -- goes in a callout that starts '> [!BACKGROUND]' (General background, not from your notes), with no source tags inside it. Never present an uncited claim as coming from their notes.",
+  "- Partial coverage: if the passages cover only part of the question, answer the supported part first, citing it, then say what is missing: a '> [!BACKGROUND]' callout for what you can explain generally, or a short list. Never refuse the whole question when part of it can be answered. When the passages leave anything the question asks uncovered, end the answer with one final line, exactly 'NOT COVERED: ' then short phrases separated by '; ' that name what their notes do not cover (for example 'NOT COVERED: causes; first-line treatment'). Leave that line out when the passages cover the whole question. The clinical safety rules in this prompt apply unchanged to background.",
+];
+
+/**
+ * The Scholar Personal AI's persona and rules: systemPrompt("scholar") with the plain-text rule replaced by the format.
+ * `passages: true` (the Learn-step route, which numbers its study material) adds the source-tag and notes-versus-background rules.
+ */
+export function scholarPersonalAiPrompt(opts?: { passages?: boolean }): string {
+  const swap = opts?.passages ? [...GROUNDED_FORMAT_RULES, ...NOTES_RULES, DIAGRAM_FORMAT_GUIDE] : [...SCHOLAR_FORMAT_RULES, DIAGRAM_FORMAT_GUIDE];
+  return [...PERSONA.scholar, ...SHARED_RULES.flatMap(r => (r === PLAIN_TEXT_RULE ? swap : [r]))].join("\n");
 }
 
 /** Pure: the person's own record as plain lines. Unread sections say so rather than reading as empty. */

@@ -347,8 +347,8 @@ const AI_ROUTES: [string, string, RegExp][] = [
   [`${API}/explain/route.ts`, `scholarAiRunner(ctx, req, mode === "tutor" ? "tutor_continue" : mode, await scholarRisk(ctx.admin, ctx.userId, { text: question, passages }))`, /runExplain\([^)]*ai\.run\)/],
   // COMPETEN-RESEARCH-01: Learn runs on the REQUEST's risk subject (scholarRisk), built before research so research cost
   // carries the action id; what the research part writes is then checked against that same tier (withinRequestRisk).
-  [`${API}/learn/act/route.ts`, `scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", risk)`,
-    /const risk = await scholarRisk\(ctx\.admin, ctx\.userId, \{ text: prompt, passages, purpose: purposeFrom\(body\) \}\);[\s\S]*const ai = scholarAiRunner\([\s\S]*runLearn\([\s\S]*?\}, ai\.run\)[\s\S]*if \(rr\?\.ok && !\(await withinRequestRisk\(ctx\.admin, action as LearnAction, risk, \[rr\.text\]\)\)\[0\]\) rr = \{ ok: false, reason: "risk_raised" \};/],
+  [`${API}/learn/act/route.ts`, `scholarAiRunner(ctx, req, activity, risk)`,
+    /const risk = await scholarRisk\(ctx\.admin, ctx\.userId, \{ text: prompt, passages, purpose: purposeFrom\(body\) \}\);[\s\S]*const ai = scholarAiRunner\([\s\S]*runLearn\([\s\S]*?\}, ai\.run\)[\s\S]*if \(rr\?\.ok && !\(await withinRequestRisk\(ctx\.admin, activity, risk, \[rr\.text\]\)\)\[0\]\) rr = \{ ok: false, reason: "risk_raised" \};/],
   [`${API}/questions/route.ts`, `scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runQuestions\([^;]*ai\.run(?:, \{[^;]*\})?\)/],
   [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run\)/],
   [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }))`, /runAnalysis\([^)]*ai\.run\)/],
@@ -1276,8 +1276,8 @@ function main() {
     && !assistantShared(plant(ASSIST, "  const study = await scholarRisk(", "  await saveArtefact(ctx.admin, ctx.userId, {} as never);\n  const study = await scholarRisk("))
     && !assistantShared(plant(ASSIST, "label: PERSONAL_AI_LABEL", "label: null")));
   ok("P61. ⚠ K43 goes red when the search runs without the risk gate, or the query is built from the passages",
-    !meteredEverywhere(plant(`${API}/learn/act/route.ts`, "if (rr?.ok && !(await withinRequestRisk(ctx.admin, action as LearnAction, risk, [rr.text]))[0]) rr = { ok: false, reason: \"risk_raised\" };", ""))
-    && !researchGoverned(plant(`${API}/learn/act/route.ts`, "const gate = await scholarRiskGate(ctx, action as LearnAction, risk);", "const gate = null;"))
+    !meteredEverywhere(plant(`${API}/learn/act/route.ts`, "if (rr?.ok && !(await withinRequestRisk(ctx.admin, activity, risk, [rr.text]))[0]) rr = { ok: false, reason: \"risk_raised\" };", ""))
+    && !researchGoverned(plant(`${API}/learn/act/route.ts`, "const gate = await scholarRiskGate(ctx, activity, risk);", "const gate = null;"))
     && !researchGoverned(plant(`${API}/learn/act/route.ts`, "topics, title: stepTitle }", "topics, title: passages.map(p => p.content).join(\" \") }")));
   ok("P48. ⚠ K30 goes red when the learner view carries the rationale, or a route sends a raw question",
     !answersServerSide(plant(REV, "  const base = { id: q.id, kind: q.kind, stem: q.stem,", "  const base = { id: q.id, kind: q.kind, rationale: q.rationale, stem: q.stem,"))

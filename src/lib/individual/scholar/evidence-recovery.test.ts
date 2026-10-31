@@ -560,3 +560,24 @@ describe("SCHOLAR-LEARN-FIX-01: recovery in My notes only stays in the selected 
     expect(plain.evidence.notes).toHaveLength(2);
   });
 });
+
+describe("SCHOLAR-PAI-RESEARCH-01: the sufficiency threshold is configurable, 0.6 when none is given", () => {
+  const ev = (matched: string[]) => ({ notes: [{ origin: "notes" as const, tag: "S1", chunkId: "c", materialId: "m", materialTitle: "M", citation: "M, page 1", excerpt: "x", matched }], library: [], external: [] });
+  it("3 of 5 terms is sufficient at 0.5 and 0.6 but partial at 0.7; the default is unchanged", () => {
+    const q = "alpha beta gamma delta epsilon";
+    const terms = keyTermsOf(q);
+    expect(terms).toHaveLength(5);
+    const covered = ev(terms.slice(0, 3));
+    expect(assessSufficiency(q, covered).verdict).toBe("sufficient");
+    expect(assessSufficiency(q, covered, 0.5).verdict).toBe("sufficient");
+    expect(assessSufficiency(q, covered, 0.6).verdict).toBe("sufficient");
+    expect(assessSufficiency(q, covered, 0.7).verdict).toBe("partial");
+    expect(assessSufficiency(q, ev([]), 0.5).verdict).toBe("insufficient");
+  });
+  it("groundingOutcome takes the same threshold", () => {
+    const passages = [{ content: "alpha beta gamma" }];
+    const terms = ["alpha", "beta", "gamma", "delta", "epsilon"];
+    expect(groundingOutcome(terms, passages).outcome).toBe("sufficient");
+    expect(groundingOutcome(terms, passages, 0.7).outcome).toBe("partial");
+  });
+});

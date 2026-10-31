@@ -111,6 +111,8 @@ export const PROMPT_VERSIONS = {
   // system prompt and checks as explain (generation.ts). v2: a last no-counting reminder (staging, Simplify).
   // v3: Simplify keeps the passages' own names rather than counting them ("two tubes" for "right and left").
   learn: "scholar-learn-v3",
+  // SCHOLAR-COMPANION-01 P1: the six teaching actions (ask me, guide, challenge, mistake, teach back, high-yield), learn-teaching.ts.
+  teaching: "scholar-learn-teaching-v1",
   // SCHOLAR-SESSION-AI-02 slice C (owner D4): an ask in a connected study session carries the study-session block
   // (study-session-context.ts) beside the learner context. Its own suffix ("scholar-learn-v3:ask+scholar-study-session-v1"),
   // so a request with the block is always told apart from one without; an ask is never a saved artefact.
@@ -268,11 +270,28 @@ export const TUTOR_MAX_TURNS = 6;
 // The student-facing learning actions, in the order the workspace offers them. Teach Me is the default. Each is
 // one way of using the SAME engine (generation.ts): the student's own sections as passages, cited, checked.
 // "check" and "clarify" are the informal understanding check -- never a practice question, never assessment.
-export const LEARN_ACTIONS = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask"] as const;
+// SCHOLAR-COMPANION-01 P1 (owner, 31 Oct): six TEACHING actions beside the seven above. They reuse the same engine, the same
+// passages and the same checks; the learner always keeps a direct explanation (teach / explain). Their learning_event.action
+// is mapped onto the existing 414 values and their metering onto the existing activity codes (learn-teaching.ts), so none
+// of them needs a migration. Not saved artefacts: 415's CHECK lists only the original six.
+export const CLASSIC_LEARN_ACTIONS = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask"] as const;
+export const TEACHING_ACTIONS = ["ask_me", "guide", "challenge", "mistake", "teach_back", "high_yield"] as const;
+export const LEARN_ACTIONS = [...CLASSIC_LEARN_ACTIONS, ...TEACHING_ACTIONS] as const;
 export type LearnAction = (typeof LEARN_ACTIONS)[number];
+export type ClassicLearnAction = (typeof CLASSIC_LEARN_ACTIONS)[number];
+export type TeachingAction = (typeof TEACHING_ACTIONS)[number];
 export const LEARN_ACTION_LABEL: Record<LearnAction, string> = {
   teach: "Teach me", explain: "Explain this", simplify: "Simplify", deeper: "Go deeper", examples: "Give examples", summary: "Summarise", ask: "Ask Scholar",
+  ask_me: "Ask me", guide: "Guide me", challenge: "Challenge me", mistake: "Explain my mistake", teach_back: "Teach back", high_yield: "High-yield",
 };
+export const isTeachingAction = (v: unknown): v is TeachingAction => typeof v === "string" && (TEACHING_ACTIONS as readonly string[]).includes(v);
+/** The existing learning_event.action (414 CHECK) and AI activity each teaching action is recorded and metered as. */
+export const TEACHING_EVENT_ACTION: Record<TeachingAction, "check" | "explain" | "clarify" | "summary"> = {
+  ask_me: "check", challenge: "check", guide: "explain", mistake: "clarify", teach_back: "clarify", high_yield: "summary",
+};
+export const TEACHING_AI_ACTIVITY: Record<TeachingAction, "check" | "explain" | "clarify" | "summary"> = { ...TEACHING_EVENT_ACTION };
+/** The seven original actions: the only ones a starting-action preference (migration 414's CHECK) may name. */
+export const isClassicLearnAction = (v: unknown): v is ClassicLearnAction => typeof v === "string" && (CLASSIC_LEARN_ACTIONS as readonly string[]).includes(v);
 export const isLearnAction = (v: unknown): v is LearnAction => typeof v === "string" && (LEARN_ACTIONS as readonly string[]).includes(v);
 export const EXPLANATION_DEPTHS = ["brief", "standard", "detailed"] as const;
 export type ExplanationDepth = (typeof EXPLANATION_DEPTHS)[number];
