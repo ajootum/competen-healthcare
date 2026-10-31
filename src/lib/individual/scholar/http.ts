@@ -15,6 +15,7 @@ import { sha256Hex } from "@/lib/ai/outcomes";
 import type { ResolvedOwner } from "@/lib/ai/consumption";
 import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
 import { classifyRisk, riskRank, type RiskContext, type RiskTier } from "@/lib/ai/clinical-risk";
+import { servedTier } from "@/lib/ai/operating-mode";
 import type { ScholarAiActivity } from "./ai-standing";
 import { studentAiText } from "../ai-availability";
 
@@ -207,6 +208,7 @@ export async function withinRequestRisk(admin: unknown, activity: ScholarAiActiv
   if (!readable || !texts.length) return texts.map(() => false);
   const floor = ((policy.activities as Record<string, { riskFloor?: string }>)[activity]?.riskFloor ?? "standard_educational") as RiskTier;
   const subject = await resolveRiskSubject(admin, risk);
-  const base = riskRank(classifyRisk(policy.risk, subject, floor).tier);
+  // SCHOLAR-RISK-01: the tier the request was SERVED at (the intent layer may have recognised it where no rule did).
+  const base = riskRank(servedTier(policy.risk, subject, floor));
   return texts.map(t => riskRank(classifyRisk(policy.risk, { ...subject, text: `${subject.text}\n\n${t}` }, floor).tier) <= base);
 }

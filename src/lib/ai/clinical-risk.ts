@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { AiTier } from "./fair-use-policy";
+import { firstKind, REFUSAL_KINDS, type RefusalKind } from "./request-intent";
 
 // ── HOLDINGS AI: CLINICAL RISK OF A REQUEST ── COMPETEN IND-007 owner decision D1, migration 412 ─────────────
 //
@@ -57,11 +58,53 @@ export type RiskRule = {
   all?: string[][];
   competencyRisk?: string[];
   frameworks?: string[];
+  /** SCHOLAR-RISK-01: what a refusal by this rule tells the learner (operating-mode.ts REFUSAL). Absent: by known id, else
+   *  the general high-risk words. */
+  refusal?: RefusalKind;
 };
+
+/**
+ * SCHOLAR-RISK-01 (owner GO 31 Oct 2026): how a product treats what the keyword rules alone cannot settle. Every field
+ * defaults to the behaviour before it (unknown is high risk, no clarify outside a mode that has one, nothing ambiguous),
+ * so a product whose policy does not set it is unchanged.
+ *
+ *   unknownHandling       "high_risk": unrecognised is high-risk clinical (fail closed, the default).
+ *                         "clarify": unrecognised asks the learner once whether it is for study.
+ *                         "educational_if_study_intent": unrecognised WITH study framing (a study verb or a question)
+ *                         is clinical educational; without it, clarify.
+ *   clarifyAmbiguous      the clarify question may be asked in ANY operating mode, Strict Production included, for an
+ *                         ambiguous request (category 3): an ambiguous rule or a giving decision with no study framing.
+ *   ambiguousRules        high-risk rules that show a request MIGHT be about a real person (e.g. "should I give"), not
+ *                         that it is: inside study framing they are clinical education, without it the learner is asked.
+ *                         Never a real-patient, emergency, identifiable or personal-safety rule (dropped if named).
+ *   educationalSafeguards every request above standard educational carries the educational boundary in its instructions,
+ *                         whatever the mode (prompt only).
+ *
+ * With any of the first three set, the INTENT LAYER is on (request-intent.ts): real-patient evidence in the learner's own
+ * words is category 4 and is refused outright, before routing, whatever model would be eligible.
+ */
+export type UnknownHandling = "high_risk" | "clarify" | "educational_if_study_intent";
+export const UNKNOWN_HANDLING: readonly UnknownHandling[] = ["high_risk", "clarify", "educational_if_study_intent"];
+export type IntentPolicy = { unknownHandling: UnknownHandling; clarifyAmbiguous: boolean; ambiguousRules: string[]; educationalSafeguards: boolean };
+export const NO_INTENT: IntentPolicy = { unknownHandling: "high_risk", clarifyAmbiguous: false, ambiguousRules: [], educationalSafeguards: false };
+/** Pure: whether the intent layer runs for a policy. */
+export const intentActive = (i: IntentPolicy | undefined) => !!i && (i.unknownHandling !== "high_risk" || i.clarifyAmbiguous || i.ambiguousRules.length > 0);
+
+/** The refusal words for the high-risk rules every product has used since 29 Oct, by id (a rule's own `refusal` wins). */
+export const KNOWN_RULE_REFUSAL: Record<string, RefusalKind> = {
+  "high.real-patient": "real_patient", "high.administration-now": "administration", "high.urgent-direction": "emergency",
+  "high.personal-safety": "personal_safety", "high.identifiable": "identifiable",
+};
+/** Never ambiguous: evidence of a real person, now. */
+const NEVER_AMBIGUOUS: readonly RefusalKind[] = ["real_patient", "emergency", "identifiable", "personal_safety"];
+export const ruleRefusal = (r: Pick<RiskRule, "id" | "refusal">): RefusalKind => r.refusal ?? KNOWN_RULE_REFUSAL[r.id] ?? "clinical_high";
+
 export type RiskPolicy = {
   /** The cheapest model tier each risk tier may run on, at any service level. */
   minTier: Record<RiskTier, AiTier>;
   rules: RiskRule[];
+  /** SCHOLAR-RISK-01. Absent (older callers building a policy by hand): NO_INTENT. */
+  intent?: IntentPolicy;
 };
 
 export const RULE_ID = /^[a-z][a-z0-9_.-]{1,60}$/;
@@ -94,9 +137,21 @@ export function resolveRiskPolicy(s: any): RiskPolicy {
     if (!all.length && !competencyRisk.length && !frameworks.length) continue;
     seen.add(r.id);
     const scope: RiskRuleScope = r.scope === "request" ? "request" : "subject";
-    rules.push({ id: r.id, label: typeof r.label === "string" && r.label.trim() ? r.label.trim().slice(0, 120) : r.id, tier: r.tier, scope, all, competencyRisk, frameworks });
+    const refusal = (REFUSAL_KINDS as readonly string[]).includes(r.refusal) && r.refusal !== "unrecognised" ? { refusal: r.refusal as RefusalKind } : {};
+    rules.push({ id: r.id, label: typeof r.label === "string" && r.label.trim() ? r.label.trim().slice(0, 120) : r.id, tier: r.tier, scope, all, competencyRisk, frameworks, ...refusal });
   }
-  return { minTier: { standard_educational: std, clinical_educational: clin, high_risk_clinical: high }, rules };
+  return { minTier: { standard_educational: std, clinical_educational: clin, high_risk_clinical: high }, rules, intent: resolveIntent(s, rules) };
+}
+
+/** Pure: the intent settings of a risk section. Anything malformed is the default; an ambiguous rule must exist, be high
+ *  risk, and not be evidence of a real person now. */
+export function resolveIntent(s: any, rules: readonly RiskRule[]): IntentPolicy {
+  const unknownHandling: UnknownHandling = (UNKNOWN_HANDLING as readonly string[]).includes(s?.unknownHandling) ? s.unknownHandling : "high_risk";
+  const ambiguousRules = (Array.isArray(s?.ambiguousRules) ? s.ambiguousRules : []).filter((id: unknown) => {
+    const r = typeof id === "string" ? rules.find(x => x.id === id) : undefined;
+    return !!r && r.tier === "high_risk_clinical" && !NEVER_AMBIGUOUS.includes(ruleRefusal(r));
+  }).slice(0, 20);
+  return { unknownHandling, clarifyAmbiguous: s?.clarifyAmbiguous === true, ambiguousRules: [...new Set<string>(ambiguousRules)], educationalSafeguards: s?.educationalSafeguards === true };
 }
 
 /** What the product tells the engine about a request's subject. */
@@ -121,7 +176,9 @@ export type ResolvedRiskSubject = {
   /** What rules of scope "request" match. Absent: `text` (the whole subject). */
   requestText?: string;
 };
-export type RiskDecision = { tier: RiskTier; rule: string; reason: string };
+/** `refusal`: SCHOLAR-RISK-01, why a high-risk decision is refused, for honest words. `boundary`: the educational
+ *  boundary goes into the instructions (policy educationalSafeguards). Neither is recorded beyond tier and rule. */
+export type RiskDecision = { tier: RiskTier; rule: string; reason: string; refusal?: RefusalKind; boundary?: boolean };
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const termPattern = (t: string) => t.endsWith("*") ? new RegExp(`(^|[^a-z0-9])${escape(t.slice(0, -1))}`) : new RegExp(`(^|[^a-z0-9])${escape(t)}($|[^a-z0-9])`);
@@ -145,16 +202,19 @@ export function ruleMatches(r: RiskRule, s: ResolvedRiskSubject): boolean {
 export function classifyRisk(policy: RiskPolicy, subject: ResolvedRiskSubject, activityFloor: RiskTier = "standard_educational"): RiskDecision {
   const has = subject.text.trim().length > 0 || subject.competencyRisks.length > 0 || subject.frameworkCodes.length > 0;
   let d: RiskDecision;
-  if (!has) d = { tier: "high_risk_clinical", rule: "unknown:no_subject", reason: "No subject was given, so it is treated as high-risk clinical." };
+  if (!has) d = { tier: "high_risk_clinical", rule: "unknown:no_subject", reason: "No subject was given, so it is treated as high-risk clinical.", refusal: "unrecognised" };
   else {
     const hits = policy.rules.filter(r => ruleMatches(r, subject));
-    if (!hits.length) d = { tier: "high_risk_clinical", rule: "unknown:no_rule", reason: "No rule recognised the subject, so it is treated as high-risk clinical." };
+    if (!hits.length) d = { tier: "high_risk_clinical", rule: "unknown:no_rule", reason: "No rule recognised the subject, so it is treated as high-risk clinical.", refusal: "unrecognised" };
     else {
       const top = hits.reduce((a, b) => (riskRank(b.tier) > riskRank(a.tier) ? b : a));
       d = { tier: top.tier, rule: top.id, reason: top.label };
+      // SCHOLAR-RISK-01: the most serious reason among every high-risk rule that matched, for the learner's words.
+      if (top.tier === "high_risk_clinical") d.refusal = firstKind(hits.filter(r => r.tier === "high_risk_clinical").map(ruleRefusal)) ?? "clinical_high";
     }
   }
-  if (riskRank(activityFloor) > riskRank(d.tier)) d = { tier: activityFloor, rule: `activity_floor:${d.rule}`.slice(0, 120), reason: "This activity is always at least this clinical risk." };
+  if (riskRank(activityFloor) > riskRank(d.tier)) d = { tier: activityFloor, rule: `activity_floor:${d.rule}`.slice(0, 120), reason: "This activity is always at least this clinical risk.",
+    ...(activityFloor === "high_risk_clinical" ? { refusal: "clinical_high" as const } : {}) };
   return d;
 }
 

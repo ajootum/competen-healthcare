@@ -4,7 +4,7 @@ import { clinicalGate, MODEL_ROUTING_PATH, resolveModelRouting, routeCandidates,
 import { PROVIDER_REGISTRY_PATH, registeredAvailable, resolveRegistry, type ProviderRegistry } from "./provider-registry";
 import { generate, type GenerateArgs, type GenerateResult } from "./client";
 import { classifyRisk, RISK_TIERS, requestTextOf, riskRank, subjectText, type ResolvedRiskSubject, type RiskContext, type RiskDecision, type RiskTier } from "./clinical-risk";
-import { CLARIFY, EDUCATIONAL_BOUNDARY, decideRisk, loadRequestMode, logGateDecision, SUPPORTIVE_REFUSAL, type RequestMode } from "./operating-mode";
+import { CLARIFY, EDUCATIONAL_BOUNDARY, decideRisk, loadRequestMode, logGateDecision, refusalFor, type RequestMode } from "./operating-mode";
 import {
   activityAt, allowancePeriod, defaultPolicy, fairUsePath, FAIR_USE_SCOPE, maxInputTokens, remainingBand, resolvePolicy, serviceLevel,
   type AiProduct, type AiServiceLevel, type AiTier, type Balance, type ProductAiPolicy,
@@ -56,7 +56,7 @@ export type AiStanding = {
 /** Pure: whether a resolved product policy is a published one (the unpublished default allows nothing). */
 export const isPublishedPolicy = (policy: Pick<ProductAiPolicy, "version">) => policy.version !== "default-nothing-allowed";
 export type MeteredError = "allowance_exhausted" | "not_entitled" | "unreadable" | "duplicate_request" | "unknown_activity" | "level_insufficient"
-  | "not_eligible" | "pending_reconciliation" | "clarify_purpose";
+  | "not_eligible" | "pending_reconciliation" | "clarify_purpose" | "clinical_restricted";
 /** `risk` is the request's classified clinical risk where it was decided, so the page can say why. Never the text.
  *  `clarify` (AI operating modes): the question to put to the learner instead of a refusal, with its two answers. */
 export type MeteredRefusal = { ok: false; error: MeteredError; standing: AiStanding; risk?: RiskDecision; clarify?: typeof CLARIFY; mode?: string };
@@ -153,11 +153,13 @@ export const NOT_ELIGIBLE_REASON = "This needs an AI model approved for clinical
 /**
  * Pure. SQIE D-5: what a "no eligible model" refusal says. A HIGH-RISK request (a real patient now, giving now, acting
  * now, personal safety, identifiable details) always gets the supportive words, in every mode: the availability words
- * ("try again later") would invite retrying a patient-care question. Otherwise as before: the supportive words in a
- * mode that answers the educational part, the governance reason elsewhere.
+ * ("try again later") would invite retrying a patient-care question. SCHOLAR-RISK-01: the supportive words are the ones
+ * for its ACTUAL reason (operating-mode.ts refusalFor: real patient, giving, emergency, safety, identifiers, high-risk
+ * content, or unrecognised), and a request below high risk gets the governance (availability) reason in every mode,
+ * never words about a real patient it was not about.
  */
-export const notEligibleMessage = (mode: Pick<RequestMode, "behaviour">, risk: Pick<RiskDecision, "tier"> | undefined, governance: string): string =>
-  risk?.tier === "high_risk_clinical" || mode.behaviour.educationalBoundary ? SUPPORTIVE_REFUSAL : governance;
+export const notEligibleMessage = (_mode: Pick<RequestMode, "behaviour">, risk: Pick<RiskDecision, "tier" | "refusal"> | undefined, governance: string): string =>
+  risk?.tier === "high_risk_clinical" ? refusalFor(risk) : governance;
 const ELIGIBILITY_UNREADABLE = "Whether a model is approved for this could not be checked just now.";
 
 /**
@@ -263,7 +265,8 @@ const pickRoute = (routing: ModelRouting & { registry: ProviderRegistry }, rows:
  * educational boundary in its instructions. Prompt only: the gate has already decided the model and the tier.
  */
 function withBoundary(g: GenerateArgs, mode: RequestMode | undefined, risk: RiskDecision | undefined): GenerateArgs {
-  if (!mode?.behaviour.educationalBoundary || !risk || riskRank(risk.tier) <= 0) return g;
+  // SCHOLAR-RISK-01: or where the product's risk policy asks for educational safeguards (risk.boundary), in any mode.
+  if (!(mode?.behaviour.educationalBoundary || risk?.boundary) || !risk || riskRank(risk.tier) <= 0) return g;
   return { ...g, system: [g.system, EDUCATIONAL_BOUNDARY].filter(Boolean).join("\n\n") };
 }
 
@@ -332,6 +335,10 @@ export async function gateCore(admin: any, product: AiProduct, activity: string,
   const verdict = decideRisk(policy.risk, await resolveRiskSubject(admin, subject), a.riskFloor as RiskTier, mode, subject?.purpose ?? null);
   const risk = verdict.risk;
   if (verdict.kind === "clarify") return { ok: false, error: "clarify_purpose", standing: closed(policy, true, CLARIFY.question), risk, clarify: CLARIFY, mode: mode.mode };
+  // SCHOLAR-RISK-01: category 4 (real-patient clinical decision support) is refused here, before any route is chosen.
+  // The person's AI help is not closed: only this request is. The standing says so, with the words for its reason.
+  if (verdict.kind === "restricted") return { ok: false, error: "clinical_restricted", risk, mode: mode.mode, standing: { readable: true, metered: false, level: "full",
+    remaining: { band: "plenty", percent: null }, resetsAt: null, activities: {}, message: refusalFor(risk), policyPublished: isPublishedPolicy(policy) } };
   const floor = risk.tier;
   if (riskRank(floor) <= 0) {
     // Standard educational: the caller's tier as before. Published routing picks its provider and model.
@@ -378,6 +385,10 @@ export async function runMeteredAi(admin: any, args: { userId: string; product: 
   if (verdict?.kind === "clarify") {
     await logGateDecision(admin, mode, { userId: args.userId, product: args.product, activity: args.activity, decision: "clarify", reason: "clarify_purpose", risk });
     return { ok: false, error: "clarify_purpose", standing: { ...standing, message: CLARIFY.question }, risk, clarify: CLARIFY, mode: mode.mode };
+  }
+  if (verdict?.kind === "restricted") {
+    await logGateDecision(admin, mode, { userId: args.userId, product: args.product, activity: args.activity, decision: "refused", reason: "clinical_restricted", risk });
+    return { ok: false, error: "clinical_restricted", standing: { ...standing, message: refusalFor(risk) }, risk, mode: mode.mode };
   }
   const decision = activityAt(policy, standing.level, args.activity, b, risk?.tier);
   if (!decision.available || !decision.via || !decision.tier) {
@@ -478,7 +489,7 @@ export async function runOwnedAi(admin: any, args: {
   if (o.type === "individual") return runMeteredAi(admin, { userId: o.userId, product: args.product, activity: args.activity, requestId: args.requestId, generate: args.generate, risk: args.risk, record: args.record ?? null });
   if (!(await aiFairUseEnabled(admin))) {
     const g = await unmeteredGate(admin, args.product, args.activity, args.generate.tier ?? "reasoning", args.risk);
-    if (!g.ok) return { ok: false, error: g.error === "not_eligible" ? "not_eligible" : g.error === "unknown_activity" ? "unknown_activity" : "unreadable", budget: o.budget.code, message: g.standing.message ?? "This AI activity is not available just now." };
+    if (!g.ok) return { ok: false, error: g.error === "not_eligible" || g.error === "clinical_restricted" ? "not_eligible" : g.error === "unknown_activity" ? "unknown_activity" : "unreadable", budget: o.budget.code, message: g.standing.message ?? "This AI activity is not available just now." };
     return generate({ ...args.generate, ...(g.tier ? { tier: g.tier } : {}), ...(g.route ? { route: g.route } : {}) });
   }
   const refuse = (error: BudgetError, message: string, risk?: RiskDecision): BudgetRefusal => ({ ok: false, error, budget: o.budget.code, message, risk });
@@ -543,6 +554,6 @@ export function meteredRefusalBody(r: MeteredRefusal): { status: number; body: {
     : r.error === "unreadable" ? "AI help could not be checked just now, so nothing was sent. Try again shortly."
     : r.error === "not_entitled" ? "This needs an active subscription."
     : r.standing.message ?? "This AI activity is not available right now.";
-  const status = r.error === "unreadable" || r.error === "not_eligible" ? 503 : r.error === "duplicate_request" ? 409 : r.error === "unknown_activity" ? 400 : r.error === "not_entitled" ? 403 : 429;
+  const status = r.error === "unreadable" || r.error === "not_eligible" ? 503 : r.error === "clinical_restricted" ? 422 : r.error === "duplicate_request" ? 409 : r.error === "unknown_activity" ? 400 : r.error === "not_entitled" ? 403 : 429;
   return { status, body: { error, code, continuity: r.error === "allowance_exhausted" || r.error === "level_insufficient", standing: r.standing } };
 }
