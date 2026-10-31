@@ -139,6 +139,16 @@ async function main() {
   const author = await ensureUser(AUTHOR, savedPassword());
   const publisher = await ensureUser(PUBLISHER, null);
 
+  // Gate 1 (COMP-ARCH-PSA-001): /super-admin admits only a platform member. Same row provision-staging-hq-fixture.ts creates.
+  const pm = (await admin.from("platform_membership").select("id, status").eq("user_id", author.id).maybeSingle()).data;
+  if (!pm) {
+    const r = await admin.from("platform_membership").insert({ user_id: author.id, status: "active", source: "admin_grant", note: "FDS browser fixture author. Staging only." });
+    if (r.error) throw new Error(`platform_membership failed: ${r.error.message}`);
+  } else if (pm.status !== "active") {
+    const r = await admin.from("platform_membership").update({ status: "active" }).eq("id", pm.id);
+    if (r.error) throw new Error(`platform_membership activate failed: ${r.error.message}`);
+  }
+
   const existing = (await admin.from("ogs_office_appointments").select("id, status").eq("person_id", author.id).eq("role", "competency_author")).data ?? [];
   if (!existing.some((a: any) => a.status === "active")) {
     const office = (await admin.from("ogs_offices").select("id, office_type, is_active, status").like("office_type", `${HQ_OFFICE_TYPE_PREFIX}%`).limit(50)).data
