@@ -321,6 +321,8 @@ export const LEARN_MODE_LABEL = { notes: "My notes only", library: "My notes + C
 
 /** SCHOLAR-SQIE-02 s7: evidence recovery, as the learner sees it. No internal activity names, no eligibility terms. */
 export const RECOVERY_PROMPT = "Your notes do not contain enough information to fully explain this topic. Would you like to explore additional learning resources?";
+/** SCHOLAR-GUIDED-LEARNING-01 (owner screenshot 31 Oct): the same finding when nothing wider can be offered -- no question it cannot answer. */
+export const RECOVERY_PROMPT_PLAIN = "Your notes do not contain enough information to fully explain this topic. You can carry on with what your notes do cover, or add material that covers it and ask again.";
 export const RECOVERY_ACTION_LABEL = {
   find_resources: "Find learning resources",
   explain_with_references: "Explain using approved references",
