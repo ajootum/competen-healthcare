@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  CONTENT_STATUS_LABEL, RECOVERY_ACTION_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL, RECOVERY_ORIGIN_LABEL, RECOVERY_PROMPT,
+  CONTENT_STATUS_LABEL, RECOVERY_ACTION_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL, RECOVERY_ORIGIN_LABEL,
   RECOVERY_RETRIEVED_LABEL, RECOVERY_STILL_WITHHELD, RECOVERY_UNANSWERED_LABEL,
 } from "@/lib/individual/scholar/config";
 import type { ReadingLink, RecoveryAction, RecoveryResult } from "@/lib/individual/scholar/evidence-recovery";
 import type { RecoveryMode } from "@/lib/individual/policy";
+import { recoveryPromptText } from "@/lib/individual/scholar/guided-learn";
 
 // SCHOLAR-SQIE-02 s7 -- EVIDENCE RECOVERY. What POST /api/individual/scholar/evidence/recover returned, grouped by where
 // it came from and labelled by what was retrieved: Your notes / Competen library / External reference (abstract only,
@@ -24,6 +25,11 @@ const btn = `inline-flex items-center rounded-lg px-3 py-1.5 text-[13px] font-se
 
 export type RecoveryView = Pick<RecoveryResult, "prompt" | "evidence" | "reading" | "sufficiency" | "actions" | "external">;
 /** What the page's explain call came to. `text`: when the page shows the explanation here rather than in its own view. */
+/**
+ * SCHOLAR-GUIDED-LEARNING-01: a wider Learn-from mode the LEARNER may choose (the page's own, policy-offered), shown as
+ * a button here. Choosing one is the learner's act: recovery itself never widens.
+ */
+export type Expansion = { label: string; onChoose: () => void };
 export type ExplainOutcome = { shown: boolean; text?: string | null; message?: string | null; unanswered?: string[]; reading?: ReadingLink[] } | { error: string };
 
 function Group({ label, note, children }: { label: string; note?: string; children: React.ReactNode }) {
@@ -74,7 +80,7 @@ function ReadingList({ reading }: { reading: readonly ReadingLink[] }) {
   );
 }
 
-export function EvidenceRecovery({ result, explanation = null, onAction, busy = false, showReading = true, unanswered = null, note = null }: {
+export function EvidenceRecovery({ result, explanation = null, onAction, busy = false, showReading = true, unanswered = null, note = null, expansions = [] }: {
   result: RecoveryView;
   /** An explanation the page's own AI activity wrote from this evidence, after its own checks. Shown under its own label. */
   explanation?: { text: string } | null;
@@ -85,13 +91,23 @@ export function EvidenceRecovery({ result, explanation = null, onAction, busy = 
   /** What remains unanswered, when it differs from the first search (after an explanation was still not possible). */
   unanswered?: readonly string[] | null;
   note?: string | null;
+  expansions?: readonly Expansion[];
 }) {
   const { notes, library, external } = result.evidence;
   const nothing = !notes.length && !library.length && !external.length && !(showReading && result.reading.length);
   const left = unanswered ?? result.sufficiency.unanswered;
   return (
     <div role="region" aria-label="More learning resources" className="mt-3 rounded-[9px] border border-[var(--cmp-app-border)] bg-white px-3 py-3">
-      <p className="text-[14px] font-semibold text-gray-900">{RECOVERY_PROMPT}</p>
+      {/* A question only when it can be answered here (owner screenshot 31 Oct); otherwise what the learner can do, plainly. */}
+      <p className="text-[14px] font-semibold text-gray-900">{recoveryPromptText(onAction ? result.actions : [], expansions.length)}</p>
+      {expansions.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Learn from wider sources">
+          {expansions.map(x => (
+            <button key={x.label} type="button" disabled={busy} onClick={x.onChoose}
+              className={`${btn} border border-gray-900 bg-white text-gray-900 hover:bg-gray-50 disabled:opacity-60`}>{x.label}</button>
+          ))}
+        </div>
+      )}
 
       {onAction && result.actions.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
@@ -182,10 +198,11 @@ async function post(body: RecoveryRequestBody): Promise<Loaded | { error: string
  * The panel under a withheld answer. `explain` re-runs the page's own request with { recovery: { id, mode, question } }
  * and says what it came to; without it, Explain using approved references is not offered.
  */
-export function RecoveryFlow({ request, explain, onDismiss }: {
+export function RecoveryFlow({ request, explain, onDismiss, expansions = [] }: {
   request: RecoveryRequestBody;
   explain?: (recovery: { id: string; mode: RecoveryMode; question: string }) => Promise<ExplainOutcome>;
   onDismiss?: () => void;
+  expansions?: readonly Expansion[];
 }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState("");
@@ -240,7 +257,7 @@ export function RecoveryFlow({ request, explain, onDismiss }: {
     .filter(a => !(a.action === "explain_with_references" && outcome && !outcome.shown));
   const view: RecoveryView = { ...loaded, actions, reading: outcome?.reading?.length ? outcome.reading : loaded.reading };
   return (
-    <EvidenceRecovery result={view} onAction={onAction} busy={busy} showReading={showReading} note={note}
+    <EvidenceRecovery result={view} onAction={onAction} busy={busy} showReading={showReading} note={note} expansions={expansions}
       explanation={outcome?.shown && outcome.text ? { text: outcome.text } : null}
       unanswered={outcome && !outcome.shown ? outcome.unanswered ?? null : null} />
   );
