@@ -4,6 +4,7 @@ import { reviewQueue } from "./clinical-review-hq";
 import { CLINICAL_STATE_LABEL, loadClinicalReviews } from "./clinical-review";
 import { contentHashes } from "./review-batch";
 import { checksFor } from "./criteria-checks";
+import { applyLayout, asLayout, byRowOrder, sectionOrder, type LayoutTree } from "./layout-order";
 export { checksFor };
 
 // ── THE CLINICAL REVIEW PACK ── owner, 29 Oct 2026 ─────────────────────────────────────────────────────────────────
@@ -28,14 +29,18 @@ export type PackCompetency = {
   groups: { label: string; criteria: PackCriterion[] }[];
   checks: string[];
 };
-export type Pack = { title: string; scope: string; generatedAt: string; generatedBy: string | null; items: PackCompetency[] };
+export type Pack = { title: string; scope: string; generatedAt: string; generatedBy: string | null; items: PackCompetency[];
+  /** FRAMEWORK-DESIGN-STUDIO-01 (750), a framework pack only: which order is shown ("draft" = the pending layout draft,
+   *  not yet published), whether a layout draft is pending, and when it was saved. Absent before 750. */
+  layout?: { shown: "published" | "draft"; pending: boolean; savedAt: string | null } };
 
 export const PACK_NOTICE = "Paper is for reading and notes. A decision counts only when it is recorded in Competen, in Clinical review, against the version shown here. If the content has changed since this pack was made, its fingerprint will not match and it needs a fresh review.";
 const PREFIX: Record<string, string> = { clinical_skills: "S", knowledge: "K", knowledge_application: "A" };
 
-/** Pure: criteria grouped by component, in registry order, numbered S1, K1, A1... Unclassified last. */
-export function groupCriteria(criteria: { component: string | null; text: string; sourceRef: string | null }[], components: Record<string, string>): PackCompetency["groups"] {
-  const order = [...Object.keys(components), ...new Set(criteria.map(c => c.component ?? "").filter(c => c && !(c in components))), ""];
+/** Pure: criteria grouped by component, in the section order (the framework's, else the registry's), numbered S1, K1, A1... Unclassified last. */
+export function groupCriteria(criteria: { component: string | null; text: string; sourceRef: string | null }[], components: Record<string, string>, sections?: readonly string[] | null): PackCompetency["groups"] {
+  const known = sections?.length ? [...new Set([...sections.filter(c => c in components), ...Object.keys(components)])] : Object.keys(components);
+  const order = [...known, ...new Set(criteria.map(c => c.component ?? "").filter(c => c && !(c in components))), ""];
   return order.map(code => {
     const items = criteria.filter(c => (c.component ?? "") === code);
     return { label: code ? components[code] ?? code : "Not classified", criteria: items.map((c, i) => ({ n: `${PREFIX[code] ?? "C"}${i + 1}`, text: c.text, sourceRef: c.sourceRef })) };
@@ -75,30 +80,51 @@ export async function loadReviewerPack(admin: any, reviewer: { id: string; name:
   };
 }
 
-/** A framework's pack for its authors: every competency at its current content, with its clinical review state. */
-export async function loadFrameworkPack(admin: any, frameworkId: string, by: string | null): Promise<Pack | null> {
+/**
+ * A framework's pack for its authors: every competency at its current content, with its clinical review state.
+ * FRAMEWORK-DESIGN-STUDIO-01: opts.layout "draft" previews the pending layout draft's order (750). Without one, or
+ * before 750, the live (published) order is shown, and pack.layout says which.
+ */
+export async function loadFrameworkPack(admin: any, frameworkId: string, by: string | null, opts: { layout?: "draft" | "published" } = {}): Promise<Pack | null> {
   const { data: f, error } = await admin.from("frameworks")
     .select("id, name, code, hospital_id, framework_domains(id, name, sort_order, framework_competencies(id, code, name, description, learning_outcomes, sort_order))").eq("id", frameworkId).maybeSingle();
   if (error || !f || f.hospital_id !== null) return null;
-  const doms = [...(f.framework_domains ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
-  const comps = doms.flatMap((d: any) => [...(d.framework_competencies ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order).map((c: any) => ({ ...c, domain: d.name })));
-  const ids = comps.map((c: any) => c.id);
+  // 750: absent columns read as "no layout", never as a failure of the pack.
+  const lay = await admin.from("frameworks").select("layout_draft, layout_draft_at, component_order").eq("id", frameworkId).maybeSingle();
+  const layRow = lay?.error ? null : lay?.data ?? null;
+  const draft = asLayout(layRow?.layout_draft), useDraft = opts.layout === "draft" && !!draft;
+  const allComps = (f.framework_domains ?? []).flatMap((d: any) => d.framework_competencies ?? []);
+  const ids: string[] = allComps.map((c: any) => c.id);
   const [components, reviews, hashes, skills] = await Promise.all([
     componentLabels(admin), loadClinicalReviews(admin, ids), contentHashes(admin, ids),
-    ids.length ? admin.from("competency_skills").select("competency_id, name, sort_order, component_code, source_ref").in("competency_id", ids).order("sort_order").limit(20000) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("competency_skills").select("id, competency_id, name, sort_order, component_code, source_ref").in("competency_id", ids).order("sort_order").limit(20000) : Promise.resolve({ data: [] }),
   ]);
   if (reviews === null || hashes === null || skills.error) return null;
+  // One order for everything shown: the live order with its stable tie-break, or the pending layout over it.
+  const rowsOf = (cid: string) => ((skills.data ?? []) as any[]).filter(k => k.competency_id === cid).sort(byRowOrder);
+  const tree: LayoutTree = {
+    componentOrder: Array.isArray(layRow?.component_order) ? layRow.component_order : null, registry: Object.keys(components),
+    domains: (f.framework_domains ?? []).map((d: any) => ({ id: d.id, name: d.name ?? "", sortOrder: d.sort_order ?? null,
+      competencies: (d.framework_competencies ?? []).map((c: any) => ({ id: c.id, name: c.name ?? "", sortOrder: c.sort_order ?? null,
+        criteria: rowsOf(c.id).map(k => ({ id: String(k.id ?? ""), name: k.name ?? "", sortOrder: k.sort_order ?? null, component: k.component_code ?? null })) })) })),
+  };
+  const shown = applyLayout(tree, useDraft ? draft : null);
+  const sections = sectionOrder(tree, useDraft ? draft : null);
+  const compRow = new Map<string, any>(allComps.map((c: any) => [c.id, c]));
+  const comps = shown.domains.flatMap(d => d.competencies.map(c => ({ ...compRow.get(c.id), domain: d.name, order: c.criteria.map(k => k.id) })));
   return {
+    ...(layRow ? { layout: { shown: useDraft ? ("draft" as const) : ("published" as const), pending: !!draft, savedAt: draft ? layRow.layout_draft_at ?? null : null } } : {}),
     title: "Clinical review pack", scope: `${f.name}${f.code ? ` (${f.code})` : ""} · ${comps.length} competencies`, generatedAt: new Date().toISOString(), generatedBy: by,
     items: comps.map((c: any) => {
-      const criteria = ((skills.data ?? []) as any[]).filter(k => k.competency_id === c.id).map(k => ({ component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null }));
+      const byId = new Map(rowsOf(c.id).map(k => [String(k.id ?? ""), k]));
+      const criteria = (c.order as string[]).map(id => byId.get(id)).filter(Boolean).map((k: any) => ({ component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null }));
       const r = reviews.get(c.id);
       return {
         competencyId: c.id, code: c.code ?? null, name: c.name, domain: c.domain, framework: f.name,
         versionId: r?.state === "in_review" || r?.state === "approved" || r?.state === "changes_requested" ? r.versionId : null, fingerprint: hashes.get(c.id) ?? null,
         state: r ? CLINICAL_STATE_LABEL[r.state] : "Clinical state not readable", approvals: r?.approvals ?? 0, required: r?.required ?? 1,
         description: c.description ?? null, outcomes: Array.isArray(c.learning_outcomes) ? c.learning_outcomes : [],
-        groups: groupCriteria(criteria, components), checks: checksFor(criteria, components),
+        groups: groupCriteria(criteria, components, sections), checks: checksFor(criteria, components),
       };
     }),
   };
