@@ -31,10 +31,16 @@ export default function AssistantPanel({ experience, accent, unavailable = false
   const [clarify, setClarify] = useState<{ q: string; prompt: ClarifyPrompt } | null>(null);
   const off = aiActionProps(unavailable ? { available: false, reason: "unreadable" } : { available: true }, "ai-unavailable");
   const [turns, setTurns] = useState<{ q: string; a: string }[]>([]);
+  // SCHOLAR-RISK-01 clarify-once: once the learner says this conversation is for study, later questions carry purpose
+  // "education" without asking again. The server honours it only for an ambiguous request: real-patient evidence is
+  // refused whatever the purpose. "A patient I'm caring for" ends it.
+  const [studyConfirmed, setStudyConfirmed] = useState(false);
 
-  async function ask(q: string, purpose?: "education") {
+  async function ask(q: string, asked?: "education") {
     const text = q.trim();
     if (!text || busy || unavailable) return;
+    if (asked === "education") setStudyConfirmed(true);
+    const purpose = asked ?? (studyConfirmed ? "education" : undefined);
     setBusy(true); setError(null); setClarify(null);
     try {
       const res = await fetch("/api/individual/assistant", {
@@ -81,7 +87,7 @@ export default function AssistantPanel({ experience, accent, unavailable = false
         )}
       </form>
 
-      {clarify && <ClarifyPurpose key={clarify.q} clarify={clarify.prompt} busy={busy} accent={accent} className="mt-3" onEducation={() => void ask(clarify.q, "education")} />}
+      {clarify && <ClarifyPurpose key={clarify.q} clarify={clarify.prompt} busy={busy} accent={accent} className="mt-3" onEducation={() => void ask(clarify.q, "education")} onPatient={() => setStudyConfirmed(false)} />}
 
       {error && <AiRefusalNotice body={error.body} fallback="The assistant could not answer just now." experience={experience} className="mt-3" />}
 
