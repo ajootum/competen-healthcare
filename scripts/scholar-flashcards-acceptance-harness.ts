@@ -418,7 +418,7 @@ async function main() {
   const s1 = await send("POST", "/api/individual/scholar/revision/sessions", { mode: "flashcards", deck: D1 }, A.jar);
   const S1 = s1.json.session?.id as string;
   const sv = await send("GET", `/api/individual/scholar/revision/sessions/${S1}`, undefined, A.jar);
-  const order = (sv.json.items ?? []).map((i: any) => i.id as string);
+  const order: string[] = (sv.json.items ?? []).map((i: any) => i.id as string);
   const deckNow = (await cardsOf(A.jar, `?deck=${D1}`)).cards;
   const backs = deckNow.map(c => c.back as string).filter(b => b.length > 6);
   show("session 1", { status: s1.status, total: s1.json.session?.total, generated: s1.json.generated, items: order.length });
