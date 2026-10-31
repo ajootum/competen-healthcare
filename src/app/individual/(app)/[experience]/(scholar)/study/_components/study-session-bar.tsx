@@ -61,7 +61,7 @@ export function StudySessionBar({ bar }: { bar: StudyBarView }) {
 
   return (
     <section aria-label="Study session" data-testid="study-session-bar" className="mb-5 rounded-2xl border bg-white px-3 py-2.5 md:px-4 md:py-3" style={{ borderColor: "var(--cmp-theme-border, #d1d5db)" }}>
-      <div className="flex min-w-0 items-center gap-2 md:items-start md:gap-4">
+      <div className="relative flex min-w-0 items-center gap-2 md:items-start md:gap-4">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>Study session{bar.status === "completed" ? " · ended" : ""}</p>
           <h2 className="truncate text-[15px] font-bold text-gray-900" title={bar.title}>{bar.title}</h2>
@@ -72,7 +72,7 @@ export function StudySessionBar({ bar }: { bar: StudyBarView }) {
           Ask<span className="hidden md:inline">&nbsp;Personal AI</span>
         </Link>
         {/* Below md: the stages and End session in one More menu, so the bar stays one row. */}
-        <details className="relative md:hidden">
+        <details className="md:hidden">
           <summary className={`${action} cursor-pointer list-none border border-gray-300 text-gray-800`} aria-label="More for this study session">More</summary>
           <div className="absolute right-0 z-30 mt-1 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
             <ul className="space-y-1.5">
