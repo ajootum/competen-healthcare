@@ -304,6 +304,10 @@ export const SOURCE_KIND_LABEL = {
   /** COMPETEN-RESEARCH-01: Research & Explain, apart from the notes. */
   research: "External research: from published abstracts Competen found (PubMed, OpenAlex). Not from your notes and not clinically reviewed. Open the source before relying on it",
 } as const;
+/** SCHOLAR-LEARN-FIX-01 L-B: a partly grounded lesson -- taught from what the notes support, then the gaps, named. */
+export const LEARN_NOT_COVERED_LABEL = "Not covered in your notes";
+export const LEARN_NOT_COVERED_NOTE = "The explanation above uses only what your notes support. Scholar did not explain these.";
+export const LEARN_WIDER_LABEL = "Explore wider sources";
 /** COMPETEN-RESEARCH-01: the three Learn modes, as the learner sees them. */
 export const LEARN_MODE_LABEL = { notes: "My notes only", library: "My notes + Competen library", research: "Research & Explain" } as const;
 
