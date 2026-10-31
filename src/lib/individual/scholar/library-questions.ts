@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { validateStationContent, type GovernedStationContent } from "./osce";
+import { libraryCopyOf, validateLibraryQuestion, type LibraryCopy, type LibraryFormat } from "./library-format";
 
 // ── GOVERNED LIBRARY QUESTIONS, REUSED BEFORE ANY ARE WRITTEN ── SCHOLAR-SQIE-CLOSE-01 C (owner, 30 Oct 2026) ──────────
 //
@@ -22,6 +23,11 @@ export type LibraryQuestion = {
   versionId: string; resourceId: string; versionNo: number; title: string;
   stem: string; options: string[]; correctIndex: number; rationale: string;
   competencyIds: string[]; publishedAt: string | null;
+  /**
+   * SQIE-LIBRARY-EXPANSION-01 (800): the version's format and the learner copy it makes (library-format.ts libraryCopyOf),
+   * exactly what the 800 guard rebuilds. Absent: a 442 single best answer question (the fields above are its copy).
+   */
+  format?: LibraryFormat; copy?: LibraryCopy;
 };
 /** A section of the student's notes, as the library is matched to it: its ACCEPTED competency links and its topics. */
 export type LibrarySection = { chunkId: string; competencyIds: string[]; topics: string[] };
@@ -73,6 +79,9 @@ export function pickLibraryQuestions(input: { questions: readonly LibraryQuestio
   return out;
 }
 
+/** Pure. The format a library question is offered as: its own, or a 442 single best answer question. */
+export const formatOfLibrary = (q: Pick<LibraryQuestion, "format">): LibraryFormat => q.format ?? "mcq";
+
 /**
  * The published, clinically approved library revision questions teaching any of these competencies. [] when there are
  * none, and when anything cannot be read (442 absent, an error): the session is then made without them, as before.
@@ -92,13 +101,15 @@ export async function loadLibraryQuestions(admin: any, competencyIds: readonly s
       .in("id", [...new Set((versions.data as any[]).map(v => v.resource_id))]).eq("kind", "revision_question").eq("status", "active");
     if (resources.error) return [];
     const resource = new Map(((resources.data ?? []) as any[]).map(r => [r.id, r]));
-    const candidates = (versions.data as any[]).filter(v => resource.has(v.resource_id) && libraryContent(v.content)).slice(0, 50);
+    // SQIE-LIBRARY-EXPANSION-01: every format the one validator accepts (library-format.ts), each with its learner copy.
+    const candidates = (versions.data as any[]).filter(v => resource.has(v.resource_id) && validateLibraryQuestion(v.content).ok && libraryCopyOf(v.content)).slice(0, 50);
     const approved = await approvedVersions(admin, candidates.map(v => v.id));
     return candidates.filter(v => approved.has(v.id)).map(v => {
-      const c = libraryContent(v.content)!;
+      const copy = libraryCopyOf(v.content)!;
       return {
         versionId: v.id, resourceId: v.resource_id, versionNo: v.version_no, title: String(resource.get(v.resource_id)!.title ?? ""),
-        ...c, competencyIds: byVersion.get(v.id) ?? [], publishedAt: v.published_at ?? null,
+        stem: copy.stem, options: copy.options, correctIndex: copy.correctIndex ?? -1, rationale: copy.rationale,
+        competencyIds: byVersion.get(v.id) ?? [], publishedAt: v.published_at ?? null, format: copy.format, copy,
       };
     });
   } catch {

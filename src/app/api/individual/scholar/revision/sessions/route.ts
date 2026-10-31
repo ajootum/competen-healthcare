@@ -11,7 +11,8 @@ import {
   addDeckCards, chunkMappings, createRevisionSession, flashcardDecks, touchFlashcardDeck, getPassage, getRevisionSet, insertLibraryCopies, insertQuestions, insertRevisionQuestions, isUuid, listMaterials, listRevisionSessions,
   revisionPool, sectionLinks, sqieSchema, topicsOfSections, touchRevisionSet, type QuestionRow,
 } from "@/lib/individual/scholar/store";
-import { loadLibraryQuestions, pickLibraryQuestions, type LibrarySection } from "@/lib/individual/scholar/library-questions";
+import { formatOfLibrary, loadLibraryQuestions, pickLibraryQuestions, type LibrarySection } from "@/lib/individual/scholar/library-questions";
+import { LIBRARY_FORMATS } from "@/lib/individual/scholar/library-format";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { parseScope, resolveScope } from "@/lib/individual/scholar/learn";
@@ -229,7 +230,8 @@ export async function POST(req: Request) {
 
   // ── SCHOLAR-SQIE-CLOSE-01 C: the shortfall's multiple-choice places from the governed library first, with no AI ──
   let libraryVersions: string[] = [];
-  if (pick.shortfall > 0 && GENERATING_MODES.includes(mode) && (kinds.includes("mcq") || mode === "flashcards") && scopeSections.length && sqie) {
+  // SQIE-LIBRARY-EXPANSION-01 (800): every format the session asks for, not only multiple choice (formatOfLibrary).
+  if (pick.shortfall > 0 && GENERATING_MODES.includes(mode) && (kinds.some(k => (LIBRARY_FORMATS as readonly string[]).includes(k)) || mode === "flashcards") && scopeSections.length && sqie) {
     const sections = scopeSections.slice(0, 40);
     const [links, topics] = await Promise.all([sectionLinks(ctx.admin, ctx.userId, sections), topicsOfSections(ctx.admin, ctx.userId, sections)]);
     const libSections: LibrarySection[] = sections
@@ -239,7 +241,10 @@ export async function POST(req: Request) {
       const library = await loadLibraryQuestions(ctx.admin, libSections.flatMap(x => x.competencyIds));
       const held = new Set(pool.questions.map(q => q.library?.versionId).filter((v): v is string => !!v));
       // SCHOLAR-FLASHCARDS-01: as cards, only a library question whose stem stands alone as a recall prompt.
-      const picks = pickLibraryQuestions({ questions: mode === "flashcards" ? library.filter(x => libraryRecallFits(x.stem)) : library, sections: libSections, exclude: held, limit: pick.shortfall });
+      // As cards: a flashcard, or a single best answer question whose stem stands alone. Otherwise: the formats asked for.
+      const fits = mode === "flashcards" ? library.filter(x => formatOfLibrary(x) === "flashcard" || (formatOfLibrary(x) === "mcq" && libraryRecallFits(x.stem)))
+        : library.filter(x => (kinds as readonly string[]).includes(formatOfLibrary(x)));
+      const picks = pickLibraryQuestions({ questions: fits, sections: libSections, exclude: held, limit: pick.shortfall });
       const copies = await insertLibraryCopies(ctx.admin, ctx.userId, picks);
       if (copies.ids.length) {
         libraryIds = copies.ids; libraryVersions = picks.map(x => x.question.versionId);

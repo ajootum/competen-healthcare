@@ -22,6 +22,10 @@ import { CLOZE_REVEALED_TEXT, isClozeQuestion } from "@/lib/individual/scholar/c
 import { extendedMarks, extendedSpecOf, isExtendedQuestion } from "@/lib/individual/scholar/formats";
 import { rubricSnapshotOf, withRubricSnapshot } from "@/lib/individual/scholar/rubric-snapshot";
 import { keepAttemptSnapshot } from "@/lib/individual/scholar/attempt-integrity";
+import { aiMarkingAllowed } from "@/lib/individual/scholar/library-format";
+
+/** SQIE-LIBRARY-EXPANSION-01: what a governed library copy whose version is not marked by AI says instead of calling it. */
+const LIBRARY_SELF_MARKED = { available: false, insufficient: false, message: "This Competen library question is marked against its key, not by AI." };
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -131,7 +135,8 @@ export async function POST(req: Request) {
     else {
       let why = "This answer does not match the stored answer word for word, so compare it yourself.";
       if (policy.scholarShortAnswerMarking === "ai_then_self") {
-        const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate");
+        // SQIE-LIBRARY-EXPANSION-01: a governed library copy is AI-marked only where its version says rubric_ai_formative.
+        const standing = aiMarkingAllowed(q) ? activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate") : LIBRARY_SELF_MARKED;
         const pre = standing.available ? await aiPreflight(ctx) : null;
         let passage = standing.available && !pre ? await getPassage(ctx.admin, ctx.userId, q.chunkId) : null;
         if (passage && recovery) {
@@ -236,7 +241,8 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
     } else {
       let why = "Some parts do not match the stored answers word for word, so compare them yourself.";
       if (policy.scholarShortAnswerMarking === "ai_then_self") {
-        const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate");
+        // SQIE-LIBRARY-EXPANSION-01: a governed library copy is AI-marked only where its version says rubric_ai_formative.
+        const standing = aiMarkingAllowed(q) ? activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate") : LIBRARY_SELF_MARKED;
         const pre = standing.available ? await aiPreflight(ctx) : null;
         const passage = standing.available && !pre ? await getPassage(ctx.admin, ctx.userId, q.chunkId) : null;
         if (!standing.available) why = `${standing.message ?? "AI evaluation is not available right now."} Compare your answers yourself.`;

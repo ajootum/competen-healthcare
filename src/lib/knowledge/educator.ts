@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadRequiredApprovals, reviewerAppointments } from "@/lib/competency/clinical-review";
 import { stationContentOf, validateStationContent } from "@/lib/individual/scholar/osce";
+import { validateLibraryQuestion } from "@/lib/individual/scholar/library-format";
+import { questionContentFromFields } from "./question-format";
 import { dbRefusal } from "./governance";
 import { findSimilar, type SimilarMatch } from "./question-similarity";
-import { normaliseSource, sourceRefusal } from "./question-source";
+import { sourceRefusal } from "./question-source";
 
 // ── CKRI EDUCATOR KNOWLEDGE IMPROVEMENT ── COMPETEN-KNOWLEDGE-RESEARCH-01 s5 (K3), migration 442 ──────────────────────
 //
@@ -25,18 +27,16 @@ const CODE = /^[a-z][a-z0-9_-]{2,60}$/;
 // the same educator review, submission, independent clinical approval (395, 640) and publication as the other three.
 export const RESOURCE_KINDS = ["explanation", "revision_question", "targeted_resource", "osce_station"] as const;
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
-const refusal = (error: any, fb: string) => dbRefusal({ message: String(error?.message ?? "").replace(/^ckri_knowledge_(submit|review|publish|retire): /, "ckri_knowledge: ") }, fb);
+const refusal = (error: any, fb: string) => dbRefusal({ message: String(error?.message ?? "").replace(/^ckri_knowledge_(submit|review|publish|retire|retire_version): /, "ckri_knowledge: ") }, fb);
 
 /** Pure: the content of a kind, from form fields. Shape is enforced again by 442 (ckri_knowledge_content_ok). */
 export function contentOf(kind: ResourceKind, f: Record<string, unknown>): Record<string, unknown> {
   const s = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) : "");
   if (kind === "osce_station") return stationContentOf(f);
-  if (kind === "revision_question") {
-    const options = Array.isArray(f.options) ? f.options.slice(0, 4).map(o => s(o, 500)) : [];
-    // SQIE-COMPLETE-01: the optional source-rights declaration rides inside the content (no migration: 442 ignores extra keys).
-    const source = normaliseSource(f.source);
-    return { stem: s(f.stem, 2000), options, correct_index: Number.isInteger(f.correctIndex) ? f.correctIndex : Number(f.correctIndex), rationale: s(f.rationale, 4000), ...(source ? { source } : {}) };
-  }
+  // SQIE-COMPLETE-01: the optional source-rights declaration rides inside the content (442 ignores extra keys).
+  // SQIE-LIBRARY-EXPANSION-01: every revision format (question-format.ts). A single best answer question without a
+  // rubric is built in the 442 shape exactly.
+  if (kind === "revision_question") return questionContentFromFields(f);
   const body = { body: s(f.body, 20000) };
   return kind === "targeted_resource" && Array.isArray(f.links) ? { ...body, links: f.links.slice(0, 20).map(l => s(l, 500)).filter(l => /^https:\/\//.test(l)) } : body;
 }
@@ -48,6 +48,9 @@ export function contentOf(kind: ResourceKind, f: Record<string, unknown>): Recor
  */
 export function checkedContent(kind: ResourceKind, f: Record<string, unknown>): { ok: true; content: Record<string, unknown> } | { ok: false; error: string } {
   const content = contentOf(kind, f);
+  // SQIE-LIBRARY-EXPANSION-01: a revision question is checked by the SAME validator Scholar reads it with
+  // (library-format.ts validateLibraryQuestion), at save here and again at submission and publication.
+  if (kind === "revision_question") { const q = validateLibraryQuestion(content); return q.ok ? { ok: true, content: q.content } : { ok: false, error: q.error }; }
   if (kind !== "osce_station") return { ok: true, content };
   const v = validateStationContent(content);
   return v.ok ? { ok: true, content } : { ok: false, error: v.reason };
@@ -155,6 +158,8 @@ export async function submitDraft(admin: any, me: string, versionId: string, opt
   const { data: v } = await admin.from("ckri_knowledge_version").select("risk, content, resource_id, ckri_knowledge_resource(kind)").eq("id", versionId).maybeSingle();
   if (!v) return { ok: false, error: "Unknown version." };
   if (v.ckri_knowledge_resource?.kind === "revision_question") {
+    const shape = validateLibraryQuestion(v.content);
+    if (!shape.ok) return { ok: false, error: shape.error };
     const why = sourceRefusal(v.content);
     if (why) return { ok: false, error: why };
     if (!opts.duplicatesChecked) {
@@ -173,11 +178,27 @@ export async function publishVersion(admin: any, me: string, versionId: string):
   // not licences). A revision question whose declared source is incomplete, non-commercial or unrecognised is not published.
   const { data: v } = await admin.from("ckri_knowledge_version").select("content, ckri_knowledge_resource(kind)").eq("id", versionId).maybeSingle();
   if (v?.ckri_knowledge_resource?.kind === "revision_question") {
+    const shape = validateLibraryQuestion(v.content);
+    if (!shape.ok) return { ok: false, error: shape.error };
     const why = sourceRefusal(v.content);
     if (why) return { ok: false, error: why };
   }
   const { error } = await admin.rpc("ckri_knowledge_publish", { p_version: versionId, p_publisher: me });
   return error ? { ok: false, error: refusal(error, "The resource could not be published.") } : { ok: true };
+}
+
+/**
+ * SQIE-LIBRARY-EXPANSION-01 (801, owner item G): retire ONE published version, with a reason. The resource stays active,
+ * its other versions are untouched, and every historical reference (learner copies, attempts, rubric snapshots, review
+ * decisions) keeps pointing at the version. The database checks hq.quality.knowledge.publish and the reason again.
+ */
+export async function retireVersion(admin: any, me: string, versionId: string, reason: string): Promise<R> {
+  if (!UUID.test(versionId)) return { ok: false, error: "Unknown version." };
+  const why = (reason ?? "").trim();
+  if (why.length < 10 || why.length > 500) return { ok: false, error: "Give the reason this version is retired (10 to 500 characters)." };
+  const { error } = await admin.rpc("ckri_knowledge_retire_version", { p_version: versionId, p_actor: me, p_reason: why });
+  if (error && /could not find|does not exist|schema cache/i.test(String(error.message ?? ""))) return { ok: false, error: "Retiring a single version is not available here yet (migration 801 is not applied)." };
+  return error ? { ok: false, error: refusal(error, "The version could not be retired.") } : { ok: true };
 }
 
 export async function retireResource(admin: any, resourceId: string): Promise<R> {

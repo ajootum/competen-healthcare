@@ -116,7 +116,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
-  | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution";
+  | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
+  | "scholar_question_offering";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1461,6 +1462,15 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Cannot open anything the case library switch keeps shut. Withdrawing is never blocked. Default: follows the case library switch.",
   },
   {
+    // SQIE-LIBRARY-EXPANSION-01 (owner GO 31 Oct 2026, item F), migration 802.
+    key: "scholar_question_offering", kind: "choice", product: "Scholar",
+    label: "Offering questions to the Competen library",
+    help: "Whether a student may give the separate permission to offer their own practice questions, one at a time, to the governed Competen question library, and offer them. Every offer is screened for patient details and for text copied from the student's notes, the student is never named to educators, and an educator draft from it still needs educator review, independent clinical approval and publication. Off by default. A student can always withdraw a permission or an offer they made, whatever this says. Offering never uses the student's AI allowance.",
+    options: [{ value: "off", label: "Off" }, { value: "on", label: "On" }],
+    fallback: "off",
+    limitReason: "Off until HQ switches it on (and migration 802 is applied). Withdrawing is never blocked. Nothing is approved automatically.",
+  },
+  {
     key: "scholar_case_reasoning_feedback", kind: "choice", product: "Scholar",
     label: "Feedback on written reasoning",
     help: "How a written answer in a case gets feedback: AI reasoning feedback where it is available (labelled), or the student compares it with what a good answer contains.",
@@ -1853,6 +1863,8 @@ export type IndividualPolicy = {
   scholarStudySessions: boolean;
   /** SCHOLAR-INTELLIGENCE-COMPLETE-01. "on" follows the case_library flag (the default); "off" stops new case-contribution permissions and offers. Withdrawal is never gated. */
   scholarCaseContribution: "on" | "off";
+  /** SQIE-LIBRARY-EXPANSION-01 (802). Whether a student may grant the question-offering permission and offer a question. Default off. Withdrawal is never gated. */
+  scholarQuestionOffering: "on" | "off";
   /** SCHOLAR-COMPANION-01. Whether the study plan is offered. Read it through isStudyPlanOn, which also needs 780. */
   scholarStudyPlan: boolean;
   /** SCHOLAR-GUIDED-LEARNING-01. Whether Learn may prepare the next lesson ahead (one at most). Default off. */
@@ -2012,6 +2024,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarFlashcardLevelMix: clampChoice(policyDef("scholar_flashcard_level_mix") as ChoicePolicy, published.get(policyPath("scholar_flashcard_level_mix"))) as "programme" | "recall" | "balanced" | "applied",
     scholarStudySessions: clampChoice(policyDef("scholar_study_sessions") as ChoicePolicy, published.get(policyPath("scholar_study_sessions"))) === "on",
     scholarCaseContribution: clampChoice(policyDef("scholar_case_contribution") as ChoicePolicy, published.get(policyPath("scholar_case_contribution"))) as "on" | "off",
+    scholarQuestionOffering: clampChoice(policyDef("scholar_question_offering") as ChoicePolicy, published.get(policyPath("scholar_question_offering"))) as "on" | "off",
     scholarStudyPlan: clampChoice(policyDef("scholar_study_plan") as ChoicePolicy, published.get(policyPath("scholar_study_plan"))) === "on",
     scholarLearnPrepareNext: clampChoice(policyDef("scholar_learn_prepare_next") as ChoicePolicy, published.get(policyPath("scholar_learn_prepare_next"))) === "on",
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),

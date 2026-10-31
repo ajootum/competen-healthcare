@@ -798,7 +798,8 @@ export async function insertRevisionQuestions(admin: Admin, userId: string, inpu
 }
 
 /**
- * SCHOLAR-SQIE-CLOSE-01 C (710): the learner's own copy of each picked governed library question -- an mcq row naming its
+ * SCHOLAR-SQIE-CLOSE-01 C (710), SQIE-LIBRARY-EXPANSION-01 (800): the learner's own copy of each picked governed library
+ * question -- a row of the version's format (an mcq for a 442 question) naming its
  * resource and version, review_status library_approved, filed under the section it was matched to, practising the
  * competency it matched. One copy per learner and version: one already held is reused. The 710 guard refuses any copy
  * that is not the published, clinically approved content exactly. Returns the ids in pick order ([] where 710 is absent).
@@ -816,9 +817,13 @@ export async function insertLibraryCopies(admin: Admin, userId: string, picks: r
     const chunks = await admin.from("individual_scholar_chunk").select("id, material_id").eq("user_id", userId).in("id", [...new Set(fresh.map(p => p.chunkId))]);
     if (chunks.error) return { ok: false, ids: [], copied: 0 };
     const material = new Map(((chunks.data ?? []) as any[]).map(c => [c.id as string, c.material_id as string]));
+    // SQIE-LIBRARY-EXPANSION-01 (800): a version of any format is copied as libraryCopyOf made it -- kind, key and answer
+    // exactly as the 800 guard rebuilds them from the published content. A 442 question is the mcq row it always was.
     const rows = fresh.filter(p => material.has(p.chunkId)).map(p => ({
-      user_id: userId, material_id: material.get(p.chunkId)!, chunk_id: p.chunkId, kind: "mcq",
-      stem: p.question.stem, options: p.question.options, correct_index: p.question.correctIndex, rationale: p.question.rationale,
+      user_id: userId, material_id: material.get(p.chunkId)!, chunk_id: p.chunkId, kind: p.question.copy?.kind ?? "mcq",
+      stem: p.question.copy?.stem ?? p.question.stem, options: p.question.copy?.options ?? p.question.options,
+      correct_index: p.question.copy ? p.question.copy.correctIndex : p.question.correctIndex, rationale: p.question.rationale,
+      ...(p.question.copy?.answer ? { answer: p.question.copy.answer } : {}),
       // Not a quote from the student's notes: the library item is its own source, shown as such (revision-view.ts).
       source_quote: "", model: "competen-library", provider: "competen-library", prompt_version: `library:v${p.question.versionNo}`,
       review_status: "library_approved", library_resource_id: p.question.resourceId, library_version_id: p.question.versionId,
