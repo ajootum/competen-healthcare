@@ -202,8 +202,14 @@ type Debrief = {
 type Closing = { reflectionPrompt: string | null; differentials: { label: string; reasoning: string }[]; managementPrinciples: string[]; expectedReasoning: string | null };
 export type Play = {
   kind: "private" | "library"; sessionId: string; status: string; view: LearnerView; answered: string[]; feedback: Feedback[]; debrief: Debrief | null; label: string; materialId?: string; caseId?: string;
-  /** A library play's saved "why" per decision token. A private play's reasons live only in this browser session. */
+  /** The saved "why" per decision token, kept with the answer on the server, so it returns on any device. */
   reasons?: Record<string, string>; closing?: Closing | null;
+  /** The kept record of a finished attempt (SCHOLAR-CASE-INTEGRITY-01), when there is one. */
+  attempt?: Attempt | null;
+};
+type Attempt = {
+  keptAt: string; completedAt: string; label: string; changed: boolean;
+  corrected: { id: string; prompt: string; original: string; effective: string; corrections: { basis: string; reason: string; from: string; to: string; at: string }[] }[];
 };
 
 export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }) {
@@ -211,7 +217,7 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
   const [fresh, setFresh] = useState<Record<string, Feedback>>({});
   const [choice, setChoice] = useState<Record<string, string[]>>({});
   const [text, setText] = useState<Record<string, string>>({});
-  // "Explain your choice": typed here, sent with a library answer (kept with it) and otherwise held only in this page for the debrief.
+  // "Explain your choice": typed here and sent with the answer, which keeps it on the server. Where it cannot be kept, this page still holds it for the debrief.
   const [reason, setReason] = useState<Record<string, string>>(initial.reasons ?? {});
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -228,7 +234,7 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
     setBusy(decisionToken); setError("");
     const why = (reason[decisionToken] ?? "").trim();
     const r = await call(`${base}/answer`, kind === "free_text" ? { decisionToken, text: text[decisionToken] ?? "", hints }
-      : { decisionToken, optionTokens: choice[decisionToken] ?? [], hints, ...(play.kind === "library" && why ? { reason: why } : {}) });
+      : { decisionToken, optionTokens: choice[decisionToken] ?? [], hints, ...(why ? { reason: why } : {}) });
     setBusy("");
     if (!r.ok) { setError(r.json.error ?? "Your answer could not be recorded."); return; }
     setFresh(f => ({ ...f, [decisionToken]: r.json.feedback }));
@@ -313,6 +319,7 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       </ol>
       {error && <p role="alert" className="mt-3 text-[13.5px] font-semibold text-red-800">{error}</p>}
       {play.status !== "active" && (play.debrief ? <CaseDebrief d={play.debrief} /> : <p className="mt-4 text-[14px] font-semibold text-gray-900">Case finished.</p>)}
+      {play.status !== "active" && play.attempt && <AttemptRecord a={play.attempt} />}
       {play.status !== "active" && <ClosingNotes closing={play.closing ?? null} reasons={reason} view={v} />}
       {play.status !== "active" && <ReflectionCard prompt={play.closing?.reflectionPrompt ?? null} revisit={play.debrief?.revisit ?? []} materialId={play.materialId} />}
       {/* SCHOLAR-AI-OPT-01 s7: optional feedback on an AI-written private case (a library case is clinically reviewed). */}
@@ -374,6 +381,35 @@ function DecisionFeedback({ d, fb, materialId }: { d: LearnerView["stages"][numb
         </div>
       )}
     </div>
+  );
+}
+
+const OUTCOME_LABEL: Record<string, string> = { correct: "what the case calls for", partial: "partly", incorrect: "not what the case calls for", unmarked: "not marked" };
+const BASIS_LABEL: Record<string, string> = { rubric_error: "the rubric was wrong", key_error: "the answer key was wrong", marking_error: "it was marked wrongly", other: "reviewed" };
+const day = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); };
+
+/** SCHOLAR-CASE-INTEGRITY-01: the finished attempt is kept as it was completed, and any correction is shown beside the original. */
+function AttemptRecord({ a }: { a: Attempt }) {
+  return (
+    <section aria-labelledby="attempt-h" className="mt-5 rounded-xl border border-gray-200 p-4">
+      <h3 id="attempt-h" className="text-[15px] font-bold text-gray-900">Your completed attempt</h3>
+      <p className="mt-1 text-[13px] text-gray-700">Kept as you completed it{a.completedAt ? ` on ${day(a.completedAt)}` : ""}. {a.label}</p>
+      {a.changed && <p role="status" className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-[13px] text-amber-950">This case has changed since you completed it. Your attempt is kept against the case as you played it.</p>}
+      {a.corrected.length > 0 && (
+        <div className="mt-3">
+          <p className="text-[12.5px] font-bold text-gray-800">Corrections</p>
+          <ul className="mt-1 space-y-2 text-[13.5px] text-gray-800">
+            {a.corrected.map(d => (
+              <li key={d.id}>
+                <span className="font-semibold">{d.prompt}</span>
+                <span className="block">Originally: {OUTCOME_LABEL[d.original] ?? d.original}. Now: {OUTCOME_LABEL[d.effective] ?? d.effective}.</span>
+                {d.corrections.map((c, i) => <span key={i} className="block text-[12.5px] text-gray-600">{day(c.at)}: {BASIS_LABEL[c.basis] ?? c.basis}. {c.reason}</span>)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }
 
