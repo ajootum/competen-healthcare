@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
-import { loadAssessorQueue, loadConfirmationQueue, loadDecisionDraft, loadVersionsById, verificationReady, type RequestView } from "@/lib/competency/verification";
+import { loadAssessorQueue, loadConfirmationQueue, loadDecisionDraft, loadVersionsById, outcomeTexts, verificationReady, type RequestView } from "@/lib/competency/verification";
 import { EMPTY_CONTENT, EVIDENCE_KIND_LABEL, NOT_A_DECLARATION, STATE_LABEL, type MethodContent } from "@/lib/competency/verification-config";
 import { AssessorEvidenceForm, Claim, ConfirmForm, Decline, DecisionForm } from "./_components/AssessControls";
 import { DecisionSummary } from "./_components/DecisionSummary";
@@ -58,7 +58,7 @@ export default async function CompetencyAssessmentPage() {
         <p className="text-[12.5px] text-gray-600">{v?.method?.name ?? "Method"}, version {v?.version_no ?? "?"} (criteria {v?.content_hash?.slice(0, 8) ?? "unpublished"}) · framework version {r.frameworkVersion ?? "not recorded"} · requested {fmt(r.createdAt)}</p>
         <div className="text-[13px] text-gray-800">
           <p className="font-semibold">Learning outcomes asked about</p>
-          <ul className="list-disc pl-5">{(r.outcomeIndexes.includes(-1) ? ["The whole competency"] : r.outcomeIndexes.map(i => outcomes[i] ?? `Outcome ${i + 1}`)).map((o, i) => <li key={i}>{o}</li>)}</ul>
+          <ul className="list-disc pl-5">{(outcomeTexts(r.outcomeIndexes, r.outcomeIds, r.outcomeMap, outcomes) ?? ["The whole competency"]).map((o, i) => <li key={i}>{o}</li>)}</ul>
         </div>
         {r.note && <p className="rounded-lg bg-gray-50 p-2.5 text-[13px] text-gray-700">From the person: {r.note}</p>}
         <div>
