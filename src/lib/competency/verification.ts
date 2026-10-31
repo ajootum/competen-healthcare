@@ -188,8 +188,25 @@ export async function endScope(admin: any, actor: string, scopeId: string, reaso
 
 // ── REQUESTS, READ ────────────────────────────────────────────────────────────────────────────────────────────────
 
+// ── STABLE OUTCOME IDS (migration 751, owner ruling 5) ── evidence names outcomes by id, resolved through the REQUEST's
+// outcome_map (the outcomes as they were when it was made), never the live competency, so reordering or rewording a
+// competency never changes what historical evidence says. Before 751 (no ids) the stored indexes are read into the
+// request's own snapshot, exactly as before.
+export const WHOLE_COMPETENCY_OUTCOME = "00000000-0000-0000-0000-000000000000";
+export type OutcomeMapEntry = { id: string; text: string };
+/** Pure: the outcome texts an index list or id list names. null = the whole competency. */
+export function outcomeTexts(indexes: readonly number[], ids: readonly string[] | null | undefined, map: readonly OutcomeMapEntry[] | null | undefined, snapshot: readonly string[]): string[] | null {
+  if (ids?.length && map) {
+    if (ids.includes(WHOLE_COMPETENCY_OUTCOME)) return null;
+    return ids.map(id => map.find(m => m.id === id)?.text ?? "An outcome not recorded on this request");
+  }
+  if (indexes.includes(-1)) return null;
+  return indexes.map(i => snapshot[i] ?? `Outcome ${i + 1}`);
+}
+const outcomeMapOf = (v: unknown): OutcomeMapEntry[] | null => Array.isArray(v) ? v.filter((m: any) => typeof m?.id === "string" && typeof m?.text === "string").map((m: any) => ({ id: m.id, text: m.text })) : null;
+
 /** sourcePresent: the person's source record still exists. Always true for 680 assessor evidence, which has no source but itself. */
-export type EvidenceView = { id: string; kind: AnyEvidenceKind; outcomeIndexes: number[]; provenance: Record<string, any>; sourcePresent: boolean; addedAt: string };
+export type EvidenceView = { id: string; kind: AnyEvidenceKind; outcomeIndexes: number[]; outcomeIds?: string[] | null; provenance: Record<string, any>; sourcePresent: boolean; addedAt: string };
 /** 680: one component as the decision recorded it (levelId null: not assessed). */
 export type ComponentResultView = { code: string; levelId: string | null; score: number | null; label: string | null; note: string | null };
 export type ConsolidatedView = NonNullable<ReturnType<typeof componentOutcomeOf>>;
@@ -211,7 +228,9 @@ export const componentResultsOf = (v: unknown): ComponentResultView[] => (Array.
   note: typeof r.note === "string" ? r.note : null,
 }));
 export type RequestView = { id: string; userId: string; competencyId: string; competency: { name: string; code: string | null; learning_outcomes: string[] } | null;
-  frameworkVersion: string | null; methodVersionId: string; outcomeIndexes: number[]; targetLevelId: string | null; context: string; note: string | null; createdAt: string;
+  frameworkVersion: string | null; methodVersionId: string; outcomeIndexes: number[];
+  /** 751: the stable outcome ids and the request's outcome map. null before 751. */
+  outcomeIds?: string[] | null; outcomeMap?: OutcomeMapEntry[] | null; targetLevelId: string | null; context: string; note: string | null; createdAt: string;
   state: RequestState; assignedTo: { assessorId: string; appointmentId: string } | null; evidence: EvidenceView[]; decisions: DecisionView[];
   events: { event: string; actorId: string | null; reason: string | null; decisionId: string | null; at: string }[];
   /** 690: who asked for the assessment: the person, or a programme lead. null before 690. */
@@ -230,15 +249,32 @@ async function confirmationsOf(admin: any, requestIds: string[]): Promise<any[] 
   return data ?? [];
 }
 
+/** 751 outcome ids of these requests and their evidence. Before 751 (or unreadable) none: readers fall back to indexes. */
+async function outcomeIdsOf(admin: any, requestIds: string[]): Promise<{ requests: Map<string, { ids: string[]; map: OutcomeMapEntry[] | null }>; evidence: Map<string, string[]> }> {
+  const out = { requests: new Map<string, { ids: string[]; map: OutcomeMapEntry[] | null }>(), evidence: new Map<string, string[]>() };
+  if (!requestIds.length) return out;
+  try {
+    const [rq, ev] = await Promise.all([
+      admin.from("competency_verification_request").select("id, outcome_ids, outcome_map").in("id", requestIds),
+      admin.from("competency_verification_evidence").select("id, outcome_ids").in("request_id", requestIds),
+    ]);
+    if (rq?.error || ev?.error) return out;
+    for (const r of rq?.data ?? []) if (Array.isArray(r.outcome_ids)) out.requests.set(r.id, { ids: r.outcome_ids, map: outcomeMapOf(r.outcome_map) });
+    for (const e of ev?.data ?? []) if (Array.isArray(e.outcome_ids)) out.evidence.set(e.id, e.outcome_ids);
+  } catch { /* before 751: indexes */ }
+  return out;
+}
+
 /** Assemble requests with their evidence, events and decisions, deriving state and standing as 510 (and 690) does. */
 async function assemble(admin: any, reqs: any[], today: string): Promise<RequestView[] | null> {
   if (!reqs.length) return [];
   const ids = reqs.map(r => r.id);
-  const [ev, evts, decs, confs] = await Promise.all([
+  const [ev, evts, decs, confs, ids751] = await Promise.all([
     admin.from("competency_verification_evidence").select("id, request_id, kind, outcome_indexes, provenance, cpd_id, learning_record_id, evidence_id, profile_item_id, reflection_id, created_at").in("request_id", ids).order("created_at"),
     admin.from("competency_verification_event").select("id, request_id, event, actor_id, assessor_id, appointment_id, decision_id, reason, created_at").in("request_id", ids).order("created_at"),
     withLevel(level => admin.from("competency_verification_decision").select(decCols(level)).in("request_id", ids).order("created_at")),
     confirmationsOf(admin, ids),
+    outcomeIdsOf(admin, ids),
   ]);
   if (ev.error || evts.error || decs.error || confs === null) return null;
   const allDecisions = decs.data ?? [];
@@ -254,11 +290,11 @@ async function assemble(admin: any, reqs: any[], today: string): Promise<Request
     const lastAssign = [...events].reverse().find((e: any) => e.event === "assigned" || e.event === "assignment_declined");
     return {
       id: r.id, userId: r.user_id, competencyId: r.competency_id, competency: r.competency_snapshot ?? null, frameworkVersion: r.framework_version, methodVersionId: r.method_version_id,
-      outcomeIndexes: r.outcome_indexes ?? [-1], targetLevelId: r.target_level_id, context: r.context, note: r.note, createdAt: r.created_at,
+      outcomeIndexes: r.outcome_indexes ?? [-1], outcomeIds: ids751.requests.get(r.id)?.ids ?? null, outcomeMap: ids751.requests.get(r.id)?.map ?? null, targetLevelId: r.target_level_id, context: r.context, note: r.note, createdAt: r.created_at,
       requestedBy: r.requested_by ?? null, renewsDecisionId: r.renews_decision_id ?? null,
       state: deriveState(events, decisions, evidence, confs.filter((c: any) => c.request_id === r.id)),
       assignedTo: lastAssign?.event === "assigned" ? { assessorId: lastAssign.assessor_id, appointmentId: lastAssign.appointment_id } : null,
-      evidence: evidence.map((e: any) => ({ id: e.id, kind: e.kind, outcomeIndexes: e.outcome_indexes ?? [-1], provenance: e.provenance ?? {},
+      evidence: evidence.map((e: any) => ({ id: e.id, kind: e.kind, outcomeIndexes: e.outcome_indexes ?? [-1], outcomeIds: ids751.evidence.get(e.id) ?? null, provenance: e.provenance ?? {},
         sourcePresent: isAssessorEvidence(e.kind) || !!(e.cpd_id ?? e.learning_record_id ?? e.evidence_id ?? e.profile_item_id ?? e.reflection_id), addedAt: e.created_at })),
       decisions: decisions.map((d: any) => ({ id: d.id, assessorId: d.assessor_id, appointmentId: d.appointment_id, methodVersionId: d.method_version_id, methodContentHash: d.method_content_hash,
         competencyHash: d.competency_hash, outcomeCode: d.outcome_code, outcomeClass: d.outcome_class, outcomeLabel: d.outcome_label, levelId: d.level_id, criteria: d.criteria_results ?? [],
@@ -351,8 +387,10 @@ export async function listVerifications(admin: any, userId: string, opts: { fram
     const linkOf = new Map<string, string | null>((ev.data ?? []).map((e: any) => [e.id, e.portfolio_link_id ?? null]));
     const sameCompetency = (v: RequestView) => views.filter(x => x.competencyId === v.competencyId).flatMap(x => x.decisions);
     const items = mine.map(v => {
-      const all = (v.competency?.learning_outcomes ?? []).map(String);
-      const words = (idx: number[]) => (idx.includes(-1) ? [] : idx.map(i => all[i] ?? `Outcome ${i + 1}`));
+      const snapshot = (v.competency?.learning_outcomes ?? []).map(String);
+      // 751: the request's own outcome map is what it asked about, in its order. Before 751, its snapshot.
+      const all = v.outcomeMap?.length ? v.outcomeMap.map(m => m.text) : snapshot;
+      const words = (idx: number[], ids?: string[] | null) => outcomeTexts(idx, ids, v.outcomeMap, snapshot) ?? [];
       const ver = versions.get(v.methodVersionId);
       const ds: VerificationDecision[] = v.decisions.map(d => {
         const later = sameCompetency(v).filter(x => x.outcomeClass === "verified" && x.decidedAt > d.decidedAt && x.standing !== "awaiting_confirmation" && x.standing !== "not_confirmed").sort((a, b) => a.decidedAt.localeCompare(b.decidedAt))[0];
@@ -372,14 +410,14 @@ export async function listVerifications(admin: any, userId: string, opts: { fram
       return {
         requestId: v.id, status: v.state,
         competency: { frameworkCompetencyId: v.competencyId, frameworkId: fwOf.get(v.id) ?? null, frameworkVersion: v.frameworkVersion, code: v.competency?.code ?? null,
-          title: v.competency?.name ?? "", learningOutcomes: words(v.outcomeIndexes), allLearningOutcomes: all },
+          title: v.competency?.name ?? "", learningOutcomes: words(v.outcomeIndexes, v.outcomeIds), allLearningOutcomes: all },
         method: { code: ver?.method?.code ?? null, name: ver?.method?.name ?? null, kind: ver?.method?.kind ?? null, versionNo: ver?.version_no ?? null, criteriaHash: ver?.content_hash ?? null },
         context: v.context, requestedAt: v.createdAt,
         evidence: v.evidence.map(e => ({
           evidenceId: e.id, linkId: linkOf.get(e.id) ?? null, kind: e.kind, title: String(e.provenance.title ?? e.provenance.template ?? e.kind),
           evidenceClass: e.provenance.evidence_class ?? null, issuer: e.provenance.issuing_body ?? e.provenance.organisation ?? null,
           occurredOn: e.provenance.date ?? e.provenance.completed_at ?? e.provenance.issued_on ?? e.provenance.started_on ?? null,
-          learningOutcomes: words(e.outcomeIndexes), sourcePresent: e.sourcePresent, submittedAt: e.addedAt,
+          learningOutcomes: words(e.outcomeIndexes, e.outcomeIds), sourcePresent: e.sourcePresent, submittedAt: e.addedAt,
         })),
         decisions: ds,
         current: [...ds].reverse().find(d => d.standing === "current") ?? null,

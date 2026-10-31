@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
+import { TOPICS_UNREAD, topicsState } from "@/lib/individual/scholar/classify-view";
 
 // WHAT SCHOLAR FOUND IN THIS MATERIAL (PRODUCT-EXPERIENCE P6, Option A). Classify runs in the background; this is
 // where its result is read, on the material itself: the topics found across sections, and the competency links
@@ -39,6 +40,8 @@ export function FoundInMaterial({ topics, competencies, analysed, sections, abse
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const waiting = competencies.reduce((n, c) => n + c.proposedIds.length, 0);
+  // SCHOLAR-UPLOAD-FIX: "none" only once every section was looked at (topicsState).
+  const line = topicsState({ consent, analysed, sections, topics: topics.length });
 
   async function decide(c: FoundCompetencyView, decision: "accepted" | "rejected") {
     setBusy(c.competencyId); setError("");
@@ -57,15 +60,17 @@ export function FoundInMaterial({ topics, competencies, analysed, sections, abse
         <span className="text-[12.5px] text-gray-600">{analysed} of {sections} section{sections === 1 ? "" : "s"} looked at</span>
       </div>
 
-      {analysed === 0 ? (
+      {analysed === 0 && !consent ? (
         <p className="mt-1.5 text-[14px] text-gray-600">
-          Scholar has not looked for topics in this material yet.{" "}
-          {consent ? "It starts on its own when you open the material with AI help on, or use “Find topics and competencies” below." : "It looks for them once AI help is on. You can study the material either way."}
+          Scholar has not looked for topics in this material yet. It looks for them once AI help is on. You can study the material either way.
         </p>
+      ) : analysed === 0 ? (
+        <p className="mt-1.5 text-[14px] text-gray-600" aria-live="polite">{line.text ?? TOPICS_UNREAD}</p>
       ) : (
         <>
           <h3 className="mt-3 text-[13px] font-bold uppercase tracking-[0.12em] text-gray-500">Topics</h3>
-          {topics.length === 0 ? <p className="mt-1 text-[14px] text-gray-600">No topics were found in the sections looked at so far.</p> : (
+          {line.kind === "found" && line.text && <p className="mt-1 text-[13px] text-gray-600" aria-live="polite">{line.text}</p>}
+          {topics.length === 0 ? <p className="mt-1 text-[14px] text-gray-600" aria-live="polite">{line.kind === "off" ? "No topics were found in the sections looked at so far. Turn on AI help to look at the rest." : line.text}</p> : (
             <ul className="mt-1.5 flex flex-wrap gap-2">
               {topics.slice(0, 16).map(t => (
                 <li key={t.name}>

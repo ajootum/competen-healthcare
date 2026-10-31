@@ -4,6 +4,7 @@ import { sm2 } from "@/lib/delivery/reinforcement";
 import { isNotProvisioned } from "../access";
 import { LEARNER_CARD, BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
 import type { Chunk, ExtractionQuality } from "./extract";
+import { planChunkInsertion, type NewChunk } from "./slide-images";
 import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
 import { SRS_DEFAULTS, scheduleReview, type RevisionDraft, type RevisionKind, type SrsParams } from "./revision";
@@ -235,10 +236,18 @@ export async function createMaterial(admin: Admin, userId: string, input: {
 }
 
 /** The stored shape (migration 406's CHECK names these keys). */
-const toQualityJson = (q: ExtractionQuality) => ({ unit: q.unit, units: q.units, empty_units: q.emptyUnits, chars: q.chars, sections: q.sections });
+// SCHOLAR-UPLOAD-FIX: ai_read_units / ai_tried_units are extra keys. 406's CHECK requires the five keys and allows others.
+const toQualityJson = (q: ExtractionQuality) => ({
+  unit: q.unit, units: q.units, empty_units: q.emptyUnits, chars: q.chars, sections: q.sections,
+  ...(q.aiReadUnits ? { ai_read_units: q.aiReadUnits } : {}), ...(q.aiTriedUnits ? { ai_tried_units: q.aiTriedUnits } : {}),
+});
+const numbers = (v: unknown): number[] | undefined => Array.isArray(v) ? v.map(Number).filter(Number.isFinite) : undefined;
 export const fromQualityJson = (j: any): ExtractionQuality | null =>
   j && typeof j === "object" && Array.isArray(j.empty_units)
-    ? { unit: j.unit, units: Number(j.units), emptyUnits: (j.empty_units as unknown[]).map(Number), chars: Number(j.chars), sections: Number(j.sections) }
+    ? {
+      unit: j.unit, units: Number(j.units), emptyUnits: (j.empty_units as unknown[]).map(Number), chars: Number(j.chars), sections: Number(j.sections),
+      ...(numbers(j.ai_read_units) ? { aiReadUnits: numbers(j.ai_read_units) } : {}), ...(numbers(j.ai_tried_units) ? { aiTriedUnits: numbers(j.ai_tried_units) } : {}),
+    }
     : null;
 
 /** Owner erasure of one material: the object, then the row (which cascades to everything derived). */
@@ -1483,6 +1492,25 @@ export async function saveAnalysis(admin: Admin, userId: string, input: {
   return { ok: !mErr, proposals: mErr ? 0 : maps.length };
 }
 
+/** SCHOLAR-UPLOAD-FIX: the programme each analysed section of one material was analysed against (null: none). */
+export async function analysedProgrammes(admin: Admin, userId: string, materialId: string): Promise<Read<Map<string, string | null>>> {
+  const { data, error } = await admin.from("individual_scholar_chunk_analysis").select("chunk_id, programme_code")
+    .eq("user_id", userId).eq("material_id", materialId).limit(2000);
+  if (error) return fail(error);
+  return { ok: true, data: new Map(((data ?? []) as any[]).map(r => [r.chunk_id, r.programme_code ?? null])) };
+}
+
+/**
+ * SCHOLAR-UPLOAD-FIX: after a re-link, record that these sections are now analysed against `programmeCode`. Only the
+ * programme is changed: the concepts found, the model and the prompt version of the analysis row are kept as they are.
+ */
+export async function markRelinked(admin: Admin, userId: string, materialId: string, chunkIds: readonly string[], programmeCode: string): Promise<boolean> {
+  if (!chunkIds.length) return true;
+  const { error } = await admin.from("individual_scholar_chunk_analysis").update({ programme_code: programmeCode })
+    .eq("user_id", userId).eq("material_id", materialId).in("chunk_id", [...chunkIds]);
+  return !error;
+}
+
 export type MappingRow = {
   id: string; chunkId: string; materialId: string; competencyId: string; layer: Layer; source: MapSource;
   confidence: number | null; rationale: string | null; model: string | null; promptVersion: string | null; createdAt: string;
@@ -2656,6 +2684,68 @@ export async function aiSpendToday(admin: Admin, userId: string, operation: stri
 export async function materialOriginal(admin: Admin, userId: string, id: string): Promise<{ path: string; extractor: string } | null> {
   const { data } = await admin.from("individual_scholar_material").select("storage_path, extractor").eq("user_id", userId).eq("id", id).maybeSingle();
   return data ? { path: (data as any).storage_path, extractor: (data as any).extractor ?? "" } : null;
+}
+
+// ── SCHOLAR-UPLOAD-FIX: SECTIONS READ BY AI FROM PICTURE-ONLY SLIDES ─────────────────────────────────────────────────
+
+/** The stored original file of the caller's OWN material (its path from their own row), or null. */
+export async function materialBytes(admin: Admin, userId: string, id: string): Promise<Uint8Array | null> {
+  const original = await materialOriginal(admin, userId, id);
+  return original?.path ? readUpload(admin, original.path) : null;
+}
+
+/**
+ * Add the sections an AI reading produced, each on its slide, in slide order among the existing ones, and record the
+ * reading on the material: the slides read leave empty_units and join ai_read_units, every slide attempted joins
+ * ai_tried_units, and chunk_count, char_count, extraction_quality's chars and sections and the extractor follow.
+ *
+ * ⚠ EXISTING IDS NEVER CHANGE (questions, cards, mappings and learning history point at them). Where later sections
+ * must make room, only their ordinal is raised, last first, so the unique (material_id, ordinal) index never sees two
+ * rows on one ordinal (planChunkInsertion). Interrupted part-way, the order is still right, with gaps.
+ * ⚠ RE-CHECKED HERE: a slide no longer recorded as empty, or already attempted (a second request running alongside),
+ * is dropped before anything is written.
+ */
+export async function addPictureSlideSections(admin: Admin, userId: string, materialId: string, input: {
+  additions: NewChunk[]; read: readonly number[]; tried: readonly number[]; extractorTag: string;
+}): Promise<{ ok: true; added: number; recorded: boolean } | { ok: false; error: string }> {
+  const { data: row, error: rErr } = await admin.from("individual_scholar_material").select("extraction_quality, chunk_count, char_count, extractor")
+    .eq("user_id", userId).eq("id", materialId).maybeSingle();
+  if (rErr || !row) return { ok: false, error: "material" };
+  const q = fromQualityJson(row.extraction_quality);
+  if (!q || q.unit !== "slide") return { ok: false, error: "quality" };
+  const { data: rows, error: cErr } = await admin.from("individual_scholar_chunk").select("id, ordinal, page_from")
+    .eq("user_id", userId).eq("material_id", materialId).order("ordinal").limit(2000);
+  if (cErr) return { ok: false, error: "chunks" };
+  const existing = ((rows ?? []) as any[]).map(r => ({ id: r.id as string, ordinal: Number(r.ordinal), pageFrom: r.page_from as number | null }));
+  const haveSection = new Set(existing.map(c => c.pageFrom));
+  const open = new Set(q.emptyUnits.filter(n => !(q.aiTriedUnits ?? []).includes(n) && !haveSection.has(n)));
+  const additions = input.additions.filter(a => open.has(a.pageFrom));
+  const read = input.read.filter(n => open.has(n) && additions.some(a => a.pageFrom === n));
+  const tried = input.tried.filter(n => open.has(n));
+  if (!tried.length) return { ok: true, added: 0, recorded: false };
+  const plan = planChunkInsertion(existing, additions);
+  for (const m of plan.moves) {
+    const { error } = await admin.from("individual_scholar_chunk").update({ ordinal: m.to }).eq("user_id", userId).eq("material_id", materialId).eq("id", m.id);
+    if (error) return { ok: false, error: "move" };
+  }
+  if (plan.inserts.length) {
+    const { error } = await admin.from("individual_scholar_chunk").insert(plan.inserts.map(c => ({
+      material_id: materialId, user_id: userId, ordinal: c.ordinal, page_from: c.pageFrom, page_to: c.pageTo, content: c.content,
+    })));
+    if (error) return { ok: false, error: "insert" };
+  }
+  const chars = plan.inserts.reduce((n, c) => n + c.content.length, 0);
+  const quality: ExtractionQuality = {
+    ...q, emptyUnits: q.emptyUnits.filter(n => !read.includes(n)), chars: q.chars + chars, sections: q.sections + plan.inserts.length,
+    aiReadUnits: [...new Set([...(q.aiReadUnits ?? []), ...read])].sort((a, b) => a - b),
+    aiTriedUnits: [...new Set([...(q.aiTriedUnits ?? []), ...tried])].sort((a, b) => a - b),
+  };
+  const extractor = String(row.extractor ?? "").includes(input.extractorTag) ? row.extractor : `${row.extractor}+${input.extractorTag}`;
+  const { error: uErr } = await admin.from("individual_scholar_material").update({
+    extraction_quality: toQualityJson(quality), chunk_count: Number(row.chunk_count) + plan.inserts.length, char_count: Number(row.char_count) + chars,
+    extractor, updated_at: new Date().toISOString(),
+  }).eq("user_id", userId).eq("id", materialId);
+  return { ok: true, added: plan.inserts.length, recorded: !uErr };
 }
 // ── WHAT THE STUDENT ALREADY HAS, BEFORE ANYTHING NEW IS WRITTEN ── COMPETEN-SCHOLAR-AI-OPT-01 (Wave 2, s6) ─────────
 //

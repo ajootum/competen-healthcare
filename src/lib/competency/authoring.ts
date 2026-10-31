@@ -80,14 +80,14 @@ type Fail = { ok: false; status: number; error: string };
 type Result<T extends object = object> = ({ ok: true } & T) | Fail;
 
 /** The authorship record, FIRST. False = not recorded, so the caller must not write. */
-async function authored(admin: any, actor: Actor, action: string, entityType: "framework" | "framework_competency" | "framework_domain", entityId: string, entityName: string, detail: Record<string, unknown>): Promise<boolean> {
+export async function authored(admin: any, actor: Actor, action: string, entityType: "framework" | "framework_competency" | "framework_domain", entityId: string, entityName: string, detail: Record<string, unknown>): Promise<boolean> {
   const { error } = await admin.from("audit_log").insert({
     trace_id: await currentTraceId(), actor_id: actor.userId, actor_name: actor.name, action,
     entity_type: entityType, entity_id: entityId, entity_name: entityName.slice(0, 200), new_value: detail,
   });
   return !error;
 }
-const NOT_RECORDED: Fail = { ok: false, status: 503, error: "The authorship record could not be written, so nothing was changed. Try again shortly." };
+export const NOT_RECORDED: Fail = { ok: false, status: 503, error: "The authorship record could not be written, so nothing was changed. Try again shortly." };
 
 /** A shared framework the curator may edit now, or why not. */
 export async function editableFramework(admin: any, frameworkId: string): Promise<Result<{ fw: { id: string; name: string; pub_status: string } }>> {

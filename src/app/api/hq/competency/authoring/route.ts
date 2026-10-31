@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { createCompetency, createCpu, createDomain, createFramework, createPractice, importDraftPackage, isId, renameDomain, setFrameworkIdentity, updateCompetency, updateFramework } from "@/lib/competency/authoring";
 import { submitForReview } from "@/lib/competency/clinical-review";
+import { discardLayout, reorderLayout } from "@/lib/competency/framework-layout";
 import { loadFrameworkForReview, outcomeCounts, previewOf, runSubmission, type ReviewScope } from "@/lib/competency/review-batch";
 import { currentTraceId } from "@/lib/trace";
 
@@ -14,7 +15,14 @@ export const maxDuration = 60;
 // POST /api/hq/competency/authoring -- CFCA authoring in production (migration 465, owner CFCA PRODUCTION AUTHORING).
 //
 // Body: { action: "create_framework" | "update_framework" | "set_identity" | "create_domain" | "rename_domain" |
-//         "create_practice" | "create_cpu" | "create_competency" | "update_competency" | "import_draft" | "submit_review", ... }
+//         "create_practice" | "create_cpu" | "create_competency" | "update_competency" | "import_draft" | "submit_review" |
+//         "reorder_layout" | "discard_layout", ... }
+//
+// FRAMEWORK-DESIGN-STUDIO-01 (750/751): reorder_layout { frameworkId, level: "domains" | "competencies" | "criteria" |
+// "sections", parentId? (domain for competencies, competency for criteria), component? (the criteria's section, null =
+// not classified), order: ids (codes for sections), every one of that parent, in the new order }. A never-published
+// draft is reordered directly; a published framework saves a layout draft, applied only by an independent publisher.
+// "outcomes" and any cross-parent move are refused (409) as clinical changes. discard_layout { frameworkId }.
 //
 // ⚠ GATED BY hqApiGate(["hq.quality.competency.author"]) -- the Competency Author. It authors shared content and
 // puts it forward for clinical review. It approves nothing (395, the Clinical Content Reviewer) and publishes nothing
@@ -37,6 +45,8 @@ export async function POST(req: Request) {
     case "rename_domain": { const r = await renameDomain(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
     case "create_competency": { const r = await createCompetency(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
     case "update_competency": { const r = await updateCompetency(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "reorder_layout": { const r = await reorderLayout(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "discard_layout": { const r = await discardLayout(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
     case "import_draft": { const r = await importDraftPackage(ctx.admin, actor, body.package); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
     case "submit_review": {
       // Draft -> Submit for Review. The curator becomes the submitter (and is already an author), so the 395 trigger

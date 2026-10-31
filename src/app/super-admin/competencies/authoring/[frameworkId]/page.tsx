@@ -10,6 +10,8 @@ import StudioWorkspace, { type StudioDomain } from "../_components/StudioWorkspa
 import { SubmitForPublication } from "../../publication/_components/PublicationControls";
 import { ReviewPackView } from "../../_studio/ReviewPackView";
 import { loadFrameworkPack } from "@/lib/competency/review-pack";
+import { applyLayout, sectionOrder, type LayoutTree } from "@/lib/competency/layout-order";
+import { LayoutDraftBanner } from "../_components/LayoutDraftBanner";
 
 // /super-admin/competencies/authoring/[frameworkId] -- CFCA-STUDIO-UX-02: one framework, focused. Competencies (explorer
 // and a single active editor) and Overview & governance (structure, clinical review in numbers, publication kept
@@ -24,12 +26,12 @@ const STATUS: Record<string, string> = { draft: "Draft framework", in_review: "I
 const PUB: Record<string, string> = { draft: "Not published", in_review: "Awaiting a publication decision", approved: "Approved, not yet published", published: "Published", archived: "Archived" };
 const tabCls = (on: boolean) => `border-b-2 px-1 pb-2 text-[14.5px] font-semibold ${on ? "border-teal-700 text-teal-800" : "border-transparent text-gray-600 hover:text-gray-900"}`;
 
-export default async function FrameworkStudioPage({ params, searchParams }: { params: Promise<{ frameworkId: string }>; searchParams: Promise<{ tab?: string; c?: string; view?: string }> }) {
+export default async function FrameworkStudioPage({ params, searchParams }: { params: Promise<{ frameworkId: string }>; searchParams: Promise<{ tab?: string; c?: string; view?: string; layout?: string }> }) {
   const ctx = await requireHqCapability("hq.quality.competency.author");
   const [{ frameworkId }, sp] = await Promise.all([params, searchParams]);
   // The paper copy of this framework for its authors (owner, 29 Oct 2026).
   if (sp.view === "pack") {
-    const pack = await loadFrameworkPack(ctx.admin, frameworkId, ctx.fullName ?? null);
+    const pack = await loadFrameworkPack(ctx.admin, frameworkId, ctx.fullName ?? null, sp.layout === "draft" ? { layout: "draft" } : {});
     return pack ? <ReviewPackView pack={pack} back={{ href: `/super-admin/competencies/authoring/${frameworkId}`, label: "Back to the framework" }} wordHref={`/api/hq/competency/review-pack?frameworkId=${frameworkId}`} />
       : <p role="alert" className="text-[13.5px] text-[var(--cmp-text-critical)]">That framework could not be read just now.</p>;
   }
@@ -47,7 +49,7 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
   }
   const editable = f.pubStatus === "draft" || f.pubStatus === "published";
   const fwOpts = v.frameworks.map(x => ({ id: x.id, name: x.name, code: x.code }));
-  const domains: StudioDomain[] = f.domains.map(d => ({
+  const domains0: StudioDomain[] = f.domains.map(d => ({
     id: d.id, name: d.name,
     cpus: d.practices.flatMap(p => p.cpus.map(u => ({ id: u.id, label: `${u.code ?? ""} ${u.name} (${p.name})` }))),
     competencies: d.competencies.map(c => ({
@@ -56,7 +58,22 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
       status: eligibilityOf(c.clinical, f.pubStatus), statusText: c.clinical ? `${CLINICAL_STATE_LABEL[c.clinical.state]}. ${clinicalNote(c.clinical)}` : "Clinical state not readable",
     })),
   }));
+  // FRAMEWORK-DESIGN-STUDIO-01: a pending layout draft is what the editor sees and moves from (learners keep the published order).
+  const sections = sectionOrder({ componentOrder: f.componentOrder ?? null, registry: Object.keys(v.components) }, f.layoutDraft ?? null);
+  const draftApplies = !!f.layoutDraft && f.domains.every(d => d.competencies.every(c => c.criteria.every(k => k.id)));
+  const domains: StudioDomain[] = (() => {
+    if (!draftApplies) return domains0;
+    // sortOrder = the current (already stable) position, so applyLayout keeps the live order wherever the draft is silent.
+    const tree: LayoutTree = { componentOrder: f.componentOrder ?? null, registry: Object.keys(v.components), domains: domains0.map((d, i) => ({ id: d.id, name: d.name, sortOrder: i, competencies: d.competencies.map((c, j) => ({ id: c.id, name: c.name, sortOrder: j, criteria: c.criteria.map((k, m) => ({ id: k.id!, name: k.text, sortOrder: m, component: k.component })) })) })) };
+    const a = applyLayout(tree, f.layoutDraft);
+    const dById = new Map(domains0.map(d => [d.id, d]));
+    return a.domains.map(ad => { const d = dById.get(ad.id)!; const cById = new Map(d.competencies.map(c => [c.id, c]));
+      return { ...d, competencies: ad.competencies.map(ac => { const c = cById.get(ac.id)!; const kById = new Map(c.criteria.map(k => [k.id!, k])); return { ...c, criteria: ac.criteria.map(ak => kById.get(ak.id)!) }; }) }; });
+  })();
   const comps = domains.flatMap(d => d.competencies);
+  const [draftBy] = f.layoutDraft && f.layoutDraftBy
+    ? await Promise.all([Promise.resolve(ctx.admin.from("profiles").select("full_name").eq("id", f.layoutDraftBy).maybeSingle()).then((r: { data?: { full_name?: string | null } | null }) => r?.data?.full_name ?? null, () => null)])
+    : [null];
   const n = (s: string) => comps.filter(c => c.status === s).length;
   const criteria = comps.reduce((s, c) => s + c.criteria.length, 0);
   const tab = sp.tab === "overview" ? "overview" : "competencies";
@@ -79,13 +96,15 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
       </header>
       {!v.clinicalReadable && <p role="alert" className="text-[13px] font-semibold text-amber-900">Clinical review states could not be read just now, so none is shown and nothing can be put forward.</p>}
 
+      {f.layoutDraft && <LayoutDraftBanner frameworkId={f.id} savedAt={f.layoutDraftAt ?? null} by={draftBy} editable={editable} />}
+
       <div role="tablist" aria-label="Framework views" className="flex gap-6 border-b border-gray-200">
         <Link role="tab" aria-selected={tab === "competencies"} href="?tab=competencies" className={tabCls(tab === "competencies")}>Competencies <span className="text-gray-500">{comps.length}</span></Link>
         <Link role="tab" aria-selected={tab === "overview"} href="?tab=overview" className={tabCls(tab === "overview")}>Overview &amp; governance</Link>
       </div>
 
       {tab === "competencies" ? (
-        <StudioWorkspace frameworkId={f.id} domains={domains} levels={v.levels} components={v.components} editable={editable} initialId={sp.c ?? null} />
+        <StudioWorkspace frameworkId={f.id} domains={domains} levels={v.levels} components={v.components} editable={editable} initialId={sp.c ?? null} canReorder={editable && v.layoutReady === true} sectionCodes={sections} draftMode={f.pubStatus === "published" || !!f.layoutDraft} />
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

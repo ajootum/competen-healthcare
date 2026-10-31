@@ -95,6 +95,13 @@ export type ExtractionQuality = {
   emptyUnits: number[];
   chars: number;
   sections: number;
+  /**
+   * SCHOLAR-UPLOAD-FIX: slides that held no text and were later read by AI from their pictures, on the learner's
+   * request (no longer in emptyUnits), and every slide an AI reading was attempted for (read or not), so none is
+   * offered twice. Absent on a material never read this way. Stored as ai_read_units / ai_tried_units.
+   */
+  aiReadUnits?: number[];
+  aiTriedUnits?: number[];
 };
 
 /** Pure. The quality record stored with a material (migration 406), from what extraction and chunking produced. */
@@ -107,9 +114,19 @@ export function extractionQuality(mime: MaterialMime, pages: readonly ExtractedP
 /** Pure. "Partial" when some pages or slides held no readable text. The sentence the material shows. */
 export function qualitySummary(q: ExtractionQuality | null): { partial: boolean; text: string } {
   if (!q) return { partial: false, text: "How completely this file was read was not recorded: it was uploaded before Scholar measured it." };
-  if (!q.emptyUnits.length) return { partial: false, text: q.unit === "section" ? `Read in full: ${q.sections} section${q.sections === 1 ? "" : "s"}.` : `Every ${q.unit} was read: ${q.units} ${q.unit}${q.units === 1 ? "" : "s"}, ${q.sections} section${q.sections === 1 ? "" : "s"}.` };
-  const list = q.emptyUnits.length > 8 ? `${q.emptyUnits.slice(0, 8).join(", ")} and ${q.emptyUnits.length - 8} more` : q.emptyUnits.join(", ");
-  return { partial: true, text: `Partly read: ${q.emptyUnits.length} of ${q.units} ${q.unit}s held no readable text (${q.unit}${q.emptyUnits.length === 1 ? "" : "s"} ${list}). A scanned page or a picture-only slide cannot be read yet, so Scholar cannot teach from ${q.emptyUnits.length === 1 ? "it" : "them"}.` };
+  const listOf = (u: readonly number[]) => u.length > 8 ? `${u.slice(0, 8).join(", ")} and ${u.length - 8} more` : u.join(", ");
+  // SCHOLAR-UPLOAD-FIX: slides read by AI from their pictures are said, every time, never folded into "read".
+  const ai = q.aiReadUnits?.length ? ` ${q.aiReadUnits.length === 1 ? "Slide" : "Slides"} ${listOf(q.aiReadUnits)} ${q.aiReadUnits.length === 1 ? "was" : "were"} read by AI from a picture: check ${q.aiReadUnits.length === 1 ? "it" : "them"} against the slide${q.aiReadUnits.length === 1 ? "" : "s"}.` : "";
+  if (!q.emptyUnits.length) return { partial: false, text: (q.unit === "section" ? `Read in full: ${q.sections} section${q.sections === 1 ? "" : "s"}.` : `Every ${q.unit} was read: ${q.units} ${q.unit}${q.units === 1 ? "" : "s"}, ${q.sections} section${q.sections === 1 ? "" : "s"}.`) + ai };
+  const list = listOf(q.emptyUnits);
+  return { partial: true, text: `Partly read: ${q.emptyUnits.length} of ${q.units} ${q.unit}s held no readable text (${q.unit}${q.emptyUnits.length === 1 ? "" : "s"} ${list}). A scanned page or a picture-only slide cannot be read yet, so Scholar cannot teach from ${q.emptyUnits.length === 1 ? "it" : "them"}.${ai}` };
+}
+
+/** Pure. SCHOLAR-UPLOAD-FIX: the slides whose sections were read by AI from a picture -- labelled on every section. */
+export function aiReadSlides(q: ExtractionQuality | null): Set<number> {
+  // A section on a slide still recorded as empty can only have come from an AI reading (one whose record update
+  // failed): it is labelled too, never shown as text the file itself held.
+  return new Set(q && q.unit === "slide" ? [...(q.aiReadUnits ?? []), ...q.emptyUnits] : []);
 }
 
 // ── UPLOAD-01 U1: OFFICE FILES ARE ZIP ARCHIVES -- SCREENED BEFORE ANYTHING IS DECOMPRESSED ────────────────
@@ -135,7 +152,7 @@ export function screenZipEntries(entries: readonly ZipEntryInfo[]): string | nul
   return null;
 }
 
-async function openOfficeZip(buffer: Uint8Array): Promise<{ ok: true; zip: JSZip } | { ok: false; reason: "unreadable" | "unsafe"; detail: string }> {
+export async function openOfficeZip(buffer: Uint8Array): Promise<{ ok: true; zip: JSZip } | { ok: false; reason: "unreadable" | "unsafe"; detail: string }> {
   let zip: JSZip;
   // Loaded on demand, like unpdf and mammoth: this file is also imported (for citeChunk) by browser code.
   const { default: Zip } = await import("jszip");
@@ -175,13 +192,21 @@ export function drawingText(xml: string): string {
     .map(l => l.trim()).filter(Boolean).join("\n");
 }
 
+/**
+ * Pure. The slide parts of a presentation in the order Scholar numbers them: slide N is the Nth of these. The one
+ * numbering the extractor and the picture-slide reader (slide-reading.ts) share, so "slide 33" means the same part.
+ */
+export function slidePartNames(names: readonly string[]): string[] {
+  const slideNo = (name: string) => Number(name.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
+  return names.filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => slideNo(a) - slideNo(b));
+}
+
 async function extractPptx(buffer: Uint8Array, maxSlides: number): Promise<Extraction> {
   const z = await openOfficeZip(buffer);
   if (!z.ok) return { ok: false, reason: z.reason, detail: z.detail };
   const { zip } = z;
   try {
-    const slideNo = (name: string) => Number(name.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
-    const slides = Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => slideNo(a) - slideNo(b));
+    const slides = slidePartNames(Object.keys(zip.files));
     if (!slides.length) return { ok: false, reason: "no_text" };
     if (slides.length > maxSlides) return { ok: false, reason: "too_many_pages", detail: String(slides.length) };
     const pages: ExtractedPage[] = [];
@@ -196,6 +221,47 @@ async function extractPptx(buffer: Uint8Array, maxSlides: number): Promise<Extra
       pages.push({ page: i + 1, text: notes ? `${body}\n\nSpeaker notes:\n${notes}` : body });
     }
     return { ok: true, pages, pageCount: slides.length, extractor: "pptx-drawingml@1" };
+  } catch (e) {
+    return { ok: false, reason: "unreadable", detail: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export type SlideImages = { slide: number; images: { bytes: Uint8Array; kind: "png" | "jpeg" }[]; unsupported: string[]; tooLarge: boolean };
+
+/**
+ * SCHOLAR-UPLOAD-FIX: the PNG and JPEG pictures of the named slides (numbered as extractPptx numbers them), from the
+ * stored file. The archive is screened first, exactly as at upload. A picture whose bytes are not really PNG or JPEG
+ * is reported unsupported; pictures beyond SLIDE_IMAGE_LIMITS.bytesPerSlide are left out and the slide says so.
+ */
+export async function pictureSlideImages(buffer: Uint8Array, slides: readonly number[]): Promise<{ ok: true; slides: SlideImages[] } | { ok: false; reason: "unreadable" | "unsafe"; detail: string }> {
+  const z = await openOfficeZip(buffer);
+  if (!z.ok) return z;
+  const { zip } = z;
+  const { slidePictures, imageKind, SLIDE_IMAGE_LIMITS } = await import("./slide-images");
+  try {
+    const parts = slidePartNames(Object.keys(zip.files));
+    const out: SlideImages[] = [];
+    for (const n of slides) {
+      const name = parts[n - 1];
+      if (!name) { out.push({ slide: n, images: [], unsupported: [], tooLarge: false }); continue; }
+      const xml = await zip.file(name)!.async("string");
+      const rels = await zip.file(name.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels")?.async("string");
+      const pics = slidePictures(xml, rels ?? null);
+      const images: SlideImages["images"] = [];
+      const unsupported = [...pics.unsupported];
+      let bytes = 0, tooLarge = false;
+      for (const part of pics.images) {
+        const data = await zip.file(part)?.async("uint8array");
+        if (!data) continue;
+        const kind = imageKind(data);
+        if (!kind) { unsupported.push(part.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() ?? "unknown"); continue; }
+        if (bytes + data.byteLength > SLIDE_IMAGE_LIMITS.bytesPerSlide) { tooLarge = true; continue; }
+        bytes += data.byteLength;
+        images.push({ bytes: data, kind });
+      }
+      out.push({ slide: n, images, unsupported: [...new Set(unsupported)], tooLarge });
+    }
+    return { ok: true, slides: out };
   } catch (e) {
     return { ok: false, reason: "unreadable", detail: e instanceof Error ? e.message : String(e) };
   }

@@ -6,6 +6,7 @@ import { AI_LABEL, FORMAT_LABEL, FORMAT_OF, MAPPING_LABEL, UNIT_OF } from "@/lib
 import { analysisStatus, getMaterial, isUuid, libraryTopics, listCollections, listMappings, listMaterials, listProgrammes, materialExtras, readConsent } from "@/lib/individual/scholar/store";
 import { competencyAbsence, competencyLabels, loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { qualitySummary } from "@/lib/individual/scholar/extract";
+import { topicsState } from "@/lib/individual/scholar/classify-view";
 import { materialTopics, relatedMaterials } from "@/lib/individual/scholar/library";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { PageHeader, StatePanel, Unreadable, focusRing, primaryBtn, secondaryBtn } from "../../../../../_components/chrome";
@@ -105,6 +106,8 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
           const unit = UNIT_OF(m.mimeType);
           const q = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null) : null;
           const analysed = analysis.ok && analysis.data.analysed >= analysis.data.sections;
+          // SCHOLAR-UPLOAD-FIX: "none" only once every section was looked at; while finding, how far it has got.
+          const topicsLine = topicsState({ consent: consentOn, analysed: analysis.ok ? analysis.data.analysed : null, sections: analysis.ok ? analysis.data.sections : null, topics: topics.length });
           const limits = [
             q?.partial ? q.text : null,
             !consentOn ? `Topics and competencies need AI help, which is off. ${status ? aiOffMessage(status) ?? "" : ""}`.trim() : null,
@@ -142,9 +145,10 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
                       <ul className="mt-2 flex flex-wrap gap-1.5">
                         {topics.map(t => <li key={t.topic} className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[12.5px] text-gray-800">{t.topic}{t.sections > 1 ? <span className="text-gray-500"> · {t.sections} sections</span> : null}</li>)}
                       </ul>
+                      {topicsLine.text && <p className="mt-2 text-[12.5px] text-gray-600" aria-live="polite">{topicsLine.text}</p>}
                       <p className="mt-2 text-[12.5px] text-gray-600">Wrong? <Link href={`${experienceHref("scholar", `study/${m.id}`)}#sections-h`} className={`font-semibold underline ${focusRing}`}>Correct a section&apos;s topics</Link>.</p>
                     </>
-                  ) : <p className="mt-1.5 text-[13.5px] text-gray-700">{consentOn ? "None found yet." : "Not found: AI help is off."}</p>}
+                  ) : <p className="mt-1.5 text-[13.5px] text-gray-700" aria-live="polite">{topicsLine.kind === "off" ? "Not found: AI help is off." : topicsLine.text}</p>}
                 </section>
 
                 <section aria-labelledby={`comp-${m.id}`}>

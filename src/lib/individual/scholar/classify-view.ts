@@ -98,3 +98,37 @@ export function noProgrammeText(offered: number | null): string {
     ? "Competen has not set up a programme or competency framework for Scholar yet, so your notes are not linked to competencies. Scholar still finds the topics in them, and you can study them either way."
     : "No programme is chosen, so your notes are not linked to competencies. Choose your programme in My Learning to see which competencies they support. You can study them either way.";
 }
+
+// ── SCHOLAR-UPLOAD-FIX: WHAT THE TOPICS LINE SAYS ── never "none" while topic finding is still running ──────────
+//
+// "No topics found" is a FINDING, and only true once every section was looked at. While sections are still waiting
+// (with AI help on) the line says how far it has got. With AI help off and sections waiting, the surface keeps its own
+// AI-off words ("off"). Progress that could not be read is said as such, never guessed.
+
+export const TOPICS_NONE = "No topics found in these notes.";
+export const TOPICS_UNREAD = "How far topic finding has got could not be read just now.";
+
+export type TopicsState = { kind: "found" | "finding" | "none" | "off" | "unread"; text: string | null };
+
+/** Pure. `analysed`/`sections` null: unreadable. `text` for "found" is the progress line while finding continues. */
+export function topicsState(s: { consent: boolean; analysed: number | null; sections: number | null; topics: number }): TopicsState {
+  const known = s.analysed !== null && s.sections !== null;
+  const complete = known && s.analysed! >= s.sections!;
+  const finding = known && !complete && s.consent ? `Finding topics… ${s.analysed} of ${s.sections} section${s.sections === 1 ? "" : "s"}` : null;
+  if (s.topics > 0) return { kind: "found", text: finding };
+  if (complete) return { kind: "none", text: TOPICS_NONE };
+  if (!s.consent) return { kind: "off", text: null };
+  return finding ? { kind: "finding", text: finding } : { kind: "unread", text: TOPICS_UNREAD };
+}
+
+// ── SCHOLAR-UPLOAD-FIX: RE-LINKING ANALYSED SECTIONS TO THE PROGRAMME NOW CHOSEN ──────────────────────────────────
+//
+// individual_scholar_chunk_analysis.programme_code records the programme each section was analysed against (null: none).
+// When the learner now has a programme with a usable catalogue, the sections analysed against nothing or against another
+// programme can be sent for competency mapping again. Sections never analysed are NOT here: the ordinary run maps them.
+
+/** Pure. The analysed sections, in document order, whose recorded programme is not `programme`. */
+export function relinkTargets(chunkOrder: readonly string[], analysedProgramme: ReadonlyMap<string, string | null>, programme: string | null): string[] {
+  if (!programme) return [];
+  return chunkOrder.filter(id => analysedProgramme.has(id) && analysedProgramme.get(id) !== programme);
+}
