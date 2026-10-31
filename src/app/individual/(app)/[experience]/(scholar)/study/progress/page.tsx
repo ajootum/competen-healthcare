@@ -8,7 +8,7 @@ import { listPassportChoices, progressRows, reviewRows } from "@/lib/individual/
 import { loadLearningIntelligence } from "@/lib/individual/scholar/intelligence-data";
 import LearningIntelligence from "../_components/LearningIntelligence";
 import { eligibleAchievements } from "@/lib/individual/scholar/passport-items";
-import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { isStudyPlanOn, loadIndividualPolicy } from "@/lib/individual/policy";
 import { EVIDENCE_LABEL } from "@/lib/individual/passport";
 import { PassportChoices } from "../_components/passport-choice";
 import { buildProgress } from "@/lib/individual/scholar/progress";
@@ -30,6 +30,12 @@ import { ContentStatusTag } from "../_components/client";
 import { CHECK_VERDICT_LABEL, NO_APPROVED_COMPETENCIES, NOT_COMPETENCE_LABEL, type CheckVerdict } from "@/lib/individual/scholar/config";
 import { learningActivityByCompetency } from "@/lib/individual/scholar/store";
 import type { CompetencyCoverage } from "@/lib/competency/progress-model";
+import { loadTopicProgress, mergeStudyNext, topicProgressEnabled } from "@/lib/individual/scholar/study-next";
+import { isStudyId } from "@/lib/individual/scholar/study-carry";
+import { StudyNextCard, TopicProgressSection } from "../_components/topic-progress-view";
+import { getStudyPlan, studyPlanSchema } from "@/lib/individual/scholar/store";
+import { buildStudyPlan, unstartedMappedSections } from "@/lib/individual/scholar/study-plan";
+import { StudyPlanCard } from "../_components/study-plan-card";
 
 const STATUS_TEXT: Record<CompetencyProgressRow["status"], string> = {
   no_notes: "No notes linked yet",
@@ -237,6 +243,23 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   // PROGRESS-01 (Stage 8): one read of the evidence for the workspace. No AI.
   const period: PeriodKind = sp.period === "week" || sp.period === "month" || sp.period === "programme" ? sp.period : policy.scholarProgressPeriod;
   const pv = rows.ok && p && p.materials.length > 0 ? await loadProgress(ctx.admin, ctx.userId, policy, new Date().toISOString(), { period }) : null;
+  // SCHOLAR-COMPANION-01 P1: "Study next" and learning progress by topic, from the same rows plus one bounded evidence read.
+  // No AI. Gated by an option of scholar_progress_sections (topicProgressEnabled). Merged with Learning Intelligence's recommendations:
+  // the ones the card already says (same place, or covered) are dropped from its own list below.
+  const showTopicProgress = topicProgressEnabled(policy);
+  // SCHOLAR-COMPANION-01 (780): the study plan. On only where HQ switched it on AND 780 is present (fails closed). It reads the same topic evidence.
+  const planOn = policy.scholarStudyPlan && isStudyPlanOn(policy, await studyPlanSchema(ctx.admin, ctx.userId));
+  const planRead = planOn ? await getStudyPlan(ctx.admin, ctx.userId) : null;
+  const tp = (showTopicProgress || planRead?.ok === true) && rows.ok && p && p.materials.length > 0
+    ? await loadTopicProgress(ctx.admin, ctx.userId, policy, new Date().toISOString(), {
+      materials: rows.data.materials,
+      linked: allRows?.ok ? { mappings: allRows.data.mappings, concepts: allRows.data.concepts } : null,
+      competencies: learner?.programme && learner.competencies ? learner.competencies.map(c => ({ id: c.id, title: c.title })) : null,
+      studyId: study && isStudyId(sp.study) ? sp.study : null,
+    })
+    : null;
+  const merged = showTopicProgress && tp?.ok && li?.ok ? mergeStudyNext(tp.data.studyNext, li.data.recommendations, 5, study && isStudyId(sp.study) ? sp.study : null) : null;
+  const liShown = li?.ok ? (merged ? { ...li.data, recommendations: merged.rest } : li.data) : null;
 
   return (
     <>
@@ -257,6 +280,21 @@ export default async function ProgressPage({ params, searchParams }: { params: P
         ) : p && (
           <>
             {/* PROGRESS-01 (Stage 8 of 8): the learning command centre, above the detail by material. */}
+            {planRead?.ok ? (tp?.ok
+              ? <StudyPlanCard
+                accent={x.accent} today={today} topics={tp.data.topics.map(t => ({ label: t.label }))}
+                settings={planRead.data ? { examDate: planRead.data.examDate, examLabel: planRead.data.examLabel, weeklyMinutes: planRead.data.weeklyMinutes, daysPerWeek: planRead.data.daysPerWeek, goal: planRead.data.goal, priorities: planRead.data.priorities } : null}
+                result={planRead.data ? buildStudyPlan({
+                  plan: { examDate: planRead.data.examDate, examLabel: planRead.data.examLabel, weeklyMinutes: planRead.data.weeklyMinutes, daysPerWeek: planRead.data.daysPerWeek, goal: planRead.data.goal, priorities: planRead.data.priorities },
+                  entries: tp.data.topics, dueCards: p.totals.cardsDue, today, studyId: study && isStudyId(sp.study) ? sp.study : null,
+                  unstarted: allRows?.ok && learner?.programme && learner.competencies
+                    ? unstartedMappedSections({ mappings: allRows.data.mappings, concepts: allRows.data.concepts, questions: allRows.data.questions, attempts: allRows.data.attempts, competencies: learner.competencies.map(c => ({ id: c.id, title: c.title })) })
+                    : [],
+                }) : null} />
+              : <div className="mb-6"><Unreadable what="your study plan" /></div>)
+              : planRead ? (planRead.notProvisioned ? null : <div className="mb-6"><Unreadable what="your study plan" /></div>) : null}
+            {showTopicProgress && (tp?.ok ? <StudyNextCard items={merged ? merged.items : tp.data.studyNext} accent={x.accent} />
+              : tp ? <div className="mb-6"><Unreadable what="what to study next" /></div> : null)}
             {pv?.ok ? <ProgressWorkspace v={pv} sections={policy.scholarProgressSections} period={period} />
               : pv ? <StatePanel title="Your learning progress could not be read just now"><p>{pv.error} The detail below is still shown.</p></StatePanel> : null}
             <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -276,7 +314,9 @@ export default async function ProgressPage({ params, searchParams }: { params: P
             <TopicSection topics={topics} unreadable={!!allRows && !allRows.ok} accent={x.accent} />
             <CompetencySection learner={learner} progress={cp} coverage={li?.ok ? li.data.coverage : null} unreadable={cUnreadable} accent={x.accent} activity={activity} offered={programmesOffered} />
 
-            {li?.ok ? <LearningIntelligence li={li.data} accent={x.accent} /> : <div className="mt-8"><Unreadable what="learning intelligence" /></div>}
+            {showTopicProgress && tp?.ok && <TopicProgressSection m={tp.data} />}
+
+            {liShown ? <LearningIntelligence li={liShown} accent={x.accent} /> : <div className="mt-8"><Unreadable what="learning intelligence" /></div>}
 
             <section aria-labelledby="accuracy-h" className="mt-8">
               <h2 id="accuracy-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">By material</h2>
