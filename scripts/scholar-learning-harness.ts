@@ -836,8 +836,13 @@ const contentStatusLabelled = (src: Src) => {
     && /learner\.belowFloor > 0/.test(mp) && /learner\.belowFloor > 0/.test(pg);
 };
 /** K4: no Scholar code edits or deletes a mapping or a decision, and every upsert onto them leaves existing rows alone. */
+// SCHOLAR-UPLOAD-FIX: ONE update is allowed -- re-linking records the programme a section's competencies were last
+// mapped against, and nothing else: an update of chunk_analysis that sets programme_code ALONE. Concepts stay untouchable.
+const programmeOnly = (x: { table: string; stmt: string }) => x.table === "individual_scholar_chunk_analysis"
+  && /^\.update\(\{ programme_code: programmeCode \}\)/.test(x.stmt.trim()) && !/\.(delete|upsert)\(/.test(x.stmt);
 const trailEdits = (src: Src) => storeStatements(src)
   .filter(x => /^individual_scholar_(competency_decision|competency_map|chunk_analysis)$/.test(x.table))
+  .filter(x => !programmeOnly(x))
   .filter(x => /\.(update|delete)\(/.test(x.stmt) || (/\.upsert\(/.test(x.stmt) && !/ignoreDuplicates: true/.test(x.stmt)))
   .map(x => `${x.table}@${x.at}`);
 /** K5: what lies beyond the notes is split off before the check, checked on its own, and shown apart under its label. */
@@ -897,6 +902,18 @@ const legalEnv = (over: Record<string, string>) => ({
     [`INDIVIDUAL_LEGAL_${e}_${d}_VERSION`, "test-1"], [`INDIVIDUAL_LEGAL_${e}_${d}_URL`, "https://example.test/doc"]]))),
   ...over,
 });
+
+const SLIDES = `${LIB}/slide-reading.ts`;
+/** U1: in the slide reader, the policy gate and the consent preflight come before the AI call, and the identifier screen before a section is kept. */
+function slideReadingScreened(src: Src): boolean {
+  const s = src.get(SLIDES) ?? "";
+  const gate = s.indexOf('policy.scholarMaterialImageSlides !== "ai_transcription"');
+  const pre = s.indexOf("await aiPreflight(ctx)");
+  const call = s.indexOf("await runTranscription(");
+  const screen = s.indexOf("if (findPatientIdentifiers(text).length)");
+  const kept = s.indexOf("additions.push(");
+  return gate >= 0 && pre > gate && call > pre && screen > call && kept > screen;
+}
 
 function main() {
   console.log("SCHOLAR LEARNING HARNESS (COMPETEN-IND-004)\n");
@@ -1164,6 +1181,11 @@ function main() {
   if (MIG387 && MIG388) ok("K10. 387/388: configuration service-role only, own-row read on personal rows, no write policy, typed catalogue keys, an append-only trail that cascade can still remove, AI provenance, and case steps only on case questions",
     mig387Shape(MIG387) && mig388Shape(MIG388));
 
+  // SCHOLAR-UPLOAD-FIX: a picture-only slide read by AI is screened for patient identifiers, exactly like an upload,
+  // BEFORE its section is added -- and the reading is behind the owner's policy and the consent preflight.
+  ok("U1. picture-only slides: policy-gated, consent preflight before the AI call, every transcription screened for patient identifiers before a section is kept",
+    slideReadingScreened(REAL));
+
   // ── P. PLANTED-FAILURE CONTROLS ── each key check, run on a copy with the violation planted ──────
   const plant = (file: string, from: RegExp | string, to: string): Src => {
     const copy = new Map(REAL);
@@ -1173,6 +1195,9 @@ function main() {
     copy.set(file, after);
     return copy;
   };
+  ok("P62. ⚠ U1 goes red when the slide reader stops screening for patient identifiers, or drops the policy gate",
+    !slideReadingScreened(plant(SLIDES, 'if (findPatientIdentifiers(text).length) { skipped.push({ slide, reason: "patient_identifier" }); return; }', ""))
+    && !slideReadingScreened(plant(SLIDES, 'if (policy.scholarMaterialImageSlides !== "ai_transcription")', "if (false)")));
   ok("P1. ⚠ A1 goes red when one store query loses its user_id filter",
     unkeyedStatements(plant(STORE, '.from("individual_scholar_chunk").select("id, ordinal, page_from, page_to, content")\n    .eq("user_id", userId)', '.from("individual_scholar_chunk").select("id, ordinal, page_from, page_to, content")\n    ')).length > 0);
   ok("P2. ⚠ A2 goes red when processing trusts a path from the request body",
@@ -1335,6 +1360,8 @@ function main() {
     && !engineNeutral(HOLD, plant(GEN, "screen: findPatientIdentifiers,", "")));
   ok("P24. ⚠ K4 goes red when a decision is updated instead of appended",
     trailEdits(plant(STORE, ".insert({ user_id: userId, map_id: mapId, decision,", ".update({ user_id: userId, map_id: mapId, decision,")).length > 0);
+  ok("P63. ⚠ K4 goes red when the re-link update also rewrites a section's concepts",
+    trailEdits(plant(STORE, ".update({ programme_code: programmeCode })", ".update({ programme_code: programmeCode, concepts: [] })")).length > 0);
   ok("P25. ⚠ K5 goes red when the notes check is given the unsplit text, or the background is shown without its box",
     !explanationChecked(plant(GEN, "check: checkExplanation(split.main, asked, passages)", "check: checkExplanation(r.text, asked, passages)"))
     && !supplementaryApart(plant(CLIENT, "<BeyondNotes s={item.supplementary} />", "")));
