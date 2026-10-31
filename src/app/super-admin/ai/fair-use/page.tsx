@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
-import { loadBudgets, loadEvaluations, loadModelRoutingView, loadPolicies, loadProviderRegistryView, loadRates, pendingDrafts } from "@/lib/ai/fair-use-admin";
+import { loadAssistantProfileViews, loadBudgets, loadEvaluations, loadModelRoutingView, loadPolicies, loadProviderRegistryView, loadRates, pendingDrafts } from "@/lib/ai/fair-use-admin";
 import { aiFairUseEnabled } from "@/lib/ai/allowance";
 import { RISK_TIER_LABEL, type RiskTier } from "@/lib/ai/clinical-risk";
 import { PolicyEditor, PublishPolicies, RateForm } from "./_components/FairUseControls";
+import { AssistantProfileEditor } from "./_components/AssistantProfileControls";
+import { AUTHORISED_SCOPES, MODE_LABEL, PRODUCT_MODES, SCOPE_DESCRIPTION, SCOPE_LABEL, type AssistantMode, type DataScope } from "@/lib/ai/personal-assistant";
 import { BudgetCreate, BudgetPolicyEditor, BudgetStatus, RoutingEditor } from "./_components/BudgetControls";
 import { ModelRoutingEditor } from "./_components/ModelRoutingControls";
 import { ProviderRegistry } from "./_components/ProviderRegistryControls";
@@ -34,7 +36,7 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB",
 export default async function FairUsePage() {
   const ctx = await requireHqCapability("hq.platform.ai.manage");
   const [rates, policies, on, evaluations, budgets, drafts, modelRouting, registry, modes, modeVersions] = await Promise.all([loadRates(ctx.admin), loadPolicies(ctx.admin), aiFairUseEnabled(ctx.admin), loadEvaluations(ctx.admin), loadBudgets(ctx.admin), pendingDrafts(ctx.admin), loadModelRoutingView(ctx.admin), loadProviderRegistryView(ctx.admin), loadModes(ctx.admin), loadModeVersions(ctx.admin)]);
-  const [metrics, readiness, review, reviewVersions] = await Promise.all([loadPilotMetrics(ctx.admin, 30, modes), loadReadiness(ctx.admin), loadContentReviewViews(ctx.admin), loadContentReviewVersions(ctx.admin)]);
+  const [metrics, readiness, review, reviewVersions, profiles] = await Promise.all([loadPilotMetrics(ctx.admin, 30, modes), loadReadiness(ctx.admin), loadContentReviewViews(ctx.admin), loadContentReviewVersions(ctx.admin), loadAssistantProfileViews(ctx.admin)]);
   // SCHOLAR-EDU-AI-01: shown beside both publish buttons, so nothing is published without seeing what students cannot use.
   const scholarGaps = gapList(readiness.find(r => r.product === "scholar")?.rows ?? null);
   // The product's published risk rule ids: the choices for "clarifiable rules" (ids only, never rule text).
@@ -176,6 +178,35 @@ export default async function FairUsePage() {
               <div className="mt-3"><PolicyEditor product={p.product} initial={(p.draft ?? p.published) as any} /></div>
             </section>
           ))}
+
+          {/* Personal AI profiles: the no-code half of the ONE Personal AI (personal-assistant.ts). Narrows within AUTHORISED_SCOPES only. */}
+          <section aria-labelledby="pa-h" className="rounded-xl border border-gray-200 bg-white p-5">
+            <h2 id="pa-h" className="text-[16px] font-bold text-gray-900">Personal AI profiles</h2>
+            <p className="mt-1 text-[13px] text-gray-600">
+              What each product&apos;s personal AI offers and may read. A profile can only narrow what the product is authorised to use, never widen it.
+              A scope that is not ticked is not read. Saved drafts publish with the other AI policies, using Publish below. Nothing published: the default applies.
+            </p>
+            {profiles === null ? (
+              <p role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">The profiles could not be read just now (or migration 076 is not applied here). The defaults apply.</p>
+            ) : (
+              <div className="mt-3 grid gap-4 md:grid-cols-2">
+                {profiles.map(v => {
+                  const doc = v.draft ?? v.published;
+                  const list = (xs: readonly string[], label: (c: string) => string) => xs.length ? xs.map(label).join(", ") : "none";
+                  return (
+                    <div key={v.product} className="rounded-lg border border-gray-200 p-4">
+                      <h3 className="text-[15px] font-bold capitalize text-gray-900">{v.product}</h3>
+                      <p className="mt-1 text-[13px] text-gray-800">In force: <strong>{v.hasPublished ? "published profile" : "the default (nothing published)"}</strong>{v.pending ? " · an unpublished draft is waiting" : ""}.</p>
+                      <p className="text-[12.5px] text-gray-600">Reads: {list(v.published.scopes, c => SCOPE_LABEL[c as DataScope])}. Modes: {list(v.published.modes, c => MODE_LABEL[c as AssistantMode])}. Opens in: {MODE_LABEL[v.published.defaultMode]}.</p>
+                      <div className="mt-2"><AssistantProfileEditor key={`${v.product}-${JSON.stringify(v.published)}-${v.pending}`} product={v.product}
+                        scopes={AUTHORISED_SCOPES[v.product].map(code => ({ code, label: SCOPE_LABEL[code], description: SCOPE_DESCRIPTION[code] }))}
+                        modes={PRODUCT_MODES[v.product].map(code => ({ code, label: MODE_LABEL[code] }))} initial={doc} /></div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
           <section aria-labelledby="bu-h" className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 id="bu-h" className="text-[16px] font-bold text-gray-900">Budgets: who pays</h2>

@@ -65,6 +65,41 @@ export function resolveAssistantProfile(product: AiProduct, s: any): AssistantPr
   return { defaultMode, modes: usable, scopes };
 }
 
+export const SCOPE_LABEL: Record<DataScope, string> = {
+  passport: "Passport", study_context: "Study material", own_learning: "Own learning record",
+  own_development: "Own Professional needs and plan", study_session: "Connected study session", professional_record: "Own Professional record",
+};
+/** One plain-English line per scope, for the HQ editor. */
+export const SCOPE_DESCRIPTION: Record<DataScope, string> = {
+  passport: "The person's own Passport.",
+  study_context: "The study material the person's workspace hands over.",
+  own_learning: "The person's own recorded programme, level and Scholar progress.",
+  own_development: "Reads the person's own Professional needs and plan, only with their consent.",
+  study_session: "The person's own connected study session summary.",
+  professional_record: "The person's own Professional record.",
+};
+
+/** Pure, strict (HQ draft save): refuses anything outside the product's AUTHORISED scopes and supported modes, where
+ *  resolveAssistantProfile (the reader) silently clamps. The stored document is exactly { defaultMode, modes, scopes }. */
+export function validateAssistantProfile(product: AiProduct, input: any): { ok: true; doc: AssistantProfile } | { ok: false; error: string } {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return { ok: false, error: "Send a profile." };
+  const list = (v: unknown): string[] | null => Array.isArray(v) && v.every(x => typeof x === "string") ? v as string[] : null;
+  const modes = list(input.modes), scopes = list(input.scopes);
+  if (!modes) return { ok: false, error: "Modes must be a list." };
+  if (!scopes) return { ok: false, error: "Data scopes must be a list." };
+  const badMode = modes.find(m => !(PRODUCT_MODES[product] as readonly string[]).includes(m));
+  if (badMode) return { ok: false, error: `${product} does not offer the mode "${badMode}".` };
+  const badScope = scopes.find(x => !(AUTHORISED_SCOPES[product] as readonly string[]).includes(x));
+  if (badScope) return { ok: false, error: `${product} is not authorised to read "${badScope}".` };
+  if (modes.length === 0) return { ok: false, error: "Offer at least one mode." };
+  if (typeof input.defaultMode !== "string" || !modes.includes(input.defaultMode)) return { ok: false, error: "The default mode must be one of the modes offered." };
+  return { ok: true, doc: {
+    defaultMode: input.defaultMode as AssistantMode,
+    modes: PRODUCT_MODES[product].filter(m => modes.includes(m)),
+    scopes: AUTHORISED_SCOPES[product].filter(x => scopes.includes(x)),
+  } };
+}
+
 /** The published profile. Unpublished or unreadable: the default, which is the product's authorised behaviour. */
 export async function loadAssistantProfile(admin: any, product: AiProduct): Promise<AssistantProfile> {
   try {

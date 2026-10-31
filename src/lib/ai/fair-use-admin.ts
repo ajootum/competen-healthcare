@@ -4,8 +4,9 @@ import { activationProblems, allowedHosts, checkEndpoint, credentialEnvName, PRO
   SUPPORTED_PROTOCOLS, type ProviderRegistry, type RegisteredProvider } from "./provider-registry";
 import { generate } from "./client";
 import { AI_PROVIDERS } from "./config";
-import { publishScope, setOverride, type WceActor } from "@/lib/config/workspace-config-write";
+import { publishScope, setOverride, type WceActor, type WceResult } from "@/lib/config/workspace-config-write";
 import { RISK_TIERS } from "./clinical-risk";
+import { assistantPath, resolveAssistantProfile, validateAssistantProfile, type AssistantProfile } from "./personal-assistant";
 import { BUDGET_CODE, ROUTING_PATH, budgetPath, budgetPeriod, resolveBudgetPolicy, resolveRouting, type BudgetPolicy, type Workflow } from "./consumption";
 import { ACTIVITY_CODE, AI_PRODUCTS, FAIR_USE_SCOPE, fairUsePath, resolvePolicy, type AiProduct, type ProductAiPolicy } from "./fair-use-policy";
 
@@ -397,4 +398,34 @@ export async function loadModelRoutingView(admin: any): Promise<{ published: Mod
   if (data === null) return null;
   const r = data[0];
   return { published: resolveModelRouting(r?.published ?? null), draft: r?.draft && JSON.stringify(r.draft) !== JSON.stringify(r.published ?? null) ? resolveModelRouting(r.draft) : null };
+}
+
+// ── Personal AI profiles (HQ editor, ai.assistant.<product>) ─────────────────────────────────────────────────
+//
+// The no-code profile personal-assistant.ts reads: { defaultMode, modes, scopes }. A draft is validated STRICTLY against
+// the product's AUTHORISED scopes and supported modes (a profile only narrows). It is a CONFIG-002 draft in the fair-use
+// scope, so the existing PublishPolicies button publishes it with the other AI policies. It changes no authorisation.
+
+export type AssistantProfileView = { product: AiProduct; published: AssistantProfile; hasPublished: boolean; draft: AssistantProfile | null; pending: boolean };
+
+export async function loadAssistantProfileViews(admin: any): Promise<AssistantProfileView[] | null> {
+  const data = await rows(admin.from("workspace_config_overrides").select("config_path, draft, published")
+    .eq("scope_type", FAIR_USE_SCOPE.scopeType).eq("scope_ref", FAIR_USE_SCOPE.scopeRef));
+  if (data === null) return null;
+  return AI_PRODUCTS.map(product => {
+    const r = data.find((x: any) => x.config_path === assistantPath(product));
+    return {
+      product, published: resolveAssistantProfile(product, r?.published ?? null), hasPublished: !!r?.published,
+      draft: r?.draft ? resolveAssistantProfile(product, r.draft) : null,
+      pending: !!r && JSON.stringify(r.draft ?? null) !== JSON.stringify(r.published ?? null),
+    };
+  });
+}
+
+/** Save a draft. Refused (400/422) with the reason; nothing is stored then. */
+export async function saveAssistantProfileDraft(admin: any, actor: WceActor, product: unknown, input: unknown): Promise<WceResult> {
+  if (!(AI_PRODUCTS as readonly unknown[]).includes(product)) return { ok: false, status: 400, error: "Choose a product." };
+  const v = validateAssistantProfile(product as AiProduct, input);
+  if (!v.ok) return { ok: false, status: 422, error: v.error };
+  return setOverride(admin, actor, FAIR_USE_SCOPE, assistantPath(product as AiProduct), v.doc);
 }
