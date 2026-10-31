@@ -15,7 +15,7 @@
 import type { QuestionRow } from "./store";
 import { findPatientIdentifiers } from "./extract";
 import { LEARNER_CARD, LEARNER_CARD_LABEL, LIBRARY_QUESTION_LABEL } from "./config";
-import { flashcardFrontAsks, rubricOf, stemKey } from "./question-intel";
+import { flashcardFrontAsks, rubricOf, stemKey, type CognitiveLevel } from "./question-intel";
 import { scheduleReview, type SrsParams } from "./revision";
 import { citationOf } from "./revision-view";
 
@@ -135,6 +135,8 @@ export type CardReview = {
 export type FlashcardView = {
   id: string; front: string; back: string; explanation: string | null;
   origin: CardOrigin; originLabel: string; topic: string | null; objective: string | null; keyPoints: string[];
+  /** The rubric's cognitive level where one is stored. application and reasoning cards are the revision guide's Clinical Application. */
+  level: CognitiveLevel | null;
   difficulty: 1 | 2 | 3 | null; competency: { id: string; title: string } | null; sources: CardSource[];
   createdAt: string; updatedAt: string | null; contentVersion: number; version: string;
   material: { id: string; title: string }; chunkId: string;
@@ -172,7 +174,7 @@ export function flashcardView(q: QuestionRow, x: CardRowExtras, today: string): 
   const explanation = q.rationale && q.rationale.trim() && q.rationale.trim() !== back.trim() ? q.rationale.trim() : null;
   return {
     id: q.id, front: q.stem, back, explanation, origin, originLabel: ORIGIN_LABEL[origin],
-    topic: x.topics[0] ?? null, objective: rubric?.objective ?? null, keyPoints: rubric?.keyPoints ?? [],
+    topic: x.topics[0] ?? null, objective: rubric?.objective ?? null, keyPoints: rubric?.keyPoints ?? [], level: rubric?.level ?? null,
     difficulty: q.difficulty === 1 || q.difficulty === 2 || q.difficulty === 3 ? q.difficulty : null,
     competency: q.competencyId ? { id: q.competencyId, title: x.competencyTitle ?? "A linked competency" } : null,
     sources, createdAt: q.createdAt, updatedAt: x.updatedAt, contentVersion: x.contentVersion,
