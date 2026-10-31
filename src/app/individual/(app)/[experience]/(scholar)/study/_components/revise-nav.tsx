@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { studyHref } from "./question-view";
+import { withStudy } from "@/lib/individual/scholar/study-carry";
 
 // THE REVISE SUB-NAVIGATION -- SCHOLAR-FLASHCARDS-01 (owner mock-up, 31 Oct 2026), within the Scholar shell.
 // Practice Questions, Flashcards, Adaptive Exams, Revision History, My Decks. It sits INSIDE the Revise space: the
@@ -27,8 +28,9 @@ const ICON: Record<ReviseNavKey, React.ReactNode> = {
  * `row`: one row at every width (the Revise and Adaptive pages, whose own layout has no side column for it).
  * `container` (SCHOLAR-FLASHCARDS-QA-01): a row until the CONTENT AREA (the nearest @container) is 56rem wide, then a
  * column -- by the width it has, not the viewport, since the shell sidebar takes its share first.
+ * `studyId` (SCHOLAR-SESSION-AI-02): the open study session, carried on every sub-tab. Absent: the links are unchanged.
  */
-export function ReviseNav({ current, adaptive, row = false, container = false }: { current: ReviseNavKey; adaptive: boolean; row?: boolean; container?: boolean }) {
+export function ReviseNav({ current, adaptive, row = false, container = false, studyId = null }: { current: ReviseNavKey; adaptive: boolean; row?: boolean; container?: boolean; studyId?: string | null }) {
   const items: { key: ReviseNavKey; label: string; href: string }[] = [
     { key: "practice", label: "Practice Questions", href: studyHref("revise") },
     { key: "flashcards", label: "Flashcards", href: flashcardsHref() },
@@ -44,7 +46,7 @@ export function ReviseNav({ current, adaptive, row = false, container = false }:
           const on = i.key === current;
           return (
             <li key={i.key}>
-              <Link href={i.href} aria-current={on ? "page" : undefined}
+              <Link href={withStudy(i.href, studyId)} aria-current={on ? "page" : undefined}
                 className={`inline-flex min-h-[40px] w-full items-center gap-2.5 rounded-xl px-3 text-[14px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on ? "bg-[var(--cmp-role-indigo-soft)] text-[var(--cmp-role-indigo-ink)]" : "text-gray-700 hover:bg-gray-100"}`}>
                 <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{ICON[i.key]}</svg>
                 <span className="whitespace-nowrap">{i.label}</span>
