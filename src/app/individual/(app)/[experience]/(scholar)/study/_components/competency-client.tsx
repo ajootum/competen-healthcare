@@ -114,6 +114,8 @@ export function AnalysePanel({ materialId, consent, sections, analysed, programm
       setDone(n);
       left = typeof r.json.remaining === "number" ? r.json.remaining : 0;
       if (!r.json.analysed) break;
+      // SCHOLAR-UPLOAD-FIX: the topics found so far appear as each batch is saved, not only at the end.
+      if (left > 0) router.refresh();
     }
     setRunning(false);
     router.refresh();

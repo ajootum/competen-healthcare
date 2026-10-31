@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { competenciesFound, noProgrammeText, topicPractice, topicsOf } from "./classify-view";
+import { TOPICS_NONE, TOPICS_UNREAD, competenciesFound, noProgrammeText, relinkTargets, topicPractice, topicsOf, topicsState } from "./classify-view";
 import { competencyAbsence } from "./competency-view";
 
 const concepts = new Map<string, string[]>([
@@ -60,5 +60,37 @@ describe("honest absence where no programme or catalogue is configured", () => {
     expect(competencyAbsence(none, 3)).toMatch(/Choose your programme in My Learning/);
     expect(competencyAbsence(none)).toMatch(/Choose your programme in My Learning/);
     expect(competencyAbsence({ ...none, provisioned: false }, 0)).toBeNull();
+  });
+});
+
+describe("SCHOLAR-UPLOAD-FIX: the topics line", () => {
+  it("says how far topic finding has got while sections wait, never 'none'", () => {
+    expect(topicsState({ consent: true, analysed: 12, sections: 47, topics: 0 })).toEqual({ kind: "finding", text: "Finding topics… 12 of 47 sections" });
+    expect(topicsState({ consent: true, analysed: 0, sections: 1, topics: 0 }).text).toBe("Finding topics… 0 of 1 section");
+    // Topics already found are shown, with the progress line beside them until every section is done.
+    expect(topicsState({ consent: true, analysed: 30, sections: 47, topics: 40 })).toEqual({ kind: "found", text: "Finding topics… 30 of 47 sections" });
+    expect(topicsState({ consent: true, analysed: 47, sections: 47, topics: 277 })).toEqual({ kind: "found", text: null });
+  });
+  it("'No topics found' only when every section was analysed and none was found", () => {
+    expect(topicsState({ consent: true, analysed: 47, sections: 47, topics: 0 })).toEqual({ kind: "none", text: TOPICS_NONE });
+    expect(topicsState({ consent: false, analysed: 47, sections: 47, topics: 0 }).kind).toBe("none");
+  });
+  it("AI help off keeps the surface's own words; unreadable progress is said, not guessed", () => {
+    expect(topicsState({ consent: false, analysed: 3, sections: 47, topics: 0 })).toEqual({ kind: "off", text: null });
+    expect(topicsState({ consent: false, analysed: 3, sections: 47, topics: 5 })).toEqual({ kind: "found", text: null });
+    expect(topicsState({ consent: true, analysed: null, sections: null, topics: 0 })).toEqual({ kind: "unread", text: TOPICS_UNREAD });
+  });
+});
+
+describe("SCHOLAR-UPLOAD-FIX: which sections are re-linked", () => {
+  const order = ["a", "b", "c", "d", "e"];
+  const analysed = new Map<string, string | null>([["a", null], ["b", "BSN"], ["c", "RN-DIP"], ["e", null]]);
+  it("the analysed sections recorded against no programme or another one, in document order", () => {
+    expect(relinkTargets(order, analysed, "BSN")).toEqual(["a", "c", "e"]);
+  });
+  it("never a section not analysed yet (the ordinary run maps it), and nothing without a programme", () => {
+    expect(relinkTargets(order, analysed, "BSN")).not.toContain("d");
+    expect(relinkTargets(order, analysed, null)).toEqual([]);
+    expect(relinkTargets(order, new Map([["a", "BSN"]]), "BSN")).toEqual([]);
   });
 });
