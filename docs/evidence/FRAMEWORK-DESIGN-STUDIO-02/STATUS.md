@@ -67,7 +67,7 @@ Reuse the existing infrastructure. No-code first. No parallel systems. Testing p
 | S1 | Server (a): criteria CRUD on drafts; append-mode import; spreadsheet template and parser into a package; draft vs published diff | pending |
 | S2 | UI (a): properties panel, criteria editor, touch drag helper, registry labels, compare view, spreadsheet import page | pending |
 | S3 | Server (b): migration 760 Areas; layout draft extension for organisational cross-parent moves; substantive moves in drafts | **done 31 Oct** (760 staging x2, server code; substantive moves left to S1 criteria editing and S5, see Log) |
-| S4 | UI (b): Areas in the tree, cross-parent drag, visual framework map | pending |
+| S4 | UI (b): Areas in the tree, cross-parent drag, visual framework map | **done 31 Oct** (not browser-verified, see Log) |
 | S5/S6 | D2 revision drafts, server (770) and UI | pending |
 
 ## Log
@@ -99,3 +99,19 @@ Reuse the existing infrastructure. No-code first. No parallel systems. Testing p
 **Checks.** vitest framework-areas (new, 14) + layout-order + framework-layout + review-pack + clinical-review + framework-publication: 64/64. Plant-fail: organisational actions taken out of NOT_AUTHORSHIP and published routed live -> 2 red, restored -> green.
 
 **Not done here.** Substantive moves (criterion to another section or competency) in draft frameworks: content edits belong to S1 criteria editing (competen-fds2a) and, for published frameworks, S5 revision drafts. UI is S4.
+
+### 31 Oct 2026: S4 done (branch hq/framework-studio-02b, not pushed)
+
+**Built (UI over the S3 API, no server change).**
+- Explorer tree is framework > Area > domain > competency; domains with no Area under "Unassigned" (shown only when Areas exist and one domain has none); a framework with no Area is the flat tree as before. Create Area (details form), Rename, Delete (enabled only when empty; server also checks), Move up / Move down and drag to reorder Areas (`reorder_areas`), domain reorder now inside its Area (the full-framework order is sent: slots refilled, same `expand` idea as S2).
+- Organisational moves: drag a domain onto an Area (or Unassigned), drag a competency onto another domain (moves to the end), or the accessible alternative: "Move to Area..." on an open domain and "Move to domain..." on the selected competency, each a select plus a Move button (a select that moved on change would move on every arrow key). Optimistic with rollback; live-region announcements ("Moved X to the Area Y."), and on a published framework the message adds that it is saved to the draft layout.
+- Draft banner (`LayoutDraftBanner`) now says "published structure" and lists Area/domain/competency moves as organisational, no clinical re-review.
+- Map view: Tree | Map toggle (aria-pressed). Areas are columns (CSS grid auto-fit, stacks on a phone with no breakpoint), domain cards, competency chips (name, code, active-criteria count, status dot and text). Real nested lists, chips are buttons. A chip selects the competency in the tree and returns to the Tree view (properties/editor).
+- CPR-MOB-001: only the existing `md` edge; `pointer-coarse:min-h-[var(--cmp-touch-min)]` on every new control; `min-w-0` / `break-words` so nothing sets a fixed width. Not measured in a browser (no authenticated 760 stack here).
+- `page.tsx` passes the Areas as the editor sees them: live Areas + domain `areaId`, `applyLayout` over the pending draft (order, names, placement), `areasReady` = 760 present.
+
+**Files.** New: `src/lib/competency/studio-areas.ts` (+ test, 11), `_components/OrganiseControls.tsx`, `_components/FrameworkMap.tsx`. Edited: `StudioWorkspace.tsx` (an S4 block after the reorder code, the domain loop wrapped per Area, toggle), `LayoutDraftBanner.tsx`, `[frameworkId]/page.tsx`.
+
+**Merge notes for fds2a (S2).** StudioWorkspace.tsx conflicts are expected. (1) `Group` gets `expand` in both branches (same name and meaning; mine also adds `post` for `reorder_areas` and level "areas"); the `order: g.expand ? g.expand(ids) : ids` line must read the same. (2) Cross-parent drops use native HTML5 events: `xdrop(...)` on Area blocks and domain blocks reads `dragSource()` from `drag.current.{key,index}` and relies on same-list rows stopping the event first. When S2's pointer drag replaces native drag, the pointer-up handler must, when the hit element is not in the same list, resolve the source like `dragSource()` (domain key `domains:<areaId|none>`, competency key `competencies:<domainId>`) and the target from the element under the pointer (add `data-drop-area` / `data-drop-domain` attributes to the Area and domain blocks), then call `dropAction` + `organiseMove`. `dropAction` and everything else in studio-areas.ts is pure and unaffected. (3) The competency "Move to domain..." select sits under the selected explorer row, not in the properties panel, so it does not touch PropertiesPanel.
+
+**Checks.** tsc whole project clean (`NODE_OPTIONS=--max-old-space-size=8192`), which includes the S3 `framework-layout.ts:105` fix. eslint clean on all changed files. vitest studio-areas 11/11 (grouping incl. unassigned, expandOrder, setDomainArea, moveCompetency, dropAction, mapModel). Not done: browser walk at 375/768 and a drag walk (needs the authenticated staging stack with 760).
