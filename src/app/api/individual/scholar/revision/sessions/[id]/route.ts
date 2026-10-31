@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { getRevisionSession, revisionPool, updateRevisionSession, type QuestionRow } from "@/lib/individual/scholar/store";
+import { getRevisionSession, revisionPool, updateRevisionSession, type QuestionRow, type SessionAttempt } from "@/lib/individual/scholar/store";
 import { audit } from "@/lib/individual/scholar/http";
 import { MARKING_LABEL, REVISION_FORMATS, type Marking } from "@/lib/individual/scholar/config";
 import { feedbackView, revisionItemView } from "@/lib/individual/scholar/revision-view";
-import { keyOf } from "@/lib/individual/scholar/revision";
+import { keyOf, structuredParts } from "@/lib/individual/scholar/revision";
 import { questionLinks, type QuestionLink } from "@/lib/individual/scholar/revision-links";
+import { formativeOf, formativeText, storedPartResults } from "@/lib/individual/scholar/written-feedback";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -30,6 +31,17 @@ async function load(ctx: { admin: unknown; userId: string }, id: string) {
   return { s: s.data, questions };
 }
 
+/**
+ * SCHOLAR-WRITTEN-FEEDBACK-01: the formative AI feedback an AI-evaluated written answer kept (written-feedback.ts),
+ * shown again with its label. Nothing for a self-graded or code-marked answer: their own label stands alone.
+ */
+function keptFeedback(q: QuestionRow, a: SessionAttempt) {
+  const parts = structuredParts(q);
+  if (parts.length) { const structured = storedPartResults(a.response, a.marking, parts.length); return structured ? { structured } : {}; }
+  const whole = formativeOf(a.response, a.marking)?.items.find(i => i.part === null);
+  return whole ? { evaluation: formativeText(whole), evaluationParts: whole.parts } : {};
+}
+
 function view(s: NonNullable<Awaited<ReturnType<typeof load>>["s"]>, questions: QuestionRow[], showFeedback: boolean, links: Map<string, QuestionLink> = new Map()) {
   const answered = new Map(s.attempts.map(a => [a.questionId, a]));
   const held = new Map(s.held.map(h => [h.questionId, h.response.text]));
@@ -38,7 +50,7 @@ function view(s: NonNullable<Awaited<ReturnType<typeof load>>["s"]>, questions: 
     items: questions.map(revisionItemView),
     answered: questions.filter(q => answered.has(q.id) || held.has(q.id)).map(q => {
       const a = answered.get(q.id);
-      if (a) return { questionId: q.id, ...(showFeedback ? { feedback: feedbackView(q, { correct: a.correct, score: a.score, marking: a.marking as Marking, link: links.get(q.id) ?? null }) } : {}) };
+      if (a) return { questionId: q.id, ...(showFeedback ? { feedback: feedbackView(q, { correct: a.correct, score: a.score, marking: a.marking as Marking, link: links.get(q.id) ?? null, ...keptFeedback(q, a) }) } : {}) };
       // 425, owner decision R4: a short answer held unmarked. Before the end, only that it is kept. At the end, the
       // student's own answer beside the accepted answers, the explanation and the source, to grade it themselves.
       const { answer: keyText, rationale, source } = feedbackView(q, { correct: false, score: null, marking: "self_graded" });

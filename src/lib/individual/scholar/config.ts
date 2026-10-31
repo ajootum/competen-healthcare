@@ -251,6 +251,11 @@ export const MARKING_LABEL = {
   ai_evaluation: "AI evaluation: an AI judged your answer against your notes. Not verified.",
 } as const;
 export type Marking = keyof typeof MARKING_LABEL;
+/**
+ * SCHOLAR-WRITTEN-FEEDBACK-01: AI feedback on a written answer, kept with the answer (written-feedback.ts). Formative
+ * only: never self-assessment, never verified, never competence (D5).
+ */
+export const FORMATIVE_FEEDBACK_LABEL = "Formative AI feedback on your written answer. Not self-assessment, not verified, not a measure of competence.";
 
 /** S4: a multi-step practice case has this many steps at most (migration 388 allows 1 to 5). */
 export const CASE_MAX_STEPS = 4;

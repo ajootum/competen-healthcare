@@ -17,6 +17,7 @@ import { STUDY_ACHIEVEMENT, isStudyAchievementKind, studyAchievementsFrom, type 
 import { passportEvaluationOf, type PassportEvaluation } from "./passport-evaluations";
 import type { ExamOption, PaperFlag, ParsedQuestion, QuestionFlag } from "./exam-paper";
 import { stemKey } from "./question-intel";
+import { formativeOf, type FormativeFeedback } from "./written-feedback";
 import { servableLibraryVersions, type LibraryPick } from "./library-questions";
 import type { ResearchSource } from "./exam-research";
 import type { OsceDefinition, OsceItem, OsceSource, OsceStationDraft, OsceTick } from "./osce";
@@ -900,7 +901,8 @@ export async function createRevisionSession(admin: Admin, userId: string, input:
   return { ok: true, id: data.id };
 }
 
-export type SessionAttempt = { questionId: string; correct: boolean; score: number | null; marking: string; answeredAt: string };
+/** `response` is the stored answer (416): the student's own words, and on an ai_evaluation attempt its formative feedback (written-feedback.ts). */
+export type SessionAttempt = { questionId: string; correct: boolean; score: number | null; marking: string; answeredAt: string; response?: Record<string, unknown> | null };
 /** 425: a short answer held, unmarked, until the end of its session (end-of-session feedback and Mock). */
 export type HeldAnswer = { questionId: string; response: { text: string } };
 
@@ -917,7 +919,7 @@ export async function getRevisionSession(admin: Admin, userId: string, id: strin
   const itemsOf = (cols: string) => admin.from("individual_scholar_revision_session_item").select(cols).eq("user_id", userId).eq("session_id", id).order("ordinal");
   const [first, att] = await Promise.all([
     itemsOf("ordinal, question_id, held_response"),
-    admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at").eq("user_id", userId).eq("revision_session_id", id).order("answered_at"),
+    admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at, response").eq("user_id", userId).eq("revision_session_id", id).order("answered_at"),
   ]);
   let items = first, holding = true;
   if (first.error && isNotProvisioned(first.error)) { items = await itemsOf("ordinal, question_id"); holding = false; }
@@ -927,11 +929,30 @@ export async function getRevisionSession(admin: Admin, userId: string, id: strin
     ok: true,
     data: {
       session: toRevSession(s), questionIds: rows.map(r => r.question_id),
-      attempts: ((att.data ?? []) as any[]).map(a => ({ questionId: a.question_id, correct: a.correct, score: a.score === null ? null : Number(a.score), marking: a.marking, answeredAt: a.answered_at })),
+      attempts: ((att.data ?? []) as any[]).map(a => ({ questionId: a.question_id, correct: a.correct, score: a.score === null ? null : Number(a.score), marking: a.marking, answeredAt: a.answered_at, response: a.response && typeof a.response === "object" ? a.response : null })),
       held: rows.filter(r => typeof r.held_response?.text === "string").map(r => ({ questionId: r.question_id, response: { text: r.held_response.text } })),
       holding,
     },
   };
+}
+
+/**
+ * SCHOLAR-WRITTEN-FEEDBACK-01. The caller's latest AI-evaluated written answers to these questions that kept formative
+ * feedback (written-feedback.ts formativeOf), newest first, at most `limit`. Owner-keyed. Formative only: nothing that
+ * makes an evaluation, a verification or a Passport entry calls this.
+ */
+export async function recentWrittenFeedback(admin: Admin, userId: string, questionIds: readonly string[], limit = 6): Promise<Read<{ id: string; questionId: string; answeredAt: string; formative: FormativeFeedback }[]>> {
+  const ids = [...new Set(questionIds)].filter(isUuid).slice(0, 200);
+  if (!ids.length) return { ok: true, data: [] };
+  const { data, error } = await admin.from("individual_scholar_attempt").select("id, question_id, answered_at, marking, response")
+    .eq("user_id", userId).eq("marking", "ai_evaluation").in("question_id", ids).order("answered_at", { ascending: false }).limit(Math.max(1, limit) * 4);
+  if (error) return fail(error);
+  const out: { id: string; questionId: string; answeredAt: string; formative: FormativeFeedback }[] = [];
+  for (const a of (data ?? []) as any[]) {
+    const formative = formativeOf(a.response, a.marking);
+    if (formative && out.length < limit) out.push({ id: a.id, questionId: a.question_id, answeredAt: a.answered_at, formative });
+  }
+  return { ok: true, data: out };
 }
 
 /** 425: hold a short answer, unmarked, on its session item until the end. false where it could not be kept (425 absent). Owner-keyed. */

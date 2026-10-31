@@ -601,6 +601,7 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f
           <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{f.evaluation.label}</p>
           {f.evaluation.parts ? <FeedbackPartsView parts={f.evaluation.parts} /> : <p className="mt-1 text-[13.5px] text-amber-950">{f.evaluation.feedback}</p>}
           <FormativeAiLabel className="mt-1" />
+          {f.evaluation.formative && <p className="mt-0.5 text-[12px] text-amber-900">{f.evaluation.formative}</p>}
         </div>
       )}
       {f.structured ? (
@@ -614,6 +615,7 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f
                 <div className="mt-1 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
                   <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{pt.evaluation.label}</p>
                   {pt.evaluation.parts ? <FeedbackPartsView parts={pt.evaluation.parts} /> : <p className="mt-1 text-[13.5px] text-amber-950">{pt.evaluation.feedback}</p>}
+                  {pt.evaluation.formative && <p className="mt-0.5 text-[12px] text-amber-900">{pt.evaluation.formative}</p>}
                 </div>
               )}
             </li>

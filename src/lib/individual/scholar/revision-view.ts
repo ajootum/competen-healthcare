@@ -7,7 +7,7 @@
 // question's feedback is part by part, with its practice marks (formative).
 
 import { citeChunk } from "./extract";
-import { LEARNER_CARD, LEARNER_CARD_LABEL, LIBRARY_QUESTION_LABEL, LIBRARY_REVISION_LABEL, MARKING_LABEL, NOT_COMPETENCE_LABEL, PRACTICE_MARKS_LABEL, REVISION_LABEL, type Marking } from "./config";
+import { FORMATIVE_FEEDBACK_LABEL, LEARNER_CARD, LEARNER_CARD_LABEL, LIBRARY_QUESTION_LABEL, LIBRARY_REVISION_LABEL, MARKING_LABEL, NOT_COMPETENCE_LABEL, PRACTICE_MARKS_LABEL, REVISION_LABEL, type Marking } from "./config";
 import { answerText, keyOf, learnerItem, practiceMarks, structuredParts, type LearnerItem, type PartResult } from "./revision";
 import type { LibraryProvenance, QuestionRow } from "./store";
 import { GENERATION_DIFFICULTIES as STEPS, GROUNDING_LABEL, LEVEL_LABEL, rubricOf, type FeedbackParts, type GenerationDifficulty } from "./question-intel";
@@ -41,7 +41,7 @@ export function revisionItemView(q: QuestionRow): RevisionItemView {
 /** SCHOLAR-SQIE-CLOSE-01: one part of a structured answer after marking. */
 export type StructuredPartFeedback = {
   prompt: string; marks: number; awarded: number | null; by: PartResult["by"] | null; accepted: string; keyPoints: string[];
-  evaluation: { feedback: string; label: string; parts: FeedbackParts | null } | null;
+  evaluation: { feedback: string; label: string; parts: FeedbackParts | null; formative?: string } | null;
 };
 
 export type RevisionFeedback = {
@@ -50,7 +50,7 @@ export type RevisionFeedback = {
   /** The key's indexes for the choice kinds, so the card can mark the options. */
   key: { index?: number; indexes?: number[]; order?: number[]; matches?: string[] } | null;
   /** AI evaluation of a short answer: its feedback, labelled, and its five parts where it wrote them (evaluate v2). */
-  evaluation?: { feedback: string; label: string; parts?: FeedbackParts | null } | null;
+  evaluation?: { feedback: string; label: string; parts?: FeedbackParts | null; formative?: string } | null;
   /** SCHOLAR-QUESTION-INTELLIGENCE-01: after answering only -- what the question checks, at what level, its key points. */
   rubric?: { objective: string | null; level: string; keyPoints: string[]; grounding: string } | null;
   /** SCHOLAR-SQIE-01: the difficulty a follow-up practice on this material starts at -- a step up after a right answer, down after a miss. */
@@ -80,7 +80,7 @@ export function feedbackView(q: QuestionRow, m: { correct: boolean; score: numbe
         const r = results?.[i] ?? null;
         return {
           prompt: p.prompt, marks: p.marks, awarded: r ? r.awarded : null, by: r ? r.by : null, accepted: p.accepted.join("; "), keyPoints: p.rubric?.keyPoints ?? [],
-          evaluation: r?.by === "ai" && r.feedback ? { feedback: r.feedback, label: MARKING_LABEL.ai_evaluation, parts: r.parts ?? null } : null,
+          evaluation: r?.by === "ai" && r.feedback ? { feedback: r.feedback, label: MARKING_LABEL.ai_evaluation, parts: r.parts ?? null, formative: FORMATIVE_FEEDBACK_LABEL } : null,
         };
       }),
       practiceMarks: { awarded, total, label: PRACTICE_MARKS_LABEL },
@@ -93,7 +93,7 @@ export function feedbackView(q: QuestionRow, m: { correct: boolean; score: numbe
     answer: answerText(q), rationale: q.rationale,
     source: { quote: q.library ? "" : q.sourceQuote, citation: citationOf(q), materialId: q.materialId, chunkId: q.chunkId },
     key: !k ? null : k.kind === "choice" ? { index: k.index } : k.kind === "set" ? { indexes: k.indexes } : k.kind === "order" ? { order: k.order } : k.kind === "matches" ? { matches: k.matches } : null,
-    evaluation: m.evaluation ? { feedback: m.evaluation, label: MARKING_LABEL.ai_evaluation, parts: m.evaluationParts ?? null } : null,
+    evaluation: m.evaluation ? { feedback: m.evaluation, label: MARKING_LABEL.ai_evaluation, parts: m.evaluationParts ?? null, formative: FORMATIVE_FEEDBACK_LABEL } : null,
     card: m.card ?? null, nextReviewAt: m.nextReviewAt ?? null,
     practises: m.link ? { ...m.link, label: NOT_COMPETENCE_LABEL } : null,
     ...(q.library ? { library: { ...q.library, label: LIBRARY_QUESTION_LABEL } } : {}),
