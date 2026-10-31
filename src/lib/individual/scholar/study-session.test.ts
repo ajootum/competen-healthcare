@@ -157,3 +157,14 @@ describe("ownership (store.ts, every statement keyed on the caller)", () => {
     for (const c of a.calls) expect(c.filters[0]).toEqual(["eq", "user_id", U]);
   });
 });
+
+describe("cleanObjectiveText", () => {
+  it("folds spaces (including the letter s untouched), trims and cuts to the 740 limit; nothing left is null", async () => {
+    const { cleanObjectiveText, OBJECTIVE_TEXT_MAX } = await import("./study-session");
+    expect(cleanObjectiveText("  Explain   respiratory\n distress  ")).toBe("Explain respiratory distress");
+    expect(cleanObjectiveText("x".repeat(OBJECTIVE_TEXT_MAX + 50))).toHaveLength(OBJECTIVE_TEXT_MAX);
+    expect(cleanObjectiveText("   ")).toBeNull();
+    expect(cleanObjectiveText(42)).toBeNull();
+    expect(cleanObjectiveText(undefined)).toBeNull();
+  });
+});

@@ -91,6 +91,8 @@ export function LearnWorkspace(props: {
   modes?: LearnMode[];
   /** SCHOLAR-SESSION-AI-02: start the scope as a connected study session (the server decides whether it may). */
   connect?: boolean;
+  /** SCHOLAR-SESSION-AI-02: the learner's own typed objective for a study session whose focus has no competency outcome (D2). */
+  objectiveText?: string;
   /** SCHOLAR-SESSION-AI-02: opened from the study session bar's Ask: the Ask panel first. */
   openAsk?: boolean;
 }) {
@@ -188,7 +190,7 @@ export function LearnWorkspace(props: {
     started.current = true;
     (async () => {
       setBusy("start");
-      const r = await call("/api/individual/scholar/learn/sessions", { scope: props.start, ...(props.connect ? { connected: true } : {}) });
+      const r = await call("/api/individual/scholar/learn/sessions", { scope: props.start, ...(props.connect ? { connected: true, ...(props.objectiveText ? { objectiveText: props.objectiveText } : {}) } : {}) });
       setBusy("");
       if (!r.ok) { setError(r.json.error ?? "This session could not be started."); return; }
       // SCH-LEARN-UX-01: the address becomes the session's, so a reload or a return resumes it instead of starting again.
@@ -204,7 +206,7 @@ export function LearnWorkspace(props: {
       }
       setSession(r.json.session); setNote(r.json.note ?? null); setAt(r.json.resumed ? r.json.session.currentStep : 0);
     })();
-  }, [props.start, props.connect, session]);
+  }, [props.start, props.connect, props.objectiveText, session]);
   useEffect(() => {
     if (opened.current || !session || !props.start || !props.consent) return;
     opened.current = true;

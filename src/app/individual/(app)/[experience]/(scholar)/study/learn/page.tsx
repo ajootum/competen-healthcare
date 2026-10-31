@@ -18,6 +18,7 @@ import { ContinueLearning, LearnSearchBox, MyTopics, RecentlyAdded, SearchResult
 import { getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { continueStudy, loadStudy, studySessionsOn } from "@/lib/individual/scholar/study-context";
 import { STUDY_SPACE_LABEL, stageHref } from "@/lib/individual/scholar/study-carry";
+import { cleanObjectiveText } from "@/lib/individual/scholar/study-session";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -133,7 +134,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
           actions={offered.actions} startAction={startAction} labels={LEARN_ACTION_LABEL}
           consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? null : "Your AI help setting could not be read just now."}
           checks={policy.scholarCheckBehaviour} depth={pref?.depth ?? policy.scholarExplanationDepth} maxTurns={policy.scholarTutorTurns}
-          materials={materials} standingMessage={standingMessage} connect={studyOn && one(q.study) === "new" && !!start} openAsk={q.panel === "ask"} modes={shownLearnModes(policy.scholarResearch, policy.scholarResearch.modes.includes("research") && await scholarResearchOperational(ctx.admin))}
+          materials={materials} standingMessage={standingMessage} connect={studyOn && one(q.study) === "new" && !!start} objectiveText={studyOn && one(q.study) === "new" && start && start.kind !== "competency" ? cleanObjectiveText(one(q.obj)) ?? undefined : undefined} openAsk={q.panel === "ask"} modes={shownLearnModes(policy.scholarResearch, policy.scholarResearch.modes.includes("research") && await scholarResearchOperational(ctx.admin))}
         />
       )}
     </>

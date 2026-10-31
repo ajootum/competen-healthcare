@@ -10,7 +10,7 @@ import { sessionView } from "@/lib/individual/scholar/learn-view";
 import { audit } from "@/lib/individual/scholar/http";
 import { loadStudy, studySessionsOn } from "@/lib/individual/scholar/study-context";
 import { chooseOutcome } from "@/lib/individual/scholar/study-carry";
-import { OBJECTIVE_TEXT_MAX } from "@/lib/individual/scholar/study-session";
+import { cleanObjectiveText } from "@/lib/individual/scholar/study-session";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "That topic looks like it identifies a patient. Name the topic only." }, { status: 422 });
 
   const wantsStudy = body?.connected === true;
-  const objectiveText = wantsStudy && typeof body?.objectiveText === "string" ? body.objectiveText.replace(/s+/g, " ").trim().slice(0, OBJECTIVE_TEXT_MAX) || null : null;
+  const objectiveText = wantsStudy ? cleanObjectiveText(body?.objectiveText) : null;
   if (objectiveText && findPatientIdentifiers(objectiveText).length)
     return NextResponse.json({ error: "That objective looks like it identifies a patient. Describe what you want to learn only." }, { status: 422 });
 

@@ -31,6 +31,9 @@ const clean = (s: string | null | undefined, max: number): string | null => {
   return t.length ? t : null;
 };
 
+/** A typed learning objective (D2, free text): spaces folded, trimmed, cut to the 740 limit, or null when nothing is left. */
+export const cleanObjectiveText = (raw: unknown): string | null => clean(typeof raw === "string" ? raw : null, OBJECTIVE_TEXT_MAX);
+
 /**
  * The 740 columns for a new session, or null when the caller asked for none of them (so a plain Learn session is
  * written exactly as before, and works where 740 is absent). An outcome is kept only with a competency.

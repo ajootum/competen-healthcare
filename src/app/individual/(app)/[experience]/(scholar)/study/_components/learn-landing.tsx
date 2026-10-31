@@ -5,6 +5,7 @@ import {
   type CompetencyRef, type DocumentHit, type SearchParams, type SearchResult, type SearchTab, type SectionHit, type SessionHit, type TopicHit,
 } from "@/lib/individual/scholar/learn-search";
 import { MAX_SCOPE_MATERIALS } from "@/lib/individual/scholar/learn";
+import { OBJECTIVE_TEXT_MAX } from "@/lib/individual/scholar/study-session";
 import { BookmarkedTopics, SelectionBar, TopicTools } from "./learn-search-client";
 
 // SCH-LEARN-UX-01: the search-first, topic-centred Learn page (owner s3-s5, s10). Server-rendered: one page of each
@@ -44,6 +45,13 @@ export function LearnSearchBox({ q = "", studyOn = false }: { q?: string; studyO
         <input id="learn-q" name="q" type="search" defaultValue={q} maxLength={200} autoComplete="off"
           placeholder="Search your notes, topics, clinical concepts or ask Scholar a question..."
           className={`mt-3 block min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-[15px] text-gray-900 ${focusRing}`} />
+        {studyOn && (
+          <div className="mt-3">
+            <label htmlFor="learn-obj" className="block text-[13px] font-semibold text-gray-700">What do you want to be able to do? <span className="font-normal text-gray-500">(optional, used by Study this topic)</span></label>
+            <input id="learn-obj" name="obj" type="text" maxLength={OBJECTIVE_TEXT_MAX} autoComplete="off" placeholder="For example: explain how to recognise and escalate respiratory distress"
+              className={`mt-1 block min-h-[44px] w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-[14px] text-gray-900 ${focusRing}`} />
+          </div>
+        )}
         <div className="mt-3 flex flex-wrap gap-2.5">
           <button type="submit" className={primary} style={{ background: accent }}>Search my library</button>
           <button type="submit" name="teach" value="1" className={ghost}>Teach me this topic</button>
