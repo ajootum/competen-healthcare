@@ -64,7 +64,7 @@
 | Slice | Scope | State |
 |---|---|---|
 | A | 750 (`frameworks.layout_draft` jsonb, `frameworks.component_order` text[]) and 751 (stable outcome ids, evidence `outcome_ids`, backfill, guards, F4 change to the 640 review SoD guard), each staged twice with PRECHECK/VERIFY/ROLLBACK and build records | **done 31 Oct** (staging only, see Log) |
-| B | Server: reorder actions, classification, layout draft, apply on publication as a revision, snapshot ids, tie-break reads, learner per-domain order, F4 audit classification, evidence readers using `outcome_ids` | pending |
+| B | Server: reorder actions, classification, layout draft, apply on publication as a revision, snapshot ids, tie-break reads, learner per-domain order, F4 audit classification, evidence readers using `outcome_ids` | **done 31 Oct** (code only, see Log) |
 | C | UI: drag and drop with Move up/down on every row, live-region announcements, draft-layout banner and preview in the pack, submit layout, CPR-MOB-001 | pending |
 | D | Tests and harnesses (plant-fail), browser at 375/768/1440, PR | pending |
 
@@ -76,6 +76,32 @@
 - Harnesses: `npx tsx scripts/<name>.ts`. Relevant: `migration-house-rules`, `plane-boundary`, `hq-nav-registry`, and the competency/verification harnesses (find them under `scripts/`).
 
 ## Log
+
+### 31 Oct 2026: slice B done (server code, commits f0b7e126..2a9be4cd, not pushed)
+
+**Gate.** Every new path fails closed while 750 or 751 is absent: reorder/discard answer 409 "not set up (750 and 751)" and write nothing; reads treat missing columns as "no layout" / indexes. `layoutReady(admin)` in `framework-layout.ts`; the authoring view exposes `layoutReady`.
+
+**Route actions for slice C** (`POST /api/hq/competency/authoring`, author capability, audit row first as `reorder_layout`):
+- `{ action: "reorder_layout", frameworkId, level, parentId?, component?, order }`
+  - `level` = `"domains"` (order = every domain id) | `"competencies"` (parentId = domain id, order = every competency id of it) | `"criteria"` (parentId = competency id, component = the section code or null for unclassified, order = every criterion id of THAT section) | `"sections"` (order = component codes; unnamed ones follow in current order).
+  - 200 `{ ok, mode: "direct" | "draft", unchanged, layoutPending }`. direct = never-published draft (sort_order dense 1..n / component_order written). draft = published (or ever-published): only `frameworks.layout_draft` written, live order untouched; a draft equal to live is pruned to null.
+  - 409 = clinical change refused (`level: "outcomes"`, competency to another domain, criterion to another section or competency). The message points to editing the competency (outcome order stays in `update_competency`, a hashed clinical change). 422 = an incomplete, repeated or foreign list.
+- `{ action: "discard_layout", frameworkId }` -> `{ ok, discarded }`.
+- Submit a layout = existing publication `submit`. A layout saved after the pending request was put forward is refused at decide (409) until submitted again.
+
+**Publication decide** (`framework-publication.ts`): a pending layout is applied to the live order BEFORE the snapshot (compensating writes: undone if 466/640 refuse or a write fails; the draft stays), then cleared. Layout-only (same competency ids and hashes as the last snapshot's `clinical_approvals`, no catalogue entries) is forced to `revision`; otherwise the publisher's kind applies. Response adds `layoutApplied`, `changeKindForced`. SoD unchanged: the reorderer is a contributor (not in GOVERNANCE) and is refused; not an author for clinical review (in NOT_AUTHORSHIP).
+- ⚠ Not a single DB transaction (no RPC without a schema change): a crash between the sort_order writes and the publish could leave the new live order with the old version. Owner may want an RPC later.
+
+**Reads for slice C.**
+- `loadAuthoringView`: each framework adds `layoutDraft` (v1 or null), `layoutDraftBy`, `layoutDraftAt`, `componentOrder`; each criterion adds `id`; all lists in stable order (sort_order, name, id). Render the draft order with `applyLayout(tree, layoutDraft)` / `sectionOrder` from `src/lib/competency/layout-order.ts` (pure, client-safe).
+- Preview: `loadFrameworkPack(admin, id, by, { layout: "draft" })` renders the pending layout; `pack.layout = { shown: "draft" | "published", pending, savedAt }` (absent before 750). The page/route param (`?view=pack&layout=draft`) and banner text are slice C's. Criteria groups follow the framework's section order.
+- Learner (`foundation.ts`): own competencies catalogue by catalogue, domain by domain, then competency, with the tie-break.
+- Snapshot: adds domain ids, criterion ids + `component_code`, `component_order`, `learning_outcome_ids` (falls back to the pre-750 select).
+- Evidence: `outcomeTexts(indexes, ids, outcomeMap, snapshot)` in `verification.ts`; RequestView adds `outcomeIds`, `outcomeMap`, EvidenceView `outcomeIds`; the assessor page and `listVerifications` use it.
+
+**Gap for the owner.** No content-edit path exists for moving a competency to another domain or a criterion to another section; the refusal says it is a clinical content edit, but that edit is not built (out of this slice's scope).
+
+**Verified.** vitest: layout-order (pure), framework-layout (draft vs published, apply-at-publish, forced revision, SoD, undo on refusal, resubmit, fail-closed), plus existing competency suites, 180/180. Plant-fail: `reorder_layout` put in GOVERNANCE and taken out of NOT_AUTHORSHIP -> 3 red, restored -> green. tsc clean. Harnesses: competency-foundation 33/33, plane-boundary 35/35, professional-competency 40/40.
 
 ### 31 Oct 2026: slice A done (750 + 751 on STAGING only, production does NOT have them)
 
