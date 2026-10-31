@@ -115,6 +115,11 @@ export async function transitionFramework(
     const m = /(\d+) of (\d+)/.exec(updateErr.message);
     return { ok: false, code: 409, error: `This framework cannot be published yet: ${m ? `${m[1]} of its ${m[2]} competencies are` : "some of its competencies are"} not clinically approved at their current content. Each needs an independent clinical review of that exact content first.` };
   }
+  // Migration 752: a pending layout that went stale (an id it names was deleted or moved) refuses the publication whole.
+  if (updateErr && /framework layout at publication/i.test(updateErr.message ?? "")) {
+    const m = /out of date, (.*?)\. Nothing/.exec(updateErr.message);
+    return { ok: false, code: 409, error: `The pending layout is out of date${m ? ` (${m[1]})` : ""}, so nothing was published. Discard it or save the layout again, then put the framework forward again.` };
+  }
   if (updateErr) return { ok: false, error: updateErr.message, code: 500 };
 
   let warning: string | undefined;

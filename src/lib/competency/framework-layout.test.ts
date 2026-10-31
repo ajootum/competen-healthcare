@@ -17,8 +17,25 @@ const PUBLISHER = { userId: "00000000-0000-4000-8000-0000000000b1", name: "Publi
 
 let T: Record<string, any[]>;
 let no750: boolean;
+let no752: boolean;
+let stale: string | null;
 let refusePublish: string | null;
 let selects: string[];
+let appWrites: string[];
+// Migration 752, emulated: the publication statement applies the stored draft (named first, the rest in order, dense
+// 1..n) and clears it, after the guards (refusePublish) accepted it. The app itself writes no sort_order.
+function trigger752(row: any) {
+  const l = row.layout_draft;
+  if (no752 || !l) return;
+  const dense = (rows: any[], named: string[] | undefined) => {
+    if (!named) return;
+    const rest = rows.filter(x => !named.includes(x.id)).sort((a, b) => a.sort_order - b.sort_order);
+    [...named.map(id => rows.find(x => x.id === id)), ...rest].forEach((x, i) => { x.sort_order = i + 1; });
+  };
+  dense(T.framework_domains.filter(d => d.framework_id === row.id), l.domains);
+  for (const [d, ids] of Object.entries(l.competencies ?? {})) dense(T.framework_competencies.filter(c => c.domain_id === d), ids as string[]);
+  Object.assign(row, { layout_draft: null, layout_draft_by: null, layout_draft_at: null });
+}
 function fake() {
   const nest = (table: string, r: any): any => table === "frameworks"
     ? { ...r, framework_domains: T.framework_domains.filter(d => d.framework_id === r.id).map(d => nest("framework_domains", d)) }
@@ -43,12 +60,14 @@ function fake() {
       if (write?.op === "insert") { (T[table] ??= []).push({ ...write.row }); return { data: null, error: null }; }
       if (write?.op === "update") {
         if (table === "frameworks" && write.row.pub_status === "published" && refusePublish) return { data: null, error: { message: refusePublish } };
+        if (table === "frameworks" && write.row.pub_status === "published" && stale && !no752) return { data: null, error: { message: `framework layout at publication: the pending layout is out of date, ${stale}. Nothing was published` } };
+        appWrites.push(`${table}:${Object.keys(write.row).join(",")}`);
         if (table === "frameworks" && "layout_draft" in write.row) {
           // the 750 trigger: a draft names its author, null clears by and at
           if (write.row.layout_draft && !write.row.layout_draft_by) return { data: null, error: { message: "a layout draft records who saved it" } };
           write = { op: "update", row: { ...write.row, layout_draft_at: write.row.layout_draft ? new Date().toISOString() : null, ...(write.row.layout_draft ? {} : { layout_draft_by: null }) } };
         }
-        for (const r of hit()) Object.assign(r, write!.row);
+        for (const r of hit()) { Object.assign(r, write!.row); if (table === "frameworks" && write!.row.pub_status === "published") trigger752(r); }
         return { data: null, error: null };
       }
       const e = err();
@@ -59,7 +78,10 @@ function fake() {
     q.then = (ok: any, ko: any) => Promise.resolve(done()).then(ok, ko);
     return q;
   };
-  return { from, rpc: async (_: string, a: any) => ({ data: (a?.p_ids ?? []).map((id: string) => ({ competency_id: id, content_hash: T.hashes.find(h => h.id === id)?.hash ?? "h0" })), error: null }) };
+  const rpc = async (name: string, a: any) => name === "framework_layout_check"
+    ? (no752 ? { data: null, error: { code: "PGRST202", message: "Could not find the function public.framework_layout_check" } } : { data: stale, error: null })
+    : { data: (a?.p_ids ?? []).map((id: string) => ({ competency_id: id, content_hash: T.hashes.find(h => h.id === id)?.hash ?? "h0" })), error: null };
+  return { from, rpc };
 }
 
 const fw = (over: Record<string, any> = {}) => ({ id: FW, name: "Framework", code: "FW", hospital_id: null, competency_layer: "foundational", pub_status: "draft", version_num: 0,
@@ -67,7 +89,7 @@ const fw = (over: Record<string, any> = {}) => ({ id: FW, name: "Framework", cod
 const published = () => { T.frameworks = [fw({ pub_status: "published", version_num: 1 })]; T.framework_versions = [{ framework_id: FW, version_num: 1, snapshot: { clinical_approvals: { [C1]: { content_hash: "h1" }, [C2]: { content_hash: "h2" } } } }]; };
 
 beforeEach(() => {
-  no750 = false; refusePublish = null; selects = [];
+  no750 = false; no752 = false; stale = null; refusePublish = null; selects = []; appWrites = [];
   T = {
     frameworks: [fw()],
     framework_domains: [{ id: D1, framework_id: FW, name: "One", sort_order: 1 }, { id: D2, framework_id: FW, name: "Two", sort_order: 2 }],
@@ -118,11 +140,17 @@ describe("applied at publication, as a revision", () => {
     await reorderLayout(fake(), AUTHOR, { frameworkId: FW, level: "competencies", parentId: D1, order: [C2, C1] });
     T.content_approvals = [{ id: "req1", framework_id: FW, status: "pending", submitted_by: AUTHOR.userId, submitted_at: new Date(Date.now() + 60_000).toISOString() }];
   });
-  it("a layout-only publication is forced to a revision, applied before the snapshot, and the draft cleared", async () => {
+  it("a layout-only publication is forced to a revision, applied by the publication statement (752), the snapshot after it", async () => {
+    appWrites = [];
     const r = await decidePublication(fake(), PUBLISHER, { frameworkId: FW, decision: "publish", changeKind: "major" });
     expect(r).toMatchObject({ ok: true, version: "1.0.1", layoutApplied: true, changeKindForced: true });
     expect(sorts()).toEqual([["Alpha", 2], ["Beta", 1]]);
     expect(T.frameworks[0].layout_draft).toBeNull();
+    // no app-level apply, undo or clear: only the publication statement and its bookkeeping
+    expect(appWrites.filter(w => /^(framework_domains|framework_competencies|competency_skills):/.test(w) || /layout_draft|component_order/.test(w))).toEqual([]);
+    // the version snapshot records the applied order
+    const snap = T.framework_versions.at(-1).snapshot;
+    expect(snap.framework_domains[0].framework_competencies.map((c: any) => [c.name, c.sort_order])).toEqual([["Alpha", 2], ["Beta", 1]]);
     // the snapshot asks for the ids that rebuild the order
     expect(selects.some(s => s.startsWith("frameworks:") && /competency_skills\(id, name, sort_order, component_code\)/.test(s) && /learning_outcome_ids/.test(s) && /component_order/.test(s))).toBe(true);
   });
@@ -137,7 +165,29 @@ describe("applied at publication, as a revision", () => {
     expect(r).toMatchObject({ ok: false, status: 403 });
     expect(sorts()).toEqual([["Alpha", 1], ["Beta", 2]]);
   });
-  it("a refused publication (466/640) restores the live order and keeps the draft", async () => {
+  it("without 752 a pending layout is refused, nothing is written (no non-atomic fallback)", async () => {
+    no752 = true;
+    const r = await decidePublication(fake(), PUBLISHER, { frameworkId: FW, decision: "publish", changeKind: "revision" });
+    expect(r).toMatchObject({ ok: false, status: 409 });
+    expect((r as any).error).toMatch(/752/);
+    expect(sorts()).toEqual([["Alpha", 1], ["Beta", 2]]);
+    expect(T.frameworks[0]).toMatchObject({ pub_status: "published", version_revision: 0 });
+    expect(T.frameworks[0].layout_draft).not.toBeNull();
+  });
+  it("a stale layout is refused with its reason: by the pre-check, and by the publication statement itself", async () => {
+    stale = "a competency it names is no longer in that domain";
+    const r = await decidePublication(fake(), PUBLISHER, { frameworkId: FW, decision: "publish", changeKind: "revision" });
+    expect(r).toMatchObject({ ok: false, status: 409 });
+    expect((r as any).error).toMatch(/out of date \(a competency it names is no longer in that domain\)/);
+    // the trigger's own refusal (a draft that went stale between the check and the statement) reads the same
+    const { transitionFramework } = await import("./framework-lifecycle");
+    const t = await transitionFramework(fake(), FW, "publish", { id: PUBLISHER.userId, name: "P" }, { holdings: true, nextVersion: { major: 1, minor: 0, revision: 1 } });
+    expect(t).toMatchObject({ ok: false, code: 409 });
+    expect(t.error).toMatch(/out of date \(a competency it names is no longer in that domain\)/);
+    expect(sorts()).toEqual([["Alpha", 1], ["Beta", 2]]);
+    expect(T.frameworks[0].layout_draft).not.toBeNull();
+  });
+  it("a refused publication (466/640) leaves the live order and keeps the draft", async () => {
     refusePublish = "cfca publication: 1 of 2 competencies";
     const r = await decidePublication(fake(), PUBLISHER, { frameworkId: FW, decision: "publish", changeKind: "revision" });
     expect(r).toMatchObject({ ok: false, status: 409 });

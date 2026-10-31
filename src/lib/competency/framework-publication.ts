@@ -3,7 +3,7 @@ import { currentTraceId } from "@/lib/trace";
 import { isHoldingsGoverned, transitionFramework, versionLabel, type VersionLabel } from "./framework-lifecycle";
 import { loadClinicalReviews } from "./clinical-review";
 import { isId } from "./authoring";
-import { applyPendingLayout, contentUnchangedSinceLastVersion, pendingLayout } from "./framework-layout";
+import { contentUnchangedSinceLastVersion, layoutPublishCheck, pendingLayout } from "./framework-layout";
 
 // ── HOLDINGS FRAMEWORK PUBLICATION ── migration 467, owner COMPETENCY FRAMEWORKS: CENTRAL GOVERNANCE (26 Oct 2026) ──
 //
@@ -176,28 +176,28 @@ export async function decidePublication(admin: any, actor: Actor, b: any): Promi
 
   const first = (fw.version_num ?? 0) === 0;
   const chosen = (CHANGE_KINDS as readonly string[]).includes(b?.changeKind) ? (b.changeKind as ChangeKind) : null;
-  // FRAMEWORK-DESIGN-STUDIO-01 (750): a pending layout is what was put forward only if it did not change after the
-  // request. It is applied to the live order BEFORE the snapshot, and undone if the publication is refused.
+  // FRAMEWORK-DESIGN-STUDIO-01 (750, 752): a pending layout is what was put forward only if it did not change after the
+  // request. The database applies it to the live order and clears the draft IN THE PUBLICATION STATEMENT (752), after
+  // 466 and 640 accepted it, so a refusal leaves order and draft as they were. The snapshot below is taken after that
+  // statement, so it records the applied order. Without 752 a pending layout is refused, never applied from here.
   const lay = await pendingLayout(admin, fw.id);
   if (lay && "ok" in lay) return { ok: false, status: lay.status, error: "The layout could not be read just now, so nothing was decided." };
   if (lay && lay.at && req.submitted_at && Date.parse(lay.at) > Date.parse(req.submitted_at))
     return { ok: false, status: 409, error: "The layout was changed after this framework was put forward. It must be put forward again, so the decision is on what will be published." };
+  if (lay) {
+    const chk = await layoutPublishCheck(admin, fw.id);
+    if ("ok" in chk) return { ok: false, status: chk.status, error: "The layout could not be checked just now, so nothing was decided." };
+    if (!chk.ready) return { ok: false, status: 409, error: "Publishing a new layout is not set up on this environment yet (migration 752), so nothing was published. Discard the pending layout to publish the content alone." };
+    if (chk.problem) return { ok: false, status: 409, error: `The pending layout is out of date (${chk.problem}), so nothing was published. Discard it or save the layout again, then put the framework forward again.` };
+  }
   const k = publicationKind(first, chosen, { pending: !!lay, only: !!lay && !first && (await contentUnchangedSinceLastVersion(admin, fw.id)) });
   if (!k.ok) return { ok: false, status: 400, error: k.error };
   const kind = k.kind;
   const next = nextVersion({ major: fw.version_major ?? 1, minor: fw.version_minor ?? 0, revision: fw.version_revision ?? 0 }, kind, first);
-  const applied = lay ? await applyPendingLayout(admin, fw.id, lay.layout) : null;
-  if (applied && "ok" in applied) return { ok: false, status: applied.status, error: applied.error };
+  const applied = !!lay;
   const r = await transitionFramework(admin, fw.id, "publish", { id: actor.userId, name: actor.name }, { holdings: true, nextVersion: next, note: reason });
-  if (!r.ok) {
-    if (applied) await applied.undo();
-    return { ok: false, status: r.code ?? 500, error: r.error ?? "That could not be published. Nothing has changed." };
-  }
-  let warning = r.warning;
-  if (applied) {
-    const { error: clrErr } = await admin.from("frameworks").update({ layout_draft: null }).eq("id", fw.id);
-    if (clrErr) warning = [warning, "Published with the new layout, but the layout draft could not be cleared. Discard it in the Studio."].filter(Boolean).join(" ");
-  }
+  if (!r.ok) return { ok: false, status: r.code ?? 500, error: r.error ?? "That could not be published. Nothing has changed." };
+  const warning = r.warning;
   await admin.from("content_approvals").update({ ...decided, status: "approved" }).eq("id", req.id);
   const label = versionLabel(next ?? { major: fw.version_major ?? 1, minor: fw.version_minor ?? 0, revision: fw.version_revision ?? 0 });
   await audit(admin, actor, fw, "approve_content", { version: label, change: kind, note: reason, ...(applied ? { layout_applied: true, change_forced: k.forced } : {}) });

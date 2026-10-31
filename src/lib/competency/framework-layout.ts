@@ -143,28 +143,20 @@ export async function pendingLayout(admin: any, frameworkId: string): Promise<{ 
   return layout ? { layout, at: data?.layout_draft_at ?? null } : null;
 }
 
-export type AppliedLayout = { undo: () => Promise<void> };
+const missingFunction = (e: any) => ["PGRST202", "42883"].includes(String(e?.code ?? "")) || /could not find the function|function .* does not exist/i.test(String(e?.message ?? ""));
+
 /**
- * Write the pending layout into the live order, BEFORE the publication snapshot. Every write is captured, so a refused
- * publication (466, 640) or a failed write restores the previous order exactly and keeps the draft.
+ * Migration 752 applies a pending layout to the live order INSIDE the publication statement (an AFTER trigger on
+ * frameworks, after the 466 and 640 guards accepted it), and clears the draft. There is no app-level apply or undo.
+ * This asks the database whether the stored draft can still be applied. { ready: false } = 752 is absent: the caller
+ * refuses to publish a pending layout (no non-atomic fallback). problem = why the draft is stale (null = fine).
  */
-export async function applyPendingLayout(admin: any, frameworkId: string, layout: LayoutV1): Promise<AppliedLayout | Fail> {
-  const L = await loadLayoutTree(admin, frameworkId);
-  if (L === null) return NOT_READY;
-  if ("ok" in L) return L;
-  const plan = densePlan(L.tree, layout);
-  const w = await writeSortOrders(admin, plan.writes);
-  const undoSorts = () => writeSortOrders(admin, w.done, "from").then(() => undefined);
-  if (!w.ok) { await undoSorts(); return { ok: false, status: 503, error: "The new layout could not be applied just now, so nothing was published." }; }
-  if (plan.componentOrder !== undefined) {
-    const { error } = await admin.from("frameworks").update({ component_order: plan.componentOrder }).eq("id", frameworkId);
-    if (error) { await undoSorts(); return { ok: false, status: 503, error: "The new section order could not be applied just now, so nothing was published." }; }
-  }
-  const before = L.state.componentOrder;
-  return { undo: async () => {
-    await undoSorts();
-    if (plan.componentOrder !== undefined) await admin.from("frameworks").update({ component_order: before }).eq("id", frameworkId);
-  } };
+export async function layoutPublishCheck(admin: any, frameworkId: string): Promise<{ ready: false } | { ready: true; problem: string | null } | Fail> {
+  try {
+    const { data, error } = await admin.rpc("framework_layout_check", { p_framework_id: frameworkId });
+    if (error) return missingFunction(error) ? { ready: false } : UNREADABLE;
+    return { ready: true, problem: typeof data === "string" && data ? data : null };
+  } catch { return UNREADABLE; }
 }
 
 /**
