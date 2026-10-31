@@ -144,7 +144,7 @@
 **Verification**
 - Targeted vitest: grounding, term-match, teach-salvage, teach-format, policy, the new route test learn-guided.test.ts (cache-first with zero AI including v1, open, dedupe with 1 AI call for 2 requests, prepare gating, salvage through the route), the 4 wiring tests, and the 13 grounding/coverage-dependent suites. All pass.
 - The dedupe test was red (2 AI calls) before the end-of-flight fix.
-- scholar-learning-harness: 163/0. individual-config-harness: 47/0. tsc: see below.
+- scholar-learning-harness: 163/0. individual-config-harness: 47/0. tsc --noEmit: clean (needs NODE_OPTIONS=--max-old-space-size=8192; the default heap ran out of memory).
 
 **Open for owner/G-C**
 - Prepare-next stays OFF.
