@@ -14,8 +14,9 @@
 // ⚠ FORMATIVE SIMULATION. Nothing here is assessment, competence or Passport evidence. AI feedback is labelled.
 
 import { textGroundingViolations } from "@/lib/ai/grounding";
-import { DEFAULT_DIMENSIONS, safetyEvents, validateBlueprint, type Blueprint, type CaseFact, type DecisionPoint } from "@/lib/cases/blueprint";
+import { DEFAULT_DIMENSIONS, safetyEvents, validateBlueprint, type Blueprint, type CaseFact, type DecisionPoint, type StageCategory } from "@/lib/cases/blueprint";
 import { screenBlueprint } from "@/lib/cases/screen";
+import { CASE_FACT_KINDS, isStageCategory } from "@/lib/cases/categories";
 import { findPatientIdentifiers } from "./extract";
 import type { Passage } from "./generation";
 
@@ -29,7 +30,7 @@ const str = (v: unknown, max: number): string | null => (typeof v === "string" &
 /** A model's own numbering ("Stage 2:", "Step 1 -", "1.") is structure, not content: the case shows its own order. */
 const unnumbered = (s: string | null): string | null => (s ? s.replace(/^\s*(?:(?:stage|step|decision|question|part)\s*\d+\s*[:.)-]?\s*|\d+\s*[:.)-]\s+)/i, "").trim() || null : null);
 const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
-const FACT_KINDS: readonly CaseFact["kind"][] = ["history", "observation", "examination", "result", "context"];
+const FACT_KINDS: readonly CaseFact["kind"][] = CASE_FACT_KINDS;
 
 /**
  * Pure. The private blueprint made from a model's draft. ids are assigned in order (s1, f1, d1, a ...), references
@@ -39,9 +40,11 @@ const FACT_KINDS: readonly CaseFact["kind"][] = ["history", "observation", "exam
  */
 export function blueprintFromDraft(draft: CaseDraft, ctx: { passages: readonly Passage[]; competencies: readonly { id: string }[]; dimensions?: readonly string[] }): Blueprint | null {
   const dims = ctx.dimensions?.length ? ctx.dimensions : DEFAULT_DIMENSIONS;
-  const stagesIn = list(draft.stages).map(s => unnumbered(str(typeof s === "string" ? s : s?.title, 120))).filter((s): s is string => !!s).slice(0, 6);
+  // A stage is a title, or {title, category} -- the category (cases/categories.ts) is optional and only a known one is kept.
+  const stagesIn = list(draft.stages).map(s => ({ title: unnumbered(str(typeof s === "string" ? s : s?.title, 120)), category: isStageCategory(s?.category) ? s.category : null }))
+    .filter((s): s is { title: string; category: StageCategory | null } => !!s.title).slice(0, 6);
   if (!stagesIn.length) return null;
-  const stages = stagesIn.map((title, i) => ({ id: `s${i + 1}`, title, reveals: [] as string[], decisionPointIds: [] as string[] }));
+  const stages = stagesIn.map((st, i) => ({ id: `s${i + 1}`, title: st.title, reveals: [] as string[], decisionPointIds: [] as string[], ...(st.category ? { category: st.category } : {}) }));
   const stageOf = (v: unknown) => { const n = Number(String(v ?? "").replace(/\D/g, "")); return Number.isInteger(n) && n >= 1 && n <= stages.length ? stages[n - 1].id : null; };
   const factRefs = new Map<string, string>();
   const facts: CaseFact[] = [];
@@ -115,6 +118,8 @@ export function caseTexts(b: Blueprint): string[] {
     ...b.stages.map(s => s.title),
     ...b.decisionPoints.flatMap(d => [d.prompt, d.rationale ?? "", d.expectedResponse ?? "", ...d.options.flatMap(o => [o.text, o.rationale ?? ""])]),
     ...b.safetyCriteria.map(c => c.text), ...b.learningObjectives.map(l => l.text),
+    ...(b.differentials ?? []).flatMap(d => [d.label, d.reasoning]), ...(b.managementPrinciples ?? []), b.expectedReasoning ?? "",
+    ...b.stages.map(s => s.narrativeHint ?? ""),
   ].filter(Boolean);
 }
 

@@ -141,7 +141,9 @@ export const PROMPT_VERSIONS = {
   // v2: no counting, and no state or change words the passages do not use (the staging runs' refusal reasons).
   // v3 (SCHOLAR-AI-OPT-01 P2): the reply example shows expectedResponse on a free-text decision and says one decision per
   // stage -- the acceptance run's other refused draft had a free-text decision with no expected response.
-  caseBlueprint: "scholar-case-blueprint-v3",
+  // v4 (SCHOLAR-INTELLIGENCE-COMPLETE-01): a stage may carry one standard, profession-neutral category, in the usual order
+  // where the notes support it and never forced. Nothing else about the draft changes.
+  caseBlueprint: "scholar-case-blueprint-v4",
   // v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): the five feedback parts, clinically equivalent wording accepted.
   caseReasoning: "scholar-case-reasoning-v2",
 } as const;

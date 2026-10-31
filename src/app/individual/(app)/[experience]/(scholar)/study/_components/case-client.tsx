@@ -6,6 +6,7 @@ import { useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
 import { carry, studyField } from "./study-active";
+import type { CaseFrom } from "@/lib/individual/scholar/study-carry";
 import { CASE_CONTEXT_LABEL, CASE_DIMENSION_LABEL, CASE_ENTRY_LABEL, MARKING_LABEL, type CaseContext, type CaseEntry } from "@/lib/individual/scholar/config";
 import type { LearnerView } from "@/lib/cases/blueprint";
 import { AiFeedback } from "./ai-feedback";
@@ -34,7 +35,9 @@ async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok:
 }
 const caseHref = (kind: string, id: string) => `${studyHref("apply/case")}?kind=${kind}&session=${id}`;
 
-type Offer = { versionId: string; title: string; intro: string | null; level: string };
+type Offer = { versionId: string; title: string; intro: string | null; level: string; why?: string[] };
+/** Apply opened from Learn, Teach me, Revision or the study journey: the words for "the section you came from". */
+const FROM_LABEL: Record<CaseFrom, string> = { learn: "The section from Learn", teach: "The section you were learning", revision: "The question you were revising", journey: "The section from your study journey" };
 /** SCHOLAR-AI-OPT-01: why a case was not written from these notes, and what to do instead (sufficiency.ts). */
 type Readiness = { outcome: string; message?: string | null; alternative: "case_question" | "teach" | null; canAttempt: boolean; sectionIds?: string[]; materialId?: string };
 
@@ -44,12 +47,12 @@ export function CaseStart(props: {
   entries: CaseEntry[]; contexts: CaseContext[]; mode: "guided" | "independent"; libraryOn: boolean;
   materials: { id: string; title: string }[]; competencies: { id: string; title: string }[]; aiNote: string | null;
   /** SCHOLAR-SESSION-AI-02 adds `entry` with a material or competency: the open study session's focus, chosen first. */
-  preset?: { chunkId?: string; from?: "teach" | "revision" } | { entry: "notes"; materialId: string } | { entry: "competency"; competencyId: string } | null;
+  preset?: { chunkId?: string; from?: CaseFrom } | { entry: "notes"; materialId: string } | { entry: "competency"; competencyId: string } | null;
 }) {
   const router = useRouter();
   const chunkPreset = props.preset && "chunkId" in props.preset && props.preset.chunkId ? props.preset : null;
   const focus = props.preset && "entry" in props.preset && props.entries.includes(props.preset.entry) ? props.preset : null;
-  const [entry, setEntry] = useState<CaseEntry | "teach" | "revision">(chunkPreset ? (chunkPreset.from ?? "teach") : focus?.entry ?? props.entries.find(e => e !== "library" || props.libraryOn) ?? "notes");
+  const [entry, setEntry] = useState<CaseEntry | "teach" | "revision">(chunkPreset ? (chunkPreset.from === "revision" ? "revision" : "teach") : focus?.entry ?? props.entries.find(e => e !== "library" || props.libraryOn) ?? "notes");
   const [material, setMaterial] = useState(focus?.entry === "notes" ? focus.materialId : props.materials[0]?.id ?? "");
   const [competency, setCompetency] = useState(focus?.entry === "competency" ? focus.competencyId : props.competencies[0]?.id ?? "");
   const [context, setContext] = useState<CaseContext>(props.contexts[0] ?? "general");
@@ -93,12 +96,12 @@ export function CaseStart(props: {
   }
   async function play(versionId: string) {
     setBusy(true); setError("");
-    const r = await call("/api/individual/scholar/clinical/sessions", { versionId, mode });
+    const r = await call("/api/individual/scholar/clinical/sessions", { versionId, mode, ...studyField() });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "That case could not be started."); return; }
-    router.push(`${caseHref("library", r.json.play.sessionId)}${mode === "guided" ? "&hints=1" : ""}`);
+    router.push(carry(`${caseHref("library", r.json.play.sessionId)}${mode === "guided" ? "&hints=1" : ""}`));
   }
-  const entries: (CaseEntry | "teach" | "revision")[] = chunkPreset?.chunkId ? [chunkPreset.from ?? "teach"] : props.entries.filter(e => e !== "library" || props.libraryOn);
+  const entries: (CaseEntry | "teach" | "revision")[] = chunkPreset?.chunkId ? [chunkPreset.from === "revision" ? "revision" : "teach"] : props.entries.filter(e => e !== "library" || props.libraryOn);
   return (
     <section aria-labelledby="case-start-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
       <h2 id="case-start-h" className="text-[16px] font-bold text-gray-900">Clinical reasoning</h2>
@@ -106,7 +109,7 @@ export function CaseStart(props: {
       <fieldset className="mt-3">
         <legend className="text-[13px] font-semibold text-gray-800">Start from</legend>
         <div className="mt-1 flex flex-wrap gap-3 text-[13.5px]">
-          {entries.map(e => <label key={e} className="inline-flex items-center gap-1.5"><input type="radio" name="case-entry" checked={entry === e} onChange={() => setEntry(e)} />{e === "teach" ? "The section you were learning" : e === "revision" ? "The question you were revising" : CASE_ENTRY_LABEL[e]}</label>)}
+          {entries.map(e => <label key={e} className="inline-flex items-center gap-1.5"><input type="radio" name="case-entry" checked={entry === e} onChange={() => setEntry(e)} />{e === "teach" || e === "revision" ? FROM_LABEL[chunkPreset?.from ?? e] : CASE_ENTRY_LABEL[e]}</label>)}
         </div>
       </fieldset>
       <div className="mt-3 flex flex-wrap gap-3">
@@ -143,7 +146,8 @@ export function CaseStart(props: {
           <ul className="mt-2 space-y-2">
             {offers.list.map(o => (
               <li key={o.versionId} className="flex flex-wrap items-center justify-between gap-2">
-                <span className="min-w-0 flex-1 text-[14px]"><span className="font-semibold text-gray-900">{o.title}</span>{o.intro ? <span className="block text-[12.5px] text-gray-600">{o.intro}</span> : null}</span>
+                <span className="min-w-0 flex-1 text-[14px]"><span className="font-semibold text-gray-900">{o.title}</span>{o.intro ? <span className="block text-[12.5px] text-gray-600">{o.intro}</span> : null}
+                  <span className="block text-[12px] text-gray-700"><span className="font-semibold">Why this case:</span> {o.why?.length ? o.why.join("; ") : "Clinically approved. Nothing closer to your topic or your gaps was found."}</span></span>
                 <button type="button" className={ghost} disabled={busy} onClick={() => play(o.versionId)}>Play this case</button>
               </li>
             ))}
@@ -195,13 +199,20 @@ type Debrief = {
   answered: number; of: number; correct: number; dimensions: { dimension: string; answered: number; correct: number; written: number }[];
   safetyEvents: string[]; missedFindings: { label: string }[]; objectives: { text: string }[]; revisit: { decisionPointId: string; chunkIds: string[] }[]; label: string;
 };
-export type Play = { kind: "private" | "library"; sessionId: string; status: string; view: LearnerView; answered: string[]; feedback: Feedback[]; debrief: Debrief | null; label: string; materialId?: string; caseId?: string };
+type Closing = { reflectionPrompt: string | null; differentials: { label: string; reasoning: string }[]; managementPrinciples: string[]; expectedReasoning: string | null };
+export type Play = {
+  kind: "private" | "library"; sessionId: string; status: string; view: LearnerView; answered: string[]; feedback: Feedback[]; debrief: Debrief | null; label: string; materialId?: string; caseId?: string;
+  /** A library play's saved "why" per decision token. A private play's reasons live only in this browser session. */
+  reasons?: Record<string, string>; closing?: Closing | null;
+};
 
 export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }) {
   const [play, setPlay] = useState<Play>(initial);
   const [fresh, setFresh] = useState<Record<string, Feedback>>({});
   const [choice, setChoice] = useState<Record<string, string[]>>({});
   const [text, setText] = useState<Record<string, string>>({});
+  // "Explain your choice": typed here, sent with a library answer (kept with it) and otherwise held only in this page for the debrief.
+  const [reason, setReason] = useState<Record<string, string>>(initial.reasons ?? {});
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const base = `/api/individual/scholar/clinical/sessions/${play.kind}/${play.sessionId}`;
@@ -215,7 +226,9 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
   }
   async function answer(decisionToken: string, kind: string) {
     setBusy(decisionToken); setError("");
-    const r = await call(`${base}/answer`, kind === "free_text" ? { decisionToken, text: text[decisionToken] ?? "", hints } : { decisionToken, optionTokens: choice[decisionToken] ?? [], hints });
+    const why = (reason[decisionToken] ?? "").trim();
+    const r = await call(`${base}/answer`, kind === "free_text" ? { decisionToken, text: text[decisionToken] ?? "", hints }
+      : { decisionToken, optionTokens: choice[decisionToken] ?? [], hints, ...(play.kind === "library" && why ? { reason: why } : {}) });
     setBusy("");
     if (!r.ok) { setError(r.json.error ?? "Your answer could not be recorded."); return; }
     setFresh(f => ({ ...f, [decisionToken]: r.json.feedback }));
@@ -241,8 +254,9 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       <ol className="mt-4 space-y-4">
         {v.stages.map((st, si) => (
           <li key={st.token} className="rounded-xl border border-gray-200 p-4">
-            <p className="text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: accent }}>Stage {si + 1}</p>
+            <p className="text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: accent }}>Stage {si + 1}{st.categoryLabel ? ` · ${st.categoryLabel}` : ""}</p>
             <h3 className="text-[15px] font-bold text-gray-900">{st.title}</h3>
+            {st.guidance && <StageGuidanceBox g={st.guidance} />}
             {st.decisionPoints.map(d => {
               const fb = feedbackFor(d.token);
               const done = play.answered.includes(d.token);
@@ -279,11 +293,17 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
                       </fieldset>
                     )
                   ) : null}
+                  {!done && d.askReason && d.kind !== "free_text" && (
+                    <label className="mt-2 block text-[13px] font-semibold text-gray-800">Explain your choice <span className="font-normal text-gray-600">(optional: it does not change how the choice is marked)</span>
+                      <textarea rows={2} maxLength={1000} value={reason[d.token] ?? ""} onChange={e => setReason(r => ({ ...r, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
+                    </label>
+                  )}
                   {!done && play.status === "active" && (
                     <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={!!busy || (d.kind === "free_text" ? !(text[d.token] ?? "").trim() : !(choice[d.token] ?? []).length)} onClick={() => answer(d.token, d.kind)}>
                       {busy === d.token ? "Recording…" : "Decide"}
                     </button>
                   )}
+                  {done && d.askReason && reason[d.token]?.trim() && <p className="mt-2 rounded-lg bg-gray-50 px-3 py-1.5 text-[13px] text-gray-800"><span className="font-semibold">Your reason:</span> {reason[d.token]}</p>}
                   {done && <DecisionFeedback d={d} fb={fb} materialId={play.materialId} />}
                 </div>
               );
@@ -292,7 +312,9 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
         ))}
       </ol>
       {error && <p role="alert" className="mt-3 text-[13.5px] font-semibold text-red-800">{error}</p>}
-      {play.status !== "active" && (play.debrief ? <CaseDebrief d={play.debrief} materialId={play.materialId} /> : <p className="mt-4 text-[14px] font-semibold text-gray-900">Case finished.</p>)}
+      {play.status !== "active" && (play.debrief ? <CaseDebrief d={play.debrief} /> : <p className="mt-4 text-[14px] font-semibold text-gray-900">Case finished.</p>)}
+      {play.status !== "active" && <ClosingNotes closing={play.closing ?? null} reasons={reason} view={v} />}
+      {play.status !== "active" && <ReflectionCard prompt={play.closing?.reflectionPrompt ?? null} revisit={play.debrief?.revisit ?? []} materialId={play.materialId} />}
       {/* SCHOLAR-AI-OPT-01 s7: optional feedback on an AI-written private case (a library case is clinically reviewed). */}
       {play.status !== "active" && play.kind === "private" && <AiFeedback kind="case" target="case" refId={play.caseId} />}
       <nav aria-label="What next" className="mt-5 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
@@ -355,7 +377,7 @@ function DecisionFeedback({ d, fb, materialId }: { d: LearnerView["stages"][numb
   );
 }
 
-function CaseDebrief({ d, materialId }: { d: Debrief; materialId?: string }) {
+function CaseDebrief({ d }: { d: Debrief }) {
   return (
     <section aria-labelledby="debrief-h" className="mt-5 rounded-xl border border-gray-200 p-4">
       <h3 id="debrief-h" className="text-[15px] font-bold text-gray-900">How your reasoning went</h3>
@@ -369,8 +391,76 @@ function CaseDebrief({ d, materialId }: { d: Debrief; materialId?: string }) {
       {d.safetyEvents.length > 0 && <div className="mt-3"><p className="text-[12.5px] font-bold text-red-900">Safety-critical points missed</p><ul className="list-disc pl-5 text-[13.5px] text-red-950">{d.safetyEvents.map(s => <li key={s}>{s}</li>)}</ul></div>}
       {d.missedFindings.length > 0 && <div className="mt-3"><p className="text-[12.5px] font-bold text-gray-800">Findings you could have asked for</p><ul className="list-disc pl-5 text-[13.5px] text-gray-800">{d.missedFindings.map(f => <li key={f.label}>{f.label}</li>)}</ul></div>}
       {d.objectives.length > 0 && <div className="mt-3"><p className="text-[12.5px] font-bold text-gray-800">What this case was about</p><ul className="list-disc pl-5 text-[13.5px] text-gray-800">{d.objectives.map(o => <li key={o.text}>{o.text}</li>)}</ul></div>}
-      {d.revisit.some(r => r.chunkIds.length) && materialId && (
-        <div className="mt-3 flex flex-wrap gap-2">{d.revisit.filter(r => r.chunkIds.length).slice(0, 3).map(r => <Link key={r.decisionPointId} href={`${studyHref("learn")}?section=${r.chunkIds[0]}`} className={ghost}>Teach me what I missed</Link>)}</div>
+    </section>
+  );
+}
+
+/** What a stage's own category adds as the learner reaches it (cases/blueprint.ts stageGuidance): never an answer to the decision in front of them. */
+function StageGuidanceBox({ g }: { g: NonNullable<LearnerView["stages"][number]["guidance"]> }) {
+  return (
+    <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-800">
+      {g.differentials && (
+        <>
+          <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-gray-600">Differentials to weigh</p>
+          <ul className="mt-1 list-disc pl-5">{g.differentials.map(x => <li key={x.label}><span className="font-semibold">{x.label}</span>{x.reasoning ? <span className="block font-normal text-gray-700">{x.reasoning}</span> : null}</li>)}</ul>
+        </>
+      )}
+      {g.managementPrinciples && (
+        <>
+          <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-gray-600">Management principles</p>
+          <ul className="mt-1 list-disc pl-5">{g.managementPrinciples.map(x => <li key={x}>{x}</li>)}</ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** At the end of a case: the author's differentials, management principles and expected reasoning, and the learner's own reasons. */
+function ClosingNotes({ closing, reasons, view }: { closing: Closing | null; reasons: Record<string, string>; view: LearnerView }) {
+  const prompts = new Map(view.stages.flatMap(s => s.decisionPoints.map(d => [d.token, d.prompt] as const)));
+  const mine = Object.entries(reasons).filter(([t, r]) => r.trim() && prompts.has(t));
+  const c = closing;
+  if (!c?.differentials.length && !c?.managementPrinciples.length && !c?.expectedReasoning && !mine.length) return null;
+  return (
+    <section aria-labelledby="closing-h" className="mt-5 rounded-xl border border-gray-200 p-4">
+      <h3 id="closing-h" className="text-[15px] font-bold text-gray-900">How the case can be reasoned</h3>
+      {c?.expectedReasoning && <p className="mt-2 text-[14px] text-gray-900">{c.expectedReasoning}</p>}
+      {!!c?.differentials.length && (
+        <div className="mt-3"><p className="text-[12.5px] font-bold text-gray-800">Differentials</p>
+          <ul className="list-disc pl-5 text-[13.5px] text-gray-800">{c.differentials.map(d => <li key={d.label}><span className="font-semibold">{d.label}</span>: {d.reasoning}</li>)}</ul></div>
+      )}
+      {!!c?.managementPrinciples.length && (
+        <div className="mt-3"><p className="text-[12.5px] font-bold text-gray-800">Management principles</p>
+          <ul className="list-disc pl-5 text-[13.5px] text-gray-800">{c.managementPrinciples.map(m => <li key={m}>{m}</li>)}</ul></div>
+      )}
+      {mine.length > 0 && (
+        <div className="mt-3"><p className="text-[12.5px] font-bold text-gray-800">Your reasons</p>
+          <ul className="list-disc pl-5 text-[13.5px] text-gray-800">{mine.map(([t, r]) => <li key={t}><span className="font-semibold">{prompts.get(t)}</span> {r}</li>)}</ul></div>
+      )}
+    </section>
+  );
+}
+
+const REFLECTION_PROMPTS = ["What did you notice?", "What would you do differently?", "What do you need to revise?"] as const;
+
+/**
+ * A short reflection at the end of a case. The text lives in this page only: it is NOT saved, sent or kept anywhere, and
+ * the card says so. If the case has a reflection stage, its prompt leads. Links go back to the sections to revisit.
+ */
+function ReflectionCard({ prompt, revisit, materialId }: { prompt: string | null; revisit: { decisionPointId: string; chunkIds: string[] }[]; materialId?: string }) {
+  const [note, setNote] = useState("");
+  const links = revisit.filter(r => r.chunkIds.length).slice(0, 3);
+  return (
+    <section aria-labelledby="reflect-h" className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <h3 id="reflect-h" className="text-[15px] font-bold text-gray-900">Reflect on this case</h3>
+      <p className="text-[12.5px] font-semibold text-gray-700">Not saved — for your own reflection.</p>
+      {prompt && <p className="mt-2 text-[14px] text-gray-900">{prompt}</p>}
+      <ul className="mt-2 list-disc pl-5 text-[13.5px] text-gray-800">{REFLECTION_PROMPTS.map(p => <li key={p}>{p}</li>)}</ul>
+      <label className="mt-2 block text-[13px] font-semibold text-gray-800">Your reflection
+        <textarea rows={4} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} className={`${field} mt-1 block w-full bg-white`} />
+      </label>
+      {links.length > 0 && materialId && (
+        <div className="mt-3 flex flex-wrap gap-2">{links.map(r => <Link key={r.decisionPointId} href={`${studyHref("learn")}?section=${r.chunkIds[0]}`} className={ghost}>Teach me what I missed</Link>)}</div>
       )}
     </section>
   );
@@ -378,12 +468,15 @@ function CaseDebrief({ d, materialId }: { d: Debrief; materialId?: string }) {
 
 // ── OFFER A CASE TO THE CASE LIBRARY (5B, the Scholar side) ──
 
-export function CaseOfferPanel(props: { libraryOn: boolean; granted: boolean; attestationVersion: string; text: { own_notes: string; licensed_to_share: string; terms: string } | null; cases: { id: string; title: string }[]; offers: { sourceKey: string; status: string; reasons: string[] }[] }) {
+export function CaseOfferPanel(props: { libraryOn: boolean; /** Whether offering is on (it follows the case library switch unless HQ turns it off). Off: only withdrawing is offered. */ offering: boolean; granted: boolean; attestationVersion: string; text: { own_notes: string; licensed_to_share: string; terms: string } | null; cases: { id: string; title: string }[]; offers: { sourceKey: string; status: string; reasons: string[] }[] }) {
   const router = useRouter();
   const [attestation, setAttestation] = useState<"own_notes" | "licensed_to_share" | "">("");
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
   if (!props.libraryOn) return null;
+  const anyOffer = props.offers.some(o => ["eligible", "in_development"].includes(o.status));
+  // Switched off: nothing new can be granted or offered, but a student can always take back what they gave.
+  if (!props.offering && !props.granted && !anyOffer) return null;
   const offered = new Map(props.offers.map(o => [o.sourceKey, o]));
   async function grant() {
     setBusy("grant"); setMsg("");
@@ -411,7 +504,9 @@ export function CaseOfferPanel(props: { libraryOn: boolean; granted: boolean; at
     <section aria-labelledby="offer-panel-h" className="rounded-2xl border border-gray-200 bg-white p-5">
       <h2 id="offer-panel-h" className="text-[15px] font-bold text-gray-900">Offer your cases to the case library</h2>
       <p className="text-[12.5px] text-gray-600">Optional, and separate from your AI help setting. Nothing is offered unless you choose a case. Offering never uses your AI allowance.</p>
+      {!props.offering && <p role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">Offering cases is switched off here. You can still withdraw a permission or an offer you made.</p>}
       {!props.granted ? (
+        !props.offering ? null :
         props.text && (
           <div className="mt-3 space-y-2 text-[13.5px] text-gray-800">
             <p>{props.text.terms}</p>
@@ -429,7 +524,7 @@ export function CaseOfferPanel(props: { libraryOn: boolean; granted: boolean; at
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[14px]">
                 <span className="min-w-0 flex-1">{c.title}{o ? <span className="text-[12.5px] text-gray-500"> · {o.status}{o.reasons.length ? ` (${o.reasons.join(", ")})` : ""}</span> : null}</span>
                 {o && ["eligible", "in_development"].includes(o.status) ? <button type="button" className={ghost} disabled={!!busy} onClick={() => withdraw(c.id)}>Withdraw</button>
-                  : !o || o.status === "withdrawn" || o.status === "ineligible" ? <button type="button" className={ghost} disabled={!!busy} onClick={() => offer(c.id)}>{busy === c.id ? "Offering…" : "Offer this case"}</button> : null}
+                  : props.offering && (!o || o.status === "withdrawn" || o.status === "ineligible") ? <button type="button" className={ghost} disabled={!!busy} onClick={() => offer(c.id)}>{busy === c.id ? "Offering…" : "Offer this case"}</button> : null}
               </li>
             ); })}
           </ul>

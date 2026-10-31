@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireHqCapability } from "@/lib/hq/context";
 import { CASE_LIBRARY_OFF, caseLibraryEnabled, loadCasePolicy } from "@/lib/cases/policy";
-import { candidateQueue, competencyOptions, listCases, type QueueFilters } from "@/lib/cases/studio";
+import { candidateQueue, classificationOptions, competencyOptions, listCases, type QueueFilters } from "@/lib/cases/studio";
 import { CaseContent } from "@/app/super-admin/clinical-review/_components/CaseContent";
 import { AiDraft, CandidateActions, CreateCase } from "./_components/CaseControls";
 import { input, primary } from "@/app/super-admin/ai/fair-use/_components/FairUseControls";
@@ -35,7 +35,7 @@ export default async function CaseStudioPage({ searchParams }: { searchParams: P
     risk: sp.risk === "standard" || sp.risk === "high" ? sp.risk : null,
     domainId: UUIDish(sp.domain), cpuId: UUIDish(sp.cpu), specialtyTermId: UUIDish(sp.specialty), professionTermId: UUIDish(sp.profession),
   };
-  const [queue, cases, comps] = await Promise.all([candidateQueue(ctx.admin, ctx.userId, f), listCases(ctx.admin), competencyOptions(ctx.admin)]);
+  const [queue, cases, comps, classification] = await Promise.all([candidateQueue(ctx.admin, ctx.userId, f), listCases(ctx.admin), competencyOptions(ctx.admin), classificationOptions(ctx.admin)]);
   const compLabel = new Map(comps.map(c => [c.id, c.label]));
 
   return (
@@ -90,7 +90,7 @@ export default async function CaseStudioPage({ searchParams }: { searchParams: P
       <section aria-labelledby="lib-h" className="space-y-3">
         <h2 id="lib-h" className="text-[15px] font-bold text-gray-900">Case library</h2>
         <div className="rounded-xl border border-gray-200 bg-white p-3"><CreateCase /></div>
-        <details className="rounded-xl border border-gray-200 bg-white p-3"><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">Draft a case with AI (charged to the platform budget, never to a student)</summary><div className="mt-3"><AiDraft competencies={comps} /></div></details>
+        <details className="rounded-xl border border-gray-200 bg-white p-3"><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">Draft a case with AI (charged to the platform budget, never to a student)</summary><div className="mt-3"><AiDraft competencies={comps} professions={classification?.professions ?? []} /></div></details>
         {cases === null ? (
           <p role="alert" className="rounded-lg border border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)] px-3 py-2 text-[13px] text-[var(--cmp-text-critical)]">The library could not be read just now.</p>
         ) : cases.length === 0 ? (

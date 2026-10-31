@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 // POST /api/individual/scholar/clinical/sessions -- COMPETEN-SCHOLAR-CLINICAL-REASONING-01 CR2 and CI6.
 // { caseId, mode? } replays one of the student's own stored cases; { versionId, mode? } starts a governed library case
 // through the shared delivery (library.ts startCaseSession: published and approved for that version only). Neither
-// uses AI, so both work whatever the student's AI allowance (Learning Continuity).
+// uses AI, so both work whatever the student's AI allowance (Learning Continuity). Either, started inside a study session, is linked to it.
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");
@@ -27,8 +27,7 @@ export async function POST(req: Request) {
     const p = await startPrivatePlay(ctx.admin, ctx.userId, body.caseId, mode);
     if ("error" in p) return NextResponse.json({ error: p.error }, { status: p.status });
     await audit(ctx, "individual_scholar_case_started", "individual_scholar_case_session", p.sessionId, { kind: "private", mode });
-    // SCHOLAR-SESSION-AI-02: replayed inside a study session, the play is linked to it. A library play lives in the
-    // shared case library, not in the learner's own case sessions, so it is not linked.
+    // SCHOLAR-SESSION-AI-02: replayed inside a study session, the play is linked to it.
     await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "case_session", p.sessionId, policy);
     return NextResponse.json({ kind: "private", play: p });
   }
@@ -37,6 +36,11 @@ export async function POST(req: Request) {
     const s = await startCaseSession(ctx.admin, ctx.userId, body.versionId, { hints: mode === "guided" });
     if ("error" in s) return NextResponse.json({ error: s.error }, { status: 404 });
     await audit(ctx, "individual_scholar_case_started", "case_library_session", s.sessionId, { kind: "library", mode });
+    // SCHOLAR-INTELLIGENCE-COMPLETE-01: a library play is linked to the open study session too. The only reason it was not
+    // was that the link's ownership check read the learner's own case sessions (library plays live in case_library_session).
+    // store.ts ownsStudyRef now accepts the caller's own library session under the same "case_session" kind: no migration
+    // (740's kind CHECK already lists it, ref_id has no foreign key, and no reader dereferences a case_session ref).
+    await linkStudy(ctx.admin, ctx.userId, body?.studySessionId, "case_session", s.sessionId, policy);
     return NextResponse.json({ kind: "library", play: await viewPlay(ctx.admin, ctx.userId, "library", s.sessionId, mode === "guided") });
   }
   return NextResponse.json({ error: "Choose a case." }, { status: 400 });

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { primary, ghost, input, Message } from "@/app/super-admin/ai/fair-use/_components/FairUseControls";
 import { screenBlueprint, SCREEN_LABEL } from "@/lib/cases/screen";
 import { Problems, useCaseSend } from "./CaseControls";
+import { CASE_FACT_KINDS, REASONING_CAPS, STAGE_CATEGORIES, STAGE_CATEGORY_LABEL } from "@/lib/cases/categories";
 
 // THE NO-CODE CASE EDITOR (C2 s8: edit clinical findings and structure, configure decision points and progression,
 // define objectives and assessment, link CFCA outcomes, add references and rationales). It edits ONE draft as a
@@ -26,7 +27,7 @@ const CLASS_FIELDS = [
   { key: "cpus", field: "cpuIds", legend: "Competency Practice Units (CPUs)", none: "No CPU sits under a shared framework yet." },
   { key: "proficiency", field: "proficiencyLevelIds", legend: "Proficiency levels", none: "No proficiency scale is set up yet." },
 ] as const;
-const KINDS = ["history", "observation", "examination", "result", "context"] as const;
+const KINDS = CASE_FACT_KINDS;
 const lbl = "block text-[12.5px] text-gray-700";
 const box = "rounded-xl border border-gray-200 bg-white p-4";
 const h2 = "text-[14px] font-bold text-gray-900";
@@ -139,6 +140,8 @@ export function CaseEditor({ versionId, initial, competencies, dimensions, initi
             <div key={s.id} className="rounded-lg border border-gray-200 p-3">
               <div className="flex flex-wrap items-end gap-2">
                 <label className={lbl}>Stage title<input className={`${input} mt-1 block w-64`} value={s.title} onChange={e => up(x => { x.stages[si].title = e.target.value; })} /></label>
+                <label className={lbl}>Category (optional)<select className={`${input} mt-1 block w-48`} value={s.category ?? ""} onChange={e => up(x => { if (e.target.value) x.stages[si].category = e.target.value; else delete x.stages[si].category; })}><option value="">None</option>{STAGE_CATEGORIES.map(c => <option key={c} value={c}>{STAGE_CATEGORY_LABEL[c]}</option>)}</select></label>
+                {s.category === "reflection" && <label className={`${lbl} min-w-[16rem] flex-1`}>Reflection prompt (shown to the learner at the end)<input className={`${input} mt-1 block w-full`} maxLength={1000} value={s.narrativeHint ?? ""} onChange={e => up(x => { x.stages[si].narrativeHint = e.target.value || null; })} /></label>}
                 <button type="button" className={ghost} disabled={b.stages.length < 2} onClick={() => up(x => { const id = x.stages[si].id; x.stages.splice(si, 1); x.decisionPoints = x.decisionPoints.filter((d: any) => d.stageId !== id); x.progression = x.progression.filter((t: any) => t.from !== id && t.to !== id); })}>Remove stage</button>
               </div>
               <fieldset className="mt-2"><legend className={small}>Findings this stage reveals when reached</legend>
@@ -151,6 +154,7 @@ export function CaseEditor({ versionId, initial, competencies, dimensions, initi
                     <label className={lbl}>Answer form<select className={`${input} mt-1 block w-full`} value={d.kind} onChange={e => up(x => { x.decisionPoints[di].kind = e.target.value; })}><option value="single">One choice</option><option value="multiple">Several choices</option><option value="free_text">Written answer</option></select></label>
                     <label className={lbl}>Reasoning dimension<select className={`${input} mt-1 block w-full`} value={d.dimension ?? ""} onChange={e => up(x => { x.decisionPoints[di].dimension = e.target.value; })}><option value="">Choose</option>{dimensions.map(m => <option key={m} value={m}>{m}</option>)}</select></label>
                     <label className={lbl}>Hint (guided mode)<input className={`${input} mt-1 block w-full`} value={d.hint ?? ""} onChange={e => up(x => { x.decisionPoints[di].hint = e.target.value || null; })} /></label>
+                    {d.kind !== "free_text" && <label className="flex items-end gap-2 pb-1 text-[12.5px] text-gray-700"><input type="checkbox" className="mr-1" checked={d.askReason === true} onChange={e => up(x => { if (e.target.checked) x.decisionPoints[di].askReason = true; else delete x.decisionPoints[di].askReason; })} />Ask the learner to explain their choice (never changes the marking)</label>}
                     <label className={`${lbl} sm:col-span-3`}>Why (the decision&apos;s rationale)<textarea rows={2} className={`${input} mt-1 block w-full`} value={d.rationale ?? ""} onChange={e => up(x => { x.decisionPoints[di].rationale = e.target.value || null; })} /></label>
                   </div>
                   {d.kind === "free_text" ? (
@@ -260,6 +264,23 @@ export function CaseEditor({ versionId, initial, competencies, dimensions, initi
             );
           })}
           <button type="button" className={ghost} disabled={!b.decisionPoints.some((d: any) => d.kind !== "free_text")} onClick={() => up(x => { const dp = x.decisionPoints.find((d: any) => d.kind !== "free_text"); x.safetyCriteria.push({ id: nextId("sc", x.safetyCriteria.map((y: any) => y.id)), text: "", decisionPointId: dp.id, mustSelect: [], mustNotSelect: [] }); })}>Add a safety criterion</button>
+        </div>
+      </section>
+
+      <section className={box} aria-labelledby="ed-reasoning">
+        <h2 id="ed-reasoning" className={h2}>Differentials, management and expected reasoning (optional)</h2>
+        <p className={small}>Differentials appear to the learner on reaching a stage categorised Differentials (their reasoning once it is behind them); management principles once a Management stage is finished; everything at the end of the case. Expected reasoning is shown at the end only.</p>
+        <div className="mt-2 space-y-2">
+          {(b.differentials ?? []).map((d: any, i: number) => (
+            <div key={i} className="grid gap-2 rounded-lg border border-gray-100 p-2 sm:grid-cols-5">
+              <label className={lbl}>Differential<input className={`${input} mt-1 block w-full`} maxLength={REASONING_CAPS.differentialLabel} value={d.label} onChange={e => up(x => { x.differentials[i].label = e.target.value; })} /></label>
+              <label className={`${lbl} sm:col-span-3`}>Reasoning (for and against)<input className={`${input} mt-1 block w-full`} maxLength={REASONING_CAPS.differentialReasoning} value={d.reasoning} onChange={e => up(x => { x.differentials[i].reasoning = e.target.value; })} /></label>
+              <div className="flex items-end"><button type="button" className={ghost} onClick={() => up(x => { x.differentials.splice(i, 1); if (!x.differentials.length) delete x.differentials; })}>Remove</button></div>
+            </div>
+          ))}
+          <button type="button" className={ghost} disabled={(b.differentials ?? []).length >= REASONING_CAPS.differentials} onClick={() => up(x => { x.differentials = [...(x.differentials ?? []), { label: "", reasoning: "" }]; })}>Add a differential</button>
+          <label className={`${lbl} mt-2`}>Management principles, one per line<textarea rows={3} className={`${input} mt-1 block w-full`} value={(b.managementPrinciples ?? []).join("\n")} onChange={e => up(x => { const l = lines(e.target.value); if (l.length) x.managementPrinciples = l; else delete x.managementPrinciples; })} /></label>
+          <label className={lbl}>Expected reasoning (what a strong line of reasoning covers)<textarea rows={3} className={`${input} mt-1 block w-full`} maxLength={REASONING_CAPS.expectedReasoning} value={b.expectedReasoning ?? ""} onChange={e => up(x => { if (e.target.value) x.expectedReasoning = e.target.value; else delete x.expectedReasoning; })} /></label>
         </div>
       </section>
 

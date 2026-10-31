@@ -24,7 +24,7 @@ export async function viewPlay(admin: any, userId: string, kind: PlayKind, id: s
   return v ? {
     kind: "library" as const, sessionId: v.sessionId, status: v.status === "in_progress" ? "active" : v.status, current: v.current, view: v.view, answered: v.answered,
     feedback: (v.feedback ?? []).map(f => ({ token: f.decisionToken, marking: "ai_evaluation" as const, markingLabel: MARKING_LABEL.ai_evaluation, answered: null, aiFeedback: f.text })),
-    debrief: null, label: LIBRARY_CASE_LABEL,
+    debrief: null, label: LIBRARY_CASE_LABEL, reasons: v.reasons, closing: v.closing,
   } : null;
 }
 
@@ -52,7 +52,7 @@ export async function withdrawCasesOf(admin: any, userId: string, materialId: st
 }
 
 /** Answer a decision, on that kind's engine. A library case's written answer gets its deterministic view only, for now. */
-export async function answerPlay(admin: any, userId: string, kind: PlayKind, id: string, args: { decisionToken: string; optionTokens?: string[]; text?: string | null }, judge: ReasoningJudge, hints: boolean) {
+export async function answerPlay(admin: any, userId: string, kind: PlayKind, id: string, args: { decisionToken: string; optionTokens?: string[]; text?: string | null; reason?: string | null }, judge: ReasoningJudge, hints: boolean) {
   if (kind === "private") return answerPrivate(admin, userId, id, args, judge);
   const r = await answerInSession(admin, userId, id, args);
   if ("error" in r) return { error: r.error, status: 400 };

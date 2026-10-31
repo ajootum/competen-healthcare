@@ -57,7 +57,8 @@ export async function POST(req: Request) {
     case "save": r = await saveDraft(ctx.admin, me, str(body.versionId), body.content); if (r.ok) await audit("case_library_version", str(body.versionId), { problems: r.problems.length }); break;
     case "submit": r = await submitCase(ctx.admin, me, str(body.versionId)); if (r.ok) await audit("case_library_version", str(body.versionId), { review_version: r.reviewVersionId, required: r.required }); break;
     case "ai_draft": r = await draftCaseWithAi(ctx.admin, me, { brief: str(body.brief, 4000), competencyIds: Array.isArray(body.competencyIds) ? body.competencyIds.map((x: unknown) => str(x, 40)) : [],
-        level: ["foundation", "intermediate", "advanced"].includes(body.level) ? body.level : "intermediate", risk: body.risk === "high" ? "high" : "standard", requestKey: str(body.requestKey, 40) });
+        level: ["foundation", "intermediate", "advanced"].includes(body.level) ? body.level : "intermediate", risk: body.risk === "high" ? "high" : "standard", requestKey: str(body.requestKey, 40),
+        professionTermIds: Array.isArray(body.professionTermIds) ? body.professionTermIds.map((x: unknown) => str(x, 40)) : [] });
       if (r.ok) await audit("case_library_case", null, { workflow: "case.educator_develop" }); break;
     case "publish": r = await publishCase(ctx.admin, me, str(body.versionId)); if (r.ok) await audit("case_library_version", str(body.versionId), {}); break;
     case "retire": r = await retireCase(ctx.admin, str(body.caseId)); if (r.ok) await audit("case_library_case", str(body.caseId), {}); break;

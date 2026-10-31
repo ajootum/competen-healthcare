@@ -116,7 +116,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
-  | "scholar_study_sessions" | "scholar_learn_prepare_next";
+  | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_case_contribution";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1413,6 +1413,14 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Two choices. Default: guided.",
   },
   {
+    key: "scholar_case_contribution", kind: "choice", product: "Scholar",
+    label: "Offering cases to the case library",
+    help: "Whether a student may allow their own cases to be considered for the shared case library and offer them one at a time. It follows the case library switch: until this is published it is on exactly where the case library is on, and off where it is off. Set Off to stop new permissions and new offers while the case library stays on for playing. A student can always withdraw a permission or an offer they made, whatever this says.",
+    options: [{ value: "on", label: "Follows the case library switch" }, { value: "off", label: "Off" }],
+    fallback: "on",
+    limitReason: "Cannot open anything the case library switch keeps shut. Withdrawing is never blocked. Default: follows the case library switch.",
+  },
+  {
     key: "scholar_case_reasoning_feedback", kind: "choice", product: "Scholar",
     label: "Feedback on written reasoning",
     help: "How a written answer in a case gets feedback: AI reasoning feedback where it is available (labelled), or the student compares it with what a good answer contains.",
@@ -1799,6 +1807,8 @@ export type IndividualPolicy = {
   scholarFlashcardLevelMix: "programme" | "recall" | "balanced" | "applied";
   /** SCHOLAR-SESSION-AI-02. Whether connected study sessions are offered. Read it through isStudySessionsOn, which also needs 740. */
   scholarStudySessions: boolean;
+  /** SCHOLAR-INTELLIGENCE-COMPLETE-01. "on" follows the case_library flag (the default); "off" stops new case-contribution permissions and offers. Withdrawal is never gated. */
+  scholarCaseContribution: "on" | "off";
   /** SCHOLAR-GUIDED-LEARNING-01. Whether Learn may prepare the next lesson ahead (one at most). Default off. */
   scholarLearnPrepareNext: boolean;
   scholarSrsMasteryReps: number;
@@ -1953,6 +1963,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarFlashcardExports: clampSet(policyDef("scholar_flashcard_exports") as SetPolicy, published.get(policyPath("scholar_flashcard_exports"))) as ("deck" | "print" | "guide")[],
     scholarFlashcardLevelMix: clampChoice(policyDef("scholar_flashcard_level_mix") as ChoicePolicy, published.get(policyPath("scholar_flashcard_level_mix"))) as "programme" | "recall" | "balanced" | "applied",
     scholarStudySessions: clampChoice(policyDef("scholar_study_sessions") as ChoicePolicy, published.get(policyPath("scholar_study_sessions"))) === "on",
+    scholarCaseContribution: clampChoice(policyDef("scholar_case_contribution") as ChoicePolicy, published.get(policyPath("scholar_case_contribution"))) as "on" | "off",
     scholarLearnPrepareNext: clampChoice(policyDef("scholar_learn_prepare_next") as ChoicePolicy, published.get(policyPath("scholar_learn_prepare_next"))) === "on",
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),
     scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
