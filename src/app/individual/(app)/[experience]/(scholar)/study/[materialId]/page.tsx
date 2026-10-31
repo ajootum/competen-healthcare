@@ -5,7 +5,7 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
 import { FORMAT_LABEL, FORMAT_OF, NO_APPROVED_COMPETENCIES, UNIT_OF } from "@/lib/individual/scholar/config";
-import { analysisStatus, countDue, getMaterial, listChunks, listCollections, listMappings, listProgrammes, listQuestions, materialExtras, readConsent } from "@/lib/individual/scholar/store";
+import { analysedProgrammes, analysisStatus, countDue, getMaterial, listChunks, listCollections, listMappings, listProgrammes, listQuestions, materialExtras, readConsent } from "@/lib/individual/scholar/store";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
 import { competencyAbsence, competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
 import { AnalysePanel, SectionTopics, type CompetencyOption, type MappingView } from "../_components/competency-client";
@@ -21,7 +21,7 @@ import { EXAM_ATTESTATION, LIVE_EXAM_NOTICE } from "@/lib/individual/scholar/exa
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { StudyAsPaper } from "../_components/paper-client";
 import { FoundInMaterial } from "../_components/classify-client";
-import { competenciesFound, topicsOf } from "@/lib/individual/scholar/classify-view";
+import { competenciesFound, relinkTargets, topicsOf } from "@/lib/individual/scholar/classify-view";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -105,6 +105,10 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
     .map(f => ({ ...f, sections: f.chunkIds.length, firstChunkId: f.chunkIds.sort((a, b) => chunkOrder.indexOf(a) - chunkOrder.indexOf(b))[0] }));
   const status = consent.ok ? consentStatus(consent.data, consentDocuments().published) : null;
   const consentOn = status === "on";
+  // SCHOLAR-UPLOAD-FIX: sections analysed against no programme (or another one) while the learner now has one with a
+  // usable catalogue -- offered for re-linking. Unreadable: nothing is offered.
+  const relinkCodes = learner.programme && learner.competencies?.length ? await analysedProgrammes(ctx.admin, ctx.userId, m.id) : null;
+  const relinkable = relinkCodes?.ok && learner.programme ? relinkTargets(chunkOrder, relinkCodes.data, learner.programme.code).length : 0;
   const [paper, policy] = await Promise.all([getExamPaper(ctx.admin, ctx.userId, m.id), loadIndividualPolicy(ctx.admin)]);
   const paperOn = policy.scholarExams.enabled && paper.ok;
   const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
@@ -177,7 +181,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
       )}
       {competenciesOn && analysis.ok && (
         <AnalysePanel materialId={m.id} consent={consentOn} sections={analysis.data.sections} analysed={analysis.data.analysed}
-          programmeLabel={learner.programme?.label ?? null} absence={absence} />
+          programmeLabel={learner.programme?.label ?? null} absence={absence} relinkable={relinkable} />
       )}
       {/* Owner ruling 2026-10-24: content held back by the status floor is SAID, never silently missing. */}
       {competenciesOn && learner.programme && learner.belowFloor > 0 && (

@@ -1482,6 +1482,25 @@ export async function saveAnalysis(admin: Admin, userId: string, input: {
   return { ok: !mErr, proposals: mErr ? 0 : maps.length };
 }
 
+/** SCHOLAR-UPLOAD-FIX: the programme each analysed section of one material was analysed against (null: none). */
+export async function analysedProgrammes(admin: Admin, userId: string, materialId: string): Promise<Read<Map<string, string | null>>> {
+  const { data, error } = await admin.from("individual_scholar_chunk_analysis").select("chunk_id, programme_code")
+    .eq("user_id", userId).eq("material_id", materialId).limit(2000);
+  if (error) return fail(error);
+  return { ok: true, data: new Map(((data ?? []) as any[]).map(r => [r.chunk_id, r.programme_code ?? null])) };
+}
+
+/**
+ * SCHOLAR-UPLOAD-FIX: after a re-link, record that these sections are now analysed against `programmeCode`. Only the
+ * programme is changed: the concepts found, the model and the prompt version of the analysis row are kept as they are.
+ */
+export async function markRelinked(admin: Admin, userId: string, materialId: string, chunkIds: readonly string[], programmeCode: string): Promise<boolean> {
+  if (!chunkIds.length) return true;
+  const { error } = await admin.from("individual_scholar_chunk_analysis").update({ programme_code: programmeCode })
+    .eq("user_id", userId).eq("material_id", materialId).in("chunk_id", [...chunkIds]);
+  return !error;
+}
+
 export type MappingRow = {
   id: string; chunkId: string; materialId: string; competencyId: string; layer: Layer; source: MapSource;
   confidence: number | null; rationale: string | null; model: string | null; promptVersion: string | null; createdAt: string;

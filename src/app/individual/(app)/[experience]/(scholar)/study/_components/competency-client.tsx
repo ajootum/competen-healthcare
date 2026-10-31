@@ -90,17 +90,40 @@ export function ProgrammeChooser({ programmes, current }: { programmes: Programm
 
 // ── FIND TOPICS AND COMPETENCIES ───────────────────────────────────────────────────────────────────
 
-export function AnalysePanel({ materialId, consent, sections, analysed, programmeLabel, absence = null }: {
+export function AnalysePanel({ materialId, consent, sections, analysed, programmeLabel, absence = null, relinkable = 0 }: {
   materialId: string; consent: boolean; sections: number; analysed: number; programmeLabel: string | null;
   /** UPLOAD-01 R1: why no competency will be suggested (no programme, or no usable catalogue). Said, never blank. */
   absence?: string | null;
+  /** SCHOLAR-UPLOAD-FIX: analysed sections not yet linked to the programme now chosen (its catalogue non-empty). */
+  relinkable?: number;
 }) {
   const router = useRouter();
   const [done, setDone] = useState(analysed);
   const [running, setRunning] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [linked, setLinked] = useState(0);
   const [error, setError] = useState("");
   const started = useRef(false);
   const remaining = Math.max(0, sections - done);
+  // The server count (refreshed after each batch) is the truth; `linked` only words the result of this visit.
+  const toLink = relinkable;
+
+  // Learner-initiated only: sections analysed before this programme was chosen, sent for competency mapping in batches.
+  async function relink() {
+    if (linking || running) return;
+    setLinking(true); setError("");
+    let n = linked;
+    for (;;) {
+      const r = await send(`/api/individual/scholar/materials/${materialId}/analyse`, { relink: true });
+      if (!r.ok) { setError(r.json.error ?? "Linking stopped."); break; }
+      n += r.json.relinked ?? 0;
+      setLinked(n);
+      if (!r.json.relinked || !r.json.remaining) break;
+      router.refresh();
+    }
+    setLinking(false);
+    router.refresh();
+  }
 
   async function run() {
     if (running) return;
@@ -134,7 +157,7 @@ export function AnalysePanel({ materialId, consent, sections, analysed, programm
         {programmeLabel && !absence
           ? <>Scholar finds the concepts in each section and suggests which competencies of <span className="font-semibold">{programmeLabel}</span> it supports.</>
           : absence
-            ? <>Scholar finds the concepts in each section. {absence}</>
+            ? <>Scholar finds the concepts in each section. {absence} Linking can be run from here once a framework is published for your programme.</>
             : <>Scholar finds the concepts in each section. Choose your programme in My Learning to also see which competencies your notes support.</>}
       </p>
       <p className="mt-2 text-[13.5px] text-gray-800" aria-live="polite">
@@ -148,6 +171,20 @@ export function AnalysePanel({ materialId, consent, sections, analysed, programm
         )
       ) : (
         <p className="mt-2 text-[13px] text-gray-600">Turn on AI help in My Learning to find topics.</p>
+      )}
+      {consent && !absence && programmeLabel && (toLink > 0 || linked > 0) && (
+        <div className="mt-3">
+          <p className="text-[13.5px] text-gray-800" aria-live="polite">
+            {toLink > 0
+              ? `${toLink} section${toLink === 1 ? " was" : "s were"} analysed before you chose ${programmeLabel}, so ${toLink === 1 ? "it is" : "they are"} not linked to its competencies yet.`
+              : `${linked} section${linked === 1 ? "" : "s"} linked to ${programmeLabel}. Accept or reject each suggestion below.`}
+          </p>
+          {toLink > 0 && (
+            <button type="button" className={`${ghost} mt-2`} disabled={linking || running} onClick={relink}>
+              {linking ? "Linking…" : "Link to your programme's competencies"}
+            </button>
+          )}
+        </div>
       )}
       {error && <p role="alert" className="mt-2 text-[13.5px] font-medium text-red-700">{error}</p>}
     </section>
