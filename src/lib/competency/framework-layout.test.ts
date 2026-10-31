@@ -20,7 +20,7 @@ let no750: boolean;
 let refusePublish: string | null;
 let selects: string[];
 function fake() {
-  const nest = (table: string, r: any) => table === "frameworks"
+  const nest = (table: string, r: any): any => table === "frameworks"
     ? { ...r, framework_domains: T.framework_domains.filter(d => d.framework_id === r.id).map(d => nest("framework_domains", d)) }
     : table === "framework_domains"
       ? { ...r, framework_competencies: T.framework_competencies.filter(c => c.domain_id === r.id).map(c => ({ ...c, competency_skills: T.competency_skills.filter(k => k.competency_id === c.id) })) }
