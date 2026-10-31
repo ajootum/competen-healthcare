@@ -289,11 +289,11 @@ export function externalEvidence(research: LearnResearch, terms: readonly string
  * Pure. THE DETERMINISTIC SUFFICIENCY DECISION. Evidence = a notes passage or library item containing at least one of
  * the question's key terms (an approved competency, not a case: a case is practice), or an external abstract with a
  * verified identity. Details-only references never count.
- *   sufficient    evidence covers at least 60% of the key terms
+ *   sufficient    evidence covers at least the threshold (policy scholar_recovery_sufficiency, default 60%) of the key terms
  *   partial       some evidence, less coverage
  *   insufficient  no evidence at all: reading suggestions and what remains unanswered, never an answer
  */
-export function assessSufficiency(question: string, ev: RecoveryResult["evidence"]): SufficiencyVerdict {
+export function assessSufficiency(question: string, ev: RecoveryResult["evidence"], threshold: number = SUFFICIENT_COVERAGE): SufficiencyVerdict {
   const keyTerms = keyTermsOf(question);
   const items = [
     ...ev.notes.filter(n => n.matched.length), ...ev.library.filter(l => l.kind === "competency" && l.approved && l.matched.length), ...ev.external.filter(e => e.evidence),
@@ -307,13 +307,17 @@ export function assessSufficiency(question: string, ev: RecoveryResult["evidence
   const covered = keyTerms.filter(t => items.some(i => i.matched.includes(t)));
   const unanswered = keyTerms.filter(t => !covered.includes(t));
   const canExplain = items.length > 0 && keyTerms.length > 0 && hasApprovedReference(ev);
-  return { verdict: groundingVerdict(covered.length, keyTerms.length), keyTerms, covered, unanswered, canExplain };
+  return { verdict: groundingVerdict(covered.length, keyTerms.length, threshold), keyTerms, covered, unanswered, canExplain };
 }
 
-/** Pure. THE THREE OUTCOMES, one rule: sufficient at 60% of the key terms covered or more, partial below, insufficient at none. */
+/**
+ * Pure. THE THREE OUTCOMES, one rule: sufficient at the threshold share of the key terms covered or more, partial below,
+ * insufficient at none. The threshold is HQ's (policy scholar_recovery_sufficiency: 0.5, 0.6 or 0.7); this constant is
+ * the fallback when none is passed.
+ */
 export const SUFFICIENT_COVERAGE = 0.6;
-export const groundingVerdict = (covered: number, of: number): SufficiencyVerdict["verdict"] =>
-  !of || !covered ? "insufficient" : covered / of >= SUFFICIENT_COVERAGE ? "sufficient" : "partial";
+export const groundingVerdict = (covered: number, of: number, threshold: number = SUFFICIENT_COVERAGE): SufficiencyVerdict["verdict"] =>
+  !of || !covered ? "insufficient" : covered / of >= threshold ? "sufficient" : "partial";
 
 export type Grounding = { outcome: SufficiencyVerdict["verdict"]; keyTerms: string[]; covered: string[]; uncoveredTerms: string[] };
 
@@ -324,11 +328,11 @@ export type Grounding = { outcome: SufficiencyVerdict["verdict"]; keyTerms: stri
  *   insufficient  nothing to teach from: the existing evidence recovery
  * The terms are matched by prefix, as retrieval ranks and as recovery's sufficiency reads them.
  */
-export function groundingOutcome(terms: readonly string[], passages: readonly { content: string }[]): Grounding {
+export function groundingOutcome(terms: readonly string[], passages: readonly { content: string }[], threshold: number = SUFFICIENT_COVERAGE): Grounding {
   const keyTerms = [...new Set(terms)];
   const text = passages.map(p => p.content).join("\n");
   const covered = passages.length ? matchedTerms(text, keyTerms) : [];
-  return { outcome: groundingVerdict(covered.length, keyTerms.length), keyTerms, covered, uncoveredTerms: keyTerms.filter(t => !covered.includes(t)) };
+  return { outcome: groundingVerdict(covered.length, keyTerms.length, threshold), keyTerms, covered, uncoveredTerms: keyTerms.filter(t => !covered.includes(t)) };
 }
 
 /** Another material's section joins a lesson only when it holds this share of the lesson's key terms, and at least two. */
@@ -450,7 +454,7 @@ export type RecoveryInput = {
 type Internal = { research: LearnResearch | null; passages: Passage[] };
 
 /** The sequence, in order: notes, then the library, then (references only, and only if allowed) external sources. */
-export async function runRecovery(input: RecoveryInput, plan: TierPlan, sources: RecoverySources, opts: { wider: RecoveryMode | null; recoveryId?: string }): Promise<RecoveryResult & Internal> {
+export async function runRecovery(input: RecoveryInput, plan: TierPlan, sources: RecoverySources, opts: { wider: RecoveryMode | null; recoveryId?: string; sufficiency?: number }): Promise<RecoveryResult & Internal> {
   const terms = keyTermsOf(input.question);
   // 1. Notes. The section and material the learner was on come first when they match. An excluded material never counts.
   // In My notes only, a scoped session's notes come from its own materials alone (the reader is asked so, and held to it).
@@ -489,7 +493,7 @@ export async function runRecovery(input: RecoveryInput, plan: TierPlan, sources:
     ...(plan.guidelines ? sources.guidelines() : []),
   ];
   const evidence = { notes, library, external };
-  const sufficiency = assessSufficiency(input.question, evidence);
+  const sufficiency = assessSufficiency(input.question, evidence, opts.sufficiency);
   const canExplain = explainable(sufficiency, evidence);
   // Reading, not evidence: details-only references and library cases (practice, never an explanation's source).
   // SCHOLAR-LEARN-FIX-01: notes that hold a key term are reading too, so the state never says "unanswered" beside them.
@@ -545,7 +549,7 @@ export async function recoverEvidence(ctx: IndividualContext, policy: Individual
   const recoveryId = randomUUID();
   const operational = await scholarResearchOperational(ctx.admin).catch(() => false);
   const plan = tierPlan(input.mode, policy, operational);
-  const r = publicResult(await runRecovery(input, plan, liveSources(ctx, policy, recoveryId), { wider: widerMode(input.mode, policy, operational), recoveryId }));
+  const r = publicResult(await runRecovery(input, plan, liveSources(ctx, policy, recoveryId), { wider: widerMode(input.mode, policy, operational), recoveryId, sufficiency: policy.scholarRecovery.sufficiency }));
   await recordRecovery(ctx.admin, r, input.withheldReason ?? null);
   return r;
 }
@@ -614,7 +618,7 @@ export async function rederiveRecovery(ctx: IndividualContext, policy: Individua
   if (!(await (deps.known ?? recoveryKnown)(ctx.admin, req.id))) return { ok: false, reason: "unknown", result: null };
   const operational = deps.operational ?? await scholarResearchOperational(ctx.admin).catch(() => false);
   const plan = tierPlan(req.mode, policy, operational);
-  const r = await runRecovery({ question: req.question, mode: req.mode, ...scope }, plan, deps.sources ?? liveSources(ctx, policy, req.id), { wider: widerMode(req.mode, policy, operational), recoveryId: req.id });
+  const r = await runRecovery({ question: req.question, mode: req.mode, ...scope }, plan, deps.sources ?? liveSources(ctx, policy, req.id), { wider: widerMode(req.mode, policy, operational), recoveryId: req.id, sufficiency: policy.scholarRecovery.sufficiency });
   return inputsOf(r);
 }
 

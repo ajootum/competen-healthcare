@@ -3,7 +3,8 @@ export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { chunkMappings, getPassage, insertQuestions, questionStems, unansweredQuestions } from "@/lib/individual/scholar/store";
+import { chunkMappings, getPassage, insertQuestions, listQuestions, questionStems, unansweredQuestions } from "@/lib/individual/scholar/store";
+import { citeChunk } from "@/lib/individual/scholar/extract";
 import { generationContextLoader } from "@/lib/individual/scholar/question-context";
 import { generationDifficulty } from "@/lib/individual/scholar/question-intel";
 import { leadingCompetency } from "@/lib/competency/mapping";
@@ -27,6 +28,31 @@ export const dynamic = "force-dynamic";
 // (options built from the passage's terms, keyed answer in the quote, no catch-alls or overlaps) and a
 // blind verification that the passage supports exactly the keyed option. If nothing survives, it
 // regenerates once. The rest are dropped and counted, never stored.
+
+// GET /api/individual/scholar/questions?chunkId=&kind=mcq -- SCHOLAR-COMPANION-01 P0b (Learn's "Practise this lesson").
+// The caller's OWN unanswered questions of this kind on ONE section, newest at the current prompt version first, at
+// most three. A read only: no AI, no write, no allowance. The keyed answer and rationale are NOT sent (attempts
+// returns them after the learner answers), exactly as the practice pages render a question.
+const LIST_MAX = 3;
+export async function GET(req: Request) {
+  const ctx = await requireIndividualContext("scholar");
+  if (isGuardRefusal(ctx)) return ctx;
+  const url = new URL(req.url);
+  const kind: QuestionKind = url.searchParams.get("kind") === "case" ? "case" : "mcq";
+  const passage = await getPassage(ctx.admin, ctx.userId, url.searchParams.get("chunkId") ?? "");
+  if (!passage) return NextResponse.json({ error: "That section could not be found." }, { status: 404 });
+  const list = await listQuestions(ctx.admin, ctx.userId, { materialId: passage.materialId, kind });
+  if (!list.ok) return NextResponse.json({ error: "Your questions could not be read just now." }, { status: 503 });
+  const current = `${PROMPT_VERSIONS[kind]}+${PROMPT_VERSIONS.verify}`;
+  const open = list.data.filter(q => q.chunkId === passage.chunkId && !q.caseId && !q.latest && q.correctIndex !== null)
+    .sort((a, b) => Number(b.promptVersion === current) - Number(a.promptVersion === current)).slice(0, LIST_MAX);
+  return NextResponse.json({
+    questions: open.map(q => ({
+      id: q.id, kind, stem: q.stem, options: q.options, materialId: q.materialId, materialTitle: q.materialTitle,
+      citation: `${q.materialTitle}, ${q.ordinal !== null ? citeChunk({ ordinal: q.ordinal, pageFrom: q.pageFrom, pageTo: q.pageTo }, q.unit) : "source section"}`,
+    })),
+  });
+}
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");

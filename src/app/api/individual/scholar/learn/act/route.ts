@@ -31,8 +31,11 @@ import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { studySessionBlock } from "@/lib/individual/scholar/study-context";
 import {
   AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD, RESEARCH_READING_ONLY, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL,
-  isLearnAction, type ExplanationDepth, type LearnAction,
+  isLearnAction, type ClassicLearnAction, type ExplanationDepth, type LearnAction,
 } from "@/lib/individual/scholar/config";
+import { challengeNextLevels, eventVerdict, extractQuestion, isTeachingAction, learningEventAction, meteredActivity, parseTeachingRequest, teachingPrompt, teachingTexts } from "@/lib/individual/scholar/learn-teaching";
+import { examEvidenceFor } from "@/lib/individual/scholar/exam-evidence";
+import type { ScholarAiActivity } from "@/lib/individual/scholar/ai-standing";
 import {
   DUPLICATE_IN_FLIGHT, DUPLICATE_RETRY, DUPLICATE_WITHHELD, LEARN_ENTITY, LEARN_SERVED_ACTION, SALVAGE_NOTE, claimFlight, endFlight, flightActive, later, salvagedCount, salvagedPromptVersion, stageTimer, waitForFlight, type Flight,
 } from "@/lib/individual/scholar/learn-flight";
@@ -60,6 +63,17 @@ export const dynamic = "force-dynamic";
 // (the student's standing, or the allowance refusing), the answer says so plainly and returns what is saved for these
 // sections. Nothing claims a new AI answer was made.
 //
+// SCHOLAR-COMPANION-01 P1 (owner, 31 Oct): six TEACHING actions on the same path (learn-teaching.ts), grounded on the step's
+// passages exactly like Teach me (same risk gate on what the learner typed, standing, preflight, metering, maxDuration):
+//   ask_me     { level? }                          -> answer (markdown), checkQuestion, level, informal   (the learner's reply goes to `clarify`)
+//   challenge  { level? }                          -> as ask_me, plus nextLevel { understood, partly, not_yet } (the client holds the rung)
+//   guide      { hintLevel: 1|2|3, attempt?, question? } -> answer = the hint only, hintLevel, nextHintLevel, explainDirectly { action: "explain" }
+//   mistake    { question, learnerAnswer }         -> answer (right / misconceptions / why / quick check)
+//   teach_back { explanation }                     -> answer + verdict (parseVerdict), like clarify
+//   high_yield { depth? }                          -> answer (key concepts ... ), examEvidence { papers, questions } | null
+// None is a saved artefact (415's CHECK) or a flight; learning_event.action and the metered activity are mapped onto existing
+// values (learn-teaching.ts header). Nothing the learner types is stored.
+//
 // SCHOLAR-GUIDED-LEARNING-01 (owner, 31 Oct):
 //   { open: true }     OPEN A LESSON: the saved answer if there is one (cached: true), otherwise { open: "generate" } or
 //                      { open: "in_flight" } -- never an AI call, never a standing or allowance read.
@@ -72,7 +86,7 @@ export const dynamic = "force-dynamic";
 //   first one's lesson. TIMINGS: every audit row carries timing_ms by stage. SALVAGE: a Teach Me lesson whose
 //   unsupported parts were left out (generation.ts checkTeachAnswer) carries salvage { removed, note }.
 
-const CANNED: Record<LearnAction | "check", string> = {
+const CANNED: Record<ClassicLearnAction | "check", string> = {
   teach: "Teach me this step.", explain: "Explain this.", simplify: "Explain this as simply as possible.", deeper: "Help me understand this in more depth.",
   examples: "Give me examples of this in practice.", summary: "Summarise the important learning points.", ask: "", check: "Check my understanding of this.",
 };
@@ -93,6 +107,7 @@ export async function POST(req: Request) {
   // ── the action, as policy allows it ──
   const action = body?.action as string;
   const isCheck = action === "check" || action === "clarify";
+  const teaching = isTeachingAction(action);
   if (!isLearnAction(action) && !isCheck) return NextResponse.json({ error: "Unknown learning action." }, { status: 400 });
   if (isLearnAction(action) && !policy.scholarLearningActions.includes(action)) return NextResponse.json({ error: "That way of learning is not offered here." }, { status: 403 });
   // SCHOLAR-GUIDED-LEARNING-01: open (no AI ever) and prepare (the next lesson, policy-gated, default off).
@@ -111,7 +126,7 @@ export async function POST(req: Request) {
   const mode: LearnSourceMode = RESEARCH_ACTIONS.includes(action as LearnAction) ? askedMode : "notes";
   // SCHOLAR-SQIE-02, "Explain using approved references": recovery { id, mode, question }. Only those are read -- never
   // evidence, ids or text -- and the evidence is found again on the server below. A check or clarification never takes one.
-  const recoveryAsked = isCheck ? null : parseRecoveryRequest(body?.recovery, "notes_only", QUESTION_MAX);
+  const recoveryAsked = isCheck || teaching ? null : parseRecoveryRequest(body?.recovery, "notes_only", QUESTION_MAX);
   if (recoveryAsked && !recoveryAsked.ok) return NextResponse.json({ error: recoveryAsked.error }, { status: 400 });
   const recovery = recoveryAsked?.value ?? null;
   if (prepare && recovery) return notPrepared("recovery");
@@ -125,7 +140,11 @@ export async function POST(req: Request) {
   const question = text(body?.question), checkQuestion = text(body?.checkQuestion), answer = text(body?.answer);
   if (action === "ask" && (!question || question.length > QUESTION_MAX)) return NextResponse.json({ error: `Ask a question of up to ${QUESTION_MAX} characters.` }, { status: 400 });
   if (action === "clarify" && (!checkQuestion || !answer || answer.length > QUESTION_MAX || checkQuestion.length > 400)) return NextResponse.json({ error: "Answer the check question first." }, { status: 400 });
-  if ([question, answer].some(t => t && findPatientIdentifiers(t).length))
+  // The teaching actions' own fields (attempt, question, learner answer, explanation): bounded, then screened like the rest.
+  const treq = isTeachingAction(action) ? parseTeachingRequest(action, body) : null;
+  if (treq && !treq.ok) return NextResponse.json({ error: treq.error }, { status: 400 });
+  const teachingRequest = treq?.ok ? treq.value : null;
+  if ([question, answer, ...(teachingRequest ? teachingTexts(teachingRequest) : [])].some(t => t && findPatientIdentifiers(t).length))
     return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
 
   // ── the passages: the step's own sections, by the caller's id ──
@@ -178,7 +197,7 @@ export async function POST(req: Request) {
       await topicsOfSections(ctx.admin, ctx.userId, passages.map(p => p.chunkId)), new Map(passages.map(p => [p.chunkId, sectionProfile(p.content)])));
   clock.mark("passages_outline");
   const lessonTerms = action === "ask" ? keyTermsOf(question) : lesson ? keyTermsOf(lesson.focus.join(" ")).slice(0, 8) : [];
-  let grounding: Grounding = groundingOutcome(lessonTerms, passages);
+  let grounding: Grounding = groundingOutcome(lessonTerms, passages, policy.scholarRecovery.sufficiency);
   const related = { sameMaterial: 0, otherMaterials: 0 };
   const thin = passages.reduce((n, p) => n + p.content.length, 0) < TEACH_THIN_CHARS;
   if (isArtefactAction(action) && !recovery && lessonTerms.length && (thin || grounding.outcome !== "sufficient")) {
@@ -197,7 +216,7 @@ export async function POST(req: Request) {
       passages = [...passages, ...(await toPassages(ctx.admin, ctx.userId, picked))];
       related.sameMaterial = picked.filter(c => sessionMaterials.includes(c.materialId)).length;
       related.otherMaterials = picked.length - related.sameMaterial;
-      grounding = groundingOutcome(lessonTerms, passages);
+      grounding = groundingOutcome(lessonTerms, passages, policy.scholarRecovery.sufficiency);
     }
   }
   // What L-B renders: sufficient -> teach; partial -> teach what is supported, name uncoveredTerms, offer `wider`;
@@ -300,7 +319,9 @@ export async function POST(req: Request) {
   // The tutor context is a read the AI call needs and nothing before it decides on: started now, awaited after the gates.
   const tutorP = loadTutorContext(ctx.admin, ctx.userId, passages.map(p => p.chunkId));
   tutorP.catch(() => {});
-  const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), action as "teach");
+  // A teaching action is metered as the nearest existing activity (the engine refuses an unlisted code; learn-teaching.ts).
+  const activity = meteredActivity(action) as ScholarAiActivity;
+  const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), activity);
   if (!standing.available) return prepare ? notPrepared("unavailable", { step }) : continuity(standing.message ?? "", standing.insufficient);
   const pre = await aiPreflight(ctx);
   if (pre) {
@@ -344,11 +365,13 @@ export async function POST(req: Request) {
   const study = action === "ask" && recorded && sessionId
     ? await studySessionBlock(ctx.admin, ctx.userId, sessionId, { policy, competencyTitle: id => learner.competencies?.find(c => c.id === id)?.title ?? null })
     : null;
-  const history: TutorTurn[] = (Array.isArray(body?.history) ? body.history : []).slice(-policy.scholarTutorTurns).flatMap((raw: unknown) => {
+  // SCHOLAR-COMPANION-01 P1: High-yield's exam evidence is COUNTED here (no AI) from the learner's own past papers.
+  const examEvidence = action === "high_yield" ? await examEvidenceFor(ctx.admin, ctx.userId, lessonTerms) : null;
+  const history: TutorTurn[] = (!teaching && Array.isArray(body?.history) ? body.history : []).slice(-policy.scholarTutorTurns).flatMap((raw: unknown) => {
     const t = raw as { speaker?: unknown; text?: unknown } | null;
     return (t?.speaker === "tutor" || t?.speaker === "student") && typeof t.text === "string" && t.text.trim() ? [{ speaker: t.speaker, text: t.text.trim().slice(0, 1500) }] : [];
   });
-  const prompt = action === "ask" ? question : action === "clarify" ? `Your check question was: ${checkQuestion}\nMy answer: ${answer}` : CANNED[action as LearnAction | "check"];
+  const prompt = teachingRequest ? teachingPrompt(teachingRequest, examEvidence) : action === "ask" ? question : action === "clarify" ? `Your check question was: ${checkQuestion}\nMy answer: ${answer}` : CANNED[action as ClassicLearnAction | "check"];
 
   // AI-FAIR-USE-01: through the Holdings allowance, the learning action as the activity. A refusal becomes
   // Learning Continuity (s7): said plainly, with what is saved for these sections -- and nothing was sent.
@@ -380,12 +403,12 @@ export async function POST(req: Request) {
   //       classified by the same published rules: research text that would lift the request above its own tier (a dose,
   //       a medication instruction) is withheld as risk_raised, on top of the dosing and grounding checks.
   // The runner is built first so the research it pays for carries the same action id as the AI call and its outcome.
-  const ai = scholarAiRunner(ctx, req, action as LearnAction | "check" | "clarify", risk);
+  const ai = scholarAiRunner(ctx, req, activity, risk);
   // SCHOLAR-GUIDED-LEARNING-01: the model call's own time, apart from the checks that follow it.
   ai.run = clock.wrap("ai", ai.run);
   let research: LearnResearch | null = null;
   if (mode === "research") {
-    const gate = await scholarRiskGate(ctx, action as LearnAction, risk);
+    const gate = await scholarRiskGate(ctx, activity, risk);
     if (gate) await closeFlight("refused");
     if (gate && prepare) return notPrepared("unavailable", { step });
     // AI operating modes: a clarify question is put to the student, not shown as a refusal. Nothing was sent anywhere.
@@ -397,7 +420,8 @@ export async function POST(req: Request) {
   }
   const evidence = [...(research ? researchEvidence(research) : []), ...(recovered?.ok ? recovered.inputs.research : [])];
   clock.mark("research");
-  const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence, studyContext: study?.text ?? null }, ai.run);
+  const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence, studyContext: study?.text ?? null,
+    teaching: teachingRequest ? { level: "level" in teachingRequest ? teachingRequest.level : undefined, hintLevel: teachingRequest.action === "guide" ? teachingRequest.hintLevel : undefined, examEvidence } : undefined }, ai.run);
   clock.mark("generate");
   const refusal = ai.refusal();
   if (refusal) await closeFlight("refused");
@@ -407,7 +431,10 @@ export async function POST(req: Request) {
   // SCHOLAR-AI-OPT-01: the outcome of this one action, codes only. A check question is not an explanation.
   // COMPETEN-RESEARCH-01: a research answer is its own operation; the notes part and the research part each count.
   let rr = r.ok ? r.research : null;
-  if (rr?.ok && !(await withinRequestRisk(ctx.admin, action as LearnAction, risk, [rr.text]))[0]) rr = { ok: false, reason: "risk_raised" };
+  if (rr?.ok && !(await withinRequestRisk(ctx.admin, activity, risk, [rr.text]))[0]) rr = { ok: false, reason: "risk_raised" };
+  // An Ask me / Challenge me answer must hold exactly ONE question: it is what the learner's reply is judged against (`clarify`).
+  const asksQuestion = action === "ask_me" || action === "challenge";
+  const askedQuestion = asksQuestion && r.ok && r.check.ok ? extractQuestion(r.check.text) : null;
   const researchCodes = research ? [`research_${research.state}`, ...research.codes, ...(rr ? [rr.ok ? "research_shown" : `research_${rr.reason}`] : [])] : [];
   // SCHOLAR-GUIDED-LEARNING-01: a lesson shown with unsupported parts left out (never verified: an outcome "partial").
   const salvaged = r.ok && action !== "check" && r.check.ok ? r.check.salvaged ?? null : null;
@@ -426,13 +453,14 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     });
   }
   clock.mark("save");
-  const outcomeCode = r.ok ? (action === "check" ? (r.question?.ok ? "shown" : `withheld:${r.question?.reason}`) : r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`;
+  const outcomeCode = r.ok ? (action === "check" ? (r.question?.ok ? "shown" : `withheld:${r.question?.reason}`) : r.check.ok ? (asksQuestion && !askedQuestion ? "withheld:malformed" : "shown") : `withheld:${r.check.reason}`) : `error:${r.error}`;
   // The writes are independent, so they run together (the flight closes as the artefact is already saved).
   await Promise.all([closeFlight(outcomeCode), recordScholarOutcome(ctx.admin, ai, {
-    operation: `${mode === "research" ? "individual_scholar_learn_research" : "individual_scholar_learn"}:${action}`, outputKind: action === "check" ? "other" : "explanation",
+    operation: `${mode === "research" ? "individual_scholar_learn_research" : "individual_scholar_learn"}:${action}`, outputKind: action === "check" || asksQuestion ? "other" : "explanation",
     promptVersion: r.ok ? r.promptVersion : null, configVersion: `depth:${depth}${mode === "notes" ? "" : `;mode:${mode}`}`,
     ...(!r.ok ? { outcome: "error" as const, reasons: [`error_${r.error}`, ...researchCodes] }
       : action === "check" ? (r.question?.ok ? { outcome: "accepted" as const, accepted: 1 } : { outcome: "rejected" as const, rejected: 1, reasons: [r.question?.reason ?? "malformed"] })
+        : asksQuestion && r.check.ok && !askedQuestion ? { outcome: "rejected" as const, rejected: 1, reasons: ["malformed"] }
         : (() => {
           // A salvaged lesson: the lesson accepted, the parts left out rejected -- so "partial", never "accepted".
           const accepted = (r.check.ok ? 1 : 0) + (rr?.ok ? 1 : 0), rejected = (r.check.ok ? 0 : 1) + (rr && !rr.ok ? 1 : 0) + (salvaged ? 1 : 0);
@@ -446,6 +474,8 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     // SCHOLAR-SESSION-AI-02: which study-session sections reached the prompt (names only, never the text).
     study_context: study ? study.sections : null,
     outcome: outcomeCode,
+    // SCHOLAR-COMPANION-01 P1: the event value and the metered activity a teaching action was mapped to (codes only).
+    event_action: learningEventAction(action), metered_as: activity,
     // SCHOLAR-AI-OPT-01: what the grounding check refused, in its own words ("the number one"), never the answer text.
     withheld_detail: r.ok && action !== "check" && !r.check.ok && r.check.violations?.length ? describeViolations(r.check.violations) : null,
     flags: r.ok ? r.flags.kept.length : 0, verdict: r.ok ? r.verdict : null, model: r.ok ? r.model : null, prompt_version: r.ok ? r.promptVersion : null,
@@ -460,10 +490,10 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
   if (!r.ok) return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
 
   // ── the record: structure only, and only what was shown ──
-  const shown = action === "check" ? !!r.question?.ok : r.check.ok;
+  const shown = action === "check" ? !!r.question?.ok : r.check.ok && (!asksQuestion || !!askedQuestion);
   if (recorded && sessionId && shown && policy.scholarLearningHistory === "record") {
     await Promise.all([
-      recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action, verdict: r.verdict, chunkIds: passages.map(p => p.chunkId) }),
+      recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action: learningEventAction(action), verdict: eventVerdict(action, r.verdict), chunkIds: passages.map(p => p.chunkId) }),
       updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }),
     ]);
   }
@@ -490,6 +520,14 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     const next = withheldNext({ reason: r.check.reason, detail, sources, askOffered: policy.scholarLearningActions.includes("ask"), background: r.background, backgroundAllowed: background });
     return NextResponse.json({ ...base, withheld: true, reason: r.check.reason, message: next.why, notInNotes: next.notInNotes, next });
   }
+  if (asksQuestion && !askedQuestion) return NextResponse.json({ ...base, withheld: true, message: "A question could not be written from these sections just now. Try again, or carry on learning." });
+  // What a teaching action adds to the reply (SCHOLAR-COMPANION-01 P1); nothing for the original actions.
+  const level = teachingRequest && "level" in teachingRequest ? teachingRequest.level : null;
+  const teachingFields = !teachingRequest ? {}
+    : asksQuestion ? { level, checkQuestion: askedQuestion, informal: INFORMAL_CHECK_LABEL, ...(action === "challenge" && level ? { nextLevel: challengeNextLevels(level) } : {}) }
+      : teachingRequest.action === "guide" ? { hintLevel: teachingRequest.hintLevel, nextHintLevel: teachingRequest.hintLevel < 3 ? teachingRequest.hintLevel + 1 : null, explainDirectly: { action: "explain", label: "Explain it directly" } }
+        : teachingRequest.action === "high_yield" ? { examEvidence }
+          : { informal: INFORMAL_CHECK_LABEL };
   const b = r.background;
   // (s8: saved above, before the trail.) A salvaged lesson says what was left out (a count) and is graded "partial".
   return NextResponse.json({
@@ -502,5 +540,6 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     flags: r.flags.kept,
     verdict: r.verdict ? { value: r.verdict, label: CHECK_VERDICT_LABEL[r.verdict], informal: INFORMAL_CHECK_LABEL } : null,
     savedForLater: savedNow === "ok",
+    ...teachingFields,
   });
 }

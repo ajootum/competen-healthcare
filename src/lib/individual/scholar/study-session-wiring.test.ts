@@ -121,7 +121,7 @@ describe("the wiring, as written", () => {
   it("learn/act builds the block only for an ask on a recorded (caller-owned) session, and passes it as studyContext", () => {
     const s = read("src/app/api/individual/scholar/learn/act/route.ts");
     expect(s).toMatch(/const study = action === "ask" && recorded && sessionId\s*\? await studySessionBlock\(ctx\.admin, ctx\.userId, sessionId, \{ policy,/);
-    expect(s).toContain("studyContext: study?.text ?? null }, ai.run)");
+    expect(s).toContain("studyContext: study?.text ?? null,");
     expect(s).toContain("study_context: study ? study.sections : null");
     // the block is built after the preflight, never before it, and is not classified as the request
     expect(s.indexOf("const pre = await aiPreflight(ctx)")).toBeLessThan(s.indexOf("await studySessionBlock("));

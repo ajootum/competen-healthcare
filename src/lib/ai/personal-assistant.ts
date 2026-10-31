@@ -129,6 +129,12 @@ export type AssistantRequest = {
   /** The request's subject, for the clinical risk classification (owner D1). */
   risk: (mode: AssistantMode, scopes: readonly DataScope[]) => RiskContext;
   compose: (mode: AssistantMode, scopes: readonly DataScope[]) => Promise<Composed>;
+  /**
+   * SCHOLAR-PAI-EXPERIENCE-01, optional. `onText` receives the answer as it is written, and only once every check below
+   * (profile, identifier screen, clinical risk, eligibility, routing, reservation) has passed: generate() calls it, and
+   * generate() is reached only through them. `onStage` and `onStart` are stage timings (no text, no data).
+   */
+  hooks?: { onText?: (text: string) => void; onStart?: () => void; onStage?: (stage: "gate" | "context") => void };
 };
 export type AssistantOutcome =
   | { ok: true; answer: string; mode: AssistantMode; model: string; scopesRead: readonly DataScope[] }
@@ -146,7 +152,9 @@ export async function runPersonalAssistant(admin: any, r: AssistantRequest): Pro
   const found = findPatientIdentifiers(r.screen.join("\n"));
   if (found.length) return invalid(422, `Remove the patient-identifiable details first (${[...new Set(found)].map(k => PII_LABEL[k]).join(", ")}). Nothing was sent.`);
 
+  r.hooks?.onStage?.("gate");
   const composed = await r.compose(mode, profile.scopes);
+  r.hooks?.onStage?.("context");
   if ("error" in composed) return invalid(composed.status, composed.error);
   const result = await runMeteredAi(admin, {
     userId: r.userId, product: r.product, activity: MODE_ACTIVITY[mode], requestId: r.requestId,
@@ -156,6 +164,8 @@ export async function runPersonalAssistant(admin: any, r: AssistantRequest): Pro
       tier: "reasoning",
       maxTokens: composed.maxTokens ?? 900,
       context: { userId: r.userId, attribution: { scope: "person" }, operation: `personal_ai_${r.product}_${mode}` },
+      ...(r.hooks?.onText ? { onText: r.hooks.onText } : {}),
+      ...(r.hooks?.onStart ? { onStart: r.hooks.onStart } : {}),
     },
     risk: r.risk(mode, profile.scopes),
   });

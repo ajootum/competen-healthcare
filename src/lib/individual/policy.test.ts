@@ -5,7 +5,7 @@ import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, in
 import { publishScope, rollbackVersion, setOverride } from "@/lib/config/workspace-config-write";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX, parseShare } from "./professional/share";
-import { MAX_MATERIALS_PER_PERSON, QUESTIONS_PER_REQUEST, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS } from "./scholar/config";
+import { LEARN_ACTIONS, MAX_MATERIALS_PER_PERSON, QUESTIONS_PER_REQUEST, INSIGHT_MIN_ANSWERS, INSIGHT_WINDOW_DAYS } from "./scholar/config";
 import { STUDY_ACHIEVEMENT_KINDS } from "./scholar/passport-items";
 import { INDIVIDUAL_APP_FLAG } from "./gate";
 import { COUNTRIES } from "../countries";
@@ -86,7 +86,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarUploadFormats: ["pdf", "docx"], scholarUploadMaxMb: 10, scholarPdfMaxPages: 300, scholarPptxMaxSlides: 150,
       // LEARN-01 L5: every action offered, Teach me first, background labelled, standard depth, 8 steps, checks
       // offered, outcomes shown, 6 turns, structured history recorded.
-      scholarLearningActions: ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask"], scholarDefaultAction: "teach",
+      scholarLearningActions: [...LEARN_ACTIONS], scholarDefaultAction: "teach",
       scholarBeyondNotes: "labelled", scholarExplanationDepth: "standard", scholarSessionMaxSteps: 8, scholarCheckBehaviour: "offer",
       scholarLearningObjectives: "outcomes", scholarTutorTurns: 6, scholarLearningHistory: "record",
       // Upload limits (owner GO 2026-10-24): the per-file value stays 10 MB (ceiling 25); a session is 10 files, 100 MB.
@@ -149,7 +149,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // SCHOLAR-SOURCE-QUALITY-01: only PubMed-indexed reviews, guidelines and trials whose title names the topic may explain.
       scholarRecovery: {
         defaultMode: "notes_and_library", external: "off", providers: [], maxResults: 5, timeoutMs: 6000, evidenceIndexed: "pubmed_only",
-        evidenceTypes: ["review", "systematic_review", "meta_analysis", "practice_guideline", "guideline", "randomized_controlled_trial", "clinical_trial"], evidenceOnTopic: "title",
+        evidenceTypes: ["review", "systematic_review", "meta_analysis", "practice_guideline", "guideline", "randomized_controlled_trial", "clinical_trial"], evidenceOnTopic: "title", sufficiency: 0.6,
       },
       // P0: label, do not hide -- everything of a chosen catalogue is offered, labelled, by default.
       scholarCatalogueMinStatus: "unreviewed",
@@ -335,4 +335,14 @@ describe("WCE shared lifecycle, Individual partition", () => {
     expect(now.aiHourlyLimit).toBe(30);
     expect(admin.tables.workspace_config_versions.filter(x => x.scope_ref === "individual")).toHaveLength(3);
   });
+});
+
+it("SCHOLAR-PAI-RESEARCH-01: the sufficiency threshold is HQ's choice of 0.5, 0.6 or 0.7, falling back to 0.6", () => {
+  const path = policyPath("scholar_recovery_sufficiency");
+  expect(POLICIES.some(p => p.key === "scholar_recovery_sufficiency" && p.product === "Scholar")).toBe(true);
+  expect(DEFAULT_POLICY.scholarRecovery.sufficiency).toBe(0.6);
+  for (const v of ["0.5", "0.6", "0.7"]) expect(resolvePolicy([{ config_path: path, published: { value: v } }]).scholarRecovery.sufficiency).toBe(Number(v));
+  for (const v of ["0.9", 0.7, "", null]) expect(resolvePolicy([{ config_path: path, published: { value: v } }]).scholarRecovery.sufficiency).toBe(0.6);
+  expect(validateDraft("scholar_recovery_sufficiency", "0.7")).toMatchObject({ ok: true, settings: { value: "0.7" } });
+  expect(validateDraft("scholar_recovery_sufficiency", "0.95").ok).toBe(false);
 });

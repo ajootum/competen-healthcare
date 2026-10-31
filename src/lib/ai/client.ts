@@ -38,6 +38,16 @@ export type GenerateArgs = {
   webSearch?: { maxUses: number; allowedDomains: readonly string[] };
   /** COMPETEN-SCHOLAR-EXAM-PAPERS-01. Anthropic only: PDF documents the model reads (transcribing scanned pages). */
   documents?: readonly { mediaType: "application/pdf"; data: string }[];
+  /**
+   * SCHOLAR-PAI-EXPERIENCE-01. Streaming, optional: each piece of answer text as the provider produces it. Called only
+   * once every gate has passed (this function runs after them), and never changes the result: generate() still returns
+   * the whole answer, its usage and its outcome, and the engine settles exactly as it does without it. The Anthropic
+   * adapter streams; every other adapter answers whole and hands the full text over once. A callback that throws is
+   * ignored (the answer is never cut short by a reader that went away).
+   */
+  onText?: (text: string) => void;
+  /** SCHOLAR-PAI-EXPERIENCE-01. Called once, just before the provider is asked: the stage timings' end of the gates. */
+  onStart?: () => void;
 };
 
 /** A web source the provider's search tool actually returned (not one the model wrote). */
@@ -71,12 +81,13 @@ export type GenerateResult =
 
 /** What every adapter returns, before the dispatcher records usage and normalises the result. */
 type AdapterResult =
-  | { ok: true; text: string; model: string; input: number; output: number; sources?: WebSource[]; searches?: number }
+  | { ok: true; text: string; model: string; input: number; output: number; sources?: WebSource[]; searches?: number; /** The text already went to onText piece by piece. */ streamed?: boolean }
   | { ok: false; kind: "refusal" | "failed"; detail?: string; input?: number; output?: number };
 
 type AdapterArgs = {
   system: string; user: string; model: string; maxTokens: number; key: string;
   webSearch?: GenerateArgs["webSearch"]; documents?: GenerateArgs["documents"];
+  onText?: (text: string) => void;
 };
 
 /** The web search tool version a model supports: the dynamic-filtering one on 4.6 and later, the basic one before. */
@@ -123,6 +134,8 @@ async function anthropicAdapter(a: AdapterArgs): Promise<AdapterResult> {
     messages: [{ role: "user", content: a.documents?.length ? content : a.user }],
     ...(a.webSearch ? { tools: [{ type: webSearchToolType(a.model), name: "web_search", max_uses: a.webSearch.maxUses, allowed_domains: [...a.webSearch.allowedDomains] } as Anthropic.ToolUnion] } : {}),
   });
+  // SCHOLAR-PAI-EXPERIENCE-01: the same stream, its text handed on as it arrives. The result below is unchanged.
+  if (a.onText) stream.on("text", a.onText);
   const message = await stream.finalMessage();
 
   // A refusal is the model declining, which is a RESULT, not a transport failure. The distinction
@@ -135,6 +148,7 @@ async function anthropicAdapter(a: AdapterArgs): Promise<AdapterResult> {
     model: message.model,
     input: message.usage.input_tokens,
     output: message.usage.output_tokens,
+    ...(a.onText ? { streamed: true } : {}),
     ...(a.webSearch ? { sources: webSourcesOf(message.content), searches: message.usage.server_tool_use?.web_search_requests ?? 0 } : {}),
   };
 }
@@ -263,7 +277,7 @@ const FAILOVER_ELIGIBLE: ReadonlyArray<"failed"> = ["failed"];
  * Returns the text plus which vendor and model produced it. Never throws.
  */
 export async function generate(
-  { system, user, tier = "reasoning", maxTokens = 1500, context, route, webSearch, documents }: GenerateArgs,
+  { system, user, tier = "reasoning", maxTokens = 1500, context, route, webSearch, documents, onText, onStart }: GenerateArgs,
 ): Promise<GenerateResult> {
   const status = aiStatus();
   // A routed request names its provider and model. Its key is still the environment's (never configuration's), and a
@@ -296,9 +310,12 @@ export async function generate(
     actionId: context?.actionId ?? null,
   };
 
+  // A reader that went away (or throws) never cuts the answer short: its callback is isolated here.
+  const text = onText ? (t: string) => { if (!t) return; try { onText(t); } catch { /* the reader's problem, not the answer's */ } } : undefined;
+  try { onStart?.(); } catch { /* timing only */ }
   const t0 = Date.now();
   try {
-    const args = { system, user, model, maxTokens, key, webSearch, documents };
+    const args = { system, user, model, maxTokens, key, webSearch, documents, onText: text };
     const result = registered ? await compatibleAdapter(route!.endpoint!, args) : await ADAPTERS[provider as AiProvider](args);
     const latencyMs = Date.now() - t0;
 
@@ -318,6 +335,8 @@ export async function generate(
     }
 
     void recordAiUsage({ ...base, model: result.model, inputTokens: result.input, outputTokens: result.output, latencyMs, status: "ok" });
+    // An adapter that does not stream: its whole answer, once, only after it succeeded.
+    if (text && !result.streamed) text(result.text);
     return {
       ok: true,
       text: result.text,
