@@ -10,6 +10,8 @@ import { getLearningSession, getPassage, isUuid } from "@/lib/individual/scholar
 import type { Passage } from "@/lib/individual/scholar/generation";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarRequestId, scholarRisk } from "@/lib/individual/scholar/http";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
+import { studySessionBlock } from "@/lib/individual/scholar/study-context";
+import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { PERSONAL_AI_LABEL, QUESTION_MAX, STEP_MAX_SECTIONS } from "@/lib/individual/scholar/config";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -60,9 +62,18 @@ export async function POST(req: Request) {
 
   // The study context: the sections (screened at upload), their live competency links and topic terms.
   const study = await scholarRisk(ctx.admin, ctx.userId, { passages });
+  // SCHOLAR-SESSION-AI-02 (D4): the study id passed (studySessionId, else the Learn sessionId, which IS the study session
+  // when connected). Built only if the published profile lists study_session (default off), and only for the caller's
+  // own connected session with the policy on and 740 present (studySessionBlock). Reads only; no extra AI call.
+  const studyId = isUuid(body?.studySessionId) ? body.studySessionId as string : isUuid(body?.sessionId) ? body.sessionId as string : null;
+  const studySession = studyId ? async () => {
+    const learner = await loadLearnerCatalogue(ctx.admin, ctx.userId);
+    return (await studySessionBlock(ctx.admin, ctx.userId, studyId, { competencyTitle: id => learner.competencies?.find(c => c.id === id)?.title ?? null }))?.text ?? null;
+  } : null;
   const out = await runIndividualAssistant(ctx.admin, {
     userId: ctx.userId, fullName: ctx.profile.fullName, live: ctx.live, experience: "scholar", mode, question,
     requestId: scholarRequestId(ctx, req), study, purpose,
+    studySession,
   });
   if (!out.ok && out.kind === "invalid") return NextResponse.json({ error: out.error }, { status: out.status });
   if (!out.ok && out.kind === "metered") return meteredRefusal(out.refusal)!;

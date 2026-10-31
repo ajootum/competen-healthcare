@@ -11,6 +11,7 @@ import { loadOwnLearning } from "./own-learning";
 import { crossExperienceConsented } from "./scholar/store";
 import { loadProfessionalProfile } from "./professional/profile-store";
 import { profileContext } from "./professional/profile-ai";
+import { CONTEXT_PREAMBLE } from "./scholar/learner-context";
 
 // ── THE PERSONAL AI IN SCHOLAR AND PROFESSIONAL ── COMPETEN IND-007 owner decision D3 ─────────────────────────
 //
@@ -57,6 +58,8 @@ export function assistantUserMessage(mode: AssistantMode, grounding: readonly st
 export async function runIndividualAssistant(admin: any, r: {
   userId: string; fullName: string | null; live: readonly ExperienceKey[]; experience: ExperienceKey; mode?: unknown; requestId: string;
   question?: string | null; activity?: ActivityNotes | null; study?: StudyContext | null;
+  /** SCHOLAR-SESSION-AI-02 (D4): the study-session block, read only when the profile allows `study_session` (default off). */
+  studySession?: (() => Promise<string | null>) | null;
   /** The learner's answer to a clarify question (purposeFrom): "education" runs the request as a study question. */
   purpose?: "education" | null;
 }): Promise<AssistantOutcome> {
@@ -97,6 +100,12 @@ export async function runIndividualAssistant(admin: any, r: {
       }
       const study = studyFor(scopes);
       if (study?.text) { grounding.push(`Study material (from the person's own Scholar workspace):\n${study.text.slice(0, 6000)}`); read.push("study_context"); }
+      // SCHOLAR-SESSION-AI-02 (D4): the person's own study session, built from their own Scholar records (already screened
+      // and capped) -- what to emphasise, never a source of facts. Read only when the profile lists study_session.
+      if (scopes.includes("study_session") && r.studySession) {
+        const block = await r.studySession();
+        if (block) { grounding.push(`${CONTEXT_PREAMBLE}\n${block}`); read.push("study_session"); }
+      }
       return { system: assistantSystemPrompt(r.experience, mode), user: assistantUserMessage(mode, grounding, r), scopesRead: read };
     },
   });
