@@ -8,8 +8,9 @@
 //   * which slides may be read: only slides recorded as empty, never one already attempted, never one that already has
 //     a section, and at most MAX_AI_SLIDES_PER_MATERIAL attempted per material, ever;
 //   * which pictures a slide shows: the relationships its own XML embeds (r:embed / r:link), resolved through the
-//     slide's .rels into ppt/media. Only PNG and JPEG can be put in the PDF; anything else (EMF, WMF, SVG, GIF, TIFF, a
-//     linked picture) is reported as such, never guessed at;
+//     slide's .rels into ppt/media. PNG and JPEG go into the PDF as they are; TIFF, BMP, GIF and WebP are converted to PNG first
+//     (slide-convert.ts, first page / frame only); anything else (EMF, WMF, SVG, a linked picture) is reported as such,
+//     never guessed at;
 //   * where the new sections go: in slide order among the existing ones, WITHOUT changing any existing id. Ordinals of
 //     later sections are only ever raised, and the moves are listed in an order that never collides with the unique
 //     (material_id, ordinal) index.
@@ -19,7 +20,11 @@ export const MAX_AI_SLIDES_PER_MATERIAL = 10;
 /** Pictures per slide, and their combined size: two slides go in one call, as a PDF, well inside the provider's limit. */
 export const SLIDE_IMAGE_LIMITS = { imagesPerSlide: 6, bytesPerSlide: 8 * 1024 * 1024 } as const;
 
-const SUPPORTED = new Set(["png", "jpg", "jpeg"]);
+/** Pictures that go into the PDF as they are. */
+const DIRECT = new Set(["png", "jpg", "jpeg"]);
+/** Pictures converted to PNG (with sharp) before they go into the PDF. */
+const CONVERTIBLE = new Set(["tif", "tiff", "bmp", "gif", "webp"]);
+const SUPPORTED = new Set([...DIRECT, ...CONVERTIBLE]);
 const IMAGE_REL = /\/relationships\/image$/;
 
 export type SlideRel = { target: string; image: boolean; external: boolean };
@@ -56,7 +61,7 @@ export function mediaPart(target: string): string | null {
 const extOf = (part: string) => (part.match(/\.([a-z0-9]+)$/i)?.[1] ?? "").toLowerCase();
 
 export type SlidePictures = {
-  /** The PNG / JPEG parts, in the order the slide shows them, at most SLIDE_IMAGE_LIMITS.imagesPerSlide. */
+  /** The PNG / JPEG / TIFF / BMP / GIF / WebP parts, in the order the slide shows them, at most SLIDE_IMAGE_LIMITS.imagesPerSlide. */
   images: string[];
   /** What could not be used: a file extension ("emf", "svg"...), "linked" for a picture outside the file. */
   unsupported: string[];
@@ -81,10 +86,20 @@ export function slidePictures(slideXml: string, relsXml: string | null): SlidePi
   return { images: images.slice(0, SLIDE_IMAGE_LIMITS.imagesPerSlide), unsupported: [...new Set(unsupported)] };
 }
 
+export type ImageKind = "png" | "jpeg" | "tiff" | "bmp" | "gif" | "webp";
+/** Kinds that must be converted to PNG before they can be put in the PDF. */
+export const CONVERTIBLE_KINDS: readonly ImageKind[] = ["tiff", "bmp", "gif", "webp"];
+export const isConvertibleKind = (k: ImageKind | null): boolean => k !== null && CONVERTIBLE_KINDS.includes(k);
+
 /** Pure. What a picture's bytes really are -- the extension is the file's claim, the magic bytes are the fact. */
-export function imageKind(bytes: Uint8Array): "png" | "jpeg" | null {
-  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "png";
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpeg";
+export function imageKind(bytes: Uint8Array): ImageKind | null {
+  const b = bytes;
+  if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "png";
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "jpeg";
+  if (b.length >= 8 && ((b[0] === 0x49 && b[1] === 0x49 && b[2] === 0x2a && b[3] === 0x00) || (b[0] === 0x4d && b[1] === 0x4d && b[2] === 0x00 && b[3] === 0x2a))) return "tiff";
+  if (b.length >= 4 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return "gif";
+  if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "webp";
+  if (b.length >= 14 && b[0] === 0x42 && b[1] === 0x4d) return "bmp";
   return null;
 }
 
