@@ -15,6 +15,9 @@
 // ⚠ NOT MEASURED IS NOT ZERO: before migration 710 (or on a read error) `measured` is false and the page says so.
 // ⚠ A SMALL COUNT IS NOT A SIGNAL. The difficulty flag needs MIN_ATTEMPTS attempts.
 
+// The two aggregate reads live on the HQ plane (CKRI K1-7: no raw Scholar table named here).
+import { libraryCopyAttemptRows, libraryCopyRows } from "@/lib/hq/library-item-performance";
+
 export const MIN_ATTEMPTS = 20;
 export const LOW_CORRECT = 25;
 export const HIGH_CORRECT = 95;
@@ -60,13 +63,13 @@ export async function loadLibraryPerformance(admin: any, versionIds: readonly st
   try {
     const copies: { id: string; library_version_id: string }[] = [];
     for (let i = 0; i < ids.length; i += CHUNK) {
-      const r = await admin.from("individual_scholar_question").select("id, library_version_id").in("library_version_id", ids.slice(i, i + CHUNK)).limit(20000);
+      const r = await libraryCopyRows(admin, ids.slice(i, i + CHUNK));
       if (r.error) return { measured: false, byVersion: new Map() };
       copies.push(...(r.data ?? []));
     }
     const attempts: { question_id: string; correct: boolean; answered_at: string }[] = [];
     for (let i = 0; i < copies.length; i += CHUNK) {
-      const r = await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at").in("question_id", copies.slice(i, i + CHUNK).map(c => c.id)).limit(50000);
+      const r = await libraryCopyAttemptRows(admin, copies.slice(i, i + CHUNK).map(c => c.id));
       if (r.error) return { measured: false, byVersion: new Map() };
       attempts.push(...(r.data ?? []));
     }
