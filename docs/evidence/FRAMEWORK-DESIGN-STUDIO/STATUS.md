@@ -66,6 +66,7 @@
 | A | 750 (`frameworks.layout_draft` jsonb, `frameworks.component_order` text[]) and 751 (stable outcome ids, evidence `outcome_ids`, backfill, guards, F4 change to the 640 review SoD guard), each staged twice with PRECHECK/VERIFY/ROLLBACK and build records | **done 31 Oct** (staging only, see Log) |
 | B | Server: reorder actions, classification, layout draft, apply on publication as a revision, snapshot ids, tie-break reads, learner per-domain order, F4 audit classification, evidence readers using `outcome_ids` | **done 31 Oct** (code only, see Log) |
 | C | UI: drag and drop with Move up/down on every row, live-region announcements, draft-layout banner and preview in the pack, submit layout, CPR-MOB-001 | **done 31 Oct** (code only, see Log; browser check is slice D) |
+| B2 | 752: apply a pending layout in the publication statement (AFTER trigger), app apply/undo removed | **done 31 Oct** (staging x2, see Log) |
 | D | Tests and harnesses (plant-fail), browser at 375/768/1440, PR | pending |
 
 ## Commands
@@ -76,6 +77,15 @@
 - Harnesses: `npx tsx scripts/<name>.ts`. Relevant: `migration-house-rules`, `plane-boundary`, `hq-nav-registry`, and the competency/verification harnesses (find them under `scripts/`).
 
 ## Log
+
+### 31 Oct 2026: 752 done (layout applied atomically at publication, commits bdcedc41, 3340007e, not pushed)
+
+- **Migration 752** `752-framework-layout-apply-on-publish.sql` (sha256 `6d08ec5e...7d6c`), build record `752-build-record.md`. Application order **750, 751, 752**. Staging: PRECHECK, applied twice, VERIFY 16/16, plant-fail (trigger disabled, 6 red), ROLLBACK rehearsed to PRE exactly, re-applied, VERIFY 16/16. House rules ALL CLEAR. **Production does NOT have it.**
+- **How:** trigger `frameworks_layout_apply_on_publish`, AFTER UPDATE OF pub_status/version_* FOR EACH ROW, only on a publication (becomes published, or a published row takes a new version) with a draft. 466 and 640 are BEFORE ROW, so they always decide first (name order irrelevant). In the same statement: stale draft refuses the whole update; else dense renumber (named first, rest by sort_order, name, id, as `densePlan`), componentOrder into component_order, draft cleared. SECURITY DEFINER (whole apply regardless of RLS). `framework_layout_check(uuid)` (service_role) = the app pre-check and 752 detection.
+- **App:** `applyPendingLayout`/undo/clear removed. `decidePublication` pre-checks via `layoutPublishCheck`; the snapshot is taken after the publish statement, so it records the applied order. `transitionFramework` maps the trigger refusal to 409.
+- **Choice recorded (fallback):** without 752 a publication WITH a pending layout is refused (409, "migration 752", discard the layout to publish content alone). No non-atomic fallback. Publications without a pending layout are unchanged.
+- **Verified:** vitest framework-layout + framework-publication 27/27 (new: no app sort/layout writes at publish, snapshot carries applied order, refused without 752, stale refused pre-check and in-statement). Plant-fail: 752-absent refusal disabled -> 1 red, restored -> green. tsc clean.
+- **Note:** unnamed rows with tied sort_order are ordered by name in the DB collation (en_US.UTF-8) vs JS localeCompare in the preview; only matters for rows the draft does not name.
 
 ### 31 Oct 2026: slice C done (Studio UI, code only, not pushed)
 
@@ -104,7 +114,7 @@
 - Submit a layout = existing publication `submit`. A layout saved after the pending request was put forward is refused at decide (409) until submitted again.
 
 **Publication decide** (`framework-publication.ts`): a pending layout is applied to the live order BEFORE the snapshot (compensating writes: undone if 466/640 refuse or a write fails; the draft stays), then cleared. Layout-only (same competency ids and hashes as the last snapshot's `clinical_approvals`, no catalogue entries) is forced to `revision`; otherwise the publisher's kind applies. Response adds `layoutApplied`, `changeKindForced`. SoD unchanged: the reorderer is a contributor (not in GOVERNANCE) and is refused; not an author for clinical review (in NOT_AUTHORSHIP).
-- ⚠ Not a single DB transaction (no RPC without a schema change): a crash between the sort_order writes and the publish could leave the new live order with the old version. Owner may want an RPC later.
+- ~~Not a single DB transaction~~: superseded by 752 (see the 752 log entry).
 
 **Reads for slice C.**
 - `loadAuthoringView`: each framework adds `layoutDraft` (v1 or null), `layoutDraftBy`, `layoutDraftAt`, `componentOrder`; each criterion adds `id`; all lists in stable order (sort_order, name, id). Render the draft order with `applyLayout(tree, layoutDraft)` / `sectionOrder` from `src/lib/competency/layout-order.ts` (pure, client-safe).
