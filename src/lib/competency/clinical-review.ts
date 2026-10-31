@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { activeGrants, appointmentInTerm, narrowToScope } from "@/lib/hq/spaces";
+import { ORGANISATIONAL_ACTIONS } from "./layout-order";
 
 // ── COMPETEN HOLDINGS CLINICAL-CONTENT APPROVAL ── migration 395, owner decisions D2 and D3 ─────────────────
 //
@@ -121,7 +122,10 @@ const NOT_AUTHORSHIP = new Set(["submit_review", "approve_content", "reject_cont
   "clinical_scope_added", "clinical_scope_ended", "framework_specialty_set",
   // FRAMEWORK-DESIGN-STUDIO-01 F4 (751): a presentation-only reorder is not authorship, so it does not bar clinical review.
   // It still counts as contribution for publication (framework-publication.ts GOVERNANCE leaves it out).
-  "reorder_layout"]);
+  "reorder_layout",
+  // FRAMEWORK-DESIGN-STUDIO-02 (760, ruling D3): organisational changes (Areas, a domain's Area, a competency to another
+  // domain) are not authorship either. The 760 clinical_review_decision_sod_guard names the same six.
+  ...ORGANISATIONAL_ACTIONS]);
 
 /** Pure: who authored or materially edited a competency, from its audit trail and the person putting it forward. */
 export function authorsOf(submitter: string, audit: readonly { actor_id: string | null; action: string }[]): string[] {
