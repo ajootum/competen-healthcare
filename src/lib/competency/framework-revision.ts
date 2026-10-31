@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { currentTraceId } from "@/lib/trace";
-import { competencyCodeTaken, cpuFor, isId, NOT_RECORDED, parseCompetency, type Actor, type CompetencyInput } from "./authoring";
+import { competencyCodeTaken, cpuFor, isId, NOT_RECORDED, parseCompetency, parseCpu, parseCpuLabel, parseDomainLabel, parseFrameworkLabel, parsePracticeLabel, practiceInFramework,
+  type Actor, type CompetencyInput } from "./authoring";
 import { authorsOf, clinicalStatus, loadRequiredApprovals, reviewRefusal, reviewRisk, type ClinicalReview } from "./clinical-review";
 import { checkComponent, classifyMove, parseCriterionText, parsePosition, parseSourceRef, pinnedByActiveMethod, placeCriterion } from "./criteria-authoring";
 import { diffFramework, normalise, type FrameworkDiff } from "./framework-diff";
@@ -31,6 +32,15 @@ import { byRowOrder } from "./layout-order";
 //
 // ⚠ FAIL CLOSED. Without 770 a content change to a published governed framework is refused (409), nothing written. Never a
 // live write. Organisational changes keep using the layout draft (750/760), unchanged.
+//
+// MIGRATION 771 (D3: ALL changes to a published framework pass through the revision): the framework name and description,
+// new domains (pre-allocated id, Area optional) and domain renames, new or renamed practices and CPUs are saved in the
+// same revision (framework_revision proposal columns, framework_revision_domain / _practice / _cpu) and applied by the
+// same publication statement. They are not in the content hash: ORGANISATIONAL for review (their audit actions
+// cfca_revision_*_created / _renamed / _updated are recorded on the FRAMEWORK and are not authorship, NOT_AUTHORSHIP and
+// the 771 SoD guard), but contribution for publication. A NEW revision competency may move to another domain of the
+// revision (move_competency_domain, mode "revision"). Without 771 every such action on a published governed framework is
+// refused (409), nothing written.
 
 type Fail = { ok: false; status: number; error: string };
 type Result<T extends object = object> = ({ ok: true } & T) | Fail;
@@ -43,6 +53,18 @@ const absent = (e: any) => !!e && ABSENT.has(String(e.code ?? ""));
 
 /** The content actions that a published governed framework routes into its revision draft. */
 export const REVISION_ACTIONS = new Set(["update_competency", "create_competency", "create_criterion", "update_criterion", "retire_criterion", "restore_criterion", "move_criterion"]);
+/** 771: the structure actions a published governed framework routes into its revision draft. */
+export const STRUCTURE_ACTIONS = new Set(["update_framework", "create_domain", "rename_domain", "create_practice", "create_cpu", "rename_practice", "rename_cpu", "move_competency_domain"]);
+export const NOT_READY_771: Fail = { ok: false, status: 409, error: "Changing the structure of a published framework through its revision draft is not set up on this environment yet (migration 771), so nothing has changed." };
+
+export type RevDomain = { revision_id: string; domain_id: string; origin_domain_id: string | null; name: string; code: string | null; area_id: string | null; sort_order: number | null };
+export type RevPractice = { revision_id: string; practice_id: string; origin_practice_id: string | null; domain_id: string | null; name: string; description: string | null; code: string | null };
+export type RevCpu = { revision_id: string; cpu_id: string; origin_cpu_id: string | null; practice_id: string | null; name: string; description: string | null; code: string | null;
+  risk_category: string | null; complexity: number | null; reassessment_months: number | null };
+export type RevStructure = { framework: { name: string; description: string | null } | null; domains: RevDomain[]; practices: RevPractice[]; cpus: RevCpu[] };
+const DOM_COLS = "revision_id, domain_id, origin_domain_id, name, code, area_id, sort_order";
+const PRA_COLS = "revision_id, practice_id, origin_practice_id, domain_id, name, description, code";
+const CPU_COLS = "revision_id, cpu_id, origin_cpu_id, practice_id, name, description, code, risk_category, complexity, reassessment_months";
 
 type Fw = { id: string; name: string; pub_status: string | null; hospital_id: string | null; competency_layer: string | null };
 /** Pure (D2): content changes to this framework go into a revision draft. */
@@ -62,19 +84,25 @@ const CRIT_COLS = "id, revision_id, skill_id, origin_skill_id, competency_id, na
  * Pure: the live framework row (framework-diff LIVE nesting) with a revision laid over it, in the same nesting, so
  * diffFramework(normalise(live), normalise(overlay)) is the revision against what is published. Existing competencies take
  * their proposed fields and proposed criteria (a moved criterion appears under its new competency), new ones join their
- * domain. Domains, order of competencies and the framework itself are the live ones (organisational, the layout draft).
+ * domain. Order of competencies is the live one (organisational, the layout draft). 771: the proposed framework name and
+ * description, domain renames and new domains (with the new competencies proposed in them) are laid over too.
  */
-export function overlayRevision(live: any, comps: readonly RevComp[], crits: readonly RevCrit[]): any {
+export function overlayRevision(live: any, comps: readonly RevComp[], crits: readonly RevCrit[], structure?: RevStructure | null): any {
   const byComp = new Map(comps.map(c => [c.competency_id, c]));
   const critsOf = (id: string) => crits.filter(k => k.competency_id === id)
     .map(k => ({ id: k.skill_id, name: k.name, sort_order: k.sort_order, component_code: k.component_code, is_active: k.is_active }));
   const movedIn = new Set(crits.map(k => k.skill_id));
   const fields = (c: RevComp) => ({ code: c.code, name: c.name, description: c.description, learning_outcomes: c.learning_outcomes, expected_level_id: c.expected_level_id,
     risk_category: c.risk_category, practice_id: c.practice_id, cpu_id: c.cpu_id });
+  const renamed = new Map((structure?.domains ?? []).filter(d => d.origin_domain_id).map(d => [d.domain_id, d]));
+  const newComps = (domainId: string) => comps.filter(c => !c.origin_competency_id && c.domain_id === domainId)
+    .map(c => ({ id: c.competency_id, sort_order: c.sort_order, ...fields(c), competency_skills: critsOf(c.competency_id) }));
   return {
     ...live,
-    framework_domains: (live?.framework_domains ?? []).map((d: any) => ({
+    ...(structure?.framework ? { name: structure.framework.name, description: structure.framework.description } : {}),
+    framework_domains: [...(live?.framework_domains ?? []).map((d: any) => ({
       ...d,
+      ...(renamed.has(d.id) ? { name: renamed.get(d.id)!.name, code: renamed.get(d.id)!.code } : {}),
       framework_competencies: [
         ...(d.framework_competencies ?? []).map((c: any) => {
           const rc = byComp.get(c.id);
@@ -82,10 +110,11 @@ export function overlayRevision(live: any, comps: readonly RevComp[], crits: rea
           // Not in the revision: its live criteria, less any the revision moved into another competency.
           return { ...c, competency_skills: (c.competency_skills ?? []).filter((k: any) => !movedIn.has(k.id)) };
         }),
-        ...comps.filter(c => !c.origin_competency_id && c.domain_id === d.id)
-          .map(c => ({ id: c.competency_id, sort_order: c.sort_order, ...fields(c), competency_skills: critsOf(c.competency_id) })),
+        ...newComps(d.id),
       ],
     })),
+    ...(structure?.domains ?? []).filter(d => !d.origin_domain_id)
+      .map(d => ({ id: d.domain_id, name: d.name, code: d.code, sort_order: d.sort_order, framework_competencies: newComps(d.domain_id) }))],
   };
 }
 
@@ -119,7 +148,11 @@ async function revCrits(admin: any, revisionId: string, competencyId: string): P
 async function frameworkIdOf(admin: any, kind: "competency" | "domain" | "criterion", id: string): Promise<string | null | undefined> {
   if (kind === "domain") {
     const { data, error } = await admin.from("framework_domains").select("framework_id").eq("id", id).maybeSingle();
-    return error ? undefined : data?.framework_id ?? null;
+    if (error) return undefined;
+    if (data) return data.framework_id ?? null;
+    // 771: a NEW domain exists only in an open revision.
+    const n = await newInRevision(admin, "framework_revision_domain", "domain_id", id);
+    return n === undefined ? undefined : n?.frameworkId ?? null;
   }
   if (kind === "competency") {
     const { data, error } = await admin.from("framework_competencies").select("domain_id, framework_domains(framework_id)").eq("id", id).maybeSingle();
@@ -135,6 +168,29 @@ async function frameworkIdOf(admin: any, kind: "competency" | "domain" | "criter
   const { data, error } = await admin.from(table).select("framework_revision!inner(framework_id, status)").eq(kind === "competency" ? "competency_id" : "skill_id", id).eq("framework_revision.status", "open").limit(1);
   if (error) return absent(error) ? null : undefined;
   return data?.[0]?.framework_revision?.framework_id ?? null;
+}
+
+/** Whether 771 is on this environment. null = unreadable. Zero-row read. */
+export async function structureReady(admin: any): Promise<boolean | null> {
+  try {
+    const r = await admin.from("framework_revision_domain").select("domain_id").limit(0);
+    return !r.error ? true : absent(r.error) ? false : null;
+  } catch { return null; }
+}
+
+type NewRow = { revisionId: string; frameworkId: string; row: any };
+/** 771: a row NEW in an open revision (no origin), by its stable id. null = none (or 771 absent), undefined = unreadable. */
+async function newInRevision(admin: any, table: string, col: string, id: string): Promise<NewRow | null | undefined> {
+  const origin = "origin_" + col;
+  const { data, error } = await admin.from(table).select("*").eq(col, id).limit(5);
+  if (error) return absent(error) ? null : undefined;
+  for (const row of (data ?? []) as any[]) {
+    if (row[origin]) continue;
+    const r = await admin.from("framework_revision").select("id, framework_id").eq("id", row.revision_id).eq("status", "open").limit(1);
+    if (r.error) return undefined;
+    if (r.data?.[0]) return { revisionId: r.data[0].id, frameworkId: r.data[0].framework_id, row };
+  }
+  return null;
 }
 
 async function frameworkRow(admin: any, id: string): Promise<Fw | null | undefined> {
@@ -216,6 +272,7 @@ async function renumberRev(admin: any, revisionId: string, order: string[], rows
  * caller's existing draft-framework path applies, unchanged).
  */
 export async function routeToRevision(admin: any, actor: Actor, action: string, b: any): Promise<Result<any> | null> {
+  if (STRUCTURE_ACTIONS.has(action)) return routeStructure(admin, actor, action, b);
   if (!REVISION_ACTIONS.has(action)) return null;
   const ref = action === "create_competency" ? { kind: "domain" as const, id: b?.domainId }
     : action === "update_competency" || action === "create_criterion" ? { kind: "competency" as const, id: b?.competencyId } : { kind: "criterion" as const, id: b?.criterionId };
@@ -265,7 +322,7 @@ async function reviseCompetency(admin: any, actor: Actor, place: Place, b: any):
   const taken = await codeTaken(admin, place.revisionId, p.value.code, c.id);
   if (taken === null) return { ok: false, status: 503, error: "Competency codes could not be checked just now. Nothing has changed." };
   if (taken) return { ok: false, status: 409, error: `A shared competency with the code ${p.value.code} already exists.` };
-  const cpu = b && "cpuId" in b ? await cpuFor(admin, place.fw.id, b.cpuId) : null;
+  const cpu = b && "cpuId" in b ? await revisionCpuFor(admin, place, b.cpuId) : null;
   if (cpu && !cpu.ok) return { ok: false, status: 422, error: cpu.error };
   if (!(await record(admin, actor, "cfca_revision_competency_updated", "framework_competency", c.id, p.value.name, { code: p.value.code, framework_id: place.fw.id, substantive: true }))) return NOT_RECORDED;
   const rev = await ensureRevision(admin, actor, place.fw);
@@ -283,7 +340,7 @@ async function reviseCreateCompetency(admin: any, actor: Actor, place: Place, b:
   const taken = await codeTaken(admin, place.revisionId, p.value.code, "");
   if (taken === null) return { ok: false, status: 503, error: "Competency codes could not be checked just now. Nothing has changed." };
   if (taken) return { ok: false, status: 409, error: `A shared competency with the code ${p.value.code} already exists.` };
-  const cpu = await cpuFor(admin, place.fw.id, b?.cpuId);
+  const cpu = await revisionCpuFor(admin, place, b?.cpuId);
   if (!cpu.ok) return { ok: false, status: 422, error: cpu.error };
   const [{ data: last, error: e1 }, newer] = await Promise.all([
     admin.from("framework_competencies").select("sort_order").eq("domain_id", b.domainId).order("sort_order", { ascending: false }).limit(1),
@@ -454,6 +511,277 @@ async function reviseMoveCriterion(admin: any, actor: Actor, place: Place, b: an
   return { ok: true, kind, substantive: true, mode: "revision", revisionId: rev };
 }
 
+// ── 771: the structure of a published framework, in its revision ─────────────────────────────────────────────────────
+
+/** The CPU a revision competency may name: a live CPU of the framework (cpuFor), or a NEW CPU of this revision. */
+async function revisionCpuFor(admin: any, place: Place, cpuId: unknown): Promise<{ ok: true; practiceId: string | null; cpuId: string | null } | { ok: false; error: string }> {
+  const live = await cpuFor(admin, place.fw.id, cpuId);
+  if (live.ok || !isId(cpuId) || !place.revisionId) return live;
+  const n = await newInRevision(admin, "framework_revision_cpu", "cpu_id", cpuId);
+  return n && n.revisionId === place.revisionId ? { ok: true, practiceId: n.row.practice_id, cpuId } : live;
+}
+
+/** A domain of the framework of this place: live, or NEW in its open revision. null = neither. */
+async function domainHere(admin: any, place: Place, id: unknown): Promise<{ id: string; isNew: boolean; name: string; code: string | null } | null | Fail> {
+  if (!isId(id)) return null;
+  const { data, error } = await admin.from("framework_domains").select("id, framework_id, name, code").eq("id", id).maybeSingle();
+  if (error) return UNREADABLE;
+  if (data) return data.framework_id === place.fw.id ? { id: data.id, isNew: false, name: data.name, code: data.code ?? null } : null;
+  const n = await newInRevision(admin, "framework_revision_domain", "domain_id", id);
+  if (n === undefined) return UNREADABLE;
+  return n && n.revisionId === place.revisionId ? { id, isNew: true, name: n.row.name, code: n.row.code ?? null } : null;
+}
+
+/** A practice of the framework of this place: live, or NEW in its open revision. null = neither. */
+async function practiceHere(admin: any, place: Place, id: unknown): Promise<{ id: string; isNew: boolean } | null | Fail> {
+  if (!isId(id)) return null;
+  const live = await practiceInFramework(admin, id);
+  if (live) return live.framework_id === place.fw.id ? { id: live.id, isNew: false } : null;
+  const n = await newInRevision(admin, "framework_revision_practice", "practice_id", id);
+  if (n === undefined) return UNREADABLE;
+  return n && n.revisionId === place.revisionId ? { id, isNew: true } : null;
+}
+
+/** The structure action's framework: through the live row it names, or a NEW row of an open revision. */
+async function structureFramework(admin: any, action: string, b: any): Promise<string | null | undefined> {
+  const viaNew = async (table: string, col: string, id: string) => { const n = await newInRevision(admin, table, col, id); return n === undefined ? undefined : n?.frameworkId ?? null; };
+  switch (action) {
+    case "update_framework": case "create_domain": case "move_competency_domain": return isId(b?.frameworkId) ? b.frameworkId : null;
+    case "rename_domain": case "create_practice": {
+      if (!isId(b?.domainId)) return null;
+      return frameworkIdOf(admin, "domain", b.domainId);
+    }
+    case "rename_practice": case "create_cpu": {
+      if (!isId(b?.practiceId)) return null;
+      const live = await practiceInFramework(admin, b.practiceId);
+      return live ? live.framework_id : viaNew("framework_revision_practice", "practice_id", b.practiceId);
+    }
+    case "rename_cpu": {
+      if (!isId(b?.cpuId)) return null;
+      const { data, error } = await admin.from("clinical_practice_units").select("id, practice_id").eq("id", b.cpuId).maybeSingle();
+      if (error) return undefined;
+      const live = data ? await practiceInFramework(admin, data.practice_id) : null;
+      return live ? live.framework_id : viaNew("framework_revision_cpu", "cpu_id", b.cpuId);
+    }
+  }
+  return null;
+}
+
+/**
+ * 771: a structure action on a published governed framework, done in its revision draft. null = not such a framework, or
+ * (move_competency_domain) a move the layout draft owns: the caller's existing path applies, unchanged.
+ */
+async function routeStructure(admin: any, actor: Actor, action: string, b: any): Promise<Result<any> | null> {
+  const fwId = await structureFramework(admin, action, b);
+  if (fwId === undefined) return UNREADABLE;
+  if (!fwId) return null;
+  const fw = await frameworkRow(admin, fwId);
+  if (fw === undefined) return UNREADABLE;
+  if (!goesToRevision(fw)) return null;
+  if (action === "move_competency_domain") {
+    // Only a NEW competency of the revision, or a move into a NEW domain, is the revision's. Every other move is the
+    // layout draft's (760), unchanged.
+    const [nc, nd] = isId(b?.competencyId) && isId(b?.domainId)
+      ? await Promise.all([newInRevision(admin, "framework_revision_competency", "competency_id", b.competencyId), newInRevision(admin, "framework_revision_domain", "domain_id", b.domainId)])
+      : [null, null];
+    if (nc === undefined || nd === undefined) return UNREADABLE;
+    if (!nc && !nd) return null;
+    if (!nc) return { ok: false, status: 409, error: "A published competency moves into a new domain only after the new domain is published. Publish this revision first, then move it." };
+  }
+  const [r770, r771] = await Promise.all([revisionsReady(admin), structureReady(admin)]);
+  if (r770 === null || r771 === null) return UNREADABLE;
+  if (!r770 || !r771) return NOT_READY_771;
+  const open = await openRevision(admin, fw!.id);
+  if (open && "ok" in open) return open;
+  const place: Place = { fw: fw!, revisionId: open?.id ?? null };
+  switch (action) {
+    case "update_framework": return reviseFramework(admin, actor, place, b);
+    case "create_domain": return reviseCreateDomain(admin, actor, place, b);
+    case "rename_domain": return reviseRenameDomain(admin, actor, place, b);
+    case "create_practice": return reviseCreatePractice(admin, actor, place, b);
+    case "rename_practice": return reviseRenamePractice(admin, actor, place, b);
+    case "create_cpu": return reviseCreateCpu(admin, actor, place, b);
+    case "rename_cpu": return reviseRenameCpu(admin, actor, place, b);
+    case "move_competency_domain": return reviseMoveNewCompetency(admin, actor, place, b);
+  }
+  return null;
+}
+
+type Done = Result<{ unchanged: boolean; mode: "revision"; revisionId?: string }>;
+const recordOn = (admin: any, actor: Actor, place: Place, action: string, detail: Record<string, unknown>) =>
+  record(admin, actor, action, "framework", place.fw.id, place.fw.name, { ...detail, mode: "revision" });
+
+/** update_framework { frameworkId, name, description? } on a published framework: the label, proposed. */
+async function reviseFramework(admin: any, actor: Actor, place: Place, b: any): Promise<Done> {
+  const lab = parseFrameworkLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  const { data: live, error } = await admin.from("frameworks").select("name, description").eq("id", place.fw.id).maybeSingle();
+  if (error || !live) return UNREADABLE;
+  const asLive = live.name === lab.value.name && (live.description ?? null) === lab.value.description;
+  let now: { framework_proposed: boolean; proposed_name: string | null; proposed_description: string | null } | null = null;
+  if (place.revisionId) {
+    const r = await admin.from("framework_revision").select("framework_proposed, proposed_name, proposed_description").eq("id", place.revisionId).maybeSingle();
+    if (r.error) return UNREADABLE;
+    now = r.data ?? null;
+  }
+  const same = now?.framework_proposed ? now.proposed_name === lab.value.name && (now.proposed_description ?? null) === lab.value.description : asLive;
+  if (same) return { ok: true, unchanged: true, mode: "revision", ...(place.revisionId ? { revisionId: place.revisionId } : {}) };
+  if (!(await recordOn(admin, actor, place, "cfca_revision_framework_updated", { name: lab.value.name, description_set: !!lab.value.description }))) return NOT_RECORDED;
+  const rev = await ensureRevision(admin, actor, place.fw);
+  if (typeof rev !== "string") return rev;
+  const { error: uErr } = await admin.from("framework_revision")
+    .update(asLive ? { framework_proposed: false, proposed_name: null, proposed_description: null } : { framework_proposed: true, proposed_name: lab.value.name, proposed_description: lab.value.description })
+    .eq("id", rev).eq("status", "open");
+  return uErr ? NOT_SAVED : { ok: true, unchanged: false, mode: "revision", revisionId: rev };
+}
+
+/** create_domain { frameworkId, name, code?, areaId? }: a NEW domain proposed with its final id, at the end. */
+async function reviseCreateDomain(admin: any, actor: Actor, place: Place, b: any): Promise<Result<{ id: string; mode: "revision"; revisionId: string }>> {
+  const lab = parseDomainLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  const areaId = b?.areaId == null || b.areaId === "" ? null : isId(b.areaId) ? b.areaId : undefined;
+  if (areaId === undefined) return { ok: false, status: 422, error: "That Area is not valid." };
+  if (areaId) {
+    const { data, error } = await admin.from("framework_areas").select("id").eq("id", areaId).eq("framework_id", place.fw.id).limit(1);
+    if (error) return UNREADABLE;
+    if (!data?.length) return { ok: false, status: 422, error: "A new domain is placed in an Area of its own framework." };
+  }
+  const [live, newer] = await Promise.all([
+    admin.from("framework_domains").select("sort_order").eq("framework_id", place.fw.id).order("sort_order", { ascending: false }).limit(1),
+    place.revisionId ? admin.from("framework_revision_domain").select("sort_order").eq("revision_id", place.revisionId).limit(500) : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (live.error || newer.error) return UNREADABLE;
+  const sort = Math.max(live.data?.[0]?.sort_order ?? 0, ...((newer.data ?? []) as any[]).map(r => r.sort_order ?? 0)) + 1;
+  const id = crypto.randomUUID();
+  if (!(await recordOn(admin, actor, place, "cfca_revision_domain_created", { domain_id: id, name: lab.value.name, code: lab.value.code, area_id: areaId }))) return NOT_RECORDED;
+  const rev = await ensureRevision(admin, actor, place.fw);
+  if (typeof rev !== "string") return rev;
+  const { error } = await admin.from("framework_revision_domain").insert({ revision_id: rev, domain_id: id, name: lab.value.name, code: lab.value.code, area_id: areaId, sort_order: sort,
+    created_by: actor.userId, updated_by: actor.userId });
+  return error ? { ok: false, status: 422, error: "The domain could not be proposed." } : { ok: true, id, mode: "revision", revisionId: rev };
+}
+
+/**
+ * A rename of a live row (inserted once with its origin, then updated) or an edit of a NEW row of the revision, by its
+ * stable id. `current` is what the row reads as now (proposed, else live).
+ */
+async function proposeRename(admin: any, actor: Actor, place: Place, o: { table: string; col: string; id: string; isNew: boolean; action: string; fields: Record<string, unknown>; current: Record<string, unknown> | null }): Promise<Done> {
+  let row: any = null;
+  if (place.revisionId) {
+    const r = await admin.from(o.table).select("*").eq("revision_id", place.revisionId).eq(o.col, o.id).limit(1);
+    if (r.error) return UNREADABLE;
+    row = r.data?.[0] ?? null;
+  }
+  const cur = row ?? o.current;
+  if (cur && Object.entries(o.fields).every(([k, v]) => (cur[k] ?? null) === (v ?? null)))
+    return { ok: true, unchanged: true, mode: "revision", ...(place.revisionId ? { revisionId: place.revisionId } : {}) };
+  if (!(await recordOn(admin, actor, place, o.action, { [o.col]: o.id, ...o.fields }))) return NOT_RECORDED;
+  const rev = await ensureRevision(admin, actor, place.fw);
+  if (typeof rev !== "string") return rev;
+  const { error } = row || o.isNew
+    ? await admin.from(o.table).update({ ...o.fields, updated_by: actor.userId }).eq("revision_id", rev).eq(o.col, o.id)
+    : await admin.from(o.table).insert({ revision_id: rev, [o.col]: o.id, ["origin_" + o.col]: o.id, ...o.fields, created_by: actor.userId, updated_by: actor.userId });
+  return error ? NOT_SAVED : { ok: true, unchanged: false, mode: "revision", revisionId: rev };
+}
+
+/** rename_domain { domainId, name, code? }: a live domain of the framework, or a new one of the revision. */
+async function reviseRenameDomain(admin: any, actor: Actor, place: Place, b: any): Promise<Done> {
+  const lab = parseDomainLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  const d = await domainHere(admin, place, b?.domainId);
+  if (d && "ok" in d) return d;
+  if (!d) return { ok: false, status: 404, error: "That domain does not exist." };
+  return proposeRename(admin, actor, place, { table: "framework_revision_domain", col: "domain_id", id: d.id, isNew: d.isNew, action: "cfca_revision_domain_renamed",
+    fields: { name: lab.value.name, code: lab.value.code }, current: { name: d.name, code: d.code } });
+}
+
+/** create_practice { domainId, name, code, description? }: in a live domain or a new domain of the revision. */
+async function reviseCreatePractice(admin: any, actor: Actor, place: Place, b: any): Promise<Result<{ id: string; mode: "revision"; revisionId: string }>> {
+  const lab = parsePracticeLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  const d = await domainHere(admin, place, b?.domainId);
+  if (d && "ok" in d) return d;
+  if (!d) return { ok: false, status: 404, error: "That domain does not exist." };
+  const id = crypto.randomUUID();
+  if (!(await recordOn(admin, actor, place, "cfca_revision_practice_created", { practice_id: id, code: lab.value.code, domain_id: d.id }))) return NOT_RECORDED;
+  const rev = await ensureRevision(admin, actor, place.fw);
+  if (typeof rev !== "string") return rev;
+  const { error } = await admin.from("framework_revision_practice").insert({ revision_id: rev, practice_id: id, domain_id: d.id, ...lab.value, created_by: actor.userId, updated_by: actor.userId });
+  return error ? { ok: false, status: 422, error: "The practice could not be proposed." } : { ok: true, id, mode: "revision", revisionId: rev };
+}
+
+/** rename_practice { practiceId, name, code, description? }. */
+async function reviseRenamePractice(admin: any, actor: Actor, place: Place, b: any): Promise<Done> {
+  const lab = parsePracticeLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  const p = await practiceHere(admin, place, b?.practiceId);
+  if (p && "ok" in p) return p;
+  if (!p) return { ok: false, status: 404, error: "That practice does not exist." };
+  const live = p.isNew ? null : (await admin.from("practices").select("name, description, code").eq("id", p.id).maybeSingle()).data ?? null;
+  return proposeRename(admin, actor, place, { table: "framework_revision_practice", col: "practice_id", id: p.id, isNew: p.isNew, action: "cfca_revision_practice_renamed", fields: lab.value, current: live });
+}
+
+/** create_cpu { practiceId, name, code, description?, riskCategory?, complexity?, reassessmentMonths? }. */
+async function reviseCreateCpu(admin: any, actor: Actor, place: Place, b: any): Promise<Result<{ id: string; mode: "revision"; revisionId: string }>> {
+  const cp = parseCpu(b);
+  if (!cp.ok) return { ok: false, status: 422, error: cp.error };
+  const p = await practiceHere(admin, place, b?.practiceId);
+  if (p && "ok" in p) return p;
+  if (!p) return { ok: false, status: 404, error: "That practice does not exist." };
+  const id = crypto.randomUUID(), v = cp.value;
+  if (!(await recordOn(admin, actor, place, "cfca_revision_cpu_created", { cpu_id: id, code: v.code, practice_id: p.id, risk_category: v.risk }))) return NOT_RECORDED;
+  const rev = await ensureRevision(admin, actor, place.fw);
+  if (typeof rev !== "string") return rev;
+  const { error } = await admin.from("framework_revision_cpu").insert({ revision_id: rev, cpu_id: id, practice_id: p.id, name: v.name, description: v.description, code: v.code,
+    risk_category: v.risk, complexity: v.complexity, reassessment_months: v.months, created_by: actor.userId, updated_by: actor.userId });
+  return error ? { ok: false, status: 422, error: "The CPU could not be proposed." } : { ok: true, id, mode: "revision", revisionId: rev };
+}
+
+/** rename_cpu { cpuId, name, code, description? }. Its risk is not changed by a rename. */
+async function reviseRenameCpu(admin: any, actor: Actor, place: Place, b: any): Promise<Done> {
+  const lab = parseCpuLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  if (!isId(b?.cpuId)) return { ok: false, status: 400, error: "Choose a CPU." };
+  const { data: u, error } = await admin.from("clinical_practice_units").select("id, practice_id, name, description, code").eq("id", b.cpuId).maybeSingle();
+  if (error) return UNREADABLE;
+  let isNew = false;
+  if (u) {
+    const pr = await practiceInFramework(admin, u.practice_id);
+    if (!pr || pr.framework_id !== place.fw.id) return { ok: false, status: 404, error: "That CPU does not exist." };
+  } else {
+    const n = await newInRevision(admin, "framework_revision_cpu", "cpu_id", b.cpuId);
+    if (n === undefined) return UNREADABLE;
+    if (!n || n.revisionId !== place.revisionId) return { ok: false, status: 404, error: "That CPU does not exist." };
+    isNew = true;
+  }
+  return proposeRename(admin, actor, place, { table: "framework_revision_cpu", col: "cpu_id", id: b.cpuId, isNew, action: "cfca_revision_cpu_renamed", fields: lab.value,
+    current: u ? { name: u.name, description: u.description ?? null, code: u.code ?? null } : null });
+}
+
+/** move_competency_domain { frameworkId, competencyId, domainId } for a NEW competency of the revision: to the end of a
+ *  live domain or a new domain of the revision. Organisational (not authorship), recorded on the framework. */
+async function reviseMoveNewCompetency(admin: any, actor: Actor, place: Place, b: any): Promise<Result<{ mode: "revision"; unchanged: boolean; layoutPending: boolean; revisionId: string }>> {
+  if (!place.revisionId) return { ok: false, status: 404, error: "That competency does not exist." };
+  if (b?.position != null) return { ok: false, status: 422, error: "A new competency of a revision is placed at the end of its domain. Reorder it after the revision is published." };
+  const rc = await revComp(admin, place.revisionId, b.competencyId);
+  if (rc && "ok" in rc) return rc;
+  if (!rc || rc.origin_competency_id) return { ok: false, status: 404, error: "That competency does not exist." };
+  const d = await domainHere(admin, place, b?.domainId);
+  if (d && "ok" in d) return d;
+  if (!d) return { ok: false, status: 422, error: "A competency moves only to a domain of its own framework." };
+  if (rc.domain_id === d.id) return { ok: true, mode: "revision", unchanged: true, layoutPending: false, revisionId: place.revisionId };
+  const [live, newer] = await Promise.all([
+    admin.from("framework_competencies").select("sort_order").eq("domain_id", d.id).order("sort_order", { ascending: false }).limit(1),
+    admin.from("framework_revision_competency").select("competency_id, sort_order").eq("revision_id", place.revisionId).eq("domain_id", d.id).limit(500),
+  ]);
+  if (live.error || newer.error) return UNREADABLE;
+  const sort = Math.max(live.data?.[0]?.sort_order ?? 0, ...((newer.data ?? []) as any[]).filter(r => r.competency_id !== rc.competency_id).map(r => r.sort_order ?? 0)) + 1;
+  if (!(await recordOn(admin, actor, place, "move_competency_domain", { competency_id: rc.competency_id, from_domain_id: rc.domain_id, to_domain_id: d.id }))) return NOT_RECORDED;
+  const { error } = await admin.from("framework_revision_competency").update({ domain_id: d.id, sort_order: sort, updated_by: actor.userId })
+    .eq("revision_id", place.revisionId).eq("competency_id", rc.competency_id);
+  return error ? NOT_SAVED : { ok: true, mode: "revision", unchanged: false, layoutPending: false, revisionId: place.revisionId };
+}
+
 /** discard_revision { frameworkId }: the revision is closed. Nothing live ever changed, so nothing is undone. */
 export async function discardRevision(admin: any, actor: Actor, b: any): Promise<Result<{ discarded: boolean }>> {
   if (!isId(b?.frameworkId)) return { ok: false, status: 400, error: "Choose a framework." };
@@ -474,17 +802,36 @@ export async function discardRevision(admin: any, actor: Actor, b: any): Promise
 // ── Review, comparison and the publication check ─────────────────────────────────────────────────────────────────
 
 /** Every competency of an open revision, with its proposed hash. null = no open revision, Fail = unreadable. */
-export async function loadRevision(admin: any, frameworkId: string): Promise<{ head: RevisionHead; comps: RevComp[]; crits: RevCrit[]; hashes: Map<string, { proposed: string; live: string | null; base: string | null }> } | null | Fail> {
+export async function loadRevision(admin: any, frameworkId: string): Promise<{ head: RevisionHead; comps: RevComp[]; crits: RevCrit[]; hashes: Map<string, { proposed: string; live: string | null; base: string | null }>;
+  structure: RevStructure } | null | Fail> {
   const head = await openRevision(admin, frameworkId);
   if (!head || "ok" in head) return head;
-  const [c, k, h] = await Promise.all([
+  const [c, k, h, structure] = await Promise.all([
     admin.from("framework_revision_competency").select(COMP_COLS).eq("revision_id", head.id).limit(2000),
     admin.from("framework_revision_criterion").select(CRIT_COLS).eq("revision_id", head.id).limit(20000),
     admin.rpc("framework_revision_hashes", { p_revision: head.id }),
+    loadStructure(admin, head.id),
   ]);
-  if (c.error || k.error || h.error) return UNREADABLE;
-  return { head, comps: c.data ?? [], crits: k.data ?? [],
+  if (c.error || k.error || h.error || !structure) return UNREADABLE;
+  return { head, comps: c.data ?? [], crits: k.data ?? [], structure,
     hashes: new Map((h.data ?? []).map((r: any) => [r.competency_id, { proposed: r.proposed_hash, live: r.live_hash ?? null, base: r.base_hash ?? null }])) };
+}
+
+const EMPTY_STRUCTURE: RevStructure = { framework: null, domains: [], practices: [], cpus: [] };
+/** 771: the structure a revision proposes. Before 771 there is none (empty). null = unreadable. */
+async function loadStructure(admin: any, revisionId: string): Promise<RevStructure | null> {
+  const ready = await structureReady(admin);
+  if (ready === null) return null;
+  if (!ready) return EMPTY_STRUCTURE;
+  const [l, d, p, u] = await Promise.all([
+    admin.from("framework_revision").select("framework_proposed, proposed_name, proposed_description").eq("id", revisionId).maybeSingle(),
+    admin.from("framework_revision_domain").select(DOM_COLS).eq("revision_id", revisionId).limit(1000),
+    admin.from("framework_revision_practice").select(PRA_COLS).eq("revision_id", revisionId).limit(2000),
+    admin.from("framework_revision_cpu").select(CPU_COLS).eq("revision_id", revisionId).limit(2000),
+  ]);
+  if (l.error || d.error || p.error || u.error) return null;
+  return { framework: l.data?.framework_proposed ? { name: l.data.proposed_name, description: l.data.proposed_description ?? null } : null,
+    domains: d.data ?? [], practices: p.data ?? [], cpus: u.data ?? [] };
 }
 
 /** The clinical state of each revision competency at its PROPOSED content (versions bound to the stable id). */
@@ -518,7 +865,10 @@ export async function loadRevisionForReview(admin: any, frameworkId: string): Pr
   const hashes = new Map([...rv.hashes].map(([id, h]) => [id, h.proposed]));
   const reviews = await revisionReviews(admin, rv.comps.map(c => c.competency_id), hashes);
   const domainOf = new Map<string, string>(((doms ?? []) as any[]).flatMap(d => (d.framework_competencies ?? []).map((c: any) => [c.id, d.id] as [string, string])));
-  const sorted = [...(doms ?? [])].sort(byRowOrder);
+  // 771: domains carry their proposed names, and NEW domains of the revision follow the live ones (their new competencies).
+  const renamed = new Map(rv.structure.domains.filter(d => d.origin_domain_id).map(d => [d.domain_id, d.name]));
+  const sorted = [...((doms ?? []) as any[]).map(d => ({ ...d, name: renamed.get(d.id) ?? d.name })).sort(byRowOrder),
+    ...rv.structure.domains.filter(d => !d.origin_domain_id).map(d => ({ id: d.domain_id, name: d.name, sort_order: d.sort_order }))];
   return {
     hashes, revisionId: rv.head.id,
     fw: { id: fw.id, name: fw.name, code: null, pubStatus: fw.pub_status ?? "draft",
@@ -541,7 +891,9 @@ export async function submitRevisionVersion(admin: any, frameworkId: string, com
     loadRequiredApprovals(admin),
   ]);
   if (audit.error) return { ok: false, error: "The authorship trail could not be read, so nothing was put forward." };
-  const risk = reviewRisk(rc.risk_category, cpu.data?.risk_category);
+  // 771: a NEW CPU of the revision carries its own risk (the 771 floor reads it the same way).
+  const newCpu = rc.cpu_id && !cpu.data ? await newInRevision(admin, "framework_revision_cpu", "cpu_id", rc.cpu_id) : null;
+  const risk = reviewRisk(rc.risk_category, cpu.data?.risk_category ?? (newCpu && newCpu.revisionId === head.id ? newCpu.row.risk_category : null));
   const { data: v, error } = await admin.from("clinical_content_version").insert({
     ...(rc.origin_competency_id ? { competency_id: competencyId } : { proposed_competency_id: competencyId }), revision_id: head.id,
     content_hash: "computed-by-trigger", content_snapshot: {}, authored_by: authorsOf(submitter, audit.data ?? []), submitted_by: submitter,
@@ -561,7 +913,7 @@ export async function loadRevisionDiff(admin: any, frameworkId: string): Promise
       framework_competencies(id, code, name, description, sort_order, learning_outcomes, expected_level_id, risk_category, practice_id, cpu_id,
         competency_skills(id, name, sort_order, component_code, is_active)))`).eq("id", frameworkId).single();
   if (live.error || !live.data) return UNREADABLE;
-  return { status: "compared", revision: { id: rv.head.id, updatedAt: rv.head.updated_at }, diff: diffFramework(normalise(live.data), normalise(overlayRevision(live.data, rv.comps, rv.crits))) };
+  return { status: "compared", revision: { id: rv.head.id, updatedAt: rv.head.updated_at }, diff: diffFramework(normalise(live.data), normalise(overlayRevision(live.data, rv.comps, rv.crits, rv.structure))) };
 }
 
 /**

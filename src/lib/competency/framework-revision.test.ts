@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { diffFramework, normalise } from "./framework-diff";
 import { goesToRevision, overlayRevision, routeToRevision, type RevComp, type RevCrit } from "./framework-revision";
 import { pinningMethods } from "./criteria-authoring";
+import { authorsOf, REVISION_STRUCTURE_ACTIONS } from "./clinical-review";
 import { updateCompetency } from "./authoring";
 
 // FRAMEWORK-DESIGN-STUDIO-02 S5 (D2, migration 770): content changes to a PUBLISHED governed framework go into its revision
@@ -12,16 +13,18 @@ vi.mock("@/lib/trace", () => ({ currentTraceId: async () => "trace-test" }));
 
 const ME = { userId: "00000000-0000-4000-8000-0000000000c1", name: "Author" };
 const FW = "00000000-0000-4000-8000-0000000000f1", DOM = "00000000-0000-4000-8000-0000000000d1", REV = "00000000-0000-4000-8000-0000000000b1";
+const AREA = "00000000-0000-4000-8000-0000000000aa", AREA_OTHER = "00000000-0000-4000-8000-0000000000ab";
 const C1 = "00000000-0000-4000-8000-0000000000e1", K1 = "00000000-0000-4000-8000-0000000000a1", K2 = "00000000-0000-4000-8000-0000000000a2";
 
-const S: { calls: { table: string; op: string; args: any[] }[]; rows: Record<string, any[]>; has770: boolean } = { calls: [], rows: {}, has770: true };
+const S: { calls: { table: string; op: string; args: any[] }[]; rows: Record<string, any[]>; has770: boolean; has771: boolean } = { calls: [], rows: {}, has770: true, has771: true };
+const T771 = ["framework_revision_domain", "framework_revision_practice", "framework_revision_cpu"];
 function fake() {
   const from = (table: string) => {
     const f: [string, any][] = [];
     const q: any = {};
     let write: { op: string; row: any } | null = null;
     const rec = (op: string, args: any[]) => S.calls.push({ table, op, args });
-    const missing = !S.has770 && table.startsWith("framework_revision");
+    const missing = (!S.has770 && table.startsWith("framework_revision")) || (!S.has771 && T771.includes(table));
     for (const op of ["select", "order", "limit", "in", "is", "or"]) q[op] = (...a: any[]) => { rec(op, a); return q; };
     q.eq = (...a: any[]) => { rec("eq", a); f.push([a[0], a[1]]); return q; };
     q.insert = (row: any) => { rec("insert", [row]); write = { op: "insert", row }; return q; };
@@ -64,6 +67,7 @@ const liveWrites = () => writes().filter(c => ["framework_competencies", "compet
 beforeEach(() => {
   S.calls = [];
   S.has770 = true;
+  S.has771 = true;
   S.rows = {
     frameworks: [{ id: FW, name: "Published", pub_status: "published", hospital_id: null, competency_layer: "foundational" }],
     framework_domains: [{ id: DOM, framework_id: FW, name: "D" }],
@@ -75,6 +79,9 @@ beforeEach(() => {
     competency_assessment_component: [{ code: "clinical_skills", is_active: true }, { code: "knowledge", is_active: true }],
     competency_verification_method_version: [],
     framework_revision: [], framework_revision_competency: [], framework_revision_criterion: [],
+    framework_revision_domain: [], framework_revision_practice: [], framework_revision_cpu: [],
+    framework_areas: [{ id: AREA, framework_id: FW }, { id: AREA_OTHER, framework_id: "00000000-0000-4000-8000-0000000000f9" }],
+    practices: [], clinical_practice_units: [],
     audit_log: [],
   };
 });
@@ -193,5 +200,105 @@ describe("routing (POST authoring on a published framework)", () => {
     const r: any = await updateCompetency(fake(), ME, { competencyId: C1, code: "EX-001", name: "Communicates well" });
     expect(r).toMatchObject({ ok: false, status: 409 });
     expect(liveWrites()).toEqual([]);
+  });
+});
+
+describe("771: the structure of a published framework goes into its revision", () => {
+  const live = () => writes().filter(c => ["frameworks", "framework_domains", "practices", "clinical_practice_units", "framework_competencies"].includes(c.table));
+
+  it("a draft framework keeps its existing (live) path", async () => {
+    S.rows.frameworks[0].pub_status = "draft";
+    expect(await routeToRevision(fake(), ME, "update_framework", { frameworkId: FW, name: "Renamed" })).toBeNull();
+    expect(await routeToRevision(fake(), ME, "create_domain", { frameworkId: FW, name: "New" })).toBeNull();
+    expect(writes()).toEqual([]);
+  });
+
+  it("without 771 every structure action is refused and nothing is written (fail closed)", async () => {
+    S.has771 = false;
+    for (const [a, b] of [["update_framework", { frameworkId: FW, name: "Renamed" }], ["create_domain", { frameworkId: FW, name: "New" }], ["rename_domain", { domainId: DOM, name: "D2" }],
+      ["create_practice", { domainId: DOM, name: "Practice", code: "PRA-1" }]] as const) {
+      const r: any = await routeToRevision(fake(), ME, a, b);
+      expect(r).toMatchObject({ ok: false, status: 409 });
+      expect(r.error).toMatch(/migration 771/);
+    }
+    expect(writes()).toEqual([]);
+  });
+
+  it("update_framework: recorded on the framework first, proposed in the revision, live name untouched", async () => {
+    S.rows.frameworks[0].description = null;
+    const r: any = await routeToRevision(fake(), ME, "update_framework", { frameworkId: FW, name: "Published, revised", description: "Why" });
+    expect(r).toMatchObject({ ok: true, unchanged: false, mode: "revision", revisionId: REV });
+    expect(writes()[0].args[0]).toMatchObject({ action: "cfca_revision_framework_updated", entity_type: "framework", entity_id: FW });
+    expect(S.rows.framework_revision[0]).toMatchObject({ framework_proposed: true, proposed_name: "Published, revised", proposed_description: "Why" });
+    expect(S.rows.frameworks[0].name).toBe("Published");
+    expect(live()).toEqual([]);
+    const n = writes().length;
+    expect(await routeToRevision(fake(), ME, "update_framework", { frameworkId: FW, name: "Published, revised", description: "Why" })).toMatchObject({ ok: true, unchanged: true });
+    expect(writes().length).toBe(n);
+  });
+
+  it("create_domain: a pre-allocated id, an Area of its own framework only, nothing live", async () => {
+    expect(await routeToRevision(fake(), ME, "create_domain", { frameworkId: FW, name: "Professional", areaId: AREA_OTHER })).toMatchObject({ ok: false, status: 422 });
+    const r: any = await routeToRevision(fake(), ME, "create_domain", { frameworkId: FW, name: "Professional", code: "pp", areaId: AREA });
+    expect(r).toMatchObject({ ok: true, mode: "revision" });
+    expect(S.rows.framework_revision_domain[0]).toMatchObject({ domain_id: r.id, name: "Professional", code: "PP", area_id: AREA, sort_order: 1 });
+    expect(S.rows.audit_log[0]).toMatchObject({ action: "cfca_revision_domain_created", entity_id: FW });
+    expect(S.rows.framework_domains).toHaveLength(1);
+    expect(live()).toEqual([]);
+  });
+
+  it("rename_domain of a live domain: one rename row with its origin, edited again in place", async () => {
+    await routeToRevision(fake(), ME, "rename_domain", { domainId: DOM, name: "Domain one" });
+    await routeToRevision(fake(), ME, "rename_domain", { domainId: DOM, name: "Domain one, again" });
+    expect(S.rows.framework_revision_domain).toHaveLength(1);
+    expect(S.rows.framework_revision_domain[0]).toMatchObject({ domain_id: DOM, origin_domain_id: DOM, name: "Domain one, again" });
+    expect(S.rows.framework_domains[0].name).toBe("D");
+  });
+
+  it("a new practice and CPU under a new domain, and a competency linked to the new CPU, all in the revision", async () => {
+    const d: any = await routeToRevision(fake(), ME, "create_domain", { frameworkId: FW, name: "Professional" });
+    const p: any = await routeToRevision(fake(), ME, "create_practice", { domainId: d.id, name: "Ethics", code: "PRA-ETH-1" });
+    expect(p).toMatchObject({ ok: true, mode: "revision" });
+    const u: any = await routeToRevision(fake(), ME, "create_cpu", { practiceId: p.id, name: "Consent unit", code: "CPU-CON-1", riskCategory: "high", complexity: 3, reassessmentMonths: 6 });
+    expect(u).toMatchObject({ ok: true, mode: "revision" });
+    expect(S.rows.framework_revision_cpu[0]).toMatchObject({ cpu_id: u.id, practice_id: p.id, risk_category: "high", complexity: 3, reassessment_months: 6 });
+    const c: any = await routeToRevision(fake(), ME, "update_competency", { competencyId: C1, code: "EX-001", name: "Communicates", cpuId: u.id });
+    expect(c).toMatchObject({ ok: true, mode: "revision" });
+    expect(S.rows.framework_revision_competency[0]).toMatchObject({ cpu_id: u.id, practice_id: p.id });
+    expect(await routeToRevision(fake(), ME, "rename_cpu", { cpuId: u.id, name: "Consent and capacity", code: "CPU-CON-1" })).toMatchObject({ ok: true, unchanged: false });
+    expect(S.rows.framework_revision_cpu).toHaveLength(1);
+    expect(S.rows.framework_revision_cpu[0].name).toBe("Consent and capacity");
+    expect(live()).toEqual([]);
+  });
+
+  it("move_competency_domain: a NEW competency moves within the revision, a published one into a new domain is refused, the rest stays with the layout", async () => {
+    const d: any = await routeToRevision(fake(), ME, "create_domain", { frameworkId: FW, name: "Professional" });
+    const nc: any = await routeToRevision(fake(), ME, "create_competency", { domainId: DOM, code: "EX-009", name: "Escalates concerns" });
+    const m: any = await routeToRevision(fake(), ME, "move_competency_domain", { frameworkId: FW, competencyId: nc.id, domainId: d.id });
+    expect(m).toMatchObject({ ok: true, mode: "revision", unchanged: false });
+    expect(S.rows.framework_revision_competency.find(x => x.competency_id === nc.id).domain_id).toBe(d.id);
+    expect(S.rows.audit_log.at(-1)).toMatchObject({ action: "move_competency_domain", entity_id: FW });
+    expect(await routeToRevision(fake(), ME, "move_competency_domain", { frameworkId: FW, competencyId: nc.id, domainId: DOM, position: 0 })).toMatchObject({ ok: false, status: 422 });
+    expect(await routeToRevision(fake(), ME, "move_competency_domain", { frameworkId: FW, competencyId: C1, domainId: d.id })).toMatchObject({ ok: false, status: 409 });
+    expect(await routeToRevision(fake(), ME, "move_competency_domain", { frameworkId: FW, competencyId: C1, domainId: DOM })).toBeNull();
+    expect(await routeToRevision(fake(), ME, "create_competency", { domainId: d.id, code: "EX-010", name: "Acts ethically" })).toMatchObject({ ok: true, mode: "revision" });
+  });
+
+  it("the structure actions are organisational: not authorship for clinical review", () => {
+    expect(authorsOf("submitter", REVISION_STRUCTURE_ACTIONS.map(action => ({ actor_id: "organiser", action })))).toEqual(["submitter"]);
+    expect(authorsOf("submitter", [{ actor_id: "author", action: "cfca_revision_competency_updated" }])).toEqual(["submitter", "author"]);
+  });
+
+  it("the diff of a revision shows the proposed framework label, a renamed domain and a new domain with its competency", () => {
+    const liveRow = { name: "F", description: null, component_order: null, framework_domains: [{ id: "d1", name: "D1", code: null, sort_order: 1, framework_competencies: [] }] };
+    const comps: RevComp[] = [{ id: "x", revision_id: "r", competency_id: "n1", origin_competency_id: null, domain_id: "d9", sort_order: 1, code: "N", name: "New", description: null,
+      learning_outcomes: [], expected_level_id: null, practice_id: null, cpu_id: null, risk_category: "standard" }];
+    const d = diffFramework(normalise(liveRow), normalise(overlayRevision(liveRow, comps, [], { framework: { name: "F2", description: "x" }, practices: [], cpus: [],
+      domains: [{ revision_id: "r", domain_id: "d1", origin_domain_id: "d1", name: "D1 renamed", code: null, area_id: null, sort_order: null },
+        { revision_id: "r", domain_id: "d9", origin_domain_id: null, name: "D9", code: null, area_id: null, sort_order: 2 }] })));
+    expect(d.framework.map(f => f.field).sort()).toEqual(["description", "name"]);
+    expect(d.domains.renamed.length).toBe(1);
+    expect(d.domains.added.length).toBe(1);
+    expect(d.competencies.added.map(c => c.id)).toEqual(["n1"]);
   });
 });

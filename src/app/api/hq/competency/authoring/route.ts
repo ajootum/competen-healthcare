@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
-import { createCompetency, createCpu, createDomain, createFramework, createPractice, importDraftPackage, isId, renameDomain, setFrameworkIdentity, updateCompetency, updateFramework } from "@/lib/competency/authoring";
+import { createCompetency, createCpu, createDomain, createFramework, createPractice, importDraftPackage, isId, renameCpu, renameDomain, renamePractice, setFrameworkIdentity, updateCompetency, updateFramework } from "@/lib/competency/authoring";
 import { submitForReview } from "@/lib/competency/clinical-review";
 import { createCriterion, moveCriterion, restoreCriterion, retireCriterion, updateCriterion } from "@/lib/competency/criteria-authoring";
 import { loadFrameworkDiff } from "@/lib/competency/framework-diff";
@@ -47,6 +47,11 @@ export const maxDuration = 60;
 // 770, nothing written. Also: discard_revision { frameworkId }, revision_view { frameworkId }, compare_revision
 // { frameworkId }, and submit_review / review_preview / review_submit with revision: true (the PROPOSED content).
 //
+// FRAMEWORK-DESIGN-STUDIO-02 (771, ruling D3): on such a framework the STRUCTURE goes into the same revision too:
+// update_framework, create_domain (+ areaId?), rename_domain, create_practice, rename_practice { practiceId, name, code,
+// description? }, create_cpu, rename_cpu { cpuId, name, code, description? }, and move_competency_domain of a NEW revision
+// competency. 409 without 771, nothing written. rename_practice / rename_cpu are new: on a draft framework they save live.
+//
 // ⚠ GATED BY hqApiGate(["hq.quality.competency.author"]) -- the Competency Author. It authors shared content and
 // puts it forward for clinical review. It approves nothing (395, the Clinical Content Reviewer) and publishes nothing
 // (the governed framework lifecycle). Every write is preceded by its authorship row (src/lib/competency/authoring.ts).
@@ -67,6 +72,8 @@ export async function POST(req: Request) {
     case "set_identity": { const r = await setFrameworkIdentity(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
     case "create_practice": { const r = await createPractice(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
     case "create_cpu": { const r = await createCpu(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
+    case "rename_practice": { const r = await renamePractice(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "rename_cpu": { const r = await renameCpu(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
     case "create_domain": { const r = await createDomain(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
     case "rename_domain": { const r = await renameDomain(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
     case "create_competency": { const r = await createCompetency(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
@@ -103,7 +110,14 @@ export async function POST(req: Request) {
       if (!r) return NextResponse.json({ revision: null });
       const proposed = new Map([...r.hashes].map(([id, h]) => [id, h.proposed]));
       const reviews = await revisionReviews(ctx.admin, r.comps.map(c => c.competency_id), proposed);
+      const st = r.structure;
       return NextResponse.json({ revision: { id: r.head.id, createdBy: r.head.created_by, createdAt: r.head.created_at, updatedAt: r.head.updated_at,
+        // 771: the proposed framework label (null = unchanged) and the domains, practices and CPUs the revision adds or renames.
+        framework: st.framework,
+        domains: st.domains.map(d => ({ id: d.domain_id, isNew: !d.origin_domain_id, name: d.name, code: d.code, areaId: d.area_id, sortOrder: d.sort_order })),
+        practices: st.practices.map(p => ({ id: p.practice_id, isNew: !p.origin_practice_id, domainId: p.domain_id, name: p.name, description: p.description, code: p.code })),
+        cpus: st.cpus.map(u => ({ id: u.cpu_id, isNew: !u.origin_cpu_id, practiceId: u.practice_id, name: u.name, description: u.description, code: u.code,
+          riskCategory: u.risk_category, complexity: u.complexity, reassessmentMonths: u.reassessment_months })),
         competencies: r.comps.map(c => ({ id: c.competency_id, isNew: !c.origin_competency_id, domainId: c.domain_id, sortOrder: c.sort_order, code: c.code, name: c.name,
           description: c.description, learningOutcomes: c.learning_outcomes, expectedLevelId: c.expected_level_id, riskCategory: c.risk_category, practiceId: c.practice_id, cpuId: c.cpu_id,
           proposedHash: r.hashes.get(c.competency_id)?.proposed ?? null, liveHash: r.hashes.get(c.competency_id)?.live ?? null,

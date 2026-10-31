@@ -142,12 +142,21 @@ export async function createFramework(admin: any, actor: Actor, b: any): Promise
   return insErr ? { ok: false, status: 422, error: "The framework could not be created." } : { ok: true, id };
 }
 
+/** Pure: a framework's label (name and description), as update_framework sets it. */
+export function parseFrameworkLabel(b: any): Ok<{ name: string; description: string | null }> | Bad {
+  const name = text(b?.name), description = text(b?.description) || null;
+  if (name.length < 3 || name.length > 200) return { ok: false, error: "A framework name is 3 to 200 characters." };
+  if (description && description.length > 2000) return { ok: false, error: "A framework description is at most 2,000 characters." };
+  return { ok: true, value: { name, description } };
+}
+
 export async function updateFramework(admin: any, actor: Actor, b: any): Promise<Result> {
   const g = await editableFramework(admin, b?.frameworkId);
   if (!g.ok) return g;
-  const name = text(b?.name), description = text(b?.description) || null;
-  if (name.length < 3 || name.length > 200) return { ok: false, status: 422, error: "A framework name is 3 to 200 characters." };
-  if (description && description.length > 2000) return { ok: false, status: 422, error: "A framework description is at most 2,000 characters." };
+  if (revisionOnly(g.fw)) return REVISION_ONLY;
+  const lab = parseFrameworkLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  const { name, description } = lab.value;
   if (!(await authored(admin, actor, "cfca_framework_updated", "framework", g.fw.id, name, { name, description_set: !!description }))) return NOT_RECORDED;
   const { error } = await admin.from("frameworks").update({ name, description }).eq("id", g.fw.id).is("hospital_id", null);
   return error ? { ok: false, status: 422, error: "The framework could not be saved." } : { ok: true };
@@ -186,16 +195,54 @@ const optCode = (v: unknown): string | null | undefined => {
   return CODE.test(c) && c.length <= 40 ? c : undefined;
 };
 
+/** Pure: a domain's name and optional code, as create_domain and rename_domain set them. */
+export function parseDomainLabel(b: any): Ok<{ name: string; code: string | null }> | Bad {
+  const name = text(b?.name);
+  if (name.length < 2 || name.length > 200) return { ok: false, error: "A domain name is 2 to 200 characters." };
+  const code = optCode(b?.code);
+  if (code === undefined) return { ok: false, error: "A domain code is capitals, digits and hyphens." };
+  return { ok: true, value: { name, code } };
+}
+
+/** Pure: a practice's name, description and code, as create_practice and rename_practice set them. */
+export function parsePracticeLabel(b: any): Ok<{ name: string; description: string | null; code: string }> | Bad {
+  const name = text(b?.name), description = text(b?.description) || null, code = optCode(b?.code);
+  if (name.length < 2 || name.length > 200) return { ok: false, error: "A practice name is 2 to 200 characters." };
+  if (description && description.length > 2000) return { ok: false, error: "A practice description is at most 2,000 characters." };
+  if (code === undefined || !code) return { ok: false, error: "A practice has a code of capitals, digits and hyphens, for example PRA-OXY-001." };
+  return { ok: true, value: { name, description, code } };
+}
+
+/** Pure: a CPU's name, description and code (rename_cpu). */
+export function parseCpuLabel(b: any): Ok<{ name: string; description: string | null; code: string }> | Bad {
+  const name = text(b?.name), description = text(b?.description) || null, code = optCode(b?.code);
+  if (name.length < 3 || name.length > 200) return { ok: false, error: "A CPU name is 3 to 200 characters." };
+  if (description && description.length > 2000) return { ok: false, error: "A CPU description is at most 2,000 characters." };
+  if (code === undefined || !code) return { ok: false, error: "A CPU has a code of capitals, digits and hyphens, for example CPU-OXYSAFE-001." };
+  return { ok: true, value: { name, description, code } };
+}
+
+/** Pure: a new CPU (create_cpu): its label, risk, complexity and reassessment interval. */
+export function parseCpu(b: any): Ok<{ name: string; description: string | null; code: string; risk: string; complexity: number; months: number }> | Bad {
+  const lab = parseCpuLabel(b);
+  if (!lab.ok) return lab;
+  const risk = (b?.riskCategory ?? "standard") as string, complexity = Number(b?.complexity ?? 2), months = Number(b?.reassessmentMonths ?? 12);
+  if (!(RISKS as readonly string[]).includes(risk)) return { ok: false, error: "Choose the CPU risk category." };
+  if (!Number.isInteger(complexity) || complexity < 1 || complexity > 5) return { ok: false, error: "CPU complexity is 1 to 5." };
+  if (!Number.isInteger(months) || months < 1 || months > 120) return { ok: false, error: "Reassessment is 1 to 120 months." };
+  return { ok: true, value: { ...lab.value, risk, complexity, months } };
+}
+
 export async function createDomain(admin: any, actor: Actor, b: any): Promise<Result<{ id: string }>> {
   const g = await editableFramework(admin, b?.frameworkId);
   if (!g.ok) return g;
-  const name = text(b?.name);
-  if (name.length < 2 || name.length > 200) return { ok: false, status: 422, error: "A domain name is 2 to 200 characters." };
+  if (revisionOnly(g.fw)) return REVISION_ONLY;
+  const lab = parseDomainLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  const { name, code } = lab.value;
   const { data: last } = await admin.from("framework_domains").select("sort_order").eq("framework_id", g.fw.id).order("sort_order", { ascending: false }).limit(1);
   const id = crypto.randomUUID();
   // A domain belongs to its framework's content, so its authorship is recorded on the framework.
-  const code = optCode(b?.code);
-  if (code === undefined) return { ok: false, status: 422, error: "A domain code is capitals, digits and hyphens." };
   if (!(await authored(admin, actor, "cfca_domain_created", "framework", g.fw.id, g.fw.name, { domain_id: id, name, code }))) return NOT_RECORDED;
   const { error } = await admin.from("framework_domains").insert({ id, framework_id: g.fw.id, name, code, sort_order: (last?.[0]?.sort_order ?? 0) + 1 });
   return error ? { ok: false, status: 422, error: "The domain could not be created." } : { ok: true, id };
@@ -206,10 +253,10 @@ export async function renameDomain(admin: any, actor: Actor, b: any): Promise<Re
   if (!d) return { ok: false, status: 404, error: "That domain does not exist." };
   const g = await editableFramework(admin, d.framework_id);
   if (!g.ok) return g;
-  const name = text(b?.name);
-  if (name.length < 2 || name.length > 200) return { ok: false, status: 422, error: "A domain name is 2 to 200 characters." };
-  const code = optCode(b?.code);
-  if (code === undefined) return { ok: false, status: 422, error: "A domain code is capitals, digits and hyphens." };
+  if (revisionOnly(g.fw)) return REVISION_ONLY;
+  const lab = parseDomainLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  const { name, code } = lab.value;
   if (!(await authored(admin, actor, "cfca_domain_renamed", "framework", g.fw.id, g.fw.name, { domain_id: d.id, name, code }))) return NOT_RECORDED;
   const { error } = await admin.from("framework_domains").update({ name, code }).eq("id", d.id);
   return error ? { ok: false, status: 422, error: "The domain could not be saved." } : { ok: true };
@@ -224,16 +271,17 @@ export async function createPractice(admin: any, actor: Actor, b: any): Promise<
   if (!d) return { ok: false, status: 404, error: "That domain does not exist." };
   const g = await editableFramework(admin, d.framework_id);
   if (!g.ok) return g;
-  const name = text(b?.name), description = text(b?.description) || null, code = optCode(b?.code);
-  if (name.length < 2 || name.length > 200) return { ok: false, status: 422, error: "A practice name is 2 to 200 characters." };
-  if (code === undefined || !code) return { ok: false, status: 422, error: "A practice has a code of capitals, digits and hyphens, for example PRA-OXY-001." };
+  if (revisionOnly(g.fw)) return REVISION_ONLY;
+  const lab = parsePracticeLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  const { name, description, code } = lab.value;
   const id = crypto.randomUUID();
   if (!(await authored(admin, actor, "cfca_practice_created", "framework", g.fw.id, g.fw.name, { practice_id: id, code, domain_id: d.id }))) return NOT_RECORDED;
   const { error } = await admin.from("practices").insert({ id, domain_id: d.id, name, description, code, sort_order: 1 });
   return error ? { ok: false, status: 422, error: "The practice could not be created." } : { ok: true, id };
 }
 
-async function practiceInFramework(admin: any, practiceId: string): Promise<{ id: string; domain_id: string; framework_id: string } | null> {
+export async function practiceInFramework(admin: any, practiceId: string): Promise<{ id: string; domain_id: string; framework_id: string } | null> {
   if (!isId(practiceId)) return null;
   const { data } = await admin.from("practices").select("id, domain_id, framework_domains!inner(framework_id)").eq("id", practiceId).maybeSingle();
   return data ? { id: data.id, domain_id: data.domain_id, framework_id: data.framework_domains.framework_id } : null;
@@ -244,17 +292,44 @@ export async function createCpu(admin: any, actor: Actor, b: any): Promise<Resul
   if (!pr) return { ok: false, status: 404, error: "That practice does not exist." };
   const g = await editableFramework(admin, pr.framework_id);
   if (!g.ok) return g;
-  const name = text(b?.name), description = text(b?.description) || null, code = optCode(b?.code);
-  const risk = (b?.riskCategory ?? "standard") as string, complexity = Number(b?.complexity ?? 2), months = Number(b?.reassessmentMonths ?? 12);
-  if (name.length < 3 || name.length > 200) return { ok: false, status: 422, error: "A CPU name is 3 to 200 characters." };
-  if (code === undefined || !code) return { ok: false, status: 422, error: "A CPU has a code of capitals, digits and hyphens, for example CPU-OXYSAFE-001." };
-  if (!(RISKS as readonly string[]).includes(risk)) return { ok: false, status: 422, error: "Choose the CPU risk category." };
-  if (!Number.isInteger(complexity) || complexity < 1 || complexity > 5) return { ok: false, status: 422, error: "CPU complexity is 1 to 5." };
-  if (!Number.isInteger(months) || months < 1 || months > 120) return { ok: false, status: 422, error: "Reassessment is 1 to 120 months." };
+  if (revisionOnly(g.fw)) return REVISION_ONLY;
+  const cp = parseCpu(b);
+  if (!cp.ok) return { ok: false, status: 422, error: cp.error };
+  const { name, description, code, risk, complexity, months } = cp.value;
   const id = crypto.randomUUID();
   if (!(await authored(admin, actor, "cfca_cpu_created", "framework", g.fw.id, g.fw.name, { cpu_id: id, code, practice_id: pr.id }))) return NOT_RECORDED;
   const { error } = await admin.from("clinical_practice_units").insert({ id, practice_id: pr.id, name, description, code, risk_category: risk, complexity, reassessment_months: months, pub_status: "draft", sort_order: 1 });
   return error ? { ok: false, status: 422, error: "The CPU could not be created." } : { ok: true, id };
+}
+
+/** rename_practice { practiceId, name, code, description? } on a DRAFT framework (published: the revision draft, 771). */
+export async function renamePractice(admin: any, actor: Actor, b: any): Promise<Result> {
+  const pr = await practiceInFramework(admin, b?.practiceId);
+  if (!pr) return { ok: false, status: 404, error: "That practice does not exist." };
+  const g = await editableFramework(admin, pr.framework_id);
+  if (!g.ok) return g;
+  if (revisionOnly(g.fw)) return REVISION_ONLY;
+  const lab = parsePracticeLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  if (!(await authored(admin, actor, "cfca_practice_renamed", "framework", g.fw.id, g.fw.name, { practice_id: pr.id, code: lab.value.code }))) return NOT_RECORDED;
+  const { error } = await admin.from("practices").update(lab.value).eq("id", pr.id);
+  return error ? { ok: false, status: 422, error: "The practice could not be saved." } : { ok: true };
+}
+
+/** rename_cpu { cpuId, name, code, description? } on a DRAFT framework. Its risk is not changed here. */
+export async function renameCpu(admin: any, actor: Actor, b: any): Promise<Result> {
+  if (!isId(b?.cpuId)) return { ok: false, status: 400, error: "Choose a CPU." };
+  const { data: u } = await admin.from("clinical_practice_units").select("id, practice_id").eq("id", b.cpuId).maybeSingle();
+  const pr = u ? await practiceInFramework(admin, u.practice_id) : null;
+  if (!u || !pr) return { ok: false, status: 404, error: "That CPU does not exist." };
+  const g = await editableFramework(admin, pr.framework_id);
+  if (!g.ok) return g;
+  if (revisionOnly(g.fw)) return REVISION_ONLY;
+  const lab = parseCpuLabel(b);
+  if (!lab.ok) return { ok: false, status: 422, error: lab.error };
+  if (!(await authored(admin, actor, "cfca_cpu_renamed", "framework", g.fw.id, g.fw.name, { cpu_id: u.id, code: lab.value.code }))) return NOT_RECORDED;
+  const { error } = await admin.from("clinical_practice_units").update(lab.value).eq("id", u.id);
+  return error ? { ok: false, status: 422, error: "The CPU could not be saved." } : { ok: true };
 }
 
 /** The CPU a competency may name: a CPU of a practice in the SAME framework. Returns its practice, or why not. */

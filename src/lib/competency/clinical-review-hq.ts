@@ -72,6 +72,16 @@ export async function reviewQueue(admin: any, reviewerId: string): Promise<{ app
   if (comps === null) return null;
   const doms = await rows(admin.from("framework_domains").select("id, name, framework_id").in("id", [...new Set([...comps.map((c: any) => c.domain_id), ...proposals.map((p: any) => p.domain_id)])]));
   if (doms === null) return null;
+  // 771: a new competency may be proposed in a NEW domain of its revision, which has no live row yet. Its framework is the
+  // revision's (framework_revision_open_hashes says which), its name the revision's. Unreadable or before 771: not listed.
+  const missing = [...new Set(proposals.filter((p: any) => p.is_new && p.domain_id && !doms.some((d: any) => d.id === p.domain_id)).map((p: any) => p.domain_id as string))];
+  if (missing.length) {
+    const nd = await (async () => { try { const r = await admin.from("framework_revision_domain").select("domain_id, name, revision_id").in("domain_id", missing).is("origin_domain_id", null); return r.error ? [] : r.data ?? []; } catch { return []; } })();
+    for (const d of nd as any[]) {
+      const p = proposals.find((x: any) => x.domain_id === d.domain_id && x.revision_id === d.revision_id);
+      if (p) doms.push({ id: d.domain_id, name: d.name, framework_id: p.framework_id });
+    }
+  }
   const fws = await rows(admin.from("frameworks").select("id, name, profession_term_id, specialty_term_id").in("id", [...new Set([...doms.map((d: any) => d.framework_id), ...methodFw])]).is("hospital_id", null));
   if (fws === null) return null;
   const hash = new Map<string, string>(hashes.map((h: any) => [h.competency_id, h.content_hash]));
