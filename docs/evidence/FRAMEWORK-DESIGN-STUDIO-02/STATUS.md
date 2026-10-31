@@ -64,8 +64,8 @@ Reuse the existing infrastructure. No-code first. No parallel systems. Testing p
 
 | Slice | Scope | State |
 |---|---|---|
-| S1 | Server (a): criteria CRUD on drafts; append-mode import; spreadsheet template and parser into a package; draft vs published diff | pending |
-| S2 | UI (a): properties panel, criteria editor, touch drag helper, registry labels, compare view, spreadsheet import page | pending |
+| S1 | Server (a): criteria CRUD on drafts; append-mode import; spreadsheet template and parser into a package; draft vs published diff | built, unpushed |
+| S2 | UI (a): properties panel, criteria editor, touch drag helper, registry labels, compare view, spreadsheet import page | DONE (built, unpushed, not browser-walked) |
 | S3 | Server (b): migration 760 Areas; layout draft extension for organisational cross-parent moves; substantive moves in drafts | pending |
 | S4 | UI (b): Areas in the tree, cross-parent drag, visual framework map | pending |
 | S5/S6 | D2 revision drafts, server (770) and UI | pending |
@@ -129,3 +129,13 @@ Other changes:
 **Owner decision needed (retire).** `competency_content_hash` (395/670) hashes every skill row, active or not, so retiring a criterion does not change the fingerprint. Retire and restore are therefore refused (409) once a competency has any clinical content version. Making them usable after review needs a migration that leaves inactive rows out of the hash. Existing hashes would be unchanged wherever no inactive criteria exist.
 
 Tests: 5 new or extended vitest files, plus review-pack and the authoring suites, all pass. tsc and eslint are clean. No harness covers authoring.
+
+### 31 Oct 2026, S2 UI (branch hq/framework-studio-02a): built, unpushed. No migration, no server change.
+
+- **Properties panel** (PropertiesPanel.tsx) replaces the old Criteria tabs and the collapsed editor: the existing update_competency form, then the criteria grouped by section (registry order) with Edit, Add, Retire, Restore and Move to (another competency or section), reorder grip and arrows, and a link "Assessment methods & evidence" to the Verification Studio (no per-competency deep link exists, so it opens the studio). Substantive actions (text, add, retire, restore, move) show "This change needs clinical review again". Criteria controls are enabled in a DRAFT framework only: otherwise they are disabled with "Changes to a published framework go through a revision draft (coming next)." The competency fields form is unchanged (still saves in a draft or published framework as before; disabled only when the framework is in review or archived).
+- **Layout:** the panel is the main column beside the explorer (right on md and up, below on a phone). No separate centre canvas, so no horizontal squeeze at 768.
+- **Pointer drag** (reorder-ui.ts: startPointerDrag, movePointerDrag, dropOf, readDropTarget): replaces native HTML5 drag. The grip starts it, a 6 px threshold separates a tap or scroll from a drag, drops only inside the list the drag started in. Arrows and the live region stay. Retired criteria keep their slots in the order sent to reorder_layout (the server wants the whole section).
+- **Compare with published:** tab ?tab=compare, server-rendered from loadFrameworkDiff (CompareView.tsx, diff-format.ts), with the "no published version" state.
+- **Spreadsheet import:** Overview & governance, draft frameworks only, "Add competencies from a spreadsheet" (SheetImport.tsx): template download, CSV upload, preview (adds, unchanged, row errors), Confirm import (append). The JSON import box on the library page is untouched.
+- **Labels:** every numbered criteria list in the Studio uses criterionLabel from the registry (the only hard-coded numbering left was the tabs, now removed). Retired criteria are excluded from counts and numbering and shown as "off".
+- Tests: reorder-ui and diff-format (13 pass). tsc and eslint clean. Not walked in a browser (needs an authenticated HQ session and data).
