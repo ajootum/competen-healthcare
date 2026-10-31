@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { getLearningSession, learningEvents, recordLearningEvent, updateLearningSession } from "@/lib/individual/scholar/store";
-import { sessionTopics } from "@/lib/individual/scholar/learn";
+import { sectionProfiles, sessionTopics } from "@/lib/individual/scholar/learn";
 import { sessionView } from "@/lib/individual/scholar/learn-view";
 import { displaySessionTitle } from "@/lib/individual/scholar/learn-search";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -26,9 +26,10 @@ export async function GET(_req: Request, ctx2: { params: Promise<{ id: string }>
   const r = await getLearningSession(ctx.admin, ctx.userId, id);
   if (!r.ok) return NextResponse.json({ error: r.notProvisioned ? "Learning history is not available here." : "Your session could not be read just now." }, { status: r.notProvisioned ? 409 : 503 });
   if (!r.data) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const [events, topics] = await Promise.all([
+  const [events, topics, profiles] = await Promise.all([
     learningEvents(ctx.admin, ctx.userId, id),
     sessionTopics(ctx.admin, ctx.userId, r.data.steps.flatMap(s => s.sections.map(x => x.chunkId))),
+    sectionProfiles(ctx.admin, ctx.userId, r.data.steps.flatMap(s => s.sections.map(x => x.chunkId))),
   ]);
   const byStep: Record<number, { actions: string[]; verdict: string | null }> = {};
   for (const e of events.ok ? events.data : []) {
@@ -38,7 +39,7 @@ export async function GET(_req: Request, ctx2: { params: Promise<{ id: string }>
   }
   const s = r.data.session;
   return NextResponse.json({
-    session: sessionView({ id: s.id, recorded: true, title: displaySessionTitle(s.title), scopeKind: s.scopeKind, currentStep: Math.min(s.currentStep, Math.max(0, r.data.steps.length - 1)), status: s.status, coverage: null, steps: r.data.steps, topics }),
+    session: sessionView({ id: s.id, recorded: true, title: displaySessionTitle(s.title), scopeKind: s.scopeKind, currentStep: Math.min(s.currentStep, Math.max(0, r.data.steps.length - 1)), status: s.status, coverage: null, steps: r.data.steps, topics, profiles }),
     progress: byStep, lastActiveAt: s.lastActiveAt,
   });
 }

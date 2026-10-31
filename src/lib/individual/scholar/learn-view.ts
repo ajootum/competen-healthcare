@@ -7,7 +7,7 @@ import { citeChunk } from "./extract";
 import type { IndividualPolicy } from "../policy";
 import { LEARN_ACTIONS, SUPPLEMENTARY_LABEL, WITHHELD_NEAREST_MAX, WITHHELD_WHY, type LearnAction } from "./config";
 import type { SupplementaryCheck } from "./generation";
-import { stepTitle } from "./learn";
+import { lessonOutline, type SectionProfile } from "./learn";
 import { displayTitle } from "./learn-search";
 import type { LearningStep } from "./store";
 
@@ -19,17 +19,18 @@ export type SessionView = {
   currentStep: number;
   status: "active" | "completed";
   coverage: { sections: number; of: number } | null;
-  steps: { step: number; title: string; sections: { chunkId: string; materialId: string; materialTitle: string; citation: string }[] }[];
+  /** SCHOLAR-LEARN-FIX-01: each lesson's title and objective, from the material's own headings and topics (learn.lessonOutline, no AI). */
+  steps: { step: number; title: string; objective: string; sections: { chunkId: string; materialId: string; materialTitle: string; citation: string }[] }[];
 };
 
 export function sessionView(input: {
   id: string | null; recorded: boolean; title: string; scopeKind: string; currentStep: number; status: "active" | "completed";
-  coverage: { sections: number; of: number } | null; steps: LearningStep[]; topics: ReadonlyMap<string, readonly string[]>;
+  coverage: { sections: number; of: number } | null; steps: LearningStep[]; topics: ReadonlyMap<string, readonly string[]>; profiles?: ReadonlyMap<string, SectionProfile>;
 }): SessionView {
   return {
     id: input.id, recorded: input.recorded, title: input.title, scopeKind: input.scopeKind, currentStep: input.currentStep, status: input.status, coverage: input.coverage,
     steps: input.steps.map(s => ({
-      step: s.step, title: stepTitle(s, input.topics),
+      ...(({ title, objective }) => ({ step: s.step, title, objective }))(lessonOutline(s, input.topics, input.profiles)),
       // SCH-LEARN-UX-01: a file-like material title is shown as a title here; the act route cites the passages as stored.
       sections: s.sections.map(x => ({ chunkId: x.chunkId, materialId: x.materialId, materialTitle: displayTitle(x.materialTitle), citation: `${displayTitle(x.materialTitle)}, ${citeChunk(x, x.unit)}` })),
     })),

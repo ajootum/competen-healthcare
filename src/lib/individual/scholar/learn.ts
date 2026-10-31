@@ -11,7 +11,6 @@
 // ⚠ NOTHING HERE IS ASSESSMENT. An informal check is the student's own signal (config INFORMAL_CHECK_LABEL).
 
 import { createHash } from "node:crypto";
-import { STEP_MAX_SECTIONS } from "./config";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "./retrieval";
 import { chunksByIds, competencyChunks, getPassage, isUuid, searchCandidates, sectionLinks, sectionRefs, sectionTopicRows, sectionsOf, topicsOfSections, type LearningStep, type SectionRef } from "./store";
 import { topicIndex, topicKey } from "./learn-search";
@@ -55,36 +54,247 @@ export function storedScopeKind(scope: LearningScope, sections: readonly Section
 
 const norm = (t: string) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 
-/**
- * Pure. Sections (already in teaching order) -> the suggested steps. Consecutive sections of the same material
- * share a step, up to STEP_MAX_SECTIONS, and a new step starts where the topics change (no topic in common with
- * the step so far). At most `maxSteps`; `coverage` says how many sections the steps hold, of how many there were.
- */
-export function planSteps(sections: readonly SectionRef[], topics: ReadonlyMap<string, readonly string[]>, maxSteps: number): { steps: LearningStep[]; coverage: { sections: number; of: number } } {
-  const steps: LearningStep[] = [];
-  let cur: SectionRef[] = [], curTopics = new Set<string>();
-  const flush = () => { if (cur.length) { steps.push({ step: steps.length, sections: cur }); cur = []; curTopics = new Set(); } };
-  for (const s of sections) {
-    const t = (topics.get(s.chunkId) ?? []).map(norm).filter(Boolean);
-    const sameMaterial = cur.length > 0 && cur[cur.length - 1].materialId === s.materialId;
-    const shares = !curTopics.size || !t.length || t.some(x => curTopics.has(x));
-    if (cur.length && (!sameMaterial || cur.length >= STEP_MAX_SECTIONS || !shares)) flush();
-    if (steps.length >= maxSteps) break;
-    cur.push(s); t.forEach(x => curTopics.add(x));
-  }
-  if (steps.length < maxSteps) flush();
-  const held = steps.reduce((n, s) => n + s.sections.length, 0);
-  return { steps, coverage: { sections: held, of: sections.length } };
+// ── SCHOLAR-LEARN-FIX-01 L-A: LESSONS, NOT SLIDES ───────────────────────────────────────────────────────────────────
+//
+// Production, 31 Oct: a 47-section deck gave 8 steps covering 9 sections, and step 1 was the title slide alone. A step
+// broke wherever the next section shared no EXACT topic string, and a near-empty title or agenda slide was a step of
+// its own. The plan is now a set of LESSONS: thin sections join their neighbour, and the material is cut into at most
+// maxSteps contiguous lessons where the headings and topics change most, with sizes balanced. Still pure, still no AI,
+// still the document's own order, so it is the same every time. Saved sessions keep the steps they were given (414).
+
+/** What the planner and the lesson titles read of a section: its heading (first line), its size and its text. */
+export type SectionProfile = { heading: string | null; chars: number; content?: string };
+/** A section below this many characters (a title, agenda or divider slide) is not a lesson of its own. */
+export const LESSON_THIN_CHARS = 160;
+/** A lesson holds at most this many sections and characters (one section larger than that is a lesson alone). */
+export const LESSON_MAX_SECTIONS = 10;
+export const LESSON_MAX_CHARS = 7200;
+/** A lesson aims at the planned material's size over maxSteps, never below this: a short material is one or two lessons. */
+export const LESSON_MIN_TARGET_CHARS = 1500;
+/** The size assumed for a section whose text was not read (no profile): an ordinary section, never a thin one. */
+const UNREAD_CHARS = 600;
+/** Cutting between two sections costs this times how alike they are (0-1); a lesson's distance from the target size costs its square. */
+const CUT_WEIGHT = 1;
+
+const SPEAKER_NOTES = /^speaker notes:?$/i;
+/** Headings that say where you are, not what is taught: never a lesson title. */
+const GENERIC_HEADING = /^(objectives?|learning objectives?|learning outcomes?|aims?|agenda|outline|contents?|overview|introduction|intro|summary|conclusions?|references?|bibliography|questions?|any questions\??|thank you|thanks|tools|discussion|activity|exercise|notes?|appendix)$/i;
+const FUNCTION_WORD = /^(a|an|and|as|at|by|for|from|in|into|of|on|or|the|to|vs|with|within|without)$/i;
+const HEADING_STOP = new Set("a an and are as at be by for from how in into is it its of on or the this to what when where which who why with your".split(" "));
+
+/** Pure. A section's first line as a heading, cleaned, or null where it is not one (a sentence, a number, the notes marker). */
+export function sectionHeading(content: string): string | null {
+  const line = (content.split("\n").map(l => l.trim()).find(Boolean) ?? "").replace(/\s+/g, " ");
+  if (!line || SPEAKER_NOTES.test(line) || !/\p{L}/u.test(line)) return null;
+  const words = line.split(" ");
+  // A full sentence (a quotation, a definition) is content, not a heading.
+  if (line.length > 90 || words.length > 12 || (/[.!]$/.test(line) && words.length > 6)) return null;
+  // A citation in brackets ("Just Culture (Leape, 2000)") is where the slide came from, not what it teaches.
+  return line.replace(/\s*\([^)]*\b\d{4}\b[^)]*\)/g, "").replace(/[\s:;,.–—-]+$/u, "").trim() || null;
 }
 
-/** Pure. A step's name for the student: its topics where known, otherwise where it is in the notes. */
-export function stepTitle(step: LearningStep, topics: ReadonlyMap<string, readonly string[]>): string {
+/** Pure. A section's profile from its text: the heading, and its size without the speaker-notes marker. */
+export const sectionProfile = (content: string): SectionProfile =>
+  ({ heading: sectionHeading(content), chars: content.replace(/\n*Speaker notes:\n*/i, " ").trim().length, content });
+
+/** Pure. The words of a heading or topic as the planner compares them: lower-case, no stop words, five-letter stems. */
+export function stems(text: string): string[] {
+  const out = new Set<string>();
+  for (const w of text.toLowerCase().normalize("NFKD").split(/[^a-z0-9]+/)) {
+    if (w.length < 3 || HEADING_STOP.has(w) || /^\d+$/.test(w)) continue;
+    out.add(w.length > 5 ? w.slice(0, 5) : w);
+  }
+  return [...out];
+}
+
+type Unit = { sections: SectionRef[]; chars: number; material: string; head: Set<string>; topic: Set<string> };
+
+/** Pure. How alike two neighbouring units are, 0-1: their headings' word overlap or their topics' Jaccard, whichever is higher. */
+function likeness(a: Unit, b: Unit): number {
+  const common = (x: Set<string>, y: Set<string>) => { let n = 0; for (const w of x) if (y.has(w)) n++; return n; };
+  const head = a.head.size && b.head.size ? common(a.head, b.head) / Math.min(a.head.size, b.head.size) : 0;
+  const both = a.topic.size && b.topic.size ? common(a.topic, b.topic) : 0;
+  const topic = both ? both / (a.topic.size + b.topic.size - both) : 0;
+  return Math.max(head, topic);
+}
+
+/**
+ * Pure. Sections (already in teaching order) -> the suggested LESSONS (SCHOLAR-LEARN-FIX-01).
+ *   1. A thin section (under LESSON_THIN_CHARS: a title, agenda or divider slide) joins the next section of its material
+ *      (the previous one at the material's end), so it is never a lesson alone.
+ *   2. Capacity: at most maxSteps lessons of LESSON_MAX_SECTIONS sections and LESSON_MAX_CHARS characters each. What is
+ *      beyond that is left unplanned FROM THE END, so the lessons always cover one contiguous run from the start, and
+ *      `coverage` says how many sections they hold, of how many there were.
+ *   3. That run is cut into at most maxSteps contiguous lessons, never across materials, by the cuts that cost least
+ *      (dynamic programming, deterministic): cutting between alike neighbours (heading words, topics) costs their
+ *      likeness, and each lesson costs its squared distance from the target size (the run's size over maxSteps).
+ * Without profiles (text not read) every section counts as an ordinary one with no heading, and topics alone decide.
+ */
+export function planSteps(sections: readonly SectionRef[], topics: ReadonlyMap<string, readonly string[]>, maxSteps: number, profiles: ReadonlyMap<string, SectionProfile> = new Map()): { steps: LearningStep[]; coverage: { sections: number; of: number } } {
+  const max = Math.max(1, Math.floor(maxSteps));
+  const charsOf = (s: SectionRef) => profiles.get(s.chunkId)?.chars ?? UNREAD_CHARS;
+  const unitOf = (list: SectionRef[]): Unit => ({
+    sections: list, chars: list.reduce((t, s) => t + charsOf(s), 0), material: list[0].materialId,
+    head: new Set(list.filter(s => charsOf(s) >= LESSON_THIN_CHARS).flatMap(s => stems(profiles.get(s.chunkId)?.heading ?? ""))),
+    topic: new Set(list.flatMap(s => (topics.get(s.chunkId) ?? []).flatMap(stems))),
+  });
+  // 1. Units: each substantive section with the thin ones just before it; thin ones at a material's end join the last.
+  const units: Unit[] = [];
+  let pending: SectionRef[] = [];
+  const settle = () => {
+    if (!pending.length) return;
+    const prev = units[units.length - 1];
+    if (prev && prev.material === pending[0].materialId) units[units.length - 1] = unitOf([...prev.sections, ...pending]);
+    else units.push(unitOf(pending));
+    pending = [];
+  };
+  for (const s of sections) {
+    if (pending.length && pending[0].materialId !== s.materialId) settle();
+    // A thin section that carries the previous one on (its heading words are all the previous heading's: the last,
+    // short slide of "FMEA") joins it; any other thin section (a title, an agenda) leads into what follows.
+    const prev = units[units.length - 1];
+    const words = stems(profiles.get(s.chunkId)?.heading ?? "");
+    if (charsOf(s) < LESSON_THIN_CHARS && !pending.length && prev?.material === s.materialId && words.length && words.every(w => prev.head.has(w))) {
+      units[units.length - 1] = { ...prev, sections: [...prev.sections, s], chars: prev.chars + charsOf(s) };
+      continue;
+    }
+    pending.push(s);
+    if (charsOf(s) >= LESSON_THIN_CHARS) { units.push(unitOf(pending)); pending = []; }
+  }
+  settle();
+  // 2. Capacity, from the start.
+  let n = 0, secs = 0, chars = 0;
+  while (n < units.length && (n === 0 || (secs + units[n].sections.length <= max * LESSON_MAX_SECTIONS && chars + units[n].chars <= max * LESSON_MAX_CHARS))) {
+    secs += units[n].sections.length; chars += units[n].chars; n++;
+  }
+  // 3. The cuts. best[i][k]: the least cost of units 0..i-1 as k lessons; from[i][k]: where the last lesson starts.
+  const preC = [0], preS = [0];
+  for (let j = 0; j < n; j++) { preC.push(preC[j] + units[j].chars); preS.push(preS[j] + units[j].sections.length); }
+  const target = Math.max(LESSON_MIN_TARGET_CHARS, chars / max);
+  const cut = (i: number) => (i <= 0 || units[i].material !== units[i - 1].material ? 0 : CUT_WEIGHT * likeness(units[i - 1], units[i]));
+  const INF = Number.POSITIVE_INFINITY;
+  const best: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(max + 1).fill(INF));
+  const from: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(max + 1).fill(-1));
+  best[0][0] = 0;
+  for (let i = 1; i <= n; i++) {
+    for (let a = i - 1; a >= 0; a--) {
+      // A lesson is one material, within the size caps (one unit alone always fits). Wider only grows, so stop.
+      if (a < i - 1 && (units[a].material !== units[i - 1].material || preC[i] - preC[a] > LESSON_MAX_CHARS || preS[i] - preS[a] > LESSON_MAX_SECTIONS)) break;
+      const d = (preC[i] - preC[a] - target) / target;
+      const own = d * d + cut(a);
+      for (let k = 1; k <= max; k++) {
+        if (best[a][k - 1] === INF) continue;
+        const c = best[a][k - 1] + own;
+        if (c < best[i][k] - 1e-12) { best[i][k] = c; from[i][k] = a; }
+      }
+    }
+  }
+  // The longest run the lessons can hold (all of it, unless there are more materials than steps), at its least cost.
+  let end = n;
+  while (end > 0 && best[end].every(v => v === INF)) end--;
+  let k = 0;
+  for (let j = 1; j <= max; j++) if (best[end][j] < (k ? best[end][k] : INF) - 1e-12) k = j;
+  const bounds: [number, number][] = [];
+  for (let i = end; k > 0 && i > 0; k--) { const a = from[i][k]; bounds.unshift([a, i]); i = a; }
+  const steps = bounds.map(([a, b], step) => ({ step, sections: units.slice(a, b).flatMap(u => u.sections) }));
+  return { steps, coverage: { sections: steps.reduce((t, s) => t + s.sections.length, 0), of: sections.length } };
+}
+
+/** A lesson's name and objective for the student, from the material's own headings and topics (no AI). */
+export type LessonOutline = { title: string; objective: string; focus: string[] };
+const TITLE_MAX = 80;
+const DESCRIBE_NOUN = /\b(diagram|worksheet|framework|model|tool|tools|cycle|analysis|process|steps|method|methods|chart|bundle|checklist|template|pathway|algorithm|scale|score)\b/i;
+
+/** Pure. A heading in sentence case: a Title-Case word becomes lower case only where the material itself writes it so. */
+export function sentenceCase(heading: string, content = ""): string {
+  const lower = new Set((content.match(/(?:^|[^\p{L}])(\p{Ll}[\p{L}'-]*)/gu) ?? []).map(w => w.replace(/^[^\p{L}]+/u, "")));
+  const proper = new Set([...content.matchAll(/\p{Ll}[\p{L}'-]*,? (\p{Lu}\p{Ll}+)/gu)].map(m => m[1]));
+  const words = heading.replace(/\s+/g, " ").trim().split(" ");
+  const caps = words.filter(w => /\p{L}/u.test(w)).every(w => w === w.toUpperCase());
+  const out = words.map((w, i) => {
+    const bare = w.replace(/^[^\p{L}\d]+|[^\p{L}\d]+$/gu, "");
+    if (!bare) return w;
+    const low = bare.toLowerCase();
+    if (i === 0) return caps && bare.length > 1 ? w.replace(bare, bare[0] + bare.slice(1).toLowerCase()) : w.replace(bare, bare[0].toUpperCase() + bare.slice(1));
+    if (FUNCTION_WORD.test(bare)) return w.replace(bare, low);
+    // An acronym (FMEA, PDSA, WHO) stays, unless the whole heading is shouted and the material writes the word in lower case.
+    if (bare === bare.toUpperCase() && bare.length > 1) return caps && lower.has(low) ? w.replace(bare, low) : w;
+    // A Title-Case word is lower-cased where the material writes it in lower case, or never writes it capitalised
+    // after a lower-case word (a name it does: "the Donabedian framework" keeps Donabedian).
+    if (/^\p{Lu}\p{Ll}+$/u.test(bare) && (lower.has(low) || !proper.has(bare))) return w.replace(bare, low);
+    return w;
+  });
+  return out.join(" ");
+}
+
+const clip = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, s.lastIndexOf(" ", n) > n / 2 ? s.lastIndexOf(" ", n) : n).replace(/[\s,;:]+$/, "")}`);
+/** The first letter in lower case inside a sentence, unless the first word is an acronym (PDSA) or a name followed by a capitalised word. */
+const lowerFirst = (s: string) => (/^\p{Lu}(\p{Ll}*)(\s|$)/u.test(s) && !/^\p{Lu}\p{Ll}+\s+\p{Lu}/u.test(s) ? s[0].toLowerCase() + s.slice(1) : s);
+const listOf = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+
+/**
+ * Pure. A lesson's title and objective, deterministic, from what the lesson actually holds:
+ *   title      its best heading -- the heading that carries most of the lesson's text (a slide title, or the first
+ *              heading line of its most substantive section), never a generic one (Objectives, Agenda ...), cleaned,
+ *              sentence-cased, at most 80 characters. Otherwise its top one or two topics phrased as a title. Otherwise
+ *              where it is in the notes.
+ *   objective  one sentence, "Describe ..." for a tool, model or process and "Explain ..." otherwise, naming the title and
+ *              up to two other headings (or topics) the lesson holds.
+ *   focus      the headings and topics used, for the lesson's key terms (grounding).
+ */
+export function lessonOutline(step: LearningStep, topics: ReadonlyMap<string, readonly string[]>, profiles: ReadonlyMap<string, SectionProfile> = new Map()): LessonOutline {
+  const groups = new Map<string, { heading: string; chars: number; content: string; first: number }>();
+  step.sections.forEach((s, i) => {
+    const p = profiles.get(s.chunkId);
+    if (!p?.heading || GENERIC_HEADING.test(p.heading.replace(/[?!.:]+$/, "").trim())) return;
+    const key = stems(p.heading).join(" ") || norm(p.heading);
+    const g = groups.get(key) ?? { heading: p.heading, chars: 0, content: "", first: i };
+    g.chars += p.chars; g.content += `\n${p.content ?? ""}`;
+    groups.set(key, g);
+  });
+  const ranked = [...groups.values()].sort((a, b) => b.chars - a.chars || a.first - b.first);
   const seen = new Map<string, string>();
-  for (const s of step.sections) for (const t of topics.get(s.chunkId) ?? []) if (!seen.has(norm(t))) seen.set(norm(t), t);
-  const names = [...seen.values()].slice(0, 3);
-  if (names.length) return names.join(", ");
-  const first = step.sections[0];
-  return first ? `${first.materialTitle}, ${first.pageFrom !== null ? `${first.unit} ${first.pageFrom}` : `section ${first.ordinal}`}` : "This step";
+  for (const s of step.sections) for (const t of topics.get(s.chunkId) ?? []) if (norm(t) && !seen.has(norm(t))) seen.set(norm(t), t.trim());
+  const topicNames = [...seen.values()];
+  const content = step.sections.map(s => profiles.get(s.chunkId)?.content ?? "").join("\n");
+  let title: string;
+  if (ranked.length) title = clip(sentenceCase(ranked[0].heading, content), TITLE_MAX);
+  else if (topicNames.length) title = clip(sentenceCase(listOf(topicNames.slice(0, 2)), topicNames.join(" ").toLowerCase()), TITLE_MAX);
+  else {
+    const first = step.sections[0];
+    title = first ? `${first.materialTitle}, ${first.pageFrom !== null ? `${first.unit} ${first.pageFrom}` : `section ${first.ordinal}`}` : "This step";
+    return { title, objective: "Explain what this part of your notes says.", focus: [] };
+  }
+  // Up to two more headings (then topics), each adding words the title and the ones before it do not already say.
+  const said = new Set(stems(title));
+  const more: string[] = [];
+  for (const x of [...ranked.slice(1).map(g => sentenceCase(g.heading, content)), ...topicNames].map(x => x.replace(/[?!.]+$/, "").trim())) {
+    if (more.length >= 2) break;
+    const w = stems(x);
+    if (!w.length || w.every(t => said.has(t))) continue;
+    more.push(x); w.forEach(t => said.add(t));
+  }
+  const what = title.match(/^what (is|are) (.+?)\??$/i);
+  const subject = what ? `what ${what[2]} ${what[1].toLowerCase()}` : lowerFirst(title.replace(/[?!]+$/, ""));
+  const verb = !what && DESCRIBE_NOUN.test(title) ? "Describe" : "Explain";
+  const objective = `${verb} ${subject}${more.length ? `, including ${listOf(more.map(lowerFirst))}` : ""}.`;
+  return { title, objective, focus: [ranked.length ? ranked[0].heading : title, ...more] };
+}
+
+/** Pure. A step's name for the student (lessonOutline's title). Callers without profiles get the topics-or-place title. */
+export function stepTitle(step: LearningStep, topics: ReadonlyMap<string, readonly string[]>, profiles?: ReadonlyMap<string, SectionProfile>): string {
+  return lessonOutline(step, topics, profiles).title;
+}
+
+/** The profiles of some of the person's own sections (heading and size), read in batches. Unreadable: none (planning still works). */
+export async function sectionProfiles(admin: any, userId: string, chunkIds: readonly string[]): Promise<Map<string, SectionProfile>> {
+  const ids = [...new Set(chunkIds)];
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += 100) batches.push(ids.slice(i, i + 100));
+  const read = await Promise.all(batches.map(b => chunksByIds(admin, userId, b)));
+  const out = new Map<string, SectionProfile>();
+  for (const r of read) if (r.ok) for (const c of r.data) out.set(c.id, sectionProfile(c.content));
+  return out;
 }
 
 export type ResolvedScope = { ok: true; title: string; sections: SectionRef[]; topic: string | null; competencyId: string | null } | { ok: false; status: number; error: string };
