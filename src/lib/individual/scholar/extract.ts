@@ -1,4 +1,5 @@
 import type JSZip from "jszip";
+import type { ImageKind } from "./slide-images";
 import { CHUNK_MAX, CHUNK_TARGET, DOCX_MIME, MAX_MATERIAL_CHARS, MAX_PDF_PAGES, MAX_PPTX_SLIDES, PDF_MIME, PPTX_MIME, TEXT_MIME, type MaterialMime } from "./config";
 
 // ── UPLOAD → TEXT → PAGE-REFERENCED CHUNKS ── COMPETEN-IND-004 s1, COMPETEN-IND-002 s3.2(2) ──────────────
@@ -226,18 +227,20 @@ async function extractPptx(buffer: Uint8Array, maxSlides: number): Promise<Extra
   }
 }
 
-export type SlideImages = { slide: number; images: { bytes: Uint8Array; kind: "png" | "jpeg" }[]; unsupported: string[]; tooLarge: boolean };
+export type SlideImages = { slide: number; images: { bytes: Uint8Array; kind: ImageKind }[]; unsupported: string[]; tooLarge: boolean };
 
 /**
- * SCHOLAR-UPLOAD-FIX: the PNG and JPEG pictures of the named slides (numbered as extractPptx numbers them), from the
- * stored file. The archive is screened first, exactly as at upload. A picture whose bytes are not really PNG or JPEG
- * is reported unsupported; pictures beyond SLIDE_IMAGE_LIMITS.bytesPerSlide are left out and the slide says so.
+ * SCHOLAR-UPLOAD-FIX: the PNG, JPEG, TIFF, BMP, GIF and WebP pictures of the named slides (numbered as extractPptx
+ * numbers them), from the stored file. The archive is screened first, exactly as at upload. A picture whose bytes are
+ * not really one of those is reported unsupported. PNG / JPEG count toward SLIDE_IMAGE_LIMITS.bytesPerSlide and are left
+ * out beyond it; a picture to be converted (TIFF, BMP, GIF, WebP) is limited to MAX_CONVERT_INPUT_BYTES on its own and its
+ * CONVERTED size is counted later (slide-reading.ts). Either way the slide says "too large".
  */
 export async function pictureSlideImages(buffer: Uint8Array, slides: readonly number[]): Promise<{ ok: true; slides: SlideImages[] } | { ok: false; reason: "unreadable" | "unsafe"; detail: string }> {
   const z = await openOfficeZip(buffer);
   if (!z.ok) return z;
   const { zip } = z;
-  const { slidePictures, imageKind, SLIDE_IMAGE_LIMITS } = await import("./slide-images");
+  const { slidePictures, imageKind, isConvertibleKind, SLIDE_IMAGE_LIMITS, MAX_CONVERT_INPUT_BYTES } = await import("./slide-images");
   try {
     const parts = slidePartNames(Object.keys(zip.files));
     const out: SlideImages[] = [];
@@ -255,8 +258,12 @@ export async function pictureSlideImages(buffer: Uint8Array, slides: readonly nu
         if (!data) continue;
         const kind = imageKind(data);
         if (!kind) { unsupported.push(part.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() ?? "unknown"); continue; }
-        if (bytes + data.byteLength > SLIDE_IMAGE_LIMITS.bytesPerSlide) { tooLarge = true; continue; }
-        bytes += data.byteLength;
+        if (isConvertibleKind(kind)) {
+          if (data.byteLength > MAX_CONVERT_INPUT_BYTES) { tooLarge = true; continue; }
+        } else {
+          if (bytes + data.byteLength > SLIDE_IMAGE_LIMITS.bytesPerSlide) { tooLarge = true; continue; }
+          bytes += data.byteLength;
+        }
         images.push({ bytes: data, kind });
       }
       out.push({ slide: n, images, unsupported: [...new Set(unsupported)], tooLarge });

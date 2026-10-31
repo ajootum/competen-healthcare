@@ -7,7 +7,8 @@ import { addPictureSlideSections, getMaterial, listChunks, materialBytes, materi
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "./http";
 import { TRANSCRIBE_PROMPT_VERSION, runTranscription } from "./exam-answer";
 import { EXAM_ACTIVITY, TRANSCRIBE_BATCH } from "./exam-service";
-import { MAX_AI_SLIDES_PER_MATERIAL, hasReadableText, planPictureSlides, type NewChunk } from "./slide-images";
+import { MAX_AI_SLIDES_PER_MATERIAL, SLIDE_IMAGE_LIMITS, hasReadableText, isConvertibleKind, planPictureSlides, type NewChunk } from "./slide-images";
+import { convertToPng } from "./slide-convert";
 
 // ── READING PICTURE-ONLY SLIDES WITH AI ── SCHOLAR-UPLOAD-FIX ──────────────────────────────────────────────────────
 //
@@ -54,8 +55,17 @@ async function slidesPdf(slides: SlideImages[]): Promise<{ base64: string; pages
   const W = 960, GAP = 12, MAX_H = 14000;
   for (const s of slides) {
     const embedded = [];
+    let bytes = 0;
     for (const img of s.images) {
-      try { embedded.push(img.kind === "png" ? await doc.embedPng(img.bytes) : await doc.embedJpg(img.bytes)); } catch { /* an image pdf-lib cannot read is left out */ }
+      try {
+        // TIFF / BMP / GIF / WebP become PNG first; one sharp or pdf-lib cannot read is left out, never a crash.
+        const data = isConvertibleKind(img.kind) ? await convertToPng(img.bytes) : img.bytes;
+        if (!data) continue;
+        if (bytes + data.byteLength > SLIDE_IMAGE_LIMITS.bytesPerSlide) continue; // the slide's combined size stays bounded
+        const e = img.kind === "jpeg" ? await doc.embedJpg(data) : await doc.embedPng(data);
+        bytes += data.byteLength;
+        embedded.push(e);
+      } catch { /* an image pdf-lib cannot read is left out */ }
     }
     if (!embedded.length) continue;
     const dims = embedded.map(e => ({ e, w: W, h: (e.height / e.width) * W }));

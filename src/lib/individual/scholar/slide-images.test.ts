@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
+import sharp from "sharp";
 import { MAX_AI_SLIDES_PER_MATERIAL, hasReadableText, imageKind, mediaPart, parseRels, planChunkInsertion, planPictureSlides, slidePictures } from "./slide-images";
 import { aiReadSlides, pictureSlideImages, qualitySummary, slidePartNames } from "./extract";
 import { slideSkipReason } from "./slide-reading";
+import { CONVERT_MAX_DIMENSION, MAX_CONVERT_INPUT_BYTES, convertToPng } from "./slide-convert";
 
 // SCHOLAR-UPLOAD-FIX: the picture-only slide reader's pure parts -- which pictures, which slides, where the sections go.
 
@@ -40,6 +42,24 @@ describe("slide pictures from the slide's own .rels", () => {
     expect(imageKind(PNG)).toBe("png");
     expect(imageKind(JPG)).toBe("jpeg");
     expect(imageKind(new Uint8Array([0x01, 0x00, 0x00, 0x00, 0, 0, 0, 0]))).toBeNull(); // an EMF header
+  });
+  it("TIFF (both byte orders), BMP, GIF and WebP are recognised by their magic bytes", () => {
+    const pad = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    expect(imageKind(new Uint8Array([0x49, 0x49, 0x2a, 0x00, ...pad]))).toBe("tiff");
+    expect(imageKind(new Uint8Array([0x4d, 0x4d, 0x00, 0x2a, ...pad]))).toBe("tiff");
+    expect(imageKind(new Uint8Array([0x42, 0x4d, ...pad]))).toBe("bmp");
+    expect(imageKind(new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, ...pad]))).toBe("gif");
+    expect(imageKind(new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4, 0x57, 0x45, 0x42, 0x50, ...pad]))).toBe("webp");
+    expect(imageKind(new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4, 0x57, 0x41, 0x56, 0x45, ...pad]))).toBeNull(); // RIFF WAVE
+    expect(imageKind(new Uint8Array([0x4d, 0x4d, 0x00, 0x2b, ...pad]))).toBeNull(); // BigTIFF is not claimed
+  });
+  it("tif / tiff / bmp / gif / webp are convertible; emf, wmf, svg and linked stay unsupported", () => {
+    const names = ["tif", "tiff", "bmp", "gif", "webp", "emf", "wmf", "svg"];
+    const p = slidePictures(slide(...names.map((_, i) => `rId${i + 1}`), "rId20"), rels(
+      ...names.map((n, i) => rel(`rId${i + 1}`, `../media/image${i + 1}.${n}`)), rel("rId20", "http://x/y.tif", IMG, ' TargetMode="External"'),
+    ));
+    expect(p.images).toEqual(names.slice(0, 5).map((n, i) => `ppt/media/image${i + 1}.${n}`));
+    expect(p.unsupported).toEqual(["emf", "wmf", "svg", "linked"]);
   });
 });
 
@@ -110,6 +130,27 @@ describe("the transcription and the record", () => {
     expect(slideSkipReason({ slide: 3, images: [], unsupported: [], tooLarge: true })).toBe("too_large");
     expect(slideSkipReason({ slide: 3, images: [], unsupported: [], tooLarge: false })).toBe("no_picture");
     expect(slideSkipReason({ slide: 3, images: [{ bytes: PNG, kind: "png" }], unsupported: ["emf"], tooLarge: false })).toBeNull();
+  });
+});
+
+describe("converting a picture to PNG", () => {
+  const raw = (w: number, h: number) => ({ create: { width: w, height: h, channels: 3 as const, background: "#336699" } });
+  it("a TIFF becomes a PNG no larger than 2000 px, never enlarged", async () => {
+    const tiff = await sharp(raw(3000, 1500)).tiff().toBuffer();
+    expect(imageKind(tiff)).toBe("tiff");
+    const png = await convertToPng(tiff);
+    expect(png).not.toBeNull();
+    expect(imageKind(png!)).toBe("png");
+    const m = await sharp(png!).metadata();
+    expect(Math.max(m.width!, m.height!)).toBeLessThanOrEqual(CONVERT_MAX_DIMENSION);
+    expect([m.width, m.height]).toEqual([2000, 1000]);
+    const small = await convertToPng(await sharp(raw(40, 30)).tiff().toBuffer());
+    expect((await sharp(small!).metadata()).width).toBe(40);
+  });
+  it("GIF, BMP and WebP convert too; garbage and oversized input are refused, not thrown", async () => {
+    for (const buf of [await sharp(raw(20, 20)).gif().toBuffer(), await sharp(raw(20, 20)).webp().toBuffer()]) expect(imageKind((await convertToPng(buf))!)).toBe("png");
+    expect(await convertToPng(new Uint8Array([0x4d, 0x4d, 0x00, 0x2a, 1, 2, 3, 4, 5, 6]))).toBeNull();
+    expect(await convertToPng(new Uint8Array(MAX_CONVERT_INPUT_BYTES + 1))).toBeNull();
   });
 });
 
