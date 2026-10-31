@@ -50,7 +50,7 @@ export const LIVE_EXAM_NOTICE = "Scholar is for studying past and practice paper
 
 /** The most scanned pages one paper may have transcribed, and how many go in one AI call. */
 export const TRANSCRIBE_MAX_PAGES = 12;
-const TRANSCRIBE_BATCH = 2;
+export const TRANSCRIBE_BATCH = 2;
 
 type Out = { status: number; body: Record<string, unknown> };
 const json = (status: number, body: Record<string, unknown>): Out => ({ status, body });

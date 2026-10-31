@@ -4,13 +4,14 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { FORMAT_LABEL, FORMAT_OF, NO_APPROVED_COMPETENCIES, UNIT_OF } from "@/lib/individual/scholar/config";
+import { FORMAT_LABEL, FORMAT_OF, NO_APPROVED_COMPETENCIES, PPTX_MIME, UNIT_OF } from "@/lib/individual/scholar/config";
 import { analysedProgrammes, analysisStatus, countDue, getMaterial, listChunks, listCollections, listMappings, listProgrammes, listQuestions, materialExtras, readConsent } from "@/lib/individual/scholar/store";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
 import { competencyAbsence, competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
-import { AnalysePanel, SectionTopics, type CompetencyOption, type MappingView } from "../_components/competency-client";
+import { AnalysePanel, PictureSlides, SectionTopics, type CompetencyOption, type MappingView } from "../_components/competency-client";
 import { OrganiseMaterial } from "../_components/library-client";
-import { citeChunk, qualitySummary } from "@/lib/individual/scholar/extract";
+import { aiReadSlides, citeChunk, qualitySummary } from "@/lib/individual/scholar/extract";
+import { MAX_AI_SLIDES_PER_MATERIAL, planPictureSlides } from "@/lib/individual/scholar/slide-images";
 import { PageHeader, StatePanel, Unreadable, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
@@ -111,6 +112,13 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
   const relinkable = relinkCodes?.ok && learner.programme ? relinkTargets(chunkOrder, relinkCodes.data, learner.programme.code).length : 0;
   const [paper, policy] = await Promise.all([getExamPaper(ctx.admin, ctx.userId, m.id), loadIndividualPolicy(ctx.admin)]);
   const paperOn = policy.scholarExams.enabled && paper.ok;
+  // SCHOLAR-UPLOAD-FIX: picture-only slides -- offered for an AI reading where policy allows it (slide-reading.ts), and
+  // every section such a reading added is labelled. Labelled from the stored quality record, whatever the policy is now.
+  const rawQuality = extras.qualityOn ? extras.byId.get(m.id)?.quality ?? null : null;
+  const aiRead = aiReadSlides(rawQuality);
+  const pictures = policy.scholarMaterialImageSlides === "ai_transcription" && m.mimeType === PPTX_MIME && rawQuality?.unit === "slide" && chunks.ok
+    ? planPictureSlides({ emptyUnits: rawQuality.emptyUnits, triedUnits: rawQuality.aiTriedUnits, slidesWithSections: chunks.data.map(c => c.pageFrom ?? 0), cap: MAX_AI_SLIDES_PER_MATERIAL })
+    : null;
   const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
   const byChunk = new Map<string, ReturnType<typeof questionView>[]>();
   let caseCount = 0;
@@ -131,6 +139,9 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
       <StudyNav dueCount={due} />
       {quality && (
         <p className={`mb-4 rounded-xl px-4 py-2.5 text-[13.5px] ${quality.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "border border-gray-200 bg-white text-gray-700"}`}>{quality.text}</p>
+      )}
+      {pictures && (
+        <PictureSlides materialId={m.id} slides={pictures.slides.length} beyondCap={pictures.beyondCap} consent={consentOn} />
       )}
 
       <div className="mb-6 flex flex-wrap items-start gap-3">
@@ -212,6 +223,11 @@ export default async function MaterialPage({ params }: { params: Promise<{ exper
                   <p className="text-[12px] font-bold uppercase tracking-[0.12em]" style={{ color: x.accent }}>
                     {citeChunk(c, unit).replace(/^./, s => s.toUpperCase())}{c.pageFrom !== null ? ` · section ${c.ordinal}` : ""}
                   </p>
+                  {c.pageFrom !== null && aiRead.has(c.pageFrom) && (
+                    <p className="mt-1 inline-flex rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[12.5px] font-semibold text-amber-950">
+                      Read by AI from a picture on slide {c.pageFrom} — check it against the slide
+                    </p>
+                  )}
                   <details className="mt-1 group">
                     <summary className={`cursor-pointer list-none text-[14px] leading-relaxed text-gray-800 ${focusRing}`}>
                       <span className="group-open:hidden">{c.content.length > 280 ? `${c.content.slice(0, 280).trim()}…` : c.content}</span>
