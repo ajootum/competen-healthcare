@@ -161,7 +161,9 @@ export function LearnWorkspace(props: {
     if (!r.withheld || r.recovered || r.action === "check" || r.action === "clarify" || !step) return undefined;
     const first = step.sections[0];
     return {
-      request: { question: (c.asked || step.title || "").slice(0, QUESTION_MAX), mode: recoveryMode(), materialId: first?.materialId ?? null, sectionId: first?.chunkId ?? null, withheldReason: r.reason ?? null },
+      // SCHOLAR-LEARN-FIX-01: the session's selected materials scope My notes only (a recorded session by id, read on the server).
+      request: { question: (c.asked || step.title || "").slice(0, QUESTION_MAX), mode: recoveryMode(), materialId: first?.materialId ?? null, sectionId: first?.chunkId ?? null, withheldReason: r.reason ?? null,
+        ...(session.id ? { sessionId: session.id } : { materialIds: [...new Set(session.steps.flatMap(s => s.sections.map(x => x.materialId)))].slice(0, 10) }) },
       explain: async rec => {
         const x = await act(r.action, { ...(c.extra ?? {}), recovery: rec }, c.target ?? "lesson", c.asked);
         if (!x) return { error: "Scholar could not explain this just now. Try again shortly." };

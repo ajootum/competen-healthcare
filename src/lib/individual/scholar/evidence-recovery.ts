@@ -295,14 +295,61 @@ export function assessSufficiency(question: string, ev: RecoveryResult["evidence
   const items = [
     ...ev.notes.filter(n => n.matched.length), ...ev.library.filter(l => l.kind === "competency" && l.approved && l.matched.length), ...ev.external.filter(e => e.evidence),
   ];
-  // SQIE D-4: ONE derivation. An explanation needs evidence AND an approved reference among it (more of the learner's
-  // own notes alone were already not enough). Without one, nothing is covered: the verdict is insufficient, every key
-  // term remains unanswered, and the state can never read "sufficient" beside "unanswered".
-  const canExplain = items.length > 0 && keyTerms.length > 0 && hasApprovedReference(ev);
-  const covered = canExplain ? keyTerms.filter(t => items.some(i => i.matched.includes(t))) : [];
+  // SCHOLAR-LEARN-FIX-01 (owner, 31 Oct), adjusting SQIE D-4: what is COVERED is what the shown evidence contains --
+  // the learner's notes included -- so a term is never listed as unanswered while a note on screen says it (production
+  // listed every term of a step as "not found" beside notes that held them). The verdict is that coverage.
+  // What D-4 still decides: an explanation FROM RECOVERY (the wider tiers, beyond the learner's selected notes) needs
+  // an approved reference among the evidence; the learner's notes alone never make canExplain (their own lesson, from
+  // their selected material, is taught by Learn itself: groundingOutcome).
+  const covered = keyTerms.filter(t => items.some(i => i.matched.includes(t)));
   const unanswered = keyTerms.filter(t => !covered.includes(t));
-  const verdict = !canExplain ? "insufficient" : covered.length / keyTerms.length >= 0.6 ? "sufficient" : "partial";
-  return { verdict, keyTerms, covered, unanswered, canExplain };
+  const canExplain = items.length > 0 && keyTerms.length > 0 && hasApprovedReference(ev);
+  return { verdict: groundingVerdict(covered.length, keyTerms.length), keyTerms, covered, unanswered, canExplain };
+}
+
+/** Pure. THE THREE OUTCOMES, one rule: sufficient at 60% of the key terms covered or more, partial below, insufficient at none. */
+export const SUFFICIENT_COVERAGE = 0.6;
+export const groundingVerdict = (covered: number, of: number): SufficiencyVerdict["verdict"] =>
+  !of || !covered ? "insufficient" : covered / of >= SUFFICIENT_COVERAGE ? "sufficient" : "partial";
+
+export type Grounding = { outcome: SufficiencyVerdict["verdict"]; keyTerms: string[]; covered: string[]; uncoveredTerms: string[] };
+
+/**
+ * Pure. SCHOLAR-LEARN-FIX-01: whether a lesson's (or a question's) key terms are in the passages it will be taught from.
+ *   sufficient    teach
+ *   partial       teach what is supported, name the uncovered terms, offer the wider tiers (evidence recovery)
+ *   insufficient  nothing to teach from: the existing evidence recovery
+ * The terms are matched by prefix, as retrieval ranks and as recovery's sufficiency reads them.
+ */
+export function groundingOutcome(terms: readonly string[], passages: readonly { content: string }[]): Grounding {
+  const keyTerms = [...new Set(terms)];
+  const text = passages.map(p => p.content).join("\n");
+  const covered = passages.length ? matchedTerms(text, keyTerms) : [];
+  return { outcome: groundingVerdict(covered.length, keyTerms.length), keyTerms, covered, uncoveredTerms: keyTerms.filter(t => !covered.includes(t)) };
+}
+
+/** Another material's section joins a lesson only when it holds this share of the lesson's key terms, and at least two. */
+export const OTHER_MATERIAL_MIN_SHARE = 0.6;
+export const OTHER_MATERIAL_MIN_TERMS = 2;
+
+/**
+ * Pure. SCHOLAR-LEARN-FIX-01: the sections to add to a thin or partly grounded lesson, best first, at most `limit`.
+ * The SAME selected material(s) first: any section that holds a key term the lesson has not covered yet. Another of the
+ * learner's uploads only when `others` is allowed (a source mode wider than My notes only) AND it is clearly relevant:
+ * at least OTHER_MATERIAL_MIN_SHARE of the key terms and at least OTHER_MATERIAL_MIN_TERMS of them. Never one already
+ * in the lesson, never an excluded material (an examination paper).
+ */
+export function relatedSections<T extends { id: string; materialId: string; ordinal: number; content: string }>(
+  candidates: readonly T[], input: { have: readonly string[]; terms: readonly string[]; covered: readonly string[]; materialIds: readonly string[]; others: boolean; exclude?: ReadonlySet<string>; limit: number },
+): T[] {
+  const own = new Set(input.materialIds), have = new Set(input.have), missing = input.terms.filter(t => !input.covered.includes(t));
+  const need = Math.max(OTHER_MATERIAL_MIN_TERMS, Math.ceil(input.terms.length * OTHER_MATERIAL_MIN_SHARE));
+  const scored = candidates.filter(c => !have.has(c.id) && !input.exclude?.has(c.materialId)).map(c => {
+    const m = matchedTerms(c.content, input.terms);
+    return { c, inScope: own.has(c.materialId), all: m.length, adds: m.filter(t => missing.includes(t)).length };
+  }).filter(s => (s.inScope ? s.adds > 0 || (!missing.length && s.all > 0) : input.others && s.all >= need));
+  scored.sort((a, b) => Number(b.inScope) - Number(a.inScope) || b.adds - a.adds || b.all - a.all || a.c.ordinal - b.c.ordinal || a.c.id.localeCompare(b.c.id));
+  return [...new Map(scored.map(s => [s.c.id, s.c])).values()].slice(0, input.limit);
 }
 
 /** Pure. An approved reference among the evidence: an approved Competen library entry or a verified external abstract. */
@@ -380,7 +427,8 @@ export const restatesOnly = (content: string, question: string, terms: readonly 
 
 /** The three readers, injected so the order and the gating can be proven without a database or a network. */
 export type RecoverySources = {
-  notes: (question: string) => Promise<Passage[] | null>;
+  /** The learner's notes for the question; `scope` (My notes only, in a Learn session) keeps the search to those materials. */
+  notes: (question: string, scope?: { materialIds: readonly string[] } | null) => Promise<Passage[] | null>;
   library: (question: string, notes: readonly Passage[]) => Promise<Omit<LibraryEvidence, "tag" | "matched">[] | null>;
   external: (keywords: readonly string[]) => Promise<LearnResearch>;
   guidelines: () => ReadingLink[];
@@ -389,6 +437,12 @@ export type RecoveryInput = {
   question: string; mode: RecoveryMode; materialId?: string | null; sectionId?: string | null;
   /** A material the notes search must leave out: an examination paper is never evidence for its own questions. */
   excludeMaterialId?: string | null;
+  /**
+   * SCHOLAR-LEARN-FIX-01: the materials the learner selected (a Learn session's). In My notes only, notes evidence comes
+   * from these alone -- another upload is never shown or used unless the learner chose a wider mode. In a wider mode
+   * they come first. Absent (revision, papers, OSCE): the learner's notes as before.
+   */
+  scopeMaterialIds?: readonly string[] | null;
 };
 type Internal = { research: LearnResearch | null; passages: Passage[] };
 
@@ -396,8 +450,12 @@ type Internal = { research: LearnResearch | null; passages: Passage[] };
 export async function runRecovery(input: RecoveryInput, plan: TierPlan, sources: RecoverySources, opts: { wider: RecoveryMode | null; recoveryId?: string }): Promise<RecoveryResult & Internal> {
   const terms = keyTermsOf(input.question);
   // 1. Notes. The section and material the learner was on come first when they match. An excluded material never counts.
-  const passages = ((await sources.notes(input.question).catch(() => null)) ?? []).filter(p => !input.excludeMaterialId || p.materialId !== input.excludeMaterialId);
-  const first = (p: Passage) => (p.chunkId === input.sectionId ? 0 : p.materialId === input.materialId ? 1 : 2);
+  // In My notes only, a scoped session's notes come from its own materials alone (the reader is asked so, and held to it).
+  const selected = new Set(input.scopeMaterialIds ?? []);
+  const scoped = input.mode === "notes_only" && selected.size > 0;
+  const passages = ((await sources.notes(input.question, scoped ? { materialIds: [...selected] } : null).catch(() => null)) ?? [])
+    .filter(p => (!input.excludeMaterialId || p.materialId !== input.excludeMaterialId) && (!scoped || selected.has(p.materialId)));
+  const first = (p: Passage) => (p.chunkId === input.sectionId ? 0 : p.materialId === input.materialId ? 1 : selected.has(p.materialId) ? 2 : 3);
   const ordered = [...passages].sort((a, b) => first(a) - first(b));
   const notes: NotesEvidence[] = ordered.map((p, i) => ({
     origin: "notes", tag: `N${i + 1}`, chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p),
@@ -431,7 +489,8 @@ export async function runRecovery(input: RecoveryInput, plan: TierPlan, sources:
   const sufficiency = assessSufficiency(input.question, evidence);
   const canExplain = explainable(sufficiency, evidence);
   // Reading, not evidence: details-only references and library cases (practice, never an explanation's source).
-  const details = external.filter(e => !e.evidence).length + library.filter(l => l.kind === "case").length;
+  // SCHOLAR-LEARN-FIX-01: notes that hold a key term are reading too, so the state never says "unanswered" beside them.
+  const details = external.filter(e => !e.evidence).length + library.filter(l => l.kind === "case").length + notes.filter(n => n.matched.length).length;
   return {
     recoveryId: opts.recoveryId ?? randomUUID(), mode: input.mode, prompt: RECOVERY_PROMPT, evidence, reading, sufficiency, explainable: canExplain,
     state: recoveryState(canExplain, reading.length, details), actions: suggestedActions(canExplain, opts.wider, reading.length), external: status,
@@ -442,10 +501,10 @@ export async function runRecovery(input: RecoveryInput, plan: TierPlan, sources:
 /** The real readers, each an existing read path, every one keyed on the learner's own id. */
 export function liveSources(ctx: IndividualContext, policy: IndividualPolicy, recoveryId: string): RecoverySources {
   return {
-    async notes(question) {
+    async notes(question, scope) {
       const tsq = toTsQuery(question);
       if (!tsq) return [];
-      const [found, papers] = await Promise.all([searchCandidates(ctx.admin, ctx.userId, tsq, null), listExamPapers(ctx.admin, ctx.userId)]);
+      const [found, papers] = await Promise.all([searchCandidates(ctx.admin, ctx.userId, tsq, scope?.materialIds.length ? { materialIds: scope.materialIds } : null), listExamPapers(ctx.admin, ctx.userId)]);
       // SQIE D-4: a prepared examination paper is the learner's questions, never notes that answer them. Unreadable
       // papers: no notes evidence at all (fail closed: less evidence, never a paper counted as notes). Where papers are
       // not provisioned there are none.
@@ -548,7 +607,7 @@ export function inputsOf(r: RecoveryResult & Internal): Rederived {
  * The generation inputs for a recovery, found again on the server. Refused when the id names no recovery this server
  * recorded; no_evidence when there is nothing approved to explain from (the route then makes no AI call).
  */
-export async function rederiveRecovery(ctx: IndividualContext, policy: IndividualPolicy, req: RecoveryRequest, scope: Pick<RecoveryInput, "materialId" | "sectionId" | "excludeMaterialId"> = {}, deps: { known?: typeof recoveryKnown; sources?: RecoverySources; operational?: boolean } = {}): Promise<Rederived> {
+export async function rederiveRecovery(ctx: IndividualContext, policy: IndividualPolicy, req: RecoveryRequest, scope: Pick<RecoveryInput, "materialId" | "sectionId" | "excludeMaterialId" | "scopeMaterialIds"> = {}, deps: { known?: typeof recoveryKnown; sources?: RecoverySources; operational?: boolean } = {}): Promise<Rederived> {
   if (!(await (deps.known ?? recoveryKnown)(ctx.admin, req.id))) return { ok: false, reason: "unknown", result: null };
   const operational = deps.operational ?? await scholarResearchOperational(ctx.admin).catch(() => false);
   const plan = tierPlan(req.mode, policy, operational);

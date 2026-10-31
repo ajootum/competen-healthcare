@@ -71,6 +71,8 @@ export const LESSON_MAX_SECTIONS = 10;
 export const LESSON_MAX_CHARS = 7200;
 /** A lesson aims at the planned material's size over maxSteps, never below this: a short material is one or two lessons. */
 export const LESSON_MIN_TARGET_CHARS = 1500;
+/** A lesson whose own text is shorter than this (an older session's title-slide step) is thin: Teach adds related sections of the same material. */
+export const TEACH_THIN_CHARS = 400;
 /** The size assumed for a section whose text was not read (no profile): an ordinary section, never a thin one. */
 const UNREAD_CHARS = 600;
 /** Cutting between two sections costs this times how alike they are (0-1); a lesson's distance from the target size costs its square. */
