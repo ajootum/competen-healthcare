@@ -68,7 +68,8 @@ Reuse the existing infrastructure. No-code first. No parallel systems. Testing p
 | S2 | UI (a): properties panel, criteria editor, touch drag helper, registry labels, compare view, spreadsheet import page | DONE (built, unpushed, not browser-walked) |
 | S3 | Server (b): migration 760 Areas; layout draft extension for organisational cross-parent moves; substantive moves in drafts | **done 31 Oct** (760 staging x2, server code; substantive moves left to S1 criteria editing and S5, see Log) |
 | S4 | UI (b): Areas in the tree, cross-parent drag, visual framework map | **done 31 Oct** (not browser-verified, see Log) |
-| S5/S6 | D2 revision drafts, server (770) and UI | pending |
+| S5 | D2 revision drafts, server + migration 770 | **done 31 Oct** (770 staging x2, VERIFY 17/17, rollback rehearsed; production NOT applied) |
+| S6 | D2 revision drafts, UI | pending |
 
 ## Log
 
@@ -194,3 +195,19 @@ Tests: 5 new or extended vitest files, plus review-pack and the authoring suites
 - `OrganiseControls.tsx` `AreaHeading` takes a `grip` (the S2 pointer grip) in place of its static native-drag handle, so Areas reorder by drag again.
 - `[frameworkId]/page.tsx` passes both `pubStatus` (S2) and `areas`/`areasReady` (S4). `review-pack.ts` imports both `groupByArea` and the criterion labels.
 - Not browser-walked (drag across parents needs the authenticated stack with 760).
+
+### 31 Oct 2026: S5 done (branch hq/framework-studio-02a, not pushed)
+
+**Migration 770** `770-framework-revision-drafts.sql`, sha256 `ae0b8190c51fba8994d52e5fa05de31efca6e932122d835bf4d11f373383e90a`. Record `770-build-record.md`. Order 750, 751, 752, 760, 761, 770. **Staging only; production needs owner GO.** 466/640 publication guards unchanged; the apply runs BEFORE them so they judge the content as it will be published. Without 770 every content change to a published governed framework is refused (409), never written live.
+
+**API contract for S6** (`POST /api/hq/competency/authoring`, `hq.quality.competency.author`, errors `{ error }`). A framework is "revised" when `pub_status = published`, shared and CFCA (`competency_layer` set). Drafts behave exactly as S1-S4.
+- Same actions, same bodies, on a revised framework: `update_competency`, `create_competency` (201 `{ ok, id, mode: "revision", revisionId }`, `id` is the final competency id), `create_criterion` (201 `{ ok, id, mode, revisionId }`), `update_criterion`, `retire_criterion`, `restore_criterion` (`{ ok, unchanged, mode: "revision", revisionId? }`), `move_criterion` (`{ ok, kind, substantive, mode: "revision" | "draft", unchanged? }`: a same-section reorder of a competency the revision holds is saved in the revision, otherwise the layout draft). The first edit opens the revision. Ids in every later call are the same ids (live, or the new ones returned). 409 without 770; 409 "Remove it from the method first" when a published assessment method pins the criterion (drafts too).
+- `revision_view { frameworkId }` -> `{ revision: null }` or `{ revision: { id, createdBy, createdAt, updatedAt, competencies: [{ id, isNew, domainId (new only), sortOrder, code, name, description, learningOutcomes, expectedLevelId, riskCategory, practiceId, cpuId, proposedHash, liveHash, changed, clinical: ClinicalReview at the PROPOSED content, criteria: [{ id, isNew, text, component, sourceRef, sortOrder, active }] }] } }`. Only competencies touched by the revision are listed; render the rest from the live tree.
+- `compare_revision { frameworkId }` -> `{ status: "no_revision" }` or `{ status: "compared", revision: { id, updatedAt }, diff: FrameworkDiff }` (published -> proposed, same shape as compare_published).
+- `discard_revision { frameworkId }` -> `{ ok, discarded }`. Nothing live changes.
+- Review of the PROPOSED content: `review_preview { frameworkId, scope, revision: true }` and `review_submit { frameworkId, items, revision: true }` (same shapes as now; hashes are proposed hashes), or `submit_review { competencyId, frameworkId, revision: true }`. Reviewers decide on the existing queue: items carry `revision: { id, isNew }` and show the revision's criteria.
+- Publication: unchanged route. `decidePublication` returns `revisionApplied: true`; refuses 409 when the revision changed after it was put forward or can no longer be applied (message names why). Put forward again after any revision edit.
+- Organisational changes (Areas, domain Area, competency to another domain, reorders) keep the layout draft. A NEW revision competency is not moved between domains (404).
+
+**Checks.** vitest 76/76 (framework-revision 12 new), plant red/green; competency-foundation harness 33/33; tsc and eslint clean; house rules ALL CLEAR. Not browser-walked.
+
