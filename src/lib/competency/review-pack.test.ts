@@ -13,9 +13,9 @@ const crit = [
 ];
 
 describe("the review pack content", () => {
-  it("groups criteria by component in registry order, numbered S1, K1, A1", () => {
+  it("groups criteria by component in registry order, numbered by the registry prefix (CS1, K1)", () => {
     const g = groupCriteria(crit, COMPONENTS);
-    expect(g.map(x => [x.label, x.criteria.map(k => k.n)])).toEqual([["Clinical Skills", ["S1", "S2"]], ["Knowledge", ["K1"]]]);
+    expect(g.map(x => [x.label, x.criteria.map(k => k.n)])).toEqual([["Clinical Skills", ["CS1", "CS2"]], ["Knowledge", ["K1"]]]);
   });
   it("points out a repeated criterion and a missing component, without judging the content", () => {
     expect(checksFor(crit, COMPONENTS)).toEqual(["Criterion 2 repeats criterion 1 word for word.", "No Knowledge Application criteria are recorded."]);

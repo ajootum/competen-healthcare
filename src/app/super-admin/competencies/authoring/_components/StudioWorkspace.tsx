@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { arrange } from "@/lib/competency/layout-order";
+import { criterionLabel, criterionPrefixes } from "@/lib/competency/criterion-labels";
 import { announceMove, moveInArray, shortName, stepTarget } from "@/lib/competency/reorder-ui";
 import { CompetencyEditor, SubmitReview } from "./AuthoringControls";
 import { ReviewButton } from "./ReviewDialog";
@@ -289,7 +290,7 @@ function Criteria({ comp, components, sections, rx }: { comp: StudioCompetency; 
   if (!criteria.length) return <p className="text-[13px] text-gray-600">No assessment criteria are recorded for this competency.</p>;
   const shown = criteria.filter(c => (c.component ?? "") === tab);
   const g = rx.on && shown.length > 1 && shown.every(c => c.id) ? rx.criteriaGroup(comp, tab || null) : null;
-  const prefix = (code: string) => (code === "clinical_skills" ? "S" : code === "knowledge" ? "K" : code === "knowledge_application" ? "A" : "C");
+  const prefixes = criterionPrefixes(components);
   return (
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-[15px] font-bold text-gray-900">Assessment criteria</h3><span className="text-[12px] text-gray-500">One section at a time · source wording{g ? " · reorder within this section" : ""}</span></div>
@@ -305,7 +306,7 @@ function Criteria({ comp, components, sections, rx }: { comp: StudioCompetency; 
         {shown.map((c, i) => (
           <li key={c.id ?? i} title={c.sourceRef ?? undefined} {...(g ? rx.row(g, i) : {})} className={`flex items-start gap-2 rounded-lg ${g ? rx.row(g, i).className ?? "" : ""}`}>
             {g && <span aria-hidden title="Drag to reorder" className="mt-1.5 cursor-grab select-none text-gray-400">⠿</span>}
-            <span className="mt-0.5 inline-flex h-7 min-w-9 items-center justify-center rounded-md bg-teal-50 px-1.5 font-mono text-[11.5px] font-semibold text-teal-900">{prefix(tab)}{i + 1}</span>
+            <span className="mt-0.5 inline-flex h-7 min-w-9 items-center justify-center rounded-md bg-teal-50 px-1.5 font-mono text-[11.5px] font-semibold text-teal-900">{criterionLabel(prefixes, tab, i)}</span>
             <span className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-[13.5px] text-gray-900">{c.text}</span>
             {g && <span className="mt-0.5">{rx.buttons(g, i)}</span>}
           </li>

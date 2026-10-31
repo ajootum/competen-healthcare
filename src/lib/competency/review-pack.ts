@@ -5,6 +5,7 @@ import { CLINICAL_STATE_LABEL, loadClinicalReviews } from "./clinical-review";
 import { contentHashes } from "./review-batch";
 import { checksFor } from "./criteria-checks";
 import { applyLayout, asLayout, byRowOrder, sectionOrder, type LayoutTree } from "./layout-order";
+import { criterionLabel, criterionPrefixes } from "./criterion-labels";
 export { checksFor };
 
 // ── THE CLINICAL REVIEW PACK ── owner, 29 Oct 2026 ─────────────────────────────────────────────────────────────────
@@ -35,15 +36,15 @@ export type Pack = { title: string; scope: string; generatedAt: string; generate
   layout?: { shown: "published" | "draft"; pending: boolean; savedAt: string | null } };
 
 export const PACK_NOTICE = "Paper is for reading and notes. A decision counts only when it is recorded in Competen, in Clinical review, against the version shown here. If the content has changed since this pack was made, its fingerprint will not match and it needs a fresh review.";
-const PREFIX: Record<string, string> = { clinical_skills: "S", knowledge: "K", knowledge_application: "A" };
 
-/** Pure: criteria grouped by component, in the section order (the framework's, else the registry's), numbered S1, K1, A1... Unclassified last. */
+/** Pure: criteria grouped by component, in the section order (the framework's, else the registry's), numbered by the registry prefix (criterion-labels.ts). Unclassified last. */
 export function groupCriteria(criteria: { component: string | null; text: string; sourceRef: string | null }[], components: Record<string, string>, sections?: readonly string[] | null): PackCompetency["groups"] {
   const known = sections?.length ? [...new Set([...sections.filter(c => c in components), ...Object.keys(components)])] : Object.keys(components);
   const order = [...known, ...new Set(criteria.map(c => c.component ?? "").filter(c => c && !(c in components))), ""];
+  const prefixes = criterionPrefixes(components);
   return order.map(code => {
     const items = criteria.filter(c => (c.component ?? "") === code);
-    return { label: code ? components[code] ?? code : "Not classified", criteria: items.map((c, i) => ({ n: `${PREFIX[code] ?? "C"}${i + 1}`, text: c.text, sourceRef: c.sourceRef })) };
+    return { label: code ? components[code] ?? code : "Not classified", criteria: items.map((c, i) => ({ n: criterionLabel(prefixes, code, i), text: c.text, sourceRef: c.sourceRef })) };
   }).filter(g => g.criteria.length);
 }
 
