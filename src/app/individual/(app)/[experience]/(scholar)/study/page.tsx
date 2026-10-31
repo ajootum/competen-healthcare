@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
@@ -44,7 +45,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const card = "rounded-2xl border border-gray-200 bg-white p-6";
 
-export default async function MyLearning({ params }: { params: Promise<{ experience: string }> }) {
+export default async function MyLearning({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ study?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
@@ -56,6 +57,8 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
   ]);
   // Stage 2: what may be uploaded is Individual policy (formats, size), shown and enforced from one place.
   const rules = uploadRules(policy);
+  // SCHOLAR-SESSION-AI-02: an open study session is carried by the tabs (the Library is not a stage of it).
+  const study = await loadStudy(ctx.admin, ctx.userId, (await searchParams).study, null, policy);
   // Stage 2: each material shows the educational context it was uploaded in (402), never today's by default.
   const programmeLabels = new Map((programmes.ok ? programmes.data : []).map(p => [p.code, p.label]));
   const stampOf = (createdAt: string) => (history.ok ? contextStamp(history.periods, createdAt, programmeLabels) : null);
@@ -91,7 +94,7 @@ export default async function MyLearning({ params }: { params: Promise<{ experie
   const header = (
     <>
       <PageHeader accent={x.accent} eyebrow={space.eyebrow} title={space.title} intro={space.intro} />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
     </>
   );
 

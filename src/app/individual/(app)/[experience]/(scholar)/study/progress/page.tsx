@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
@@ -192,7 +193,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const fmtWeek = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
-export default async function ProgressPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ period?: string }> }) {
+export default async function ProgressPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ period?: string; study?: string }> }) {
   const sp = await searchParams;
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
@@ -201,6 +202,8 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   const [rows, reviews] = await Promise.all([progressRows(ctx.admin, ctx.userId), reviewRows(ctx.admin, ctx.userId)]);
   const today = new Date().toISOString().slice(0, 10);
   const policy = await loadIndividualPolicy(ctx.admin);
+  // SCHOLAR-SESSION-AI-02: an open study session is carried by the tabs (Progress is not a stage of it).
+  const study = await loadStudy(ctx.admin, ctx.userId, sp.study, null, policy);
   // COMPETEN-SCHOLAR-01 S5: the four measures, from the rows already read (nothing is read twice).
   const li = rows.ok ? await loadLearningIntelligence(ctx.admin, ctx.userId, policy, today, { pre: { rows, reviews } }) : null;
   const reviewRefs = reviews.ok && reviews.data ? reviews.data : [];
@@ -238,7 +241,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   return (
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("progress").eyebrow} title="Progress" intro={scholarSpace("progress").intro} />
-      <StudyNav dueCount={p?.totals.cardsDue ?? null} />
+      <StudyNav dueCount={p?.totals.cardsDue ?? null} study={study?.bar ?? null} />
       <Notice>
         {FORMATIVE_NOTICE} · <span className="font-semibold">{SELF_DIRECTED_LABEL}</span> None of it is added to your Passport or shared with anyone unless you choose an achievement below.
       </Notice>

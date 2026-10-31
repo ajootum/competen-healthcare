@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
+import { flashcardPrefill, withStudy } from "@/lib/individual/scholar/study-carry";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -41,7 +43,7 @@ export async function generateMetadata(): Promise<Metadata> {
 /** 2026-10-12T... as 12 October 2026 (UTC), for a library card's clinically reviewed date. */
 const ukDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }); };
 
-type Search = { session?: string; deck?: string; view?: string; q?: string; state?: string; origin?: string; bookmarked?: string; edit?: string; create?: string; made?: string; lib?: string; note?: string };
+type Search = { session?: string; deck?: string; view?: string; q?: string; state?: string; origin?: string; bookmarked?: string; edit?: string; create?: string; made?: string; lib?: string; note?: string; study?: string };
 
 const glyphOf = (title: string) => title.trim().slice(0, 1).toUpperCase() || "F";
 
@@ -51,12 +53,15 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
   const { ctx } = page;
   const q = await searchParams;
   const [due, policy] = await Promise.all([countDue(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
+  // SCHOLAR-SESSION-AI-02: the open study session (database reads only): its bar, carried links, and Create More chosen.
+  const study = await loadStudy(ctx.admin, ctx.userId, q.study, "revise", policy);
+  const sid = study?.session.id ?? null;
   const navKey: ReviseNavKey = q.view === "history" ? "history" : q.view === "decks" ? "decks" : "flashcards";
   const crumb = q.view === "history" ? "Revision History" : q.view === "decks" ? "My Decks" : q.view === "cards" ? "All cards" : null;
   const top = (
     <>
       <PageHeader accent={SCHOLAR.accent} eyebrow="Revise" title="Flashcards" />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
     </>
   );
   const shell = (main: React.ReactNode, side: React.ReactNode, notice = true) => (
@@ -68,11 +73,11 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
           is its own column too. CPR-MOB-001's single md viewport edge is untouched. */}
       <div data-testid="flashcards-shell" className="@container">
       <div className={FLASHCARDS_GRID}>
-        <div className={FLASHCARDS_NAV}><ReviseNav current={navKey} adaptive={policy.scholarAdaptiveExams === "on"} container /></div>
+        <div className={FLASHCARDS_NAV}><ReviseNav current={navKey} adaptive={policy.scholarAdaptiveExams === "on"} container studyId={sid} /></div>
         <div className={FLASHCARDS_MAIN}>
           <nav aria-label="Breadcrumb" className="text-[13.5px] text-gray-600">
             <ol className="flex flex-wrap items-center gap-1.5">
-              <li><Link href={studyHref("revise")} className={`hover:underline ${focusRing}`}>Revise</Link></li>
+              <li><Link href={withStudy(studyHref("revise"), sid)} className={`hover:underline ${focusRing}`}>Revise</Link></li>
               <li aria-hidden>›</li>
               <li>{crumb ? <Link href={flashcardsHref()} className={`hover:underline ${focusRing}`}>Flashcards</Link> : <span aria-current="page" className="font-semibold text-gray-900">Flashcards</span>}</li>
               {crumb && <><li aria-hidden>›</li><li aria-current="page" className="font-semibold text-gray-900">{crumb}</li></>}
@@ -111,7 +116,8 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
       <DeckOptions deck={{ key: deck.key, id: deck.id, title: deck.title, total: deck.total, due: deck.due + deck.fresh }} exports={exports} />
       <CreateMore materials={mats} competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} decks={personal}
         sourceModes={policy.scholarFlashcardSourceModes} perGeneration={policy.scholarFlashcardsPerGeneration} aiNote={aiNote} gaps={gaps.length} marksOn={schema730}
-        preset={preset === "notes" || preset === "competency" || preset === "topic" || preset === "gaps" || preset === "write" ? preset : null} />
+        preset={preset === "notes" || preset === "competency" || preset === "topic" || preset === "gaps" || preset === "write" ? preset : null}
+        scope={flashcardPrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) })} />
       {!schema730 && <p className="rounded-2xl border border-gray-200 bg-white p-4 text-[13px] text-gray-600">Decks of your own, cards you write yourself, bookmarks and notes are not available here yet. Flashcards from your notes and the Competen library work as usual.</p>}
     </>
   );

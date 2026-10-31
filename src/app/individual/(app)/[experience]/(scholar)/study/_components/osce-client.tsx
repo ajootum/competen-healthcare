@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import type { RecoveryMode } from "@/lib/individual/policy";
 import { studyHref } from "./question-view";
+import { carry, studyField } from "./study-active";
 import { FormativeAiLabel } from "./edu-notice";
 import { RecoveryFlow, type RecoveryRequestBody } from "./evidence-recovery";
 import {
@@ -84,7 +85,7 @@ export function OsceCreate(props: {
       if (r.json.recovery?.question) setRecovery({ key: Date.now(), note: r.json.recoveryNote ?? "", body: { ...r.json.recovery, mode: props.recoveryMode } });
       return;
     }
-    router.push(osceHref(r.json.id));
+    router.push(carry(osceHref(r.json.id)));
   }
   const choices: { v: Source; label: string; note: string | null; disabled: boolean }[] = [
     { v: "library", label: LIBRARY_STATION_LABEL, note: props.library.length ? "Published stations, clinically reviewed and approved. No AI." : "No clinically approved station has been published yet.", disabled: !props.library.length },
@@ -201,7 +202,7 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
 
   const start = useCallback(async () => {
     setBusy(true); setError("");
-    const r = await call("/api/individual/scholar/osce/attempts", { stationId: station.id });
+    const r = await call("/api/individual/scholar/osce/attempts", { stationId: station.id, ...studyField() });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "The station could not be started."); return; }
     setAttemptId(r.json.attemptId);

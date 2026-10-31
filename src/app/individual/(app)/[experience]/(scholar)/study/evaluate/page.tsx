@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
+import { evaluationPrefill } from "@/lib/individual/scholar/study-carry";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { PageHeader, StatePanel, focusRing, BoundaryNotice } from "../../../../../_components/chrome";
@@ -32,7 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Evaluate" });
 }
 
-export default async function EvaluatePage({ params }: { params: Promise<{ experience: string }> }) {
+export default async function EvaluatePage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ study?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
@@ -43,12 +45,14 @@ export default async function EvaluatePage({ params }: { params: Promise<{ exper
     evaluateScope(ctx.admin, ctx.userId, policy, { kind: "all" }, { method: "existing", now: new Date().toISOString() }),
   ]);
   const mats = (materials.ok ? materials.data : []).filter(m => m.chunkCount > 0);
+  // SCHOLAR-SESSION-AI-02: the open study session (database reads only) only chooses EvaluationStart's first scope (D5).
+  const study = await loadStudy(ctx.admin, ctx.userId, (await searchParams).study, "evaluate", policy);
   const counts = live.ok ? live.evaluation.evidence.counts : null;
 
   return (
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("evaluate").eyebrow} title="Evaluate" intro={scholarSpace("evaluate").intro} />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
       <BoundaryNotice notice={FORMATIVE_NOTICE} detail={EVALUATION_LABEL} />
       <ExamPapersSection admin={ctx.admin} userId={ctx.userId} variant="evaluate" />
 
@@ -88,7 +92,8 @@ export default async function EvaluatePage({ params }: { params: Promise<{ exper
           <section aria-labelledby="ev-start-h">
             <EvaluationStart methods={policy.scholarEvaluationMethods} materials={mats.map(m => ({ id: m.id, title: m.title }))}
               competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: `${c.code ? `${c.code} ` : ""}${c.title}`, outcomes: c.outcomes }))}
-              contexts={policy.scholarCaseContexts.map(c => ({ value: c, label: CASE_CONTEXT_LABEL[c] }))} freshQuantity={policy.scholarEvaluationFreshQuantity} />
+              contexts={policy.scholarCaseContexts.map(c => ({ value: c, label: CASE_CONTEXT_LABEL[c] }))} freshQuantity={policy.scholarEvaluationFreshQuantity}
+              defaultScope={evaluationPrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) })} />
           </section>
 
           <section aria-labelledby="ev-hist-h">

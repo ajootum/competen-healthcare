@@ -5,6 +5,8 @@ import { useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { EVALUATION_METHOD_LABEL } from "@/lib/individual/scholar/config";
 import { evaluationHref, studyHref } from "./question-view";
+import { carry, studyField } from "./study-active";
+import type { EvaluationDefault } from "@/lib/individual/scholar/study-carry";
 
 // EVALUATION-01 (Stage 6) E1: choosing what to evaluate and how, without knowing the CFCA underneath. "From your
 // existing evidence" keeps an evaluation at once. "A fresh knowledge check" and "Existing evidence and a fresh
@@ -42,17 +44,20 @@ function checkScope(scope: Record<string, unknown>): Record<string, unknown> {
 export function EvaluationStart(props: {
   methods: Method[]; materials: { id: string; title: string }[]; competencies: { id: string; title: string; outcomes: string[] }[];
   contexts: { value: string; label: string }[]; freshQuantity: number;
+  /** SCHOLAR-SESSION-AI-02: the open study session's focus as the scope chosen first. The learner still chooses and starts. */
+  defaultScope?: EvaluationDefault | null;
 }) {
   const router = useRouter();
   const kinds = (Object.keys(SCOPE_LABEL) as ScopeKind[]).filter(k => (k !== "competency" && k !== "outcome") || props.competencies.length > 0)
     .filter(k => (k !== "document" && k !== "documents") || props.materials.length > 0);
-  const [kind, setKind] = useState<ScopeKind>("all");
+  const d = props.defaultScope && kinds.includes(props.defaultScope.kind) ? props.defaultScope : null;
+  const [kind, setKind] = useState<ScopeKind>(d?.kind ?? "all");
   const [method, setMethod] = useState<Method>(props.methods[0] ?? "existing");
-  const [topic, setTopic] = useState("");
-  const [material, setMaterial] = useState(props.materials[0]?.id ?? "");
-  const [chosen, setChosen] = useState<string[]>([]);
-  const [competency, setCompetency] = useState(props.competencies[0]?.id ?? "");
-  const [outcome, setOutcome] = useState("");
+  const [topic, setTopic] = useState(d?.kind === "topic" ? d.topic : "");
+  const [material, setMaterial] = useState(d?.kind === "document" ? d.materialId : props.materials[0]?.id ?? "");
+  const [chosen, setChosen] = useState<string[]>(d?.kind === "documents" ? d.materialIds : []);
+  const [competency, setCompetency] = useState(d?.kind === "competency" || d?.kind === "outcome" ? d.competencyId : props.competencies[0]?.id ?? "");
+  const [outcome, setOutcome] = useState(d?.kind === "outcome" ? d.outcome : "");
   const [context, setContext] = useState(props.contexts[0]?.value ?? "general");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -68,13 +73,13 @@ export function EvaluationStart(props: {
     setBusy(true); setError(""); setContinuity("");
     const s = scope();
     if (method === "existing") {
-      const r = await call("/api/individual/scholar/evaluations", { scope: s, method });
+      const r = await call("/api/individual/scholar/evaluations", { scope: s, method, ...studyField() });
       setBusy(false);
       if (!r.ok) { setError(r.json.error ?? "Your evaluation could not be made just now."); return; }
-      router.push(evaluationHref(r.json.id));
+      router.push(carry(evaluationHref(r.json.id)));
       return;
     }
-    const r = await call("/api/individual/scholar/revision/sessions", { mode: "mock", scope: checkScope(s), quantity: props.freshQuantity });
+    const r = await call("/api/individual/scholar/revision/sessions", { mode: "mock", scope: checkScope(s), quantity: props.freshQuantity, ...studyField() });
     setBusy(false);
     if (!r.ok && r.json.continuity) { setContinuity(r.json.error ?? "A knowledge check cannot be written right now."); return; }
     if (!r.ok) { setError(r.json.error ?? "The knowledge check could not start just now."); return; }

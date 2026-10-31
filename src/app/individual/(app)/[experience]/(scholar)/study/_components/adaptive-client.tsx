@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { adaptiveHref, studyHref } from "./question-view";
+import { carry, studyField } from "./study-active";
+import type { adaptivePrefill } from "@/lib/individual/scholar/study-carry";
 import { FeedbackPanel, GradeAtEnd, QuestionRunner, type Answered, type HeldGrade } from "./revision-client";
 import {
   ADAPTIVE_LENGTH_MIN, ADAPTIVE_TIME_LIMITS, GROUNDING_LABEL, REVISION_FORMAT_LABEL, type AdaptiveFormat,
@@ -45,12 +47,15 @@ export function AdaptiveStart(props: {
   formats: AdaptiveFormat[]; length: number; maxLength: number; feedback: "immediate" | "end";
   materials: { id: string; title: string }[]; competencies: { id: string; title: string }[];
   programme: string | null; levelDefault: GenerationDifficulty | null; rule: string; aiNote: string | null;
+  /** SCHOLAR-SESSION-AI-02: the open study session's focus, chosen as the exam's scope (the learner may change it). */
+  scope?: ReturnType<typeof adaptivePrefill>;
 }) {
   const router = useRouter();
-  const [scopeKind, setScopeKind] = useState<"programme" | "library" | "documents" | "topic" | "competencies">(props.programme && props.competencies.length ? "programme" : "library");
-  const [chosen, setChosen] = useState<string[]>([]);
-  const [comps, setComps] = useState<string[]>([]);
-  const [topic, setTopic] = useState("");
+  const sc = props.scope ?? null;
+  const [scopeKind, setScopeKind] = useState<"programme" | "library" | "documents" | "topic" | "competencies">(sc?.kind ?? (props.programme && props.competencies.length ? "programme" : "library"));
+  const [chosen, setChosen] = useState<string[]>(sc?.kind === "documents" ? sc.materialIds : []);
+  const [comps, setComps] = useState<string[]>(sc?.kind === "competencies" ? sc.competencyIds : []);
+  const [topic, setTopic] = useState(sc?.kind === "topic" ? sc.topic : "");
   const [formats, setFormats] = useState<AdaptiveFormat[]>(props.formats);
   const [length, setLength] = useState(props.length);
   const [start, setStart] = useState<"auto" | GenerationDifficulty>("auto");
@@ -68,11 +73,11 @@ export function AdaptiveStart(props: {
     setBusy(true); setError(""); setContinuity("");
     const scope = scopeKind === "documents" ? { kind: "documents", materialIds: chosen } : scopeKind === "topic" ? { kind: "topic", topic }
       : scopeKind === "competencies" ? { kind: "competencies", competencyIds: comps } : { kind: scopeKind };
-    const r = await call("/api/individual/scholar/revision/adaptive", { scope, formats: formats.filter(f => shown.includes(f)), length, start, feedback, timeLimitMinutes: timeLimit, source });
+    const r = await call("/api/individual/scholar/revision/adaptive", { scope, formats: formats.filter(f => shown.includes(f)), length, start, feedback, timeLimitMinutes: timeLimit, source, ...studyField() });
     setBusy(false);
     if (!r.ok && r.json.continuity) { setContinuity(r.json.error ?? "There are no questions for this yet."); return; }
     if (!r.ok) { setError(r.json.error ?? "The exam could not start just now."); return; }
-    router.push(adaptiveHref(r.json.session.id));
+    router.push(carry(adaptiveHref(r.json.session.id)));
   }
 
   const ready = formats.some(f => shown.includes(f)) && (scopeKind !== "documents" || chosen.length > 0) && (scopeKind !== "topic" || topic.trim().length >= 2) && (scopeKind !== "competencies" || comps.length > 0);

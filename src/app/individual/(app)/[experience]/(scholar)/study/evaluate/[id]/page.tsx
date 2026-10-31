@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../../_components/chrome";
@@ -23,17 +24,19 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Evaluation" });
 }
 
-export default async function EvaluationRecordPage({ params }: { params: Promise<{ experience: string; id: string }> }) {
+export default async function EvaluationRecordPage({ params, searchParams }: { params: Promise<{ experience: string; id: string }>; searchParams: Promise<{ study?: string }> }) {
   const p = await params;
   const page = await experienceModulePage(p.experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
   const [due, r, policy, inPassport] = await Promise.all([countDue(ctx.admin, ctx.userId), getEvaluation(ctx.admin, ctx.userId, p.id), loadIndividualPolicy(ctx.admin), loadPassportEvaluations(ctx.admin, ctx.userId)]);
+  // SCHOLAR-SESSION-AI-02: an open study session is carried by the tabs only; the record itself is unchanged.
+  const study = await loadStudy(ctx.admin, ctx.userId, (await searchParams).study, "evaluate", policy);
   const header = (
     <>
       <PageHeader accent={x.accent} eyebrow="Evaluate" title={r.ok && r.data ? r.data.scope?.label ?? "Evaluation" : "Evaluation"} intro={EVALUATION_LABEL} />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
     </>
   );
   if (!r.ok) return <>{header}<Unreadable what="this evaluation" /></>;

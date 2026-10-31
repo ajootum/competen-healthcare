@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
+import { adaptivePrefill, withStudy } from "@/lib/individual/scholar/study-carry";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -33,19 +35,22 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Adaptive exam" });
 }
 
-export default async function AdaptiveExam({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string }> }) {
+export default async function AdaptiveExam({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; study?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const q = await searchParams;
   const [due, policy] = await Promise.all([countDue(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
+  // SCHOLAR-SESSION-AI-02: the open study session (database reads only): its bar, carried links, and the exam scope chosen.
+  const study = await loadStudy(ctx.admin, ctx.userId, q.study, "revise", policy);
+  const sid = study?.session.id ?? null;
   const header = (
     <>
       <PageHeader accent={SCHOLAR.accent} eyebrow={scholarSpace("revise").eyebrow} title="Adaptive exam" intro={ADAPTIVE_HELP} />
-      <StudyNav dueCount={due} />
-      <ReviseNav current="adaptive" adaptive={policy.scholarAdaptiveExams === "on"} row />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
+      <ReviseNav current="adaptive" adaptive={policy.scholarAdaptiveExams === "on"} row studyId={sid} />
       <BoundaryNotice notice={FORMATIVE_NOTICE} />
-      <p className="mb-3 text-[13px]"><Link href={studyHref("revise")} className={`underline ${focusRing}`}>← Back to Revision</Link></p>
+      <p className="mb-3 text-[13px]"><Link href={withStudy(studyHref("revise"), sid)} className={`underline ${focusRing}`}>← Back to Revision</Link></p>
     </>
   );
   if (policy.scholarAdaptiveExams !== "on")
@@ -107,7 +112,8 @@ export default async function AdaptiveExam({ params, searchParams }: { params: P
           : <AdaptiveStart formats={[...limits.formats]} length={limits.defaultLength} maxLength={limits.maxLength} feedback={limits.defaultFeedback}
               materials={materials.ok ? materials.data.filter(m => m.chunkCount > 0).map(m => ({ id: m.id, title: m.title })) : []}
               competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} programme={learner.programme?.label ?? null}
-              levelDefault={loader.levelDefault} rule={ADAPTIVE_RULE} aiNote={aiNote} />}
+              levelDefault={loader.levelDefault} rule={ADAPTIVE_RULE} aiNote={aiNote}
+              scope={adaptivePrefill(study?.scope ?? null, { materialIds: materials.ok ? materials.data.filter(m => m.chunkCount > 0).map(m => m.id) : [], competencyIds: (learner.competencies ?? []).map(c => c.id) })} />}
         <aside aria-labelledby="adaptive-history-h" className="rounded-2xl border border-gray-200 bg-white p-5">
           <h2 id="adaptive-history-h" className="text-[15px] font-bold text-gray-900">Your adaptive exams</h2>
           <p className="text-[12.5px] text-gray-600">{ADAPTIVE_REPORT_LABEL}</p>

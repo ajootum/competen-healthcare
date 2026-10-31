@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sourceHref, studyHref } from "./question-view";
 import { flashcardsHref } from "./revise-nav";
+import { carry, studyField } from "./study-active";
+import type { flashcardPrefill } from "@/lib/individual/scholar/study-carry";
 
 // SCHOLAR FLASHCARDS -- SCHOLAR-FLASHCARDS-01 (owner, 31 Oct 2026), to the owner mock-up.
 //
@@ -461,10 +463,10 @@ export function DeckOptions({ deck, exports }: { deck: { key: string; id: string
   const [error, setError] = useState("");
   async function study(only?: "due") {
     setBusy(only ?? "all"); setError("");
-    const r = await call("/api/individual/scholar/revision/sessions", { mode: "flashcards", deck: deck.key, ...(only ? { only } : {}) });
+    const r = await call("/api/individual/scholar/revision/sessions", { ...studyField(), mode: "flashcards", deck: deck.key, ...(only ? { only } : {}) });
     setBusy("");
     if (!r.ok || !r.json.session?.id) { setError(r.json.error ?? "Studying could not start just now."); return; }
-    router.push(flashcardsHref({ session: r.json.session.id, deck: deck.key }));
+    router.push(carry(flashcardsHref({ session: r.json.session.id, deck: deck.key })));
   }
   const row = `flex min-h-[44px] w-full items-center gap-3 rounded-xl px-2 text-left text-[14.5px] text-gray-900 hover:bg-gray-50 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
   return (
@@ -487,12 +489,15 @@ export function DeckOptions({ deck, exports }: { deck: { key: string; id: string
 export function CreateMore(props: {
   materials: { id: string; title: string }[]; competencies: { id: string; title: string }[]; decks: { id: string; title: string }[];
   sourceModes: ("notes" | "notes_and_references")[]; perGeneration: number; aiNote: string | null; gaps: number; marksOn: boolean; preset?: "notes" | "competency" | "topic" | "gaps" | "write" | null;
+  /** SCHOLAR-SESSION-AI-02: the open study session's focus, on its existing row (the learner may change it). */
+  scope?: ReturnType<typeof flashcardPrefill>;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState<"" | "notes" | "competency" | "topic" | "gaps" | "write">(props.preset ?? "");
-  const [materials, setMaterials] = useState<string[]>([]);
-  const [competency, setCompetency] = useState("");
-  const [topic, setTopic] = useState("");
+  const sc = props.preset ? null : props.scope ?? null;
+  const [open, setOpen] = useState<"" | "notes" | "competency" | "topic" | "gaps" | "write">(props.preset ?? sc?.open ?? "");
+  const [materials, setMaterials] = useState<string[]>(sc?.materialIds ?? []);
+  const [competency, setCompetency] = useState(sc?.competencyId ?? "");
+  const [topic, setTopic] = useState(sc?.topic ?? "");
   const [deckId, setDeckId] = useState("");
   const [source, setSource] = useState<"notes" | "notes_and_references">("notes");
   const [busy, setBusy] = useState(false);
@@ -501,11 +506,11 @@ export function CreateMore(props: {
     e.preventDefault();
     setBusy(true); setMsg("");
     const scope = open === "notes" ? { kind: "documents", materialIds: materials } : open === "competency" ? { kind: "competency", competencyId: competency } : open === "topic" ? { kind: "topic", topic } : { kind: "gaps" };
-    const r = await call("/api/individual/scholar/revision/sessions", { mode: "flashcards", scope, quantity: props.perGeneration, source, ...(deckId ? { deckId } : {}) });
+    const r = await call("/api/individual/scholar/revision/sessions", { ...studyField(), mode: "flashcards", scope, quantity: props.perGeneration, source, ...(deckId ? { deckId } : {}) });
     setBusy(false);
     if (!r.ok || !r.json.session?.id) { setMsg(r.json.error ?? "Cards could not be made just now."); return; }
     const deck = deckId ? `deck:${deckId}` : null;
-    router.push(flashcardsHref({ session: r.json.session.id, deck, made: String(r.json.generated ?? 0), lib: String(r.json.library ?? 0), note: r.json.note ?? null }));
+    router.push(carry(flashcardsHref({ session: r.json.session.id, deck, made: String(r.json.generated ?? 0), lib: String(r.json.library ?? 0), note: r.json.note ?? null })));
   }
   const row = (k: typeof open, icon: React.ReactNode, label: string, disabled = false) => (
     <li><button type="button" disabled={disabled} aria-expanded={open === k} onClick={() => setOpen(o => (o === k ? "" : k))}
@@ -611,14 +616,14 @@ export function DeckList({ decks, marksOn, exports, editId }: { decks: DeckRow[]
   const [organiseRef, setOrganiseRef] = useState("");
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    const r = await call("/api/individual/scholar/flashcards/decks", { title, organiseBy, organiseRef: organiseBy === "personal" ? null : organiseRef });
+    const r = await call("/api/individual/scholar/flashcards/decks", { ...studyField(), title, organiseBy, organiseRef: organiseBy === "personal" ? null : organiseRef });
     setMsg(r.ok ? "Deck made. Add cards to it from All cards, or make new cards into it." : r.json.error ?? "The deck could not be made.");
     if (r.ok) { setTitle(""); setOrganiseRef(""); router.refresh(); }
   }
   async function studyChosen() {
     const all = decks.filter(d => chosen.includes(d.key));
-    const r = await call("/api/individual/scholar/revision/sessions", { mode: "flashcards", decks: all.map(d => d.key) });
-    if (r.ok && r.json.session?.id) router.push(flashcardsHref({ session: r.json.session.id, deck: all.length === 1 ? all[0].key : null }));
+    const r = await call("/api/individual/scholar/revision/sessions", { ...studyField(), mode: "flashcards", decks: all.map(d => d.key) });
+    if (r.ok && r.json.session?.id) router.push(carry(flashcardsHref({ session: r.json.session.id, deck: all.length === 1 ? all[0].key : null })));
     else setMsg(r.json.error ?? "Studying could not start just now.");
   }
   const groups: [string, DeckRow[]][] = [["Your decks", decks.filter(d => d.kind === "personal")], ["All cards", decks.filter(d => d.kind === "all" || d.kind === "bookmarked")],
@@ -722,7 +727,7 @@ export function CardBrowser({ cards, decks, currentDeck, marksOn, filters }: {
 
   async function addTo() {
     const r = target === "__new"
-      ? await call("/api/individual/scholar/flashcards/decks", { title: newDeck, cardIds: chosen })
+      ? await call("/api/individual/scholar/flashcards/decks", { ...studyField(), title: newDeck, cardIds: chosen })
       : await call(`/api/individual/scholar/flashcards/decks/${target}`, { add: chosen }, "PATCH");
     setMsg(r.ok ? `Added ${chosen.length} card${chosen.length === 1 ? "" : "s"}. Their review history goes with them.` : r.json.error ?? "That could not be done.");
     if (r.ok) { setChosen([]); setNewDeck(""); router.refresh(); }
@@ -743,8 +748,8 @@ export function CardBrowser({ cards, decks, currentDeck, marksOn, filters }: {
     if (r.ok) router.refresh(); else setMsg(r.json.error ?? "The card could not be removed.");
   }
   async function studyChosen() {
-    const r = await call("/api/individual/scholar/revision/sessions", { mode: "flashcards", cardIds: chosen });
-    if (r.ok && r.json.session?.id) router.push(flashcardsHref({ session: r.json.session.id })); else setMsg(r.json.error ?? "Studying could not start just now.");
+    const r = await call("/api/individual/scholar/revision/sessions", { ...studyField(), mode: "flashcards", cardIds: chosen });
+    if (r.ok && r.json.session?.id) router.push(carry(flashcardsHref({ session: r.json.session.id }))); else setMsg(r.json.error ?? "Studying could not start just now.");
   }
 
   return (
@@ -846,10 +851,10 @@ export function DeckStart({ deck, perState }: { deck: { key: string; title: stri
   const [error, setError] = useState("");
   async function study(only?: "due" | "practice") {
     setBusy(only ?? "all"); setError("");
-    const r = await call("/api/individual/scholar/revision/sessions", { mode: "flashcards", deck: deck.key, ...(only ? { only } : {}) });
+    const r = await call("/api/individual/scholar/revision/sessions", { ...studyField(), mode: "flashcards", deck: deck.key, ...(only ? { only } : {}) });
     setBusy("");
     if (!r.ok || !r.json.session?.id) { setError(r.json.error ?? "Studying could not start just now."); return; }
-    router.push(flashcardsHref({ session: r.json.session.id, deck: deck.key }));
+    router.push(carry(flashcardsHref({ session: r.json.session.id, deck: deck.key })));
   }
   const stat = (label: string, n: number, tone?: string) => (
     <div className="rounded-2xl border border-gray-200 bg-white p-3"><p className="text-[12px] font-semibold text-gray-500">{label}</p><p className="text-[22px] font-bold tabular-nums" style={tone ? { color: tone } : undefined}>{n}</p></div>

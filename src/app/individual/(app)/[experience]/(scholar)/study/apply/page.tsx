@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { loadStudy } from "@/lib/individual/scholar/study-context";
+import { casePrefill, withStudy } from "@/lib/individual/scholar/study-carry";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
@@ -39,7 +41,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Apply" });
 }
 
-export default async function Apply({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ section?: string; from?: string }> }) {
+export default async function Apply({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ section?: string; from?: string; study?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
@@ -65,7 +67,12 @@ export default async function Apply({ params, searchParams }: { params: Promise<
     const v = await caseSessionView(ctx.admin, ctx.userId, h.id);
     if (v) libTitles.set(h.id, v.view.title);
   }
-  const preset = sp.section && /^[0-9a-f-]{36}$/i.test(sp.section) ? { chunkId: sp.section, from: sp.from === "revision" ? "revision" as const : "teach" as const } : null;
+  // SCHOLAR-SESSION-AI-02: the open study session (database reads only). Without a ?section= of its own, the case
+  // start opens on the session's focus: Apply from its section, else its competency, else its first material.
+  const study = await loadStudy(ctx.admin, ctx.userId, sp.study, "apply", policy);
+  const sid = study?.session.id ?? null;
+  const preset = sp.section && /^[0-9a-f-]{36}$/i.test(sp.section) ? { chunkId: sp.section, from: sp.from === "revision" ? "revision" as const : "teach" as const }
+    : casePrefill(study?.scope ?? null, { materialIds: (materials.ok ? materials.data : []).filter(m => m.chunkCount > 0).map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) });
 
   // COMPETEN-SCHOLAR-01 S4: steps of one case play together, in order. Where 388 is absent no question has
   // a case_id, and the page is the MVP page.
@@ -86,10 +93,10 @@ export default async function Apply({ params, searchParams }: { params: Promise<
   return (
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("apply").eyebrow} title="Apply" intro={scholarSpace("apply").intro} />
-      <StudyNav dueCount={due} />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
       <BoundaryNotice notice={FORMATIVE_NOTICE} detail="Practice cases are formative simulation, not assessment." />
       <ExamPapersSection admin={ctx.admin} userId={ctx.userId} variant="apply" />
-      <OsceEntry admin={ctx.admin} userId={ctx.userId} />
+      <OsceEntry admin={ctx.admin} userId={ctx.userId} studyId={sid} />
 
       <div className="mb-8 grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">
@@ -110,7 +117,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
               : history.data.length === 0 ? <p className="mt-2 text-[13px] text-gray-600">None yet.</p> : (
                 <ul className="mt-2 space-y-1.5">{history.data.map(h => (
                   <li key={`${h.kind}${h.id}`} className="text-[13.5px]">
-                    <Link href={`${experienceHref("scholar", "study/apply/case")}?kind=${h.kind}&session=${h.id}`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{h.title ?? libTitles.get(h.id) ?? "Library case"}</Link>
+                    <Link href={withStudy(`${experienceHref("scholar", "study/apply/case")}?kind=${h.kind}&session=${h.id}`, sid)} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{h.title ?? libTitles.get(h.id) ?? "Library case"}</Link>
                     <span className="text-[12px] text-gray-500"> · {h.kind === "library" ? "library" : "your case"} · {h.status === "completed" ? "finished" : "in progress"}</span>
                   </li>
                 ))}</ul>
