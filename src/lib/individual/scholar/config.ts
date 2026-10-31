@@ -118,7 +118,9 @@ export const PROMPT_VERSIONS = {
   // SCHOLAR-LEARN-FIX-01 L-B: Teach Me is a STRUCTURED lesson -- overview, cited key points, an example only where the
   // passages support one, and a one-or-two question understanding check (teach-format.ts). Teach carries this on top of
   // `learn` (generation.ts learnPromptVersion), so a Teach Me answer saved in the old free-text form is never reused.
-  learnTeach: "scholar-learn-teach-v1",
+  // v2 (SCHOLAR-GUIDED-LEARNING-01): no unsupported counts ("two types") unless the passages give them. A saved v1
+  // lesson is still opened, with no AI call (LEARN_TEACH_LEGACY): its structure and checks are the same.
+  learnTeach: "scholar-learn-teach-v2",
   // COMPETEN-SCHOLAR-REVISION-01 R4: AI evaluation of a short answer (Holdings activity `evaluate`).
   // v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): five labelled feedback parts, judged against the rubric where there is one.
   evaluate: "scholar-evaluate-v2",
@@ -155,6 +157,8 @@ export const REVISION_FORMAT_LABEL: Record<RevisionFormat, string> = {
   mcq: "Multiple choice", mrq: "Multiple response", short: "Short answer", flashcard: "Flashcards", match: "Matching", sequence: "Sequencing",
   structured: "Structured (multi-part)",
 };
+/** SCHOLAR-GUIDED-LEARNING-01: earlier Teach Me versions whose saved lessons are still opened (same structure and checks). */
+export const LEARN_TEACH_LEGACY: readonly string[] = ["scholar-learn-teach-v1"];
 /** SCHOLAR-SQIE-CLOSE-01: a structured question has 2 to 4 parts of 1 to 5 marks each (migration 710 CHECK). */
 export const STRUCTURED_PARTS_MIN = 2;
 export const STRUCTURED_PARTS_MAX = 4;
@@ -317,6 +321,8 @@ export const LEARN_MODE_LABEL = { notes: "My notes only", library: "My notes + C
 
 /** SCHOLAR-SQIE-02 s7: evidence recovery, as the learner sees it. No internal activity names, no eligibility terms. */
 export const RECOVERY_PROMPT = "Your notes do not contain enough information to fully explain this topic. Would you like to explore additional learning resources?";
+/** SCHOLAR-GUIDED-LEARNING-01 (owner screenshot 31 Oct): the same finding when nothing wider can be offered -- no question it cannot answer. */
+export const RECOVERY_PROMPT_PLAIN = "Your notes do not contain enough information to fully explain this topic. You can carry on with what your notes do cover, or add material that covers it and ask again.";
 export const RECOVERY_ACTION_LABEL = {
   find_resources: "Find learning resources",
   explain_with_references: "Explain using approved references",

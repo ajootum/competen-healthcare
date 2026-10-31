@@ -116,7 +116,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
-  | "scholar_study_sessions";
+  | "scholar_study_sessions" | "scholar_learn_prepare_next";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -940,6 +940,16 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [{ value: "record", label: "Record structured history (no conversation text)" }, { value: "off", label: "Off: nothing is recorded, sessions cannot be resumed" }],
     fallback: "record",
     limitReason: "Structure only, by design. A student can erase their history with their materials.",
+  },
+  // SCHOLAR-GUIDED-LEARNING-01 (owner, 31 Oct): prepare the NEXT lesson ahead, at most one, OFF by default. Through the same
+  // metered runner, allowance and checks as a lesson the student asks for (learn/act { prepare: true }).
+  {
+    key: "scholar_learn_prepare_next", kind: "choice", product: "Scholar",
+    label: "Prepare the next lesson ahead",
+    help: "Whether Scholar may write the next lesson of a guided session in the background while the student reads the current one, so it opens at once. At most one lesson ahead, never the whole sequence, only when nothing is saved for it yet, and only while the student's AI allowance allows it. It uses the student's allowance like any lesson.",
+    options: [{ value: "on", label: "Prepare one lesson ahead" }, { value: "off", label: "Off: each lesson is written when the student opens it" }],
+    fallback: "off",
+    limitReason: "One lesson ahead at most. Default: off, because a prepared lesson the student never opens still costs allowance.",
   },
   // ── COMPETEN-SCHOLAR-REVISION-01 (Stage 4): REVISION, in the existing engine (owner GO s9) ──
   // What is offered and its defaults. The rules beneath are not settings: grounding and the identifier screen on
@@ -1789,6 +1799,8 @@ export type IndividualPolicy = {
   scholarFlashcardLevelMix: "programme" | "recall" | "balanced" | "applied";
   /** SCHOLAR-SESSION-AI-02. Whether connected study sessions are offered. Read it through isStudySessionsOn, which also needs 740. */
   scholarStudySessions: boolean;
+  /** SCHOLAR-GUIDED-LEARNING-01. Whether Learn may prepare the next lesson ahead (one at most). Default off. */
+  scholarLearnPrepareNext: boolean;
   scholarSrsMasteryReps: number;
   scholarSrsMasteryDays: number;
   scholarSrsMaxIntervalDays: number;
@@ -1941,6 +1953,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarFlashcardExports: clampSet(policyDef("scholar_flashcard_exports") as SetPolicy, published.get(policyPath("scholar_flashcard_exports"))) as ("deck" | "print" | "guide")[],
     scholarFlashcardLevelMix: clampChoice(policyDef("scholar_flashcard_level_mix") as ChoicePolicy, published.get(policyPath("scholar_flashcard_level_mix"))) as "programme" | "recall" | "balanced" | "applied",
     scholarStudySessions: clampChoice(policyDef("scholar_study_sessions") as ChoicePolicy, published.get(policyPath("scholar_study_sessions"))) === "on",
+    scholarLearnPrepareNext: clampChoice(policyDef("scholar_learn_prepare_next") as ChoicePolicy, published.get(policyPath("scholar_learn_prepare_next"))) === "on",
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),
     scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
     scholarSrsMaxIntervalDays: int("scholar_srs_max_interval_days"),
