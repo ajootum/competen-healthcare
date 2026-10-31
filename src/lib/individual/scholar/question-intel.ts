@@ -186,6 +186,24 @@ export function flashcardFrontAsks(front: string): boolean {
   return words.length >= 1 && words.length <= 8 && !/[.;]\s*$/.test(f) && !/:\s*\S+\s+\S+/.test(f);
 }
 
+// SCHOLAR-FLASHCARDS-01: a generated card is ONE concept and a RECALL PROMPT, not a sentence copied from the notes.
+const flatWords = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+/** The longest back that is still one concept, and the most sentences it may run to. */
+export const CARD_BACK_ONE_CONCEPT = { chars: 300, sentences: 2 };
+
+/**
+ * Pure. Why an AI-written card is not a good flashcard, or null: its front is a sentence copied from the notes (eight
+ * words or more, found verbatim in the passage) rather than a recall prompt, or its back is more than one concept
+ * (longer than 300 characters or more than two sentences).
+ */
+export function flashcardDraftProblem(front: string, back: string, passage: string): "copied" | "multi_concept" | null {
+  const f = flatWords(front);
+  if (f.split(" ").length >= 8 && flatWords(passage).includes(f)) return "copied";
+  const sentences = back.split(/[.!?]+(?:\s|$)/).map(s => s.trim()).filter(Boolean).length;
+  if (back.length > CARD_BACK_ONE_CONCEPT.chars || sentences > CARD_BACK_ONE_CONCEPT.sentences) return "multi_concept";
+  return null;
+}
+
 /** Pure. A stem reduced for duplicate detection: case, punctuation and small framing words ignored. */
 export function stemKey(stem: string): string {
   return stem.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\b(the|a|an|of|in|on|to|is|are|was|were|which|what|that|this|these|for|and|or|with|from|by|all|apply|choose|select)\b/g, " ").replace(/\s+/g, " ").trim();

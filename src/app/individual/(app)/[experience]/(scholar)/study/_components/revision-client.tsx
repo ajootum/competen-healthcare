@@ -341,7 +341,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
   const [text, setText] = useState("");
   const [matches, setMatches] = useState<string[]>(item.options.map(() => ""));
   const [order, setOrder] = useState<number[]>(item.options.map((_, i) => i));
-  const [back, setBack] = useState<{ back: string; source: { quote: string; citation: string; materialId: string; chunkId: string } } | null>(null);
+  const [back, setBack] = useState<{ back: string; source: { quote: string; citation: string; materialId: string; chunkId: string }; card?: { origin: "notes" | "library" | "learner"; originLabel: string } } | null>(null);
   const [selfGrade, setSelfGrade] = useState<{ accepted: string[]; reason: string; label: string } | null>(null);
   // SCHOLAR-SQIE-CLOSE-01: a structured question's answers, one per part, and the student's own marking of each part.
   const [texts, setTexts] = useState<string[]>((item.parts ?? []).map(() => ""));
@@ -411,9 +411,11 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
         !back ? <button type="button" className={`${btn} mt-4`} style={{ background: accent }} disabled={busy} onClick={reveal}>Show the answer</button> : (
           <div className="mt-4">
             <div className="rounded-xl bg-gray-50 p-4">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">What your notes say</p>
+              {/* SCHOLAR-FLASHCARDS-01: a card the student wrote, or a library card, says so -- never "your notes". */}
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">{back.card?.origin === "learner" ? "Your card" : back.card?.origin === "library" ? "The Competen library" : "What your notes say"}</p>
               <p className="mt-1 text-[14.5px] font-bold text-gray-900">{back.back}</p>
-              <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={sourceHref(back.source.materialId, back.source.chunkId)} className={`underline ${focusRing}`}>{back.source.citation}</Link></p>
+              {back.card && back.card.origin !== "notes" ? <p className="mt-1 text-[12.5px] text-gray-600">{back.card.originLabel}</p>
+                : <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={sourceHref(back.source.materialId, back.source.chunkId)} className={`underline ${focusRing}`}>{back.source.citation}</Link></p>}
             </div>
             <fieldset className="mt-3" disabled={busy}>
               <legend className="text-[14px] font-semibold text-gray-900">How well did you remember it? (your own judgement)</legend>

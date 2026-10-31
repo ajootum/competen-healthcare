@@ -74,7 +74,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days"
   | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms"
   | "scholar_osce_duration_minutes" | "scholar_osce_checklist_min" | "scholar_osce_checklist_max"
-  | "scholar_adaptive_length" | "scholar_adaptive_max_length";
+  | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -82,7 +82,7 @@ export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fi
   | "scholar_evaluation_methods" | "scholar_evaluation_evidence" | "scholar_progress_sections" | "scholar_progress_next_rules"
   | "professional_evaluation_scopes" | "professional_evaluation_confidence_factors" | "professional_evaluation_recommendation_rules"
   | "professional_progress_periods" | "professional_progress_recommendation_rules" | "scholar_exam_evidence_sources" | "scholar_learn_source_modes" | "scholar_recovery_providers"
-  | "scholar_recovery_evidence_types" | "scholar_adaptive_formats";
+  | "scholar_recovery_evidence_types" | "scholar_adaptive_formats" | "scholar_flashcard_source_modes" | "scholar_flashcard_exports";
 /** COMPETEN-SCHOLAR-01 S1: which shared catalogues (framework ids) each experience may offer. */
 export type CataloguePolicyKey = "scholar_catalogues" | "professional_catalogues" | "scholar_reference_collections";
 /** COMPETEN-SCHOLAR-JOIN-01: the educational context a person gives when they join Scholar. */
@@ -115,7 +115,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic"
-  | "scholar_osce" | "scholar_adaptive_exams";
+  | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1043,6 +1043,56 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: [...ADAPTIVE_FORMATS],
     limitReason: "Only the formats migrations 416 and 710 store. Structured (multi-part) needs 710 and feedback after each answer. Default: all of these.",
   },
+  // ── SCHOLAR-FLASHCARDS-01: FLASHCARDS, on the revision engine (owner, 31 Oct 2026) ──
+  // What is offered and its limits. The rules beneath are not settings: a card is a revision question (416), its schedule
+  // the shared SM-2 (the spaced review settings below apply to cards too), grounding, the identifier screen, dedupe and
+  // the one-concept recall check on every generated card, governed library first, private and formative always.
+  {
+    key: "scholar_flashcards", kind: "choice", product: "Scholar",
+    label: "Flashcards",
+    help: "Whether Revise offers Flashcards: decks of recall cards from the student's own notes, the Competen library and their learning gaps, cards they write themselves, two-button recall on the spaced review schedule, and downloadable decks and revision guides. Formative practice only.",
+    options: [{ value: "on", label: "Offer flashcards" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Decks, hand-written cards, bookmarks and notes need migration 730. Without it, flashcards from notes and the library still work. Default: offered.",
+  },
+  {
+    key: "scholar_flashcards_per_generation", kind: "int", product: "Scholar", unit: "cards",
+    label: "Most new flashcards written at one time",
+    help: "However many cards a student asks for, at most this many new ones are written by AI in one go. Saved and library cards are reused first and do not count.",
+    fallback: 10, min: 1, max: 30,
+    limitReason: "One to thirty, and never more than the revision generation calls allow. Default: ten.",
+  },
+  {
+    key: "scholar_flashcard_deck_max", kind: "int", product: "Scholar", unit: "cards",
+    label: "Most cards in one deck",
+    help: "A deck may hold at most this many cards. One study run takes up to fifty of them, due cards first.",
+    fallback: 200, min: 10, max: 1000,
+    limitReason: "Ten to a thousand. A study run is a revision session, which holds at most fifty cards (migration 417). Default: two hundred.",
+  },
+  {
+    key: "scholar_flashcard_source_modes", kind: "set", product: "Scholar",
+    label: "Where new flashcards may come from",
+    help: "The sources a student may choose for new flashcards: their notes only, or their notes with the clinically approved references linked to them. Governed library cards are always offered first.",
+    options: [{ value: "notes", label: "Notes only" }, { value: "notes_and_references", label: "Notes and approved references" }],
+    fallback: ["notes", "notes_and_references"],
+    limitReason: "Two modes. Notes only is always allowed (an empty choice means notes only). Default: both.",
+  },
+  {
+    key: "scholar_flashcard_difficulty", kind: "choice", product: "Scholar",
+    label: "Default flashcard difficulty",
+    help: "Which cards a study run prefers, and the level new cards are written at, when the student does not choose.",
+    options: [{ value: "any", label: "Any" }, { value: "easy", label: "Easier" }, { value: "standard", label: "Standard" }, { value: "harder", label: "Harder" }],
+    fallback: "any",
+    limitReason: "Four choices. Default: any (the programme level, adapted to recent answers).",
+  },
+  {
+    key: "scholar_flashcard_exports", kind: "set", product: "Scholar",
+    label: "Flashcard downloads offered",
+    help: "Which downloads a student may make from their own cards: a deck of flashcards, printable cards, and a multi-page revision guide. Each is a PDF of the student's own cards only.",
+    options: [{ value: "deck", label: "This deck (flashcards)" }, { value: "print", label: "Printable cards" }, { value: "guide", label: "Revision guide" }],
+    fallback: ["deck", "print", "guide"],
+    limitReason: "Three formats. Default: all.",
+  },
   {
     key: "scholar_srs_mastery_reps", kind: "int", product: "Scholar", unit: "reviews",
     label: "Spaced review: consecutive good reviews for a long interval",
@@ -1693,6 +1743,14 @@ export type IndividualPolicy = {
   scholarAdaptiveLength: number;
   scholarAdaptiveMaxLength: number;
   scholarAdaptiveFormats: AdaptiveFormat[];
+  /** SCHOLAR-FLASHCARDS-01. */
+  scholarFlashcards: "on" | "off";
+  scholarFlashcardsPerGeneration: number;
+  scholarFlashcardDeckMax: number;
+  /** Always includes notes. */
+  scholarFlashcardSourceModes: ("notes" | "notes_and_references")[];
+  scholarFlashcardDifficulty: RevisionDifficulty;
+  scholarFlashcardExports: ("deck" | "print" | "guide")[];
   scholarSrsMasteryReps: number;
   scholarSrsMasteryDays: number;
   scholarSrsMaxIntervalDays: number;
@@ -1835,6 +1893,12 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     // The default never exceeds the maximum, whatever was published.
     scholarAdaptiveLength: Math.min(int("scholar_adaptive_length"), int("scholar_adaptive_max_length")),
     scholarAdaptiveFormats: clampSet(policyDef("scholar_adaptive_formats") as SetPolicy, published.get(policyPath("scholar_adaptive_formats"))) as AdaptiveFormat[],
+    scholarFlashcards: clampChoice(policyDef("scholar_flashcards") as ChoicePolicy, published.get(policyPath("scholar_flashcards"))) as "on" | "off",
+    scholarFlashcardsPerGeneration: int("scholar_flashcards_per_generation"),
+    scholarFlashcardDeckMax: int("scholar_flashcard_deck_max"),
+    scholarFlashcardSourceModes: (() => { const m = clampSet(policyDef("scholar_flashcard_source_modes") as SetPolicy, published.get(policyPath("scholar_flashcard_source_modes"))) as ("notes" | "notes_and_references")[]; return m.includes("notes") ? m : ["notes" as const, ...m]; })(),
+    scholarFlashcardDifficulty: clampChoice(policyDef("scholar_flashcard_difficulty") as ChoicePolicy, published.get(policyPath("scholar_flashcard_difficulty"))) as RevisionDifficulty,
+    scholarFlashcardExports: clampSet(policyDef("scholar_flashcard_exports") as SetPolicy, published.get(policyPath("scholar_flashcard_exports"))) as ("deck" | "print" | "guide")[],
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),
     scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
     scholarSrsMaxIntervalDays: int("scholar_srs_max_interval_days"),

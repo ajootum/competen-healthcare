@@ -17,6 +17,7 @@ import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from ".
 import StudyNav from "../../_components/StudyNav";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
 import { studyHref } from "../../_components/question-view";
+import { ReviseNav } from "../../_components/revise-nav";
 import { AdaptiveReportView, AdaptiveRunner, AdaptiveStart, adaptiveHref, type ReviewRow } from "../../_components/adaptive-client";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -42,6 +43,7 @@ export default async function AdaptiveExam({ params, searchParams }: { params: P
     <>
       <PageHeader accent={SCHOLAR.accent} eyebrow={scholarSpace("revise").eyebrow} title="Adaptive exam" intro={ADAPTIVE_HELP} />
       <StudyNav dueCount={due} />
+      <ReviseNav current="adaptive" adaptive={policy.scholarAdaptiveExams === "on"} row />
       <BoundaryNotice notice={FORMATIVE_NOTICE} />
       <p className="mb-3 text-[13px]"><Link href={studyHref("revise")} className={`underline ${focusRing}`}>← Back to Revision</Link></p>
     </>

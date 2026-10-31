@@ -22,6 +22,7 @@ import { CardReview, type CardView } from "../_components/client";
 import { sourceHref, studyHref } from "../_components/question-view";
 import { RevisionRunner, RevisionStart, SavedSets } from "../_components/revision-client";
 import { adaptiveHref } from "../_components/adaptive-client";
+import { ReviseNav, flashcardsHref } from "../_components/revise-nav";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -55,11 +56,13 @@ export default async function Revise({ params, searchParams }: { params: Promise
   const { ctx } = page;
   const x = SCHOLAR;
   const q = await searchParams;
-  const due = await countDue(ctx.admin, ctx.userId);
+  const [due, navPolicy] = await Promise.all([countDue(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
+  const reviseNavAdaptive = navPolicy.scholarAdaptiveExams === "on";
   const header = (
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("revise").eyebrow} title="Revise" intro={scholarSpace("revise").intro} />
       <StudyNav dueCount={due} />
+      <ReviseNav current="practice" adaptive={reviseNavAdaptive} row />
       <BoundaryNotice notice={FORMATIVE_NOTICE} />
     </>
   );
@@ -70,6 +73,8 @@ export default async function Revise({ params, searchParams }: { params: Promise
     const [s, pool] = await Promise.all([getRevisionSession(ctx.admin, ctx.userId, q.session), revisionPool(ctx.admin, ctx.userId, { kinds: [...REVISION_FORMATS, "case"] })]);
     if (!s.ok || !pool.ok) return <>{header}<Unreadable what="this revision session" /></>;
     // SCHOLAR-PRACTICE-EXAMS-01: an adaptive exam runs on its own page (its questions are chosen one at a time).
+    // SCHOLAR-FLASHCARDS-01: a flashcards session runs on the Flashcards page (the card-flipping study view).
+    if (s.data && s.data.session.mode === "flashcards") redirect(flashcardsHref({ session: s.data.session.id }));
     if (s.data && (s.data.session.mode === "adaptive" || await getAdaptiveSet(ctx.admin, ctx.userId, s.data.session.setId))) redirect(adaptiveHref(s.data.session.id));
     if (!s.data) return <>{header}<StatePanel title="That revision session could not be found" actions={<Link href={studyHref("revise")} className={focusRing}>Back to Revision</Link>}><p>It may have been removed with the materials it used.</p></StatePanel></>;
     const byId = new Map(pool.data.questions.map(qq => [qq.id, qq]));
@@ -155,6 +160,17 @@ export default async function Revise({ params, searchParams }: { params: Promise
                 {examsActive.map(e => (
                   <Link key={e.session.id} href={adaptiveHref(e.session.id)} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`}>Carry on: {e.title} ({e.session.position} answered)</Link>
                 ))}
+              </div>
+            </section>
+          )}
+
+          {policy.scholarFlashcards === "on" && (
+            <section aria-labelledby="flashcards-h" className="rounded-2xl border border-gray-200 bg-white p-5">
+              <h2 id="flashcards-h" className="text-[15px] font-bold text-gray-900">Flashcards</h2>
+              <p className="mt-0.5 text-[13px] text-gray-600">Recall the answer, flip the card, and say whether you remembered: it comes back sooner or later on your spaced review schedule. From your notes, the Competen library and your learning gaps, or cards you write yourself, in decks you can download.</p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Link href={flashcardsHref()} className={`inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Open Flashcards</Link>
+                <Link href={flashcardsHref({ view: "decks" })} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`}>My Decks</Link>
               </div>
             </section>
           )}
