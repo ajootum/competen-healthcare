@@ -3,20 +3,27 @@ export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { finishOsceAttempt, getOsceAttempt, getOsceStation, markOsceAttempt, saveOsceFeedback } from "@/lib/individual/scholar/store";
+import { abandonOsceAttempt, finishOsceAttempt, getOsceAttempt, getOsceStation, markOsceAttempt, saveOsceFeedback, saveOsceProgress } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runOsceFeedback } from "@/lib/individual/scholar/generation";
 import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
-import { osceGate } from "@/lib/individual/scholar/osce-service";
-import { OSCE_FEEDBACK_WITHHELD, finishRun, normaliseResponses, remediation, scoreSummary, scoreTicks } from "@/lib/individual/scholar/osce";
+import { osceGate, resultExtras, stationSnapshot } from "@/lib/individual/scholar/osce-service";
+import {
+  OSCE_FEEDBACK_WITHHELD, finishRun, marksCompared, normaliseResponses, readSnapshot, remediation, resultOf, saveAllowed, scoreExplanation, scoreSummary, scoreTicks,
+  type OsceTick,
+} from "@/lib/individual/scholar/osce";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
 export const dynamic = "force-dynamic";
 
-// POST /api/individual/scholar/osce/attempts/[id] -- SCHOLAR-PRACTICE-EXAMS-01 (720). One practice run, in three steps:
+// POST /api/individual/scholar/osce/attempts/[id] -- SCHOLAR-PRACTICE-EXAMS-01 (720), SCHOLAR-OSCE-01 (721). One run:
+//   { action: "save", responses }            AUTOSAVE during the timed run (debounced by the browser): what is written so
+//                                             far, screened, kept on the open run. After the time (and a short grace) it
+//                                             is refused, and the run is finished with what was last saved.
+//   { action: "abandon" }                     the learner discards an open run: kept as abandoned, never marked.
 //   { action: "finish", responses, timeUp? }  what the learner wrote under each heading, screened for patient
 //                                             identifiers, kept once. How long it took is measured from the server's
 //                                             own start, never more than the station allows.
@@ -39,16 +46,41 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
   const station = await getOsceStation(ctx.admin, ctx.userId, attempt.stationId);
   if (!station) return NextResponse.json({ error: "That station could not be found." }, { status: 404 });
   const body = await req.json().catch(() => ({}));
+  // The run is marked against the station AS IT WAS when the run began (721 snapshot); a run from before 721 has none.
+  const snap = readSnapshot(attempt.snapshot, stationSnapshot(station));
+
+  if (body?.action === "save") {
+    if (attempt.status !== "in_progress" || attempt.finishedAt) return NextResponse.json({ error: "This run is no longer open.", closed: true }, { status: 409 });
+    const responses = normaliseResponses(body?.responses, snap.sections);
+    if (findPatientIdentifiers(Object.values(responses).join("\n")).length)
+      return NextResponse.json({ error: "Something you wrote looks like it identifies a patient, so it was not saved. Remove it and carry on.", identifier: true }, { status: 422 });
+    const started = Date.parse(attempt.startedAt);
+    if (!saveAllowed(started, snap.durationMinutes, Date.now())) {
+      const now = Math.max(Date.now(), started);
+      const run = finishRun(started, now, snap.durationMinutes);
+      await finishOsceAttempt(ctx.admin, ctx.userId, attempt.id, { responses: attempt.responses, finishedAt: new Date(now).toISOString(), durationSeconds: run.durationSeconds, timeUp: true });
+      return NextResponse.json({ error: "Time was up, so the run was finished with what was last saved.", closed: true, timeUp: true }, { status: 409 });
+    }
+    if (!(await saveOsceProgress(ctx.admin, ctx.userId, attempt.id, responses))) return NextResponse.json({ error: "Not saved just now. Keep writing: it will try again." }, { status: 500 });
+    return NextResponse.json({ saved: true, savedAt: new Date().toISOString() });
+  }
+
+  if (body?.action === "abandon") {
+    if (attempt.status !== "in_progress" || attempt.finishedAt) return NextResponse.json({ error: "This run is no longer open." }, { status: 409 });
+    if (!(await abandonOsceAttempt(ctx.admin, ctx.userId, attempt.id))) return NextResponse.json({ error: "The run could not be closed just now." }, { status: 500 });
+    return NextResponse.json({ abandoned: true });
+  }
 
   if (body?.action === "finish") {
-    if (attempt.finishedAt) return NextResponse.json({ error: "This run has already finished." }, { status: 409 });
-    const responses = normaliseResponses(body?.responses, station.sections);
+    if (attempt.finishedAt || attempt.status !== "in_progress") return NextResponse.json({ error: "This run has already finished." }, { status: 409 });
+    // What the browser sends, or (nothing sent, for example after a reload at the bell) what was last autosaved.
+    const responses = body?.responses && typeof body.responses === "object" ? normaliseResponses(body.responses, snap.sections) : attempt.responses;
     if (findPatientIdentifiers(Object.values(responses).join("\n")).length)
       return NextResponse.json({ error: "Something you wrote looks like it identifies a patient. Remove it and finish again." }, { status: 422 });
     // The start is the database's clock, the finish the server's: never earlier than the start, never longer than the station.
     const started = Date.parse(attempt.startedAt);
     const finished = Math.max(Date.now(), started);
-    const run = finishRun(started, finished, station.durationMinutes);
+    const run = finishRun(started, finished, snap.durationMinutes);
     const ok = await finishOsceAttempt(ctx.admin, ctx.userId, attempt.id, {
       responses, finishedAt: new Date(finished).toISOString(), durationSeconds: run.durationSeconds, timeUp: run.timeUp || body?.timeUp === true,
     });
@@ -69,7 +101,10 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
       text: Object.values(attempt.responses).join("\n"), passages: [{ chunkId: station.chunkId ?? station.id, content: `${station.scenario}\n${station.checklist.map(i => i.text).join("\n")}` }],
       competencyIds: station.competencyId ? [station.competencyId] : [],
     }));
-    const r = await runOsceFeedback(ctx.userId, { scenario: station.scenario, candidateInstructions: station.candidateInstructions, checklist: station.checklist, responses: attempt.responses }, ai.run);
+    const r = await runOsceFeedback(ctx.userId, {
+      scenario: snap.scenario, candidateInstructions: snap.candidateInstructions, checklist: snap.checklist, responses: attempt.responses,
+      guidance: snap.guidance, expectedActivities: snap.expectedActivities,
+    }, ai.run);
     const refusal = ai.refusal();
     if (refusal) return NextResponse.json({ error: `${refusalWords(refusal).message} Mark each item yourself.`, selfMark: true }, { status: 409 });
     await recordScholarOutcome(ctx.admin, ai, {
@@ -91,19 +126,25 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
   if (body?.action === "mark") {
     if (!attempt.finishedAt) return NextResponse.json({ error: "Finish the station first." }, { status: 409 });
     if (attempt.ticks) return NextResponse.json({ error: "This run is already marked." }, { status: 409 });
-    const s = scoreTicks(station.checklist, body?.ticks);
+    const s = scoreTicks(snap.checklist, body?.ticks);
     if (!s.ok) return NextResponse.json({ error: s.reason }, { status: 400 });
     // ai_evaluation is recorded only from the server's own kept feedback, never from what the browser says.
     const fb = attempt.feedback;
     const usedAi = body?.useAi === true && !!fb?.parts && typeof fb.model === "string" && typeof fb.promptVersion === "string";
+    const result = resultOf(snap.checklist, s.ticks);
+    const remedies = remediation({ checklist: snap.checklist, materialId: station.materialId, competencyId: station.competencyId }, s.ticks);
     const ok = await markOsceAttempt(ctx.admin, ctx.userId, attempt.id, {
       ticks: s.ticks, score: s.score, criticalMissed: s.criticalMissed, marking: usedAi ? "ai_evaluation" : "self_graded",
       evaluatorModel: usedAi ? fb!.model : null, evaluatorPromptVersion: usedAi ? fb!.promptVersion : null,
+      gaps: result.gaps, revisionSuggestions: remedies,
     });
     if (!ok) return NextResponse.json({ error: "Your marks could not be saved just now." }, { status: 500 });
     return NextResponse.json({
       marked: true, score: s.score, points: s.points, outOf: s.outOf, criticalMissed: s.criticalMissed, criticalMissedIds: s.criticalMissedIds,
-      summary: scoreSummary(s), marking: usedAi ? "ai_evaluation" : "self_graded", remediation: remediation(station, s.ticks),
+      summary: scoreSummary(s), marking: usedAi ? "ai_evaluation" : "self_graded", remediation: remedies, version: snap.version,
+      explanation: scoreExplanation({ points: s.points, outOf: s.outOf, criticalMissed: s.criticalMissed, criticalPartly: s.criticalPartlyIds.length, criticalTotal: snap.checklist.filter(i => i.critical).length }),
+      result, marks: marksCompared(snap.checklist, s.ticks, Array.isArray(fb?.suggested) ? fb!.suggested as OsceTick[] : null),
+      ...resultExtras(snap),
     });
   }
 

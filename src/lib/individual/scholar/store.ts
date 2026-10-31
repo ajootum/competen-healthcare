@@ -18,7 +18,8 @@ import type { ExamOption, PaperFlag, ParsedQuestion, QuestionFlag } from "./exam
 import { stemKey } from "./question-intel";
 import { servableLibraryVersions, type LibraryPick } from "./library-questions";
 import type { ResearchSource } from "./exam-research";
-import type { OsceItem, OsceSource, OsceStationDraft, OsceTick } from "./osce";
+import type { OsceDefinition, OsceItem, OsceSource, OsceStationDraft, OsceTick } from "./osce";
+import { guidanceJson, readDefinition } from "./osce";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -2596,15 +2597,16 @@ export async function resolveFeedbackTarget(admin: any, userId: string, target: 
   } catch { return null; }
 }
 
-// ── OSCE PRACTICE (720, SCHOLAR-PRACTICE-EXAMS-01) ── simulated stations and their timed runs, formative only ────────
+// ── OSCE PRACTICE (720 + 721, SCHOLAR-PRACTICE-EXAMS-01, SCHOLAR-OSCE-01) ── simulated stations and their runs ─────
 //
-// Detected once, as 710 is: one read of the 720 station table keyed on the caller. Absent (42P01, PGRST205): OSCE
-// practice is shown as unavailable with its reason, and nothing else changes. A transient error is "no" for now.
+// Detected once, as 710 is: one read of a 721 column of the 720 station table, keyed on the caller. Either migration
+// absent (42P01 table, 42703 or PGRST204 column, PGRST205): OSCE practice is shown as unavailable with its reason, and
+// nothing else changes. 720 and 721 are one unit: the code needs both. A transient error is "no" for now.
 // Nothing here is an assessment: no row is copied to assessments, competency_verification_* or the estate osce_* tables.
 let osce720: boolean | null = null;
 export async function osceSchema(admin: Admin, userId: string): Promise<boolean> {
   if (osce720 !== null) return osce720;
-  const { error } = await admin.from("individual_scholar_osce_station").select("id").eq("user_id", userId).limit(1);
+  const { error } = await admin.from("individual_scholar_osce_station").select("id, version").eq("user_id", userId).limit(1);
   if (!error) return (osce720 = true);
   if (isNotProvisioned(error)) return (osce720 = false);
   return false;
@@ -2612,36 +2614,49 @@ export async function osceSchema(admin: Admin, userId: string): Promise<boolean>
 /** Tests only: forget what was detected. */
 export const resetOsceSchema = () => { osce720 = null; };
 
-export type OsceStationRow = {
+export type OsceStationRow = OsceDefinition & {
   id: string; title: string; scenario: string; candidateInstructions: string; durationMinutes: number; sections: string[];
   checklist: OsceItem[]; competencyId: string | null; materialId: string | null; chunkId: string | null;
-  source: OsceSource; templateKey: string | null; contentStatus: string; model: string | null; promptVersion: string | null; createdAt: string;
+  source: OsceSource; templateKey: string | null; contentStatus: string; reviewStatus: string; model: string | null; promptVersion: string | null; createdAt: string;
+  libraryResourceId: string | null; libraryVersionId: string | null;
 };
-const OSCE_STATION_COLS = "id, title, scenario, candidate_instructions, duration_minutes, sections, checklist, competency_id, material_id, chunk_id, source, template_key, content_status, model, prompt_version, created_at";
+const OSCE_STATION_COLS = "id, title, scenario, candidate_instructions, duration_minutes, sections, checklist, competency_id, material_id, chunk_id, source, template_key, content_status, review_status, model, prompt_version, created_at, profession, programme_code, programme_label, topic, body_system, difficulty, learning_outcomes, objectives, expected_activities, guidance, source_references, version, library_resource_id, library_version_id";
 const toOsceStation = (r: any): OsceStationRow => ({
+  ...readDefinition(r),
   id: r.id, title: r.title, scenario: r.scenario, candidateInstructions: r.candidate_instructions, durationMinutes: r.duration_minutes,
   sections: Array.isArray(r.sections) ? r.sections : [], checklist: Array.isArray(r.checklist) ? r.checklist : [], competencyId: r.competency_id,
-  materialId: r.material_id, chunkId: r.chunk_id, source: r.source, templateKey: r.template_key, contentStatus: r.content_status,
-  model: r.model, promptVersion: r.prompt_version, createdAt: r.created_at,
+  materialId: r.material_id, chunkId: r.chunk_id, source: r.source, templateKey: r.template_key, contentStatus: r.content_status, reviewStatus: r.review_status ?? "private_formative",
+  model: r.model, promptVersion: r.prompt_version, createdAt: r.created_at, libraryResourceId: r.library_resource_id ?? null, libraryVersionId: r.library_version_id ?? null,
 });
 
-/** One station. A template already copied for this learner is returned, not copied twice (720 unique key). */
+const listOrNull = (xs: readonly string[]) => (xs.length ? [...xs] : null);
+
+/**
+ * One station. A template, or a governed station version, already copied for this learner is returned, not copied twice
+ * (720 and 721 unique keys). A governed copy is written exactly as published: the 721 trigger refuses anything else.
+ */
 export async function insertOsceStation(admin: Admin, userId: string, d: OsceStationDraft): Promise<{ ok: true; id: string; existing: boolean } | { ok: false; notProvisioned: boolean }> {
-  if (d.templateKey) {
-    const { data: had } = await admin.from("individual_scholar_osce_station").select("id").eq("user_id", userId).eq("template_key", d.templateKey).maybeSingle();
+  if (d.templateKey || d.libraryVersionId) {
+    const q = admin.from("individual_scholar_osce_station").select("id").eq("user_id", userId);
+    const { data: had } = await (d.templateKey ? q.eq("template_key", d.templateKey) : q.eq("library_version_id", d.libraryVersionId)).maybeSingle();
     if (had?.id) return { ok: true, id: had.id, existing: true };
   }
   const { data, error } = await admin.from("individual_scholar_osce_station").insert({
     user_id: userId, title: d.title, scenario: d.scenario, candidate_instructions: d.candidateInstructions, duration_minutes: d.durationMinutes,
     sections: d.sections, checklist: d.checklist, competency_id: d.competencyId, material_id: d.materialId, chunk_id: d.chunkId,
     source: d.source, template_key: d.templateKey, content_status: d.contentStatus, model: d.model, prompt_version: d.promptVersion,
+    profession: d.profession, programme_code: d.programmeCode, programme_label: d.programmeLabel, topic: d.topic, body_system: d.bodySystem,
+    difficulty: d.difficulty, learning_outcomes: listOrNull(d.learningOutcomes), objectives: listOrNull(d.objectives),
+    expected_activities: d.exact ? d.exact.expected_activities : listOrNull(d.expectedActivities),
+    guidance: d.exact ? d.exact.guidance : guidanceJson(d.guidance), source_references: d.references.length ? d.references : null, version: d.version,
+    review_status: d.libraryVersionId ? "library_approved" : "private_formative", library_resource_id: d.libraryResourceId, library_version_id: d.libraryVersionId,
   }).select("id").single();
   if (error || !data) return fail(error);
   return { ok: true, id: data.id, existing: false };
 }
 
 export async function listOsceStations(admin: Admin, userId: string): Promise<Read<OsceStationRow[]>> {
-  const { data, error } = await admin.from("individual_scholar_osce_station").select(OSCE_STATION_COLS).eq("user_id", userId).order("created_at", { ascending: false }).limit(100);
+  const { data, error } = await admin.from("individual_scholar_osce_station").select(OSCE_STATION_COLS).eq("user_id", userId).order("created_at", { ascending: false }).limit(200);
   if (error) return fail(error);
   return { ok: true, data: (data ?? []).map(toOsceStation) };
 }
@@ -2660,28 +2675,43 @@ export async function deleteOsceStation(admin: Admin, userId: string, id: string
   return data?.length ? "ok" : "not_found";
 }
 
+export type OsceAttemptStatus = "in_progress" | "finished" | "abandoned";
 export type OsceAttemptRow = {
   id: string; stationId: string; startedAt: string; finishedAt: string | null; durationSeconds: number | null; timeUp: boolean;
   responses: Record<string, string>; ticks: OsceTick[] | null; score: number | null; criticalMissed: number | null;
   marking: "self_graded" | "ai_evaluation" | null; evaluatorModel: string | null; feedback: Record<string, any> | null;
+  status: OsceAttemptStatus; stationVersion: number | null; snapshot: Record<string, unknown> | null; lastSavedAt: string | null;
+  gaps: unknown[] | null; revisionSuggestions: unknown[] | null;
 };
-const OSCE_ATTEMPT_COLS = "id, station_id, started_at, finished_at, duration_seconds, time_up, responses, ticks, score, critical_missed, marking, evaluator_model, feedback";
+const OSCE_ATTEMPT_COLS = "id, station_id, started_at, finished_at, duration_seconds, time_up, responses, ticks, score, critical_missed, marking, evaluator_model, feedback, status, station_version, station_snapshot, last_saved_at, gaps, revision_suggestions";
 const toOsceAttempt = (r: any): OsceAttemptRow => ({
   id: r.id, stationId: r.station_id, startedAt: r.started_at, finishedAt: r.finished_at, durationSeconds: r.duration_seconds, timeUp: !!r.time_up,
   responses: r.responses && typeof r.responses === "object" ? r.responses : {}, ticks: Array.isArray(r.ticks) ? r.ticks : null,
   score: r.score === null || r.score === undefined ? null : Number(r.score), criticalMissed: r.critical_missed, marking: r.marking,
   evaluatorModel: r.evaluator_model, feedback: r.feedback && typeof r.feedback === "object" ? r.feedback : null,
+  status: r.status === "abandoned" || r.status === "finished" ? r.status : r.finished_at ? "finished" : "in_progress",
+  stationVersion: Number.isInteger(r.station_version) ? r.station_version : null,
+  snapshot: r.station_snapshot && typeof r.station_snapshot === "object" && !Array.isArray(r.station_snapshot) ? r.station_snapshot : null,
+  lastSavedAt: r.last_saved_at ?? null, gaps: Array.isArray(r.gaps) ? r.gaps : null, revisionSuggestions: Array.isArray(r.revision_suggestions) ? r.revision_suggestions : null,
 });
 
-/** A run begins: the server clock is its start. The station must be the caller's own (composite key, 720). */
-export async function startOsceAttempt(admin: Admin, userId: string, stationId: string): Promise<{ id: string; startedAt: string } | null> {
-  const { data, error } = await admin.from("individual_scholar_osce_attempt").insert({ user_id: userId, station_id: stationId }).select("id, started_at").single();
+/** A run begins: the server clock is its start, and the exact station it will be marked against is kept with it (721). */
+export async function startOsceAttempt(admin: Admin, userId: string, stationId: string, s: { version: number; snapshot: Record<string, unknown> }): Promise<{ id: string; startedAt: string } | null> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt")
+    .insert({ user_id: userId, station_id: stationId, station_version: s.version, station_snapshot: s.snapshot }).select("id, started_at").single();
   return error || !data ? null : { id: data.id, startedAt: data.started_at };
 }
 
 export async function getOsceAttempt(admin: Admin, userId: string, id: string): Promise<OsceAttemptRow | null> {
   if (!isUuid(id)) return null;
   const { data } = await admin.from("individual_scholar_osce_attempt").select(OSCE_ATTEMPT_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  return data ? toOsceAttempt(data) : null;
+}
+
+/** The caller's open run of this station, if any (the newest): what a return after navigation or reload resumes. */
+export async function openOsceAttempt(admin: Admin, userId: string, stationId: string): Promise<OsceAttemptRow | null> {
+  const { data } = await admin.from("individual_scholar_osce_attempt").select(OSCE_ATTEMPT_COLS).eq("user_id", userId).eq("station_id", stationId)
+    .eq("status", "in_progress").is("finished_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle();
   return data ? toOsceAttempt(data) : null;
 }
 
@@ -2694,11 +2724,26 @@ export async function listOsceAttempts(admin: Admin, userId: string, stationId?:
   return { ok: true, data: (data ?? []).map(toOsceAttempt) };
 }
 
-/** A run ends, once: what was written, and how long it took. A run already finished is not changed. */
+/** Autosave (721): what is written so far, on an open run only. A finished or abandoned run is never changed by it. */
+export async function saveOsceProgress(admin: Admin, userId: string, id: string, responses: Record<string, string>): Promise<boolean> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt")
+    .update({ responses, last_saved_at: new Date().toISOString() })
+    .eq("user_id", userId).eq("id", id).eq("status", "in_progress").is("finished_at", null).select("id");
+  return !error && !!data?.length;
+}
+
+/** An open run the learner discards (721): kept as abandoned, with what was written, and never marked. */
+export async function abandonOsceAttempt(admin: Admin, userId: string, id: string): Promise<boolean> {
+  const { data, error } = await admin.from("individual_scholar_osce_attempt").update({ status: "abandoned" })
+    .eq("user_id", userId).eq("id", id).eq("status", "in_progress").is("finished_at", null).select("id");
+  return !error && !!data?.length;
+}
+
+/** A run ends, once: what was written, and how long it took. A run already finished or abandoned is not changed. */
 export async function finishOsceAttempt(admin: Admin, userId: string, id: string, f: { responses: Record<string, string>; finishedAt: string; durationSeconds: number; timeUp: boolean }): Promise<boolean> {
   const { data, error } = await admin.from("individual_scholar_osce_attempt")
-    .update({ responses: f.responses, finished_at: f.finishedAt, duration_seconds: f.durationSeconds, time_up: f.timeUp })
-    .eq("user_id", userId).eq("id", id).is("finished_at", null).select("id");
+    .update({ responses: f.responses, finished_at: f.finishedAt, duration_seconds: f.durationSeconds, time_up: f.timeUp, status: "finished", last_saved_at: f.finishedAt })
+    .eq("user_id", userId).eq("id", id).eq("status", "in_progress").is("finished_at", null).select("id");
   return !error && !!data?.length;
 }
 
@@ -2709,12 +2754,16 @@ export async function saveOsceFeedback(admin: Admin, userId: string, id: string,
   return !error && !!data?.length;
 }
 
-/** The self-check, once, on a finished run: ticks, practice score, critical misses and how it was checked (720). */
+/** The self-check, once, on a finished run: ticks, practice score, critical misses, how it was checked, gaps and revision suggestions. */
 export async function markOsceAttempt(admin: Admin, userId: string, id: string, m: {
   ticks: OsceTick[]; score: number; criticalMissed: number; marking: "self_graded" | "ai_evaluation"; evaluatorModel: string | null; evaluatorPromptVersion: string | null;
+  gaps: unknown[]; revisionSuggestions: unknown[];
 }): Promise<boolean> {
   const { data, error } = await admin.from("individual_scholar_osce_attempt")
-    .update({ ticks: m.ticks, score: m.score, critical_missed: m.criticalMissed, marking: m.marking, evaluator_model: m.evaluatorModel, evaluator_prompt_version: m.evaluatorPromptVersion })
+    .update({
+      ticks: m.ticks, score: m.score, critical_missed: m.criticalMissed, marking: m.marking, evaluator_model: m.evaluatorModel, evaluator_prompt_version: m.evaluatorPromptVersion,
+      gaps: m.gaps, revision_suggestions: m.revisionSuggestions,
+    })
     .eq("user_id", userId).eq("id", id).not("finished_at", "is", null).is("ticks", null).select("id");
   return !error && !!data?.length;
 }

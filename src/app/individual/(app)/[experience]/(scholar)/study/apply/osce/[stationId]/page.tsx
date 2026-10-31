@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -9,23 +10,29 @@ import { countDue, getOsceStation, listOsceAttempts, readConsent } from "@/lib/i
 import { FORMATIVE_NOTICE } from "@/lib/individual/scholar/spaces";
 import { consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
-import { osceAvailability, stationView } from "@/lib/individual/scholar/osce-service";
-import { OSCE_MARK_LABEL, OSCE_OFF, OSCE_PRACTICE_LABEL, OSCE_SOURCE_LABEL, OSCE_UNAVAILABLE, formatClock, remediation, scoreSummary } from "@/lib/individual/scholar/osce";
-import { studyHref } from "../../../_components/question-view";
-import { DeleteStation, OsceRunner } from "../../../_components/osce-client";
+import { servableOsceStation } from "@/lib/individual/scholar/library-questions";
+import { osceAvailability, resultExtras, stationSnapshot, stationView } from "@/lib/individual/scholar/osce-service";
+import {
+  OSCE_DIFFICULTY_LABEL, OSCE_OFF, OSCE_PRACTICE_LABEL, OSCE_SOURCE_LABEL, OSCE_UNAVAILABLE, formatClock, marksCompared, readFeedbackParts, readSnapshot,
+  remediation, resultOf, scoreExplanation, scoreSummary, type OsceTick,
+} from "@/lib/individual/scholar/osce";
+import { DeleteStation, OsceRunner, ResultView, type OsceResultView } from "../../../_components/osce-client";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
 
-// ONE OSCE PRACTICE STATION -- SCHOLAR-PRACTICE-EXAMS-01 (720): run it (timer, written responses, self-check with optional
-// AI feedback), and its past runs with what to revisit. Read by the caller's own id: another person's station is a 404.
-// Simulated practice only -- never an observed clinical skills assessment, never verified competence.
+// ONE OSCE PRACTICE STATION -- SCHOLAR-PRACTICE-EXAMS-01 (720), SCHOLAR-OSCE-01 (721): the station's definition (who it
+// is for, what it practises, where it came from, its review status and version), the focused run (timer, written
+// responses autosaved, resumed after a reload on the server's clock), the self-check with optional AI feedback, and the
+// last result (critical misses first, the score explained, strengths, gaps, guidance, next steps). Read by the caller's
+// own id: another person's station is a 404. Simulated practice only -- never an observed clinical skills assessment.
 
 export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "OSCE practice station" });
 }
 
 const MARKING_WORDS = { self_graded: "your own marks", ai_evaluation: "your marks, with AI suggestions you confirmed (not verified)" } as const;
+const dt = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 export default async function OsceStationPage({ params }: { params: Promise<{ experience: string; stationId: string }> }) {
   const { experience, stationId } = await params;
@@ -43,62 +50,101 @@ export default async function OsceStationPage({ params }: { params: Promise<{ ex
   }
   const station = await getOsceStation(ctx.admin, ctx.userId, stationId);
   if (!station) notFound();
-  const [attempts, consent] = await Promise.all([listOsceAttempts(ctx.admin, ctx.userId, station.id, 30), readConsent(ctx.admin, ctx.userId)]);
+  const [attempts, consent, stillPublished] = await Promise.all([
+    listOsceAttempts(ctx.admin, ctx.userId, station.id, 30), readConsent(ctx.admin, ctx.userId),
+    station.source === "library" && station.libraryVersionId ? servableOsceStation(ctx.admin, station.libraryVersionId).then(Boolean) : Promise.resolve(true),
+  ]);
   const consentOn = consent.ok && consentStatus(consent.data, consentDocuments().published) === "on";
   const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate");
   const aiNote = !consentOn ? "AI feedback is off because AI help is off. Mark each item yourself."
     : !standing.available ? `${standing.message ?? "AI feedback is limited right now."} Mark each item yourself.` : null;
   const runs = attempts.ok ? attempts.data : [];
-  // A run finished but not yet marked (the page was left during the self-check) is picked up where it stopped.
-  const open = runs.find(r => r.finishedAt && !r.ticks);
+  const fallback = stationSnapshot(station);
+  // A run finished but not yet marked (the page was left during the self-check) is picked up where it stopped, and a
+  // run still open (left during the timer) is resumed by the runner on the server's clock.
+  const pending = runs.find(r => r.finishedAt && !r.ticks);
+  const openRun = runs.find(r => r.status === "in_progress" && !r.finishedAt);
+  const pendingSnap = pending ? readSnapshot(pending.snapshot, fallback) : null;
   const lastMarked = runs.find(r => r.ticks);
-  const remedies = lastMarked?.ticks ? remediation(station, lastMarked.ticks) : [];
-  const remedyHref = (r: { segment: string; query: Record<string, string> }) => { const q = new URLSearchParams(r.query).toString(); return `${studyHref(r.segment)}${q ? `?${q}` : ""}`; };
+  let last: OsceResultView | null = null;
+  if (lastMarked?.ticks && lastMarked.score !== null) {
+    const snap = readSnapshot(lastMarked.snapshot, fallback);
+    const ticks = lastMarked.ticks as OsceTick[];
+    const result = resultOf(snap.checklist, ticks);
+    const points = lastMarked.score * snap.checklist.length;
+    last = {
+      summary: scoreSummary({ points, outOf: snap.checklist.length, criticalMissed: lastMarked.criticalMissed ?? 0 }),
+      explanation: scoreExplanation({ points, outOf: snap.checklist.length, criticalMissed: result.criticalMissed.length, criticalPartly: result.criticalPartly.length, criticalTotal: snap.checklist.filter(i => i.critical).length }),
+      marking: lastMarked.marking ?? "self_graded", remediation: remediation({ checklist: snap.checklist, materialId: station.materialId, competencyId: station.competencyId }, ticks),
+      result, marks: marksCompared(snap.checklist, ticks, Array.isArray(lastMarked.feedback?.suggested) ? lastMarked.feedback!.suggested : null),
+      version: lastMarked.stationVersion ?? snap.version, feedback: lastMarked.marking === "ai_evaluation" ? readFeedbackParts(lastMarked.feedback?.parts) : null,
+      ...resultExtras(snap),
+    };
+  }
+  const facts: [string, string | null][] = [
+    ["Profession", station.profession ?? "Any healthcare profession"], ["Programme", station.programmeLabel ?? station.programmeCode],
+    ["Topic", station.topic], ["Body system", station.bodySystem], ["Difficulty", station.difficulty ? OSCE_DIFFICULTY_LABEL[station.difficulty] : null],
+    ["Source", OSCE_SOURCE_LABEL[station.source]], ["Review status", station.contentStatus], ["Version", String(station.version)],
+  ];
 
   return (
     <>
       {back}
-      <PageHeader accent={x.accent} eyebrow="OSCE practice" title={station.title} intro={`${station.durationMinutes} minutes · ${station.checklist.length} checklist items`} />
+      <PageHeader accent={x.accent} eyebrow="OSCE practice" title={station.title} intro={`${station.durationMinutes} minutes · ${station.checklist.length} checklist items · version ${station.version}`} />
       <StudyNav dueCount={due} />
       <BoundaryNotice notice={FORMATIVE_NOTICE} detail={OSCE_PRACTICE_LABEL} />
-      <p className="mb-4 text-[12.5px] text-gray-600">{OSCE_SOURCE_LABEL[station.source]} · {station.contentStatus}</p>
+      {!stillPublished && <p role="status" className="mb-4 rounded-xl border border-amber-400 bg-amber-50 px-3 py-2 text-[13.5px] text-amber-900">This station&rsquo;s library version is no longer published, so it cannot be practised again. Your earlier runs are kept below.</p>}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <OsceRunner key={open?.id ?? "new"} station={stationView(station)} aiNote={aiNote} pending={open ? { attemptId: open.id, timeUp: open.timeUp } : null} />
-        <aside aria-labelledby="osce-history-h" className="space-y-4">
+      <div className="grid gap-5 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="space-y-5">
+          {stillPublished || pending || openRun ? (
+            <OsceRunner key={pending?.id ?? openRun?.id ?? "new"} station={stationView(station, pendingSnap?.checklist ?? (openRun ? readSnapshot(openRun.snapshot, fallback).checklist : station.checklist))}
+              aiNote={aiNote} pending={pending ? { attemptId: pending.id, timeUp: pending.timeUp } : null} hasOpenRun={!!openRun} />
+          ) : null}
+          {last && (
+            <section aria-labelledby="osce-last-h" className="rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4 md:p-5">
+              <h2 id="osce-last-h" className="text-[16px] font-bold text-gray-900">Your last marked run</h2>
+              <ResultView r={last} />
+            </section>
+          )}
+        </div>
+        <aside aria-labelledby="osce-about-h" className="space-y-4">
+          <section className="rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4">
+            <h2 id="osce-about-h" className="text-[14px] font-bold text-gray-900">About this station</h2>
+            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]">
+              {facts.map(([k, v]) => <Fragment key={k}><dt className="font-semibold text-gray-700">{k}</dt><dd className="text-gray-800">{v ?? <span className="text-gray-500">Not recorded</span>}</dd></Fragment>)}
+            </dl>
+            {station.learningOutcomes.length > 0 && (
+              <><p className="mt-2 text-[12.5px] font-semibold text-gray-700">Learning outcomes</p><ul className="list-disc pl-5 text-[13px]">{station.learningOutcomes.map(o => <li key={o}>{o}</li>)}</ul></>
+            )}
+            {station.references.length > 0 && (
+              <><p className="mt-2 text-[12.5px] font-semibold text-gray-700">Where it came from</p>
+                <ul className="list-disc pl-5 text-[13px]">{station.references.map((r, i) => (
+                  <li key={i}>{r.kind === "notes" ? `Your notes: ${r.citation}` : r.kind === "competency" ? `Competency: ${r.label}` : r.kind === "library" ? `Competen station library, version ${r.versionNo}` : r.url ? <a href={r.url} className="underline" rel="noreferrer" target="_blank">{r.label}</a> : r.label}</li>
+                ))}</ul></>
+            )}
+          </section>
           <section className="rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4">
             <h2 id="osce-history-h" className="text-[14px] font-bold text-gray-900">Your runs of this station</h2>
             <p className="text-[12px] text-gray-600">Practice scores, not marks of competence.</p>
             {!attempts.ok ? <Unreadable what="your practice runs" /> : runs.length === 0 ? <p className="mt-2 text-[13px] text-gray-600">None yet.</p> : (
               <ul className="mt-2 space-y-2">
-                {runs.map(r => (
-                  <li key={r.id} className="text-[13px] text-gray-800">
-                    <span className="font-semibold">{new Date(r.startedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
-                    {" · "}{!r.finishedAt ? "not finished" : `${formatClock(r.durationSeconds ?? 0)}${r.timeUp ? " (time up)" : ""}`}
-                    {r.ticks && r.score !== null
-                      ? <span className="block text-[12.5px] text-gray-600">{scoreSummary({ points: r.score * station.checklist.length, outOf: station.checklist.length, criticalMissed: r.criticalMissed ?? 0 })} · {r.marking ? MARKING_WORDS[r.marking] : ""}</span>
-                      : r.finishedAt ? <span className="block text-[12.5px] text-gray-600">Not marked yet</span> : null}
-                    {r.ticks && (
-                      <details className="mt-1">
-                        <summary className={`cursor-pointer text-[12.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Item by item</summary>
-                        <ul className="mt-1 space-y-0.5 text-[12.5px]">{station.checklist.map(i => {
-                          const m = r.ticks!.find(t => t.itemId === i.id)?.mark;
-                          return <li key={i.id}>{m ? OSCE_MARK_LABEL[m] : "Not marked"} · {i.text}{i.critical ? " (critical)" : ""}</li>;
-                        })}</ul>
-                      </details>
-                    )}
-                  </li>
-                ))}
+                {runs.map(r => {
+                  const snap = readSnapshot(r.snapshot, fallback);
+                  return (
+                    <li key={r.id} className="text-[13px] text-gray-800">
+                      <span className="font-semibold">{dt(r.startedAt)}</span>
+                      {" · "}version {r.stationVersion ?? snap.version}
+                      {" · "}{r.status === "abandoned" ? "discarded" : !r.finishedAt ? "in progress" : `${formatClock(r.durationSeconds ?? 0)}${r.timeUp ? " (time up)" : ""}`}
+                      {r.ticks && r.score !== null
+                        ? <span className="block text-[12.5px] text-gray-600">{scoreSummary({ points: r.score * snap.checklist.length, outOf: snap.checklist.length, criticalMissed: r.criticalMissed ?? 0 })} · {r.marking ? MARKING_WORDS[r.marking] : ""}</span>
+                        : r.finishedAt ? <span className="block text-[12.5px] text-gray-600">Not marked yet</span> : null}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
-          {remedies.length > 0 && (
-            <section aria-labelledby="osce-next-h" className="rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4">
-              <h2 id="osce-next-h" className="text-[14px] font-bold text-gray-900">What to revisit</h2>
-              <p className="text-[12px] text-gray-600">From your last marked run: the items you missed or partly did, critical ones first.</p>
-              <ul className="mt-2 space-y-1">{remedies.map(r => <li key={r.label}><Link href={remedyHref(r)} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>{r.label}</Link></li>)}</ul>
-            </section>
-          )}
           <DeleteStation stationId={station.id} />
         </aside>
       </div>

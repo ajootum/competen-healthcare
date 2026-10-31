@@ -1172,7 +1172,7 @@ export const POLICIES: readonly PolicyDef[] = [
     help: "Whether a student may practise simulated OSCE stations alone: a timed scenario, written responses, then a self-check against the station checklist, with optional AI feedback. Never an observed assessment and never verified competence.",
     options: [{ value: "on", label: "Offered" }, { value: "off", label: "Not offered" }],
     fallback: "on",
-    limitReason: "Needs migration 720. Default: offered.",
+    limitReason: "Needs migrations 720 and 721. Default: offered.",
   },
   {
     key: "scholar_osce_duration_minutes", kind: "int", product: "Scholar", unit: "minutes",
@@ -1185,15 +1185,15 @@ export const POLICIES: readonly PolicyDef[] = [
     key: "scholar_osce_checklist_min", kind: "int", product: "Scholar", unit: "items",
     label: "Fewest checklist items in a station written from notes",
     help: "A station written by AI from a student's notes is withheld if fewer grounded checklist items than this survive the checks.",
-    fallback: 8, min: 6, max: 14,
-    limitReason: "Six to fourteen (720 allows no other). Never above the most. Default: eight.",
+    fallback: 8, min: 1, max: 60,
+    limitReason: "One to sixty (the 721 structural bound). Eight to twelve is the design default, and a clinically justified station may differ. Never above the most. Default: eight.",
   },
   {
     key: "scholar_osce_checklist_max", kind: "int", product: "Scholar", unit: "items",
     label: "Most checklist items in a station written from notes",
     help: "At most this many checklist items are kept from a station written by AI from a student's notes.",
-    fallback: 12, min: 6, max: 14,
-    limitReason: "Six to fourteen (720 allows no other). Default: twelve.",
+    fallback: 12, min: 1, max: 60,
+    limitReason: "One to sixty (the 721 structural bound). Eight to twelve is the design default. Default: twelve.",
   },
   // COMPETEN-RESEARCH-01 (owner direction 2026-10-28): governed academic research for Learn, through the shared
   // Holdings research service (src/lib/holdings/research). OFF until the owner publishes a provider AND the Research &

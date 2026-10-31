@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { textGroundingViolations } from "@/lib/ai/grounding";
 import { findPatientIdentifiers } from "./extract";
 import {
-  DEFAULT_OSCE_SECTIONS, OSCE_FEEDBACK_SYSTEM, OSCE_FEEDBACK_WITHHELD, OSCE_OFF, OSCE_PRACTICE_LABEL, OSCE_SOURCE_LABEL, OSCE_STATION_SYSTEM, OSCE_TEMPLATES,
+  DEFAULT_OSCE_SECTIONS, OSCE_BOUNDS, OSCE_DESIGN_CHECKLIST, OSCE_FEEDBACK_LABEL, OSCE_FEEDBACK_SYSTEM, readFeedbackParts, OSCE_FEEDBACK_WITHHELD, OSCE_OFF, OSCE_PRACTICE_LABEL, OSCE_SOURCE_LABEL, OSCE_STATION_SYSTEM, OSCE_TEMPLATES,
   OSCE_UNAVAILABLE, OSCE_WITHHELD, TEMPLATE_CONTENT_STATUS, checkOsceDraft, claimsVerification, finishRun, normaliseResponses, normaliseSections,
   parseOsceFeedback, remediation, scoreSummary, scoreTicks, stationFromCompetency, stationFromTemplate, timerAnnouncement, timerState, validateChecklist,
   type OsceItem, type OscePassage,
@@ -17,14 +17,18 @@ import { FORMATIVE_NOTICE } from "./spaces";
 const item = (id: string, critical = false, extra: Partial<OsceItem> = {}): OsceItem => ({ id, text: `Item ${id}`, critical, ...extra });
 const six = ["a", "b", "c", "d", "e", "f"].map((id, i) => item(id, i % 2 === 0));
 
-describe("the checklist, as 720 accepts it", () => {
-  it("accepts 6 to 14 items, each with an id, text and a boolean critical", () => {
+describe("the checklist, as 720 and 721 accept it (no fixed limit beyond the structural bound)", () => {
+  it("accepts 1 to 60 items, each with an id, text and a boolean critical: 8 to 12 is a default, not a rule", () => {
     expect(validateChecklist(six).ok).toBe(true);
-    expect(validateChecklist([...six, ...["g", "h", "i", "j", "k", "l", "m", "n"].map(id => item(id))]).ok).toBe(true);
+    expect(validateChecklist(six.slice(0, 1)).ok).toBe(true);
+    expect(validateChecklist(Array.from({ length: 15 }, (_, i) => item(`x${i}`))).ok).toBe(true);
+    expect(validateChecklist(Array.from({ length: 60 }, (_, i) => item(`x${i}`))).ok).toBe(true);
+    expect(OSCE_BOUNDS).toMatchObject({ checklistMin: 1, checklistMax: 60 });
+    expect(OSCE_DESIGN_CHECKLIST).toEqual({ min: 8, max: 12 });
   });
-  it("refuses too few, too many, duplicates and malformed items, each with a plain reason", () => {
-    expect(validateChecklist(six.slice(0, 5))).toMatchObject({ ok: false });
-    expect(validateChecklist(Array.from({ length: 15 }, (_, i) => item(`x${i}`)))).toMatchObject({ ok: false });
+  it("refuses none, more than the structural 60, duplicates and malformed items, each with a plain reason", () => {
+    expect(validateChecklist([])).toMatchObject({ ok: false });
+    expect(validateChecklist(Array.from({ length: 61 }, (_, i) => item(`x${i}`)))).toMatchObject({ ok: false });
     expect(validateChecklist([...six.slice(0, 5), item("a")])).toEqual({ ok: false, reason: "Two checklist items share an id." });
     expect(validateChecklist([...six.slice(0, 5), { id: "z", text: "t", critical: "yes" }])).toMatchObject({ ok: false });
     expect(validateChecklist([...six.slice(0, 5), { id: "z", text: " ", critical: true }])).toMatchObject({ ok: false });
@@ -32,9 +36,9 @@ describe("the checklist, as 720 accepts it", () => {
     expect(validateChecklist([...six.slice(0, 5), { id: "z", text: "t", critical: true, outcome: 3 }])).toMatchObject({ ok: false });
     expect(validateChecklist("not a list")).toMatchObject({ ok: false });
   });
-  it("narrower bounds from policy apply, wider ones never pass 720's", () => {
+  it("narrower bounds from policy apply, wider ones never pass the structural bound", () => {
     expect(validateChecklist(six, { min: 8, max: 12 })).toMatchObject({ ok: false });
-    expect(validateChecklist(Array.from({ length: 15 }, (_, i) => item(`x${i}`)), { min: 1, max: 40 })).toMatchObject({ ok: false });
+    expect(validateChecklist(Array.from({ length: 61 }, (_, i) => item(`x${i}`)), { min: 1, max: 99 })).toMatchObject({ ok: false });
   });
   it("the shipped template is a valid checklist, labelled not clinically reviewed, built from the respiratory seed outcomes", () => {
     for (const t of OSCE_TEMPLATES) {
@@ -113,14 +117,19 @@ describe("a station from a competency (no AI)", () => {
     if (!r.ok) return;
     expect(r.draft.checklist).toHaveLength(7);
     expect(r.draft.checklist.filter(i => i.outcome).map(i => i.critical)).toEqual([true, true, true]);
-    expect(r.draft).toMatchObject({ source: "competency", competencyId: resp001.id, contentStatus: "Competency content: Not clinically reviewed", model: null });
+    expect(r.draft).toMatchObject({ source: "competency", competencyId: resp001.id, contentStatus: "Competency content: Not clinically reviewed · station not clinically reviewed", model: null });
+    expect(r.draft.learningOutcomes).toEqual(resp001.outcomes);
+    expect(r.draft.references).toEqual([{ kind: "competency", competencyId: resp001.id, label: "COMP-RESP-001 Performs a systematic respiratory assessment (Not clinically reviewed)" }]);
     expect(validateChecklist(r.draft.checklist).ok).toBe(true);
   });
-  it("too few outcomes is refused with the reason, and too many are trimmed to 720's maximum", () => {
+  it("too few outcomes is refused with the reason; many outcomes make a longer station, trimmed only at the structural bound", () => {
     expect(stationFromCompetency({ ...resp001, outcomes: ["one"] }, 8)).toMatchObject({ ok: false });
     const many = stationFromCompetency({ ...resp001, outcomes: Array.from({ length: 20 }, (_, i) => `Outcome ${i}`) }, 8);
-    expect(many).toMatchObject({ ok: true, trimmed: 10 });
-    if (many.ok) expect(many.draft.checklist).toHaveLength(14);
+    expect(many).toMatchObject({ ok: true, trimmed: 0 });
+    if (many.ok) expect(many.draft.checklist).toHaveLength(24);
+    const huge = stationFromCompetency({ ...resp001, outcomes: Array.from({ length: 70 }, (_, i) => `Outcome ${i}`) }, 8);
+    expect(huge).toMatchObject({ ok: true, trimmed: 14 });
+    if (huge.ok) expect(huge.draft.checklist).toHaveLength(60);
   });
 });
 
@@ -184,16 +193,24 @@ describe("AI feedback on a run: suggestions the learner confirms, or withheld", 
   const items = six;
   const grounding = ["Item a", "Item b", "Item c", "Item d", "Item e", "Item f", "I counted the rate"];
   const parse = (raw: string) => parseOsceFeedback(raw, items, grounding, textGroundingViolations, findPatientIdentifiers);
-  const reply = (extra = "") => ["ITEM a: done", "ITEM b: partly", "ITEM zz: done", "ITEM c: missed", "RIGHT: Item a", "MISSING: Item c", "MISCONCEPTIONS: none", "WHY: Item c matters", `NEXT: practise Item c${extra}`].join("\n");
-  it("reads suggested ticks for known items and the five parts", () => {
+  const reply = (extra = "") => ["ITEM a: done", "ITEM b: partly", "ITEM zz: done", "ITEM c: missed", "UNDERSTOOD: Item a", "MISSING_STEPS: Item c", "REASONING: none",
+    "SAFETY: Item c; Item e", "IMPROVE: Item b", `REVISE: practise Item c${extra}`].join("\n");
+  it("reads suggested ticks for known items and the six parts (SCHOLAR-OSCE-01 s8)", () => {
     const f = parse(reply());
     expect(f).toMatchObject({ ok: true, suggested: [{ itemId: "a", mark: "done" }, { itemId: "b", mark: "partly" }, { itemId: "c", mark: "missed" }] });
-    if (f.ok) expect(f.parts).toMatchObject({ right: ["Item a"], missing: ["Item c"], misconceptions: [], why: "Item c matters" });
+    if (f.ok) expect(f.parts).toEqual({ understanding: ["Item a"], missingSteps: ["Item c"], reasoningGaps: [], safety: ["Item c", "Item e"], improvements: ["Item b"], revisionTopics: ["practise Item c"] });
+    expect(Object.values(OSCE_FEEDBACK_LABEL)).toEqual(["Correct understanding", "Missing assessment steps", "Clinical reasoning gaps", "Important safety considerations", "Suggested improvements", "Revision topics"]);
+    expect(OSCE_FEEDBACK_SYSTEM).toMatch(/UNDERSTOOD:[\s\S]*MISSING_STEPS:[\s\S]*REASONING:[\s\S]*SAFETY:[\s\S]*IMPROVE:[\s\S]*REVISE:/);
+  });
+  it("feedback kept by the first version is still read, into the nearest parts", () => {
+    expect(readFeedbackParts({ right: ["A"], missing: ["B"], misconceptions: ["C"], why: "D", next: "E" }))
+      .toEqual({ understanding: ["A"], missingSteps: ["B"], reasoningGaps: ["C"], safety: [], improvements: ["D", "E"], revisionTopics: [] });
+    expect(readFeedbackParts("x")).toBeNull();
   });
   it("withholds feedback that claims competence or a pass, adds numbers, or has no ticks", () => {
     expect(parse(reply(". You are competent."))).toEqual({ ok: false, reason: "verdict_words" });
     expect(parse(reply(" at 30 breaths"))).toEqual({ ok: false, reason: "ungrounded" });
-    expect(parse("RIGHT: Item a")).toEqual({ ok: false, reason: "malformed" });
+    expect(parse("UNDERSTOOD: Item a")).toEqual({ ok: false, reason: "malformed" });
     expect(OSCE_FEEDBACK_WITHHELD).toMatch(/Mark each item yourself/);
   });
   it("the feedback prompt forbids marks, passes and competence claims", () => {

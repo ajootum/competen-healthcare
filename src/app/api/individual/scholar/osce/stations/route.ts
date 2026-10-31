@@ -3,17 +3,19 @@ export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { getMaterial, getPassage, insertOsceStation, isUuid, listChunks } from "@/lib/individual/scholar/store";
+import { getMaterial, getPassage, insertOsceStation, isUuid, learnerProgramme, listChunks } from "@/lib/individual/scholar/store";
+import { servableOsceStation } from "@/lib/individual/scholar/library-questions";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
-import { runOsceStation, type Passage } from "@/lib/individual/scholar/generation";
+import { passageCitation, runOsceStation, type Passage } from "@/lib/individual/scholar/generation";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { CONTENT_STATUS_LABEL } from "@/lib/individual/scholar/config";
 import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
 import { osceGate } from "@/lib/individual/scholar/osce-service";
 import {
-  OSCE_WITHHELD, normaliseSections, osceTemplate, stationFromCompetency, stationFromTemplate, type OsceStationDraft,
+  EMPTY_DEFINITION, OSCE_RECOVERY_NOTE, OSCE_WITHHELD, normaliseSections, osceRecoveryRequest, osceTemplate, stationFromCompetency, stationFromLibrary, stationFromTemplate,
+  type OsceStationDraft,
 } from "@/lib/individual/scholar/osce";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -25,6 +27,10 @@ export const dynamic = "force-dynamic";
 //   { source: "competency", competencyId }     the learning outcomes of a competency the learner's catalogue offers. No AI.
 //   { source: "ai", materialId, chunkId? }     written by AI (activity `questions`) from ONE of the learner's own materials,
 //                                              each checklist item quoted from its passage and grounding-checked, or withheld.
+//                                              Withheld or too thin: the reply offers evidence recovery (SCHOLAR-OSCE-01 s4).
+//   { source: "library", versionId }            a copy of a PUBLISHED, clinically approved Competen station (CKRI osce_station,
+//                                              721), exactly as published. Anything else is refused (and the 721 trigger
+//                                              refuses it again). No AI.
 // Optional `sections`: the response headings (one per line), screened for identifiers. Formative practice only: never an
 // observed assessment, never verified competence. Gated by policy (scholar_osce) and by 720 being installed.
 
@@ -43,7 +49,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "A heading looks like it identifies a patient. Remove it and try again." }, { status: 422 });
 
   let draft: OsceStationDraft;
-  if (body?.source === "template") {
+  if (body?.source === "library") {
+    const lib = await servableOsceStation(ctx.admin, typeof body?.versionId === "string" ? body.versionId : "");
+    if (!lib) return NextResponse.json({ error: "That station is not offered by the Competen station library. Only published, clinically approved stations are." }, { status: 404 });
+    draft = stationFromLibrary(lib);
+  } else if (body?.source === "template") {
     const t = osceTemplate(body?.templateKey);
     if (!t) return NextResponse.json({ error: "Choose one of the practice templates." }, { status: 400 });
     draft = stationFromTemplate(t, sections);
@@ -53,7 +63,12 @@ export async function POST(req: Request) {
     if (learner.competencies === null) return NextResponse.json({ error: "Your competency catalogue could not be read just now." }, { status: 503 });
     const c = learner.competencies.find(x => x.id === body.competencyId);
     if (!c) return NextResponse.json({ error: "That competency is not in your catalogue." }, { status: 404 });
-    const built = stationFromCompetency({ id: c.id, code: c.code, title: c.title, outcomes: c.outcomes, contentStatusLabel: CONTENT_STATUS_LABEL[c.contentStatus] ?? CONTENT_STATUS_LABEL.unreviewed },
+    // The competency's content status as recorded, never assumed approved because it exists (SCHOLAR-OSCE-01 s5).
+    const built = stationFromCompetency({
+      id: c.id, code: c.code, title: c.title, outcomes: c.outcomes, contentStatusLabel: CONTENT_STATUS_LABEL[c.contentStatus] ?? CONTENT_STATUS_LABEL.unreviewed,
+      profession: c.profession ?? learner.programme?.profession ?? null, domain: c.domain ?? null,
+      programme: learner.programme ? { code: learner.programme.code, label: learner.programme.label } : null,
+    },
       policy.durationMinutes, sections);
     if (!built.ok) return NextResponse.json({ error: built.reason }, { status: 422 });
     draft = built.draft;
@@ -88,8 +103,9 @@ async function fromNotes(ctx: Parameters<typeof aiPreflight>[0], req: Request, b
   if (!picked.length && chunks.data[from]) picked.push(chunks.data[from].id);
   const passages = (await Promise.all(picked.map(id => getPassage(ctx.admin, ctx.userId, id)))).filter((p): p is Passage => !!p);
   if (!passages.length) return NextResponse.json({ error: "Your notes could not be read just now." }, { status: 503 });
+  const recover = (reason: string) => osceRecoveryRequest({ materialId: material.data!.id, title: material.data!.title, chunkId: passages[0]?.chunkId ?? null }, reason);
   if (passages.reduce((n, p) => n + p.content.length, 0) < MIN_PASSAGE_CHARS)
-    return NextResponse.json({ error: "There is not enough in these notes for a practice station. Choose a longer section, or use the practice template." }, { status: 422 });
+    return NextResponse.json({ error: "There is not enough in these notes for a practice station. Choose a longer section, or use the practice template.", recovery: recover("thin_notes"), recoveryNote: OSCE_RECOVERY_NOTE }, { status: 422 });
   if (findPatientIdentifiers(passages.map(p => p.content).join("\n")).length)
     return NextResponse.json({ error: "These notes look as if they identify a patient, so they are not sent to AI. Remove the details and upload them again." }, { status: 422 });
 
@@ -115,11 +131,18 @@ async function fromNotes(ctx: Parameters<typeof aiPreflight>[0], req: Request, b
   });
   if (!r.ok) return NextResponse.json({ error: "A station could not be written just now. Try again shortly, or use the practice template." }, { status: 502 });
   const check = r.check;
-  if (!check.ok) return NextResponse.json({ error: OSCE_WITHHELD[check.reason], withheld: { reason: check.reason } }, { status: 422 });
+  if (!check.ok) return NextResponse.json({ error: OSCE_WITHHELD[check.reason], withheld: { reason: check.reason }, ...(check.reason === "identifier" ? {} : { recovery: recover(check.reason), recoveryNote: OSCE_RECOVERY_NOTE }) }, { status: 422 });
+  const programme = await learnerProgramme(ctx.admin, ctx.userId);
+  const prog = programme.ok ? programme.data : null;
   const saved = await insertOsceStation(ctx.admin, ctx.userId, {
     title: check.title, scenario: check.scenario, candidateInstructions: check.candidateInstructions, durationMinutes: policy.durationMinutes,
     sections, checklist: check.items, source: "ai", templateKey: null, contentStatus: "AI-generated from your notes, not clinically reviewed",
     competencyId: null, materialId: material.data.id, chunkId: passages[0].chunkId, model: r.model, promptVersion: r.promptVersion,
+    ...EMPTY_DEFINITION, profession: prog?.profession ?? null, programmeCode: prog?.code ?? null, programmeLabel: prog?.label ?? null,
+    topic: material.data.title.replace(/\s+/g, " ").trim().slice(0, 160) || null,
+    // Where it came from, kept on the station: the material and every passage the checklist was checked against.
+    references: passages.map(p => ({ kind: "notes" as const, materialId: material.data!.id, chunkId: p.chunkId, citation: passageCitation(p).slice(0, 200) })),
+    libraryResourceId: null, libraryVersionId: null,
   });
   if (!saved.ok) return NextResponse.json({ error: "The station could not be saved just now." }, { status: 500 });
   return NextResponse.json({ id: saved.id, existing: false, dropped: check.dropped.length });

@@ -17,7 +17,7 @@ import { checkRevisionDraft, type RevisionDraft } from "./revision";
 import { blueprintFromDraft, checkPrivateCase } from "./clinical";
 import {
   OSCE_FEEDBACK_SYSTEM, OSCE_PROMPT_VERSIONS, checkOsceDraft, osceFeedbackPrompt, osceStationPrompt, osceStationSystem, parseOsceFeedback,
-  type OsceItem, type OscePassage,
+  type OsceGuidance, type OsceItem, type OscePassage,
 } from "./osce";
 
 // ── SOURCE-GROUNDED AI FOR SCHOLAR ── COMPETEN-IND-004 s2, s3 and s5 ───────────────────────────────────
@@ -1126,8 +1126,8 @@ export async function runOsceStation(userId: string, input: { passages: Passage[
   };
 }
 
-/** AI feedback on one finished run: suggested ticks and the five parts, checked against the station and what was written. */
-export async function runOsceFeedback(userId: string, input: { scenario: string; candidateInstructions: string; checklist: OsceItem[]; responses: Record<string, string> }, run: AiRun = direct) {
+/** AI feedback on one finished run: suggested ticks and the six parts, checked against the station, its guidance and what was written. */
+export async function runOsceFeedback(userId: string, input: { scenario: string; candidateInstructions: string; checklist: OsceItem[]; responses: Record<string, string>; guidance?: OsceGuidance | null; expectedActivities?: string[] }, run: AiRun = direct) {
   const r = await run({
     system: OSCE_FEEDBACK_SYSTEM,
     user: osceFeedbackPrompt(input, input.responses),
@@ -1136,7 +1136,8 @@ export async function runOsceFeedback(userId: string, input: { scenario: string;
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_osce_feedback" },
   });
   if (!r.ok) return { ok: false as const, error: r.error };
-  const grounding = [input.scenario, input.candidateInstructions, ...input.checklist.map(i => i.text), ...input.checklist.map(i => i.quote ?? ""), ...Object.values(input.responses)];
+  const grounding = [input.scenario, input.candidateInstructions, ...input.checklist.map(i => i.text), ...input.checklist.map(i => i.quote ?? ""), ...input.checklist.map(i => i.outcome ?? ""),
+    ...(input.expectedActivities ?? []), ...(input.guidance?.suggestedResponses ?? []), input.guidance?.assessmentGuidance ?? "", ...Object.values(input.responses)].filter(Boolean);
   return {
     ok: true as const, model: r.model, provider: r.provider, promptVersion: OSCE_PROMPT_VERSIONS.feedback,
     feedback: parseOsceFeedback(r.text, input.checklist, grounding, groundingViolations, findPatientIdentifiers),

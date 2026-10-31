@@ -11,24 +11,45 @@
 //
 // ⚠ PURE. No I/O and no clock of its own (times are passed in), so every rule here is tested by being run. The store is
 // store.ts (the one Scholar write site), the AI calls are generation.ts (the one generate() site).
+//
+// SCHOLAR-OSCE-01 (owner, 31 Oct 2026), migration 721: the full station definition (profession, programme, topic, body
+// system, objectives, expected activities, guidance shown only after a run, references, version), no fixed checklist
+// limit beyond the structural bound (8 to 12 is the design default, in policy), governed stations read from the CKRI
+// library (published and clinically approved only), the score explained with critical misses shown apart, and a run's
+// written work autosaved and resumed. ⚠ PROFESSION-AGNOSTIC: the rules here assume no profession. A profession, a
+// setting or a role appears only in DATA (a template, a station's own fields), never in the engine.
 
 export const OSCE_PRACTICE_LABEL = "Simulated practice — not an observed clinical skills assessment and not verified competence";
 export const OSCE_UNAVAILABLE = "OSCE practice is not available here yet: the place it keeps your stations has not been installed on this environment. Everything else in Scholar works as before.";
 export const OSCE_OFF = "OSCE practice is not offered right now.";
+/** Said wherever feedback or guidance is shown: practice points the learner back to their course and local guidance. */
+export const OSCE_GUIDELINES_NOTE = "Check what you practised against your course materials and current local clinical guidelines. This is practice, not clinical guidance.";
 
-/** 720 bounds. Policy narrows them for stations written from notes, never widens them. */
-export const OSCE_BOUNDS = { checklistMin: 6, checklistMax: 14, durationMin: 3, durationMax: 20, sectionsMax: 6 } as const;
-export const OSCE_TEXT_MAX = { title: 160, scenario: 4000, instructions: 2000, item: 300, section: 80, response: 4000 } as const;
+/**
+ * The structural bounds (721). A checklist of 1 to 60 items: wide on purpose, so a clinically justified station is never
+ * refused for its length. The DESIGN default is 8 to 12 (OSCE_DESIGN_CHECKLIST, and the policy defaults), which is a
+ * pattern, not a rule. Duration and sections are 720's.
+ */
+export const OSCE_BOUNDS = { checklistMin: 1, checklistMax: 60, durationMin: 3, durationMax: 20, sectionsMax: 6 } as const;
+export const OSCE_DESIGN_CHECKLIST = { min: 8, max: 12 } as const;
+export const OSCE_TEXT_MAX = { title: 160, scenario: 4000, instructions: 2000, item: 300, section: 80, response: 4000, field: 160, list: 400, guidance: 4000 } as const;
 export const DEFAULT_OSCE_SECTIONS: readonly string[] = ["Introduction and consent", "Assessment", "Findings", "Escalation and plan"];
-export const OSCE_PROMPT_VERSIONS = { station: "scholar-osce-station-v1", feedback: "scholar-osce-feedback-v1" } as const;
+export const OSCE_PROMPT_VERSIONS = { station: "scholar-osce-station-v1", feedback: "scholar-osce-feedback-v2" } as const;
 
-export type OsceSource = "template" | "competency" | "ai" | "own";
+export type OsceSource = "template" | "competency" | "ai" | "own" | "library";
 export const OSCE_SOURCE_LABEL: Record<OsceSource, string> = {
   template: "Competen practice template",
   competency: "Built from a competency's learning outcomes",
   ai: "Written by AI from your notes",
   own: "Written by you",
+  library: "Competen station library",
 };
+export const OSCE_SOURCES: readonly OsceSource[] = ["library", "template", "competency", "ai", "own"];
+
+export type OsceDifficulty = "introductory" | "intermediate" | "advanced";
+export const OSCE_DIFFICULTIES: readonly OsceDifficulty[] = ["introductory", "intermediate", "advanced"];
+export const OSCE_DIFFICULTY_LABEL: Record<OsceDifficulty, string> = { introductory: "Introductory", intermediate: "Intermediate", advanced: "Advanced" };
+export const isOsceDifficulty = (v: unknown): v is OsceDifficulty => typeof v === "string" && (OSCE_DIFFICULTIES as readonly string[]).includes(v);
 
 /** One checklist item. `quote`/`chunkId`: where an item written from notes is grounded. `outcome`: the outcome it practises. */
 export type OsceItem = { id: string; text: string; critical: boolean; outcome?: string; quote?: string; chunkId?: string };
@@ -38,19 +59,99 @@ export const OSCE_MARK_LABEL: Record<OsceMark, string> = { done: "Done", partly:
 export type OsceTick = { itemId: string; mark: OsceMark };
 export const isOsceMark = (v: unknown): v is OsceMark => typeof v === "string" && (OSCE_MARKS as readonly string[]).includes(v);
 
-export type OsceStationDraft = {
+/** Assessment guidance and suggested responses: shown to the learner only AFTER a run, never in the brief or during it. */
+export type OsceGuidance = { suggestedResponses: string[]; assessmentGuidance: string | null };
+/** Where a station came from, kept on it (721 source_references). */
+export type OsceReference =
+  | { kind: "notes"; materialId: string; chunkId: string; citation: string }
+  | { kind: "competency"; competencyId: string; label: string }
+  | { kind: "library"; resourceId: string; versionId: string; versionNo: number }
+  | { kind: "reference"; label: string; url?: string };
+
+/** The station definition beyond the brief and checklist (721). Every field is optional: unknown is null, never invented. */
+export type OsceDefinition = {
+  profession: string | null; programmeCode: string | null; programmeLabel: string | null; topic: string | null; bodySystem: string | null;
+  difficulty: OsceDifficulty | null; learningOutcomes: string[]; objectives: string[]; expectedActivities: string[];
+  guidance: OsceGuidance | null; references: OsceReference[]; version: number;
+};
+export const EMPTY_DEFINITION: OsceDefinition = {
+  profession: null, programmeCode: null, programmeLabel: null, topic: null, bodySystem: null, difficulty: null,
+  learningOutcomes: [], objectives: [], expectedActivities: [], guidance: null, references: [], version: 1,
+};
+
+export type OsceStationDraft = OsceDefinition & {
   title: string; scenario: string; candidateInstructions: string; durationMinutes: number; sections: string[]; checklist: OsceItem[];
   source: OsceSource; templateKey: string | null; contentStatus: string; competencyId: string | null;
   materialId: string | null; chunkId: string | null; model: string | null; promptVersion: string | null;
+  libraryResourceId: string | null; libraryVersionId: string | null;
+  /** A governed copy only: the stored JSON the 721 guard compares, written exactly as published. */
+  exact?: { expected_activities: unknown; guidance: unknown };
 };
 
 const clean = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
+const cleanOrNull = (v: unknown, max: number) => clean(v, max) || null;
+/** Pure. A list of short non-empty strings, duplicates dropped, at most `n`. */
+export function cleanList(v: unknown, n: number, max: number = OSCE_TEXT_MAX.list): string[] {
+  const out: string[] = [];
+  for (const x of Array.isArray(v) ? v : []) {
+    const t = clean(x, max);
+    if (t && !out.includes(t)) out.push(t);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
+/** Pure. Guidance read defensively from its stored shape ({suggested_responses, assessment_guidance}). Empty: null. */
+export function readGuidance(v: unknown): OsceGuidance | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const suggestedResponses = cleanList(o.suggested_responses ?? o.suggestedResponses, 30, OSCE_TEXT_MAX.guidance);
+  const g = o.assessment_guidance ?? o.assessmentGuidance;
+  const assessmentGuidance = typeof g === "string" && g.trim() ? g.trim().slice(0, OSCE_TEXT_MAX.guidance) : null;
+  return suggestedResponses.length || assessmentGuidance ? { suggestedResponses, assessmentGuidance } : null;
+}
+export const guidanceJson = (g: OsceGuidance | null) => (g ? { suggested_responses: g.suggestedResponses, assessment_guidance: g.assessmentGuidance } : null);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Pure. References read defensively: only the four known shapes, at most 40. */
+export function readReferences(v: unknown): OsceReference[] {
+  const out: OsceReference[] = [];
+  for (const r of Array.isArray(v) ? v : []) {
+    const o = (r ?? {}) as Record<string, unknown>;
+    if (o.kind === "notes" && UUID_RE.test(String(o.materialId)) && UUID_RE.test(String(o.chunkId))) out.push({ kind: "notes", materialId: String(o.materialId), chunkId: String(o.chunkId), citation: clean(o.citation, 200) });
+    else if (o.kind === "competency" && UUID_RE.test(String(o.competencyId))) out.push({ kind: "competency", competencyId: String(o.competencyId), label: clean(o.label, 200) });
+    else if (o.kind === "library" && UUID_RE.test(String(o.resourceId)) && UUID_RE.test(String(o.versionId)) && Number.isInteger(o.versionNo)) out.push({ kind: "library", resourceId: String(o.resourceId), versionId: String(o.versionId), versionNo: o.versionNo as number });
+    else if ((o.kind === "reference" || o.kind === undefined) && clean(o.label, 300)) {
+      const url = typeof o.url === "string" && /^https:\/\/[^\s]+$/.test(o.url) ? o.url.slice(0, 500) : undefined;
+      out.push({ kind: "reference", label: clean(o.label, 300), ...(url ? { url } : {}) });
+    }
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+
+/** Pure. The 721 definition fields of a stored row or a governed content object (snake_case or camelCase), cleaned. */
+export function readDefinition(o: Record<string, unknown>): OsceDefinition {
+  const pick = (a: string, b: string) => o[a] ?? o[b];
+  const version = Number(o.version);
+  return {
+    profession: cleanOrNull(o.profession, 80), programmeCode: cleanOrNull(pick("programme_code", "programmeCode"), 80),
+    programmeLabel: cleanOrNull(pick("programme_label", "programmeLabel"), 200), topic: cleanOrNull(o.topic, OSCE_TEXT_MAX.field),
+    bodySystem: cleanOrNull(pick("body_system", "bodySystem"), 80), difficulty: isOsceDifficulty(o.difficulty) ? o.difficulty : null,
+    learningOutcomes: cleanList(pick("learning_outcomes", "learningOutcomes"), 60), objectives: cleanList(o.objectives, 30),
+    expectedActivities: cleanList(pick("expected_activities", "expectedActivities"), 60), guidance: readGuidance(o.guidance),
+    references: readReferences(pick("source_references", "references")), version: Number.isInteger(version) && version >= 1 ? version : 1,
+  };
+}
 
 // ── VALIDATION (the 720 CHECKs, said first in code so a refusal has a plain reason) ─────────────────────────────
 
 export type ChecklistCheck = { ok: true; items: OsceItem[] } | { ok: false; reason: string };
 
-/** Pure. A checklist as 720 accepts it: min to max items, each with an id, text and a boolean critical, ids unique. */
+/**
+ * Pure. A checklist as 720/721 accept it: min to max items (the structural 1 to 60 unless narrowed), each with an id,
+ * text and a boolean critical, ids unique. No length is refused below the structural bound: 8 to 12 is a design default.
+ */
 export function validateChecklist(raw: unknown, bounds: { min: number; max: number } = { min: OSCE_BOUNDS.checklistMin, max: OSCE_BOUNDS.checklistMax }): ChecklistCheck {
   const min = Math.max(OSCE_BOUNDS.checklistMin, bounds.min), max = Math.min(OSCE_BOUNDS.checklistMax, bounds.max);
   if (!Array.isArray(raw)) return { ok: false, reason: "The checklist must be a list of items." };
@@ -74,6 +175,68 @@ export function validateChecklist(raw: unknown, bounds: { min: number; max: numb
     items.push(item);
   }
   return { ok: true, items };
+}
+
+// ── A GOVERNED STATION (CKRI kind osce_station, 442 widened by 721) ── its content shape, said first in code ─────
+//
+// The content of a published, clinically approved station is snake_case JSON, checked again by the database
+// (ckri_knowledge_content_ok). A learner copy is that content EXACTLY (the 721 guard compares scenario, instructions,
+// duration, checklist, expected activities and guidance), so nothing here rewrites what it copies.
+
+export type GovernedStationContent = {
+  scenario: string; candidateInstructions: string; durationMinutes: number; checklist: OsceItem[]; sections: string[] | null;
+  definition: OsceDefinition;
+  /** The exact stored values the copy must carry (721 guard). */
+  raw: { scenario: string; candidate_instructions: string; checklist: unknown; expected_activities: unknown; guidance: unknown };
+};
+
+/** Pure. A governed station's content, validated as 721 accepts it, or the plain reason it cannot be used. */
+export function validateStationContent(c: unknown): { ok: true; content: GovernedStationContent } | { ok: false; reason: string } {
+  const o = (c ?? {}) as Record<string, unknown>;
+  if (!c || typeof c !== "object" || Array.isArray(c)) return { ok: false, reason: "The station content is not an object." };
+  if (typeof o.scenario !== "string" || o.scenario.trim().length < 20 || o.scenario.trim().length > OSCE_TEXT_MAX.scenario) return { ok: false, reason: "The scenario must be 20 to 4000 characters." };
+  if (typeof o.candidate_instructions !== "string" || o.candidate_instructions.trim().length < 10 || o.candidate_instructions.trim().length > OSCE_TEXT_MAX.instructions) return { ok: false, reason: "The candidate instructions must be 10 to 2000 characters." };
+  const d = o.duration_minutes;
+  if (typeof d !== "number" || !Number.isInteger(d) || d < OSCE_BOUNDS.durationMin || d > OSCE_BOUNDS.durationMax) return { ok: false, reason: "The duration must be a whole number of minutes from 3 to 20." };
+  const list = validateChecklist(o.checklist);
+  if (!list.ok) return list;
+  // The copy keeps the stored checklist exactly, so it must already be in the cleaned form (no padding to trim away).
+  const exact = (o.checklist as Record<string, unknown>[]).every((r, i) => r.id === list.items[i].id && r.text === list.items[i].text);
+  if (!exact) return { ok: false, reason: "Each checklist item's id and text must be stored without extra spaces." };
+  if (o.sections !== undefined && o.sections !== null) {
+    if (!Array.isArray(o.sections) || o.sections.length < 1 || o.sections.length > OSCE_BOUNDS.sectionsMax || o.sections.some(s => typeof s !== "string" || !s.trim())) return { ok: false, reason: "Sections must be 1 to 6 headings." };
+  }
+  for (const k of ["objectives", "expected_activities", "learning_outcomes"] as const)
+    if (o[k] !== undefined && o[k] !== null && (!Array.isArray(o[k]) || (o[k] as unknown[]).some(s => typeof s !== "string" || !s))) return { ok: false, reason: `${k.replace(/_/g, " ")} must be a list of text.` };
+  if (o.references !== undefined && o.references !== null && (!Array.isArray(o.references) || (o.references as unknown[]).some(r => !r || typeof r !== "object" || Array.isArray(r)))) return { ok: false, reason: "References must be a list of objects." };
+  if (o.guidance !== undefined && o.guidance !== null && (typeof o.guidance !== "object" || Array.isArray(o.guidance))) return { ok: false, reason: "Guidance must be an object." };
+  if (o.difficulty !== undefined && o.difficulty !== null && !isOsceDifficulty(o.difficulty)) return { ok: false, reason: "Difficulty must be introductory, intermediate or advanced." };
+  return {
+    ok: true,
+    content: {
+      scenario: o.scenario, candidateInstructions: o.candidate_instructions, durationMinutes: d, checklist: list.items,
+      sections: Array.isArray(o.sections) ? normaliseSections(o.sections) : null, definition: readDefinition(o),
+      raw: { scenario: o.scenario, candidate_instructions: o.candidate_instructions, checklist: o.checklist, expected_activities: o.expected_activities ?? null, guidance: o.guidance ?? null },
+    },
+  };
+}
+
+export const libraryContentStatus = (versionNo: number) => `Clinically approved Competen station, version ${versionNo}`;
+
+/** Pure. The learner's copy of a governed station, exactly as published (the 721 guard checks it again). */
+export function stationFromLibrary(lib: { resourceId: string; versionId: string; versionNo: number; title: string; content: GovernedStationContent }): OsceStationDraft {
+  const c = lib.content;
+  return {
+    ...c.definition,
+    expectedActivities: Array.isArray(c.raw.expected_activities) ? c.raw.expected_activities as string[] : [],
+    references: [{ kind: "library", resourceId: lib.resourceId, versionId: lib.versionId, versionNo: lib.versionNo }, ...c.definition.references.filter(r => r.kind === "reference")],
+    version: lib.versionNo,
+    title: clean(lib.title, OSCE_TEXT_MAX.title), scenario: c.raw.scenario, candidateInstructions: c.raw.candidate_instructions, durationMinutes: c.durationMinutes,
+    sections: c.sections ?? [...DEFAULT_OSCE_SECTIONS], checklist: c.raw.checklist as OsceItem[], source: "library", templateKey: null,
+    contentStatus: libraryContentStatus(lib.versionNo), competencyId: null, materialId: null, chunkId: null, model: null, promptVersion: null,
+    libraryResourceId: lib.resourceId, libraryVersionId: lib.versionId,
+    exact: { expected_activities: c.raw.expected_activities, guidance: c.raw.guidance },
+  };
 }
 
 /** Pure. Response headings: 1 to 6 short non-empty lines, duplicates dropped. Empty or absent: the defaults. */
@@ -181,8 +344,12 @@ export function scoreSummary(s: { points: number; outOf: number; criticalMissed:
 // ── STATION SOURCES WITHOUT AI ─────────────────────────────────────────────────────────────────────────────────
 
 /** Shipped as DATA, built from the respiratory seed outcomes. Never clinically reviewed, and labelled so everywhere. */
-export const TEMPLATE_CONTENT_STATUS = "Competen practice template - not clinically reviewed";
-export type OsceTemplate = { key: string; title: string; scenario: string; candidateInstructions: string; durationMinutes: number; checklist: OsceItem[] };
+export const TEMPLATE_CONTENT_STATUS = "Competen practice template — not clinically reviewed";
+/** A template is DATA: its profession, topic, objectives and guidance are its own fields, never the engine's. */
+export type OsceTemplate = {
+  key: string; title: string; scenario: string; candidateInstructions: string; durationMinutes: number; checklist: OsceItem[];
+  profession: string | null; topic: string; bodySystem: string; difficulty: OsceDifficulty; objectives: string[]; expectedActivities: string[]; guidance: OsceGuidance;
+};
 export const OSCE_TEMPLATES: readonly OsceTemplate[] = [
   {
     key: "respiratory-assessment",
@@ -202,6 +369,13 @@ export const OSCE_TEMPLATES: readonly OsceTemplate[] = [
       { id: "escalate", text: "Escalates using a structured handover", critical: true, outcome: "Escalates using a structured handover" },
       { id: "document", text: "Documents findings in the agreed format", critical: false, outcome: "Documents findings in the agreed format" },
     ],
+    profession: null, topic: "Respiratory assessment and escalation", bodySystem: "Respiratory", difficulty: "introductory",
+    objectives: ["Practise a systematic respiratory assessment out loud", "Practise deciding when and how to escalate"],
+    expectedActivities: ["Introduces themselves and gains consent", "Assesses breathing systematically", "Says what they find", "Escalates with a structured handover", "Documents what they found"],
+    guidance: {
+      suggestedResponses: ["A systematic order, said out loud: rate over a full minute, rhythm and effort, saturation against the prescribed target, breath sounds", "A structured handover that says what was found and what is needed"],
+      assessmentGuidance: "Look for a systematic order, interpretation against the prescribed target rather than a remembered number, and escalation that is timely and structured. Check the detail against your course materials and local policy.",
+    },
   },
 ];
 export const osceTemplate = (key: unknown) => OSCE_TEMPLATES.find(t => t.key === key) ?? null;
@@ -212,6 +386,11 @@ export function stationFromTemplate(t: OsceTemplate, sections: readonly string[]
     title: t.title, scenario: t.scenario, candidateInstructions: t.candidateInstructions, durationMinutes: t.durationMinutes,
     sections: [...sections], checklist: t.checklist.map(i => ({ ...i })), source: "template", templateKey: t.key,
     contentStatus: TEMPLATE_CONTENT_STATUS, competencyId: null, materialId: null, chunkId: null, model: null, promptVersion: null,
+    ...EMPTY_DEFINITION, profession: t.profession, topic: t.topic, bodySystem: t.bodySystem, difficulty: t.difficulty,
+    learningOutcomes: [...new Set(t.checklist.map(i => i.outcome).filter((o): o is string => !!o))], objectives: [...t.objectives],
+    expectedActivities: [...t.expectedActivities], guidance: { ...t.guidance, suggestedResponses: [...t.guidance.suggestedResponses] },
+    references: [{ kind: "reference", label: "Competen practice template, written from the respiratory seed learning outcomes. Not clinically reviewed." }],
+    libraryResourceId: null, libraryVersionId: null,
   };
 }
 
@@ -223,11 +402,21 @@ const FRAMING: readonly { id: string; text: string; critical: boolean; at: "star
   { id: "f-next", text: "Says what they would do next, including when they would ask for help", critical: true, at: "end" },
 ];
 
-export type CompetencyForStation = { id: string; code: string | null; title: string; description?: string | null; outcomes: readonly string[]; contentStatusLabel: string };
+export type CompetencyForStation = {
+  id: string; code: string | null; title: string; description?: string | null; outcomes: readonly string[]; contentStatusLabel: string;
+  profession?: string | null; domain?: string | null; programme?: { code: string; label: string } | null;
+};
+
+/**
+ * Pure. What a station built from a competency says about review. The COMPETENCY's content status is shown as it is
+ * recorded (never assumed approved because it exists), and the station itself is never a clinically reviewed station.
+ */
+export const competencyContentStatus = (label: string) => clean(`Competency content: ${label || "Not clinically reviewed"} · station not clinically reviewed`, 160);
 
 /**
  * Pure. A station built by CODE from a competency's recorded learning outcomes (no AI): each outcome is a critical item,
- * between the station framing items. Fewer than 2 outcomes, or a checklist outside 720's bounds: refused with the reason.
+ * between the station framing items. Fewer than 2 outcomes: refused with the reason. Every outcome is kept up to the
+ * structural bound (721): a competency with many outcomes makes a longer station, not a trimmed one.
  */
 export function stationFromCompetency(c: CompetencyForStation, durationMinutes: number, sections: readonly string[] = DEFAULT_OSCE_SECTIONS): { ok: true; draft: OsceStationDraft; trimmed: number } | { ok: false; reason: string } {
   const outcomes = [...new Set(c.outcomes.map(o => clean(o, OSCE_TEXT_MAX.item)).filter(Boolean))];
@@ -249,7 +438,12 @@ export function stationFromCompetency(c: CompetencyForStation, durationMinutes: 
       scenario: clean(`A simulated practice station for ${name}.${c.description ? ` ${c.description}` : ""} Imagine a person who needs this from you, in a setting you know.`, OSCE_TEXT_MAX.scenario),
       candidateInstructions: "Show each learning outcome of this competency as you would in practice. Under each heading, write what you would say and do.",
       durationMinutes: clampDuration(durationMinutes, 8), sections: [...sections], checklist: v.items, source: "competency", templateKey: null,
-      contentStatus: clean(`Competency content: ${c.contentStatusLabel}`, 160), competencyId: c.id, materialId: null, chunkId: null, model: null, promptVersion: null,
+      contentStatus: competencyContentStatus(c.contentStatusLabel), competencyId: c.id, materialId: null, chunkId: null, model: null, promptVersion: null,
+      ...EMPTY_DEFINITION, profession: cleanOrNull(c.profession, 80), programmeCode: cleanOrNull(c.programme?.code, 80), programmeLabel: cleanOrNull(c.programme?.label, 200),
+      topic: cleanOrNull(c.domain, OSCE_TEXT_MAX.field) ?? cleanOrNull(c.title, OSCE_TEXT_MAX.field), learningOutcomes: kept,
+      objectives: [clean(`Practise the learning outcomes of ${name}`, OSCE_TEXT_MAX.list)],
+      references: [{ kind: "competency", competencyId: c.id, label: clean(`${name} (${c.contentStatusLabel || "Not clinically reviewed"})`, 200) }],
+      libraryResourceId: null, libraryVersionId: null,
     },
   };
 }
@@ -348,62 +542,102 @@ export const OSCE_WITHHELD: Record<Exclude<OsceDraftCheck, { ok: true }>["reason
   too_few_items: "Too few checklist items could be checked against your notes, so the station was withheld. Nothing was kept.",
 };
 
-// ── AI FEEDBACK ON A RUN (activity `evaluate`) ── suggested ticks the learner confirms, and the five-part feedback ──
+// ── AI FEEDBACK ON A RUN (activity `evaluate`) ── suggested ticks the learner confirms, and the six-part feedback ──
+//
+// SCHOLAR-OSCE-01 s8: correct understanding, missing assessment steps, clinical reasoning gaps, important safety
+// considerations, suggested improvements, revision topics. The ticks are SUGGESTIONS the learner confirms or changes
+// (their own marks are what is recorded, and the result says which marks were the learner's and which the AI suggested).
+// Never a pass, a fail or a claim of competence, and never anything the station, its guidance and the writing do not hold.
 
 export const OSCE_FEEDBACK_SYSTEM = [
   "You give formative feedback on what a healthcare student WROTE during a simulated OSCE practice station they did alone, for their own study.",
-  "Judge ONLY against the station checklist and the station text given. Do not use outside knowledge, and do not reward anything the checklist does not ask for.",
+  "Judge ONLY against the station checklist, the station text and the station guidance given. Do not use outside knowledge, and do not reward anything the checklist does not ask for.",
   "For every checklist item write one line, exactly 'ITEM <id>: done', 'ITEM <id>: partly' or 'ITEM <id>: missed' -- done where the writing clearly shows it, partly where it shows some of it, missed where it does not.",
-  "Then exactly these five lines, each short (write none where a part has nothing):",
-  "RIGHT: what the responses did well (separate points with ;)",
-  "MISSING: the checklist items or parts of them that were missed (separate with ;)",
-  "MISCONCEPTIONS: any mistaken idea in the responses (separate with ;)",
-  "WHY: one sentence on why the missed items matter, in the checklist's words",
-  "NEXT: one short thing to practise next",
+  "Then exactly these six lines, each short (write none where a part has nothing, separate points with ;):",
+  "UNDERSTOOD: what the writing shows was understood correctly",
+  "MISSING_STEPS: assessment or task steps from the checklist that were missed or only partly shown",
+  "REASONING: gaps in the clinical reasoning the writing shows, in the words of the checklist and guidance",
+  "SAFETY: important safety points from the CRITICAL checklist items that the writing missed or only partly showed",
+  "IMPROVE: suggested improvements for next time",
+  "REVISE: topics to revise, in the words of the checklist",
   "Never give a mark, a score, a percentage, a pass or a fail, and never say the student is competent. No new facts, numbers, doses, drugs or advice. No names.",
 ].join("\n");
 
-export function osceFeedbackPrompt(station: { scenario: string; candidateInstructions: string; checklist: readonly OsceItem[] }, responses: Record<string, string>): string {
+export function osceFeedbackPrompt(station: { scenario: string; candidateInstructions: string; checklist: readonly OsceItem[]; guidance?: OsceGuidance | null; expectedActivities?: readonly string[] }, responses: Record<string, string>): string {
   const written = Object.entries(responses).map(([h, t]) => `${h}:\n${t}`).join("\n\n") || "(nothing written)";
+  const g = station.guidance;
   return [
     `STATION: ${station.scenario}\nTASK: ${station.candidateInstructions}`,
     `CHECKLIST:\n${station.checklist.map(i => `${i.id}: ${i.text}${i.critical ? " [CRITICAL]" : ""}`).join("\n")}`,
+    ...(station.expectedActivities?.length ? [`EXPECTED ACTIVITIES:\n${station.expectedActivities.join("\n")}`] : []),
+    ...(g ? [`GUIDANCE:\n${[g.assessmentGuidance ?? "", ...g.suggestedResponses].filter(Boolean).join("\n")}`] : []),
     `WHAT I WROTE:\n${written}`,
   ].join("\n\n");
 }
 
-export type OsceFeedbackParts = { right: string[]; missing: string[]; misconceptions: string[]; why: string | null; next: string | null };
+export type OsceFeedbackParts = {
+  understanding: string[]; missingSteps: string[]; reasoningGaps: string[]; safety: string[]; improvements: string[]; revisionTopics: string[];
+};
+export const OSCE_FEEDBACK_PARTS: readonly (keyof OsceFeedbackParts)[] = ["understanding", "missingSteps", "reasoningGaps", "safety", "improvements", "revisionTopics"];
+export const OSCE_FEEDBACK_LABEL: Record<keyof OsceFeedbackParts, string> = {
+  understanding: "Correct understanding",
+  missingSteps: "Missing assessment steps",
+  reasoningGaps: "Clinical reasoning gaps",
+  safety: "Important safety considerations",
+  improvements: "Suggested improvements",
+  revisionTopics: "Revision topics",
+};
 export type OsceFeedback = { ok: true; suggested: OsceTick[]; parts: OsceFeedbackParts } | { ok: false; reason: "malformed" | "ungrounded" | "identifier" | "verdict_words" };
 
-const FEEDBACK_KEY: Record<string, keyof OsceFeedbackParts> = { RIGHT: "right", MISSING: "missing", MISCONCEPTION: "misconceptions", MISCONCEPTIONS: "misconceptions", WHY: "why", NEXT: "next" };
+const FEEDBACK_KEY: Record<string, keyof OsceFeedbackParts> = {
+  UNDERSTOOD: "understanding", MISSING_STEPS: "missingSteps", "MISSING STEPS": "missingSteps", REASONING: "reasoningGaps",
+  SAFETY: "safety", IMPROVE: "improvements", REVISE: "revisionTopics",
+};
+const emptyParts = (): OsceFeedbackParts => ({ understanding: [], missingSteps: [], reasoningGaps: [], safety: [], improvements: [], revisionTopics: [] });
 
 /**
- * Pure. The evaluator's reply, checked: a suggested tick for items it named (unknown ids ignored), the five parts, and
- * feedback that adds nothing the station, checklist and responses do not hold, identifies no one, and never claims a
- * pass or competence. Anything else is withheld: the learner marks themselves, as without AI.
+ * Pure. The evaluator's reply, checked: a suggested tick for items it named (unknown ids ignored), the six parts, and
+ * feedback that adds nothing the station, checklist, guidance and responses do not hold, identifies no one, and never
+ * claims a pass or competence. Anything else is withheld: the learner marks themselves, as without AI.
  */
 export function parseOsceFeedback(raw: string, items: readonly OsceItem[], grounding: readonly string[], grounded: GroundingCheck, identifiers: IdentifierCheck): OsceFeedback {
   const suggested = new Map<string, OsceMark>();
-  const parts: OsceFeedbackParts = { right: [], missing: [], misconceptions: [], why: null, next: null };
+  const parts = emptyParts();
   let found = 0;
   for (const line of raw.split("\n")) {
     const m = /^\s*\**\s*ITEM\s+([A-Za-z0-9_-]+)\s*\**\s*:\s*\**\s*(done|partly|missed)\b/i.exec(line);
     if (m) { if (items.some(i => i.id === m[1]) && !suggested.has(m[1])) suggested.set(m[1], m[2].toLowerCase() as OsceMark); continue; }
-    const f = /^\s*\**\s*(RIGHT|MISSING|MISCONCEPTIONS?|WHY|NEXT)\s*\**\s*:\s*(.*)$/i.exec(line);
+    const f = /^\s*\**\s*(UNDERSTOOD|MISSING[_ ]STEPS|REASONING|SAFETY|IMPROVE|REVISE)\s*\**\s*:\s*(.*)$/i.exec(line);
     if (!f) continue;
     found++;
     const key = FEEDBACK_KEY[f[1].toUpperCase()];
     const body = f[2].trim();
     if (/^none\.?$/i.test(body) || !body) continue;
-    if (key === "why" || key === "next") parts[key] = body.slice(0, 400);
-    else parts[key] = body.split(/;\s*/).map(s => s.trim().replace(/\.$/, "")).filter(Boolean).slice(0, 5).map(s => s.slice(0, 300));
+    parts[key] = body.split(/;\s*/).map(s => s.trim().replace(/\.$/, "")).filter(Boolean).slice(0, 5).map(s => s.slice(0, 300));
   }
   if (!found || !suggested.size) return { ok: false, reason: "malformed" };
-  const text = [...parts.right, ...parts.missing, ...parts.misconceptions, parts.why ?? "", parts.next ?? ""].filter(Boolean).join("\n");
+  const text = OSCE_FEEDBACK_PARTS.flatMap(k => parts[k]).join("\n");
   if (claimsVerification(text)) return { ok: false, reason: "verdict_words" };
   if (identifiers(text).length) return { ok: false, reason: "identifier" };
   if (text && grounded(text, [...grounding]).length) return { ok: false, reason: "ungrounded" };
   return { ok: true, suggested: items.filter(i => suggested.has(i.id)).map(i => ({ itemId: i.id, mark: suggested.get(i.id)! })), parts };
+}
+
+/**
+ * Pure. Feedback kept on a run, read for display: the six parts. A run kept by the first version (right, missing,
+ * misconceptions, why, next) is read into the nearest parts, so nothing kept is lost. Anything else: null.
+ */
+export function readFeedbackParts(v: unknown): OsceFeedbackParts | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const list = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === "string" && !!s.trim()).slice(0, 5) : typeof x === "string" && x.trim() ? [x.trim()] : []);
+  const out = emptyParts();
+  if (OSCE_FEEDBACK_PARTS.some(k => k in o)) { for (const k of OSCE_FEEDBACK_PARTS) out[k] = list(o[k]); }
+  else if ("right" in o || "missing" in o) {
+    out.understanding = list(o.right); out.missingSteps = list(o.missing); out.reasoningGaps = list(o.misconceptions);
+    out.improvements = [...list(o.why), ...list(o.next)];
+  } else return null;
+  return out;
 }
 
 export const OSCE_FEEDBACK_WITHHELD = "AI feedback could not be checked against this station, so it is not shown. Mark each item yourself.";
@@ -441,4 +675,141 @@ export function remediation(station: { checklist: readonly OsceItem[]; materialI
   else if (station.competencyId) out.push({ label: "Learn this competency", segment: "learn", query: { competency: station.competencyId } });
   else out.push({ label: "Go to Revise", segment: "revise", query: {} });
   return out;
+}
+
+// ── HOW THE SCORE IS MADE, AND WHAT A HIGH SCORE MUST NOT HIDE (SCHOLAR-OSCE-01 s9) ───────────────────────────────
+
+/** Pure. The practice score explained in plain steps, for the results page. Never pass, fail or competence. */
+export function scoreExplanation(s: { points: number; outOf: number; criticalMissed: number; criticalPartly: number; criticalTotal: number }): string[] {
+  const pct = s.outOf ? Math.round((s.points / s.outOf) * 100) : 0;
+  const pts = Number.isInteger(s.points) ? String(s.points) : s.points.toFixed(1);
+  return [
+    `Each of the ${s.outOf} checklist item${s.outOf === 1 ? "" : "s"} counts one point if marked done, half a point if partly, and nothing if missed.`,
+    `Your marks add up to ${pts} of ${s.outOf} points, which is ${pct}%.`,
+    s.criticalTotal
+      ? `Critical items count the same in the score, so they are also listed on their own: ${s.criticalMissed} of ${s.criticalTotal} critical item${s.criticalTotal === 1 ? "" : "s"} missed${s.criticalPartly ? ` and ${s.criticalPartly} partly done` : ""}. A high score does not cancel a missed critical item.`
+      : "This station marks no item as critical.",
+    "The score is a practice measure from the marks you confirmed. It is not a pass or a fail, and it is not an assessment of competence.",
+  ];
+}
+
+// ── THE RESULT: STRENGTHS, GAPS, NEXT STEPS (SCHOLAR-OSCE-01 s10) ───────────────────────────────────────────────
+
+export type OsceGap = { itemId: string; text: string; critical: boolean; mark: "partly" | "missed" };
+export type OsceResult = { strengths: string[]; gaps: OsceGap[]; criticalMissed: OsceGap[]; criticalPartly: OsceGap[] };
+
+/** Pure. From the confirmed ticks: what went well (done items), the gaps (missed then partly, critical first). */
+export function resultOf(checklist: readonly OsceItem[], ticks: readonly OsceTick[]): OsceResult {
+  const mark = new Map(ticks.map(t => [t.itemId, t.mark]));
+  const gap = (i: OsceItem): OsceGap => ({ itemId: i.id, text: i.text, critical: i.critical, mark: mark.get(i.id) as "partly" | "missed" });
+  const weak = checklist.filter(i => mark.get(i.id) === "missed" || mark.get(i.id) === "partly").map(gap)
+    .sort((a, b) => Number(b.critical) - Number(a.critical) || (a.mark === b.mark ? 0 : a.mark === "missed" ? -1 : 1));
+  return {
+    strengths: checklist.filter(i => mark.get(i.id) === "done").map(i => i.text),
+    gaps: weak, criticalMissed: weak.filter(g => g.critical && g.mark === "missed"), criticalPartly: weak.filter(g => g.critical && g.mark === "partly"),
+  };
+}
+
+/** Pure. Per item: the learner's own mark and, where AI feedback was asked for, what it suggested -- kept apart. */
+export function marksCompared(checklist: readonly OsceItem[], ticks: readonly OsceTick[], suggested: readonly OsceTick[] | null) {
+  return checklist.map(i => ({
+    itemId: i.id, text: i.text, critical: i.critical,
+    yours: ticks.find(t => t.itemId === i.id)?.mark ?? null,
+    suggested: suggested?.find(t => t.itemId === i.id)?.mark ?? null,
+  }));
+}
+
+// ── THE SNAPSHOT A RUN IS MARKED AGAINST (721) ──────────────────────────────────────────────────────────────────
+
+export type OsceSnapshot = {
+  version: number; title: string; scenario: string; candidateInstructions: string; durationMinutes: number; sections: string[];
+  checklist: OsceItem[]; guidance: OsceGuidance | null; expectedActivities: string[];
+};
+export function snapshotOf(s: OsceSnapshot): Record<string, unknown> {
+  return {
+    version: s.version, title: s.title, scenario: s.scenario, candidate_instructions: s.candidateInstructions, duration_minutes: s.durationMinutes,
+    sections: s.sections, checklist: s.checklist, guidance: guidanceJson(s.guidance), expected_activities: s.expectedActivities,
+  };
+}
+/** Pure. The stored snapshot, or the station itself where a run has none (one started before 721). */
+export function readSnapshot(v: unknown, fallback: OsceSnapshot): OsceSnapshot {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return fallback;
+  const o = v as Record<string, unknown>;
+  const list = validateChecklist(o.checklist);
+  if (!list.ok) return fallback;
+  const version = Number(o.version);
+  return {
+    version: Number.isInteger(version) && version >= 1 ? version : fallback.version, title: clean(o.title, OSCE_TEXT_MAX.title) || fallback.title,
+    scenario: typeof o.scenario === "string" ? o.scenario : fallback.scenario,
+    candidateInstructions: typeof o.candidate_instructions === "string" ? o.candidate_instructions : fallback.candidateInstructions,
+    durationMinutes: clampDuration(o.duration_minutes, fallback.durationMinutes), sections: Array.isArray(o.sections) ? normaliseSections(o.sections) : fallback.sections,
+    checklist: list.items, guidance: readGuidance(o.guidance), expectedActivities: cleanList(o.expected_activities, 60),
+  };
+}
+
+// ── INTERRUPTION RECOVERY (SCHOLAR-OSCE-01 s7) ── the server clock decides, written work is never lost ───────────
+
+/** How often the browser saves while typing (debounced), and how late after time up a save is still kept. */
+export const OSCE_AUTOSAVE = { debounceMs: 1500, heartbeatMs: 15000, graceSeconds: 20 } as const;
+
+/**
+ * Pure. Where an open run stands when the learner comes back: still running (with the server's remaining seconds),
+ * or time up (finish it with what was saved). Never restarts the clock.
+ */
+export function resumeOf(startedAtMs: number, durationMinutes: number, serverNowMs: number): { state: "running"; remainingSeconds: number } | { state: "time_up" } {
+  const t = timerState(startedAtMs, durationMinutes, serverNowMs);
+  return t.timeUp ? { state: "time_up" } : { state: "running", remainingSeconds: t.remainingSeconds };
+}
+
+/** Pure. Whether an autosave arriving now is still inside the run (with a short grace for a save sent at the bell). */
+export function saveAllowed(startedAtMs: number, durationMinutes: number, serverNowMs: number): boolean {
+  return serverNowMs <= startedAtMs + (durationMinutes * 60 + OSCE_AUTOSAVE.graceSeconds) * 1000;
+}
+
+// ── STATION SELECTION (SCHOLAR-OSCE-01 s6) ── filter and browse by topic or body system, competency, programme, ──
+// difficulty and source. Pure: the page passes its stations and the query.
+
+export type OsceFilter = { q: string | null; competency: string | null; programme: string | null; difficulty: OsceDifficulty | null; source: OsceSource | null };
+export type Filterable = { title: string; topic: string | null; bodySystem: string | null; competencyId: string | null; programmeCode: string | null; difficulty: OsceDifficulty | null; source: OsceSource };
+
+/** Pure. The filter from a query string's values. Unknown values are ignored, never an error. */
+export function parseOsceFilter(sp: Record<string, string | string[] | undefined>): OsceFilter {
+  const one = (k: string) => { const v = sp[k]; const s = Array.isArray(v) ? v[0] : v; return typeof s === "string" && s.trim() ? s.trim().slice(0, 120) : null; };
+  const source = one("source"), difficulty = one("difficulty");
+  return {
+    q: one("q"), competency: one("competency"), programme: one("programme"),
+    difficulty: isOsceDifficulty(difficulty) ? difficulty : null,
+    source: source && (OSCE_SOURCES as readonly string[]).includes(source) ? source as OsceSource : null,
+  };
+}
+
+/** Pure. The stations a filter keeps. `q` matches the topic, the body system or the title (any word order). */
+export function filterStations<T extends Filterable>(stations: readonly T[], f: OsceFilter): T[] {
+  const words = (f.q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  return stations.filter(s => {
+    const hay = `${s.title} ${s.topic ?? ""} ${s.bodySystem ?? ""}`.toLowerCase();
+    return words.every(w => hay.includes(w))
+      && (!f.competency || s.competencyId === f.competency) && (!f.programme || s.programmeCode === f.programme)
+      && (!f.difficulty || s.difficulty === f.difficulty) && (!f.source || s.source === f.source);
+  });
+}
+
+/** Pure. The choices a filter offers, from the stations themselves (nothing offered that would match none). */
+export function stationFacets(stations: readonly Filterable[]) {
+  const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b));
+  return {
+    topics: uniq(stations.flatMap(s => [s.topic, s.bodySystem])), programmes: uniq(stations.map(s => s.programmeCode)),
+    competencies: uniq(stations.map(s => s.competencyId)), difficulties: OSCE_DIFFICULTIES.filter(d => stations.some(s => s.difficulty === d)),
+    sources: OSCE_SOURCES.filter(x => stations.some(s => s.source === x)),
+  };
+}
+
+// ── NOTES TOO THIN FOR A STATION (SCHOLAR-OSCE-01 s4) ── offer evidence recovery, never a guess ─────────────────
+
+export const OSCE_RECOVERY_NOTE = "Your notes were not enough for a station that could be checked against them. You can look for more learning resources on this topic below (your notes, then the approved Competen library), or choose a practice template or a competency instead.";
+
+/** Pure. The evidence-recovery request a withheld station offers: the material's own title as the topic, its section. */
+export function osceRecoveryRequest(m: { materialId: string; title: string; chunkId: string | null }, reason: string): { question: string; materialId: string; sectionId: string | null; withheldReason: string } | null {
+  const question = clean(m.title, 300);
+  return question.length >= 3 ? { question, materialId: m.materialId, sectionId: m.chunkId, withheldReason: `osce_${reason}`.slice(0, 40) } : null;
 }
