@@ -285,6 +285,11 @@ export const LEARN_ACTION_LABEL: Record<LearnAction, string> = {
   ask_me: "Ask me", guide: "Guide me", challenge: "Challenge me", mistake: "Explain my mistake", teach_back: "Teach back", high_yield: "High-yield",
 };
 export const isTeachingAction = (v: unknown): v is TeachingAction => typeof v === "string" && (TEACHING_ACTIONS as readonly string[]).includes(v);
+/** The existing learning_event.action (414 CHECK) and AI activity each teaching action is recorded and metered as. */
+export const TEACHING_EVENT_ACTION: Record<TeachingAction, "check" | "explain" | "clarify" | "summary"> = {
+  ask_me: "check", challenge: "check", guide: "explain", mistake: "clarify", teach_back: "clarify", high_yield: "summary",
+};
+export const TEACHING_AI_ACTIVITY: Record<TeachingAction, "check" | "explain" | "clarify" | "summary"> = { ...TEACHING_EVENT_ACTION };
 /** The seven original actions: the only ones a starting-action preference (migration 414's CHECK) may name. */
 export const isClassicLearnAction = (v: unknown): v is ClassicLearnAction => typeof v === "string" && (CLASSIC_LEARN_ACTIONS as readonly string[]).includes(v);
 export const isLearnAction = (v: unknown): v is LearnAction => typeof v === "string" && (LEARN_ACTIONS as readonly string[]).includes(v);

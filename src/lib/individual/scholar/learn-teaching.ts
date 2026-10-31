@@ -27,10 +27,9 @@ export { isTeachingAction };
 
 // ── the maps ──
 
-export const TEACHING_EVENT_ACTION: Record<TeachingAction, "check" | "explain" | "clarify" | "summary"> = {
-  ask_me: "check", challenge: "check", guide: "explain", mistake: "clarify", teach_back: "clarify", high_yield: "summary",
-};
-export const TEACHING_AI_ACTIVITY: Record<TeachingAction, "check" | "explain" | "clarify" | "summary"> = { ...TEACHING_EVENT_ACTION };
+// Defined in config.ts (client-safe) so the Learn page can ask the AI standing about the same activity it is metered as.
+export { TEACHING_AI_ACTIVITY, TEACHING_EVENT_ACTION } from "./config";
+import { TEACHING_AI_ACTIVITY, TEACHING_EVENT_ACTION } from "./config";
 
 /** The value written to learning_event.action (migration 414's CHECK) for any learn action. */
 export const learningEventAction = (action: string): string => (isTeachingAction(action) ? TEACHING_EVENT_ACTION[action] : action);

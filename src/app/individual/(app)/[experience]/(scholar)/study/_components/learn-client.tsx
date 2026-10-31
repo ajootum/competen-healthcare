@@ -32,6 +32,7 @@ import { FOLLOW_UP_LABEL, type FollowUp, type FollowUpKind, type PersonalAiDepth
 import { JourneyBar, JourneyOutline, type NavLesson } from "./learn-journey-nav";
 import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, LessonCard, LessonPlaceholder, ResumeBanner, lessonDomId, lessonHeadingId, type Activity } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
+import { TEACHING_AI_ACTIVITY, isTeachingAction } from "@/lib/individual/scholar/config";
 import { ApproachControl, offeredApproaches, type Approach, type ApproachResult } from "./learn-approach";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
@@ -224,7 +225,7 @@ export function LearnWorkspace(props: {
   const step = session?.steps.find(s => s.step === at) ?? session?.steps[0] ?? null;
   // SCHOLAR-EDU-AI-01 s6: an action whose activity the standing says is not available is shown disabled, with why.
   const aiOf = useAiAvailabilityOf();
-  const offReason = useCallback((a: string) => { const v = aiOf(a); return v && !v.available ? v.reason : null; }, [aiOf]);
+  const offReason = useCallback((a: string) => { const v = aiOf(isTeachingAction(a) ? TEACHING_AI_ACTIVITY[a] : a); return v && !v.available ? v.reason : null; }, [aiOf]);
   // The latest shown Teach Me answer's check questions that cite only this lesson's own sections (see startCheck).
   const answerable = (st: Step, r: Reply, q: string) => { const own = new Set(st.sections.map(x => x.chunkId)); const tags = citedTags(q); return tags.length > 0 && tags.every(n => own.has(r.sources.find(s => s.tag === `S${n}`)?.chunkId ?? "")); };
   const lastTeachOf = (st: Step) => [...(cards[st.step] ?? [])].reverse().find(c => c.reply.action === "teach" && !!c.reply.answer && !c.reply.withheld);
